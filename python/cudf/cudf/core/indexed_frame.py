@@ -5488,6 +5488,17 @@ class IndexedFrame(Frame):
         else:
             idx_cols = ()
 
+        explode_column_idx = column_index + len(idx_cols)
+        # We must copy inner datatype of the exploded list column to
+        # maintain struct dtype key names
+        exploded_type = cast(
+            "ListDtype", self._columns[column_index].dtype
+        ).element_type
+        result_types = (
+            exploded_type if i == explode_column_idx else col.dtype
+            for i, col in enumerate(itertools.chain(idx_cols, self._columns))
+        )
+
         with access_columns(
             *itertools.chain(idx_cols, self._columns),
             mode="read",
@@ -5500,33 +5511,14 @@ class IndexedFrame(Frame):
                         for col in itertools.chain(idx_cols, self._columns)
                     ]
                 ),
-                column_index + len(idx_cols),
+                explode_column_idx,
             )
             exploded = [
-                ColumnBase.from_pylibcudf(col) for col in plc_table.columns()
-            ]
-        # We must copy inner datatype of the exploded list column to
-        # maintain struct dtype key names
-        element_type = cast(
-            ListDtype, self._columns[column_index].dtype
-        ).element_type
-
-        column_index += len(idx_cols)
-        exploded = [
-            ColumnBase.create(
-                new_column.plc_column,
-                element_type,
-            )
-            if i == column_index
-            else ColumnBase.create(new_column.plc_column, old_column.dtype)
-            for i, (new_column, old_column) in enumerate(
-                zip(
-                    exploded,
-                    itertools.chain(idx_cols, self._columns),
-                    strict=True,
+                ColumnBase.create(plc_column, dtype=dtype)
+                for plc_column, dtype in zip(
+                    plc_table.columns(), result_types, strict=True
                 )
-            )
-        ]
+            ]
 
         data = type(self._data)(
             dict(
@@ -7078,9 +7070,7 @@ def _append_new_row_inplace(col: ColumnBase, value: ScalarLike) -> None:
             to_type = col.dtype
     val_col = val_col.astype(to_type)
     old_col = col.astype(to_type)
-    res_col = ColumnBase.create(
-        concat_columns([old_col, val_col]).plc_column, to_type
-    )
+    res_col = concat_columns([old_col, val_col])
     if (
         cudf.get_option("mode.pandas_compatible")
         and res_col.dtype != col.dtype
