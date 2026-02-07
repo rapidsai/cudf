@@ -10,7 +10,7 @@ function(find_and_configure_lz4)
 
   set(CPM_DOWNLOAD_lz4 ON)
   rapids_cpm_find(
-    lz4 1.5.7
+    lz4 dev
     GLOBAL_TARGETS lz4
     CPM_ARGS
     GIT_REPOSITORY https://github.com/lz4/lz4.git
@@ -20,12 +20,11 @@ function(find_and_configure_lz4)
 
   if(lz4_ADDED)
     add_library(
-      lz4_static STATIC ${lz4_SOURCE_DIR}/lib/lz4file.c ${lz4_SOURCE_DIR}/lib/lz4frame.c
-                        ${lz4_SOURCE_DIR}/lib/lz4hc.c ${lz4_SOURCE_DIR}/lib/xxhash.c
+      lz4_objects OBJECT
+      ${lz4_SOURCE_DIR}/lib/lz4.c ${lz4_SOURCE_DIR}/lib/lz4file.c ${lz4_SOURCE_DIR}/lib/lz4frame.c
+      ${lz4_SOURCE_DIR}/lib/lz4hc.c ${lz4_SOURCE_DIR}/lib/xxhash.c
     )
-    target_include_directories(lz4_static PUBLIC $<BUILD_INTERFACE:${lz4_SOURCE_DIR}/lib>)
-
-    set_target_properties(lz4_static PROPERTIES POSITION_INDEPENDENT_CODE ON)
+    target_include_directories(lz4_objects PUBLIC $<BUILD_INTERFACE:${lz4_SOURCE_DIR}/lib>)
   endif()
 
 endfunction()

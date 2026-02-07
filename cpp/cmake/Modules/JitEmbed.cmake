@@ -254,6 +254,7 @@ function(jit_embed)
 
   add_custom_command(
     OUTPUT ${OUTPUT_DIR}/embed.hpp ${OUTPUT_DIR}/embed.s ${OUTPUT_DIR}/embed.bin
+    BYPRODUCTS ${OUTPUT_DIR}/*
     COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules/jit_embed.py" --id
             "${TARGET}" --output-dir "${OUTPUT_DIR}" --input "${YAML_FILE_PATH}"
     DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules/jit_embed.py" "${YAML_FILE_PATH}"

@@ -6,7 +6,7 @@ import logging
 import os
 from typing import NamedTuple, Self
 
-import lz4.frame
+import lz4.block
 import yaml
 
 LIST_LINE_WIDTH = 32
@@ -370,9 +370,11 @@ def generate_cxx_source_files_data(
     compress = compression != "none"
 
     compressed_files_bytes = (
-        lz4.frame.compress(
+        lz4.block.compress(
             uncompressed_files_bytes,
-            compression_level=lz4.frame.COMPRESSIONLEVEL_MAX,
+            mode="high_compression",
+            compression = 12,
+            store_size = False
         )
         if compress
         else None
@@ -476,9 +478,11 @@ def generate_cxx_blobs_data(
     compress = compression != "none"
 
     compressed_blob_bytes = (
-        lz4.frame.compress(
+        lz4.block.compress(
             uncompressed_blob_bytes,
-            compression_level=lz4.frame.COMPRESSIONLEVEL_MAX,
+            mode="high_compression",
+            compression = 12,
+            store_size = False
         )
         if compress
         else None

@@ -176,6 +176,7 @@ void jit_bundle::ensure_installed() const
       throw_posix(std::format("Failed to get stat for directory ({})", expected_path), "lstat");
     } else {
       // ensure base install directory exists
+      CUDF_LOG_INFO("Creating JIT install directory at ({})", expected_path);
       std::filesystem::create_directories(install_dir_);
       create_and_install_cudf_jit(expected_path.c_str());
     }
@@ -444,10 +445,10 @@ library compile_and_link_udf(char const* name,
       options_cstr.emplace_back(option.c_str());
     }
 
-    blob_view const link_fragments[] = {library->get(binary_type::LTO_IR)->view(),
+    blob_view const link_fragments[] = {library->get(binary_type::FATBIN)->view(),
                                         fragment->get(binary_type::LTO_IR)->view()};
 
-    binary_type const fragment_binary_types[] = {binary_type::LTO_IR, binary_type::LTO_IR};
+    binary_type const fragment_binary_types[] = {binary_type::FATBIN, binary_type::LTO_IR};
 
     char const* const fragment_names[] = {"cudf_lto_library", "cudf_udf_fragment"};
 
