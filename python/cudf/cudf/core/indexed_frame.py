@@ -7050,25 +7050,30 @@ def _append_new_row_inplace(col: ColumnBase, value: ScalarLike) -> None:
         val_col = val_col.astype(col.dtype)
         to_type = col.dtype
     else:
-        if (
-            is_pandas_nullable_extension_dtype(col.dtype)
-            and val_col.dtype.kind == "f"
-        ):
-            # If the column is a pandas nullable extension type, we need to
-            # convert the nans to a nullable type as well.
-            val_col = val_col.nans_to_nulls()
-            if len(val_col) == val_col.null_count:
-                # If the column is all nulls, we can use the column dtype
-                # to avoid unnecessary casting.
-                val_col = val_col.astype(col.dtype)
-        to_type = find_common_type([val_col.dtype, col.dtype])
+        to_type = None
+        if is_pandas_nullable_extension_dtype(col.dtype):
+            if val_col.dtype.kind == "f":
+                # If the column is a pandas nullable extension type, we need to
+                # convert the nans to a nullable type as well.
+                val_col = val_col.nans_to_nulls()
+                if len(val_col) == val_col.null_count:
+                    # If the column is all nulls, we can use the column dtype
+                    # to avoid unnecessary casting.
+                    val_col = val_col.astype(col.dtype)
+            if val_col.can_cast_safely(col.dtype):
+                to_type = col.dtype
+        if to_type is None:
+            to_type = find_common_type([val_col.dtype, col.dtype])
+
         if (
             cudf.get_option("mode.pandas_compatible")
             and is_string_dtype(to_type)
             and is_mixed_with_object_dtype(val_col, col)
         ):
             raise MixedTypeError("Cannot append mixed types")
-        if val_col.can_cast_safely(col.dtype):
+        if is_pandas_nullable_extension_dtype(
+            col.dtype
+        ) and val_col.can_cast_safely(col.dtype):
             to_type = col.dtype
     val_col = val_col.astype(to_type)
     old_col = col.astype(to_type)
