@@ -2092,10 +2092,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 out.index.dtype, CategoricalDtype
             ):
                 out = out.set_index(out.index)
-        for name, col in out._column_labels_and_values:
-            out._data[name] = col._with_type_metadata(
-                tables[0]._data[name].dtype,
-            )
+        out = out._copy_type_metadata(tables[0])
 
         # Reassign index and column names
         if objs[0]._data.multiindex:

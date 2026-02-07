@@ -9,7 +9,6 @@ from cudf.core.accessors.base_accessor import BaseAccessor
 from cudf.core.column.struct import StructColumn
 from cudf.core.dtype.validators import is_dtype_obj_struct
 from cudf.core.dtypes import StructDtype
-from cudf.utils.dtypes import get_dtype_of_same_kind
 
 if TYPE_CHECKING:
     from cudf.core.dataframe import DataFrame
@@ -64,26 +63,18 @@ class StructMethods(BaseAccessor):
         field_keys = list(struct_dtype_fields.keys())
         if key in struct_dtype_fields:
             pos = field_keys.index(key)
-            assert isinstance(self._column, StructColumn)
-            return self._return_or_inplace(
-                self._column._get_sliced_child(pos)._with_type_metadata(
-                    get_dtype_of_same_kind(
-                        self._column.dtype, struct_dtype_fields[key]
-                    )
-                )
-            )
         elif isinstance(key, int):
-            try:
-                assert isinstance(self._column, StructColumn)
-                return self._return_or_inplace(
-                    self._column._get_sliced_child(key)
-                )
-            except IndexError as err:
-                raise IndexError(f"Index {key} out of range") from err
+            pos = key
         else:
             raise KeyError(
                 f"Field '{key}' is not found in the set of existing keys."
             )
+        assert isinstance(self._column, StructColumn)
+        try:
+            result = self._column._get_sliced_child(pos)
+        except IndexError as err:
+            raise IndexError(f"Index {key} out of range") from err
+        return self._return_or_inplace(result)
 
     def explode(self) -> DataFrame:
         """
