@@ -15,6 +15,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/io/data_sink.hpp>
 #include <cudf/io/parquet.hpp>
+#include <cudf/io/parquet_metadata.hpp>
 #include <cudf/io/parquet_schema.hpp>
 #include <cudf/io/types.hpp>
 #include <cudf/unary.hpp>
@@ -2483,6 +2484,37 @@ TEST_F(ParquetWriterStressTest, DeviceWriteLargeTableWithValids)
       reinterpret_cast<std::byte const*>(mm_buf.data()), mm_buf.size()}});
   auto custom_tbl = cudf::io::read_parquet(custom_args);
   CUDF_TEST_EXPECT_TABLES_EQUAL(custom_tbl.tbl->view(), expected->view());
+}
+
+TEST_F(ParquetWriterTest, ReturnedFooterMetadata)
+{
+  auto table    = create_random_fixed_table<int>(5, 10, true);
+  auto filepath = temp_env->get_temp_filepath("ReturnedMetadata.parquet");
+  cudf::io::chunked_parquet_writer_options args =
+    cudf::io::chunked_parquet_writer_options::builder(cudf::io::sink_info{filepath});
+
+  // Write the table and get the returned footer buffer
+  auto footer = cudf::io::chunked_parquet_writer(args).write(*table).close();
+  EXPECT_NE(footer, nullptr);
+  EXPECT_GT(footer->size(), 0);
+
+  // Read file metadata from the returned buffer from the writer
+  cudf::io::parquet::FileMetaData fmd_footer;
+  auto footer_source = cudf::io::datasource::create(cudf::host_span<std::byte const>{
+    reinterpret_cast<std::byte const*>(footer->data()), footer->size()});
+  read_footer(footer_source, &fmd_footer);
+
+  // Read file metadata from the written parquet file
+  auto file_source    = cudf::io::make_datasources(cudf::io::source_info{filepath});
+  auto const fmd_file = cudf::io::read_parquet_footers(file_source).front();
+
+  // Compare key metadata fields
+  EXPECT_EQ(fmd_footer.num_rows, fmd_file.num_rows);
+  EXPECT_EQ(fmd_footer.row_groups.size(), fmd_file.row_groups.size());
+  EXPECT_EQ(fmd_footer.schema.size(), fmd_file.schema.size());
+  EXPECT_EQ(fmd_footer.key_value_metadata, fmd_file.key_value_metadata);
+  EXPECT_EQ(fmd_footer.created_by, fmd_file.created_by);
+  EXPECT_EQ(fmd_footer.column_orders, fmd_file.column_orders);
 }
 
 TEST_F(ParquetWriterTest, DISABLED_SizeTypeOverflow)
