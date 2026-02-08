@@ -17,7 +17,7 @@ from cudf_polars.dsl.ir import IR
 from cudf_polars.dsl.tracing import log_do_evaluate, nvtx_annotate_cudf_polars
 from cudf_polars.experimental.base import get_key_name
 from cudf_polars.experimental.dispatch import generate_ir_tasks, lower_ir_node
-from cudf_polars.experimental.utils import _concat
+from cudf_polars.experimental.utils import _concat, _dynamic_planning_on
 from cudf_polars.utils.config import ShufflerInsertionMethod
 from cudf_polars.utils.cuda_stream import get_dask_cuda_stream
 
@@ -312,8 +312,14 @@ def _(
 
     (child,) = ir.children
 
+    # Check for dynamic planning - may have more partitions at runtime
+    config_options = rec.state["config_options"]
     new_child, pi = rec(child)
-    if pi[new_child].count == 1 or ir.keys == pi[new_child].partitioned_on:
+    already_partitioned = ir.keys == pi[new_child].partitioned_on
+    single_partition = pi[new_child].count == 1 and not _dynamic_planning_on(
+        config_options
+    )
+    if single_partition or already_partitioned:
         # Already shuffled
         return new_child, pi
     new_node = ir.reconstruct([new_child])
