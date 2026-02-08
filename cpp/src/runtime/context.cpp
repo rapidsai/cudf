@@ -81,9 +81,9 @@ void initialize(init_flags flags)
 void teardown()
 {
   std::call_once(*_context_deinit_flag, [&]() {
+    // reset the context to destroy all global objects and release resources, allowing for clean
+    // re-initialization in the future if desired.
     _context.reset();
-    _context_init_flag.reset();
-    _context_deinit_flag.reset();
     _context_init_flag.emplace();
     _context_deinit_flag.emplace();
   });
