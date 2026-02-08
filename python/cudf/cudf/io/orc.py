@@ -26,7 +26,7 @@ from cudf.utils import ioutils
 from cudf.utils.dtypes import cudf_dtype_from_pa_type, dtype_to_pylibcudf_type
 
 if TYPE_CHECKING:
-    from cudf.core.column import ColumnBase
+    from cudf._typing import DtypeObj
 
 
 @ioutils.doc_read_orc_metadata()
@@ -491,7 +491,7 @@ def _plc_write_orc(
             # generate_pandas_metadata will reject tables with non-string column names
             tbl_meta.column_metadata[i].set_name(name)  # type: ignore[arg-type]
             _set_col_children_metadata(
-                col,
+                col.dtype,
                 tbl_meta.column_metadata[i],
                 has_map_type and name in cols_as_map_type,
             )
@@ -625,7 +625,7 @@ class ORCWriter:
         ):
             self.tbl_meta.column_metadata[i].set_name(name)
             _set_col_children_metadata(
-                col,
+                col.dtype,
                 self.tbl_meta.column_metadata[i],
                 has_map_type and name in self.cols_as_map_type,
             )
@@ -693,23 +693,21 @@ def _get_orc_stat_freq(
 
 
 def _set_col_children_metadata(
-    col: ColumnBase,
+    dtype: DtypeObj,
     col_meta: plc.io.types.ColumnInMetadata,
     list_column_as_map: bool = False,
 ) -> None:
-    if isinstance(col.dtype, StructDtype):
-        for i, (child_col, name) in enumerate(
-            zip(col.children, list(col.dtype.fields), strict=True)
-        ):
+    if isinstance(dtype, StructDtype):
+        for i, (name, field_dtype) in enumerate(dtype.fields.items()):
             col_meta.child(i).set_name(name)
             _set_col_children_metadata(
-                child_col, col_meta.child(i), list_column_as_map
+                field_dtype, col_meta.child(i), list_column_as_map
             )
-    elif isinstance(col.dtype, ListDtype):
+    elif isinstance(dtype, ListDtype):
         if list_column_as_map:
             col_meta.set_list_column_as_map()
         _set_col_children_metadata(
-            col.children[1], col_meta.child(1), list_column_as_map
+            dtype.element_type, col_meta.child(1), list_column_as_map
         )
     else:
         return

@@ -12,6 +12,7 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/search.hpp>
 #include <cudf/detail/stream_compaction.hpp>
+#include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/lists/detail/combine.hpp>
 #include <cudf/lists/detail/set_operations.hpp>
 #include <cudf/lists/detail/stream_compaction.hpp>
@@ -26,7 +27,6 @@
 #include <cuda/std/functional>
 #include <cuda/std/iterator>
 #include <thrust/functional.h>
-#include <thrust/reduce.h>
 #include <thrust/scatter.h>
 #include <thrust/uninitialized_fill.h>
 
@@ -86,15 +86,15 @@ std::unique_ptr<column> have_overlap(lists_column_view const& lhs,
   // Stores the result of checking overlap for non-empty lists.
   auto overlap_results = rmm::device_uvector<bool>(num_rows, stream);
 
-  auto const labels_begin           = rhs_labels->view().begin<size_type>();
-  auto const end                    = thrust::reduce_by_key(rmm::exec_policy_nosync(stream),
-                                         labels_begin,  // keys
-                                         labels_begin + rhs_labels->size(),  // keys
-                                         contained.begin(),  // values to reduce
-                                         list_indices.begin(),     // out keys
-                                         overlap_results.begin(),  // out values
-                                         cuda::std::equal_to{},  // comp for keys
-                                         cuda::std::logical_or{});  // reduction op for values
+  auto const labels_begin = rhs_labels->view().begin<size_type>();
+  auto const end          = cudf::detail::reduce_by_key(labels_begin,  // keys
+                                               labels_begin + rhs_labels->size(),
+                                               contained.begin(),     // values to reduce
+                                               list_indices.begin(),  // out keys
+                                               overlap_results.begin(),  // out values
+                                               cuda::std::logical_or{},  // reduction op for values
+                                               stream);
+
   auto const num_non_empty_segments = cuda::std::distance(overlap_results.begin(), end.second);
 
   auto [null_mask, null_count] =

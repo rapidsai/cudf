@@ -1,3 +1,266 @@
+# cudf 26.02.00 (4 Feb 2026)
+
+### 🚨 Breaking Changes
+* Avoid counting nulls and creating null mask in groupby aggregation `MERGE_M2` by @ttnghia in https://github.com/rapidsai/cudf/pull/20716
+* Remove cudf::get_current_device_resource by @bdice in https://github.com/rapidsai/cudf/pull/20688
+* Avoid creating null mask in groupby aggregation `M2` by @ttnghia in https://github.com/rapidsai/cudf/pull/20726
+* Remove deprecated left semi- and anti- join APIs by @shrshi in https://github.com/rapidsai/cudf/pull/20668
+* Inline and simplify some column methods by @vyasr in https://github.com/rapidsai/cudf/pull/20819
+* Enable copy-on-write in cudf.pandas by @vyasr in https://github.com/rapidsai/cudf/pull/20401
+* [FEA] Improve Null-Aware Operator Support in AST-Codegen by @lamarrr in https://github.com/rapidsai/cudf/pull/20206
+* Remove legacy hash-combine logic and unify hashing with row hasher by @PointKernel in https://github.com/rapidsai/cudf/pull/20796
+* Remove deprecated .from_pandas constructors by @mroeschke in https://github.com/rapidsai/cudf/pull/20925
+* Remove deprecated Series.data by @mroeschke in https://github.com/rapidsai/cudf/pull/20914
+* Remove all base attributes from ColumnBase by @vyasr in https://github.com/rapidsai/cudf/pull/20961
+* Fix handling of unquoted strings in the CSV reader by @vuule in https://github.com/rapidsai/cudf/pull/20996
+### 🐛 Bug Fixes
+* Avoid duplicate streaming nodes for the rapidsmpf runtime by @rjzamora in https://github.com/rapidsai/cudf/pull/20586
+* Handle scalar arguments in ternary expression by @Matt711 in https://github.com/rapidsai/cudf/pull/20600
+* fix(noarch): use noarch build script in noarch build by @gforsyth in https://github.com/rapidsai/cudf/pull/20654
+* fix(conda): matrix out noarch builds by cuda-major version by @gforsyth in https://github.com/rapidsai/cudf/pull/20678
+* Include RMM in type checking environment and update type annotations for optional `stream` by @TomAugspurger in https://github.com/rapidsai/cudf/pull/20636
+* Add no-op path for `ArrowExtensionArray.astype` by @Matt711 in https://github.com/rapidsai/cudf/pull/20580
+* Skip pytorch integration tests if CUDA is not available by @Matt711 in https://github.com/rapidsai/cudf/pull/20729
+* Always delay CUDA Array Interface pointer access by @vyasr in https://github.com/rapidsai/cudf/pull/20719
+* Fix various copy-on-write bugs by @vyasr in https://github.com/rapidsai/cudf/pull/20744
+* Fix leaks in cuDF java tests by @abellina in https://github.com/rapidsai/cudf/pull/20767
+* Fix plc.Scalar.from_py(datetime.datetime) incorrectly localizing naive datetimes by @mroeschke in https://github.com/rapidsai/cudf/pull/20769
+* Don't remove double casts in cudf_polars by @mroeschke in https://github.com/rapidsai/cudf/pull/20773
+* Fixes struct column handling in sort-merge joins by @shrshi in https://github.com/rapidsai/cudf/pull/20664
+* Fix for `synccheck` compute-sanitizer errors across Parquet gtest by @mhaseeb123 in https://github.com/rapidsai/cudf/pull/20775
+* Pin `numpy<2.4.0a0` in mypy pre-commit environment by @TomAugspurger in https://github.com/rapidsai/cudf/pull/20781
+* Raise when trying to run queries on different devices in same process by @wence- in https://github.com/rapidsai/cudf/pull/20617
+* Ensure `min_periods=0` is passed through rolling aggregations by @Matt711 in https://github.com/rapidsai/cudf/pull/20653
+* Fix racecheck errors in the ORC reader by @vuule in https://github.com/rapidsai/cudf/pull/20792
+* Fix the crash of multi-threaded parquet reader benchmark by @kingcrimsontianyu in https://github.com/rapidsai/cudf/pull/20783
+* Fix racecheck reported by DATA_CHUNK_SOURCE_TEST in inflate_kernel by @davidwendt in https://github.com/rapidsai/cudf/pull/20804
+* Fix racecheck in the gpu_debrotli_kernel by @davidwendt in https://github.com/rapidsai/cudf/pull/20806
+* Ensure literal groupby aggregations are broadcasted to key length in cudf_polars by @mroeschke in https://github.com/rapidsai/cudf/pull/20776
+* Pin `aiobotocore<3` to fix CI failures by @TomAugspurger in https://github.com/rapidsai/cudf/pull/20844
+* Fix racecheck in parquet decode_page_data_generic kernel by @davidwendt in https://github.com/rapidsai/cudf/pull/20850
+* Avoid generating empty `TableChunks` in streaming scan nodes by @rjzamora in https://github.com/rapidsai/cudf/pull/20815
+* Fix dask imports in ``CudfFusedParquetIOHost`` by @rjzamora in https://github.com/rapidsai/cudf/pull/20845
+* Fix UB due to OOM Exception in ParquetReaderTest.ManyLargeLists by @lamarrr in https://github.com/rapidsai/cudf/pull/20841
+* Fix racecheck/synccheck in JSON parse_fn_string_parallel kernel by @davidwendt in https://github.com/rapidsai/cudf/pull/20856
+* Fix racecheck in ORC decode_column_data_kernel by @davidwendt in https://github.com/rapidsai/cudf/pull/20853
+* Disable flatbuffers tests in CMake configuration by @bdice in https://github.com/rapidsai/cudf/pull/20848
+* Upper bound on aiosqlite in polars-upstream job by @TomAugspurger in https://github.com/rapidsai/cudf/pull/20866
+* Fix boolean casting consistency with Pandas (#20746) by @aryansri05 in https://github.com/rapidsai/cudf/pull/20747
+* Add retries to requests made to PyPI's JSON API by @TomAugspurger in https://github.com/rapidsai/cudf/pull/20865
+* Fix `size_type` overflow in multiple APIs by @vuule in https://github.com/rapidsai/cudf/pull/20857
+* Fix racecheck in parquet compute_string_page_bounds_kernel by @davidwendt in https://github.com/rapidsai/cudf/pull/20868
+* Fix dictionary::encode to honor indices-type parameter by @davidwendt in https://github.com/rapidsai/cudf/pull/20842
+* Add missing headers to row_ir.hpp, row_ir.cpp by @bdice in https://github.com/rapidsai/cudf/pull/20834
+* Fix `parquet_options` in pdsh benchmark by @TomAugspurger in https://github.com/rapidsai/cudf/pull/20893
+* Add stream synchronize to tdigest generate_group_cluster_info by @davidwendt in https://github.com/rapidsai/cudf/pull/20846
+* Only install RMM in mypy env on linux by @TomAugspurger in https://github.com/rapidsai/cudf/pull/20878
+* Make nvcomp export unconditional by @vyasr in https://github.com/rapidsai/cudf/pull/20828
+* Ensure we have nvjitlink from the CUDA version used at build time or newer and upgrade numba-cuda lower bound by @bdice in https://github.com/rapidsai/cudf/pull/20873
+* Fix size_type overflow in the ORC writer by @vuule in https://github.com/rapidsai/cudf/pull/20889
+* Constrain pyparsing version by @vyasr in https://github.com/rapidsai/cudf/pull/20935
+* Revert #20902 by @vyasr in https://github.com/rapidsai/cudf/pull/20955
+* Add force-blocking-launches to run_compute_sanitizer_test script by @davidwendt in https://github.com/rapidsai/cudf/pull/20962
+* Fix racecheck error in parquet delta_byte_array_decoder::string_scan by @davidwendt in https://github.com/rapidsai/cudf/pull/20967
+* Fix racechecks reported in parquet gpuEncodePages kernel by @davidwendt in https://github.com/rapidsai/cudf/pull/20975
+* Don't encode s3 paths for kvikio_remote_io in read_json by @mroeschke in https://github.com/rapidsai/cudf/pull/20976
+* Allow sort merge join to go above int32 output row limits by @revans2 in https://github.com/rapidsai/cudf/pull/20960
+* Correct stream ordered deallocation in `Join` by @TomAugspurger in https://github.com/rapidsai/cudf/pull/20981
+* Reintroduce `Buffer.nbytes` property by @pentschev in https://github.com/rapidsai/cudf/pull/21027
+* Fix SHA hash OOB on strings that are exact multiples of message chunk size by @rishic3 in https://github.com/rapidsai/cudf/pull/21004
+* Temporarily disable IWYU for nightly tests by @davidwendt in https://github.com/rapidsai/cudf/pull/21045
+* Fix cudf-polars multi-partition distributed sort by @TomAugspurger in https://github.com/rapidsai/cudf/pull/21047
+* Backport #21051 by @wence- in https://github.com/rapidsai/cudf/pull/21086
+* Pin pandas for `pylibcudf` testing by @galipremsagar in https://github.com/rapidsai/cudf/pull/21124
+* Hide pinned pool instantiation to avoid symbol conflicts with nvcomp by @vyasr in https://github.com/rapidsai/cudf/pull/21161
+* Specialize field type checking for bool in Parquet thrift list decoder by @mhaseeb123 in https://github.com/rapidsai/cudf/pull/21144
+* Fix reading of CSV files with double quotes in unquoted strings by @vuule in https://github.com/rapidsai/cudf/pull/21151
+* Revert the multithreaded optimization in the CSV reader by @vuule in https://github.com/rapidsai/cudf/pull/21198
+* Pin sqlglot in third-party integration tests by @Matt711 in https://github.com/rapidsai/cudf/pull/21271
+* Exclude sqlglot version 28.7 from CI by @Matt711 in https://github.com/rapidsai/cudf/pull/21293
+### 📖 Documentation
+* Add note to developer guide about null values being undefined by @bdice in https://github.com/rapidsai/cudf/pull/20645
+* [DOC] Add cudf-polars to the example build command by @Matt711 in https://github.com/rapidsai/cudf/pull/20763
+* Clarify internal API header placement guidelines for details headers by @PointKernel in https://github.com/rapidsai/cudf/pull/20985
+* Clarify deprecation message for cudf::round by @nirandaperera in https://github.com/rapidsai/cudf/pull/20809
+* Require nvcc 12.9 in contributing guide by @bdice in https://github.com/rapidsai/cudf/pull/21186
+### 🚀 New Features
+* Expose `cudf::compute_column_jit` to python by @Matt711 in https://github.com/rapidsai/cudf/pull/20697
+* Add configuration option for max-io-threads by @quasiben in https://github.com/rapidsai/cudf/pull/20606
+* Return stats from `lower_ir_graph` by @rjzamora in https://github.com/rapidsai/cudf/pull/20528
+* Promote join_kind from detail namespace to public by @PointKernel in https://github.com/rapidsai/cudf/pull/20703
+* Make DataFrameScan and DataFrameSourceInfo pickle-able by @rjzamora in https://github.com/rapidsai/cudf/pull/20732
+* Add compute-sanitizer dispatch action by @bdice in https://github.com/rapidsai/cudf/pull/20542
+* Add RapidsMPF AllGather manager to cudf-polars by @rjzamora in https://github.com/rapidsai/cudf/pull/20731
+* Use metadata channel for the "rapidsmpf" runtime by @rjzamora in https://github.com/rapidsai/cudf/pull/20738
+* Enable distributed execution with the "rapidsmpf" runtime by @rjzamora in https://github.com/rapidsai/cudf/pull/20662
+* Filter row groups using byte range in the new experimental parquet reader by @mhaseeb123 in https://github.com/rapidsai/cudf/pull/20733
+* Make row hasher 64-bit hashing compatible by @PointKernel in https://github.com/rapidsai/cudf/pull/20777
+* Expose parquet JIT filter option to python by @Matt711 in https://github.com/rapidsai/cudf/pull/20790
+* Add filter_join_indices by @PointKernel in https://github.com/rapidsai/cudf/pull/20385
+* Add support for topk aggregation in libcudf groupby by @davidwendt in https://github.com/rapidsai/cudf/pull/20632
+* Allow parquet readers to use existing `datasource`s and `metadata`s by @mhaseeb123 in https://github.com/rapidsai/cudf/pull/20693
+* Reader and writer for a simple CudfTable format by @vuule in https://github.com/rapidsai/cudf/pull/20811
+* Add support for dictionary types in the row hasher by @PointKernel in https://github.com/rapidsai/cudf/pull/20989
+* Support left joins using sort-merge algorithm by @shrshi in https://github.com/rapidsai/cudf/pull/20787
+* Implement `batch_null_count` to count nulls for multiple null masks by a single kernel call, and application in groupby aggregations by @ttnghia in https://github.com/rapidsai/cudf/pull/20872
+* Support multiple roaring bitmap deletion vectors in parquet readers by @mhaseeb123 in https://github.com/rapidsai/cudf/pull/20840
+* Add approx_distinct_count by @PointKernel in https://github.com/rapidsai/cudf/pull/20735
+* Pin Polars>=1.30,<1.36 by @Matt711 in https://github.com/rapidsai/cudf/pull/20791
+* Support `is_compressed` V2 flag in the Parquet writer by @vuule in https://github.com/rapidsai/cudf/pull/21050
+* Example to demonstrate intra-parquet-file pipelining using hybrid scan APIs by @mhaseeb123 in https://github.com/rapidsai/cudf/pull/20918
+### 🛠️ Improvements
+* feat(conda): build noarch python packages separately by @gforsyth in https://github.com/rapidsai/cudf/pull/20613
+* Fix rapidsmpf dependency updates by @bdice in https://github.com/rapidsai/cudf/pull/20624
+* Print duckDB query plan and change Q17 join type by @Matt711 in https://github.com/rapidsai/cudf/pull/20615
+* Update RapidsMPF imports  by @madsbk in https://github.com/rapidsai/cudf/pull/20665
+* Forward-merge release/25.12 into main by @bdice in https://github.com/rapidsai/cudf/pull/20676
+* Remove cudfjar install target by @vyasr in https://github.com/rapidsai/cudf/pull/20670
+* Use `RAPIDS_BRANCH` in cmake-format invocations that need rapids-cmake configs by @bdice in https://github.com/rapidsai/cudf/pull/20415
+* Merge release/25.12 into main by @vyasr in https://github.com/rapidsai/cudf/pull/20706
+* Use strict priority in CI conda tests by @bdice in https://github.com/rapidsai/cudf/pull/20690
+* Minor improvements to pylibcudf recipe by @bdice in https://github.com/rapidsai/cudf/pull/20684
+* Remove unnecessary nanoarrow fetch by @vyasr in https://github.com/rapidsai/cudf/pull/20669
+* Revert pytest pin by @TomAugspurger in https://github.com/rapidsai/cudf/pull/20643
+* Use real row-group sample to estimate partition size by @rjzamora in https://github.com/rapidsai/cudf/pull/20567
+* Move rapidsmpf-specific testing in cudf-polars by @rjzamora in https://github.com/rapidsai/cudf/pull/20695
+* Include thrust::pair headers by @bdice in https://github.com/rapidsai/cudf/pull/20708
+* Remove sccache calls in noarch builds by @vyasr in https://github.com/rapidsai/cudf/pull/20710
+* Replace rmm::mr::get_current_device_resource() with cudf::get_current_device_resource_ref() by @davidwendt in https://github.com/rapidsai/cudf/pull/20694
+* Improved implementation for get_mask_offset_word utility by @davidwendt in https://github.com/rapidsai/cudf/pull/20622
+* Remove unneeded cudaMemcpy() calls by @davidwendt in https://github.com/rapidsai/cudf/pull/20618
+* Simplify broadcast-join algorithm in cudf-polars by @rjzamora in https://github.com/rapidsai/cudf/pull/20724
+* Add spilling support to staged fanout chunks by @rjzamora in https://github.com/rapidsai/cudf/pull/20642
+* Use rapidsmpf ShufflerAsync by @rjzamora in https://github.com/rapidsai/cudf/pull/20701
+* Move thrust::tuple usages to cuda::std::tuple by @davidwendt in https://github.com/rapidsai/cudf/pull/20717
+* Add job-specific timeouts to GHA test jobs by @bdice in https://github.com/rapidsai/cudf/pull/20730
+* Compatibility updates for CCCL 3.2 by @bdice in https://github.com/rapidsai/cudf/pull/20725
+* Move googlebench benchmarks to nvbench by @davidwendt in https://github.com/rapidsai/cudf/pull/20698
+* Enable blocking mechanism to avoid proxy object transfers in `cudf.pandas` by @galipremsagar in https://github.com/rapidsai/cudf/pull/19805
+* Remove googlebench dependency for libcudf by @davidwendt in https://github.com/rapidsai/cudf/pull/20739
+* Upgrade nanoarrow by @vyasr in https://github.com/rapidsai/cudf/pull/20711
+* Improve local pandas testing experience by @vyasr in https://github.com/rapidsai/cudf/pull/20753
+* Use .plc_column instead of .to_pylibcudf in IO methods by @mroeschke in https://github.com/rapidsai/cudf/pull/20742
+* Use .plc_column instead of .to_pylibcudf in indexing_utils, public objects by @mroeschke in https://github.com/rapidsai/cudf/pull/20758
+* Add back previously failing json test with stream by @vyasr in https://github.com/rapidsai/cudf/pull/19865
+* Add libcudf dictionary encode benchmark by @davidwendt in https://github.com/rapidsai/cudf/pull/20696
+* Remove unneeded aggregation kind_to_type utility and macro by @davidwendt in https://github.com/rapidsai/cudf/pull/20682
+* Test copy-on-write in CI by @vyasr in https://github.com/rapidsai/cudf/pull/20745
+* Stop using Dtype annotation more internally in cudf classic by @mroeschke in https://github.com/rapidsai/cudf/pull/20760
+* Parquet: Only fill in null values for string lengths and list offsets by @pmattione-nvidia in https://github.com/rapidsai/cudf/pull/20671
+* Enable mypy's disallow_untyped_defs = true in cudf.core.column.* by @mroeschke in https://github.com/rapidsai/cudf/pull/20759
+* Improve groupby test utils to include the original location of failure by @ttnghia in https://github.com/rapidsai/cudf/pull/20718
+* use CUDA 13 for third-party integration tests by @jameslamb in https://github.com/rapidsai/cudf/pull/20748
+* Use strict priority in CI conda tests by @bdice in https://github.com/rapidsai/cudf/pull/20772
+* Upgrade to nvcomp 5.1.0.21 by @bdice in https://github.com/rapidsai/cudf/pull/20770
+* Use RapidsMPF's `reserve_device_memory_and_spill()` by @madsbk in https://github.com/rapidsai/cudf/pull/20778
+* avoid passing `start` as keyword argument to `np.arange` by @jorenham in https://github.com/rapidsai/cudf/pull/20788
+* Use env var to disable long tests when run with racecheck by @davidwendt in https://github.com/rapidsai/cudf/pull/20755
+* Improve performance for small string gather by @tgujar in https://github.com/rapidsai/cudf/pull/20656
+* Deprecate sort-merge join functional APIs by @shrshi in https://github.com/rapidsai/cudf/pull/20785
+* Partially revert broadcast-join change by @rjzamora in https://github.com/rapidsai/cudf/pull/20779
+* Type checking compatibility for numpy 2.4.0rc1 and other fixes by @TomAugspurger in https://github.com/rapidsai/cudf/pull/20795
+* Support pl.Expr.cast(strict=False) in cudf_polars by @mroeschke in https://github.com/rapidsai/cudf/pull/20784
+* chore(noarch): standardize noarch artifact naming by @gforsyth in https://github.com/rapidsai/cudf/pull/20794
+* Remove alpha specs from non-RAPIDS dependencies by @bdice in https://github.com/rapidsai/cudf/pull/20797
+* Enable merge barriers by @KyleFromNVIDIA in https://github.com/rapidsai/cudf/pull/20813
+* Update to numba-cuda `>=0.22.1,<0.23.0` by @brandon-b-miller in https://github.com/rapidsai/cudf/pull/20750
+* Enable using multithreaded `setup_page_index` in hybrid scan reader by @mhaseeb123 in https://github.com/rapidsai/cudf/pull/20721
+* Remove size and offsets from Column by @vyasr in https://github.com/rapidsai/cudf/pull/20824
+* Add devcontainer fallback for C++ test location by @bdice in https://github.com/rapidsai/cudf/pull/20838
+* Add cudf-polars option to control rapidsmpf Shuffle insertion method by @TomAugspurger in https://github.com/rapidsai/cudf/pull/19634
+* Make null_count delegate to plc_column by @vyasr in https://github.com/rapidsai/cudf/pull/20854
+* Replace thrust reductions in Parquet reader with CUB + pinned memory based implementations by @mhaseeb123 in https://github.com/rapidsai/cudf/pull/20821
+* Reduce stream synchronization in `(mutable_)column_device_view::create()` and `(mutable_)table_device_view::create()` by @ttnghia in https://github.com/rapidsai/cudf/pull/20852
+* Clean up hash-based groupby aggregation, reducing overhead and memory usage by @ttnghia in https://github.com/rapidsai/cudf/pull/20658
+* Support decomposing Len expressions in cudf_polars streaming executor by @mroeschke in https://github.com/rapidsai/cudf/pull/20786
+* Add parameter to disable native `read_parquet` node by @rjzamora in https://github.com/rapidsai/cudf/pull/20858
+* Support arbitrary span-like data storage in pylibcudf Column by @vyasr in https://github.com/rapidsai/cudf/pull/20869
+* Merge ExposureTrackedBuffer into Buffer to simplify class hierarchy by @vyasr in https://github.com/rapidsai/cudf/pull/20874
+* Replace thrust logical functions with CUB + pinned memory based implementations in Parquet reader by @mhaseeb123 in https://github.com/rapidsai/cudf/pull/20822
+* Sync stream in host_memory.cpp by @bdice in https://github.com/rapidsai/cudf/pull/20687
+* Remove extra syncthreads() call from ORC DecodeRowPositions device function by @davidwendt in https://github.com/rapidsai/cudf/pull/20867
+* Temporarily increase max_days_without_success for nightly CI check by @bdice in https://github.com/rapidsai/cudf/pull/20880
+* Add zstd kernels to compute-sanitizer filter parameter by @davidwendt in https://github.com/rapidsai/cudf/pull/20875
+* Replace `thrust::reduce_by_key` with CUB + pinned memory based wrapper by @mhaseeb123 in https://github.com/rapidsai/cudf/pull/20860
+* cuml 26.2.0 compatibility by @TomAugspurger in https://github.com/rapidsai/cudf/pull/20883
+* Implement pandas 3.0, backward compatible changes by @mroeschke in https://github.com/rapidsai/cudf/pull/20803
+* Improve column selection in the new experimental parquet reader by @mhaseeb123 in https://github.com/rapidsai/cudf/pull/20604
+* Fix some gtests to not assume dictionary keys order by @davidwendt in https://github.com/rapidsai/cudf/pull/20827
+* Parquet decode: Skip up to first_row for non-lists by @pmattione-nvidia in https://github.com/rapidsai/cudf/pull/20835
+* Disable DeeplyNestedArithmeticLogicalExpression jit gtest for driver < 12.9 by @davidwendt in https://github.com/rapidsai/cudf/pull/20894
+* Make base_data and base_mask passthroughs by @vyasr in https://github.com/rapidsai/cudf/pull/20896
+* Changes needed for CCCL 3.2 compatibility by @bdice in https://github.com/rapidsai/cudf/pull/20810
+* Modify the default pinned pool to allow growth when the pool is exhausted by @vuule in https://github.com/rapidsai/cudf/pull/20839
+* Empty commit to trigger a build by @bdice in https://github.com/rapidsai/cudf/pull/20922
+* Fix clang-tidy errors by @vyasr in https://github.com/rapidsai/cudf/pull/20929
+* Replace thrust `count_if` and `copy_if` with CUB + pinned memory based wrappers by @mhaseeb123 in https://github.com/rapidsai/cudf/pull/20861
+* Parquet: Reuse string offset preprocessing when allocating output memory by @pmattione-nvidia in https://github.com/rapidsai/cudf/pull/20902
+* Clean up includes for rmm::mr::polymorphic_allocator by @bdice in https://github.com/rapidsai/cudf/pull/20371
+* Convert to plc_column wherever possible by @vyasr in https://github.com/rapidsai/cudf/pull/20940
+* Push more arrow conversion logic down to pylibcudf by @vyasr in https://github.com/rapidsai/cudf/pull/20919
+* Simplify categorical column by @vyasr in https://github.com/rapidsai/cudf/pull/20942
+* Remove get_ptr from buffer owner classes by @vyasr in https://github.com/rapidsai/cudf/pull/20949
+* Fix null counts in mutating pylibcudf operations by @vyasr in https://github.com/rapidsai/cudf/pull/20950
+* Add context manager to control access mode by @vyasr in https://github.com/rapidsai/cudf/pull/20952
+* Convert column children computation from lazy to eager by @vyasr in https://github.com/rapidsai/cudf/pull/20953
+* Use SPDX license identifiers in pyproject.toml, bump build dependency floors by @jameslamb in https://github.com/rapidsai/cudf/pull/20959
+* Compatibility for cuML deprecation warnings by @TomAugspurger in https://github.com/rapidsai/cudf/pull/20884
+* Use larger node for cpp-linters job in nightly tests by @vyasr in https://github.com/rapidsai/cudf/pull/20963
+* Fix min/max reduction logic for dictionary columns by @davidwendt in https://github.com/rapidsai/cudf/pull/20847
+* Remove null masks for intermediate results when computing compound hash-based groupby aggregations by @ttnghia in https://github.com/rapidsai/cudf/pull/20736
+* Fix warnings in dask-cudf test suite by @TomAugspurger in https://github.com/rapidsai/cudf/pull/20951
+* Add CUDA 13.1 support by @bdice in https://github.com/rapidsai/cudf/pull/20870
+* Enable spill lock acquisition via context by @vyasr in https://github.com/rapidsai/cudf/pull/20964
+* Restore string preprocess PR and fix memcheck by @pmattione-nvidia in https://github.com/rapidsai/cudf/pull/20969
+* Enable sccache-dist for cpp-linters by @vyasr in https://github.com/rapidsai/cudf/pull/20968
+* [pre-commit.ci] pre-commit autoupdate by @pre-commit-ci[bot] in https://github.com/rapidsai/cudf/pull/20971
+* Clean up mixed join common utilities by @PointKernel in https://github.com/rapidsai/cudf/pull/20836
+* Disable TRANSPOSE_TEST checking logic for CI racecheck runs by @davidwendt in https://github.com/rapidsai/cudf/pull/20970
+* Use nosync execution policy everywhere by @bdice in https://github.com/rapidsai/cudf/pull/20807
+* Remove `cuda.core.experimental` warnings filters by @brandon-b-miller in https://github.com/rapidsai/cudf/pull/20933
+* Implement more flexible runtime to compile-time dispatching by @vyasr in https://github.com/rapidsai/cudf/pull/20927
+* Use per-column context in place of acquire_spill_lock by @vyasr in https://github.com/rapidsai/cudf/pull/20977
+* Fix cudf::clamp() for dictionary column types by @davidwendt in https://github.com/rapidsai/cudf/pull/20898
+* Patch installed pandas for cudf.pandas, pandas unit test run with CoW fix by @mroeschke in https://github.com/rapidsai/cudf/pull/20973
+* build and test against CUDA 13.1.0 by @jameslamb in https://github.com/rapidsai/cudf/pull/20972
+* Add ``opaque_reservation`` utility by @rjzamora in https://github.com/rapidsai/cudf/pull/20885
+* Remove exposure on column construction and unwrap buffers on pylibcudf conversion by @vyasr in https://github.com/rapidsai/cudf/pull/20980
+* Apply nosync execution policy in tests, benchmarks, Python, Java, and add docs by @bdice in https://github.com/rapidsai/cudf/pull/20978
+* Use `D` instead of `d` for time units by @galipremsagar in https://github.com/rapidsai/cudf/pull/20910
+* Add missing standard library headers to groupby/hash and jit files by @bdice in https://github.com/rapidsai/cudf/pull/20982
+* Add in key remapping for improved sort merge join performance by @revans2 in https://github.com/rapidsai/cudf/pull/20826
+* Use pinned memory in PQ reader to avoid pageable copies by @mhaseeb123 in https://github.com/rapidsai/cudf/pull/20820
+* Add Hybrid scan APIs for single-step table materialization by @mhaseeb123 in https://github.com/rapidsai/cudf/pull/20906
+* Add utility for deferring allocations on a stream by @TomAugspurger in https://github.com/rapidsai/cudf/pull/20987
+* Remove CUDF_EXPORT from cudf::detail::contains by @davidwendt in https://github.com/rapidsai/cudf/pull/20991
+* Restrict objects that construct cuDF Python Buffer  by @mroeschke in https://github.com/rapidsai/cudf/pull/20983
+* Fix min/max groupby logic for dictionary columns by @davidwendt in https://github.com/rapidsai/cudf/pull/20887
+* Centralize cudf Column creation as much as possible by @vyasr in https://github.com/rapidsai/cudf/pull/20999
+* Empty commit to trigger a build by @jameslamb in https://github.com/rapidsai/cudf/pull/21014
+* Rearrange variables to reduce padding by @pmattione-nvidia in https://github.com/rapidsai/cudf/pull/21016
+* Clean up buffer and access context implementations by @vyasr in https://github.com/rapidsai/cudf/pull/21013
+* Add missing thrust/tuple.h include for thrust::tie by @bdice in https://github.com/rapidsai/cudf/pull/21009
+* Replace remaining small pageable copies in PQ reader with pinned by @mhaseeb123 in https://github.com/rapidsai/cudf/pull/21006
+* Add dictionary specialization to row comparators by @davidwendt in https://github.com/rapidsai/cudf/pull/20830
+* Add no_sanitizer filter to compute-sanitizer script by @davidwendt in https://github.com/rapidsai/cudf/pull/20992
+* Make test_json_writer compatible with pandas 3 by @mroeschke in https://github.com/rapidsai/cudf/pull/21015
+* Use main shared-workflows branch by @jameslamb in https://github.com/rapidsai/cudf/pull/21038
+* Improve usage of polymorphism in columns by @vyasr in https://github.com/rapidsai/cudf/pull/21030
+* Increase memcheck timeout in nightly test script by @davidwendt in https://github.com/rapidsai/cudf/pull/21040
+* wheel builds: react to changes in pip's handling of build constraints by @mmccarty in https://github.com/rapidsai/cudf/pull/21048
+* Stop using non-pylibcudf children by @vyasr in https://github.com/rapidsai/cudf/pull/21057
+* Backport #21033: Add new pinned vector factory functions by @mhaseeb123 in https://github.com/rapidsai/cudf/pull/21106
+* Use a multi-level host thread pool to avoid deadlocks by @vuule in https://github.com/rapidsai/cudf/pull/21075
+* fix(build): build package on merge to `release/*` branch by @gforsyth in https://github.com/rapidsai/cudf/pull/21181
+* Fallback to numba-cuda with no extra CUDA packages if 'cuda_suffixed' isn't true by @trxcllnt in https://github.com/rapidsai/cudf/pull/21185
+
+## New Contributors
+* @jorenham made their first contribution in https://github.com/rapidsai/cudf/pull/20788
+* @nirandaperera made their first contribution in https://github.com/rapidsai/cudf/pull/20809
+* @rishic3 made their first contribution in https://github.com/rapidsai/cudf/pull/21004
+
+**Full Changelog**: https://github.com/rapidsai/cudf/compare/v26.02.00a...release/26.02
+
 # cudf 25.12.00 (10 Dec 2025)
 
 ### 🚨 Breaking Changes

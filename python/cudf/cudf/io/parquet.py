@@ -47,9 +47,9 @@ from cudf.utils.performance_tracking import _performance_tracking
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Hashable, Sequence
+    from typing import Self
 
-    from typing_extensions import Self
-
+    from cudf._typing import DtypeObj
     from cudf.core.series import Series
 
 
@@ -113,6 +113,7 @@ def _plc_write_parquet(
     column_type_length: dict | None = None,
     output_as_binary: set[Hashable] | None = None,
     write_arrow_schema: bool = False,
+    page_level_compression: bool = False,
 ) -> np.ndarray | None:
     """
     Cython function to call into libcudf API, see `write_parquet`.
@@ -162,7 +163,7 @@ def _plc_write_parquet(
                 tbl_meta.column_metadata[i].set_name(name)
 
             _set_col_metadata(
-                table[name]._column,
+                table[name]._column.dtype,
                 tbl_meta.column_metadata[i],
                 force_nullable_schema,
                 None,
@@ -212,6 +213,7 @@ def _plc_write_parquet(
             .stats_level(stat_freq)
             .int96_timestamps(int96_timestamps)
             .write_v2_headers(header_version == "2.0")
+            .page_level_compression(page_level_compression)
             .dictionary_policy(dict_policy)
             .utc_timestamps(False)
             .write_arrow_schema(write_arrow_schema)
@@ -282,6 +284,7 @@ def _write_parquet(
     column_type_length: dict | None = None,
     output_as_binary: set[Hashable] | None = None,
     write_arrow_schema: bool = True,
+    page_level_compression: bool = False,
 ) -> np.ndarray | None:
     if is_list_like(paths) and len(paths) > 1:
         if partitions_info is None:
@@ -320,6 +323,7 @@ def _write_parquet(
         "column_type_length": column_type_length,
         "output_as_binary": output_as_binary,
         "write_arrow_schema": write_arrow_schema,
+        "page_level_compression": page_level_compression,
     }
     if all(ioutils.is_fsspec_open_file(buf) for buf in paths_or_bufs):
         with ExitStack() as stack:
@@ -377,6 +381,7 @@ def write_to_dataset(
     column_type_length: dict | None = None,
     output_as_binary: set[Hashable] | None = None,
     store_schema=False,
+    page_level_compression: bool = False,
 ):
     """Wraps `to_parquet` to write partitioned Parquet datasets.
     For each combination of partition group and value,
@@ -468,6 +473,11 @@ def write_to_dataset(
     store_schema : bool, default False
         If ``True``, enable computing and writing arrow schema to Parquet
         file footer's key-value metadata section for faithful round-tripping.
+    page_level_compression : bool, default False
+        If ``True``, when writing version 2.0 pages (``header_version="2.0"``),
+        allow each page to independently decide whether to compress based on
+        compression ratio. Pages that do not benefit from compression will
+        be written uncompressed.
     """
 
     fs = ioutils._ensure_filesystem(fs, root_path, storage_options)
@@ -512,6 +522,7 @@ def write_to_dataset(
             column_type_length=column_type_length,
             output_as_binary=output_as_binary,
             store_schema=store_schema,
+            page_level_compression=page_level_compression,
         )
 
     else:
@@ -540,6 +551,7 @@ def write_to_dataset(
             column_type_length=column_type_length,
             output_as_binary=output_as_binary,
             store_schema=store_schema,
+            page_level_compression=page_level_compression,
         )
 
     return metadata
@@ -1372,7 +1384,7 @@ def _read_parquet(
             if skip_rows != 0:
                 options.set_skip_rows(skip_rows)
             if columns is not None:
-                options.set_columns(columns)
+                options.set_column_names(columns)
             if filters is not None:
                 options.set_filter(filters)
 
@@ -1440,7 +1452,7 @@ def _read_parquet(
             if skip_rows != 0:
                 options.set_skip_rows(skip_rows)
             if columns is not None:
-                options.set_columns(columns)
+                options.set_column_names(columns)
             if filters is not None:
                 options.set_filter(filters)
 
@@ -1517,6 +1529,7 @@ def to_parquet(
     column_type_length: dict | None = None,
     output_as_binary: set[Hashable] | None = None,
     store_schema=False,
+    page_level_compression: bool = False,
     *args,
     **kwargs,
 ):
@@ -1573,6 +1586,7 @@ def to_parquet(
                 column_type_length=column_type_length,
                 output_as_binary=output_as_binary,
                 store_schema=store_schema,
+                page_level_compression=page_level_compression,
             )
 
         partition_info = (
@@ -1603,6 +1617,7 @@ def to_parquet(
             column_type_length=column_type_length,
             output_as_binary=output_as_binary,
             write_arrow_schema=store_schema,
+            page_level_compression=page_level_compression,
         )
 
     else:
@@ -1888,7 +1903,7 @@ class ParquetWriter:
         for i, name in enumerate(table._column_names, num_index_cols_meta):
             self.tbl_meta.column_metadata[i].set_name(name)
             _set_col_metadata(
-                table[name]._column,
+                table[name]._column.dtype,
                 self.tbl_meta.column_metadata[i],
             )
 
@@ -2281,7 +2296,7 @@ def _hive_dirname(name, val):
 
 
 def _set_col_metadata(
-    col: ColumnBase,
+    dtype: DtypeObj,
     col_meta: plc.io.types.ColumnInMetadata,
     force_nullable_schema: bool = False,
     path: str | None = None,
@@ -2339,13 +2354,11 @@ def _set_col_metadata(
     if output_as_binary is not None and full_path in output_as_binary:
         col_meta.set_output_as_binary(True)
 
-    if isinstance(col.dtype, StructDtype):
-        for i, (child_col, name) in enumerate(
-            zip(col.children, list(col.dtype.fields), strict=True)
-        ):
+    if isinstance(dtype, StructDtype):
+        for i, (name, field_dtype) in enumerate(dtype.fields.items()):
             col_meta.child(i).set_name(name)
             _set_col_metadata(
-                child_col,
+                field_dtype,
                 col_meta.child(i),
                 force_nullable_schema,
                 full_path,
@@ -2354,12 +2367,12 @@ def _set_col_metadata(
                 column_type_length,
                 output_as_binary,
             )
-    elif isinstance(col.dtype, ListDtype):
+    elif isinstance(dtype, ListDtype):
         if full_path is not None:
             full_path = full_path + ".list"
             col_meta.child(1).set_name("element")
         _set_col_metadata(
-            col.children[1],
+            dtype.element_type,
             col_meta.child(1),
             force_nullable_schema,
             full_path,
@@ -2368,8 +2381,8 @@ def _set_col_metadata(
             column_type_length,
             output_as_binary,
         )
-    elif isinstance(col.dtype, DecimalDtype):
-        col_meta.set_decimal_precision(col.dtype.precision)
+    elif isinstance(dtype, DecimalDtype):
+        col_meta.set_decimal_precision(dtype.precision)
 
 
 def _get_comp_type(

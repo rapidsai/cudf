@@ -5,13 +5,13 @@ from __future__ import annotations
 
 import itertools
 import re
-from functools import cached_property, lru_cache
-from typing import TYPE_CHECKING, Any, cast
+import warnings
+from functools import lru_cache
+from typing import TYPE_CHECKING, Any, Self, cast
 
 import numpy as np
 import pandas as pd
 import pyarrow as pa
-from typing_extensions import Self
 
 import pylibcudf as plc
 
@@ -19,14 +19,13 @@ import cudf
 from cudf.api.types import is_scalar
 from cudf.core._internals import binaryop
 from cudf.core.column.column import ColumnBase, as_column, column_empty
+from cudf.core.dtype.validators import is_dtype_obj_string
 from cudf.core.mixins import Scannable
 from cudf.errors import MixedTypeError
 from cudf.utils.dtypes import (
-    CUDF_STRING_DTYPE,
     cudf_dtype_to_pa_type,
     dtype_to_pylibcudf_type,
     get_dtype_of_same_kind,
-    is_dtype_obj_string,
     is_pandas_nullable_extension_dtype,
 )
 from cudf.utils.scalar import pa_scalar_to_plc_scalar
@@ -76,20 +75,7 @@ def plc_flags_from_re_flags(
 
 
 class StringColumn(ColumnBase, Scannable):
-    """
-    Implements operations for Columns of String type
-
-    Parameters
-    ----------
-    data : Buffer
-        Buffer of the string data
-    mask : Buffer
-        The validity mask
-    offset : int
-        Data offset
-    children : Tuple[Column]
-        Columns containing the offsets
-    """
+    """Implements operations for Columns of String type"""
 
     _VALID_BINARY_OPERATIONS = {
         "__eq__",
@@ -116,61 +102,23 @@ class StringColumn(ColumnBase, Scannable):
         "cummax",
     }
 
+    @property
+    def _PANDAS_NA_VALUE(self) -> ScalarLike:
+        """String columns return None as NA value in pandas compatibility mode."""
+        if cudf.get_option("mode.pandas_compatible"):
+            if is_pandas_nullable_extension_dtype(self.dtype):
+                return self.dtype.na_value
+            return None
+        return pd.NA
+
     @classmethod
     def _validate_args(
         cls, plc_column: plc.Column, dtype: np.dtype
     ) -> tuple[plc.Column, np.dtype]:
         plc_column, dtype = super()._validate_args(plc_column, dtype)
-        if (
-            not cudf.get_option("mode.pandas_compatible")
-            and dtype != CUDF_STRING_DTYPE
-            and dtype.kind != "U"
-        ) or (
-            cudf.get_option("mode.pandas_compatible")
-            and not is_dtype_obj_string(dtype)
-        ):
-            raise ValueError(f"dtype must be {CUDF_STRING_DTYPE}")
-        if (
-            cudf.get_option("mode.pandas_compatible")
-            and isinstance(dtype, np.dtype)
-            and dtype.kind == "U"
-        ):
-            dtype = CUDF_STRING_DTYPE
+        if not is_dtype_obj_string(dtype):
+            raise ValueError("dtype must be a valid cuDF string dtype")
         return plc_column, dtype
-
-    @cached_property
-    def start_offset(self) -> int:
-        if len(self.children) == 1 and self.offset < self.children[0].size:
-            return int(self.children[0].element_indexing(self.offset))
-        else:
-            return 0
-
-    @cached_property
-    def end_offset(self) -> int:
-        if (
-            len(self.children) == 1
-            and (self.offset + self.size) < self.children[0].size
-        ):
-            return int(
-                self.children[0].element_indexing(self.offset + self.size)
-            )
-        else:
-            return 0
-
-    def all(self, skipna: bool = True) -> bool:
-        if skipna and self.null_count == self.size:
-            return True
-        elif not skipna and self.has_nulls():
-            raise TypeError("boolean value of NA is ambiguous")
-        raise NotImplementedError("`all` not implemented for `StringColumn`")
-
-    def any(self, skipna: bool = True) -> bool:
-        if not skipna and self.has_nulls():
-            raise TypeError("boolean value of NA is ambiguous")
-        elif skipna and self.null_count == self.size:
-            return False
-
-        raise NotImplementedError("`any` not implemented for `StringColumn`")
 
     @property
     def __cuda_array_interface__(self) -> Mapping[str, Any]:
@@ -201,7 +149,7 @@ class StringColumn(ColumnBase, Scannable):
         # All null string columns fail to convert in libcudf, so we must short-circuit
         # the call to super().to_arrow().
         # TODO: Investigate if the above is a bug in libcudf and fix it there.
-        if len(self.children) == 0 or self.null_count == len(self):
+        if self.plc_column.num_children() == 0 or self.null_count == len(self):
             return pa.NullArray.from_buffers(
                 pa.null(), len(self), [pa.py_buffer(b"")]
             )
@@ -211,14 +159,59 @@ class StringColumn(ColumnBase, Scannable):
         self,
         skipna: bool = True,
         min_count: int = 0,
+        **kwargs: Any,
     ) -> ScalarLike:
-        result_col = self._process_for_reduction(
-            skipna=skipna, min_count=min_count
+        col = self.nans_to_nulls() if skipna else self
+        if not skipna and col.has_nulls():
+            return pd.NA
+        if skipna:
+            col = col.dropna()
+
+        if min_count > 0 and len(col) - col.null_count < min_count:
+            return pd.NA
+
+        return (
+            0
+            if len(col) == 0
+            else col.join_strings("", None).element_indexing(0)
         )
-        if isinstance(result_col, type(self)):
-            return result_col.join_strings("", None).element_indexing(0)
-        else:
-            return result_col
+
+    def any(
+        self, skipna: bool = True, min_count: int = 0, **kwargs: Any
+    ) -> ScalarLike:
+        """Check if any string value is truthy (non-empty)."""
+        if not skipna and self.has_nulls():
+            raise TypeError("boolean value of NA is ambiguous")
+        elif skipna and self.null_count == self.size:
+            return False
+        raise NotImplementedError("`any` not implemented for `StringColumn`")
+
+    def all(
+        self, skipna: bool = True, min_count: int = 0, **kwargs: Any
+    ) -> ScalarLike:
+        """Check if all string values are truthy (non-empty)."""
+        if skipna and self.null_count == self.size:
+            return True
+        elif not skipna and self.has_nulls():
+            raise TypeError("boolean value of NA is ambiguous")
+        raise NotImplementedError("`all` not implemented for `StringColumn`")
+
+    def _reduce(
+        self,
+        op: str,
+        skipna: bool = True,
+        min_count: int = 0,
+        **kwargs: Any,
+    ) -> ScalarLike:
+        """Validate reduction operations for StringColumn."""
+        if op in {"min", "max"}:
+            return super()._reduce(op, skipna, min_count, **kwargs)
+
+        # For empty columns with statistical operations, return NaN (pandas behavior)
+        if len(self) == 0 and op in {"var", "std", "mean", "sum_of_squares"}:
+            return np.nan
+
+        raise TypeError(f"Series.{op} does not support StringColumn")
 
     def __contains__(self, item: ScalarLike) -> bool:
         other = [item] if is_scalar(item) else item
@@ -279,11 +272,6 @@ class StringColumn(ColumnBase, Scannable):
             return result._with_type_metadata(new_type)
         return result
 
-    def _scan(self, op: str) -> ColumnBase:
-        return self.scan(op.replace("cum", ""), True)._with_type_metadata(
-            self.dtype
-        )
-
     def as_numerical_column(self, dtype: np.dtype) -> NumericalColumn:
         if dtype.kind == "b":
             result = self.count_characters() > np.int8(0)
@@ -310,12 +298,11 @@ class StringColumn(ColumnBase, Scannable):
             raise ValueError(f"dtype must be a numerical type, not {dtype}")
         plc_dtype = dtype_to_pylibcudf_type(dtype)
         with self.access(mode="read", scope="internal"):
-            return (
+            return cast(
+                cudf.core.column.numerical.NumericalColumn,
                 type(self)
-                .from_pylibcudf(  # type: ignore[return-value]
-                    cast_func(self.plc_column, plc_dtype)
-                )
-                ._with_type_metadata(dtype=dtype)
+                .from_pylibcudf(cast_func(self.plc_column, plc_dtype))
+                ._with_type_metadata(dtype=dtype),
             )
 
     def strptime(
@@ -362,14 +349,18 @@ class StringColumn(ColumnBase, Scannable):
 
         with self.access(mode="read", scope="internal"):
             plc_dtype = dtype_to_pylibcudf_type(dtype)
-            result_col = type(self).from_pylibcudf(
-                casting_func(self.plc_column, plc_dtype, format)
+            result_col = cast(
+                cudf.core.column.datetime.DatetimeColumn
+                | cudf.core.column.timedelta.TimeDeltaColumn,
+                type(self).from_pylibcudf(
+                    casting_func(self.plc_column, plc_dtype, format)
+                ),
             )
 
         if add_back_nat:
             result_col[is_nat] = None
 
-        return result_col  # type: ignore[return-value]
+        return result_col
 
     def as_datetime_column(self, dtype: np.dtype) -> DatetimeColumn:
         not_null = self.apply_boolean_mask(self.notnull())
@@ -393,27 +384,15 @@ class StringColumn(ColumnBase, Scannable):
                     dtype_to_pylibcudf_type(dtype),
                 )
             )
-            result = ColumnBase.from_pylibcudf(plc_column)
-            result.dtype.precision = dtype.precision  # type: ignore[union-attr]
-            return result  # type: ignore[return-value]
+            return cast(
+                "cudf.core.column.decimal.DecimalBaseColumn",
+                ColumnBase.create(plc_column, dtype),
+            )
 
-    def as_string_column(self, dtype: DtypeObj) -> StringColumn:
-        col = self
+    def as_string_column(self, dtype: DtypeObj) -> Self:
         if dtype != self.dtype:
-            if isinstance(dtype, pd.StringDtype) or (
-                isinstance(dtype, pd.ArrowDtype)
-                and pa.string() == dtype.pyarrow_dtype
-            ):
-                # TODO: Drop the deep copies on astype's copy keyword
-                # default value is fixed in `25.10`
-                col = self.copy(deep=True)
-                col._dtype = dtype
-            elif isinstance(dtype, np.dtype) and dtype.kind in {"U", "O"}:
-                # TODO: Drop the deep copies on astype's copy keyword
-                # default value is fixed in `25.10`
-                col = self.copy(deep=True)
-                col._dtype = CUDF_STRING_DTYPE
-        return col
+            return cast(Self, ColumnBase.create(self.plc_column, dtype))
+        return self
 
     @property
     def values(self) -> cp.ndarray:
@@ -543,14 +522,14 @@ class StringColumn(ColumnBase, Scannable):
                         dtype=get_dtype_of_same_kind(
                             self.dtype, np.dtype(np.bool_)
                         ),
-                    ).set_mask(self.mask)
+                    ).set_mask(self.mask, self.null_count)
                 else:
                     return NotImplemented
 
             if op == "__add__":
                 if isinstance(other, pa.Scalar):
                     other = cast(
-                        StringColumn,
+                        cudf.core.column.string.StringColumn,
                         as_column(other, length=len(self)),
                     )
                 lhs, rhs = (other, self) if reflect else (self, other)
@@ -595,14 +574,17 @@ class StringColumn(ColumnBase, Scannable):
                         f"seed must be in range [0, {np.iinfo(np.uint32).max}]"
                     )
                 seed = np.uint32(seed)
-            return type(self).from_pylibcudf(  # type: ignore[return-value]
-                plc.nvtext.minhash.minhash(
-                    self.plc_column,
-                    seed,
-                    a.plc_column,
-                    b.plc_column,
-                    width,
-                )
+            return cast(
+                cudf.core.column.lists.ListColumn,
+                type(self).from_pylibcudf(
+                    plc.nvtext.minhash.minhash(
+                        self.plc_column,
+                        seed,
+                        a.plc_column,
+                        b.plc_column,
+                        width,
+                    )
+                ),
             )
 
     def minhash64(
@@ -620,14 +602,17 @@ class StringColumn(ColumnBase, Scannable):
                         f"seed must be in range [0, {np.iinfo(np.uint64).max}]"
                     )
                 seed = np.uint64(seed)
-            return type(self).from_pylibcudf(  # type: ignore[return-value]
-                plc.nvtext.minhash.minhash64(
-                    self.plc_column,
-                    seed,
-                    a.plc_column,
-                    b.plc_column,
-                    width,
-                )
+            return cast(
+                cudf.core.column.lists.ListColumn,
+                type(self).from_pylibcudf(
+                    plc.nvtext.minhash.minhash64(
+                        self.plc_column,
+                        seed,
+                        a.plc_column,
+                        b.plc_column,
+                        width,
+                    )
+                ),
             )
 
     def jaccard_index(self, other: Self, width: int) -> NumericalColumn:
@@ -637,7 +622,13 @@ class StringColumn(ColumnBase, Scannable):
                 other.plc_column,
                 width,
             )
-            return type(self).from_pylibcudf(result)  # type: ignore[return-value]
+            return cast(
+                "cudf.core.column.numerical.NumericalColumn",
+                ColumnBase.create(
+                    result,
+                    get_dtype_of_same_kind(self.dtype, np.dtype(np.float32)),
+                ),
+            )
 
     def generate_ngrams(self, ngrams: int, separator: plc.Scalar) -> Self:
         with self.access(mode="read", scope="internal"):
@@ -646,14 +637,20 @@ class StringColumn(ColumnBase, Scannable):
                 ngrams,
                 separator,
             )
-            return type(self).from_pylibcudf(result)
+            return cast(
+                Self,
+                ColumnBase.create(result, self.dtype),
+            )
 
     def generate_character_ngrams(self, ngrams: int) -> ListColumn:
         with self.access(mode="read", scope="internal"):
             result = plc.nvtext.generate_ngrams.generate_character_ngrams(
                 self.plc_column, ngrams
             )
-            return type(self).from_pylibcudf(result)  # type: ignore[return-value]
+            return cast(
+                "cudf.core.column.lists.ListColumn",
+                type(self).from_pylibcudf(result),
+            )
 
     def hash_character_ngrams(
         self, ngrams: int, seed: int | np.uint32
@@ -669,14 +666,20 @@ class StringColumn(ColumnBase, Scannable):
             result = plc.nvtext.generate_ngrams.hash_character_ngrams(
                 self.plc_column, ngrams, seed
             )
-            return type(self).from_pylibcudf(result)  # type: ignore[return-value]
+            return cast(
+                cudf.core.column.lists.ListColumn,
+                type(self).from_pylibcudf(result),
+            )
 
     def build_suffix_array(self, min_width: int) -> Self:
         with self.access(mode="read", scope="internal"):
             result = plc.nvtext.deduplicate.build_suffix_array(
                 self.plc_column, min_width
             )
-            return type(self).from_pylibcudf(result)
+            return cast(
+                Self,
+                type(self).from_pylibcudf(result),
+            )
 
     def resolve_duplicates(self, sa: Self, min_width: int) -> Self:
         with self.access(mode="read", scope="internal"):
@@ -685,7 +688,10 @@ class StringColumn(ColumnBase, Scannable):
                 sa.plc_column,
                 min_width,
             )
-            return type(self).from_pylibcudf(result)
+            return cast(
+                Self,
+                type(self).from_pylibcudf(result),
+            )
 
     def resolve_duplicates_pair(
         self, sa1: Self, input2: Self, sa2: Self, min_width: int
@@ -698,34 +704,57 @@ class StringColumn(ColumnBase, Scannable):
                 sa2.plc_column,
                 min_width,
             )
-            return type(self).from_pylibcudf(result)
+            return cast(
+                Self,
+                ColumnBase.create(result, self.dtype),
+            )
 
     def edit_distance(self, targets: Self) -> NumericalColumn:
         with self.access(mode="read", scope="internal"):
             result = plc.nvtext.edit_distance.edit_distance(
                 self.plc_column, targets.plc_column
             )
-            return type(self).from_pylibcudf(result)  # type: ignore[return-value]
+            return cast(
+                "cudf.core.column.numerical.NumericalColumn",
+                ColumnBase.create(
+                    result,
+                    get_dtype_of_same_kind(self.dtype, np.dtype(np.int32)),
+                ),
+            )
 
     def edit_distance_matrix(self) -> ListColumn:
+        warnings.warn(
+            "edit_distance_matrix is deprecated. Use edit_distance instead.",
+            FutureWarning,
+        )
         with self.access(mode="read", scope="internal"):
             result = plc.nvtext.edit_distance.edit_distance_matrix(
                 self.plc_column
             )
-            return type(self).from_pylibcudf(result)  # type: ignore[return-value]
+            return cast(
+                cudf.core.column.lists.ListColumn,
+                type(self).from_pylibcudf(result),
+            )
 
     def byte_pair_encoding(
         self,
         merge_pairs: plc.nvtext.byte_pair_encode.BPEMergePairs,
         separator: str,
     ) -> Self:
+        warnings.warn(
+            "byte_pair_encoding is deprecated and will be removed in a future version.",
+            FutureWarning,
+            stacklevel=2,
+        )
         with self.access(mode="read", scope="internal"):
-            return type(self).from_pylibcudf(
-                plc.nvtext.byte_pair_encode.byte_pair_encoding(
-                    self.plc_column,
-                    merge_pairs,
-                    pa_scalar_to_plc_scalar(pa.scalar(separator)),
-                )
+            plc_column = plc.nvtext.byte_pair_encode.byte_pair_encoding(
+                self.plc_column,
+                merge_pairs,
+                pa_scalar_to_plc_scalar(pa.scalar(separator)),
+            )
+            return cast(
+                Self,
+                ColumnBase.create(plc_column, self.dtype),
             )
 
     def ngrams_tokenize(
@@ -735,43 +764,51 @@ class StringColumn(ColumnBase, Scannable):
         separator: plc.Scalar,
     ) -> Self:
         with self.access(mode="read", scope="internal"):
-            return type(self).from_pylibcudf(
-                plc.nvtext.ngrams_tokenize.ngrams_tokenize(
-                    self.plc_column,
-                    ngrams,
-                    delimiter,
-                    separator,
-                )
+            plc_column = plc.nvtext.ngrams_tokenize.ngrams_tokenize(
+                self.plc_column,
+                ngrams,
+                delimiter,
+                separator,
+            )
+            return cast(
+                Self,
+                ColumnBase.create(plc_column, self.dtype),
             )
 
     def normalize_spaces(self) -> Self:
         with self.access(mode="read", scope="internal"):
-            return type(self).from_pylibcudf(
-                plc.nvtext.normalize.normalize_spaces(self.plc_column)
+            plc_column = plc.nvtext.normalize.normalize_spaces(self.plc_column)
+            return cast(
+                Self,
+                ColumnBase.create(plc_column, self.dtype),
             )
 
     def normalize_characters(
         self, normalizer: plc.nvtext.normalize.CharacterNormalizer
     ) -> Self:
         with self.access(mode="read", scope="internal"):
-            return ColumnBase.from_pylibcudf(  # type: ignore[return-value]
-                plc.nvtext.normalize.normalize_characters(
-                    self.plc_column,
-                    normalizer,
-                )
+            plc_column = plc.nvtext.normalize.normalize_characters(
+                self.plc_column,
+                normalizer,
+            )
+            return cast(
+                Self,
+                ColumnBase.create(plc_column, self.dtype),
             )
 
     def replace_tokens(
         self, targets: Self, replacements: Self, delimiter: plc.Scalar
     ) -> Self:
         with self.access(mode="read", scope="internal"):
-            return type(self).from_pylibcudf(
-                plc.nvtext.replace.replace_tokens(
-                    self.plc_column,
-                    targets.plc_column,
-                    replacements.plc_column,
-                    delimiter,
-                )
+            plc_column = plc.nvtext.replace.replace_tokens(
+                self.plc_column,
+                targets.plc_column,
+                replacements.plc_column,
+                delimiter,
+            )
+            return cast(
+                Self,
+                ColumnBase.create(plc_column, self.dtype),
             )
 
     def filter_tokens(
@@ -781,67 +818,102 @@ class StringColumn(ColumnBase, Scannable):
         delimiter: plc.Scalar,
     ) -> Self:
         with self.access(mode="read", scope="internal"):
-            return type(self).from_pylibcudf(
-                plc.nvtext.replace.filter_tokens(
-                    self.plc_column,
-                    min_token_length,
-                    replacement,
-                    delimiter,
-                )
+            plc_column = plc.nvtext.replace.filter_tokens(
+                self.plc_column,
+                min_token_length,
+                replacement,
+                delimiter,
+            )
+            return cast(
+                Self,
+                ColumnBase.create(plc_column, self.dtype),
             )
 
     def porter_stemmer_measure(self) -> NumericalColumn:
         with self.access(mode="read", scope="internal"):
-            return type(self).from_pylibcudf(  # type: ignore[return-value]
-                plc.nvtext.stemmer.porter_stemmer_measure(self.plc_column)
+            plc_column = plc.nvtext.stemmer.porter_stemmer_measure(
+                self.plc_column
+            )
+            return cast(
+                "cudf.core.column.numerical.NumericalColumn",
+                ColumnBase.create(
+                    plc_column,
+                    get_dtype_of_same_kind(self.dtype, np.dtype(np.int32)),
+                ),
             )
 
-    def is_letter(self, is_vowel: bool, index: int | NumericalColumn) -> Self:
+    def is_letter(
+        self, is_vowel: bool, index: int | NumericalColumn
+    ) -> NumericalColumn:
         with self.access(mode="read", scope="internal"):
-            return type(self).from_pylibcudf(
-                plc.nvtext.stemmer.is_letter(
-                    self.plc_column,
-                    is_vowel,
-                    index if isinstance(index, int) else index.plc_column,
-                )
+            plc_column = plc.nvtext.stemmer.is_letter(
+                self.plc_column,
+                is_vowel,
+                index if isinstance(index, int) else index.plc_column,
+            )
+            return cast(
+                "cudf.core.column.numerical.NumericalColumn",
+                ColumnBase.create(
+                    plc_column,
+                    get_dtype_of_same_kind(self.dtype, np.dtype(np.bool_)),
+                ),
             )
 
     def tokenize_scalar(self, delimiter: plc.Scalar) -> Self:
         with self.access(mode="read", scope="internal"):
-            return type(self).from_pylibcudf(
-                plc.nvtext.tokenize.tokenize_scalar(self.plc_column, delimiter)
+            plc_column = plc.nvtext.tokenize.tokenize_scalar(
+                self.plc_column, delimiter
+            )
+            return cast(
+                Self,
+                ColumnBase.create(plc_column, self.dtype),
             )
 
     def tokenize_column(self, delimiters: Self) -> Self:
         with self.access(mode="read", scope="internal"):
-            return type(self).from_pylibcudf(
-                plc.nvtext.tokenize.tokenize_column(
-                    self.plc_column,
-                    delimiters.plc_column,
-                )
+            plc_column = plc.nvtext.tokenize.tokenize_column(
+                self.plc_column,
+                delimiters.plc_column,
+            )
+            return cast(
+                Self,
+                ColumnBase.create(plc_column, self.dtype),
             )
 
     def count_tokens_scalar(self, delimiter: plc.Scalar) -> NumericalColumn:
         with self.access(mode="read", scope="internal"):
-            return type(self).from_pylibcudf(  # type: ignore[return-value]
-                plc.nvtext.tokenize.count_tokens_scalar(
-                    self.plc_column, delimiter
-                )
+            plc_column = plc.nvtext.tokenize.count_tokens_scalar(
+                self.plc_column, delimiter
+            )
+            return cast(
+                "cudf.core.column.numerical.NumericalColumn",
+                ColumnBase.create(
+                    plc_column,
+                    get_dtype_of_same_kind(self.dtype, np.dtype(np.int32)),
+                ),
             )
 
     def count_tokens_column(self, delimiters: Self) -> NumericalColumn:
         with self.access(mode="read", scope="internal"):
-            return type(self).from_pylibcudf(  # type: ignore[return-value]
-                plc.nvtext.tokenize.count_tokens_column(
-                    self.plc_column,
-                    delimiters.plc_column,
-                )
+            plc_column = plc.nvtext.tokenize.count_tokens_column(
+                self.plc_column,
+                delimiters.plc_column,
+            )
+            return cast(
+                "cudf.core.column.numerical.NumericalColumn",
+                ColumnBase.create(
+                    plc_column,
+                    get_dtype_of_same_kind(self.dtype, np.dtype(np.int32)),
+                ),
             )
 
     def character_tokenize(self) -> Self:
         with self.access(mode="read", scope="internal"):
-            return type(self).from_pylibcudf(
-                plc.nvtext.tokenize.character_tokenize(self.plc_column)
+            return cast(
+                Self,
+                type(self).from_pylibcudf(
+                    plc.nvtext.tokenize.character_tokenize(self.plc_column)
+                ),
             )
 
     def tokenize_with_vocabulary(
@@ -851,13 +923,16 @@ class StringColumn(ColumnBase, Scannable):
         default_id: int,
     ) -> Self:
         with self.access(mode="read", scope="internal"):
-            return type(self).from_pylibcudf(
-                plc.nvtext.tokenize.tokenize_with_vocabulary(
-                    self.plc_column,
-                    vocabulary,
-                    pa_scalar_to_plc_scalar(pa.scalar(delimiter)),
-                    default_id,
-                )
+            return cast(
+                Self,
+                type(self).from_pylibcudf(
+                    plc.nvtext.tokenize.tokenize_with_vocabulary(
+                        self.plc_column,
+                        vocabulary,
+                        pa_scalar_to_plc_scalar(pa.scalar(delimiter)),
+                        default_id,
+                    )
+                ),
             )
 
     def wordpiece_tokenize(
@@ -866,62 +941,106 @@ class StringColumn(ColumnBase, Scannable):
         max_words_per_row: int,
     ) -> Self:
         with self.access(mode="read", scope="internal"):
-            return type(self).from_pylibcudf(
-                plc.nvtext.wordpiece_tokenize.wordpiece_tokenize(
-                    self.plc_column,
-                    vocabulary,
-                    max_words_per_row,
-                )
+            return cast(
+                Self,
+                type(self).from_pylibcudf(
+                    plc.nvtext.wordpiece_tokenize.wordpiece_tokenize(
+                        self.plc_column,
+                        vocabulary,
+                        max_words_per_row,
+                    )
+                ),
             )
 
     def detokenize(self, indices: ColumnBase, separator: plc.Scalar) -> Self:
         with self.access(mode="read", scope="internal"):
-            return type(self).from_pylibcudf(
-                plc.nvtext.tokenize.detokenize(
-                    self.plc_column,
-                    indices.plc_column,
-                    separator,
-                )
+            plc_column = plc.nvtext.tokenize.detokenize(
+                self.plc_column,
+                indices.plc_column,
+                separator,
+            )
+            return cast(
+                Self,
+                ColumnBase.create(plc_column, self.dtype),
             )
 
     def _modify_characters(
         self, method: Callable[[plc.Column], plc.Column]
     ) -> Self:
+        """Helper function for methods that modify characters e.g. to_lower"""
         with self.access(mode="read", scope="internal"):
-            """
-            Helper function for methods that modify characters e.g. to_lower
-            """
             plc_column = method(self.plc_column)
             return cast(Self, ColumnBase.from_pylibcudf(plc_column))
 
     def to_lower(self) -> Self:
-        return self._modify_characters(
-            plc.strings.case.to_lower
-        )._with_type_metadata(self.dtype)
+        with self.access(mode="read", scope="internal"):
+            result = cast(
+                Self,
+                ColumnBase.create(
+                    plc.strings.case.to_lower(self.plc_column), self.dtype
+                ),
+            )
+
+        # Handle Greek final sigma (ς) special case in pandas compatibility mode
+        # Greek capital sigma (Σ) lowercases to regular sigma (σ) at libcudf level,  # noqa: RUF003
+        # but should become final sigma (ς) when at the end of a word.
+        # Replace σ with ς when followed by end-of-string or non-letter character.  # noqa: RUF003
+        if cudf.get_option("mode.pandas_compatible"):
+            has_sigma = result.str_contains("σ")
+            if has_sigma.any():
+                result = result.replace_with_backrefs(
+                    r"σ($|[^a-zA-Zα-ωΑ-Ωά-ώΆ-Ώ])", r"ς\1"
+                )
+
+        return result
 
     def to_upper(self) -> Self:
-        return self._modify_characters(
-            plc.strings.case.to_upper
-        )._with_type_metadata(self.dtype)
+        with self.access(mode="read", scope="internal"):
+            return cast(
+                Self,
+                ColumnBase.create(
+                    plc.strings.case.to_upper(self.plc_column), self.dtype
+                ),
+            )
 
     def capitalize(self) -> Self:
-        return self._modify_characters(
-            plc.strings.capitalize.capitalize
-        )._with_type_metadata(self.dtype)
+        with self.access(mode="read", scope="internal"):
+            return cast(
+                Self,
+                ColumnBase.create(
+                    plc.strings.capitalize.capitalize(self.plc_column),
+                    self.dtype,
+                ),
+            )
 
     def swapcase(self) -> Self:
-        return self._modify_characters(
-            plc.strings.case.swapcase
-        )._with_type_metadata(self.dtype)
+        with self.access(mode="read", scope="internal"):
+            return cast(
+                Self,
+                ColumnBase.create(
+                    plc.strings.case.swapcase(self.plc_column), self.dtype
+                ),
+            )
 
     def title(self) -> Self:
-        return self._modify_characters(
-            plc.strings.capitalize.title
-        )._with_type_metadata(self.dtype)
+        with self.access(mode="read", scope="internal"):
+            return cast(
+                Self,
+                ColumnBase.create(
+                    plc.strings.capitalize.title(self.plc_column), self.dtype
+                ),
+            )
 
     def is_title(self) -> Self:
-        res = self._modify_characters(plc.strings.capitalize.is_title)
-        return self._apply_pandas_bool_metadata(res)  # type: ignore[return-value]
+        with self.access(mode="read", scope="internal"):
+            plc_column = plc.strings.capitalize.is_title(self.plc_column)
+            return cast(
+                Self,
+                ColumnBase.create(
+                    plc_column,
+                    get_dtype_of_same_kind(self.dtype, np.dtype(np.bool_)),
+                ),
+            )
 
     def replace_multiple(self, pattern: Self, replacements: Self) -> Self:
         with self.access(mode="read", scope="internal"):
@@ -932,61 +1051,72 @@ class StringColumn(ColumnBase, Scannable):
             )
             return cast(
                 Self,
-                ColumnBase.from_pylibcudf(plc_result)._with_type_metadata(
-                    self.dtype
-                ),
+                ColumnBase.create(plc_result, self.dtype),
             )
 
     def is_hex(self) -> NumericalColumn:
         with self.access(mode="read", scope="internal"):
-            return (
-                type(self)
-                .from_pylibcudf(  # type: ignore[return-value]
-                    plc.strings.convert.convert_integers.is_hex(
-                        self.plc_column,
-                    )
-                )
-                ._with_type_metadata(
-                    get_dtype_of_same_kind(self.dtype, np.dtype("bool"))
-                )
+            plc_column = plc.strings.convert.convert_integers.is_hex(
+                self.plc_column,
+            )
+            return cast(
+                "cudf.core.column.numerical.NumericalColumn",
+                ColumnBase.create(
+                    plc_column,
+                    get_dtype_of_same_kind(self.dtype, np.dtype(np.bool_)),
+                ),
             )
 
     def hex_to_integers(self) -> NumericalColumn:
         with self.access(mode="read", scope="internal"):
-            return type(self).from_pylibcudf(  # type: ignore[return-value]
-                plc.strings.convert.convert_integers.hex_to_integers(
-                    self.plc_column, plc.DataType(plc.TypeId.INT64)
-                )
+            plc_column = plc.strings.convert.convert_integers.hex_to_integers(
+                self.plc_column, plc.DataType(plc.TypeId.INT64)
+            )
+            return cast(
+                "cudf.core.column.numerical.NumericalColumn",
+                ColumnBase.create(
+                    plc_column,
+                    get_dtype_of_same_kind(self.dtype, np.dtype(np.int64)),
+                ),
             )
 
     def is_ipv4(self) -> NumericalColumn:
         with self.access(mode="read", scope="internal"):
-            return type(self).from_pylibcudf(  # type: ignore[return-value]
-                plc.strings.convert.convert_ipv4.is_ipv4(
-                    self.plc_column,
-                )
+            plc_column = plc.strings.convert.convert_ipv4.is_ipv4(
+                self.plc_column,
+            )
+            return cast(
+                "cudf.core.column.numerical.NumericalColumn",
+                ColumnBase.create(
+                    plc_column,
+                    get_dtype_of_same_kind(self.dtype, np.dtype(np.bool_)),
+                ),
             )
 
     def ipv4_to_integers(self) -> NumericalColumn:
         with self.access(mode="read", scope="internal"):
-            return type(self).from_pylibcudf(  # type: ignore[return-value]
-                plc.strings.convert.convert_ipv4.ipv4_to_integers(
-                    self.plc_column,
-                )
+            plc_column = plc.strings.convert.convert_ipv4.ipv4_to_integers(
+                self.plc_column,
+            )
+            return cast(
+                "cudf.core.column.numerical.NumericalColumn",
+                ColumnBase.create(
+                    plc_column,
+                    get_dtype_of_same_kind(self.dtype, np.dtype(np.uint32)),
+                ),
             )
 
     def is_timestamp(self, format: str) -> NumericalColumn:
         with self.access(mode="read", scope="internal"):
-            return (
-                type(self)
-                .from_pylibcudf(  # type: ignore[return-value]
-                    plc.strings.convert.convert_datetime.is_timestamp(
-                        self.plc_column, format
-                    )
-                )
-                ._with_type_metadata(
-                    get_dtype_of_same_kind(self.dtype, np.dtype("bool"))
-                )
+            plc_column = plc.strings.convert.convert_datetime.is_timestamp(
+                self.plc_column, format
+            )
+            return cast(
+                "cudf.core.column.numerical.NumericalColumn",
+                ColumnBase.create(
+                    plc_column,
+                    get_dtype_of_same_kind(self.dtype, np.dtype("bool")),
+                ),
             )
 
     def _split_record_re(
@@ -1008,8 +1138,11 @@ class StringColumn(ColumnBase, Scannable):
                 maxsplit,
             )
             res_col = ColumnBase.from_pylibcudf(plc_column)
-            return res_col._with_type_metadata(  # type: ignore[return-value]
-                self._get_pandas_compatible_dtype(res_col.dtype)
+            return cast(
+                Self,
+                res_col._with_type_metadata(
+                    self._get_pandas_compatible_dtype(res_col.dtype)
+                ),
             )
 
     def split_record_re(self, pattern: str, maxsplit: int) -> Self:
@@ -1042,9 +1175,10 @@ class StringColumn(ColumnBase, Scannable):
             )
             return dict(
                 enumerate(
-                    ColumnBase.from_pylibcudf(col)._with_type_metadata(
-                        self.dtype
-                    )  # type: ignore[misc]
+                    cast(
+                        Self,
+                        ColumnBase.create(col, self.dtype),
+                    )
                     for col in plc_table.columns()
                 )
             )
@@ -1078,8 +1212,11 @@ class StringColumn(ColumnBase, Scannable):
                         self.dtype,
                         res_col.dtype,
                     )
-                    return res_col._with_type_metadata(new_type)
-            return res_col
+                    return cast(
+                        Self,
+                        res_col._with_type_metadata(new_type),
+                    )
+            return cast(Self, res_col)
 
     def split_record(self, delimiter: plc.Scalar, maxsplit: int) -> Self:
         return self._split_record(
@@ -1105,9 +1242,10 @@ class StringColumn(ColumnBase, Scannable):
             )
             return dict(
                 enumerate(
-                    ColumnBase.from_pylibcudf(col)._with_type_metadata(
-                        self.dtype
-                    )  # type: ignore[misc]
+                    cast(
+                        Self,
+                        ColumnBase.create(col, self.dtype),
+                    )
                     for col in plc_table.columns()
                 )
             )
@@ -1117,6 +1255,18 @@ class StringColumn(ColumnBase, Scannable):
 
     def rsplit(self, delimiter: plc.Scalar, maxsplit: int) -> dict[int, Self]:
         return self._split(delimiter, maxsplit, plc.strings.split.split.rsplit)
+
+    def split_part(self, delimiter: plc.Scalar, index: int) -> Self:
+        with self.access(mode="read", scope="internal"):
+            plc_column = plc.strings.split.split.split_part(
+                self.plc_column,
+                delimiter,
+                index,
+            )
+            return cast(
+                Self,
+                ColumnBase.create(plc_column, self.dtype),
+            )
 
     def _partition(
         self,
@@ -1130,9 +1280,10 @@ class StringColumn(ColumnBase, Scannable):
             )
             return dict(
                 enumerate(
-                    ColumnBase.from_pylibcudf(col)._with_type_metadata(
-                        self.dtype
-                    )  # type: ignore[misc]
+                    cast(
+                        Self,
+                        ColumnBase.create(col, self.dtype),
+                    )
                     for col in plc_table.columns()
                 )
             )
@@ -1152,10 +1303,9 @@ class StringColumn(ColumnBase, Scannable):
             plc_column = plc.strings.convert.convert_urls.url_decode(
                 self.plc_column
             )
-            return (
-                type(self)
-                .from_pylibcudf(plc_column)
-                ._with_type_metadata(self.dtype)
+            return cast(
+                Self,
+                ColumnBase.create(plc_column, self.dtype),
             )
 
     def url_encode(self) -> Self:
@@ -1163,10 +1313,9 @@ class StringColumn(ColumnBase, Scannable):
             plc_column = plc.strings.convert.convert_urls.url_encode(
                 self.plc_column
             )
-            return (
-                type(self)
-                .from_pylibcudf(plc_column)
-                ._with_type_metadata(self.dtype)
+            return cast(
+                Self,
+                ColumnBase.create(plc_column, self.dtype),
             )
 
     def is_integer(self) -> NumericalColumn:
@@ -1174,12 +1323,12 @@ class StringColumn(ColumnBase, Scannable):
             plc_column = plc.strings.convert.convert_integers.is_integer(
                 self.plc_column
             )
-            return (
-                type(self)  # type: ignore[return-value]
-                .from_pylibcudf(plc_column)
-                ._with_type_metadata(
-                    get_dtype_of_same_kind(self.dtype, np.dtype("bool"))
-                )
+            return cast(
+                cudf.core.column.numerical.NumericalColumn,
+                ColumnBase.create(
+                    plc_column,
+                    get_dtype_of_same_kind(self.dtype, np.dtype(np.bool_)),
+                ),
             )
 
     def is_float(self) -> NumericalColumn:
@@ -1187,12 +1336,12 @@ class StringColumn(ColumnBase, Scannable):
             plc_column = plc.strings.convert.convert_floats.is_float(
                 self.plc_column
             )
-            return (
-                type(self)  # type: ignore[return-value]
-                .from_pylibcudf(plc_column)
-                ._with_type_metadata(
-                    get_dtype_of_same_kind(self.dtype, np.dtype("bool"))
-                )
+            return cast(
+                cudf.core.column.numerical.NumericalColumn,
+                ColumnBase.create(
+                    plc_column,
+                    get_dtype_of_same_kind(self.dtype, np.dtype(np.bool_)),
+                ),
             )
 
     def count_characters(self) -> NumericalColumn:
@@ -1202,9 +1351,11 @@ class StringColumn(ColumnBase, Scannable):
             )
             res = type(self).from_pylibcudf(plc_column)
             if cudf.get_option("mode.pandas_compatible"):
-                new_type = self._get_pandas_compatible_dtype(np.dtype("int64"))
-                res = res.astype(new_type)  # type: ignore[assignment]
-            return res  # type: ignore[return-value]
+                new_type = self._get_pandas_compatible_dtype(
+                    np.dtype(np.int64)
+                )
+                res = res.astype(new_type)
+            return cast(cudf.core.column.numerical.NumericalColumn, res)
 
     def count_bytes(self) -> NumericalColumn:
         with self.access(mode="read", scope="internal"):
@@ -1213,7 +1364,7 @@ class StringColumn(ColumnBase, Scannable):
             res = res._with_type_metadata(
                 get_dtype_of_same_kind(self.dtype, res.dtype)
             )
-            return res  # type: ignore[return-value]
+            return cast(cudf.core.column.numerical.NumericalColumn, res)
 
     def join_strings(self, separator: str, na_rep: str | None) -> Self:
         with self.access(mode="read", scope="internal"):
@@ -1222,10 +1373,9 @@ class StringColumn(ColumnBase, Scannable):
                 pa_scalar_to_plc_scalar(pa.scalar(separator)),
                 pa_scalar_to_plc_scalar(pa.scalar(na_rep, type=pa.string())),
             )
-            return (
-                type(self)
-                .from_pylibcudf(plc_column)
-                ._with_type_metadata(self.dtype)
+            return cast(
+                Self,
+                ColumnBase.create(plc_column, self.dtype),
             )
 
     def concatenate(
@@ -1239,10 +1389,9 @@ class StringColumn(ColumnBase, Scannable):
                 pa_scalar_to_plc_scalar(pa.scalar(sep)),
                 pa_scalar_to_plc_scalar(pa.scalar(na_rep, type=pa.string())),
             )
-            return (
-                type(self)
-                .from_pylibcudf(plc_column)
-                ._with_type_metadata(self.dtype)
+            return cast(
+                Self,
+                ColumnBase.create(plc_column, self.dtype),
             )
 
     def extract(self, pattern: str, flags: int) -> dict[int, Self]:
@@ -1256,9 +1405,7 @@ class StringColumn(ColumnBase, Scannable):
             )
             return dict(
                 enumerate(
-                    type(self)
-                    .from_pylibcudf(col)
-                    ._with_type_metadata(self.dtype)
+                    cast(Self, ColumnBase.create(col, self.dtype))
                     for col in plc_table.columns()
                 )
             )
@@ -1286,12 +1433,12 @@ class StringColumn(ColumnBase, Scannable):
                 self.plc_column,
                 plc_pattern,
             )
-            return (
-                type(self)
-                .from_pylibcudf(plc_column)
-                ._with_type_metadata(
-                    get_dtype_of_same_kind(self.dtype, np.dtype("bool"))
-                )
+            return cast(
+                Self,
+                ColumnBase.create(
+                    plc_column,
+                    get_dtype_of_same_kind(self.dtype, np.dtype(np.bool_)),
+                ),
             )
 
     def like(self, pattern: str, escape: str) -> Self:
@@ -1301,10 +1448,12 @@ class StringColumn(ColumnBase, Scannable):
                 pattern,
                 escape,
             )
-            return (
-                type(self)
-                .from_pylibcudf(plc_column)
-                ._with_type_metadata(self.dtype)
+            return cast(
+                Self,
+                ColumnBase.create(
+                    plc_column,
+                    get_dtype_of_same_kind(self.dtype, np.dtype(np.bool_)),
+                ),
             )
 
     def repeat_strings(self, repeats: int | ColumnBase) -> Self:
@@ -1318,10 +1467,9 @@ class StringColumn(ColumnBase, Scannable):
                 self.plc_column,
                 plc_repeats,
             )
-            return (
-                type(self)
-                .from_pylibcudf(plc_column)
-                ._with_type_metadata(self.dtype)
+            return cast(
+                Self,
+                ColumnBase.create(plc_column, self.dtype),
             )
 
     def replace_re(
@@ -1354,10 +1502,9 @@ class StringColumn(ColumnBase, Scannable):
                 )
             else:
                 raise ValueError("Invalid pattern and replacement types")
-            return (
-                type(self)
-                .from_pylibcudf(plc_column)
-                ._with_type_metadata(self.dtype)
+            return cast(
+                Self,
+                ColumnBase.create(plc_column, self.dtype),
             )
 
     def replace_str(
@@ -1370,10 +1517,9 @@ class StringColumn(ColumnBase, Scannable):
                 pa_scalar_to_plc_scalar(replacement),
                 max_replace_count,
             )
-            return (
-                type(self)
-                .from_pylibcudf(plc_result)
-                ._with_type_metadata(self.dtype)
+            return cast(
+                Self,
+                ColumnBase.create(plc_result, self.dtype),
             )
 
     def replace_with_backrefs(self, pattern: str, replacement: str) -> Self:
@@ -1385,10 +1531,9 @@ class StringColumn(ColumnBase, Scannable):
                 ),
                 replacement,
             )
-            return (
-                type(self)
-                .from_pylibcudf(plc_result)
-                ._with_type_metadata(self.dtype)
+            return cast(
+                Self,
+                ColumnBase.create(plc_result, self.dtype),
             )
 
     def slice_strings(
@@ -1418,10 +1563,9 @@ class StringColumn(ColumnBase, Scannable):
             plc_result = plc.strings.slice.slice_strings(
                 self.plc_column, plc_start, plc_stop, plc_step
             )
-            return (
-                type(self)
-                .from_pylibcudf(plc_result)
-                ._with_type_metadata(self.dtype)
+            return cast(
+                Self,
+                ColumnBase.create(plc_result, self.dtype),
             )
 
     def all_characters_of_type(
@@ -1433,26 +1577,19 @@ class StringColumn(ColumnBase, Scannable):
             plc_result = plc.strings.char_types.all_characters_of_type(
                 self.plc_column, char_type, case_type
             )
-            res = type(self).from_pylibcudf(plc_result)
-
-            if cudf.get_option("mode.pandas_compatible"):
-                if (
-                    isinstance(self.dtype, pd.StringDtype)
-                    and self.dtype.na_value is np.nan
-                ):
-                    res = res.fillna(False)
-                    # var-annotated ignore not needed for numpy>=2.4.0
-                    new_type = np.dtype("bool")  # type: ignore[var-annotated,unused-ignore]
-                else:
-                    new_type = get_dtype_of_same_kind(
-                        pd.StringDtype()
-                        if isinstance(self.dtype, pd.StringDtype)
-                        else self.dtype,
-                        np.dtype("bool"),
-                    )
-            else:
-                new_type = np.dtype("bool")
-            return res._with_type_metadata(new_type)  # type: ignore[return-value]
+            result = cast(
+                "cudf.core.column.numerical.NumericalColumn",
+                ColumnBase.create(
+                    plc_result,
+                    get_dtype_of_same_kind(self.dtype, np.dtype(np.bool_)),
+                ),
+            )
+            if (
+                isinstance(self.dtype, pd.StringDtype)
+                and self.dtype.na_value is np.nan
+            ):
+                result = result.fillna(False)
+            return result
 
     def filter_characters_of_type(
         self,
@@ -1469,10 +1606,9 @@ class StringColumn(ColumnBase, Scannable):
                 ),
                 types_to_keep,
             )
-            return (
-                type(self)
-                .from_pylibcudf(plc_column)
-                ._with_type_metadata(self.dtype)
+            return cast(
+                Self,
+                ColumnBase.create(plc_column, self.dtype),
             )
 
     def replace_slice(self, start: int, stop: int, repl: str) -> Self:
@@ -1483,10 +1619,9 @@ class StringColumn(ColumnBase, Scannable):
                 start,
                 stop,
             )
-            return (
-                type(self)
-                .from_pylibcudf(plc_result)
-                ._with_type_metadata(self.dtype)
+            return cast(
+                Self,
+                ColumnBase.create(plc_result, self.dtype),
             )
 
     def get_json_object(
@@ -1509,7 +1644,10 @@ class StringColumn(ColumnBase, Scannable):
                 pa_scalar_to_plc_scalar(pa.scalar(json_path)),
                 options,
             )
-            return type(self).from_pylibcudf(plc_result)
+            return cast(
+                Self,
+                ColumnBase.create(plc_result, self.dtype),
+            )
 
     def pad(
         self, width: int, side: plc.strings.side_type.SideType, fillchar: str
@@ -1521,10 +1659,9 @@ class StringColumn(ColumnBase, Scannable):
                 side,
                 fillchar,
             )
-            return (
-                type(self)
-                .from_pylibcudf(plc_result)
-                ._with_type_metadata(self.dtype)
+            return cast(
+                Self,
+                ColumnBase.create(plc_result, self.dtype),
             )
 
     def zfill(self, width: int) -> Self:
@@ -1533,10 +1670,9 @@ class StringColumn(ColumnBase, Scannable):
                 self.plc_column,
                 width,
             )
-            return (
-                type(self)
-                .from_pylibcudf(plc_result)
-                ._with_type_metadata(self.dtype)
+            return cast(
+                Self,
+                ColumnBase.create(plc_result, self.dtype),
             )
 
     def strip(
@@ -1550,10 +1686,9 @@ class StringColumn(ColumnBase, Scannable):
                     pa.scalar(to_strip or "", type=pa.string())
                 ),
             )
-            return (
-                type(self)
-                .from_pylibcudf(plc_result)
-                ._with_type_metadata(self.dtype)
+            return cast(
+                Self,
+                ColumnBase.create(plc_result, self.dtype),
             )
 
     def wrap(self, width: int) -> Self:
@@ -1562,10 +1697,9 @@ class StringColumn(ColumnBase, Scannable):
                 self.plc_column,
                 width,
             )
-            return (
-                type(self)
-                .from_pylibcudf(plc_result)
-                ._with_type_metadata(self.dtype)
+            return cast(
+                Self,
+                ColumnBase.create(plc_result, self.dtype),
             )
 
     def count_re(self, pattern: str, flags: int) -> NumericalColumn:
@@ -1579,10 +1713,10 @@ class StringColumn(ColumnBase, Scannable):
             res = type(self).from_pylibcudf(plc_result)
             if cudf.get_option("mode.pandas_compatible"):
                 if not isinstance(self.dtype, pd.ArrowDtype):
-                    res = res.astype(np.dtype("int64"))  # type: ignore[assignment]
+                    res = res.astype(np.dtype(np.int64))
                 new_type = self._get_pandas_compatible_dtype(res.dtype)
                 res = res._with_type_metadata(new_type)
-            return res  # type: ignore[return-value]
+            return cast(cudf.core.column.numerical.NumericalColumn, res)
 
     def findall(
         self,
@@ -1594,7 +1728,10 @@ class StringColumn(ColumnBase, Scannable):
     ) -> Self:
         with self.access(mode="read", scope="internal"):
             if len(self) == 0:
-                return as_column([], dtype=np.dtype("object"))  # type: ignore[return-value]
+                return cast(
+                    Self,
+                    as_column([], dtype=np.dtype("object")),
+                )
             plc_result = method(
                 self.plc_column,
                 plc.strings.regex_program.RegexProgram.create(
@@ -1605,7 +1742,7 @@ class StringColumn(ColumnBase, Scannable):
             res = res._with_type_metadata(
                 get_dtype_of_same_kind(self.dtype, res.dtype)
             )
-            return res
+            return cast(Self, res)
 
     def find_multiple(self, patterns: Self) -> Self:
         with self.access(mode="read", scope="internal"):
@@ -1613,7 +1750,10 @@ class StringColumn(ColumnBase, Scannable):
                 self.plc_column,
                 patterns.plc_column,
             )
-            return type(self).from_pylibcudf(plc_result)
+            return cast(
+                Self,
+                type(self).from_pylibcudf(plc_result),
+            )
 
     def starts_ends_with(
         self,
@@ -1650,7 +1790,10 @@ class StringColumn(ColumnBase, Scannable):
                     f"expected a str or tuple[str, ...], not {type(pat).__name__}"
                 )
             res = type(self).from_pylibcudf(plc_result)
-            return self._apply_pandas_bool_metadata(res)  # type: ignore[return-value]
+            return cast(
+                Self,
+                self._apply_pandas_bool_metadata(res),
+            )
 
     def find(
         self,
@@ -1670,8 +1813,8 @@ class StringColumn(ColumnBase, Scannable):
             if cudf.get_option("mode.pandas_compatible"):
                 res = self._apply_pandas_int_metadata(
                     res.astype(np.dtype("int64"))
-                )  # type: ignore[assignment]
-            return res
+                )
+            return cast(Self, res)
 
     def matches_re(self, pattern: str, flags: int) -> Self:
         with self.access(mode="read", scope="internal"):
@@ -1682,7 +1825,10 @@ class StringColumn(ColumnBase, Scannable):
                 ),
             )
             res = type(self).from_pylibcudf(plc_result)
-            return self._apply_pandas_bool_metadata(res)  # type: ignore[return-value]
+            return cast(
+                Self,
+                self._apply_pandas_bool_metadata(res),
+            )
 
     def code_points(self) -> Self:
         with self.access(mode="read", scope="internal"):
@@ -1693,7 +1839,7 @@ class StringColumn(ColumnBase, Scannable):
             res = res._with_type_metadata(
                 get_dtype_of_same_kind(self.dtype, res.dtype)
             )
-            return res
+            return cast(Self, res)
 
     def translate(self, table: dict) -> Self:
         with self.access(mode="read", scope="internal"):
@@ -1701,10 +1847,9 @@ class StringColumn(ColumnBase, Scannable):
                 self.plc_column,
                 str.maketrans(table),  # type: ignore[arg-type]
             )
-            return (
-                type(self)
-                .from_pylibcudf(plc_result)
-                ._with_type_metadata(self.dtype)
+            return cast(
+                Self,
+                ColumnBase.create(plc_result, self.dtype),
             )
 
     def filter_characters(
@@ -1722,8 +1867,7 @@ class StringColumn(ColumnBase, Scannable):
                 else plc.strings.translate.FilterType.REMOVE,
                 pa_scalar_to_plc_scalar(pa.scalar(repl, type=pa.string())),
             )
-            return (
-                type(self)
-                .from_pylibcudf(plc_result)
-                ._with_type_metadata(self.dtype)
+            return cast(
+                Self,
+                ColumnBase.create(plc_result, self.dtype),
             )

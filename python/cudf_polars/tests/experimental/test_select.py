@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -17,7 +17,6 @@ from cudf_polars.testing.asserts import (
     assert_ir_translation_raises,
 )
 from cudf_polars.utils.versions import (
-    POLARS_VERSION_LT_130,
     POLARS_VERSION_LT_132,
     POLARS_VERSION_LT_134,
 )
@@ -78,9 +77,7 @@ def test_select_reduce_fallback(df, fallback_mode):
         ctx = contextlib.nullcontext()
     elif fallback_mode == "raise":
         ctx = pytest.raises(
-            pl.exceptions.ComputeError
-            if POLARS_VERSION_LT_130
-            else NotImplementedError,
+            NotImplementedError,
             match=match,
         )
     elif fallback_mode == "foo":
