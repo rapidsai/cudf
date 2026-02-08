@@ -11,7 +11,11 @@ from rapidsmpf.memory.buffer import MemoryType
 from rapidsmpf.memory.memory_reservation import opaque_memory_usage
 from rapidsmpf.streaming.core.message import Message
 from rapidsmpf.streaming.core.node import define_py_node
-from rapidsmpf.streaming.cudf.channel_metadata import ChannelMetadata
+from rapidsmpf.streaming.cudf.channel_metadata import (
+    ChannelMetadata,
+    HashScheme,
+    Partitioning,
+)
 from rapidsmpf.streaming.cudf.table_chunk import (
     TableChunk,
     make_table_chunks_available_or_wait,
@@ -20,6 +24,7 @@ from rapidsmpf.streaming.cudf.table_chunk import (
 from cudf_polars.containers import DataFrame
 from cudf_polars.dsl.ir import IR, Distinct
 from cudf_polars.experimental.rapidsmpf.collectives.allgather import AllGatherManager
+from cudf_polars.experimental.rapidsmpf.collectives.shuffle import ShuffleManager
 from cudf_polars.experimental.rapidsmpf.dispatch import generate_ir_sub_network
 from cudf_polars.experimental.rapidsmpf.utils import (
     ChannelManager,
@@ -32,6 +37,7 @@ from cudf_polars.experimental.rapidsmpf.utils import (
     shutdown_on_error,
 )
 from cudf_polars.experimental.utils import _concat
+from cudf_polars.utils.config import StreamingExecutor
 
 if TYPE_CHECKING:
     from rapidsmpf.streaming.core.channel import Channel
@@ -46,7 +52,22 @@ def _apply_distinct(
     ir: Distinct,
     ir_context: Any,
 ) -> TableChunk:
-    """Apply Distinct evaluation to a chunk."""
+    """
+    Apply Distinct evaluation to a chunk.
+
+    Parameters
+    ----------
+    chunk
+        The input table chunk.
+    ir
+        The Distinct IR node.
+    ir_context
+        The IR execution context.
+
+    Returns
+    -------
+    The chunk with duplicates removed.
+    """
     input_schema = ir.children[0].schema
     names = list(input_schema.keys())
     dtypes = list(input_schema.values())
@@ -84,6 +105,29 @@ async def _tree_distinct(
 
     When collective_id is provided and data is not duplicated, uses allgather
     to collect partial results from all ranks before final distinct.
+
+    Parameters
+    ----------
+    context
+        The rapidsmpf streaming context.
+    ir
+        The Distinct IR node.
+    ir_context
+        The IR execution context.
+    ch_out
+        The output channel.
+    ch_in
+        The input channel.
+    metadata_in
+        The input channel metadata.
+    initial_chunks
+        Chunks already received during sampling.
+    n_ary
+        The fan-in for tree reduction.
+    collective_id
+        Optional collective ID for allgather. If None, no allgather is performed.
+    tracer
+        Optional tracer for runtime metrics.
     """
     nranks = context.comm().nranks
     need_allgather = (
@@ -242,20 +286,40 @@ async def _shuffle_distinct(
     """
     Shuffle-based distinct.
 
-    Shuffles data by distinct keys, then applies local distinct.
-    """
-    from cudf_polars.experimental.rapidsmpf.collectives.shuffle import (
-        ShuffleManager,
-    )
+    Shuffles data by distinct keys, then applies local distinct to
+    each partition. Use when the expected output is large.
 
+    Parameters
+    ----------
+    context
+        The rapidsmpf streaming context.
+    ir
+        The Distinct IR node.
+    ir_context
+        The IR execution context.
+    ch_out
+        The output channel.
+    ch_in
+        The input channel.
+    metadata_in
+        The input channel metadata.
+    initial_chunks
+        Chunks already received during sampling.
+    output_count
+        The number of output partitions per rank.
+    collective_id
+        The collective ID for the shuffle operation.
+    key_indices
+        The column indices of the distinct keys.
+    tracer
+        Optional tracer for runtime metrics.
+    """
     nranks = context.comm().nranks
 
     # Calculate output partitioning
     modulus = nranks * output_count
 
     # Send output metadata
-    from rapidsmpf.streaming.cudf.channel_metadata import HashScheme, Partitioning
-
     metadata_out = ChannelMetadata(
         local_count=output_count,
         partitioning=Partitioning(
@@ -349,9 +413,31 @@ async def unique_node(
     Dynamic Distinct node that selects the best strategy at runtime.
 
     Strategy selection based on sampled data:
-    - Skip global comm: Data already partitioned on keys or duplicated
-    - Tree reduction: Small estimated output (< target_partition_size)
-    - Shuffle: Large estimated output requiring redistribution
+
+    - Skip global comm: Data already partitioned on keys or duplicated.
+    - Tree reduction: Small estimated output (< target_partition_size).
+    - Shuffle: Large estimated output requiring redistribution.
+
+    Parameters
+    ----------
+    context
+        The rapidsmpf streaming context.
+    ir
+        The Distinct IR node.
+    ir_context
+        The IR execution context.
+    ch_out
+        The output channel.
+    ch_in
+        The input channel.
+    sample_chunk_count
+        Number of chunks to sample for size estimation.
+    target_partition_size
+        Target size (in bytes) for output partitions.
+    n_ary
+        Default fan-in for tree reduction (may be adapted based on chunk sizes).
+    collective_ids
+        Pool of collective IDs for allgather and shuffle operations.
     """
     async with shutdown_on_error(context, ch_in, ch_out, trace_ir=ir) as tracer:
         # Receive input metadata
@@ -365,7 +451,7 @@ async def unique_node(
         )
 
         # Check if already partitioned on keys
-        already_partitioned = is_partitioned_on_keys(metadata_in, key_indices)
+        already_partitioned, _ = is_partitioned_on_keys(metadata_in, key_indices)
 
         nranks = context.comm().nranks
 
@@ -501,8 +587,6 @@ async def unique_node(
 def _(
     ir: Distinct, rec: SubNetGenerator
 ) -> tuple[dict[IR, list[Any]], dict[IR, ChannelManager]]:
-    from cudf_polars.utils.config import StreamingExecutor
-
     config_options = rec.state["config_options"]
     executor = config_options.executor
 

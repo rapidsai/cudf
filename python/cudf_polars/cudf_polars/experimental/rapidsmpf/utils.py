@@ -220,9 +220,9 @@ async def recv_metadata(ch: Channel[TableChunk], ctx: Context) -> ChannelMetadat
 def is_partitioned_on_keys(
     metadata: ChannelMetadata,
     key_indices: tuple[int, ...],
-) -> bool:
+) -> tuple[bool, bool]:
     """
-    Check if data is already partitioned on the given keys (inter-rank).
+    Check if data is already partitioned on the given keys.
 
     Parameters
     ----------
@@ -233,15 +233,26 @@ def is_partitioned_on_keys(
 
     Returns
     -------
-    bool
-        True if data is partitioned on the keys between ranks.
+    already_partitioned_inter_rank
+        Whether the data is already partitioned between ranks.
+    already_partitioned_local
+        Whether the data is already partitioned within a rank.
     """
     if metadata.partitioning is None:
-        return False
+        return False, False
+
     inter_rank = metadata.partitioning.inter_rank
-    if inter_rank is None or inter_rank == "inherit":
-        return False
-    return inter_rank.column_indices == key_indices
+    local = metadata.partitioning.local
+    if (
+        inter_rank is None
+        or inter_rank == "inherit"
+        or inter_rank.column_indices != key_indices
+    ):
+        return False, False
+    elif local == "inherit" or local.column_indices != key_indices:
+        return True, True
+    else:
+        return True, False
 
 
 class ChannelManager:
