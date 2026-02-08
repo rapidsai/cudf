@@ -249,9 +249,16 @@ def is_partitioned_on_keys(
         or inter_rank.column_indices != key_indices
     ):
         return False, False
-    elif local == "inherit" or local.column_indices != key_indices:
+
+    # Inter-rank is partitioned on keys. Check local.
+    if local == "inherit":
+        # Local inherits from inter_rank, which is partitioned on keys
+        return True, True
+    elif local is not None and local.column_indices == key_indices:
+        # Local is explicitly partitioned on the same keys
         return True, True
     else:
+        # Inter-rank matches but local doesn't
         return True, False
 
 
