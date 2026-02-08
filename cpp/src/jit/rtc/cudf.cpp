@@ -30,6 +30,9 @@
 #include <future>
 #include <iostream>
 
+// TODO: remove
+#define CHECKPOINT std::cout << "Checkpoint: " << __FILE__ << ":" << __LINE__ << std::endl
+
 #define CUDFRTC_CHECK_CUDART(msg, ...)                                              \
   do {                                                                              \
     ::cudaError_t __result = (__VA_ARGS__);                                         \
@@ -196,6 +199,9 @@ jit_bundle::jit_bundle(std::string install_dir) : install_dir_{std::move(install
 {
   ensure_installed();
   preload_lto_library();
+
+  // TODO: recursive because of call to get_bundle() and get_cache()
+  // TODO: fix cmake change tracking
 }
 
 void jit_bundle::ensure_installed() const
