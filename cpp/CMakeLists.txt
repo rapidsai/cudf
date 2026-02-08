@@ -406,7 +406,7 @@ endforeach()
 # it should be as small as possible
 jit_add_options(cudf_jit_embed OPTIONS ${CUDF_JIT_COMPILE_FLAGS})
 jit_add_blob(cudf_jit_embed FILE "$<TARGET_OBJECTS:cudf_lto_library>" DEST cudf_lto_library.fatbin)
-jit_embed(cudf_jit_embed COMPRESSION lz4)
+jit_embed(cudf_jit_embed COMPRESSION zstd)
 
 # ##################################################################################################
 # * library targets -------------------------------------------------------------------------------

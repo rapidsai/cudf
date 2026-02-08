@@ -21,6 +21,7 @@
 #include <runtime/context.hpp>
 #include <sys/file.h>
 #include <sys/stat.h>
+#include <zstd.h>
 
 #include <cerrno>
 #include <cstring>
@@ -85,24 +86,57 @@ void install_file(char const* dst_path, std::span<unsigned char const> contents)
   }
 }
 
-void install_file_set(char const* target_dir,
-                      jit_bytes_t const& compressed_binary,
-                      size_t uncompressed_size,
-                      std::span<jit_byte_range_t const> file_ranges,
-                      jit_bytes_array_t const& dst)
+std::vector<unsigned char> decompress_blob(jit_bytes_t const& compressed_binary,
+                                           size_t uncompressed_size,
+                                           char const* compression)
 {
   std::vector<unsigned char> decompressed;
   decompressed.resize(uncompressed_size);
 
-  int errc = LZ4_decompress_safe(reinterpret_cast<char const*>(compressed_binary.data),
-                                 reinterpret_cast<char*>(decompressed.data()),
-                                 compressed_binary.size,
-                                 uncompressed_size);
+  if (std::string_view{compression} == "lz4") {
+    int errc = LZ4_decompress_safe(reinterpret_cast<char const*>(compressed_binary.data),
+                                   reinterpret_cast<char*>(decompressed.data()),
+                                   compressed_binary.size,
+                                   uncompressed_size);
 
-  CUDF_EXPECTS(errc == static_cast<int64_t>(uncompressed_size),
-               "Failed to decompress embedded RTC source files",
+    CUDF_EXPECTS(
+      errc == static_cast<int64_t>(uncompressed_size),
+      +std::format("Failed to decompress embedded RTC source files with LZ4, error code {}", errc),
+      std::runtime_error);
+
+  } else if (std::string_view{compression} == "zstd") {
+    size_t const errc = ZSTD_decompress(
+      decompressed.data(), uncompressed_size, compressed_binary.data, compressed_binary.size);
+
+    CUDF_EXPECTS(
+      !ZSTD_isError(errc) && errc == uncompressed_size,
+      +std::format("Failed to decompress embedded RTC source files with ZSTD, error code {} : ",
+                   errc,
+                   ZSTD_getErrorName(errc)),
+      std::runtime_error);
+  } else {
+    // compression is "none", so just copy the data
+    std::copy(
+      compressed_binary.data, compressed_binary.data + compressed_binary.size, decompressed.data());
+  }
+
+  return decompressed;
+}
+
+void install_file_set(char const* target_dir,
+                      jit_bytes_t const& compressed_binary,
+                      size_t uncompressed_size,
+                      std::span<jit_byte_range_t const> file_ranges,
+                      jit_bytes_array_t const& dst,
+                      char const* compression)
+{
+  CUDF_EXPECTS(compression != nullptr, "Compression type must be specified", std::runtime_error);
+  CUDF_EXPECTS(compression == std::string_view{"none"} || compression == std::string_view{"lz4"} ||
+                 compression == std::string_view{"zstd"},
+               +std::format("Unsupported compression type specified: {}", compression),
                std::runtime_error);
 
+  auto decompressed     = decompress_blob(compressed_binary, uncompressed_size, compression);
   auto const files_data = decompressed.data();
 
   for (size_t i = 0; i < file_ranges.size(); ++i) {
@@ -125,13 +159,15 @@ void install_cudf_jit(char const* target_dir)
                    cudf_jit_embed_blobs_binary,
                    cudf_jit_embed_blobs_uncompressed_size,
                    cudf_jit_embed_blobs_ranges,
-                   cudf_jit_embed_blobs_file_destinations);
+                   cudf_jit_embed_blobs_file_destinations,
+                   cudf_jit_embed_blobs_compression);
 
   install_file_set(target_dir,
                    cudf_jit_embed_sources_binary,
                    cudf_jit_embed_sources_uncompressed_size,
                    cudf_jit_embed_sources_ranges,
-                   cudf_jit_embed_sources_file_destinations);
+                   cudf_jit_embed_sources_file_destinations,
+                   cudf_jit_embed_sources_compression);
 }
 
 void create_and_install_cudf_jit(char const* target_dir)

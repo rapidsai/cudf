@@ -164,8 +164,11 @@ function(jit_embed)
     message(FATAL_ERROR "COMPRESSION argument is required")
   endif()
 
-  if(NOT ARG_COMPRESSION STREQUAL "none" AND NOT ARG_COMPRESSION STREQUAL "lz4")
-    message(FATAL_ERROR "COMPRESSION argument must be either none or lz4")
+  if(NOT ARG_COMPRESSION STREQUAL "none"
+     AND NOT ARG_COMPRESSION STREQUAL "lz4"
+     AND NOT ARG_COMPRESSION STREQUAL "zstd"
+  )
+    message(FATAL_ERROR "COMPRESSION argument must be either none, lz4, or, zstd")
   endif()
 
   string(APPEND TARGET_YAML "\"${TARGET}_sources\":\n")

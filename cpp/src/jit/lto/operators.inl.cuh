@@ -9,7 +9,7 @@
 #include <cudf/jit/lto/thunk.cuh>
 #include <cudf/jit/lto/types.cuh>
 
-namespace CUDF_EXPORT cudf {
+namespace CUDF_LTO_EXPORT cudf {
 namespace lto {
 
 template <ast::ast_operator op>
@@ -563,4 +563,4 @@ CUDF_LTO_DEF(logical_not, NOT, uint64_t);
 #undef CUDF_LTO_DEF
 
 }  // namespace lto
-}  // namespace CUDF_EXPORT cudf
+}  // namespace CUDF_LTO_EXPORT cudf

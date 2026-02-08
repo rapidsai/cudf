@@ -7,7 +7,7 @@
 #include <cudf/jit/lto/thunk.cuh>
 #include <cudf/jit/lto/types.cuh>
 
-namespace CUDF_EXPORT cudf {
+namespace CUDF_LTO_EXPORT cudf {
 namespace lto {
 
 [[nodiscard]] __device__ size_type string_view::size_bytes() const
@@ -362,4 +362,4 @@ CUDF_LTO_INST(duration_ns);
 #undef CUDF_LTO_INST
 
 }  // namespace lto
-}  // namespace CUDF_EXPORT cudf
+}  // namespace CUDF_LTO_EXPORT cudf

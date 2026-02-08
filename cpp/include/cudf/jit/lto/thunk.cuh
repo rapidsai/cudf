@@ -13,7 +13,7 @@
 
 #include <cuda/std/optional>
 
-namespace CUDF_EXPORT cudf {
+namespace CUDF_LTO_EXPORT cudf {
 
 namespace lto {
 
@@ -132,4 +132,4 @@ CUDF_LTO_MAP(lto::mutable_column_device_view_core, cudf::mutable_column_device_v
 
 }  // namespace lto
 
-}  // namespace CUDF_EXPORT cudf
+}  // namespace CUDF_LTO_EXPORT cudf

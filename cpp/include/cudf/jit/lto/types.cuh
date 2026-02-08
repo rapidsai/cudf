@@ -4,8 +4,8 @@
  */
 #pragma once
 
-#define CUDF_LTO_EXPORT
-#define CUDF_LTO_ALIAS __attribute__((may_alias))
+#define CUDF_LTO_EXPORT __attribute__((visibility("default")))
+#define CUDF_LTO_ALIAS  __attribute__((may_alias))
 
 namespace CUDF_LTO_EXPORT cudf {
 

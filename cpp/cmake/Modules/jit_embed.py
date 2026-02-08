@@ -8,6 +8,7 @@ from typing import NamedTuple, Self
 
 import lz4.block
 import yaml
+import zstd
 
 LIST_LINE_WIDTH = 32
 NAMESPACE_PREFIX = "jit_"
@@ -206,6 +207,19 @@ class CXXRangesDecl(NamedTuple):
         return CXXVarDecl(id=self.id, expr=expr)
 
 
+class CXXAsciiStringDecl(NamedTuple):
+    id: str
+    string: str
+
+    @staticmethod
+    def of_string(id: str, string: str) -> Self:
+        return CXXAsciiStringDecl(id=id, string=string)
+
+    def var(self: Self) -> CXXVarDecl:
+        expr = f"""static char const {self.id}[] = "{self.string}";"""
+        return CXXVarDecl(id=self.id, expr=expr)
+
+
 class CXXArrayOfBytesDecl(NamedTuple):
     id: str
     data: bytes
@@ -355,6 +369,27 @@ def load_file_bytes(file_path: str) -> bytes:
         return f.read()
 
 
+def compress_bytes(data: bytes, compression: str) -> bytes:
+    assert compression in ("none", "lz4", "zstd"), "Invalid compression type"
+
+    if compression == "none":
+        return data
+    elif compression == "lz4":
+        compressed_data = lz4.block.compress(
+            data, mode="high_compression", compression=12, store_size=False
+        )
+        logger.info(
+            f"Uncompressed size is {len(data)} bytes, compressed size is {len(compressed_data)} bytes"
+        )
+        return compressed_data
+    elif compression == "zstd":
+        compressed_data = zstd.compress(data, 22)
+        logger.info(
+            f"Uncompressed size is {len(data)} bytes, compressed size is {len(compressed_data)} bytes"
+        )
+        return compressed_data
+
+
 def generate_cxx_source_files_data(
     id: str,
     file_paths: list[str],
@@ -366,16 +401,10 @@ def generate_cxx_source_files_data(
         [load_file_bytes(p) for p in file_paths]
     )
 
-    assert compression in ("none", "lz4"), "Invalid compression type"
     compress = compression != "none"
 
     compressed_files_bytes = (
-        lz4.block.compress(
-            uncompressed_files_bytes,
-            mode="high_compression",
-            compression = 12,
-            store_size = False
-        )
+        compress_bytes(uncompressed_files_bytes, compression)
         if compress
         else None
     )
@@ -429,6 +458,10 @@ def generate_cxx_source_files_data(
         id=f"{id}_ranges", ranges=files_ranges
     )
 
+    binary_compression_decl = CXXAsciiStringDecl.of_string(
+        id=f"{id}_compression", string=compression
+    )
+
     include_directories_decls: CXXArrayOfBytesDecl = (
         CXXArrayOfBytesDecl.of_byte_ranges(
             id=f"{id}_include_directories",
@@ -444,6 +477,8 @@ def generate_cxx_source_files_data(
 {binary_decl.var().decl()}
 
 {binary_size_decl.var().decl()}
+
+{binary_compression_decl.var().decl()}
 
 {binary_ranges_decl.var().decl()}
 
@@ -474,16 +509,10 @@ def generate_cxx_blobs_data(
         [load_file_bytes(p) for p in blob_paths]
     )
 
-    assert compression in ("none", "lz4"), "Invalid compression type"
     compress = compression != "none"
 
     compressed_blob_bytes = (
-        lz4.block.compress(
-            uncompressed_blob_bytes,
-            mode="high_compression",
-            compression = 12,
-            store_size = False
-        )
+        compress_bytes(uncompressed_blob_bytes, compression)
         if compress
         else None
     )
@@ -522,6 +551,10 @@ def generate_cxx_blobs_data(
         id=f"{id}_uncompressed_size", size=len(uncompressed_blob_bytes)
     )
 
+    binary_compression_decl = CXXAsciiStringDecl.of_string(
+        id=f"{id}_compression", string=compression
+    )
+
     binary_embed_decl: AsmEmbedDecl = AsmEmbedDecl.of_file(
         id=f"{id}_binary", file=binary_file_name
     )
@@ -535,6 +568,8 @@ def generate_cxx_blobs_data(
 {file_destinations_decls.var().decl()}
 
 {binary_decl.var().decl()}
+
+{binary_compression_decl.var().decl()}
 
 {binary_size_decl.var().decl()}
 
