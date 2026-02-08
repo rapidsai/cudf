@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 from libc.stdint cimport int64_t, uint8_t
 from libcpp cimport bool
@@ -44,6 +44,11 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
         void set_source(source_info src) except +libcudf_exception_handler
         void set_filter(expression &filter) except +libcudf_exception_handler
         void set_columns(vector[string] col_names) except +libcudf_exception_handler
+        void set_column_names(
+                vector[string] col_names) except +libcudf_exception_handler
+        void set_column_indices(
+            vector[size_type] col_indices
+        ) except +libcudf_exception_handler
         void set_num_rows(int64_t val) except +libcudf_exception_handler
         void set_row_groups(
             vector[vector[size_type]] row_grp
@@ -71,6 +76,12 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
         ) except +libcudf_exception_handler
         parquet_reader_options_builder& columns(
             vector[string] col_names
+        ) except +libcudf_exception_handler
+        parquet_reader_options_builder& column_names(
+            vector[string] col_names
+        ) except +libcudf_exception_handler
+        parquet_reader_options_builder& column_indices(
+            vector[size_type] col_indices
         ) except +libcudf_exception_handler
         parquet_reader_options_builder& row_groups(
             vector[vector[size_type]] row_grp
@@ -146,6 +157,7 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
         void set_max_dictionary_size(size_t val) except +libcudf_exception_handler
         void enable_write_v2_headers(bool val) except +libcudf_exception_handler
         void enable_write_arrow_schema(bool val) except +libcudf_exception_handler
+        void enable_page_level_compression(bool val) except +libcudf_exception_handler
         void set_dictionary_policy(
             dictionary_policy policy
         ) except +libcudf_exception_handler
@@ -207,6 +219,9 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
             size_t val
         ) except +libcudf_exception_handler
         BuilderT& write_v2_headers(
+            bool enabled
+        ) except +libcudf_exception_handler
+        BuilderT& page_level_compression(
             bool enabled
         ) except +libcudf_exception_handler
         BuilderT& dictionary_policy(

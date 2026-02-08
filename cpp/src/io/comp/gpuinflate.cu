@@ -1,6 +1,6 @@
 /*
  * SPDX-FileCopyrightText: Copyright (C) 2002-2013 Mark Adler, all rights reserved
- * SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0 AND Zlib
  */
 
@@ -1024,10 +1024,10 @@ __device__ int parse_gzip_header(uint8_t const* src, size_t src_size)
  */
 template <int block_size>
 CUDF_KERNEL void __launch_bounds__(block_size)
-  inflate_kernel(device_span<device_span<uint8_t const> const> inputs,
-                 device_span<device_span<uint8_t> const> outputs,
-                 device_span<codec_exec_result> results,
-                 gzip_header_included parse_hdr)
+  inflate_kernel_no_racecheck(device_span<device_span<uint8_t const> const> inputs,
+                              device_span<device_span<uint8_t> const> outputs,
+                              device_span<codec_exec_result> results,
+                              gzip_header_included parse_hdr)
 {
   __shared__ __align__(16) inflate_state_s state_g;
 
@@ -1363,7 +1363,7 @@ void gpuinflate(device_span<device_span<uint8_t const> const> inputs,
 {
   constexpr int block_size = 128;  // Threads per block
   if (inputs.size() > 0) {
-    inflate_kernel<block_size>
+    inflate_kernel_no_racecheck<block_size>
       <<<inputs.size(), block_size, 0, stream.value()>>>(inputs, outputs, results, parse_hdr);
   }
 }

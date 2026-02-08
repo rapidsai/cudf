@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 """Union logic for the RapidsMPF streaming runtime."""
 
@@ -7,6 +7,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from rapidsmpf.streaming.core.message import Message
+from rapidsmpf.streaming.cudf.channel_metadata import ChannelMetadata
 from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 
 from cudf_polars.dsl.ir import Union
@@ -16,16 +17,17 @@ from cudf_polars.experimental.rapidsmpf.dispatch import (
 from cudf_polars.experimental.rapidsmpf.nodes import define_py_node, shutdown_on_error
 from cudf_polars.experimental.rapidsmpf.utils import (
     ChannelManager,
-    Metadata,
     process_children,
+    recv_metadata,
+    send_metadata,
 )
 
 if TYPE_CHECKING:
+    from rapidsmpf.streaming.core.channel import Channel
     from rapidsmpf.streaming.core.context import Context
 
     from cudf_polars.dsl.ir import IR, IRExecutionContext
     from cudf_polars.experimental.rapidsmpf.core import SubNetGenerator
-    from cudf_polars.experimental.rapidsmpf.utils import ChannelPair
 
 
 @define_py_node()
@@ -33,8 +35,8 @@ async def union_node(
     context: Context,
     ir: Union,
     ir_context: IRExecutionContext,
-    ch_out: ChannelPair,
-    *chs_in: ChannelPair,
+    ch_out: Channel[TableChunk],
+    *chs_in: Channel[TableChunk],
 ) -> None:
     """
     Union node for rapidsmpf.
@@ -48,34 +50,35 @@ async def union_node(
     ir_context
         The execution context for the IR node.
     ch_out
-        The output ChannelPair.
+        The output Channel[TableChunk].
     chs_in
-        The input ChannelPairs.
+        The input Channel[TableChunk]s.
     """
-    async with shutdown_on_error(
-        context,
-        *[ch.metadata for ch in chs_in],
-        *[ch.data for ch in chs_in],
-        ch_out.metadata,
-        ch_out.data,
-    ):
+    async with shutdown_on_error(context, *chs_in, ch_out):
         # Merge and forward metadata.
-        total_count = 0
+        # Union loses partitioning/ordering info since sources may differ.
+        # TODO: Warn users that Union does NOT preserve order?
+        total_local_count = 0
         duplicated = True
         for ch_in in chs_in:
-            metadata = await ch_in.recv_metadata(context)
-            total_count += metadata.count
+            metadata = await recv_metadata(ch_in, context)
+            total_local_count += metadata.local_count
             duplicated = duplicated and metadata.duplicated
-        await ch_out.send_metadata(
-            context, Metadata(total_count, duplicated=duplicated)
+        await send_metadata(
+            ch_out,
+            context,
+            ChannelMetadata(
+                local_count=total_local_count,
+                duplicated=duplicated,
+            ),
         )
 
         seq_num_offset = 0
         for ch_in in chs_in:
             num_ch_chunks = 0
-            while (msg := await ch_in.data.recv(context)) is not None:
+            while (msg := await ch_in.recv(context)) is not None:
                 num_ch_chunks += 1
-                await ch_out.data.send(
+                await ch_out.send(
                     context,
                     Message(
                         msg.sequence_number + seq_num_offset,
@@ -86,7 +89,7 @@ async def union_node(
                 )
             seq_num_offset += num_ch_chunks
 
-        await ch_out.data.drain(context)
+        await ch_out.drain(context)
 
 
 @generate_ir_sub_network.register(Union)

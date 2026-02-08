@@ -14,6 +14,7 @@
 #include <cudf/detail/row_operator/hashing.cuh>
 #include <cudf/detail/row_operator/primitive_row_operators.cuh>
 #include <cudf/detail/structs/utilities.hpp>
+#include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/join/hash_join.hpp>
 #include <cudf/join/join.hpp>
 #include <cudf/utilities/error.hpp>
@@ -29,7 +30,6 @@
 
 #include <cuda/std/functional>
 #include <cuda/std/iterator>
-#include <thrust/count.h>
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/discard_iterator.h>
 #include <thrust/iterator/transform_output_iterator.h>
@@ -515,10 +515,8 @@ std::size_t get_full_join_size(
                        valid);                      // Stencil Predicate
 
     // Create list of indices that have been marked as invalid
-    left_join_complement_size = thrust::count_if(rmm::exec_policy_nosync(stream),
-                                                 invalid_index_map->begin(),
-                                                 invalid_index_map->end(),
-                                                 cuda::std::identity());
+    left_join_complement_size = cudf::detail::count_if(
+      invalid_index_map->begin(), invalid_index_map->end(), cuda::std::identity{}, stream);
   }
   return join_size + left_join_complement_size;
 }

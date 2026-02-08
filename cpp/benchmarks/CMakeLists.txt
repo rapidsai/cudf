@@ -7,7 +7,7 @@
 
 find_package(Threads REQUIRED)
 
-add_library(cudf_datagen STATIC common/generate_input.cu)
+add_library(cudf_datagen STATIC common/generate_input.cu common/generate_nested_types.cpp)
 target_compile_features(cudf_datagen PUBLIC cxx_std_20 cuda_std_20)
 
 target_compile_options(
@@ -367,7 +367,6 @@ ConfigureNVBench(
 # * nvtext benchmark -------------------------------------------------------------------
 ConfigureNVBench(
   TEXT_NVBENCH
-  text/byte_pair_encoding.cpp
   text/deduplicate.cpp
   text/edit_distance.cpp
   text/hash_ngrams.cpp

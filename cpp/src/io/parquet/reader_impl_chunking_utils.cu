@@ -126,7 +126,7 @@ void codec_stats::add_pages(host_span<ColumnChunkDesc const> chunks,
   std::for_each(zip_iter, zip_iter + pages.size(), [&](auto const& item) {
     auto& [page, is_page_needed] = item;
     // If this is a V2 page, use the `is_compressed` field to determine if it's compressed.
-    // For V1 pages, it's always compressed if the chunk.codec is specified.
+    // For dictionary and V1 data pages, they're compressed if chunk.codec is set.
     auto const is_page_compressed = (page.flags & PAGEINFO_FLAGS_V2) ? page.is_compressed : true;
     if (is_page_needed && chunks[page.chunk_idx].codec == compression_type &&
         (page.flags & cudf::io::parquet::detail::PAGEINFO_FLAGS_DICTIONARY) ==
@@ -363,12 +363,7 @@ std::tuple<rmm::device_uvector<page_span>, size_t, size_t> compute_next_subpass(
   auto [aggregated_info, page_keys_by_split] = adjust_cumulative_sizes(c_info, pages, stream);
 
   // bring back to the cpu
-  auto h_aggregated_info =
-    cudf::detail::make_pinned_vector_async<cumulative_page_info>(aggregated_info.size(), stream);
-  cudf::detail::cuda_memcpy(
-    cudf::host_span<cumulative_page_info>{h_aggregated_info.data(), aggregated_info.size()},
-    cudf::device_span<cumulative_page_info const>{aggregated_info.data(), aggregated_info.size()},
-    stream);
+  auto h_aggregated_info = cudf::detail::make_pinned_vector(aggregated_info, stream);
 
 #if defined(CHUNKING_DEBUG)
   print_cumulative_page_info(h_aggregated_info, "adjusted");
@@ -420,12 +415,7 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
   auto [aggregated_info, page_keys_by_split] = adjust_cumulative_sizes(c_info, pages, stream);
 
   // bring back to the cpu
-  auto h_aggregated_info =
-    cudf::detail::make_pinned_vector_async<cumulative_page_info>(aggregated_info.size(), stream);
-  cudf::detail::cuda_memcpy(
-    cudf::host_span<cumulative_page_info>{h_aggregated_info.data(), aggregated_info.size()},
-    cudf::device_span<cumulative_page_info const>{aggregated_info.data(), aggregated_info.size()},
-    stream);
+  auto h_aggregated_info = cudf::detail::make_pinned_vector(aggregated_info, stream);
 
 #if defined(CHUNKING_DEBUG)
   print_cumulative_page_info(h_aggregated_info, "adjusted");
@@ -546,7 +536,7 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
       auto& page                = pages[page_idx];
       auto const is_page_needed = page_mask_iter[page_idx];
       // If this is a V2 page, use the `is_compressed` field to determine if it's compressed.
-      // For V1 pages, it's always compressed if the chunk.codec is specified.
+      // For dictionary and V1 data pages, they're compressed if chunk.codec is set.
       auto const is_page_compressed = (page.flags & PAGEINFO_FLAGS_V2) ? page.is_compressed : true;
       if (is_page_needed && chunks[page.chunk_idx].codec == codec.compression_type &&
           (page.flags & PAGEINFO_FLAGS_DICTIONARY) == select_dict_pages and is_page_compressed) {
@@ -678,10 +668,8 @@ void detect_malformed_pages(device_span<PageInfo const> pages,
     row_counts_begin, row_counts_end, compacted_row_counts_begin, row_counts_nonzero{}, stream);
   if (compacted_row_counts_end != compacted_row_counts_begin) {
     auto const found_row_count = [&]() {
-      auto found_row_count = cudf::detail::make_pinned_vector_async<size_type>(1, stream);
-      cudf::detail::cuda_memcpy(cudf::host_span<size_type>{found_row_count.data(), 1},
-                                cudf::device_span<size_type const>{compacted_row_counts.data(), 1},
-                                stream);
+      auto found_row_count = cudf::detail::make_pinned_vector(
+        cudf::device_span<size_type const>{compacted_row_counts.data(), 1}, stream);
       return found_row_count.front();
     }();
 
@@ -721,13 +709,8 @@ rmm::device_uvector<size_t> compute_decompression_scratch_sizes(
                                 decomp_sum{});
 
   // retrieve to host so we can get compression scratch sizes
-  auto h_decomp_info =
-    cudf::detail::make_pinned_vector_async<decompression_info>(decomp_info.size(), stream);
-  cudf::detail::cuda_memcpy(
-    cudf::host_span<decompression_info>(h_decomp_info.data(), decomp_info.size()),
-    cudf::device_span<decompression_info const>(decomp_info.data(), decomp_info.size()),
-    stream);
-  auto temp_cost = cudf::detail::make_pinned_vector_async<size_t>(pages.size(), stream);
+  auto temp_cost     = cudf::detail::make_pinned_vector_async<size_t>(pages.size(), stream);
+  auto h_decomp_info = cudf::detail::make_pinned_vector(decomp_info, stream);
   std::transform(h_decomp_info.begin(), h_decomp_info.end(), temp_cost.begin(), [](auto const& d) {
     return cudf::io::detail::get_decompression_scratch_size(d);
   });
@@ -850,10 +833,11 @@ namespace {
  * for non-dictionary, non-FLBA string pages.
  */
 struct compute_page_string_offset_size {
-  device_span<PageInfo const> pages;
   device_span<ColumnChunkDesc const> chunks;
+  size_t skip_rows;
+  size_t num_rows;
 
-  __device__ size_t operator()(size_t page_idx) const
+  __device__ size_t operator()(PageInfo const& page) const
   {
     // Mask for non-dictionary, non-delta string columns (same as used in decode kernel)
     constexpr uint32_t STRINGS_MASK_NON_DELTA_NON_DICT =
@@ -864,7 +848,6 @@ struct compute_page_string_offset_size {
             decode_kernel_mask::STRING_STREAM_SPLIT_NESTED,
             decode_kernel_mask::STRING_STREAM_SPLIT_LIST);
 
-    auto const& page  = pages[page_idx];
     auto const& chunk = chunks[page.chunk_idx];
 
     // Check if this page is a non-dictionary string page using kernel mask
@@ -873,15 +856,41 @@ struct compute_page_string_offset_size {
     // Fixed length byte array: Offsets are fixed, no need to allocate offset buffer
     if (chunk.physical_type == Type::FIXED_LEN_BYTE_ARRAY) { return 0; }
 
-    // Estimate number of offsets based on page.num_input_values
-    // This is an upper bound estimate since we compute this before knowing:
-    // - exact batch sizes for list columns after preprocessing
-    // - which rows will be skipped due to subpass boundaries
-    // We add 1 for the final offset
-    auto const num_offsets = page.num_input_values + 1;
+    // Determine how many values need offsets
+    size_t const num_values = precompute_page_num_values_in_range(page, chunk, skip_rows, num_rows);
+    if (num_values == 0) { return 0; }
+
+    // We need num_values + 1 offsets (one extra for the final offset)
+    auto const num_offsets = num_values + 1;
 
     // Return size in bytes (uint32_t per offset)
     return num_offsets * sizeof(uint32_t);
+  }
+};
+
+/**
+ * @brief Functor to compute the level decode buffer size needed for a page.
+ *
+ * This computes the memory needed to store definition and repetition levels.
+ */
+struct compute_page_level_decode_size {
+  cudf::device_span<ColumnChunkDesc const> chunks;
+  int level_type_size;
+  size_t skip_rows;
+  size_t num_rows;
+
+  __device__ size_t operator()(PageInfo const& page) const
+  {
+    size_t def_level_size = 0;
+    size_t rep_level_size = 0;
+    compute_page_level_decode_sizes(page,
+                                    chunks[page.chunk_idx],
+                                    level_type_size,
+                                    skip_rows,
+                                    num_rows,
+                                    def_level_size,
+                                    rep_level_size);
+    return def_level_size + rep_level_size;
   }
 };
 
@@ -889,18 +898,39 @@ struct compute_page_string_offset_size {
 
 rmm::device_uvector<size_t> compute_string_offset_sizes(device_span<ColumnChunkDesc const> chunks,
                                                         device_span<PageInfo const> pages,
-                                                        rmm::cuda_stream_view stream)
+                                                        size_t skip_rows,
+                                                        size_t num_rows,
+                                                        rmm::cuda_stream_view stream,
+                                                        rmm::device_async_resource_ref mr)
 {
-  rmm::device_uvector<size_t> string_offset_sizes(pages.size(), stream);
+  rmm::device_uvector<size_t> string_offset_sizes(pages.size(), stream, mr);
 
-  auto iter = thrust::make_counting_iterator(size_t{0});
   thrust::transform(rmm::exec_policy_nosync(stream),
-                    iter,
-                    iter + pages.size(),
+                    pages.begin(),
+                    pages.end(),
                     string_offset_sizes.begin(),
-                    compute_page_string_offset_size{pages, chunks});
+                    compute_page_string_offset_size{chunks, skip_rows, num_rows});
 
   return string_offset_sizes;
+}
+
+rmm::device_uvector<size_t> compute_level_decode_sizes(device_span<ColumnChunkDesc const> chunks,
+                                                       device_span<PageInfo const> pages,
+                                                       int level_type_size,
+                                                       size_t skip_rows,
+                                                       size_t num_rows,
+                                                       rmm::cuda_stream_view stream,
+                                                       rmm::device_async_resource_ref mr)
+{
+  rmm::device_uvector<size_t> level_decode_sizes(pages.size(), stream, mr);
+
+  thrust::transform(rmm::exec_policy_nosync(stream),
+                    pages.begin(),
+                    pages.end(),
+                    level_decode_sizes.begin(),
+                    compute_page_level_decode_size{chunks, level_type_size, skip_rows, num_rows});
+
+  return level_decode_sizes;
 }
 
 }  // namespace cudf::io::parquet::detail
