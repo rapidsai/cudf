@@ -49,7 +49,7 @@ template <typename Lambda>
 void run_multithreaded(Lambda func)
 {
   std::vector<std::thread> threads;
-  auto concurrency = std::thread::hardware_concurrency();
+  auto concurrency = std::max(std::thread::hardware_concurrency(), 1U) - 1U;
 
   for (size_t i = 0; i < concurrency; ++i) {
     threads.emplace_back([i, f = std::move(func)]() { f(i); });
