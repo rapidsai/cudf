@@ -70,8 +70,12 @@ constexpr bool has_flag(init_flags flags, init_flags flag) noexcept
 /// steps are already performed, the call has no effect.
 void initialize(init_flags flags = init_flags::INIT_JIT_CACHE);
 
-/// @brief teardown the cudf global context, resetting it to an uninitialized state. This is primarily
-/// intended for testing purposes, allowing for re-initialization of the context after teardown.
+/// @brief Destroy the cudf global context, resetting it to an uninitialized state. This is
+/// primarily intended for testing purposes, allowing for re-initialization of the context after
+/// teardown.
+/// @warning This is not intended for general use and may lead to undefined behavior if used
+/// improperly. The caller must ensure that no threads are concurrently accessing the context during
+/// teardown and that only one thread calls teardown at a time.
 void teardown();
 
 }  // namespace CUDF_EXPORT cudf
