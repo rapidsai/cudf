@@ -231,11 +231,11 @@ inline void init_cudf_test(int argc, char** argv, cudf::test::config const& conf
       cudf::set_current_device_resource(&mr);                                                    \
       auto rc = RUN_ALL_TESTS();                                                                 \
       std::cout << "Peak memory usage " << mr.get_bytes_counter().peak << " bytes" << std::endl; \
-      cudf::teardown();                                                                      \
+      cudf::teardown();                                                                          \
       return rc;                                                                                 \
     } else {                                                                                     \
       auto rc = RUN_ALL_TESTS();                                                                 \
-      cudf::teardown();                                                                      \
+      cudf::teardown();                                                                          \
       return rc;                                                                                 \
     }                                                                                            \
   }
