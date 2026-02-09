@@ -552,7 +552,12 @@ table_with_metadata hybrid_scan_reader_impl::materialize_all_columns(
   prepare_data(read_mode::READ_ALL, row_group_indices, column_chunk_data, {});
 
   // Use the main reader's function
-  return reader_impl::read_chunk_internal(read_mode::READ_ALL);
+  auto result = reader_impl::read_chunk_internal(read_mode::READ_ALL);
+
+  // base read_chunk_internal() does not update the _rows_processed_so_far
+  _rows_processed_so_far += result.tbl->num_rows();
+
+  return result;
 }
 
 void hybrid_scan_reader_impl::setup_chunking_for_filter_columns(
@@ -656,9 +661,56 @@ table_with_metadata hybrid_scan_reader_impl::materialize_payload_columns_chunk(
   return read_chunk_internal(read_mode::CHUNKED_READ, read_columns_mode::PAYLOAD_COLUMNS, row_mask);
 }
 
+void hybrid_scan_reader_impl::setup_chunking_for_all_columns(
+  std::size_t chunk_read_limit,
+  std::size_t pass_read_limit,
+  cudf::host_span<std::vector<size_type> const> row_group_indices,
+  cudf::host_span<cudf::device_span<uint8_t const> const> column_chunk_data,
+  parquet_reader_options const& options,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
+{
+  CUDF_EXPECTS(not row_group_indices.empty(), "Empty input row group indices encountered");
+
+  prepare_materialization(
+    read_columns_mode::ALL_COLUMNS, row_group_indices.size(), options, stream, mr);
+
+  _input_pass_read_limit   = pass_read_limit;
+  _output_chunk_read_limit = chunk_read_limit;
+
+  // Convert the input expression (must be done after column selection)
+  _expr_conv = build_converted_expression(options);
+
+  prepare_data(read_mode::CHUNKED_READ, row_group_indices, column_chunk_data, {});
+}
+
+table_with_metadata hybrid_scan_reader_impl::materialize_all_columns_chunk()
+{
+  CUDF_EXPECTS(_file_preprocessed, "Chunking for all columns not yet setup");
+
+  // Reset the output buffers to their original states (right after reader construction).
+  // Don't need to do it if we read the file all at once.
+  if (_file_itm_data._current_input_pass < _file_itm_data.num_passes() and
+      not is_first_output_chunk()) {
+    _output_buffers.resize(0);
+    for (auto const& buff : _output_buffers_template) {
+      _output_buffers.emplace_back(cudf::io::detail::inline_column_buffer::empty_like(buff));
+    }
+  }
+  prepare_data(read_mode::CHUNKED_READ, {}, {}, {});
+
+  // Use the main reader's function for reading all columns
+  auto result = reader_impl::read_chunk_internal(read_mode::CHUNKED_READ);
+
+  // base read_chunk_internal() does not update the _rows_processed_so_far
+  _rows_processed_so_far += result.tbl->num_rows();
+
+  return result;
+}
+
 bool hybrid_scan_reader_impl::has_next_table_chunk()
 {
-  CUDF_EXPECTS(_file_preprocessed, "Chunking for filter columns not yet setup");
+  CUDF_EXPECTS(_file_preprocessed, "Chunking not yet setup");
   prepare_data(read_mode::CHUNKED_READ, {}, {}, {});
 
   // current_input_pass will only be incremented to be == num_passes after
