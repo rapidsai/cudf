@@ -75,7 +75,20 @@ jobs:
       files_yaml: |
         build_docs:
           - '**'
+          - '!.clang-format'
           - '!.devcontainer/**'
+          - '!.github/CODEOWNERS'
+          - '!.github/ISSUE_TEMPLATE/**'
+          - '!.github/PULL_REQUEST_TEMPLATE.md'
+          - '!.github/copy-pr-bot.yaml'
+          - '!.github/labeler.yml'
+          - '!.github/ops-bot.yaml'
+          - '!.github/release.yml'
+          - '!.github/workflows/auto-assign.yml'
+          - '!.github/workflows/issue-release-scheduled.yml'
+          - '!.github/workflows/labeler.yml'
+          - '!.github/workflows/pr_issue_status_automation.yml'
+          - '!.github/workflows/trigger-breaking-change-alert.yaml'
           - '!.pre-commit-config.yaml'
           - '!ci/build_wheel*.sh'
           - '!ci/check_style.sh'
@@ -88,6 +101,18 @@ jobs:
         test_cpp:
           - '**'
           - '!.devcontainer/**'
+          - '!.github/CODEOWNERS'
+          - '!.github/ISSUE_TEMPLATE/**'
+          - '!.github/PULL_REQUEST_TEMPLATE.md'
+          - '!.github/copy-pr-bot.yaml'
+          - '!.github/labeler.yml'
+          - '!.github/ops-bot.yaml'
+          - '!.github/release.yml'
+          - '!.github/workflows/auto-assign.yml'
+          - '!.github/workflows/issue-release-scheduled.yml'
+          - '!.github/workflows/labeler.yml'
+          - '!.github/workflows/pr_issue_status_automation.yml'
+          - '!.github/workflows/trigger-breaking-change-alert.yaml'
           - '!.pre-commit-config.yaml'
           - '!CONTRIBUTING.md'
           - '!README.md'
@@ -110,6 +135,18 @@ jobs:
           - '**'
           - '!.clang-format'
           - '!.devcontainer/**'
+          - '!.github/CODEOWNERS'
+          - '!.github/ISSUE_TEMPLATE/**'
+          - '!.github/PULL_REQUEST_TEMPLATE.md'
+          - '!.github/copy-pr-bot.yaml'
+          - '!.github/labeler.yml'
+          - '!.github/ops-bot.yaml'
+          - '!.github/release.yml'
+          - '!.github/workflows/auto-assign.yml'
+          - '!.github/workflows/issue-release-scheduled.yml'
+          - '!.github/workflows/labeler.yml'
+          - '!.github/workflows/pr_issue_status_automation.yml'
+          - '!.github/workflows/trigger-breaking-change-alert.yaml'
           - '!.pre-commit-config.yaml'
           - '!CONTRIBUTING.md'
           - '!README.md'
@@ -124,6 +161,18 @@ jobs:
           - '**'
           - '!.clang-format'
           - '!.devcontainer/**'
+          - '!.github/CODEOWNERS'
+          - '!.github/ISSUE_TEMPLATE/**'
+          - '!.github/PULL_REQUEST_TEMPLATE.md'
+          - '!.github/copy-pr-bot.yaml'
+          - '!.github/labeler.yml'
+          - '!.github/ops-bot.yaml'
+          - '!.github/release.yml'
+          - '!.github/workflows/auto-assign.yml'
+          - '!.github/workflows/issue-release-scheduled.yml'
+          - '!.github/workflows/labeler.yml'
+          - '!.github/workflows/pr_issue_status_automation.yml'
+          - '!.github/workflows/trigger-breaking-change-alert.yaml'
           - '!.pre-commit-config.yaml'
           - '!CONTRIBUTING.md'
           - '!README.md'
@@ -144,6 +193,18 @@ jobs:
           - '**'
           - '!.clang-format'
           - '!.devcontainer/**'
+          - '!.github/CODEOWNERS'
+          - '!.github/ISSUE_TEMPLATE/**'
+          - '!.github/PULL_REQUEST_TEMPLATE.md'
+          - '!.github/copy-pr-bot.yaml'
+          - '!.github/labeler.yml'
+          - '!.github/ops-bot.yaml'
+          - '!.github/release.yml'
+          - '!.github/workflows/auto-assign.yml'
+          - '!.github/workflows/issue-release-scheduled.yml'
+          - '!.github/workflows/labeler.yml'
+          - '!.github/workflows/pr_issue_status_automation.yml'
+          - '!.github/workflows/trigger-breaking-change-alert.yaml'
           - '!.pre-commit-config.yaml'
           - '!CONTRIBUTING.md'
           - '!README.md'
@@ -158,6 +219,18 @@ jobs:
           - '**'
           - '!.clang-format'
           - '!.devcontainer/**'
+          - '!.github/CODEOWNERS'
+          - '!.github/ISSUE_TEMPLATE/**'
+          - '!.github/PULL_REQUEST_TEMPLATE.md'
+          - '!.github/copy-pr-bot.yaml'
+          - '!.github/labeler.yml'
+          - '!.github/ops-bot.yaml'
+          - '!.github/release.yml'
+          - '!.github/workflows/auto-assign.yml'
+          - '!.github/workflows/issue-release-scheduled.yml'
+          - '!.github/workflows/labeler.yml'
+          - '!.github/workflows/pr_issue_status_automation.yml'
+          - '!.github/workflows/trigger-breaking-change-alert.yaml'
           - '!.pre-commit-config.yaml'
           - '!CONTRIBUTING.md'
           - '!README.md'
@@ -177,6 +250,18 @@ jobs:
           - '**'
           - '!.clang-format'
           - '!.devcontainer/**'
+          - '!.github/CODEOWNERS'
+          - '!.github/ISSUE_TEMPLATE/**'
+          - '!.github/PULL_REQUEST_TEMPLATE.md'
+          - '!.github/copy-pr-bot.yaml'
+          - '!.github/labeler.yml'
+          - '!.github/ops-bot.yaml'
+          - '!.github/release.yml'
+          - '!.github/workflows/auto-assign.yml'
+          - '!.github/workflows/issue-release-scheduled.yml'
+          - '!.github/workflows/labeler.yml'
+          - '!.github/workflows/pr_issue_status_automation.yml'
+          - '!.github/workflows/trigger-breaking-change-alert.yaml'
           - '!.pre-commit-config.yaml'
           - '!CONTRIBUTING.md'
           - '!README.md'
@@ -247,6 +332,8 @@ jobs:
     with:
       build_type: pull-request
       script: ci/build_python.sh
+      # Build a conda package for each CUDA x ARCH x minimum supported Python version
+      matrix_filter: group_by({CUDA_VER, ARCH}) | map(min_by(.PY_VER | split(".") | map(tonumber)))
   conda-python-build-noarch:
     needs: [conda-cpp-build, conda-python-build]
     secrets: inherit
@@ -264,6 +351,8 @@ jobs:
       build_type: pull-request
       script: "ci/test_python_cudf.sh"
       sccache-dist-token-secret-name: GIST_REPO_READ_ORG_GITHUB_TOKEN
+      # Skip failing tests on RTX PRO 6000 (Blackwell). xref: https://github.com/rapidsai/cudf/issues/21357
+      matrix_filter: map(select(.GPU != "rtxpro6000"))
   conda-python-other-tests:
     # Tests for dask_cudf, custreamz, cudf_kafka are separated for CI parallelism
     needs: [conda-python-build-noarch, changed-files]
@@ -331,6 +420,8 @@ jobs:
       package-name: pylibcudf
       package-type: python
       sccache-dist-token-secret-name: GIST_REPO_READ_ORG_GITHUB_TOKEN
+      # Build a wheel for each CUDA x ARCH x minimum supported Python version
+      matrix_filter: group_by({CUDA_VER, ARCH}) | map(min_by(.PY_VER | split(".") | map(tonumber)))
   wheel-build-cudf:
     needs: wheel-build-pylibcudf
     secrets: inherit
@@ -342,6 +433,8 @@ jobs:
       package-name: cudf
       package-type: python
       sccache-dist-token-secret-name: GIST_REPO_READ_ORG_GITHUB_TOKEN
+      # Build a wheel for each CUDA x ARCH x minimum supported Python version
+      matrix_filter: group_by({CUDA_VER, ARCH}) | map(min_by(.PY_VER | split(".") | map(tonumber)))
   wheel-tests-cudf:
     needs: [wheel-build-cudf, changed-files]
     secrets: inherit
@@ -351,6 +444,8 @@ jobs:
       build_type: pull-request
       script: ci/test_wheel_cudf.sh
       sccache-dist-token-secret-name: GIST_REPO_READ_ORG_GITHUB_TOKEN
+      # Skip failing tests on RTX PRO 6000 (Blackwell). xref: https://github.com/rapidsai/cudf/issues/21357
+      matrix_filter: map(select(.GPU != "rtxpro6000"))
   wheel-build-cudf-polars:
     needs: wheel-build-pylibcudf
     secrets: inherit

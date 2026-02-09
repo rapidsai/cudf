@@ -29,7 +29,6 @@
 #include <cuda/std/iterator>
 #include <cuda/std/tuple>
 #include <thrust/binary_search.h>
-#include <thrust/copy.h>
 #include <thrust/count.h>
 #include <thrust/fill.h>
 #include <thrust/functional.h>
@@ -722,14 +721,13 @@ get_array_children_indices(TreeDepthT row_array_children_level,
                                         row_array_children_level);
   rmm::device_uvector<NodeIndexT> level2_nodes(num_level2_nodes, stream);
   rmm::device_uvector<NodeIndexT> level2_indices(num_level2_nodes, stream);
-  auto const iter = thrust::copy_if(rmm::exec_policy_nosync(stream),
-                                    thrust::counting_iterator<NodeIndexT>(0),
-                                    thrust::counting_iterator<NodeIndexT>(num_nodes),
-                                    node_levels.begin(),
-                                    level2_nodes.begin(),
-                                    [row_array_children_level] __device__(auto level) {
-                                      return level == row_array_children_level;
-                                    });
+  cudf::detail::copy_if(
+    thrust::counting_iterator<NodeIndexT>(0),
+    thrust::counting_iterator<NodeIndexT>(num_nodes),
+    node_levels.begin(),
+    level2_nodes.begin(),
+    [row_array_children_level] __device__(auto level) { return level == row_array_children_level; },
+    stream);
   auto level2_parent_nodes =
     thrust::make_permutation_iterator(parent_node_ids.begin(), level2_nodes.cbegin());
   thrust::exclusive_scan_by_key(rmm::exec_policy_nosync(stream),

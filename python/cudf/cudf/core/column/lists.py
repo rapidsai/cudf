@@ -15,17 +15,15 @@ import pylibcudf as plc
 
 import cudf
 from cudf.core.column.column import ColumnBase, as_column, column_empty
+from cudf.core.dtype.validators import is_dtype_obj_list
 from cudf.core.dtypes import ListDtype
 from cudf.core.missing import NA
-from cudf.utils.dtypes import (
-    get_dtype_of_same_kind,
-    is_dtype_obj_list,
-)
+from cudf.utils.dtypes import get_dtype_of_same_kind
 from cudf.utils.scalar import (
     maybe_nested_pa_scalar_to_py,
     pa_scalar_to_plc_scalar,
 )
-from cudf.utils.utils import _is_null_host_scalar
+from cudf.utils.utils import is_na_like
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
@@ -151,7 +149,7 @@ class ListColumn(ColumnBase):
 
         # Build Data, Mask & Offsets
         for data in arbitrary:
-            if _is_null_host_scalar(data):
+            if is_na_like(data):
                 mask_bools.append(False)
                 offset_vals.append(offset)
             else:
@@ -323,20 +321,24 @@ class ListColumn(ColumnBase):
 
     def extract_element_scalar(self, index: int) -> ColumnBase:
         with self.access(mode="read", scope="internal"):
-            return ColumnBase.from_pylibcudf(
-                plc.lists.extract_list_element(
-                    self.plc_column,
-                    index,
-                )
+            plc_column = plc.lists.extract_list_element(
+                self.plc_column,
+                index,
+            )
+            return ColumnBase.create(
+                plc_column,
+                self.dtype.element_type,  # type: ignore[union-attr]
             )
 
     def extract_element_column(self, index: ColumnBase) -> ColumnBase:
         with self.access(mode="read", scope="internal"):
-            return ColumnBase.from_pylibcudf(
-                plc.lists.extract_list_element(
-                    self.plc_column,
-                    index.plc_column,
-                )
+            plc_column = plc.lists.extract_list_element(
+                self.plc_column,
+                index.plc_column,
+            )
+            return ColumnBase.create(
+                plc_column,
+                self.dtype.element_type,  # type: ignore[union-attr]
             )
 
     def contains_scalar(self, search_key: pa.Scalar) -> ColumnBase:
@@ -406,6 +408,7 @@ class ListColumn(ColumnBase):
         separator: str | StringColumn,
         sep_na_rep: str,
         string_na_rep: str,
+        result_dtype: DtypeObj,
     ) -> StringColumn:
         with self.access(mode="read", scope="internal"):
             if isinstance(separator, str):
@@ -424,7 +427,7 @@ class ListColumn(ColumnBase):
             )
             return cast(
                 "cudf.core.column.string.StringColumn",
-                type(self).from_pylibcudf(plc_column),
+                ColumnBase.create(plc_column, result_dtype),
             )
 
     def minhash_ngrams(

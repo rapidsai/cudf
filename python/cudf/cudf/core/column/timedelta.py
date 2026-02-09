@@ -28,6 +28,7 @@ from cudf.utils.dtypes import (
 )
 from cudf.utils.scalar import pa_scalar_to_plc_scalar
 from cudf.utils.temporal import unit_to_nanoseconds_conversion
+from cudf.utils.utils import _EQUALITY_OPS, is_na_like
 
 if TYPE_CHECKING:
     from cudf._typing import (
@@ -139,6 +140,7 @@ class TimeDeltaColumn(TemporalBaseColumn):
             if isinstance(other, pa.Scalar)
             else other.dtype
         )
+        other_is_null_scalar = is_na_like(other)
 
         if other_cudf_dtype.kind == "m":
             # TODO: pandas will allow these operators to work but return false
@@ -209,8 +211,8 @@ class TimeDeltaColumn(TemporalBaseColumn):
 
         result = binaryop.binaryop(lhs, rhs, op, out_dtype)
         if (
-            cudf.get_option("mode.pandas_compatible")
-            and out_dtype.kind == "b"
+            out_dtype.kind == "b"
+            and (op in _EQUALITY_OPS or not other_is_null_scalar)
             and not is_pandas_nullable_extension_dtype(out_dtype)
         ):
             result = result.fillna(op == "__ne__")
@@ -306,7 +308,7 @@ class TimeDeltaColumn(TemporalBaseColumn):
                     0, length=len(self), dtype=self._UNDERLYING_DTYPE
                 )
                 if self.nullable:
-                    res_col = res_col.set_mask(self.mask)
+                    res_col = res_col.set_mask(self.mask, self.null_count)
             data[result_key] = res_col
         return data
 
@@ -377,7 +379,7 @@ class TimeDeltaColumn(TemporalBaseColumn):
                 0, length=len(self), dtype=self._UNDERLYING_DTYPE
             )
             if self.nullable:
-                res_col = res_col.set_mask(self.mask)
+                res_col = res_col.set_mask(self.mask, self.null_count)
             return cast("cudf.core.column.NumericalColumn", res_col)
         return (
             self % get_np_td_unit_conversion("us", None)

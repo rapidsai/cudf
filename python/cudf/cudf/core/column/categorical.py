@@ -26,7 +26,7 @@ from cudf.utils.dtypes import (
     min_unsigned_type,
 )
 from cudf.utils.scalar import pa_scalar_to_plc_scalar
-from cudf.utils.utils import _is_null_host_scalar
+from cudf.utils.utils import is_na_like
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, MutableSequence, Sequence
@@ -79,6 +79,22 @@ class CategoricalColumn(column.ColumnBase):
         plc.TypeId.UINT64,
     }
 
+    @staticmethod
+    def _validate_dtype_to_plc_column(
+        plc_column: plc.Column, dtype: DtypeObj
+    ) -> None:
+        """Validate that the dtype matches the equivalent type of the plc_column"""
+        return None
+
+    @classmethod
+    def _validate_args(  # type: ignore[override]
+        cls, plc_column: plc.Column, dtype: CategoricalDtype
+    ) -> tuple[plc.Column, CategoricalDtype]:
+        plc_column, dtype = super()._validate_args(plc_column, dtype)  # type: ignore[assignment]
+        if not isinstance(dtype, CategoricalDtype):
+            raise ValueError(f"{dtype=} must be a CategoricalDtype instance")
+        return plc_column, dtype
+
     def __contains__(self, item: ScalarLike) -> bool:
         try:
             encoded = self._encode(item)
@@ -117,7 +133,7 @@ class CategoricalColumn(column.ColumnBase):
         return self.dtype.ordered
 
     def __setitem__(self, key: Any, value: Any) -> None:
-        if is_scalar(value) and _is_null_host_scalar(value):
+        if is_scalar(value) and is_na_like(value):
             to_add_categories = 0
         else:
             if is_scalar(value):
@@ -270,8 +286,8 @@ class CategoricalColumn(column.ColumnBase):
             raise NotImplementedError(f"{arrow_type=} is not supported.")
 
         if self.categories.dtype.kind == "f":
-            new_mask = self.notnull().fillna(False).as_mask()
-            col = self.set_mask(new_mask)
+            new_mask, null_count = self.notnull().fillna(False).as_mask()
+            col = self.set_mask(new_mask, null_count)
         else:
             col = self
 
@@ -279,7 +295,7 @@ class CategoricalColumn(column.ColumnBase):
         codes = (
             col.codes.astype(signed_dtype)
             .fillna(_DEFAULT_CATEGORICAL_VALUE)
-            .values_host
+            .to_numpy()
         )
 
         cats = col.categories.nans_to_nulls()
@@ -333,6 +349,15 @@ class CategoricalColumn(column.ColumnBase):
             other = other.codes  # type: ignore[union-attr]
 
         return self.codes, other
+
+    def where(
+        self, cond: ColumnBase, other: ScalarLike | ColumnBase, inplace: bool
+    ) -> ColumnBase:
+        casted_col, casted_other = self._cast_self_and_other_for_where(
+            other, inplace
+        )
+        result = casted_col.copy_if_else(casted_other, cond)  # type: ignore[arg-type]
+        return column.ColumnBase.create(result.plc_column, self.dtype)
 
     def _encode(self, value: ScalarLike) -> ScalarLike:
         return self.categories.find_first_value(value)
@@ -598,6 +623,7 @@ class CategoricalColumn(column.ColumnBase):
         gather_map = self.codes.astype(SIZE_TYPE_DTYPE).fillna(0)
         out = self.categories.take(gather_map)
         mask = self.mask
+        new_null_count = self.null_count
         if self.offset > 0 and mask is not None:
             with mask.access(mode="read", scope="internal"):
                 mask = cudf.core.buffer.as_buffer(
@@ -607,7 +633,12 @@ class CategoricalColumn(column.ColumnBase):
                         mask.size - self.offset,
                     )
                 )
-        out = out.set_mask(mask)
+                new_null_count = plc.null_mask.null_count(
+                    mask,
+                    0,
+                    mask.size,
+                )
+        out = out.set_mask(mask, new_null_count)
         return out
 
     def copy(self, deep: bool = True) -> Self:
