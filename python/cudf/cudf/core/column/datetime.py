@@ -32,6 +32,7 @@ from cudf.utils.dtypes import (
     _get_base_dtype,
     cudf_dtype_from_pa_type,
     cudf_dtype_to_pa_type,
+    dtype_from_pylibcudf_column,
     get_dtype_of_same_kind,
     get_dtype_of_same_type,
 )
@@ -211,10 +212,10 @@ class DatetimeColumn(TemporalBaseColumn):
     @functools.cached_property
     def is_month_end(self) -> ColumnBase:
         with self.access(mode="read", scope="internal"):
-            # Currently this needs to use from_pylibcudf because we need to infer the
-            # type after _wrap_buffers so we can't use dtype_from_pylibcudf_column
-            last_day_col = ColumnBase.from_pylibcudf(
-                plc.datetime.last_day_of_month(self.plc_column),
+            plc_result = plc.datetime.last_day_of_month(self.plc_column)
+            last_day_col = ColumnBase.create(
+                plc_result,
+                dtype_from_pylibcudf_column(plc_result),
             )
         return (self.day == cast("Self", last_day_col).day).fillna(False)
 
