@@ -128,9 +128,43 @@ def serialize_query(
     --------
     >>> import polars as pl
     >>> import json
-    >>> q = pl.LazyFrame({"a": [1, 2, 3]}).select("a")
+    >>> import dataclasses
+    >>> q = pl.LazyFrame({"a": [1, 2, 3]}).select(pl.col("a") * 2)
     >>> engine = pl.GPUEngine(executor="streaming")
-    >>> dag = serialize_query(q, engine, physical=False)
+    >>> plan = serialize_query(q, engine, physical=False)
+    >>> print(json.dumps(dataclasses.asdict(plan), indent=2))
+    {
+      "roots": [
+        "1739020873"
+      ],
+      "nodes": {
+        "1739020873": {
+          "id": "1739020873",
+          "children": [
+            "2653195019"
+          ],
+          "schema": {
+            "a": "INT64"
+          },
+          "properties": {
+            "columns": [
+              "a"
+            ]
+          },
+          "type": "Select"
+        },
+        "2653195019": {
+          "id": "2653195019",
+          "children": [],
+          "schema": {
+            "a": "INT64"
+          },
+          "properties": {},
+          "type": "DataFrameScan"
+        }
+      },
+      "partition_info": null
+    }
     """
     return SerializablePlan.from_query(q, engine, lowered=physical)
 
