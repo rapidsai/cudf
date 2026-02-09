@@ -25,7 +25,6 @@ from cudf.testing._utils import (
     _decimal_series,
     assert_exceptions_equal,
     expect_warning_if,
-    gen_rand_series,
 )
 
 
@@ -1330,12 +1329,17 @@ def test_operator_func_between_series(
     float_types_as_str, arithmetic_op_method, has_nulls, fill_value
 ):
     count = 1000
-    gdf_series_a = gen_rand_series(
-        float_types_as_str, count, has_nulls=has_nulls, stride=10000
+    rng = np.random.default_rng(0)
+    gdf_series_a = cudf.Series(
+        (rng.random(count).astype(float_types_as_str) * 2 - 1)
     )
-    gdf_series_b = gen_rand_series(
-        float_types_as_str, count, has_nulls=has_nulls, stride=100
+    if has_nulls:
+        gdf_series_a.loc[rng.choice([True, False], count)] = None
+    gdf_series_b = cudf.Series(
+        (rng.random(count).astype(float_types_as_str) * 2 - 1)
     )
+    if has_nulls:
+        gdf_series_b.loc[rng.choice([True, False], count)] = None
     pdf_series_a = gdf_series_a.to_pandas()
     pdf_series_b = gdf_series_b.to_pandas()
 
@@ -1356,9 +1360,12 @@ def test_operator_func_series_and_scalar(
 ):
     count = 1000
     scalar = 59
-    gdf_series = gen_rand_series(
-        float_types_as_str, count, has_nulls=has_nulls, stride=10000
+    rng = np.random.default_rng(0)
+    gdf_series = cudf.Series(
+        (rng.random(count).astype(float_types_as_str) * 2 - 1)
     )
+    if has_nulls:
+        gdf_series.loc[rng.choice([True, False], count)] = None
     pdf_series = gdf_series.to_pandas()
 
     gdf_series_result = getattr(gdf_series, arithmetic_op_method)(

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 import numpy as np
@@ -7,9 +7,6 @@ import pytest
 
 import cudf
 from cudf.testing import assert_eq
-from cudf.testing._utils import (
-    gen_rand,
-)
 
 
 @pytest.mark.parametrize("period", [-20, 1, 0, 1, 2])
@@ -18,11 +15,24 @@ def test_diff(numeric_types_as_str, period, data_empty):
     if data_empty:
         data = None
     else:
-        if np.dtype(numeric_types_as_str) == np.int8:
-            # to keep data in range
-            data = gen_rand(numeric_types_as_str, 100000, low=-2, high=2)
-        else:
-            data = gen_rand(numeric_types_as_str, 100000)
+        rng = np.random.default_rng(0)
+        dtype = np.dtype(numeric_types_as_str)
+        if dtype == np.int8:
+            data = rng.integers(-2, 2, size=100000).astype(np.int8)
+        elif dtype.kind == "f":
+            data = rng.random(100000).astype(dtype) * 2 - 1
+        elif dtype.kind in ("i", "u"):
+            if dtype == np.int8:
+                low, high = -2, 2
+            elif dtype == np.int16:
+                low, high = -32, 32
+            elif dtype.kind == "i":
+                low, high = -10000, 10000
+            elif dtype in (np.uint8, np.uint16):
+                low, high = 0, 32
+            else:
+                low, high = 0, 128
+            data = rng.integers(low=low, high=high, size=100000).astype(dtype)
 
     gs = cudf.Series(data, dtype=numeric_types_as_str)
     ps = pd.Series(data, dtype=numeric_types_as_str)

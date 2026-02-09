@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 import cupy
 import numpy as np
@@ -7,7 +7,6 @@ import pytest
 
 import cudf
 from cudf.testing import assert_eq
-from cudf.testing._utils import gen_rand
 
 
 @pytest.mark.parametrize("side", ["left", "right"])
@@ -15,11 +14,11 @@ from cudf.testing._utils import gen_rand
 @pytest.mark.parametrize("vals_class", ["series", "index"])
 def test_searchsorted(side, obj_class, vals_class):
     nelem = 1000
-    column_data = gen_rand("float64", nelem)
     rng = np.random.default_rng(0)
+    column_data = rng.random(nelem).astype(np.float64) * 2 - 1
     column_mask = rng.choice([True, False], size=nelem)
 
-    values_data = gen_rand("float64", nelem)
+    values_data = rng.random(nelem).astype(np.float64) * 2 - 1
     values_mask = rng.choice([True, False], size=nelem)
 
     sr = cudf.Series(column_data)

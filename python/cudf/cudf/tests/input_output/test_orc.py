@@ -5,6 +5,7 @@ import datetime
 import decimal
 import os
 import random
+import string
 from io import BytesIO
 from string import ascii_letters, ascii_lowercase
 
@@ -25,9 +26,9 @@ from cudf.io.orc import (
 from cudf.testing import assert_eq, assert_frame_equal
 from cudf.testing._utils import (
     expect_warning_if,
-    gen_rand_series,
     supported_numpy_dtypes,
 )
+from cudf.utils.temporal import unit_to_nanoseconds_conversion
 
 # Removal of these deprecated features is no longer imminent. They will not be
 # removed until a suitable alternative has been implemented. As a result, we
@@ -619,13 +620,41 @@ def test_orc_write_statistics(tmp_path, datadir, nrows, stats_freq):
     if nrows == 100000:
         supported_stat_types.remove("bool")
 
-    # Make a dataframe
-    gdf = cudf.DataFrame(
-        {
-            "col_" + str(dtype): gen_rand_series(dtype, nrows, has_nulls=True)
-            for dtype in supported_stat_types
-        }
-    )
+    null_rng = np.random.default_rng(0)
+    nullmask = null_rng.choice([True, False], size=nrows)
+    cols = {}
+    for dtype in supported_stat_types:
+        rng = np.random.default_rng(0)
+        if dtype == "bool":
+            vals = rng.integers(0, 2, nrows).astype(np.bool_)
+        elif dtype == "str":
+            nchars = rng.integers(10, 11, size=1)[0]
+            char_options = np.array(list(string.ascii_letters + string.digits))
+            all_chars = "".join(rng.choice(char_options, nchars * nrows))
+            vals = np.array(
+                [
+                    all_chars[nchars * i : nchars * (i + 1)]
+                    for i in range(nrows)
+                ]
+            )
+        elif dtype in ("datetime64[ms]", "datetime64[us]"):
+            time_unit = "ms" if "ms" in dtype else "us"
+            high = int(1e18) // unit_to_nanoseconds_conversion[time_unit]
+            vals = pd.to_datetime(rng.integers(0, high, nrows), unit=time_unit)
+        elif dtype in ("int8", "int16"):
+            vals = rng.integers(-32, 32, nrows).astype(dtype)
+        elif np.dtype(dtype).kind == "i":
+            vals = rng.integers(-10000, 10000, nrows).astype(dtype)
+        elif dtype in ("uint8", "uint16"):
+            vals = rng.integers(0, 32, nrows).astype(dtype)
+        elif np.dtype(dtype).kind == "u":
+            vals = rng.integers(0, 128, nrows).astype(dtype)
+        else:
+            vals = rng.random(nrows).astype(dtype) * 2 - 1
+        ser = cudf.Series(vals)
+        ser.loc[nullmask] = None
+        cols["col_" + str(dtype)] = ser
+    gdf = cudf.DataFrame(cols)
     fname = tmp_path / "gdf.orc"
 
     # Write said dataframe to ORC with cuDF
@@ -693,43 +722,97 @@ def test_orc_chunked_write_statistics(tmp_path, datadir, nrows, stats_freq):
         supported_stat_types.remove("bool")
 
     gdf_fname = tmp_path / "chunked_stats.orc"
+    max_char_length = 100 if nrows < 1000 else 10
+    nrows_half = nrows // 2
+    null_rng = np.random.default_rng(0)
+    nullmask = null_rng.choice([True, False], size=nrows_half)
+
     with ORCWriter(
         gdf_fname, statistics=stats_freq, stripe_size_rows=512
     ) as writer:
-        max_char_length = 100 if nrows < 1000 else 10
-
-        # Make a dataframe
-        gdf = cudf.DataFrame(
-            {
-                "col_" + str(dtype): gen_rand_series(
-                    dtype,
-                    nrows // 2,
-                    has_nulls=True,
-                    low=0,
-                    high=max_char_length,
-                    seed=0,
+        cols = {}
+        for dtype in supported_stat_types:
+            rng = np.random.default_rng(0)
+            if dtype == "bool":
+                vals = rng.integers(0, 2, nrows_half).astype(np.bool_)
+            elif dtype == "str":
+                nchars = max(1, rng.integers(0, max_char_length, size=1)[0])
+                char_options = np.array(
+                    list(string.ascii_letters + string.digits)
                 )
-                for dtype in supported_stat_types
-            }
-        )
-
+                all_chars = "".join(
+                    rng.choice(char_options, nchars * nrows_half)
+                )
+                vals = np.array(
+                    [
+                        all_chars[nchars * i : nchars * (i + 1)]
+                        for i in range(nrows_half)
+                    ]
+                )
+            elif dtype in ("datetime64[ms]", "datetime64[us]"):
+                time_unit = "ms" if "ms" in dtype else "us"
+                high = int(1e18) // unit_to_nanoseconds_conversion[time_unit]
+                vals = pd.to_datetime(
+                    rng.integers(0, high, nrows_half), unit=time_unit
+                )
+            elif dtype in ("int8", "int16"):
+                vals = rng.integers(-32, 32, nrows_half).astype(dtype)
+            elif np.dtype(dtype).kind == "i":
+                vals = rng.integers(-10000, 10000, nrows_half).astype(dtype)
+            elif dtype in ("uint8", "uint16"):
+                vals = rng.integers(0, 32, nrows_half).astype(dtype)
+            elif np.dtype(dtype).kind == "u":
+                vals = rng.integers(0, 128, nrows_half).astype(dtype)
+            else:
+                vals = rng.random(nrows_half).astype(dtype) * 2 - 1
+            ser = cudf.Series(vals)
+            ser.loc[nullmask] = None
+            cols["col_" + str(dtype)] = ser
+        gdf = cudf.DataFrame(cols)
         pdf1 = gdf.to_pandas()
         writer.write_table(gdf)
         # gdf is specifically being reused here to ensure the data is destroyed
-        # before the next write_table call to ensure the data is persisted inside
-        # write and no pointers are saved into the original table
-        gdf = cudf.DataFrame(
-            {
-                "col_" + str(dtype): gen_rand_series(
-                    dtype,
-                    nrows // 2,
-                    has_nulls=True,
-                    low=0,
-                    high=max_char_length,
+        # before the next write_table call to ensure the data is persisted
+        # inside write and no pointers are saved into the original table
+        cols = {}
+        for dtype in supported_stat_types:
+            rng = np.random.default_rng(0)
+            if dtype == "bool":
+                vals = rng.integers(0, 2, nrows_half).astype(np.bool_)
+            elif dtype == "str":
+                nchars = max(1, rng.integers(0, max_char_length, size=1)[0])
+                char_options = np.array(
+                    list(string.ascii_letters + string.digits)
                 )
-                for dtype in supported_stat_types
-            }
-        )
+                all_chars = "".join(
+                    rng.choice(char_options, nchars * nrows_half)
+                )
+                vals = np.array(
+                    [
+                        all_chars[nchars * i : nchars * (i + 1)]
+                        for i in range(nrows_half)
+                    ]
+                )
+            elif dtype in ("datetime64[ms]", "datetime64[us]"):
+                time_unit = "ms" if "ms" in dtype else "us"
+                high = int(1e18) // unit_to_nanoseconds_conversion[time_unit]
+                vals = pd.to_datetime(
+                    rng.integers(0, high, nrows_half), unit=time_unit
+                )
+            elif dtype in ("int8", "int16"):
+                vals = rng.integers(-32, 32, nrows_half).astype(dtype)
+            elif np.dtype(dtype).kind == "i":
+                vals = rng.integers(-10000, 10000, nrows_half).astype(dtype)
+            elif dtype in ("uint8", "uint16"):
+                vals = rng.integers(0, 32, nrows_half).astype(dtype)
+            elif np.dtype(dtype).kind == "u":
+                vals = rng.integers(0, 128, nrows_half).astype(dtype)
+            else:
+                vals = rng.random(nrows_half).astype(dtype) * 2 - 1
+            ser = cudf.Series(vals)
+            ser.loc[nullmask] = None
+            cols["col_" + str(dtype)] = ser
+        gdf = cudf.DataFrame(cols)
         pdf2 = gdf.to_pandas()
         writer.write_table(gdf)
 
@@ -790,8 +873,10 @@ def test_orc_chunked_write_statistics(tmp_path, datadir, nrows, stats_freq):
 
 @pytest.mark.parametrize("nrows", [1, 100, 100000])
 def test_orc_write_bool_statistics(tmp_path, datadir, nrows):
-    # Make a dataframe
-    gdf = cudf.DataFrame({"col_bool": gen_rand_series("bool", nrows)})
+    rng = np.random.default_rng(0)
+    gdf = cudf.DataFrame(
+        {"col_bool": cudf.Series(rng.integers(0, 2, nrows).astype(np.bool_))}
+    )
     fname = tmp_path / "gdf.orc"
 
     # Write said dataframe to ORC with cuDF
@@ -847,9 +932,12 @@ def test_orc_reader_gmt_timestamps(datadir):
 
 def test_orc_bool_encode_fail():
     buffer = BytesIO()
+    rng = np.random.default_rng(0)
 
     # Generate a boolean column longer than a single row group
-    fail_df = cudf.DataFrame({"col": gen_rand_series("bool", 20000)})
+    fail_df = cudf.DataFrame(
+        {"col": cudf.Series(rng.integers(0, 2, 20000).astype(np.bool_))}
+    )
     # Invalidate a row in the first row group
     fail_df["col"][5000] = None
 
@@ -859,7 +947,9 @@ def test_orc_bool_encode_fail():
         fail_df.to_orc(buffer)
 
     # Generate a boolean column longer than a single row group
-    okay_df = cudf.DataFrame({"col": gen_rand_series("bool", 20000)})
+    okay_df = cudf.DataFrame(
+        {"col": cudf.Series(rng.integers(0, 2, 20000).astype(np.bool_))}
+    )
     okay_df["col"][15000] = None
     # Invalid row is in the last row group; encoding is assumed to be correct
     okay_df.to_orc(buffer)
@@ -944,8 +1034,10 @@ def test_empty_string_columns(data):
 )
 def test_orc_writer_decimal(tmp_path, scale, decimal_type):
     fname = tmp_path / "decimal.orc"
-
-    expected = cudf.DataFrame({"dec_val": gen_rand_series("i", 100)})
+    rng = np.random.default_rng(0)
+    expected = cudf.DataFrame(
+        {"dec_val": cudf.Series(rng.integers(-10000, 10000, 100))}
+    )
     expected["dec_val"] = expected["dec_val"].astype(decimal_type(7, scale))
 
     expected.to_orc(fname)
@@ -1895,7 +1987,10 @@ def test_orc_reader_empty_deeply_nested_level(datadir):
 
 
 def test_orc_chunked_writer_stripe_size(datadir):
-    df = cudf.DataFrame({"col": gen_rand_series("int", 100000)})
+    rng = np.random.default_rng(0)
+    df = cudf.DataFrame(
+        {"col": cudf.Series(rng.integers(-10000, 10000, 100000))}
+    )
 
     buffer = BytesIO()
     with ORCWriter(buffer, stripe_size_bytes=64 * 1024) as writer:

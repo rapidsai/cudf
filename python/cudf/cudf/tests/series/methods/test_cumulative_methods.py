@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 import numpy as np
@@ -8,7 +8,6 @@ import pytest
 import cudf
 from cudf.core.dtypes import Decimal32Dtype, Decimal64Dtype, Decimal128Dtype
 from cudf.testing import assert_eq
-from cudf.testing._utils import gen_rand
 
 
 @pytest.fixture(params=[0, 5])
@@ -23,11 +22,21 @@ def cumulative_methods(request):
 
 def test_cumulative_methods(numeric_types_as_str, nelem, cumulative_methods):
     dtype = np.dtype(numeric_types_as_str)
+    rng = np.random.default_rng(0)
     if dtype == np.int8:
-        # to keep data in range
-        data = gen_rand(dtype, nelem, low=-2, high=2)
-    else:
-        data = gen_rand(dtype, nelem)
+        data = rng.integers(-2, 2, size=nelem).astype(np.int8)
+    elif dtype.kind == "f":
+        data = rng.random(nelem).astype(dtype) * 2 - 1
+    elif dtype.kind in ("i", "u"):
+        if dtype == np.int16:
+            low, high = -32, 32
+        elif dtype.kind == "i":
+            low, high = -10000, 10000
+        elif dtype in (np.uint8, np.uint16):
+            low, high = 0, 32
+        else:
+            low, high = 0, 128
+        data = rng.integers(low=low, high=high, size=nelem).astype(dtype)
 
     decimal = 4 if dtype == np.float32 else 6
 
