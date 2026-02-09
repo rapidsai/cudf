@@ -61,20 +61,23 @@ class StructMethods(BaseAccessor):
             self._column.dtype
         ).fields
         field_keys = list(struct_dtype_fields.keys())
+        result_name = None
         if key in struct_dtype_fields:
             pos = field_keys.index(key)
+            result_name = key
         elif isinstance(key, int):
             pos = key
+            try:
+                result_name = field_keys[key]
+            except IndexError as err:
+                raise IndexError(f"Index {key} out of range") from err
         else:
             raise KeyError(
                 f"Field '{key}' is not found in the set of existing keys."
             )
         assert isinstance(self._column, StructColumn)
-        try:
-            result = self._column._get_sliced_child(pos)
-        except IndexError as err:
-            raise IndexError(f"Index {key} out of range") from err
-        return self._return_or_inplace(result)
+        result = self._column._get_sliced_child(pos)
+        return self._return_or_inplace(result, replace_name=result_name)
 
     def explode(self) -> DataFrame:
         """
