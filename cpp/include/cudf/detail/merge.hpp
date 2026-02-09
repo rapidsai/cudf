@@ -1,18 +1,17 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
 
-#include <cudf/utilities/export.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/device_uvector.hpp>
 
 #include <cuda/std/utility>
 
-namespace CUDF_EXPORT cudf {
+namespace cudf {
 namespace detail {
 
 /**
@@ -50,4 +49,4 @@ std::unique_ptr<cudf::table> merge(std::vector<table_view> const& tables_to_merg
                                    rmm::device_async_resource_ref mr);
 
 }  // namespace detail
-}  // namespace CUDF_EXPORT cudf
+}  // namespace cudf

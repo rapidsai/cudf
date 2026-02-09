@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -40,6 +40,16 @@ T getenv_or(std::string_view env_var_name, T default_val)
   T converted_val;
   sstream >> converted_val;
   return converted_val;
+}
+
+/**
+ * @brief Specialization of getenv_or for bool, to allow common "ON"/"OFF" string values.
+ */
+inline bool get_bool_env_or(std::string_view env_var_name, bool default_val)
+{
+  auto val = getenv_or(env_var_name, default_val ? std::string{"ON"} : std::string{"OFF"});
+  return val == "ON" || val == "on" || val == "1" || val == "true" || val == "TRUE" ||
+         val == "True";
 }
 
 }  // namespace

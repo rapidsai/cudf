@@ -601,11 +601,21 @@ class Frame(BinaryOperand, Scannable, Serializable):
         Only the values in the DataFrame will be returned, the axes labels will
         be removed.
 
+        .. deprecated:: 26.04
+            `values_host` is deprecated and will be removed in a future version.
+            Use `to_numpy()` instead.
+
         Returns
         -------
         numpy.ndarray
             A host representation of the underlying data.
         """
+        warnings.warn(
+            "values_host is deprecated and will be removed in a future version. "
+            "Use to_numpy() instead.",
+            FutureWarning,
+            stacklevel=2,
+        )
         return self.to_numpy()
 
     @_performance_tracking
@@ -677,7 +687,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
                 and dtype is not None
                 and is_string_dtype(dtype)
             ):
-                casted_array[col.isnull().values_host] = (
+                casted_array[col.isnull().to_numpy()] = (
                     cudf.NA if na_value is no_default else na_value
                 )
             if copy and casted_array is array:
@@ -900,7 +910,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
             )
 
         return self._to_array(
-            lambda col: col.values_host, np, copy, dtype, na_value
+            lambda col: col.to_numpy(), np, copy, dtype, na_value
         )
 
     @_performance_tracking

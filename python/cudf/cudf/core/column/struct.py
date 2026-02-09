@@ -18,7 +18,7 @@ from cudf.utils.scalar import (
     maybe_nested_pa_scalar_to_py,
     pa_scalar_to_plc_scalar,
 )
-from cudf.utils.utils import _is_null_host_scalar
+from cudf.utils.utils import is_na_like
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -32,7 +32,7 @@ def _maybe_na_to_none(value: Any) -> Any:
     """
     Convert NA-like values to None for pyarrow.
     """
-    if _is_null_host_scalar(value):
+    if is_na_like(value):
         return None
     else:
         return value
@@ -159,8 +159,9 @@ class StructColumn(ColumnBase):
             from cudf.core.column.interval import IntervalColumn
 
             # Determine the current subtype from the first child
-            first_child = ColumnBase.from_pylibcudf(
-                self.plc_column.children()[0]
+            first_child_plc = self.plc_column.children()[0]
+            first_child = ColumnBase.create(
+                first_child_plc, dtype_from_pylibcudf_column(first_child_plc)
             )
             current_dtype = IntervalDtype(
                 subtype=first_child.dtype, closed=dtype.closed
