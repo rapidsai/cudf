@@ -354,12 +354,12 @@ struct rolling_postprocessor {
  */
 template <typename OutputType,
           int block_size,
-          bool has_nulls,
           typename DeviceRollingOperator,
           typename PrecedingWindowIterator,
           typename FollowingWindowIterator>
 __launch_bounds__(block_size) CUDF_KERNEL
   void gpu_rolling(column_device_view input,
+                   bool has_nulls,
                    column_device_view default_outputs,
                    mutable_column_device_view output,
                    size_type* __restrict__ output_valid_count,
@@ -391,8 +391,8 @@ __launch_bounds__(block_size) CUDF_KERNEL
     //       This might require separating the kernel into a special version
     //       for dynamic and static sizes.
 
-    bool const output_is_valid = device_operator.template operator()<OutputType, has_nulls>(
-      input, default_outputs, output, start, end, i);
+    bool const output_is_valid = device_operator.template operator()<OutputType>(
+      input, has_nulls, default_outputs, output, start, end, i);
 
     // set the mask
     cudf::bitmask_type const result_mask{__ballot_sync(active_threads, output_is_valid)};
@@ -454,25 +454,15 @@ struct rolling_window_launcher {
       auto constexpr block_size = 256;
       auto const grid           = cudf::detail::grid_1d(input.size(), block_size);
 
-      if (input.has_nulls()) {
-        gpu_rolling<OutType, block_size, true>
-          <<<grid.num_blocks, block_size, 0, stream.value()>>>(*d_inp_ptr,
-                                                               *d_default_out_ptr,
-                                                               *d_out_ptr,
-                                                               d_valid_count.data(),
-                                                               device_op,
-                                                               preceding_window_begin,
-                                                               following_window_begin);
-      } else {
-        gpu_rolling<OutType, block_size, false>
-          <<<grid.num_blocks, block_size, 0, stream.value()>>>(*d_inp_ptr,
-                                                               *d_default_out_ptr,
-                                                               *d_out_ptr,
-                                                               d_valid_count.data(),
-                                                               device_op,
-                                                               preceding_window_begin,
-                                                               following_window_begin);
-      }
+      gpu_rolling<OutType, block_size>
+        <<<grid.num_blocks, block_size, 0, stream.value()>>>(*d_inp_ptr,
+                                                             input.has_nulls(),
+                                                             *d_default_out_ptr,
+                                                             *d_out_ptr,
+                                                             d_valid_count.data(),
+                                                             device_op,
+                                                             preceding_window_begin,
+                                                             following_window_begin);
 
       auto const valid_count = d_valid_count.value(stream);
       output->set_null_count(output->size() - valid_count);
