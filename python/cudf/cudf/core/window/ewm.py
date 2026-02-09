@@ -228,11 +228,16 @@ class ExponentialMovingWindow(_RollingBase):
             )
 
         head_plc_col, tail_plc_col = plc.copying.split(
-            plc_col, [int(leading_nulls)]
+            plc_col, [leading_nulls]
         )
-        head = type(to_libcudf_column).from_pylibcudf(head_plc_col)
+        head = type(to_libcudf_column).create(
+            head_plc_col, to_libcudf_column.dtype
+        )
         tail = getattr(
-            type(to_libcudf_column).from_pylibcudf(tail_plc_col), agg_name
+            type(to_libcudf_column).create(
+                tail_plc_col, to_libcudf_column.dtype
+            ),
+            agg_name,
         )(inclusive=True, com=self.com, adjust=self.adjust)
         return head.append(tail)
 
