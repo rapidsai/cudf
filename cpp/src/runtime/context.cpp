@@ -120,12 +120,8 @@ namespace CUDF_EXPORT cudf {
 void initialize(init_flags flags)
 {
   std::call_once(*_context_init_flag, [&]() {
-    auto dump_codegen_env = getenv_or("LIBCUDF_JIT_DUMP_CODEGEN", std::string{"OFF"});
-    bool dump_codegen =
-      (dump_codegen_env == "ON" || dump_codegen_env == "on" || dump_codegen_env == "1");
-
-    auto use_jit_env = getenv_or("LIBCUDF_JIT_ENABLED", std::string{"OFF"});
-    bool use_jit     = (use_jit_env == "ON" || use_jit_env == "on" || use_jit_env == "1");
+    bool dump_codegen = get_bool_env_or("LIBCUDF_JIT_DUMP_CODEGEN", false);
+    bool use_jit      = get_bool_env_or("LIBCUDF_JIT_ENABLED", false);
 
     flags = flags | (use_jit ? init_flags::INIT_JIT_CACHE : init_flags::NONE);
 
