@@ -360,7 +360,7 @@ bundle={})***",
   // TODO: add time function in cache
 
   auto compile = [&] {
-    auto begin = std::chrono::high_resolution_clock::now();
+    auto begin = std::chrono::steady_clock::now();
 
     auto include_dirs    = bundle.get_include_directories();
     auto compile_options = bundle.get_compile_options();
@@ -403,7 +403,7 @@ bundle={})***",
 
     auto frag = fragment_t::compile(params);
 
-    auto end = std::chrono::high_resolution_clock::now();
+    auto end = std::chrono::steady_clock::now();
 
     auto duration = end - begin;
 
@@ -436,7 +436,7 @@ library compile_and_link_udf(char const* name,
   auto bundle_hash = bundle.get_hash();
 
   auto compile = [&] {
-    auto begin    = std::chrono::high_resolution_clock::now();
+    auto begin    = std::chrono::steady_clock::now();
     auto library  = bundle.get_lto_library();
     auto fragment = get_or_compile_fragment(name, udf_code, udf_key);
 
@@ -487,7 +487,7 @@ library compile_and_link_udf(char const* name,
 
     auto linked_library = library_t::load(load_params);
 
-    auto end = std::chrono::high_resolution_clock::now();
+    auto end = std::chrono::steady_clock::now();
 
     auto duration = end - begin;
 
