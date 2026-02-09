@@ -631,6 +631,36 @@ class hybrid_scan_reader {
     cudf::column_view const& row_mask) const;
 
   /**
+   * @brief Setup chunking information for all (or selected) columns and preprocess the input data
+   * pages
+   *
+   * @param chunk_read_limit Limit on total number of bytes to be returned per table chunk. `0` if
+   * there is no limit
+   * @param pass_read_limit Limit on the memory used for reading and decompressing data. `0` if
+   * there is no limit
+   * @param row_group_indices Input row groups indices
+   * @param column_chunk_data Device spans of column chunk data of all columns
+   * @param options Parquet reader options
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource used to allocate the device memory for the output table chunks
+   */
+  void setup_chunking_for_all_columns(
+    std::size_t chunk_read_limit,
+    std::size_t pass_read_limit,
+    cudf::host_span<size_type const> row_group_indices,
+    cudf::host_span<cudf::device_span<uint8_t const> const> column_chunk_data,
+    parquet_reader_options const& options,
+    rmm::cuda_stream_view stream,
+    rmm::device_async_resource_ref mr) const;
+
+  /**
+   * @brief Materializes all (or selected) columns and returns the final output table
+   *
+   * @return Table of materialized all (or selected) columns and metadata
+   */
+  [[nodiscard]] table_with_metadata materialize_all_columns_chunk() const;
+
+  /**
    * @brief Check if there is any parquet data left to read for the current setup
    *
    * @return Boolean indicating if there is any data left to read

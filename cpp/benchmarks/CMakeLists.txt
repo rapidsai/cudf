@@ -457,7 +457,9 @@ ConfigureNVBench(
 # ##################################################################################################
 # * dictionary benchmark
 # ---------------------------------------------------------------------------------
-ConfigureNVBench(DICTIONARY_NVBENCH dictionary/encode.cpp)
+ConfigureNVBench(
+  DICTIONARY_NVBENCH dictionary/encode.cpp dictionary/set_keys.cpp dictionary/sort.cpp
+)
 
 add_custom_target(
   run_benchmarks
