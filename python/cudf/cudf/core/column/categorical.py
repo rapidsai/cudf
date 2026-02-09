@@ -423,8 +423,13 @@ class CategoricalColumn(column.ColumnBase):
         )
 
         if old_col.null_count == 1:
+            with old_col.access(mode="read", scope="internal"):
+                old_col_isnull_plc = plc.unary.is_null(old_col.plc_column)
+            old_col_isnull = ColumnBase.create(
+                old_col_isnull_plc, np.dtype("bool")
+            )
             fill_value = new_col.apply_boolean_mask(
-                old_col.isnull()
+                old_col_isnull
             ).element_indexing(0)
             # TODO: This line of code does not work because we cannot use the
             # `in` operator on self.categories (which is a column). mypy
@@ -462,7 +467,12 @@ class CategoricalColumn(column.ColumnBase):
         else:
             replaced = self
         if new_col.null_count > 0:
-            drop_values = old_col.apply_boolean_mask(new_col.isnull())
+            with new_col.access(mode="read", scope="internal"):
+                new_col_isnull_plc = plc.unary.is_null(new_col.plc_column)
+            new_col_isnull = ColumnBase.create(
+                new_col_isnull_plc, np.dtype("bool")
+            )
+            drop_values = old_col.apply_boolean_mask(new_col_isnull)
             cur_categories = replaced.categories
             new_categories = cur_categories.apply_boolean_mask(
                 cur_categories.isin(drop_values).unary_operator("not")  # type: ignore[arg-type]
@@ -564,7 +574,9 @@ class CategoricalColumn(column.ColumnBase):
         # those categories don't exist anymore
         # Resetting the index creates a column 'index' that associates
         # the original integers to the new labels
-        bmask = new_cats_col.notnull()
+        with new_cats_col.access(mode="read", scope="internal"):
+            bmask_plc = plc.unary.is_valid(new_cats_col.plc_column)
+        bmask = ColumnBase.create(bmask_plc, np.dtype("bool"))
         new_cats_col = new_cats_col.apply_boolean_mask(bmask)
         # Keep as columns instead of DataFrame
         # new_cats has: "index" -> range column, "cats" -> new_cats_col
@@ -1035,8 +1047,11 @@ class CategoricalColumn(column.ColumnBase):
         # gather doesn't accept null indices, so we need to handle them specially
         with cur_codes.access(mode="read", scope="internal"):
             # Get validity mask for cur_codes
-            cur_codes_valid = cur_codes.notnull()
-
+            cur_codes_valid_plc = plc.unary.is_valid(cur_codes.plc_column)
+        cur_codes_valid = ColumnBase.create(
+            cur_codes_valid_plc, np.dtype("bool")
+        )
+        with cur_codes.access(mode="read", scope="internal"):
             if cur_codes.null_count == 0:
                 # No nulls, can gather directly
                 final_new_codes_table = plc.copying.gather(
