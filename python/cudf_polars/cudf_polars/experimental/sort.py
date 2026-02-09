@@ -462,6 +462,7 @@ class ShuffleSorted(IR):
 
     __slots__ = ("by", "null_order", "order", "shuffle_method")
     _non_child = ("schema", "by", "order", "null_order", "shuffle_method")
+    _n_non_child_args = 5
     by: tuple[NamedExpr, ...]
     """Keys by which the data was sorted."""
     order: tuple[plc.types.Order, ...]
@@ -574,8 +575,22 @@ def _(
             config_options,
         )
 
+    # RapidsMPF runtime: ShuffleSorted not supported, fall back to single partition.
+    # We always use fallback for rapidsmpf because dynamic planning may produce
+    # more partitions than expected at planning time.
+    if (
+        config_options.executor.runtime == "rapidsmpf"
+    ):  # pragma: no cover; Requires rapidsmpf runtime
+        return _lower_ir_fallback(
+            ir,
+            rec,
+            msg="Sort does not support multiple partitions with rapidsmpf runtime."
+            if partition_info[child].count > 1
+            else None,  # Don't warn if we expect single partition
+        )
+
     # Handle single-partition case
-    if partition_info[child].count == 1:
+    elif partition_info[child].count == 1:
         single_part_node = ir.reconstruct([child])
         partition_info[single_part_node] = partition_info[child]
         return single_part_node, partition_info
