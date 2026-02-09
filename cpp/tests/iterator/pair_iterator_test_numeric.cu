@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #include <tests/iterator/pair_iterator_test.cuh>
@@ -8,8 +8,8 @@
 
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/std/utility>
 #include <thrust/iterator/transform_iterator.h>
-#include <thrust/pair.h>
 #include <thrust/reduce.h>
 
 using TestingTypes = cudf::test::NumericTypes;
@@ -24,9 +24,9 @@ TYPED_TEST(NumericPairIteratorTest, null_pair_iterator) { null_pair_iterator(*th
 // Transformers and Operators for pair_iterator test
 template <typename ElementType>
 struct transformer_pair_meanvar {
-  using ResultType = thrust::pair<cudf::meanvar<ElementType>, bool>;
+  using ResultType = cuda::std::pair<cudf::meanvar<ElementType>, bool>;
 
-  CUDF_HOST_DEVICE inline ResultType operator()(thrust::pair<ElementType, bool> const& pair)
+  CUDF_HOST_DEVICE inline ResultType operator()(cuda::std::pair<ElementType, bool> const& pair)
   {
     ElementType v = pair.first;
     return {{v, static_cast<ElementType>(v * v), (pair.second) ? 1 : 0}, pair.second};
@@ -36,8 +36,8 @@ struct transformer_pair_meanvar {
 namespace {
 struct sum_if_not_null {
   template <typename T>
-  CUDF_HOST_DEVICE inline thrust::pair<T, bool> operator()(thrust::pair<T, bool> const& lhs,
-                                                           thrust::pair<T, bool> const& rhs)
+  CUDF_HOST_DEVICE inline cuda::std::pair<T, bool> operator()(cuda::std::pair<T, bool> const& lhs,
+                                                              cuda::std::pair<T, bool> const& rhs)
   {
     if (lhs.second & rhs.second)
       return {lhs.first + rhs.first, true};
@@ -105,10 +105,10 @@ TYPED_TEST(NumericPairIteratorTest, mean_var_output)
   // GPU test
   auto it_dev         = d_col->pair_begin<T, true>();
   auto it_dev_squared = thrust::make_transform_iterator(it_dev, transformer);
-  auto result         = thrust::reduce(rmm::exec_policy(cudf::get_default_stream()),
+  auto result         = thrust::reduce(rmm::exec_policy_nosync(cudf::get_default_stream()),
                                it_dev_squared,
                                it_dev_squared + d_col->size(),
-                               thrust::make_pair(T_output{}, true),
+                               cuda::std::make_pair(T_output{}, true),
                                sum_if_not_null{});
   if constexpr (not std::is_floating_point<T>()) {
     EXPECT_EQ(expected_value, result.first) << "pair iterator reduction sum";

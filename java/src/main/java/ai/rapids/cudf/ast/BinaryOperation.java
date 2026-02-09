@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -33,5 +33,10 @@ public class BinaryOperation extends AstExpression {
     op.serialize(bb);
     leftInput.serialize(bb);
     rightInput.serialize(bb);
+  }
+
+  @Override
+  public String toString() {
+    return "(" + leftInput + " " + op + " " + rightInput + ")";
   }
 }

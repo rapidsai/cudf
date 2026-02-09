@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -11,7 +11,6 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/structs/utilities.hpp>
-#include <cudf/detail/utilities/functional.hpp>
 #include <cudf/scalar/scalar_device_view.cuh>
 #include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/utilities/memory_resource.hpp>
@@ -190,7 +189,7 @@ struct null_considering_binop {
     compare_functor<LhsViewT, RhsViewT, OutT, CompareFunc> binop_func{lhsv, rhsv, cfunc};
 
     // Execute it on every element
-    thrust::transform(rmm::exec_policy(stream),
+    thrust::transform(rmm::exec_policy_nosync(stream),
                       thrust::make_counting_iterator(0),
                       thrust::make_counting_iterator(col_size),
                       out_col,
@@ -228,8 +227,8 @@ struct null_considering_binop {
           return invalid_str;
         else if (lhs_valid && rhs_valid) {
           return (op == binary_operator::NULL_MAX)
-                   ? cudf::detail::maximum<cudf::string_view>()(lhs_value, rhs_value)
-                   : cudf::detail::minimum<cudf::string_view>()(lhs_value, rhs_value);
+                   ? cuda::maximum<cudf::string_view>()(lhs_value, rhs_value)
+                   : cuda::minimum<cudf::string_view>()(lhs_value, rhs_value);
         } else if (lhs_valid)
           return lhs_value;
         else

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -204,6 +204,8 @@ nrows : int, default None
 allow_mismatched_pq_schemas : boolean, default False
     If True, enables reading (matching) columns specified in `columns` and `filters`
     options from the input files with otherwise mismatched schemas.
+ignore_missing_columns : boolean, default True
+    If True, ignores non-existent projected columns while reading.
 prefetch_options : dict, default None
     WARNING: This is an experimental feature and may be removed at any
     time without warning or deprecation period.
@@ -930,7 +932,7 @@ Parameters
 ----------
 path_or_buf : string, buffer or path object
     Path to the file to open, or an open `HDFStore
-    <https://pandas.pydata.org/pandas-docs/stable/user_guide/io.html#hdf5-pytables>`_.
+    <https://pandas.pydata.org/pandas-docs/version/2.3.3/user_guide/io.html#hdf5-pytables>`_.
     object.
     Supports any object implementing the ``__fspath__`` protocol.
     This includes :class:`pathlib.Path` and py._path.local.LocalPath
@@ -941,7 +943,7 @@ key : object, optional
 mode : {'r', 'r+', 'a'}, optional
     Mode to use when opening the file. Ignored if path_or_buf is a
     `Pandas HDFS
-    <https://pandas.pydata.org/pandas-docs/stable/user_guide/io.html#hdf5-pytables>`_.
+    <https://pandas.pydata.org/pandas-docs/version/2.3.3/user_guide/io.html#hdf5-pytables>`_.
     Default is 'r'.
 where : list, optional
     A list of Term (or convertible) objects.
@@ -985,7 +987,7 @@ In order to add another DataFrame or Series to an existing HDF file
 please use append mode and a different a key.
 
 For more information see the `user guide
-<https://pandas.pydata.org/pandas-docs/stable/user_guide/io.html#hdf5-pytables>`_.
+<https://pandas.pydata.org/pandas-docs/version/2.3.3/user_guide/io.html#hdf5-pytables>`_.
 
 Parameters
 ----------
@@ -1015,7 +1017,7 @@ data_columns :  list of columns or True, optional
     List of columns to create as indexed data columns for on-disk
     queries, or True to use all columns. By default only the axes
     of the object are indexed. See `Query via Data Columns
-    <https://pandas.pydata.org/pandas-docs/stable/user_guide/io.html#io-hdf5-query-data-columns>`_.
+    <https://pandas.pydata.org/pandas-docs/version/2.3.3/user_guide/io.html#io-hdf5-query-data-columns>`_.
     Applicable only to format='table'.
 complevel : {0-9}, optional
     Specifies a compression level for data.
@@ -1768,6 +1770,9 @@ def _maybe_expand_directories(paths, glob_pattern, fs):
     expanded_paths = []
     for path in paths:
         if fs.isdir(path):
+            dir_paths = fs.glob(fs.sep.join([path, glob_pattern]))
+            if len(dir_paths) == 0:
+                raise FileNotFoundError(f"No files found in directory: {path}")
             expanded_paths.extend(fs.glob(fs.sep.join([path, glob_pattern])))
         else:
             expanded_paths.append(path)
@@ -1887,7 +1892,10 @@ def get_reader_filepath_or_buffer(
             raw_text_input = True
 
         if raw_text_input:
-            filepaths_or_buffers = input_sources
+            # Assuming _all_ strings are raw data and not a mix of file paths too
+            filepaths_or_buffers = [
+                source.encode() for source in input_sources
+            ]
             if warn_on_raw_text_input:
                 # Do not remove until pandas 3.0 support is added.
                 assert PANDAS_LT_300, (

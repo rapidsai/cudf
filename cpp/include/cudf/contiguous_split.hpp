@@ -1,11 +1,11 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
 
-#include <cudf/table/table.hpp>
+#include <cudf/packed_types.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/export.hpp>
 #include <cudf/utilities/memory_resource.hpp>
@@ -21,52 +21,6 @@ namespace CUDF_EXPORT cudf {
  * @file
  * @brief Table APIs for contiguous_split, pack, unpack, and metadata
  */
-
-/**
- * @brief Column data in a serialized format
- *
- * Contains data from an array of columns in two contiguous buffers: one on host, which contains
- * table metadata and one on device which contains the table data.
- */
-struct packed_columns {
-  packed_columns()
-    : metadata(std::make_unique<std::vector<uint8_t>>()),
-      gpu_data(std::make_unique<rmm::device_buffer>())
-  {
-  }
-
-  /**
-   * @brief Construct a new packed columns object
-   *
-   * @param md Host-side metadata buffer
-   * @param gd Device-side data buffer
-   */
-  packed_columns(std::unique_ptr<std::vector<uint8_t>>&& md,
-                 std::unique_ptr<rmm::device_buffer>&& gd)
-    : metadata(std::move(md)), gpu_data(std::move(gd))
-  {
-  }
-
-  std::unique_ptr<std::vector<uint8_t>> metadata;  ///< Host-side metadata buffer
-  std::unique_ptr<rmm::device_buffer> gpu_data;    ///< Device-side data buffer
-};
-
-/**
- * @brief The result(s) of a cudf::contiguous_split
- *
- * Each table_view resulting from a split operation performed by contiguous_split,
- * will be returned wrapped in a `packed_table`. The table_view and internal
- * column_views in this struct are not owned by a top level cudf::table or cudf::column.
- * The backing memory and metadata is instead owned by the `data` field and is in one
- * contiguous block.
- *
- * The user is responsible for assuring that the `table` or any derived table_views do
- * not outlive the memory owned by `data`.
- */
-struct packed_table {
-  cudf::table_view table;  ///< Result table_view of a cudf::contiguous_split
-  packed_columns data;     ///< Column data owned
-};
 
 /**
  * @brief Performs a deep-copy split of a `table_view` into a vector of `packed_table` where each
@@ -287,6 +241,23 @@ class chunked_pack {
 packed_columns pack(cudf::table_view const& input,
                     rmm::cuda_stream_view stream      = cudf::get_default_stream(),
                     rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
+/**
+ * @brief Compute the size in bytes of the contiguous memory buffer needed to pack the input table.
+ *
+ * This function computes the total contiguous size that would be required to pack the input
+ * table using `pack()` or `chunked_pack`, without actually performing the packing operation.
+ * This is useful for pre-allocating memory or determining if a table will fit in available memory.
+ *
+ * @param input View of the table to compute the packed size for
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param temp_mr An optional memory resource to use for temporary allocations
+ * @return The size in bytes required to store the packed table data (not including metadata)
+ */
+std::size_t packed_size(
+  cudf::table_view const& input,
+  rmm::cuda_stream_view stream           = cudf::get_default_stream(),
+  rmm::device_async_resource_ref temp_mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Produce the metadata used for packing a table stored in a contiguous buffer.

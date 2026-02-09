@@ -8,12 +8,14 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, ClassVar
 
-from polars.polars import _expr_nodes as pl_expr
+from polars import polars  # type: ignore[attr-defined]
 
 import pylibcudf as plc
 
 from cudf_polars.containers import Column
 from cudf_polars.dsl.expressions.base import ExecutionContext, Expr
+
+pl_expr = polars._expr_nodes
 
 if TYPE_CHECKING:
     from cudf_polars.containers import DataFrame, DataType
@@ -59,7 +61,9 @@ class BinOp(Expr):
         plc.binaryop.BinaryOperator.LOGICAL_OR: plc.binaryop.BinaryOperator.NULL_LOGICAL_OR,
     }
 
-    _MAPPING: ClassVar[dict[pl_expr.Operator, plc.binaryop.BinaryOperator]] = {
+    _MAPPING: ClassVar[
+        dict[polars._expr_nodes.Operator, plc.binaryop.BinaryOperator]
+    ] = {
         pl_expr.Operator.Eq: plc.binaryop.BinaryOperator.EQUAL,
         pl_expr.Operator.EqValidity: plc.binaryop.BinaryOperator.NULL_EQUALS,
         pl_expr.Operator.NotEq: plc.binaryop.BinaryOperator.NOT_EQUAL,
@@ -100,7 +104,7 @@ class BinOp(Expr):
         }:
             if (
                 right.obj.size() == 1
-                and right.obj.to_scalar(stream=df.stream).to_py() == 0
+                and right.obj.to_scalar(stream=df.stream).to_py(stream=df.stream) == 0
             ):
                 return Column(
                     plc.Column.all_null_like(

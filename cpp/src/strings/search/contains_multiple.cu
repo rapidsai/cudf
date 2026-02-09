@@ -181,7 +181,7 @@ CUDF_KERNEL void multi_contains_kernel(column_device_view const d_strings,
 std::unique_ptr<table> contains_multiple(strings_column_view const& input,
                                          strings_column_view const& targets,
                                          rmm::cuda_stream_view stream,
-                                         rmm::mr::device_memory_resource* mr)
+                                         rmm::device_async_resource_ref mr)
 {
   CUDF_EXPECTS(
     not targets.is_empty(), "Must specify at least one target string.", std::invalid_argument);
@@ -297,7 +297,7 @@ std::unique_ptr<table> contains_multiple(strings_column_view const& input,
 std::unique_ptr<table> contains_multiple(strings_column_view const& strings,
                                          strings_column_view const& targets,
                                          rmm::cuda_stream_view stream,
-                                         rmm::mr::device_memory_resource* mr)
+                                         rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::contains_multiple(strings, targets, stream, mr);

@@ -290,7 +290,7 @@ std::unique_ptr<column> replace_character_parallel(strings_column_view const& in
   // These may also include overlapping targets which will be resolved later.
   auto targets_positions = rmm::device_uvector<int64_t>(target_count, stream);
   auto const copy_itr    = thrust::counting_iterator<int64_t>(chars_offset);
-  auto const copy_end    = cudf::detail::copy_if_safe(
+  auto const copy_end    = cudf::detail::copy_if(
     copy_itr,
     copy_itr + chars_bytes + chars_offset,
     targets_positions.begin(),

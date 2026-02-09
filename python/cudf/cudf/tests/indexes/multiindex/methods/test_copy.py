@@ -1,14 +1,16 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
-import operator
-from functools import reduce
 
 import pandas as pd
 import pytest
 
 import cudf
 from cudf.testing import assert_eq
+from cudf.testing._utils import (
+    assert_column_memory_eq,
+    assert_column_memory_ne,
+)
 
 
 def test_multiindex_copy_sem():
@@ -27,8 +29,8 @@ def test_multiindex_copy_sem():
 @pytest.mark.parametrize(
     "data",
     [
-        {
-            "Date": [
+        [
+            [
                 "2020-08-27",
                 "2020-08-28",
                 "2020-08-31",
@@ -39,18 +41,7 @@ def test_multiindex_copy_sem():
                 "2020-08-28",
                 "2020-08-31",
             ],
-            "Close": [
-                3400.00,
-                3401.80,
-                3450.96,
-                226.58,
-                228.91,
-                225.53,
-                505.13,
-                525.91,
-                534.98,
-            ],
-            "Symbol": [
+            [
                 "AMZN",
                 "AMZN",
                 "AMZN",
@@ -61,7 +52,7 @@ def test_multiindex_copy_sem():
                 "NVDA",
                 "NVDA",
             ],
-        },
+        ],
         pd.MultiIndex(
             levels=[[1001, 1002], [2001, 2002]],
             codes=[[1, 1, 0, 0], [0, 1, 0, 1]],
@@ -73,31 +64,18 @@ def test_multiindex_copy_sem():
 @pytest.mark.parametrize("deep", [True, False])
 def test_multiindex_copy_deep(data, copy_on_write, deep):
     """Test memory identity for deep copy
-    Case1: Constructed from GroupBy, StringColumns
+    Case1: Constructed from arrays, StringColumns
     Case2: Constructed from MultiIndex, NumericColumns
     """
     with cudf.option_context("copy_on_write", copy_on_write):
-        if isinstance(data, dict):
-            gdf = cudf.DataFrame(data)
-            mi1 = gdf.groupby(["Date", "Symbol"]).mean().index
+        if isinstance(data, list):
+            mi1 = cudf.MultiIndex.from_arrays(data)
             mi2 = mi1.copy(deep=deep)
-
-            lchildren = [col.children for col in mi1._columns]
-            rchildren = [col.children for col in mi2._columns]
-
-            # Flatten
-            lchildren = reduce(operator.add, lchildren)
-            rchildren = reduce(operator.add, rchildren)
-
-            lptrs = [
-                child.base_data.get_ptr(mode="read") for child in lchildren
-            ]
-            rptrs = [
-                child.base_data.get_ptr(mode="read") for child in rchildren
-            ]
-
-            assert all((x == y) for x, y in zip(lptrs, rptrs, strict=True))
-
+            for col1, col2 in zip(mi1._columns, mi2._columns, strict=True):
+                if not deep or (copy_on_write and not deep):
+                    assert_column_memory_eq(col1, col2)
+                else:
+                    assert_column_memory_ne(col1, col2)
         elif isinstance(data, pd.MultiIndex):
             data = cudf.MultiIndex(
                 levels=data.levels,
@@ -111,28 +89,24 @@ def test_multiindex_copy_deep(data, copy_on_write, deep):
             mi2 = mi1.copy(deep=deep)
 
             # Assert ._levels identity
-            lptrs = [
-                lv._column.base_data.get_ptr(mode="read") for lv in mi1._levels
-            ]
-            rptrs = [
-                lv._column.base_data.get_ptr(mode="read") for lv in mi2._levels
-            ]
+            lptrs = [lv._column.data.ptr for lv in mi1._levels]
+            rptrs = [lv._column.data.ptr for lv in mi2._levels]
 
             assert all(
                 (x == y) == same_ref for x, y in zip(lptrs, rptrs, strict=True)
             )
 
             # Assert ._codes identity
-            lptrs = [c.base_data.get_ptr(mode="read") for c in mi1._codes]
-            rptrs = [c.base_data.get_ptr(mode="read") for c in mi2._codes]
+            lptrs = [c.data.ptr for c in mi1._codes]
+            rptrs = [c.data.ptr for c in mi2._codes]
 
             assert all(
                 (x == y) == same_ref for x, y in zip(lptrs, rptrs, strict=True)
             )
 
             # Assert ._data identity
-            lptrs = [d.base_data.get_ptr(mode="read") for d in mi1._columns]
-            rptrs = [d.base_data.get_ptr(mode="read") for d in mi2._columns]
+            lptrs = [d.data.ptr for d in mi1._columns]
+            rptrs = [d.data.ptr for d in mi2._columns]
 
             assert all(
                 (x == y) == same_ref for x, y in zip(lptrs, rptrs, strict=True)

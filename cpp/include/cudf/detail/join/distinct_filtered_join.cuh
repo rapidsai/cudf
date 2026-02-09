@@ -13,6 +13,10 @@
 #include <rmm/resource_ref.hpp>
 
 namespace cudf {
+
+// Forward declaration
+enum class join_kind : int32_t;
+
 namespace detail {
 
 /**

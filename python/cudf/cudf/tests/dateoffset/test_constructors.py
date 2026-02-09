@@ -8,6 +8,7 @@ import pandas as pd
 import pytest
 
 import cudf
+from cudf.core._compat import PANDAS_GE_230
 
 
 @pytest.mark.parametrize("period", [1.5, 0.5, "string", "1", "1.0"])
@@ -64,3 +65,13 @@ def test_offset_no_fractional_periods(unit, period):
 def test_dateoffset_instance_subclass_check():
     assert not issubclass(pd.DateOffset, cudf.DateOffset)
     assert not isinstance(pd.DateOffset(), cudf.DateOffset)
+
+
+@pytest.mark.skipif(
+    not PANDAS_GE_230, reason="freqstr not supported in pandas < 2.3.0"
+)
+@pytest.mark.parametrize("freqstr", ["ME", "YE-DEC"])
+def test_dateoffset_freq_edgecases(freqstr):
+    expect = pd.tseries.frequencies.to_offset(freqstr)
+    got = cudf.DateOffset._from_freqstr(freqstr)
+    assert got == expect
