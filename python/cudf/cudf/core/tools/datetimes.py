@@ -6,7 +6,7 @@ import math
 import re
 import warnings
 from functools import lru_cache
-from typing import TYPE_CHECKING, Literal, Self
+from typing import TYPE_CHECKING, Literal, Self, cast
 
 import numpy as np
 import pandas as pd
@@ -16,7 +16,6 @@ import pyarrow as pa
 import pylibcudf as plc
 
 from cudf.api.types import is_integer, is_scalar
-from cudf.core.column._pylibcudf_helpers import string_is_int
 from cudf.core.column.column import ColumnBase, as_column
 from cudf.core.dataframe import DataFrame
 from cudf.core.index import DatetimeIndex, Index, ensure_index
@@ -235,7 +234,10 @@ def to_datetime(
                         )
                         break
                     elif arg_col.dtype.kind == "O":
-                        if not string_is_int(arg_col):
+                        from cudf.core.column.string import StringColumn
+
+                        string_col = cast(StringColumn, arg_col)
+                        if not string_col.is_all_integer():
                             col = new_series._column.strptime(
                                 np.dtype("datetime64[ns]"), format=format
                             )

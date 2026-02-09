@@ -332,23 +332,24 @@ class Merge:
                 plc.Table([col.plc_column for col in self.rhs._columns]),
             )
             columns = lib_table.columns()
-            left_names, right_names = (
-                self.lhs._column_names,
-                self.rhs._column_names,
-            )
+            num_left_cols = len(self.lhs._column_names)
             left_result = DataFrame._from_data(
                 {
-                    col: ColumnBase.create(lib_col, self.lhs._data[col].dtype)
-                    for col, lib_col in zip(
-                        left_names, columns[: len(left_names)], strict=True
+                    col: ColumnBase.create(lib_col, dtype)
+                    for (col, dtype), lib_col in zip(
+                        self.lhs._dtypes,
+                        columns[:num_left_cols],
+                        strict=True,
                     )
                 }
             )
             right_result = DataFrame._from_data(
                 {
-                    col: ColumnBase.create(lib_col, self.rhs._data[col].dtype)
-                    for col, lib_col in zip(
-                        right_names, columns[len(left_names) :], strict=True
+                    col: ColumnBase.create(lib_col, dtype)
+                    for (col, dtype), lib_col in zip(
+                        self.rhs._dtypes,
+                        columns[num_left_cols:],
+                        strict=True,
                     )
                 }
             )

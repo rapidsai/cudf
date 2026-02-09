@@ -3,13 +3,12 @@
 from __future__ import annotations
 
 import warnings
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Literal, cast
 
 import numpy as np
 import pandas as pd
 
 from cudf.core.column import as_column
-from cudf.core.column._pylibcudf_helpers import string_is_int
 from cudf.core.dtype.validators import is_dtype_obj_numeric
 from cudf.core.dtypes import CategoricalDtype, ListDtype, StructDtype
 from cudf.core.index import ensure_index
@@ -226,7 +225,10 @@ def _convert_str_col(
     if col.dtype != CUDF_STRING_DTYPE:
         raise TypeError("col must be string dtype.")
 
-    if string_is_int(col):
+    from cudf.core.column.string import StringColumn
+
+    string_col = cast(StringColumn, col)
+    if string_col.is_all_integer():
         return col.astype(dtype=np.dtype(np.int64))  # type: ignore[return-value]
 
     # TODO: This can be handled by libcudf in
