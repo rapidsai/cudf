@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 import datetime
@@ -12,6 +12,7 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pytest
+from packaging import version
 from pyarrow import orc
 
 import cudf
@@ -923,7 +924,23 @@ def test_empty_string_columns(data):
 @pytest.mark.parametrize("scale", [-3, 0, 3])
 @pytest.mark.parametrize(
     "decimal_type",
-    [cudf.Decimal32Dtype, cudf.Decimal64Dtype, cudf.Decimal128Dtype],
+    [
+        pytest.param(
+            cudf.Decimal32Dtype,
+            marks=pytest.mark.xfail(
+                reason="https://github.com/apache/arrow/issues/45570 from pandas.read_orc",
+                condition=version.parse(pa.__version__) < version.parse("20"),
+            ),
+        ),
+        pytest.param(
+            cudf.Decimal64Dtype,
+            marks=pytest.mark.xfail(
+                reason="https://github.com/apache/arrow/issues/45570 from pandas.read_orc",
+                condition=version.parse(pa.__version__) < version.parse("20"),
+            ),
+        ),
+        cudf.Decimal128Dtype,
+    ],
 )
 def test_orc_writer_decimal(tmp_path, scale, decimal_type):
     fname = tmp_path / "decimal.orc"

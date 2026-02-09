@@ -1,7 +1,10 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
+
+import datetime
+from typing import TYPE_CHECKING
 
 import pytest
 
@@ -14,8 +17,11 @@ import cudf_polars.containers.datatype
 from cudf_polars.containers import Column, DataType
 from cudf_polars.utils.cuda_stream import get_cuda_stream
 
+if TYPE_CHECKING:
+    from cudf_polars.typing import PolarsDataType
 
-def _as_instance(dtype: pl.DataType) -> pl.DataType:
+
+def _as_instance(dtype: PolarsDataType) -> pl.DataType:
     if isinstance(dtype, type):
         return dtype()
     if isinstance(dtype, pl.List):
@@ -47,9 +53,9 @@ def test_obj_scalar_caching():
         plc.Column.from_iterable_of_py([1], dtype.plc_type),
         dtype=dtype,
     )
-    assert column.obj_scalar(stream=stream).to_py() == 1
+    assert column.obj_scalar(stream=stream).to_py(stream=stream) == 1
     # test caching behavior
-    assert column.obj_scalar(stream=stream).to_py() == 1
+    assert column.obj_scalar(stream=stream).to_py(stream=stream) == 1
 
 
 def test_check_sorted():
@@ -289,3 +295,47 @@ def test_dtype_header_roundtrip(dtype: pl.DataType):
     header = cudf_polars.containers.datatype._dtype_to_header(dt)
     result = cudf_polars.containers.datatype._dtype_from_header(header)
     assert result == dt
+
+
+@pytest.mark.parametrize(
+    "val, plc_tid, pl_type",
+    [
+        (1, plc.TypeId.INT64, pl.Int64()),
+        (True, plc.TypeId.BOOL8, pl.Boolean()),
+    ],
+)
+def test_astype_to_string(val, plc_tid, pl_type):
+    stream = get_cuda_stream()
+    col = Column(
+        plc.Column.from_iterable_of_py([val], plc.DataType(plc_tid), stream=stream),
+        dtype=DataType(pl_type),
+    )
+    target_dtype = DataType(pl.String())
+    result = col.astype(target_dtype, stream=stream)
+    assert result.dtype == target_dtype
+
+
+def test_astype_from_string_unsupported():
+    stream = get_cuda_stream()
+    col = Column(
+        plc.Column.from_iterable_of_py(
+            ["True"], plc.DataType(plc.TypeId.STRING), stream=stream
+        ),
+        dtype=DataType(pl.String()),
+    )
+    with pytest.raises(pl.exceptions.InvalidOperationError):
+        col.astype(DataType(pl.Boolean()), stream=stream)
+
+
+def test_astype_to_string_unsupported():
+    stream = get_cuda_stream()
+    col = Column(
+        plc.Column.from_scalar(
+            plc.Scalar.from_py(datetime.datetime(2020, 1, 1), stream=stream),
+            1,
+            stream=stream,
+        ),
+        dtype=DataType(pl.Datetime(time_unit="ns")),
+    )
+    with pytest.raises(pl.exceptions.InvalidOperationError):
+        col.astype(DataType(pl.String()), stream=stream)

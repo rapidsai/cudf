@@ -13,8 +13,8 @@
 #include <cudf/table/table_view.hpp>
 
 #include <rmm/cuda_stream_pool.hpp>
-#include <rmm/mr/device/device_memory_resource.hpp>
-#include <rmm/mr/device/statistics_resource_adaptor.hpp>
+#include <rmm/mr/device_memory_resource.hpp>
+#include <rmm/mr/statistics_resource_adaptor.hpp>
 
 #include <filesystem>
 #include <stdexcept>

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -24,6 +24,7 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/std/utility>
 #include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
 
@@ -50,7 +51,7 @@ struct join_base_fn {
   string_view d_separator;
   string_scalar_device_view d_narep;
 
-  __device__ thrust::pair<string_view, string_view> process_string(size_type idx) const
+  __device__ cuda::std::pair<string_view, string_view> process_string(size_type idx) const
   {
     string_view d_str{};
     string_view d_sep = (idx + 1 < d_strings.size()) ? d_separator : d_str;

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
@@ -400,6 +400,29 @@ cpdef Column rsplit_record_re(
             input.view(),
             prog.c_obj.get()[0],
             maxsplit,
+            stream.view(),
+            mr.get_mr()
+        )
+
+    return Column.from_libcudf(move(c_result), stream, mr)
+
+
+cpdef Column split_part(
+    Column input, Scalar delimiter, size_type index, Stream stream=None,
+    DeviceMemoryResource mr=None,
+):
+    cdef unique_ptr[column] c_result
+    cdef const string_scalar* c_delimiter = <const string_scalar*>(
+        delimiter.c_obj.get()
+    )
+    stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
+
+    with nogil:
+        c_result = cpp_split.split_part(
+            input.view(),
+            dereference(c_delimiter),
+            index,
             stream.view(),
             mr.get_mr()
         )

@@ -115,6 +115,7 @@ class DataSourceInfo:
     """
 
     _unique_stats_columns: set[str]
+    _read_columns: set[str]
 
     @property
     def row_count(self) -> ColumnStat[int]:  # pragma: no cover
@@ -140,6 +141,10 @@ class DataSourceInfo:
     def add_unique_stats_column(self, column: str) -> None:
         """Add a column needing unique-value information."""
         self._unique_stats_columns.add(column)
+
+    def add_read_column(self, column: str) -> None:
+        """Add a column needing to be read."""
+        self._read_columns.add(column)
 
 
 class DataSourcePair(NamedTuple):
@@ -239,6 +244,11 @@ class ColumnSourceInfo:
         # We must call add_unique_stats_column for ALL table sources.
         for table_source, column_name in self.table_source_pairs:
             table_source.add_unique_stats_column(column or column_name)
+
+    def add_read_column(self, column: str | None = None) -> None:
+        """Add a column needing to be read."""
+        for table_source, column_name in self.table_source_pairs:
+            table_source.add_read_column(column or column_name)
 
 
 class ColumnStats:
@@ -402,6 +412,7 @@ class IOPartitionFlavor(IntEnum):
     SINGLE_FILE = enum.auto()  # 1:1 mapping between files and partitions
     SPLIT_FILES = enum.auto()  # Split each file into >1 partition
     FUSED_FILES = enum.auto()  # Fuse multiple files into each partition
+    SINGLE_READ = enum.auto()  # One worker/task reads everything
 
 
 class IOPartitionPlan:
@@ -414,6 +425,7 @@ class IOPartitionPlan:
       - SINGLE_FILE: `factor` must be `1`.
       - SPLIT_FILES: `factor` is the number of partitions per file.
       - FUSED_FILES: `factor` is the number of files per partition.
+      - SINGLE_READ: `factor` is the total number of files.
     """
 
     __slots__ = ("factor", "flavor")

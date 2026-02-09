@@ -6,6 +6,9 @@ set -euo pipefail
 
 . /opt/conda/etc/profile.d/conda.sh
 
+rapids-logger "Configuring conda strict channel priority"
+conda config --set channel_priority strict
+
 rapids-logger "Downloading artifacts from previous jobs"
 CPP_CHANNEL=$(rapids-download-conda-from-github cpp)
 
@@ -42,7 +45,7 @@ export LIBCUDF_LARGE_STRINGS_ENABLED=0
 
 rapids-logger "Run Java tests"
 pushd java
-mvn test -B -DCUDF_JNI_ENABLE_PROFILING=OFF
+timeout 30m mvn test -B -DCUDF_JNI_ENABLE_PROFILING=OFF
 popd
 
 rapids-logger "Test script exiting with value: $EXITCODE"

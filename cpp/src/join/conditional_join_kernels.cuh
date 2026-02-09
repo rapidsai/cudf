@@ -12,6 +12,7 @@
 #include <cudf/ast/detail/expression_parser.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/grid_1d.cuh>
+#include <cudf/join/join.hpp>
 #include <cudf/table/table_device_view.cuh>
 
 #include <cub/cub.cuh>
@@ -338,7 +339,7 @@ CUDF_KERNEL void conditional_join(table_device_view left_table,
       // to the left_row_index, but for now we can assume that they are
       // equivalent inside this conditional.
       add_pair_to_cache(outer_row_index,
-                        static_cast<cudf::size_type>(JoinNoneValue),
+                        static_cast<cudf::size_type>(cudf::JoinNoMatch),
                         current_idx_shared,
                         warp_id,
                         join_shared_l[warp_id],

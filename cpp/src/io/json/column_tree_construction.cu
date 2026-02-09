@@ -1,12 +1,12 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "nested_json.hpp"
 
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/detail/utilities/functional.hpp>
+#include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
@@ -18,13 +18,13 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
+#include <cuda/std/tuple>
 #include <thrust/for_each.h>
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/permutation_iterator.h>
 #include <thrust/iterator/transform_output_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
-#include <thrust/reduce.h>
 #include <thrust/scan.h>
 #include <thrust/sort.h>
 #include <thrust/transform.h>
@@ -192,13 +192,13 @@ std::tuple<compressed_sparse_row, column_tree_properties> reduce_to_column_tree(
       rmm::exec_policy_nosync(stream), parent_col_ids.begin() + 1, parent_col_ids.end());
     rmm::device_uvector<NodeIndexT> non_leaf_nodes(num_non_leaf_columns, stream);
     rmm::device_uvector<NodeIndexT> non_leaf_nodes_children(num_non_leaf_columns, stream);
-    thrust::reduce_by_key(rmm::exec_policy_nosync(stream),
-                          parent_col_ids.begin() + 1,
-                          parent_col_ids.end(),
-                          thrust::make_constant_iterator(1),
-                          non_leaf_nodes.begin(),
-                          non_leaf_nodes_children.begin(),
-                          cuda::std::equal_to<TreeDepthT>());
+    cudf::detail::reduce_by_key_async(parent_col_ids.begin() + 1,
+                                      parent_col_ids.end(),
+                                      thrust::make_constant_iterator(1),
+                                      non_leaf_nodes.begin(),
+                                      non_leaf_nodes_children.begin(),
+                                      cuda::std::plus<NodeIndexT>(),
+                                      stream);
 
     thrust::scatter(rmm::exec_policy_nosync(stream),
                     non_leaf_nodes_children.begin(),
@@ -213,8 +213,8 @@ std::tuple<compressed_sparse_row, column_tree_properties> reduce_to_column_tree(
         thrust::make_zip_iterator(thrust::make_counting_iterator(1) + num_columns, row_idx.end()),
         row_idx.begin() + 1,
         cuda::proclaim_return_type<NodeIndexT>([] __device__(auto a) {
-          auto n   = thrust::get<0>(a);
-          auto idx = thrust::get<1>(a);
+          auto n   = cuda::std::get<0>(a);
+          auto idx = cuda::std::get<1>(a);
           return n == 1 ? idx : idx + 1;
         }),
         cuda::std::plus<NodeIndexT>{});
