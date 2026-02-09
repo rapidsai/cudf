@@ -157,7 +157,7 @@ TEST_F(TextNormalizeTest, SpecialTokens)
     "this entry is intended to pad out past 256 bytes which is currently the block size";
   auto input =
     cudf::test::strings_column_wrapper({"[BOS]Some strings with [PAD] special[SEP]tokens[EOS]",
-                                        "[bos]these should[sep]work too[eos]",
+                                        "[bos]these should[sep]work for lowercase[eos]",
                                         "some[non]tokens[eol]too",
                                         long_row,
                                         long_row,
@@ -170,8 +170,8 @@ TEST_F(TextNormalizeTest, SpecialTokens)
   auto normalizer = nvtext::create_character_normalizer(true, stv);
   auto results    = nvtext::normalize_characters(sv, *normalizer);
   auto expected   = cudf::test::strings_column_wrapper(
-    {" [bos] some strings with  [pad]  special [sep] tokens [eos] ",
-       " [bos] these should [sep] work too [eos] ",
+    {" [BOS] some strings with  [PAD]  special [SEP] tokens [EOS] ",
+       " [BOS] these should [SEP] work for lowercase [EOS] ",
        "some [ non ] tokens [ eol ] too",
        long_row,
        long_row,
@@ -184,7 +184,7 @@ TEST_F(TextNormalizeTest, SpecialTokens)
   results    = nvtext::normalize_characters(sv, *normalizer);
   expected   = cudf::test::strings_column_wrapper(
     {" [BOS] Some strings with  [PAD]  special [SEP] tokens [EOS] ",
-       " [ bos ] these should [ sep ] work too [ eos ] ",
+       " [ bos ] these should [ sep ] work for lowercase [ eos ] ",
        "some [ non ] tokens [ eol ] too",
        long_row,
        long_row,

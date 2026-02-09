@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -39,7 +39,7 @@ void row_comparison(cudf::table_view input1,
   auto const lhs_it = cudf::detail::row::lhs_iterator(0);
   auto const rhs_it = cudf::detail::row::rhs_iterator(0);
 
-  thrust::transform(rmm::exec_policy(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream),
                     lhs_it,
                     lhs_it + input1.num_rows(),
                     rhs_it,

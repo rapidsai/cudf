@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -116,7 +116,7 @@ struct sequences_functor<T, std::enable_if_t<is_supported<T>()>> {
     auto const steps_begin  = steps ? steps.value().template begin<T>() : nullptr;
 
     auto const op = tabulator<T>{n_lists, n_elements, starts_begin, steps_begin, offsets};
-    thrust::tabulate(rmm::exec_policy(stream), result_begin, result_begin + n_elements, op);
+    thrust::tabulate(rmm::exec_policy_nosync(stream), result_begin, result_begin + n_elements, op);
 
     return result;
   }

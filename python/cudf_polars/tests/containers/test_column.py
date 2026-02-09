@@ -1,7 +1,10 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
+
+import datetime
+from typing import TYPE_CHECKING
 
 import pytest
 
@@ -13,6 +16,22 @@ import cudf_polars.containers.column
 import cudf_polars.containers.datatype
 from cudf_polars.containers import Column, DataType
 from cudf_polars.utils.cuda_stream import get_cuda_stream
+
+if TYPE_CHECKING:
+    from cudf_polars.typing import PolarsDataType
+
+
+def _as_instance(dtype: PolarsDataType) -> pl.DataType:
+    if isinstance(dtype, type):
+        return dtype()
+    if isinstance(dtype, pl.List):
+        inner = _as_instance(dtype.inner)
+        return pl.List(inner)
+    if isinstance(dtype, pl.Struct):
+        return pl.Struct(
+            [pl.Field(f.name, _as_instance(f.dtype)) for f in dtype.fields]
+        )
+    return dtype
 
 
 def test_non_scalar_access_raises():
@@ -34,9 +53,9 @@ def test_obj_scalar_caching():
         plc.Column.from_iterable_of_py([1], dtype.plc_type),
         dtype=dtype,
     )
-    assert column.obj_scalar(stream=stream).to_py() == 1
+    assert column.obj_scalar(stream=stream).to_py(stream=stream) == 1
     # test caching behavior
-    assert column.obj_scalar(stream=stream).to_py() == 1
+    assert column.obj_scalar(stream=stream).to_py(stream=stream) == 1
 
 
 def test_check_sorted():
@@ -157,15 +176,20 @@ def test_slice_none_returns_self():
     assert column.slice(None, stream=stream) is column
 
 
-def test_deserialize_ctor_kwargs_invalid_dtype():
+def test_deserialize_ctor_kwargs_invalid_dtype_and_kind():
     column_kwargs = {
         "is_sorted": plc.types.Sorted.NO,
         "order": plc.types.Order.ASCENDING,
         "null_order": plc.types.NullOrder.AFTER,
         "name": "test",
-        "dtype": "in64",
+        "dtype": {"kind": "scalar", "name": "foo"},
     }
-    with pytest.raises(ValueError):
+    with pytest.raises(NotImplementedError, match="Unknown scalar dtype name"):
+        Column.deserialize_ctor_kwargs(column_kwargs)
+
+    column_kwargs["dtype"]["kind"] = "bar"
+
+    with pytest.raises(NotImplementedError, match="Unsupported kind"):
         Column.deserialize_ctor_kwargs(column_kwargs)
 
 
@@ -176,7 +200,7 @@ def test_deserialize_ctor_kwargs_list_dtype():
         "order": plc.types.Order.ASCENDING,
         "null_order": plc.types.NullOrder.AFTER,
         "name": "test",
-        "dtype": pl.polars.dtype_str_repr(pl_type),
+        "dtype": cudf_polars.containers.datatype._dtype_to_header(pl_type),
     }
     result = Column.deserialize_ctor_kwargs(column_kwargs)
     expected = {
@@ -212,7 +236,7 @@ def test_serialize_cache_miss():
     # the same hash, so they cache the same, but have some difference
     # in behavior (e.g. isinstance).
     cudf_polars.containers.datatype._from_polars.cache_clear()
-    result = Column.deserialize(header, frames)
+    result = Column.deserialize(header, frames, stream=stream)
     assert result.dtype == dtype
 
 
@@ -222,21 +246,21 @@ def test_serialize_cache_miss():
 @pytest.mark.parametrize(
     "dtype",
     [
-        pl.Binary,
-        pl.Binary(),
         pl.Boolean,
         pl.Boolean(),
-        pl.Categorical(),
         pl.Date,
         pl.Date(),
         pl.Datetime,
         pl.Datetime(),
+        pl.Duration,
+        pl.Duration(),
         pl.Float32,
         pl.Float32(),
         pl.Int8,
         pl.Int8(),
         pl.List(pl.Int8()),
         pl.List(pl.Int8),
+        pl.List(pl.Decimal(10)),
         pl.Object,
         pl.Object(),
         pl.String,
@@ -245,38 +269,73 @@ def test_serialize_cache_miss():
         pl.Time(),
         pl.UInt8,
         pl.UInt8(),
+        pl.Struct([pl.Field("a", pl.Int8), pl.Field("b", pl.Int8)]),
         # These fail.
+        pytest.param(
+            pl.Binary,
+            marks=pytest.mark.xfail(reason="Binary is not supported", strict=True),
+        ),
+        pytest.param(
+            pl.Binary(),
+            marks=pytest.mark.xfail(reason="Binary is not supported", strict=True),
+        ),
+        # These Error
         pytest.param(
             pl.Enum(["a", "b"]),
             marks=pytest.mark.xfail(reason="Enum is not supported", strict=True),
         ),
         pytest.param(
-            pl.List(pl.Decimal(10)),
-            marks=pytest.mark.xfail(
-                reason="List[Decimal] is not supported", strict=True
-            ),
-        ),
-        # These Error
-        pytest.param(
             pl.Array(pl.Int8, shape=(1,)),
             marks=pytest.mark.xfail(reason="Array[Int8] is not supported", strict=True),
         ),
-        pytest.param(
-            pl.Array(pl.Int8(), shape=(1,)),
-            marks=pytest.mark.xfail(reason="Array[Int8] is not supported", strict=True),
-        ),
-        pytest.param(
-            pl.Struct([pl.Field("a", pl.Int8), pl.Field("b", pl.Int8)]),
-            marks=pytest.mark.xfail(reason="Struct is not supported", strict=True),
-        ),
-        pytest.param(
-            pl.Struct([pl.Field("a", pl.Int8()), pl.Field("b", pl.Int8())]),
-            marks=pytest.mark.xfail(reason="Struct is not supported", strict=True),
-        ),
     ],
 )
-def test_dtype_short_repr_to_dtype_roundtrip(dtype: pl.DataType):
-    result = cudf_polars.containers.column._dtype_short_repr_to_dtype(
-        pl.polars.dtype_str_repr(dtype)
+def test_dtype_header_roundtrip(dtype: pl.DataType):
+    dt = _as_instance(dtype)
+    header = cudf_polars.containers.datatype._dtype_to_header(dt)
+    result = cudf_polars.containers.datatype._dtype_from_header(header)
+    assert result == dt
+
+
+@pytest.mark.parametrize(
+    "val, plc_tid, pl_type",
+    [
+        (1, plc.TypeId.INT64, pl.Int64()),
+        (True, plc.TypeId.BOOL8, pl.Boolean()),
+    ],
+)
+def test_astype_to_string(val, plc_tid, pl_type):
+    stream = get_cuda_stream()
+    col = Column(
+        plc.Column.from_iterable_of_py([val], plc.DataType(plc_tid), stream=stream),
+        dtype=DataType(pl_type),
     )
-    assert result == dtype
+    target_dtype = DataType(pl.String())
+    result = col.astype(target_dtype, stream=stream)
+    assert result.dtype == target_dtype
+
+
+def test_astype_from_string_unsupported():
+    stream = get_cuda_stream()
+    col = Column(
+        plc.Column.from_iterable_of_py(
+            ["True"], plc.DataType(plc.TypeId.STRING), stream=stream
+        ),
+        dtype=DataType(pl.String()),
+    )
+    with pytest.raises(pl.exceptions.InvalidOperationError):
+        col.astype(DataType(pl.Boolean()), stream=stream)
+
+
+def test_astype_to_string_unsupported():
+    stream = get_cuda_stream()
+    col = Column(
+        plc.Column.from_scalar(
+            plc.Scalar.from_py(datetime.datetime(2020, 1, 1), stream=stream),
+            1,
+            stream=stream,
+        ),
+        dtype=DataType(pl.Datetime(time_unit="ns")),
+    )
+    with pytest.raises(pl.exceptions.InvalidOperationError):
+        col.astype(DataType(pl.String()), stream=stream)

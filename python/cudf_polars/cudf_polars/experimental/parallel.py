@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 """Multi-partition evaluation."""
 
@@ -22,6 +22,7 @@ from cudf_polars.dsl.ir import (
     Filter,
     HConcat,
     HStack,
+    IRExecutionContext,
     MapFunction,
     Projection,
     Slice,
@@ -36,14 +37,20 @@ from cudf_polars.experimental.dispatch import (
 from cudf_polars.experimental.io import _clear_source_info_cache
 from cudf_polars.experimental.repartition import Repartition
 from cudf_polars.experimental.statistics import collect_statistics
-from cudf_polars.experimental.utils import _concat, _contains_over, _lower_ir_fallback
+from cudf_polars.experimental.utils import (
+    _concat,
+    _contains_over,
+    _dynamic_planning_on,
+    _lower_ir_fallback,
+)
 
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
     from typing import Any
 
-    from cudf_polars.containers import DataFrame
-    from cudf_polars.dsl.ir import IRExecutionContext
+    import polars as pl
+
+    from cudf_polars.experimental.base import StatsCollector
     from cudf_polars.experimental.dispatch import LowerIRTransformer, State
     from cudf_polars.utils.config import ConfigOptions
 
@@ -60,7 +67,7 @@ def _(
 
 def lower_ir_graph(
     ir: IR, config_options: ConfigOptions
-) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
+) -> tuple[IR, MutableMapping[IR, PartitionInfo], StatsCollector]:
     """
     Rewrite an IR graph and extract partitioning information.
 
@@ -73,9 +80,10 @@ def lower_ir_graph(
 
     Returns
     -------
-    new_ir, partition_info
-        The rewritten graph, and a mapping from unique nodes
-        in the new graph to associated partitioning information.
+    new_ir, partition_info, stats
+        The rewritten graph, a mapping from unique nodes
+        in the new graph to associated partitioning information,
+        and the statistics collector.
 
     Notes
     -----
@@ -91,14 +99,13 @@ def lower_ir_graph(
         "stats": collect_statistics(ir, config_options),
     }
     mapper: LowerIRTransformer = CachingVisitor(lower_ir_node, state=state)
-    return mapper(ir)
+    return *mapper(ir), state["stats"]
 
 
 def task_graph(
     ir: IR,
     partition_info: MutableMapping[IR, PartitionInfo],
     config_options: ConfigOptions,
-    context: IRExecutionContext,
 ) -> tuple[MutableMapping[Any, Any], str | tuple[str, int]]:
     """
     Construct a task graph for evaluation of an IR graph.
@@ -134,6 +141,7 @@ def task_graph(
     --------
     generate_ir_tasks
     """
+    context = IRExecutionContext.from_config_options(config_options)
     graph = reduce(
         operator.or_,
         (
@@ -224,11 +232,34 @@ def post_process_task_graph(
     return graph
 
 
+def evaluate_rapidsmpf(
+    ir: IR,
+    config_options: ConfigOptions,
+) -> pl.DataFrame:  # pragma: no cover; rapidsmpf runtime not tested in CI yet
+    """
+    Evaluate with the RapidsMPF streaming runtime.
+
+    Parameters
+    ----------
+    ir
+        Logical plan to evaluate.
+    config_options
+        GPUEngine configuration options.
+
+    Returns
+    -------
+    A cudf-polars DataFrame object.
+    """
+    from cudf_polars.experimental.rapidsmpf.core import evaluate_logical_plan
+
+    result, _ = evaluate_logical_plan(ir, config_options, collect_metadata=False)
+    return result
+
+
 def evaluate_streaming(
     ir: IR,
     config_options: ConfigOptions,
-    context: IRExecutionContext,
-) -> DataFrame:
+) -> pl.DataFrame:
     """
     Evaluate an IR graph with partitioning.
 
@@ -238,8 +269,6 @@ def evaluate_streaming(
         Logical plan to evaluate.
     config_options
         GPUEngine configuration options.
-    context
-        The execution context for the IR node.
 
     Returns
     -------
@@ -248,11 +277,19 @@ def evaluate_streaming(
     # Clear source info cache in case data was overwritten
     _clear_source_info_cache()
 
-    ir, partition_info = lower_ir_graph(ir, config_options)
+    assert config_options.executor.name == "streaming", "Executor must be streaming"
+    if (
+        config_options.executor.runtime == "rapidsmpf"
+    ):  # pragma: no cover; rapidsmpf runtime not tested in CI yet
+        # Using the RapidsMPF streaming runtime.
+        return evaluate_rapidsmpf(ir, config_options)
+    else:
+        # Using the default task engine.
+        ir, partition_info, _ = lower_ir_graph(ir, config_options)
 
-    graph, key = task_graph(ir, partition_info, config_options, context=context)
+        graph, key = task_graph(ir, partition_info, config_options)
 
-    return get_scheduler(config_options)(graph, key)
+        return get_scheduler(config_options)(graph, key).to_polars()
 
 
 @generate_ir_tasks.register(IR)
@@ -366,7 +403,7 @@ def _lower_ir_pwise(
 
 _lower_ir_pwise_preserve = partial(_lower_ir_pwise, preserve_partitioning=True)
 lower_ir_node.register(Projection, _lower_ir_pwise_preserve)
-lower_ir_node.register(Cache, _lower_ir_pwise)
+lower_ir_node.register(Cache, _lower_ir_pwise_preserve)
 lower_ir_node.register(HConcat, _lower_ir_pwise)
 
 
@@ -405,11 +442,15 @@ def _(
 def _(
     ir: Slice, rec: LowerIRTransformer
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
+    # Check for dynamic planning - may have more partitions at runtime
+    config_options = rec.state["config_options"]
+    dynamic_planning = _dynamic_planning_on(config_options)
+
     if ir.offset == 0:
         # Taking the first N rows.
         # We don't know how large each partition is, so we reduce.
         new_node, partition_info = _lower_ir_pwise(ir, rec)
-        if partition_info[new_node].count > 1:
+        if partition_info[new_node].count > 1 or dynamic_planning:
             # Collapse down to single partition
             inter = Repartition(new_node.schema, new_node)
             partition_info[inter] = PartitionInfo(count=1)

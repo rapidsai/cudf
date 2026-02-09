@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -14,7 +14,7 @@
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/mr/device/device_memory_resource.hpp>
+#include <rmm/mr/device_memory_resource.hpp>
 
 #include <memory>
 #include <optional>
@@ -33,10 +33,15 @@ using parquet::detail::row_group_info;
 /**
  * @brief Class for parsing dataset metadata
  */
-struct metadata : private metadata_base {
+struct metadata : public metadata_base {
   explicit metadata(cudf::host_span<uint8_t const> footer_bytes);
   explicit metadata(FileMetaData const& other) { static_cast<FileMetaData&>(*this) = other; }
-  metadata_base get_file_metadata() && { return std::move(*this); }
+  metadata(metadata const& other)            = delete;
+  metadata(metadata&& other)                 = default;
+  metadata& operator=(metadata const& other) = delete;
+  metadata& operator=(metadata&& other)      = default;
+
+  ~metadata() = default;
 };
 
 class aggregate_reader_metadata : public aggregate_reader_metadata_base {
@@ -93,6 +98,11 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
                             bool use_arrow_schema,
                             bool has_cols_from_mismatched_srcs);
 
+  aggregate_reader_metadata(aggregate_reader_metadata const&)            = delete;
+  aggregate_reader_metadata& operator=(aggregate_reader_metadata const&) = delete;
+  aggregate_reader_metadata(aggregate_reader_metadata&&)                 = default;
+  aggregate_reader_metadata& operator=(aggregate_reader_metadata&&)      = default;
+
   /**
    * @brief Initialize the internal variables
    */
@@ -131,6 +141,7 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
    * @param filter_columns_names List of paths of column names present only in filter, if any
    * @param include_index Whether to always include the PANDAS index column(s)
    * @param strings_to_categorical Type conversion parameter
+   * @param ignore_missing_columns Whether to ignore non-existent columns
    * @param timestamp_type_id Type conversion parameter
    *
    * @return input column information, output column buffers, list of output column schema
@@ -142,7 +153,26 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
                            std::optional<std::vector<std::string>> const& filter_column_names,
                            bool include_index,
                            bool strings_to_categorical,
+                           bool ignore_missing_columns,
                            type_id timestamp_type_id);
+
+  /**
+   * @brief Filters row groups such that only the row groups that start within the byte range
+   * specified by [`bytes_to_skip`, `bytes_to_skip + bytes_to_read`) are selected
+   *
+   * @note The last selected row group may end beyond the byte range.
+   *
+   * @param row_group_indices Input row groups indices
+   * @param bytes_to_skip Bytes to skip before selecting row groups
+   * @param bytes_to_read Optional bytes to select row groups from after skipping. All row groups
+   * until the end of the file are selected if not provided
+   *
+   * @return Filtered row group indices
+   */
+  [[nodiscard]] std::vector<std::vector<cudf::size_type>> filter_row_groups_with_byte_range(
+    cudf::host_span<std::vector<size_type> const> row_group_indices,
+    std::size_t bytes_to_skip,
+    std::optional<std::size_t> const& bytes_to_read) const;
 
   /**
    * @brief Filter the row groups with statistics based on predicate filter
@@ -225,7 +255,7 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
   /**
    * @brief Filter the row groups using bloom filters based on predicate filter
    *
-   * @param bloom_filter_data Device buffers of bloom filters, one per input column chunk
+   * @param bloom_filter_data Device spans of bloom filters, one per input column chunk
    * @param row_group_indices Input row groups indices
    * @param output_dtypes Datatypes of output columns
    * @param output_column_schemas schema indices of output columns
@@ -235,7 +265,7 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
    * @return Filtered row group indices, if any are filtered
    */
   [[nodiscard]] std::vector<std::vector<size_type>> filter_row_groups_with_bloom_filters(
-    cudf::host_span<rmm::device_buffer> bloom_filter_data,
+    cudf::host_span<cudf::device_span<uint8_t const> const> bloom_filter_data,
     cudf::host_span<std::vector<size_type> const> row_group_indices,
     cudf::host_span<data_type const> output_dtypes,
     cudf::host_span<cudf::size_type const> output_column_schemas,
@@ -270,17 +300,21 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
    * Compute a vector of boolean vectors indicating which data pages need to be decoded to
    * construct each input column based on the row mask, one vector per column
    *
+   * @tparam ColumnView Type of the row mask column view - cudf::mutable_column_view for filter
+   * columns and cudf::column_view for payload columns
+   *
    * @param row_mask Boolean column indicating which rows need to be read after page-pruning
    * @param row_group_indices Input row groups indices
    * @param input_columns Input column information
    * @param row_mask_offset Offset into the row mask column for the current pass
    * @param stream CUDA stream used for device memory operations and kernel launches
    *
-   * @return A vector of boolean vectors indicating which data pages need to be decoded to produce
-   *         the output table based on the input row mask, one per input column
+   * @return Boolean vector indicating which data pages need to be decoded to produce
+   *         the output table based on the input row mask across all input columns
    */
-  [[nodiscard]] std::vector<std::vector<bool>> compute_data_page_mask(
-    cudf::column_view row_mask,
+  template <typename ColumnView>
+  [[nodiscard]] thrust::host_vector<bool> compute_data_page_mask(
+    ColumnView const& row_mask,
     cudf::host_span<std::vector<size_type> const> row_group_indices,
     cudf::host_span<input_column_info const> input_columns,
     cudf::size_type row_mask_offset,
@@ -319,6 +353,29 @@ class dictionary_literals_collector : public equality_literals_collector {
 
  private:
   std::vector<std::vector<ast::ast_operator>> _operators;
+};
+
+/**
+ * @brief Converts named columns to index reference columns
+ */
+class named_to_reference_converter : public parquet::detail::named_to_reference_converter {
+ public:
+  named_to_reference_converter() = default;
+
+  named_to_reference_converter(std::optional<std::reference_wrapper<ast::expression const>> expr,
+                               table_metadata const& metadata,
+                               std::vector<SchemaElement> const& schema_tree,
+                               cudf::io::parquet_reader_options const& options);
+
+  using parquet::detail::named_to_reference_converter::visit;
+
+  /**
+   * @copydoc ast::detail::expression_transformer::visit(ast::column_reference const& )
+   */
+  std::reference_wrapper<ast::expression const> visit(ast::column_reference const& expr) override;
+
+ private:
+  std::unordered_map<int32_t, std::string> _column_indices_to_names;
 };
 
 }  // namespace cudf::io::parquet::experimental::detail

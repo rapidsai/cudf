@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -10,8 +10,21 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/export.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
+#include <rmm/resource_ref.hpp>
+
+#include <array>
+#include <cstddef>
+#include <cstdint>
+#include <functional>
+#include <memory>
+#include <optional>
+#include <span>
 #include <string>
 #include <string_view>
+#include <tuple>
+#include <variant>
+#include <vector>
 
 namespace CUDF_EXPORT cudf {
 namespace detail {
@@ -29,18 +42,11 @@ enum class target {
 };
 
 /**
- * @brief The type information of the variable used in the IR.
- */
-struct type_info {
-  data_type type = data_type{type_id::EMPTY};  ///< The data type of the variable
-};
-
-/**
  * @brief The information about the variable used in the IR.
  */
 struct var_info {
-  std::string id = {};  ///< The variable identifier
-  type_info type = {};  ///< The type information of the variable
+  std::string id = {};                         ///< The variable identifier
+  data_type type = data_type{type_id::EMPTY};  ///< The data type of the variable
 };
 
 /**
@@ -71,10 +77,11 @@ struct target_info {
  * This context is used to generate temporary variable identifiers and any state setup needed for
  * the IR instantiation.
  */
-struct instance_context {
+struct [[nodiscard]] instance_context {
  private:
   int32_t num_tmp_vars_   = 0;       ///< The number of temporary variables generated
   std::string tmp_prefix_ = "tmp_";  ///< The prefix for temporary variable identifiers
+  bool has_nulls_         = false;   ///< If expressions involve null values
 
  public:
   instance_context() = default;  ///< Default constructor
@@ -93,12 +100,21 @@ struct instance_context {
    * @brief Generate a globally unique temporary variable identifier
    * @return A unique temporary variable identifier
    */
-  std::string make_tmp_id();
+  [[nodiscard]] std::string make_tmp_id();
 
-  void reset();
+  /**
+   * @brief Returns true if expressions involve null values
+   */
+  [[nodiscard]] bool has_nulls() const;
+
+  /**
+   * @brief Sets whether expressions involve null values
+   * @param has_nulls True if expressions involve null values
+   */
+  void set_has_nulls(bool has_nulls);
 };
 
-struct node {
+struct [[nodiscard]] node {
   /**
    * @brief Get the identifier of the IR node
    * @return The identifier of the IR node
@@ -109,7 +125,22 @@ struct node {
    * @brief Get the type info of the IR node
    * @return The type information of the IR node
    */
-  virtual type_info get_type() = 0;
+  [[nodiscard]] virtual data_type get_type() = 0;
+
+  /**
+   * @brief Returns `false` if this node forwards nulls from its inputs to its output.
+   * e.g., `ADD` operator is not null-aware because if any of its inputs is null, the output is
+   * null. but `NULL_EQUAL` operator is null-aware because it can produce a non-null output even if
+   * its inputs are null.
+   */
+  [[nodiscard]] virtual bool is_null_aware() = 0;
+
+  /**
+   * @brief Returns `true` if this node always produces a valid output even if its inputs are
+   * nullable, e.g., `IS_NULL` operator produces a valid boolean output regardless of the
+   * nullability of its input.
+   */
+  [[nodiscard]] virtual bool is_always_valid() = 0;
 
   /**
    * @brief Instantiate the IR node with the given context and instance information, setting up any
@@ -126,9 +157,9 @@ struct node {
    * @param instance The instance information
    * @return The generated code for the IR node
    */
-  virtual std::string generate_code(instance_context& ctx,
-                                    target_info const& info,
-                                    instance_info const& instance) = 0;
+  [[nodiscard]] virtual std::string generate_code(instance_context& ctx,
+                                                  target_info const& info,
+                                                  instance_info const& instance) = 0;
 
   virtual ~node() = default;
 };
@@ -142,11 +173,11 @@ using opcode = ast::ast_operator;
  * @brief An IR node that retrieves an input variable by its index.
  * This node is used to access input variables in the IR.
  */
-struct get_input final : node {
+struct [[nodiscard]] get_input final : node {
  private:
   std::string id_;  ///< The identifier of the IR node
   int32_t input_;   ///< The index of the input variable
-  type_info type_;  ///< The type information of the IR node
+  data_type type_;  ///< The type information of the IR node
 
  public:
   /**
@@ -168,12 +199,22 @@ struct get_input final : node {
   /**
    * @copydoc node::get_id
    */
-  std::string_view get_id() override;
+  [[nodiscard]] std::string_view get_id() override;
 
   /**
    * @copydoc node::get_type
    */
-  type_info get_type() override;
+  [[nodiscard]] data_type get_type() override;
+
+  /**
+   * @copydoc node::is_null_aware
+   */
+  [[nodiscard]] bool is_null_aware() override;
+
+  /**
+   * @copydoc node::is_always_valid
+   */
+  [[nodiscard]] bool is_always_valid() override;
 
   /**
    * @copydoc node::instantiate
@@ -183,20 +224,20 @@ struct get_input final : node {
   /**
    * @copydoc node::generate_code
    */
-  std::string generate_code(instance_context& ctx,
-                            target_info const& info,
-                            instance_info const& instance) override;
+  [[nodiscard]] std::string generate_code(instance_context& ctx,
+                                          target_info const& info,
+                                          instance_info const& instance) override;
 };
 
 /**
  * @brief An IR node that sets the output variable to the value of a source IR node.
  */
-struct set_output final : node {
+struct [[nodiscard]] set_output final : node {
  private:
   std::string id_;                ///< The identifier of the IR node
   int32_t output_;                ///< The index of the output variable
   std::unique_ptr<node> source_;  ///< The source IR node from which the value is taken
-  type_info type_;                ///< The type information of the IR node
+  data_type type_;                ///< The type information of the IR node
   std::string output_id_;         ///< The identifier of the output variable
 
  public:
@@ -220,17 +261,27 @@ struct set_output final : node {
   /**
    * @copydoc node::get_id
    */
-  std::string_view get_id() override;
+  [[nodiscard]] std::string_view get_id() override;
 
   /**
    * @copydoc node::get_type
    */
-  type_info get_type() override;
+  [[nodiscard]] data_type get_type() override;
+
+  /**
+   * @copydoc node::is_null_aware
+   */
+  [[nodiscard]] bool is_null_aware() override;
+
+  /**
+   * @copydoc node::is_always_valid
+   */
+  [[nodiscard]] bool is_always_valid() override;
 
   /**
    * @brief Get the source IR node from which the value is taken
    */
-  node& get_source();
+  [[nodiscard]] node& get_source();
 
   /**
    * @copydoc node::instantiate
@@ -240,20 +291,20 @@ struct set_output final : node {
   /**
    * @copydoc node::generate_code
    */
-  std::string generate_code(instance_context& ctx,
-                            target_info const& info,
-                            instance_info const& instance) override;
+  [[nodiscard]] std::string generate_code(instance_context& ctx,
+                                          target_info const& info,
+                                          instance_info const& instance) override;
 };
 
 /**
  * @brief An IR node that represents an operation with zero or more operands.
  */
-struct operation final : node {
+struct [[nodiscard]] operation final : node {
  private:
   std::string id_;                               ///< The identifier of the IR node
   opcode op_;                                    ///< The operation code
   std::vector<std::unique_ptr<node>> operands_;  ///< The operands of the operation
-  type_info type_;                               ///< The type information of the IR node
+  data_type type_;                               ///< The type information of the IR node
 
   operation(opcode op, std::unique_ptr<node>* move_begin, std::unique_ptr<node>* move_end);
 
@@ -304,12 +355,22 @@ struct operation final : node {
   /**
    * @copydoc node::get_id
    */
-  std::string_view get_id() override;
+  [[nodiscard]] std::string_view get_id() override;
 
   /**
    * @copydoc node::get_type
    */
-  type_info get_type() override;
+  [[nodiscard]] data_type get_type() override;
+
+  /**
+   * @copydoc node::is_null_aware
+   */
+  [[nodiscard]] bool is_null_aware() override;
+
+  /**
+   * @copydoc node::is_always_valid
+   */
+  [[nodiscard]] bool is_always_valid() override;
 
   /**
    * @brief Get the operation code of the operation
@@ -330,9 +391,9 @@ struct operation final : node {
   /**
    * @copydoc node::generate_code
    */
-  std::string generate_code(instance_context& ctx,
-                            target_info const& info,
-                            instance_info const& instance) override;
+  [[nodiscard]] std::string generate_code(instance_context& ctx,
+                                          target_info const& info,
+                                          instance_info const& instance) override;
 };
 
 /**
@@ -361,7 +422,7 @@ using ast_input_spec = std::variant<ast_column_input_spec, ast_scalar_input_spec
 /**
  * @brief The arguments needed to invoke a `cudf::transform`
  */
-struct transform_args {
+struct [[nodiscard]] transform_args {
   std::vector<std::unique_ptr<column>> scalar_columns =
     {};  ///< The scalar columns created during the expression conversion
   std::vector<column_view> columns = {};  ///< The input columns to the transform
@@ -370,12 +431,13 @@ struct transform_args {
   bool is_ptx                    = false;           ///< Whether the transform is a PTX kernel
   std::optional<void*> user_data = std::nullopt;    ///< User data to pass to the transform
   null_aware is_null_aware       = null_aware::NO;  ///< Whether the transform is null-aware
+  output_nullability null_policy = output_nullability::PRESERVE;  ///< Null-transformation policy
 };
 
 /**
  * @brief The arguments needed to invoke a `cudf::filter`
  */
-struct filter_args {
+struct [[nodiscard]] filter_args {
   std::vector<std::unique_ptr<column>> scalar_columns =
     {};  ///< The scalar columns created during the expression conversion
   std::vector<column_view> predicate_columns = {};  ///< The input columns to the predicate UDF
@@ -396,7 +458,7 @@ struct ast_args {
 /**
  * @brief AST Converter is a class for converting AST expressions to codegen targets, ie. CUDA.
  */
-struct ast_converter {
+struct [[nodiscard]] ast_converter {
  private:
   std::vector<ast_input_spec> input_specs_;              ///< The input specs for the AST
   std::vector<var_info> input_vars_;                     ///< The input variables for the IR
@@ -415,7 +477,7 @@ struct ast_converter {
    * @param mr Device memory resource used to allocate the returned table's device memory
    */
   ast_converter(rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
-    : stream_(stream), mr_(mr)
+    : stream_(std::move(stream)), mr_(std::move(mr))
   {
   }
 
@@ -434,18 +496,18 @@ struct ast_converter {
   friend class ast::operation;
   friend class ast::column_name_reference;
 
-  std::unique_ptr<row_ir::node> add_ir_node(ast::literal const& expr);
+  [[nodiscard]] std::unique_ptr<row_ir::node> add_ir_node(ast::literal const& expr);
 
-  std::unique_ptr<row_ir::node> add_ir_node(ast::column_reference const& expr);
+  [[nodiscard]] std::unique_ptr<row_ir::node> add_ir_node(ast::column_reference const& expr);
 
-  std::unique_ptr<row_ir::node> add_ir_node(ast::operation const& expr);
+  [[nodiscard]] std::unique_ptr<row_ir::node> add_ir_node(ast::operation const& expr);
 
   [[nodiscard]] std::span<ast_input_spec const> get_input_specs() const;
 
   /**
    * @brief add an AST input/input_reference and return its reference index
    */
-  int32_t add_ast_input(ast_input_spec in);
+  [[nodiscard]] int32_t add_ast_input(ast_input_spec in);
 
   void add_input_var(ast_column_input_spec const& in, ast_args const& args);
 
@@ -453,14 +515,14 @@ struct ast_converter {
 
   void add_output_var();
 
-  void generate_code(target target, ast::expression const& expr, ast_args const& args);
+  [[nodiscard]] std::tuple<null_aware, output_nullability> generate_code(
+    target target, ast::expression const& expr, ast_args const& args);
 
  public:
   /**
    * @brief Convert an AST `compute_column` expression to a `cudf::transform`
    * @param target The target for which the IR is generated
    * @param expr The AST expression to convert
-   * @param null_aware Whether to use null-aware operators
    * @param args The arguments needed to resolve the AST expression
    * @param stream CUDA stream used for device memory operations and kernel launches.
    * @param mr Device memory resource used to allocate the returned table's device memory
@@ -476,7 +538,6 @@ struct ast_converter {
    * @brief Convert an AST `filter` expression to a `cudf::filter`
    * @param target The target for which the IR is generated
    * @param expr The AST expression to convert
-   * @param null_aware Whether to use null-aware operators
    * @param args The arguments needed to resolve the AST expression
    * @param filter_table The table to be filtered
    * @param stream CUDA stream used for device memory operations and kernel launches.

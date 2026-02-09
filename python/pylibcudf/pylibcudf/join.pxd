@@ -1,6 +1,8 @@
 # SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
+from libcpp.memory cimport unique_ptr
+from pylibcudf.libcudf cimport join as cpp_join
 from pylibcudf.libcudf.types cimport null_equality
 from rmm.pylibrmm.stream cimport Stream
 from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
@@ -148,3 +150,6 @@ cpdef Column mixed_left_anti_join(
     Stream stream=*,
     DeviceMemoryResource mr=*,
 )
+
+cdef class FilteredJoin:
+    cdef unique_ptr[cpp_join.filtered_join] c_obj

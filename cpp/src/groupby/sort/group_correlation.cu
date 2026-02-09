@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -8,6 +8,7 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
+#include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/utilities/memory_resource.hpp>
@@ -17,13 +18,12 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/std/tuple>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/discard_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
-#include <thrust/reduce.h>
 #include <thrust/transform.h>
-#include <thrust/tuple.h>
 
 #include <type_traits>
 
@@ -151,12 +151,13 @@ std::unique_ptr<column> group_covariance(column_view const& values_0,
   auto corr_iter =
     thrust::make_transform_iterator(thrust::make_counting_iterator(0), covariance_transform_op);
 
-  thrust::reduce_by_key(rmm::exec_policy(stream),
-                        group_labels.begin(),
-                        group_labels.end(),
-                        corr_iter,
-                        thrust::make_discard_iterator(),
-                        d_result);
+  cudf::detail::reduce_by_key_async(group_labels.begin(),
+                                    group_labels.end(),
+                                    corr_iter,
+                                    thrust::make_discard_iterator(),
+                                    d_result,
+                                    cuda::std::plus<result_type>(),
+                                    stream);
 
   auto is_null = [ddof, min_periods] __device__(size_type group_size) {
     return not(group_size == 0 or group_size - ddof <= 0 or group_size < min_periods);
@@ -177,7 +178,7 @@ std::unique_ptr<column> group_correlation(column_view const& covariance,
   CUDF_EXPECTS(covariance.type().id() == type_id::FLOAT64, "Covariance result must be FLOAT64");
   auto stddev0_ptr = stddev_0.begin<result_type>();
   auto stddev1_ptr = stddev_1.begin<result_type>();
-  auto stddev_iter = thrust::make_zip_iterator(thrust::make_tuple(stddev0_ptr, stddev1_ptr));
+  auto stddev_iter = thrust::make_zip_iterator(cuda::std::make_tuple(stddev0_ptr, stddev1_ptr));
   auto result      = make_numeric_column(covariance.type(),
                                     covariance.size(),
                                     cudf::detail::copy_bitmask(covariance, stream, mr),
@@ -185,13 +186,13 @@ std::unique_ptr<column> group_correlation(column_view const& covariance,
                                     stream,
                                     mr);
   auto d_result    = result->mutable_view().begin<result_type>();
-  thrust::transform(rmm::exec_policy(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream),
                     covariance.begin<result_type>(),
                     covariance.end<result_type>(),
                     stddev_iter,
                     d_result,
                     [] __device__(auto const covariance, auto const stddev) {
-                      return covariance / thrust::get<0>(stddev) / thrust::get<1>(stddev);
+                      return covariance / cuda::std::get<0>(stddev) / cuda::std::get<1>(stddev);
                     });
 
   result->set_null_count(covariance.null_count());

@@ -69,7 +69,7 @@ create_device_view_from_view(ColumnView const& source, rmm::cuda_stream_view str
     new ColumnDeviceView(source, staging_buffer.data(), descendant_storage->data()), deleter};
 
   // copy the CPU memory with all the children into device memory
-  detail::cuda_memcpy<char>(*descendant_storage, staging_buffer, stream);
+  detail::cuda_memcpy_async<char>(*descendant_storage, staging_buffer, stream);
 
   return result;
 }

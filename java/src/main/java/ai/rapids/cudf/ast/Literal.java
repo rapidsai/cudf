@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -15,6 +15,11 @@ import java.nio.charset.StandardCharsets;
 public final class Literal extends AstExpression {
   private final DType type;
   private final byte[] serializedValue;
+
+  @Override
+  public String toString() {
+    return "Literal " + type + " " + java.util.Arrays.toString(serializedValue);
+  }
 
   /** Construct a null literal of the specified type. */
   public static Literal ofNull(DType type) {

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -328,7 +328,7 @@ __device__ void snappy_decode_symbols(unsnap_state_s* s, uint32_t t)
             b[t].offset = ofs;
             ofs += blen;  // for correct out-of-range detection below
           }
-          blen           = WarpReducePos32(blen, t);
+          blen           = warp_reduce_pos<cudf::detail::warp_size>(blen, t);
           bytes_left     = shuffle(bytes_left);
           dst_pos        = shuffle(dst_pos);
           short_sym_mask = __ffs(ballot(blen > bytes_left || ofs > (int32_t)(dst_pos + blen)));
@@ -374,7 +374,7 @@ __device__ void snappy_decode_symbols(unsnap_state_s* s, uint32_t t)
               b[batch_len + t].offset = ofs;
               ofs += blen;  // for correct out-of-range detection below
             }
-            blen           = WarpReducePos32(blen, t);
+            blen           = warp_reduce_pos<cudf::detail::warp_size>(blen, t);
             bytes_left     = shuffle(bytes_left);
             dst_pos        = shuffle(dst_pos);
             short_sym_mask = __ffs(ballot(blen > bytes_left || ofs > (int32_t)(dst_pos + blen)));
@@ -521,7 +521,7 @@ __device__ void snappy_process_symbols(unsnap_state_s* s, int t, Storage& temp_s
     if (shuffle(min((uint32_t)dist_t, (uint32_t)shuffle_xor(dist_t, 1))) > 8) {
       uint32_t n;
       do {
-        uint32_t bofs      = WarpReducePos32(blen_t, t);
+        uint32_t bofs      = warp_reduce_pos<cudf::detail::warp_size>(blen_t, t);
         uint32_t stop_mask = ballot((uint32_t)dist_t < bofs);
         uint32_t start_mask =
           cub::WarpReduce<uint32_t>(temp_storage).Sum((bofs < 32 && t < batch_len) ? 1 << bofs : 0);
@@ -620,9 +620,9 @@ __device__ void snappy_process_symbols(unsnap_state_s* s, int t, Storage& temp_s
  */
 template <int block_size>
 CUDF_KERNEL void __launch_bounds__(block_size)
-  unsnap_kernel(device_span<device_span<uint8_t const> const> inputs,
-                device_span<device_span<uint8_t> const> outputs,
-                device_span<codec_exec_result> results)
+  unsnap_kernel_no_racecheck(device_span<device_span<uint8_t const> const> inputs,
+                             device_span<device_span<uint8_t> const> outputs,
+                             device_span<codec_exec_result> results)
 {
   __shared__ __align__(16) unsnap_state_s state_g;
   __shared__ cub::WarpReduce<uint32_t>::TempStorage temp_storage;
@@ -705,7 +705,8 @@ void gpu_unsnap(device_span<device_span<uint8_t const> const> inputs,
   dim3 dim_block(128, 1);           // 4 warps per stream, 1 stream per block
   dim3 dim_grid(inputs.size(), 1);  // TODO: Check max grid dimensions vs max expected count
 
-  unsnap_kernel<128><<<dim_grid, dim_block, 0, stream.value()>>>(inputs, outputs, results);
+  unsnap_kernel_no_racecheck<128>
+    <<<dim_grid, dim_block, 0, stream.value()>>>(inputs, outputs, results);
 }
 
 __global__ void get_snappy_uncompressed_size_kernel(

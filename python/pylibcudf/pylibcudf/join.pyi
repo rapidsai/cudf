@@ -1,13 +1,19 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
-from rmm.pylibrmm import Stream
+from enum import IntEnum
+
 from rmm.pylibrmm.memory_resource import DeviceMemoryResource
+from rmm.pylibrmm.stream import Stream
 
 from pylibcudf.column import Column
 from pylibcudf.expressions import Expression
 from pylibcudf.table import Table
 from pylibcudf.types import NullEquality
+
+class SetAsBuildTable(IntEnum):
+    LEFT = ...
+    RIGHT = ...
 
 def inner_join(
     left_keys: Table,
@@ -135,3 +141,25 @@ def mixed_left_anti_join(
     stream: Stream | None = None,
     mr: DeviceMemoryResource | None = None,
 ) -> Column: ...
+
+class FilteredJoin:
+    def __init__(
+        self,
+        build: Table,
+        compare_nulls: NullEquality,
+        reuse_tbl: SetAsBuildTable,
+        load_factor: float,
+        stream: Stream | None = None,
+    ) -> None: ...
+    def semi_join(
+        self,
+        probe: Table,
+        stream: Stream | None = None,
+        mr: DeviceMemoryResource | None = None,
+    ) -> Column: ...
+    def anti_join(
+        self,
+        probe: Table,
+        stream: Stream | None = None,
+        mr: DeviceMemoryResource | None = None,
+    ) -> Column: ...

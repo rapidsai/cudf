@@ -10,10 +10,12 @@ namespace cudf::io::parquet::detail {
 reader::reader() = default;
 
 reader::reader(std::vector<std::unique_ptr<datasource>>&& sources,
+               std::vector<FileMetaData>&& parquet_metadatas,
                parquet_reader_options const& options,
                rmm::cuda_stream_view stream,
                rmm::device_async_resource_ref mr)
-  : _impl(std::make_unique<reader_impl>(std::move(sources), options, stream, mr))
+  : _impl(std::make_unique<reader_impl>(
+      std::move(sources), std::move(parquet_metadatas), options, stream, mr))
 {
 }
 
@@ -24,12 +26,18 @@ table_with_metadata reader::read() { return _impl->read(); }
 chunked_reader::chunked_reader(std::size_t chunk_read_limit,
                                std::size_t pass_read_limit,
                                std::vector<std::unique_ptr<datasource>>&& sources,
+                               std::vector<FileMetaData>&& parquet_metadatas,
                                parquet_reader_options const& options,
                                rmm::cuda_stream_view stream,
                                rmm::device_async_resource_ref mr)
 {
-  _impl = std::make_unique<reader_impl>(
-    chunk_read_limit, pass_read_limit, std::move(sources), options, stream, mr);
+  _impl = std::make_unique<reader_impl>(chunk_read_limit,
+                                        pass_read_limit,
+                                        std::move(sources),
+                                        std::move(parquet_metadatas),
+                                        options,
+                                        stream,
+                                        mr);
 }
 
 chunked_reader::~chunked_reader() = default;

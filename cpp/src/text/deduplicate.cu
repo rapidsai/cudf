@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -178,18 +178,18 @@ std::unique_ptr<cudf::column> resolve_duplicates_fn(
                     find_adjacent_duplicates_fn{chars_span, min_width, indices.data()});
 
   auto const dup_count =
-    sizes.size() - thrust::count(rmm::exec_policy(stream), sizes.begin(), sizes.end(), 0);
+    sizes.size() - thrust::count(rmm::exec_policy_nosync(stream), sizes.begin(), sizes.end(), 0);
   auto dup_indices = rmm::device_uvector<cudf::size_type>(dup_count, stream);
 
   // remove the non-candidate entries from indices and sizes
   thrust::remove_copy_if(
-    rmm::exec_policy(stream),
+    rmm::exec_policy_nosync(stream),
     indices.begin(),
     indices.end(),
     thrust::counting_iterator<cudf::size_type>(0),
     dup_indices.begin(),
     [d_sizes = sizes.data()] __device__(cudf::size_type idx) -> bool { return d_sizes[idx] == 0; });
-  auto end = thrust::remove(rmm::exec_policy(stream), sizes.begin(), sizes.end(), 0);
+  auto end = thrust::remove(rmm::exec_policy_nosync(stream), sizes.begin(), sizes.end(), 0);
   sizes.resize(cuda::std::distance(sizes.begin(), end), stream);
 
   // sort the resulting indices/sizes for overlap filtering
@@ -206,12 +206,12 @@ std::unique_ptr<cudf::column> resolve_duplicates_fn(
                     collapse_overlaps_fn{chars_span.data(), dup_indices.data(), sizes.data()});
 
   // filter out the remaining non-viable candidates
-  duplicates.resize(
-    cuda::std::distance(
-      duplicates.begin(),
-      thrust::remove(
-        rmm::exec_policy(stream), duplicates.begin(), duplicates.end(), string_index{nullptr, 0})),
-    stream);
+  duplicates.resize(cuda::std::distance(duplicates.begin(),
+                                        thrust::remove(rmm::exec_policy_nosync(stream),
+                                                       duplicates.begin(),
+                                                       duplicates.end(),
+                                                       string_index{nullptr, 0})),
+                    stream);
 
   // sort the result by size descending (should be very fast)
   thrust::sort(rmm::exec_policy_nosync(stream),
@@ -222,7 +222,7 @@ std::unique_ptr<cudf::column> resolve_duplicates_fn(
   // ironically remove duplicates from the sorted list
   duplicates.resize(
     cuda::std::distance(duplicates.begin(),
-                        thrust::unique(rmm::exec_policy(stream),
+                        thrust::unique(rmm::exec_policy_nosync(stream),
                                        duplicates.begin(),
                                        duplicates.end(),
                                        [] __device__(auto lhs, auto rhs) -> bool {
@@ -447,18 +447,18 @@ std::unique_ptr<cudf::column> resolve_duplicates_pair_impl(
   // this means any duplicates in both inputs should be reflected in indices1/sizes;
   // so we should be able to filter/collapse the results using only indices1/sizes
   auto const dup_count =
-    sizes.size() - thrust::count(rmm::exec_policy(stream), sizes.begin(), sizes.end(), 0);
+    sizes.size() - thrust::count(rmm::exec_policy_nosync(stream), sizes.begin(), sizes.end(), 0);
   auto dup_indices = rmm::device_uvector<cudf::size_type>(dup_count, stream);
 
   // remove the non-candidate entries from indices and sizes
   thrust::remove_copy_if(
-    rmm::exec_policy(stream),
+    rmm::exec_policy_nosync(stream),
     indices1.begin(),
     indices1.end(),
     thrust::counting_iterator<cudf::size_type>(0),
     dup_indices.begin(),
     [d_sizes = sizes.data()] __device__(cudf::size_type idx) -> bool { return d_sizes[idx] == 0; });
-  auto end = thrust::remove(rmm::exec_policy(stream), sizes.begin(), sizes.end(), 0);
+  auto end = thrust::remove(rmm::exec_policy_nosync(stream), sizes.begin(), sizes.end(), 0);
   sizes.resize(cuda::std::distance(sizes.begin(), end), stream);
 
   // sort the resulting indices/sizes for overlap filtering
@@ -475,12 +475,12 @@ std::unique_ptr<cudf::column> resolve_duplicates_pair_impl(
                     collapse_overlaps_fn{chars_span1.data(), dup_indices.data(), sizes.data()});
 
   // filter out the remaining non-viable candidates
-  duplicates.resize(
-    cuda::std::distance(
-      duplicates.begin(),
-      thrust::remove(
-        rmm::exec_policy(stream), duplicates.begin(), duplicates.end(), string_index{nullptr, 0})),
-    stream);
+  duplicates.resize(cuda::std::distance(duplicates.begin(),
+                                        thrust::remove(rmm::exec_policy_nosync(stream),
+                                                       duplicates.begin(),
+                                                       duplicates.end(),
+                                                       string_index{nullptr, 0})),
+                    stream);
 
   // sort result by size descending (should be very fast)
   thrust::sort(rmm::exec_policy_nosync(stream),
@@ -491,7 +491,7 @@ std::unique_ptr<cudf::column> resolve_duplicates_pair_impl(
   // ironically remove duplicates from the sorted list
   duplicates.resize(
     cuda::std::distance(duplicates.begin(),
-                        thrust::unique(rmm::exec_policy(stream),
+                        thrust::unique(rmm::exec_policy_nosync(stream),
                                        duplicates.begin(),
                                        duplicates.end(),
                                        [] __device__(auto lhs, auto rhs) -> bool {
