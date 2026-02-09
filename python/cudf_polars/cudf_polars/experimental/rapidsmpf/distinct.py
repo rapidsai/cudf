@@ -547,12 +547,12 @@ async def _local_shuffle_distinct(
 
 
 # ============================================================================
-# Dynamic Unique Node
+# Dynamic Distinct Node
 # ============================================================================
 
 
 @define_py_node()
-async def unique_node(
+async def distinct_node(
     context: Context,
     ir: Distinct,
     ir_context: Any,
@@ -574,12 +574,8 @@ async def unique_node(
       reduction, no global communication.
     - Shuffle local: Partitioned inter-rank, large output - local hash
       shuffle with single-rank communicator.
-    - Tree local fallback: Partitioned inter-rank, large output but no
-      collective ID - falls back to local tree reduction.
     - Tree allgather: Small estimated output - tree reduction with
       allgather to merge across ranks.
-    - Tree fallback: No collective ID available - local tree without
-      allgather.
     - Shuffle: Large estimated output requiring global redistribution.
 
     Parameters
@@ -714,7 +710,7 @@ async def unique_node(
                     adaptive_n_ary,
                     tracer=tracer,
                 )
-            elif collective_ids:
+            else:
                 # Large output - use local shuffle (no inter-rank communication)
                 if tracer is not None:
                     tracer.decision = "shuffle_local"
@@ -733,21 +729,6 @@ async def unique_node(
                     key_indices,
                     tracer,
                 )
-            else:
-                # No shuffle ID available - fall back to tree
-                if tracer is not None:
-                    tracer.decision = "tree_local_fallback"
-                await _tree_distinct(
-                    context,
-                    ir,
-                    ir_context,
-                    ch_out,
-                    ch_in,
-                    metadata_in,
-                    initial_chunks,
-                    adaptive_n_ary,
-                    tracer=tracer,
-                )
         elif estimated_total_size < target_partition_size:
             # Small output - use tree reduction with allgather to merge across ranks
             if tracer is not None:
@@ -761,23 +742,8 @@ async def unique_node(
                 metadata_in,
                 initial_chunks,
                 adaptive_n_ary,
-                collective_ids.pop() if collective_ids else None,
+                collective_ids.pop(),
                 tracer,
-            )
-        elif not collective_ids:
-            # No shuffle ID available - fall back to tree (no allgather)
-            if tracer is not None:
-                tracer.decision = "tree_fallback"
-            await _tree_distinct(
-                context,
-                ir,
-                ir_context,
-                ch_out,
-                ch_in,
-                metadata_in,
-                initial_chunks,
-                adaptive_n_ary,
-                tracer=tracer,
             )
         else:
             # Large output - use shuffle
@@ -831,7 +797,7 @@ def _(
 
     # Create the dynamic unique node
     nodes[ir] = [
-        unique_node(
+        distinct_node(
             rec.state["context"],
             ir,
             rec.state["ir_context"],
