@@ -1,7 +1,5 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
-# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES.
-# SPDX-License-Identifier: Apache-2.0
 """Explain logical and physical plans."""
 
 from __future__ import annotations
@@ -421,7 +419,7 @@ class SerializablePlan:
         for ir_node in traversal([ir]):
             stable_id = str(ir_node.get_stable_id())
             nodes[stable_id] = SerializableIRNode.from_ir(ir_node)
-            if lowered and partition_info_dict is not None:
+            if partition_info_dict is not None:
                 partition_info_dict[stable_id] = SerializablePartitionInfo(
                     count=partition_info_d[ir_node].count,
                     partitioned_on=tuple(

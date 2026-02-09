@@ -652,3 +652,33 @@ def test_hstack_properties():
     node = dag.nodes[dag.roots[0]]
     assert node.type == "HStack"
     assert node.properties == {"columns": ["a", "b"]}
+
+
+@pytest.mark.skipif(
+    DEFAULT_RUNTIME != "rapidsmpf",
+    reason="Requires the rapidsmpf runtime",
+)
+@pytest.mark.parametrize("op", ["sort", "sum"])
+def test_dynamic_planning_adds_repartition(df, op):
+    # With dynamic planning, even single-partition data needs a REPARTITION
+    # since partition count may increase at runtime.
+    q = df.lazy()
+    if op == "sort":
+        q = q.sort("x")
+    elif op == "sum":
+        q = q.select(pl.sum("x"))
+
+    engine = pl.GPUEngine(
+        executor="streaming",
+        raise_on_fail=True,
+        executor_options={
+            "runtime": "rapidsmpf",
+            "dynamic_planning": {},
+            "max_rows_per_partition": 1_000_000,
+        },
+    )
+    plan = explain_query(q, engine, physical=True)
+
+    # With dynamic planning enabled, these operations should include
+    # a REPARTITION to collapse partitions.
+    assert "REPARTITION" in plan
