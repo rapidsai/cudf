@@ -5013,11 +5013,12 @@ class CategoricalIndex(Index):
         name : Hashable, optional
             The name of the CategoricalIndex.
         """
-        codes = as_column(codes, dtype=np.dtype(np.int32))
         categories = as_column(categories)
+        dtype = cudf.CategoricalDtype(categories=categories, ordered=ordered)
+        codes = as_column(codes, dtype=dtype._codes_dtype)
         cat_col = ColumnBase.create(
             codes.plc_column,
-            cudf.CategoricalDtype(categories=categories, ordered=ordered),
+            dtype,
         )
         return cls._from_column(cat_col, name=name)
 

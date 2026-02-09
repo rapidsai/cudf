@@ -230,8 +230,11 @@ class CategoricalColumn(column.ColumnBase):
                     )
             # We'll compare self's decategorized values later for non-CategoricalColumn
         else:
+            encoded = self._encode(other)
+            if isinstance(encoded, np.generic):
+                encoded = encoded.item()
             plc_scalar = plc.Scalar.from_py(
-                self._encode(other),
+                encoded,
                 dtype_to_pylibcudf_type(self.dtype._codes_dtype),
             )
             plc_col = plc.Column.from_scalar(plc_scalar, len(self))
@@ -428,12 +431,26 @@ class CategoricalColumn(column.ColumnBase):
         # The index of this dataframe represents the original
         # ints that map to the categories
         cats_col = column.as_column(replaced.dtype.categories)
+        if (
+            to_replace_col.dtype != cats_col.dtype
+            and replacement_col.dtype != cats_col.dtype
+        ):
+            cats_replace_col = cats_col.copy()
+        else:
+            with cats_col.access(mode="read", scope="internal"):
+                cats_replace_plc = plc.replace.find_and_replace_all(
+                    cats_col.plc_column,
+                    to_replace_col.plc_column,
+                    replacement_col.plc_column,
+                )
+            cats_replace_col = ColumnBase.create(
+                cats_replace_plc,
+                cats_col.dtype,
+            )
         old_cats = cudf.DataFrame._from_data(
             {
                 "cats": cats_col,
-                "cats_replace": cats_col.find_and_replace(
-                    to_replace_col, replacement_col
-                ),
+                "cats_replace": cats_replace_col,
             }
         )
 
@@ -443,9 +460,19 @@ class CategoricalColumn(column.ColumnBase):
         # map it to the new label it is to be replaced by
         dtype_replace = cudf.Series._from_column(replacement_col)
         dtype_replace[dtype_replace.isin(cats_col)] = None
-        new_cats_col = cats_col.find_and_replace(
-            to_replace_col, dtype_replace._column
-        )
+        if (
+            to_replace_col.dtype != cats_col.dtype
+            and dtype_replace._column.dtype != cats_col.dtype
+        ):
+            new_cats_col = cats_col.copy()
+        else:
+            with cats_col.access(mode="read", scope="internal"):
+                new_cats_plc = plc.replace.find_and_replace_all(
+                    cats_col.plc_column,
+                    to_replace_col.plc_column,
+                    dtype_replace._column.plc_column,
+                )
+            new_cats_col = ColumnBase.create(new_cats_plc, cats_col.dtype)
 
         # anything we mapped to None, we want to now filter out since
         # those categories don't exist anymore
@@ -475,10 +502,14 @@ class CategoricalColumn(column.ColumnBase):
         )
         replacement_col = catmap._data["index"].astype(replaced.codes.dtype)
 
-        replaced_codes = column.as_column(replaced.codes)
-        new_codes = replaced_codes.replace(to_replace_col, replacement_col)
+        with replaced.codes.access(mode="read", scope="internal"):
+            new_codes = plc.replace.find_and_replace_all(
+                replaced.codes.plc_column,
+                to_replace_col.plc_column,
+                replacement_col.plc_column,
+            )
         result = ColumnBase.create(
-            new_codes.plc_column,
+            new_codes,
             CategoricalDtype(
                 categories=new_cats["cats"], ordered=self.dtype.ordered
             ),
