@@ -2,7 +2,6 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
-import string
 from collections import abc
 from contextlib import contextmanager
 from decimal import Decimal
@@ -14,7 +13,6 @@ import pytest
 
 import cudf
 from cudf.utils import dtypes as dtypeutils
-from cudf.utils.temporal import unit_to_nanoseconds_conversion
 
 if TYPE_CHECKING:
     import pylibcudf as plc
@@ -175,68 +173,6 @@ def _get_args_kwars_for_assert_exceptions(func_args_and_kwargs):
         else:
             raise ValueError("func_args_and_kwargs must be of length 1 or 2")
         return func_args, func_kwargs
-
-
-def gen_rand(dtype, size, **kwargs):
-    rng = np.random.default_rng(seed=kwargs.get("seed", 0))
-    dtype = cudf.dtype(dtype)
-    if dtype.kind == "f":
-        res = rng.random(size=size).astype(dtype)
-        if kwargs.get("positive_only", False):
-            return res
-        else:
-            return res * 2 - 1
-    elif dtype == np.int8 or dtype == np.int16:
-        low = kwargs.get("low", -32)
-        high = kwargs.get("high", 32)
-        return rng.integers(low=low, high=high, size=size).astype(dtype)
-    elif dtype.kind == "i":
-        low = kwargs.get("low", -10000)
-        high = kwargs.get("high", 10000)
-        return rng.integers(low=low, high=high, size=size).astype(dtype)
-    elif dtype == np.uint8 or dtype == np.uint16:
-        low = kwargs.get("low", 0)
-        high = kwargs.get("high", 32)
-        return rng.integers(low=low, high=high, size=size).astype(dtype)
-    elif dtype.kind == "u":
-        low = kwargs.get("low", 0)
-        high = kwargs.get("high", 128)
-        return rng.integers(low=low, high=high, size=size).astype(dtype)
-    elif dtype.kind == "b":
-        low = kwargs.get("low", 0)
-        high = kwargs.get("high", 2)
-        return rng.integers(low=low, high=high, size=size).astype(np.bool_)
-    elif dtype.kind == "M":
-        low = kwargs.get("low", 0)
-        time_unit, _ = np.datetime_data(dtype)
-        high = kwargs.get(
-            "high",
-            int(1e18) / unit_to_nanoseconds_conversion[time_unit],
-        )
-        return pd.to_datetime(
-            rng.integers(low=low, high=high, size=size), unit=time_unit
-        )
-    elif dtype.kind in ("O", "U"):
-        low = kwargs.get("low", 10)
-        high = kwargs.get("high", 11)
-        nchars = rng.integers(low=low, high=high, size=1)[0]
-        char_options = np.array(list(string.ascii_letters + string.digits))
-        all_chars = "".join(rng.choice(char_options, nchars * size))
-        return np.array(
-            [all_chars[nchars * i : nchars * (i + 1)] for i in range(size)]
-        )
-
-    raise NotImplementedError(f"dtype.kind={dtype.kind}")
-
-
-def gen_rand_series(dtype, size, **kwargs):
-    values = gen_rand(dtype, size, **kwargs)
-    ser = cudf.Series(values)
-    if kwargs.get("has_nulls", False):
-        rng = np.random.default_rng(0)
-        boolmask = rng.choice([True, False], size=size)
-        ser.loc[boolmask] = None
-    return ser
 
 
 def _decimal_series(input, dtype):
