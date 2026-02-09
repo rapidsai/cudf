@@ -39,6 +39,7 @@
 
 #include <src/io/parquet/compact_protocol_reader.hpp>
 
+#include <cstdlib>
 #include <fstream>
 #include <type_traits>
 
@@ -2206,6 +2207,12 @@ INSTANTIATE_TEST_CASE_P(Host,
 
 TEST_F(ParquetChunkedReaderTest, TestStringColumnSizeOverflow)
 {
+  // Temporarily disable large strings support for this test
+  // to ensure string column size limit is enforced
+  auto const* env_name     = "LIBCUDF_LARGE_STRINGS_ENABLED";
+  auto const* original_env = std::getenv(env_name);
+  setenv(env_name, "0", 1);
+
   // Test parameters designed to ensure splitting is due to string column size limit,
   // not output size limit:
   // - Each row group: ~1.1GB string data (under INT32_MAX ~2.1GB limit)
@@ -2270,14 +2277,21 @@ TEST_F(ParquetChunkedReaderTest, TestStringColumnSizeOverflow)
     tables.push_back(std::move(chunk.tbl));
   }
 
-  // Verify that the data was split into exactly 2 chunks due to string column size limit
-  // (not output size limit, since chunk_read_limit > total table size)
-  EXPECT_EQ(tables.size(), 2);
-
-  // Verify total row count
+  // Verify total row count first
   size_t total_rows = 0;
   for (auto const& tbl : tables) {
     total_rows += tbl->num_rows();
   }
   EXPECT_EQ(total_rows, total_num_rows);
+
+  // Verify that the data was split into exactly 2 chunks due to string column size limit
+  // (large strings is disabled for this test, so string size limit is enforced)
+  EXPECT_EQ(tables.size(), 2);
+
+  // Restore original environment variable
+  if (original_env != nullptr) {
+    setenv(env_name, original_env, 1);
+  } else {
+    unsetenv(env_name);
+  }
 }
