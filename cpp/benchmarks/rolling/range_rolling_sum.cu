@@ -1,10 +1,10 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <benchmarks/common/generate_input.hpp>
-#include <benchmarks/fixture/benchmark_fixture.hpp>
+#include <benchmarks/common/memory_stats.hpp>
 
 #include <cudf/aggregation.hpp>
 #include <cudf/binaryop.hpp>
@@ -53,7 +53,7 @@ void bench_range_rolling_sum(nvbench::state& state)
                                            num_rows);
     // Equally spaced rows separated by 1s
     thrust::tabulate(
-      rmm::exec_policy(cudf::get_default_stream()),
+      rmm::exec_policy_nosync(cudf::get_default_stream()),
       seq->mutable_view().begin<cudf::timestamp_ms>(),
       seq->mutable_view().end<cudf::timestamp_ms>(),
       [] __device__(cudf::size_type i) {

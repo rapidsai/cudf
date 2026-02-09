@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -13,6 +13,7 @@ import pylibcudf as plc
 from cudf_polars import Translator
 from cudf_polars.dsl.ir import IRExecutionContext
 from cudf_polars.testing.asserts import assert_gpu_result_equal
+from cudf_polars.utils.versions import POLARS_VERSION_LT_135
 
 
 @pytest.mark.parametrize("descending", [False, True])
@@ -59,7 +60,11 @@ def test_sort_by_expression(descending, nulls_last, maintain_order):
 
 @pytest.mark.parametrize("descending", [False, True])
 @pytest.mark.parametrize("nulls_last", [False, True])
-def test_setsorted(descending, nulls_last, with_nulls):
+def test_setsorted(request, descending, nulls_last, with_nulls):
+    if not POLARS_VERSION_LT_135:
+        request.applymarker(
+            pytest.mark.xfail(reason="See https://github.com/pola-rs/polars/pull/24981")
+        )
     values = sorted([1, 2, 3, 4, 5, 6, -2], reverse=descending)
     if with_nulls:
         values[-1 if nulls_last else 0] = None

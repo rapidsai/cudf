@@ -91,8 +91,7 @@ std::unique_ptr<column> compute_m2(data_type source_type,
 {
   auto output = make_numeric_column(cudf::detail::target_type(source_type, aggregation::M2),
                                     sum.size(),
-                                    cudf::detail::copy_bitmask(sum, stream, mr),
-                                    sum.null_count(),
+                                    mask_state::UNALLOCATED,
                                     stream,
                                     mr);
   type_dispatcher(source_type, m2_functor{}, output->mutable_view(), sum_sqr, sum, count, stream);

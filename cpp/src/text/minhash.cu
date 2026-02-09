@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -13,7 +13,6 @@
 #include <cudf/detail/offsets_iterator_factory.cuh>
 #include <cudf/detail/sequence.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
-#include <cudf/detail/utilities/functional.hpp>
 #include <cudf/detail/utilities/grid_1d.cuh>
 #include <cudf/hashing/detail/hashing.hpp>
 #include <cudf/hashing/detail/murmurhash3_x64_128.cuh>
@@ -32,8 +31,10 @@
 
 #include <cooperative_groups.h>
 #include <cuda/atomic>
+#include <cuda/functional>
 #include <cuda/std/iterator>
 #include <cuda/std/limits>
+#include <cuda/std/tuple>
 #include <thrust/binary_search.h>
 #include <thrust/execution_policy.h>
 #include <thrust/fill.h>
@@ -133,7 +134,7 @@ CUDF_KERNEL void minhash_seed_kernel(cudf::column_device_view const d_strings,
     if constexpr (std::is_same_v<hash_value_type, uint32_t>) {
       hv = hasher(hash_str);
     } else {
-      hv = thrust::get<0>(hasher(hash_str));
+      hv = cuda::std::get<0>(hasher(hash_str));
     }
     // disallowing hash to zero case
     *seed_hashes = cuda::std::max(hv, hash_value_type{1});
@@ -360,7 +361,7 @@ CUDF_KERNEL void minhash_kernel(offsets_type offsets_itr,
       auto const values = block_values + (lane_idx * block_size);
       // cooperative groups does not have a min function and cub::BlockReduce was slower
       auto const minv =
-        thrust::reduce(thrust::seq, values, values + block_size, init, cudf::detail::minimum{});
+        thrust::reduce(thrust::seq, values, values + block_size, init, cuda::minimum{});
       if constexpr (blocks_per_row > 1) {
         // accumulates mins for each block into d_output
         cuda::atomic_ref<hash_value_type, cuda::thread_scope_block> ref{d_output[lane_idx + i]};
@@ -393,7 +394,7 @@ std::pair<cudf::size_type, rmm::device_uvector<cudf::size_type>> partition_input
   rmm::cuda_stream_view stream)
 {
   auto indices = rmm::device_uvector<cudf::size_type>(size, stream);
-  thrust::sequence(rmm::exec_policy(stream), indices.begin(), indices.end());
+  thrust::sequence(rmm::exec_policy_nosync(stream), indices.begin(), indices.end());
   cudf::size_type threshold_index = threshold_count < size ? size : 0;
 
   // if we counted a split of above/below threshold then

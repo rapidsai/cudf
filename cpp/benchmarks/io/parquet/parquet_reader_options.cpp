@@ -1,10 +1,10 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <benchmarks/common/generate_input.hpp>
-#include <benchmarks/fixture/benchmark_fixture.hpp>
+#include <benchmarks/common/memory_stats.hpp>
 #include <benchmarks/io/cuio_common.hpp>
 #include <benchmarks/io/nvbench_helpers.hpp>
 
@@ -76,7 +76,7 @@ void BM_parquet_read_options(nvbench::state& state,
   cudf::size_type const expected_num_cols = cols_to_read.size();
   cudf::io::parquet_reader_options read_options =
     cudf::io::parquet_reader_options::builder(source_sink.make_source_info())
-      .columns(cols_to_read)
+      .column_names(cols_to_read)
       .convert_strings_to_categories(str_to_categories)
       .use_pandas_metadata(uses_pd_metadata)
       .timestamp_type(ts_type);

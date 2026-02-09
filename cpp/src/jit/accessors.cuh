@@ -42,6 +42,12 @@ struct column_accessor {
   }
 
   template <typename ColumnView>
+  static __device__ bool is_valid(ColumnView const* inputs, cudf::size_type row)
+  {
+    return inputs[index].is_valid(row);
+  }
+
+  template <typename ColumnView>
   static __device__ cuda::std::optional<T> nullable_element(ColumnView const* columns,
                                                             cudf::size_type row)
   {
@@ -74,6 +80,12 @@ struct span_accessor {
     return inputs[index].is_null(row);
   }
 
+  static __device__ bool is_valid(cudf::jit::device_optional_span<T> const* inputs,
+                                  cudf::size_type row)
+  {
+    return inputs[index].is_valid(row);
+  }
+
   static __device__ cuda::std::optional<T> nullable_element(
     cudf::jit::device_optional_span<T> const* outputs, cudf::size_type row)
   {
@@ -104,6 +116,12 @@ struct scalar_accessor {
   static __device__ bool is_null(ColumnView const* columns, cudf::size_type)
   {
     return Accessor::is_null(columns, 0);
+  }
+
+  template <typename ColumnView>
+  static __device__ bool is_valid(ColumnView const* columns, cudf::size_type)
+  {
+    return Accessor::is_valid(columns, 0);
   }
 
   template <typename ColumnView>
