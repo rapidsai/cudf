@@ -1,9 +1,9 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal, cast
 
 import pytest
 
@@ -13,7 +13,7 @@ from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
     assert_ir_translation_raises,
 )
-from cudf_polars.utils.versions import POLARS_VERSION_LT_130, POLARS_VERSION_LT_132
+from cudf_polars.utils.versions import POLARS_VERSION_LT_132
 
 if TYPE_CHECKING:
     from cudf_polars.typing import RankMethod
@@ -110,15 +110,11 @@ def test_unsorted_raises():
     q = df.select(pl.col("values").sum().rolling("orderby", period="2i"))
     with pytest.raises(pl.exceptions.InvalidOperationError):
         q.collect(engine="in-memory")
-    if POLARS_VERSION_LT_130:
-        with pytest.raises(pl.exceptions.ComputeError):
-            q.collect(engine=pl.GPUEngine(raise_on_fail=True))
-    else:
-        with pytest.raises(
-            RuntimeError,
-            match=r"Index column.*in rolling is not sorted, please sort first",
-        ):
-            q.collect(engine=pl.GPUEngine(raise_on_fail=True))
+    with pytest.raises(
+        RuntimeError,
+        match=r"Index column.*in rolling is not sorted, please sort first",
+    ):
+        q.collect(engine=pl.GPUEngine(raise_on_fail=True))
 
 
 def test_orderby_nulls_raises_computeerror():
@@ -126,14 +122,10 @@ def test_orderby_nulls_raises_computeerror():
     q = df.select(pl.col("values").sum().rolling("orderby", period="2i"))
     with pytest.raises(pl.exceptions.InvalidOperationError):
         q.collect(engine="in-memory")
-    if POLARS_VERSION_LT_130:
-        with pytest.raises(pl.exceptions.ComputeError):
-            q.collect(engine=pl.GPUEngine(raise_on_fail=True))
-    else:
-        with pytest.raises(
-            RuntimeError, match=r"Index column.*in rolling may not contain nulls"
-        ):
-            q.collect(engine=pl.GPUEngine(raise_on_fail=True))
+    with pytest.raises(
+        RuntimeError, match=r"Index column.*in rolling may not contain nulls"
+    ):
+        q.collect(engine=pl.GPUEngine(raise_on_fail=True))
 
 
 def test_invalid_duration_spec_raises_in_translation():
@@ -388,7 +380,11 @@ def test_fill_over(
     group_key: str,
     expr: pl.Expr,
 ) -> None:
-    q = df.select(expr.fill_null(strategy=strategy).over(group_key, order_by=order_by))
+    q = df.select(
+        expr.fill_null(strategy=cast(Literal["forward", "backward"], strategy)).over(
+            group_key, order_by=order_by
+        )
+    )
     if POLARS_VERSION_LT_132:
         assert_ir_translation_raises(q, NotImplementedError)
     else:

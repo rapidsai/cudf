@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -81,7 +81,7 @@ std::unique_ptr<column> ipv4_to_integers(strings_column_view const& input,
                                      mr);
   auto d_results = results->mutable_view().data<uint32_t>();
   // fill output column with ipv4 integers
-  thrust::transform(rmm::exec_policy(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream),
                     thrust::make_counting_iterator<size_type>(0),
                     thrust::make_counting_iterator<size_type>(strings_count),
                     d_results,
@@ -181,7 +181,7 @@ std::unique_ptr<column> is_ipv4(strings_column_view const& input,
                                      stream,
                                      mr);
   auto d_results = results->mutable_view().data<bool>();
-  thrust::transform(rmm::exec_policy(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream),
                     thrust::make_counting_iterator<size_type>(0),
                     thrust::make_counting_iterator<size_type>(input.size()),
                     d_results,

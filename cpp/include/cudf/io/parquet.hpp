@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -13,7 +13,6 @@
 #include <cudf/utilities/export.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
-#include <iostream>
 #include <memory>
 #include <optional>
 #include <string>
@@ -67,8 +66,11 @@ class parquet_reader_options_builder;
 class parquet_reader_options {
   source_info _source;
 
-  // Path in schema of column to read; `nullopt` is all
-  std::optional<std::vector<std::string>> _columns;
+  // Path in schema of column names to read; `nullopt` is all
+  std::optional<std::vector<std::string>> _column_names;
+  // Indices of top-level columns to read; `nullopt` is all (cannot be used alongside
+  // `_column_names`)
+  std::optional<std::vector<cudf::size_type>> _column_indices;
 
   // List of individual row groups to read (ignored if empty)
   std::vector<std::vector<size_type>> _row_groups;
@@ -93,6 +95,8 @@ class parquet_reader_options {
   bool _use_arrow_schema = true;
   // Whether to allow reading matching select columns from mismatched Parquet files.
   bool _allow_mismatched_pq_schemas = false;
+  // Whether to ignore non-existent projected columns
+  bool _ignore_missing_columns = true;
   // Cast timestamp columns to a specific type
   data_type _timestamp_type{type_id::EMPTY};
   // Whether to use JIT compilation for filtering
@@ -171,6 +175,15 @@ class parquet_reader_options {
   }
 
   /**
+   * @brief Returns boolean depending on whether to ignore non-existent projected columns while
+   * reading.
+   *
+   * @return `true` if non-existent projected columns will be ignored while reading.
+   *
+   */
+  [[nodiscard]] bool is_enabled_ignore_missing_columns() const { return _ignore_missing_columns; }
+
+  /**
    * @brief Returns optional tree of metadata.
    *
    * @return vector of reader_column_schema objects.
@@ -216,7 +229,24 @@ class parquet_reader_options {
    *
    * @return Names of column to be read; `nullopt` if the option is not set
    */
-  [[nodiscard]] auto const& get_columns() const { return _columns; }
+  [[nodiscard]] [[deprecated("Use `get_column_names` instead.")]] auto const& get_columns() const
+  {
+    return _column_names;
+  }
+
+  /**
+   * @brief Returns names of column to be read, if set.
+   *
+   * @return Names of column to be read; `nullopt` if the option is not set
+   */
+  [[nodiscard]] auto const& get_column_names() const { return _column_names; }
+
+  /**
+   * @brief Returns indices of top-level columns to be read, if set.
+   *
+   * @return Indices of top-level columns to be read; `nullopt` if the option is not set
+   */
+  [[nodiscard]] auto const& get_column_indices() const { return _column_indices; }
 
   /**
    * @brief Returns list of individual row groups to be read.
@@ -256,11 +286,14 @@ class parquet_reader_options {
   /**
    * @brief Sets the names of columns to be read from all input sources.
    *
+   * @deprecated Deprecated in 26.04 and will be removed in 26.06+. Use `set_column_names` instead.
+   *
    * Applies the same list of column names across all sources. Unlike `set_row_groups`,
    * which allows per-source configuration, `set_columns` applies globally.
    *
-   * Columns that do not exist in the input files will be ignored silently.
-   * The output table will only include the columns that are actually found.
+   * Columns that do not exist in the input files will be ignored silently and the output table will
+   * only include the columns that are actually found. This behavior can be changed by setting
+   * `enable_ignore_missing_columns` to false.
    *
    * To select a nested column (e.g., a struct member), use dot notation.
    *
@@ -270,9 +303,58 @@ class parquet_reader_options {
    *
    * @note This function does not currently support per-source column selection.
    *
-   * @param col_names A vector of column names to attempt to read from each input source.
+   * @param column_names A vector of column names to attempt to read from each input source.
    */
-  void set_columns(std::vector<std::string> col_names) { _columns = std::move(col_names); }
+  [[deprecated("Use `set_column_names` instead.")]] void set_columns(
+    std::vector<std::string> column_names)
+  {
+    set_column_names(std::move(column_names));
+  }
+
+  /**
+   * @brief Sets the names of columns to be read from all input sources.
+   *
+   * Applies the same list of column names across all sources. Unlike `set_row_groups`,
+   * which allows per-source configuration, `set_columns` applies globally.
+   *
+   * Columns that do not exist in the input files will be ignored silently and the output table will
+   * only include the columns that are actually found. This behavior can be changed by setting
+   * `enable_ignore_missing_columns` to false.
+   *
+   * To select a nested column (e.g., a struct member), use dot notation.
+   *
+   * Example:
+   * To read only the `bar` and `baz` fields, call:
+   *   set_column_names({"foo.bar", "foo.baz"});
+   *
+   * @note This function does not currently support per-source column selection.
+   *
+   * @param column_names A vector of column names to attempt to read from each input source.
+   */
+  void set_column_names(std::vector<std::string> column_names)
+  {
+    CUDF_EXPECTS(not _column_indices.has_value(),
+                 "Cannot select columns by indices and names simultaneously");
+    _column_names = std::move(column_names);
+  }
+
+  /**
+   * @brief Sets the indices of top-level columns to be read from all input sources.
+   *
+   * Applies the same list of top-level column indices across all sources. Unlike `set_row_groups`,
+   * which allows per-source configuration, `set_column_indices` applies globally.
+   *
+   * Note that `set_column_indices` can only be used to select top-level columns. unlike
+   * `set_columns` which can also select nested columns.
+   *
+   * @param col_indices A vector of column indices to attempt to read from each input source.
+   */
+  void set_column_indices(std::vector<cudf::size_type> col_indices)
+  {
+    CUDF_EXPECTS(not _column_names.has_value(),
+                 "Cannot select columns by indices and names simultaneously");
+    _column_indices = std::move(col_indices);
+  }
 
   /**
    * @brief Specifies which row groups to read from each input source.
@@ -356,6 +438,14 @@ class parquet_reader_options {
   void enable_allow_mismatched_pq_schemas(bool val) { _allow_mismatched_pq_schemas = val; }
 
   /**
+   * @brief Sets to enable/disable ignoring of non-existent projected columns while reading.
+   *
+   * @param val Boolean indicating whether to ignore non-existent projected columns while reading.
+   *
+   */
+  void enable_ignore_missing_columns(bool val) { _ignore_missing_columns = val; }
+
+  /**
    * @brief Sets reader column schema.
    *
    * @param val Tree of schema nodes to enable/disable conversion of binary to string columns.
@@ -430,12 +520,38 @@ class parquet_reader_options_builder {
   /**
    * @brief Sets names of the columns to be read.
    *
-   * @param col_names Vector of column names
+   * @deprecated Deprecated in 26.04 and will be removed in 26.06+. Use `column_names` instead.
+   *
+   * @param column_names Vector of column names
    * @return this for chaining
    */
-  parquet_reader_options_builder& columns(std::vector<std::string> col_names)
+  [[deprecated("Use `column_names` instead.")]] parquet_reader_options_builder& columns(
+    std::vector<std::string> column_names)
   {
-    options._columns = std::move(col_names);
+    return this->column_names(std::move(column_names));
+  }
+
+  /**
+   * @brief Sets names of the columns to be read.
+   *
+   * @param column_names Vector of column names
+   * @return this for chaining
+   */
+  parquet_reader_options_builder& column_names(std::vector<std::string> column_names)
+  {
+    options.set_column_names(std::move(column_names));
+    return *this;
+  }
+
+  /**
+   * @brief Sets the indices of top-level columns to be read from all input sources.
+   *
+   * @param col_indices A vector of column indices to attempt to read from each input source.
+   * @return this for chaining
+   */
+  parquet_reader_options_builder& column_indices(std::vector<cudf::size_type> col_indices)
+  {
+    options.set_column_indices(std::move(col_indices));
     return *this;
   }
 
@@ -509,6 +625,19 @@ class parquet_reader_options_builder {
   parquet_reader_options_builder& allow_mismatched_pq_schemas(bool val)
   {
     options._allow_mismatched_pq_schemas = val;
+    return *this;
+  }
+
+  /**
+   * @brief Sets to enable/disable ignoring of non-existent projected columns while reading.
+   *
+   * @param val Boolean indicating whether to ignore non-existent projected columns while reading.
+   *
+   * @return this for chaining.
+   */
+  parquet_reader_options_builder& ignore_missing_columns(bool val)
+  {
+    options._ignore_missing_columns = val;
     return *this;
   }
 
@@ -637,6 +766,34 @@ table_with_metadata read_parquet(
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
+ * @brief Reads a Parquet dataset into a set of columns using pre-existing Parquet datasources and
+ * file metadatas.
+ *
+ * The following code snippet demonstrates how to read a dataset from a file:
+ * @code
+ *  auto sources = cudf::io::make_datasources(cudf::io::source_info("dataset.parquet"));
+ *  auto metadatas = cudf::io::read_parquet_footers(sources);
+ *  auto options = cudf::io::parquet_reader_options::builder();
+ *  auto result  = cudf::io::read_parquet(std::move(sources), std::move(metadatas), options);
+ * @endcode
+ *
+ * @param sources Input `datasource` objects to read the dataset from
+ * @param parquet_metadatas Pre-materialized Parquet file metadata(s). Read from sources if empty
+ * @param options Settings for controlling reading behavior
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate device memory of the table in the returned
+ * table_with_metadata
+ *
+ * @return The set of columns along with metadata
+ */
+table_with_metadata read_parquet(
+  std::vector<std::unique_ptr<cudf::io::datasource>>&& sources,
+  std::vector<parquet::FileMetaData>&& parquet_metadatas,
+  parquet_reader_options const& options,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
+/**
  * @brief The chunked parquet reader class to read Parquet file iteratively in to a series of
  * tables, chunk by chunk.
  *
@@ -675,6 +832,30 @@ class chunked_parquet_reader {
     rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
   /**
+   * @brief Constructor for chunked reader using pre-existing Parquet datasources and
+   * file metadatas.
+   *
+   * This constructor requires the same `parquet_reader_option` parameter as in
+   * `cudf::read_parquet()`, and an additional parameter to specify the size byte limit of the
+   * output table for each reading.
+   *
+   * @param chunk_read_limit Limit on total number of bytes to be returned per read,
+   *        or `0` if there is no limit
+   * @param sources Input `datasource` objects to read the dataset from
+   * @param parquet_metadatas Pre-materialized Parquet file metadata(s). Read from sources if empty
+   * @param options The options used to read Parquet file
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource to use for device memory allocation
+   */
+  chunked_parquet_reader(
+    std::size_t chunk_read_limit,
+    std::vector<std::unique_ptr<cudf::io::datasource>>&& sources,
+    std::vector<parquet::FileMetaData>&& parquet_metadatas,
+    parquet_reader_options const& options,
+    rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
+  /**
    * @brief Constructor for chunked reader.
    *
    * This constructor requires the same `parquet_reader_option` parameter as in
@@ -696,6 +877,37 @@ class chunked_parquet_reader {
   chunked_parquet_reader(
     std::size_t chunk_read_limit,
     std::size_t pass_read_limit,
+    parquet_reader_options const& options,
+    rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
+  /**
+   * @brief Constructor for chunked reader using pre-existing Parquet datasources and
+   * file metadatas.
+   *
+   * This constructor requires the same `parquet_reader_option` parameter as in
+   * `cudf::read_parquet()`, with additional parameters to specify the size byte limit of the
+   * output table for each reading, and a byte limit on the amount of temporary memory to use
+   * when reading. pass_read_limit affects how many row groups we can read at a time by limiting
+   * the amount of memory dedicated to decompression space. pass_read_limit is a hint, not an
+   * absolute limit - if a single row group cannot fit within the limit given, it will still be
+   * loaded.
+   *
+   * @param chunk_read_limit Limit on total number of bytes to be returned per read,
+   * or `0` if there is no limit
+   * @param pass_read_limit Limit on the amount of memory used for reading and decompressing data or
+   * `0` if there is no limit
+   * @param sources Input `datasource` objects to read the dataset from
+   * @param parquet_metadatas Pre-materialized Parquet file metadata(s). Read from sources if empty
+   * @param options The options used to read Parquet file
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource to use for device memory allocation
+   */
+  chunked_parquet_reader(
+    std::size_t chunk_read_limit,
+    std::size_t pass_read_limit,
+    std::vector<std::unique_ptr<cudf::io::datasource>>&& sources,
+    std::vector<parquet::FileMetaData>&& parquet_metadatas,
     parquet_reader_options const& options,
     rmm::cuda_stream_view stream      = cudf::get_default_stream(),
     rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
@@ -791,6 +1003,8 @@ class parquet_writer_options_base {
   std::shared_ptr<writer_compression_statistics> _compression_stats;
   // write V2 page headers?
   bool _v2_page_headers = false;
+  // enable per-page compression decision for V2?
+  bool _page_level_compression = false;
   // Which columns in _table are used for sorting
   std::optional<std::vector<sorting_column>> _sorting_columns;
 
@@ -957,6 +1171,17 @@ class parquet_writer_options_base {
   [[nodiscard]] auto is_enabled_write_v2_headers() const { return _v2_page_headers; }
 
   /**
+   * @brief Returns `true` if per-page compression is enabled for V2 pages.
+   *
+   * When enabled, each V2 data page can independently decide whether to store
+   * compressed or uncompressed based on compression effectiveness. This may
+   * produce files that are not readable by all Parquet implementations.
+   *
+   * @return `true` if per-page compression decision is enabled.
+   */
+  [[nodiscard]] auto is_enabled_page_level_compression() const { return _page_level_compression; }
+
+  /**
    * @brief Returns the sorting_columns.
    *
    * @return Column sort order metadata
@@ -1081,6 +1306,17 @@ class parquet_writer_options_base {
    * @param val Boolean value to enable/disable writing of V2 page headers.
    */
   void enable_write_v2_headers(bool val);
+
+  /**
+   * @brief Sets preference for per-page compression decision in V2 pages.
+   *
+   * When enabled, each V2 data page can independently decide whether to store
+   * compressed or uncompressed based on compression effectiveness. This may
+   * produce files that are not readable by all Parquet implementations (e.g., PyArrow).
+   *
+   * @param val Boolean value to enable/disable per-page compression decisions.
+   */
+  void enable_page_level_compression(bool val);
 
   /**
    * @brief Sets sorting columns.
@@ -1288,6 +1524,18 @@ class parquet_writer_options_builder_base {
    * @return this for chaining
    */
   BuilderT& write_v2_headers(bool enabled);
+
+  /**
+   * @brief Set to true to enable per-page compression decisions for V2 pages.
+   *
+   * When enabled, each V2 data page can independently decide whether to store
+   * compressed or uncompressed based on compression effectiveness. This may
+   * produce files that are not readable by all Parquet implementations.
+   *
+   * @param enabled Boolean value to enable/disable per-page compression decisions.
+   * @return this for chaining
+   */
+  BuilderT& page_level_compression(bool enabled);
 
   /**
    * @brief Sets column sorting metadata.
@@ -1598,14 +1846,6 @@ class chunked_parquet_writer {
   /// Unique pointer to impl writer class
   std::unique_ptr<parquet::detail::writer> writer;
 };
-
-/**
- * @brief Deprecated type alias for the `chunked_parquet_writer`
- *
- * @deprecated Use chunked_parquet_writer instead. This alias will be removed in a future release.
- */
-using parquet_chunked_writer [[deprecated("Use chunked_parquet_writer instead")]] =
-  chunked_parquet_writer;
 
 /** @} */  // end of group
 

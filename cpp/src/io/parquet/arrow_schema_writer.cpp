@@ -19,6 +19,8 @@
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
+#include <cuda/std/tuple>
+
 namespace cudf::io::parquet::detail {
 
 using namespace cudf::io::detail;
@@ -376,15 +378,16 @@ std::string construct_arrow_schema_ipc_message(cudf::detail::LinkedColVector con
   field_offsets.reserve(linked_columns.size());
 
   // populate field offsets (aka schema fields)
-  std::transform(thrust::make_zip_iterator(
-                   thrust::make_tuple(linked_columns.begin(), metadata.column_metadata.begin())),
-                 thrust::make_zip_iterator(
-                   thrust::make_tuple(linked_columns.end(), metadata.column_metadata.end())),
-                 std::back_inserter(field_offsets),
-                 [&](auto const& elem) {
-                   return make_arrow_schema_fields(
-                     fbb, thrust::get<0>(elem), thrust::get<1>(elem), write_mode, utc_timestamps);
-                 });
+  std::transform(
+    thrust::make_zip_iterator(
+      cuda::std::make_tuple(linked_columns.begin(), metadata.column_metadata.begin())),
+    thrust::make_zip_iterator(
+      cuda::std::make_tuple(linked_columns.end(), metadata.column_metadata.end())),
+    std::back_inserter(field_offsets),
+    [&](auto const& elem) {
+      return make_arrow_schema_fields(
+        fbb, cuda::std::get<0>(elem), cuda::std::get<1>(elem), write_mode, utc_timestamps);
+    });
 
   // Build an arrow:schema flatbuffer using the field offset vector and use it as the header to
   // create an ipc message flatbuffer

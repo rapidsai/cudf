@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -15,7 +15,11 @@ import pylibcudf as plc
 
 import cudf
 from cudf.api.extensions import no_default
-from cudf.api.types import is_integer, is_scalar
+from cudf.api.types import (
+    is_integer,
+    is_scalar,
+    is_string_dtype,
+)
 from cudf.core.accessors.base_accessor import BaseAccessor
 from cudf.core.accessors.lists import ListMethods
 from cudf.core.column.column import ColumnBase, as_column, column_empty
@@ -88,7 +92,17 @@ class StringMethods(BaseAccessor):
             if isinstance(parent.dtype, ListDtype)
             else parent.dtype
         )
-        if value_type != CUDF_STRING_DTYPE:
+        # Convert categorical with string categories to string dtype
+        if isinstance(value_type, cudf.CategoricalDtype) and is_string_dtype(
+            value_type.categories.dtype
+        ):
+            parent = parent.astype(value_type.categories.dtype)
+            value_type = parent.dtype
+            is_valid_string = True
+        else:
+            # Validate dtype is suitable for string operations
+            is_valid_string = is_string_dtype(value_type)
+        if not is_valid_string:
             raise AttributeError(
                 "Can only use .str accessor with string values"
             )
@@ -133,7 +147,7 @@ class StringMethods(BaseAccessor):
         >>> s.str.ip2int()
         0    212336897
         1    167772161
-        dtype: int64
+        dtype: uint32
 
         Returns 0's if any string is not an IP.
 
@@ -142,7 +156,7 @@ class StringMethods(BaseAccessor):
         0    212336897
         1    167772161
         2            0
-        dtype: int64
+        dtype: uint32
         """
         return self._return_or_inplace(self._column.ipv4_to_integers())
 
@@ -305,6 +319,8 @@ class StringMethods(BaseAccessor):
 
         if others is None:
             data = self._column.join_strings(sep, na_rep)
+            if len(data) == 0:
+                return ""
         else:
             parent_index = (
                 self._parent.index
@@ -501,17 +517,21 @@ class StringMethods(BaseAccessor):
 
         if isinstance(self._column.dtype, ListDtype):
             list_column = self._column
+            result_dtype = cast("ListDtype", list_column.dtype).element_type
         else:
             # If self._column is not a ListColumn, we will have to
             # split each row by character and create a ListColumn out of it.
             list_column = self._column.fillna("").character_tokenize()
+            result_dtype = cast("ListDtype", list_column.dtype).element_type
             if len(list_column) == 0:
                 list_column = column_empty(  # type: ignore[assignment]
                     len(self._column), dtype=list_column.dtype
                 )
 
         if is_scalar(sep):
-            data = list_column.join_list_elements(sep, string_na_rep, "")  # type: ignore[attr-defined]
+            data = list_column.join_list_elements(  # type: ignore[attr-defined]
+                sep, string_na_rep, "", result_dtype
+            )
         elif can_convert_to_column(sep):
             sep_column = as_column(sep)
             if len(sep_column) != len(list_column):
@@ -528,6 +548,7 @@ class StringMethods(BaseAccessor):
                 sep_column,
                 sep_na_rep,
                 string_na_rep,
+                result_dtype,
             )
         else:
             raise TypeError(
@@ -597,6 +618,8 @@ class StringMethods(BaseAccessor):
             The `flags` parameter currently only supports re.DOTALL and
             re.MULTILINE.
         """
+        if not isinstance(expand, bool):
+            raise ValueError("expand parameter must be True or False")
         if not _is_supported_regex_flags(flags):
             raise NotImplementedError(
                 "unsupported value for `flags` parameter"
@@ -605,6 +628,8 @@ class StringMethods(BaseAccessor):
         data = self._column.extract(pat, flags)
         if len(data) == 1 and expand is False:
             _, data = data.popitem()  # type: ignore[assignment]
+        elif expand is False and len(data) > 1:
+            expand = True
         return self._return_or_inplace(data, expand=expand)
 
     def contains(
@@ -630,6 +655,11 @@ class StringMethods(BaseAccessor):
             accepted.
         flags : int, default 0 (no flags)
             Flags to pass through to the regex engine (e.g. re.MULTILINE)
+        na : scalar, optional
+            Fill value for missing values. The default depends on dtype of the
+            array. For the ``"str"`` dtype, ``False`` is used. For object
+            dtype, ``numpy.nan`` is used. For the nullable ``StringDtype``,
+            ``pandas.NA`` is used.
         regex : bool, default True
             If True, assumes the pattern is a regular expression.
             If False, treats the pattern as a literal string.
@@ -718,7 +748,7 @@ class StringMethods(BaseAccessor):
         .. pandas-compat::
             :meth:`pandas.Series.str.contains`
 
-            The parameters `case` and `na` are not yet supported and will
+            The parameter `case` is not yet supported and will
             raise a NotImplementedError if anything other than the default
             value is set.
             The `flags` parameter currently only supports re.DOTALL and
@@ -735,8 +765,6 @@ class StringMethods(BaseAccessor):
                 "and will raise in a future version.",
                 FutureWarning,
             )
-        if na not in {no_default, np.nan}:
-            raise NotImplementedError("`na` parameter is not yet supported")
         if regex and isinstance(pat, re.Pattern):
             flags = pat.flags & ~re.U
             pat = pat.pattern
@@ -769,6 +797,8 @@ class StringMethods(BaseAccessor):
             else:
                 input_column = self._column
             result_col = input_column.str_contains(col_pat)  # type: ignore[arg-type]
+        if na is not no_default:
+            result_col = result_col.fillna(na)
         return self._return_or_inplace(result_col)
 
     def like(self, pat: str, esc: str | None = None) -> Series | Index:
@@ -990,7 +1020,7 @@ class StringMethods(BaseAccessor):
             raise TypeError(f"repl must be a str, not {type(repl).__name__}.")
 
         # Pandas forces non-regex replace when pat is a single-character
-        if regex is True and len(pat) > 1:
+        if regex is True and len(pat) > 0:
             result = self._column.replace_re(
                 pat,  # type: ignore[arg-type]
                 pa_repl,
@@ -2546,16 +2576,20 @@ class StringMethods(BaseAccessor):
 
         if pat is None:
             pat = ""
+            regex = False
 
         if regex and isinstance(pat, re.Pattern):
             pat = pat.pattern
 
-        if len(str(pat)) <= 1:
-            regex = False
+        if regex is None:
+            if len(str(pat)) <= 1:
+                regex = False
+            else:
+                regex = True
 
         result_table: StringColumn | dict[int, StringColumn]
         if expand:
-            if self._column.null_count == len(self._column):
+            if self._column.is_all_null:
                 result_table = {0: self._column.copy()}
             else:
                 if regex is True:
@@ -2567,7 +2601,7 @@ class StringMethods(BaseAccessor):
                         ),
                         n,
                     )
-                if len(data) == 1 and data[0].null_count == len(self._column):
+                if len(data) == 1 and data[0].is_all_null:
                     result_table = {}
                 else:
                     result_table = data
@@ -2732,7 +2766,7 @@ class StringMethods(BaseAccessor):
 
         result_table: StringColumn | dict[int, StringColumn]
         if expand:
-            if self._column.null_count == len(self._column):
+            if self._column.is_all_null:
                 result_table = {0: self._column.copy()}
             else:
                 if regex is True:
@@ -2744,7 +2778,7 @@ class StringMethods(BaseAccessor):
                         ),
                         n,
                     )
-                if len(data) == 1 and data[0].null_count == len(self._column):
+                if len(data) == 1 and data[0].is_all_null:
                     result_table = {}
                 else:
                     result_table = data
@@ -2758,6 +2792,41 @@ class StringMethods(BaseAccessor):
                 )
 
         return self._return_or_inplace(result_table, expand=expand)
+
+    def split_part(
+        self, delimiter: str | None = None, index: int = 0
+    ) -> Series | Index:
+        """
+        Splits the string by delimiter and returns the token at the given index.
+
+        Parameters
+        ----------
+        delimiter : str, default None
+            The string to split on. If not specified, split on whitespace.
+        index : int, default 0
+            The index of the token to retrieve.
+
+        Returns
+        -------
+        Series or Index
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series(["a_b_c", "d_e", "f"])
+        >>> s.str.split_part(delimiter="_", index=1)
+        0       b
+        1       e
+        2    None
+        dtype: object
+        """
+
+        if delimiter is None:
+            delimiter = ""
+        delim_scalar = plc.Scalar.from_py(delimiter)
+        return self._return_or_inplace(
+            self._column.split_part(delim_scalar, index)
+        )
 
     def partition(self, sep: str = " ", expand: bool = True) -> Series | Index:
         """
@@ -3410,6 +3479,8 @@ class StringMethods(BaseAccessor):
         if expand_tabs is True:
             raise NotImplementedError("`expand_tabs=True` is not supported")
         elif expand_tabs is None:
+            if cudf.get_option("mode.pandas_compatible"):
+                raise NotImplementedError("not implemented for pandas mode")
             warnings.warn(
                 "wrap current implementation defaults to `expand_tabs`=False"
             )
@@ -4200,7 +4271,11 @@ class StringMethods(BaseAccessor):
             return result
 
     def match(
-        self, pat: str, case: bool = True, flags: int = 0
+        self,
+        pat: str,
+        case: bool = True,
+        flags: int = 0,
+        na=no_default,
     ) -> Series | Index:
         """
         Determine if each string matches a regular expression.
@@ -4211,6 +4286,11 @@ class StringMethods(BaseAccessor):
             Character sequence or regular expression.
         flags : int, default 0 (no flags)
             Flags to pass through to the regex engine (e.g. re.MULTILINE)
+        na : scalar, optional
+            Fill value for missing values. The default depends on dtype of the
+            array. For the ``"str"`` dtype, ``False`` is used. For object
+            dtype, ``numpy.nan`` is used. For the nullable ``StringDtype``,
+            ``pandas.NA`` is used.
 
         Returns
         -------
@@ -4240,20 +4320,27 @@ class StringMethods(BaseAccessor):
         .. pandas-compat::
             :meth:`pandas.Series.str.match`
 
-            Parameters `case` and `na` are currently not supported.
+            Parameter `case` is currently not supported.
             The `flags` parameter currently only supports re.DOTALL and
             re.MULTILINE.
         """
         if case is not True:
             raise NotImplementedError("`case` parameter is not yet supported")
         if isinstance(pat, re.Pattern):
+            if flags:
+                raise ValueError(
+                    "cannot process flags argument with a compiled pattern"
+                )
             flags = pat.flags & ~re.U
             pat = pat.pattern
         if not _is_supported_regex_flags(flags):
             raise NotImplementedError(
                 "unsupported value for `flags` parameter"
             )
-        return self._return_or_inplace(self._column.matches_re(pat, flags))
+        result = self._column.matches_re(pat, flags)
+        if na is not no_default:
+            result = result.fillna(na)
+        return self._return_or_inplace(result)
 
     def url_decode(self) -> Series | Index:
         """
@@ -4598,7 +4685,10 @@ class StringMethods(BaseAccessor):
         2    .
         dtype: object
         """
-        result_col = self._column.character_tokenize().children[1]
+        result_col = ColumnBase.create(
+            self._column.character_tokenize().plc_column.children()[1],
+            self._column.dtype,
+        )
         if isinstance(self._parent, cudf.Series):
             lengths = self.len().fillna(0)
             index = self._parent.index.repeat(lengths)

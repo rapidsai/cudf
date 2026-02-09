@@ -5,6 +5,7 @@ from cython.operator cimport dereference
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 from pylibcudf.libcudf.column.column cimport column
+from pylibcudf.libcudf.column.column_view cimport mutable_column_view
 from pylibcudf.libcudf.filling cimport (
     fill as cpp_fill,
     fill_in_place as cpp_fill_in_place,
@@ -113,14 +114,16 @@ cpdef void fill_in_place(
 
     stream = _get_stream(stream)
 
+    cdef mutable_column_view c_destination = destination.mutable_view()
     with nogil:
         cpp_fill_in_place(
-            destination.mutable_view(),
+            c_destination,
             begin,
             end,
             dereference(value.c_obj),
             stream.view()
         )
+    destination.set_null_count(c_destination.null_count())
 
 cpdef Column sequence(
     size_type size,

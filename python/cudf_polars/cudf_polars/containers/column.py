@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 """A column, with some properties."""
@@ -7,53 +7,38 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-import polars as pl
-import polars.datatypes.convert
 from polars.exceptions import InvalidOperationError
 
 import pylibcudf as plc
+from pylibcudf.strings.convert.convert_booleans import from_booleans
 from pylibcudf.strings.convert.convert_floats import from_floats, is_float, to_floats
 from pylibcudf.strings.convert.convert_integers import (
     from_integers,
     is_integer,
     to_integers,
 )
-from pylibcudf.traits import is_floating_point
 
 from cudf_polars.containers import DataType
+from cudf_polars.containers.datatype import _dtype_from_header, _dtype_to_header
 from cudf_polars.utils import conversion
 from cudf_polars.utils.dtypes import is_order_preserving_cast
 
 if TYPE_CHECKING:
-    from typing_extensions import Self
+    from collections.abc import Callable
+    from typing import Self
+
+    from polars import Series as pl_Series
 
     from rmm.pylibrmm.stream import Stream
 
     from cudf_polars.typing import (
         ColumnHeader,
         ColumnOptions,
-        DecimalDataTypeOptions,
         DeserializedColumnOptions,
         Slice,
     )
 
 __all__: list[str] = ["Column"]
-
-
-def _dtype_short_repr_to_dtype(dtype_str: str) -> pl.DataType:
-    """Convert a Polars dtype short repr to a Polars dtype."""
-    # limitations of dtype_short_repr_to_dtype described in
-    # py-polars/polars/datatypes/convert.py#L299
-    if dtype_str.startswith("list["):
-        stripped = dtype_str.removeprefix("list[").removesuffix("]")
-        return pl.List(_dtype_short_repr_to_dtype(stripped))
-    pl_type = polars.datatypes.convert.dtype_short_repr_to_dtype(dtype_str)
-    if pl_type is None:
-        raise ValueError(f"{dtype_str} was not able to be parsed by Polars.")
-    if isinstance(pl_type, polars.datatypes.DataTypeClass):
-        return pl_type()
-    else:
-        return pl_type
 
 
 class Column:
@@ -87,7 +72,10 @@ class Column:
 
     @classmethod
     def deserialize(
-        cls, header: ColumnHeader, frames: tuple[memoryview[bytes], plc.gpumemoryview]
+        cls,
+        header: ColumnHeader,
+        frames: tuple[memoryview[bytes], plc.gpumemoryview],
+        stream: Stream,
     ) -> Self:
         """
         Create a Column from a serialized representation returned by `.serialize()`.
@@ -98,6 +86,10 @@ class Column:
             The (unpickled) metadata required to reconstruct the object.
         frames
             Two-tuple of frames (a memoryview and a gpumemoryview).
+        stream
+            CUDA stream used for device memory operations and kernel launches
+            on this column. The caller is responsible for ensuring that
+            the data in ``frames`` is valid on ``stream``.
 
         Returns
         -------
@@ -106,7 +98,7 @@ class Column:
         """
         packed_metadata, packed_gpu_data = frames
         (plc_column,) = plc.contiguous_split.unpack_from_memoryviews(
-            packed_metadata, packed_gpu_data
+            packed_metadata, packed_gpu_data, stream
         ).columns()
         return cls(plc_column, **cls.deserialize_ctor_kwargs(header["column_kwargs"]))
 
@@ -115,18 +107,12 @@ class Column:
         column_kwargs: ColumnOptions,
     ) -> DeserializedColumnOptions:
         """Deserialize the constructor kwargs for a Column."""
-        dtype_kwarg = column_kwargs["dtype"]
-        if isinstance(dtype_kwarg, dict):  # pragma: no cover
-            dtype = DataType(pl.Decimal(dtype_kwarg["precision"], dtype_kwarg["scale"]))
-        else:
-            dtype = DataType(_dtype_short_repr_to_dtype(dtype_kwarg))
-
         return {
             "is_sorted": column_kwargs["is_sorted"],
             "order": column_kwargs["order"],
             "null_order": column_kwargs["null_order"],
             "name": column_kwargs["name"],
-            "dtype": dtype,
+            "dtype": DataType(_dtype_from_header(column_kwargs["dtype"])),
         }
 
     def serialize(
@@ -160,21 +146,12 @@ class Column:
 
     def serialize_ctor_kwargs(self) -> ColumnOptions:
         """Serialize the constructor kwargs for self."""
-        polars_type = self.dtype.polars_type
-        if isinstance(polars_type, pl.Decimal):  # pragma: no cover
-            dtype: DecimalDataTypeOptions = {
-                "precision": polars_type.precision,
-                "scale": polars_type.scale,
-            }
-        else:
-            dtype = pl.polars.dtype_str_repr(polars_type)
-
         return {
             "is_sorted": self.is_sorted,
             "order": self.order,
             "null_order": self.null_order,
             "name": self.name,
-            "dtype": dtype,
+            "dtype": _dtype_to_header(self.dtype.polars_type),
         }
 
     def obj_scalar(self, stream: Stream) -> plc.Scalar:
@@ -288,7 +265,7 @@ class Column:
             return True
         return False
 
-    def astype(self, dtype: DataType, stream: Stream) -> Column:
+    def astype(self, dtype: DataType, stream: Stream, *, strict: bool = True) -> Column:
         """
         Cast the column to as the requested dtype.
 
@@ -299,6 +276,9 @@ class Column:
         stream
             CUDA stream used for device memory operations and kernel launches
             on this Column. The data in ``self.obj`` must be valid on this stream.
+        strict
+            If True, raise an error if the cast is unsupported.
+            If False, return nulls for unsupported casts.
 
         Returns
         -------
@@ -323,7 +303,8 @@ class Column:
             or self.obj.type().id() == plc.TypeId.STRING
         ):
             return Column(
-                self._handle_string_cast(plc_dtype, stream=stream), dtype=dtype
+                self._handle_string_cast(plc_dtype, stream=stream, strict=strict),
+                dtype=dtype,
             )
         elif plc.traits.is_integral_not_bool(
             self.obj.type()
@@ -364,35 +345,62 @@ class Column:
                 return result.sorted_like(self)
             return result
 
-    def _handle_string_cast(self, dtype: plc.DataType, stream: Stream) -> plc.Column:
+    def _handle_string_cast(
+        self, dtype: plc.DataType, stream: Stream, *, strict: bool
+    ) -> plc.Column:
         if dtype.id() == plc.TypeId.STRING:
-            if is_floating_point(self.obj.type()):
+            if plc.traits.is_floating_point(self.obj.type()):
                 return from_floats(self.obj, stream=stream)
-            else:
+            elif plc.traits.is_integral_not_bool(self.obj.type()):
                 return from_integers(self.obj, stream=stream)
-        else:
-            if is_floating_point(dtype):
-                floats = is_float(self.obj, stream=stream)
-                if not plc.reduce.reduce(
-                    floats,
-                    plc.aggregation.all(),
-                    plc.DataType(plc.TypeId.BOOL8),
+            elif plc.traits.is_boolean(self.obj.type()):
+                return from_booleans(
+                    self.obj,
+                    plc.Scalar.from_py("true", dtype, stream=stream),
+                    plc.Scalar.from_py("false", dtype, stream=stream),
                     stream=stream,
-                ).to_py():
-                    raise InvalidOperationError("Conversion from `str` failed.")
-                return to_floats(self.obj, dtype)
+                )
             else:
-                integers = is_integer(self.obj, stream=stream)
-                if not plc.reduce.reduce(
-                    integers,
-                    plc.aggregation.all(),
-                    plc.DataType(plc.TypeId.BOOL8),
-                    stream=stream,
-                ).to_py():
-                    raise InvalidOperationError("Conversion from `str` failed.")
-                return to_integers(self.obj, dtype, stream=stream)
+                raise InvalidOperationError(
+                    f"Unsupported casting from {self.dtype.id()} to {dtype.id()}."
+                )
 
-    def copy_metadata(self, from_: pl.Series, /) -> Self:
+        type_checker: Callable[[plc.Column, Stream], plc.Column]
+        type_caster: Callable[[plc.Column, plc.DataType, Stream], plc.Column]
+        if plc.traits.is_floating_point(dtype):
+            type_checker = is_float
+            type_caster = to_floats
+        elif plc.traits.is_integral_not_bool(dtype):
+            # is_integer has a second optional int_type: plc.DataType | None = None argument
+            # we do not use
+            # unused-ignore for if RMM is missing
+            type_checker = is_integer  # type: ignore[assignment,unused-ignore]
+            type_caster = to_integers
+        else:
+            raise InvalidOperationError(
+                f"Unsupported casting from {self.dtype.id()} to {dtype.id()}."
+            )
+
+        castable = type_checker(self.obj, stream=stream)  # type: ignore[call-arg]
+        if not plc.reduce.reduce(
+            castable,
+            plc.aggregation.all(),
+            plc.DataType(plc.TypeId.BOOL8),
+            stream=stream,
+        ).to_py(stream=stream):
+            if strict:
+                raise InvalidOperationError(
+                    f"Conversion from {self.dtype.id()} to {dtype.id()} failed."
+                )
+            else:
+                values = self.obj.with_mask(
+                    *plc.transform.bools_to_mask(castable, stream=stream)
+                )
+        else:
+            values = self.obj
+        return type_caster(values, dtype, stream=stream)
+
+    def copy_metadata(self, from_: pl_Series, /) -> Self:
         """
         Copy metadata from a host series onto self.
 
@@ -511,7 +519,7 @@ class Column:
                 plc.aggregation.sum(),
                 plc.types.SIZE_TYPE,
                 stream=stream,
-            ).to_py()
+            ).to_py(stream=stream)
         else:
             result = 0
         return result

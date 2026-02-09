@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2024, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 # Dependency list for https://github.com/rapidsai/dependency-file-generator
 files:
@@ -166,14 +166,14 @@ dependencies:
               cuda: "13.0"
             packages:
               - cuda-version=13.0
+          - matrix:
+              cuda: "13.1"
+            packages:
+              - cuda-version=13.1
   py_version:
     specific:
       - output_types: conda
         matrices:
-          - matrix:
-              py: "3.10"
-            packages:
-              - python=3.10
           - matrix:
               py: "3.11"
             packages:
@@ -188,12 +188,12 @@ dependencies:
               - python=3.13
           - matrix:
             packages:
-              - python>=3.10,<3.14
+              - python>=3.11,<3.14
   test_base:
     common:
       - output_types: conda
         packages:
-          - cudf==25.12.*,>=0.0.0a0
+          - cudf==26.4.*,>=0.0.0a0
           - pandas
           - pytest
           - pytest-xdist
@@ -269,13 +269,13 @@ dependencies:
     common:
       - output_types: conda
         packages:
-          - cuml==25.12.*,>=0.0.0a0
+          - cuml==26.4.*,>=0.0.0a0
           - scikit-learn
   test_cugraph:
     common:
       - output_types: conda
         packages:
-          - cugraph==25.12.*,>=0.0.0a0
+          - cugraph==26.4.*,>=0.0.0a0
           - networkx
   test_ibis:
     common:
@@ -286,6 +286,8 @@ dependencies:
               # ibis 11 is the first version that supports duckdb 1.4.0
               - ibis-framework[duckdb]>=11.0.0
               - duckdb>=1.4.0
+              # Exclude broken version: https://github.com/tobymao/sqlglot/issues/6908
+              - sqlglot!=28.7.*
   test_hvplot:
     common:
       - output_types: conda

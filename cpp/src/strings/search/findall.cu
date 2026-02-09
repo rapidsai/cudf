@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -23,13 +23,9 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <thrust/pair.h>
-
 namespace cudf {
 namespace strings {
 namespace detail {
-
-using string_index_pair = thrust::pair<char const*, size_type>;
 
 namespace {
 

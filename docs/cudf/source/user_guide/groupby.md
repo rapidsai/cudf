@@ -9,7 +9,7 @@ myst:
 # GroupBy
 
 cuDF supports a small (but important) subset of Pandas' [groupby
-API](https://pandas.pydata.org/pandas-docs/stable/user_guide/groupby.html).
+API](https://pandas.pydata.org/pandas-docs/version/2.3.3/user_guide/groupby.html).
 
 ## Summary of supported operations
 
@@ -28,7 +28,7 @@ API](https://pandas.pydata.org/pandas-docs/stable/user_guide/groupby.html).
    equivalent Pandas function. See the section on
    [apply](#groupby-apply) for more details.
 9. `GroupBy.pipe` similar to
-   [Pandas](https://pandas.pydata.org/pandas-docs/stable/user_guide/groupby.html#piping-function-calls).
+   [Pandas](https://pandas.pydata.org/pandas-docs/version/2.3.3/user_guide/groupby.html#piping-function-calls).
 
 ## Grouping
 
@@ -271,4 +271,4 @@ a
   4     4     5     9
 ```
 
-[describe]: https://pandas.pydata.org/pandas-docs/stable/user_guide/groupby.html#flexible-apply
+[describe]: https://pandas.pydata.org/pandas-docs/version/2.3.3/user_guide/groupby.html#flexible-apply

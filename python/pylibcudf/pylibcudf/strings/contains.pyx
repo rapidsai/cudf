@@ -2,17 +2,12 @@
 # SPDX-License-Identifier: Apache-2.0
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
-from cython.operator import dereference
+from libcpp.string cimport string
 
 from pylibcudf.column cimport Column
 from pylibcudf.libcudf.column.column cimport column
-from pylibcudf.libcudf.scalar.scalar cimport string_scalar
-from pylibcudf.libcudf.scalar.scalar_factories cimport (
-    make_string_scalar as cpp_make_string_scalar,
-)
 from pylibcudf.libcudf.strings cimport contains as cpp_contains
 from pylibcudf.strings.regex_program cimport RegexProgram
-from pylibcudf.scalar cimport Scalar
 from pylibcudf.utils cimport _get_stream, _get_memory_resource
 from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from rmm.pylibrmm.stream cimport Stream
@@ -139,8 +134,8 @@ cpdef Column matches_re(
 
 cpdef Column like(
     Column input,
-    ColumnOrScalar pattern,
-    Scalar escape_character=None,
+    str pattern,
+    str escape_character=None,
     Stream stream=None,
     DeviceMemoryResource mr=None,
 ):
@@ -154,9 +149,9 @@ cpdef Column like(
     ----------
     input : Column
         The input strings
-    pattern : Column or Scalar
-        Like patterns to match within each string
-    escape_character : Scalar
+    pattern : str
+        Like pattern to match within each string
+    escape_character : str
         Optional character specifies the escape prefix.
         Default is no escape character.
 
@@ -170,35 +165,19 @@ cpdef Column like(
     mr = _get_memory_resource(mr)
 
     if escape_character is None:
-        escape_character = Scalar.from_libcudf(
-            cpp_make_string_scalar("".encode(), stream.view(), mr.get_mr())
+        escape_character = ""
+
+    cdef string c_escape_character = escape_character.encode()
+    cdef string c_pattern = pattern.encode()
+
+    with nogil:
+        result = cpp_contains.like(
+            input.view(),
+            c_pattern,
+            c_escape_character,
+            stream.view(),
+            mr.get_mr()
         )
-
-    cdef const string_scalar* c_escape_character = <const string_scalar*>(
-        escape_character.c_obj.get()
-    )
-    cdef const string_scalar* c_pattern
-
-    if ColumnOrScalar is Column:
-        with nogil:
-            result = cpp_contains.like(
-                input.view(),
-                pattern.view(),
-                dereference(c_escape_character),
-                stream.view(),
-                mr.get_mr()
-            )
-    elif ColumnOrScalar is Scalar:
-        c_pattern = <const string_scalar*>(pattern.c_obj.get())
-        with nogil:
-            result = cpp_contains.like(
-                input.view(),
-                dereference(c_pattern),
-                dereference(c_escape_character),
-                stream.view(),
-                mr.get_mr()
-            )
-    else:
-        raise ValueError("pattern must be a Column or a Scalar")
+    stream.synchronize()
 
     return Column.from_libcudf(move(result), stream, mr)

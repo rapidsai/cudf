@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -412,21 +412,7 @@ struct column_gatherer_impl<dictionary32> {
       gather_map_end,
       nullify_out_of_bounds,
       stream);
-    // dissect the column's contents
-    auto indices_type = new_indices->type();
-    auto null_count   = new_indices->null_count();  // get this before calling release()
-    auto contents     = new_indices->release();     // new_indices will now be empty
-    // build the output indices column from the contents' data component
-    auto indices_column = std::make_unique<column>(indices_type,
-                                                   static_cast<size_type>(output_count),
-                                                   std::move(*(contents.data.release())),
-                                                   rmm::device_buffer{0, stream, mr},
-                                                   0);  // set null count to 0
-    // finally, build the dictionary with the null_mask component and the keys and indices
-    return make_dictionary_column(std::move(keys_copy),
-                                  std::move(indices_column),
-                                  std::move(*(contents.null_mask.release())),
-                                  null_count);
+    return make_dictionary_column(std::move(keys_copy), std::move(new_indices), stream, mr);
   }
 };
 

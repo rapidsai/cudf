@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -26,11 +26,11 @@
 #include <rmm/device_uvector.hpp>
 
 #include <cuda/std/optional>
+#include <cuda/std/utility>
 #include <thrust/execution_policy.h>
 #include <thrust/functional.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/logical.h>
-#include <thrust/pair.h>
 #include <thrust/transform.h>
 
 #include <map>
@@ -169,7 +169,7 @@ struct format_compiler {
  * @param bytes Number of bytes in str to read.
  * @return Integer value of valid characters read and how many bytes were not read.
  */
-__device__ thrust::pair<int32_t, size_type> parse_int(char const* str, size_type bytes)
+__device__ cuda::std::pair<int32_t, size_type> parse_int(char const* str, size_type bytes)
 {
   int32_t value = 0;
   while (bytes-- > 0) {
@@ -177,7 +177,7 @@ __device__ thrust::pair<int32_t, size_type> parse_int(char const* str, size_type
     if (chr < '0' || chr > '9') break;
     value = (value * 10) + static_cast<int32_t>(chr - '0');
   }
-  return thrust::make_pair(value, bytes + 1);
+  return cuda::std::make_pair(value, bytes + 1);
 }
 
 /**
@@ -407,7 +407,7 @@ struct dispatch_to_timestamps_fn {
   {
     format_compiler compiler(format, stream);
     parse_datetime<T> pfn{d_strings, compiler.format_items(), compiler.subsecond_precision()};
-    thrust::transform(rmm::exec_policy(stream),
+    thrust::transform(rmm::exec_policy_nosync(stream),
                       thrust::make_counting_iterator<size_type>(0),
                       thrust::make_counting_iterator<size_type>(results_view.size()),
                       results_view.data<T>(),
@@ -487,12 +487,12 @@ struct check_datetime_format {
    * @param max_value Inclusive maximum value
    * @return If value is valid and number of bytes not successfully processed
    */
-  __device__ thrust::pair<bool, size_type> check_value(char const* str,
-                                                       size_type const bytes,
-                                                       int const min_value,
-                                                       int const max_value)
+  __device__ cuda::std::pair<bool, size_type> check_value(char const* str,
+                                                          size_type const bytes,
+                                                          int const min_value,
+                                                          int const max_value)
   {
-    if (*str < '0' || *str > '9') { return thrust::make_pair(false, bytes); }
+    if (*str < '0' || *str > '9') { return cuda::std::make_pair(false, bytes); }
     int32_t value   = 0;
     size_type count = bytes;
     while (count-- > 0) {
@@ -500,8 +500,8 @@ struct check_datetime_format {
       if (chr < '0' || chr > '9') break;
       value = (value * 10) + static_cast<int32_t>(chr - '0');
     }
-    return (value >= min_value && value <= max_value) ? thrust::make_pair(true, count + 1)
-                                                      : thrust::make_pair(false, bytes);
+    return (value >= min_value && value <= max_value) ? cuda::std::make_pair(true, count + 1)
+                                                      : cuda::std::make_pair(false, bytes);
   }
 
   /**
@@ -686,7 +686,7 @@ std::unique_ptr<cudf::column> is_timestamp(strings_column_view const& input,
   auto d_results = results->mutable_view().data<bool>();
 
   format_compiler compiler(format, stream);
-  thrust::transform(rmm::exec_policy(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream),
                     thrust::make_counting_iterator<size_type>(0),
                     thrust::make_counting_iterator<size_type>(strings_count),
                     d_results,
@@ -888,7 +888,7 @@ struct datetime_formatter_fn {
   }
 
   // from https://howardhinnant.github.io/date/date.html
-  __device__ thrust::pair<int32_t, int32_t> get_iso_week_year(
+  __device__ cuda::std::pair<int32_t, int32_t> get_iso_week_year(
     cuda::std::chrono::year_month_day const& ymd) const
   {
     auto const days = cuda::std::chrono::sys_days(ymd);
@@ -911,7 +911,7 @@ struct datetime_formatter_fn {
         start = next_start;
       }
     }
-    return thrust::make_pair(
+    return cuda::std::make_pair(
       (cuda::std::chrono::duration_cast<cuda::std::chrono::weeks>(days - start) +
        cuda::std::chrono::weeks{1})  // always [1-53]
         .count(),
