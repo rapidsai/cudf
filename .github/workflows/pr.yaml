@@ -286,8 +286,9 @@ jobs:
           - '!img/**'
           - '!java/**'
           - '!notebooks/**'
-        test_python_dir_only:
-          - 'python/**'
+        test_not_cpp_only:
+          - '**'
+          - '!cpp/**'
   checks:
     secrets: inherit
     needs: telemetry-setup
@@ -554,7 +555,7 @@ jobs:
     needs: [conda-python-build, conda-python-build-noarch, changed-files]
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@main
-    if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_dir_only
+    if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_not_cpp_only
     with:
       build_type: pull-request
       branch: ${{ inputs.branch }}
@@ -570,7 +571,7 @@ jobs:
     needs: [wheel-build-cudf, changed-files]
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@main
-    if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_dir_only
+    if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_not_cpp_only
     with:
       build_type: pull-request
       branch: ${{ inputs.branch }}
@@ -583,7 +584,7 @@ jobs:
     needs: [conda-python-build, conda-python-build-noarch, changed-files]
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@main
-    if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_dir_only
+    if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_not_cpp_only
     with:
       build_type: pull-request
       branch: ${{ inputs.branch }}
