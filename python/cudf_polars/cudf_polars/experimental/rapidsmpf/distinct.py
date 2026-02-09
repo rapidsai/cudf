@@ -106,8 +106,8 @@ async def _tree_distinct(
     reduction by concatenating and re-applying distinct until a single
     chunk remains.
 
-    When collective_id is provided and data is not duplicated, uses allgather
-    to collect partial results from all ranks before final distinct.
+    When collective_id is provided, uses allgather to collect partial
+    results from all ranks before final distinct.
 
     Parameters
     ----------
@@ -132,16 +132,11 @@ async def _tree_distinct(
     tracer
         Optional tracer for runtime metrics.
     """
-    nranks = context.comm().nranks
-    need_allgather = (
-        collective_id is not None and not metadata_in.duplicated and nranks > 1
-    )
-
     # Output: single chunk, duplicated if allgather is used
     metadata_out = ChannelMetadata(
         local_count=1,
         partitioning=None,
-        duplicated=True if need_allgather else metadata_in.duplicated,
+        duplicated=True if collective_id is not None else metadata_in.duplicated,
     )
     await send_metadata(ch_out, context, metadata_out)
 
@@ -211,9 +206,7 @@ async def _tree_distinct(
         distinct_chunks = new_chunks
 
     # Allgather partial results from all ranks if needed
-    if need_allgather:
-        assert collective_id is not None
-
+    if collective_id is not None:
         allgather = AllGatherManager(context, collective_id)
         stream = ir_context.get_cuda_stream()
 
