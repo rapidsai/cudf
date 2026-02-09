@@ -13,7 +13,12 @@ from cudf_polars.experimental.base import PartitionInfo, get_key_name
 from cudf_polars.experimental.dispatch import generate_ir_tasks, lower_ir_node
 from cudf_polars.experimental.repartition import Repartition
 from cudf_polars.experimental.shuffle import Shuffle, _hash_partition_dataframe
-from cudf_polars.experimental.utils import _concat, _fallback_inform, _lower_ir_fallback
+from cudf_polars.experimental.utils import (
+    _concat,
+    _dynamic_planning_on,
+    _fallback_inform,
+    _lower_ir_fallback,
+)
 
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
@@ -206,6 +211,12 @@ def _(
             msg="Slice not supported in ConditionalJoin for multiple partitions.",
         )
 
+    config_options = rec.state["config_options"]
+    assert config_options.executor.name == "streaming", (
+        "'in-memory' executor not supported in 'lower_ir_node'"
+    )
+    dynamic_planning = _dynamic_planning_on(config_options)
+
     # Lower children
     left, right = ir.children
     left, pi_left = rec(left)
@@ -217,14 +228,14 @@ def _(
     output_count = max(left_count, right_count)
     fallback_msg = "ConditionalJoin not supported for multiple partitions."
     if left_count < right_count:
-        if left_count > 1:
+        if left_count > 1 or dynamic_planning:
             left = Repartition(left.schema, left)
             pi_left[left] = PartitionInfo(count=1)
-            _fallback_inform(fallback_msg, rec.state["config_options"])
-    elif right_count > 1:
-        right = Repartition(left.schema, right)
+            _fallback_inform(fallback_msg, config_options)
+    elif right_count > 1 or dynamic_planning:
+        right = Repartition(right.schema, right)
         pi_right[right] = PartitionInfo(count=1)
-        _fallback_inform(fallback_msg, rec.state["config_options"])
+        _fallback_inform(fallback_msg, config_options)
 
     # Reconstruct and return
     new_node = ir.reconstruct([left, right])
@@ -259,9 +270,14 @@ def _(
     children, _partition_info = zip(*(rec(c) for c in ir.children), strict=True)
     partition_info = reduce(operator.or_, _partition_info)
 
+    # Check for dynamic planning - may have more partitions at runtime
+    config_options = rec.state["config_options"]
+    assert config_options.executor.name == "streaming"
+    dynamic_planning = _dynamic_planning_on(config_options)
+
     left, right = children
     output_count = max(partition_info[left].count, partition_info[right].count)
-    if output_count == 1:
+    if output_count == 1 and not dynamic_planning:
         new_node = ir.reconstruct(children)
         partition_info[new_node] = PartitionInfo(count=1)
         return new_node, partition_info
@@ -270,13 +286,8 @@ def _(
             ir, rec, msg="Cross join not support for multiple partitions."
         )
 
-    config_options = rec.state["config_options"]
-    assert config_options.executor.name == "streaming", (
-        "'in-memory' executor not supported in 'lower_join'"
-    )
-
     maintain_order = ir.options[5]
-    if maintain_order != "none" and output_count > 1:
+    if maintain_order != "none" and (output_count > 1 or dynamic_planning):
         return _lower_ir_fallback(
             ir,
             rec,
