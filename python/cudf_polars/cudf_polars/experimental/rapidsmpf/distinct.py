@@ -317,23 +317,26 @@ async def _shuffle_distinct(
     key_indices
         The column indices of the distinct keys.
     shuffle_context
-        Optional context for shuffle operations. If provided, uses this
-        context for ShuffleManager (e.g., a local context with single-rank
-        communicator for local-only shuffle). Defaults to main context.
+        Optional context for shuffle operations.
+        Defaults to a temporary local context.
     tracer
         Optional tracer for runtime metrics.
     """
-    # Use shuffle_context for ShuffleManager if provided
-    shuf_ctx = shuffle_context if shuffle_context is not None else context
-    shuf_nranks = shuf_ctx.comm().nranks
-    shuf_rank = shuf_ctx.comm().rank
+    # Define shuffle context
+    if shuffle_context is None:
+        # Create a temporary local context
+        options = Options(get_environment_variables())
+        local_comm = single_comm(options)
+        shuffle_context = Context(local_comm, context.br(), options)
+    shuf_nranks = shuffle_context.comm().nranks
+    shuf_rank = shuffle_context.comm().rank
 
     # Calculate output partitioning
     modulus = shuf_nranks * output_count
 
     # Send output metadata
     # For local shuffle (shuf_nranks=1), keep inter-rank partitioning from input
-    if shuffle_context is not None and metadata_in.partitioning is not None:
+    if shuf_nranks == 1 and metadata_in.partitioning is not None:
         # Local shuffle: preserve inter-rank partitioning
         inter_rank_scheme = metadata_in.partitioning.inter_rank
         local_scheme = HashScheme(column_indices=key_indices, modulus=modulus)
@@ -350,19 +353,19 @@ async def _shuffle_distinct(
     await send_metadata(ch_out, context, metadata_out)
 
     # Create shuffle manager with shuffle context
-    shuffle = ShuffleManager(shuf_ctx, output_count, key_indices, collective_id)
+    shuffle = ShuffleManager(shuffle_context, output_count, key_indices, collective_id)
 
     # Insert initial chunks
     for chunk in initial_chunks:
         shuffle.insert_chunk(
-            chunk.make_available_and_spill(shuf_ctx.br(), allow_overbooking=True)
+            chunk.make_available_and_spill(shuffle_context.br(), allow_overbooking=True)
         )
 
     # Insert remaining chunks from channel
     while (msg := await ch_in.recv(context)) is not None:
         shuffle.insert_chunk(
             TableChunk.from_message(msg).make_available_and_spill(
-                shuf_ctx.br(), allow_overbooking=True
+                shuffle_context.br(), allow_overbooking=True
             )
         )
         del msg
@@ -480,74 +483,6 @@ async def _chunkwise_distinct(
         seq_num += 1
 
     await ch_out.drain(context)
-
-
-async def _local_shuffle_distinct(
-    context: Context,
-    ir: Distinct,
-    ir_context: Any,
-    ch_out: Channel[TableChunk],
-    ch_in: Channel[TableChunk],
-    metadata_in: ChannelMetadata,
-    initial_chunks: list[TableChunk],
-    output_count: int,
-    collective_id: int,
-    key_indices: tuple[int, ...],
-    *,
-    tracer: ActorTracer | None = None,
-) -> None:
-    """
-    Local shuffle-based distinct - no inter-rank communication.
-
-    Creates a local context with a single-rank communicator and delegates
-    to _shuffle_distinct. Use when data is already partitioned inter-rank
-    but the output is too large for a single partition.
-
-    Parameters
-    ----------
-    context
-        The rapidsmpf streaming context.
-    ir
-        The Distinct IR node.
-    ir_context
-        The IR execution context.
-    ch_out
-        The output channel.
-    ch_in
-        The input channel.
-    metadata_in
-        The input channel metadata.
-    initial_chunks
-        Chunks already received during sampling.
-    output_count
-        The number of output partitions.
-    collective_id
-        The collective ID for the shuffle operation.
-    key_indices
-        The column indices of the distinct keys.
-    tracer
-        Optional tracer for runtime metrics.
-    """
-    # Create a local context with single-rank communicator
-    options = Options(get_environment_variables())
-    local_comm = single_comm(options)
-    local_context = Context(local_comm, context.br(), options)
-
-    # Delegate to shuffle_distinct with local context
-    await _shuffle_distinct(
-        context,
-        ir,
-        ir_context,
-        ch_out,
-        ch_in,
-        metadata_in,
-        initial_chunks,
-        output_count,
-        collective_id,
-        key_indices,
-        shuffle_context=local_context,
-        tracer=tracer,
-    )
 
 
 # ============================================================================
@@ -720,7 +655,7 @@ async def distinct_node(
                     tracer.decision = "shuffle_local"
                 ideal_count = max(1, local_estimate // target_partition_size)
                 output_count = max(1, min(ideal_count, local_count))
-                await _local_shuffle_distinct(
+                await _shuffle_distinct(
                     context,
                     ir,
                     ir_context,
@@ -767,6 +702,7 @@ async def distinct_node(
                 output_count,
                 collective_ids.pop(),
                 key_indices,
+                shuffle_context=context,
                 tracer=tracer,
             )
 
