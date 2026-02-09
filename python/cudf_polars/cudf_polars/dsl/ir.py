@@ -198,6 +198,8 @@ class IR(Node["IR"]):
     # Concrete classes should set this up with the arguments that will
     # be passed to do_evaluate.
     _non_child_args: tuple[Any, ...]
+    # The number of non-child arguments to pass to do_evaluate.
+    _n_non_child_args: ClassVar[int]
     schema: Schema
     """Mapping from column names to their data types."""
 
@@ -299,6 +301,7 @@ class ErrorNode(IR):
         "schema",
         "error",
     )
+    _n_non_child_args = 0
     error: str
     """The error."""
 
@@ -313,6 +316,7 @@ class PythonScan(IR):
 
     __slots__ = ("options", "predicate")
     _non_child = ("schema", "options", "predicate")
+    _n_non_child_args = 3
     options: Any
     """Arbitrary options."""
     predicate: expr.NamedExpr | None
@@ -452,6 +456,7 @@ class Scan(IR):
         "predicate",
         "parquet_options",
     )
+    _n_non_child_args = 11
     typ: str
     """What type of file are we reading? Parquet, CSV, etc..."""
     reader_options: dict[str, Any]
@@ -946,6 +951,7 @@ class Sink(IR):
         "options",
         "cloud_options",
     )
+    _n_non_child_args = 5
 
     kind: str
     """The type of file to write to. Eg. Parquet, CSV, etc."""
@@ -1245,6 +1251,7 @@ class Cache(IR):
 
     __slots__ = ("key", "refcount")
     _non_child = ("schema", "key", "refcount")
+    _n_non_child_args = 2
     key: int
     """The cache key."""
     refcount: int | None
@@ -1319,6 +1326,7 @@ class DataFrameScan(IR):
 
     __slots__ = ("_id_for_hash", "df", "projection")
     _non_child = ("schema", "df", "projection")
+    _n_non_child_args = 3
     df: Any
     """Polars internal PyDataFrame object."""
     projection: tuple[str, ...] | None
@@ -1431,6 +1439,7 @@ class Select(IR):
 
     __slots__ = ("exprs", "should_broadcast")
     _non_child = ("schema", "exprs", "should_broadcast")
+    _n_non_child_args = 2
     exprs: tuple[expr.NamedExpr, ...]
     """List of expressions to evaluate to form the new dataframe."""
     should_broadcast: bool
@@ -1547,6 +1556,7 @@ class Reduce(IR):
 
     __slots__ = ("exprs",)
     _non_child = ("schema", "exprs")
+    _n_non_child_args = 1
     exprs: tuple[expr.NamedExpr, ...]
     """List of expressions to evaluate to form the new dataframe."""
 
@@ -1598,6 +1608,7 @@ class Rolling(IR):
         "agg_requests",
         "zlice",
     )
+    _n_non_child_args = 8
     index: expr.NamedExpr
     """Column being rolled over."""
     index_dtype: plc.DataType
@@ -1769,6 +1780,7 @@ class GroupBy(IR):
         "maintain_order",
         "zlice",
     )
+    _n_non_child_args = 5
     keys: tuple[expr.NamedExpr, ...]
     """Grouping keys."""
     agg_requests: tuple[expr.NamedExpr, ...]
@@ -2084,6 +2096,7 @@ class ConditionalJoin(IR):
 
     __slots__ = ("ast_predicate", "options", "predicate")
     _non_child = ("schema", "predicate", "options")
+    _n_non_child_args = 2
     predicate: expr.Expr
     """Expression predicate to join on"""
     options: tuple[
@@ -2194,6 +2207,7 @@ class Join(IR):
 
     __slots__ = ("left_on", "options", "right_on")
     _non_child = ("schema", "left_on", "right_on", "options")
+    _n_non_child_args = 3
     left_on: tuple[expr.NamedExpr, ...]
     """List of expressions used as keys in the left frame."""
     right_on: tuple[expr.NamedExpr, ...]
@@ -2600,6 +2614,7 @@ class HStack(IR):
 
     __slots__ = ("columns", "should_broadcast")
     _non_child = ("schema", "columns", "should_broadcast")
+    _n_non_child_args = 2
     should_broadcast: bool
     """Should the resulting evaluated columns be broadcast to the same length."""
 
@@ -2652,6 +2667,7 @@ class Distinct(IR):
 
     __slots__ = ("keep", "stable", "subset", "zlice")
     _non_child = ("schema", "keep", "subset", "zlice", "stable")
+    _n_non_child_args = 4
     keep: plc.stream_compaction.DuplicateKeepOption
     """Which distinct value to keep."""
     subset: frozenset[str] | None
@@ -2746,6 +2762,7 @@ class Sort(IR):
 
     __slots__ = ("by", "null_order", "order", "stable", "zlice")
     _non_child = ("schema", "by", "order", "null_order", "stable", "zlice")
+    _n_non_child_args = 5
     by: tuple[expr.NamedExpr, ...]
     """Sort keys."""
     order: tuple[plc.types.Order, ...]
@@ -2828,6 +2845,7 @@ class Slice(IR):
 
     __slots__ = ("length", "offset")
     _non_child = ("schema", "offset", "length")
+    _n_non_child_args = 2
     offset: int
     """Start of the slice."""
     length: int | None
@@ -2855,6 +2873,7 @@ class Filter(IR):
 
     __slots__ = ("mask",)
     _non_child = ("schema", "mask")
+    _n_non_child_args = 1
     mask: expr.NamedExpr
     """Expression to produce the filter mask."""
 
@@ -2882,6 +2901,7 @@ class Projection(IR):
 
     __slots__ = ()
     _non_child = ("schema",)
+    _n_non_child_args = 1
 
     def __init__(self, schema: Schema, df: IR):
         self.schema = schema
@@ -2909,6 +2929,7 @@ class MergeSorted(IR):
 
     __slots__ = ("key",)
     _non_child = ("schema", "key")
+    _n_non_child_args = 1
     key: str
     """Key that is sorted."""
 
@@ -2959,6 +2980,7 @@ class MapFunction(IR):
 
     __slots__ = ("name", "options")
     _non_child = ("schema", "name", "options")
+    _n_non_child_args = 3
     name: str
     """Name of the function to apply"""
     options: Any
@@ -3174,6 +3196,7 @@ class Union(IR):
 
     __slots__ = ("zlice",)
     _non_child = ("schema", "zlice")
+    _n_non_child_args = 1
     zlice: Zlice | None
     """Optional slice to apply to the result."""
 
@@ -3206,6 +3229,7 @@ class HConcat(IR):
 
     __slots__ = ("should_broadcast",)
     _non_child = ("schema", "should_broadcast")
+    _n_non_child_args = 1
 
     def __init__(
         self,
@@ -3305,6 +3329,7 @@ class Empty(IR):
 
     __slots__ = ("schema",)
     _non_child = ("schema",)
+    _n_non_child_args = 1
 
     def __init__(self, schema: Schema):
         self.schema = schema

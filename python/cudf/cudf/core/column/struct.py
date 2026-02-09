@@ -18,7 +18,7 @@ from cudf.utils.scalar import (
     maybe_nested_pa_scalar_to_py,
     pa_scalar_to_plc_scalar,
 )
-from cudf.utils.utils import _is_null_host_scalar
+from cudf.utils.utils import is_na_like
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -32,7 +32,7 @@ def _maybe_na_to_none(value: Any) -> Any:
     """
     Convert NA-like values to None for pyarrow.
     """
-    if _is_null_host_scalar(value):
+    if is_na_like(value):
         return None
     else:
         return value

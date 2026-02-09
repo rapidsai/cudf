@@ -6,6 +6,22 @@ set -euo pipefail
 
 package_name=$1
 package_dir=$2
+shift 2
+
+# Parse optional flags
+stable_abi=false
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --stable)
+      stable_abi=true
+      shift
+      ;;
+    *)
+      echo "Unknown option: $1" >&2
+      exit 1
+      ;;
+  esac
+done
 
 source rapids-configure-sccache
 source rapids-date-string
@@ -29,6 +45,11 @@ RAPIDS_PIP_WHEEL_ARGS=(
   --no-deps
   --disable-pip-version-check
 )
+
+# Add py-api setting for stable ABI builds
+if [[ "${stable_abi}" == "true" ]] && [[ -n "${RAPIDS_PY_API:-}" ]]; then
+  RAPIDS_PIP_WHEEL_ARGS+=(--config-settings="skbuild.wheel.py-api=${RAPIDS_PY_API}")
+fi
 
 # Only use --build-constraint when build isolation is enabled.
 #

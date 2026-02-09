@@ -24,7 +24,7 @@ from cudf.core._internals.timezones import (
     get_compatible_timezone,
     get_tz_data,
 )
-from cudf.core.column import as_column
+from cudf.core.column import as_column, column_empty
 from cudf.core.column.column import ColumnBase
 from cudf.core.column.temporal_base import TemporalBaseColumn
 from cudf.utils.dtypes import (
@@ -36,6 +36,7 @@ from cudf.utils.dtypes import (
     is_pandas_nullable_extension_dtype,
 )
 from cudf.utils.scalar import pa_scalar_to_plc_scalar
+from cudf.utils.utils import _EQUALITY_OPS, is_na_like
 
 if TYPE_CHECKING:
     import datetime
@@ -105,12 +106,7 @@ class DatetimeColumn(TemporalBaseColumn):
         cls, plc_column: plc.Column, dtype: np.dtype
     ) -> tuple[plc.Column, np.dtype]:
         plc_column, dtype = super()._validate_args(plc_column, dtype)
-        if (
-            cudf.get_option("mode.pandas_compatible") and not dtype.kind == "M"
-        ) or (
-            not cudf.get_option("mode.pandas_compatible")
-            and not (isinstance(dtype, np.dtype) and dtype.kind == "M")
-        ):
+        if not getattr(dtype, "kind", None) == "M":
             raise ValueError(f"dtype must be a datetime, got {dtype}")
         return plc_column, dtype
 
@@ -547,18 +543,21 @@ class DatetimeColumn(TemporalBaseColumn):
 
     def _binaryop(self, other: ColumnBinaryOperand, op: str) -> ColumnBase:
         reflect, op = self._check_reflected_op(op)
+
         if isinstance(other, cudf.DateOffset):
             return other._datetime_binop(self, op, reflect=reflect)
         other = self._normalize_binop_operand(other)
         if other is NotImplemented:
             return NotImplemented
 
+        other_is_null_scalar = False
         if reflect:
             lhs = other
             rhs = self
             if isinstance(lhs, pa.Scalar):
                 lhs_unit = lhs.type.unit
                 other_dtype = cudf_dtype_from_pa_type(lhs.type)
+                other_is_null_scalar = is_na_like(lhs)
             else:
                 lhs_unit = getattr(lhs, "time_unit", None)
                 other_dtype = lhs.dtype
@@ -569,6 +568,7 @@ class DatetimeColumn(TemporalBaseColumn):
             if isinstance(rhs, pa.Scalar):
                 rhs_unit = rhs.type.unit
                 other_dtype = cudf_dtype_from_pa_type(rhs.type)
+                other_is_null_scalar = is_na_like(rhs)
             else:
                 rhs_unit = getattr(rhs, "time_unit", None)
                 other_dtype = rhs.dtype
@@ -578,7 +578,6 @@ class DatetimeColumn(TemporalBaseColumn):
         other_is_datetime64 = other_dtype.kind == "M"
 
         out_dtype = None
-
         if (
             op
             in {
@@ -591,7 +590,7 @@ class DatetimeColumn(TemporalBaseColumn):
             and other_is_datetime64
         ):
             out_dtype = get_dtype_of_same_kind(self.dtype, np.dtype(np.bool_))
-        elif op == "__add__" and other_is_timedelta:
+        elif op == "__add__" and (other_is_timedelta or other_is_null_scalar):
             # The only thing we can add to a datetime is a timedelta. This
             # operation is symmetric, i.e. we allow `datetime + timedelta` or
             # `timedelta + datetime`. Both result in DatetimeColumns.
@@ -601,6 +600,9 @@ class DatetimeColumn(TemporalBaseColumn):
                     f"datetime64[{_resolve_binop_resolution(lhs_unit, rhs_unit)}]"  # type: ignore[arg-type]
                 ),
             )
+            if other_is_null_scalar:
+                # return a column with all nulls in the size of `self`
+                return column_empty(len(self), out_dtype)
         elif op == "__sub__":
             # Subtracting a datetime from a datetime results in a timedelta.
             if other_is_datetime64:
@@ -610,6 +612,9 @@ class DatetimeColumn(TemporalBaseColumn):
                         f"timedelta64[{_resolve_binop_resolution(lhs_unit, rhs_unit)}]"  # type: ignore[arg-type]
                     ),
                 )
+                if other_is_null_scalar:
+                    # return a column with all nulls in the size of `self`
+                    return column_empty(len(self), out_dtype)
             # We can subtract a timedelta from a datetime, but not vice versa.
             # Not only is subtraction antisymmetric (as is normal), it is only
             # well-defined if this operation was not invoked via reflection.
@@ -620,6 +625,9 @@ class DatetimeColumn(TemporalBaseColumn):
                         f"datetime64[{_resolve_binop_resolution(lhs_unit, rhs_unit)}]"  # type: ignore[arg-type]
                     ),
                 )
+                if other_is_null_scalar:
+                    # return a column with all nulls in the size of `self`
+                    return column_empty(len(self), out_dtype)
         elif op in {
             "__eq__",
             "__ne__",
@@ -634,8 +642,7 @@ class DatetimeColumn(TemporalBaseColumn):
                 result = self._all_bools_with_nulls(
                     other, bool_fill_value=fill_value
                 )
-                if cudf.get_option("mode.pandas_compatible"):
-                    result = result.fillna(fill_value)
+                result = result.fillna(fill_value)
                 return result
 
         if out_dtype is None:
@@ -651,9 +658,7 @@ class DatetimeColumn(TemporalBaseColumn):
         result_col = binaryop.binaryop(lhs_binop, rhs_binop, op, out_dtype)
         if out_dtype.kind != "b" and op == "__add__":
             return result_col
-        elif (
-            cudf.get_option("mode.pandas_compatible") and out_dtype.kind == "b"
-        ):
+        elif out_dtype.kind == "b" and op in _EQUALITY_OPS:
             return result_col.fillna(op == "__ne__")
         else:
             return result_col
@@ -664,8 +669,7 @@ class DatetimeColumn(TemporalBaseColumn):
                 plc_column=self.plc_column,
                 dtype=dtype,
             )
-        if cudf.get_option("mode.pandas_compatible"):
-            self._dtype = get_dtype_of_same_type(dtype, self.dtype)
+        self._dtype = get_dtype_of_same_type(dtype, self.dtype)
 
         return self
 
@@ -798,14 +802,7 @@ class DatetimeTZColumn(DatetimeColumn):
         nullable: bool = False,
         arrow_type: bool = False,
     ) -> pd.Index:
-        if (
-            arrow_type
-            or nullable
-            or (
-                cudf.get_option("mode.pandas_compatible")
-                and isinstance(self.dtype, pd.ArrowDtype)
-            )
-        ):
+        if arrow_type or nullable or isinstance(self.dtype, pd.ArrowDtype):
             return super().to_pandas(nullable=nullable, arrow_type=arrow_type)
         else:
             return self._local_time.to_pandas().tz_localize(

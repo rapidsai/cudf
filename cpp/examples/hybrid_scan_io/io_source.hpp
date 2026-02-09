@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -24,7 +24,7 @@
 /**
  * @brief Available IO source types
  */
-enum class io_source_type { HOST_BUFFER, PINNED_BUFFER };
+enum class io_source_type { FILEPATH, HOST_BUFFER, PINNED_BUFFER, DEVICE_BUFFER };
 
 /**
  * @brief Get io source type from the string keyword argument
@@ -58,7 +58,7 @@ struct pinned_allocator : public std::allocator<T> {
     return static_cast<T*>(ptr);
   }
 
-  void deallocate(T* ptr, std::size_t n) { mr.deallocate(stream, ptr, n * sizeof(T)); }
+  void deallocate(T* ptr, std::size_t n) noexcept { mr.deallocate(stream, ptr, n * sizeof(T)); }
 
  private:
   rmm::host_async_resource_ref mr;
@@ -76,17 +76,12 @@ class io_source {
   // Get the internal source info
   [[nodiscard]] cudf::io::source_info get_source_info() const { return source_info; }
 
-  [[nodiscard]] io_source_type get_source_type() const { return io_type; }
-
-  // Get the internal buffer span
-  [[nodiscard]] cudf::host_span<uint8_t const> get_host_buffer_span() const;
-
  private:
   // alias for pinned vector
   template <typename T>
   using pinned_vector = thrust::host_vector<T, pinned_allocator<T>>;
   cudf::io::source_info source_info;
-  io_source_type io_type;
   std::vector<char> h_buffer;
   pinned_vector<char> pinned_buffer;
+  rmm::device_uvector<std::byte> d_buffer;
 };
