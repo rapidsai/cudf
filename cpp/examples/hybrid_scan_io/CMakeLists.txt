@@ -1,5 +1,5 @@
 # cmake-format: off
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 # cmake-format: on
 
@@ -38,6 +38,15 @@ target_link_libraries(
 )
 target_compile_features(hybrid_scan_io PRIVATE cxx_std_20)
 install(TARGETS hybrid_scan_io DESTINATION bin/examples/libcudf/hybrid_scan_io)
+
+# Build and install hybrid_scan_pipeline
+add_executable(hybrid_scan_pipeline hybrid_scan_pipeline.cpp)
+target_link_libraries(
+  hybrid_scan_pipeline PRIVATE cudf::cudf $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp>
+                               $<TARGET_OBJECTS:hybrid_scan_io_utils>
+)
+target_compile_features(hybrid_scan_pipeline PRIVATE cxx_std_20)
+install(TARGETS hybrid_scan_pipeline DESTINATION bin/examples/libcudf/hybrid_scan_io)
 
 # Install the example.parquet file
 install(FILES ${CMAKE_CURRENT_LIST_DIR}/example.parquet

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -39,7 +39,7 @@ struct calendrical_month_sequence_functor {
     auto output             = cudf::make_fixed_width_column(
       output_column_type, n, cudf::mask_state::UNALLOCATED, stream, mr);
 
-    thrust::transform(rmm::exec_policy(stream),
+    thrust::transform(rmm::exec_policy_nosync(stream),
                       thrust::make_counting_iterator<size_type>(0),
                       thrust::make_counting_iterator<size_type>(n),
                       output->mutable_view().begin<T>(),

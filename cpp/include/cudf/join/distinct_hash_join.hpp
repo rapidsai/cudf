@@ -93,7 +93,7 @@ class distinct_hash_join {
    *
    * @note For a given row index `i` of the probe table, the resulting `build_indices[i]` contains
    * the row index of the matched row from the build table if there is a match. Otherwise, contains
-   * `JoinNoneValue`.
+   * `JoinNoMatch`.
    *
    * @param probe The probe table, from which the keys are probed
    * @param stream CUDA stream used for device memory operations and kernel launches

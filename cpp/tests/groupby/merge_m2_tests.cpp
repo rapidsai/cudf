@@ -290,7 +290,7 @@ TYPED_TEST(GroupbyMergeM2TypedTest, InputHasNulls)
 
   // The expected results to validate.
   auto const expected_keys = keys_col<T>{1, 2, 3, 4};
-  auto const expected_M2s  = M2s_col<R>{{4.5, 32.0 + 2.0 / 3.0, 18.0, 0.0 /*NULL*/}, null_at(3)};
+  auto const expected_M2s  = M2s_col<R>{4.5, 32.0 + 2.0 / 3.0, 18.0, 0.0};
 
   // Compute partial results (`COUNT_VALID`, `MEAN`, `M2`) of each dataset.
   // The partial results are also assembled into a structs column.

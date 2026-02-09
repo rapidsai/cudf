@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 import subprocess
@@ -387,6 +387,37 @@ def test_read_json(s3_bucket_public, s3so):
 
     expect = pd.read_json(StringIO(buffer), lines=True)
     assert_eq(expect, got)
+
+
+def test_read_jsonl_files_kvikio_remote(s3_bucket_public, s3so, monkeypatch):
+    fname1 = "test_json_reader1.jsonl"
+    fname2 = "test_json_reader2.jsonl"
+    buffer1 = (
+        '{"amount": 100, "name": "Alice"}\n{"amount": 200, "name": "Bob"}\n'
+    )
+    buffer2 = (
+        '{"amount": 300, "name": "Charlie"}\n'
+        '{"amount": 400, "name": "Dennis"}\n'
+    )
+    s3_bucket_public.put_object(Key=fname1, Body=buffer1)
+    s3_bucket_public.put_object(Key=fname2, Body=buffer2)
+    with cudf.option_context("kvikio_remote_io", True):
+        got = cudf.read_json(
+            [
+                f"s3://{s3_bucket_public.name}/{fname1}",
+                f"s3://{s3_bucket_public.name}/{fname2}",
+            ],
+            engine="cudf",
+            lines=True,
+            storage_options=s3so,
+        )
+    expected = cudf.DataFrame(
+        {
+            "amount": [100, 200, 300, 400],
+            "name": ["Alice", "Bob", "Charlie", "Dennis"],
+        }
+    )
+    assert_eq(expected, got)
 
 
 @pytest.mark.parametrize("columns", [None, ["string1"]])
