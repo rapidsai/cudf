@@ -134,7 +134,18 @@ class TemporalBaseColumn(ColumnBase, Scannable):
 
         if is_scalar(other):
             if is_na_like(other):
-                return pa.scalar(None, type=cudf_dtype_to_pa_type(self.dtype))
+                if isinstance(
+                    other, (np.datetime64, np.timedelta64)
+                ) and np.isnat(other):
+                    try:
+                        arrow_type = cudf_dtype_to_pa_type(other.dtype)
+                    except pa.ArrowNotImplementedError:
+                        arrow_type = cudf_dtype_to_pa_type(
+                            np.dtype(f"{other.dtype.type.__name__}[ns]")
+                        )
+                else:
+                    arrow_type = cudf_dtype_to_pa_type(self.dtype)
+                return pa.scalar(None, type=arrow_type)
             elif self.dtype.kind == "M" and isinstance(other, pd.Timestamp):
                 if other.tz is not None:
                     raise NotImplementedError(
@@ -230,27 +241,12 @@ class TemporalBaseColumn(ColumnBase, Scannable):
         nullable: bool = False,
         arrow_type: bool = False,
     ) -> pd.Index:
-        if arrow_type and nullable:
-            raise ValueError(
-                f"{arrow_type=} and {nullable=} cannot both be set."
+        if nullable and not arrow_type:
+            raise NotImplementedError(
+                f"pandas does not have a native nullable type for {self.dtype}."
             )
-        if (
-            cudf.get_option("mode.pandas_compatible")
-            and isinstance(self.dtype, pd.ArrowDtype)
-        ) or arrow_type:
-            return super().to_pandas(nullable=nullable, arrow_type=arrow_type)
-
-        elif nullable:
-            raise NotImplementedError(f"{nullable=} is not implemented.")
-        pa_array = self.to_arrow()
-        if arrow_type:
-            return pd.Index(pd.arrays.ArrowExtensionArray(pa_array))
         else:
-            # Workaround until the following issue is fixed:
-            # https://github.com/apache/arrow/issues/45341
-            return pd.Index(
-                pa_array.to_numpy(zero_copy_only=False, writable=True)
-            )
+            return super().to_pandas(nullable=nullable, arrow_type=arrow_type)
 
     def as_numerical_column(self, dtype: np.dtype) -> NumericalColumn:
         new_plc_column = plc.Column(

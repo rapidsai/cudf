@@ -27,18 +27,19 @@ import rmm
 import cudf_polars.experimental.rapidsmpf.collectives.shuffle
 import cudf_polars.experimental.rapidsmpf.io
 import cudf_polars.experimental.rapidsmpf.join
-import cudf_polars.experimental.rapidsmpf.lower
 import cudf_polars.experimental.rapidsmpf.repartition
 import cudf_polars.experimental.rapidsmpf.union  # noqa: F401
 from cudf_polars.containers import DataFrame
 from cudf_polars.dsl.ir import DataFrameScan, IRExecutionContext, Join, Scan, Union
 from cudf_polars.dsl.traversal import CachingVisitor, traversal
+from cudf_polars.experimental.dispatch import lower_ir_node
 from cudf_polars.experimental.rapidsmpf.collectives import ReserveOpIDs
-from cudf_polars.experimental.rapidsmpf.dispatch import FanoutInfo, lower_ir_node
+from cudf_polars.experimental.rapidsmpf.dispatch import FanoutInfo
 from cudf_polars.experimental.rapidsmpf.nodes import (
     generate_ir_sub_network_wrapper,
     metadata_drain_node,
 )
+from cudf_polars.experimental.rapidsmpf.tracing import log_query_plan
 from cudf_polars.experimental.rapidsmpf.utils import empty_table_chunk
 from cudf_polars.experimental.statistics import collect_statistics
 from cudf_polars.experimental.utils import _concat
@@ -49,6 +50,7 @@ if TYPE_CHECKING:
 
     from rapidsmpf.streaming.core.channel import Channel
     from rapidsmpf.streaming.core.leaf_node import DeferredMessages
+    from rapidsmpf.streaming.cudf.channel_metadata import ChannelMetadata
 
     import polars as pl
 
@@ -56,14 +58,15 @@ if TYPE_CHECKING:
 
     from cudf_polars.dsl.ir import IR
     from cudf_polars.experimental.base import PartitionInfo, StatsCollector
+    from cudf_polars.experimental.dispatch import (
+        LowerIRTransformer,
+        State as LowerState,
+    )
     from cudf_polars.experimental.parallel import ConfigOptions
     from cudf_polars.experimental.rapidsmpf.dispatch import (
         GenState,
-        LowerIRTransformer,
-        LowerState,
         SubNetGenerator,
     )
-    from cudf_polars.experimental.rapidsmpf.utils import Metadata
 
 
 def evaluate_logical_plan(
@@ -71,7 +74,7 @@ def evaluate_logical_plan(
     config_options: ConfigOptions,
     *,
     collect_metadata: bool = False,
-) -> tuple[pl.DataFrame, list[Metadata] | None]:
+) -> tuple[pl.DataFrame, list[ChannelMetadata] | None]:
     """
     Evaluate a logical plan with the RapidsMPF streaming runtime.
 
@@ -94,8 +97,11 @@ def evaluate_logical_plan(
     # Lower the IR graph on the client process (for now).
     ir, partition_info, stats = lower_ir_graph(ir, config_options)
 
+    # Log the query plan structure for tracing (no-op if tracing disabled)
+    log_query_plan(ir)
+
     # Reserve shuffle IDs for the entire pipeline execution
-    with ReserveOpIDs(ir) as collective_id_map:
+    with ReserveOpIDs(ir, config_options) as collective_id_map:
         # Build and execute the streaming pipeline.
         # This must be done on all worker processes
         # for cluster == "distributed".
@@ -139,7 +145,7 @@ def evaluate_pipeline(
     rmpf_context: Context | None = None,
     *,
     collect_metadata: bool = False,
-) -> tuple[pl.DataFrame, list[Metadata] | None]:
+) -> tuple[pl.DataFrame, list[ChannelMetadata] | None]:
     """
     Build and evaluate a RapidsMPF streaming pipeline.
 
@@ -229,7 +235,9 @@ def evaluate_pipeline(
 
         # Generate network nodes
         assert rmpf_context is not None, "RapidsMPF context must defined."
-        metadata_collector: list[Metadata] | None = [] if collect_metadata else None
+        metadata_collector: list[ChannelMetadata] | None = (
+            [] if collect_metadata else None
+        )
         nodes, output = generate_network(
             rmpf_context,
             ir,
@@ -413,7 +421,7 @@ def generate_network(
     *,
     ir_context: IRExecutionContext,
     collective_id_map: dict[IR, list[int]],
-    metadata_collector: list[Metadata] | None,
+    metadata_collector: list[ChannelMetadata] | None,
 ) -> tuple[list[Any], DeferredMessages]:
     """
     Translate the IR graph to a RapidsMPF streaming network.

@@ -292,7 +292,8 @@ cpdef size_type index_of_first_set_bit(
     size_type stop,
     Stream stream=None
 ):
-    """Given a validity bitmask, returns the index of the first valid element.
+    """Given a validity bitmask, returns the index of the first valid element
+    relative to ``start``.
 
     For details, see :cpp:func:`index_of_first_set_bit`.
 
@@ -310,7 +311,7 @@ cpdef size_type index_of_first_set_bit(
     Returns
     -------
     int
-        The number of null elements in the specified range.
+        The index of the first set bit relative to ``start``
     """
     if not py_is_span(bitmask):
         raise TypeError(
