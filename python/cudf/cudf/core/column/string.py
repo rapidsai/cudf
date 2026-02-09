@@ -1138,9 +1138,12 @@ class StringColumn(ColumnBase, Scannable):
                 ),
                 maxsplit,
             )
+            result_dtype = get_dtype_of_same_kind(
+                self.dtype, cudf.ListDtype(self.dtype)
+            )
             return cast(
                 Self,
-                ColumnBase.create(plc_column, cudf.ListDtype(self.dtype)),
+                ColumnBase.create(plc_column, result_dtype),
             )
 
     def split_record_re(self, pattern: str, maxsplit: int) -> Self:
@@ -1203,9 +1206,12 @@ class StringColumn(ColumnBase, Scannable):
                 delimiter,
                 maxsplit,
             )
+            result_dtype = get_dtype_of_same_kind(
+                self.dtype, cudf.ListDtype(self.dtype)
+            )
             return cast(
                 Self,
-                ColumnBase.create(plc_column, cudf.ListDtype(self.dtype)),
+                ColumnBase.create(plc_column, result_dtype),
             )
 
     def split_record(self, delimiter: plc.Scalar, maxsplit: int) -> Self:
