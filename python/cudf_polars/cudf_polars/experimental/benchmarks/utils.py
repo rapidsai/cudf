@@ -27,6 +27,7 @@ from typing import TYPE_CHECKING, Any, Literal, assert_never
 import nvtx
 
 import polars as pl
+import polars.testing
 
 import rmm.statistics
 
@@ -60,6 +61,16 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
 
 
+POLARS_VALIDATION_OPTIONS = {
+    "check_row_order": True,
+    "check_column_order": True,
+    "check_dtypes": True,
+    "check_exact": False,
+    "rel_tol": 1e-5,
+    "abs_tol": 1e-8,
+}
+
+
 try:
     import structlog
     import structlog.contextvars
@@ -75,6 +86,52 @@ ExecutorType = Literal["in-memory", "streaming", "cpu"]
 
 
 @dataclasses.dataclass
+class ValidationResult:
+    """
+    Result of a validation run.
+
+    Parameters
+    ----------
+    status
+        The status of the validation.
+    message
+        The message from the validation. This should be ``None`` if
+        the validation passed, and a string describing the failure otherwise.
+    """
+
+    status: Literal["Passed", "Failed"]
+    message: str | None
+
+
+@dataclasses.dataclass
+class ValidationMethod:
+    """
+    Information about how the validation was performed.
+
+    Parameters
+    ----------
+    expected_source
+        A name indicating the source of the expected results.
+
+        - 'polars-cpu': Run polars against the same data
+        - 'duckdb': Compare against pre-computed DuckDB results
+
+    comparison_method
+        How the comparison was performed. Currently, only
+        'polars' is supported, which indicates that ``polars.testing.assert_frame_equal``
+        was used.
+
+    comparison_options
+        Additional options passed to the comparison method, controlling
+        things like the tolerance for floating point comparisons.
+    """
+
+    expected_source: Literal["polars-cpu", "duckdb"]
+    comparison_method: Literal["polars"]
+    comparison_options: dict[str, Any]
+
+
+@dataclasses.dataclass
 class Record:
     """Results for a single run of a single PDS-H query."""
 
@@ -83,6 +140,7 @@ class Record:
     duration: float
     shuffle_stats: dict[str, dict[str, int | float]] | None = None
     traces: list[dict[str, Any]] | None = None
+    validation_result: ValidationResult | None = None
 
     @classmethod
     def new(
@@ -263,6 +321,7 @@ class RunConfig:
     spill_to_pinned_memory: bool
     extra_info: dict[str, Any] = dataclasses.field(default_factory=dict)
     fallback_mode: str | None = None
+    validation_method: ValidationMethod | None = None
 
     def __post_init__(self) -> None:  # noqa: D105
         if self.gather_shuffle_stats and self.shuffle != "rapidsmpf":
@@ -353,6 +412,21 @@ class RunConfig:
                     f"but the inferred scale factor is {sf_inf}."
                 )
 
+        if args.validate_directory:
+            validation_method = ValidationMethod(
+                expected_source="duckdb",
+                comparison_method="polars",
+                comparison_options=POLARS_VALIDATION_OPTIONS,
+            )
+        elif args.validate:
+            validation_method = ValidationMethod(
+                expected_source="polars-cpu",
+                comparison_method="polars",
+                comparison_options=POLARS_VALIDATION_OPTIONS,
+            )
+        else:
+            validation_method = None
+
         return cls(
             queries=args.query,
             executor=executor,
@@ -384,6 +458,7 @@ class RunConfig:
             extra_info=args.extra_info,
             spill_to_pinned_memory=args.spill_to_pinned_memory,
             fallback_mode=args.fallback_mode,
+            validation_method=validation_method,
         )
 
     def serialize(self, engine: pl.GPUEngine | None) -> dict:
@@ -951,7 +1026,13 @@ def parse_args(
         "--validate",
         action=argparse.BooleanOptionalAction,
         default=False,
-        help="Validate the result against CPU execution.",
+        help=(
+            "Validate the result against CPU execution. This will "
+            "run the query with both GPU and CPU polars engines, collect the "
+            "results in memory, and compare them using polars' assert_frame_equal function. "
+            "At larger scale factors, computing the expected result can be slow so "
+            "--validate-directory should be used instead."
+        ),
     )
     parser.add_argument(
         "--baseline",
@@ -998,6 +1079,16 @@ def parse_args(
         help="Optional directory to write query results as parquet files.",
     )
     parser.add_argument(
+        "--validate-directory",
+        type=Path,
+        default=None,
+        help=(
+            "Optionally validate the results against a directory with a pre-computed set of 'golden' results. "
+            "The directory should contain one parquet file per query, named 'qDD.parquet', where DD is the "
+            "zero-padded query number."
+        ),
+    )
+    parser.add_argument(
         "--spill-to-pinned-memory",
         action=argparse.BooleanOptionalAction,
         default=False,
@@ -1028,6 +1119,26 @@ def parse_args(
     if parsed_args.rmm_pool_size is None and not parsed_args.rmm_async:
         # The default rmm pool size depends on the rmm_async flag
         parsed_args.rmm_pool_size = 0.5
+
+    if parsed_args.validate_directory and parsed_args.validate:
+        raise ValueError("Specify either --validate-directory or --validate, not both.")
+    if (
+        parsed_args.validate_directory is not None
+        and not parsed_args.validate_directory.exists()
+    ):
+        raise FileNotFoundError(
+            f"--validate-directory: {parsed_args.validate_directory} does not exist."
+        )
+    if parsed_args.validate_directory:
+        # Verify that the directory contains a a parquet file for each query
+        missing_files: list[str] = []
+        for q_id in parsed_args.query:
+            q_path = parsed_args.validate_directory / f"q{q_id:02d}.parquet"
+            if not q_path.exists():
+                missing_files.append(q_path.name)
+
+        if missing_files:
+            raise ValueError(f"Missing files for queries: {','.join(missing_files)}")
 
     return parsed_args
 
@@ -1108,6 +1219,7 @@ def run_polars(
             else:
                 shuffle_stats = None
 
+            validation_result = None
             if args.validate and run_config.executor != "cpu":
                 try:
                     assert_gpu_result_equal(
@@ -1120,10 +1232,19 @@ def run_polars(
                 except AssertionError as e:
                     validation_failures.append(q_id)
                     print(f"❌ Query {q_id} failed validation!\n{e}")
+                    validation_result = ValidationResult(
+                        status="Failed", message=str(e)
+                    )
+                else:
+                    validation_result = ValidationResult(status="Passed", message=None)
 
             t1 = time.monotonic()
             record = Record(
-                query=q_id, iteration=i, duration=t1 - t0, shuffle_stats=shuffle_stats
+                query=q_id,
+                iteration=i,
+                duration=t1 - t0,
+                shuffle_stats=shuffle_stats,
+                validation_result=validation_result,
             )
             if args.print_results:
                 print(result)
@@ -1133,6 +1254,31 @@ def run_polars(
                 results_dir.mkdir(parents=True, exist_ok=True)
                 output_path = results_dir / f"q_{q_id:02d}.parquet"
                 result.write_parquet(output_path)
+
+            if args.validate_directory is not None:
+                expected = pl.read_parquet(
+                    args.validate_directory / f"q{q_id:02d}.parquet"
+                )
+
+                try:
+                    polars.testing.assert_frame_equal(result, expected)
+                except AssertionError as e:
+                    print(f"❌ Query {q_id} failed validation:\n{e}")
+
+                    record = dataclasses.replace(
+                        record,
+                        validation_result=ValidationResult(
+                            status="Failed",
+                            message=str(e),
+                        ),
+                    )
+                else:
+                    record = dataclasses.replace(
+                        record,
+                        validation_result=ValidationResult(
+                            status="Passed", message=None
+                        ),
+                    )
 
             print(
                 f"Query {q_id} - Iteration {i} finished in {record.duration:0.4f}s",
