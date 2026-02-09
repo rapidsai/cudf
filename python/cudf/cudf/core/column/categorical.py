@@ -16,10 +16,12 @@ import pylibcudf as plc
 import cudf
 from cudf.api.types import is_scalar
 from cudf.core.column import column
+from cudf.core.column.column import ColumnBase
 from cudf.core.dtypes import CategoricalDtype, IntervalDtype
 from cudf.utils.dtypes import (
     SIZE_TYPE_DTYPE,
     cudf_dtype_to_pa_type,
+    dtype_to_pylibcudf_type,
     find_common_type,
     is_mixed_with_object_dtype,
     min_signed_type,
@@ -38,7 +40,6 @@ if TYPE_CHECKING:
         ScalarLike,
     )
     from cudf.core.column import (
-        ColumnBase,
         DatetimeColumn,
         NumericalColumn,
         StringColumn,
@@ -154,8 +155,8 @@ class CategoricalColumn(column.ColumnBase):
             value = value.codes
         codes = self.codes
         codes[key] = value
-        out = codes._with_type_metadata(self.dtype)
-        self._mimic_inplace(out, inplace=True)  # type: ignore[arg-type]
+        self.plc_column = codes.plc_column
+        self._clear_cache()
 
     def _fill(
         self,
@@ -229,11 +230,15 @@ class CategoricalColumn(column.ColumnBase):
                     )
             # We'll compare self's decategorized values later for non-CategoricalColumn
         else:
-            other = column.as_column(
+            plc_scalar = plc.Scalar.from_py(
                 self._encode(other),
-                length=len(self),
-                dtype=self.dtype._codes_dtype,
-            )._with_type_metadata(self.dtype)
+                dtype_to_pylibcudf_type(self.dtype._codes_dtype),
+            )
+            plc_col = plc.Column.from_scalar(plc_scalar, len(self))
+            other = cast(
+                CategoricalColumn,
+                ColumnBase.create(plc_col, self.dtype),
+            )
         equality_ops = {"__eq__", "__ne__", "NULL_EQUALS", "NULL_NOT_EQUALS"}
         if not self.ordered and op not in equality_ops:
             raise TypeError(
@@ -324,9 +329,9 @@ class CategoricalColumn(column.ColumnBase):
             self.astype(self.categories.dtype).clip(lo, hi).astype(self.dtype)  # type: ignore[return-value]
         )
 
-    def _cast_self_and_other_for_where(
-        self, other: ScalarLike | ColumnBase, inplace: bool
-    ) -> tuple[ColumnBase, plc.Scalar | ColumnBase]:
+    def where(
+        self, cond: ColumnBase, other: ScalarLike | ColumnBase, inplace: bool
+    ) -> ColumnBase:
         if is_scalar(other):
             try:
                 other = self._encode(other)
@@ -343,15 +348,7 @@ class CategoricalColumn(column.ColumnBase):
         elif isinstance(other.dtype, CategoricalDtype):
             other = other.codes  # type: ignore[union-attr]
 
-        return self.codes, other
-
-    def where(
-        self, cond: ColumnBase, other: ScalarLike | ColumnBase, inplace: bool
-    ) -> ColumnBase:
-        casted_col, casted_other = self._cast_self_and_other_for_where(
-            other, inplace
-        )
-        result = casted_col.copy_if_else(casted_other, cond)  # type: ignore[arg-type]
+        result = self.codes.copy_if_else(other, cond)  # type: ignore[arg-type]
         return column.ColumnBase.create(result.plc_column, self.dtype)
 
     def _encode(self, value: ScalarLike) -> ScalarLike:
@@ -480,10 +477,11 @@ class CategoricalColumn(column.ColumnBase):
 
         replaced_codes = column.as_column(replaced.codes)
         new_codes = replaced_codes.replace(to_replace_col, replacement_col)
-        result = new_codes._with_type_metadata(
+        result = ColumnBase.create(
+            new_codes.plc_column,
             CategoricalDtype(
                 categories=new_cats["cats"], ordered=self.dtype.ordered
-            )
+            ),
         )
         if result.dtype != self.dtype:
             warnings.warn(
@@ -578,7 +576,10 @@ class CategoricalColumn(column.ColumnBase):
             if isinstance(
                 self.categories.dtype, cudf.StructDtype
             ) and isinstance(dtype.categories.dtype, cudf.IntervalDtype):
-                return self._with_type_metadata(dtype)
+                return cast(
+                    "Self",
+                    ColumnBase.create(self.plc_column, dtype),
+                )
             else:
                 # Otherwise if both categories are of different Column types,
                 # return a column full of nulls.
@@ -590,7 +591,10 @@ class CategoricalColumn(column.ColumnBase):
                         dtype=self.dtype._codes_dtype,
                     ),
                 )
-                return codes._with_type_metadata(dtype)  # type: ignore[return-value]
+                return cast(
+                    "Self",
+                    ColumnBase.create(codes.plc_column, dtype),
+                )
 
         return self.set_categories(
             new_categories=self.dtype.categories
@@ -637,16 +641,15 @@ class CategoricalColumn(column.ColumnBase):
         return out
 
     def copy(self, deep: bool = True) -> Self:
-        result_col = super().copy(deep=deep)
         if deep:
             dtype_copy = CategoricalDtype(
                 categories=self.categories.copy(),
                 ordered=self.ordered,
             )
-            result_col = cast(
-                "Self", result_col._with_type_metadata(dtype_copy)
-            )
-        return result_col
+        else:
+            dtype_copy = self.dtype
+        plc_col = self.plc_column.copy() if deep else self.plc_column
+        return cast("Self", ColumnBase.create(plc_col, dtype_copy))
 
     @cached_property
     def memory_usage(self) -> int:
@@ -681,7 +684,13 @@ class CategoricalColumn(column.ColumnBase):
         else:
             codes_col = column.concat_columns(codes)
 
-        return codes_col._with_type_metadata(CategoricalDtype(categories=cats))  # type: ignore[return-value]
+        return cast(
+            "Self",
+            ColumnBase.create(
+                codes_col.plc_column,
+                CategoricalDtype(categories=cats),
+            ),
+        )
 
     def _with_type_metadata(self: Self, dtype: DtypeObj) -> Self:
         if isinstance(dtype, CategoricalDtype):
@@ -716,8 +725,14 @@ class CategoricalColumn(column.ColumnBase):
                     "new_categories must have the same "
                     "number of items as old categories"
                 )
-            return self._with_type_metadata(
-                CategoricalDtype(categories=new_categories, ordered=ordered)
+            return cast(
+                "Self",
+                ColumnBase.create(
+                    self.plc_column,
+                    CategoricalDtype(
+                        categories=new_categories, ordered=ordered
+                    ),
+                ),
             )
         else:
             out_col = self
@@ -732,10 +747,14 @@ class CategoricalColumn(column.ColumnBase):
                         dtype=self.dtype._codes_dtype,
                     ),
                 )
-                out_col = new_codes._with_type_metadata(  # type: ignore[assignment]
-                    CategoricalDtype(
-                        categories=new_categories, ordered=ordered
-                    )
+                out_col = cast(
+                    "Self",
+                    ColumnBase.create(
+                        new_codes.plc_column,
+                        CategoricalDtype(
+                            categories=new_categories, ordered=ordered
+                        ),
+                    ),
                 )
             elif (
                 not out_col._categories_equal(new_categories, ordered=True)
@@ -823,8 +842,12 @@ class CategoricalColumn(column.ColumnBase):
         new_codes = cast(
             "cudf.core.column.numerical.NumericalColumn", df._data["new_codes"]
         )
-        return new_codes._with_type_metadata(  # type: ignore[return-value]
-            CategoricalDtype(categories=new_cats, ordered=ordered)
+        return cast(
+            "Self",
+            ColumnBase.create(
+                new_codes.plc_column,
+                CategoricalDtype(categories=new_cats, ordered=ordered),
+            ),
         )
 
     def add_categories(self, new_categories: Any) -> Self:
@@ -904,6 +927,10 @@ class CategoricalColumn(column.ColumnBase):
     def as_ordered(self, ordered: bool) -> Self:
         if self.dtype.ordered == ordered:
             return self
-        return self._with_type_metadata(
-            CategoricalDtype(categories=self.categories, ordered=ordered)
+        return cast(
+            "Self",
+            ColumnBase.create(
+                self.plc_column,
+                CategoricalDtype(categories=self.categories, ordered=ordered),
+            ),
         )

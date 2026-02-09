@@ -1300,10 +1300,11 @@ def _parquet_to_frame(
                     partition_categories[name].index(value),
                     length=_len,
                 )
-                col = codes._with_type_metadata(
+                col = ColumnBase.create(
+                    codes.plc_column,
                     CategoricalDtype(
                         categories=partition_categories[name], ordered=False
-                    )
+                    ),
                 )
             else:
                 # Not building categorical columns, so
