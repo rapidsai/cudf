@@ -2216,10 +2216,10 @@ TEST_F(ParquetChunkedReaderTest, TestStringColumnSizeOverflow)
   //
   // We use chunked writer with small row_group_size_rows to create multiple row groups,
   // since strings_column_wrapper cannot create >2GB columns directly.
-  constexpr int rows_per_group = 1'000'000;
-  constexpr int num_row_groups = 2;
-  constexpr int string_length  = 1100;  // 1M * 1100 bytes = 1.1GB per group
-  constexpr int total_num_rows = rows_per_group * num_row_groups;
+  constexpr size_t rows_per_group = 1'000'000;
+  constexpr size_t num_row_groups = 2;
+  constexpr size_t string_length  = 1100;  // 1M * 1100 bytes = 1.1GB per group
+  constexpr size_t total_num_rows = rows_per_group * num_row_groups;
 
   auto const filepath = temp_env->get_temp_filepath("string_overflow.parquet");
 
@@ -2227,22 +2227,23 @@ TEST_F(ParquetChunkedReaderTest, TestStringColumnSizeOverflow)
   {
     cudf::io::chunked_parquet_writer_options write_opts =
       cudf::io::chunked_parquet_writer_options::builder(cudf::io::sink_info{filepath});
-    auto writer = cudf::io::parquet_chunked_writer(write_opts);
+    auto writer = cudf::io::chunked_parquet_writer(write_opts);
 
     std::string str_a(string_length, 'a');
     std::string str_b(string_length, 'b');
 
-    for (int rg = 0; rg < num_row_groups; ++rg) {
+    for (size_t rg = 0; rg < num_row_groups; ++rg) {
       std::vector<std::string> strings;
       strings.reserve(rows_per_group);
-      for (int i = 0; i < rows_per_group; ++i) {
+      for (size_t i = 0; i < rows_per_group; ++i) {
         strings.push_back(i % 2 == 0 ? str_a : str_b);
       }
 
-      int const start_id = rg * rows_per_group;
-      auto id_col        = int32s_col(thrust::make_counting_iterator(start_id),
-                               thrust::make_counting_iterator(start_id + rows_per_group));
-      auto str_col       = strings_col(strings.begin(), strings.end());
+      auto const start_id = static_cast<int32_t>(rg * rows_per_group);
+      auto const end_id   = static_cast<int32_t>(start_id + rows_per_group);
+      auto id_col         = int32s_col(thrust::make_counting_iterator(start_id),
+                               thrust::make_counting_iterator(end_id));
+      auto str_col        = strings_col(strings.begin(), strings.end());
 
       std::vector<std::unique_ptr<cudf::column>> cols;
       cols.push_back(id_col.release());
