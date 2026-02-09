@@ -517,7 +517,6 @@ class IndexedFrame(Frame):
                     result_col = col
 
             if cast_to_int and result_col.dtype.kind in "uib":
-                # For reductions that accumulate a value (e.g. sum, not max)
                 # pandas returns an int64 dtype for all int or bool dtypes.
                 dtype = get_dtype_of_same_kind(
                     result_col.dtype, np.dtype(np.int64)
