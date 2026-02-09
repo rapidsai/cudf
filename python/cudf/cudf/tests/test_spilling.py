@@ -187,10 +187,22 @@ def test_creations(manager: SpillManager):
     df = single_column_df()
     assert single_column_df_data(df).owner.spillable
 
-    df = cudf.datasets.timeseries(dtypes={"a": float})
+    rng = np.random.default_rng(0)
+    index = pandas.DatetimeIndex(
+        pandas.date_range(
+            "2000-01-01", "2000-01-31", freq="1s", name="timestamp"
+        )
+    )
+    pdf = pandas.DataFrame(
+        {"a": rng.random(len(index)) * 2 - 1}, index=index, columns=["a"]
+    )
+    df = cudf.from_pandas(pdf)
     assert single_column_df_data(df).owner.spillable
 
-    df = cudf.datasets.randomdata(dtypes={"a": float})
+    rng = np.random.default_rng(0)
+    df = cudf.from_pandas(
+        pandas.DataFrame({"a": rng.random(10) * 2 - 1}, columns=["a"])
+    )
     assert single_column_df_data(df).owner.spillable
 
 

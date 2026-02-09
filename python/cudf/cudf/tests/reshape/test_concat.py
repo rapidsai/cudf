@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 import warnings
@@ -329,20 +329,32 @@ def test_concat_string_index_name(myindex):
 
 
 def test_pandas_concat_compatibility_axis1():
-    d1 = cudf.datasets.randomdata(
-        3, dtypes={"a": float, "ind": float}
+    rng = np.random.default_rng(0)
+    ind = rng.random(3) * 2 - 1
+    d1 = cudf.from_pandas(
+        pd.DataFrame(
+            {"a": rng.random(3) * 2 - 1, "ind": ind}, columns=["a", "ind"]
+        )
     ).set_index("ind")
-    d2 = cudf.datasets.randomdata(
-        3, dtypes={"b": float, "ind": float}
+    d2 = cudf.from_pandas(
+        pd.DataFrame(
+            {"b": rng.random(3) * 2 - 1, "ind": ind}, columns=["b", "ind"]
+        )
     ).set_index("ind")
-    d3 = cudf.datasets.randomdata(
-        3, dtypes={"c": float, "ind": float}
+    d3 = cudf.from_pandas(
+        pd.DataFrame(
+            {"c": rng.random(3) * 2 - 1, "ind": ind}, columns=["c", "ind"]
+        )
     ).set_index("ind")
-    d4 = cudf.datasets.randomdata(
-        3, dtypes={"d": float, "ind": float}
+    d4 = cudf.from_pandas(
+        pd.DataFrame(
+            {"d": rng.random(3) * 2 - 1, "ind": ind}, columns=["d", "ind"]
+        )
     ).set_index("ind")
-    d5 = cudf.datasets.randomdata(
-        3, dtypes={"e": float, "ind": float}
+    d5 = cudf.from_pandas(
+        pd.DataFrame(
+            {"e": rng.random(3) * 2 - 1, "ind": ind}, columns=["e", "ind"]
+        )
     ).set_index("ind")
 
     pd1 = d1.to_pandas()

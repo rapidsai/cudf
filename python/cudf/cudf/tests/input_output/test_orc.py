@@ -37,6 +37,35 @@ pytestmark = pytest.mark.filterwarnings(
     "ignore:(num_rows|skiprows) is deprecated and will be removed."
 )
 
+_NAMES = [
+    "Alice",
+    "Bob",
+    "Charlie",
+    "Dan",
+    "Edith",
+    "Frank",
+    "George",
+    "Hannah",
+    "Ingrid",
+    "Jerry",
+    "Kevin",
+    "Laura",
+    "Michael",
+    "Norbert",
+    "Oliver",
+    "Patricia",
+    "Quinn",
+    "Ray",
+    "Sarah",
+    "Tim",
+    "Ursula",
+    "Victor",
+    "Wendy",
+    "Xavier",
+    "Yvonne",
+    "Zelda",
+]
+
 
 @pytest.fixture(scope="module")
 def datadir(datadir):
@@ -477,7 +506,17 @@ def test_chunked_orc_writer(
 def test_orc_writer_strings(tmp_path, dtypes):
     gdf_fname = tmp_path / "gdf_strings.orc"
 
-    expect = cudf.datasets.randomdata(nrows=10, dtypes=dtypes, seed=1)
+    rng = np.random.default_rng(1)
+    columns = {}
+    for k in sorted(dtypes):
+        dt = dtypes[k]
+        if dt is int:
+            columns[k] = rng.poisson(1000, size=10)
+        elif dt is float:
+            columns[k] = rng.random(10) * 2 - 1
+        elif dt in (str, object):
+            columns[k] = rng.choice(_NAMES, size=10)
+    expect = cudf.from_pandas(pd.DataFrame(columns, columns=sorted(columns)))
     expect.to_orc(gdf_fname)
     got = pd.read_orc(gdf_fname)
 
@@ -496,7 +535,17 @@ def test_orc_writer_strings(tmp_path, dtypes):
 def test_chunked_orc_writer_strings(tmp_path, dtypes):
     gdf_fname = tmp_path / "chunked_gdf_strings.orc"
 
-    gdf = cudf.datasets.randomdata(nrows=10, dtypes=dtypes, seed=1)
+    rng = np.random.default_rng(1)
+    columns = {}
+    for k in sorted(dtypes):
+        dt = dtypes[k]
+        if dt is int:
+            columns[k] = rng.poisson(1000, size=10)
+        elif dt is float:
+            columns[k] = rng.random(10) * 2 - 1
+        elif dt in (str, object):
+            columns[k] = rng.choice(_NAMES, size=10)
+    gdf = cudf.from_pandas(pd.DataFrame(columns, columns=sorted(columns)))
     pdf = gdf.to_pandas()
     expect = pd.concat([pdf, pdf]).reset_index(drop=True)
     with ORCWriter(gdf_fname) as writer:
@@ -1623,8 +1672,16 @@ def test_writer_protobuf_large_rowindexentry():
 
 @pytest.mark.parametrize("compression", ["ZLIB", "ZSTD"])
 def test_orc_writer_nvcomp(compression):
-    expected = cudf.datasets.randomdata(
-        nrows=12345, dtypes={"a": int, "b": str, "c": float}, seed=1
+    rng = np.random.default_rng(1)
+    expected = cudf.from_pandas(
+        pd.DataFrame(
+            {
+                "a": rng.poisson(1000, size=12345),
+                "b": rng.choice(_NAMES, size=12345),
+                "c": rng.random(12345) * 2 - 1,
+            },
+            columns=["a", "b", "c"],
+        )
     )
 
     buff = BytesIO()

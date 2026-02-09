@@ -131,7 +131,17 @@ def test_groupby_agg(func, aggregation, pdf):
 def test_groupby_agg_empty_partition(tmpdir, split_out):
     # Write random and empty cudf DataFrames
     # to two distinct files.
-    df = cudf.datasets.randomdata()
+    rng = np.random.default_rng(0)
+    df = cudf.from_pandas(
+        pd.DataFrame(
+            {
+                "id": rng.poisson(1000, size=10),
+                "x": rng.random(10) * 2 - 1,
+                "y": rng.random(10) * 2 - 1,
+            },
+            columns=["id", "x", "y"],
+        )
+    )
     df.to_parquet(str(tmpdir.join("f0.parquet")))
     cudf.DataFrame(
         columns=["id", "x", "y"],
@@ -443,7 +453,16 @@ def test_groupby_reset_index_drop_True():
 
 
 def test_groupby_mean_sort_false():
-    df = cudf.datasets.randomdata(nrows=150, dtypes={"a": int, "b": int})
+    state = np.random.RandomState(0)
+    df = cudf.from_pandas(
+        pd.DataFrame(
+            {
+                "a": state.poisson(1000, size=150),
+                "b": state.poisson(1000, size=150),
+            },
+            columns=["a", "b"],
+        )
+    )
     ddf = dask_cudf.from_cudf(df, 1)
     pddf = dd.from_pandas(df.to_pandas(), 1)
 
@@ -474,9 +493,47 @@ def test_groupby_reset_index_dtype():
     assert a.reset_index().dtypes.iloc[0] == "int8"
 
 
+_NAMES = [
+    "Alice",
+    "Bob",
+    "Charlie",
+    "Dan",
+    "Edith",
+    "Frank",
+    "George",
+    "Hannah",
+    "Ingrid",
+    "Jerry",
+    "Kevin",
+    "Laura",
+    "Michael",
+    "Norbert",
+    "Oliver",
+    "Patricia",
+    "Quinn",
+    "Ray",
+    "Sarah",
+    "Tim",
+    "Ursula",
+    "Victor",
+    "Wendy",
+    "Xavier",
+    "Yvonne",
+    "Zelda",
+]
+
+
 def test_groupby_reset_index_names():
-    df = cudf.datasets.randomdata(
-        nrows=10, dtypes={"a": str, "b": int, "c": int}
+    rng = np.random.default_rng(0)
+    df = cudf.from_pandas(
+        pd.DataFrame(
+            {
+                "a": rng.choice(_NAMES, size=10),
+                "b": rng.poisson(1000, size=10),
+                "c": rng.poisson(1000, size=10),
+            },
+            columns=["a", "b", "c"],
+        )
     )
     pdf = df.to_pandas()
 
@@ -554,9 +611,17 @@ def test_groupby_categorical_key():
 def test_groupby_agg_params(
     npartitions, split_every, split_out, fused, as_index
 ):
-    df = cudf.datasets.randomdata(
-        nrows=150,
-        dtypes={"name": str, "a": int, "b": int, "c": float},
+    rng = np.random.default_rng(0)
+    df = cudf.from_pandas(
+        pd.DataFrame(
+            {
+                "a": rng.poisson(1000, size=150),
+                "b": rng.poisson(1000, size=150),
+                "c": rng.random(150) * 2 - 1,
+                "name": rng.choice(_NAMES, size=150),
+            },
+            columns=["a", "b", "c", "name"],
+        )
     )
     df["a"] = [0, 1, 2] * 50
     ddf = dask_cudf.from_cudf(df, npartitions)
@@ -814,8 +879,16 @@ def test_groupby_all_columns(func):
 
 
 def test_groupby_shuffle():
-    df = cudf.datasets.randomdata(
-        nrows=640, dtypes={"a": str, "b": int, "c": int}
+    rng = np.random.default_rng(0)
+    df = cudf.from_pandas(
+        pd.DataFrame(
+            {
+                "a": rng.choice(_NAMES, size=640),
+                "b": rng.poisson(1000, size=640),
+                "c": rng.poisson(1000, size=640),
+            },
+            columns=["a", "b", "c"],
+        )
     )
     gddf = dask_cudf.from_cudf(df, 8)
     spec = {"b": "mean", "c": "max"}

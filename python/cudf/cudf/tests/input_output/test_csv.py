@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 import codecs
@@ -1112,11 +1112,50 @@ def test_csv_reader_byte_range(tmp_path, segment_bytes):
 def test_csv_reader_byte_range_type_corner_case(tmp_path):
     fname = tmp_path / "tmp_csvreader_file17.csv"
 
-    cudf.datasets.timeseries(
-        start="2000-01-01",
-        end="2000-01-02",
-        dtypes={"name": str, "id": int, "x": float, "y": float},
-    ).to_csv(fname, chunksize=100000)
+    _names = [
+        "Alice",
+        "Bob",
+        "Charlie",
+        "Dan",
+        "Edith",
+        "Frank",
+        "George",
+        "Hannah",
+        "Ingrid",
+        "Jerry",
+        "Kevin",
+        "Laura",
+        "Michael",
+        "Norbert",
+        "Oliver",
+        "Patricia",
+        "Quinn",
+        "Ray",
+        "Sarah",
+        "Tim",
+        "Ursula",
+        "Victor",
+        "Wendy",
+        "Xavier",
+        "Yvonne",
+        "Zelda",
+    ]
+    rng = np.random.default_rng(0)
+    index = pd.DatetimeIndex(
+        pd.date_range("2000-01-01", "2000-01-02", freq="1s", name="timestamp")
+    )
+    n = len(index)
+    pdf = pd.DataFrame(
+        {
+            "id": rng.poisson(1000, size=n),
+            "name": rng.choice(_names, size=n),
+            "x": rng.random(n) * 2 - 1,
+            "y": rng.random(n) * 2 - 1,
+        },
+        index=index,
+        columns=["id", "name", "x", "y"],
+    )
+    cudf.from_pandas(pdf).to_csv(fname, chunksize=100000)
 
     byte_range = (2_147_483_648, 0)
     with pytest.raises(ValueError, match="Invalid byte range offset"):

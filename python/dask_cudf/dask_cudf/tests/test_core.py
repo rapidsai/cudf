@@ -19,6 +19,35 @@ import dask_cudf
 
 rng = np.random.default_rng(seed=0)
 
+_NAMES = [
+    "Alice",
+    "Bob",
+    "Charlie",
+    "Dan",
+    "Edith",
+    "Frank",
+    "George",
+    "Hannah",
+    "Ingrid",
+    "Jerry",
+    "Kevin",
+    "Laura",
+    "Michael",
+    "Norbert",
+    "Oliver",
+    "Patricia",
+    "Quinn",
+    "Ray",
+    "Sarah",
+    "Tim",
+    "Ursula",
+    "Victor",
+    "Wendy",
+    "Xavier",
+    "Yvonne",
+    "Zelda",
+]
+
 
 def test_from_dict_backend_dispatch():
     # Test ddf.from_dict cudf-backend dispatch
@@ -213,7 +242,7 @@ def test_set_index(nelem):
 def test_set_index_quantile(nelem, nparts, by):
     df = cudf.DataFrame()
     df["a"] = np.ascontiguousarray(np.arange(nelem)[::-1])
-    df["b"] = rng.choice(cudf.datasets.names, size=nelem)
+    df["b"] = rng.choice(_NAMES, size=nelem)
     ddf = dd.from_pandas(df, npartitions=nparts)
 
     with pytest.warns(FutureWarning, match="deprecated"):
@@ -683,7 +712,16 @@ def test_dataframe_assign_col():
 
 def test_dataframe_set_index():
     random.seed(0)
-    df = cudf.datasets.randomdata(26, dtypes={"a": float, "b": int})
+    rng = np.random.default_rng(0)
+    df = cudf.from_pandas(
+        pd.DataFrame(
+            {
+                "a": rng.random(26) * 2 - 1,
+                "b": rng.poisson(1000, size=26),
+            },
+            columns=["a", "b"],
+        )
+    )
     df["str"] = list("abcdefghijklmnopqrstuvwxyz")
     pdf = df.to_pandas()
 
@@ -701,7 +739,17 @@ def test_dataframe_set_index():
 
 def test_series_describe():
     random.seed(0)
-    sr = cudf.datasets.randomdata(20)["x"]
+    rng = np.random.default_rng(0)
+    sr = cudf.from_pandas(
+        pd.DataFrame(
+            {
+                "id": rng.poisson(1000, size=20),
+                "x": rng.random(20) * 2 - 1,
+                "y": rng.random(20) * 2 - 1,
+            },
+            columns=["id", "x", "y"],
+        )
+    )["x"]
     psr = sr.to_pandas()
 
     dsr = dask_cudf.from_cudf(sr, npartitions=4)
@@ -716,7 +764,17 @@ def test_series_describe():
 
 def test_dataframe_describe():
     random.seed(0)
-    df = cudf.datasets.randomdata(20)
+    rng = np.random.default_rng(0)
+    df = cudf.from_pandas(
+        pd.DataFrame(
+            {
+                "id": rng.poisson(1000, size=20),
+                "x": rng.random(20) * 2 - 1,
+                "y": rng.random(20) * 2 - 1,
+            },
+            columns=["id", "x", "y"],
+        )
+    )
     pdf = df.to_pandas()
 
     ddf = dask_cudf.from_cudf(df, npartitions=4)

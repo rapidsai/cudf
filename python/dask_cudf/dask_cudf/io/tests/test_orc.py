@@ -6,6 +6,8 @@ import os
 from contextlib import nullcontext
 from datetime import datetime, timezone
 
+import numpy as np
+import pandas as pd
 import pytest
 
 import dask
@@ -17,6 +19,35 @@ import dask_cudf
 
 cur_dir = os.path.dirname(__file__)
 sample_orc = os.path.join(cur_dir, "data/orc/sample.orc")
+
+_NAMES = [
+    "Alice",
+    "Bob",
+    "Charlie",
+    "Dan",
+    "Edith",
+    "Frank",
+    "George",
+    "Hannah",
+    "Ingrid",
+    "Jerry",
+    "Kevin",
+    "Laura",
+    "Michael",
+    "Norbert",
+    "Oliver",
+    "Patricia",
+    "Quinn",
+    "Ray",
+    "Sarah",
+    "Tim",
+    "Ursula",
+    "Victor",
+    "Wendy",
+    "Xavier",
+    "Yvonne",
+    "Zelda",
+]
 
 
 def test_read_orc_backend_dispatch():
@@ -133,7 +164,17 @@ def test_read_orc_first_file_empty(tmpdir):
 )
 def test_to_orc(tmpdir, dtypes, compression, compute):
     # Create cudf and dask_cudf dataframes
-    df = cudf.datasets.randomdata(nrows=10, dtypes=dtypes, seed=1)
+    rng = np.random.default_rng(1)
+    columns = {}
+    for k in sorted(dtypes):
+        dt = dtypes[k]
+        if dt is int:
+            columns[k] = rng.poisson(1000, size=10)
+        elif dt is float:
+            columns[k] = rng.random(10) * 2 - 1
+        elif dt in (str, object):
+            columns[k] = rng.choice(_NAMES, size=10)
+    df = cudf.from_pandas(pd.DataFrame(columns, columns=sorted(columns)))
     df = df.set_index("index").sort_index()
     ddf = dask_cudf.from_cudf(df, npartitions=3)
 

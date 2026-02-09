@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 import cupy as cp
@@ -567,18 +567,84 @@ def test_empty_dataframe_any(axis):
     assert_eq(got, expected, check_index_type=False)
 
 
+_REDUCTION_NAMES = [
+    "Alice",
+    "Bob",
+    "Charlie",
+    "Dan",
+    "Edith",
+    "Frank",
+    "George",
+    "Hannah",
+    "Ingrid",
+    "Jerry",
+    "Kevin",
+    "Laura",
+    "Michael",
+    "Norbert",
+    "Oliver",
+    "Patricia",
+    "Quinn",
+    "Ray",
+    "Sarah",
+    "Tim",
+    "Ursula",
+    "Victor",
+    "Wendy",
+    "Xavier",
+    "Yvonne",
+    "Zelda",
+]
+
+
 @pytest.mark.parametrize(
     "data",
     [
-        lambda: cudf.datasets.randomdata(
-            nrows=10, dtypes={"a": "category", "b": int, "c": float, "d": int}
-        ),
-        lambda: cudf.datasets.randomdata(
-            nrows=10, dtypes={"a": "category", "b": int, "c": float, "d": str}
-        ),
-        lambda: cudf.datasets.randomdata(
-            nrows=10, dtypes={"a": bool, "b": int, "c": float, "d": str}
-        ),
+        lambda: (
+            lambda r=np.random.default_rng(0): cudf.from_pandas(
+                pd.DataFrame(
+                    {
+                        "a": pd.Categorical.from_codes(
+                            r.integers(0, len(_REDUCTION_NAMES), 10),
+                            _REDUCTION_NAMES,
+                        ),
+                        "b": r.poisson(1000, 10),
+                        "c": r.random(10) * 2 - 1,
+                        "d": r.poisson(1000, 10),
+                    },
+                    columns=["a", "b", "c", "d"],
+                )
+            )
+        )(),
+        lambda: (
+            lambda r=np.random.default_rng(0): cudf.from_pandas(
+                pd.DataFrame(
+                    {
+                        "a": pd.Categorical.from_codes(
+                            r.integers(0, len(_REDUCTION_NAMES), 10),
+                            _REDUCTION_NAMES,
+                        ),
+                        "b": r.poisson(1000, 10),
+                        "c": r.random(10) * 2 - 1,
+                        "d": r.choice(_REDUCTION_NAMES, 10),
+                    },
+                    columns=["a", "b", "c", "d"],
+                )
+            )
+        )(),
+        lambda: (
+            lambda r=np.random.default_rng(0): cudf.from_pandas(
+                pd.DataFrame(
+                    {
+                        "a": r.choice([True, False], 10),
+                        "b": r.poisson(1000, 10),
+                        "c": r.random(10) * 2 - 1,
+                        "d": r.choice(_REDUCTION_NAMES, 10),
+                    },
+                    columns=["a", "b", "c", "d"],
+                )
+            )
+        )(),
         lambda: cudf.DataFrame(),
         lambda: cudf.DataFrame({"a": [0, 1, 2], "b": [1, None, 3]}),
         lambda: cudf.DataFrame(

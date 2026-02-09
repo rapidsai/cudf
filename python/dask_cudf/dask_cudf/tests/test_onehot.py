@@ -1,6 +1,7 @@
-# SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -9,6 +10,35 @@ from dask import dataframe as dd
 import cudf
 
 import dask_cudf
+
+_NAMES = [
+    "Alice",
+    "Bob",
+    "Charlie",
+    "Dan",
+    "Edith",
+    "Frank",
+    "George",
+    "Hannah",
+    "Ingrid",
+    "Jerry",
+    "Kevin",
+    "Laura",
+    "Michael",
+    "Norbert",
+    "Oliver",
+    "Patricia",
+    "Quinn",
+    "Ray",
+    "Sarah",
+    "Tim",
+    "Ursula",
+    "Victor",
+    "Wendy",
+    "Xavier",
+    "Yvonne",
+    "Zelda",
+]
 
 
 def test_get_dummies_cat():
@@ -86,14 +116,22 @@ def test_get_dummies_cat_index():
 
 
 def test_get_dummies_large():
-    gdf = cudf.datasets.randomdata(
-        nrows=200000,
-        dtypes={
-            "C": int,
-            "first": "category",
-            "b": float,
-            "second": "category",
-        },
+    rng = np.random.default_rng(0)
+    n = 200000
+    gdf = cudf.from_pandas(
+        pd.DataFrame(
+            {
+                "C": rng.poisson(1000, n),
+                "first": pd.Categorical.from_codes(
+                    rng.integers(0, len(_NAMES), n), _NAMES
+                ),
+                "b": rng.random(n) * 2 - 1,
+                "second": pd.Categorical.from_codes(
+                    rng.integers(0, len(_NAMES), n), _NAMES
+                ),
+            },
+            columns=["C", "first", "b", "second"],
+        )
     )
     df = gdf.to_pandas()
     ddf = dd.from_pandas(df, npartitions=25)

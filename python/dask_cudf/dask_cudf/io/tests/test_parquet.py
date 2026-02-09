@@ -185,13 +185,58 @@ def test_dask_timeseries_from_dask(tmpdir, index, divisions):
     )
 
 
+_NAMES = [
+    "Alice",
+    "Bob",
+    "Charlie",
+    "Dan",
+    "Edith",
+    "Frank",
+    "George",
+    "Hannah",
+    "Ingrid",
+    "Jerry",
+    "Kevin",
+    "Laura",
+    "Michael",
+    "Norbert",
+    "Oliver",
+    "Patricia",
+    "Quinn",
+    "Ray",
+    "Sarah",
+    "Tim",
+    "Ursula",
+    "Victor",
+    "Wendy",
+    "Xavier",
+    "Yvonne",
+    "Zelda",
+]
+
+
 @pytest.mark.parametrize("index", [False, None])
 @pytest.mark.parametrize("divisions", [False, True])
 def test_dask_timeseries_from_daskcudf(tmpdir, index, divisions):
     fn = str(tmpdir)
-    ddf2 = dask_cudf.from_cudf(
-        cudf.datasets.timeseries(freq="D"), npartitions=4
+    rng = np.random.default_rng(0)
+    index_ts = pd.DatetimeIndex(
+        pd.date_range("2000-01-01", "2000-01-31", freq="D", name="timestamp")
     )
+    n = len(index_ts)
+    pdf = pd.DataFrame(
+        {
+            "id": rng.poisson(1000, size=n),
+            "name": pd.Categorical.from_codes(
+                rng.integers(0, len(_NAMES), n), _NAMES
+            ),
+            "x": rng.random(n) * 2 - 1,
+            "y": rng.random(n) * 2 - 1,
+        },
+        index=index_ts,
+        columns=["id", "name", "x", "y"],
+    )
+    ddf2 = dask_cudf.from_cudf(cudf.from_pandas(pdf), npartitions=4)
     # Use assign in lieu of `ddf2.name = ...`
     # See: https://github.com/dask/dask-expr/issues/1010
     ddf2 = ddf2.assign(name=ddf2.name.astype("object"))

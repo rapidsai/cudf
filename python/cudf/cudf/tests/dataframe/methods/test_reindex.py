@@ -1,13 +1,43 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 
+import numpy as np
 import pandas as pd
 import pytest
 
 import cudf
 from cudf.testing import assert_eq
 from cudf.testing._utils import assert_exceptions_equal
+
+_NAMES = [
+    "Alice",
+    "Bob",
+    "Charlie",
+    "Dan",
+    "Edith",
+    "Frank",
+    "George",
+    "Hannah",
+    "Ingrid",
+    "Jerry",
+    "Kevin",
+    "Laura",
+    "Michael",
+    "Norbert",
+    "Oliver",
+    "Patricia",
+    "Quinn",
+    "Ray",
+    "Sarah",
+    "Tim",
+    "Ursula",
+    "Victor",
+    "Wendy",
+    "Xavier",
+    "Yvonne",
+    "Zelda",
+]
 
 
 @pytest.mark.parametrize("copy", [True, False])
@@ -35,13 +65,18 @@ from cudf.testing._utils import assert_exceptions_equal
     ],
 )
 def test_dataframe_reindex(copy, args, gd_kwargs):
-    reindex_data = cudf.datasets.randomdata(
-        nrows=6,
-        dtypes={
-            "a": "category",
-            "c": float,
-            "d": str,
-        },
+    rng = np.random.default_rng(0)
+    reindex_data = cudf.from_pandas(
+        pd.DataFrame(
+            {
+                "a": pd.Categorical.from_codes(
+                    rng.integers(0, len(_NAMES), 6), _NAMES
+                ),
+                "c": rng.random(6) * 2 - 1,
+                "d": rng.choice(_NAMES, size=6),
+            },
+            columns=["a", "c", "d"],
+        )
     )
     pdf, gdf = reindex_data.to_pandas(), reindex_data
     assert_eq(
@@ -75,9 +110,16 @@ def test_dataframe_reindex(copy, args, gd_kwargs):
     ],
 )
 def test_dataframe_reindex_fill_value(args, kwargs, fill_value):
-    reindex_data_numeric = cudf.datasets.randomdata(
-        nrows=6,
-        dtypes={"a": float, "b": float, "c": float},
+    rng = np.random.default_rng(0)
+    reindex_data_numeric = cudf.from_pandas(
+        pd.DataFrame(
+            {
+                "a": rng.random(6) * 2 - 1,
+                "b": rng.random(6) * 2 - 1,
+                "c": rng.random(6) * 2 - 1,
+            },
+            columns=["a", "b", "c"],
+        )
     )
     pdf, gdf = reindex_data_numeric.to_pandas(), reindex_data_numeric
     assert_eq(
@@ -90,8 +132,18 @@ def test_dataframe_reindex_fill_value(args, kwargs, fill_value):
 def test_dataframe_reindex_change_dtype(copy):
     index = pd.date_range("12/29/2009", periods=10, freq="D")
     columns = ["a", "b", "c", "d", "e"]
-    gdf = cudf.datasets.randomdata(
-        nrows=6, dtypes={"a": "category", "c": float, "d": str}
+    rng = np.random.default_rng(0)
+    gdf = cudf.from_pandas(
+        pd.DataFrame(
+            {
+                "a": pd.Categorical.from_codes(
+                    rng.integers(0, len(_NAMES), 6), _NAMES
+                ),
+                "c": rng.random(6) * 2 - 1,
+                "d": rng.choice(_NAMES, size=6),
+            },
+            columns=["a", "c", "d"],
+        )
     )
     pdf = gdf.to_pandas()
     # Validate reindexes both labels and column names when
@@ -106,7 +158,17 @@ def test_dataframe_reindex_change_dtype(copy):
 @pytest.mark.parametrize("copy", [True, False])
 def test_series_categorical_reindex(copy):
     index = [-3, 0, 3, 0, -2, 1, 3, 4, 6]
-    gdf = cudf.datasets.randomdata(nrows=6, dtypes={"a": "category"})
+    rng = np.random.default_rng(0)
+    gdf = cudf.from_pandas(
+        pd.DataFrame(
+            {
+                "a": pd.Categorical.from_codes(
+                    rng.integers(0, len(_NAMES), 6), _NAMES
+                )
+            },
+            columns=["a"],
+        )
+    )
     pdf = gdf.to_pandas()
     assert_eq(pdf["a"].reindex(copy=True), gdf["a"].reindex(copy=copy))
     assert_eq(
@@ -121,7 +183,10 @@ def test_series_categorical_reindex(copy):
 @pytest.mark.parametrize("copy", [True, False])
 def test_series_float_reindex(copy):
     index = [-3, 0, 3, 0, -2, 1, 3, 4, 6]
-    gdf = cudf.datasets.randomdata(nrows=6, dtypes={"c": float})
+    rng = np.random.default_rng(0)
+    gdf = cudf.from_pandas(
+        pd.DataFrame({"c": rng.random(6) * 2 - 1}, columns=["c"])
+    )
     pdf = gdf.to_pandas()
     assert_eq(pdf["c"].reindex(copy=True), gdf["c"].reindex(copy=copy))
     assert_eq(
@@ -136,7 +201,10 @@ def test_series_float_reindex(copy):
 @pytest.mark.parametrize("copy", [True, False])
 def test_series_string_reindex(copy):
     index = [-3, 0, 3, 0, -2, 1, 3, 4, 6]
-    gdf = cudf.datasets.randomdata(nrows=6, dtypes={"d": str})
+    rng = np.random.default_rng(0)
+    gdf = cudf.from_pandas(
+        pd.DataFrame({"d": rng.choice(_NAMES, size=6)}, columns=["d"])
+    )
     pdf = gdf.to_pandas()
     assert_eq(pdf["d"].reindex(copy=True), gdf["d"].reindex(copy=copy))
     assert_eq(

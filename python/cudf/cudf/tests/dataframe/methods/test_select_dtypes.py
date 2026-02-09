@@ -1,16 +1,57 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 import numpy as np
+import pandas as pd
 
 import cudf
 from cudf.testing import assert_eq
 from cudf.testing._utils import assert_exceptions_equal
 
+_NAMES = [
+    "Alice",
+    "Bob",
+    "Charlie",
+    "Dan",
+    "Edith",
+    "Frank",
+    "George",
+    "Hannah",
+    "Ingrid",
+    "Jerry",
+    "Kevin",
+    "Laura",
+    "Michael",
+    "Norbert",
+    "Oliver",
+    "Patricia",
+    "Quinn",
+    "Ray",
+    "Sarah",
+    "Tim",
+    "Ursula",
+    "Victor",
+    "Wendy",
+    "Xavier",
+    "Yvonne",
+    "Zelda",
+]
+
 
 def test_select_dtype():
-    gdf = cudf.datasets.randomdata(
-        nrows=20, dtypes={"a": "category", "b": int, "c": float, "d": str}
+    rng = np.random.default_rng(0)
+    gdf = cudf.from_pandas(
+        pd.DataFrame(
+            {
+                "a": pd.Categorical.from_codes(
+                    rng.integers(0, len(_NAMES), 20), _NAMES
+                ),
+                "b": rng.poisson(1000, size=20),
+                "c": rng.random(20) * 2 - 1,
+                "d": rng.choice(_NAMES, size=20),
+            },
+            columns=["a", "b", "c", "d"],
+        )
     )
     pdf = gdf.to_pandas()
 
@@ -139,10 +180,16 @@ def test_select_dtype():
 
 
 def test_select_dtype_datetime():
-    gdf = cudf.datasets.timeseries(
-        start="2000-01-01", end="2000-01-02", freq="3600s", dtypes={"x": int}
+    rng = np.random.default_rng(0)
+    index = pd.DatetimeIndex(
+        pd.date_range(
+            "2000-01-01", "2000-01-02", freq="3600s", name="timestamp"
+        )
     )
-    gdf = gdf.reset_index()
+    pdf = pd.DataFrame(
+        {"x": rng.poisson(1000, size=len(index))}, index=index, columns=["x"]
+    )
+    gdf = cudf.from_pandas(pdf).reset_index()
     pdf = gdf.to_pandas()
 
     assert_eq(pdf.select_dtypes("datetime64"), gdf.select_dtypes("datetime64"))
@@ -157,10 +204,16 @@ def test_select_dtype_datetime():
 
 
 def test_select_dtype_datetime_with_frequency():
-    gdf = cudf.datasets.timeseries(
-        start="2000-01-01", end="2000-01-02", freq="3600s", dtypes={"x": int}
+    rng = np.random.default_rng(0)
+    index = pd.DatetimeIndex(
+        pd.date_range(
+            "2000-01-01", "2000-01-02", freq="3600s", name="timestamp"
+        )
     )
-    gdf = gdf.reset_index()
+    pdf = pd.DataFrame(
+        {"x": rng.poisson(1000, size=len(index))}, index=index, columns=["x"]
+    )
+    gdf = cudf.from_pandas(pdf).reset_index()
     pdf = gdf.to_pandas()
 
     assert_exceptions_equal(
