@@ -26,6 +26,7 @@ from cudf.utils.temporal import infer_format, unit_to_nanoseconds_conversion
 
 if TYPE_CHECKING:
     from cudf.core.column.datetime import DatetimeColumn
+    from cudf.core.column.string import StringColumn
 
 
 # https://github.com/pandas-dev/pandas/blob/2.2.x/pandas/core/tools/datetimes.py#L1112
@@ -234,9 +235,7 @@ def to_datetime(
                         )
                         break
                     elif arg_col.dtype.kind == "O":
-                        from cudf.core.column.string import StringColumn
-
-                        string_col = cast(StringColumn, arg_col)
+                        string_col = cast("StringColumn", arg_col)
                         if not string_col.is_all_integer():
                             col = new_series._column.strptime(
                                 np.dtype("datetime64[ns]"), format=format

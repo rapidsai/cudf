@@ -225,9 +225,7 @@ def _convert_str_col(
     if col.dtype != CUDF_STRING_DTYPE:
         raise TypeError("col must be string dtype.")
 
-    from cudf.core.column.string import StringColumn
-
-    string_col = cast(StringColumn, col)
+    string_col = cast("StringColumn", col)
     if string_col.is_all_integer():
         return col.astype(dtype=np.dtype(np.int64))  # type: ignore[return-value]
 
