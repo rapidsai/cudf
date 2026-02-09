@@ -1,18 +1,20 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Literal, TypeAlias
+from typing import TYPE_CHECKING, Any, Literal, TypeAlias, cast
 
 import numpy as np
 
 import pylibcudf as plc
 
+import cudf
 from cudf.api.types import (
     _is_scalar_or_zero_d_array,
     is_integer,
+    is_list_like,
 )
 from cudf.core.column.column import as_column
 from cudf.core.copy_types import BooleanMask, GatherMap
@@ -66,6 +68,30 @@ class ScalarIndexer:
 IndexingSpec: TypeAlias = (
     EmptyIndexer | MapIndexer | MaskIndexer | ScalarIndexer | SliceIndexer
 )
+
+
+def validate_scalar_key(key: Any, error_msg: str) -> None:
+    """Validate that key contains only scalar values for .at/.iat indexers.
+
+    Parameters
+    ----------
+    key : Any
+        The key to validate
+    error_msg : str
+        The error message to raise if validation fails
+
+    Raises
+    ------
+    ValueError
+        If the key contains list-like indexers
+    """
+    if not isinstance(key, tuple):
+        if is_list_like(key):
+            raise ValueError(error_msg)
+    else:
+        for k in key:
+            if is_list_like(k):
+                raise ValueError(error_msg)
 
 
 # Helpers for code-sharing between loc and iloc paths
@@ -128,6 +154,8 @@ def expand_key(
     if isinstance(key, tuple):
         # Key potentially indexes rows and columns, slice-expand to
         # shape of frame
+        if len(key) > 1 and sum(k is Ellipsis for k in key) > 1:
+            raise IndexError("indexer may only contain one '...' entry")
         indexers = key + (slice(None),) * (dim - len(key))
         if len(indexers) > dim:
             raise IndexError(
@@ -511,8 +539,8 @@ def ordered_find(needles: ColumnBase, haystack: ColumnBase) -> GatherMap:
     # the needle might appear multiple times in the haystack).
 
     left_rows, right_rows = plc.join.left_join(
-        plc.Table([needles.to_pylibcudf(mode="read")]),
-        plc.Table([haystack.to_pylibcudf(mode="read")]),
+        plc.Table([needles.plc_column]),
+        plc.Table([haystack.plc_column]),
         plc.types.NullEquality.EQUAL,
     )
     right_order = plc.copying.gather(
@@ -547,7 +575,10 @@ def ordered_find(needles: ColumnBase, haystack: ColumnBase) -> GatherMap:
         [plc.types.NullOrder.AFTER] * 2,
     ).columns()[0]
     return GatherMap.from_column_unchecked(
-        type(haystack).from_pylibcudf(right_rows),  # type: ignore[arg-type]
+        cast(
+            cudf.core.column.NumericalColumn,
+            type(haystack).from_pylibcudf(right_rows),
+        ),
         len(haystack),
         nullify=False,
     )

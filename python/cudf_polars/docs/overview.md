@@ -8,7 +8,7 @@ You will need:
    preferred configuration. Or else, use
    [rustup](https://www.rust-lang.org/tools/install)
 2. A [cudf development
-   environment](https://github.com/rapidsai/cudf/blob/branch-25.12/CONTRIBUTING.md#setting-up-your-build-environment).
+   environment](https://github.com/rapidsai/cudf/blob/main/CONTRIBUTING.md#setting-up-your-build-environment).
    The combined devcontainer works, or whatever your favourite approach is.
 
 :::{note}
@@ -219,6 +219,10 @@ keyword-only `context` argument (an `IRExecutionContext` object
 containing runtime execution context). To perform the
 evaluation, one should use the base class (generic) `evaluate` method
 which handles the recursive evaluation of child nodes.
+
+Plan nodes must also declare an `_n_non_child_args` attribute giving
+the length of the `_non_child_args` tuple. This is used by tracing to know
+how many non-child (dataframe) inputs to expect without introspection.
 
 To translate the plan node, add a case handler in `translate_ir` that
 lives in `cudf_polars/dsl/translate.py`.
@@ -742,15 +746,17 @@ and convert back to polars:
 ```python
 from cudf_polars.dsl.translate import Translator
 from cudf_polars.dsl.ir import IRExecutionContext
+from rmm.pylibrmm.stream import DEFAULT_STREAM
 import polars as pl
 
 q = ...
 
 # Convert to our IR
-ir = Translator(q._ldf.visit(), pl.GPUEngine()).translate_ir()
+translator = Translator(q._ldf.visit(), pl.GPUEngine())
+ir = translator.translate_ir()
 
 # DataFrame living on the device
-result = ir.evaluate(cache={}, timer=None, context=IRExecutionContext())
+result = ir.evaluate(cache={}, timer=None, context=IRExecutionContext.from_config_options(translator.config_options))
 
 # Polars dataframe
 host_result = result.to_polars()

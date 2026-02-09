@@ -8,9 +8,9 @@ from typing import TYPE_CHECKING, Any
 
 from dask.sizeof import sizeof
 from distributed import get_worker
-from rapidsmpf.buffer.buffer import MemoryType
 from rapidsmpf.integrations.dask.core import get_worker_context
 from rapidsmpf.integrations.dask.spilling import SpillableWrapper
+from rapidsmpf.memory.buffer import MemoryType
 
 from cudf_polars.containers import DataFrame
 

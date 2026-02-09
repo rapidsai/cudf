@@ -1813,7 +1813,7 @@ TEST_F(SearchTest, multi_contains_empty_input_set_string)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expect);
 }
 
-TEST_F(SearchTest, multi_contains_primitive_nan_unequal_bug)
+TEST_F(SearchTest, multi_contains_primitive_nan_unequal)
 {
   auto nan_val = std::numeric_limits<float>::quiet_NaN();
 
@@ -1827,12 +1827,8 @@ TEST_F(SearchTest, multi_contains_primitive_nan_unequal_bug)
                                        cudf::get_default_stream(),
                                        cudf::get_current_device_resource_ref());
 
-  thrust::host_vector<bool> result_host(result.size());
-  CUDF_CUDA_TRY(cudaMemcpy(
-    result_host.data(), result.data(), result.size() * sizeof(bool), cudaMemcpyDeviceToHost));
-
   // With nan_equality::UNEQUAL, NaN should not match NaN
-  EXPECT_FALSE(result_host[0]);
+  EXPECT_FALSE(result.front_element(cudf::get_default_stream()));
 }
 
 template <typename T>

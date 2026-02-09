@@ -35,14 +35,7 @@ def test_index_copy(data, deep, copy_on_write):
 
     with cudf.option_context("copy_on_write", copy_on_write):
         if not isinstance(cidx, cudf.RangeIndex):
-            if (
-                isinstance(cidx._column, cudf.core.column.StringColumn)
-                or not deep
-                or (copy_on_write and not deep)
-            ):
-                # StringColumn is immutable hence, deep copies of a
-                # Index with string dtype will share the same StringColumn.
-
+            if not deep:
                 # When `copy_on_write` is turned on, Index objects will
                 # have unique column object but they all point to same
                 # data pointers.

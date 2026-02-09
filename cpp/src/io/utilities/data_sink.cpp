@@ -97,6 +97,26 @@ class host_buffer_sink : public data_sink {
     buffer_->insert(buffer_->end(), char_array, char_array + size);
   }
 
+  [[nodiscard]] bool supports_device_write() const override { return true; }
+
+  [[nodiscard]] bool is_device_write_preferred(size_t size) const override { return true; }
+
+  void device_write(void const* gpu_data, size_t size, rmm::cuda_stream_view stream) override
+  {
+    device_write_async(gpu_data, size, stream).get();
+  }
+
+  std::future<void> device_write_async(void const* gpu_data,
+                                       size_t size,
+                                       rmm::cuda_stream_view stream) override
+  {
+    auto const current_size = buffer_->size();
+    buffer_->resize(current_size + size);
+    CUDF_CUDA_TRY(cudaMemcpyAsync(
+      buffer_->data() + current_size, gpu_data, size, cudaMemcpyDeviceToHost, stream.value()));
+    return std::async(std::launch::deferred, [stream]() -> void { stream.synchronize(); });
+  }
+
   void flush() override {}
 
   size_t bytes_written() override { return buffer_->size(); }

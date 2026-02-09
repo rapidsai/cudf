@@ -1,8 +1,7 @@
-# SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
-import os
 import warnings
 from collections.abc import Collection, Mapping
 from io import BytesIO, StringIO
@@ -13,8 +12,7 @@ import pandas as pd
 
 import pylibcudf as plc
 
-from cudf.core.buffer import acquire_spill_lock
-from cudf.core.column import ColumnBase
+from cudf.core.column import ColumnBase, access_columns
 from cudf.core.dataframe import DataFrame
 from cudf.core.dtypes import (
     CategoricalDtype,
@@ -32,6 +30,8 @@ from cudf.utils.dtypes import (
 
 if TYPE_CHECKING:
     from collections.abc import Hashable
+
+    from cudf._typing import DtypeObj
 
 
 def _get_cudf_schema_element_from_dtype(
@@ -161,14 +161,6 @@ def read_json(
             expand_dir_pattern="*.json",
         )
 
-        # If input data is a JSON string (or StringIO), hold a reference to
-        # the encoded memoryview externally to ensure the encoded buffer
-        # isn't destroyed before calling pylibcudf `read_json()`
-
-        for idx, source in enumerate(filepaths_or_buffers):
-            if isinstance(source, str) and not os.path.isfile(source):
-                filepaths_or_buffers[idx] = source.encode()
-
         c_compression = _to_plc_compression(compression)
 
         if on_bad_lines.lower() == "error":
@@ -260,6 +252,10 @@ def read_json(
         filepath_or_buffer = ioutils._select_single_source(
             filepath_or_buffer, "read_json (via pandas)"
         )
+        if isinstance(filepath_or_buffer, bytes):
+            # TODO: Remove once pandas 3.0 is minimum version
+            # get_reader_filepath_or_buffer may have encoded raw data to bytes for libcudf
+            filepath_or_buffer = filepath_or_buffer.decode()
 
         pd_value = pd.read_json(
             filepath_or_buffer,
@@ -311,18 +307,18 @@ def _maybe_return_nullable_pd_obj(
         return cudf_obj.to_pandas(nullable=False)
 
 
-def _dtype_to_names_list(col: ColumnBase) -> list[tuple[Hashable, Any]]:
-    if isinstance(col.dtype, StructDtype):
+def _dtype_to_names_list(dtype: DtypeObj) -> list[tuple[Hashable, Any]]:
+    if isinstance(dtype, StructDtype):
         return [
-            (name, _dtype_to_names_list(child))
-            for name, child in zip(col.dtype.fields, col.children, strict=True)
+            (name, _dtype_to_names_list(field_dtype))
+            for name, field_dtype in dtype.fields.items()
         ]
-    elif isinstance(col.dtype, ListDtype):
-        return [("", _dtype_to_names_list(child)) for child in col.children]
+    elif isinstance(dtype, ListDtype):
+        # List columns have two children: offsets and values
+        return [("", []), ("", _dtype_to_names_list(dtype.element_type))]
     return []
 
 
-@acquire_spill_lock()
 def _plc_write_json(
     table: Series | DataFrame,
     colnames: list[tuple[Hashable, Any]],
@@ -338,33 +334,32 @@ def _plc_write_json(
     lines: bool = False,
     rows_per_chunk: int = 1024 * 64,  # 64K rows
 ) -> None:
-    try:
-        # TODO: TableWithMetadata expects list[ColumnNameSpec] but receives list[tuple[Hashable, Any]]
-        tbl_w_meta = plc.io.TableWithMetadata(
-            plc.Table(
-                [col.to_pylibcudf(mode="read") for col in table._columns]
-            ),
-            colnames,  # type: ignore[arg-type]
-        )
-        options = (
-            plc.io.json.JsonWriterOptions.builder(
-                plc.io.SinkInfo([path_or_buf]), tbl_w_meta.tbl
+    with access_columns(*table._columns, mode="read", scope="internal"):
+        try:
+            # TODO: TableWithMetadata expects list[ColumnNameSpec] but receives list[tuple[Hashable, Any]]
+            tbl_w_meta = plc.io.TableWithMetadata(
+                plc.Table([col.plc_column for col in table._columns]),
+                colnames,  # type: ignore[arg-type]
             )
-            .metadata(tbl_w_meta)
-            .na_rep(na_rep)
-            .include_nulls(include_nulls)
-            .lines(lines)
-            .compression(_to_plc_compression(compression))
-            .build()
-        )
-        if rows_per_chunk != np.iinfo(np.int32).max:
-            options.set_rows_per_chunk(rows_per_chunk)
-        plc.io.json.write_json(options)
-    except OverflowError as err:
-        raise OverflowError(
-            f"Writing JSON file with rows_per_chunk={rows_per_chunk} failed. "
-            "Consider providing a smaller rows_per_chunk argument."
-        ) from err
+            options = (
+                plc.io.json.JsonWriterOptions.builder(
+                    plc.io.SinkInfo([path_or_buf]), tbl_w_meta.tbl
+                )
+                .metadata(tbl_w_meta)
+                .na_rep(na_rep)
+                .include_nulls(include_nulls)
+                .lines(lines)
+                .compression(_to_plc_compression(compression))
+                .build()
+            )
+            if rows_per_chunk != np.iinfo(np.int32).max:
+                options.set_rows_per_chunk(rows_per_chunk)
+            plc.io.json.write_json(options)
+        except OverflowError as err:
+            raise OverflowError(
+                f"Writing JSON file with rows_per_chunk={rows_per_chunk} failed. "
+                "Consider providing a smaller rows_per_chunk argument."
+            ) from err
 
 
 @ioutils.doc_to_json()
@@ -402,7 +397,7 @@ def to_json(
             return_as_string = False
 
         colnames = [
-            (name, _dtype_to_names_list(col))
+            (name, _dtype_to_names_list(col.dtype))
             for name, col in cudf_val._column_labels_and_values
         ]
 

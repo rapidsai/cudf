@@ -365,7 +365,7 @@ def test_fillna_categorical(psr, fill_value, inplace):
                 freq="1YE" if PANDAS_GE_220 else "1y",
             )
         )
-        + pd.Timedelta("1d"),
+        + pd.Timedelta(days=1),
         pd.Series(["2010-01-01", None, "2011-10-10"], dtype="datetime64[ns]"),
         pd.Series(
             [

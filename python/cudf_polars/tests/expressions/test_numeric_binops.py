@@ -121,3 +121,16 @@ def test_true_div_with_decimals():
     )
     q = df.select(pl.col("bar") / pl.col("foo"))
     assert_gpu_result_equal(q, check_dtypes=not POLARS_VERSION_LT_132)
+
+
+def test_multiply_with_decimals():
+    df = pl.LazyFrame(
+        {
+            "x": [Decimal("1.23"), Decimal("4.56"), Decimal("7.89")],
+            "y": [Decimal("2.00"), Decimal("3.00"), Decimal("4.00")],
+        },
+        schema={"x": pl.Decimal(10, 2), "y": pl.Decimal(10, 3)},
+    )
+
+    q = df.select(pl.col("x") * pl.col("y"))
+    assert_gpu_result_equal(q, check_dtypes=not POLARS_VERSION_LT_132)
