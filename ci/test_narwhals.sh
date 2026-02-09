@@ -76,7 +76,6 @@ NARWHALS_POLARS_GPU=1 \
     -p xdist \
     -p env \
     -p no:pytest_benchmark \
-    --deselect=tests/series_only/is_ordered_categorical_test.py::test_is_ordered_categorical_polars \
     -k "not ( \
         ${TESTS_THAT_NEED_NARWHALS_FIX_FOR_CUDF_POLARS} \
     )" \
