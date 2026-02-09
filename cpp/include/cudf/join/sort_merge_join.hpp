@@ -15,10 +15,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
-#include <thrust/iterator/counting_iterator.h>
-
 #include <optional>
-#include <variant>
 
 namespace CUDF_EXPORT cudf {
 
@@ -30,6 +27,11 @@ namespace CUDF_EXPORT cudf {
 
 /**
  * @brief Class that implements sort-merge algorithm for table joins
+ *
+ * This class enables the sort-merge join scheme that builds a preprocessed right table once,
+ * and probes as many times as needed. All join methods (`inner_join()`, `left_join()`,
+ * `inner_join_match_context()`, and `partitioned_inner_join()`) are thread-safe and can be
+ * called concurrently from multiple threads on the same instance.
  */
 class sort_merge_join {
  public:
@@ -63,6 +65,8 @@ class sort_merge_join {
    * left table.
    * @see cudf::inner_join().
    *
+   * This method is thread-safe and can be called concurrently from multiple threads.
+   *
    * @param left The left table
    * @param is_left_sorted Enum to indicate if left table is pre-sorted
    * @param stream CUDA stream used for device memory operations and kernel launches
@@ -77,13 +81,15 @@ class sort_merge_join {
   inner_join(table_view const& left,
              sorted is_left_sorted,
              rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-             rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+             rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref()) const;
 
   /**
    * @brief Returns the row indices that can be used to construct the result of performing
    * a left join between the right table passed while creating the sort_merge_join object, and the
    * left table.
    * @see cudf::left_join().
+   *
+   * This method is thread-safe and can be called concurrently from multiple threads.
    *
    * @param left The left table
    * @param is_left_sorted Enum to indicate if left table is pre-sorted
@@ -98,7 +104,7 @@ class sort_merge_join {
   left_join(table_view const& left,
             sorted is_left_sorted,
             rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-            rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+            rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref()) const;
 
   /**
    * @brief Returns context information about matches between the left and right tables.
@@ -107,26 +113,29 @@ class sort_merge_join {
    * the right table according to inner join semantics, and returns the number of matches through a
    * match_context object.
    *
+   * This method is thread-safe and can be called concurrently from multiple threads.
+   *
    * This is particularly useful for:
    * - Determining the total size of a potential join result without materializing it
    * - Planning partitioned join operations for large datasets
    *
-   * The returned join_match_context can be used directly with partitioned_inner_join() to
-   * process large joins in manageable chunks.
+   * The returned sort_merge_join_match_context can be used directly with partitioned_inner_join()
+   * to process large joins in manageable chunks.
    *
    * @param left The left table to join with the pre-processed right table
    * @param is_left_sorted Enum to indicate if left table is pre-sorted
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource used to allocate the result device memory
    *
-   * @return A join_match_context object containing the left table view and a device vector
-   *         of match counts for each row in the left table
+   * @return A unique_ptr to join_match_context
+   *         containing the left table view, match counts, and preprocessed left table state for
+   *         partitioned joins
    */
-  cudf::join_match_context inner_join_match_context(
+  std::unique_ptr<join_match_context> inner_join_match_context(
     table_view const& left,
     sorted is_left_sorted,
     rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref()) const;
 
   /**
    * @brief Performs an inner join between a partition of the left table and the right table.
@@ -135,6 +144,8 @@ class sort_merge_join {
    * (defined by the join_partition_context) and the right table that was provided when constructing
    * the sort_merge_join object. The join_partition_context must have been previously created by
    * calling inner_join_match_context().
+   *
+   * This method is thread-safe and can be called concurrently from multiple threads.
    *
    * This partitioning approach enables processing large joins in smaller, memory-efficient chunks,
    * while maintaining consistent results as if the entire join was performed at once. This is
@@ -158,14 +169,18 @@ class sort_merge_join {
    * sort_merge_join join_obj(right_table, sorted::NO);
    *
    * // Get match context for the entire left table
-   * auto context = join_obj.inner_join_match_context(left_table, sorted::NO);
+   * auto match_ctx = join_obj.inner_join_match_context(left_table, sorted::NO);
+   *
+   * // Create partition context
+   * cudf::join_partition_context part_ctx{std::move(match_ctx), 0, 0};
    *
    * // Define partition boundaries (e.g., process 1000 rows at a time)
    * for (size_type start = 0; start < left_table.num_rows(); start += 1000) {
    *   size_type end = std::min(start + 1000, left_table.num_rows());
    *
-   *   // Create partition context
-   *   cudf::join_partition_context part_ctx{context, start, end};
+   *   // Set partition boundaries
+   *   part_ctx.left_start_idx = start;
+   *   part_ctx.left_end_idx = end;
    *
    *   // Get join indices for this partition
    *   auto [left_indices, right_indices] = join_obj.partitioned_inner_join(part_ctx);
@@ -179,7 +194,7 @@ class sort_merge_join {
   partitioned_inner_join(
     cudf::join_partition_context const& context,
     rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref()) const;
 
  private:
   /**
@@ -202,6 +217,20 @@ class sort_merge_join {
 
     std::optional<std::unique_ptr<column>> _null_processed_table_sorted_order =
       std::nullopt;  ///< Optional sort ordering for pre-sorted tables
+
+    /**
+     * @brief Factory method to create a preprocessed table
+     *
+     * @param table The table to preprocess
+     * @param compare_nulls Controls whether null join-key values should match or not
+     * @param is_sorted Enum to indicate if the table is pre-sorted
+     * @param stream CUDA stream used for device memory operations and kernel launches
+     * @return A preprocessed_table ready for join operations
+     */
+    static preprocessed_table create(table_view const& table,
+                                     null_equality compare_nulls,
+                                     sorted is_sorted,
+                                     rmm::cuda_stream_view stream);
 
     /**
      * @brief Mark rows in unprocessed table with nulls at root or child levels by populating the
@@ -239,23 +268,51 @@ class sort_merge_join {
      * @return A device vector containing the mapping from processed table indices to unprocessed
      * table indices
      */
-    rmm::device_uvector<size_type> map_table_to_unprocessed(rmm::cuda_stream_view stream);
+    rmm::device_uvector<size_type> map_table_to_unprocessed(rmm::cuda_stream_view stream) const;
   };
-  preprocessed_table preprocessed_left;
-  preprocessed_table preprocessed_right;
-  null_equality compare_nulls;
+
+  /**
+   * @brief Extended match context for sort-merge join with preprocessed table state.
+   *
+   * This struct derives from join_match_context and adds the preprocessed left table
+   * state needed for thread-safe partitioned join operations. It is returned by
+   * inner_join_match_context() and used with partitioned_inner_join().
+   */
+  struct sort_merge_join_match_context : public join_match_context {
+    preprocessed_table preprocessed_left;  ///< Preprocessed left table state for partitioned joins
+
+    /**
+     * @brief Construct a sort_merge_join_match_context
+     *
+     * @param left_table The left table view
+     * @param match_counts Device vector of match counts per row
+     * @param preprocessed Preprocessed left table state
+     */
+    sort_merge_join_match_context(table_view left_table,
+                                  std::unique_ptr<rmm::device_uvector<size_type>> match_counts,
+                                  preprocessed_table preprocessed)
+      : join_match_context{left_table, std::move(match_counts)},
+        preprocessed_left{std::move(preprocessed)}
+    {
+    }
+  };
+
+  preprocessed_table preprocessed_right;  ///< Preprocessed right table
+  null_equality compare_nulls;            ///< Null comparison mode
 
   /**
    * @brief Post-process left and right tables after the merge operation
    *
+   * @param preprocessed_left The preprocessed left table
    * @param smaller_indices Indices for the smaller processed table used to construct the join
    * result
    * @param larger_indices Indices for the larger processed table used to construct the join result
    * @param stream CUDA stream used for device memory operations and kernel launches
    */
-  void postprocess_indices(device_span<size_type> smaller_indices,
+  void postprocess_indices(preprocessed_table const& preprocessed_left,
+                           device_span<size_type> smaller_indices,
                            device_span<size_type> larger_indices,
-                           rmm::cuda_stream_view stream);
+                           rmm::cuda_stream_view stream) const;
 
   /**
    * @brief Core merge operation implementation for the sort-merge join algorithm.
@@ -273,6 +330,7 @@ class sort_merge_join {
    * null values according to the null_equality setting.
    *
    * @tparam MergeOperation Functor type that implements the specific join operation
+   * @param preprocessed_left The preprocessed left table
    * @param right_view The preprocessed right table view
    * @param left_view The preprocessed left table view
    * @param op The merge operation functor to execute during the merge
@@ -282,10 +340,11 @@ class sort_merge_join {
    *         (typically pairs of join indices or match counts)
    */
   template <typename MergeOperation>
-  auto invoke_merge(table_view right_view,
+  auto invoke_merge(preprocessed_table const& preprocessed_left,
+                    table_view right_view,
                     table_view left_view,
                     MergeOperation&& op,
-                    rmm::cuda_stream_view stream);
+                    rmm::cuda_stream_view stream) const;
 };
 
 /**
