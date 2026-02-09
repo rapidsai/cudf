@@ -1359,16 +1359,7 @@ class StringColumn(ColumnBase, Scannable):
             bool_plc = plc.strings.convert.convert_integers.is_integer(
                 self.plc_column
             )
-            result_scalar = plc.reduce.reduce(
-                bool_plc,
-                plc.aggregation.all(),
-                plc.types.DataType(plc.types.TypeId.BOOL8),
-            )
-            result = result_scalar.to_py()
-            assert isinstance(result, bool), (
-                f"Expected bool, got {type(result)}"
-            )
-            return result
+            return self._reduce_bool_column(bool_plc)
 
     def is_all_float(self) -> bool:
         """Check if all non-null strings in the column are floats.
@@ -1385,16 +1376,19 @@ class StringColumn(ColumnBase, Scannable):
             bool_plc = plc.strings.convert.convert_floats.is_float(
                 self.plc_column
             )
-            result_scalar = plc.reduce.reduce(
-                bool_plc,
-                plc.aggregation.all(),
-                plc.types.DataType(plc.types.TypeId.BOOL8),
-            )
-            result = result_scalar.to_py()
-            assert isinstance(result, bool), (
-                f"Expected bool, got {type(result)}"
-            )
-            return result
+            return self._reduce_bool_column(bool_plc)
+
+    @staticmethod
+    def _reduce_bool_column(bool_plc: plc.Column) -> bool:
+        """Reduce a boolean column to a single bool using all()."""
+        result_scalar = plc.reduce.reduce(
+            bool_plc,
+            plc.aggregation.all(),
+            plc.types.DataType(plc.types.TypeId.BOOL8),
+        )
+        result = result_scalar.to_py()
+        assert isinstance(result, bool), f"Expected bool, got {type(result)}"
+        return result
 
     def count_characters(self) -> NumericalColumn:
         with self.access(mode="read", scope="internal"):
