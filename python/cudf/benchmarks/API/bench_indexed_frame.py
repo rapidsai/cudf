@@ -8,7 +8,7 @@ from utils import benchmark_with_object
 
 
 @benchmark_with_object(cls="indexedframe", dtype="int")
-@pytest.mark.parametrize("op", ["cumsum", "cumprod", "cummax"])
+@pytest.mark.parametrize("op", ["cumsum", "cummax"])
 def bench_scans(benchmark, op, indexedframe):
     benchmark(getattr(indexedframe, op))
 
