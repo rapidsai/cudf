@@ -187,6 +187,18 @@ void test_hybrid_scan(std::vector<cudf::column_view> const& columns)
     mr);
 
   CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected_tbl->view(), read_single_step_table->view());
+
+  // Read parquet using the chunked hybrid scan reader in a single step
+  auto [read_chunked_single_step_table, read_chunked_single_step_metadata] =
+    chunked_hybrid_scan_single_step(
+      cudf::host_span<uint8_t const>(reinterpret_cast<uint8_t const*>(parquet_buffer.data()),
+                                     parquet_buffer.size()),
+      std::make_optional(filter_expression),
+      {},
+      stream,
+      mr);
+
+  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected_tbl->view(), read_chunked_single_step_table->view());
 }
 
 }  // namespace
