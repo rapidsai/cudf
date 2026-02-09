@@ -12,11 +12,10 @@ namespace CUDF_LTO_EXPORT cudf {
 namespace lto {
 
 /// @brief Type-erased parameters for LTO-JIT-compiled transform operations.
-struct transform_params {
-  void const* inputs  = nullptr;  ///< Pointer to inputs data.
-  void* user_data     = nullptr;  ///< Pointer to user data / context.
-  void const* outputs = nullptr;  ///< Pointer to outputs data.
-  size_type row_index = 0;        ///< Current row index.
+struct [[nodiscard]] transform_params {
+  void* __restrict__ const* __restrict__ scope =
+    nullptr;                ///< Pointer to scope data (e.g. column views, scalars, etc.).
+  size_type row_index = 0;  ///< Current row index.
 };
 
 }  // namespace lto

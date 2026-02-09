@@ -150,7 +150,7 @@ void add_blob_to_disk(std::string const& cache_dir,
 }  // namespace
 
 std::shared_future<blob> cache_t::query_or_insert_blob(sha256_hash const& sha,
-                                                       std::function<blob()> maker)
+                                                       blob_compile_function_t compile)
 {
   CUDF_FUNC_RANGE();
 
@@ -204,7 +204,7 @@ std::shared_future<blob> cache_t::query_or_insert_blob(sha256_hash const& sha,
       lock_.unlock();
       unlocked = true;
 
-      auto result = maker();
+      auto result = compile();
       promise.set_value(result);
 
       // store result to disk
@@ -217,7 +217,7 @@ std::shared_future<blob> cache_t::query_or_insert_blob(sha256_hash const& sha,
 
 std::shared_future<fragment> cache_t::query_or_insert_fragment(sha256_hash const& sha,
                                                                binary_type type,
-                                                               std::function<fragment()> maker)
+                                                               fragment_compile_function_t compile)
 {
   CUDF_FUNC_RANGE();
 
@@ -279,7 +279,7 @@ std::shared_future<fragment> cache_t::query_or_insert_fragment(sha256_hash const
       lock_.unlock();
       unlocked = true;
 
-      auto result = maker();
+      auto result = compile();
       promise.set_value(result);
 
       // store result to disk
@@ -290,8 +290,9 @@ std::shared_future<fragment> cache_t::query_or_insert_fragment(sha256_hash const
   }
 }
 
-std::shared_future<library> cache_t::query_or_insert_library(
-  sha256_hash const& sha, binary_type type, std::function<std::tuple<library, blob>()> maker)
+std::shared_future<library> cache_t::query_or_insert_library(sha256_hash const& sha,
+                                                             binary_type type,
+                                                             library_compile_function_t compile)
 {
   CUDF_FUNC_RANGE();
 
@@ -352,7 +353,7 @@ std::shared_future<library> cache_t::query_or_insert_library(
       lock_.unlock();
       unlocked = true;
 
-      auto [library, blob] = maker();
+      auto [library, blob] = compile();
       promise.set_value(library);
 
       // store result to disk

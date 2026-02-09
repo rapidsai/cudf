@@ -91,6 +91,43 @@ struct [[nodiscard]] blob_t {
 
 using blob = std::shared_ptr<blob_t>;
 
+template <typename Signature>
+struct function_ref;
+
+/// @brief Zero-copy, type-erased reference to a callable entity (e.g. lambda, function pointer)
+/// that can be invoked with the given signature.
+template <typename R, typename... Args>
+struct function_ref<R(Args...)> {
+ private:
+  void* _user_data;
+  R (*_thunk)(void*, Args...);
+
+ public:
+  function_ref(void* user_data, R (*thunk)(void*, Args...)) : _user_data{user_data}, _thunk{thunk}
+  {
+  }
+
+  R operator()(Args... args) const { return _thunk(_user_data, std::forward<Args>(args)...); }
+
+  template <typename Lambda>
+  static function_ref from_functor(Lambda& func)
+  {
+    return function_ref{static_cast<void*>(std::addressof(func)),
+                        +[](void* user_data, Args... args) -> R {
+                          auto& lambda = *static_cast<std::remove_reference_t<Lambda>*>(user_data);
+                          return lambda(std::forward<Args>(args)...);
+                        }};
+  }
+
+  static function_ref from_function_pointer(R (*func)(Args...))
+  {
+    return function_ref{func, +[](void* user_data, Args... args) -> R {
+                          auto func = reinterpret_cast<R (*)(Args...)>(user_data);
+                          return func(std::forward<Args>(args)...);
+                        }};
+  }
+};
+
 struct [[nodiscard]] header_map {
   std::span<char const* const> include_names = {};  // null-terminated header include names
   std::span<char const* const> headers       = {};  // null-terminated header contents

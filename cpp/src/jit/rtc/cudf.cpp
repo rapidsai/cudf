@@ -248,7 +248,8 @@ bundle={})***",
     return fragment_t::load(load_params);
   };
 
-  auto fut = cache.query_or_insert_fragment(cache_key_sha256, binary_type::FATBIN, compile);
+  auto fut = cache.query_or_insert_fragment(
+    cache_key_sha256, binary_type::FATBIN, fragment_compile_function_t::from_functor(compile));
 
   lto_library_ = fut.get();
 }
@@ -415,7 +416,8 @@ bundle={})***",
     return frag;
   };
 
-  auto fut = cache.query_or_insert_fragment(cache_key_sha256, binary_type::LTO_IR, compile);
+  auto fut = cache.query_or_insert_fragment(
+    cache_key_sha256, binary_type::LTO_IR, fragment_compile_function_t::from_functor(compile));
 
   return fut.get();
 }
@@ -445,7 +447,7 @@ library compile_and_link_udf(char const* name,
 
     // TODO: experiment with:
     // optimization flags
-    // split compile
+    // split-compile
     // split-compile-extended
     // lineinfo and debug info options
     // -kernels-used=
@@ -512,8 +514,9 @@ arch={})***",
                                        sm);
   auto library_cache_key_sha256 = hash_string(library_cache_key);
 
-  auto library =
-    cache.query_or_insert_library(library_cache_key_sha256, binary_type::CUBIN, compile);
+  auto library = cache.query_or_insert_library(library_cache_key_sha256,
+                                               binary_type::CUBIN,
+                                               library_compile_function_t::from_functor(compile));
 
   return library.get();
 }

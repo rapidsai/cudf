@@ -193,6 +193,10 @@ struct cache_statistics_counter {
 
 }  // namespace detail
 
+using blob_compile_function_t     = function_ref<blob()>;
+using fragment_compile_function_t = function_ref<fragment()>;
+using library_compile_function_t  = function_ref<std::tuple<library, blob>()>;
+
 /// @brief Thread-safe compile cache for compiled blobs, fragments, and libraries
 /// @details Provides in-memory and on-disk caching of compiled RTC artifacts.
 /// The cache uses an LRU eviction policy when the number of cached items
@@ -234,14 +238,15 @@ struct cache_t {
   [[nodiscard]] std::string const& get_cache_dir();
 
   std::shared_future<blob> query_or_insert_blob(sha256_hash const& sha,
-                                                std::function<blob()> maker);
+                                                blob_compile_function_t compile);
 
   std::shared_future<fragment> query_or_insert_fragment(sha256_hash const& sha,
                                                         binary_type type,
-                                                        std::function<fragment()> maker);
+                                                        fragment_compile_function_t compile);
 
-  std::shared_future<library> query_or_insert_library(
-    sha256_hash const& sha, binary_type type, std::function<std::tuple<library, blob>()> maker);
+  std::shared_future<library> query_or_insert_library(sha256_hash const& sha,
+                                                      binary_type type,
+                                                      library_compile_function_t compile);
 
   cache_statistics get_statistics();
 
