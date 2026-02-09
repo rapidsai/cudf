@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 import itertools
 import operator
@@ -1376,10 +1376,10 @@ if PANDAS_GE_220:
 else:
 
     def expect_inner(left, right, sort):
-        left_key = left.key.values_host.tolist()
-        left_val = left.val.values_host.tolist()
-        right_key = right.key.values_host.tolist()
-        right_val = right.val.values_host.tolist()
+        left_key = left.key.to_numpy().tolist()
+        left_val = left.val.to_numpy().tolist()
+        right_key = right.key.to_numpy().tolist()
+        right_val = right.val.to_numpy().tolist()
 
         right_have = defaultdict(list)
         for i, k in enumerate(right_key):
@@ -1408,10 +1408,10 @@ else:
         return cudf.DataFrame({"key": keys, "val_x": val_x, "val_y": val_y})
 
     def expect_left(left, right, sort):
-        left_key = left.key.values_host.tolist()
-        left_val = left.val.values_host.tolist()
-        right_key = right.key.values_host.tolist()
-        right_val = right.val.values_host.tolist()
+        left_key = left.key.to_numpy().tolist()
+        left_val = left.val.to_numpy().tolist()
+        right_key = right.key.to_numpy().tolist()
+        right_val = right.val.to_numpy().tolist()
 
         right_have = defaultdict(list)
         for i, k in enumerate(right_key):
@@ -1443,10 +1443,10 @@ else:
         return cudf.DataFrame({"key": keys, "val_x": val_x, "val_y": val_y})
 
     def expect_outer(left, right, sort):
-        left_key = left.key.values_host.tolist()
-        left_val = left.val.values_host.tolist()
-        right_key = right.key.values_host.tolist()
-        right_val = right.val.values_host.tolist()
+        left_key = left.key.to_numpy().tolist()
+        left_val = left.val.to_numpy().tolist()
+        right_key = right.key.to_numpy().tolist()
+        right_val = right.val.to_numpy().tolist()
         right_have = defaultdict(list)
         for i, k in enumerate(right_key):
             right_have[k].append(i)
@@ -1582,8 +1582,8 @@ def test_merge_combinations(
         else:
             expected, other, other_unique = right, left, left_unique
         if how == "inner":
-            keep_values = set(left["key"].values_host).intersection(
-                right["key"].values_host
+            keep_values = set(left["key"].to_numpy()).intersection(
+                right["key"].to_numpy()
             )
             keep_mask = expected["key"].isin(keep_values)
             expected = expected[keep_mask]
@@ -1605,8 +1605,8 @@ def test_merge_combinations(
             right_counts = right["key"].value_counts()
             expected_counts = left_counts.mul(right_counts, fill_value=1)
             expected_counts = expected_counts.astype(np.intp)
-            expected = expected_counts.index.values_host.repeat(
-                expected_counts.values_host
+            expected = expected_counts.index.to_numpy().repeat(
+                expected_counts.to_numpy()
             )
             expected = cudf.DataFrame({"key": expected})
             expected = expected.sort_values("key")

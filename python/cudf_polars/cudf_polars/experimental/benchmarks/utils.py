@@ -45,6 +45,7 @@ except ImportError:
 
 try:
     from cudf_polars.dsl.ir import IRExecutionContext
+    from cudf_polars.dsl.tracing import Scope
     from cudf_polars.dsl.translate import Translator
     from cudf_polars.experimental.explain import explain_query
     from cudf_polars.experimental.parallel import evaluate_streaming
@@ -261,6 +262,7 @@ class RunConfig:
     native_parquet: bool
     spill_to_pinned_memory: bool
     extra_info: dict[str, Any] = dataclasses.field(default_factory=dict)
+    fallback_mode: str | None = None
 
     def __post_init__(self) -> None:  # noqa: D105
         if self.gather_shuffle_stats and self.shuffle != "rapidsmpf":
@@ -381,6 +383,7 @@ class RunConfig:
             native_parquet=args.native_parquet,
             extra_info=args.extra_info,
             spill_to_pinned_memory=args.spill_to_pinned_memory,
+            fallback_mode=args.fallback_mode,
         )
 
     def serialize(self, engine: pl.GPUEngine | None) -> dict:
@@ -461,6 +464,8 @@ def get_executor_options(
             executor_options["broadcast_join_limit"] = run_config.broadcast_join_limit
         if run_config.rapidsmpf_spill:
             executor_options["rapidsmpf_spill"] = run_config.rapidsmpf_spill
+        if run_config.fallback_mode:
+            executor_options["fallback_mode"] = run_config.fallback_mode
         if run_config.cluster == "distributed":
             executor_options["cluster"] = "distributed"
         executor_options["stats_planning"] = {
@@ -558,7 +563,7 @@ def initialize_dask_cluster(run_config: RunConfig, args: argparse.Namespace):  #
     if scheduler_address is not None:
         # Connect to existing cluster via scheduler address
         client = Client(address=scheduler_address)
-        n_workers = len(client.scheduler_info().get("workers", {}))
+        n_workers = client.scheduler_info()["n_workers"]
         print(
             f"Connected to existing Dask cluster at {scheduler_address} "
             f"with {n_workers} workers"
@@ -566,7 +571,7 @@ def initialize_dask_cluster(run_config: RunConfig, args: argparse.Namespace):  #
     elif scheduler_file is not None:
         # Connect to existing cluster via scheduler file
         client = Client(scheduler_file=scheduler_file)
-        n_workers = len(client.scheduler_info().get("workers", {}))
+        n_workers = client.scheduler_info()["n_workers"]
         print(
             f"Connected to existing Dask cluster via scheduler file: {scheduler_file} "
             f"with {n_workers} workers"
@@ -1006,6 +1011,17 @@ def parse_args(
         default={},
         help="Extra information to add to the output file (e.g. version information). Must be JSON-serializable.",
     )
+    parser.add_argument(
+        "--fallback-mode",
+        type=str,
+        choices=["warn", "raise", "silent"],
+        default=None,
+        help=textwrap.dedent("""\
+            How to handle operations that don't support multiple partitions in streaming executor.
+            - warn   : Emit a warning and fall back to single partition (default)
+            - raise  : Raise an exception
+            - silent : Silently fall back to single partition"""),
+    )
 
     parsed_args = parser.parse_args(args)
 
@@ -1032,7 +1048,7 @@ def run_polars(
 
     # Update n_workers from the actual cluster when using scheduler file/address
     if client is not None:
-        actual_n_workers = len(client.scheduler_info().get("workers", {}))
+        actual_n_workers = client.scheduler_info()["n_workers"]
         run_config = dataclasses.replace(run_config, n_workers=actual_n_workers)
 
     records: defaultdict[int, list[Record]] = defaultdict(list)
@@ -1134,13 +1150,17 @@ def run_polars(
             return logger.handlers[0].stream.getvalue()  # type: ignore[attr-defined]
 
         if client is not None:
-            all_logs = "\n".join(client.run(gather_logs).values())
+            # Gather logs from both client (for Query Plan) and workers
+            worker_logs = "\n".join(client.run(gather_logs).values())
+            client_logs = gather_logs()
+            all_logs = client_logs + "\n" + worker_logs
         else:
             all_logs = gather_logs()
 
         parsed_logs = [json.loads(log) for log in all_logs.splitlines() if log]
         # Some other log records can end up in here. Filter those out.
-        parsed_logs = [log for log in parsed_logs if log["event"] == "Execute IR"]
+        scope_values = {s.value for s in Scope}
+        parsed_logs = [log for log in parsed_logs if log.get("scope") in scope_values]
         # Now we want to augment the existing Records with the trace data.
 
         def group_key(x: dict) -> int:

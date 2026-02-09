@@ -23,7 +23,7 @@ from cudf.utils.scalar import (
     maybe_nested_pa_scalar_to_py,
     pa_scalar_to_plc_scalar,
 )
-from cudf.utils.utils import _is_null_host_scalar
+from cudf.utils.utils import is_na_like
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
@@ -149,7 +149,7 @@ class ListColumn(ColumnBase):
 
         # Build Data, Mask & Offsets
         for data in arbitrary:
-            if _is_null_host_scalar(data):
+            if is_na_like(data):
                 mask_bools.append(False)
                 offset_vals.append(offset)
             else:
@@ -176,7 +176,7 @@ class ListColumn(ColumnBase):
         )
         return cast(
             "Self",
-            cls.from_pylibcudf(plc_column),
+            ColumnBase.create(plc_column, ListDtype(data_col.dtype)),
         )
 
     @cached_property
@@ -207,7 +207,7 @@ class ListColumn(ColumnBase):
             )
             return cast(
                 "cudf.core.column.string.StringColumn",
-                type(self).from_pylibcudf(plc_column),
+                ColumnBase.create(plc_column, dtype),
             )
 
     def _transform_leaves(
@@ -220,18 +220,22 @@ class ListColumn(ColumnBase):
         # We need to keep the full plc_column for accessing size, mask, null_count, offset
         leaf_queue: list[plc.Column] = []
         curr_plc_col: plc.Column = self.plc_column
+        leaf_dtype = self.dtype
 
         while curr_plc_col.type().id() == plc.TypeId.LIST:
             leaf_queue.append(curr_plc_col)
             curr_plc_col = curr_plc_col.list_view().child()
+            leaf_dtype = cast(ListDtype, leaf_dtype).element_type
 
         # Apply the transformation to the leaf column
         # TODO: For now we convert plc.Column to ColumnBase for the func, then back to
         # plc.Column, but we should be able to eventually avoid this double conversion.
-        leaf_col_base = ColumnBase.from_pylibcudf(curr_plc_col)
-        plc_leaf_col = func(leaf_col_base, *args).plc_column
+        leaf_col_base = ColumnBase.create(curr_plc_col, leaf_dtype)
+        transformed_leaf = func(leaf_col_base, *args)
+        plc_leaf_col = transformed_leaf.plc_column
 
         # Rebuild the list column hierarchy from leaf back to root
+        result_dtype = transformed_leaf.dtype
         while leaf_queue:
             parent_plc_col = leaf_queue.pop()
             offsets = parent_plc_col.list_view().offsets()
@@ -245,9 +249,10 @@ class ListColumn(ColumnBase):
                 parent_plc_col.offset(),
                 [offsets, plc_leaf_col],
             )
+            result_dtype = ListDtype(result_dtype)
         return cast(
             "Self",
-            ColumnBase.from_pylibcudf(plc_leaf_col),
+            ColumnBase.create(plc_leaf_col, result_dtype),
         )
 
     @property
@@ -278,13 +283,14 @@ class ListColumn(ColumnBase):
 
     def count_elements(self) -> ColumnBase:
         with self.access(mode="read", scope="internal"):
-            return type(self).from_pylibcudf(
-                plc.lists.count_elements(self.plc_column)
+            return ColumnBase.create(
+                plc.lists.count_elements(self.plc_column),
+                get_dtype_of_same_kind(self.dtype, np.dtype(np.int32)),
             )
 
     def distinct(self, nulls_equal: bool, nans_all_equal: bool) -> ColumnBase:
         with self.access(mode="read", scope="internal"):
-            return type(self).from_pylibcudf(
+            return ColumnBase.create(
                 plc.lists.distinct(
                     self.plc_column,
                     (
@@ -297,14 +303,15 @@ class ListColumn(ColumnBase):
                         if nans_all_equal
                         else plc.types.NanEquality.UNEQUAL
                     ),
-                )
+                ),
+                self.dtype,
             )
 
     def sort_lists(
         self, ascending: bool, na_position: Literal["first", "last"]
     ) -> ColumnBase:
         with self.access(mode="read", scope="internal"):
-            return type(self).from_pylibcudf(
+            return ColumnBase.create(
                 plc.lists.sort_lists(
                     self.plc_column,
                     plc.types.Order.ASCENDING
@@ -316,59 +323,65 @@ class ListColumn(ColumnBase):
                         else plc.types.NullOrder.AFTER
                     ),
                     False,
-                )
+                ),
+                self.dtype,
             )
 
     def extract_element_scalar(self, index: int) -> ColumnBase:
         with self.access(mode="read", scope="internal"):
-            return ColumnBase.from_pylibcudf(
+            return ColumnBase.create(
                 plc.lists.extract_list_element(
                     self.plc_column,
                     index,
-                )
+                ),
+                self.element_type,
             )
 
     def extract_element_column(self, index: ColumnBase) -> ColumnBase:
         with self.access(mode="read", scope="internal"):
-            return ColumnBase.from_pylibcudf(
+            return ColumnBase.create(
                 plc.lists.extract_list_element(
                     self.plc_column,
                     index.plc_column,
-                )
+                ),
+                self.element_type,
             )
 
     def contains_scalar(self, search_key: pa.Scalar) -> ColumnBase:
         with self.access(mode="read", scope="internal"):
-            return type(self).from_pylibcudf(
+            return ColumnBase.create(
                 plc.lists.contains(
                     self.plc_column,
                     pa_scalar_to_plc_scalar(search_key),
-                )
+                ),
+                get_dtype_of_same_kind(self.dtype, np.dtype(np.bool_)),
             )
 
     def index_of_scalar(self, search_key: pa.Scalar) -> ColumnBase:
         with self.access(mode="read", scope="internal"):
-            return type(self).from_pylibcudf(
+            return ColumnBase.create(
                 plc.lists.index_of(
                     self.plc_column,
                     pa_scalar_to_plc_scalar(search_key),
                     plc.lists.DuplicateFindOption.FIND_FIRST,
-                )
+                ),
+                get_dtype_of_same_kind(self.dtype, np.dtype(np.int32)),
             )
 
     def index_of_column(self, search_keys: ColumnBase) -> ColumnBase:
         with self.access(mode="read", scope="internal"):
-            return type(self).from_pylibcudf(
+            return ColumnBase.create(
                 plc.lists.index_of(
                     self.plc_column,
                     search_keys.plc_column,
                     plc.lists.DuplicateFindOption.FIND_FIRST,
-                )
+                ),
+                get_dtype_of_same_kind(self.dtype, np.dtype(np.int32)),
             )
 
     def concatenate_rows(self, other_columns: list[ColumnBase]) -> ColumnBase:
         with self.access(mode="read", scope="internal"):
-            return type(self).from_pylibcudf(
+            return ColumnBase.create(
                 plc.lists.concatenate_rows(
                     plc.Table(
                         [
@@ -376,27 +389,30 @@ class ListColumn(ColumnBase):
                             for col in itertools.chain([self], other_columns)
                         ]
                     )
-                )
+                ),
+                self.dtype,
             )
 
     def concatenate_list_elements(self, dropna: bool) -> ColumnBase:
         with self.access(mode="read", scope="internal"):
-            return type(self).from_pylibcudf(
+            return ColumnBase.create(
                 plc.lists.concatenate_list_elements(
                     self.plc_column,
                     plc.lists.ConcatenateNullPolicy.IGNORE
                     if dropna
                     else plc.lists.ConcatenateNullPolicy.NULLIFY_OUTPUT_ROW,
-                )
+                ),
+                self.element_type,
             )
 
     def segmented_gather(self, gather_map: ColumnBase) -> ColumnBase:
         with self.access(mode="read", scope="internal"):
-            return type(self).from_pylibcudf(
+            return ColumnBase.create(
                 plc.lists.segmented_gather(
                     self.plc_column,
                     gather_map.plc_column,
-                )
+                ),
+                self.dtype,
             )
 
     def join_list_elements(
@@ -404,6 +420,7 @@ class ListColumn(ColumnBase):
         separator: str | StringColumn,
         sep_na_rep: str,
         string_na_rep: str,
+        result_dtype: DtypeObj,
     ) -> StringColumn:
         with self.access(mode="read", scope="internal"):
             if isinstance(separator, str):
@@ -422,7 +439,7 @@ class ListColumn(ColumnBase):
             )
             return cast(
                 "cudf.core.column.string.StringColumn",
-                type(self).from_pylibcudf(plc_column),
+                ColumnBase.create(plc_column, result_dtype),
             )
 
     def minhash_ngrams(
@@ -442,14 +459,17 @@ class ListColumn(ColumnBase):
                 seed = np.uint32(seed)
             return cast(
                 "Self",
-                type(self).from_pylibcudf(
+                ColumnBase.create(
                     plc.nvtext.minhash.minhash_ngrams(
                         self.plc_column,
                         width,
                         seed,
                         a.plc_column,
                         b.plc_column,
-                    )
+                    ),
+                    ListDtype(
+                        get_dtype_of_same_kind(self.dtype, np.dtype(np.uint32))
+                    ),
                 ),
             )
 
@@ -470,13 +490,16 @@ class ListColumn(ColumnBase):
                 seed = np.uint64(seed)
             return cast(
                 "Self",
-                type(self).from_pylibcudf(
+                ColumnBase.create(
                     plc.nvtext.minhash.minhash64_ngrams(
                         self.plc_column,
                         width,
                         seed,
                         a.plc_column,
                         b.plc_column,
-                    )
+                    ),
+                    ListDtype(
+                        get_dtype_of_same_kind(self.dtype, np.dtype(np.uint64))
+                    ),
                 ),
             )

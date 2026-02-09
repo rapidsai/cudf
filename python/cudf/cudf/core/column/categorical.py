@@ -26,7 +26,7 @@ from cudf.utils.dtypes import (
     min_unsigned_type,
 )
 from cudf.utils.scalar import pa_scalar_to_plc_scalar
-from cudf.utils.utils import _is_null_host_scalar
+from cudf.utils.utils import is_na_like
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, MutableSequence, Sequence
@@ -79,6 +79,13 @@ class CategoricalColumn(column.ColumnBase):
         plc.TypeId.UINT64,
     }
 
+    @staticmethod
+    def _validate_dtype_to_plc_column(
+        plc_column: plc.Column, dtype: DtypeObj
+    ) -> None:
+        """Validate that the dtype matches the equivalent type of the plc_column"""
+        return None
+
     @classmethod
     def _validate_args(  # type: ignore[override]
         cls, plc_column: plc.Column, dtype: CategoricalDtype
@@ -113,20 +120,15 @@ class CategoricalColumn(column.ColumnBase):
         many operations on categoricals need to delegate to the codes column.
         """
         return cudf.core.column.NumericalColumn._from_preprocessed(
-            self.plc_column, self.codes_dtype
+            self.plc_column, self.dtype._codes_dtype
         )
-
-    @cached_property
-    def codes_dtype(self) -> np.dtype:
-        """The dtype of the codes (unsigned integer) used to represent categories."""
-        return min_unsigned_type(len(self.dtype.categories))
 
     @property
     def ordered(self) -> bool | None:
         return self.dtype.ordered
 
     def __setitem__(self, key: Any, value: Any) -> None:
-        if is_scalar(value) and _is_null_host_scalar(value):
+        if is_scalar(value) and is_na_like(value):
             to_add_categories = 0
         else:
             if is_scalar(value):
@@ -230,7 +232,7 @@ class CategoricalColumn(column.ColumnBase):
             other = column.as_column(
                 self._encode(other),
                 length=len(self),
-                dtype=self.codes_dtype,
+                dtype=self.dtype._codes_dtype,
             )._with_type_metadata(self.dtype)
         equality_ops = {"__eq__", "__ne__", "NULL_EQUALS", "NULL_NOT_EQUALS"}
         if not self.ordered and op not in equality_ops:
@@ -288,7 +290,7 @@ class CategoricalColumn(column.ColumnBase):
         codes = (
             col.codes.astype(signed_dtype)
             .fillna(_DEFAULT_CATEGORICAL_VALUE)
-            .values_host
+            .to_numpy()
         )
 
         cats = col.categories.nans_to_nulls()
@@ -335,13 +337,22 @@ class CategoricalColumn(column.ColumnBase):
             other = pa_scalar_to_plc_scalar(
                 pa.scalar(
                     other,
-                    type=cudf_dtype_to_pa_type(self.codes_dtype),
+                    type=cudf_dtype_to_pa_type(self.dtype._codes_dtype),
                 )
             )
         elif isinstance(other.dtype, CategoricalDtype):
             other = other.codes  # type: ignore[union-attr]
 
         return self.codes, other
+
+    def where(
+        self, cond: ColumnBase, other: ScalarLike | ColumnBase, inplace: bool
+    ) -> ColumnBase:
+        casted_col, casted_other = self._cast_self_and_other_for_where(
+            other, inplace
+        )
+        result = casted_col.copy_if_else(casted_other, cond)  # type: ignore[arg-type]
+        return column.ColumnBase.create(result.plc_column, self.dtype)
 
     def _encode(self, value: ScalarLike) -> ScalarLike:
         return self.categories.find_first_value(value)
@@ -532,7 +543,7 @@ class CategoricalColumn(column.ColumnBase):
             return pa_scalar_to_plc_scalar(
                 pa.scalar(
                     fill_value,
-                    type=cudf_dtype_to_pa_type(self.codes_dtype),
+                    type=cudf_dtype_to_pa_type(self.dtype._codes_dtype),
                 )
             )
         else:
@@ -549,7 +560,7 @@ class CategoricalColumn(column.ColumnBase):
             fill_value = cast("CategoricalColumn", fill_value)._set_categories(
                 self.categories,
             )
-            return fill_value.codes.astype(self.codes_dtype)
+            return fill_value.codes.astype(self.dtype._codes_dtype)
 
     def indices_of(self, value: ScalarLike) -> NumericalColumn:
         return self.codes.indices_of(self._encode(value))
@@ -576,7 +587,7 @@ class CategoricalColumn(column.ColumnBase):
                     column.as_column(
                         _DEFAULT_CATEGORICAL_VALUE,
                         length=self.size,
-                        dtype=self.codes_dtype,
+                        dtype=self.dtype._codes_dtype,
                     ),
                 )
                 return codes._with_type_metadata(dtype)  # type: ignore[return-value]
@@ -718,7 +729,7 @@ class CategoricalColumn(column.ColumnBase):
                     column.as_column(
                         _DEFAULT_CATEGORICAL_VALUE,
                         length=self.size,
-                        dtype=self.codes_dtype,
+                        dtype=self.dtype._codes_dtype,
                     ),
                 )
                 out_col = new_codes._with_type_metadata(  # type: ignore[assignment]

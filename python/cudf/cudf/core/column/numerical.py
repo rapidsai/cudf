@@ -40,7 +40,7 @@ from cudf.utils.dtypes import (
     min_unsigned_type,
 )
 from cudf.utils.scalar import pa_scalar_to_plc_scalar
-from cudf.utils.utils import _is_null_host_scalar, is_na_like
+from cudf.utils.utils import is_na_like
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
@@ -494,6 +494,10 @@ class NumericalColumn(NumericalBaseColumn):
 
         if is_scalar(other):
             if is_na_like(other):
+                if isinstance(
+                    other, (np.datetime64, np.timedelta64)
+                ) and np.isnat(other):
+                    return NotImplemented
                 return pa.scalar(None, type=cudf_dtype_to_pa_type(self.dtype))
             if not isinstance(other, (int, float, complex)):
                 # Go via NumPy to get the value
@@ -546,7 +550,7 @@ class NumericalColumn(NumericalBaseColumn):
             )
             return cast(
                 cudf.core.column.string.StringColumn,
-                type(self).from_pylibcudf(plc_column),
+                ColumnBase.create(plc_column, CUDF_STRING_DTYPE),
             )
 
     def as_string_column(self, dtype: DtypeObj) -> StringColumn:
@@ -588,9 +592,7 @@ class NumericalColumn(NumericalBaseColumn):
         with col.access(mode="read", scope="internal"):
             return cast(
                 cudf.core.column.string.StringColumn,
-                type(self)
-                .from_pylibcudf(conv_func(col.plc_column))
-                ._with_type_metadata(dtype),
+                ColumnBase.create(conv_func(col.plc_column), dtype),
             )
 
     def _as_temporal_column(self, dtype: np.dtype) -> plc.Column:
@@ -671,9 +673,10 @@ class NumericalColumn(NumericalBaseColumn):
                     self._dtype = dtype
                     return self
             if self.dtype.kind == "f" and dtype.kind in "iu":
-                if (
-                    not is_pandas_nullable_extension_dtype(dtype)
-                    and self.nan_count > 0
+                if not is_pandas_nullable_extension_dtype(dtype) and (
+                    self.nan_count > 0
+                    or np.isinf(self.min())
+                    or np.isinf(self.max())
                 ):
                     raise TypeError(
                         "Cannot convert non-finite values (NA or inf) to integer"
@@ -1047,7 +1050,7 @@ class NumericalColumn(NumericalBaseColumn):
         ):
             return cast(
                 Self,
-                type(self).from_pylibcudf(
+                ColumnBase.create(
                     getattr(
                         plc.search, "lower_bound" if right else "upper_bound"
                     )(
@@ -1055,7 +1058,8 @@ class NumericalColumn(NumericalBaseColumn):
                         plc.Table([self.plc_column]),
                         [plc.types.Order.ASCENDING],
                         [plc.types.NullOrder.BEFORE],
-                    )
+                    ),
+                    get_dtype_of_same_kind(self.dtype, np.dtype(np.int32)),
                 ),
             )
 
@@ -1078,7 +1082,7 @@ def _normalize_find_and_replace_input(
         )
         # Scalar case
         if len(col_to_normalize) == 1:
-            if _is_null_host_scalar(col_to_normalize[0]):
+            if is_na_like(col_to_normalize[0]):
                 return normalized_column.astype(input_column_dtype)
             if np.isinf(col_to_normalize[0]):
                 return normalized_column
