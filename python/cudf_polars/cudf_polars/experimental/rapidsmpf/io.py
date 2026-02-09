@@ -43,6 +43,7 @@ from cudf_polars.experimental.rapidsmpf.utils import (
     ChannelManager,
     send_metadata,
 )
+from cudf_polars.experimental.utils import _dynamic_planning_on
 
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
@@ -649,7 +650,7 @@ def _(
     ir: Scan, rec: SubNetGenerator
 ) -> tuple[dict[IR, list[Any]], dict[IR, ChannelManager]]:
     config_options = rec.state["config_options"]
-    executor = rec.state["config_options"].executor
+    executor = config_options.executor
     assert executor.name == "streaming", (
         "'in-memory' executor not supported in 'generate_ir_sub_network'"
     )
@@ -674,7 +675,7 @@ def _(
     native_node: Any = None
     if (
         parquet_options.use_rapidsmpf_native
-        and partition_info.count > 1
+        and (partition_info.count > 1 or _dynamic_planning_on(config_options))
         and ir.typ == "parquet"
         and ir.row_index is None
         and ir.include_file_paths is None

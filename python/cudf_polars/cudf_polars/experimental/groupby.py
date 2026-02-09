@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 """Parallel GroupBy Logic."""
 
@@ -22,7 +22,11 @@ from cudf_polars.experimental.base import PartitionInfo
 from cudf_polars.experimental.dispatch import lower_ir_node
 from cudf_polars.experimental.repartition import Repartition
 from cudf_polars.experimental.shuffle import Shuffle
-from cudf_polars.experimental.utils import _get_unique_fractions, _lower_ir_fallback
+from cudf_polars.experimental.utils import (
+    _dynamic_planning_on,
+    _get_unique_fractions,
+    _lower_ir_fallback,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Generator, MutableMapping
@@ -185,8 +189,12 @@ def _(
     original_child = ir.children[0]
     child, partition_info = rec(ir.children[0])
 
+    # Check for dynamic planning - may have more partitions at runtime
+    config_options = rec.state["config_options"]
+    assert config_options.executor.name == "streaming"  # For type narrowing
+
     # Handle single-partition case
-    if partition_info[child].count == 1:
+    if partition_info[child].count == 1 and not _dynamic_planning_on(config_options):
         single_part_node = ir.reconstruct([child])
         partition_info[single_part_node] = partition_info[child]
         return single_part_node, partition_info
@@ -205,11 +213,6 @@ def _(
     post_aggregation_count = 1  # Default tree reduction
     groupby_key_columns = [ne.name for ne in ir.keys]
     shuffled = partition_info[child].partitioned_on == ir.keys
-
-    config_options = rec.state["config_options"]
-    assert config_options.executor.name == "streaming", (
-        "'in-memory' executor not supported in 'lower_ir_node'"
-    )
 
     child_count = partition_info[child].count
     if unique_fraction_dict := _get_unique_fractions(
