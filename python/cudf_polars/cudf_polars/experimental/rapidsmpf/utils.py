@@ -19,6 +19,7 @@ try:
 except ImportError:
     pass
 
+from rapidsmpf.memory.memory_reservation import opaque_memory_usage
 from rapidsmpf.memory.packed_data import PackedData
 from rapidsmpf.streaming.coll.allgather import AllGather
 from rapidsmpf.streaming.core.message import Message
@@ -27,7 +28,10 @@ from rapidsmpf.streaming.cudf.channel_metadata import (
     HashScheme,
     Partitioning,
 )
-from rapidsmpf.streaming.cudf.table_chunk import TableChunk
+from rapidsmpf.streaming.cudf.table_chunk import (
+    TableChunk,
+    make_table_chunks_available_or_wait,
+)
 
 import pylibcudf as plc
 
@@ -215,6 +219,139 @@ async def recv_metadata(ch: Channel[TableChunk], ctx: Context) -> ChannelMetadat
     msg = await ch.recv_metadata(ctx)
     assert msg is not None, f"Expected ChannelMetadata message, got {msg}."
     return ChannelMetadata.from_message(msg)
+
+
+def evaluate_chunk(
+    chunk: TableChunk,
+    ir: IR,
+    ir_context: Any,
+    input_schema: Mapping[str, DataType] | None = None,
+) -> TableChunk:
+    """
+    Apply an IR node's do_evaluate to a table chunk.
+
+    Parameters
+    ----------
+    chunk
+        The input table chunk.
+    ir
+        The IR node to evaluate.
+    ir_context
+        The IR execution context.
+    input_schema
+        Optional schema override. If None, uses ir.children[0].schema.
+
+    Returns
+    -------
+    The resulting table chunk after evaluation.
+    """
+    if input_schema is None:
+        input_schema = ir.children[0].schema
+    names = list(input_schema.keys())
+    dtypes = list(input_schema.values())
+    df = ir.do_evaluate(
+        *ir._non_child_args,
+        DataFrame.from_table(chunk.table_view(), names, dtypes, chunk.stream),
+        context=ir_context,
+    )
+    return TableChunk.from_pylibcudf_table(df.table, chunk.stream, exclusive_view=True)
+
+
+async def chunkwise_evaluate(
+    context: Context,
+    ir: IR,
+    ir_context: Any,
+    ch_out: Channel[TableChunk],
+    ch_in: Channel[TableChunk],
+    metadata: ChannelMetadata,
+    initial_chunks: list[TableChunk] | None = None,
+    *,
+    handle_empty_input: bool = False,
+    tracer: ActorTracer | None = None,
+) -> None:
+    """
+    Apply IR evaluation chunk-by-chunk, preserving partitioning.
+
+    Use when data is already partitioned on the relevant keys and each
+    chunk can be processed independently.
+
+    Parameters
+    ----------
+    context
+        The rapidsmpf streaming context.
+    ir
+        The IR node to evaluate.
+    ir_context
+        The IR execution context.
+    ch_out
+        The output channel.
+    ch_in
+        The input channel.
+    metadata
+        The channel metadata to forward (partitioning preserved).
+    initial_chunks
+        Optional chunks already received (e.g., during sampling) that should
+        be forwarded without re-evaluation.
+    handle_empty_input
+        If True and no chunks are received, create an empty chunk and evaluate
+        it. Use for operations like aggregations that always produce output.
+    tracer
+        Optional tracer for runtime metrics.
+    """
+    # Send output metadata preserving partitioning
+    await send_metadata(ch_out, context, metadata)
+    if tracer is not None and metadata.duplicated:
+        tracer.set_duplicated()
+
+    seq_num = 0
+    received_any = bool(initial_chunks)
+
+    # Forward initial chunks without re-evaluation (if any)
+    if initial_chunks:
+        for chunk in initial_chunks:
+            if tracer is not None:
+                tracer.add_chunk(table=chunk.table_view())
+            await ch_out.send(context, Message(seq_num, chunk))
+            seq_num += 1
+
+    # Process remaining chunks
+    while (msg := await ch_in.recv(context)) is not None:
+        received_any = True
+        chunk = TableChunk.from_message(msg)
+        del msg
+        chunk, extra = await make_table_chunks_available_or_wait(
+            context,
+            chunk,
+            reserve_extra=chunk.data_alloc_size(),
+            net_memory_delta=0,
+        )
+        with opaque_memory_usage(extra):
+            result = await asyncio.to_thread(evaluate_chunk, chunk, ir, ir_context)
+            del chunk
+        if tracer is not None:
+            tracer.add_chunk(table=result.table_view())
+        await ch_out.send(context, Message(seq_num, result))
+        del result
+        seq_num += 1
+
+    # Handle empty input for aggregation-like operations
+    if handle_empty_input and not received_any:
+        chunk = empty_table_chunk(ir.children[0], context, ir_context.get_cuda_stream())
+        chunk, extra = await make_table_chunks_available_or_wait(
+            context,
+            chunk,
+            reserve_extra=chunk.data_alloc_size(),
+            net_memory_delta=0,
+        )
+        with opaque_memory_usage(extra):
+            result = await asyncio.to_thread(evaluate_chunk, chunk, ir, ir_context)
+            del chunk
+        if tracer is not None:
+            tracer.add_chunk(table=result.table_view())
+        await ch_out.send(context, Message(seq_num, result))
+        del result
+
+    await ch_out.drain(context)
 
 
 def is_partitioned_on_keys(
