@@ -7,7 +7,8 @@
 
 #include <cudf/detail/get_value.cuh>
 #include <cudf/detail/iterator.cuh>
-#include <cudf/detail/utilities/algorithm.cuh>
+#include <cudf/detail/utilities/copy_if.cuh>
+#include <cudf/detail/utilities/reduce.cuh>
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/device_uvector.hpp>

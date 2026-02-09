@@ -4,7 +4,7 @@
  */
 #pragma once
 
-#include <cudf/detail/utilities/algorithm.cuh>
+#include <cudf/detail/utilities/copy_if.cuh>
 #include <cudf/stream_compaction.hpp>
 #include <cudf/utilities/bit.hpp>
 

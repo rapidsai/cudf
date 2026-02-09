@@ -5,7 +5,7 @@
 
 #pragma once
 
-#include <cudf/detail/utilities/algorithm.cuh>
+#include <cudf/detail/utilities/reduce.cuh>
 #include <cudf/types.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
