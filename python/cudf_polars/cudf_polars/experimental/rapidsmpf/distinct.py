@@ -24,6 +24,8 @@ from rapidsmpf.streaming.cudf.table_chunk import (
     make_table_chunks_available_or_wait,
 )
 
+import pylibcudf as plc
+
 from cudf_polars.containers import DataFrame
 from cudf_polars.dsl.ir import IR, Distinct
 from cudf_polars.experimental.rapidsmpf.collectives.allgather import AllGatherManager
@@ -502,9 +504,25 @@ async def distinct_node(
                 context, collective_ids.pop(), local_estimate, local_count
             )
 
+        # Cap estimated size based on zlice limit (e.g., head(100) caps output)
+        if ir.zlice is not None and ir.zlice[1] is not None and initial_chunks:
+            # Estimate avg row size from samples
+            total_rows = sum(c.table_view().num_rows() for c in initial_chunks)
+            if total_rows > 0:
+                avg_row_size = total_distinct_size / total_rows
+                max_zlice_size = int(avg_row_size * ir.zlice[1])
+                estimated_total_size = min(estimated_total_size, max_zlice_size)
+                local_estimate = min(local_estimate, max_zlice_size)
+
         # =====================================================================
         # Strategy Selection
         # =====================================================================
+
+        # Check for ordering requirements (shuffle strategies are not stable)
+        require_tree = ir.stable or ir.keep in (
+            plc.stream_compaction.DuplicateKeepOption.KEEP_FIRST,
+            plc.stream_compaction.DuplicateKeepOption.KEEP_LAST,
+        )
 
         if fully_partitioned:
             # Fully partitioned on keys - each chunk has disjoint keys
@@ -523,8 +541,8 @@ async def distinct_node(
             )
         elif can_skip_global_comm:
             # No global communication needed
-            if local_estimate < target_partition_size:
-                # Small output - use local tree reduction
+            if local_estimate < target_partition_size or require_tree:
+                # Small output or ordering required - use local tree reduction
                 if tracer is not None:
                     tracer.decision = "tree_local"
                 await _tree_distinct(
@@ -558,8 +576,8 @@ async def distinct_node(
                     shuffle_context=context if nranks == 1 else None,
                     tracer=tracer,
                 )
-        elif estimated_total_size < target_partition_size:
-            # Small output - use tree reduction with allgather to merge across ranks
+        elif estimated_total_size < target_partition_size or require_tree:
+            # Small output or ordering required - use tree reduction with allgather
             if tracer is not None:
                 tracer.decision = "tree_allgather"
             await _tree_distinct(
