@@ -47,3 +47,42 @@ def test_gather_out_of_bounds(negative):
 
     with pytest.raises(ValueError, match="gather indices are out of bounds"):
         query.collect(engine="gpu")
+
+
+@pytest.mark.parametrize(
+    "idx",
+    [
+        0,
+        pl.lit(0),
+        pl.col("a").first(),
+    ],
+)
+@pytest.mark.parametrize(
+    "lit",
+    [
+        pl.lit(7),
+        pytest.param(
+            pl.lit([7]),
+            marks=pytest.mark.xfail(
+                reason="List literal loses nesting in gather: https://github.com/rapidsai/cudf/issues/19610"
+            ),
+        ),
+        pl.lit([[7]]),
+        pl.lit(pl.Series([7, 8, 9])),
+    ],
+)
+def test_gather_on_literal(
+    lit: pl.Expr,
+    idx: pl.Expr,
+) -> None:
+    df = pl.LazyFrame(
+        {
+            "g": [10, 10, 10, 20, 20, 30],
+            "a": [0, 0, 0, 0, 0, 0],
+            "b": [1, 1, 1, 1, 1, 1],
+            "c": [11, 12, 13, 21, 22, 31],
+        }
+    )
+
+    q = df.select(lit.gather(idx))
+    assert_gpu_result_equal(q)
