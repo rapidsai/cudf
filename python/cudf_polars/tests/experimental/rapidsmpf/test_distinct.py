@@ -91,3 +91,16 @@ def test_dynamic_distinct_single_row():
     df = pl.LazyFrame({"x": [1], "y": [2]})
     q = df.unique()
     assert_gpu_result_equal(q, engine=engine, check_row_order=False)
+
+
+def test_dynamic_distinct_chunkwise_after_groupby():
+    engine = _make_engine()
+    df = pl.LazyFrame(
+        {
+            "key": list(range(20)) * 10,  # 200 rows, 20 unique keys
+            "value": range(200),
+        }
+    )
+    # Groupby partitions data by "key", then unique on "key" should be chunkwise
+    q = df.group_by("key").agg(pl.col("value").sum()).unique(subset=("key",))
+    assert_gpu_result_equal(q, engine=engine, check_row_order=False)

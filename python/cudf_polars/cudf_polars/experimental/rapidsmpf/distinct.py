@@ -552,16 +552,15 @@ async def distinct_node(
         # Check if already partitioned on keys
         # - partitioned_inter_rank: data is partitioned between ranks
         # - partitioned_local: data is also partitioned within rank (per chunk)
-        partitioned_inter_rank, partitioned_local = is_partitioned_on_keys(
-            metadata_in, key_indices
-        )
-
         nranks = context.comm().nranks
+        partitioned_inter_rank, partitioned_local = is_partitioned_on_keys(
+            metadata_in,
+            key_indices,
+            nranks,
+        )
 
         # Determine if we can skip global communication
-        can_skip_global_comm = (
-            nranks == 1 or metadata_in.duplicated or partitioned_inter_rank
-        )
+        can_skip_global_comm = metadata_in.duplicated or partitioned_inter_rank
 
         # If both inter-rank and local are partitioned, each chunk has
         # disjoint keys - we can do simple chunkwise distinct
@@ -605,13 +604,13 @@ async def distinct_node(
             local_estimate = 0
             adaptive_n_ary = n_ary  # fallback to configured value
 
-        if collective_ids and nranks > 1:
+        if can_skip_global_comm:
+            estimated_total_size = local_estimate
+            global_chunk_count = local_count
+        else:
             estimated_total_size, global_chunk_count = await allgather_reduce(
                 context, collective_ids.pop(), local_estimate, local_count
             )
-        else:
-            estimated_total_size = local_estimate
-            global_chunk_count = local_count
 
         # =====================================================================
         # Strategy Selection
@@ -666,6 +665,7 @@ async def distinct_node(
                     output_count,
                     collective_ids.pop(),
                     key_indices,
+                    shuffle_context=context if nranks == 1 else None,
                     tracer=tracer,
                 )
         elif estimated_total_size < target_partition_size:
