@@ -4516,7 +4516,7 @@ class StringMethods(BaseAccessor):
         Examples
         --------
         >>> import cudf
-        >>> ser = cudf.Series(["hello \\t world"," test string  "])
+        >>> ser = cudf.Series(["hello \t world"," test string  "])
         >>> ser.str.normalize_spaces()
         0    hello world
         1    test string
