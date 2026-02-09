@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 """
 Multi-partition Expr classes and utilities.
@@ -48,7 +48,11 @@ from cudf_polars.dsl.traversal import (
 )
 from cudf_polars.experimental.base import PartitionInfo
 from cudf_polars.experimental.repartition import Repartition
-from cudf_polars.experimental.utils import _get_unique_fractions, _leaf_column_names
+from cudf_polars.experimental.utils import (
+    _dynamic_planning_on,
+    _get_unique_fractions,
+    _leaf_column_names,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Generator, MutableMapping, Sequence
@@ -451,7 +455,11 @@ def _decompose_expr_node(
         partition_info[input_ir] = PartitionInfo(count=1)
 
     partition_count = partition_info[input_ir].count
-    if partition_count == 1 or expr.is_pointwise:
+
+    # Check for dynamic planning - may have more partitions at runtime
+    dynamic_planning = _dynamic_planning_on(config_options)
+
+    if expr.is_pointwise or (partition_count == 1 and not dynamic_planning):
         # Single-partition and pointwise expressions are always supported.
         return expr, input_ir, partition_info
     elif isinstance(expr, Len) or (
