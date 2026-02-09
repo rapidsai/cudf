@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -62,6 +62,21 @@ void cuda_memcpy_async(host_span<T> dst, device_span<T const> src, rmm::cuda_str
 }
 
 /**
+ * @brief Asynchronously copies data between device memory locations.
+ *
+ * @param dst Destination device memory
+ * @param src Source device memory
+ * @param stream CUDA stream used for the copy
+ */
+template <typename T>
+void cuda_memcpy_async(device_span<T> dst, device_span<T const> src, rmm::cuda_stream_view stream)
+{
+  CUDF_EXPECTS(dst.size() == src.size(), "Mismatched sizes in cuda_memcpy_async");
+  CUDF_CUDA_TRY(
+    cudaMemcpyAsync(dst.data(), src.data(), src.size_bytes(), cudaMemcpyDefault, stream.value()));
+}
+
+/**
  * @brief Synchronously copies data from host to device memory.
  *
  * Implementation may use different strategies depending on the size and type of host data.
@@ -88,6 +103,20 @@ void cuda_memcpy(device_span<T> dst, host_span<T const> src, rmm::cuda_stream_vi
  */
 template <typename T>
 void cuda_memcpy(host_span<T> dst, device_span<T const> src, rmm::cuda_stream_view stream)
+{
+  cuda_memcpy_async(dst, src, stream);
+  stream.synchronize();
+}
+
+/**
+ * @brief Synchronously copies data between device memory locations.
+ *
+ * @param dst Destination device memory
+ * @param src Source device memory
+ * @param stream CUDA stream used for the copy
+ */
+template <typename T>
+void cuda_memcpy(device_span<T> dst, device_span<T const> src, rmm::cuda_stream_view stream)
 {
   cuda_memcpy_async(dst, src, stream);
   stream.synchronize();
