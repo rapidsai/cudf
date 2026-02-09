@@ -3,8 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#include "io/comp/common.hpp"
 #include "io/parquet/parquet_common.hpp"
 
+#include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/parquet.hpp>
 #include <cudf/io/parquet_io_utils.hpp>
@@ -70,7 +72,9 @@ fetch_byte_ranges_to_device_async(
 
   // Allocate single device buffer for all column chunks
   std::vector<rmm::device_buffer> column_chunk_buffers{};
-  column_chunk_buffers.emplace_back(total_size, stream, mr);
+  // Buffer needs to be padded. Required by `gpuDecodePageData`.
+  column_chunk_buffers.emplace_back(
+    cudf::util::round_up_safe(total_size, cudf::io::detail::BUFFER_PADDING_MULTIPLE), stream, mr);
   auto buffer_data = static_cast<uint8_t*>(column_chunk_buffers.back().data());
   std::ignore      = std::accumulate(
     byte_ranges.begin(), byte_ranges.end(), std::size_t{0}, [&](auto acc, auto const& range) {
