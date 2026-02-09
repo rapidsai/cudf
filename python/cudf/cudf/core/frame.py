@@ -1215,23 +1215,16 @@ class Frame(BinaryOperand, Scannable, Serializable):
     @_performance_tracking
     def _copy_type_metadata(self: Self, other: Self) -> Self:
         """
-        Copy type metadata from each column of `other` to the corresponding
-        column of `self`.
+        Copy type metadata from `other` to `self`.
 
-        See `ColumnBase._with_type_metadata` for more information.
+        This is a no-op for Frame. Subclasses like DatetimeIndex and
+        MultiIndex override this to copy index-specific metadata
+        (like _freq or _names).
+
+        Column-level dtype metadata is no longer copied here because
+        columns should be constructed with correct dtypes upfront
+        using ColumnBase.create.
         """
-        for (name, self_col), (_, other_col) in zip(
-            self._column_labels_and_values,
-            other._column_labels_and_values,
-            strict=True,
-        ):
-            self._data.set_by_label(
-                name,
-                self_col._with_type_metadata(
-                    other_col.dtype,
-                ),
-            )
-
         return self
 
     @_performance_tracking

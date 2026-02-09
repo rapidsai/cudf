@@ -1238,6 +1238,7 @@ class Index(SingleColumnFrame):
             Null elements are considered equal to other null elements.
         """
         columns = list(self._columns)
+        original_dtypes = [col.dtype for col in columns]
         result_columns = self._drop_duplicates_columns(
             columns,
             keys=list(range(len(columns))),
@@ -1245,7 +1246,12 @@ class Index(SingleColumnFrame):
             nulls_are_equal=nulls_are_equal,
         )
         return self._from_columns_like_self(
-            [ColumnBase.from_pylibcudf(col) for col in result_columns],
+            [
+                ColumnBase.create(col, dtype)
+                for col, dtype in zip(
+                    result_columns, original_dtypes, strict=True
+                )
+            ],
             self._column_names,
         )
 
@@ -1325,13 +1331,19 @@ class Index(SingleColumnFrame):
 
         # Convert nans to nulls to be consistent with IndexedFrame.dropna
         data_columns = [col.nans_to_nulls() for col in self._columns]
+        original_dtypes = [col.dtype for col in self._columns]
         result_columns = self._drop_nulls_columns(
             data_columns,
             keys=list(range(len(data_columns))),
             how=how,
         )
         return self._from_columns_like_self(
-            [ColumnBase.from_pylibcudf(col) for col in result_columns],
+            [
+                ColumnBase.create(col, dtype)
+                for col, dtype in zip(
+                    result_columns, original_dtypes, strict=True
+                )
+            ],
             self._column_names,
         )
 
@@ -1672,11 +1684,14 @@ class Index(SingleColumnFrame):
         # check_bounds is True, require instead that the caller
         # provides a GatherMap.
         GatherMap(gather_map, len(self), nullify=not check_bounds or nullify)
+        original_dtypes = [col.dtype for col in self._columns]
         return self._from_columns_like_self(
             [
-                ColumnBase.from_pylibcudf(col)
-                for col in copying.gather(
-                    self._columns, gather_map, nullify=nullify
+                ColumnBase.create(col, dtype)
+                for col, dtype in zip(
+                    copying.gather(self._columns, gather_map, nullify=nullify),
+                    original_dtypes,
+                    strict=True,
                 )
             ],
             self._column_names,
@@ -3615,7 +3630,7 @@ class DatetimeIndex(Index):
 
     @_performance_tracking
     def _copy_type_metadata(self: Self, other: Self) -> Self:
-        super()._copy_type_metadata(other)
+        # Only copy _freq, not column-level metadata (which is now a no-op in Frame)
         self._freq = _validate_freq(other._freq)
         return self
 

@@ -5186,8 +5186,18 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
     ) -> list[Self]:
         # Remove first element (always 0) and last element (total row count) from offsets
         offsets = offsets[1:-1]
+        # Get the original dtypes to preserve (index columns + data columns if keep_index)
+        original_dtypes = (
+            [col.dtype for col in self.index._columns]
+            + [col.dtype for col in self._columns]
+            if keep_index
+            else [col.dtype for col in self._columns]
+        )
         output_columns = [
-            ColumnBase.from_pylibcudf(col) for col in table.columns()
+            ColumnBase.create(col, dtype)
+            for col, dtype in zip(
+                table.columns(), original_dtypes, strict=True
+            )
         ]
         partitioned = self._from_columns_like_self(
             output_columns,
