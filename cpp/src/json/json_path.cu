@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -32,7 +32,7 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/std/optional>
-#include <thrust/pair.h>
+#include <cuda/std/utility>
 #include <thrust/scan.h>
 #include <thrust/tuple.h>
 
@@ -875,7 +875,7 @@ constexpr int max_command_stack_depth = 8;
  * @param options Options controlling behavior
  * @returns A pair containing the result code the output buffer.
  */
-__device__ thrust::pair<parse_result, json_output> get_json_object_single(
+__device__ cuda::std::pair<parse_result, json_output> get_json_object_single(
   char const* input,
   size_t input_len,
   path_operator const* const commands,

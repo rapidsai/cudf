@@ -67,7 +67,9 @@ def test_compute_column(expr, df):
     ir = Translator(q._ldf.visit(), pl.GPUEngine()).translate_ir()
 
     assert isinstance(ir, ir_nodes.Select)
-    table = ir.children[0].evaluate(cache={}, timer=None, context=IRExecutionContext())
+    table = ir.children[0].evaluate(
+        cache={}, timer=None, context=IRExecutionContext(get_cuda_stream=lambda: stream)
+    )
     name_to_index = {c.name: i for i, c in enumerate(table.columns)}
 
     def compute_column(e):

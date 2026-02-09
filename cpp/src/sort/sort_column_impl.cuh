@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -9,6 +9,7 @@
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/detail/row_operator/common_utils.cuh>
+#include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/traits.hpp>
@@ -59,7 +60,17 @@ struct simple_comparator {
         return (null_precedence == cudf::null_order::BEFORE ? !rhs_null : !lhs_null);
       }
     }
-    return relational_compare(d_column.element<T>(lhs), d_column.element<T>(rhs)) ==
+
+    auto left_elememt  = d_column.type().id() == type_id::DICTIONARY32
+                           ? d_column.child(dictionary_column_view::keys_column_index)
+                              .element<T>(d_column.element<dictionary32>(lhs).value())
+                           : d_column.element<T>(lhs);
+    auto right_elememt = d_column.type().id() == type_id::DICTIONARY32
+                           ? d_column.child(dictionary_column_view::keys_column_index)
+                               .element<T>(d_column.element<dictionary32>(rhs).value())
+                           : d_column.element<T>(rhs);
+
+    return relational_compare(left_elememt, right_elememt) ==
            (ascending ? weak_ordering::LESS : weak_ordering::GREATER);
   }
   column_device_view const d_column;

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -26,9 +26,12 @@
 
 #include <cub/block/block_scan.cuh>
 #include <cub/device/device_histogram.cuh>
+#include <cuda/devices>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/scan.h>
 #include <thrust/transform.h>
+
+#include <stdexcept>
 
 namespace cudf {
 namespace {
@@ -466,6 +469,15 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition_table(
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
+  int dev;
+  CUDF_CUDA_TRY(cudaGetDevice(&dev));
+  // Algorithmic restriction in the kernel implementation, there's a histogram that holds one
+  // size_type value per partition in shared memory.
+  CUDF_EXPECTS(static_cast<std::size_t>(num_partitions) <
+                 cuda::device_attributes::max_shared_memory_per_block(cuda::device_ref{dev}) /
+                   sizeof(size_type),
+               "Requested number of partitions does not fit in shared memory.",
+               std::invalid_argument);
   auto const num_rows = table_to_hash.num_rows();
 
   bool const use_optimization{num_partitions <= THRESHOLD_FOR_OPTIMIZED_PARTITION_KERNEL};
@@ -474,8 +486,7 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition_table(
     use_optimization ? OPTIMIZED_ROWS_PER_THREAD : FALLBACK_ROWS_PER_THREAD;
   auto const rows_per_block = block_size * rows_per_thread;
 
-  // NOTE grid_size is non-const to workaround lambda capture bug in gcc 5.4
-  auto grid_size = util::div_rounding_up_safe(num_rows, rows_per_block);
+  std::size_t const grid_size = util::div_rounding_up_safe(num_rows, rows_per_block);
 
   // Allocate array to hold which partition each row belongs to
   auto row_partition_numbers = rmm::device_uvector<size_type>(num_rows, stream);
@@ -548,7 +559,7 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition_table(
 
   // Compute exclusive scan of all blocks' partition sizes in-place to determine
   // the starting point for each blocks portion of each partition in the output
-  thrust::exclusive_scan(rmm::exec_policy(stream),
+  thrust::exclusive_scan(rmm::exec_policy_nosync(stream),
                          block_partition_sizes.begin(),
                          block_partition_sizes.end(),
                          scanned_block_partition_sizes.data());
@@ -556,15 +567,16 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition_table(
   // Compute exclusive scan of size of each partition to determine offset
   // location of each partition in final output.
   // TODO This can be done independently on a separate stream
-  thrust::exclusive_scan(rmm::exec_policy(stream),
+  thrust::exclusive_scan(rmm::exec_policy_nosync(stream),
                          global_partition_sizes.begin(),
                          global_partition_sizes.end(),
                          global_partition_sizes.begin());
 
   // Copy the result of the exclusive scan to the output offsets array
   // to indicate the starting point for each partition in the output
-  auto const partition_offsets =
-    cudf::detail::make_std_vector_async(global_partition_sizes, stream);
+  auto partition_offsets = cudf::detail::make_std_vector_async(global_partition_sizes, stream);
+  // Add the total row count as the last offset to make the vector num_partitions + 1 in size
+  partition_offsets.push_back(num_rows);
 
   // When the number of partitions is less than a threshold, we can apply an
   // optimization using shared memory to copy values to the output buffer.
@@ -604,7 +616,7 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition_table(
     }
 
     stream.synchronize();  // Async D2H copy must finish before returning host vec
-    return std::pair(std::make_unique<table>(std::move(output_cols)), std::move(partition_offsets));
+    return std::pair{std::make_unique<table>(std::move(output_cols)), std::move(partition_offsets)};
   } else {
     // Compute a scatter map from input to output such that the output rows are
     // sorted by partition number
@@ -620,7 +632,7 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition_table(
     auto output = detail::scatter(input, row_partition_numbers, input, stream, mr);
 
     stream.synchronize();  // Async D2H copy must finish before returning host vec
-    return std::pair(std::move(output), std::move(partition_offsets));
+    return std::pair{std::move(output), std::move(partition_offsets)};
   }
 }
 
@@ -684,7 +696,7 @@ struct dispatch_map_type {
     // `histogram` was created with an extra entry at the end such that an
     // exclusive scan will put the total number of rows at the end
     thrust::exclusive_scan(
-      rmm::exec_policy(stream), histogram.begin(), histogram.end(), histogram.begin());
+      rmm::exec_policy_nosync(stream), histogram.begin(), histogram.end(), histogram.begin());
 
     // Copy offsets to host before the transform below modifies the histogram
     auto const partition_offsets = cudf::detail::make_std_vector(histogram, stream);
@@ -695,7 +707,7 @@ struct dispatch_map_type {
 
     // For each `partition_map[i]`, atomically increment the corresponding
     // partition offset to determine `i`s location in the output
-    thrust::transform(rmm::exec_policy(stream),
+    thrust::transform(rmm::exec_policy_nosync(stream),
                       partition_map.begin<MapType>(),
                       partition_map.end<MapType>(),
                       scatter_map.begin(),
@@ -706,7 +718,7 @@ struct dispatch_map_type {
     // Scatter the rows into their partitions
     auto scattered = detail::scatter(t, scatter_map, t, stream, mr);
 
-    return std::pair(std::move(scattered), std::move(partition_offsets));
+    return std::pair{std::move(scattered), std::move(partition_offsets)};
   }
 
   template <typename MapType, typename... Args>
@@ -759,7 +771,7 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition(
 
   // Return empty result if there are no partitions or nothing to hash
   if (num_partitions <= 0 || input.num_rows() == 0 || table_to_hash.num_columns() == 0) {
-    return std::pair(empty_like(input), std::vector<size_type>(num_partitions, 0));
+    return std::pair{empty_like(input), std::vector<size_type>(num_partitions + 1, 0)};
   }
 
   if (has_nested_nulls(table_to_hash)) {
@@ -785,7 +797,7 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> partition(
 
   if (num_partitions == 0 or t.num_rows() == 0) {
     // The output offsets vector must have size `num_partitions + 1` as per documentation.
-    return std::pair(empty_like(t), std::vector<size_type>(num_partitions + 1, 0));
+    return std::pair{empty_like(t), std::vector<size_type>(num_partitions + 1, 0)};
   }
 
   return cudf::type_dispatcher(

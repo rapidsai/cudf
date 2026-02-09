@@ -1,6 +1,5 @@
-# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
-import sys
 from decimal import Decimal
 
 import cupy as cp
@@ -9,16 +8,17 @@ import pandas as pd
 import pyarrow as pa
 import pytest
 
-import rmm
-
 import cudf
 from cudf.core._compat import (
     PANDAS_CURRENT_SUPPORTED_VERSION,
     PANDAS_VERSION,
 )
-from cudf.core.buffer import as_buffer
 from cudf.core.column.column import _can_values_be_equal, as_column
-from cudf.core.column.decimal import Decimal32Column, Decimal64Column
+from cudf.core.column.decimal import (
+    Decimal32Column,
+    Decimal64Column,
+    Decimal128Column,
+)
 from cudf.testing import assert_eq
 
 
@@ -92,28 +92,11 @@ def test_column_set_equal_length_object_by_mask():
 @pytest.mark.parametrize("size", [50, 10, 0])
 def test_column_offset_and_size(pandas_input, offset, size):
     col = as_column(pandas_input)
-    col = cudf.core.column.build_column(
-        data=col.base_data,
-        dtype=col.dtype,
-        mask=col.base_mask,
-        size=size,
-        offset=offset,
-        null_count=col.null_count,
-        children=col.base_children,
-    )
+
+    col = col.slice(offset, offset + size)
 
     if isinstance(col.dtype, cudf.CategoricalDtype):
         assert col.size == col.codes.size
-        assert col.size == (col.codes.data.size / col.codes.dtype.itemsize)
-    elif cudf.api.types.is_string_dtype(col.dtype):
-        if col.size > 0:
-            assert col.size == (col.children[0].size - 1)
-            assert col.size == (
-                (col.children[0].data.size / col.children[0].dtype.itemsize)
-                - 1
-            )
-    else:
-        assert col.size == (col.data.size / col.dtype.itemsize)
 
     got = cudf.Series._from_column(col)
 
@@ -293,8 +276,12 @@ def test_column_chunked_array_creation():
 )
 def test_as_column_buffer(box, data):
     expected = as_column(data)
+    boxed = box(data)
     actual_column = as_column(
-        cudf.core.buffer.as_buffer(box(data)), dtype=data.dtype
+        cudf.core.buffer.as_buffer(
+            boxed if isinstance(boxed, cp.ndarray) else boxed.data
+        ),
+        dtype=data.dtype,
     )
     assert_eq(
         cudf.Series._from_column(actual_column),
@@ -455,7 +442,7 @@ def test_build_df_from_nullable_pandas_dtype(pd_dtype, expect_dtype):
 
     # check mask
     expect_mask = [x is not pd.NA for x in pd_data["a"]]
-    got_mask = gd_data["a"]._column._get_mask_as_column().values_host
+    got_mask = gd_data["a"]._column._get_mask_as_column().to_numpy()
 
     np.testing.assert_array_equal(expect_mask, got_mask)
 
@@ -491,7 +478,7 @@ def test_build_series_from_nullable_pandas_dtype(pd_dtype, expect_dtype):
 
     # check mask
     expect_mask = [x is not pd.NA for x in pd_data]
-    got_mask = gd_data._column._get_mask_as_column().values_host
+    got_mask = gd_data._column._get_mask_as_column().to_numpy()
 
     np.testing.assert_array_equal(expect_mask, got_mask)
 
@@ -513,25 +500,6 @@ def test_build_series_from_nullable_pandas_dtype(pd_dtype, expect_dtype):
 def test__can_values_be_equal(left, right, expected):
     assert _can_values_be_equal(left, right) is expected
     assert _can_values_be_equal(right, left) is expected
-
-
-def test_string_no_children_properties():
-    empty_col = cudf.core.column.StringColumn(
-        as_buffer(rmm.DeviceBuffer(size=0)),
-        size=0,
-        dtype=np.dtype("object"),
-        mask=None,
-        offset=0,
-        null_count=0,
-        children=(),
-    )
-    assert empty_col.base_children == ()
-    assert empty_col.base_size == 0
-
-    assert empty_col.children == ()
-    assert empty_col.size == 0
-
-    assert sys.getsizeof(empty_col) >= 0  # Accounts for Python GC overhead
 
 
 def test_string_int_to_ipv4():
@@ -587,29 +555,33 @@ def test_datetime_can_cast_safely():
     ],
 )
 @pytest.mark.parametrize(
-    "typ_",
+    "col,typ_",
     [
-        pa.decimal128(precision=4, scale=2),
-        pa.decimal128(precision=5, scale=3),
-        pa.decimal128(precision=6, scale=4),
+        (Decimal32Column, pa.decimal32(precision=4, scale=2)),
+        (Decimal64Column, pa.decimal64(precision=5, scale=3)),
+        (Decimal128Column, pa.decimal128(precision=6, scale=4)),
     ],
 )
-@pytest.mark.parametrize("col", [Decimal32Column, Decimal64Column])
 def test_round_trip_decimal_column(data_, typ_, col):
     pa_arr = pa.array(data_, type=typ_)
-    col_32 = col.from_arrow(pa_arr)
-    assert pa_arr.equals(col_32.to_arrow())
+    decimal_col = col.from_arrow(pa_arr)
+    result = decimal_col.to_arrow()
+
+    # Round-trip should preserve the exact PyArrow decimal type
+    assert result.equals(pa_arr)
 
 
 def test_from_arrow_max_precision_decimal64():
+    # Decimal64 max precision is 18, so 19 should raise ValueError
     with pytest.raises(ValueError):
         Decimal64Column.from_arrow(
-            pa.array([1, 2, 3], type=pa.decimal128(scale=0, precision=19))
+            pa.array([1, 2, 3], type=pa.decimal64(scale=0, precision=19))
         )
 
 
 def test_from_arrow_max_precision_decimal32():
+    # Decimal32 max precision is 9, so 10 should raise ValueError
     with pytest.raises(ValueError):
         Decimal32Column.from_arrow(
-            pa.array([1, 2, 3], type=pa.decimal128(scale=0, precision=10))
+            pa.array([1, 2, 3], type=pa.decimal32(scale=0, precision=10))
         )

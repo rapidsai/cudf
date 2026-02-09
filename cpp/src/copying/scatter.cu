@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #include <cudf/column/column_device_view.cuh>
@@ -200,23 +200,11 @@ struct column_scalar_scatterer_impl<dictionary32, MapIterator> {
                     scatter_iter,
                     target_iter);
 
-    // build the dictionary indices column from the result
-    auto const indices_type = new_indices->type();
-    auto const output_size  = new_indices->size();
-    auto const null_count   = new_indices->null_count();
-    auto contents           = new_indices->release();
-    auto indices_column     = std::make_unique<column>(indices_type,
-                                                   static_cast<size_type>(output_size),
-                                                   std::move(*(contents.data.release())),
-                                                   rmm::device_buffer{},
-                                                   0);
     // use the keys from the matched column
     std::unique_ptr<column> keys_column(std::move(dict_target->release().children.back()));
     // create the output column
-    auto result = make_dictionary_column(std::move(keys_column),
-                                         std::move(indices_column),
-                                         std::move(*(contents.null_mask.release())),
-                                         null_count);
+    auto result =
+      make_dictionary_column(std::move(keys_column), std::move(new_indices), stream, mr);
 
     scatter_scalar_bitmask_inplace(source, scatter_iter, scatter_rows, *result, stream, mr);
     return result;

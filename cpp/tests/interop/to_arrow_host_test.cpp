@@ -681,7 +681,7 @@ TEST_F(ToArrowHostDeviceTest, FixedPoint64Table)
     ArrowSchemaInit(expected_schema->children[0]);
     NANOARROW_THROW_NOT_OK(ArrowSchemaSetTypeDecimal(expected_schema->children[0],
                                                      NANOARROW_TYPE_DECIMAL64,
-                                                     cudf::detail::max_precision<int64_t>(),
+                                                     cudf::detail::max_precision<int64_t>() - 1,
                                                      -scale));
     NANOARROW_THROW_NOT_OK(ArrowSchemaSetName(expected_schema->children[0], "a"));
     expected_schema->children[0]->flags = 0;
@@ -849,7 +849,7 @@ TEST_F(ToArrowHostDeviceTest, FixedPoint64TableLarge)
     ArrowSchemaInit(expected_schema->children[0]);
     NANOARROW_THROW_NOT_OK(ArrowSchemaSetTypeDecimal(expected_schema->children[0],
                                                      NANOARROW_TYPE_DECIMAL64,
-                                                     cudf::detail::max_precision<int64_t>(),
+                                                     cudf::detail::max_precision<int64_t>() - 1,
                                                      -scale));
     NANOARROW_THROW_NOT_OK(ArrowSchemaSetName(expected_schema->children[0], "a"));
     expected_schema->children[0]->flags = 0;
@@ -1016,7 +1016,7 @@ TEST_F(ToArrowHostDeviceTest, FixedPoint64TableNullsSimple)
     ArrowSchemaInit(expected_schema->children[0]);
     NANOARROW_THROW_NOT_OK(ArrowSchemaSetTypeDecimal(expected_schema->children[0],
                                                      NANOARROW_TYPE_DECIMAL64,
-                                                     cudf::detail::max_precision<int64_t>(),
+                                                     cudf::detail::max_precision<int64_t>() - 1,
                                                      -scale));
     NANOARROW_THROW_NOT_OK(ArrowSchemaSetName(expected_schema->children[0], "a"));
     expected_schema->children[0]->flags = 0;

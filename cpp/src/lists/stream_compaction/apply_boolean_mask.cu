@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -72,8 +72,10 @@ std::unique_ptr<column> apply_boolean_mask(lists_column_view const& input,
 
     // Could have attempted an exclusive_scan(), but it would not compute the last entry.
     // Instead, inclusive_scan(), followed by writing `0` to the head of the offsets column.
-    thrust::inclusive_scan(
-      rmm::exec_policy(stream), sizes_begin, sizes_end, output_offsets_view.begin<size_type>() + 1);
+    thrust::inclusive_scan(rmm::exec_policy_nosync(stream),
+                           sizes_begin,
+                           sizes_end,
+                           output_offsets_view.begin<size_type>() + 1);
     CUDF_CUDA_TRY(cudaMemsetAsync(
       output_offsets_view.begin<size_type>(), 0, sizeof(size_type), stream.value()));
     return output_offsets;

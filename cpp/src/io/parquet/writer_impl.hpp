@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -150,6 +150,7 @@ class writer::impl {
   bool const _int96_timestamps;
   bool const _utc_timestamps;
   bool const _write_v2_headers;
+  bool const _page_level_compression;
   bool const _write_arrow_schema;
   std::optional<std::vector<sorting_column>> _sorting_columns;
   int32_t const _column_index_truncate_length;

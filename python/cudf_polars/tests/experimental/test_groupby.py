@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -9,8 +9,11 @@ import pytest
 
 import polars as pl
 
-from cudf_polars.testing.asserts import DEFAULT_CLUSTER, assert_gpu_result_equal
-from cudf_polars.utils.versions import POLARS_VERSION_LT_130
+from cudf_polars.testing.asserts import (
+    DEFAULT_CLUSTER,
+    DEFAULT_RUNTIME,
+    assert_gpu_result_equal,
+)
 
 
 @pytest.fixture(scope="module")
@@ -21,6 +24,7 @@ def engine():
         executor_options={
             "max_rows_per_partition": 4,
             "cluster": DEFAULT_CLUSTER,
+            "runtime": DEFAULT_RUNTIME,
         },
     )
 
@@ -56,6 +60,7 @@ def test_groupby_single_partitions(df, op, keys):
             executor_options={
                 "max_rows_per_partition": int(1e9),
                 "cluster": DEFAULT_CLUSTER,
+                "runtime": DEFAULT_RUNTIME,
             },
         ),
         check_row_order=False,
@@ -85,13 +90,12 @@ def test_groupby_agg_config_options(df, op, keys):
             # Check that we can change the n-ary factor
             "groupby_n_ary": 8,
             "cluster": DEFAULT_CLUSTER,
-            "shuffle_method": "tasks",
+            "runtime": DEFAULT_RUNTIME,
+            "shuffle_method": DEFAULT_RUNTIME,  # Names coincide
         },
     )
     agg = getattr(pl.col("x"), op)()
     if op in ("sum", "mean"):
-        if POLARS_VERSION_LT_130:
-            agg = agg.cast(pl.Float64)
         agg = agg.round(2)  # Unary test coverage
     q = df.group_by(*keys).agg(agg)
     assert_gpu_result_equal(q, engine=engine, check_row_order=False)
@@ -106,6 +110,7 @@ def test_groupby_fallback(df, engine, fallback_mode):
             "fallback_mode": fallback_mode,
             "max_rows_per_partition": 4,
             "cluster": DEFAULT_CLUSTER,
+            "runtime": DEFAULT_RUNTIME,
         },
     )
     match = "Failed to decompose groupby aggs"
@@ -116,9 +121,7 @@ def test_groupby_fallback(df, engine, fallback_mode):
         ctx = contextlib.nullcontext()
     elif fallback_mode == "raise":
         ctx = pytest.raises(
-            pl.exceptions.ComputeError
-            if POLARS_VERSION_LT_130
-            else NotImplementedError,
+            NotImplementedError,
             match=match,
         )
     elif fallback_mode == "foo":
@@ -225,7 +228,12 @@ def test_mean_partitioned(values: list[int | None]) -> None:
     assert_gpu_result_equal(
         q,
         engine=pl.GPUEngine(
-            executor="streaming", executor_options={"max_rows_per_partition": 2}
+            executor="streaming",
+            executor_options={
+                "max_rows_per_partition": 2,
+                "cluster": DEFAULT_CLUSTER,
+                "runtime": DEFAULT_RUNTIME,
+            },
         ),
         check_row_order=False,
     )
@@ -238,6 +246,7 @@ def test_groupby_literal_with_stats_planning(df):
         executor_options={
             "max_rows_per_partition": 4,
             "cluster": DEFAULT_CLUSTER,
+            "runtime": DEFAULT_RUNTIME,
             "stats_planning": {"use_reduction_planning": True},
         },
     )

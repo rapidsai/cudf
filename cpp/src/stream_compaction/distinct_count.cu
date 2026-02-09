@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -16,7 +16,6 @@
 #include <cudf/detail/row_operator/hashing.cuh>
 #include <cudf/detail/sorting.hpp>
 #include <cudf/detail/stream_compaction.hpp>
-#include <cudf/hashing/detail/helper_functions.cuh>
 #include <cudf/stream_compaction.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
@@ -25,6 +24,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
+#include <rmm/mr/polymorphic_allocator.hpp>
 
 #include <cuco/static_set.cuh>
 #include <thrust/count.h>
@@ -91,7 +91,7 @@ struct has_nans {
   {
     auto input_device_view = cudf::column_device_view::create(input, stream);
     auto device_view       = *input_device_view;
-    return thrust::any_of(rmm::exec_policy(stream),
+    return thrust::any_of(rmm::exec_policy_nosync(stream),
                           thrust::counting_iterator<cudf::size_type>(0),
                           thrust::counting_iterator<cudf::size_type>(input.size()),
                           check_for_nan<T>(device_view));
@@ -133,7 +133,8 @@ cudf::size_type distinct_count(table_view const& keys,
 
   auto const comparator_helper = [&](auto const row_equal) {
     using hasher_type = decltype(hash_key);
-    auto key_set      = cuco::static_set{cuco::extent{compute_hash_table_size(num_rows)},
+    auto key_set      = cuco::static_set{cuco::extent{num_rows},
+                                    cudf::detail::CUCO_DESIRED_LOAD_FACTOR,
                                     cuco::empty_key<cudf::size_type>{-1},
                                     row_equal,
                                     cuco::linear_probing<1, hasher_type>{hash_key},

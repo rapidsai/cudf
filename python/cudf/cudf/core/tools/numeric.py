@@ -1,21 +1,21 @@
-# SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
 import warnings
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Literal, cast
 
 import numpy as np
 import pandas as pd
 
 from cudf.core.column import as_column
+from cudf.core.dtype.validators import is_dtype_obj_numeric
 from cudf.core.dtypes import CategoricalDtype, ListDtype, StructDtype
 from cudf.core.index import ensure_index
 from cudf.core.series import Series
 from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
     can_convert_to_column,
-    is_dtype_obj_numeric,
 )
 
 if TYPE_CHECKING:
@@ -225,7 +225,8 @@ def _convert_str_col(
     if col.dtype != CUDF_STRING_DTYPE:
         raise TypeError("col must be string dtype.")
 
-    if col.is_integer().all():
+    string_col = cast("StringColumn", col)
+    if string_col.is_all_integer():
         return col.astype(dtype=np.dtype(np.int64))  # type: ignore[return-value]
 
     # TODO: This can be handled by libcudf in

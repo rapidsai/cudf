@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -57,7 +57,7 @@ std::unique_ptr<column> get_values_for_impl(maps_column_view const& maps_view,
                                              cudf::get_current_device_resource_ref());
   auto constexpr absent_offset  = size_type{-1};
   auto constexpr nullity_offset = std::numeric_limits<size_type>::min();
-  thrust::replace(rmm::exec_policy(stream),
+  thrust::replace(rmm::exec_policy_nosync(stream),
                   key_indices->mutable_view().template begin<size_type>(),
                   key_indices->mutable_view().template end<size_type>(),
                   absent_offset,

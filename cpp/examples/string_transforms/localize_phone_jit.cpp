@@ -145,6 +145,7 @@ __device__ void format_phone(void* scratch,
                                 false,
                                 scratch.data(),
                                 cudf::null_aware::NO,
+                                cudf::output_nullability::PRESERVE,
                                 stream,
                                 mr);
 

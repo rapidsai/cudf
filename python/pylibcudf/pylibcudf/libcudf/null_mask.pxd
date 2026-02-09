@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 from libc.stdint cimport int32_t
 from libcpp.pair cimport pair
@@ -13,8 +13,16 @@ from rmm.librmm.memory_resource cimport device_memory_resource
 
 
 cdef extern from "cudf/null_mask.hpp" namespace "cudf" nogil:
-    cdef device_buffer copy_bitmask "cudf::copy_bitmask" (
+    cdef device_buffer copy_bitmask (
         column_view view,
+        cuda_stream_view stream,
+        device_memory_resource* mr
+    ) except +libcudf_exception_handler
+
+    cdef device_buffer copy_bitmask (
+        const bitmask_type* null_mask,
+        size_type begin_bit,
+        size_type end_bit,
         cuda_stream_view stream,
         device_memory_resource* mr
     ) except +libcudf_exception_handler
@@ -44,6 +52,13 @@ cdef extern from "cudf/null_mask.hpp" namespace "cudf" nogil:
     )
 
     cdef size_type null_count(
+        const bitmask_type * bitmask,
+        size_type start,
+        size_type stop,
+        cuda_stream_view stream
+    )
+
+    cdef size_type index_of_first_set_bit(
         const bitmask_type * bitmask,
         size_type start,
         size_type stop,

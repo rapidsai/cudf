@@ -20,7 +20,7 @@ def test_dropna_bad_how():
         (["x", None, "y"], "str"),
         (["x", None, "y"], "category"),
         (["2020-01-20", pd.NaT, "2020-03-15"], "datetime64[ns]"),
-        (["1s", pd.NaT, "3d"], "timedelta64[ns]"),
+        (["1s", pd.NaT, "3D"], "timedelta64[ns]"),
     ],
 )
 def test_dropna_index(data, dtype):

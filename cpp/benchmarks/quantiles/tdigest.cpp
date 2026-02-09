@@ -22,7 +22,7 @@ void bm_tdigest_merge(nvbench::state& state)
   auto const total_centroids = num_tdigests * tdigest_size;
 
   auto stream = cudf::get_default_stream();
-  auto mr     = rmm::mr::get_current_device_resource();
+  auto mr     = cudf::get_current_device_resource_ref();
 
   constexpr int base_value = 5;
 
@@ -103,7 +103,7 @@ void bm_tdigest_reduce(nvbench::state& state)
   auto const max_centroids  = static_cast<cudf::size_type>(state.get_int64("max_centroids"));
 
   auto stream = cudf::get_default_stream();
-  auto mr     = rmm::mr::get_current_device_resource();
+  auto mr     = cudf::get_current_device_resource_ref();
 
   // construct input values
   auto zero  = cudf::numeric_scalar<cudf::size_type>(0);
