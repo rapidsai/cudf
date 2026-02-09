@@ -656,6 +656,12 @@ def translate_named_expr(
     )
 
 
+def _contains_nested_lists(val: Any) -> bool:
+    if not val:
+        return False
+    return any(isinstance(_, list) for _ in val)
+
+
 @singledispatch
 def _translate_expr(
     node: Any, translator: Translator, dtype: DataType, schema: Schema
@@ -923,6 +929,10 @@ def _(
         return expr.LiteralColumn(dtype, pl.Series._from_pyseries(node.value))
     if dtype.id() == plc.TypeId.LIST:  # pragma: no cover
         # TODO: Remove once pylibcudf.Scalar supports lists
+        if _contains_nested_lists(node.value):
+            return expr.LiteralColumn(
+                dtype, pl.Series([node.value], dtype=dtype.polars_type)
+            )
         return expr.LiteralColumn(dtype, pl.Series(node.value))
     return expr.Literal(dtype, node.value)
 
