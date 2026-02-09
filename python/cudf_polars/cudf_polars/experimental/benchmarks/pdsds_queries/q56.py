@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 """Query 56."""
@@ -133,7 +133,7 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
 
     per_channel = [
         (
-            ch["lf"]
+            ch["lf"]  # type: ignore[attr-defined]
             .join(item, left_on=ch["item_sk_col"], right_on="i_item_sk")
             .join(color_item_ids_lf, on="i_item_id")
             .join(date_dim, left_on=ch["sold_date_col"], right_on="d_date_sk")
