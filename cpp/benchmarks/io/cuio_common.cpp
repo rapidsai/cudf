@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -8,6 +8,8 @@
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/logger.hpp>
 #include <cudf/utilities/memory_resource.hpp>
+
+#include <kvikio/file_utils.hpp>
 
 #include <rmm/mr/pinned_host_memory_resource.hpp>
 
@@ -229,37 +231,28 @@ std::string exec_cmd(std::string_view cmd)
   return error_out;
 }
 
-void log_l3_warning_once()
+void log_page_cache_warning_once()
 {
   static bool is_logged = false;
   if (not is_logged) {
     CUDF_LOG_WARN(
-      "Running benchmarks without dropping the L3 cache; results may not reflect file IO "
+      "Running benchmarks without dropping the page cache; results may not reflect file IO "
       "throughput");
     is_logged = true;
   }
 }
 
-void try_drop_l3_cache()
+void try_drop_page_cache(std::vector<std::string> const& file_paths)
 {
   static bool is_drop_cache_enabled = std::getenv("CUDF_BENCHMARK_DROP_CACHE") != nullptr;
   if (not is_drop_cache_enabled) {
-    log_l3_warning_once();
+    log_page_cache_warning_once();
     return;
   }
 
-  // When data are written to a file, Linux first places them in dirty pages, and then uses a
-  // writeback mechanism to move them to the file system. sysctl vm.drop_caches=3 is only capable of
-  // dropping the clean cache. The dirty pages may still affect the performance of cold cache
-  // benchmark. A call to sync() triggers the writeback process and makes dirty pages clean, ready
-  // to be dropped. This function never fails and does not require sudo.
-  sync();
-
-  std::array drop_cache_cmds{"/sbin/sysctl vm.drop_caches=3", "sudo /sbin/sysctl vm.drop_caches=3"};
-  CUDF_EXPECTS(std::any_of(drop_cache_cmds.cbegin(),
-                           drop_cache_cmds.cend(),
-                           [](auto& cmd) { return exec_cmd(cmd).empty(); }),
-               "Failed to execute the drop cache command");
+  for (const auto& path : file_paths) {
+    kvikio::drop_file_page_cache(path);
+  }
 }
 
 io_type retrieve_io_type_enum(std::string_view io_string)

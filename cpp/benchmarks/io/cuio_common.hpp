@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -145,14 +145,14 @@ std::vector<std::string> select_column_names(std::vector<std::string> const& col
 std::vector<cudf::size_type> segments_in_chunk(int num_segments, int num_chunks, int chunk);
 
 /**
- * @brief Drops L3 cache if `CUDF_BENCHMARK_DROP_CACHE` environment variable is set.
+ * @brief Drops the page cache if `CUDF_BENCHMARK_DROP_CACHE` environment variable is set.
  *
  * Has no effect if the environment variable is not set.
  * May require sudo access ro run successfully.
  *
  * @throw cudf::logic_error if the environment variable is set and the command fails
  */
-void try_drop_l3_cache();
+void try_drop_page_cache(std::vector<std::string> const& file_paths);
 
 /**
  * @brief Convert a string to the corresponding io_type enum value.

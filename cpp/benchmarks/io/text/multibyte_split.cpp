@@ -177,7 +177,7 @@ static void bench_multibyte_split(nvbench::state& state,
 
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
-    try_drop_l3_cache();
+    try_drop_page_cache();
     output = cudf::io::text::multibyte_split(*source, delim, options);
   });
 

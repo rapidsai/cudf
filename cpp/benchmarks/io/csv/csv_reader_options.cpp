@@ -63,7 +63,7 @@ void BM_csv_read_varying_options(
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
   state.exec(nvbench::exec_tag::sync | nvbench::exec_tag::timer,
              [&](nvbench::launch& launch, auto& timer) {
-               try_drop_l3_cache();  // Drop L3 cache for accurate measurement
+               try_drop_page_cache();  // Drop the apge cache for accurate measurement
                cudf::size_type num_rows_read = 0;
                timer.start();
                for (auto chunk = 0u; chunk < num_chunks; ++chunk) {
