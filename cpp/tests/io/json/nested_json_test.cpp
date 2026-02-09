@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2022-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "io/json/nested_json.hpp"
@@ -30,6 +19,7 @@
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/span.hpp>
 
+#include <cuda/std/tuple>
 #include <thrust/iterator/zip_iterator.h>
 
 #include <string>
@@ -755,7 +745,7 @@ TEST_F(JsonTest, PostProcessTokenStream)
   // Golden token stream sample
   using token_t       = cuio_json::token_t;
   using token_index_t = cuio_json::SymbolOffsetT;
-  using tuple_t       = thrust::tuple<token_index_t, cuio_json::PdaTokenT>;
+  using tuple_t       = cuda::std::tuple<token_index_t, cuio_json::PdaTokenT>;
 
   std::vector<tuple_t> const input = {// Line 0 (invalid)
                                       {0, token_t::LineEnd},
@@ -866,9 +856,9 @@ TEST_F(JsonTest, PostProcessTokenStream)
 
   for (std::size_t i = 0; i < filtered_tokens.size(); i++) {
     // Ensure the index the tokens are pointing to do match
-    EXPECT_EQ(thrust::get<0>(expected_output[i]), filtered_indices[i]) << "Mismatch at #" << i;
+    EXPECT_EQ(cuda::std::get<0>(expected_output[i]), filtered_indices[i]) << "Mismatch at #" << i;
     // Ensure the token category is correct
-    EXPECT_EQ(thrust::get<1>(expected_output[i]), filtered_tokens[i]) << "Mismatch at #" << i;
+    EXPECT_EQ(cuda::std::get<1>(expected_output[i]), filtered_tokens[i]) << "Mismatch at #" << i;
   }
 }
 

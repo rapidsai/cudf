@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
@@ -24,25 +13,27 @@
 
 namespace cudf::jni {
 
+// Declare the strings as inline to avoid multiple definitions in different translation units.
+#define JNI_EXP_TYPE inline constexpr char const*
+
 // Wrapper for cudf JNI exception classes, which also store native stacktrace.
-constexpr char const* CUDA_EXCEPTION_CLASS       = "ai/rapids/cudf/CudaException";
-constexpr char const* CUDA_FATAL_EXCEPTION_CLASS = "ai/rapids/cudf/CudaFatalException";
-constexpr char const* CUDF_EXCEPTION_CLASS       = "ai/rapids/cudf/CudfException";
-constexpr char const* CUDF_OVERFLOW_EXCEPTION_CLASS =
-  "ai/rapids/cudf/CudfColumnSizeOverflowException";
-constexpr char const* NVCOMP_EXCEPTION_CLASS      = "ai/rapids/cudf/nvcomp/NvcompException";
-constexpr char const* NVCOMP_CUDA_EXCEPTION_CLASS = "ai/rapids/cudf/nvcomp/NvcompCudaException";
+JNI_EXP_TYPE CUDA_EXCEPTION_CLASS          = "ai/rapids/cudf/CudaException";
+JNI_EXP_TYPE CUDA_FATAL_EXCEPTION_CLASS    = "ai/rapids/cudf/CudaFatalException";
+JNI_EXP_TYPE CUDF_EXCEPTION_CLASS          = "ai/rapids/cudf/CudfException";
+JNI_EXP_TYPE CUDF_OVERFLOW_EXCEPTION_CLASS = "ai/rapids/cudf/CudfColumnSizeOverflowException";
+JNI_EXP_TYPE NVCOMP_EXCEPTION_CLASS        = "ai/rapids/cudf/nvcomp/NvcompException";
+JNI_EXP_TYPE NVCOMP_CUDA_EXCEPTION_CLASS   = "ai/rapids/cudf/nvcomp/NvcompCudaException";
 
 // Java exceptions classes.
-constexpr char const* INDEX_OOB_EXCEPTION_CLASS   = "java/lang/ArrayIndexOutOfBoundsException";
-constexpr char const* ILLEGAL_ARG_EXCEPTION_CLASS = "java/lang/IllegalArgumentException";
-constexpr char const* NPE_EXCEPTION_CLASS         = "java/lang/NullPointerException";
-constexpr char const* RUNTIME_EXCEPTION_CLASS     = "java/lang/RuntimeException";
-constexpr char const* UNSUPPORTED_EXCEPTION_CLASS = "java/lang/UnsupportedOperationException";
+JNI_EXP_TYPE INDEX_OOB_EXCEPTION_CLASS   = "java/lang/ArrayIndexOutOfBoundsException";
+JNI_EXP_TYPE ILLEGAL_ARG_EXCEPTION_CLASS = "java/lang/IllegalArgumentException";
+JNI_EXP_TYPE NPE_EXCEPTION_CLASS         = "java/lang/NullPointerException";
+JNI_EXP_TYPE RUNTIME_EXCEPTION_CLASS     = "java/lang/RuntimeException";
+JNI_EXP_TYPE UNSUPPORTED_EXCEPTION_CLASS = "java/lang/UnsupportedOperationException";
 
 // Java error classes.
 // An error is a serious problem and the applications should not expect to recover from it.
-constexpr char const* OOM_ERROR_CLASS = "java/lang/OutOfMemoryError";
+JNI_EXP_TYPE OOM_ERROR_CLASS = "java/lang/OutOfMemoryError";
 
 /**
  * @brief Exception class indicating that a JNI error of some kind was thrown and the main
@@ -78,7 +69,7 @@ inline void check_java_exception(JNIEnv* const env)
 }
 
 /**
- * @brief Create a cuda exception from a given cudaError_t.
+ * @brief Create CudaException or CudaFatalException from a given cudaError_t code.
  */
 inline jthrowable cuda_exception(JNIEnv* const env, cudaError_t status, jthrowable cause = nullptr)
 {
@@ -186,6 +177,68 @@ inline void jni_cuda_check(JNIEnv* const env, cudaError_t cuda_status)
     }                                                                                 \
   }
 
+// Catch the commonly known exceptions.
+#define CATCH_SPECIAL_EXCEPTION(env, ret_val)                                                    \
+  catch (rmm::out_of_memory const& e)                                                            \
+  {                                                                                              \
+    JNI_EXCEPTION_OCCURRED_CHECK(env, ret_val);                                                  \
+    auto const what =                                                                            \
+      std::string("Could not allocate native memory: ") + (e.what() == nullptr ? "" : e.what()); \
+    JNI_THROW_NEW(env, cudf::jni::OOM_ERROR_CLASS, what.c_str(), ret_val);                       \
+  }                                                                                              \
+  catch (cudf::fatal_cuda_error const& e)                                                        \
+  {                                                                                              \
+    JNI_CHECK_THROW_CUDA_EXCEPTION(                                                              \
+      env, cudf::jni::CUDA_FATAL_EXCEPTION_CLASS, e.what(), nullptr, e.error_code(), ret_val);   \
+  }                                                                                              \
+  catch (cudf::cuda_error const& e)                                                              \
+  {                                                                                              \
+    JNI_CHECK_THROW_CUDA_EXCEPTION(                                                              \
+      env, cudf::jni::CUDA_EXCEPTION_CLASS, e.what(), nullptr, e.error_code(), ret_val);         \
+  }                                                                                              \
+  catch (cudf::data_type_error const& e)                                                         \
+  {                                                                                              \
+    JNI_CHECK_THROW_CUDF_EXCEPTION(                                                              \
+      env, cudf::jni::CUDF_EXCEPTION_CLASS, e.what(), nullptr, ret_val);                         \
+  }                                                                                              \
+  catch (std::overflow_error const& e)                                                           \
+  {                                                                                              \
+    JNI_CHECK_THROW_CUDF_EXCEPTION(                                                              \
+      env, cudf::jni::CUDF_OVERFLOW_EXCEPTION_CLASS, e.what(), nullptr, ret_val);                \
+  }
+
+// Catch any exceptions derived from std::exception.
+#define CATCH_STD_EXCEPTION(env, ret_val)                                                   \
+  catch (std::exception const& e)                                                           \
+  {                                                                                         \
+    /* Double check whether the thrown exception is unrecoverable CUDA error or not. */     \
+    /* Like cudf::detail::throw_cuda_error, it is nearly certain that a fatal error  */     \
+    /* occurred if the second call doesn't return with cudaSuccess. */                      \
+    cudaGetLastError();                                                                     \
+    auto const last = cudaFree(0);                                                          \
+    if (cudaSuccess != last && last == cudaDeviceSynchronize()) {                           \
+      /* Throw CudaFatalException since the thrown exception is unrecoverable CUDA error */ \
+      JNI_CHECK_THROW_CUDA_EXCEPTION(                                                       \
+        env, cudf::jni::CUDA_FATAL_EXCEPTION_CLASS, e.what(), nullptr, last, ret_val);      \
+    }                                                                                       \
+    JNI_CHECK_THROW_CUDF_EXCEPTION(                                                         \
+      env, cudf::jni::CUDF_EXCEPTION_CLASS, e.what(), nullptr, ret_val);                    \
+  }
+
+// Define try-catch macros which can be patched to something else if needed.
+// Typically, JNI_TRY/JNI_CATCH should be used in every JNI function.
+// The JNI_CATCH macro consists of several smaller catch macros to allow inserting more catch
+// blocks if needed. The macro JNI_CATCH_BEGIN must always be called before any catch block,
+// and CATCH_STD_EXCEPTION must always be called last.
+#define JNI_TRY                       try {
+#define JNI_CATCH_BEGIN(env, ret_val) }  // no-op by default
+#define JNI_CATCH(env, ret_val)         \
+  JNI_CATCH_BEGIN(env, ret_val)         \
+  CATCH_SPECIAL_EXCEPTION(env, ret_val) \
+  CATCH_STD_EXCEPTION(env, ret_val)
+
+// Deprecated: macros from here will be removed once spark-rapids-jni is updated to use the new
+// macros JNI_TRY/JNI_CATCH.
 #define CATCH_STD_CLASS(env, class_name, ret_val)                                                \
   catch (const rmm::out_of_memory& e)                                                            \
   {                                                                                              \

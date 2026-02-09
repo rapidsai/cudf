@@ -1,26 +1,112 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
 
 #include <cudf/types.hpp>
+#include <cudf/utilities/type_dispatcher.hpp>
 
 #include <cuda/std/type_traits>
+#include <thrust/detail/use_default.h>
+#include <thrust/iterator/iterator_adaptor.h>
+#include <thrust/iterator/iterator_categories.h>
+#include <thrust/iterator/iterator_facade.h>
 
 namespace cudf::detail {
+
+/**
+ * @brief A map from cudf::type_id to cudf type that excludes LIST and STRUCT types.
+ *
+ * To be used with type_dispatcher in place of the default map, when it is required that STRUCT and
+ * LIST map to void. This is useful when we want to avoid recursion in a functor. For example, in
+ * element_comparator, we have a specialization for STRUCT but the type_dispatcher in it is only
+ * used to dispatch to the same functor for non-nested types. Even when we're guaranteed to not have
+ * non-nested types at that point, the compiler doesn't know this and would try to create recursive
+ * code which is very slow.
+ *
+ * Usage:
+ * @code
+ * type_dispatcher<dispatch_nested_to_void>(data_type(), functor{});
+ * @endcode
+ */
+template <cudf::type_id t>
+struct dispatch_void_if_nested {
+  using type =
+    cuda::std::conditional_t<t == type_id::STRUCT or t == type_id::LIST, void, id_to_type<t>>;
+};
+
+namespace row {
+
+enum class lhs_index_type : size_type {};
+enum class rhs_index_type : size_type {};
+
+/**
+ * @brief A counting iterator that uses strongly typed indices bound to tables.
+ *
+ * Performing lexicographic or equality comparisons between values in two
+ * tables requires the use of strongly typed indices. The strong index types
+ * `lhs_index_type` and `rhs_index_type` ensure that index values are bound to
+ * the correct table, regardless of the order in which these indices are
+ * provided to the call operator. This struct and its type aliases
+ * `lhs_iterator` and `rhs_iterator` provide an interface similar to a counting
+ * iterator, with strongly typed values to represent the table indices.
+ *
+ * @tparam Index The strong index type
+ */
+template <typename Index, typename Underlying = cuda::std::underlying_type_t<Index>>
+struct strong_index_iterator : public thrust::iterator_facade<strong_index_iterator<Index>,
+                                                              Index,
+                                                              thrust::use_default,
+                                                              thrust::random_access_traversal_tag,
+                                                              Index,
+                                                              Underlying> {
+  using super_t =
+    thrust::iterator_adaptor<strong_index_iterator<Index>, Index>;  ///< The base class
+
+  /**
+   * @brief Constructs a strong index iterator
+   *
+   * @param n The beginning index
+   */
+  explicit constexpr strong_index_iterator(Underlying n) : begin{n} {}
+
+  friend class thrust::iterator_core_access;  ///< Allow access to the base class
+
+ private:
+  __device__ constexpr void increment() { ++begin; }
+  __device__ constexpr void decrement() { --begin; }
+
+  __device__ constexpr void advance(Underlying n) { begin += n; }
+
+  __device__ constexpr bool equal(strong_index_iterator<Index> const& other) const noexcept
+  {
+    return begin == other.begin;
+  }
+
+  __device__ constexpr Index dereference() const noexcept { return static_cast<Index>(begin); }
+
+  __device__ constexpr Underlying distance_to(
+    strong_index_iterator<Index> const& other) const noexcept
+  {
+    return other.begin - begin;
+  }
+
+  Underlying begin{};
+};
+
+/**
+ * @brief Iterator representing indices into a left-side table.
+ */
+using lhs_iterator = strong_index_iterator<lhs_index_type>;
+
+/**
+ * @brief Iterator representing indices into a right-side table.
+ */
+using rhs_iterator = strong_index_iterator<rhs_index_type>;
+
+}  // namespace row
 
 /**
  * @brief Result type of comparison operations.

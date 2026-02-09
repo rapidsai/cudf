@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2024-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf_test/base_fixture.hpp>
@@ -26,9 +15,10 @@
 
 #include <rmm/device_uvector.hpp>
 
+#include <cuda/std/tuple>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
-#include <thrust/tuple.h>
+#include <thrust/iterator/zip_iterator.h>
 
 #include <type_traits>
 
@@ -53,10 +43,11 @@ TEST(MultiBufferTestIntegral, BasicTest1)
 
   // set buffer region to other value
   std::for_each(
-    thrust::make_zip_iterator(thrust::make_tuple(expected.begin(), buffer_sizes.begin())),
-    thrust::make_zip_iterator(thrust::make_tuple(expected.end(), buffer_sizes.end())),
+    thrust::make_zip_iterator(cuda::std::make_tuple(expected.begin(), buffer_sizes.begin())),
+    thrust::make_zip_iterator(cuda::std::make_tuple(expected.end(), buffer_sizes.end())),
     [](auto elem) {
-      std::fill_n(thrust::get<0>(elem).begin() + 1000, thrust::get<1>(elem), 0xEEEEEEEEEEEEEEEE);
+      std::fill_n(
+        cuda::std::get<0>(elem).begin() + 1000, cuda::std::get<1>(elem), 0xEEEEEEEEEEEEEEEE);
     });
 
   // Copy host vector data to device
@@ -72,11 +63,12 @@ TEST(MultiBufferTestIntegral, BasicTest1)
   auto buffers =
     cudf::detail::make_host_vector<cudf::device_span<uint64_t>>(device_buffers.size(), stream);
   std::transform(
-    thrust::make_zip_iterator(thrust::make_tuple(device_buffers.begin(), buffer_sizes.begin())),
-    thrust::make_zip_iterator(thrust::make_tuple(device_buffers.end(), buffer_sizes.end())),
+    thrust::make_zip_iterator(cuda::std::make_tuple(device_buffers.begin(), buffer_sizes.begin())),
+    thrust::make_zip_iterator(cuda::std::make_tuple(device_buffers.end(), buffer_sizes.end())),
     buffers.begin(),
     [](auto const& elem) {
-      return cudf::device_span<uint64_t>(thrust::get<0>(elem).data() + 1000, thrust::get<1>(elem));
+      return cudf::device_span<uint64_t>(cuda::std::get<0>(elem).data() + 1000,
+                                         cuda::std::get<1>(elem));
     });
 
   // Function call
@@ -84,17 +76,19 @@ TEST(MultiBufferTestIntegral, BasicTest1)
 
   // Set all buffer regions to 0 for expected comparison
   std::for_each(
-    thrust::make_zip_iterator(thrust::make_tuple(expected.begin(), buffer_sizes.begin())),
-    thrust::make_zip_iterator(thrust::make_tuple(expected.end(), buffer_sizes.end())),
-    [](auto elem) { std::fill_n(thrust::get<0>(elem).begin() + 1000, thrust::get<1>(elem), 0UL); });
+    thrust::make_zip_iterator(cuda::std::make_tuple(expected.begin(), buffer_sizes.begin())),
+    thrust::make_zip_iterator(cuda::std::make_tuple(expected.end(), buffer_sizes.end())),
+    [](auto elem) {
+      std::fill_n(cuda::std::get<0>(elem).begin() + 1000, cuda::std::get<1>(elem), 0UL);
+    });
 
   // Compare to see that only given buffers are zeroed out
   std::for_each(
-    thrust::make_zip_iterator(thrust::make_tuple(device_buffers.begin(), expected.begin())),
-    thrust::make_zip_iterator(thrust::make_tuple(device_buffers.end(), expected.end())),
+    thrust::make_zip_iterator(cuda::std::make_tuple(device_buffers.begin(), expected.begin())),
+    thrust::make_zip_iterator(cuda::std::make_tuple(device_buffers.end(), expected.end())),
     [stream](auto const& elem) {
-      auto const after_memset = cudf::detail::make_host_vector(thrust::get<0>(elem), stream);
-      EXPECT_TRUE(
-        std::equal(thrust::get<1>(elem).begin(), thrust::get<1>(elem).end(), after_memset.begin()));
+      auto const after_memset = cudf::detail::make_host_vector(cuda::std::get<0>(elem), stream);
+      EXPECT_TRUE(std::equal(
+        cuda::std::get<1>(elem).begin(), cuda::std::get<1>(elem).end(), after_memset.begin()));
     });
 }

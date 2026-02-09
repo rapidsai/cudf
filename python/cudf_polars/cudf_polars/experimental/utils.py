@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 """Multi-partition utilities."""
 
@@ -20,15 +20,15 @@ if TYPE_CHECKING:
 
     from cudf_polars.containers import DataFrame
     from cudf_polars.dsl.expr import Expr
-    from cudf_polars.dsl.ir import IR
+    from cudf_polars.dsl.ir import IR, IRExecutionContext
     from cudf_polars.experimental.base import ColumnStats
     from cudf_polars.experimental.dispatch import LowerIRTransformer
     from cudf_polars.utils.config import ConfigOptions
 
 
-def _concat(*dfs: DataFrame) -> DataFrame:
+def _concat(*dfs: DataFrame, context: IRExecutionContext) -> DataFrame:
     # Concatenate a sequence of DataFrames vertically
-    return Union.do_evaluate(None, *dfs)
+    return dfs[0] if len(dfs) == 1 else Union.do_evaluate(None, *dfs, context=context)
 
 
 def _fallback_inform(msg: str, config_options: ConfigOptions) -> None:
@@ -52,6 +52,18 @@ def _fallback_inform(msg: str, config_options: ConfigOptions) -> None:
             )
 
 
+def _dynamic_planning_on(config_options: ConfigOptions) -> bool:
+    """Check if dynamic planning is enabled for rapidsmpf runtime."""
+    assert config_options.executor.name == "streaming", (
+        "'in-memory' executor not supported in 'lower_ir_node'"
+    )
+
+    return (
+        config_options.executor.runtime == "rapidsmpf"
+        and config_options.executor.dynamic_planning is not None
+    )
+
+
 def _lower_ir_fallback(
     ir: IR,
     rec: LowerIRTransformer,
@@ -63,23 +75,30 @@ def _lower_ir_fallback(
     # those children will be collapsed with `Repartition`.
     from cudf_polars.experimental.repartition import Repartition
 
+    config_options = rec.state["config_options"]
+    assert config_options.executor.name == "streaming", (
+        "'in-memory' executor not supported in 'generate_ir_sub_network'"
+    )
+    rapidsmpf_engine = config_options.executor.runtime == "rapidsmpf"
+
     # Lower children
     lowered_children, _partition_info = zip(*(rec(c) for c in ir.children), strict=True)
     partition_info = reduce(operator.or_, _partition_info)
 
     # Ensure all children are single-partitioned
     children = []
-    fallback = False
+    inform = False
     for c in lowered_children:
         child = c
-        if partition_info[c].count > 1:
+        if multi_partitioned := partition_info[c].count > 1:
+            inform = True
+        if multi_partitioned or rapidsmpf_engine:
             # Fall-back logic
-            fallback = True
             child = Repartition(child.schema, child)
             partition_info[child] = PartitionInfo(count=1)
         children.append(child)
 
-    if fallback and msg:
+    if inform and msg:
         # Warn/raise the user if any children were collapsed
         # and the "fallback_mode" configuration is not "silent"
         _fallback_inform(msg, rec.state["config_options"])

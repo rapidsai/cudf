@@ -1,4 +1,5 @@
-# Copyright (c) 2022-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 from libc.stdint cimport uint8_t, uint16_t
 from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string

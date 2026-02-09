@@ -1,10 +1,10 @@
-# Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 import operator
 
 import numpy as np
 from numba import types
-from numba.core.datamodel import default_manager
 from numba.core.extending import (
     make_attribute_wrapper,
     models,
@@ -19,6 +19,7 @@ from numba.core.typing.templates import (
 )
 from numba.core.typing.typeof import typeof
 from numba.cuda.cudadecl import registry as cuda_decl_registry
+from numba.cuda.descriptor import cuda_target
 from numba.np.numpy_support import from_dtype
 
 from cudf.core.missing import NA
@@ -112,7 +113,9 @@ class MaskedType(types.Type):
     def __init__(self, value):
         # MaskedType in Numba shall be parameterized
         # with a value type
-        if default_manager[value].has_nrt_meminfo():
+        if cuda_target.target_context.data_model_manager[
+            value
+        ].has_nrt_meminfo():
             ctx = _current_nrt_context.get(None)
             if ctx is not None:
                 # we're in a compilation that is determining

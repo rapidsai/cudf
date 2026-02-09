@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf/column/column.hpp>
@@ -20,6 +9,7 @@
 #include <cudf/detail/indexalator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/sorting.hpp>
+#include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/string_view.cuh>
@@ -34,8 +24,6 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 
-#include <thrust/copy.h>
-#include <thrust/count.h>
 #include <thrust/iterator/counting_iterator.h>
 
 namespace nvtext {
@@ -107,18 +95,18 @@ rmm::device_uvector<cudf::size_type> create_token_row_offsets(
                       sorted_indices.data<cudf::size_type>()};
 
   auto const output_count =
-    thrust::count_if(rmm::exec_policy(stream),
-                     thrust::make_counting_iterator<cudf::size_type>(0),
-                     thrust::make_counting_iterator<cudf::size_type>(tokens_counts),
-                     fn);
+    cudf::detail::count_if(thrust::counting_iterator<cudf::size_type>(0),
+                           thrust::counting_iterator<cudf::size_type>(tokens_counts),
+                           fn,
+                           stream);
 
   auto tokens_offsets = rmm::device_uvector<cudf::size_type>(output_count + 1, stream);
 
-  thrust::copy_if(rmm::exec_policy(stream),
-                  thrust::make_counting_iterator<cudf::size_type>(0),
-                  thrust::make_counting_iterator<cudf::size_type>(tokens_counts),
-                  tokens_offsets.begin(),
-                  fn);
+  cudf::detail::copy_if(thrust::counting_iterator<cudf::size_type>(0),
+                        thrust::counting_iterator<cudf::size_type>(tokens_counts),
+                        tokens_offsets.begin(),
+                        fn,
+                        stream);
 
   // set the last element to the total number of tokens
   tokens_offsets.set_element(output_count, tokens_counts, stream);

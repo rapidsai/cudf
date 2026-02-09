@@ -1,10 +1,11 @@
-# Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 from cpython.buffer cimport PyBUF_READ
 from cpython.memoryview cimport PyMemoryView_FromMemory
 
 from cython.operator cimport dereference
 
-from libc.stdint cimport int32_t, uint8_t
+from libc.stdint cimport int32_t, uint8_t, uintptr_t
 
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
@@ -27,10 +28,11 @@ from pylibcudf.libcudf.io.types cimport (
     table_with_metadata,
 )
 from pylibcudf.libcudf.types cimport size_type
-from pylibcudf.libcudf.utilities.span cimport host_span, device_span
+from pylibcudf.libcudf.utilities.span cimport device_span, host_span
 
-from pylibcudf.utils cimport _get_stream
-from rmm.pylibrmm.device_buffer cimport DeviceBuffer
+from pylibcudf.span import is_span
+
+from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from rmm.pylibrmm.stream cimport Stream
 
 import codecs
@@ -393,12 +395,15 @@ cdef class TableWithMetadata:
 
     @staticmethod
     cdef TableWithMetadata from_libcudf(
-        table_with_metadata& tbl_with_meta, Stream stream = None
+        table_with_metadata& tbl_with_meta,
+        Stream stream,
+        DeviceMemoryResource mr
     ):
         """Create a Python TableWithMetadata from a libcudf table_with_metadata"""
+        assert stream is not None, "stream cannot be None"
+        assert mr is not None, "mr cannot be None"
         cdef TableWithMetadata out = TableWithMetadata.__new__(TableWithMetadata)
-        stream = _get_stream(stream)
-        out.tbl = Table.from_libcudf(move(tbl_with_meta.tbl), stream)
+        out.tbl = Table.from_libcudf(move(tbl_with_meta.tbl), stream, mr)
         out.metadata = tbl_with_meta.metadata
         return out
 
@@ -467,11 +472,13 @@ cdef class SourceInfo:
     ]]
         A homogeneous list of sources to read from. Mixing
         different types of sources will raise a `ValueError`.
+        If an empty list, constructs an empty SourceInfo.
     """
 
-    def __init__(self, list sources):
+    def __init__(self, sources):
         if not sources:
-            raise ValueError("Need to pass at least one source")
+            self.c_obj = move(source_info())
+            return
 
         cdef vector[string] c_files
         cdef vector[datasource*] c_datasources
@@ -519,14 +526,13 @@ cdef class SourceInfo:
             self._init_byte_like_sources(sources, bytes)
         elif isinstance(sources[0], io.BytesIO):
             self._init_byte_like_sources(sources, io.BytesIO)
-        elif isinstance(sources[0], DeviceBuffer):
-            if not all(isinstance(s, DeviceBuffer) for s in sources):
+        elif is_span(sources[0]):
+            if not all(is_span(s) for s in sources):
                 raise ValueError("All sources must be of the same type!")
             self.device_sources = sources
             for buf in sources:
-                d_buf = <DeviceBuffer>buf
                 d_span = device_span[const_byte](
-                    <const_byte *>d_buf.c_data(), d_buf.c_size()
+                    <const_byte *><uintptr_t>buf.ptr, <size_t>buf.size
                 )
                 d_spans.push_back(d_span)
             self.c_obj = move(source_info(host_span[device_span[const_byte]](d_spans)))

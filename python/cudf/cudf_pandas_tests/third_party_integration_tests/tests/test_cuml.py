@@ -1,4 +1,5 @@
-# Copyright (c) 2023-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 import cupy as cp
 import numpy as np
 import pandas as pd
@@ -55,7 +56,7 @@ def binary_classification_data():
 
 
 def test_linear_regression():
-    lr = LinearRegression(fit_intercept=True, normalize=False, algorithm="eig")
+    lr = LinearRegression(fit_intercept=True, algorithm="eig")
     X = pd.DataFrame()
     X["col1"] = np.array([1, 1, 2, 2], dtype=np.float32)
     X["col2"] = np.array([1, 2, 2, 3], dtype=np.float32)
@@ -93,7 +94,7 @@ def test_random_forest(binary_classification_data):
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=0.2, random_state=42
     )
-    model = RandomForestClassifier(n_estimators=100)
+    model = RandomForestClassifier(n_estimators=100, n_bins=len(X_train))
     model.fit(X_train, y_train)
     preds = model.predict(X_test)
     return preds.values

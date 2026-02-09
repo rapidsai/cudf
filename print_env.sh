@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Copyright (c) 2022, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2022, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 # Reports relevant environment information useful for diagnosing and
 # debugging cuDF issues.
 # Usage:

@@ -1,22 +1,10 @@
 /*
- * Copyright (c) 2020-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
 
-#include <cudf/detail/utilities/host_vector.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/export.hpp>
 
@@ -24,6 +12,7 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/device_vector.hpp>
 
+#include <cuda/std/span>
 #include <thrust/detail/raw_pointer_cast.h>
 #include <thrust/device_vector.h>
 #include <thrust/host_vector.h>
@@ -31,6 +20,7 @@
 
 #include <cstddef>
 #include <limits>
+#include <span>
 #include <type_traits>
 #include <utility>
 
@@ -237,26 +227,6 @@ struct host_span : public cudf::detail::span_base<T, Extent, host_span<T, Extent
   {
   }
 
-  /// Constructor from a host_vector
-  /// @param in The host_vector to construct the span from
-  template <typename OtherT,
-            // Only supported containers of types convertible to T
-            std::enable_if_t<std::is_convertible_v<OtherT (*)[], T (*)[]>>* = nullptr>  // NOLINT
-  constexpr host_span(cudf::detail::host_vector<OtherT>& in)
-    : base(in.data(), in.size()), _is_device_accessible{in.get_allocator().is_device_accessible()}
-  {
-  }
-
-  /// Constructor from a const host_vector
-  /// @param in The host_vector to construct the span from
-  template <typename OtherT,
-            // Only supported containers of types convertible to T
-            std::enable_if_t<std::is_convertible_v<OtherT (*)[], T (*)[]>>* = nullptr>  // NOLINT
-  constexpr host_span(cudf::detail::host_vector<OtherT> const& in)
-    : base(in.data(), in.size()), _is_device_accessible{in.get_allocator().is_device_accessible()}
-  {
-  }
-
   // Copy construction to support const conversion
   /// @param other The span to copy
   template <typename OtherT,
@@ -324,6 +294,16 @@ struct host_span : public cudf::detail::span_base<T, Extent, host_span<T, Extent
     typename base::size_type offset, typename base::size_type count) const noexcept
   {
     return host_span{this->data() + offset, count, _is_device_accessible};
+  }
+
+  /**
+   * @brief Returns a standard span instance
+   *
+   * @return Standard span instance
+   */
+  [[nodiscard]] constexpr operator std::span<T>() const noexcept
+  {
+    return std::span<T>(this->data(), this->size());
   }
 
  private:
@@ -448,6 +428,16 @@ struct device_span : public cudf::detail::span_base<T, Extent, device_span<T, Ex
     typename base::size_type offset, typename base::size_type count) const noexcept
   {
     return device_span{this->data() + offset, count};
+  }
+
+  /**
+   * @brief Returns a standard span instance
+   *
+   * @return Standard span instance
+   */
+  [[nodiscard]] CUDF_HOST_DEVICE constexpr operator cuda::std::span<T>() const noexcept
+  {
+    return cuda::std::span<T>(this->data(), this->size());
   }
 };
 /** @} */  // end of group

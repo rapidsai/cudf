@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "helpers.hpp"
@@ -37,42 +26,6 @@ typename std::vector<column_view>::const_iterator get_transform_base_column(
   if (smallest->size() == 0) { return smallest; }
 
   return largest;
-}
-
-jitify2::StringVec build_jit_template_params(
-  bool has_user_data,
-  null_aware is_null_aware,
-  std::vector<std::string> const& span_outputs,
-  std::vector<std::string> const& column_outputs,
-  std::vector<input_column_reflection> const& column_inputs)
-{
-  jitify2::StringVec tparams;
-
-  tparams.emplace_back(jitify2::reflection::reflect(has_user_data));
-  tparams.emplace_back(jitify2::reflection::reflect(is_null_aware == null_aware::YES));
-
-  std::transform(thrust::counting_iterator<size_t>(0),
-                 thrust::counting_iterator(span_outputs.size()),
-                 std::back_inserter(tparams),
-                 [&](auto i) {
-                   return jitify2::reflection::Template("cudf::jit::span_accessor")
-                     .instantiate(span_outputs[i], i);
-                 });
-
-  std::transform(thrust::counting_iterator<size_t>(0),
-                 thrust::counting_iterator(column_outputs.size()),
-                 std::back_inserter(tparams),
-                 [&](auto i) {
-                   return jitify2::reflection::Template("cudf::jit::column_accessor")
-                     .instantiate(column_outputs[i], i);
-                 });
-
-  std::transform(thrust::counting_iterator<size_t>(0),
-                 thrust::counting_iterator(column_inputs.size()),
-                 std::back_inserter(tparams),
-                 [&](auto i) { return column_inputs[i].accessor(i); });
-
-  return tparams;
 }
 
 std::map<uint32_t, std::string> build_ptx_params(std::vector<std::string> const& output_typenames,

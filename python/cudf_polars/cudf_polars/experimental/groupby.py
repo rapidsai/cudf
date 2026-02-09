@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 """Parallel GroupBy Logic."""
 
@@ -14,6 +14,7 @@ import pylibcudf as plc
 
 from cudf_polars.containers import DataType
 from cudf_polars.dsl.expr import Agg, BinOp, Col, Len, NamedExpr
+from cudf_polars.dsl.expressions.base import ExecutionContext
 from cudf_polars.dsl.ir import GroupBy, Select, Slice
 from cudf_polars.dsl.traversal import traversal
 from cudf_polars.dsl.utils.naming import unique_names
@@ -21,7 +22,11 @@ from cudf_polars.experimental.base import PartitionInfo
 from cudf_polars.experimental.dispatch import lower_ir_node
 from cudf_polars.experimental.repartition import Repartition
 from cudf_polars.experimental.shuffle import Shuffle
-from cudf_polars.experimental.utils import _get_unique_fractions, _lower_ir_fallback
+from cudf_polars.experimental.utils import (
+    _dynamic_planning_on,
+    _get_unique_fractions,
+    _lower_ir_fallback,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Generator, MutableMapping
@@ -95,7 +100,12 @@ def decompose(
     if isinstance(expr, Len):
         selection = NamedExpr(name, Col(dtype, name))
         aggregation = [NamedExpr(name, expr)]
-        reduction = [NamedExpr(name, Agg(dtype, "sum", None, Col(dtype, name)))]
+        reduction = [
+            NamedExpr(
+                name,
+                Agg(dtype, "sum", None, ExecutionContext.GROUPBY, Col(dtype, name)),
+            )
+        ]
         return selection, aggregation, reduction, False
     if isinstance(expr, Agg):
         if expr.name in ("sum", "count", "min", "max", "n_unique"):
@@ -105,19 +115,32 @@ def decompose(
                 aggfunc = expr.name
             selection = NamedExpr(name, Col(dtype, name))
             aggregation = [NamedExpr(name, expr)]
-            reduction = [NamedExpr(name, Agg(dtype, aggfunc, None, Col(dtype, name)))]
+            reduction = [
+                NamedExpr(
+                    name,
+                    Agg(
+                        dtype, aggfunc, None, ExecutionContext.GROUPBY, Col(dtype, name)
+                    ),
+                )
+            ]
             return selection, aggregation, reduction, expr.name == "n_unique"
         elif expr.name == "mean":
             (child,) = expr.children
             (sum, count), aggregations, reductions, need_preshuffle = combine(
                 decompose(
                     f"{next(names)}__mean_sum",
-                    Agg(dtype, "sum", None, child),
+                    Agg(dtype, "sum", None, ExecutionContext.GROUPBY, child),
                     names=names,
                 ),
                 decompose(
                     f"{next(names)}__mean_count",
-                    Agg(DataType(pl.Int32()), "count", False, child),  # noqa: FBT003
+                    Agg(
+                        DataType(pl.Int32()),
+                        "count",
+                        False,  # noqa: FBT003
+                        ExecutionContext.GROUPBY,
+                        child,
+                    ),
                     names=names,
                 ),
             )
@@ -166,8 +189,12 @@ def _(
     original_child = ir.children[0]
     child, partition_info = rec(ir.children[0])
 
+    # Check for dynamic planning - may have more partitions at runtime
+    config_options = rec.state["config_options"]
+    assert config_options.executor.name == "streaming"  # For type narrowing
+
     # Handle single-partition case
-    if partition_info[child].count == 1:
+    if partition_info[child].count == 1 and not _dynamic_planning_on(config_options):
         single_part_node = ir.reconstruct([child])
         partition_info[single_part_node] = partition_info[child]
         return single_part_node, partition_info
@@ -186,11 +213,6 @@ def _(
     post_aggregation_count = 1  # Default tree reduction
     groupby_key_columns = [ne.name for ne in ir.keys]
     shuffled = partition_info[child].partitioned_on == ir.keys
-
-    config_options = rec.state["config_options"]
-    assert config_options.executor.name == "streaming", (
-        "'in-memory' executor not supported in 'lower_ir_node'"
-    )
 
     child_count = partition_info[child].count
     if unique_fraction_dict := _get_unique_fractions(
@@ -230,6 +252,7 @@ def _(
             child.schema,
             ir.keys,
             config_options.executor.shuffle_method,
+            config_options.executor.shuffler_insertion_method,
             child,
         )
         partition_info[child] = PartitionInfo(
@@ -272,6 +295,7 @@ def _(
             gb_pwise.schema,
             grouped_keys,
             config_options.executor.shuffle_method,
+            config_options.executor.shuffler_insertion_method,
             gb_pwise,
         )
         partition_info[gb_inter] = PartitionInfo(count=post_aggregation_count)

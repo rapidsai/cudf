@@ -1,4 +1,5 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 from enum import IntEnum
 
@@ -6,6 +7,7 @@ from rmm.pylibrmm.memory_resource import DeviceMemoryResource
 from rmm.pylibrmm.stream import Stream
 
 from pylibcudf.column import Column
+from pylibcudf.expressions import Expression
 from pylibcudf.table import Table
 from pylibcudf.types import NanEquality, NanPolicy, NullEquality, NullPolicy
 
@@ -81,3 +83,10 @@ def distinct_count(
     nan_handling: NanPolicy,
     stream: Stream | None = None,
 ) -> int: ...
+def filter(
+    predicate_table: Table,
+    predicate_expr: Expression,
+    filter_table: Table,
+    stream: Stream | None = None,
+    mr: DeviceMemoryResource | None = None,
+) -> Table: ...

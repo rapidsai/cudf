@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <benchmarks/join/join_common.hpp>
@@ -26,7 +15,44 @@ void nvbench_hm_inner_join(nvbench::state& state,
                                               nvbench::enum_type<DataType>,
                                               nvbench::enum_type<Algorithm>>)
 {
-  if constexpr (not Nullable && NullEquality == cudf::null_equality::UNEQUAL) {
+  if constexpr (!Nullable && NullEquality == cudf::null_equality::UNEQUAL) {
+    state.skip(
+      "Since the keys are not nullable, how null entries are to be compared by the join algorithm "
+      "is immaterial. Therefore, we skip running the benchmark when null equality is set to "
+      "UNEQUAL since the performance numbers will be the same as when null equality is set to "
+      "EQUAL.");
+    return;
+  }
+  auto const multiplicity = static_cast<cudf::size_type>(state.get_int64("multiplicity"));
+  auto const num_keys     = state.get_int64("num_keys");
+  auto dtypes = cycle_dtypes(get_type_or_group(static_cast<int32_t>(DataType)), num_keys);
+
+  if constexpr (Algorithm == join_t::HASH) {
+    auto hash_join = [](cudf::table_view const& left_input,
+                        cudf::table_view const& right_input,
+                        cudf::null_equality compare_nulls) {
+      return cudf::inner_join(left_input, right_input, compare_nulls);
+    };
+    BM_join<Nullable, Algorithm, NullEquality>(state, dtypes, hash_join, multiplicity);
+  } else if constexpr (Algorithm == join_t::SORT_MERGE) {
+    auto sort_merge_join = [](cudf::table_view const& left_input,
+                              cudf::table_view const& right_input,
+                              cudf::null_equality compare_nulls) {
+      auto smj = cudf::sort_merge_join(right_input, cudf::sorted::NO, compare_nulls);
+      return smj.inner_join(left_input, cudf::sorted::NO);
+    };
+    BM_join<Nullable, Algorithm, NullEquality>(state, dtypes, sort_merge_join, multiplicity);
+  }
+}
+
+template <bool Nullable, cudf::null_equality NullEquality, data_type DataType, join_t Algorithm>
+void nvbench_hm_left_join(nvbench::state& state,
+                          nvbench::type_list<nvbench::enum_type<Nullable>,
+                                             nvbench::enum_type<NullEquality>,
+                                             nvbench::enum_type<DataType>,
+                                             nvbench::enum_type<Algorithm>>)
+{
+  if constexpr (!Nullable && NullEquality == cudf::null_equality::UNEQUAL) {
     state.skip(
       "Since the keys are not nullable, how null entries are to be compared by the join algorithm "
       "is immaterial. Therefore, we skip running the benchmark when null equality is set to "
@@ -41,42 +67,19 @@ void nvbench_hm_inner_join(nvbench::state& state,
   auto hash_join = [](cudf::table_view const& left_input,
                       cudf::table_view const& right_input,
                       cudf::null_equality compare_nulls) {
-    return cudf::inner_join(left_input, right_input, compare_nulls);
+    return cudf::left_join(left_input, right_input, compare_nulls);
   };
   auto sort_merge_join = [](cudf::table_view const& left_input,
                             cudf::table_view const& right_input,
                             cudf::null_equality compare_nulls) {
     auto smj = cudf::sort_merge_join(right_input, cudf::sorted::NO, compare_nulls);
-    return smj.inner_join(left_input, cudf::sorted::NO);
+    return smj.left_join(left_input, cudf::sorted::NO);
   };
   if constexpr (Algorithm == join_t::HASH) {
     BM_join<Nullable, Algorithm, NullEquality>(state, dtypes, hash_join, multiplicity);
   } else if constexpr (Algorithm == join_t::SORT_MERGE) {
     BM_join<Nullable, Algorithm, NullEquality>(state, dtypes, sort_merge_join, multiplicity);
   }
-}
-
-template <bool Nullable, cudf::null_equality NullEquality, data_type DataType, join_t Algorithm>
-void nvbench_hm_left_join(nvbench::state& state,
-                          nvbench::type_list<nvbench::enum_type<Nullable>,
-                                             nvbench::enum_type<NullEquality>,
-                                             nvbench::enum_type<DataType>,
-                                             nvbench::enum_type<Algorithm>>)
-{
-  if constexpr (Algorithm == join_t::SORT_MERGE) {
-    state.skip("Left join using sort-merge algorithm not yet implemented");
-    return;
-  }
-  auto const multiplicity = static_cast<cudf::size_type>(state.get_int64("multiplicity"));
-  auto const num_keys     = state.get_int64("num_keys");
-  auto dtypes = cycle_dtypes(get_type_or_group(static_cast<int32_t>(DataType)), num_keys);
-
-  auto join = [](cudf::table_view const& left_input,
-                 cudf::table_view const& right_input,
-                 cudf::null_equality compare_nulls) {
-    return cudf::left_join(left_input, right_input, compare_nulls);
-  };
-  BM_join<Nullable, Algorithm, NullEquality>(state, dtypes, join, multiplicity);
 }
 
 template <bool Nullable, cudf::null_equality NullEquality, data_type DataType, join_t Algorithm>

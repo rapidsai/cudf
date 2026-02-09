@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2023-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf_test/base_fixture.hpp>
@@ -48,23 +37,6 @@ TEST_F(DictionaryTest, FactoryColumns)
 
   auto dictionary = cudf::make_dictionary_column(
     keys.release(), values.release(), cudf::test::get_default_stream());
-  cudf::dictionary_column_view view(dictionary->view());
-
-  cudf::test::strings_column_wrapper keys_expected(h_keys.begin(), h_keys.end());
-  cudf::test::fixed_width_column_wrapper<int8_t> values_expected(h_values.begin(), h_values.end());
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(view.keys(), keys_expected);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(view.indices(), values_expected);
-}
-
-TEST_F(DictionaryTest, FactoryColumnsNullMaskCount)
-{
-  std::vector<std::string> h_keys{"aaa", "ccc", "ddd", "www"};
-  cudf::test::strings_column_wrapper keys(h_keys.begin(), h_keys.end());
-  std::vector<int8_t> h_values{2, 0, 3, 1, 2, 2, 2, 3, 0};
-  cudf::test::fixed_width_column_wrapper<int8_t> values(h_values.begin(), h_values.end());
-
-  auto dictionary = cudf::make_dictionary_column(
-    keys.release(), values.release(), rmm::device_buffer{}, 0, cudf::test::get_default_stream());
   cudf::dictionary_column_view view(dictionary->view());
 
   cudf::test::strings_column_wrapper keys_expected(h_keys.begin(), h_keys.end());

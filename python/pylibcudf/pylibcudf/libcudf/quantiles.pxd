@@ -1,4 +1,5 @@
-# Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
 from libcpp.vector cimport vector
@@ -15,6 +16,7 @@ from pylibcudf.libcudf.types cimport (
     sorted,
 )
 from rmm.librmm.cuda_stream_view cimport cuda_stream_view
+from rmm.librmm.memory_resource cimport device_memory_resource
 
 
 cdef extern from "cudf/quantiles.hpp" namespace "cudf" nogil:
@@ -26,6 +28,7 @@ cdef extern from "cudf/quantiles.hpp" namespace "cudf" nogil:
         column_view ordered_indices,
         bool exact,
         cuda_stream_view stream,
+        device_memory_resource* mr
     ) except +libcudf_exception_handler
 
     cdef unique_ptr[table] quantiles (
@@ -36,4 +39,5 @@ cdef extern from "cudf/quantiles.hpp" namespace "cudf" nogil:
         vector[order] column_order,
         vector[null_order] null_precedence,
         cuda_stream_view stream,
+        device_memory_resource* mr
     ) except +libcudf_exception_handler

@@ -1,4 +1,5 @@
-# Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
@@ -17,6 +18,7 @@ from pylibcudf.libcudf.types cimport (
     size_type
 )
 from rmm.librmm.cuda_stream_view cimport cuda_stream_view
+from rmm.librmm.memory_resource cimport device_memory_resource
 
 
 cdef extern from "cudf/sorting.hpp" namespace "cudf" nogil:
@@ -24,14 +26,16 @@ cdef extern from "cudf/sorting.hpp" namespace "cudf" nogil:
         table_view source_table,
         vector[order] column_order,
         vector[null_order] null_precedence,
-        cuda_stream_view stream
+        cuda_stream_view stream,
+        device_memory_resource* mr
     ) except +libcudf_exception_handler
 
     cdef unique_ptr[column] stable_sorted_order(
         table_view source_table,
         vector[order] column_order,
         vector[null_order] null_precedence,
-        cuda_stream_view stream
+        cuda_stream_view stream,
+        device_memory_resource* mr
     ) except +libcudf_exception_handler
 
     cdef unique_ptr[column] rank(
@@ -41,7 +45,8 @@ cdef extern from "cudf/sorting.hpp" namespace "cudf" nogil:
         null_policy null_handling,
         null_order null_precedence,
         bool percentage,
-        cuda_stream_view stream
+        cuda_stream_view stream,
+        device_memory_resource* mr
     ) except +libcudf_exception_handler
 
     cdef bool is_sorted(
@@ -57,7 +62,8 @@ cdef extern from "cudf/sorting.hpp" namespace "cudf" nogil:
         const column_view& segment_offsets,
         vector[order] column_order,
         vector[null_order] null_precedence,
-        cuda_stream_view stream
+        cuda_stream_view stream,
+        device_memory_resource* mr
     ) except +libcudf_exception_handler
 
     cdef unique_ptr[table] stable_segmented_sort_by_key(
@@ -66,7 +72,8 @@ cdef extern from "cudf/sorting.hpp" namespace "cudf" nogil:
         const column_view& segment_offsets,
         vector[order] column_order,
         vector[null_order] null_precedence,
-        cuda_stream_view stream
+        cuda_stream_view stream,
+        device_memory_resource* mr
     ) except +libcudf_exception_handler
 
     cdef unique_ptr[table] sort_by_key(
@@ -74,7 +81,8 @@ cdef extern from "cudf/sorting.hpp" namespace "cudf" nogil:
         const table_view& keys,
         vector[order] column_order,
         vector[null_order] null_precedence,
-        cuda_stream_view stream
+        cuda_stream_view stream,
+        device_memory_resource* mr
     ) except +libcudf_exception_handler
 
     cdef unique_ptr[table] stable_sort_by_key(
@@ -82,33 +90,38 @@ cdef extern from "cudf/sorting.hpp" namespace "cudf" nogil:
         const table_view& keys,
         vector[order] column_order,
         vector[null_order] null_precedence,
-        cuda_stream_view stream
+        cuda_stream_view stream,
+        device_memory_resource* mr
     ) except +libcudf_exception_handler
 
     cdef unique_ptr[table] sort(
         table_view source_table,
         vector[order] column_order,
         vector[null_order] null_precedence,
-        cuda_stream_view stream
+        cuda_stream_view stream,
+        device_memory_resource* mr
     ) except +libcudf_exception_handler
 
     cdef unique_ptr[table] stable_sort(
         table_view source_table,
         vector[order] column_order,
         vector[null_order] null_precedence,
-        cuda_stream_view stream
+        cuda_stream_view stream,
+        device_memory_resource* mr
     ) except +libcudf_exception_handler
 
     cdef unique_ptr[column] top_k(
         const column_view& col,
         size_type k,
         order sort_order,
-        cuda_stream_view stream
+        cuda_stream_view stream,
+        device_memory_resource* mr
     ) except +libcudf_exception_handler
 
     cdef unique_ptr[column] top_k_order(
         const column_view& col,
         size_type k,
         order sort_order,
-        cuda_stream_view stream
+        cuda_stream_view stream,
+        device_memory_resource* mr
     ) except +libcudf_exception_handler

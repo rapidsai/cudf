@@ -1,24 +1,14 @@
 /*
- * Copyright (c) 2020-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
 
 #include "column_type_histogram.hpp"
 #include "io/csv/datetime.cuh"
-#include "io/utilities/trie.cuh"
+#include "string_parsing.hpp"
+#include "trie.cuh"
 
 #include <cudf/io/types.hpp>
 #include <cudf/lists/list_view.hpp>
@@ -45,95 +35,12 @@ namespace cudf {
 namespace io {
 
 /**
- * @brief Non-owning view for json type inference options
- */
-struct json_inference_options_view {
-  char quote_char;
-  cudf::detail::trie_view trie_true;
-  cudf::detail::trie_view trie_false;
-  cudf::detail::trie_view trie_na;
-};
-
-/**
- * @brief Structure for holding various options used when parsing and
- * converting CSV/json data to cuDF data type values.
- */
-struct parse_options_view {
-  char delimiter;
-  char terminator;
-  char quotechar;
-  char decimal;
-  char thousands;
-  char comment;
-  bool keepquotes;
-  bool detect_whitespace_around_quotes;
-  bool doublequote;
-  bool dayfirst;
-  bool skipblanklines;
-  bool normalize_whitespace;
-  bool mixed_types_as_string;
-  cudf::detail::trie_view trie_true;
-  cudf::detail::trie_view trie_false;
-  cudf::detail::trie_view trie_na;
-  bool multi_delimiter;
-};
-
-struct parse_options {
-  char delimiter;
-  char terminator;
-  char quotechar;
-  char decimal;
-  char thousands;
-  char comment;
-  bool keepquotes;
-  bool detect_whitespace_around_quotes;
-  bool doublequote;
-  bool dayfirst;
-  bool skipblanklines;
-  bool normalize_whitespace;
-  bool mixed_types_as_string;
-  cudf::detail::optional_trie trie_true;
-  cudf::detail::optional_trie trie_false;
-  cudf::detail::optional_trie trie_na;
-  bool multi_delimiter;
-
-  [[nodiscard]] json_inference_options_view json_view() const
-  {
-    return {quotechar,
-            cudf::detail::make_trie_view(trie_true),
-            cudf::detail::make_trie_view(trie_false),
-            cudf::detail::make_trie_view(trie_na)};
-  }
-
-  [[nodiscard]] parse_options_view view() const
-  {
-    return {delimiter,
-            terminator,
-            quotechar,
-            decimal,
-            thousands,
-            comment,
-            keepquotes,
-            detect_whitespace_around_quotes,
-            doublequote,
-            dayfirst,
-            skipblanklines,
-            normalize_whitespace,
-            mixed_types_as_string,
-            cudf::detail::make_trie_view(trie_true),
-            cudf::detail::make_trie_view(trie_false),
-            cudf::detail::make_trie_view(trie_na),
-            multi_delimiter};
-  }
-};
-
-/**
  * @brief Returns the escaped characters for a given character.
  *
  * @param escaped_char The character to escape.
  * @return The escaped characters for a given character.
  */
-__device__ __forceinline__ thrust::pair<char, char> get_escaped_char(char escaped_char)
+__device__ __forceinline__ cuda::std::pair<char, char> get_escaped_char(char escaped_char)
 {
   switch (escaped_char) {
     case '"': return {'\\', '"'};
@@ -302,13 +209,16 @@ __device__ __inline__ char const* seek_field_end(char const* begin,
   bool quotation   = false;
   auto current     = begin;
   bool escape_next = false;
+
+  auto const field_starts_with_quote = (begin < end && *begin == opts.quotechar);
   while (current < end) {
     // Use simple logic to ignore control chars between any quote seq
     // Handles nominal cases including doublequotes within quotes, but
     // may not output exact failures as PANDAS for malformed fields.
     // Check for instances such as "a2\"bc" and "\\" if `escape_char` is true.
 
-    if (*current == opts.quotechar and not escape_next) {
+    // Only process quotes if field started with a quote
+    if (field_starts_with_quote && *current == opts.quotechar && !escape_next) {
       quotation = !quotation;
     } else if (!quotation) {
       if (*current == opts.delimiter) {

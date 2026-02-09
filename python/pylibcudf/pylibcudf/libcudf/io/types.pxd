@@ -1,4 +1,5 @@
-# Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 cimport pylibcudf.libcudf.io.data_sink as cudf_io_data_sink
 cimport pylibcudf.libcudf.io.datasource as cudf_io_datasource
 cimport pylibcudf.libcudf.table.table_view as cudf_table_view
@@ -52,15 +53,15 @@ cdef extern from "cudf/io/types.hpp" \
         USER_IMPLEMENTED
 
     cpdef enum class statistics_freq(int32_t):
-        STATISTICS_NONE,
-        STATISTICS_ROWGROUP,
-        STATISTICS_PAGE,
-        STATISTICS_COLUMN,
+        STATISTICS_NONE
+        STATISTICS_ROWGROUP
+        STATISTICS_PAGE
+        STATISTICS_COLUMN
 
     cpdef enum class dictionary_policy(int32_t):
-        NEVER,
-        ADAPTIVE,
-        ALWAYS,
+        NEVER
+        ADAPTIVE
+        ALWAYS
 
     cpdef enum class column_encoding(int32_t):
         USE_DEFAULT

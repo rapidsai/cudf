@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2024-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "compression_common.hpp"
@@ -1148,6 +1137,9 @@ struct char_values {
 
 TEST_F(OrcChunkedReaderInputLimitTest, ListType)
 {
+  // this test runs over 3 hours when racecheck is used
+  if (getenv("LIBCUDF_RACECHECK_ENABLED")) { GTEST_SKIP(); }
+
   int constexpr num_rows  = 50'000'000;
   int constexpr list_size = 4;
 
@@ -1156,7 +1148,7 @@ TEST_F(OrcChunkedReaderInputLimitTest, ListType)
 
   auto offset_col = cudf::make_fixed_width_column(
     cudf::data_type{cudf::type_id::INT32}, num_rows + 1, cudf::mask_state::UNALLOCATED);
-  thrust::transform(rmm::exec_policy(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream),
                     iter,
                     iter + num_rows + 1,
                     offset_col->mutable_view().begin<int>(),
@@ -1165,7 +1157,7 @@ TEST_F(OrcChunkedReaderInputLimitTest, ListType)
   int constexpr num_ints = num_rows * list_size;
   auto value_col         = cudf::make_fixed_width_column(
     cudf::data_type{cudf::type_id::INT32}, num_ints, cudf::mask_state::UNALLOCATED);
-  thrust::transform(rmm::exec_policy(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream),
                     iter,
                     iter + num_ints,
                     value_col->mutable_view().begin<int>(),
@@ -1202,6 +1194,9 @@ TEST_F(OrcChunkedReaderInputLimitTest, ListType)
 
 TEST_F(OrcChunkedReaderInputLimitTest, MixedColumnsHavingList)
 {
+  // this test runs over 3 hours when racecheck is used
+  if (getenv("LIBCUDF_RACECHECK_ENABLED")) { GTEST_SKIP(); }
+
   int constexpr num_rows  = 50'000'000;
   int constexpr list_size = 4;
   int constexpr str_size  = 3;
@@ -1212,7 +1207,7 @@ TEST_F(OrcChunkedReaderInputLimitTest, MixedColumnsHavingList)
   // list<int>
   auto offset_col = cudf::make_fixed_width_column(
     cudf::data_type{cudf::type_id::INT32}, num_rows + 1, cudf::mask_state::UNALLOCATED);
-  thrust::transform(rmm::exec_policy(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream),
                     iter,
                     iter + num_rows + 1,
                     offset_col->mutable_view().begin<int>(),
@@ -1221,7 +1216,7 @@ TEST_F(OrcChunkedReaderInputLimitTest, MixedColumnsHavingList)
   int constexpr num_ints = num_rows * list_size;
   auto value_col         = cudf::make_fixed_width_column(
     cudf::data_type{cudf::type_id::INT32}, num_ints, cudf::mask_state::UNALLOCATED);
-  thrust::transform(rmm::exec_policy(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream),
                     iter,
                     iter + num_ints,
                     value_col->mutable_view().begin<int>(),
@@ -1234,13 +1229,13 @@ TEST_F(OrcChunkedReaderInputLimitTest, MixedColumnsHavingList)
   int constexpr num_chars = num_rows * str_size;
   auto str_offset_col     = cudf::make_fixed_width_column(
     cudf::data_type{cudf::type_id::INT32}, num_rows + 1, cudf::mask_state::UNALLOCATED);
-  thrust::transform(rmm::exec_policy(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream),
                     iter,
                     iter + num_rows + 1,
                     str_offset_col->mutable_view().begin<int>(),
                     offset_gen{str_size});
   rmm::device_buffer str_chars(num_chars, stream);
-  thrust::transform(rmm::exec_policy(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream),
                     iter,
                     iter + num_chars,
                     static_cast<int8_t*>(str_chars.data()),
@@ -1251,7 +1246,7 @@ TEST_F(OrcChunkedReaderInputLimitTest, MixedColumnsHavingList)
   // doubles
   auto const double_col = cudf::make_fixed_width_column(
     cudf::data_type{cudf::type_id::FLOAT64}, num_rows, cudf::mask_state::UNALLOCATED);
-  thrust::transform(rmm::exec_policy(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream),
                     iter,
                     iter + num_rows,
                     double_col->mutable_view().begin<double>(),
@@ -1356,6 +1351,9 @@ TEST_F(OrcChunkedReaderInputLimitTest, ReadWithRowSelection)
 
 TEST_F(OrcChunkedReaderInputLimitTest, SizeTypeRowsOverflow)
 {
+  // this test runs over 3 hours when racecheck is used
+  if (getenv("LIBCUDF_RACECHECK_ENABLED")) { GTEST_SKIP(); }
+
   using data_type = int16_t;
   using data_col  = cudf::test::fixed_width_column_wrapper<data_type, int64_t>;
 

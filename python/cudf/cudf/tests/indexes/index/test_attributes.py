@@ -1,4 +1,5 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 import datetime
 import re
 
@@ -106,7 +107,7 @@ def test_index_iter_error(data, all_supported_types_as_str):
         TypeError,
         match=re.escape(
             f"{gdi.__class__.__name__} object is not iterable. "
-            f"Consider using `.to_arrow()`, `.to_pandas()` or `.values_host` "
+            f"Consider using `.to_arrow()`, `.to_pandas()` or `.to_numpy()` "
             f"if you wish to iterate over the values."
         ),
     ):
@@ -126,7 +127,7 @@ def test_index_values_host(data, all_supported_types_as_str, request):
     gdi = cudf.Index(data, dtype=all_supported_types_as_str)
     pdi = pd.Index(data, dtype=all_supported_types_as_str)
 
-    np.testing.assert_array_equal(gdi.values_host, pdi.values)
+    np.testing.assert_array_equal(gdi.to_numpy(), pdi.values)
 
 
 @pytest.mark.parametrize(
@@ -219,3 +220,26 @@ def test_index_contains_float_int(data, numeric_types_as_str, needle):
     expected = needle in pidx
 
     assert_eq(actual, expected)
+
+
+def test_index_constructor():
+    gidx = cudf.Index([1, 2, 3])
+
+    assert gidx._constructor is cudf.Index
+
+
+@pytest.mark.parametrize(
+    "data,expected_type",
+    [
+        ([], "empty"),
+        ([1, 2, 3], "int64"),
+        ([1.0, 2.0, 3.0], "float64"),
+        (["a", "b", "c"], "string"),
+        ([True, False, True], "boolean"),
+    ],
+)
+def test_index_inferred_type(data, expected_type):
+    gidx = cudf.Index(data)
+    pidx = pd.Index(data)
+
+    assert_eq(gidx.inferred_type, pidx.inferred_type)

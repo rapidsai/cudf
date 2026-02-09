@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
-# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION & AFFILIATES.
-# All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES.  All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 # Run Pandas unit tests with cudf.pandas.
@@ -59,18 +58,20 @@ markers = [
   "clipboard: mark a pd.read_clipboard test",
   "arm_slow: mark a test as slow for arm64 architecture",
   "skip_ubsan: Tests known to fail UBSAN check",
+  "fails_arm_wheels: Tests known to fail on arm64 wheels",
 ]
 EOF
 
     # Substitute `pandas.tests` with a relative import.
     # This will depend on the location of the test module relative to
     # the pandas-tests directory.
-    for hit in $(find . -iname '*.py' -print0 | xargs -0 grep "pandas.tests" | cut -d ":" -f 1 | sort | uniq); do
+    for hit in $(find pandas-tests -iname '*.py' -print0 | xargs -0 grep "pandas.tests" | cut -d ":" -f 1 | sort | uniq); do
         # Get the relative path to the test module
         test_module=$(echo "$hit" | cut -d "/" -f 2-)
         # Get the number of directories to go up
-        num_dirs=$(echo "$test_module" | grep -o "/" | wc -l)
-        num_dots=$((num_dirs - 2))
+        num_dirs="${test_module//[^\/]/}"
+        num_dirs="${#num_dirs}"
+        num_dots=$((num_dirs - 1))
         # Construct the relative import
         relative_import=$(printf "%0.s." $(seq 1 $num_dots))
         # Replace the import
@@ -80,6 +81,13 @@ fi
 
 # append the contents of patch-confest.py to conftest.py
 cat ../python/cudf/cudf/pandas/scripts/conftest-patch.py >> pandas-tests/conftest.py
+
+# apply copy-on-write patches that won't be fixed until pandas 3
+PATCH_FILE_1="../python/cudf/cudf/pandas/scripts/pandas-2-cow-1.patch"
+PATCH_FILE_2="../python/cudf/cudf/pandas/scripts/pandas-2-cow-2.patch"
+PANDAS_PATH=$(python -c "import pandas, os; print(os.path.dirname(pandas.__file__))")
+patch -d "$PANDAS_PATH" -p2 < "$PATCH_FILE_1"
+patch -d "$PANDAS_PATH" -p2 < "$PATCH_FILE_2"
 
 # Run the tests
 cd pandas-tests/
@@ -146,19 +154,46 @@ and not test_frame_op_subclass_nonclass_constructor \
 and not test_round_trip_current \
 and not test_pickle_frame_v124_unpickle_130"
 
-PYTEST_IGNORES=("--ignore=tests/io/parser/common/test_read_errors.py"
-                "--ignore=tests/io/test_clipboard.py" # crashes pytest workers (possibly due to fixture patching clipboard functionality)
+IGNORE_TESTS_THAT_CRASH_PYTEST_COLLECTION=("--ignore=tests/io/parser/common/test_read_errors.py"
+                                           "--ignore=tests/io/test_clipboard.py"
+)
+
+IGNORE_TESTS_THAT_TEST_PRIVATE_FUNTIONALITY=("--ignore=tests/test_nanops.py"
+                                             "--ignore=tests/test_optional_dependency.py"
+                                             "--ignore=tests/util/test_assert_produces_warning.py"
+                                             "--ignore=tests/util/test_shares_memory.py"
+                                             "--ignore=tests/util/test_validate_args.py"
+                                             "--ignore=tests/util/test_validate_args_and_kwargs.py"
+                                             "--ignore=tests/util/test_validate_inclusive.py"
+                                             "--ignore=tests/util/test_validate_kwargs.py"
+                                             "--ignore=tests/util/test_util.py"
+                                             "--ignore=tests/util/test_rewrite_warning.py"
+                                             "--ignore=tests/util/test_deprecate_nonkeyword_arguments.py"
+                                             "--ignore=tests/util/test_deprecate_kwarg.py"
+                                             "--ignore=tests/util/test_deprecate.py"
+                                             "--ignore=tests/util/test_doc.py"
+                                             "--ignore=tests/frame/methods/test_to_dict_of_blocks.py"
+                                             "--ignore=tests/tslibs/"
+                                             "--ignore=tests/libs/"
+                                             "--ignore=tests/internals/"
+                                             "--ignore=tests/groupby/test_libgroupby.py"
+                                             "--ignore=tests/frame/test_block_internals.py"
+                                             "--ignore=tests/arrays/sparse/test_libsparse.py"
+                                             "--ignore=tests/copy_view/test_internals.py"
+                                             "--ignore=tests/indexing/test_chaining_and_caching.py"
+                                             "--ignore=tests/indexing/multiindex/test_chaining_and_caching.py"
 )
 
 
 PANDAS_CI="1" python -m pytest -p cudf.pandas \
     --import-mode=importlib \
     -k "$TEST_THAT_NEED_MOTO_SERVER and $TEST_THAT_CRASH_PYTEST_WORKERS and $TEST_THAT_NEED_REASON_TO_SKIP and $TEST_THAT_USE_STRING_DTYPE_GROUPBY and $TEST_THAT_USE_WEAKREFS" \
-    "${PYTEST_IGNORES[@]}" \
+    "${IGNORE_TESTS_THAT_CRASH_PYTEST_COLLECTION[@]}" \
+    "${IGNORE_TESTS_THAT_TEST_PRIVATE_FUNTIONALITY[@]}" \
     "$@"
 
 mv ./*.json ..
 cd ..
-rm -rf pandas-testing/pandas-tests/
+rm -rf pandas-tests/
 rapids-logger "Test script exiting with value: $EXITCODE"
 exit ${EXITCODE}

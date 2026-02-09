@@ -1,4 +1,5 @@
-# Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 import io
 import os
 
@@ -10,6 +11,7 @@ from utils import (
     assert_table_and_meta_eq,
     make_source,
     sink_to_str,
+    synchronize_stream,
     write_source_str,
 )
 
@@ -48,6 +50,7 @@ def csv_table_data(table_data):
 
 @pytest.mark.parametrize("stream", [None, Stream()])
 @pytest.mark.parametrize("delimiter", [",", ";"])
+@pytest.mark.parametrize("source_strategy", ["inline", "set_source"])
 def test_read_csv_basic(
     csv_table_data,
     source_or_sink,
@@ -55,6 +58,7 @@ def test_read_csv_basic(
     nrows_skiprows,
     delimiter,
     stream,
+    source_strategy,
 ):
     _, pa_table = csv_table_data
     compression_type = text_compression_type
@@ -72,22 +76,29 @@ def test_read_csv_basic(
         **_COMMON_CSV_SOURCE_KWARGS,
     )
 
-    # Rename the table (by reversing the names) to test names argument
     pa_table = pa_table.rename_columns(pa_table.column_names[::-1])
     column_names = pa_table.column_names
 
-    # Adapt to nrows/skiprows
     pa_table = pa_table.slice(
         offset=skiprows, length=nrows if nrows != -1 else None
     )
 
+    source_info = plc.io.SourceInfo([source])
     options = (
-        plc.io.csv.CsvReaderOptions.builder(plc.io.SourceInfo([source]))
+        plc.io.csv.CsvReaderOptions.builder(
+            source_info
+            if source_strategy == "inline"
+            else plc.io.SourceInfo([])
+        )
         .compression(compression_type)
         .nrows(nrows)
         .skiprows(skiprows)
         .build()
     )
+
+    if source_strategy == "set_source":
+        options.set_source(source_info)
+
     options.set_delimiter(delimiter)
     options.set_names([str(name) for name in column_names])
     res = plc.io.csv.read_csv(options, stream)
@@ -300,7 +311,11 @@ def test_read_csv_from_device_buffers(csv_table_data, stream):
     _, pa_table = csv_table_data
 
     csv_string = pa_table.to_pandas().to_csv(index=False)
-    buf = DeviceBuffer.to_device(csv_string.encode("utf-8"))
+    buf = DeviceBuffer.to_device(
+        csv_string.encode("utf-8"), plc.utils._get_stream(stream)
+    )
+
+    synchronize_stream(stream)
 
     options = plc.io.csv.CsvReaderOptions.builder(
         plc.io.SourceInfo([buf])
@@ -367,6 +382,8 @@ def test_write_csv(
         stream,
     )
 
+    synchronize_stream(stream)
+
     # Convert everything to string to make comparisons easier
     str_result = sink_to_str(sink)
 
@@ -410,6 +427,8 @@ def test_write_csv_na_rep(na_rep):
             .build()
         )
     )
+
+    synchronize_stream()
 
     # Convert everything to string to make comparisons easier
     str_result = sink_to_str(sink)

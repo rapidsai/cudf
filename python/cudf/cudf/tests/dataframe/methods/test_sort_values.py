@@ -1,4 +1,5 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 import string
 
@@ -228,3 +229,17 @@ def test_dataframe_loc_duplicate_index_scalar():
     gdf_sorted = gdf.sort_values(by=list(gdf.columns), axis=0)
 
     assert_eq(pdf_sorted, gdf_sorted)
+
+
+def test_dataframe_sort_values_multindex():
+    df = cudf.DataFrame(
+        {"a": [2, 1, 2, 1], "b": [1, 2, 1, 2], "c": [4, 3, 2, 1]}
+    )
+    df = df.set_index(["a", "b"])
+    pdf = df.to_pandas()
+
+    expected = pdf.sort_values(by="a", ascending=True)
+    with cudf.option_context("mode.pandas_compatible", True):
+        result = df.sort_values(by="a", ascending=True)
+
+    assert_eq(expected, result)

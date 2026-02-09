@@ -2,6 +2,8 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
+from decimal import Decimal
+
 import pytest
 
 import polars as pl
@@ -9,6 +11,7 @@ import polars as pl
 from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
 )
+from cudf_polars.utils.versions import POLARS_VERSION_LT_132
 
 dtypes = [
     pl.Int8,
@@ -106,3 +109,28 @@ def test_true_div_boolean_column(divisor):
     q = df.select(pl.col("a") / divisor)
 
     assert_gpu_result_equal(q)
+
+
+def test_true_div_with_decimals():
+    df = pl.LazyFrame(
+        {
+            "foo": [Decimal("1.00"), Decimal("2.00"), Decimal("3.00"), None],
+            "bar": [Decimal("4.00"), Decimal("5.00"), Decimal("6.00"), Decimal("1.00")],
+        },
+        schema={"foo": pl.Decimal(15, 2), "bar": pl.Decimal(15, 2)},
+    )
+    q = df.select(pl.col("bar") / pl.col("foo"))
+    assert_gpu_result_equal(q, check_dtypes=not POLARS_VERSION_LT_132)
+
+
+def test_multiply_with_decimals():
+    df = pl.LazyFrame(
+        {
+            "x": [Decimal("1.23"), Decimal("4.56"), Decimal("7.89")],
+            "y": [Decimal("2.00"), Decimal("3.00"), Decimal("4.00")],
+        },
+        schema={"x": pl.Decimal(10, 2), "y": pl.Decimal(10, 3)},
+    )
+
+    q = df.select(pl.col("x") * pl.col("y"))
+    assert_gpu_result_equal(q, check_dtypes=not POLARS_VERSION_LT_132)

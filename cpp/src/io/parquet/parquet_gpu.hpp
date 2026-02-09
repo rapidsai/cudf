@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
@@ -122,6 +111,8 @@ enum class decode_error : kernel_error::value_type {
   INVALID_DICT_WIDTH       = 0x40,
   DELTA_PARAM_MISMATCH     = 0x80,
   DELTA_PARAMS_UNSUPPORTED = 0x100,
+  INVALID_PAGE_TYPE        = 0x200,
+  INVALID_PAGE_HEADER      = 0x400,
 };
 
 /**
@@ -356,9 +347,11 @@ struct PageInfo {
   int32_t skipped_leaf_values;
   // for string columns only, the size of all the chars in the string for
   // this page. only valid/computed during the base preprocess pass
-  size_t str_offset;  // offset into string data for this page
-  int32_t str_bytes;
-  bool has_page_index;  // true if str_bytes, num_valids, etc are derivable from page indexes
+  size_t str_offset;      // offset into string data for this page
+  int32_t str_bytes;      // in the case where we have selected a subset of rows, this will
+                          // reflect the subset
+  int32_t str_bytes_all;  // this reflects all rows
+  bool has_page_index;    // true if str_bytes, num_valids, etc are derivable from page indexes
 
   // nesting information (input/output) for each page. this array contains
   // input column nesting information, output column nesting information and
@@ -469,6 +462,7 @@ struct ColumnChunkDesc {
   bitmask_type** valid_map_base{};            // base pointers of valid bit map for this column
   void** column_data_base{};                  // base pointers of column data
   void** column_string_base{};                // base pointers of column string data
+  uint32_t* column_string_offset_base{};      // base pointer of column string offset data
   Compression codec{};                        // compressed codec enum
   std::optional<LogicalType> logical_type{};  // logical type
   int32_t ts_clock_rate{};  // output timestamp clock frequency (0=default, 1000=ms, 1000000000=ns)
@@ -651,6 +645,7 @@ struct EncPage {
   PageType page_type;      //!< Page type
   Encoding encoding;       //!< Encoding used for page data
   uint16_t num_fragments;  //!< Number of fragments in page
+  bool is_compressed;      //!< Whether this page is compressed (for V2 page-level compression)
 
   [[nodiscard]] CUDF_HOST_DEVICE constexpr bool is_v2() const
   {
@@ -691,19 +686,44 @@ __device__ inline bool is_literal_run(int const run_header) { return (run_header
 __device__ inline bool is_repeated_run(int const run_header) { return !is_literal_run(run_header); }
 
 /**
- * @brief Launches kernel for parsing the page headers in the column chunks
+ * @brief Launches kernel for counting page headers from column chunk data buffers
  *
- * @param[in] chunks List of column chunks
- * @param[in] chunk_pages List of pages associated with the chunks, in chunk-sorted order
- * @param[in] num_chunks Number of column chunks
+ * @param[in] chunks Device span of column chunks
  * @param[out] error_code Error code for kernel failures
  * @param[in] stream CUDA stream to use
  */
-void decode_page_headers(ColumnChunkDesc* chunks,
+void count_page_headers(cudf::detail::hostdevice_span<ColumnChunkDesc> chunks,
+                        kernel_error::pointer error_code,
+                        rmm::cuda_stream_view stream);
+/**
+ * @brief Launches kernel for parsing the page headers in the column chunks
+ *
+ * @param[in] chunks Device span of column chunks
+ * @param[in] chunk_pages List of pages associated with the chunks, in chunk-sorted order
+ * @param[out] error_code Error code for kernel failures
+ * @param[in] stream CUDA stream to use
+ */
+void decode_page_headers(cudf::device_span<ColumnChunkDesc const> chunks,
                          chunk_page_info* chunk_pages,
-                         int32_t num_chunks,
                          kernel_error::pointer error_code,
                          rmm::cuda_stream_view stream);
+
+/**
+ * @brief Decode page headers from specified page locations from the page index
+ *
+ * @param[in] chunks Device span of column chunks
+ * @param[out] pages Device span of pages
+ * @param[in] page_locations List of page locations
+ * @param[in] chunk_page_offsets List of running count of page locations per column chunk
+ * @param[out] error_code Error code for kernel failures
+ * @param[in] stream CUDA stream to use
+ */
+void decode_page_headers_with_pgidx(cudf::device_span<ColumnChunkDesc const> chunks,
+                                    cudf::device_span<PageInfo> pages,
+                                    uint8_t** page_locations,
+                                    size_type* chunk_page_offsets,
+                                    kernel_error::pointer error_code,
+                                    rmm::cuda_stream_view stream);
 
 /**
  * @brief Launches kernel for building the dictionary index for the column
@@ -740,7 +760,6 @@ uint32_t get_aggregated_decode_kernel_mask(cudf::detail::hostdevice_span<PageInf
  * - We need to determine information about where to start decoding the value stream
  *   if we are using custom user bounds (skip_rows / num_rows)
  * - We need to determine actual number of top level rows per page
- * - If we are doing a chunked read, we need to determine the total string size per page
  *
  *
  * @param pages All pages to be decoded
@@ -749,17 +768,15 @@ uint32_t get_aggregated_decode_kernel_mask(cudf::detail::hostdevice_span<PageInf
  * @param num_rows Maximum number of rows to read
  * @param compute_num_rows If set to true, the num_rows field in PageInfo will be
  * computed
- * @param compute_string_sizes If set to true, the str_bytes field in PageInfo will
- * be computed
  * @param level_type_size Size in bytes of the type for level decoding
  * @param stream CUDA stream to use
  */
 void compute_page_sizes(cudf::detail::hostdevice_span<PageInfo> pages,
                         cudf::detail::hostdevice_span<ColumnChunkDesc const> chunks,
+                        cudf::device_span<bool const> page_mask,
                         size_t min_row,
                         size_t num_rows,
                         bool compute_num_rows,
-                        bool compute_string_sizes,
                         int level_type_size,
                         rmm::cuda_stream_view stream);
 
@@ -768,8 +785,8 @@ void compute_page_sizes(cudf::detail::hostdevice_span<PageInfo> pages,
  *
  * String columns need accurate data size information to preallocate memory in the column buffer to
  * store the char data. This calls a kernel to calculate information needed by the string decoding
- * kernel. On exit, the `str_bytes`, `num_nulls`, `num_valids`, and `str_offset` fields of the
- * PageInfo struct are updated. This call ignores non-string columns.
+ * kernel. On exit, the `str_bytes`, `num_nulls`, and `num_valids` fields of the
+ * PageInfo struct are updated. This call ignores non-string pages.
  *
  * @param[in,out] pages All pages to be decoded
  * @param[in] chunks All chunks to be decoded
@@ -777,19 +794,37 @@ void compute_page_sizes(cudf::detail::hostdevice_span<PageInfo> pages,
  * @param[out] temp_string_buf Temporary space needed for decoding DELTA_BYTE_ARRAY strings
  * @param[in] min_rows crop all rows below min_row
  * @param[in] num_rows Maximum number of rows to read
- * @param[in] level_type_size Size in bytes of the type for level decoding
  * @param[in] kernel_mask Mask of kernels to run
+ * @param[in] all_rows If true, all rows will be read, regardless of `min_row` and `num_rows`
  * @param[in] stream CUDA stream to use
  */
-void compute_page_string_sizes(cudf::detail::hostdevice_span<PageInfo> pages,
-                               cudf::detail::hostdevice_span<ColumnChunkDesc const> chunks,
-                               cudf::device_span<bool const> page_mask,
-                               rmm::device_uvector<uint8_t>& temp_string_buf,
-                               size_t min_row,
-                               size_t num_rows,
-                               int level_type_size,
-                               uint32_t kernel_mask,
-                               rmm::cuda_stream_view stream);
+void compute_page_string_sizes_pass1(cudf::detail::hostdevice_span<PageInfo> pages,
+                                     cudf::detail::hostdevice_span<ColumnChunkDesc const> chunks,
+                                     cudf::device_span<bool const> page_mask,
+                                     cudf::device_span<size_t const> page_string_offset_indices,
+                                     size_t min_row,
+                                     size_t num_rows,
+                                     uint32_t kernel_mask,
+                                     bool all_rows,
+                                     int level_type_size,
+                                     rmm::cuda_stream_view stream);
+
+/**
+ * @brief Compute temp string information for decoding.
+ *
+ * Using string size information computed in compute_page_string_sizes_pass1, this function
+ * allocates the temp string buffer and sets the appropriate offsets into the buffer for
+ * all relevant string pages.
+ *
+ * @param[in,out] pages All pages to be decoded
+ * @param[in] chunks All chunks to be decoded
+ * @param[out] temp_string_buf Temporary space needed for decoding DELTA_BYTE_ARRAY strings
+ * @param[in] stream CUDA stream to use
+ */
+void compute_page_string_sizes_pass2(cudf::detail::hostdevice_span<PageInfo> pages,
+                                     cudf::detail::hostdevice_span<ColumnChunkDesc const> chunks,
+                                     rmm::device_uvector<uint8_t>& temp_string_buf,
+                                     rmm::cuda_stream_view stream);
 
 /**
  * @brief Launches kernel for reading the column data stored in the pages
@@ -928,6 +963,51 @@ void decode_delta_length_byte_array(cudf::detail::hostdevice_span<PageInfo> page
                                     rmm::cuda_stream_view stream);
 
 /**
+ * @brief Launches pre-processing kernel to fill string offsets for non-dictionary columns
+ *
+ * This kernel runs before the main decode kernel to pre-compute string offsets
+ * for columns that use plain encoding without dictionaries.
+ *
+ * @param[in,out] pages All pages to be processed
+ * @param[in] chunks All chunks to be processed
+ * @param[in] page_string_offset_indices Device span of page string offset indices
+ * @param[in] page_mask Boolean vector indicating which pages need to be processed
+ * @param[in] min_row Minimum row index to read
+ * @param[in] num_rows Number of rows to read starting from min_row
+ * @param[in] stream CUDA stream to use
+ */
+void preprocess_string_offsets(cudf::detail::hostdevice_span<PageInfo> pages,
+                               cudf::detail::hostdevice_span<ColumnChunkDesc const> chunks,
+                               cudf::device_span<size_t const> page_string_offset_indices,
+                               cudf::device_span<bool const> page_mask,
+                               size_t min_row,
+                               size_t num_rows,
+                               rmm::cuda_stream_view stream);
+
+/**
+ * @brief Launches pre-processing kernel to decode definition and repetition levels
+ *
+ * This kernel runs before most preprocessing to pre-decode all definition and
+ * repetition levels, storing them in the pre-allocated level decode buffers. This
+ * allows other kernels to skip RLE decoding and directly access decoded levels.
+ *
+ * @param[in,out] pages All pages to be processed
+ * @param[in] chunks All chunks to be processed
+ * @param[in] page_mask Boolean vector indicating which pages need to be processed
+ * @param[in] min_row Minimum row index to read
+ * @param[in] num_rows Number of rows to read starting from min_row
+ * @param[in] level_type_size Size in bytes of the type for level decoding (1 or 2)
+ * @param[in] stream CUDA stream to use
+ */
+void preprocess_levels(cudf::detail::hostdevice_span<PageInfo> pages,
+                       cudf::detail::hostdevice_span<ColumnChunkDesc const> chunks,
+                       cudf::device_span<bool const> page_mask,
+                       size_t min_row,
+                       size_t num_rows,
+                       int level_type_size,
+                       rmm::cuda_stream_view stream);
+
+/**
  * @brief Launches kernel for reading non-dictionary fixed width column data stored in the pages
  *
  * The page data will be written to the output pointed to in the page's
@@ -941,6 +1021,7 @@ void decode_delta_length_byte_array(cudf::detail::hostdevice_span<PageInfo> page
  * @param[in] kernel_mask Mask indicating the type of decoding kernel to launch.
  * @param[in] page_mask Boolean vector indicating which pages need to be decoded
  * @param[out] initial_str_offsets Vector to store the initial offsets for large nested string cols
+ * @param[in] page_string_offset_indices Device span of page string offset indices
  * @param[out] error_code Error code for kernel failures
  * @param[in] stream CUDA stream to use
  */
@@ -952,6 +1033,7 @@ void decode_page_data(cudf::detail::hostdevice_span<PageInfo> pages,
                       decode_kernel_mask kernel_mask,
                       cudf::device_span<bool const> page_mask,
                       cudf::device_span<size_t> initial_str_offsets,
+                      cudf::device_span<size_t const> page_string_offset_indices,
                       kernel_error::pointer error_code,
                       rmm::cuda_stream_view stream);
 
@@ -1058,9 +1140,12 @@ void EncodePages(device_span<EncPage> pages,
  * Also calculates the set of page encodings used for each chunk.
  *
  * @param[in,out] chunks Column chunks (updated with actual compressed/uncompressed sizes)
+ * @param[in] page_level_compression If true, V2 pages can independently decide compression
  * @param[in] stream CUDA stream to use
  */
-void DecideCompression(device_span<EncColumnChunk> chunks, rmm::cuda_stream_view stream);
+void decide_compression(device_span<EncColumnChunk> chunks,
+                        bool page_level_compression,
+                        rmm::cuda_stream_view stream);
 
 /**
  * @brief Launches kernel to encode page headers

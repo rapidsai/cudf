@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf/column/column.hpp>
@@ -45,9 +34,11 @@ std::unique_ptr<column> encode(column_view const& input_column,
                                rmm::device_async_resource_ref mr)
 {
   CUDF_EXPECTS(is_signed(indices_type) && is_index_type(indices_type),
-               "indices must be type signed integer");
+               "indices must be type signed integer",
+               std::invalid_argument);
   CUDF_EXPECTS(input_column.type().id() != type_id::DICTIONARY32,
-               "cannot encode a dictionary from a dictionary");
+               "cannot encode a dictionary from a dictionary",
+               std::invalid_argument);
 
   auto codified       = cudf::detail::encode(cudf::table_view({input_column}), stream, mr);
   auto keys_table     = std::move(codified.first);
@@ -62,6 +53,10 @@ std::unique_ptr<column> encode(column_view const& input_column,
       stream,
       mr);
     keys_column->set_null_mask(rmm::device_buffer{0, stream, mr}, 0);  // remove the null-mask
+  }
+
+  if (indices_column->type() != indices_type) {
+    indices_column = cudf::detail::cast(indices_column->view(), indices_type, stream, mr);
   }
 
   // create column with keys_column and indices_column

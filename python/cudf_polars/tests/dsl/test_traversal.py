@@ -14,6 +14,7 @@ import pylibcudf as plc
 from cudf_polars import Translator
 from cudf_polars.containers import DataType
 from cudf_polars.dsl import expr, ir
+from cudf_polars.dsl.ir import IRExecutionContext
 from cudf_polars.dsl.to_ast import ExprTransformer
 from cudf_polars.dsl.traversal import (
     CachingVisitor,
@@ -154,7 +155,8 @@ def test_rewrite_ir_node():
     df = pl.LazyFrame({"a": [1, 2, 1], "b": [1, 3, 4]})
     q = df.group_by("a").agg(pl.col("b").sum()).sort("b")
 
-    orig = Translator(q._ldf.visit(), pl.GPUEngine()).translate_ir()
+    t = Translator(q._ldf.visit(), pl.GPUEngine())
+    orig = t.translate_ir()
 
     new_df = pl.DataFrame({"a": [1, 1, 2], "b": [-1, -2, -4]})
 
@@ -171,7 +173,11 @@ def test_rewrite_ir_node():
 
     new = mapper(orig)
 
-    result = new.evaluate(cache={}, timer=None).to_polars()
+    result = new.evaluate(
+        cache={},
+        timer=None,
+        context=IRExecutionContext.from_config_options(t.config_options),
+    ).to_polars()
 
     expect = pl.DataFrame({"a": [2, 1], "b": [-4, -3]})
 
@@ -199,10 +205,15 @@ def test_rewrite_scan_node(tmp_path):
 
     mapper = CachingVisitor(replace_scan, state={})
 
-    orig = Translator(q._ldf.visit(), pl.GPUEngine()).translate_ir()
+    t = Translator(q._ldf.visit(), pl.GPUEngine())
+    orig = t.translate_ir()
     new = mapper(orig)
 
-    result = new.evaluate(cache={}, timer=None).to_polars()
+    result = new.evaluate(
+        cache={},
+        timer=None,
+        context=IRExecutionContext.from_config_options(t.config_options),
+    ).to_polars()
 
     expect = q.collect()
 
@@ -223,7 +234,8 @@ def test_rewrite_names_and_ops():
         .collect()
     )
 
-    qir = Translator(q._ldf.visit(), pl.GPUEngine()).translate_ir()
+    t = Translator(q._ldf.visit(), pl.GPUEngine())
+    qir = t.translate_ir()
 
     @singledispatch
     def _transform(e: expr.Expr, fn: ExprTransformer) -> expr.Expr:
@@ -232,7 +244,7 @@ def test_rewrite_names_and_ops():
     @_transform.register
     def _(e: expr.Col, fn: ExprTransformer):
         # We've added an extra key to the state, so ignore this type error.
-        mapping = fn.state["mapping"]  # type: ignore
+        mapping = fn.state["mapping"]  # type: ignore[typeddict-item]
         if e.name in mapping:
             return type(e)(e.dtype, mapping[e.name])
         return e
@@ -274,6 +286,10 @@ def test_rewrite_names_and_ops():
 
     new_ir = rewriter(qir)
 
-    got = new_ir.evaluate(cache={}, timer=None).to_polars()
+    got = new_ir.evaluate(
+        cache={},
+        timer=None,
+        context=IRExecutionContext.from_config_options(t.config_options),
+    ).to_polars()
 
     assert_frame_equal(expect, got)

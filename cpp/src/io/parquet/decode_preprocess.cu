@@ -1,22 +1,12 @@
 /*
- * Copyright (c) 2023-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "delta_binary.cuh"
 #include "io/utilities/column_buffer.hpp"
 #include "page_decode.cuh"
+#include "reader_impl_chunking_utils.cuh"
 
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/hashing/detail/default_hash.cuh>
@@ -25,7 +15,6 @@
 
 #include <cooperative_groups.h>
 #include <cuda/std/iterator>
-#include <thrust/reduce.h>
 
 namespace cudf::io::parquet::detail {
 
@@ -34,162 +23,10 @@ namespace cg = cooperative_groups;
 namespace {
 
 // # of threads we're decoding with
-constexpr int preprocess_block_size = 512;
-
-// the required number of runs in shared memory we will need to provide the
-// rle_stream object
-constexpr int rle_run_buffer_size = rle_stream_required_run_buffer_size<preprocess_block_size>();
-
-// the size of the rolling batch buffer
-constexpr int rolling_buf_size = LEVEL_DECODE_BUF_SIZE;
+constexpr int preprocess_block_size   = 512;
+constexpr int level_decode_block_size = 128;
 
 using unused_state_buf = page_state_buffers_s<0, 0, 0>;
-
-/**
- * @brief Calculate string bytes for DELTA_LENGTH_BYTE_ARRAY encoded pages
- *
- * Operates at thread block level. Result is valid only on thread 0.
- *
- * @param s The local page info
- * @param block Thread block cooperative group
- */
-__device__ size_type delta_length_page_string_size(page_state_s* s, cg::thread_block const& block)
-{
-  if (block.thread_rank() == 0) {
-    // find the beginning of char data
-    delta_binary_decoder string_lengths;
-    auto const* string_start = string_lengths.find_end_of_block(s->data_start, s->data_end);
-    // distance is size of string data
-    return static_cast<size_type>(cuda::std::distance(string_start, s->data_end));
-  }
-  return 0;
-}
-
-/**
- * @brief Calculate string bytes for DELTA_BYTE_ARRAY encoded pages
- *
- * Operates at thread block level of size preprocess_block_size.
- *
- * @param s The local page info
- * @param block Thread block cooperative group
- */
-__device__ size_type delta_page_string_size(page_state_s* s, cg::thread_block const& block)
-{
-  using WarpReduce = cub::WarpReduce<uleb128_t>;
-  __shared__ typename WarpReduce::TempStorage temp_storage[2];
-
-  __shared__ __align__(16) delta_binary_decoder prefixes;
-  __shared__ __align__(16) delta_binary_decoder suffixes;
-
-  auto const warp = cg::tiled_partition<cudf::detail::warp_size>(block);
-
-  if (block.thread_rank() == 0) {
-    auto const* suffix_start = prefixes.find_end_of_block(s->data_start, s->data_end);
-    suffixes.init_binary_block(suffix_start, s->data_end);
-  }
-  block.sync();
-
-  // two warps will traverse the prefixes and suffixes and sum them up
-  auto const db = warp.meta_group_rank() == 0   ? &prefixes
-                  : warp.meta_group_rank() == 1 ? &suffixes
-                                                : nullptr;
-
-  size_t total_bytes = 0;
-  if (db != nullptr) {
-    // initialize with first value (which is stored in last_value)
-    if (warp.thread_rank() == 0) { total_bytes = db->last_value; }
-
-    uleb128_t lane_sum = 0;
-    while (db->current_value_idx < db->num_encoded_values(true)) {
-      // calculate values for current mini-block
-      db->calc_mini_block_values(warp.thread_rank());
-
-      // get per lane sum for mini-block
-      for (uint32_t i = 0; i < db->values_per_mb; i += warp.size()) {
-        uint32_t const idx = db->current_value_idx + i + warp.thread_rank();
-        if (idx < db->value_count) {
-          lane_sum += db->value[rolling_index<delta_rolling_buf_size>(idx)];
-        }
-      }
-
-      if (warp.thread_rank() == 0) { db->setup_next_mini_block(true); }
-      warp.sync();
-    }
-
-    // get sum for warp.
-    // note: warp_sum will only be valid on lane 0.
-    auto const warp_sum = WarpReduce(temp_storage[warp.meta_group_rank()]).Sum(lane_sum);
-
-    if (warp.thread_rank() == 0) { total_bytes += warp_sum; }
-  }
-  block.sync();
-
-  // now sum up total_bytes from the two warps. result is only valid on thread 0.
-  auto const final_bytes =
-    cudf::detail::single_lane_block_sum_reduce<preprocess_block_size, 0>(total_bytes);
-
-  return static_cast<size_type>(final_bytes);
-}
-
-/**
- * @brief Calculate the number of string bytes in the page.
- *
- * This function expects the dictionary position to be at 0 and will traverse
- * the entire thing (for plain and dictionary encoding).
- *
- * Operates at thread block level of size preprocess_block_size. Result is only
- * valid on thread 0.
- *
- * @param s The local page info
- * @param block Thread block cooperative group
- *
- * @return The number of string bytes in the page
- */
-__device__ size_type decode_total_page_string_size(page_state_s* s, cg::thread_block const& block)
-{
-  auto const warp      = cg::tiled_partition<cudf::detail::warp_size>(block);
-  size_type target_pos = s->num_input_values;
-  size_type str_len    = 0;
-  switch (s->page.encoding) {
-    case Encoding::PLAIN_DICTIONARY:
-    case Encoding::RLE_DICTIONARY:
-      // Use warp 0 to decode dictionary indices and return the new target position
-      if (warp.meta_group_rank() == 0 && s->dict_base) {
-        auto const [new_target_pos, len] =
-          decode_dictionary_indices<is_calc_sizes_only::YES, unused_state_buf>(
-            s, nullptr, target_pos, warp);
-        target_pos = new_target_pos;
-        str_len    = len;
-      }
-      break;
-
-    case Encoding::PLAIN:
-      // For V2 headers, we know how many values are present, so can skip an expensive scan.
-      if ((s->page.flags & PAGEINFO_FLAGS_V2) != 0) {
-        auto const num_values = s->page.num_input_values - s->page.num_nulls;
-        str_len               = s->dict_size - sizeof(int) * num_values;
-      }
-      // For V1, the choice is an overestimate (s->dict_size), or an exact number that's
-      // expensive to compute. For now we're going with the latter.
-      else {
-        str_len = initialize_string_descriptors<is_calc_sizes_only::YES, unused_state_buf>(
-          s, nullptr, target_pos, block);
-      }
-      break;
-
-    case Encoding::DELTA_LENGTH_BYTE_ARRAY:
-      str_len = delta_length_page_string_size(s, block);
-      break;
-
-    case Encoding::DELTA_BYTE_ARRAY: str_len = delta_page_string_size(s, block); break;
-
-    default:
-      // not a valid string encoding, so just return 0
-      break;
-  }
-  if (!block.thread_rank()) { s->dict_pos = target_pos; }
-  return str_len;
-}
 
 /**
  * @brief Update output column sizes for every nesting level based on a batch
@@ -242,7 +79,7 @@ __device__ void update_page_sizes(page_state_s* s,
 
     // start/end depth
     int start_depth, end_depth, d;
-    get_nesting_bounds<rolling_buf_size, level_t>(
+    get_nesting_bounds<level_t>(
       start_depth, end_depth, d, s, rep, def, value_count, value_count + batch_size, t);
 
     // is this thread within row bounds? in the non skip_rows/num_rows case this will always
@@ -315,6 +152,72 @@ __device__ void update_page_sizes(page_state_s* s,
     s->input_leaf_count = leaf_count;
     s->input_row_count  = row_count;
   }
+
+  block.sync();
+}
+
+/**
+ * @brief Updates size information for a pruned page across all nesting levels
+ *
+ * @param[in,out] page The page to compute sizes for
+ * @param[in] state The local page info
+ * @param[in] has_repetition Whether the page has repetition
+ * @param[in] is_base_pass Whether this is the base pass
+ * @param[in] block The current thread block cooperative group
+ */
+__device__ void compute_page_sizes_for_pruned_pages(PageInfo* page,
+                                                    page_state_s* const state,
+                                                    bool has_repetition,
+                                                    bool is_base_pass,
+                                                    cg::thread_block const& block)
+{
+  auto const max_depth = page->num_output_nesting_levels;
+  // Return early if no repetition and max depth is 1
+  if (not has_repetition and max_depth == 1) {
+    if (!block.thread_rank()) {
+      if (is_base_pass) { page->nesting[0].size = page->num_rows; }
+      page->nesting[0].batch_size = state->num_rows;
+    }
+    return;
+  }
+
+  // Use warp 0 to set nesting size information for all depths
+  auto const warp = cg::tiled_partition<cudf::detail::warp_size>(block);
+  if (warp.meta_group_rank() == 0) {
+    auto list_depth = 0;
+    // Find the depth of the first list
+    if (has_repetition) {
+      auto depth = 0;
+      while (depth < max_depth) {
+        auto const thread_depth = depth + warp.thread_rank();
+        auto const is_list =
+          thread_depth < max_depth and page->nesting[thread_depth].type == type_id::LIST;
+        uint32_t const list_mask = warp.ballot(is_list);
+        if (list_mask != 0) {
+          auto const first_list_lane = cuda::std::countr_zero(list_mask);
+          list_depth                 = warp.shfl(thread_depth, first_list_lane);
+          break;
+        }
+        depth += warp.size();
+      }
+      // Zero out size information for all depths beyond the first list depth
+      for (auto depth = list_depth + 1 + warp.thread_rank(); depth < max_depth;
+           depth += warp.size()) {
+        if (is_base_pass) { page->nesting[depth].size = 0; }
+        page->nesting[depth].batch_size = 0;
+      }
+    }
+    // Write size information for all depths up to the list depth
+    for (auto depth = warp.thread_rank(); depth < list_depth; depth += warp.size()) {
+      if (is_base_pass) { page->nesting[depth].size = page->num_rows; }
+      page->nesting[depth].batch_size = state->num_rows;
+    }
+    // Write size information at the list depth (zero if no list)
+    if (warp.thread_rank() == 0) {
+      if (is_base_pass) { page->nesting[list_depth].size = page->num_rows; }
+      page->nesting[list_depth].batch_size = state->num_rows;
+    }
+  }
 }
 
 /**
@@ -336,10 +239,10 @@ template <typename level_t>
 CUDF_KERNEL void __launch_bounds__(preprocess_block_size)
   compute_page_sizes_kernel(PageInfo* pages,
                             device_span<ColumnChunkDesc const> chunks,
+                            device_span<bool const> page_mask,
                             size_t min_row,
                             size_t num_rows,
-                            bool is_base_pass,
-                            bool compute_string_sizes)
+                            bool is_base_pass)
 {
   __shared__ __align__(16) page_state_s state_g;
 
@@ -352,64 +255,21 @@ CUDF_KERNEL void __launch_bounds__(preprocess_block_size)
   // whether or not we have repetition levels (lists)
   bool has_repetition = chunks[pp->chunk_idx].max_level[level_type::REPETITION] > 0;
 
-  // the level stream decoders
-  __shared__ rle_run def_runs[rle_run_buffer_size];
-  __shared__ rle_run rep_runs[rle_run_buffer_size];
-  rle_stream<level_t, preprocess_block_size, rolling_buf_size>
-    decoders[level_type::NUM_LEVEL_TYPES] = {{def_runs}, {rep_runs}};
-
   // setup page info
   if (!setup_local_page_info(
         s, pp, chunks, min_row, num_rows, all_types_filter{}, page_processing_stage::PREPROCESS)) {
     return;
   }
 
-  // initialize the stream decoders (requires values computed in setup_local_page_info)
-  // the size of the rolling batch buffer
-  level_t* const rep = reinterpret_cast<level_t*>(pp->lvl_decode_buf[level_type::REPETITION]);
-  level_t* const def = reinterpret_cast<level_t*>(pp->lvl_decode_buf[level_type::DEFINITION]);
-  decoders[level_type::DEFINITION].init(s->col.level_bits[level_type::DEFINITION],
-                                        s->abs_lvl_start[level_type::DEFINITION],
-                                        s->abs_lvl_end[level_type::DEFINITION],
-                                        def,
-                                        s->page.num_input_values);
-  if (has_repetition) {
-    decoders[level_type::REPETITION].init(s->col.level_bits[level_type::REPETITION],
-                                          s->abs_lvl_start[level_type::REPETITION],
-                                          s->abs_lvl_end[level_type::REPETITION],
-                                          rep,
-                                          s->page.num_input_values);
-  }
-  block.sync();
-
-  if (!t) {
-    s->page.skipped_values      = -1;
-    s->page.skipped_leaf_values = 0;
-    // str_bytes_from_index will be 0 if no page stats are present
-    s->page.str_bytes    = s->page.str_bytes_from_index;
-    s->input_row_count   = 0;
-    s->input_value_count = 0;
-
-    // in the base pass, we're computing the number of rows, make sure we visit absolutely
-    // everything
-    if (is_base_pass) {
-      s->first_row             = 0;
-      s->num_rows              = std::numeric_limits<int32_t>::max();
-      s->row_index_lower_bound = -1;
-    }
+  // Return early if this page is pruned
+  if (not page_mask.empty() and not page_mask[page_idx]) {
+    return compute_page_sizes_for_pruned_pages(pp, s, has_repetition, is_base_pass, block);
   }
 
-  // we only need to preprocess hierarchies with repetition in them (ie, hierarchies
-  // containing lists anywhere within).
-  compute_string_sizes =
-    compute_string_sizes && s->col.physical_type == Type::BYTE_ARRAY && !s->col.is_strings_to_cat;
-
-  // early out optimizations:
-
-  // - if this is a flat hierarchy (no lists) and is not a string column. in this case we don't need
+  // - if this is a flat hierarchy (no lists), we don't need
   // to do the expensive work of traversing the level data to determine sizes.  we can just compute
   // it directly.
-  if (!has_repetition && !compute_string_sizes) {
+  if (!has_repetition) {
     int depth = 0;
     while (depth < s->page.num_output_nesting_levels) {
       auto const thread_depth = depth + t;
@@ -417,7 +277,7 @@ CUDF_KERNEL void __launch_bounds__(preprocess_block_size)
         if (is_base_pass) { pp->nesting[thread_depth].size = pp->num_input_values; }
         pp->nesting[thread_depth].batch_size = pp->num_input_values;
       }
-      depth += blockDim.x;
+      depth += block.size();
     }
     return;
   }
@@ -436,7 +296,7 @@ CUDF_KERNEL void __launch_bounds__(preprocess_block_size)
             ? 0
             : pp->nesting[thread_depth].size;
       }
-      depth += blockDim.x;
+      depth += block.size();
     }
     return;
   }
@@ -450,33 +310,32 @@ CUDF_KERNEL void __launch_bounds__(preprocess_block_size)
     }
     depth += blockDim.x;
   }
+
+  auto* const rep          = reinterpret_cast<level_t*>(pp->lvl_decode_buf[level_type::REPETITION]);
+  bool const process_nulls = should_process_nulls(s);
+  level_t* const def       = !process_nulls
+                               ? nullptr
+                               : reinterpret_cast<level_t*>(pp->lvl_decode_buf[level_type::DEFINITION]);
+
+  if (!t) {
+    s->page.skipped_values      = -1;
+    s->page.skipped_leaf_values = 0;
+    s->input_row_count          = 0;
+    s->input_value_count        = 0;
+
+    // in the base pass, we're computing the number of rows, make sure we visit absolutely
+    // everything
+    if (is_base_pass) {
+      s->first_row             = 0;
+      s->num_rows              = std::numeric_limits<int32_t>::max();
+      s->row_index_lower_bound = -1;
+    }
+  }
+
   block.sync();
 
-  // the core loop. decode batches of level stream data using rle_stream objects
-  // and pass the results to update_page_sizes
-  int processed = 0;
-  while (processed < s->page.num_input_values) {
-    // TODO:  it would not take much more work to make it so that we could run both of these
-    // decodes concurrently. there are a couple of shared variables internally that would have to
-    // get dealt with but that's about it.
-    if (has_repetition) {
-      decoders[level_type::REPETITION].decode_next(t);
-      block.sync();
-    }
-    // the # of rep/def levels will always be the same size
-    processed += decoders[level_type::DEFINITION].decode_next(t);
-    block.sync();
-
-    // update page sizes
-    update_page_sizes<level_t>(s, processed, rep, def, !is_base_pass, block);
-    block.sync();
-  }
-
-  // retrieve total string size.
-  if (compute_string_sizes && !pp->has_page_index) {
-    auto const str_bytes = decode_total_page_string_size(s, block);
-    if (t == 0) { s->page.str_bytes = str_bytes; }
-  }
+  // update_page_sizes
+  update_page_sizes<level_t>(s, s->page.num_input_values, rep, def, !is_base_pass, block);
 
   // update output results:
   // - real number of rows for the whole page
@@ -494,15 +353,107 @@ CUDF_KERNEL void __launch_bounds__(preprocess_block_size)
       if (thread_depth < s->page.num_output_nesting_levels) {
         pp->nesting[thread_depth].size = pp->nesting[thread_depth].batch_size;
       }
-      depth += blockDim.x;
+      depth += block.size();
     }
   }
 
   if (!t) {
     pp->skipped_values      = s->page.skipped_values;
     pp->skipped_leaf_values = s->page.skipped_leaf_values;
-    pp->str_bytes           = s->page.str_bytes;
   }
+}
+
+/**
+ * @brief Kernel for preprocessing definition and repetition levels
+ *
+ * This kernel decodes definition and repetition levels for all pages in advance,
+ * storing them in the pre-allocated level decode buffers. This allows other
+ * kernels to skip RLE decoding and directly access the decoded levels.
+ *
+ * @param pages List of pages
+ * @param chunks List of column chunks
+ * @param page_mask Boolean vector indicating which pages need to be processed
+ * @param min_row Minimum row index to read
+ * @param num_rows Number of rows to read starting from min_row
+ */
+template <typename level_t, int level_decode_block_size>
+CUDF_KERNEL void __launch_bounds__(level_decode_block_size)
+  preprocess_levels_kernel(PageInfo* pages,
+                           device_span<ColumnChunkDesc const> chunks,
+                           cudf::device_span<bool const> page_mask,
+                           size_t min_row,
+                           size_t num_rows)
+{
+  __shared__ __align__(16) page_state_s state_g;
+
+  page_state_s* const s = &state_g;
+  auto const block      = cg::this_thread_block();
+  int const page_idx    = cg::this_grid().block_rank();
+  int const t           = block.thread_rank();
+  PageInfo* pp          = &pages[page_idx];
+
+  // Return early if this page is pruned
+  if (not page_mask.empty() and not page_mask[page_idx]) { return; }
+
+  // setup page info - use all_types_filter since we need to preprocess levels for all page types
+  if (!setup_local_page_info(
+        s, pp, chunks, min_row, num_rows, all_types_filter{}, page_processing_stage::PREPROCESS)) {
+    return;
+  }
+
+  // whether or not we have repetition levels (lists)
+  bool const has_repetition = chunks[pp->chunk_idx].max_level[level_type::REPETITION] > 0;
+
+  // the required number of runs in shared memory we will need to provide the
+  // rle_stream object
+  constexpr int rle_run_buffer_size =
+    rle_stream_required_run_buffer_size<level_decode_block_size>();
+
+  // the level stream decoders. max_output_values is max to remove rolling buffer
+  __shared__ rle_run def_runs[rle_run_buffer_size];
+  __shared__ rle_run rep_runs[rle_run_buffer_size];
+  static constexpr int max_output_values = std::numeric_limits<int>::max();
+  rle_stream<level_t, level_decode_block_size, max_output_values>
+    decoders[level_type::NUM_LEVEL_TYPES] = {{def_runs}, {rep_runs}};
+
+  // Get the level decode buffers for this page
+  auto* const def = reinterpret_cast<level_t*>(pp->lvl_decode_buf[level_type::DEFINITION]);
+  auto* const rep = reinterpret_cast<level_t*>(pp->lvl_decode_buf[level_type::REPETITION]);
+
+  // Determine how many values need to be decoded
+  size_t const num_to_decode =
+    precompute_page_num_values_in_range(*pp, chunks[pp->chunk_idx], min_row, num_rows);
+  if (num_to_decode == 0) { return; }
+
+  // Initialize the stream decoders
+  bool const process_nulls = should_process_nulls(s);
+  if (process_nulls) {
+    decoders[level_type::DEFINITION].init(s->col.level_bits[level_type::DEFINITION],
+                                          s->abs_lvl_start[level_type::DEFINITION],
+                                          s->abs_lvl_end[level_type::DEFINITION],
+                                          def,
+                                          num_to_decode);
+  }
+  if (has_repetition) {
+    decoders[level_type::REPETITION].init(s->col.level_bits[level_type::REPETITION],
+                                          s->abs_lvl_start[level_type::REPETITION],
+                                          s->abs_lvl_end[level_type::REPETITION],
+                                          rep,
+                                          num_to_decode);
+  }
+  block.sync();
+
+  // Decode levels for this page up to the last row needed.
+  // If skipping the first rows, we still need to decode their levels.
+  // This is because we need to determine the number of non-null values we skipped.
+  // Note that for lists we haven't computed skipped_leaf_values yet; this is used as input for
+  // that.
+  if (has_repetition) { decoders[level_type::REPETITION].decode_next(t, num_to_decode); }
+
+  // Must sync as shared variables in decode_next() are shared between decoders!!
+  block.sync();
+
+  if (process_nulls) { decoders[level_type::DEFINITION].decode_next(t, num_to_decode); }
 }
 
 }  // anonymous namespace
@@ -512,10 +463,10 @@ CUDF_KERNEL void __launch_bounds__(preprocess_block_size)
  */
 void compute_page_sizes(cudf::detail::hostdevice_span<PageInfo> pages,
                         cudf::detail::hostdevice_span<ColumnChunkDesc const> chunks,
+                        cudf::device_span<bool const> page_mask,
                         size_t min_row,
                         size_t num_rows,
                         bool compute_num_rows,
-                        bool compute_string_sizes,
                         int level_type_size,
                         rmm::cuda_stream_view stream)
 {
@@ -531,10 +482,39 @@ void compute_page_sizes(cudf::detail::hostdevice_span<PageInfo> pages,
   // the starting and ending read values to account for these bounds.
   if (level_type_size == 1) {
     compute_page_sizes_kernel<uint8_t><<<dim_grid, dim_block, 0, stream.value()>>>(
-      pages.device_ptr(), chunks, min_row, num_rows, compute_num_rows, compute_string_sizes);
+      pages.device_ptr(), chunks, page_mask, min_row, num_rows, compute_num_rows);
   } else {
     compute_page_sizes_kernel<uint16_t><<<dim_grid, dim_block, 0, stream.value()>>>(
-      pages.device_ptr(), chunks, min_row, num_rows, compute_num_rows, compute_string_sizes);
+      pages.device_ptr(), chunks, page_mask, min_row, num_rows, compute_num_rows);
+  }
+}
+
+/**
+ * @copydoc cudf::io::parquet::detail::preprocess_levels
+ */
+void preprocess_levels(cudf::detail::hostdevice_span<PageInfo> pages,
+                       cudf::detail::hostdevice_span<ColumnChunkDesc const> chunks,
+                       cudf::device_span<bool const> page_mask,
+                       size_t min_row,
+                       size_t num_rows,
+                       int level_type_size,
+                       rmm::cuda_stream_view stream)
+{
+  CUDF_FUNC_RANGE();
+
+  if (pages.size() == 0) { return; }
+
+  dim3 dim_block(level_decode_block_size, 1);
+  dim3 dim_grid(pages.size(), 1);  // 1 threadblock per page
+
+  if (level_type_size == 1) {
+    preprocess_levels_kernel<uint8_t, level_decode_block_size>
+      <<<dim_grid, dim_block, 0, stream.value()>>>(
+        pages.device_ptr(), chunks, page_mask, min_row, num_rows);
+  } else {
+    preprocess_levels_kernel<uint16_t, level_decode_block_size>
+      <<<dim_grid, dim_block, 0, stream.value()>>>(
+        pages.device_ptr(), chunks, page_mask, min_row, num_rows);
   }
 }
 

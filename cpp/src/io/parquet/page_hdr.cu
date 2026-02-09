@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "error.hpp"
@@ -19,23 +8,31 @@
 #include "parquet_gpu.hpp"
 
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/detail/utilities/grid_1d.cuh>
 #include <cudf/detail/utilities/integer_utils.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/exec_policy.hpp>
 
 #include <cooperative_groups.h>
-#include <thrust/tuple.h>
+#include <cuda/std/tuple>
+#include <thrust/binary_search.h>
 
 namespace cudf::io::parquet::detail {
 
-auto constexpr decode_page_headers_block_size     = 128;
-auto constexpr build_string_dict_index_block_size = 128;
+namespace {
+
+auto constexpr decode_page_headers_block_size     = 4 * cudf::detail::warp_size;
+auto constexpr count_page_headers_block_size      = 4 * cudf::detail::warp_size;
+auto constexpr build_string_dict_index_block_size = 4 * cudf::detail::warp_size;
 
 namespace cg = cooperative_groups;
 
-// Minimal thrift implementation for parsing page headers
-// https://github.com/apache/thrift/blob/master/doc/specs/thrift-compact-protocol.md
-
+/**
+ * @brief Minimal thrift implementation for parsing page headers
+ *
+ * See: https://github.com/apache/thrift/blob/master/doc/specs/thrift-compact-protocol.md
+ */
 struct byte_stream_s {
   uint8_t const* cur{};
   uint8_t const* end{};
@@ -49,7 +46,7 @@ struct byte_stream_s {
 /**
  * @brief Get current byte from the byte stream
  *
- * @param[in] bs Byte stream
+ * @param bs Byte stream
  *
  * @return Current byte pointed to by the byte stream
  */
@@ -71,7 +68,7 @@ inline __device__ void skip_bytes(byte_stream_s* bs, size_t bytecnt)
  * integer. Most significant bit of each byte indicates if more bytes
  * are to be used to form the number.
  *
- * @param[in] bs Byte stream
+ * @param bs Byte stream
  *
  * @return Decoded 32 bit integer
  */
@@ -93,7 +90,7 @@ __device__ uint32_t get_u32(byte_stream_s* bs)
  * -1^(n%2) * ceil(n/2), with the exception of 0 which remains the same.
  * i.e. 0, 1, 2, 3, 4, 5 etc convert to 0, -1, 1, -2, 2 respectively.
  *
- * @param[in] bs Byte stream
+ * @param bs Byte stream
  *
  * @return Decoded 32 bit integer
  */
@@ -103,6 +100,12 @@ inline __device__ int32_t get_i32(byte_stream_s* bs)
   return (int32_t)((u >> 1u) ^ -(int32_t)(u & 1));
 }
 
+/**
+ * @brief Skip a struct field in the byte stream
+ *
+ * @param bs Byte stream
+ * @param field_type Field type
+ */
 __device__ void skip_struct_field(byte_stream_s* bs, int field_type)
 {
   int struct_depth = 0;
@@ -147,21 +150,49 @@ __device__ void skip_struct_field(byte_stream_s* bs, int field_type)
   } while (rep_cnt || struct_depth);
 }
 
+/**
+ * @brief Check if the column chunk has nesting
+ *
+ * @param chunk Column chunk
+ *
+ * @return True if the column chunk has nesting
+ */
 __device__ inline bool is_nested(ColumnChunkDesc const& chunk)
 {
   return chunk.max_nesting_depth > 1;
 }
 
+/**
+ * @brief Check if the column chunk is a list type
+ *
+ * @param chunk Column chunk
+ *
+ * @return True if the column chunk is a list type
+ */
 __device__ inline bool is_list(ColumnChunkDesc const& chunk)
 {
   return chunk.max_level[level_type::REPETITION] > 0;
 }
 
+/**
+ * @brief Check if the column chunk is a byte array type
+ *
+ * @param chunk Column chunk
+ *
+ * @return True if the column chunk is a byte array type
+ */
 __device__ inline bool is_byte_array(ColumnChunkDesc const& chunk)
 {
   return chunk.physical_type == Type::BYTE_ARRAY;
 }
 
+/**
+ * @brief Check if the column chunk is a boolean type
+ *
+ * @param chunk Column chunk
+ *
+ * @return True if the column chunk is a boolean type
+ */
 __device__ inline bool is_boolean(ColumnChunkDesc const& chunk)
 {
   return chunk.physical_type == Type::BOOLEAN;
@@ -328,10 +359,10 @@ struct FunctionSwitchImpl {
   static inline __device__ bool run(byte_stream_s* bs,
                                     int field_type,
                                     int const& field,
-                                    thrust::tuple<Operator...>& ops)
+                                    cuda::std::tuple<Operator...>& ops)
   {
-    if (field == thrust::get<index>(ops).field) {
-      return thrust::get<index>(ops)(bs, field_type);
+    if (field == cuda::std::get<index>(ops).field) {
+      return cuda::std::get<index>(ops)(bs, field_type);
     } else {
       return FunctionSwitchImpl<index - 1>::run(bs, field_type, field, ops);
     }
@@ -344,10 +375,10 @@ struct FunctionSwitchImpl<0> {
   static inline __device__ bool run(byte_stream_s* bs,
                                     int field_type,
                                     int const& field,
-                                    thrust::tuple<Operator...>& ops)
+                                    cuda::std::tuple<Operator...>& ops)
   {
-    if (field == thrust::get<0>(ops).field) {
-      return thrust::get<0>(ops)(bs, field_type);
+    if (field == cuda::std::get<0>(ops).field) {
+      return cuda::std::get<0>(ops)(bs, field_type);
     } else {
       skip_struct_field(bs, field_type);
       return false;
@@ -366,9 +397,9 @@ struct FunctionSwitchImpl<0> {
  * byte stream. Otherwise true is returned.
  */
 template <typename... Operator>
-inline __device__ bool parse_header(thrust::tuple<Operator...>& op, byte_stream_s* bs)
+inline __device__ bool parse_header(cuda::std::tuple<Operator...>& op, byte_stream_s* bs)
 {
-  constexpr int index = thrust::tuple_size<thrust::tuple<Operator...>>::value - 1;
+  constexpr int index = cuda::std::tuple_size<cuda::std::tuple<Operator...>>::value - 1;
   int field           = 0;
   while (true) {
     auto const current_byte = getb(bs);
@@ -382,122 +413,169 @@ inline __device__ bool parse_header(thrust::tuple<Operator...>& op, byte_stream_
   return true;
 }
 
-struct gpuParseDataPageHeader {
+/**
+ * @brief Functor to parse v1 data page header
+ *
+ * @param bs Byte stream
+ *
+ * @return True if the data page header is parsed successfully
+ */
+struct parse_data_page_header_fn {
   __device__ bool operator()(byte_stream_s* bs)
   {
-    auto op = thrust::make_tuple(ParquetFieldInt32(1, bs->page.num_input_values),
-                                 ParquetFieldEnum<Encoding>(2, bs->page.encoding),
-                                 ParquetFieldEnum<Encoding>(3, bs->page.definition_level_encoding),
-                                 ParquetFieldEnum<Encoding>(4, bs->page.repetition_level_encoding));
-    return parse_header(op, bs);
-  }
-};
-
-struct gpuParseDictionaryPageHeader {
-  __device__ bool operator()(byte_stream_s* bs)
-  {
-    auto op = thrust::make_tuple(ParquetFieldInt32(1, bs->page.num_input_values),
-                                 ParquetFieldEnum<Encoding>(2, bs->page.encoding));
-    return parse_header(op, bs);
-  }
-};
-
-struct gpuParseDataPageHeaderV2 {
-  __device__ bool operator()(byte_stream_s* bs)
-  {
-    auto op = thrust::make_tuple(ParquetFieldInt32(1, bs->page.num_input_values),
-                                 ParquetFieldInt32(2, bs->page.num_nulls),
-                                 ParquetFieldInt32(3, bs->page.num_rows),
-                                 ParquetFieldEnum<Encoding>(4, bs->page.encoding),
-                                 ParquetFieldInt32(5, bs->page.lvl_bytes[level_type::DEFINITION]),
-                                 ParquetFieldInt32(6, bs->page.lvl_bytes[level_type::REPETITION]),
-                                 ParquetFieldBool(7, bs->page.is_compressed));
-    return parse_header(op, bs);
-  }
-};
-
-struct gpuParsePageHeader {
-  __device__ bool operator()(byte_stream_s* bs)
-  {
-    auto op = thrust::make_tuple(ParquetFieldEnum<PageType>(1, bs->page_type),
-                                 ParquetFieldInt32(2, bs->page.uncompressed_page_size),
-                                 ParquetFieldInt32(3, bs->page.compressed_page_size),
-                                 ParquetFieldStruct<gpuParseDataPageHeader>(5),
-                                 ParquetFieldStruct<gpuParseDictionaryPageHeader>(7),
-                                 ParquetFieldStruct<gpuParseDataPageHeaderV2>(8));
+    auto op =
+      cuda::std::make_tuple(ParquetFieldInt32(1, bs->page.num_input_values),
+                            ParquetFieldEnum<Encoding>(2, bs->page.encoding),
+                            ParquetFieldEnum<Encoding>(3, bs->page.definition_level_encoding),
+                            ParquetFieldEnum<Encoding>(4, bs->page.repetition_level_encoding));
     return parse_header(op, bs);
   }
 };
 
 /**
+ * @brief Functor to parse dictionary page header
+ *
+ * @param bs Byte stream
+ *
+ * @return True if the dictionary page header is parsed successfully
+ */
+struct parse_dictionary_page_header_fn {
+  __device__ bool operator()(byte_stream_s* bs)
+  {
+    auto op = cuda::std::make_tuple(ParquetFieldInt32(1, bs->page.num_input_values),
+                                    ParquetFieldEnum<Encoding>(2, bs->page.encoding));
+    return parse_header(op, bs);
+  }
+};
+
+/**
+ * @brief Functor to parse V2 data page header
+ *
+ * @param bs Byte stream
+ *
+ * @return True if the data page header V2 is parsed successfully
+ */
+struct parse_data_page_header_v2_fn {
+  __device__ bool operator()(byte_stream_s* bs)
+  {
+    auto op =
+      cuda::std::make_tuple(ParquetFieldInt32(1, bs->page.num_input_values),
+                            ParquetFieldInt32(2, bs->page.num_nulls),
+                            ParquetFieldInt32(3, bs->page.num_rows),
+                            ParquetFieldEnum<Encoding>(4, bs->page.encoding),
+                            ParquetFieldInt32(5, bs->page.lvl_bytes[level_type::DEFINITION]),
+                            ParquetFieldInt32(6, bs->page.lvl_bytes[level_type::REPETITION]),
+                            ParquetFieldBool(7, bs->page.is_compressed));
+    return parse_header(op, bs);
+  }
+};
+
+/**
+ * @brief Functor to parse page header from byte stream
+ *
+ * @param bs Byte stream
+ *
+ * @return True if the page header is parsed successfully
+ */
+struct parse_page_header_fn {
+  __device__ bool operator()(byte_stream_s* bs)
+  {
+    auto op = cuda::std::make_tuple(ParquetFieldEnum<PageType>(1, bs->page_type),
+                                    ParquetFieldInt32(2, bs->page.uncompressed_page_size),
+                                    ParquetFieldInt32(3, bs->page.compressed_page_size),
+                                    ParquetFieldStruct<parse_data_page_header_fn>(5),
+                                    ParquetFieldStruct<parse_dictionary_page_header_fn>(7),
+                                    ParquetFieldStruct<parse_data_page_header_v2_fn>(8));
+    return parse_header(op, bs);
+  }
+};
+
+/**
+ * @brief Zero out page header info
+ *
+ * @param bs Byte stream
+ */
+void __forceinline__ __device__ zero_out_page_header_info(byte_stream_s* bs)
+{
+  // this computation is only valid for flat schemas. for nested schemas,
+  // they will be recomputed in the preprocess step by examining repetition and
+  // definition levels
+  bs->page.chunk_row            = 0;
+  bs->page.num_rows             = 0;
+  bs->page.is_num_rows_adjusted = false;
+  bs->page.skipped_values       = -1;
+  bs->page.skipped_leaf_values  = 0;
+  bs->page.str_bytes            = 0;
+  bs->page.str_bytes_from_index = 0;
+  bs->page.num_valids           = 0;
+  bs->page.start_val            = 0;
+  bs->page.end_val              = 0;
+  bs->page.has_page_index       = false;
+  bs->page.temp_string_size     = 0;
+  bs->page.temp_string_buf      = nullptr;
+  bs->page.kernel_mask          = decode_kernel_mask::NONE;
+  bs->page.is_compressed        = true;
+  bs->page.flags                = 0;
+  bs->page.str_bytes_all        = 0;
+  // zero out V2 info
+  bs->page.num_nulls                         = 0;
+  bs->page.lvl_bytes[level_type::DEFINITION] = 0;
+  bs->page.lvl_bytes[level_type::REPETITION] = 0;
+}
+
+/**
  * @brief Kernel for outputting page headers from the specified column chunks
  *
- * @param[in] chunks List of column chunks
- * @param[in] num_chunks Number of column chunks
+ * @param[in] chunks Device span of column chunks
+ * @param[out] chunk_pages List of chunk-sorted page info (headers)
+ * @param[out] error_code Pointer to the error code for kernel failures
  */
 CUDF_KERNEL
 void __launch_bounds__(decode_page_headers_block_size)
-  decode_page_headers_kernel(ColumnChunkDesc* chunks,
+  decode_page_headers_kernel(device_span<ColumnChunkDesc const> chunks,
                              chunk_page_info* chunk_pages,
-                             int32_t num_chunks,
                              kernel_error::pointer error_code)
 {
   auto constexpr num_warps_per_block = decode_page_headers_block_size / cudf::detail::warp_size;
-  gpuParsePageHeader parse_page_header;
-  __shared__ byte_stream_s bs_g[num_warps_per_block];
-
-  kernel_error::value_type error[num_warps_per_block] = {0};
 
   auto const block = cg::this_thread_block();
   auto const warp  = cg::tiled_partition<cudf::detail::warp_size>(block);
 
   auto const lane_id = warp.thread_rank();
   auto const warp_id = warp.meta_group_rank();
-  int const chunk    = (cg::this_grid().block_rank() * num_warps_per_block) + warp_id;
-  auto const bs      = &bs_g[warp_id];
+  auto const chunk_idx =
+    static_cast<cudf::size_type>((cg::this_grid().block_rank() * num_warps_per_block) + warp_id);
+  auto const num_chunks = static_cast<cudf::size_type>(chunks.size());
 
-  if (chunk < num_chunks and lane_id == 0) { bs->ck = chunks[chunk]; }
-  if (lane_id == 0) { error[warp_id] = 0; }
+  __shared__ byte_stream_s bs_g[num_warps_per_block];
+  __shared__ kernel_error::value_type error[num_warps_per_block];
+
+  auto const bs = &bs_g[warp_id];
+
+  if (lane_id == 0) {
+    if (chunk_idx < num_chunks) { bs->ck = chunks[chunk_idx]; }
+    error[warp_id] = 0;
+  }
   block.sync();
 
-  if (chunk < num_chunks) {
-    size_t num_values, values_found;
-    uint32_t data_page_count       = 0;
-    uint32_t dictionary_page_count = 0;
-    int32_t max_num_pages;
-    int32_t num_dict_pages = bs->ck.num_dict_pages;
-    PageInfo* page_info;
-
+  if (chunk_idx < num_chunks) {
     if (lane_id == 0) {
       bs->base = bs->cur      = bs->ck.compressed_data;
       bs->end                 = bs->base + bs->ck.compressed_size;
-      bs->page.chunk_idx      = chunk;
+      bs->page.chunk_idx      = chunk_idx;
       bs->page.src_col_schema = bs->ck.src_col_schema;
-      // this computation is only valid for flat schemas. for nested schemas,
-      // they will be recomputed in the preprocess step by examining repetition and
-      // definition levels
-      bs->page.chunk_row            = 0;
-      bs->page.num_rows             = 0;
-      bs->page.is_num_rows_adjusted = false;
-      bs->page.skipped_values       = -1;
-      bs->page.skipped_leaf_values  = 0;
-      bs->page.str_bytes            = 0;
-      bs->page.str_bytes_from_index = 0;
-      bs->page.num_valids           = 0;
-      bs->page.start_val            = 0;
-      bs->page.end_val              = 0;
-      bs->page.has_page_index       = false;
-      bs->page.temp_string_size     = 0;
-      bs->page.temp_string_buf      = nullptr;
-      bs->page.kernel_mask          = decode_kernel_mask::NONE;
-      bs->page.is_compressed        = true;
+      zero_out_page_header_info(bs);
     }
-    num_values    = bs->ck.num_values;
-    page_info     = chunk_pages ? chunk_pages[chunk].pages : nullptr;
-    max_num_pages = page_info ? (bs->ck.num_data_pages + bs->ck.num_dict_pages) : 0;
-    values_found  = 0;
+    size_t const num_values        = bs->ck.num_values;
+    size_t values_found            = 0;
+    uint32_t data_page_count       = 0;
+    uint32_t dictionary_page_count = 0;
+    auto* page_info                = chunk_pages[chunk_idx].pages;
+    auto const max_num_pages       = bs->ck.num_data_pages + bs->ck.num_dict_pages;
+    auto const num_dict_pages      = bs->ck.num_dict_pages;
     warp.sync();
-    while (values_found < num_values && bs->cur < bs->end) {
+
+    while (values_found < num_values and bs->cur < bs->end) {
       int index_out = -1;
 
       if (lane_id == 0) {
@@ -505,15 +583,18 @@ void __launch_bounds__(decode_page_headers_block_size)
         // they will be recomputed in the preprocess step by examining repetition and
         // definition levels
         bs->page.chunk_row += bs->page.num_rows;
-        bs->page.num_rows = 0;
-        bs->page.flags    = 0;
+        bs->page.num_rows      = 0;
+        bs->page.flags         = 0;
+        bs->page.str_bytes     = 0;
+        bs->page.str_bytes_all = 0;
         // zero out V2 info
         bs->page.num_nulls                         = 0;
         bs->page.lvl_bytes[level_type::DEFINITION] = 0;
         bs->page.lvl_bytes[level_type::REPETITION] = 0;
-        if (parse_page_header(bs) && bs->page.compressed_page_size >= 0) {
+        if (parse_page_header_fn{}(bs) and bs->page.compressed_page_size >= 0) {
           if (not is_supported_encoding(bs->page.encoding)) {
-            error[warp_id] |= static_cast<int32_t>(decode_error::UNSUPPORTED_ENCODING);
+            error[warp_id] |=
+              static_cast<kernel_error::value_type>(decode_error::UNSUPPORTED_ENCODING);
           }
           switch (bs->page_type) {
             case PageType::DATA_PAGE:
@@ -539,7 +620,11 @@ void __launch_bounds__(decode_page_headers_block_size)
               dictionary_page_count++;
               bs->page.flags |= PAGEINFO_FLAGS_DICTIONARY;
               break;
-            default: index_out = -1; break;
+            default:
+              error[warp_id] |=
+                static_cast<kernel_error::value_type>(decode_error::INVALID_PAGE_TYPE);
+              bs->cur = bs->end;
+              break;
           }
           bs->page.page_data = const_cast<uint8_t*>(bs->cur);
           bs->cur += bs->page.compressed_page_size;
@@ -549,23 +634,191 @@ void __launch_bounds__(decode_page_headers_block_size)
           }
           bs->page.kernel_mask = kernel_mask_for_page(bs->page, bs->ck);
         } else {
+          error[warp_id] |=
+            static_cast<kernel_error::value_type>(decode_error::INVALID_PAGE_HEADER);
+          bs->cur = bs->end;
+        }
+        if (index_out >= 0 and index_out < max_num_pages) { page_info[index_out] = bs->page; }
+      }
+      values_found = shuffle(values_found);
+      warp.sync();
+    }
+    if (lane_id == 0 and error[warp_id] != 0) { set_error(error[warp_id], error_code); }
+  }
+}
+
+/**
+ * @brief Kernel for counting the number of page headers from the specified column chunks
+ *
+ * @param[in] chunks Device span of column chunks
+ * @param[out] error_code Pointer to the error code for kernel failures
+ */
+CUDF_KERNEL void __launch_bounds__(count_page_headers_block_size)
+  count_page_headers_kernel(cudf::device_span<ColumnChunkDesc> chunks,
+                            kernel_error::pointer error_code)
+{
+  auto constexpr num_warps_per_block = decode_page_headers_block_size / cudf::detail::warp_size;
+
+  auto const block = cg::this_thread_block();
+  auto const warp  = cg::tiled_partition<cudf::detail::warp_size>(block);
+
+  auto const lane_id = warp.thread_rank();
+  auto const warp_id = warp.meta_group_rank();
+  auto const chunk_idx =
+    static_cast<cudf::size_type>((cg::this_grid().block_rank() * num_warps_per_block) + warp_id);
+  auto const num_chunks = static_cast<cudf::size_type>(chunks.size());
+
+  __shared__ byte_stream_s bs_g[num_warps_per_block];
+  __shared__ kernel_error::value_type error[num_warps_per_block];
+
+  auto const bs = &bs_g[warp_id];
+
+  if (lane_id == 0) {
+    if (chunk_idx < num_chunks) { bs->ck = chunks[chunk_idx]; }
+    error[warp_id] = 0;
+  }
+  block.sync();
+
+  if (chunk_idx < num_chunks) {
+    if (lane_id == 0) {
+      bs->base = bs->cur = bs->ck.compressed_data;
+      bs->end            = bs->base + bs->ck.compressed_size;
+    }
+    size_t const num_values        = bs->ck.num_values;
+    size_t values_found            = 0;
+    uint32_t data_page_count       = 0;
+    uint32_t dictionary_page_count = 0;
+    warp.sync();
+    while (values_found < num_values and bs->cur < bs->end) {
+      if (lane_id == 0) {
+        if (parse_page_header_fn{}(bs) and bs->page.compressed_page_size >= 0) {
+          if (not is_supported_encoding(bs->page.encoding)) {
+            error[warp_id] |=
+              static_cast<kernel_error::value_type>(decode_error::UNSUPPORTED_ENCODING);
+          }
+          switch (bs->page_type) {
+            case PageType::DATA_PAGE:
+              data_page_count++;
+              values_found += bs->page.num_input_values;
+              break;
+            case PageType::DATA_PAGE_V2:
+              data_page_count++;
+              values_found += bs->page.num_input_values;
+              break;
+            case PageType::DICTIONARY_PAGE: dictionary_page_count++; break;
+            default:
+              error[warp_id] |=
+                static_cast<kernel_error::value_type>(decode_error::INVALID_PAGE_TYPE);
+              bs->cur = bs->end;
+              break;
+          }
+          bs->cur += bs->page.compressed_page_size;
+          if (bs->cur > bs->end) {
+            error[warp_id] |=
+              static_cast<kernel_error::value_type>(decode_error::DATA_STREAM_OVERRUN);
+          }
+        } else {
+          error[warp_id] |=
+            static_cast<kernel_error::value_type>(decode_error::INVALID_PAGE_HEADER);
           bs->cur = bs->end;
         }
       }
-      index_out = shuffle(index_out);
-      if (index_out >= 0 && index_out < max_num_pages && lane_id == 0) {
-        page_info[index_out] = bs->page;
-      }
-      num_values = shuffle(num_values);
+      values_found = shuffle(values_found);
       warp.sync();
     }
     if (lane_id == 0) {
-      chunks[chunk].num_data_pages = data_page_count;
-      chunks[chunk].num_dict_pages = dictionary_page_count;
+      chunks[chunk_idx].num_data_pages = data_page_count;
+      chunks[chunk_idx].num_dict_pages = dictionary_page_count;
       if (error[warp_id] != 0) { set_error(error[warp_id], error_code); }
     }
   }
 }
+
+/**
+ * @brief Functor to decode page headers from specified page locations
+ */
+struct decode_page_headers_with_pgidx_fn {
+  cudf::device_span<ColumnChunkDesc const> colchunks;
+  cudf::device_span<PageInfo> pages;
+  uint8_t** page_locations;
+  size_type* chunk_page_offsets;
+  kernel_error::pointer error_code;
+
+  __device__ void operator()(size_type page_idx) const noexcept
+  {
+    auto const num_chunks = static_cast<cudf::size_type>(colchunks.size());
+
+    // Binary search the the column chunk index for this page
+    auto const chunk_idx = static_cast<cudf::size_type>(
+      cuda::std::distance(
+        chunk_page_offsets,
+        thrust::upper_bound(
+          thrust::seq, chunk_page_offsets, chunk_page_offsets + num_chunks + 1, page_idx)) -
+      1);
+
+    // Check if the chunk index is valid
+    if (chunk_idx < 0 or chunk_idx >= num_chunks) {
+      set_error(static_cast<kernel_error::value_type>(decode_error::DATA_STREAM_OVERRUN),
+                error_code);
+      return;
+    }
+
+    byte_stream_s bs{};
+    bs.ck   = colchunks[chunk_idx];
+    bs.base = bs.cur = page_locations[page_idx];
+    bs.end           = bs.ck.compressed_data + bs.ck.compressed_size;
+    // Check if byte stream pointers are valid.
+    if (bs.end < bs.cur) {
+      set_error(static_cast<kernel_error::value_type>(decode_error::DATA_STREAM_OVERRUN),
+                error_code);
+      return;
+    }
+    bs.page.chunk_idx      = chunk_idx;
+    bs.page.src_col_schema = bs.ck.src_col_schema;
+
+    // Zero out the rest of the page header info
+    zero_out_page_header_info(&bs);
+
+    // bs.page.chunk_row not computed here and will be filled in later by
+    // `fill_in_page_info()`.
+
+    if (not parse_page_header_fn{}(&bs) or bs.page.compressed_page_size < 0) {
+      set_error(static_cast<kernel_error::value_type>(decode_error::UNSUPPORTED_ENCODING),
+                error_code);
+      return;
+    }
+    if (not is_supported_encoding(bs.page.encoding)) {
+      set_error(static_cast<kernel_error::value_type>(decode_error::UNSUPPORTED_ENCODING),
+                error_code);
+      return;
+    }
+    switch (bs.page_type) {
+      case PageType::DATA_PAGE:
+        // this computation is only valid for flat schemas. for nested schemas,
+        // they will be recomputed in the preprocess step by examining repetition and
+        // definition levels
+        bs.page.num_rows = bs.page.num_input_values;
+        break;
+      case PageType::DATA_PAGE_V2:
+        bs.page.flags |= PAGEINFO_FLAGS_V2;
+        // V2 only uses RLE, so it was removed from the header
+        bs.page.definition_level_encoding = Encoding::RLE;
+        bs.page.repetition_level_encoding = Encoding::RLE;
+        break;
+      case PageType::DICTIONARY_PAGE: bs.page.flags |= PAGEINFO_FLAGS_DICTIONARY; break;
+      default:
+        set_error(static_cast<kernel_error::value_type>(decode_error::INVALID_PAGE_TYPE),
+                  error_code);
+        return;
+    }
+
+    bs.page.page_data   = const_cast<uint8_t*>(bs.cur);
+    bs.page.kernel_mask = kernel_mask_for_page(bs.page, bs.ck);
+
+    // Copy over the page info from byte stream
+    pages[page_idx] = bs.page;
+  }
+};
 
 /**
  * @brief Kernel for building dictionary index for the specified column chunks
@@ -629,24 +882,60 @@ CUDF_KERNEL void __launch_bounds__(build_string_dict_index_block_size)
   }
 }
 
-void decode_page_headers(ColumnChunkDesc* chunks,
+}  // namespace
+
+void count_page_headers(cudf::detail::hostdevice_span<ColumnChunkDesc> chunks,
+                        kernel_error::pointer error_code,
+                        rmm::cuda_stream_view stream)
+{
+  static_assert(count_page_headers_block_size % cudf::detail::warp_size == 0,
+                "Block size for decode page headers kernel must be a multiple of warp size");
+
+  auto constexpr num_warps_per_block = count_page_headers_block_size / cudf::detail::warp_size;
+  auto const num_blocks              = cudf::util::div_rounding_up_unsafe<cudf::size_type>(
+    chunks.size(), num_warps_per_block);  // 1 warp per chunk
+
+  dim3 dim_block(count_page_headers_block_size, 1);
+  dim3 dim_grid(num_blocks, 1);
+
+  count_page_headers_kernel<<<dim_grid, dim_block, 0, stream.value()>>>(chunks, error_code);
+}
+
+void decode_page_headers(cudf::device_span<ColumnChunkDesc const> chunks,
                          chunk_page_info* chunk_pages,
-                         int32_t num_chunks,
                          kernel_error::pointer error_code,
                          rmm::cuda_stream_view stream)
 {
   static_assert(decode_page_headers_block_size % cudf::detail::warp_size == 0,
                 "Block size for decode page headers kernel must be a multiple of warp size");
 
+  auto const num_chunks              = static_cast<cudf::size_type>(chunks.size());
   auto constexpr num_warps_per_block = decode_page_headers_block_size / cudf::detail::warp_size;
   auto const num_blocks =
-    cudf::util::div_rounding_up_safe(num_chunks, num_warps_per_block);  // 1 warp per chunk
+    cudf::util::div_rounding_up_unsafe(num_chunks, num_warps_per_block);  // 1 warp per chunk
 
   dim3 dim_block(decode_page_headers_block_size, 1);
   dim3 dim_grid(num_blocks, 1);
 
   decode_page_headers_kernel<<<dim_grid, dim_block, 0, stream.value()>>>(
-    chunks, chunk_pages, num_chunks, error_code);
+    chunks, chunk_pages, error_code);
+}
+
+void decode_page_headers_with_pgidx(cudf::device_span<ColumnChunkDesc const> chunks,
+                                    cudf::device_span<PageInfo> pages,
+                                    uint8_t** page_locations,
+                                    size_type* chunk_page_offsets,
+                                    kernel_error::pointer error_code,
+                                    rmm::cuda_stream_view stream)
+{
+  thrust::for_each(rmm::exec_policy_nosync(stream),
+                   thrust::counting_iterator(0),
+                   thrust::counting_iterator<cudf::size_type>(pages.size()),
+                   decode_page_headers_with_pgidx_fn{.colchunks          = chunks,
+                                                     .pages              = pages,
+                                                     .page_locations     = page_locations,
+                                                     .chunk_page_offsets = chunk_page_offsets,
+                                                     .error_code         = error_code});
 }
 
 void build_string_dictionary_index(ColumnChunkDesc* chunks,
@@ -658,7 +947,7 @@ void build_string_dictionary_index(ColumnChunkDesc* chunks,
     "Block size for build string dictionary index kernel must be a multiple of warp size");
   auto constexpr num_warps_per_block = build_string_dict_index_block_size / cudf::detail::warp_size;
   auto const num_blocks =
-    cudf::util::div_rounding_up_safe(num_chunks, num_warps_per_block);  // 1 warp per chunk
+    cudf::util::div_rounding_up_unsafe(num_chunks, num_warps_per_block);  // 1 warp per chunk
 
   dim3 dim_block(build_string_dict_index_block_size, 1);
   dim3 dim_grid(num_blocks, 1);

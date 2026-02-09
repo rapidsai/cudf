@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2020-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
 
@@ -20,10 +9,10 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
+#include <cuda/std/utility>
 #include <cuda_runtime.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
-#include <thrust/pair.h>
 
 namespace CUDF_EXPORT cudf {
 
@@ -165,7 +154,7 @@ class list_device_view {
   /**
    * @brief Fetcher for a pair iterator to the first element in the list_device_view.
    *
-   * Dereferencing the returned iterator yields a `thrust::pair<T, bool>`.
+   * Dereferencing the returned iterator yields a `cuda::std::pair<T, bool>`.
    *
    * If the element at index `i` is valid, then for `p = iter[i]`,
    *   1. `p.first` is the value of the element at `i`
@@ -201,7 +190,7 @@ class list_device_view {
   /**
    * @brief Fetcher for a pair iterator to the first element in the list_device_view.
    *
-   * Dereferencing the returned iterator yields a `thrust::pair<rep_type, bool>`,
+   * Dereferencing the returned iterator yields a `cuda::std::pair<rep_type, bool>`,
    * where `rep_type` is `device_storage_type_t<T>`, the type used to store the value
    * on the device.
    *
@@ -270,7 +259,7 @@ class list_device_view {
      * @param i Index into the list_device_view
      * @return A pair of data element and its validity flag.
      */
-    __device__ inline thrust::pair<T, bool> operator()(cudf::size_type i) const
+    __device__ inline cuda::std::pair<T, bool> operator()(cudf::size_type i) const
     {
       return {list.element<T>(i), !list.is_null(i)};
     }
@@ -309,7 +298,7 @@ class list_device_view {
      * @param i Index into the list_device_view
      * @return A pair of data element and its validity flag.
      */
-    __device__ inline thrust::pair<rep_type, bool> operator()(cudf::size_type i) const
+    __device__ inline cuda::std::pair<rep_type, bool> operator()(cudf::size_type i) const
     {
       return {get_rep<T>(i), !list.is_null(i)};
     }

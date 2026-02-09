@@ -1,11 +1,10 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 """Typing utilities for cudf_polars."""
 
 from __future__ import annotations
 
-import sys
 from collections.abc import Hashable, MutableMapping
 from typing import (
     TYPE_CHECKING,
@@ -14,12 +13,13 @@ from typing import (
     NewType,
     Protocol,
     TypeVar,
+    TypedDict,
     Union,
 )
 
 import polars as pl
 import polars.datatypes
-from polars.polars import _expr_nodes as pl_expr, _ir_nodes as pl_ir
+from polars import polars as plrs  # type: ignore[attr-defined]
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -29,13 +29,6 @@ if TYPE_CHECKING:
 
     from cudf_polars.containers import DataFrame, DataType
     from cudf_polars.dsl import nodebase
-
-
-if sys.version_info >= (3, 11):
-    # Inheriting from TypeDict + Generic added in python 3.11
-    from typing import TypedDict  # pragma: no cover
-else:
-    from typing_extensions import TypedDict  # pragma: no cover
 
 
 __all__: list[str] = [
@@ -48,44 +41,45 @@ __all__: list[str] = [
     "OptimizationArgs",
     "PolarsExpr",
     "PolarsIR",
+    "RankMethod",
     "Schema",
     "Slice",
 ]
 
 PolarsIR: TypeAlias = Union[
-    pl_ir.PythonScan,
-    pl_ir.Scan,
-    pl_ir.Cache,
-    pl_ir.DataFrameScan,
-    pl_ir.Select,
-    pl_ir.GroupBy,
-    pl_ir.Join,
-    pl_ir.HStack,
-    pl_ir.Distinct,
-    pl_ir.Sort,
-    pl_ir.Slice,
-    pl_ir.Filter,
-    pl_ir.SimpleProjection,
-    pl_ir.MapFunction,
-    pl_ir.Union,
-    pl_ir.HConcat,
-    pl_ir.ExtContext,
+    plrs._ir_nodes.PythonScan,
+    plrs._ir_nodes.Scan,
+    plrs._ir_nodes.Cache,
+    plrs._ir_nodes.DataFrameScan,
+    plrs._ir_nodes.Select,
+    plrs._ir_nodes.GroupBy,
+    plrs._ir_nodes.Join,
+    plrs._ir_nodes.HStack,
+    plrs._ir_nodes.Distinct,
+    plrs._ir_nodes.Sort,
+    plrs._ir_nodes.Slice,
+    plrs._ir_nodes.Filter,
+    plrs._ir_nodes.SimpleProjection,
+    plrs._ir_nodes.MapFunction,
+    plrs._ir_nodes.Union,
+    plrs._ir_nodes.HConcat,
+    plrs._ir_nodes.ExtContext,
 ]
 
 PolarsExpr: TypeAlias = Union[
-    pl_expr.Function,
-    pl_expr.Window,
-    pl_expr.Literal,
-    pl_expr.Sort,
-    pl_expr.SortBy,
-    pl_expr.Gather,
-    pl_expr.Filter,
-    pl_expr.Cast,
-    pl_expr.Column,
-    pl_expr.Agg,
-    pl_expr.BinaryExpr,
-    pl_expr.Len,
-    pl_expr.PyExprIR,
+    plrs._expr_nodes.Function,
+    plrs._expr_nodes.Window,
+    plrs._expr_nodes.Literal,
+    plrs._expr_nodes.Sort,
+    plrs._expr_nodes.SortBy,
+    plrs._expr_nodes.Gather,
+    plrs._expr_nodes.Filter,
+    plrs._expr_nodes.Cast,
+    plrs._expr_nodes.Column,
+    plrs._expr_nodes.Agg,
+    plrs._expr_nodes.BinaryExpr,
+    plrs._expr_nodes.Len,
+    plrs._expr_nodes.PyExprIR,
 ]
 
 PolarsSchema: TypeAlias = dict[str, pl.DataType]
@@ -173,6 +167,53 @@ class GenericTransformer(Protocol[U_contra, V_co, StateT_co]):
         ...
 
 
+class _ScalarDataTypeHeader(TypedDict):
+    kind: Literal["scalar"]
+    name: str
+
+
+class _DecimalDataTypeHeader(TypedDict):
+    kind: Literal["decimal"]
+    precision: int
+    scale: int
+
+
+class _DatetimeDataTypeHeader(TypedDict):
+    kind: Literal["datetime"]
+    time_unit: str
+    time_zone: str | None
+
+
+class _DurationDataTypeHeader(TypedDict):
+    kind: Literal["duration"]
+    time_unit: str
+
+
+class _ListDataTypeHeader(TypedDict):
+    kind: Literal["list"]
+    inner: DataTypeHeader
+
+
+class _StructFieldHeader(TypedDict):
+    name: str
+    dtype: DataTypeHeader
+
+
+class _StructDataTypeHeader(TypedDict):
+    kind: Literal["struct"]
+    fields: list[_StructFieldHeader]
+
+
+DataTypeHeader = (
+    _ScalarDataTypeHeader
+    | _DecimalDataTypeHeader
+    | _DatetimeDataTypeHeader
+    | _DurationDataTypeHeader
+    | _ListDataTypeHeader
+    | _StructDataTypeHeader
+)
+
+
 class ColumnOptions(TypedDict):
     """
     Column constructor options.
@@ -186,7 +227,7 @@ class ColumnOptions(TypedDict):
     order: plc.types.Order
     null_order: plc.types.NullOrder
     name: str | None
-    dtype: str
+    dtype: DataTypeHeader
 
 
 class DeserializedColumnOptions(TypedDict):
@@ -217,3 +258,9 @@ class DataFrameHeader(TypedDict):
 
     columns_kwargs: list[ColumnOptions]
     frame_count: int
+
+
+# Not public in polars yet
+RankMethod = Literal["ordinal", "dense", "min", "max", "average"]
+
+RoundMethod = Literal["half_away_from_zero", "half_to_even"]

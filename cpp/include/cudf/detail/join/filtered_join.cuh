@@ -1,29 +1,21 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
 
 #include <cudf/detail/cuco_helpers.hpp>
 #include <cudf/detail/join/join.hpp>
+#include <cudf/detail/row_operator/equality.cuh>
+#include <cudf/detail/row_operator/hashing.cuh>
 #include <cudf/detail/row_operator/primitive_row_operators.cuh>
-#include <cudf/detail/row_operator/row_operators.cuh>
+#include <cudf/join/join.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/mr/polymorphic_allocator.hpp>
 #include <rmm/resource_ref.hpp>
 
 #include <cuco/bucket_storage.cuh>
@@ -173,8 +165,8 @@ class filtered_join {
   using storage_type =
     cuco::bucket_storage<key,
                          1,  /// fixing bucket size to be 1 i.e each thread handles one slot
-                         cuco::extent<cudf::size_type>,
-                         cudf::detail::cuco_allocator<char>>;
+                         cuco::extent<std::size_t>,
+                         rmm::mr::polymorphic_allocator<char>>;
 
   // Hasher for primitive row types
   using primitive_row_hasher =
@@ -201,7 +193,7 @@ class filtered_join {
 
   // Empty sentinel key used to mark empty slots in the hash table
   static constexpr auto empty_sentinel_key = cuco::empty_key{
-    cuco::pair{std::numeric_limits<hash_value_type>::max(), lhs_index_type{JoinNoneValue}}};
+    cuco::pair{std::numeric_limits<hash_value_type>::max(), lhs_index_type{cudf::JoinNoMatch}}};
   build_properties _build_props;           ///< Properties of the build table
   cudf::table_view _build;                 ///< input table to build the hash map
   cudf::null_equality const _nulls_equal;  ///< whether to consider nulls as equal

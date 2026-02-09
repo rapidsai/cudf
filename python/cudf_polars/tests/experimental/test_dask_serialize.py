@@ -14,6 +14,7 @@ from rmm.pylibrmm.stream import DEFAULT_STREAM
 
 from cudf_polars.containers import DataFrame
 from cudf_polars.experimental.dask_registers import register
+from cudf_polars.utils.cuda_stream import get_dask_cuda_stream
 
 # Must register serializers before running tests
 register()
@@ -65,7 +66,8 @@ def convert_to_rmm(frame):
     ],
 )
 def test_dask_serialization_roundtrip(polars_tbl, protocol, context):
-    df = DataFrame.from_polars(polars_tbl)
+    stream = get_dask_cuda_stream()
+    df = DataFrame.from_polars(polars_tbl, stream=stream)
 
     cuda_rmm = protocol == "cuda_rmm"
     protocol = "cuda" if protocol == "cuda_rmm" else protocol
@@ -82,7 +84,7 @@ def test_dask_serialization_roundtrip(polars_tbl, protocol, context):
 
     # Check that we can serialize individual columns
     for column in df.columns:
-        expect = DataFrame([column])
+        expect = DataFrame([column], stream=df.stream)
 
         header, frames = serialize(
             column, on_error="raise", serializers=[protocol], context=context
@@ -92,11 +94,15 @@ def test_dask_serialization_roundtrip(polars_tbl, protocol, context):
             frames = [convert_to_rmm(f) for f in frames]
         res = deserialize(header, frames, deserializers=[protocol])
 
-        assert_frame_equal(expect.to_polars(), DataFrame([res]).to_polars())
+        assert_frame_equal(
+            expect.to_polars(), DataFrame([res], stream=df.stream).to_polars()
+        )
 
 
 def test_dask_serialization_error():
-    df = DataFrame.from_polars(pl.DataFrame({"a": [1, 2, 3]}))
+    df = DataFrame.from_polars(
+        pl.DataFrame({"a": [1, 2, 3]}), stream=get_dask_cuda_stream()
+    )
 
     header, frames = serialize(
         df,
@@ -115,7 +121,7 @@ def test_dask_serialization_error():
         on_error="message",
         serializers=["dask"],
         context={
-            "stream": DEFAULT_STREAM,
+            "stream": df.stream,
             "staging_device_buffer": rmm.DeviceBuffer(size=2**20),
         },
     )

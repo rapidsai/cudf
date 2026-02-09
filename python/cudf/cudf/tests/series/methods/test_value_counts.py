@@ -1,4 +1,5 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 from string import ascii_letters, digits
 
 import numpy as np
@@ -80,8 +81,9 @@ def test_series_value_counts(dropna, normalize):
     size = 10
     arr = rng.integers(low=-1, high=10, size=size)
     mask = arr != -1
+    mask_buff, null_count = cudf.Series(mask)._column.as_mask()
     sr = cudf.Series._from_column(
-        as_column(arr).set_mask(cudf.Series(mask)._column.as_mask())
+        as_column(arr).set_mask(mask_buff, null_count)
     )
     sr.name = "col"
 

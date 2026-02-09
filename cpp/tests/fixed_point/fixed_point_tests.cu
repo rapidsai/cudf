@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2020-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf_test/base_fixture.hpp>
@@ -88,7 +77,7 @@ TEST_F(FixedPointTest, DecimalXXThrustOnDevice)
   auto d_vec1 = cudf::detail::make_device_uvector(
     vec1, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
 
-  auto const sum = thrust::reduce(rmm::exec_policy(cudf::get_default_stream()),
+  auto const sum = thrust::reduce(rmm::exec_policy_nosync(cudf::get_default_stream()),
                                   std::cbegin(d_vec1),
                                   std::cend(d_vec1),
                                   decimal32{0, scale_type{-2}});
@@ -105,7 +94,7 @@ TEST_F(FixedPointTest, DecimalXXThrustOnDevice)
   std::vector<int32_t> vec2(1000);
   std::iota(std::begin(vec2), std::end(vec2), 1);
 
-  auto const res1 = thrust::reduce(rmm::exec_policy(cudf::get_default_stream()),
+  auto const res1 = thrust::reduce(rmm::exec_policy_nosync(cudf::get_default_stream()),
                                    std::cbegin(d_vec1),
                                    std::cend(d_vec1),
                                    decimal32{0, scale_type{-2}});
@@ -116,7 +105,7 @@ TEST_F(FixedPointTest, DecimalXXThrustOnDevice)
 
   rmm::device_uvector<int32_t> d_vec3(1000, cudf::get_default_stream());
 
-  thrust::transform(rmm::exec_policy(cudf::get_default_stream()),
+  thrust::transform(rmm::exec_policy_nosync(cudf::get_default_stream()),
                     std::cbegin(d_vec1),
                     std::cend(d_vec1),
                     std::begin(d_vec3),

@@ -1,8 +1,9 @@
-# Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
 import functools
-from typing import Any
+from typing import Any, cast
 
 import pandas as pd
 import pyarrow as pa
@@ -46,11 +47,14 @@ def maybe_nested_pa_scalar_to_py(pa_scalar: pa.Scalar) -> Any:
     if not pa_scalar.is_valid:
         return pd.NA
     if pa.types.is_struct(pa_scalar.type):
+        struct_scalar = cast(pa.StructScalar, pa_scalar)
         return {
             str(i): maybe_nested_pa_scalar_to_py(val)
-            for i, (_, val) in enumerate(pa_scalar.items())
+            for i, (_, val) in enumerate(struct_scalar.items())
         }
     elif pa.types.is_list(pa_scalar.type):
-        return [maybe_nested_pa_scalar_to_py(val) for val in pa_scalar]
+        list_scalar = cast(pa.ListScalar, pa_scalar)
+        # TODO: Fix pyarrow-stubs typing - ListScalar iteration should yield Scalar objects
+        return [maybe_nested_pa_scalar_to_py(val) for val in list_scalar]  # type: ignore[arg-type]
     else:
         return pa_scalar.as_py()

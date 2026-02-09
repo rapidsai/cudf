@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf/aggregation.hpp>
@@ -19,6 +8,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/aggregation/aggregation.cuh>
 #include <cudf/detail/iterator.cuh>
+#include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/detail/utilities/device_operators.cuh>
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/utilities/span.hpp>
@@ -29,7 +19,6 @@
 
 #include <cuda/std/functional>
 #include <thrust/iterator/discard_iterator.h>
-#include <thrust/reduce.h>
 
 namespace cudf::groupby::detail {
 
@@ -50,14 +39,13 @@ struct bitwise_group_reduction_functor {
     if (values.is_empty()) { return result; }
 
     auto const do_reduction = [&](auto const& inp_iter, auto const& out_iter, auto const& binop) {
-      thrust::reduce_by_key(rmm::exec_policy_nosync(stream),
-                            group_labels.data(),
-                            group_labels.data() + group_labels.size(),
-                            inp_iter,
-                            thrust::make_discard_iterator(),
-                            out_iter,
-                            cuda::std::equal_to{},
-                            binop);
+      cudf::detail::reduce_by_key_async(group_labels.data(),
+                                        group_labels.data() + group_labels.size(),
+                                        inp_iter,
+                                        thrust::make_discard_iterator(),
+                                        out_iter,
+                                        binop,
+                                        stream);
     };
 
     auto const d_values_ptr       = column_device_view::create(values, stream);

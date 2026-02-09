@@ -1,4 +1,5 @@
-# Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 import decimal
 
@@ -7,9 +8,7 @@ import nanoarrow
 import nanoarrow.device
 import numpy as np
 import pyarrow as pa
-import pyarrow.compute as pc
 import pytest
-from packaging.version import parse
 from utils import assert_column_eq, assert_table_eq
 
 import rmm
@@ -101,19 +100,15 @@ def test_decimal_other(data_type):
     "plc_type",
     [plc.TypeId.DECIMAL128, plc.TypeId.DECIMAL64, plc.TypeId.DECIMAL32],
 )
-def test_decimal_respect_metadata_precision(plc_type, request):
-    request.applymarker(
-        pytest.mark.xfail(
-            parse(pa.__version__) < parse("19.0.0")
-            and plc_type in {plc.TypeId.DECIMAL64, plc.TypeId.DECIMAL32},
-            reason=(
-                "pyarrow does not interpret Arrow schema decimal type string correctly"
-            ),
-        )
-    )
+def test_decimal_respect_metadata_precision(plc_type):
     precision, scale = 3, 2
+    pa_type = {
+        plc.TypeId.DECIMAL128: pa.decimal128,
+        plc.TypeId.DECIMAL64: pa.decimal64,
+        plc.TypeId.DECIMAL32: pa.decimal32,
+    }[plc_type]
     expected = pa.array(
-        [decimal.Decimal("1.23"), None], type=pa.decimal128(precision, scale)
+        [decimal.Decimal("1.23"), None], type=pa_type(precision, scale)
     )
     plc_column = plc.unary.cast(
         plc.Column.from_arrow(expected), plc.DataType(plc_type, scale=-scale)
@@ -121,11 +116,6 @@ def test_decimal_respect_metadata_precision(plc_type, request):
     result = plc_column.to_arrow(
         metadata=plc.interop.ColumnMetadata(precision=precision)
     )
-    if parse(pa.__version__) >= parse("19.0.0"):
-        if plc_type == plc.TypeId.DECIMAL64:
-            expected = pc.cast(expected, pa.decimal64(precision, scale))
-        elif plc_type == plc.TypeId.DECIMAL32:
-            expected = pc.cast(expected, pa.decimal32(precision, scale))
     assert result.equals(expected)
 
 
@@ -173,6 +163,9 @@ def test_from_dlpack_error():
         plc.interop.from_dlpack(1)
 
 
+# We can't control the stream nanoarrow uses internally so we must disable the stream
+# testing for these tests.
+@pytest.mark.uses_custom_stream
 def test_device_interop_column():
     pa_arr = pa.array([{"a": [1, None]}, None, {"b": [None, 4]}])
     plc_col = plc.Column.from_arrow(pa_arr)
@@ -182,6 +175,7 @@ def test_device_interop_column():
     assert_column_eq(pa_arr, new_col)
 
 
+@pytest.mark.uses_custom_stream
 def test_device_interop_table():
     # Have to manually construct the schema to ensure that names match. pyarrow will
     # assign names to nested types automatically otherwise.
@@ -214,10 +208,6 @@ def test_device_interop_table():
     assert_table_eq(pa_tbl, new_tbl)
 
 
-@pytest.mark.skipif(
-    parse(pa.__version__) < parse("16.0.0"),
-    reason="https://github.com/apache/arrow/pull/39985",
-)
 @pytest.mark.parametrize(
     "data",
     [
@@ -236,7 +226,7 @@ def test_column_from_arrow_stream(data):
 def test_arrow_object_lifetime():
     def f():
         # Store a temporary so it is cached in the frame when the exception is raised
-        t = plc.interop.from_arrow(pa.Table.from_pydict({"a": [1]}))  # noqa: F841
+        t = plc.Table.from_arrow(pa.Table.from_pydict({"a": [1]}))  # noqa: F841
         raise ValueError("test exception")
 
     # Nested try-excepts are necessary for Python to extend the lifetime of the stack

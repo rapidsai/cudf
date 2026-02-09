@@ -1,5 +1,7 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
+from rmm.pylibrmm.memory_resource import DeviceMemoryResource
 from rmm.pylibrmm.stream import Stream
 
 from pylibcudf.aggregation import RankMethod
@@ -12,12 +14,14 @@ def sorted_order(
     column_order: list[Order],
     null_precedence: list[NullOrder],
     stream: Stream | None = None,
+    mr: DeviceMemoryResource | None = None,
 ) -> Column: ...
 def stable_sorted_order(
     source_table: Table,
     column_order: list[Order],
     null_precedence: list[NullOrder],
     stream: Stream | None = None,
+    mr: DeviceMemoryResource | None = None,
 ) -> Column: ...
 def rank(
     input_view: Column,
@@ -27,6 +31,7 @@ def rank(
     null_precedence: NullOrder,
     percentage: bool,
     stream: Stream | None = None,
+    mr: DeviceMemoryResource | None = None,
 ) -> Column: ...
 def is_sorted(
     tbl: Table,
@@ -41,6 +46,7 @@ def segmented_sort_by_key(
     column_order: list[Order],
     null_precedence: list[NullOrder],
     stream: Stream | None = None,
+    mr: DeviceMemoryResource | None = None,
 ) -> Table: ...
 def stable_segmented_sort_by_key(
     values: Table,
@@ -49,6 +55,7 @@ def stable_segmented_sort_by_key(
     column_order: list[Order],
     null_precedence: list[NullOrder],
     stream: Stream | None = None,
+    mr: DeviceMemoryResource | None = None,
 ) -> Table: ...
 def sort_by_key(
     values: Table,
@@ -56,6 +63,7 @@ def sort_by_key(
     column_order: list[Order],
     null_precedence: list[NullOrder],
     stream: Stream | None = None,
+    mr: DeviceMemoryResource | None = None,
 ) -> Table: ...
 def stable_sort_by_key(
     values: Table,
@@ -63,28 +71,33 @@ def stable_sort_by_key(
     column_order: list[Order],
     null_precedence: list[NullOrder],
     stream: Stream | None = None,
+    mr: DeviceMemoryResource | None = None,
 ) -> Table: ...
 def sort(
     source_table: Table,
     column_order: list[Order],
     null_precedence: list[NullOrder],
     stream: Stream | None = None,
+    mr: DeviceMemoryResource | None = None,
 ) -> Table: ...
 def stable_sort(
     source_table: Table,
     column_order: list[Order],
     null_precedence: list[NullOrder],
     stream: Stream | None = None,
+    mr: DeviceMemoryResource | None = None,
 ) -> Table: ...
 def top_k(
     col: Column,
     k: int,
     sort_order: Order = Order.DESCENDING,
     stream: Stream | None = None,
+    mr: DeviceMemoryResource | None = None,
 ) -> Column: ...
 def top_k_order(
     col: Column,
     k: int,
     sort_order: Order = Order.DESCENDING,
     stream: Stream | None = None,
+    mr: DeviceMemoryResource | None = None,
 ) -> Column: ...

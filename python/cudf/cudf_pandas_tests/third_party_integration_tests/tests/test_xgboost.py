@@ -1,4 +1,5 @@
-# Copyright (c) 2023-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
 
@@ -101,6 +102,7 @@ def test_with_iter_quantile_dmatrix(
 
 
 @pytest.mark.parametrize("device", ["cpu", "cuda"])
+@pytest.mark.filterwarnings("ignore::pytest.PytestUnraisableExceptionWarning")
 def test_with_external_memory(
     device: str,
     reg_batches_data: tuple[list[pd.DataFrame], list[pd.DataFrame]],
@@ -114,6 +116,7 @@ def test_with_external_memory(
 
 
 @pytest.mark.parametrize("device", ["cpu", "cuda"])
+@pytest.mark.filterwarnings("ignore::pytest.PytestUnraisableExceptionWarning")
 def test_predict(device: str) -> np.ndarray:
     reg = xgb.XGBRegressor(n_estimators=2, device=device)
     X, y = make_regression(n_samples, n_features, random_state=11)

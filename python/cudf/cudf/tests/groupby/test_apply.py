@@ -1,4 +1,5 @@
-# Copyright (c) 2018-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 import textwrap
 from functools import partial
@@ -6,7 +7,6 @@ from functools import partial
 import numpy as np
 import pandas as pd
 import pytest
-from numba import cuda
 
 import cudf
 from cudf import DataFrame
@@ -112,42 +112,6 @@ def test_groupby_apply_args(func, args):
     got_grpby = df.groupby(["key1", "key2"])
     expect = expect_grpby.apply(func, *args, include_groups=False)
     got = got_grpby.apply(func, *args, include_groups=False)
-    assert_groupby_results_equal(expect, got)
-
-
-def test_groupby_apply_grouped():
-    df = cudf.DataFrame(
-        {
-            "key1": range(20),
-            "key2": range(20),
-            "val1": range(20),
-            "val2": range(20),
-        }
-    )
-
-    got_grpby = df.groupby(["key1", "key2"])
-
-    def foo(key1, val1, com1, com2):
-        for i in range(cuda.threadIdx.x, len(key1), cuda.blockDim.x):
-            com1[i] = key1[i] * 10000 + val1[i]
-            com2[i] = i
-
-    with pytest.warns(FutureWarning):
-        got = got_grpby.apply_grouped(
-            foo,
-            incols=["key1", "val1"],
-            outcols={"com1": np.float64, "com2": np.int32},
-            tpb=8,
-        )
-
-    got = got.to_pandas()
-
-    expect = df.copy()
-    expect["com1"] = (expect["key1"] * 10000 + expect["key1"]).astype(
-        np.float64
-    )
-    expect["com2"] = np.zeros(20, dtype=np.int32)
-
     assert_groupby_results_equal(expect, got)
 
 

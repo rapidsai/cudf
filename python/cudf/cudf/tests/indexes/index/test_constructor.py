@@ -1,4 +1,5 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 import re
 
@@ -246,13 +247,7 @@ def test_index_with_index_dtype(request, data, all_supported_types_as_str):
             reason=f"wrong result for {all_supported_types_as_str}",
         )
     )
-    request.applymarker(
-        pytest.mark.xfail(
-            all_supported_types_as_str == "category",
-            raises=AttributeError,
-            reason=f"cuDF bug in Column.astype with {all_supported_types_as_str}",
-        )
-    )
+
     pidx = pd.Index(data)
     gidx = cudf.Index(data)
 

@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 /**
@@ -49,6 +38,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_uvector.hpp>
+#include <rmm/mr/polymorphic_allocator.hpp>
 
 #include <thrust/fill.h>
 #include <thrust/for_each.h>
@@ -1346,9 +1336,8 @@ build_chunk_dictionaries(hostdevice_2dvector<EncColumnChunk>& chunks,
   if (total_map_storage_size == 0) { return {std::move(dict_data), std::move(dict_index)}; }
 
   // Create a single bulk storage used by all sub-dictionaries
-  auto map_storage = storage_type{
-    total_map_storage_size,
-    cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream}};
+  auto map_storage =
+    storage_type{total_map_storage_size, rmm::mr::polymorphic_allocator<char>{}, stream.value()};
   // Create a span of non-const map_storage as map_storage_ref takes in a non-const pointer.
   device_span<slot_type> const map_storage_data{map_storage.data(), total_map_storage_size};
 
@@ -1502,6 +1491,7 @@ void init_encoder_pages(hostdevice_2dvector<EncColumnChunk>& chunks,
  * @param compression compression format
  * @param column_index_truncate_length maximum length of min or max values in column index, in bytes
  * @param write_v2_headers True if V2 page headers should be written
+ * @param page_level_compression True if V2 pages can make per-page compression decisions
  * @param stream CUDA stream used for device memory operations and kernel launches
  */
 void encode_pages(hostdevice_2dvector<EncColumnChunk>& chunks,
@@ -1513,6 +1503,7 @@ void encode_pages(hostdevice_2dvector<EncColumnChunk>& chunks,
                   compression_type compression,
                   int32_t column_index_truncate_length,
                   bool write_v2_headers,
+                  bool page_level_compression,
                   rmm::cuda_stream_view stream)
 {
   auto const num_pages = pages.size();
@@ -1525,7 +1516,7 @@ void encode_pages(hostdevice_2dvector<EncColumnChunk>& chunks,
   rmm::device_uvector<device_span<uint8_t const>> comp_in(max_comp_pages, stream);
   rmm::device_uvector<device_span<uint8_t>> comp_out(max_comp_pages, stream);
   rmm::device_uvector<codec_exec_result> comp_res(max_comp_pages, stream);
-  thrust::fill(rmm::exec_policy(stream),
+  thrust::fill(rmm::exec_policy_nosync(stream),
                comp_res.begin(),
                comp_res.end(),
                codec_exec_result{0, codec_status::FAILURE});
@@ -1537,7 +1528,7 @@ void encode_pages(hostdevice_2dvector<EncColumnChunk>& chunks,
   // chunk-level
 
   auto d_chunks = chunks.device_view();
-  DecideCompression(d_chunks.flat_view(), stream);
+  decide_compression(d_chunks.flat_view(), page_level_compression, stream);
   EncodePageHeaders(pages, comp_res, pages_stats, chunk_stats, stream);
   GatherPages(d_chunks.flat_view(), stream);
 
@@ -1641,6 +1632,8 @@ size_t column_index_buffer_size(EncColumnChunk* ck,
  * @param int96_timestamps Flag to indicate if timestamps will be written as INT96
  * @param utc_timestamps Flag to indicate if timestamps are UTC
  * @param write_v2_headers True if V2 page headers are to be written
+ * @param page_level_compression True if V2 pages can make per-page compression decisions
+ * @param write_arrow_schema True if Arrow schema should be written to the file
  * @param out_sink Sink for checking if device write is supported, should not be used to write any
  *        data in this function
  * @param stream CUDA stream used for device memory operations and kernel launches
@@ -1666,6 +1659,7 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
                                    bool int96_timestamps,
                                    bool utc_timestamps,
                                    bool write_v2_headers,
+                                   bool page_level_compression,
                                    bool write_arrow_schema,
                                    host_span<std::unique_ptr<data_sink> const> out_sink,
                                    rmm::cuda_stream_view stream)
@@ -1766,10 +1760,11 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
                  partitions.end(),
                  std::back_inserter(num_frag_in_part),
                  [max_page_fragment_size](auto const& part) {
-                   return util::div_rounding_up_unsafe(part.num_rows, max_page_fragment_size);
+                   return util::div_rounding_up_safe<size_type>(part.num_rows,
+                                                                max_page_fragment_size);
                  });
 
-  size_type num_fragments = std::reduce(num_frag_in_part.begin(), num_frag_in_part.end());
+  auto const num_fragments = std::reduce(num_frag_in_part.begin(), num_frag_in_part.end());
 
   auto part_frag_offset =
     cudf::detail::make_empty_host_vector<int>(num_frag_in_part.size() + 1, stream);
@@ -1884,8 +1879,8 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
     for (int r = 0; r < num_rg_in_part[p]; r++) {
       size_t global_r = global_rowgroup_base[p] + r;  // Number of rowgroups already in file/part
       auto& row_group = agg_meta->file(p).row_groups[global_r];
-      uint32_t fragments_in_chunk =
-        util::div_rounding_up_unsafe(row_group.num_rows, max_page_fragment_size);
+      auto const fragments_in_chunk =
+        util::div_rounding_up_safe<uint32_t>(row_group.num_rows, max_page_fragment_size);
       row_group.total_byte_size = 0;
       row_group.columns.resize(num_columns);
       for (int c = 0; c < num_columns; c++) {
@@ -1920,7 +1915,7 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
         column_chunk_meta.codec          = Compression::UNCOMPRESSED;
         column_chunk_meta.num_values     = ck.num_values;
 
-        frags_per_column[c] += util::div_rounding_up_unsafe(
+        frags_per_column[c] += util::div_rounding_up_safe<size_type>(
           row_group.num_rows, std::min(column_frag_size[c], max_page_fragment_size));
       }
       f += fragments_in_chunk;
@@ -1958,8 +1953,8 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
         for (int r = 0; r < num_rg_in_part[p]; r++) {
           auto const global_r   = global_rowgroup_base[p] + r;
           auto const& row_group = agg_meta->file(p).row_groups[global_r];
-          uint32_t const fragments_in_chunk =
-            util::div_rounding_up_unsafe(row_group.num_rows, frag_size);
+          auto const fragments_in_chunk =
+            util::div_rounding_up_safe<uint32_t>(row_group.num_rows, frag_size);
           EncColumnChunk& ck = chunks[r + first_rg_in_part[p]][c];
           ck.fragments       = page_fragments.device_ptr(frag_offset);
           ck.first_fragment  = frag_offset;
@@ -2134,6 +2129,7 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
       compression,
       column_index_truncate_length,
       write_v2_headers,
+      page_level_compression,
       stream);
 
     bool need_sync{false};
@@ -2295,6 +2291,7 @@ writer::impl::impl(std::vector<std::unique_ptr<data_sink>> sinks,
     _int96_timestamps(options.is_enabled_int96_timestamps()),
     _utc_timestamps(options.is_enabled_utc_timestamps()),
     _write_v2_headers(options.is_enabled_write_v2_headers()),
+    _page_level_compression(options.is_enabled_page_level_compression()),
     _write_arrow_schema(options.is_enabled_write_arrow_schema()),
     _sorting_columns(options.get_sorting_columns()),
     _column_index_truncate_length(options.get_column_index_truncate_length()),
@@ -2309,6 +2306,11 @@ writer::impl::impl(std::vector<std::unique_ptr<data_sink>> sinks,
 
   CUDF_EXPECTS(is_supported_write_parquet(_compression),
                "Compression type not supported for Parquet writer");
+
+  if (_page_level_compression and not _write_v2_headers) {
+    CUDF_LOG_WARN(
+      "page_level_compression is only supported with V2 page headers; the option will be ignored");
+  }
 
   init_state();
 }
@@ -2330,6 +2332,7 @@ writer::impl::impl(std::vector<std::unique_ptr<data_sink>> sinks,
     _int96_timestamps(options.is_enabled_int96_timestamps()),
     _utc_timestamps(options.is_enabled_utc_timestamps()),
     _write_v2_headers(options.is_enabled_write_v2_headers()),
+    _page_level_compression(options.is_enabled_page_level_compression()),
     _write_arrow_schema(options.is_enabled_write_arrow_schema()),
     _sorting_columns(options.get_sorting_columns()),
     _column_index_truncate_length(options.get_column_index_truncate_length()),
@@ -2344,6 +2347,11 @@ writer::impl::impl(std::vector<std::unique_ptr<data_sink>> sinks,
 
   CUDF_EXPECTS(is_supported_write_parquet(_compression),
                "Compression type not supported for Parquet writer");
+
+  if (_page_level_compression and not _write_v2_headers) {
+    CUDF_LOG_WARN(
+      "page_level_compression is only supported with V2 page headers; the option will be ignored");
+  }
 
   init_state();
 }
@@ -2413,6 +2421,7 @@ void writer::impl::write(table_view const& input, std::vector<partition_info> co
                                            _int96_timestamps,
                                            _utc_timestamps,
                                            _write_v2_headers,
+                                           _page_level_compression,
                                            _write_arrow_schema,
                                            _out_sink,
                                            _stream);
@@ -2542,7 +2551,8 @@ void writer::impl::write_parquet_data_to_sink(
             if (enc_page.page_type == PageType::DICTIONARY_PAGE) { continue; }
 
             int32_t const this_page_size =
-              enc_page.hdr_size + (ck.is_compressed ? enc_page.comp_data_size : enc_page.data_size);
+              enc_page.hdr_size +
+              (enc_page.is_compressed ? enc_page.comp_data_size : enc_page.data_size);
             // first_row_idx is relative to start of row group
             PageLocation loc{curr_pg_offset, this_page_size, enc_page.start_row - ck.start_row};
             if (is_byte_arr) { var_bytes.push_back(enc_page.var_bytes_size); }

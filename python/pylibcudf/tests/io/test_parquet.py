@@ -1,11 +1,17 @@
-# Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 import io
 
 import pyarrow as pa
 import pyarrow.compute as pc
 import pytest
 from pyarrow.parquet import read_table
-from utils import assert_table_and_meta_eq, get_bytes_from_source, make_source
+from utils import (
+    assert_table_and_meta_eq,
+    get_bytes_from_source,
+    make_source,
+    synchronize_stream,
+)
 
 from rmm.pylibrmm.device_buffer import DeviceBuffer
 from rmm.pylibrmm.stream import Stream
@@ -24,9 +30,17 @@ _COMMON_PARQUET_SOURCE_KWARGS = {"format": "parquet"}
 
 
 @pytest.mark.parametrize("stream", [None, Stream()])
-@pytest.mark.parametrize("columns", [None, ["col_int64", "col_bool"]])
+@pytest.mark.parametrize("column_names", [None, ["col_int64", "col_bool"]])
+@pytest.mark.parametrize("column_indices", [None, [2, 0]])
+@pytest.mark.parametrize("source_strategy", ["inline", "set_source"])
 def test_read_parquet_basic(
-    table_data, binary_source_or_sink, nrows_skiprows, columns, stream
+    table_data,
+    binary_source_or_sink,
+    nrows_skiprows,
+    column_names,
+    column_indices,
+    stream,
+    source_strategy,
 ):
     _, pa_table = table_data
     nrows, skiprows = nrows_skiprows
@@ -35,20 +49,30 @@ def test_read_parquet_basic(
         binary_source_or_sink, pa_table, **_COMMON_PARQUET_SOURCE_KWARGS
     )
 
+    source_info = plc.io.SourceInfo([source])
     options = plc.io.parquet.ParquetReaderOptions.builder(
-        plc.io.SourceInfo([source])
+        source_info if source_strategy == "inline" else plc.io.SourceInfo([])
     ).build()
+
+    if source_strategy == "set_source":
+        options.set_source(source_info)
+
     if nrows > -1:
         options.set_num_rows(nrows)
     if skiprows != 0:
         options.set_skip_rows(skiprows)
-    if columns is not None:
-        options.set_columns(columns)
+    if column_names is not None:
+        options.set_column_names(column_names)
+    elif column_indices is not None:
+        options.set_column_indices(column_indices)
 
     res = plc.io.parquet.read_parquet(options, stream)
 
-    if columns is not None:
-        pa_table = pa_table.select(columns)
+    if column_names is not None:
+        pa_table = pa_table.select(column_names)
+    elif column_indices is not None:
+        column_names = [pa_table.column_names[idx] for idx in column_indices]
+        pa_table = pa_table.select(column_names)
 
     # Adapt to nrows/skiprows
     pa_table = pa_table.slice(
@@ -153,16 +177,34 @@ def test_read_parquet_filters(
     )
 
 
+class FooSpan:
+    def __init__(self, owner):
+        # Keep the owning object alive
+        self._data = owner
+
+    @property
+    def ptr(self):
+        return self._data.ptr
+
+    @property
+    def size(self):
+        return self._data.size
+
+
 @pytest.mark.parametrize("num_buffers", [1, 2])
 @pytest.mark.parametrize("stream", [None, Stream()])
-@pytest.mark.parametrize("columns", [None, ["col_int64", "col_bool"]])
+@pytest.mark.parametrize("column_names", [None, ["col_int64", "col_bool"]])
+@pytest.mark.parametrize("column_indices", [None, [2, 0]])
+@pytest.mark.parametrize("use_foo_span", [False, True])
 def test_read_parquet_from_device_buffers(
     table_data,
     binary_source_or_sink,
     nrows_skiprows,
     stream,
-    columns,
+    column_names,
+    column_indices,
     num_buffers,
+    use_foo_span,
 ):
     _, pa_table = table_data
     nrows, skiprows = nrows_skiprows
@@ -172,7 +214,12 @@ def test_read_parquet_from_device_buffers(
         binary_source_or_sink, pa_table, **_COMMON_PARQUET_SOURCE_KWARGS
     )
 
-    buf = DeviceBuffer.to_device(get_bytes_from_source(source))
+    rmm_buf = DeviceBuffer.to_device(
+        get_bytes_from_source(source), plc.utils._get_stream(stream)
+    )
+    buf = FooSpan(rmm_buf) if use_foo_span else rmm_buf
+
+    synchronize_stream(stream)
 
     options = plc.io.parquet.ParquetReaderOptions.builder(
         plc.io.SourceInfo([buf] * num_buffers)
@@ -181,8 +228,10 @@ def test_read_parquet_from_device_buffers(
         options.set_num_rows(nrows)
     if skiprows != 0:
         options.set_skip_rows(skiprows)
-    if columns is not None:
-        options.set_columns(columns)
+    if column_names is not None:
+        options.set_column_names(column_names)
+    elif column_indices is not None:
+        options.set_column_indices(column_indices)
 
     res = plc.io.parquet.read_parquet(options, stream)
 
@@ -191,8 +240,12 @@ def test_read_parquet_from_device_buffers(
         if num_buffers == 1
         else pa.concat_tables([pa_table] * num_buffers)
     )
-    if columns is not None:
-        expected = expected.select(columns)
+    if column_names is not None:
+        expected = expected.select(column_names)
+    elif column_indices is not None:
+        column_names = [expected.column_names[idx] for idx in column_indices]
+        expected = expected.select(column_names)
+
     expected = expected.slice(skiprows, nrows if nrows > -1 else None)
 
     assert_table_and_meta_eq(expected, res, check_field_nullability=False)
@@ -271,4 +324,71 @@ def test_write_parquet(
         options.set_max_dictionary_size(max_dictionary_size)
 
     result = plc.io.parquet.write_parquet(options, stream)
+
+    synchronize_stream(stream)
+
     assert isinstance(result, memoryview)
+
+
+@pytest.mark.parametrize("use_jit_filter", [False, True])
+@pytest.mark.parametrize(
+    "pa_filter,plc_filter",
+    [
+        (
+            pc.field("col_int64") >= 10,
+            Operation(
+                ASTOperator.GREATER_EQUAL,
+                ColumnNameReference("col_int64"),
+                Literal(plc.Scalar.from_arrow(pa.scalar(10, type=pa.int64()))),
+            ),
+        ),
+        (
+            pc.field("col_str") == "foo",
+            Operation(
+                ASTOperator.EQUAL,
+                ColumnNameReference("col_str"),
+                Literal(
+                    plc.Scalar.from_arrow(pa.scalar("foo", type=pa.string()))
+                ),
+            ),
+        ),
+    ],
+)
+def test_read_parquet_filters_jit(
+    binary_source_or_sink,
+    pa_filter,
+    plc_filter,
+    use_jit_filter,
+):
+    pa_table = pa.table(
+        {
+            "col_int64": pa.array([6, 0, 2, 2], type=pa.int64()),
+            "col_str": pa.array(
+                ["bar", "foo", "baz", "foo"], type=pa.string()
+            ),
+        }
+    )
+
+    source = make_source(
+        binary_source_or_sink, pa_table, **_COMMON_PARQUET_SOURCE_KWARGS
+    )
+
+    options = (
+        plc.io.parquet.ParquetReaderOptions.builder(
+            plc.io.SourceInfo([source])
+        )
+        .use_jit_filter(use_jit_filter)
+        .build()
+    )
+    options.set_filter(plc_filter)
+
+    assert options.is_enabled_use_jit_filter() is use_jit_filter
+
+    got = plc.io.parquet.read_parquet(options)
+    expect = read_table(source, filters=pa_filter)
+
+    assert_table_and_meta_eq(
+        expect,
+        got,
+        check_field_nullability=False,
+    )

@@ -1,4 +1,5 @@
-# Copyright (c) 2022-2024, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 """Benchmarks of MultiIndex methods."""
 
@@ -9,27 +10,15 @@ from config import cudf
 
 
 @pytest.fixture
-def pidx():
+def midx():
     num_elements = int(1e3)
     rng = np.random.default_rng(seed=0)
     a = rng.integers(0, num_elements // 10, num_elements)
     b = rng.integers(0, num_elements // 10, num_elements)
-    return pd.MultiIndex.from_arrays([a, b], names=("a", "b"))
-
-
-@pytest.fixture
-def midx(pidx):
-    num_elements = int(1e3)
-    rng = np.random.default_rng(seed=0)
-    a = rng.integers(0, num_elements // 10, num_elements)
-    b = rng.integers(0, num_elements // 10, num_elements)
-    df = cudf.DataFrame({"a": a, "b": b})
-    return cudf.MultiIndex.from_frame(df)
-
-
-@pytest.mark.pandas_incompatible
-def bench_from_pandas(benchmark, pidx):
-    benchmark(cudf.MultiIndex.from_pandas, pidx)
+    pidx = pd.MultiIndex.from_arrays([a, b], names=("a", "b"))
+    return cudf.MultiIndex(
+        codes=pidx.codes, levels=pidx.levels, names=pidx.names
+    )
 
 
 def bench_constructor(benchmark, midx):

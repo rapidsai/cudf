@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
@@ -234,10 +223,41 @@ enum class type_id : int32_t {
   NUM_TYPE_IDS  ///< Total number of type ids
 };
 
-/// @brief Indicates whether a function is null-aware or not.
+/**
+ * @brief A function is null-aware if its output value uses the input validity.
+ *
+ * For example, ADD is not null-aware, but IS_NULL and NULL_LOGICAL_AND are null-aware.
+ */
 enum class null_aware : bool {
   NO  = 0,  ///< The function is not null-aware
   YES = 1   ///< The function is null-aware
+};
+
+/**
+ * @brief Indicates the null output policy of a function.
+ *
+ * This policy determines whether a null-mask should be excluded from the output column.
+ *
+ * For example, consider a `null-aware` `IS_NULL` function:
+ *
+ * ```cpp
+ * void is_null(optional<bool> * out, optional<int> a){
+ *   *out = !a.has_value();
+ * }
+ *
+ * ```
+ *
+ * using `output_nullability::PRESERVE` a null-mask may be produced.
+ * with `output_nullability::ALL_VALID` a null-mask will not be produced and all values are
+ * considered valid. It is undefined behaviour to use `ALL_VALID` with a UDF that produces null
+ * values.
+ *
+ *
+ */
+enum class output_nullability : uint8_t {
+  PRESERVE  = 0,  ///< A null-mask may be produced if needed
+  ALL_VALID = 1   ///< A null-mask is not produced and all values are considered valid even if
+                  ///< null values are produced
 };
 
 /**

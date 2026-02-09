@@ -1,17 +1,18 @@
-# Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
 import warnings
 from typing import TYPE_CHECKING
 
 import cupy as cp
-import pyarrow as pa
+import numpy as np
 
 import cudf
 from cudf.core.column import as_column
 from cudf.core.dtypes import CategoricalDtype
 from cudf.options import get_option
-from cudf.utils.dtypes import can_convert_to_column, cudf_dtype_to_pa_type
+from cudf.utils.dtypes import can_convert_to_column
 
 if TYPE_CHECKING:
     from cudf.core.index import Index
@@ -55,7 +56,7 @@ def factorize(
     >>> data = cudf.Series(['a', 'c', 'c'])
     >>> codes, uniques = cudf.factorize(data)
     >>> codes
-    array([0, 1, 1], dtype=int8)
+    array([0, 1, 1])
     >>> uniques
     Index(['a' 'c'], dtype='object')
 
@@ -65,7 +66,7 @@ def factorize(
 
     >>> codes, uniques = cudf.factorize(['b', None, 'a', 'c', 'b'])
     >>> codes
-    array([ 1, -1,  0,  2,  1], dtype=int8)
+    array([ 1, -1,  0,  2,  1])
     >>> uniques
     Index(['a', 'b', 'c'], dtype='object')
 
@@ -75,12 +76,12 @@ def factorize(
     >>> values = np.array([1, 2, 1, np.nan])
     >>> codes, uniques = cudf.factorize(values)
     >>> codes
-    array([ 0,  1,  0, -1], dtype=int8)
+    array([ 0,  1,  0, -1])
     >>> uniques
     Index([1.0, 2.0], dtype='float64')
     >>> codes, uniques = cudf.factorize(values, use_na_sentinel=False)
     >>> codes
-    array([1, 2, 1, 0], dtype=int8)
+    array([1, 2, 1, 0])
     >>> uniques
     Index([<NA>, 1.0, 2.0], dtype='float64')
     """
@@ -98,10 +99,8 @@ def factorize(
         warnings.warn("size_hint is not applicable for cudf.factorize")
 
     if use_na_sentinel:
-        na_sentinel = pa.scalar(-1)
         cats = values.dropna()
     else:
-        na_sentinel = pa.scalar(None, type=cudf_dtype_to_pa_type(values.dtype))
         cats = values
 
     cats = cats.unique().astype(values.dtype)
@@ -111,8 +110,7 @@ def factorize(
 
     labels = values._label_encoding(
         cats=cats,
-        na_sentinel=na_sentinel,
-        dtype="int64" if get_option("mode.pandas_compatible") else None,
+        dtype=np.dtype("int64"),
     ).values
 
     # TODO: Avoid accessing Index from the top level namespace

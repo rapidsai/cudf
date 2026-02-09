@@ -1,21 +1,10 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <benchmarks/common/generate_input.hpp>
-#include <benchmarks/fixture/benchmark_fixture.hpp>
+#include <benchmarks/common/memory_stats.hpp>
 
 #include <cudf_test/column_wrapper.hpp>
 
@@ -118,8 +107,6 @@ void run_benchmark_complex_keys(nvbench::state& state)
   }();
   auto const vals = generate_vals(n_rows, null_probability);
 
-  cudf::groupby::groupby gb_obj(keys_table->view());
-
   std::vector<cudf::groupby::aggregation_request> requests;
   requests.emplace_back(cudf::groupby::aggregation_request());
   requests[0].values = vals->view();
@@ -130,6 +117,7 @@ void run_benchmark_complex_keys(nvbench::state& state)
   state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
 
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch&) {
+    cudf::groupby::groupby gb_obj(keys_table->view());
     [[maybe_unused]] auto const result = gb_obj.aggregate(requests, stream);
   });
 
@@ -145,14 +133,16 @@ void bench_groupby_mixed_types_keys(nvbench::state& state)
   run_benchmark_complex_keys<false>(state);
 }
 
-#define RUN_BENCH(bench_func)                              \
-  NVBENCH_BENCH(bench_func)                                \
-    .set_name(#bench_func)                                 \
-    .add_int64_power_of_two_axis("num_rows", {12, 18, 24}) \
-    .add_int64_axis("value_key_ratio", {20, 200})          \
-    .add_float64_axis("null_probability", {0, 0.5})
+NVBENCH_BENCH(bench_groupby_int_keys)
+  .set_name("complex_int_keys")
+  .add_int64_axis("num_cols", {1, 2, 4, 8, 16})
+  .add_int64_power_of_two_axis("num_rows", {12, 18, 24})
+  .add_int64_axis("value_key_ratio", {20, 200})
+  .add_float64_axis("null_probability", {0, 0.5});
 
-RUN_BENCH(bench_groupby_int_keys).add_int64_axis("num_cols", {1, 2, 4, 8, 16});
-
-// Not enough memory for more mixed types columns.
-RUN_BENCH(bench_groupby_mixed_types_keys).add_int64_axis("num_cols", {1, 2, 3, 4, 5});
+NVBENCH_BENCH(bench_groupby_mixed_types_keys)
+  .set_name("complex_mixed_keys")
+  .add_int64_axis("num_cols", {1, 2, 3, 4, 5})  // Not enough memory for more mixed types columns
+  .add_int64_power_of_two_axis("num_rows", {12, 18, 24})
+  .add_int64_axis("value_key_ratio", {20, 200})
+  .add_float64_axis("null_probability", {0, 0.5});

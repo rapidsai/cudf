@@ -1,4 +1,5 @@
-# Copyright (c) 2023-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 from cython.operator import dereference
 
@@ -299,9 +300,6 @@ cpdef Column copy_range_in_place(
         If source has null values and target is not nullable.
     """
 
-    # Need to initialize this outside the function call so that Cython doesn't
-    # try and pass a temporary that decays to an rvalue reference in where the
-    # function requires an lvalue reference.
     cdef mutable_column_view target_view = target_column.mutable_view()
     stream = _get_stream(stream)
 
@@ -314,6 +312,7 @@ cpdef Column copy_range_in_place(
             target_begin,
             stream.view()
         )
+    target_column.set_null_count(target_view.null_count())
 
 
 cpdef Column copy_range(

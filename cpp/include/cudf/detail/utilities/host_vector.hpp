@@ -1,17 +1,6 @@
 /*
- *  Copyright (c) 2024-2025, NVIDIA CORPORATION
- *
- *  Licensed under the Apache License, Version 2.0 (the "License");
- *  you may not use this file except in compliance with the License.
- *  You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- *  Unless required by applicable law or agreed to in writing, software
- *  distributed under the License is distributed on an "AS IS" BASIS,
- *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  See the License for the specific language governing permissions and
- *  limitations under the License.
+ *  SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION
+ *  SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
@@ -20,6 +9,7 @@
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/export.hpp>
 #include <cudf/utilities/memory_resource.hpp>
+#include <cudf/utilities/span.hpp>
 
 #include <rmm/aligned.hpp>
 
@@ -28,6 +18,7 @@
 #include <cstddef>
 #include <limits>
 #include <new>  // for bad_alloc
+#include <span>
 
 namespace CUDF_EXPORT cudf {
 namespace detail {
@@ -62,10 +53,6 @@ class rmm_host_allocator<void> {
     using other = rmm_host_allocator<U>;  ///< The rebound type
   };
 };
-
-template <class DesiredProperty, class... Properties>
-inline constexpr bool contains_property =
-  (cuda::std::is_same_v<DesiredProperty, Properties> || ... || false);
 
 /*! \p rmm_host_allocator is a CUDA-specific host memory allocator
  *  that employs \c `cudf::host_async_resource_ref` for allocation.
@@ -103,25 +90,43 @@ class rmm_host_allocator {
    */
   rmm_host_allocator() = delete;
 
-#if CCCL_MAJOR_VERSION > 3 || (CCCL_MAJOR_VERSION == 3 && CCCL_MINOR_VERSION >= 1)
   template <class... Properties>
   using async_host_resource_ref = cuda::mr::resource_ref<cuda::mr::host_accessible, Properties...>;
-#else
-  template <class... Properties>
-  using async_host_resource_ref =
-    cuda::mr::async_resource_ref<cuda::mr::host_accessible, Properties...>;
-#endif
 
   /**
    * @brief Construct from a `cudf::host_async_resource_ref`
    */
-  template <class... Properties>
-  rmm_host_allocator(async_host_resource_ref<Properties...> _mr, rmm::cuda_stream_view _stream)
-    : mr(_mr),
-      stream(_stream),
-      _is_device_accessible{contains_property<cuda::mr::device_accessible, Properties...>}
+#ifdef __CUDACC__
+#pragma nv_exec_check_disable
+#endif
+  template <typename ResourceType>
+  rmm_host_allocator(ResourceType _mr, rmm::cuda_stream_view _stream)
+    : mr(std::move(_mr)),
+      stream(std::move(_stream)),
+      _is_device_accessible{
+        cuda::mr::synchronous_resource_with<ResourceType, cuda::mr::device_accessible>}
   {
   }
+
+#ifdef __CUDACC__
+#pragma nv_exec_check_disable
+#endif
+  rmm_host_allocator(rmm_host_allocator const&) = default;
+
+#ifdef __CUDACC__
+#pragma nv_exec_check_disable
+#endif
+  rmm_host_allocator(rmm_host_allocator&&) = default;
+
+#ifdef __CUDACC__
+#pragma nv_exec_check_disable
+#endif
+  rmm_host_allocator& operator=(rmm_host_allocator const&) = default;
+
+#ifdef __CUDACC__
+#pragma nv_exec_check_disable
+#endif
+  rmm_host_allocator& operator=(rmm_host_allocator&&) = default;
 
   /**
    * @brief This method allocates storage for objects in host memory.
@@ -135,8 +140,7 @@ class rmm_host_allocator {
   inline pointer allocate(size_type cnt)
   {
     if (cnt > this->max_size()) { throw std::bad_alloc(); }  // end if
-    auto const result =
-      mr.allocate_async(cnt * sizeof(value_type), rmm::RMM_DEFAULT_HOST_ALIGNMENT, stream);
+    auto const result = mr.allocate(stream, cnt * sizeof(value_type));
     // Synchronize to ensure the memory is allocated before thrust::host_vector initialization
     // TODO: replace thrust::host_vector with a type that does not require synchronization
     stream.synchronize();
@@ -153,9 +157,9 @@ class rmm_host_allocator {
    *        It is the responsibility of the caller to destroy
    *        the objects stored at \p p.
    */
-  inline void deallocate(pointer p, size_type cnt)
+  inline void deallocate(pointer p, size_type cnt) noexcept
   {
-    mr.deallocate_async(p, cnt * sizeof(value_type), rmm::RMM_DEFAULT_HOST_ALIGNMENT, stream);
+    mr.deallocate(stream, p, cnt * sizeof(value_type));
   }
 
   /**
@@ -210,6 +214,27 @@ class host_vector : public thrust::host_vector<T, rmm_host_allocator<T>> {
   host_vector(rmm_host_allocator<T> const& alloc) : base(alloc) {}
 
   host_vector(size_t size, rmm_host_allocator<T> const& alloc) : base(size, alloc) {}
+
+  [[nodiscard]] operator host_span<T const>() const
+  {
+    return host_span<T const>{
+      base::data(), base::size(), base::get_allocator().is_device_accessible()};
+  }
+
+  [[nodiscard]] operator host_span<T>()
+  {
+    return host_span<T>{base::data(), base::size(), base::get_allocator().is_device_accessible()};
+  }
+
+  [[nodiscard]] operator std::span<T const>() const noexcept
+  {
+    return std::span<T const>(base::data(), base::size());
+  }
+
+  [[nodiscard]] operator std::span<T>() noexcept
+  {
+    return std::span<T>(base::data(), base::size());
+  }
 };
 
 }  // namespace detail

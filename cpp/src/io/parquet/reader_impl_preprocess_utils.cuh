@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
@@ -23,6 +12,8 @@
 #include <rmm/cuda_stream_view.hpp>
 
 #include <cuda/functional>
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/logical.h>
 
 #include <future>
 #include <vector>
@@ -82,19 +73,19 @@ void generate_depth_remappings(
 /**
  * @brief Return the number of total pages from the given column chunks.
  *
- * @param chunks List of column chunk descriptors
+ * @param chunks Host-device span of column chunk descriptors
  * @param stream CUDA stream used for device memory operations and kernel launches
  *
  * @return The total number of pages
  */
-[[nodiscard]] size_t count_page_headers(cudf::detail::hostdevice_vector<ColumnChunkDesc>& chunks,
+[[nodiscard]] size_t count_page_headers(cudf::detail::hostdevice_span<ColumnChunkDesc> chunks,
                                         rmm::cuda_stream_view stream);
 
 /**
  * @brief Count the total number of pages using page index information.
  */
 [[nodiscard]] size_t count_page_headers_with_pgidx(
-  cudf::detail::hostdevice_vector<ColumnChunkDesc>& chunks, rmm::cuda_stream_view stream);
+  cudf::detail::hostdevice_span<ColumnChunkDesc> chunks, rmm::cuda_stream_view stream);
 
 /**
  * @brief Set fields on the pages that can be derived from page indexes.

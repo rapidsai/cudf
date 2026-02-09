@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "group_reductions.hpp"
@@ -21,6 +10,7 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/device_scalar.hpp>
+#include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/dictionary/detail/iterator.cuh>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/utilities/memory_resource.hpp>
@@ -35,7 +25,6 @@
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/discard_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
-#include <thrust/reduce.h>
 #include <thrust/transform.h>
 
 namespace cudf {
@@ -86,14 +75,16 @@ void reduce_by_key_fn(column_device_view const& values,
   // using the transform-iterator directly in thrust::reduce_by_key
   // improves compile-time significantly.
   auto vars = rmm::device_uvector<ResultType>(values.size(), stream);
-  thrust::transform(rmm::exec_policy(stream), itr, itr + values.size(), vars.begin(), var_fn);
+  thrust::transform(
+    rmm::exec_policy_nosync(stream), itr, itr + values.size(), vars.begin(), var_fn);
 
-  thrust::reduce_by_key(rmm::exec_policy(stream),
-                        group_labels.begin(),
-                        group_labels.end(),
-                        vars.begin(),
-                        thrust::make_discard_iterator(),
-                        d_result);
+  cudf::detail::reduce_by_key_async(group_labels.begin(),
+                                    group_labels.end(),
+                                    vars.begin(),
+                                    thrust::make_discard_iterator(),
+                                    d_result,
+                                    cuda::std::plus<ResultType>(),
+                                    stream);
 }
 
 struct var_functor {
@@ -137,7 +128,7 @@ struct var_functor {
     auto null_count   = cudf::detail::device_scalar<cudf::size_type>(0, stream, mr);
     auto d_null_count = null_count.data();
     thrust::for_each_n(
-      rmm::exec_policy(stream),
+      rmm::exec_policy_nosync(stream),
       thrust::make_counting_iterator(0),
       group_sizes.size(),
       [d_result = *result_view, d_group_sizes, ddof, d_null_count] __device__(size_type i) {

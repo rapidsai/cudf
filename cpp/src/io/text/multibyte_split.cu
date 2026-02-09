@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2021-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "io/utilities/output_builder.cuh"
@@ -39,11 +28,12 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
-#include <rmm/mr/device/device_memory_resource.hpp>
+#include <rmm/mr/device_memory_resource.hpp>
 
 #include <cub/block/block_load.cuh>
 #include <cub/block/block_scan.cuh>
 #include <cuda/functional>
+#include <cuda/std/utility>
 #include <thrust/copy.h>
 #include <thrust/find.h>
 #include <thrust/iterator/counting_iterator.h>
@@ -466,9 +456,10 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
           *thrust::find_if(rmm::exec_policy_nosync(scan_stream),
                            it,
                            it + new_offsets_unclamped,
-                           [row_offsets, byte_range_end] __device__(output_offset i) {
-                             return row_offsets[i] >= byte_range_end;
-                           });
+                           cuda::proclaim_return_type<bool>(
+                             [row_offsets, byte_range_end] __device__(output_offset i) {
+                               return row_offsets[i] >= byte_range_end;
+                             }));
         // if we had no out-of-bounds offset, we copy all offsets
         if (end_loc == new_offsets_unclamped) { return end_loc; }
         // otherwise we copy only up to (including) the first out-of-bounds delimiter
@@ -535,7 +526,7 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
   };
   if (insert_begin) { set_offset_value(0, 0); }
   if (insert_end) { set_offset_value(offsets->size() - 1, chars_bytes); }
-  thrust::transform(rmm::exec_policy(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream),
                     global_offsets.begin(),
                     global_offsets.end(),
                     offsets_itr + insert_begin,
@@ -547,7 +538,7 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
   if (strip_delimiters) {
     auto it = cudf::detail::make_counting_transform_iterator(
       0,
-      cuda::proclaim_return_type<thrust::pair<char*, int32_t>>(
+      cuda::proclaim_return_type<cuda::std::pair<char*, int32_t>>(
         [ofs        = cudf::detail::offsetalator_factory::make_input_iterator(offsets->view()),
          chars      = chars.data(),
          delim_size = static_cast<size_type>(delimiter.size()),
@@ -556,9 +547,10 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
           auto const begin = ofs[row];
           auto const len   = static_cast<size_type>(ofs[row + 1] - begin);
           if (row == last_row && insert_end) {
-            return thrust::make_pair(chars + begin, len);
+            return cuda::std::make_pair(chars + begin, len);
           } else {
-            return thrust::make_pair(chars + begin, cuda::std::max<size_type>(0, len - delim_size));
+            return cuda::std::make_pair(chars + begin,
+                                        cuda::std::max<size_type>(0, len - delim_size));
           };
         }));
     return cudf::strings::detail::make_strings_column(it, it + string_count, stream, mr);

@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2020-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
@@ -378,6 +367,13 @@ class json_reader_options {
    * @return Additional values to recognize as null values
    */
   [[nodiscard]] std::vector<std::string> const& get_na_values() const { return _na_values; }
+
+  /**
+   * @brief Sets source info.
+   *
+   * @param src The source info.
+   */
+  void set_source(source_info src) { _source = std::move(src); }
 
   /**
    * @brief Set data types for columns to be read.

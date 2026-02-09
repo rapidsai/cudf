@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -6,8 +6,6 @@ import pytest
 
 import polars as pl
 from polars.testing import assert_frame_equal
-
-from cudf_polars.utils.versions import POLARS_VERSION_LT_130
 
 
 def test_profile_basic() -> None:
@@ -28,22 +26,13 @@ def test_profile_basic() -> None:
     assert_frame_equal(result, q.collect(engine="in-memory"), check_row_order=False)
 
 
-@pytest.mark.parametrize("scheduler", ["synchronous", "distributed"])
-def test_profile_streaming_raises(scheduler: str) -> None:
+@pytest.mark.parametrize("cluster", ["single", "distributed"])
+def test_profile_streaming_raises(cluster: str) -> None:
     df = pl.LazyFrame({"a": [1, 2, 3, 4]})
     q = df.sort("a").group_by("a").len()
-    engine = pl.GPUEngine(
-        executor="streaming", executor_options={"scheduler": scheduler}
-    )
-    if POLARS_VERSION_LT_130:
-        with pytest.raises(
-            pl.exceptions.ComputeError,
-            match=r"profile\(\) is not supported with the streaming executor.",
-        ):
-            q.profile(engine=engine)
-    else:
-        with pytest.raises(
-            NotImplementedError,
-            match=r"profile\(\) is not supported with the streaming executor.",
-        ):
-            q.profile(engine=engine)
+    engine = pl.GPUEngine(executor="streaming", executor_options={"cluster": cluster})
+    with pytest.raises(
+        NotImplementedError,
+        match=r"profile\(\) is not supported with the streaming executor.",
+    ):
+        q.profile(engine=engine)

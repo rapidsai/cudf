@@ -1,4 +1,5 @@
-# Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 from libc.stddef cimport size_t
 from libc.stdint cimport uintptr_t
@@ -18,14 +19,17 @@ from pylibcudf.libcudf.types cimport size_type
 from pylibcudf.libcudf.utilities.span cimport device_span
 
 from rmm.pylibrmm.stream cimport Stream
+from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 
 from .column cimport Column
 from .table cimport Table
-from .utils cimport _get_stream
+from .utils cimport _get_stream, _get_memory_resource
 
 __all__ = ["interleave_columns", "tile", "table_to_array"]
 
-cpdef Column interleave_columns(Table source_table, Stream stream=None):
+cpdef Column interleave_columns(
+    Table source_table, Stream stream=None, DeviceMemoryResource mr=None
+):
     """Interleave columns of a table into a single column.
 
     Converts the column major table `input` into a row major column.
@@ -42,6 +46,8 @@ cpdef Column interleave_columns(Table source_table, Stream stream=None):
         The input table to interleave
     stream : Stream | None
         CUDA stream on which to perform the operation.
+    mr : DeviceMemoryResource | None
+        Device memory resource used to allocate the returned column's device memory.
 
     Returns
     -------
@@ -50,14 +56,22 @@ cpdef Column interleave_columns(Table source_table, Stream stream=None):
     """
     cdef unique_ptr[column] c_result
     stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
 
     with nogil:
-        c_result = cpp_interleave_columns(source_table.view(), stream.view())
+        c_result = cpp_interleave_columns(
+            source_table.view(), stream.view(), mr.get_mr()
+        )
 
-    return Column.from_libcudf(move(c_result), stream)
+    return Column.from_libcudf(move(c_result), stream, mr)
 
 
-cpdef Table tile(Table source_table, size_type count, Stream stream=None):
+cpdef Table tile(
+    Table source_table,
+    size_type count,
+    Stream stream=None,
+    DeviceMemoryResource mr=None
+):
     """Repeats the rows from input table count times to form a new table.
 
     For details, see :cpp:func:`tile`.
@@ -70,6 +84,8 @@ cpdef Table tile(Table source_table, size_type count, Stream stream=None):
         The number of times to tile "rows". Must be non-negative
     stream : Stream | None
         CUDA stream on which to perform the operation.
+    mr : DeviceMemoryResource | None
+        Device memory resource used to allocate the returned table's device memory.
 
     Returns
     -------
@@ -78,11 +94,14 @@ cpdef Table tile(Table source_table, size_type count, Stream stream=None):
     """
     cdef unique_ptr[table] c_result
     stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
 
     with nogil:
-        c_result = cpp_tile(source_table.view(), count, stream.view())
+        c_result = cpp_tile(
+            source_table.view(), count, stream.view(), mr.get_mr()
+        )
 
-    return Table.from_libcudf(move(c_result), stream)
+    return Table.from_libcudf(move(c_result), stream, mr)
 
 
 cpdef void table_to_array(

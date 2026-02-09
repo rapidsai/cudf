@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2022-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "io/comp/decompression.hpp"
@@ -203,7 +192,7 @@ size_type find_first_delimiter(device_span<char const> d_data,
                                rmm::cuda_stream_view stream)
 {
   auto const first_delimiter_position =
-    thrust::find(rmm::exec_policy(stream), d_data.begin(), d_data.end(), delimiter);
+    thrust::find(rmm::exec_policy_nosync(stream), d_data.begin(), d_data.end(), delimiter);
   return first_delimiter_position != d_data.end()
            ? static_cast<size_type>(cuda::std::distance(d_data.begin(), first_delimiter_position))
            : -1;
@@ -352,7 +341,7 @@ get_record_range_raw_input(host_span<std::unique_ptr<datasource>> sources,
     auto rev_it_begin = thrust::make_reverse_iterator(bufsubspan.end());
     auto rev_it_end   = thrust::make_reverse_iterator(bufsubspan.begin());
     auto const second_last_delimiter_it =
-      thrust::find(rmm::exec_policy(stream), rev_it_begin, rev_it_end, delimiter);
+      thrust::find(rmm::exec_policy_nosync(stream), rev_it_begin, rev_it_end, delimiter);
     CUDF_EXPECTS(second_last_delimiter_it != rev_it_end,
                  "A single JSON line cannot be larger than the batch size limit");
     auto const last_line_size =

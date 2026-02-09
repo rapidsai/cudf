@@ -1,4 +1,5 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 
 import pandas as pd
@@ -44,7 +45,7 @@ def test_dataframe_reindex(copy, args, gd_kwargs):
     )
     pdf, gdf = reindex_data.to_pandas(), reindex_data
     assert_eq(
-        pdf.reindex(*args, **gd_kwargs, copy=True),
+        pdf.reindex(*args, **gd_kwargs),
         gdf.reindex(*args, **gd_kwargs, copy=copy),
     )
 

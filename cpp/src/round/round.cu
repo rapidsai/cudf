@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2020-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf/column/column_factories.hpp>
@@ -241,8 +230,11 @@ std::unique_ptr<column> round_with(column_view const& input,
   auto out_view = result->mutable_view();
   T const n     = std::pow(10, std::abs(decimal_places));
 
-  thrust::transform(
-    rmm::exec_policy(stream), input.begin<T>(), input.end<T>(), out_view.begin<T>(), Functor{n});
+  thrust::transform(rmm::exec_policy_nosync(stream),
+                    input.begin<T>(),
+                    input.end<T>(),
+                    out_view.begin<T>(),
+                    Functor{n});
 
   result->set_null_count(input.null_count());
 
@@ -284,7 +276,7 @@ std::unique_ptr<column> round_with(column_view const& input,
   // overflow. Under this circumstance, we can simply output a zero column because no digits can
   // survive such a large scale movement.
   if (scale_movement > cuda::std::numeric_limits<Type>::digits10) {
-    thrust::uninitialized_fill(rmm::exec_policy(stream),
+    thrust::uninitialized_fill(rmm::exec_policy_nosync(stream),
                                out_view.template begin<Type>(),
                                out_view.template end<Type>(),
                                static_cast<Type>(0));
@@ -293,7 +285,7 @@ std::unique_ptr<column> round_with(column_view const& input,
     for (int i = 1; i < scale_movement; ++i) {
       n *= 10;
     }
-    thrust::transform(rmm::exec_policy(stream),
+    thrust::transform(rmm::exec_policy_nosync(stream),
                       input.begin<Type>(),
                       input.end<Type>(),
                       out_view.begin<Type>(),

@@ -1,4 +1,5 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 import json
 import re
@@ -12,10 +13,11 @@ import pytest
 
 import cudf
 from cudf import concat
+from cudf.api.extensions import no_default
+from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 from cudf.testing import assert_eq
 from cudf.testing._utils import (
     assert_exceptions_equal,
-    expect_warning_if,
 )
 
 
@@ -767,12 +769,16 @@ def test_string_ip4_to_int():
     gsr = cudf.Series(
         ["", None, "hello", "41.168.0.1", "127.0.0.1", "41.197.0.1"]
     )
-    expected = cudf.Series([0, None, 0, 698875905, 2130706433, 700776449])
+    expected = cudf.Series(
+        [0, None, 0, 698875905, 2130706433, 700776449], dtype="uint32"
+    )
 
     got = gsr.str.ip2int()
+    assert got.dtype == np.dtype("uint32")
     assert_eq(expected, got)
 
     got = gsr.str.ip_to_int()  # alias
+    assert got.dtype == np.dtype("uint32")
     assert_eq(expected, got)
 
 
@@ -1153,13 +1159,24 @@ def test_string_compiled_re(ps_gs, pat, repl):
     ],
 )
 @pytest.mark.parametrize("pat", ["", " ", "a", "abc", "cat", "$", "\n"])
-def test_string_str_match(data, pat):
+@pytest.mark.parametrize(
+    "na",
+    [
+        None
+        if PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION
+        else no_default,
+        True,
+        False,
+    ],
+)
+def test_string_str_match(data, pat, na):
     ps = pd.Series(data)
     gs = cudf.Series(data)
 
-    assert_eq(ps.str.match(pat), gs.str.match(pat))
+    assert_eq(ps.str.match(pat, na=na), gs.str.match(pat, na=na))
     assert_eq(
-        pd.Index(pd.Index(ps).str.match(pat)), cudf.Index(gs).str.match(pat)
+        pd.Index(pd.Index(ps).str.match(pat, na=na)),
+        cudf.Index(gs).str.match(pat, na=na),
     )
 
 
@@ -1387,25 +1404,16 @@ def test_string_starts_ends(data, pat):
     ],
 )
 def test_string_starts_ends_list_like_pat(data, pat):
-    gs = cudf.Series(data)
+    pd_data = pd.Series(data)
+    cudf_data = cudf.Series(data)
 
-    starts_expected = []
-    ends_expected = []
-    for i in range(len(pat)):
-        if data[i] is None:
-            starts_expected.append(None)
-            ends_expected.append(None)
-        else:
-            if pat[i] is None:
-                starts_expected.append(False)
-                ends_expected.append(False)
-            else:
-                starts_expected.append(data[i].startswith(pat[i]))
-                ends_expected.append(data[i].endswith(pat[i]))
-    starts_expected = pd.Series(starts_expected)
-    ends_expected = pd.Series(ends_expected)
-    assert_eq(starts_expected, gs.str.startswith(pat), check_dtype=False)
-    assert_eq(ends_expected, gs.str.endswith(pat), check_dtype=False)
+    result = cudf_data.str.startswith(pat)
+    expected = pd_data.str.startswith(pat)
+    assert_eq(result, expected)
+
+    result = cudf_data.str.endswith(pat)
+    expected = pd_data.str.endswith(pat)
+    assert_eq(result, expected)
 
 
 @pytest.mark.parametrize(
@@ -1738,6 +1746,34 @@ def test_string_rsplit_re(n, expand):
     expect = ps.str.rsplit(pat=" ", n=n, expand=expand)
     got = gs.str.rsplit(pat="\\s", n=n, expand=expand, regex=True)
     assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "data, delimiter, index, expected",
+    [
+        (["a_b_c", "d_e", "f"], "_", 1, ["b", "e", None]),
+        (["a_b_c", "d_e", "f"], "_", 0, ["a", "d", "f"]),
+    ],
+)
+def test_split_part(data, delimiter, index, expected):
+    s = cudf.Series(data)
+    got = s.str.split_part(delimiter=delimiter, index=index)
+    expect = cudf.Series(expected)
+    assert_eq(got, expect)
+
+
+@pytest.mark.parametrize(
+    "data, index, expected",
+    [
+        (["a b c", "d  e", "f\tg", " h "], 0, ["a", "d", "f", "h"]),
+        (["a b c", "d  e", "f\tg", " h "], 1, ["b", "e", "g", None]),
+    ],
+)
+def test_split_part_whitespace(data, index, expected):
+    s = cudf.Series(data)
+    got = s.str.split_part(delimiter="", index=index)
+    expect = cudf.Series(expected)
+    assert_eq(got, expect)
 
 
 @pytest.mark.parametrize(
@@ -2233,6 +2269,31 @@ def test_string_lower(ps_gs):
     assert_eq(expect, got)
 
 
+@pytest.mark.parametrize(
+    "data",
+    [
+        "ΦΘΣ",  # Sigma at end -> should become final sigma ς
+        "ΦΘΣ.",  # Sigma before punctuation -> should become final sigma ς
+        "ΦΘΣ ",  # Sigma before space -> should become final sigma ς
+        "ΦΘΣq",  # Sigma before letter -> should stay regular sigma σ  # noqa: RUF003
+        "ΣΗΜΑ",  # Sigma at beginning -> should become regular sigma σ  # noqa: RUF003
+        "ΘΕΣΣ",  # Two sigmas at end -> last should become final sigma ς
+        "ΘΕΣΣαλονίκη",  # Sigma before Greek letter -> should stay regular sigma σ  # noqa: RUF003
+        "ΦΘΣ!",  # Sigma before exclamation -> should become final sigma ς
+        "ΦΘΣ123",  # Sigma before number -> should become final sigma ς
+    ],
+)
+def test_string_lower_greek_final_sigma(data):
+    with cudf.option_context("mode.pandas_compatible", True):
+        ps = pd.Series([data])
+        gs = cudf.Series([data])
+
+        expect = ps.str.lower()
+        got = gs.str.lower()
+
+        assert_eq(expect, got)
+
+
 def test_string_upper(ps_gs):
     ps, gs = ps_gs
 
@@ -2320,24 +2381,26 @@ def test_string_replace_n(n):
     "flags,flags_raise",
     [(0, 0), (re.MULTILINE | re.DOTALL, 0), (re.I, 1), (re.I | re.DOTALL, 1)],
 )
-@pytest.mark.parametrize("na,na_raise", [(np.nan, 0), (None, 1), ("", 1)])
-def test_string_contains(ps_gs, pat, regex, flags, flags_raise, na, na_raise):
+@pytest.mark.parametrize(
+    "na",
+    [
+        None
+        if PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION
+        else no_default,
+        True,
+        False,
+    ],
+)
+def test_string_contains(ps_gs, pat, regex, flags, flags_raise, na):
     ps, gs = ps_gs
 
     expectation = does_not_raise()
-    if flags_raise or na_raise:
+    if flags_raise:
         expectation = pytest.raises(NotImplementedError)
 
     with expectation:
-        with expect_warning_if(
-            na == "" or (na is None and not (flags_raise or na_raise)),
-            match=(
-                "Allowing a non-bool 'na' in obj.str.contains is deprecated "
-                "and will raise in a future version."
-            ),
-        ):
-            expect = ps.str.contains(pat, flags=flags, na=na, regex=regex)
-            got = gs.str.contains(pat, flags=flags, na=na, regex=regex)
+        expect = ps.str.contains(pat, flags=flags, na=na, regex=regex)
+        got = gs.str.contains(pat, flags=flags, na=na, regex=regex)
         assert_eq(expect, got)
 
 
@@ -2853,3 +2916,18 @@ def test_string_misc_name(ps_gs, name):
     assert_eq(ps + ps, gs + gs)
     assert_eq(ps + "RAPIDS", gs + "RAPIDS")
     assert_eq("RAPIDS" + ps, "RAPIDS" + gs)
+
+
+def test_string_list_get_access():
+    ps = pd.Series(["a,b,c", "d,e,f", None, "g,h,i"])
+    gs = cudf.from_pandas(ps)
+
+    expect = ps.str.split(",")
+    got = gs.str.split(",")
+
+    assert_eq(expect, got)
+
+    expect = expect.str.get(1)
+    got = got.str.get(1)
+
+    assert_eq(expect, got)

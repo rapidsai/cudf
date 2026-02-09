@@ -1,5 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2024, NVIDIA CORPORATION & AFFILIATES.
-# All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION & AFFILIATES.  All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 # Utility custom overrides for special methods/properties
@@ -41,12 +40,12 @@ def arrow_array_method(self: _FastSlowProxy, *args, **kwargs):
         return pa.array(self._fsproxy_slow, *args, **kwargs)
 
 
-@property  # type: ignore
+@property  # type: ignore[misc]
 def cuda_array_interface(self: _FastSlowProxy):
     return self._fsproxy_fast.__cuda_array_interface__
 
 
-@property  # type: ignore
+@property  # type: ignore[misc]
 def array_interface(self: _FastSlowProxy):
     return self._fsproxy_slow.__array_interface__
 
@@ -60,5 +59,5 @@ def custom_iter(self: _FastSlowProxy):
     # falling back to GPU for iter method.
     return _maybe_wrap_result(
         iter(self._fsproxy_slow),
-        None,  # type: ignore
+        None,  # type: ignore[arg-type]
     )

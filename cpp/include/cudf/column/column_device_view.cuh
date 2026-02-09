@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
 
@@ -27,9 +16,9 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <cuda/std/utility>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
-#include <thrust/pair.h>
 
 #include <functional>
 
@@ -368,7 +357,7 @@ class alignas(16) column_device_view : public column_device_view_core {
   /**
    * @brief Return a pair iterator to the first element of the column.
    *
-   * Dereferencing the returned iterator returns a `thrust::pair<T, bool>`.
+   * Dereferencing the returned iterator returns a `cuda::std::pair<T, bool>`.
    *
    * If an element at position `i` is valid (or `has_nulls == false`), then
    * for `p = *(iter + i)`, `p.first` contains the value of the element at `i`
@@ -398,7 +387,7 @@ class alignas(16) column_device_view : public column_device_view_core {
   /**
    * @brief Return a pair iterator to the first element of the column.
    *
-   * Dereferencing the returned iterator returns a `thrust::pair<rep_type, bool>`,
+   * Dereferencing the returned iterator returns a `cuda::std::pair<rep_type, bool>`,
    * where `rep_type` is `device_storage_type<T>`, the type used to store
    * the value on the device.
    *
@@ -923,7 +912,7 @@ struct pair_accessor {
    * @param[in] i index of the element
    * @return pair(element, validity)
    */
-  __device__ inline thrust::pair<T, bool> operator()(cudf::size_type i) const
+  __device__ inline cuda::std::pair<T, bool> operator()(cudf::size_type i) const
   {
     return {col.element<T>(i), (has_nulls ? col.is_valid_nocheck(i) : true)};
   }
@@ -971,7 +960,7 @@ struct pair_rep_accessor {
    * @param[in] i index of element to access
    * @return pair of element and validity
    */
-  __device__ inline thrust::pair<rep_type, bool> operator()(cudf::size_type i) const
+  __device__ inline cuda::std::pair<rep_type, bool> operator()(cudf::size_type i) const
   {
     return {get_rep<T>(i), (has_nulls ? col.is_valid_nocheck(i) : true)};
   }

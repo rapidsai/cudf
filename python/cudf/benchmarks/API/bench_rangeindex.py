@@ -1,11 +1,12 @@
-# Copyright (c) 2022, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 import pytest
 
 
 @pytest.mark.pandas_incompatible
 def bench_values_host(benchmark, rangeindex):
-    benchmark(lambda: rangeindex.values_host)
+    benchmark(lambda: rangeindex.to_numpy())
 
 
 def bench_to_numpy(benchmark, rangeindex):

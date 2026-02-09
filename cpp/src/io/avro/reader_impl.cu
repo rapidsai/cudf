@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2020-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "avro.hpp"
@@ -23,7 +12,6 @@
 
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/structs/utilities.hpp>
-#include <cudf/detail/utilities/functional.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/detail/avro.hpp>
@@ -117,6 +105,11 @@ class metadata : public file_metadata {
  public:
   explicit metadata(datasource* const src) : source(src) {}
 
+  metadata(metadata const&)            = delete;
+  metadata& operator=(metadata const&) = delete;
+  metadata(metadata&&)                 = delete;
+  metadata& operator=(metadata&&)      = delete;
+
   /**
    * @brief Initializes the parser and filters down to a subset of rows
    *
@@ -197,7 +190,7 @@ rmm::device_buffer decompress_data(datasource& source,
       cudf::detail::hostdevice_vector<device_span<uint8_t>>(meta.block_list.size(), stream);
     auto inflate_stats =
       cudf::detail::hostdevice_vector<codec_exec_result>(meta.block_list.size(), stream);
-    thrust::fill(rmm::exec_policy(stream),
+    thrust::fill(rmm::exec_policy_nosync(stream),
                  inflate_stats.d_begin(),
                  inflate_stats.d_end(),
                  codec_exec_result{0, codec_status::FAILURE});
@@ -301,7 +294,7 @@ rmm::device_buffer decompress_data(datasource& source,
 
     rmm::device_buffer decompressed_data(uncompressed_data_size, stream);
     rmm::device_uvector<device_span<uint8_t>> decompressed_blocks(num_blocks, stream);
-    thrust::tabulate(rmm::exec_policy(stream),
+    thrust::tabulate(rmm::exec_policy_nosync(stream),
                      decompressed_blocks.begin(),
                      decompressed_blocks.end(),
                      [off  = uncompressed_offsets.device_ptr(),
@@ -323,7 +316,7 @@ rmm::device_buffer decompress_data(datasource& source,
                max_decomp_block_size,
                uncompressed_data_size,
                stream);
-    CUDF_EXPECTS(thrust::equal(rmm::exec_policy(stream),
+    CUDF_EXPECTS(thrust::equal(rmm::exec_policy_nosync(stream),
                                uncompressed_sizes.d_begin(),
                                uncompressed_sizes.d_end(),
                                decomp_results.begin(),

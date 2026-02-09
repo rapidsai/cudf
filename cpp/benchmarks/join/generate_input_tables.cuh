@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
@@ -164,24 +153,24 @@ std::pair<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::table>> generate_i
   auto unique_rows_build_table =
     create_random_table(key_types, row_count{unique_rows_build_table_numrows + 1}, profile, 1);
 
-  constexpr int block_size = 128;
+  constexpr int BLOCK_SIZE = 128;
 
   // Maximize exposed parallelism while minimizing storage for curand state
   int num_blocks_init_build_tbl{-1};
   CUDF_CUDA_TRY(cudaOccupancyMaxActiveBlocksPerMultiprocessor(
-    &num_blocks_init_build_tbl, init_build_tbl<cudf::size_type, cudf::size_type>, block_size, 0));
+    &num_blocks_init_build_tbl, init_build_tbl<cudf::size_type, cudf::size_type>, BLOCK_SIZE, 0));
 
   int num_blocks_init_probe_tbl{-1};
   CUDF_CUDA_TRY(cudaOccupancyMaxActiveBlocksPerMultiprocessor(
-    &num_blocks_init_probe_tbl, init_probe_tbl<cudf::size_type, cudf::size_type>, block_size, 0));
+    &num_blocks_init_probe_tbl, init_probe_tbl<cudf::size_type, cudf::size_type>, BLOCK_SIZE, 0));
 
   auto const num_sms = cudf::detail::num_multiprocessors();
   auto const num_states =
-    num_sms * std::max(num_blocks_init_build_tbl, num_blocks_init_probe_tbl) * block_size;
+    num_sms * std::max(num_blocks_init_build_tbl, num_blocks_init_probe_tbl) * BLOCK_SIZE;
   rmm::device_uvector<curandState> devStates(num_states, cudf::get_default_stream());
 
-  init_curand<<<(num_states - 1) / block_size + 1,
-                block_size,
+  init_curand<<<(num_states - 1) / BLOCK_SIZE + 1,
+                BLOCK_SIZE,
                 0,
                 cudf::get_default_stream().value()>>>(devStates.data(), num_states);
 
@@ -190,7 +179,7 @@ std::pair<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::table>> generate_i
   auto build_table_gather_map = cudf::make_numeric_column(
     cudf::data_type{cudf::type_id::INT32}, build_table_numrows, cudf::mask_state::ALL_VALID);
   init_build_tbl<cudf::size_type, cudf::size_type>
-    <<<num_sms * num_blocks_init_build_tbl, block_size, 0, cudf::get_default_stream().value()>>>(
+    <<<num_sms * num_blocks_init_build_tbl, BLOCK_SIZE, 0, cudf::get_default_stream().value()>>>(
       build_table_gather_map->mutable_view().data<cudf::size_type>(),
       build_table_numrows,
       multiplicity,
@@ -203,7 +192,7 @@ std::pair<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::table>> generate_i
   auto probe_table_gather_map = cudf::make_numeric_column(
     cudf::data_type{cudf::type_id::INT32}, probe_table_numrows, cudf::mask_state::ALL_VALID);
   init_probe_tbl<cudf::size_type, cudf::size_type>
-    <<<num_sms * num_blocks_init_build_tbl, block_size, 0, cudf::get_default_stream().value()>>>(
+    <<<num_sms * num_blocks_init_build_tbl, BLOCK_SIZE, 0, cudf::get_default_stream().value()>>>(
       probe_table_gather_map->mutable_view().data<cudf::size_type>(),
       probe_table_numrows,
       build_table_numrows,

@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2023-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "cudf_jni_apis.hpp"
@@ -66,7 +55,7 @@ class host_buffer_done_callback {
   explicit host_buffer_done_callback(JavaVM* jvm, jobject ds, long id) : jvm(jvm), ds(ds), id(id) {}
 
   host_buffer_done_callback(host_buffer_done_callback const& other) = delete;
-  host_buffer_done_callback(host_buffer_done_callback&& other)
+  host_buffer_done_callback(host_buffer_done_callback&& other) noexcept
     : jvm(other.jvm), ds(other.ds), id(other.id)
   {
     other.jvm = nullptr;
@@ -218,27 +207,29 @@ Java_ai_rapids_cudf_DataSourceHelper_createWrapperDataSource(JNIEnv* env,
                                                              jlong device_read_cutoff)
 {
   JNI_NULL_CHECK(env, ds, "Null data source", 0);
-  try {
+  JNI_TRY
+  {
     cudf::jni::auto_set_device(env);
     auto source =
       new cudf::jni::jni_datasource(env, ds, ds_size, device_read_supported, device_read_cutoff);
     return reinterpret_cast<jlong>(source);
   }
-  CATCH_STD(env, 0);
+  JNI_CATCH(env, 0);
 }
 
 JNIEXPORT void JNICALL Java_ai_rapids_cudf_DataSourceHelper_destroyWrapperDataSource(JNIEnv* env,
                                                                                      jclass,
                                                                                      jlong handle)
 {
-  try {
+  JNI_TRY
+  {
     cudf::jni::auto_set_device(env);
     if (handle != 0) {
       auto source = reinterpret_cast<cudf::jni::jni_datasource*>(handle);
       delete (source);
     }
   }
-  CATCH_STD(env, );
+  JNI_CATCH(env, );
 }
 
 }  // extern "C"

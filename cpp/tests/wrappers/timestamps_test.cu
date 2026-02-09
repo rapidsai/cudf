@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf_test/base_fixture.hpp>
@@ -96,8 +85,9 @@ TYPED_TEST(ChronoColumnTest, ChronoDurationsMatchPrimitiveRepresentation)
     cudf::test::fixed_width_column_wrapper<Rep>(chrono_col_data.begin(), chrono_col_data.end());
 
   rmm::device_uvector<int32_t> indices(this->size(), cudf::get_default_stream());
-  thrust::sequence(rmm::exec_policy(cudf::get_default_stream()), indices.begin(), indices.end());
-  EXPECT_TRUE(thrust::all_of(rmm::exec_policy(cudf::get_default_stream()),
+  thrust::sequence(
+    rmm::exec_policy_nosync(cudf::get_default_stream()), indices.begin(), indices.end());
+  EXPECT_TRUE(thrust::all_of(rmm::exec_policy_nosync(cudf::get_default_stream()),
                              indices.begin(),
                              indices.end(),
                              compare_chrono_elements_to_primitive_representation<T>{
@@ -151,10 +141,11 @@ TYPED_TEST(ChronoColumnTest, ChronosCanBeComparedInDeviceCode)
     this->size(), cudf::test::time_point_ms(start_rhs), cudf::test::time_point_ms(stop_rhs));
 
   rmm::device_uvector<int32_t> indices(this->size(), cudf::get_default_stream());
-  thrust::sequence(rmm::exec_policy(cudf::get_default_stream()), indices.begin(), indices.end());
+  thrust::sequence(
+    rmm::exec_policy_nosync(cudf::get_default_stream()), indices.begin(), indices.end());
 
   EXPECT_TRUE(thrust::all_of(
-    rmm::exec_policy(cudf::get_default_stream()),
+    rmm::exec_policy_nosync(cudf::get_default_stream()),
     indices.begin(),
     indices.end(),
     compare_chrono_elements<TypeParam>{cudf::binary_operator::LESS,
@@ -162,7 +153,7 @@ TYPED_TEST(ChronoColumnTest, ChronosCanBeComparedInDeviceCode)
                                        *cudf::column_device_view::create(chrono_rhs_col)}));
 
   EXPECT_TRUE(thrust::all_of(
-    rmm::exec_policy(cudf::get_default_stream()),
+    rmm::exec_policy_nosync(cudf::get_default_stream()),
     indices.begin(),
     indices.end(),
     compare_chrono_elements<TypeParam>{cudf::binary_operator::GREATER,
@@ -170,7 +161,7 @@ TYPED_TEST(ChronoColumnTest, ChronosCanBeComparedInDeviceCode)
                                        *cudf::column_device_view::create(chrono_lhs_col)}));
 
   EXPECT_TRUE(thrust::all_of(
-    rmm::exec_policy(cudf::get_default_stream()),
+    rmm::exec_policy_nosync(cudf::get_default_stream()),
     indices.begin(),
     indices.end(),
     compare_chrono_elements<TypeParam>{cudf::binary_operator::LESS_EQUAL,
@@ -178,7 +169,7 @@ TYPED_TEST(ChronoColumnTest, ChronosCanBeComparedInDeviceCode)
                                        *cudf::column_device_view::create(chrono_lhs_col)}));
 
   EXPECT_TRUE(thrust::all_of(
-    rmm::exec_policy(cudf::get_default_stream()),
+    rmm::exec_policy_nosync(cudf::get_default_stream()),
     indices.begin(),
     indices.end(),
     compare_chrono_elements<TypeParam>{cudf::binary_operator::GREATER_EQUAL,

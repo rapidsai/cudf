@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <benchmarks/common/generate_input.hpp>
@@ -33,31 +22,6 @@
 #include <vector>
 
 namespace {
-
-template <typename T>
-struct benchmark_data;
-
-template <std::floating_point T>
-struct benchmark_data<T> {
-  static T dist_min() { return 0; }
-
-  static T dist_max() { return 1; }
-
-  static T filter_min() { return 0.05; }
-
-  static T filter_max() { return 0.07; }
-};
-
-template <std::integral T>
-struct benchmark_data<T> {
-  static T dist_min() { return -128; }
-
-  static T dist_max() { return 127; }
-
-  static T filter_min() { return -64; }
-
-  static T filter_max() { return 64; }
-};
 
 enum class engine_type : uint8_t { AST = 0, JIT = 1 };
 
@@ -86,20 +50,38 @@ bool boolean_from_string(std::string_view str)
 template <typename key_type>
 void BM_filter_min_max(nvbench::state& state)
 {
-  auto const num_rows    = static_cast<cudf::size_type>(state.get_int64("num_rows"));
+  auto const num_rows = static_cast<cudf::size_type>(state.get_int64("num_rows"));
+  auto const num_filter_columns =
+    static_cast<cudf::size_type>(state.get_int64("num_filter_columns"));
   auto const engine_name = state.get_string("engine");
   auto const nullable    = boolean_from_string(state.get_string("nullable"));
   auto const engine      = engine_from_string(engine_name);
 
+  auto const input_min   = static_cast<key_type>(0);
+  auto const input_max   = static_cast<key_type>(100);
+  auto const filter_min  = input_min;
+  auto const selectivity = state.get_float64("selectivity");
+  auto const filter_max  = static_cast<key_type>(input_min + (input_max - input_min) * selectivity);
+
   auto profile = data_profile{};
-  profile.set_distribution_params(cudf::type_to_id<key_type>(),
-                                  distribution_id::NORMAL,
-                                  benchmark_data<key_type>::dist_min(),
-                                  benchmark_data<key_type>::dist_max());
+  profile.set_distribution_params(
+    cudf::type_to_id<key_type>(), distribution_id::UNIFORM, input_min, input_max);
   profile.set_null_probability(nullable ? std::optional{0.3} : std::nullopt);
 
-  auto const column =
-    create_random_column(cudf::type_to_id<key_type>(), row_count{num_rows}, profile);
+  std::vector<std::unique_ptr<cudf::column>> filter_columns;
+  std::transform(thrust::make_counting_iterator(0),
+                 thrust::make_counting_iterator(num_filter_columns),
+                 std::back_inserter(filter_columns),
+                 [&](auto) {
+                   return create_random_column(
+                     cudf::type_to_id<key_type>(), row_count{num_rows}, profile);
+                 });
+
+  std::vector<cudf::column_view> filter_column_views;
+  std::transform(filter_columns.begin(),
+                 filter_columns.end(),
+                 std::back_inserter(filter_column_views),
+                 [](auto const& col) { return col->view(); });
 
   std::string type_name = cudf::type_to_name(cudf::data_type{cudf::type_to_id<key_type>()});
 
@@ -112,8 +94,8 @@ void BM_filter_min_max(nvbench::state& state)
     type_name);
 
   auto tree              = cudf::ast::tree{};
-  auto min_scalar        = cudf::numeric_scalar<key_type>{benchmark_data<key_type>::filter_min()};
-  auto max_scalar        = cudf::numeric_scalar<key_type>{benchmark_data<key_type>::filter_max()};
+  auto min_scalar        = cudf::numeric_scalar<key_type>{filter_min};
+  auto max_scalar        = cudf::numeric_scalar<key_type>{filter_max};
   auto min_scalar_column = cudf::make_column_from_scalar(min_scalar, 1);
   auto max_scalar_column = cudf::make_column_from_scalar(max_scalar, 1);
 
@@ -128,10 +110,8 @@ void BM_filter_min_max(nvbench::state& state)
     tree.push(cudf::ast::operation{cudf::ast::ast_operator::LOGICAL_AND, filter_min, filter_max});
   }
 
-  std::vector<cudf::column_view> predicate_columns;
-  predicate_columns.push_back(column->view());
-  predicate_columns.push_back(min_scalar_column->view());
-  predicate_columns.push_back(max_scalar_column->view());
+  auto const predicate_column =
+    create_random_column(cudf::type_to_id<key_type>(), row_count{num_rows}, profile);
 
   // Use the number of bytes read from global memory
   state.add_global_memory_reads<key_type>(static_cast<size_t>(num_rows));
@@ -143,20 +123,22 @@ void BM_filter_min_max(nvbench::state& state)
 
     switch (engine) {
       case engine_type::AST: {
-        auto input_table          = cudf::table_view{{column->view()}};
-        auto const filter_boolean = cudf::compute_column(input_table, tree.back(), stream, mr);
+        auto predicate_table      = cudf::table_view{{predicate_column->view()}};
+        auto filter_table         = cudf::table_view{filter_column_views};
+        auto const filter_boolean = cudf::compute_column(predicate_table, tree.back(), stream, mr);
         auto const result =
-          cudf::apply_boolean_mask(input_table, filter_boolean->view(), stream, mr);
+          cudf::apply_boolean_mask(filter_table, filter_boolean->view(), stream, mr);
       } break;
       case engine_type::JIT: {
-        auto result = cudf::filter(predicate_columns,
-                                   udf,
-                                   std::vector{predicate_columns[0]},
-                                   false,
-                                   std::nullopt,
-                                   cudf::null_aware::NO,
-                                   stream,
-                                   mr);
+        auto result = cudf::filter(
+          {predicate_column->view(), min_scalar_column->view(), max_scalar_column->view()},
+          udf,
+          filter_column_views,
+          false,
+          std::nullopt,
+          cudf::null_aware::NO,
+          stream,
+          mr);
       } break;
       default: CUDF_UNREACHABLE("Unrecognised engine type requested");
     }
@@ -168,11 +150,19 @@ void BM_filter_min_max(nvbench::state& state)
   NVBENCH_BENCH(name)                                                           \
     .set_name(#name)                                                            \
     .add_string_axis("engine", {"ast", "jit"})                                  \
-    .add_int64_axis("num_rows", {100'000, 1'000'000, 10'000'000, 100'000'000})  \
+    .add_int64_axis("num_rows", {1'000'000, 10'000'000, 100'000'000})           \
+    .add_int64_axis("num_filter_columns", {1, 32})                              \
     .add_string_axis("nullable", {"true", "false"})
 }  // namespace
 
-FILTER_BENCHMARK_DEFINE(filter_min_max_int32, int32_t);
-FILTER_BENCHMARK_DEFINE(filter_min_max_int64, int64_t);
-FILTER_BENCHMARK_DEFINE(filter_min_max_float32, float);
-FILTER_BENCHMARK_DEFINE(filter_min_max_float64, double);
+FILTER_BENCHMARK_DEFINE(filter_min_max_int32, int32_t)
+  .add_float64_axis("selectivity", {0.001, 0.01, 0.1, 0.5, 0.8});
+
+FILTER_BENCHMARK_DEFINE(filter_min_max_int64, int64_t)
+  .add_float64_axis("selectivity", {0.001, 0.01, 0.1, 0.5, 0.8});
+
+FILTER_BENCHMARK_DEFINE(filter_min_max_float32, float)
+  .add_float64_axis("selectivity", {0.001, 0.01, 0.1, 0.5, 0.8});
+
+FILTER_BENCHMARK_DEFINE(filter_min_max_float64, double)
+  .add_float64_axis("selectivity", {0.001, 0.01, 0.1, 0.5, 0.8});

@@ -1,16 +1,6 @@
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software distributed under the License
- * is distributed on an "AS IS" BASIS,  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express
- * or implied. See the License for the specific language governing permissions and limitations under
- * the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <tests/iterator/iterator_tests.cuh>
@@ -21,10 +11,10 @@
 #include <cudf/detail/indexalator.cuh>
 
 #include <cuda/std/optional>
+#include <cuda/std/utility>
 #include <thrust/binary_search.h>
 #include <thrust/gather.h>
 #include <thrust/host_vector.h>
-#include <thrust/pair.h>
 #include <thrust/scatter.h>
 #include <thrust/sequence.h>
 
@@ -63,12 +53,13 @@ TYPED_TEST(IndexalatorTest, pair_iterator)
     host_values.begin(), host_values.end(), validity.begin());
 
   auto expected_values =
-    thrust::host_vector<thrust::pair<cudf::size_type, bool>>(host_values.size());
-  std::transform(host_values.begin(),
-                 host_values.end(),
-                 validity.begin(),
-                 expected_values.begin(),
-                 [](T v, bool b) { return thrust::make_pair(static_cast<cudf::size_type>(v), b); });
+    thrust::host_vector<cuda::std::pair<cudf::size_type, bool>>(host_values.size());
+  std::transform(
+    host_values.begin(),
+    host_values.end(),
+    validity.begin(),
+    expected_values.begin(),
+    [](T v, bool b) { return cuda::std::make_pair(static_cast<cudf::size_type>(v), b); });
 
   auto it_dev = cudf::detail::indexalator_factory::make_input_pair_iterator(d_col);
   this->iterator_test_thrust(expected_values, it_dev, host_values.size());
@@ -132,24 +123,24 @@ TYPED_TEST(IndexalatorTest, output_iterator)
     cudf::test::fixed_width_column_wrapper<cudf::size_type>({0, 33, 6, 43, 7, 45, 14, 63, 23});
 
   thrust::transform(
-    rmm::exec_policy(stream), input.begin<T>(), input.end<T>(), itr, transform_fn<T>{});
+    rmm::exec_policy_nosync(stream), input.begin<T>(), input.end<T>(), itr, transform_fn<T>{});
   expected =
     cudf::test::fixed_width_column_wrapper<cudf::size_type>({0, 12, 14, 28, 46, 66, 86, 90, 126});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(d_col2, expected);
 
-  thrust::fill(rmm::exec_policy(stream), itr, itr + input.size(), 77);
+  thrust::fill(rmm::exec_policy_nosync(stream), itr, itr + input.size(), 77);
   expected =
     cudf::test::fixed_width_column_wrapper<cudf::size_type>({77, 77, 77, 77, 77, 77, 77, 77, 77});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(d_col2, expected);
 
-  thrust::sequence(rmm::exec_policy(stream), itr, itr + input.size());
+  thrust::sequence(rmm::exec_policy_nosync(stream), itr, itr + input.size());
   expected = cudf::test::fixed_width_column_wrapper<cudf::size_type>({0, 1, 2, 3, 4, 5, 6, 7, 8});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(d_col2, expected);
 
   auto indices =
     cudf::test::fixed_width_column_wrapper<T, int32_t>({0, 10, 20, 30, 40, 50, 60, 70, 80});
   auto d_indices = cudf::column_view(indices);
-  thrust::lower_bound(rmm::exec_policy(stream),
+  thrust::lower_bound(rmm::exec_policy_nosync(stream),
                       d_indices.begin<T>(),
                       d_indices.end<T>(),
                       input.begin<T>(),

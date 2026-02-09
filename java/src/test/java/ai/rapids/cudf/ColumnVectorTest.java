@@ -1,18 +1,7 @@
 /*
  *
- *  Copyright (c) 2019-2024, NVIDIA CORPORATION.
- *
- *  Licensed under the Apache License, Version 2.0 (the "License");
- *  you may not use this file except in compliance with the License.
- *  You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- *  Unless required by applicable law or agreed to in writing, software
- *  distributed under the License is distributed on an "AS IS" BASIS,
- *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  See the License for the specific language governing permissions and
- *  limitations under the License.
+ *  SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ *  SPDX-License-Identifier: Apache-2.0
  *
  */
 
@@ -817,77 +806,6 @@ public class ColumnVectorTest extends CudfTestBase {
     }
   }
 
-  @Test
-  void roundFloatsHalfUp() {
-    try (ColumnVector v = ColumnVector.fromBoxedFloats(1.234f, 25.66f, null, 154.9f, 2346f);
-         ColumnVector result1 = v.round();
-         ColumnVector result2 = v.round(1, RoundMode.HALF_UP);
-         ColumnVector result3 = v.round(-1, RoundMode.HALF_UP);
-         ColumnVector expected1 = ColumnVector.fromBoxedFloats(1f, 26f, null, 155f, 2346f);
-         ColumnVector expected2 = ColumnVector.fromBoxedFloats(1.2f, 25.7f, null, 154.9f, 2346f);
-         ColumnVector expected3 = ColumnVector.fromBoxedFloats(0f, 30f, null, 150f, 2350f)) {
-      assertColumnsAreEqual(expected1, result1);
-      assertColumnsAreEqual(expected2, result2);
-      assertColumnsAreEqual(expected3, result3);
-    }
-  }
-
-  @Test
-  void roundFloatsHalfEven() {
-    try (ColumnVector v = ColumnVector.fromBoxedFloats(1.5f, 2.5f, 1.35f, null, 1.25f, 15f, 25f);
-         ColumnVector result1 = v.round(RoundMode.HALF_EVEN);
-         ColumnVector result2 = v.round(1, RoundMode.HALF_EVEN);
-         ColumnVector result3 = v.round(-1, RoundMode.HALF_EVEN);
-         ColumnVector expected1 = ColumnVector.fromBoxedFloats(2f, 2f, 1f, null, 1f, 15f, 25f);
-         ColumnVector expected2 = ColumnVector.fromBoxedFloats(1.5f, 2.5f, 1.4f, null, 1.2f, 15f, 25f);
-         ColumnVector expected3 = ColumnVector.fromBoxedFloats(0f, 0f, 0f, null, 0f, 20f, 20f)) {
-      assertColumnsAreEqual(expected1, result1);
-      assertColumnsAreEqual(expected2, result2);
-      assertColumnsAreEqual(expected3, result3);
-    }
-  }
-
-  @Test
-  void roundIntsHalfUp() {
-    try (ColumnVector v = ColumnVector.fromBoxedInts(12, 135, 160, -1454, null, -1500, -140, -150);
-         ColumnVector result1 = v.round(2, RoundMode.HALF_UP);
-         ColumnVector result2 = v.round(-2, RoundMode.HALF_UP);
-         ColumnVector expected1 = ColumnVector.fromBoxedInts(12, 135, 160, -1454, null, -1500, -140, -150);
-         ColumnVector expected2 = ColumnVector.fromBoxedInts(0, 100, 200, -1500, null, -1500, -100, -200)) {
-      assertColumnsAreEqual(expected1, result1);
-      assertColumnsAreEqual(expected2, result2);
-    }
-  }
-
-  @Test
-  void roundIntsHalfEven() {
-    try (ColumnVector v = ColumnVector.fromBoxedInts(12, 24, 135, 160, null, 1450, 1550, -1650);
-         ColumnVector result1 = v.round(2, RoundMode.HALF_EVEN);
-         ColumnVector result2 = v.round(-2, RoundMode.HALF_EVEN);
-         ColumnVector expected1 = ColumnVector.fromBoxedInts(12, 24, 135, 160, null, 1450, 1550, -1650);
-         ColumnVector expected2 = ColumnVector.fromBoxedInts(0, 0, 100, 200, null, 1400, 1600, -1600)) {
-      assertColumnsAreEqual(expected1, result1);
-      assertColumnsAreEqual(expected2, result2);
-    }
-  }
-
-  @Test
-  void roundDecimal() {
-    final int dec32Scale1 = -2;
-    final int resultScale1 = -3;
-
-    final int[] DECIMAL32_1 = new int[]{14, 15, 16, 24, 25, 26} ;
-    final int[] expectedHalfUp = new int[]{1, 2, 2, 2, 3, 3};
-    final int[] expectedHalfEven = new int[]{1, 2, 2, 2, 2, 3};
-    try (ColumnVector v = ColumnVector.decimalFromInts(-dec32Scale1, DECIMAL32_1);
-         ColumnVector roundHalfUp = v.round(-3, RoundMode.HALF_UP);
-         ColumnVector roundHalfEven = v.round(-3, RoundMode.HALF_EVEN);
-         ColumnVector answerHalfUp = ColumnVector.decimalFromInts(-resultScale1, expectedHalfUp);
-         ColumnVector answerHalfEven = ColumnVector.decimalFromInts(-resultScale1, expectedHalfEven)) {
-      assertColumnsAreEqual(answerHalfUp, roundHalfUp);
-      assertColumnsAreEqual(answerHalfEven, roundHalfEven);
-    }
-  }
 
   @Test
   void decimal128Cv() {

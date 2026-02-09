@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf_test/base_fixture.hpp>
@@ -54,9 +43,6 @@ using ColumnVector = std::vector<std::vector<T>>;
 
 template <typename T>
 using NullableColumnVector = std::vector<std::pair<std::vector<T>, NullMaskVector>>;
-
-constexpr cudf::size_type JoinNoneValue =
-  std::numeric_limits<cudf::size_type>::min();  // TODO: how to test if this isn't public?
 
 // Common column references.
 auto const col_ref_left_0  = cudf::ast::column_reference(0, cudf::ast::table_reference::LEFT);
@@ -285,7 +271,7 @@ struct ConditionalJoinPairReturnTest : public ConditionalJoinTest<T> {
     auto reference_pairs =
       rmm::device_uvector<index_pair>(reference.first->size(), cudf::get_default_stream());
 
-    thrust::transform(rmm::exec_policy(cudf::get_default_stream()),
+    thrust::transform(rmm::exec_policy_nosync(cudf::get_default_stream()),
                       result.first->begin(),
                       result.first->end(),
                       result.second->begin(),
@@ -293,7 +279,7 @@ struct ConditionalJoinPairReturnTest : public ConditionalJoinTest<T> {
                       [] __device__(cudf::size_type first, cudf::size_type second) {
                         return index_pair{first, second};
                       });
-    thrust::transform(rmm::exec_policy(cudf::get_default_stream()),
+    thrust::transform(rmm::exec_policy_nosync(cudf::get_default_stream()),
                       reference.first->begin(),
                       reference.first->end(),
                       reference.second->begin(),
@@ -302,12 +288,14 @@ struct ConditionalJoinPairReturnTest : public ConditionalJoinTest<T> {
                         return index_pair{first, second};
                       });
 
-    thrust::sort(
-      rmm::exec_policy(cudf::get_default_stream()), result_pairs.begin(), result_pairs.end());
-    thrust::sort(
-      rmm::exec_policy(cudf::get_default_stream()), reference_pairs.begin(), reference_pairs.end());
+    thrust::sort(rmm::exec_policy_nosync(cudf::get_default_stream()),
+                 result_pairs.begin(),
+                 result_pairs.end());
+    thrust::sort(rmm::exec_policy_nosync(cudf::get_default_stream()),
+                 reference_pairs.begin(),
+                 reference_pairs.end());
 
-    EXPECT_TRUE(thrust::equal(rmm::exec_policy(cudf::get_default_stream()),
+    EXPECT_TRUE(thrust::equal(rmm::exec_policy_nosync(cudf::get_default_stream()),
                               reference_pairs.begin(),
                               reference_pairs.end(),
                               result_pairs.begin()));
@@ -602,7 +590,7 @@ TYPED_TEST(ConditionalLeftJoinTest, TestTwoColumnThreeRowSomeEqual)
   this->test({{0, 1, 2}, {10, 20, 30}},
              {{0, 1, 3}, {30, 40, 50}},
              left_zero_eq_right_zero,
-             {{0, 0}, {1, 1}, {2, JoinNoneValue}});
+             {{0, 0}, {1, 1}, {2, cudf::JoinNoMatch}});
 };
 
 TYPED_TEST(ConditionalLeftJoinTest, TestOneColumnLeftEmpty)
@@ -615,7 +603,7 @@ TYPED_TEST(ConditionalLeftJoinTest, TestOneColumnRightEmpty)
   this->test({{3, 4, 5}},
              {{}},
              left_zero_eq_right_zero,
-             {{0, JoinNoneValue}, {1, JoinNoneValue}, {2, JoinNoneValue}});
+             {{0, cudf::JoinNoMatch}, {1, cudf::JoinNoMatch}, {2, cudf::JoinNoMatch}});
 };
 
 TYPED_TEST(ConditionalLeftJoinTest, TestCompareRandomToHash)
@@ -668,12 +656,12 @@ TYPED_TEST(ConditionalFullJoinTest, TestOneColumnNoneEqual)
   this->test({{0, 1, 2}},
              {{3, 4, 5}},
              left_zero_eq_right_zero,
-             {{0, JoinNoneValue},
-              {1, JoinNoneValue},
-              {2, JoinNoneValue},
-              {JoinNoneValue, 0},
-              {JoinNoneValue, 1},
-              {JoinNoneValue, 2}});
+             {{0, cudf::JoinNoMatch},
+              {1, cudf::JoinNoMatch},
+              {2, cudf::JoinNoMatch},
+              {cudf::JoinNoMatch, 0},
+              {cudf::JoinNoMatch, 1},
+              {cudf::JoinNoMatch, 2}});
 };
 
 TYPED_TEST(ConditionalFullJoinTest, TestOneColumnLeftEmpty)
@@ -681,7 +669,7 @@ TYPED_TEST(ConditionalFullJoinTest, TestOneColumnLeftEmpty)
   this->test({{}},
              {{3, 4, 5}},
              left_zero_eq_right_zero,
-             {{JoinNoneValue, 0}, {JoinNoneValue, 1}, {JoinNoneValue, 2}});
+             {{cudf::JoinNoMatch, 0}, {cudf::JoinNoMatch, 1}, {cudf::JoinNoMatch, 2}});
 };
 
 TYPED_TEST(ConditionalFullJoinTest, TestOneColumnRightEmpty)
@@ -689,7 +677,7 @@ TYPED_TEST(ConditionalFullJoinTest, TestOneColumnRightEmpty)
   this->test({{3, 4, 5}},
              {{}},
              left_zero_eq_right_zero,
-             {{0, JoinNoneValue}, {1, JoinNoneValue}, {2, JoinNoneValue}});
+             {{0, cudf::JoinNoMatch}, {1, cudf::JoinNoMatch}, {2, cudf::JoinNoMatch}});
 };
 
 TYPED_TEST(ConditionalFullJoinTest, TestTwoColumnThreeRowSomeEqual)
@@ -697,7 +685,7 @@ TYPED_TEST(ConditionalFullJoinTest, TestTwoColumnThreeRowSomeEqual)
   this->test({{0, 1, 2}, {10, 20, 30}},
              {{0, 1, 3}, {30, 40, 50}},
              left_zero_eq_right_zero,
-             {{0, 0}, {1, 1}, {2, JoinNoneValue}, {JoinNoneValue, 2}});
+             {{0, 0}, {1, 1}, {2, cudf::JoinNoMatch}, {cudf::JoinNoMatch, 2}});
 };
 
 TYPED_TEST(ConditionalFullJoinTest, TestCompareRandomToHash)
@@ -746,10 +734,11 @@ struct ConditionalJoinSingleReturnTest : public ConditionalJoinTest<T> {
   void _compare_to_hash_join(std::unique_ptr<rmm::device_uvector<cudf::size_type>> const& result,
                              std::unique_ptr<rmm::device_uvector<cudf::size_type>> const& reference)
   {
-    thrust::sort(rmm::exec_policy(cudf::get_default_stream()), result->begin(), result->end());
     thrust::sort(
-      rmm::exec_policy(cudf::get_default_stream()), reference->begin(), reference->end());
-    EXPECT_TRUE(thrust::equal(rmm::exec_policy(cudf::get_default_stream()),
+      rmm::exec_policy_nosync(cudf::get_default_stream()), result->begin(), result->end());
+    thrust::sort(
+      rmm::exec_policy_nosync(cudf::get_default_stream()), reference->begin(), reference->end());
+    EXPECT_TRUE(thrust::equal(rmm::exec_policy_nosync(cudf::get_default_stream()),
                               result->begin(),
                               result->end(),
                               reference->begin()));

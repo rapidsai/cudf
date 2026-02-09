@@ -15,6 +15,7 @@ from cudf_polars.dsl.expressions.base import (
     ExecutionContext,
     Expr,
 )
+from cudf_polars.dsl.utils.reshape import broadcast
 
 if TYPE_CHECKING:
     from cudf_polars.containers import DataFrame, DataType
@@ -41,9 +42,38 @@ class Ternary(Expr):
         when, then, otherwise = (
             child.evaluate(df, context=context) for child in self.children
         )
-        then_obj = then.obj_scalar if then.is_scalar else then.obj
-        otherwise_obj = otherwise.obj_scalar if otherwise.is_scalar else otherwise.obj
+
+        if when.is_scalar:
+            # For scalar predicates: lowering to copy_if_else would require
+            # materializing an all true/false mask column. Instead, just pick
+            # the correct branch.
+            when_predicate = when.obj_scalar(stream=df.stream).to_py(stream=df.stream)
+            pick, other = (then, otherwise) if when_predicate else (otherwise, then)
+
+            pick_col = (
+                broadcast(
+                    pick,
+                    target_length=1 if other.is_scalar else other.size,
+                    stream=df.stream,
+                )[0]
+                if pick.is_scalar
+                else pick
+            )
+            return Column(pick_col.obj, dtype=self.dtype)
+
+        then_obj = then.obj_scalar(stream=df.stream) if then.is_scalar else then.obj
+        otherwise_obj = (
+            otherwise.obj_scalar(stream=df.stream)
+            if otherwise.is_scalar
+            else otherwise.obj
+        )
+
         return Column(
-            plc.copying.copy_if_else(then_obj, otherwise_obj, when.obj),
+            plc.copying.copy_if_else(
+                then_obj,
+                otherwise_obj,
+                when.obj,
+                stream=df.stream,
+            ),
             dtype=self.dtype,
         )

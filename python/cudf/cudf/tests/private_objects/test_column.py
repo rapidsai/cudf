@@ -1,5 +1,5 @@
-# Copyright (c) 2020-2025, NVIDIA CORPORATION.
-import sys
+# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 from decimal import Decimal
 
 import cupy as cp
@@ -7,20 +7,19 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pytest
-from numba import cuda
-
-import rmm
 
 import cudf
 from cudf.core._compat import (
     PANDAS_CURRENT_SUPPORTED_VERSION,
     PANDAS_VERSION,
 )
-from cudf.core.buffer import as_buffer
 from cudf.core.column.column import _can_values_be_equal, as_column
-from cudf.core.column.decimal import Decimal32Column, Decimal64Column
+from cudf.core.column.decimal import (
+    Decimal32Column,
+    Decimal64Column,
+    Decimal128Column,
+)
 from cudf.testing import assert_eq
-from cudf.testing._utils import assert_exceptions_equal
 
 
 @pytest.fixture
@@ -93,27 +92,11 @@ def test_column_set_equal_length_object_by_mask():
 @pytest.mark.parametrize("size", [50, 10, 0])
 def test_column_offset_and_size(pandas_input, offset, size):
     col = as_column(pandas_input)
-    col = cudf.core.column.build_column(
-        data=col.base_data,
-        dtype=col.dtype,
-        mask=col.base_mask,
-        size=size,
-        offset=offset,
-        children=col.base_children,
-    )
+
+    col = col.slice(offset, offset + size)
 
     if isinstance(col.dtype, cudf.CategoricalDtype):
         assert col.size == col.codes.size
-        assert col.size == (col.codes.data.size / col.codes.dtype.itemsize)
-    elif cudf.api.types.is_string_dtype(col.dtype):
-        if col.size > 0:
-            assert col.size == (col.children[0].size - 1)
-            assert col.size == (
-                (col.children[0].data.size / col.children[0].dtype.itemsize)
-                - 1
-            )
-    else:
-        assert col.size == (col.data.size / col.dtype.itemsize)
 
     got = cudf.Series._from_column(col)
 
@@ -256,7 +239,7 @@ def test_column_zero_length_slice():
     the_column = x[1:]["a"]._column
 
     expect = np.array([], dtype="int8")
-    got = cuda.as_cuda_array(the_column.data).copy_to_host()
+    got = cp.asarray(the_column.data).get()
 
     np.testing.assert_array_equal(expect, got)
 
@@ -282,144 +265,6 @@ def test_column_chunked_array_creation():
     )
 
 
-@pytest.mark.parametrize(
-    "data,from_dtype,to_dtype",
-    [
-        # equal size different kind
-        (np.arange(3), "int64", "float64"),
-        (np.arange(3), "float32", "int32"),
-        (np.arange(1), "int64", "datetime64[ns]"),
-        # size / 2^n should work for all n
-        (np.arange(3), "int64", "int32"),
-        (np.arange(3), "int64", "int16"),
-        (np.arange(3), "int64", "int8"),
-        (np.arange(3), "float64", "float32"),
-        # evenly divides into bigger type
-        (np.arange(8), "int8", "int64"),
-        (np.arange(16), "int8", "int64"),
-        (np.arange(128), "int8", "int64"),
-        (np.arange(2), "float32", "int64"),
-        (np.arange(8), "int8", "datetime64[ns]"),
-        (np.arange(16), "int8", "datetime64[ns]"),
-    ],
-)
-def test_column_view_valid_numeric_to_numeric(data, from_dtype, to_dtype):
-    from_dtype = np.dtype(from_dtype)
-    to_dtype = np.dtype(to_dtype)
-    cpu_data = np.asarray(data, dtype=from_dtype)
-    gpu_data = as_column(data, dtype=from_dtype)
-
-    cpu_data_view = cpu_data.view(to_dtype)
-    gpu_data_view = gpu_data.view(to_dtype)
-
-    expect = pd.Series(cpu_data_view, dtype=cpu_data_view.dtype)
-    got = cudf.Series._from_column(gpu_data_view).astype(
-        gpu_data_view.dtype, copy=False
-    )
-
-    gpu_ptr = gpu_data.data.get_ptr(mode="read")
-    assert gpu_ptr == got._column.data.get_ptr(mode="read")
-    assert_eq(expect, got)
-
-
-@pytest.mark.parametrize(
-    "to_dtype",
-    [
-        "int64",
-        "int16",
-        "float32",
-        "datetime64[ns]",
-    ],
-)
-def test_column_view_invalid_numeric_to_numeric(to_dtype):
-    data = np.arange(5)
-    from_dtype = np.dtype("int8")
-    to_dtype = np.dtype(to_dtype)
-    cpu_data = np.asarray(data, dtype=from_dtype)
-    gpu_data = as_column(data, dtype=from_dtype)
-
-    assert_exceptions_equal(
-        lfunc=cpu_data.view,
-        rfunc=gpu_data.view,
-        lfunc_args_and_kwargs=([to_dtype],),
-        rfunc_args_and_kwargs=([to_dtype],),
-    )
-
-
-@pytest.mark.parametrize(
-    "data,to_dtype",
-    [
-        (["a", "b", "c"], "int8"),
-        (["ab"], "int8"),
-        (["ab"], "int16"),
-        (["a", "ab", "a"], "int8"),
-        (["abcd", "efgh"], "float32"),
-        (["abcdefgh"], "datetime64[ns]"),
-    ],
-)
-def test_column_view_valid_string_to_numeric(data, to_dtype):
-    to_dtype = np.dtype(to_dtype)
-    expect = cudf.Series._from_column(cudf.Series(data)._column.view(to_dtype))
-    got = cudf.Series(str_host_view(data, to_dtype))
-
-    assert_eq(expect, got)
-
-
-def test_column_view_nulls_widths_even():
-    data = [1, 2, None, 4, None]
-    expect_data = [
-        np.int32(val).view("float32") if val is not None else np.nan
-        for val in data
-    ]
-
-    sr = cudf.Series(data, dtype="int32")
-    expect = cudf.Series(expect_data, dtype="float32")
-    got = cudf.Series._from_column(sr._column.view(np.dtype(np.float32)))
-
-    assert_eq(expect, got)
-
-    data = [None, 2.1, None, 5.3, 8.8]
-    expect_data = [
-        np.float64(val).view("int64") if val is not None else val
-        for val in data
-    ]
-
-    sr = cudf.Series(data, dtype="float64")
-    expect = cudf.Series(expect_data, dtype="int64")
-    got = cudf.Series._from_column(sr._column.view(np.dtype(np.int64)))
-
-    assert_eq(expect, got)
-
-
-@pytest.mark.parametrize("slc", [slice(1, 5), slice(0, 4), slice(2, 4)])
-def test_column_view_numeric_slice(slc):
-    data = np.array([1, 2, 3, 4, 5], dtype="int32")
-    sr = cudf.Series(data)
-
-    expect = cudf.Series(data[slc].view("int64"))
-    got = cudf.Series._from_column(
-        sr._column.slice(slc.start, slc.stop).view(np.dtype(np.int64))
-    )
-
-    assert_eq(expect, got)
-
-
-@pytest.mark.parametrize(
-    "slc", [slice(3, 5), slice(0, 4), slice(2, 5), slice(1, 3)]
-)
-def test_column_view_string_slice(slc):
-    data = ["a", "bcde", "cd", "efg", "h"]
-
-    expect = cudf.Series._from_column(
-        cudf.Series(data)
-        ._column.slice(slc.start, slc.stop)
-        .view(np.dtype(np.int8))
-    )
-    got = cudf.Series(str_host_view(data[slc], "int8"))
-
-    assert_eq(expect, got)
-
-
 @pytest.mark.parametrize("box", [cp.asarray, np.asarray])
 @pytest.mark.parametrize(
     "data",
@@ -431,8 +276,12 @@ def test_column_view_string_slice(slc):
 )
 def test_as_column_buffer(box, data):
     expected = as_column(data)
+    boxed = box(data)
     actual_column = as_column(
-        cudf.core.buffer.as_buffer(box(data)), dtype=data.dtype
+        cudf.core.buffer.as_buffer(
+            boxed if isinstance(boxed, cp.ndarray) else boxed.data
+        ),
+        dtype=data.dtype,
     )
     assert_eq(
         cudf.Series._from_column(actual_column),
@@ -593,7 +442,7 @@ def test_build_df_from_nullable_pandas_dtype(pd_dtype, expect_dtype):
 
     # check mask
     expect_mask = [x is not pd.NA for x in pd_data["a"]]
-    got_mask = gd_data["a"]._column._get_mask_as_column().values_host
+    got_mask = gd_data["a"]._column._get_mask_as_column().to_numpy()
 
     np.testing.assert_array_equal(expect_mask, got_mask)
 
@@ -629,7 +478,7 @@ def test_build_series_from_nullable_pandas_dtype(pd_dtype, expect_dtype):
 
     # check mask
     expect_mask = [x is not pd.NA for x in pd_data]
-    got_mask = gd_data._column._get_mask_as_column().values_host
+    got_mask = gd_data._column._get_mask_as_column().to_numpy()
 
     np.testing.assert_array_equal(expect_mask, got_mask)
 
@@ -651,22 +500,6 @@ def test_build_series_from_nullable_pandas_dtype(pd_dtype, expect_dtype):
 def test__can_values_be_equal(left, right, expected):
     assert _can_values_be_equal(left, right) is expected
     assert _can_values_be_equal(right, left) is expected
-
-
-def test_string_no_children_properties():
-    empty_col = cudf.core.column.StringColumn(
-        as_buffer(rmm.DeviceBuffer(size=0)),
-        size=0,
-        dtype=np.dtype("object"),
-        children=(),
-    )
-    assert empty_col.base_children == ()
-    assert empty_col.base_size == 0
-
-    assert empty_col.children == ()
-    assert empty_col.size == 0
-
-    assert sys.getsizeof(empty_col) >= 0  # Accounts for Python GC overhead
 
 
 def test_string_int_to_ipv4():
@@ -722,29 +555,33 @@ def test_datetime_can_cast_safely():
     ],
 )
 @pytest.mark.parametrize(
-    "typ_",
+    "col,typ_",
     [
-        pa.decimal128(precision=4, scale=2),
-        pa.decimal128(precision=5, scale=3),
-        pa.decimal128(precision=6, scale=4),
+        (Decimal32Column, pa.decimal32(precision=4, scale=2)),
+        (Decimal64Column, pa.decimal64(precision=5, scale=3)),
+        (Decimal128Column, pa.decimal128(precision=6, scale=4)),
     ],
 )
-@pytest.mark.parametrize("col", [Decimal32Column, Decimal64Column])
 def test_round_trip_decimal_column(data_, typ_, col):
     pa_arr = pa.array(data_, type=typ_)
-    col_32 = col.from_arrow(pa_arr)
-    assert pa_arr.equals(col_32.to_arrow())
+    decimal_col = col.from_arrow(pa_arr)
+    result = decimal_col.to_arrow()
+
+    # Round-trip should preserve the exact PyArrow decimal type
+    assert result.equals(pa_arr)
 
 
 def test_from_arrow_max_precision_decimal64():
+    # Decimal64 max precision is 18, so 19 should raise ValueError
     with pytest.raises(ValueError):
         Decimal64Column.from_arrow(
-            pa.array([1, 2, 3], type=pa.decimal128(scale=0, precision=19))
+            pa.array([1, 2, 3], type=pa.decimal64(scale=0, precision=19))
         )
 
 
 def test_from_arrow_max_precision_decimal32():
+    # Decimal32 max precision is 9, so 10 should raise ValueError
     with pytest.raises(ValueError):
         Decimal32Column.from_arrow(
-            pa.array([1, 2, 3], type=pa.decimal128(scale=0, precision=10))
+            pa.array([1, 2, 3], type=pa.decimal32(scale=0, precision=10))
         )

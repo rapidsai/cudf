@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -9,9 +9,19 @@ import pytest
 
 import polars as pl
 
-from cudf_polars.testing.asserts import DEFAULT_SCHEDULER, assert_sink_result_equal
+from cudf_polars.testing.asserts import (
+    DEFAULT_CLUSTER,
+    DEFAULT_RUNTIME,
+    assert_sink_result_equal,
+)
 from cudf_polars.utils.config import ConfigOptions
-from cudf_polars.utils.versions import POLARS_VERSION_LT_130
+
+# TODO: Add Sink support to the rapidsmpf runtime.
+# See: https://github.com/rapidsai/cudf/issues/20485
+pytestmark = pytest.mark.skipif(
+    DEFAULT_RUNTIME == "rapidsmpf",
+    reason="Sink not yet supported for rapidsmpf runtime.",
+)
 
 
 @pytest.fixture(scope="module")
@@ -37,7 +47,8 @@ def test_sink_parquet_single_file(
         executor="streaming",
         executor_options={
             "max_rows_per_partition": max_rows_per_partition,
-            "scheduler": "synchronous",
+            "cluster": "single",
+            "runtime": DEFAULT_RUNTIME,
             "sink_to_directory": False,
         },
     )
@@ -66,7 +77,8 @@ def test_sink_parquet_directory(
         executor="streaming",
         executor_options={
             "max_rows_per_partition": max_rows_per_partition,
-            "scheduler": DEFAULT_SCHEDULER,
+            "cluster": DEFAULT_CLUSTER,
+            "runtime": DEFAULT_RUNTIME,
             "sink_to_directory": True,
         },
     )
@@ -94,16 +106,16 @@ def test_sink_parquet_distributed_raises():
         raise_on_fail=True,
         executor="streaming",
         executor_options={
-            "scheduler": "distributed",
+            "cluster": "distributed",
             "sink_to_directory": False,
         },
     )
-    with pytest.raises(ValueError, match="distributed scheduler"):
+    with pytest.raises(ValueError, match="distributed cluster"):
         ConfigOptions.from_polars_engine(engine)
 
 
 def test_sink_parquet_raises(df, tmp_path):
-    if DEFAULT_SCHEDULER == "distributed":
+    if DEFAULT_CLUSTER == "distributed":
         # We end up with an extra row per partition.
         pytest.skip("Distributed requires sink_to_directory=True")
 
@@ -112,7 +124,8 @@ def test_sink_parquet_raises(df, tmp_path):
         executor="streaming",
         executor_options={
             "max_rows_per_partition": 100_000,
-            "scheduler": DEFAULT_SCHEDULER,
+            "cluster": DEFAULT_CLUSTER,
+            "runtime": DEFAULT_RUNTIME,
             "sink_to_directory": False,
         },
     )
@@ -125,16 +138,13 @@ def test_sink_parquet_raises(df, tmp_path):
         executor="streaming",
         executor_options={
             "max_rows_per_partition": 100_000,
-            "scheduler": DEFAULT_SCHEDULER,
+            "cluster": DEFAULT_CLUSTER,
+            "runtime": DEFAULT_RUNTIME,
             "sink_to_directory": True,
         },
     )
-    if POLARS_VERSION_LT_130:
-        with pytest.raises(pl.exceptions.ComputeError, match="not supported"):
-            df.sink_parquet(path, engine=engine)
-    else:
-        with pytest.raises(NotImplementedError, match="not supported"):
-            df.sink_parquet(path, engine=engine)
+    with pytest.raises(NotImplementedError, match="not supported"):
+        df.sink_parquet(path, engine=engine)
 
 
 @pytest.mark.parametrize("include_header", [True, False])
@@ -154,7 +164,8 @@ def test_sink_csv(
         executor="streaming",
         executor_options={
             "max_rows_per_partition": max_rows_per_partition,
-            "scheduler": DEFAULT_SCHEDULER,
+            "cluster": DEFAULT_CLUSTER,
+            "runtime": DEFAULT_RUNTIME,
         },
     )
 
@@ -180,7 +191,8 @@ def test_sink_ndjson(df, tmp_path, max_rows_per_partition):
         executor="streaming",
         executor_options={
             "max_rows_per_partition": max_rows_per_partition,
-            "scheduler": DEFAULT_SCHEDULER,
+            "cluster": DEFAULT_CLUSTER,
+            "runtime": DEFAULT_RUNTIME,
         },
     )
 

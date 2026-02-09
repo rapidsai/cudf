@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 /**
@@ -81,6 +70,11 @@ class writer::impl {
    * @brief Destructor to complete any incomplete write and release resources.
    */
   ~impl();
+
+  impl(impl const&)            = delete;
+  impl& operator=(impl const&) = delete;
+  impl(impl&&)                 = delete;
+  impl& operator=(impl&&)      = delete;
 
   /**
    * @brief Initializes the states before writing.
@@ -156,6 +150,7 @@ class writer::impl {
   bool const _int96_timestamps;
   bool const _utc_timestamps;
   bool const _write_v2_headers;
+  bool const _page_level_compression;
   bool const _write_arrow_schema;
   std::optional<std::vector<sorting_column>> _sorting_columns;
   int32_t const _column_index_truncate_length;

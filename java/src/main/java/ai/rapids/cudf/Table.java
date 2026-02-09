@@ -1,18 +1,7 @@
 /*
  *
- *  Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
- *  Licensed under the Apache License, Version 2.0 (the "License");
- *  you may not use this file except in compliance with the License.
- *  You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- *  Unless required by applicable law or agreed to in writing, software
- *  distributed under the License is distributed on an "AS IS" BASIS,
- *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  See the License for the specific language governing permissions and
- *  limitations under the License.
+ *  SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ *  SPDX-License-Identifier: Apache-2.0
  *
  */
 
@@ -817,6 +806,7 @@ public final class Table implements AutoCloseable {
 
   private static native ContigSplitGroupByResult contiguousSplitGroups(long inputTable,
                                                                 int[] keyIndices,
+                                                                int[] projectionColumnIndices,
                                                                 boolean ignoreNullKeys,
                                                                 boolean keySorted,
                                                                 boolean[] keysDescending,
@@ -2180,11 +2170,11 @@ public final class Table implements AutoCloseable {
    * {@link Table} class
    */
   public PartitionedTable partition(ColumnView partitionMap, int numberOfPartitions) {
-    int[] partitionOffsets = new int[numberOfPartitions];
+    int[] partitionOffsets = new int[numberOfPartitions + 1];
     return new PartitionedTable(new Table(partition(
         getNativeView(),
         partitionMap.getNativeView(),
-        partitionOffsets.length,
+        numberOfPartitions,
         partitionOffsets)), partitionOffsets);
   }
 
@@ -2467,7 +2457,7 @@ public final class Table implements AutoCloseable {
    * {@link Table} class
    */
   public PartitionedTable roundRobinPartition(int numberOfPartitions, int startPartition) {
-    int[] partitionOffsets = new int[numberOfPartitions];
+    int[] partitionOffsets = new int[numberOfPartitions + 1];
     return new PartitionedTable(new Table(Table.roundRobinPartition(nativeHandle,
         numberOfPartitions, startPartition,
         partitionOffsets)), partitionOffsets);
@@ -4485,9 +4475,11 @@ public final class Table implements AutoCloseable {
      * for the memory to be released.
      */
     public ContiguousTable[] contiguousSplitGroups() {
+      int[] defaultProjectColumnsIndices = null;
       try (ContigSplitGroupByResult ret = Table.contiguousSplitGroups(
           operation.table.nativeHandle,
-          operation.indices,
+          operation.indices, // keyIndices
+          defaultProjectColumnsIndices,
           groupByOptions.getIgnoreNullKeys(),
           groupByOptions.getKeySorted(),
           groupByOptions.getKeysDescending(),
@@ -4515,14 +4507,50 @@ public final class Table implements AutoCloseable {
      * @return The split groups and uniq key table.
      */
     public ContigSplitGroupByResult contiguousSplitGroupsAndGenUniqKeys() {
+      int[] defaultProjectColumnsIndices = null;
       return Table.contiguousSplitGroups(
               operation.table.nativeHandle,
-              operation.indices,
+              operation.indices, // keyIndices
+              defaultProjectColumnsIndices,
               groupByOptions.getIgnoreNullKeys(),
               groupByOptions.getKeySorted(),
               groupByOptions.getKeysDescending(),
               groupByOptions.getKeysNullSmallest(),
               true); // generate uniq key table
+    }
+
+    /**
+     * Similar to the above {@link #contiguousSplitGroupsAndGenUniqKeys}.
+     *
+     * The diff with the above method is:
+     * - Provide an extra input `projectionColumnIndices` which defines the columns to output.
+     * - The above method outputs keys columns in the split tables,
+     *   but this method does not except `projectionColumnIndices` includes key columns.
+     *
+     * The split tables only contain the columns defined in the `projectionColumnIndices`
+     *
+     * @param projectionColumnIndices Defines the output columns.
+     * @return The split groups and uniq key table.
+     */
+    public ContigSplitGroupByResult contiguousSplitGroupsAndGenUniqKeys(
+        int[] projectionColumnIndices) {
+      if (operation.indices == null || operation.indices.length == 0) {
+        throw new IllegalArgumentException("key indices is empty!");
+      }
+
+      if (projectionColumnIndices == null || projectionColumnIndices.length == 0) {
+        throw new IllegalArgumentException("value indices is empty!");
+      }
+
+      return Table.contiguousSplitGroups(
+          operation.table.nativeHandle,
+          operation.indices,
+          projectionColumnIndices,
+          groupByOptions.getIgnoreNullKeys(),
+          groupByOptions.getKeySorted(),
+          groupByOptions.getKeysDescending(),
+          groupByOptions.getKeysNullSmallest(),
+          true); // generate uniq key table
     }
   }
 
@@ -4569,12 +4597,12 @@ public final class Table implements AutoCloseable {
      * @return Table that exposes a limited functionality of the {@link Table} class
      */
     public PartitionedTable hashPartition(HashType type, int numberOfPartitions, int seed) {
-      int[] partitionOffsets = new int[numberOfPartitions];
+      int[] partitionOffsets = new int[numberOfPartitions + 1];
       return new PartitionedTable(new Table(Table.hashPartition(
           operation.table.nativeHandle,
           operation.indices,
           type.nativeId,
-          partitionOffsets.length,
+          numberOfPartitions,
           seed,
           partitionOffsets)), partitionOffsets);
     }

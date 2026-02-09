@@ -1,34 +1,20 @@
 /*
- * Copyright (c) 2021-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
-#include <cudf/detail/valid_if.cuh>
-#include <cudf/structs/structs_column_view.hpp>
 #include <cudf/utilities/span.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <cuda/std/functional>
+#include <cuda/std/tuple>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/transform.h>
-#include <thrust/tuple.h>
 
 namespace cudf {
 namespace groupby {
@@ -50,7 +36,8 @@ struct merge_fn {
   result_type const* d_means;
   result_type const* d_M2s;
 
-  auto __device__ operator()(size_type const group_idx) const
+  __device__ cuda::std::tuple<count_type, result_type, result_type> operator()(
+    size_type const group_idx) const
   {
     count_type n{0};
     result_type avg{0};
@@ -69,16 +56,13 @@ struct merge_fn {
       n   = new_n;
     }
 
-    // If there are all nulls in the partial results (i.e., sum of all valid counts is
-    // zero), then the output is a null.
-    auto const is_valid = n > 0;
-    return thrust::tuple{n, avg, m2, is_valid};
+    return {n, avg, m2};
   }
 };
 
 template <typename count_type>
 std::unique_ptr<column> merge_m2(column_view const& values,
-                                 cudf::device_span<size_type const> group_offsets,
+                                 device_span<size_type const> group_offsets,
                                  size_type num_groups,
                                  rmm::cuda_stream_view stream,
                                  rmm::device_async_resource_ref mr)
@@ -89,15 +73,11 @@ std::unique_ptr<column> merge_m2(column_view const& values,
     data_type(type_to_id<result_type>()), num_groups, mask_state::UNALLOCATED, stream, mr);
   auto result_M2s = make_numeric_column(
     data_type(type_to_id<result_type>()), num_groups, mask_state::UNALLOCATED, stream, mr);
-  auto validities = rmm::device_uvector<bool>(num_groups, stream);
 
-  // Perform merging for all the aggregations. Their output (and their validity data) are written
-  // out concurrently through an output zip iterator.
   auto const out_iter =
     thrust::make_zip_iterator(result_counts->mutable_view().template data<count_type>(),
                               result_means->mutable_view().template data<result_type>(),
-                              result_M2s->mutable_view().template data<result_type>(),
-                              validities.begin());
+                              result_M2s->mutable_view().template data<result_type>());
 
   auto const count_valid = values.child(0);
   auto const mean_values = values.child(1);
@@ -110,28 +90,19 @@ std::unique_ptr<column> merge_m2(column_view const& values,
                                        M2_values.template begin<result_type>()};
   thrust::transform(rmm::exec_policy_nosync(stream), iter, iter + num_groups, out_iter, fn);
 
-  // Generate bitmask for the output.
-  // Only mean and M2 values can be nullable. Count column must be non-nullable.
-  auto [null_mask, null_count] =
-    cudf::detail::valid_if(validities.begin(), validities.end(), cuda::std::identity{}, stream, mr);
-  if (null_count > 0) {
-    result_means->set_null_mask(null_mask, null_count, stream);   // copy null_mask
-    result_M2s->set_null_mask(std::move(null_mask), null_count);  // take over null_mask
-  }
-
   // Output is a structs column containing the merged values of `COUNT_VALID`, `MEAN`, and `M2`.
   std::vector<std::unique_ptr<column>> out_columns;
   out_columns.emplace_back(std::move(result_counts));
   out_columns.emplace_back(std::move(result_means));
   out_columns.emplace_back(std::move(result_M2s));
-  return cudf::make_structs_column(
+  return make_structs_column(
     num_groups, std::move(out_columns), 0, rmm::device_buffer{0, stream, mr}, stream, mr);
 }
 
 }  // namespace
 
 std::unique_ptr<column> group_merge_m2(column_view const& values,
-                                       cudf::device_span<size_type const> group_offsets,
+                                       device_span<size_type const> group_offsets,
                                        size_type num_groups,
                                        rmm::cuda_stream_view stream,
                                        rmm::device_async_resource_ref mr)

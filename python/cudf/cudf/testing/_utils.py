@@ -1,4 +1,5 @@
-# Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
 import string
@@ -11,14 +12,13 @@ import numpy as np
 import pandas as pd
 import pytest
 
-import pylibcudf as plc
-
 import cudf
-from cudf.core.column.column import as_column
 from cudf.utils import dtypes as dtypeutils
 from cudf.utils.temporal import unit_to_nanoseconds_conversion
 
 if TYPE_CHECKING:
+    import pylibcudf as plc
+
     from cudf.core.column.column import ColumnBase
 
 supported_numpy_dtypes = [
@@ -78,37 +78,6 @@ def set_random_null_mask_inplace(series, null_probability=0.5, seed=None):
     rng = np.random.default_rng(seed=seed)
     mask = rng.choice([False, True], size=len(series), p=probs)
     series.iloc[mask] = None
-
-
-# TODO: This function should be removed. Anywhere that it is being used should
-# instead be generating a random boolean array (bytemask) and use the public
-# APIs to set those elements to None.
-def random_bitmask(size):
-    """
-    Parameters
-    ----------
-    size : int
-        number of bits
-    """
-    sz = plc.null_mask.bitmask_allocation_size_bytes(size)
-    rng = np.random.default_rng(seed=0)
-    data = rng.integers(0, 255, dtype="u1", size=sz)
-    return data.view("i1")
-
-
-def expand_bits_to_bytes(arr):
-    def fix_binary(bstr):
-        bstr = bstr[2:]
-        diff = 8 - len(bstr)
-        return ("0" * diff + bstr)[::-1]
-
-    ba = bytearray(arr.data)
-    return list(map(int, "".join(map(fix_binary, map(bin, ba)))))
-
-
-def count_zero(arr):
-    arr = np.asarray(arr)
-    return np.count_nonzero(arr == 0)
 
 
 def assert_exceptions_equal(
@@ -262,12 +231,12 @@ def gen_rand(dtype, size, **kwargs):
 
 def gen_rand_series(dtype, size, **kwargs):
     values = gen_rand(dtype, size, **kwargs)
+    ser = cudf.Series(values)
     if kwargs.get("has_nulls", False):
-        return cudf.Series._from_column(
-            as_column(values).set_mask(random_bitmask(size))
-        )
-
-    return cudf.Series(values)
+        rng = np.random.default_rng(0)
+        boolmask = rng.choice([True, False], size=size)
+        ser.loc[boolmask] = None
+    return ser
 
 
 def _decimal_series(input, dtype):
@@ -275,6 +244,28 @@ def _decimal_series(input, dtype):
         [x if x is None else Decimal(x) for x in input],
         dtype=dtype,
     )
+
+
+def _assert_column_memory_eq(lhs: plc.Column, rhs: plc.Column):
+    """Assert the memory location and size of `lhs` and `rhs` are equivalent.
+
+    Both data pointer and mask pointer are checked. Also recursively check for
+    children to the same constraints. Also fails check if the number of
+    children mismatches at any level.
+    """
+
+    def get_ptr(x) -> int:
+        return x.ptr if x else 0
+
+    assert get_ptr(lhs.data()) == get_ptr(rhs.data())
+    assert get_ptr(lhs.null_mask()) == get_ptr(rhs.null_mask())
+    assert lhs.size() == rhs.size()
+    assert lhs.offset() == rhs.offset()
+    assert lhs.num_children() == rhs.num_children()
+    for lhs_child, rhs_child in zip(
+        lhs.children(), rhs.children(), strict=True
+    ):
+        _assert_column_memory_eq(lhs_child, rhs_child)
 
 
 def assert_column_memory_eq(lhs: ColumnBase, rhs: ColumnBase):
@@ -285,24 +276,11 @@ def assert_column_memory_eq(lhs: ColumnBase, rhs: ColumnBase):
     children mismatches at any level.
     """
 
-    def get_ptr(x) -> int:
-        return x.get_ptr(mode="read") if x else 0
-
-    assert get_ptr(lhs.base_data) == get_ptr(rhs.base_data)
-    assert get_ptr(lhs.base_mask) == get_ptr(rhs.base_mask)
-    assert lhs.base_size == rhs.base_size
-    assert lhs.offset == rhs.offset
-    assert lhs.size == rhs.size
-    assert len(lhs.base_children) == len(rhs.base_children)
-    for lhs_child, rhs_child in zip(
-        lhs.base_children, rhs.base_children, strict=True
-    ):
-        assert_column_memory_eq(lhs_child, rhs_child)
+    _assert_column_memory_eq(lhs.plc_column, rhs.plc_column)
     if isinstance(lhs, cudf.core.column.CategoricalColumn) and isinstance(
         rhs, cudf.core.column.CategoricalColumn
     ):
         assert_column_memory_eq(lhs.categories, rhs.categories)
-        assert_column_memory_eq(lhs.codes, rhs.codes)
 
 
 def assert_column_memory_ne(lhs: ColumnBase, rhs: ColumnBase):

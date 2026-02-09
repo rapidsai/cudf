@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf/column/column_device_view.cuh>
@@ -33,10 +22,10 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/std/utility>
 #include <thrust/execution_policy.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/logical.h>
-#include <thrust/pair.h>
 #include <thrust/transform.h>
 
 namespace cudf {
@@ -50,7 +39,7 @@ namespace {
  */
 template <typename IntegerType>
 struct string_to_integer_check_fn {
-  __device__ bool operator()(thrust::pair<string_view, bool> const& p) const
+  __device__ bool operator()(cuda::std::pair<string_view, bool> const& p) const
   {
     if (!p.second || p.first.empty()) { return false; }
 
@@ -126,13 +115,13 @@ struct dispatch_is_integer_fn {
 
     auto d_results = results->mutable_view().data<bool>();
     if (input.has_nulls()) {
-      thrust::transform(rmm::exec_policy(stream),
+      thrust::transform(rmm::exec_policy_nosync(stream),
                         d_column->pair_begin<string_view, true>(),
                         d_column->pair_end<string_view, true>(),
                         d_results,
                         string_to_integer_check_fn<T>{});
     } else {
-      thrust::transform(rmm::exec_policy(stream),
+      thrust::transform(rmm::exec_policy_nosync(stream),
                         d_column->pair_begin<string_view, false>(),
                         d_column->pair_end<string_view, false>(),
                         d_results,
@@ -172,13 +161,13 @@ std::unique_ptr<column> is_integer(strings_column_view const& input,
   auto d_results = results->mutable_view().data<bool>();
   if (input.has_nulls()) {
     thrust::transform(
-      rmm::exec_policy(stream),
+      rmm::exec_policy_nosync(stream),
       d_column->pair_begin<string_view, true>(),
       d_column->pair_end<string_view, true>(),
       d_results,
       [] __device__(auto const& p) { return p.second ? is_integer(p.first) : false; });
   } else {
-    thrust::transform(rmm::exec_policy(stream),
+    thrust::transform(rmm::exec_policy_nosync(stream),
                       d_column->pair_begin<string_view, false>(),
                       d_column->pair_end<string_view, false>(),
                       d_results,
@@ -252,7 +241,7 @@ struct dispatch_to_integers_fn {
                   rmm::cuda_stream_view stream) const
     requires(cudf::is_integral_not_bool<IntegerType>())
   {
-    thrust::transform(rmm::exec_policy(stream),
+    thrust::transform(rmm::exec_policy_nosync(stream),
                       thrust::make_counting_iterator<size_type>(0),
                       thrust::make_counting_iterator<size_type>(strings_column.size()),
                       output_column.data<IntegerType>(),

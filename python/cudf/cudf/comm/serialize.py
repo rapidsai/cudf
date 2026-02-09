@@ -1,4 +1,5 @@
-# Copyright (c) 2019-2022, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2019-2022, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 import cudf  # noqa: F401
 from cudf.core.abc import Serializable

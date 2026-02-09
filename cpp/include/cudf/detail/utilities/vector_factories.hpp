@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2021-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
@@ -33,7 +22,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
-#include <rmm/mr/device/device_memory_resource.hpp>
+#include <rmm/mr/device_memory_resource.hpp>
 
 #include <vector>
 
@@ -422,7 +411,7 @@ host_vector<typename Container::value_type> make_host_vector_async(Container con
  * using a pinned memory resource.
  *
  * @tparam T The type of the data to copy
- * @param source_data The device data to copy
+ * @param v The device data to copy
  * @param stream The stream on which to perform the copy
  * @return The data copied to the host
  */
@@ -485,6 +474,99 @@ host_vector<T> make_pinned_vector(size_t size, rmm::cuda_stream_view stream)
 {
   auto result = make_pinned_vector_async<T>(size, stream);
   stream.synchronize();
+  return result;
+}
+
+/**
+ * @brief Asynchronously construct a pinned `cudf::detail::host_vector` containing a copy of data
+ * from a `device_span`
+ *
+ * @note This function does not synchronize `stream` after the copy.
+ *
+ * @tparam T The type of the data to copy
+ * @param v The device data to copy
+ * @param stream The stream on which to perform the copy
+ * @return The data copied to pinned host memory
+ */
+template <typename T>
+host_vector<T> make_pinned_vector_async(device_span<T const> v, rmm::cuda_stream_view stream)
+{
+  auto result = make_pinned_vector_async<T>(v.size(), stream);
+  cuda_memcpy_async<T>(result, v, stream);
+  return result;
+}
+
+/**
+ * @brief Asynchronously construct a pinned `cudf::detail::host_vector` containing a copy of data
+ * from a device container
+ *
+ * @note This function does not synchronize `stream` after the copy.
+ *
+ * @tparam Container The type of the container to copy from
+ * @param c The input device container from which to copy
+ * @param stream The stream on which to perform the copy
+ * @return The data copied to pinned host memory
+ */
+template <typename Container>
+host_vector<typename Container::value_type> make_pinned_vector_async(Container const& c,
+                                                                     rmm::cuda_stream_view stream)
+  requires(std::is_convertible_v<Container, device_span<typename Container::value_type const>>)
+{
+  return make_pinned_vector_async(device_span<typename Container::value_type const>{c}, stream);
+}
+
+/**
+ * @brief Synchronously construct a pinned `cudf::detail::host_vector` containing a copy of data
+ * from a `device_span`
+ *
+ * @note This function synchronizes `stream` after the copy.
+ *
+ * @tparam T The type of the data to copy
+ * @param v The device data to copy
+ * @param stream The stream on which to perform the copy
+ * @return The data copied to pinned host memory
+ */
+template <typename T>
+host_vector<T> make_pinned_vector(device_span<T const> v, rmm::cuda_stream_view stream)
+{
+  auto result = make_pinned_vector_async(v, stream);
+  stream.synchronize();
+  return result;
+}
+
+/**
+ * @brief Synchronously construct a pinned `cudf::detail::host_vector` containing a copy of data
+ * from a device container
+ *
+ * @note This function synchronizes `stream` after the copy.
+ *
+ * @tparam Container The type of the container to copy from
+ * @param c The input device container from which to copy
+ * @param stream The stream on which to perform the copy
+ * @return The data copied to pinned host memory
+ */
+template <typename Container>
+host_vector<typename Container::value_type> make_pinned_vector(Container const& c,
+                                                               rmm::cuda_stream_view stream)
+  requires(std::is_convertible_v<Container, device_span<typename Container::value_type const>>)
+{
+  return make_pinned_vector(device_span<typename Container::value_type const>{c}, stream);
+}
+
+/**
+ * @brief Synchronously construct a pinned `cudf::detail::host_vector` containing a copy of data
+ * from a `host_span`
+ *
+ * @tparam T The type of the data to copy
+ * @param v The host data to copy
+ * @param stream The stream on which to allocate memory
+ * @return The data copied to pinned host memory
+ */
+template <typename T>
+host_vector<T> make_pinned_vector(host_span<T const> v, rmm::cuda_stream_view stream)
+{
+  auto result = make_pinned_vector<T>(v.size(), stream);
+  std::copy(v.begin(), v.end(), result.begin());
   return result;
 }
 

@@ -1,4 +1,5 @@
-# Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Literal
@@ -14,8 +15,7 @@ from cudf.utils.dtypes import SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES
 
 if TYPE_CHECKING:
     from collections.abc import Callable
-
-    from typing_extensions import Self
+    from typing import Self
 
 _agg_name_map = {
     "COUNT_VALID": "COUNT",
@@ -133,9 +133,10 @@ class Aggregation:
             "linear", "lower", "higher", "midpoint", "nearest"
         ] = "linear",
     ) -> Self:
+        q_list: list[float] = [q] if is_scalar(q) else q  # type: ignore[assignment,list-item]
         return cls(
             plc.aggregation.quantile(
-                [q] if is_scalar(q) else q,
+                q_list,
                 plc.types.Interpolation[interpolation.upper()],
             )
         )

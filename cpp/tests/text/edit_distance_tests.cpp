@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2020-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf_test/base_fixture.hpp>
@@ -23,7 +12,7 @@
 
 #include <nvtext/edit_distance.hpp>
 
-#include <thrust/iterator/transform_iterator.h>
+#include <thrust/iterator/constant_iterator.h>
 
 #include <vector>
 
@@ -31,64 +20,57 @@ struct TextEditDistanceTest : public cudf::test::BaseFixture {};
 
 TEST_F(TextEditDistanceTest, EditDistance)
 {
-  std::vector<char const*> h_strings{"dog", nullptr, "cat", "mouse", "pup", "", "puppy", "thé"};
-  cudf::test::strings_column_wrapper strings(
-    h_strings.begin(),
-    h_strings.end(),
-    thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
+  auto const input = cudf::test::strings_column_wrapper(
+    {"dog", "", "cat", "mouse", "pup", "", "puppy", "thé"}, {1, 0, 1, 1, 1, 1, 1, 1});
+  auto sv = cudf::strings_column_view(input);
 
-  std::vector<char const*> h_targets{"hog", "not", "cake", "house", "fox", nullptr, "puppy", "the"};
-  cudf::test::strings_column_wrapper targets(
-    h_targets.begin(),
-    h_targets.end(),
-    thrust::make_transform_iterator(h_targets.begin(), [](auto str) { return str != nullptr; }));
   {
-    auto results =
-      nvtext::edit_distance(cudf::strings_column_view(strings), cudf::strings_column_view(targets));
+    auto const targets = cudf::test::strings_column_wrapper(
+      {"hog", "not", "cake", "house", "fox", "", "puppy", "the"}, {1, 1, 1, 1, 1, 0, 1, 1});
+    auto tv = cudf::strings_column_view(targets);
+
+    auto results = nvtext::edit_distance(sv, tv);
     cudf::test::fixed_width_column_wrapper<int32_t> expected({1, 3, 2, 1, 3, 0, 0, 1});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
   {
     cudf::test::strings_column_wrapper single({"pup"});
-    auto results =
-      nvtext::edit_distance(cudf::strings_column_view(strings), cudf::strings_column_view(single));
+    auto tv      = cudf::strings_column_view(single);
+    auto results = nvtext::edit_distance(sv, tv);
     cudf::test::fixed_width_column_wrapper<int32_t> expected({3, 3, 3, 4, 0, 3, 2, 3});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
   {
     cudf::test::strings_column_wrapper single({"pup"}, {1});
+    auto tv = cudf::strings_column_view(single);
     std::vector<char const*> h_input(516, "cup");
-    auto input = cudf::test::strings_column_wrapper(h_input.begin(), h_input.end());
-    auto results =
-      nvtext::edit_distance(cudf::strings_column_view(input), cudf::strings_column_view(single));
+    auto input    = cudf::test::strings_column_wrapper(h_input.begin(), h_input.end());
+    auto sv       = cudf::strings_column_view(input);
+    auto results  = nvtext::edit_distance(sv, tv);
     auto begin    = thrust::constant_iterator<int32_t>(1);
     auto expected = cudf::test::fixed_width_column_wrapper<int32_t>(begin, begin + h_input.size());
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
 }
 
-TEST_F(TextEditDistanceTest, EditDistanceMatrix)
+TEST_F(TextEditDistanceTest, EditDistanceLong)
 {
-  std::vector<char const*> h_strings{"dog", nullptr, "hog", "frog", "cat", "", "hat", "clog"};
-  cudf::test::strings_column_wrapper strings(
-    h_strings.begin(),
-    h_strings.end(),
-    thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
+  auto const input1 = cudf::test::strings_column_wrapper(
+    {"the lady brown fox jumps down the wall of the castle with wide windows",
+     "the lady brown fox jumps down the wall of thé castlé with wide windows",
+     "thé lady brown fox jumps down the wall of the castle with wide windows",
+     "the lazy brown dog jumps upon the hill of the castle with long windows",  // exact one
+     "why the lazy brown dog jumps upon the hill of the castle with long windows",
+     "the lazy brown dog jumps upon the hill of the castle",
+     "lazy brown dog jumps upon hill"});
+  auto const input2 = cudf::test::strings_column_wrapper(
+    {"the lazy brown dog jumps upon the hill of the castle with long windows"});
+  auto sv1 = cudf::strings_column_view(input1);
+  auto sv2 = cudf::strings_column_view(input2);
 
-  {
-    auto results = nvtext::edit_distance_matrix(cudf::strings_column_view(strings));
-
-    using LCW = cudf::test::lists_column_wrapper<int32_t>;
-    LCW expected({LCW{0, 3, 1, 2, 3, 3, 3, 2},
-                  LCW{3, 0, 3, 4, 3, 0, 3, 4},
-                  LCW{1, 3, 0, 2, 3, 3, 2, 2},
-                  LCW{2, 4, 2, 0, 4, 4, 4, 2},
-                  LCW{3, 3, 3, 4, 0, 3, 1, 3},
-                  LCW{3, 0, 3, 4, 3, 0, 3, 4},
-                  LCW{3, 3, 2, 4, 1, 3, 0, 4},
-                  LCW{2, 4, 2, 2, 3, 4, 4, 0}});
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
-  }
+  auto expected = cudf::test::fixed_width_column_wrapper<int32_t>({12, 14, 13, 0, 4, 18, 40});
+  auto results  = nvtext::edit_distance(sv1, sv2);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
 TEST_F(TextEditDistanceTest, EmptyTest)
@@ -96,8 +78,6 @@ TEST_F(TextEditDistanceTest, EmptyTest)
   auto strings = cudf::make_empty_column(cudf::data_type{cudf::type_id::STRING});
   cudf::strings_column_view strings_view(strings->view());
   auto results = nvtext::edit_distance(strings_view, strings_view);
-  EXPECT_EQ(results->size(), 0);
-  results = nvtext::edit_distance_matrix(strings_view);
   EXPECT_EQ(results->size(), 0);
 }
 
@@ -108,7 +88,6 @@ TEST_F(TextEditDistanceTest, ErrorsTest)
   auto svi     = cudf::strings_column_view(input);
   auto tvi     = cudf::strings_column_view(targets);
   EXPECT_THROW(nvtext::edit_distance(svi, tvi), std::invalid_argument);
-  EXPECT_THROW(nvtext::edit_distance_matrix(svi), std::invalid_argument);
 
   auto single = cudf::test::strings_column_wrapper({"pup"}, {0});
   auto sv1    = cudf::strings_column_view(single);

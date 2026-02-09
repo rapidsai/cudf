@@ -1,4 +1,5 @@
-# Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 import math
 
@@ -103,5 +104,6 @@ def test_transform_udf():
         output_type=plc.DataType(plc.TypeId.FLOAT64),
         is_ptx=True,
         is_null_aware=plc.types.NullAware.NO,
+        null_policy=plc.types.OutputNullability.PRESERVE,
     )
     assert_column_eq(expect, got)

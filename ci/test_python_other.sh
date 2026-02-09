@@ -1,5 +1,6 @@
 #!/bin/bash
-# Copyright (c) 2022-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 set -euo pipefail
 
@@ -17,7 +18,7 @@ trap "EXITCODE=1" ERR
 set +e
 
 rapids-logger "pytest dask_cudf"
-./ci/run_dask_cudf_pytests.sh \
+timeout 30m ./ci/run_dask_cudf_pytests.sh \
   --junitxml="${RAPIDS_TESTS_DIR}/junit-dask-cudf.xml" \
   --numprocesses=8 \
   --dist=worksteal \
@@ -27,11 +28,11 @@ rapids-logger "pytest dask_cudf"
   --cov-report=term
 
 rapids-logger "pytest cudf_kafka"
-./ci/run_cudf_kafka_pytests.sh \
+timeout 30m ./ci/run_cudf_kafka_pytests.sh \
   --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf-kafka.xml"
 
 rapids-logger "pytest custreamz"
-./ci/run_custreamz_pytests.sh \
+timeout 30m ./ci/run_custreamz_pytests.sh \
   --junitxml="${RAPIDS_TESTS_DIR}/junit-custreamz.xml" \
   --numprocesses=8 \
   --dist=worksteal \
@@ -40,14 +41,10 @@ rapids-logger "pytest custreamz"
   --cov-report=xml:"${RAPIDS_COVERAGE_DIR}/custreamz-coverage.xml" \
   --cov-report=term
 
-# Note that cudf-polars uses rmm.mr.CudaAsyncMemoryResource() which allocates
-# half the available memory. This doesn't play well with multiple workers, so
-# we keep --numprocesses=1 for now. This should be resolved by
-# https://github.com/rapidsai/cudf/issues/16723.
 rapids-logger "pytest cudf-polars"
-./ci/run_cudf_polars_pytests.sh \
+timeout 30m ./ci/run_cudf_polars_pytests.sh \
   --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf-polars.xml" \
-  --numprocesses=1 \
+  --numprocesses=8 \
   --dist=worksteal \
   --cov-config=./pyproject.toml \
   --cov=cudf_polars \

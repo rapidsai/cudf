@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2020-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "io/utilities/hostdevice_vector.hpp"
@@ -29,11 +18,13 @@
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_vector.hpp>
 
+#include <cuda/std/span>
 #include <thrust/device_vector.h>
 #include <thrust/host_vector.h>
 
 #include <cstddef>
 #include <cstring>
+#include <span>
 #include <string>
 
 using cudf::device_span;
@@ -227,6 +218,16 @@ TEST(SpanTest, CanConstructFromHostContainers)
   (void)host_span<int const>(h_vector_c);
 }
 
+TEST(SpanTest, CanUseStdSpan)
+{
+  auto message            = create_hello_world_message();
+  auto const message_span = host_span<char>(message.data(), message.size());
+
+  std::span std_span = message_span;
+  EXPECT_EQ(std_span.data(), message_span.data());
+  EXPECT_EQ(std_span.size(), message_span.size());
+}
+
 // This test is the only place in libcudf's test suite where using a
 // thrust::device_vector (and therefore the CUDA default stream) is acceptable
 // since we are explicitly testing conversions from thrust::device_vector.
@@ -261,6 +262,18 @@ TEST(SpanTest, CanUseDeviceSpan)
   simple_device_kernel<<<1, 1, 0, cudf::get_default_stream().value()>>>(d_span);
 
   ASSERT_TRUE(d_message.element(0, cudf::get_default_stream()));
+}
+
+TEST(SpanTest, CanUseCudaStdSpan)
+{
+  auto d_message = cudf::detail::make_zeroed_device_uvector_async<int>(
+    1, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
+
+  auto const d_span = device_span<int const>(d_message.data(), d_message.size());
+
+  cuda::std::span std_span = d_span;
+  EXPECT_EQ(std_span.data(), d_span.data());
+  EXPECT_EQ(std_span.size(), d_span.size());
 }
 
 class MdSpanTest : public cudf::test::BaseFixture {};
@@ -326,10 +339,9 @@ TEST(MdSpanTest, CanGetCount)
 
 auto get_test_hostdevice_vector()
 {
-  auto v = cudf::detail::hostdevice_vector<char>(0, 11, cudf::get_default_stream());
-  for (auto c : create_hello_world_message()) {
-    v.push_back(c);
-  }
+  auto const msg = create_hello_world_message();
+  auto v         = cudf::detail::hostdevice_vector<char>(msg.size(), cudf::get_default_stream());
+  std::memcpy(v.host_ptr(), msg.data(), msg.size());
 
   return v;
 }
@@ -387,11 +399,11 @@ TEST(HostDeviceSpanTest, CanGetSize)
 
 TEST(HostDeviceSpanTest, CanGetSizeBytes)
 {
-  auto doubles     = std::vector<double>({6, 3, 2});
-  auto doubles_hdv = cudf::detail::hostdevice_vector<double>(0, 3, cudf::get_default_stream());
-  for (auto d : doubles) {
-    doubles_hdv.push_back(d);
-  }
+  auto doubles = std::vector<double>({6, 3, 2});
+  auto doubles_hdv =
+    cudf::detail::hostdevice_vector<double>(doubles.size(), cudf::get_default_stream());
+  std::memcpy(doubles_hdv.host_ptr(), doubles.data(), doubles.size() * sizeof(double));
+
   auto const doubles_span = cudf::detail::hostdevice_span<double>(doubles_hdv);
   auto const empty_span   = cudf::detail::hostdevice_span<double>();
 
@@ -417,16 +429,20 @@ TEST(HostDeviceSpanTest, CanCopySpan)
 
 TEST(HostDeviceSpanTest, CanSendToDevice)
 {
-  auto message = get_test_hostdevice_vector();
+  auto original_message = get_test_hostdevice_vector();
+  auto stream           = cudf::get_default_stream();
 
-  message.host_to_device(cudf::get_default_stream());
+  original_message.host_to_device_async(stream);
 
-  char d_message[12];
-  cudaMemcpy(d_message, message.device_ptr(), 11, cudaMemcpyDefault);
-  d_message[11] = '\0';
+  std::string got_message(original_message.size(), '\0');
+  cudaMemcpyAsync(got_message.data(),
+                  original_message.device_ptr(),
+                  original_message.size(),
+                  cudaMemcpyDefault,
+                  stream.value());
+  stream.synchronize();
 
-  EXPECT_EQ(11, strlen(d_message));
-  EXPECT_EQ(std::string(d_message), hello_world_message);
+  EXPECT_EQ(got_message, hello_world_message);
 }
 
 CUDF_KERNEL void simple_device_char_kernel(device_span<char> result)
@@ -440,7 +456,7 @@ CUDF_KERNEL void simple_device_char_kernel(device_span<char> result)
 TEST(HostDeviceSpanTest, CanGetFromDevice)
 {
   auto message = get_test_hostdevice_vector();
-  message.host_to_device(cudf::get_default_stream());
+  message.host_to_device_async(cudf::get_default_stream());
   simple_device_char_kernel<<<1, 1, 0, cudf::get_default_stream()>>>(message);
 
   message.device_to_host(cudf::get_default_stream());

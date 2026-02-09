@@ -1,86 +1,90 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
 
-#include <cudf/detail/cuco_helpers.hpp>
-#include <cudf/detail/join/join.hpp>
-#include <cudf/hashing.hpp>
+#include <cudf/join/join.hpp>
 #include <cudf/table/table_view.hpp>
+#include <cudf/types.hpp>
 
-#include <cuco/static_multimap.cuh>
-#include <cuco/static_multiset.cuh>
-#include <cuda/atomic>
+#include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_uvector.hpp>
+#include <rmm/resource_ref.hpp>
+
+#include <memory>
+#include <utility>
 
 namespace cudf::detail {
 
 constexpr int DEFAULT_JOIN_BLOCK_SIZE = 128;
 
-using pair_type = cuco::pair<hash_value_type, size_type>;
-
-using hash_type = cuco::murmurhash3_32<hash_value_type>;
-
-// Multimap type used for mixed joins. TODO: This is a temporary alias used
-// until the mixed joins are converted to using CGs properly. Right now it's
-// using a cooperative group of size 1.
-using mixed_multimap_type =
-  cuco::static_multimap<hash_value_type,
-                        size_type,
-                        cuda::thread_scope_device,
-                        cudf::detail::cuco_allocator<char>,
-                        cuco::legacy::double_hashing<1, hash_type, hash_type>>;
+// Convenient alias for a pair of unique pointers to device uvectors.
+using VectorPair = std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+                             std::unique_ptr<rmm::device_uvector<size_type>>>;
 
 /**
- * @brief Remaps a hash value to avoid collisions with sentinel values.
+ * @brief Computes the trivial left join operation for the case when the
+ * right table is empty.
  *
- * @param hash The hash value to potentially remap
- * @param sentinel The reserved value
+ * In this case all the valid indices of the left table
+ * are returned with their corresponding right indices being set to
+ * `JoinNoMatch`, i.e. `cuda::std::numeric_limits<size_type>::min()`.
+ *
+ * @param left Table of left columns to join
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the result
+ *
+ * @return Join output indices vector pair
  */
-template <typename H, typename S>
-constexpr auto remap_sentinel_hash(H hash, S sentinel)
-{
-  // Arbitrarily choose hash - 1
-  return (hash == sentinel) ? (hash - 1) : hash;
-}
+VectorPair get_trivial_left_join_indices(table_view const& left,
+                                         rmm::cuda_stream_view stream,
+                                         rmm::device_async_resource_ref mr);
 
 /**
- * @brief Device functor to create a pair of hash value and row index for use with cuco data
- * structures.
+ * @brief Takes two pairs of vectors and returns a single pair where the first
+ * element is a vector made from concatenating the first elements of both input
+ * pairs and the second element is a vector made from concatenating the second
+ * elements of both input pairs.
  *
- * @tparam T Type of row index, must be convertible to `size_type`.
- * @tparam Hasher The type of internal hasher to compute row hash.
+ * This function's primary use is for computing the indices of a full join by
+ * first performing a left join, then separately getting the complementary
+ * right join indices, then finally calling this function to concatenate the
+ * results. In this case, each input VectorPair contains the left and right
+ * indices from a join.
+ *
+ * Note that this is a destructive operation, in that at least one of a or b
+ * will be invalidated (by a move) by this operation. Calling code should
+ * assume that neither input VectorPair is valid after this function executes.
+ *
+ * @param a The first pair of vectors.
+ * @param b The second pair of vectors.
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ *
+ * @return A pair of vectors containing the concatenated output.
  */
-template <typename Hasher, typename T = size_type>
-class make_pair_function {
- public:
-  CUDF_HOST_DEVICE make_pair_function(Hasher const& hash, hash_value_type const empty_key_sentinel)
-    : _hash{hash}, _empty_key_sentinel{empty_key_sentinel}
-  {
-  }
+VectorPair concatenate_vector_pairs(VectorPair& a, VectorPair& b, rmm::cuda_stream_view stream);
 
-  __device__ __forceinline__ auto operator()(size_type i) const noexcept
-  {
-    // Compute the hash value of row `i`
-    auto row_hash_value = remap_sentinel_hash(_hash(i), _empty_key_sentinel);
-    return cuco::make_pair(row_hash_value, T{i});
-  }
+/**
+ * @brief  Creates a table containing the complement of left join indices.
+ *
+ * This table has two columns. The first one is filled with `JoinNoMatch`
+ * and the second one contains values from 0 to right_table_row_count - 1
+ * excluding those found in the right_indices column.
+ *
+ * @param right_indices Vector of indices
+ * @param left_table_row_count Number of rows of left table
+ * @param right_table_row_count Number of rows of right table
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned vectors.
+ *
+ * @return Pair of vectors containing the left join indices complement
+ */
+VectorPair get_left_join_indices_complement(
+  std::unique_ptr<rmm::device_uvector<size_type>>& right_indices,
+  size_type left_table_row_count,
+  size_type right_table_row_count,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr);
 
- private:
-  Hasher _hash;
-  hash_value_type const _empty_key_sentinel;
-};
-
-bool is_trivial_join(table_view const& left, table_view const& right, join_kind join_type);
 }  // namespace cudf::detail

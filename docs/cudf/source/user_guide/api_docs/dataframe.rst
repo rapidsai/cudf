@@ -108,7 +108,6 @@ Function application, GroupBy & window
    DataFrame.agg
    DataFrame.apply
    DataFrame.applymap
-   DataFrame.apply_chunks
    DataFrame.groupby
    DataFrame.map
    DataFrame.pipe
@@ -264,7 +263,6 @@ Serialization / IO / conversion
    DataFrame.device_serialize
    DataFrame.from_arrow
    DataFrame.from_dict
-   DataFrame.from_pandas
    DataFrame.from_records
    DataFrame.hash_values
    DataFrame.host_deserialize

@@ -1,4 +1,5 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
 from libcpp.vector cimport vector
@@ -10,6 +11,8 @@ from pylibcudf.libcudf.column.column_view cimport (
 from pylibcudf.libcudf.types cimport data_type, size_type
 
 from rmm.librmm.device_buffer cimport device_buffer
+from rmm.librmm.cuda_stream_view cimport cuda_stream_view
+from rmm.librmm.memory_resource cimport device_memory_resource
 
 
 cdef extern from "cudf/column/column.hpp" namespace "cudf" nogil:
@@ -20,9 +23,17 @@ cdef extern from "cudf/column/column.hpp" namespace "cudf" nogil:
 
     cdef cppclass column:
         column() except +libcudf_exception_handler
-        column(const column& other) except +libcudf_exception_handler
+        column(
+            const column& other,
+            cuda_stream_view stream,
+            device_memory_resource* mr
+        ) except +libcudf_exception_handler
 
-        column(column_view view) except +libcudf_exception_handler
+        column(
+            column_view view,
+            cuda_stream_view stream,
+            device_memory_resource* mr
+        ) except +libcudf_exception_handler
 
         size_type size() except +libcudf_exception_handler
         size_type null_count() except +libcudf_exception_handler

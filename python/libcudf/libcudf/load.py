@@ -1,16 +1,5 @@
-# Copyright (c) 2024-2025, NVIDIA CORPORATION.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 #
 
 import ctypes
@@ -47,22 +36,30 @@ def _load_wheel_installation(soname: str):
 def load_library():
     """Dynamically load libcudf.so and its dependencies"""
     try:
+        from cuda.pathfinder import load_nvidia_dynamic_lib
+
+        load_nvidia_dynamic_lib("nvJitLink")
+    except ModuleNotFoundError:
+        pass
+
+    try:
         # librmm and libkvikio must be loaded before libcudf because libcudf references
         # them.
         import libkvikio
         import librmm
+        import nvidia.libnvcomp
         import rapids_logger
 
         rapids_logger.load_library()
         librmm.load_library()
         libkvikio.load_library()
+        nvidia.libnvcomp.load_library()
     except ModuleNotFoundError:
         # libcudf's runtime dependency on libkvikio may be satisfied by a natively
         # installed library or a conda package, in which case the import will fail and
         # we assume the library is discoverable on system paths.
         pass
 
-    _load_library("libnvcomp.so.5")
     return _load_library("libcudf.so")
 
 

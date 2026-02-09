@@ -1,23 +1,11 @@
 /*
- * Copyright (c) 2022-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "io/fst/logical_stack.cuh"
 #include "io/fst/lookup_tables.cuh"
 #include "io/utilities/parsing_utils.cuh"
-#include "io/utilities/string_parsing.hpp"
 #include "nested_json.hpp"
 
 #include <cudf/column/column_factories.hpp>
@@ -39,12 +27,11 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <thrust/device_vector.h>
+#include <cuda/std/tuple>
 #include <thrust/iterator/discard_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/transform.h>
-#include <thrust/tuple.h>
 
 #include <limits>
 #include <stack>
@@ -132,10 +119,10 @@ constexpr auto NUM_SYMBOL_GROUPS = static_cast<uint32_t>(dfa_symbol_group_id::NU
  */
 struct SymbolPairToSymbolGroupId {
   SymbolT delimiter = '\n';
-  CUDF_HOST_DEVICE SymbolGroupT operator()(thrust::tuple<SymbolT, StackSymbolT> symbol) const
+  CUDF_HOST_DEVICE SymbolGroupT operator()(cuda::std::tuple<SymbolT, StackSymbolT> symbol) const
   {
-    auto const input_symbol = thrust::get<0>(symbol);
-    auto const stack_symbol = thrust::get<1>(symbol);
+    auto const input_symbol = cuda::std::get<0>(symbol);
+    auto const stack_symbol = cuda::std::get<1>(symbol);
     return static_cast<SymbolGroupT>(
       input_symbol == delimiter
         ? dfa_symbol_group_id::DELIMITER
@@ -155,7 +142,7 @@ struct TransduceInputOp {
                                                      SymbolT const read_symbol) const
   {
     if (state_id == static_cast<StateT>(dfa_states::EXCESS)) { return '_'; }
-    return thrust::get<1>(read_symbol);
+    return cuda::std::get<1>(read_symbol);
   }
 
   template <typename SymbolT>
@@ -227,9 +214,9 @@ std::array<std::vector<PdaTokenT>, NUM_SYMBOL_GROUPS - 1> const symbol_groups{{
 struct UnwrapTokenFromSymbolOp {
   template <typename SymbolGroupLookupTableT>
   CUDF_HOST_DEVICE SymbolGroupT operator()(SymbolGroupLookupTableT const& sgid_lut,
-                                           thrust::tuple<PdaTokenT, SymbolOffsetT> symbol) const
+                                           cuda::std::tuple<PdaTokenT, SymbolOffsetT> symbol) const
   {
-    PdaTokenT const token_type = thrust::get<0>(symbol);
+    PdaTokenT const token_type = cuda::std::get<0>(symbol);
     return sgid_lut.lookup(token_type);
   }
 };
@@ -598,14 +585,14 @@ struct PdaSymbolToSymbolGroupId {
   SymbolT delimiter = '\n';
   template <typename SymbolT, typename StackSymbolT>
   __device__ __forceinline__ PdaSymbolGroupIdT
-  operator()(thrust::tuple<SymbolT, StackSymbolT> symbol_pair) const
+  operator()(cuda::std::tuple<SymbolT, StackSymbolT> symbol_pair) const
   {
     // The symbol read from the input
-    auto symbol = thrust::get<0>(symbol_pair);
+    auto symbol = cuda::std::get<0>(symbol_pair);
 
     // The stack symbol (i.e., what is on top of the stack at the time the input symbol was read)
     // I.e., whether we're reading in something within a struct, a list, or the JSON root
-    auto stack_symbol = thrust::get<1>(symbol_pair);
+    auto stack_symbol = cuda::std::get<1>(symbol_pair);
 
     // The stack symbol offset: '_' is the root group (0), '[' is the list group (1), '{' is the
     // struct group (2)
@@ -1522,7 +1509,7 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> pr
   // Instantiate FST for post-processing the token stream to remove all tokens that belong to an
   // invalid JSON line
   token_filter::UnwrapTokenFromSymbolOp sgid_op{};
-  using symbol_t  = thrust::tuple<PdaTokenT, SymbolOffsetT>;
+  using symbol_t  = cuda::std::tuple<PdaTokenT, SymbolOffsetT>;
   auto filter_fst = fst::detail::make_fst(
     fst::detail::make_symbol_group_lut(token_filter::symbol_groups, sgid_op),
     fst::detail::make_transition_table(token_filter::transition_table),
@@ -1555,11 +1542,11 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> pr
   auto const num_total_tokens = d_num_selected_tokens.value(stream);
   rmm::device_uvector<PdaTokenT> tokens_out{num_total_tokens, stream, mr};
   rmm::device_uvector<SymbolOffsetT> token_indices_out{num_total_tokens, stream, mr};
-  thrust::copy(rmm::exec_policy(stream),
+  thrust::copy(rmm::exec_policy_nosync(stream),
                filtered_tokens_out.end() - num_total_tokens,
                filtered_tokens_out.end(),
                tokens_out.data());
-  thrust::copy(rmm::exec_policy(stream),
+  thrust::copy(rmm::exec_policy_nosync(stream),
                filtered_token_indices_out.end() - num_total_tokens,
                filtered_token_indices_out.end(),
                token_indices_out.data());

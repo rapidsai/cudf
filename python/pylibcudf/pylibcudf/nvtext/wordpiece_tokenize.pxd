@@ -1,9 +1,11 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 from libcpp.memory cimport unique_ptr
 from pylibcudf.column cimport Column
 from pylibcudf.libcudf.nvtext.wordpiece_tokenize cimport wordpiece_vocabulary
 from pylibcudf.libcudf.types cimport size_type
+from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from rmm.pylibrmm.stream cimport Stream
 
 cdef class WordPieceVocabulary:
@@ -13,5 +15,6 @@ cpdef Column wordpiece_tokenize(
     Column input,
     WordPieceVocabulary vocabulary,
     size_type max_words_per_row,
-    Stream stream=*
+    Stream stream=*,
+    DeviceMemoryResource mr=*
 )

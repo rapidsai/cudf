@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ from cudf_polars.testing.asserts import (
     assert_ir_translation_raises,
 )
 from cudf_polars.testing.io import make_partitioned_source
-from cudf_polars.utils.versions import POLARS_VERSION_LT_131
+from cudf_polars.utils.versions import POLARS_VERSION_LT_131, POLARS_VERSION_LT_135
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -311,6 +311,15 @@ def test_scan_csv_skip_initial_empty_rows(tmp_path):
     assert_gpu_result_equal(q)
 
 
+def test_scan_csv_slice_end_none(tmp_path):
+    with (tmp_path / "test.csv").open("w") as f:
+        f.write("""c0\ntrue\nfalse""")
+
+    q = pl.scan_csv(tmp_path / "test.csv").slice(10, None)
+
+    assert_gpu_result_equal(q)
+
+
 @pytest.mark.parametrize(
     "schema",
     [
@@ -557,7 +566,10 @@ def test_scan_parquet_remote(
 
 
 def test_scan_ndjson_remote(
-    request, tmp_path: Path, df: pl.LazyFrame, httpserver: HTTPServer
+    request: pytest.FixtureRequest,
+    tmp_path: Path,
+    df: pl.DataFrame,
+    httpserver: HTTPServer,
 ) -> None:
     request.applymarker(
         pytest.mark.xfail(
@@ -599,3 +611,38 @@ def test_scan_ndjson_remote(
 
     q = pl.scan_ndjson(httpserver.url_for(server_path))
     assert_gpu_result_equal(q)
+
+
+def test_scan_parquet_with_decimal_literal_in_predicate(df, tmp_path):
+    make_partitioned_source(df, tmp_path / "file", "parquet")
+
+    q = pl.scan_parquet(tmp_path / "file").filter(
+        (pl.col("d") > Decimal("1.23"))
+        & (pl.lit(Decimal("2.00")).cast(pl.Decimal(15, 2)) < pl.col("d"))
+    )
+
+    assert_gpu_result_equal(q)
+
+
+def test_scan_csv_blank_line(tmp_path):
+    data = """c0
+
+polars"""
+    fle = tmp_path / "test.csv"
+    fle.write_text(data)
+    q = pl.scan_csv(fle)
+    assert_gpu_result_equal(q)
+
+
+def test_hits_scan_row_index_duplicate(tmp_path):
+    pl.DataFrame({"col": [1, 2, 3]}).write_parquet(tmp_path / "a.parquet")
+
+    q = pl.scan_parquet(tmp_path / "*.parquet", row_index_name="index").with_row_index(
+        "index"
+    )
+
+    if POLARS_VERSION_LT_135:
+        # Did not raise before
+        assert_gpu_result_equal(q)
+    else:
+        assert_ir_translation_raises(q, NotImplementedError)

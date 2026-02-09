@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
     from typing import Literal
 
 __all__: list[str] = ["make_partitioned_source"]
@@ -110,7 +111,7 @@ def make_lazy_frame(
         assert path is not None, f"path is required for fmt={fmt}."
         row_group_size: int | None = None
         if fmt == "parquet":
-            read = pl.scan_parquet
+            read: Callable[..., pl.LazyFrame] = pl.scan_parquet
             row_group_size = 10
         elif fmt == "csv":
             read = pl.scan_csv

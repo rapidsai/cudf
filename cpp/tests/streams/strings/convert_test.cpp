@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2023, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf_test/base_fixture.hpp>
@@ -27,6 +16,7 @@
 #include <cudf/strings/convert/convert_ipv4.hpp>
 #include <cudf/strings/convert/convert_lists.hpp>
 #include <cudf/strings/convert/convert_urls.hpp>
+#include <cudf/strings/convert/int_cast.hpp>
 
 #include <string>
 
@@ -111,6 +101,17 @@ TEST_F(StringsConvertTest, Integers)
   cudf::strings::is_hex(view, cudf::test::get_default_stream());
   cudf::strings::hex_to_integers(view, dtype, cudf::test::get_default_stream());
   cudf::strings::integers_to_hex(values->view(), cudf::test::get_default_stream());
+}
+
+TEST_F(StringsConvertTest, IntegerCast)
+{
+  auto input    = cudf::test::strings_column_wrapper({"aaa", "bbb", "c", "d", "", "f"});
+  auto view     = cudf::strings_column_view(input);
+  auto stream   = cudf::test::get_default_stream();
+  auto otype    = cudf::strings::integer_cast_type(view, stream);
+  auto swap     = cudf::strings::endian::LITTLE;
+  auto integers = cudf::strings::cast_to_integer(view, otype.value(), swap, stream);
+  cudf::strings::cast_from_integer(integers->view(), swap, stream);
 }
 
 TEST_F(StringsConvertTest, IPv4)

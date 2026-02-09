@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "io/comp/decompression.hpp"
@@ -26,6 +15,7 @@
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/structs/utilities.hpp>
 #include <cudf/detail/transform.hpp>
+#include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/config_utils.hpp>
@@ -38,11 +28,10 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <thrust/copy.h>
+#include <cuda/std/utility>
 #include <thrust/fill.h>
 #include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
-#include <thrust/pair.h>
 #include <thrust/scan.h>
 #include <thrust/transform.h>
 
@@ -303,13 +292,14 @@ void update_null_mask(cudf::detail::hostdevice_2dvector<column_desc>& chunks,
       if (child_valid_map_base != nullptr) {
         rmm::device_uvector<uint32_t> dst_idx(child_mask_len, stream);
         // Copy indexes at which the parent has valid value.
-        thrust::copy_if(rmm::exec_policy_nosync(stream),
-                        thrust::make_counting_iterator(0),
-                        thrust::make_counting_iterator(0) + parent_mask_len,
-                        dst_idx.begin(),
-                        [parent_valid_map_base] __device__(auto idx) {
-                          return bit_is_set(parent_valid_map_base, idx);
-                        });
+        cudf::detail::copy_if(
+          thrust::counting_iterator<size_type>(0),
+          thrust::counting_iterator<size_type>(parent_mask_len),
+          dst_idx.begin(),
+          [parent_valid_map_base] __device__(auto idx) {
+            return bit_is_set(parent_valid_map_base, idx);
+          },
+          stream);
 
         auto merged_null_mask = cudf::detail::create_null_mask(
           parent_mask_len, mask_state::ALL_NULL, rmm::cuda_stream_view(stream), mr);
@@ -345,7 +335,7 @@ void update_null_mask(cudf::detail::hostdevice_2dvector<column_desc>& chunks,
         chunk.valid_map_base = out_buffers[col_idx].null_mask();
       }
     }
-    chunks.host_to_device(stream);
+    chunks.host_to_device_async(stream);
   }
 }
 
@@ -447,8 +437,8 @@ void scan_null_counts(cudf::detail::hostdevice_2dvector<column_desc> const& chun
       return chunk.type_kind == STRUCT;
     });
   auto prefix_sums_to_update =
-    cudf::detail::make_empty_host_vector<thrust::pair<size_type, uint32_t*>>(num_struct_cols,
-                                                                             stream);
+    cudf::detail::make_empty_host_vector<cuda::std::pair<size_type, uint32_t*>>(num_struct_cols,
+                                                                                stream);
   for (auto col_idx = 0ul; col_idx < num_columns; ++col_idx) {
     // Null counts sums are only needed for children of struct columns
     if (chunks[0][col_idx].type_kind == STRUCT) {

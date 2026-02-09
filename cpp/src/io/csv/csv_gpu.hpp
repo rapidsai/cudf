@@ -1,25 +1,14 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
 
 #include "io/utilities/parsing_utils.cuh"
 
+#include <cudf/detail/utilities/host_vector.hpp>
 #include <cudf/types.hpp>
-#include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -218,6 +207,8 @@ cudf::detail::host_vector<column_type_histogram> detect_column_types(
  * @param[out] columns Device memory output of column data
  * @param[out] valids Device memory output of column valids bitmap data
  * @param[out] valid_counts Device memory output of the number of valid fields in each column
+ * @param[out] is_quoted Per-column boolean arrays indicating which rows were quoted fields
+ *                          (nullptr entries mean the column doesn't need quote tracking)
  * @param[in] stream CUDA stream to use
  */
 void decode_row_column_data(cudf::io::parse_options_view const& options,
@@ -228,6 +219,7 @@ void decode_row_column_data(cudf::io::parse_options_view const& options,
                             device_span<void* const> columns,
                             device_span<cudf::bitmask_type* const> valids,
                             device_span<size_type> valid_counts,
+                            device_span<bool* const> is_quoted,
                             rmm::cuda_stream_view stream);
 
 }  // namespace gpu

@@ -1,26 +1,15 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/detail/row_operator/common_utils.cuh>
-#include <cudf/detail/row_operator/row_operators.cuh>
+#include <cudf/detail/row_operator/preprocessed_table.cuh>
 #include <cudf/detail/utilities/assert.cuh>
-#include <cudf/hashing/detail/hash_functions.cuh>
+#include <cudf/hashing/detail/default_hash.cuh>
 #include <cudf/hashing/detail/hashing.hpp>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
@@ -35,7 +24,6 @@
 #include <memory>
 
 namespace CUDF_EXPORT cudf {
-
 namespace detail {
 
 /**
@@ -182,6 +170,8 @@ class row_equality_comparator {
 template <template <typename> class Hash>
 class element_hasher {
  public:
+  using result_type = cuda::std::invoke_result_t<Hash<int32_t>, int32_t>;
+
   /**
    * @brief Returns the hash value of the given element in the given column.
    *
@@ -192,16 +182,16 @@ class element_hasher {
    * @return The hash value of the given element
    */
   template <typename T, CUDF_ENABLE_IF(column_device_view::has_element_accessor<T>())>
-  __device__ hash_value_type operator()(hash_value_type seed,
-                                        column_device_view const& col,
-                                        size_type row_index) const
+  __device__ result_type operator()(result_type seed,
+                                    column_device_view const& col,
+                                    size_type row_index) const
   {
     return Hash<T>{seed}(col.element<T>(row_index));
   }
 
   // @cond
   template <typename T, CUDF_ENABLE_IF(not column_device_view::has_element_accessor<T>())>
-  __device__ hash_value_type operator()(hash_value_type, column_device_view const&, size_type) const
+  __device__ result_type operator()(result_type, column_device_view const&, size_type) const
   {
     CUDF_UNREACHABLE("Unsupported type in hash.");
   }
@@ -216,6 +206,8 @@ class element_hasher {
 template <template <typename> class Hash = cudf::hashing::detail::default_hash>
 class row_hasher {
  public:
+  using result_type = cuda::std::invoke_result_t<Hash<int32_t>, int32_t>;
+
   row_hasher() = delete;
 
   /**
@@ -227,7 +219,7 @@ class row_hasher {
    */
   row_hasher(cudf::nullate::DYNAMIC const& has_nulls,
              table_device_view t,
-             hash_value_type seed = DEFAULT_HASH_SEED)
+             result_type seed = DEFAULT_HASH_SEED)
     : _has_nulls{has_nulls}, _table{t}, _seed{seed}
   {
   }
@@ -241,7 +233,7 @@ class row_hasher {
    */
   row_hasher(cudf::nullate::DYNAMIC const& has_nulls,
              std::shared_ptr<cudf::detail::row::equality::preprocessed_table> t,
-             hash_value_type seed = DEFAULT_HASH_SEED)
+             result_type seed = DEFAULT_HASH_SEED)
     : _has_nulls{has_nulls}, _table{*t}, _seed{seed}
   {
   }
@@ -255,8 +247,7 @@ class row_hasher {
   __device__ auto operator()(size_type row_index) const
   {
     element_hasher<Hash> hasher;
-    // avoid hash combine call if there is only one column
-    auto hash = cuda::std::numeric_limits<hash_value_type>::max();
+    auto hash = cuda::std::numeric_limits<result_type>::max();
     if (!_has_nulls || !_table.column(0).is_null(row_index)) {
       hash = cudf::type_dispatcher<dispatch_primitive_type>(
         _table.column(0).type(), hasher, _seed, _table.column(0), row_index);
@@ -269,8 +260,8 @@ class row_hasher {
           cudf::type_dispatcher<dispatch_primitive_type>(
             _table.column(i).type(), hasher, _seed, _table.column(i), row_index));
       } else {
-        hash = cudf::hashing::detail::hash_combine(
-          hash, cuda::std::numeric_limits<hash_value_type>::max());
+        hash =
+          cudf::hashing::detail::hash_combine(hash, cuda::std::numeric_limits<result_type>::max());
       }
     }
     return hash;
@@ -279,7 +270,7 @@ class row_hasher {
  private:
   cudf::nullate::DYNAMIC _has_nulls;
   table_device_view _table;
-  hash_value_type _seed;
+  result_type _seed;
 };
 
 }  // namespace row::primitive

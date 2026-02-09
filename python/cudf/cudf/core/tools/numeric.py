@@ -1,20 +1,21 @@
-# Copyright (c) 2018-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
 import warnings
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Literal, cast
 
 import numpy as np
 import pandas as pd
 
 from cudf.core.column import as_column
+from cudf.core.dtype.validators import is_dtype_obj_numeric
 from cudf.core.dtypes import CategoricalDtype, ListDtype, StructDtype
 from cudf.core.index import ensure_index
 from cudf.core.series import Series
 from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
     can_convert_to_column,
-    is_dtype_obj_numeric,
 )
 
 if TYPE_CHECKING:
@@ -130,7 +131,7 @@ def to_numeric(
     if dtype.kind in "mM":
         col = col.astype(np.dtype(np.int64))
     elif isinstance(dtype, CategoricalDtype):
-        cat_dtype = col.dtype.categories.dtype
+        cat_dtype = col.dtype.categories.dtype  # type: ignore[union-attr]
         if cat_dtype.kind in "iufb":
             col = col.astype(cat_dtype)
         else:
@@ -172,12 +173,12 @@ def to_numeric(
                 np.dtype(np.float64).char,
             ]
         elif downcast in ("integer", "signed"):
-            type_set = list(np.typecodes["Integer"])
+            type_set = list(np.typecodes["Integer"])  # type: ignore[arg-type]
         elif downcast == "unsigned":
-            type_set = list(np.typecodes["UnsignedInteger"])
+            type_set = list(np.typecodes["UnsignedInteger"])  # type: ignore[arg-type]
 
         for t in type_set:
-            downcast_dtype = np.dtype(t)
+            downcast_dtype: np.dtype = np.dtype(t)
             if downcast_dtype.itemsize <= col.dtype.itemsize:
                 if col.can_cast_safely(downcast_dtype):
                     col = col.cast(downcast_dtype)
@@ -224,7 +225,8 @@ def _convert_str_col(
     if col.dtype != CUDF_STRING_DTYPE:
         raise TypeError("col must be string dtype.")
 
-    if col.is_integer().all():
+    string_col = cast("StringColumn", col)
+    if string_col.is_all_integer():
         return col.astype(dtype=np.dtype(np.int64))  # type: ignore[return-value]
 
     # TODO: This can be handled by libcudf in

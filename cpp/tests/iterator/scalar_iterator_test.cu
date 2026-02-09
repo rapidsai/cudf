@@ -1,23 +1,13 @@
 /*
- * Copyright (c) 2020-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software distributed under the License
- * is distributed on an "AS IS" BASIS,  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express
- * or implied. See the License for the specific language governing permissions and limitations under
- * the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 #include <tests/iterator/iterator_tests.cuh>
 
 #include <cudf_test/random.hpp>
 
+#include <cuda/std/utility>
 #include <thrust/host_vector.h>
-#include <thrust/pair.h>
 
 using TestingTypes = cudf::test::FixedWidthTypesWithoutFixedPoint;
 
@@ -37,12 +27,12 @@ TYPED_TEST(IteratorTest, scalar_iterator)
   std::unique_ptr<cudf::scalar> s(new ScalarType{init, true});
 
   // calculate the expected value by CPU.
-  thrust::host_vector<thrust::pair<T, bool>> value_and_validity(host_values.size());
+  thrust::host_vector<cuda::std::pair<T, bool>> value_and_validity(host_values.size());
   std::transform(host_values.begin(),
                  host_values.end(),
                  host_bools.begin(),
                  value_and_validity.begin(),
-                 [](auto v, auto b) { return thrust::pair<T, bool>{v, b}; });
+                 [](auto v, auto b) { return cuda::std::pair<T, bool>{v, b}; });
 
   // GPU test
   auto it_dev = cudf::detail::make_scalar_iterator<T>(*s);
@@ -66,12 +56,12 @@ TYPED_TEST(IteratorTest, null_scalar_iterator)
   std::unique_ptr<cudf::scalar> s(new ScalarType{init, true});
 
   // calculate the expected value by CPU.
-  thrust::host_vector<thrust::pair<T, bool>> value_and_validity(host_values.size());
+  thrust::host_vector<cuda::std::pair<T, bool>> value_and_validity(host_values.size());
   std::transform(host_values.begin(),
                  host_values.end(),
                  host_bools.begin(),
                  value_and_validity.begin(),
-                 [](auto v, auto b) { return thrust::pair<T, bool>{v, b}; });
+                 [](auto v, auto b) { return cuda::std::pair<T, bool>{v, b}; });
 
   // GPU test
   auto it_pair_dev = cudf::detail::make_pair_iterator<T>(*s);

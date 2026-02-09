@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "jit/row_ir.hpp"
@@ -275,6 +264,7 @@ TEST_F(RowIRCudaCodeGenTest, AstConversionBasic)
   ASSERT_EQ(transform_args.scalar_columns[0]->view().size(), 1);
   EXPECT_FALSE(transform_args.is_ptx);
   EXPECT_EQ(transform_args.is_null_aware, null_aware::NO);
+  EXPECT_EQ(transform_args.null_policy, output_nullability::ALL_VALID);
   EXPECT_EQ(transform_args.output_type, data_type{type_id::INT32});
   ASSERT_EQ(transform_args.columns.size(), 2);
 
@@ -308,7 +298,8 @@ return;
                                 transform_args.output_type,
                                 transform_args.is_ptx,
                                 transform_args.user_data,
-                                transform_args.is_null_aware);
+                                transform_args.is_null_aware,
+                                transform_args.null_policy);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }

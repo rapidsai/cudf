@@ -1,21 +1,21 @@
-# Copyright (c) 2019-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
 import math
 import re
 import warnings
-from typing import TYPE_CHECKING, Literal
+from functools import lru_cache
+from typing import TYPE_CHECKING, Literal, Self, cast
 
 import numpy as np
 import pandas as pd
 import pandas.tseries.offsets as pd_offset
 import pyarrow as pa
-from typing_extensions import Self
 
 import pylibcudf as plc
 
 from cudf.api.types import is_integer, is_scalar
-from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column.column import ColumnBase, as_column
 from cudf.core.dataframe import DataFrame
 from cudf.core.index import DatetimeIndex, Index, ensure_index
@@ -26,6 +26,7 @@ from cudf.utils.temporal import infer_format, unit_to_nanoseconds_conversion
 
 if TYPE_CHECKING:
     from cudf.core.column.datetime import DatetimeColumn
+    from cudf.core.column.string import StringColumn
 
 
 # https://github.com/pandas-dev/pandas/blob/2.2.x/pandas/core/tools/datetimes.py#L1112
@@ -234,7 +235,8 @@ def to_datetime(
                         )
                         break
                     elif arg_col.dtype.kind == "O":
-                        if not arg_col.is_integer().all():
+                        string_col = cast("StringColumn", arg_col)
+                        if not string_col.is_all_integer():
                             col = new_series._column.strptime(
                                 np.dtype("datetime64[ns]"), format=format
                             )
@@ -317,7 +319,7 @@ def to_datetime(
         elif errors == "ignore":
             pass
         elif errors == "coerce":
-            return np.datetime64("nat", "ns" if unit is None else unit)
+            return np.datetime64("nat", "ns" if unit is None else unit)  # type: ignore[call-overload]
         return arg
 
 
@@ -369,7 +371,7 @@ def _process_col(
             col = col.astype(dtype=np.dtype(_unit_dtype_map[unit]))
 
     elif col.dtype.kind == "O":
-        if unit not in (None, "ns") or col.null_count == len(col):
+        if unit not in (None, "ns") or col.is_all_null:
             try:
                 col = col.astype(np.dtype(np.int64))
             except ValueError:
@@ -415,6 +417,23 @@ def get_units(value):
         return _unit_map[value.lower()]
 
     return value
+
+
+# for pandas compatibility
+class MonthEnd:
+    def _maybe_as_fast_pandas_offset(self):
+        return pd._libs.tslibs.offsets.MonthEnd()
+
+    def __eq__(self, other):
+        return self._maybe_as_fast_pandas_offset() == other
+
+
+class YearEnd:
+    def _maybe_as_fast_pandas_offset(self):
+        return pd._libs.tslibs.offsets.YearEnd(month=12)
+
+    def __eq__(self, other):
+        return self._maybe_as_fast_pandas_offset() == other
 
 
 class DateOffset:
@@ -525,6 +544,13 @@ class DateOffset:
     }
 
     _FREQSTR_REGEX = re.compile("([-+]?[0-9]*)([a-zA-Z]+)")
+
+    def __eq__(self, other):
+        if isinstance(other, str):
+            return self._maybe_as_fast_pandas_offset() == other
+        if not isinstance(other, DateOffset):
+            return NotImplemented
+        return self.kwds == other.kwds
 
     def __init__(self, n=1, normalize=False, **kwds):
         if normalize:
@@ -660,10 +686,10 @@ class DateOffset:
             for unit, value in self._scalars.items():
                 value = -value if op == "__sub__" else value
                 if unit == "months":
-                    with acquire_spill_lock():
+                    with datetime_col.access(mode="read", scope="internal"):
                         datetime_col = type(datetime_col).from_pylibcudf(
                             plc.datetime.add_calendrical_months(
-                                datetime_col.to_pylibcudf(mode="read"),
+                                datetime_col.plc_column,
                                 pa_scalar_to_plc_scalar(pa.scalar(value)),
                             )
                         )
@@ -697,7 +723,8 @@ class DateOffset:
         return repr_str
 
     @classmethod
-    def _from_freqstr(cls, freqstr: str) -> Self:
+    @lru_cache(maxsize=128)
+    def _from_freqstr(cls, freqstr: str) -> Self | MonthEnd | YearEnd:
         """
         Parse a string and return a DateOffset object
         expects strings of the form 3D, 25W, 10ms, 42ns, etc.
@@ -711,6 +738,13 @@ class DateOffset:
         if numeric_part == "":
             numeric_part = "1"
         freq_part = match.group(2)
+
+        # Certain frequency strings are deprecated in pandas
+        # and automatically swapped on construction
+        if freq_part in ("M", "ME"):
+            return MonthEnd()
+        elif freq_part in ("Y", "YE"):
+            return YearEnd()
 
         if freq_part not in cls._CODES_TO_UNITS:
             raise ValueError(f"Cannot interpret frequency str: {freqstr}")
@@ -849,7 +883,7 @@ def date_range(
             FutureWarning,
         )
 
-    dtype = np.dtype("datetime64[ns]")
+    dtype: np.dtype = np.dtype("datetime64[ns]")
     unit, _ = np.datetime_data(dtype)
 
     if freq is None:
@@ -905,8 +939,8 @@ def date_range(
         # may contain extra elements that exceeds `end`, they are trimmed
         # as a post processing step. [1]
         _periods_not_specified = True
-        start = dtype.type(start, unit)
-        end = dtype.type(end, unit)
+        start = pd.Timestamp(start).as_unit("ns").to_numpy()
+        end = pd.Timestamp(end).as_unit("ns").to_numpy()
         _is_increment_sequence = end >= start
 
         periods = math.floor(
@@ -943,14 +977,14 @@ def date_range(
         months = offset.kwds.get("years", 0) * 12 + offset.kwds.get(
             "months", 0
         )
-        with acquire_spill_lock():
-            res = ColumnBase.from_pylibcudf(
-                plc.filling.calendrical_month_sequence(
-                    periods,
-                    pa_scalar_to_plc_scalar(pa.scalar(start)),
-                    months,
-                )
+        # No columns to access here - calendrical_month_sequence creates new data
+        res = ColumnBase.from_pylibcudf(
+            plc.filling.calendrical_month_sequence(
+                periods,
+                pa_scalar_to_plc_scalar(pa.scalar(start)),
+                months,
             )
+        )
         if _periods_not_specified:
             # As mentioned in [1], this is a post processing step to trim extra
             # elements when `periods` is an estimated value. Only offset
@@ -964,8 +998,7 @@ def date_range(
         stop = end_estim.astype(np.dtype(np.int64))
         start = start.astype(np.dtype(np.int64))
         step = _offset_to_nanoseconds_lower_bound(offset)
-        arr = range(int(start), int(stop), step)
-        res = as_column(arr).astype(dtype)
+        res = as_column(range(int(start), int(stop), step)).astype(dtype)
 
     return DatetimeIndex._from_column(res, name=name, freq=freq).tz_localize(
         tz

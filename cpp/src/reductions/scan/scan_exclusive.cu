@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2021-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "scan.cuh"
@@ -71,8 +60,12 @@ struct scan_dispatcher {
 
     // CUB 2.0.0 requires that the binary operator returns the same type as the identity.
     auto const binary_op = cudf::detail::cast_functor<T>(Op{});
-    thrust::exclusive_scan(
-      rmm::exec_policy(stream), begin, begin + input.size(), output.data<T>(), identity, binary_op);
+    thrust::exclusive_scan(rmm::exec_policy_nosync(stream),
+                           begin,
+                           begin + input.size(),
+                           output.data<T>(),
+                           identity,
+                           binary_op);
 
     CUDF_CHECK_CUDA(stream.value());
     return output_column;

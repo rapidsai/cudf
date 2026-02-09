@@ -1,4 +1,5 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 from enum import IntEnum
 from typing import TypeVar
@@ -92,5 +93,8 @@ def boolean_mask_scatter(
     mr: DeviceMemoryResource | None = None,
 ) -> Table: ...
 def get_element(
-    input_column: Column, index: int, stream: Stream | None = None
+    input_column: Column,
+    index: int,
+    stream: Stream | None = None,
+    mr: DeviceMemoryResource | None = None,
 ) -> Scalar: ...

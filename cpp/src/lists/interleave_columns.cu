@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2021-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf/column/column_factories.hpp>
@@ -68,7 +57,7 @@ generate_list_offsets_and_validities(table_view const& input,
 
   // Compute list sizes and validities.
   thrust::transform(
-    rmm::exec_policy(stream),
+    rmm::exec_policy_nosync(stream),
     thrust::make_counting_iterator<size_type>(0),
     thrust::make_counting_iterator<size_type>(num_output_lists),
     d_offsets,
@@ -88,7 +77,7 @@ generate_list_offsets_and_validities(table_view const& input,
 
   // Compute offsets from sizes.
   thrust::exclusive_scan(
-    rmm::exec_policy(stream), d_offsets, d_offsets + num_output_lists + 1, d_offsets);
+    rmm::exec_policy_nosync(stream), d_offsets, d_offsets + num_output_lists + 1, d_offsets);
 
   return {std::move(list_offsets), std::move(validities)};
 }
@@ -240,7 +229,7 @@ struct interleave_list_entries_impl<T, std::enable_if_t<cudf::is_fixed_width<T>(
       rmm::device_uvector<int8_t>(data_has_null_mask ? num_output_entries : 0, stream);
 
     thrust::for_each_n(
-      rmm::exec_policy(stream),
+      rmm::exec_policy_nosync(stream),
       thrust::make_counting_iterator<size_type>(0),
       num_output_lists,
       [num_cols,

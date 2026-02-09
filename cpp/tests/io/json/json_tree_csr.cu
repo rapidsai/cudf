@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "io/json/nested_json.hpp"
@@ -172,24 +161,27 @@ void run_test(std::string const& input, bool enable_lines = true)
                                                      options.is_enabled_lines(),
                                                      false,
                                                      stream,
-                                                     rmm::mr::get_current_device_resource());
+                                                     cudf::get_current_device_resource_ref());
   auto& gpu_col_id      = std::get<0>(tup);
   auto& gpu_row_offsets = std::get<1>(tup);
 
   auto const num_nodes = gpu_col_id.size();
   rmm::device_uvector<cudf::size_type> sorted_col_ids(gpu_col_id.size(), stream);  // make a copy
   thrust::copy(
-    rmm::exec_policy(stream), gpu_col_id.begin(), gpu_col_id.end(), sorted_col_ids.begin());
+    rmm::exec_policy_nosync(stream), gpu_col_id.begin(), gpu_col_id.end(), sorted_col_ids.begin());
 
   // sort by {col_id} on {node_ids} stable
   rmm::device_uvector<cudf::size_type> node_ids(gpu_col_id.size(), stream);
-  thrust::sequence(rmm::exec_policy(stream), node_ids.begin(), node_ids.end());
-  thrust::stable_sort_by_key(
-    rmm::exec_policy(stream), sorted_col_ids.begin(), sorted_col_ids.end(), node_ids.begin());
+  thrust::sequence(rmm::exec_policy_nosync(stream), node_ids.begin(), node_ids.end());
+  thrust::stable_sort_by_key(rmm::exec_policy_nosync(stream),
+                             sorted_col_ids.begin(),
+                             sorted_col_ids.end(),
+                             node_ids.begin());
 
   cudf::size_type const row_array_parent_col_id = [&]() {
     cudf::size_type value      = cuio_json::parent_node_sentinel;
     auto const list_node_index = options.is_enabled_lines() ? 0 : 1;
+    if (std::cmp_greater_equal(list_node_index, gpu_col_id.size())) { return value; }
     CUDF_CUDA_TRY(cudaMemcpyAsync(&value,
                                   gpu_col_id.data() + list_node_index,
                                   sizeof(cudf::size_type),

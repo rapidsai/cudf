@@ -1,7 +1,9 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
+
+from typing import TYPE_CHECKING, Literal, cast
 
 import pytest
 
@@ -11,7 +13,10 @@ from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
     assert_ir_translation_raises,
 )
-from cudf_polars.utils.versions import POLARS_VERSION_LT_130, POLARS_VERSION_LT_132
+from cudf_polars.utils.versions import POLARS_VERSION_LT_132
+
+if TYPE_CHECKING:
+    from cudf_polars.typing import RankMethod
 
 
 @pytest.fixture
@@ -105,15 +110,11 @@ def test_unsorted_raises():
     q = df.select(pl.col("values").sum().rolling("orderby", period="2i"))
     with pytest.raises(pl.exceptions.InvalidOperationError):
         q.collect(engine="in-memory")
-    if POLARS_VERSION_LT_130:
-        with pytest.raises(pl.exceptions.ComputeError):
-            q.collect(engine=pl.GPUEngine(raise_on_fail=True))
-    else:
-        with pytest.raises(
-            RuntimeError,
-            match=r"Index column.*in rolling is not sorted, please sort first",
-        ):
-            q.collect(engine=pl.GPUEngine(raise_on_fail=True))
+    with pytest.raises(
+        RuntimeError,
+        match=r"Index column.*in rolling is not sorted, please sort first",
+    ):
+        q.collect(engine=pl.GPUEngine(raise_on_fail=True))
 
 
 def test_orderby_nulls_raises_computeerror():
@@ -121,14 +122,10 @@ def test_orderby_nulls_raises_computeerror():
     q = df.select(pl.col("values").sum().rolling("orderby", period="2i"))
     with pytest.raises(pl.exceptions.InvalidOperationError):
         q.collect(engine="in-memory")
-    if POLARS_VERSION_LT_130:
-        with pytest.raises(pl.exceptions.ComputeError):
-            q.collect(engine=pl.GPUEngine(raise_on_fail=True))
-    else:
-        with pytest.raises(
-            RuntimeError, match=r"Index column.*in rolling may not contain nulls"
-        ):
-            q.collect(engine=pl.GPUEngine(raise_on_fail=True))
+    with pytest.raises(
+        RuntimeError, match=r"Index column.*in rolling may not contain nulls"
+    ):
+        q.collect(engine=pl.GPUEngine(raise_on_fail=True))
 
 
 def test_invalid_duration_spec_raises_in_translation():
@@ -273,7 +270,7 @@ def test_over_broadcast_input_row_group_indices_aligned():
 def test_rank_over(
     request,
     df: pl.LazyFrame,
-    method: str,
+    method: RankMethod,
     *,
     descending: bool,
     order_by: None | list[str | pl.Expr],
@@ -295,7 +292,7 @@ def test_rank_over(
 def test_rank_over_with_ties(
     request,
     df: pl.LazyFrame,
-    method: str,
+    method: RankMethod,
     *,
     descending: bool,
     order_by: None | list[str | pl.Expr],
@@ -319,7 +316,7 @@ def test_rank_over_with_ties(
 def test_rank_over_with_null_values(
     request,
     df: pl.LazyFrame,
-    method: str,
+    method: RankMethod,
     *,
     descending: bool,
     order_by: None | list[str | pl.Expr],
@@ -343,7 +340,7 @@ def test_rank_over_with_null_values(
 def test_rank_over_with_null_group_keys(
     request,
     df: pl.LazyFrame,
-    method: str,
+    method: RankMethod,
     *,
     descending: bool,
     order_by: None | list[str | pl.Expr],
@@ -357,3 +354,100 @@ def test_rank_over_with_null_group_keys(
         .over("g_null", order_by=order_by)
     )
     assert_gpu_result_equal(q)
+
+
+@pytest.mark.parametrize("strategy", ["forward", "backward"])
+@pytest.mark.parametrize("order_by", [None, ["g2", pl.col("x2") * 2]])
+@pytest.mark.parametrize(
+    "group_key,expr",
+    [
+        pytest.param(
+            "g",
+            pl.when((pl.col("x") % 3) == 0).then(None).otherwise(pl.col("x")),
+            id="fill_over",
+        ),
+        pytest.param(
+            "g_null",
+            pl.when((pl.col("x") % 2) == 0).then(None).otherwise(pl.col("x")),
+            id="fill_over_with_null_group_keys",
+        ),
+    ],
+)
+def test_fill_over(
+    df: pl.LazyFrame,
+    strategy: str,
+    order_by: None | list[str | pl.Expr],
+    group_key: str,
+    expr: pl.Expr,
+) -> None:
+    q = df.select(
+        expr.fill_null(strategy=cast(Literal["forward", "backward"], strategy)).over(
+            group_key, order_by=order_by
+        )
+    )
+    if POLARS_VERSION_LT_132:
+        assert_ir_translation_raises(q, NotImplementedError)
+    else:
+        assert_gpu_result_equal(q)
+
+
+def test_fill_null_with_mean_over_unsupported(df: pl.LazyFrame) -> None:
+    q = df.select(pl.col("x").fill_null(strategy="mean").over("g"))
+    assert_ir_translation_raises(q, NotImplementedError)
+
+
+@pytest.mark.parametrize(
+    "expr,group_key",
+    [
+        (pl.col("x"), "g"),
+        (pl.when((pl.col("x") % 4) == 1).then(None).otherwise(pl.col("x")), "g"),
+        (pl.col("x"), "g_null"),
+    ],
+)
+@pytest.mark.parametrize(
+    "order_by",
+    [
+        None,
+        ["g2", pl.col("x2") * 2],
+    ],
+)
+def test_cum_sum_over(
+    df: pl.LazyFrame,
+    *,
+    expr: pl.Expr,
+    group_key: str,
+    order_by: None | list[str | pl.Expr],
+) -> None:
+    q = df.select(expr.cum_sum().over(group_key, order_by=order_by))
+    assert_gpu_result_equal(q)
+
+
+@pytest.mark.parametrize(
+    "expr",
+    [
+        pl.col(["x", "x2"]).first(),
+        pl.col(["x", "x2"]).last(),
+    ],
+)
+@pytest.mark.parametrize("descending", [False, True])
+@pytest.mark.parametrize("nulls_last", [False, True])
+@pytest.mark.parametrize(
+    "order_by",
+    [
+        "g_null",
+        ["g_null", "g2"],
+    ],
+)
+def test_order_sensitive_over_scalar_aggs(df, expr, descending, nulls_last, order_by):
+    q = df.select(
+        expr.over(
+            "g",
+            order_by=order_by,
+            descending=descending,
+            nulls_last=nulls_last,
+        )
+    )
+    if isinstance(order_by, list):
+        assert_ir_translation_raises(q, NotImplementedError)
+    else:
+        assert_gpu_result_equal(q)

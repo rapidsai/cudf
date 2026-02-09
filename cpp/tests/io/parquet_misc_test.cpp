@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2023-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "parquet_common.hpp"
@@ -127,27 +116,28 @@ TYPED_TEST(ParquetWriterDeltaTest, SupportedDeltaListSliced)
 // Base test fixture for size-parameterized tests
 class ParquetSizedTest : public ::cudf::test::BaseFixtureWithParam<int> {};
 
-// test the allowed bit widths for dictionary encoding
+// Test the allowed bit widths: [1, 25) for dictionary encoding
+// Note: Using a step of 3 and avoiding bit width of 24 to reduce the test suite execution time
 INSTANTIATE_TEST_SUITE_P(ParquetDictionaryTest,
                          ParquetSizedTest,
-                         testing::Range(1, 25),
+                         testing::Range(2, 24, 3),
                          testing::PrintToStringParamName());
 
 TEST_P(ParquetSizedTest, DictionaryTest)
 {
   unsigned int const cardinality = (1 << (GetParam() - 1)) + 1;
-  unsigned int const nrows       = std::max(cardinality * 3 / 2, 3'000'000U);
+  unsigned int const nrows       = std::max(cardinality * 3 / 2, 500'000U);
 
   auto const elements = cudf::detail::make_counting_transform_iterator(
     0, [cardinality](auto i) { return std::to_string(i % cardinality); });
   auto const col0     = cudf::test::strings_column_wrapper(elements, elements + nrows);
   auto const expected = table_view{{col0}};
 
-  auto const filepath = temp_env->get_temp_filepath("DictionaryTest.parquet");
+  auto buffer = std::vector<char>{};
   // set row group size so that there will be only one row group
   // no compression so we can easily read page data
   cudf::io::parquet_writer_options out_opts =
-    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info(&buffer), expected)
       .compression(cudf::io::compression_type::NONE)
       .stats_level(cudf::io::statistics_freq::STATISTICS_COLUMN)
       .dictionary_policy(cudf::io::dictionary_policy::ALWAYS)
@@ -155,31 +145,31 @@ TEST_P(ParquetSizedTest, DictionaryTest)
       .row_group_size_bytes(512 * 1024 * 1024);
   cudf::io::write_parquet(out_opts);
 
+  auto const buffer_span =
+    cudf::host_span<std::byte>(reinterpret_cast<std::byte*>(buffer.data()), buffer.size());
   cudf::io::parquet_reader_options default_in_opts =
-    cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath});
+    cudf::io::parquet_reader_options::builder(cudf::io::source_info(buffer_span));
   auto const result = cudf::io::read_parquet(default_in_opts);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
 
   // make sure dictionary was used
-  auto const source = cudf::io::datasource::create(filepath);
+  auto const source = cudf::io::datasource::create(buffer_span);
   cudf::io::parquet::FileMetaData fmd;
 
   read_footer(source, &fmd);
-  auto used_dict = [&fmd]() {
-    for (auto enc : fmd.row_groups[0].columns[0].meta_data.encodings) {
-      if (enc == cudf::io::parquet::Encoding::PLAIN_DICTIONARY or
-          enc == cudf::io::parquet::Encoding::RLE_DICTIONARY) {
-        return true;
-      }
-    }
-    return false;
-  };
-  EXPECT_TRUE(used_dict());
+  auto const used_dict =
+    std::all_of(fmd.row_groups.front().columns.front().meta_data.encodings.begin(),
+                fmd.row_groups.front().columns.front().meta_data.encodings.end(),
+                [](auto const& enc) {
+                  return enc == cudf::io::parquet::Encoding::PLAIN_DICTIONARY or
+                         enc == cudf::io::parquet::Encoding::RLE_DICTIONARY;
+                });
+  EXPECT_TRUE(used_dict);
 
   // and check that the correct number of bits was used
-  auto const oi    = read_offset_index(source, fmd.row_groups[0].columns[0]);
-  auto const nbits = read_dict_bits(source, oi.page_locations[0]);
+  auto const oi    = read_offset_index(source, fmd.row_groups.front().columns.front());
+  auto const nbits = read_dict_bits(source, oi.page_locations.front());
   EXPECT_EQ(nbits, GetParam());
 }
 

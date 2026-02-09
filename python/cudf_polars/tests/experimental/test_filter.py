@@ -8,7 +8,8 @@ import pytest
 import polars as pl
 
 from cudf_polars.testing.asserts import (
-    DEFAULT_SCHEDULER,
+    DEFAULT_CLUSTER,
+    DEFAULT_RUNTIME,
     assert_gpu_result_equal,
 )
 
@@ -18,7 +19,11 @@ def engine():
     return pl.GPUEngine(
         raise_on_fail=True,
         executor="streaming",
-        executor_options={"max_rows_per_partition": 3, "scheduler": DEFAULT_SCHEDULER},
+        executor_options={
+            "max_rows_per_partition": 3,
+            "cluster": DEFAULT_CLUSTER,
+            "runtime": DEFAULT_RUNTIME,
+        },
     )
 
 

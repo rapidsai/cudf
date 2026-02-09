@@ -1,5 +1,7 @@
-# Copyright (c) 2025 NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
+import warnings
 from abc import ABC, abstractmethod
 from contextlib import nullcontext
 
@@ -14,6 +16,7 @@ from cudf.core.udf.masked_typing import MaskedType
 from cudf.core.udf.nrt_utils import CaptureNRTUsage, nrt_enabled
 from cudf.core.udf.strings_typing import str_view_arg_handler
 from cudf.core.udf.utils import (
+    DEPRECATED_SM_REGEX,
     UDF_SHIM_FILE,
     _generate_cache_key,
     _masked_array_type_from_col,
@@ -156,11 +159,19 @@ class ApplyKernelBase(ABC):
         _kernel = global_exec_context["_kernel"]
         ctx = nrt_enabled() if nrt else nullcontext()
         with ctx:
-            kernel = cuda.jit(
-                self.sig,
-                link=[UDF_SHIM_FILE],
-                extensions=[str_view_arg_handler],
-            )(_kernel)
+            with warnings.catch_warnings():
+                warnings.simplefilter("default")
+                warnings.filterwarnings(
+                    "ignore",
+                    message=DEPRECATED_SM_REGEX,
+                    category=UserWarning,
+                    module=r"^numba\.cuda(\.|$)",
+                )
+                kernel = cuda.jit(
+                    self.sig,
+                    link=[UDF_SHIM_FILE],
+                    extensions=[str_view_arg_handler],
+                )(_kernel)
         return kernel
 
     def get_kernel(self):

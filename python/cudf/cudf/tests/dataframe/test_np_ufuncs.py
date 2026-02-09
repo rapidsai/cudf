@@ -1,4 +1,5 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 import operator
 from functools import reduce
@@ -64,10 +65,11 @@ def test_ufunc_dataframe(request, numpy_ufunc, has_nulls, indexed):
     # scale to avoid issues with overflow, etc. We use ints because some
     # operations (like bitwise ops) are not defined for floats.
     # TODO: Add tests of mismatched columns etc.
+    rng = np.random.default_rng(0)
     pandas_args = args = [
         cudf.DataFrame(
-            {"foo": cp.random.randint(low=1, high=10, size=N)},
-            index=cp.random.choice(range(N), N, False) if indexed else None,
+            {"foo": rng.integers(low=1, high=10, size=N)},
+            index=rng.choice(range(N), N, False) if indexed else None,
         )
         for _ in range(numpy_ufunc.nin)
     ]
