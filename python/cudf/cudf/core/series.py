@@ -1519,7 +1519,7 @@ class Series(SingleColumnFrame, IndexedFrame):
             dtype_mismatch = False
             for obj in objs[1:]:
                 if (
-                    obj.null_count == len(obj)
+                    obj._is_all_null
                     or len(obj) == 0
                     or isinstance(obj._column.dtype, CategoricalDtype)
                     or isinstance(objs[0]._column.dtype, CategoricalDtype)
@@ -1563,7 +1563,13 @@ class Series(SingleColumnFrame, IndexedFrame):
     @_performance_tracking
     def valid_count(self) -> int:
         """Number of non-null values"""
-        return len(self) - self._column.null_count
+        return self._column.valid_count
+
+    @property
+    @_performance_tracking
+    def _is_all_null(self) -> bool:
+        """Check if all values in the Series are null."""
+        return self._column.is_all_null
 
     @property
     @_performance_tracking
@@ -3169,7 +3175,7 @@ class Series(SingleColumnFrame, IndexedFrame):
         if bins is not None:
             series_bins = cudf.cut(self, bins, include_lowest=True)
         result_name = "proportion" if normalize else "count"
-        if dropna and self.null_count == len(self):
+        if dropna and self._is_all_null:
             return Series(
                 [],
                 dtype=np.int64,
