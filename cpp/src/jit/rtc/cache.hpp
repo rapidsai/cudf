@@ -37,6 +37,8 @@ struct [[nodiscard]] cache_limits {
   uint32_t num_blobs     = 1024;
   uint32_t num_fragments = 1024;
   uint32_t num_libraries = 1024;
+
+  static constexpr cache_limits default_limits() { return cache_limits{}; }
 };
 
 namespace detail {
@@ -198,9 +200,6 @@ struct cache_statistics_counter {
 /// copying across threads and disk.
 struct cache_t {
  private:
-  // TODO: store under more structured pathsi, i.e. /cache.
-  // TODO: stamp binaries so we can pre-load?
-
   std::string cache_dir_;
 
   cache_limits limits_;

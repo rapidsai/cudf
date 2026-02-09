@@ -19,12 +19,14 @@ class program_cache;
 
 namespace rtc {
 class cache_t;
-class jit_bundle;
+class jit_bundle_t;
 }  // namespace rtc
 
 struct [[nodiscard]] context_config {
-  bool dump_codegen = false;
-  bool use_jit      = false;
+  bool dump_codegen          = false;
+  bool use_jit               = false;
+  std::string rtc_cache_dir  = {};
+  std::string jit_bundle_dir = {};
 };
 
 /// @brief The context object contains global state internal to CUDF.
@@ -39,7 +41,7 @@ class context {
   std::once_flag _rtc_cache_init_flag;
   std::unique_ptr<rtc::cache_t> _rtc_cache;
   std::once_flag _jit_bundle_init_flag;
-  std::unique_ptr<rtc::jit_bundle> _jit_bundle;
+  std::unique_ptr<rtc::jit_bundle_t> _jit_bundle;
 
  private:
   void ensure_nvcomp_loaded();
@@ -51,7 +53,7 @@ class context {
   void ensure_jit_bundle_initialized();
 
  public:
-  context(context_config const& cfg = {}, init_flags flags = init_flags::INIT_JIT_CACHE);
+  context(context_config cfg = {}, init_flags flags = init_flags::DEFAULT);
   context(context const&)            = delete;
   context& operator=(context const&) = delete;
   context(context&&)                 = delete;
@@ -62,7 +64,7 @@ class context {
 
   rtc::cache_t& rtc_cache();
 
-  rtc::jit_bundle& jit_bundle();
+  rtc::jit_bundle_t& jit_bundle();
 
   [[nodiscard]] bool dump_codegen() const;
 

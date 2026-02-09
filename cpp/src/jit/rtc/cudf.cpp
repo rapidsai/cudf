@@ -57,8 +57,6 @@ sha256_hash hash_string(std::span<char const> input)
   return ctx.finalize();
 }
 
-cache_t& get_rtc_cache() { return cudf::get_context().rtc_cache(); }
-
 [[noreturn]] void throw_posix(std::string_view message, std::string_view syscall_name)
 {
   auto error_code = errno;
@@ -195,16 +193,15 @@ void create_and_install_cudf_jit(char const* target_dir)
 
 }  // namespace
 
-jit_bundle::jit_bundle(std::string install_dir) : install_dir_{std::move(install_dir)}
+jit_bundle_t::jit_bundle_t(std::string install_dir, cache_t& cache)
+  : install_dir_{std::move(install_dir)}, cache_{&cache}
 {
   ensure_installed();
   preload_lto_library();
-
-  // TODO: recursive because of call to get_bundle() and get_cache()
-  // TODO: fix cmake change tracking
+  // TODO: fix cmake tracking of the scripts and embedded files
 }
 
-void jit_bundle::ensure_installed() const
+void jit_bundle_t::ensure_installed() const
 {
   CUDF_FUNC_RANGE();
 
@@ -230,9 +227,9 @@ void jit_bundle::ensure_installed() const
   }
 }
 
-void jit_bundle::preload_lto_library()
+void jit_bundle_t::preload_lto_library()
 {
-  auto& cache = get_rtc_cache();
+  auto& cache = *cache_;
 
   auto bundle_hash = get_hash();
 
@@ -263,22 +260,22 @@ void jit_bundle::preload_lto_library()
   lto_library_ = fut.get();
 }
 
-std::string jit_bundle::get_hash() const
+std::string jit_bundle_t::get_hash() const
 {
   auto str = sha256_hex_string::make(
     std::span{cudf_jit_embed_hash.data, static_cast<size_t>(cudf_jit_embed_hash.size)});
   return std::string{str.view()};
 }
 
-std::string jit_bundle::get_directory() const
+std::string jit_bundle_t::get_directory() const
 {
   auto hash = get_hash();
   return std::format("{}/{}", install_dir_, hash);
 }
 
-fragment jit_bundle::get_lto_library() const { return lto_library_; }
+fragment jit_bundle_t::get_lto_library() const { return lto_library_; }
 
-std::vector<std::string> jit_bundle::get_include_directories() const
+std::vector<std::string> jit_bundle_t::get_include_directories() const
 {
   std::vector<std::string> directories;
   auto base_dir = get_directory();
@@ -295,7 +292,7 @@ std::vector<std::string> jit_bundle::get_include_directories() const
   return directories;
 }
 
-std::vector<std::string> jit_bundle::get_compile_options() const
+std::vector<std::string> jit_bundle_t::get_compile_options() const
 {
   std::vector<std::string> options;
 
@@ -346,8 +343,8 @@ fragment get_or_compile_fragment(char const* name, char const* source_code_cstr,
 {
   CUDF_FUNC_RANGE();
 
-  auto& bundle = get_bundle();
-  auto& cache  = get_rtc_cache();
+  auto& bundle = cudf::get_context().jit_bundle();
+  auto& cache  = cudf::get_context().rtc_cache();
 
   auto runtime     = get_runtime_version();
   auto driver      = get_driver_version();
@@ -435,12 +432,6 @@ fragment get_or_compile_fragment(char const* name, char const* source_code_cstr,
   return fut.get();
 }
 
-jit_bundle& get_bundle()
-{
-  auto& context = cudf::get_context();
-  return context.jit_bundle();
-}
-
 library compile_and_link_udf(char const* name,
                              char const* udf_code,
                              char const* udf_key,
@@ -448,8 +439,8 @@ library compile_and_link_udf(char const* name,
 {
   CUDF_FUNC_RANGE();
 
-  auto& cache  = get_rtc_cache();
-  auto& bundle = get_bundle();
+  auto& cache  = cudf::get_context().rtc_cache();
+  auto& bundle = cudf::get_context().jit_bundle();
 
   auto runtime     = get_runtime_version();
   auto driver      = get_driver_version();
