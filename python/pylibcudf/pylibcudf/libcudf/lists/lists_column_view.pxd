@@ -1,5 +1,7 @@
-# SPDX-FileCopyrightText: Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
+from rmm.librmm.cuda_stream_view cimport cuda_stream_view
+
 from pylibcudf.exception_handler cimport libcudf_exception_handler
 from pylibcudf.libcudf.column.column_view cimport (
     column_view,
@@ -12,7 +14,7 @@ cdef extern from "cudf/lists/lists_column_view.hpp" namespace "cudf" nogil:
     cdef cppclass lists_column_view(column_view):
         lists_column_view() except +libcudf_exception_handler
         lists_column_view(
-            const lists_column_view& lists_colum
+            const lists_column_view& lists_column
         ) except +libcudf_exception_handler
         lists_column_view(
             const column_view& lists_column
@@ -23,6 +25,9 @@ cdef extern from "cudf/lists/lists_column_view.hpp" namespace "cudf" nogil:
         column_view parent() except +libcudf_exception_handler
         column_view offsets() except +libcudf_exception_handler
         column_view child() except +libcudf_exception_handler
+        column_view get_sliced_child(
+            cuda_stream_view stream
+        ) except +libcudf_exception_handler
 
     cdef enum:
         offsets_column_index "cudf::lists_column_view::offsets_column_index"

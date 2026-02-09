@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION & AFFILIATES.  All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES.  All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -17,9 +17,7 @@ from abc import abstractmethod
 from collections import defaultdict
 from importlib._bootstrap import _ImportLockContext as ImportLock
 from types import ModuleType
-from typing import Any, ContextManager, NamedTuple  # noqa: UP035
-
-from typing_extensions import Self
+from typing import Any, ContextManager, NamedTuple, Self  # noqa: UP035
 
 from .fast_slow_proxy import (
     _FunctionProxy,
@@ -404,6 +402,15 @@ class ModuleAccelerator(ModuleAcceleratorBase):
         # sys.meta_path.
         for mod in sys.modules.copy():
             if mod.startswith(self.slow_lib):
+                if mod == "pandas._config.config":
+                    # Since it is possible for state to diverge between the proxy and real
+                    # module, we skip wrapping this one entirely.
+                    # For example, running tests in pandas/tests/config/test_config.py
+                    # mutates internal globals like _registered_options on the proxy,
+                    # while register_option() reads them from the real module.
+                    # Therefore the two get out of sync and raise duplicate registration errors.
+                    # Keeping the real module here avoids that split state.
+                    continue
                 sys.modules[self._module_cache_prefix + mod] = sys.modules[mod]
                 del sys.modules[mod]
         self._denylist = (*slow_module.__path__, *fast_module.__path__)

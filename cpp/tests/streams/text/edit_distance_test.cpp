@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2023-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -18,5 +18,4 @@ TEST_F(TextEditDistanceTest, EditDistance)
   auto const target      = cudf::test::strings_column_wrapper({"hog", "cake", "house", "puppy"});
   auto const target_view = cudf::strings_column_view(target);
   nvtext::edit_distance(input_view, target_view, cudf::test::get_default_stream());
-  nvtext::edit_distance_matrix(input_view, cudf::test::get_default_stream());
 }

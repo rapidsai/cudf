@@ -5,12 +5,12 @@
 #pragma once
 
 #include <cudf/detail/row_operator/equality.cuh>
-#include <cudf/hashing/detail/helper_functions.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
+#include <rmm/mr/polymorphic_allocator.hpp>
 
 #include <cuco/static_set.cuh>
 
@@ -149,7 +149,7 @@ class distinct_hash_join {
 
   /// Hash table type
   using hash_table_type = cuco::static_set<cuco::pair<hash_value_type, rhs_index_type>,
-                                           cuco::extent<size_type>,
+                                           cuco::extent<std::size_t>,
                                            cuda::thread_scope_device,
                                            always_not_equal,
                                            probing_scheme_type,

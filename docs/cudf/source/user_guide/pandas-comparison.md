@@ -83,7 +83,7 @@ In the vast majority of cases, it is possible to avoid iteration and
 use an existing function or method to accomplish the same task. If you
 absolutely must iterate, copy the data from GPU to CPU by using
 `.to_arrow()` or `.to_pandas()`, then copy the result back to GPU
-using `.from_arrow()` or `.from_pandas()`.
+using `.from_arrow()` or the constructors.
 
 ## Result ordering
 

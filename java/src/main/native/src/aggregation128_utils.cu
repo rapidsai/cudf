@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -92,7 +92,7 @@ std::unique_ptr<cudf::column> extract_chunk32(cudf::column_view const& in_col,
   thrust::permutation_iterator stride_iter{in_begin + chunk_idx, transform_iter};
 
   thrust::copy(
-    rmm::exec_policy(stream), stride_iter, stride_iter + num_rows, out_view.data<int32_t>());
+    rmm::exec_policy_nosync(stream), stride_iter, stride_iter + num_rows, out_view.data<int32_t>());
   return out_col;
 }
 
@@ -118,7 +118,7 @@ std::unique_ptr<cudf::table> assemble128_from_sum(cudf::table_view const& chunks
     output_type, num_rows, copy_bitmask(chunks0), chunks0.null_count()));
   auto overflows_view = columns[0]->mutable_view();
   auto assembled_view = columns[1]->mutable_view();
-  thrust::transform(rmm::exec_policy(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream),
                     thrust::make_counting_iterator<cudf::size_type>(0),
                     thrust::make_counting_iterator<cudf::size_type>(num_rows),
                     assembled_view.begin<__int128_t>(),

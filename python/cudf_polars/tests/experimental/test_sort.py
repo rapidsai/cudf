@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -7,8 +7,18 @@ import pytest
 
 import polars as pl
 
-from cudf_polars.testing.asserts import DEFAULT_CLUSTER, assert_gpu_result_equal
-from cudf_polars.utils.versions import POLARS_VERSION_LT_130
+from cudf_polars.testing.asserts import (
+    DEFAULT_CLUSTER,
+    DEFAULT_RUNTIME,
+    assert_gpu_result_equal,
+)
+
+# TODO: Add multi-partition Sort support to the rapidsmpf runtime.
+# See: https://github.com/rapidsai/cudf/issues/20486
+pytestmark = pytest.mark.skipif(
+    DEFAULT_RUNTIME == "rapidsmpf",
+    reason="Sort not yet supported for rapidsmpf runtime.",
+)
 
 
 @pytest.fixture(scope="module")
@@ -19,6 +29,7 @@ def engine():
         executor_options={
             "max_rows_per_partition": 3,
             "cluster": DEFAULT_CLUSTER,
+            "runtime": DEFAULT_RUNTIME,
             "shuffle_method": "tasks",
             "fallback_mode": "raise",
         },
@@ -33,6 +44,7 @@ def engine_large():
         executor_options={
             "max_rows_per_partition": 2_100,
             "cluster": DEFAULT_CLUSTER,
+            "runtime": DEFAULT_RUNTIME,
             "shuffle_method": "tasks",
             "fallback_mode": "raise",
         },
@@ -123,13 +135,8 @@ def test_sort_tail(df, engine):
 def test_sort_slice(df, engine, offset):
     # Slice in the middle, which distributed sorts need to be careful with
     q = df.sort(by=["y", "z"]).slice(offset, 2)
-    if POLARS_VERSION_LT_130:
-        exception = pl.exceptions.ComputeError
-    else:
-        exception = NotImplementedError
-
     with pytest.raises(
-        exception,
+        NotImplementedError,
         match="Sort does not support a multi-partition slice with an offset.",
     ):
         assert_gpu_result_equal(q, engine=engine)
@@ -141,6 +148,7 @@ def test_sort_after_sparse_join():
         executor="streaming",
         executor_options={
             "cluster": DEFAULT_CLUSTER,
+            "runtime": DEFAULT_RUNTIME,
             "max_rows_per_partition": 4,
         },
     )

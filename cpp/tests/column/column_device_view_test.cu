@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -32,7 +32,7 @@ TEST_F(ColumnDeviceViewTest, Sample)
   auto output_device_view =
     cudf::mutable_column_device_view::create(output->mutable_view(), stream);
 
-  EXPECT_NO_THROW(thrust::copy(rmm::exec_policy(stream),
+  EXPECT_NO_THROW(thrust::copy(rmm::exec_policy_nosync(stream),
                                input_device_view->begin<T>(),
                                input_device_view->end<T>(),
                                output_device_view->begin<T>()));
@@ -50,7 +50,7 @@ TEST_F(ColumnDeviceViewTest, MismatchingType)
   auto output_device_view =
     cudf::mutable_column_device_view::create(output->mutable_view(), stream);
 
-  EXPECT_THROW(thrust::copy(rmm::exec_policy(stream),
+  EXPECT_THROW(thrust::copy(rmm::exec_policy_nosync(stream),
                             input_device_view->begin<T>(),
                             input_device_view->end<T>(),
                             output_device_view->begin<int64_t>()),

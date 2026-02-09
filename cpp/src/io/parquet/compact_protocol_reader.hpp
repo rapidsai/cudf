@@ -143,6 +143,8 @@ class CompactProtocolReader {
   friend class parquet_field_binary;
   friend class parquet_field_binary_list;
   friend class parquet_field_struct_blob;
+  template <typename T>
+  friend class parquet_field_struct_list;
 };
 
 }  // namespace io::parquet::detail

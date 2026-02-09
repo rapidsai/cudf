@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 import datetime
 import zoneinfo
@@ -102,6 +102,16 @@ def test_astype_pandas_nullable_pandas_compat(dtype, klass, kind):
         actual = ser.astype(kind(dtype))
         expected = klass([1, 2, 3], dtype=kind(dtype))
         assert_eq(actual, expected)
+
+
+def test_cast_float_nan_to_bool_pandas_compat():
+    with cudf.option_context("mode.pandas_compatible", True):
+        data = [1.0, 0.0, np.nan, None]
+        gs = cudf.Series(data, dtype="float64")
+        got = gs.astype("bool")
+        expected = pd.Series([True, False, True, True], dtype="bool")
+        assert got.null_count == 0
+        assert_eq(expected, got)
 
 
 @pytest.mark.parametrize(
@@ -452,7 +462,7 @@ def test_string_timstamp_typecast_to_different_datetime_resolutions(
     gdf_sr = cudf.Series(pd_sr)
 
     expect = pd_sr.values.astype(datetime_types_as_str)
-    got = gdf_sr.astype(datetime_types_as_str).values_host
+    got = gdf_sr.astype(datetime_types_as_str).to_numpy()
 
     np.testing.assert_equal(expect, got)
 
@@ -1132,7 +1142,7 @@ def test_typecast_from_float_to_decimal(
     got = data.astype(float_types_as_str)
 
     pa_arr = got.to_arrow().cast(
-        pa.decimal128(to_dtype.precision, to_dtype.scale)
+        pa.decimal64(to_dtype.precision, to_dtype.scale)
     )
     expected = cudf.Series._from_column(Decimal64Column.from_arrow(pa_arr))
 
@@ -1164,7 +1174,7 @@ def test_typecast_from_int_to_decimal(integer_types_as_str, precision, scale):
     pa_arr = (
         got.to_arrow()
         .cast("float64")
-        .cast(pa.decimal128(to_dtype.precision, to_dtype.scale))
+        .cast(pa.decimal64(to_dtype.precision, to_dtype.scale))
     )
     expected = cudf.Series._from_column(Decimal64Column.from_arrow(pa_arr))
 
@@ -1217,12 +1227,15 @@ def test_typecast_to_from_decimal(from_dtype, to_dtype):
         )
     s = data.astype(from_dtype)
 
-    pa_arr = s.to_arrow().cast(
-        pa.decimal128(to_dtype.precision, to_dtype.scale), safe=False
-    )
     if isinstance(to_dtype, cudf.Decimal32Dtype):
+        pa_arr = s.to_arrow().cast(
+            pa.decimal32(to_dtype.precision, to_dtype.scale), safe=False
+        )
         expected = cudf.Series._from_column(Decimal32Column.from_arrow(pa_arr))
     elif isinstance(to_dtype, cudf.Decimal64Dtype):
+        pa_arr = s.to_arrow().cast(
+            pa.decimal64(to_dtype.precision, to_dtype.scale), safe=False
+        )
         expected = cudf.Series._from_column(Decimal64Column.from_arrow(pa_arr))
 
     with expect_warning_if(to_dtype.scale < s.dtype.scale, UserWarning):
@@ -1329,3 +1342,11 @@ def test_empty_series_category_cast(ordered):
 
     assert_eq(expected, actual)
     assert_eq(expected.dtype.ordered, actual.dtype.ordered)
+
+
+@pytest.mark.parametrize("copy", [True, False])
+def test_series_astype_no_copy(copy):
+    gsr = cudf.Series([1, 2, 3])
+    result = gsr.astype("int64", copy=copy)
+    assert_eq(result, gsr)
+    assert (result is gsr) is (not copy)

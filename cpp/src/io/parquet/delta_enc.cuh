@@ -8,10 +8,10 @@
 #include "parquet_gpu.hpp"
 
 #include <cudf/detail/utilities/cuda.cuh>
-#include <cudf/detail/utilities/functional.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
 
 #include <cub/cub.cuh>
+#include <cuda/functional>
 #include <cuda/std/limits>
 #include <cuda/std/type_traits>
 
@@ -219,7 +219,9 @@ class delta_binary_packer {
     int const lane_id = t % warp_size;
 
     // if no values have been written, still need to write the header
-    if (t == 0 && _current_idx == 0) { write_header(); }
+    if (t == 0 and _current_idx == 0) { write_header(); }
+
+    __syncthreads();
 
     // if there are no values to write, just return
     if (_values_in_buffer <= 0) { return _dst; }
@@ -231,7 +233,7 @@ class delta_binary_packer {
                                             : cuda::std::numeric_limits<T>::max();
 
     // Find min delta for the block.
-    auto const min_delta = block_reduce(*_block_tmp).Reduce(delta, cudf::detail::minimum{});
+    auto const min_delta = block_reduce(*_block_tmp).Reduce(delta, cuda::minimum{});
 
     if (t == 0) { block_min = min_delta; }
     __syncthreads();
@@ -241,7 +243,7 @@ class delta_binary_packer {
 
     // Get max normalized delta for each warp, and use that to determine how many bits to use
     // for the bitpacking of this warp.
-    U const warp_max = warp_reduce(_warp_tmp[warp_id]).Reduce(norm_delta, cudf::detail::maximum{});
+    U const warp_max = warp_reduce(_warp_tmp[warp_id]).Reduce(norm_delta, cuda::maximum{});
     __syncwarp();
 
     if (lane_id == 0) { _mb_bits[warp_id] = sizeof(long long) * 8 - __clzll(warp_max); }

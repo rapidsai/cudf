@@ -255,8 +255,8 @@ def cut(
         right_edges = as_column(bins.right).astype(input_arr.dtype)
     else:
         # get the left and right edges of the bins as columns
-        left_edges = as_column(bins[:-1:], dtype="float64")
-        right_edges = as_column(bins[+1::], dtype="float64")
+        left_edges = as_column(bins[:-1:], dtype=np.dtype("float64"))
+        right_edges = as_column(bins[+1::], dtype=np.dtype("float64"))
         # the input arr must be changed to the same type as the edges
         input_arr = input_arr.astype(left_edges.dtype)
     # get the indexes for the appropriate number

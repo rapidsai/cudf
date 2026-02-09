@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -35,6 +35,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 
+#include <cuda/std/tuple>
 #include <thrust/functional.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/discard_iterator.h>
@@ -42,7 +43,6 @@
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/scan.h>
 #include <thrust/transform.h>
-#include <thrust/tuple.h>
 
 namespace {  // anonymous
 
@@ -218,7 +218,7 @@ struct replace_nulls_scalar_kernel_forwarder {
     auto device_in   = cudf::column_device_view::create(input, stream);
 
     auto func = replace_nulls_functor<col_type>{s1.data()};
-    thrust::transform(rmm::exec_policy(stream),
+    thrust::transform(rmm::exec_policy_nosync(stream),
                       input.data<col_type>(),
                       input.data<col_type>() + input.size(),
                       cudf::detail::make_validity_iterator(*device_in),
@@ -274,21 +274,21 @@ std::unique_ptr<cudf::column> replace_nulls_policy_impl(cudf::column_view const&
   auto device_in = cudf::column_device_view::create(input, stream);
   auto index     = thrust::make_counting_iterator<cudf::size_type>(0);
   auto valid_it  = cudf::detail::make_validity_iterator(*device_in);
-  auto in_begin  = thrust::make_zip_iterator(thrust::make_tuple(index, valid_it));
+  auto in_begin  = thrust::make_zip_iterator(cuda::std::make_tuple(index, valid_it));
 
   rmm::device_uvector<cudf::size_type> gather_map(input.size(), stream);
   auto gm_begin = thrust::make_zip_iterator(
-    thrust::make_tuple(gather_map.begin(), thrust::make_discard_iterator()));
+    cuda::std::make_tuple(gather_map.begin(), thrust::make_discard_iterator()));
 
   auto func = cudf::detail::replace_policy_functor();
   if (replace_policy == cudf::replace_policy::PRECEDING) {
     thrust::inclusive_scan(
-      rmm::exec_policy(stream), in_begin, in_begin + input.size(), gm_begin, func);
+      rmm::exec_policy_nosync(stream), in_begin, in_begin + input.size(), gm_begin, func);
   } else {
     auto in_rbegin = thrust::make_reverse_iterator(in_begin + input.size());
     auto gm_rbegin = thrust::make_reverse_iterator(gm_begin + gather_map.size());
     thrust::inclusive_scan(
-      rmm::exec_policy(stream), in_rbegin, in_rbegin + input.size(), gm_rbegin, func);
+      rmm::exec_policy_nosync(stream), in_rbegin, in_rbegin + input.size(), gm_rbegin, func);
   }
 
   auto output = cudf::detail::gather(cudf::table_view({input}),

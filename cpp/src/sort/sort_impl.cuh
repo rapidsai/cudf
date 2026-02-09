@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -59,7 +59,7 @@ std::unique_ptr<column> sorted_order(table_view input,
   std::unique_ptr<column> sorted_indices = cudf::make_numeric_column(
     data_type(type_to_id<size_type>()), input.num_rows(), mask_state::UNALLOCATED, stream, mr);
   mutable_column_view mutable_indices_view = sorted_indices->mutable_view();
-  thrust::sequence(rmm::exec_policy(stream),
+  thrust::sequence(rmm::exec_policy_nosync(stream),
                    mutable_indices_view.begin<size_type>(),
                    mutable_indices_view.end<size_type>(),
                    0);
@@ -68,12 +68,12 @@ std::unique_ptr<column> sorted_order(table_view input,
     // Compiling `thrust::*sort*` APIs is expensive.
     // Thus, we should optimize that by using constexpr condition to only compile what we need.
     if constexpr (method == sort_method::STABLE) {
-      thrust::stable_sort(rmm::exec_policy(stream),
+      thrust::stable_sort(rmm::exec_policy_nosync(stream),
                           mutable_indices_view.begin<size_type>(),
                           mutable_indices_view.end<size_type>(),
                           comparator);
     } else {
-      thrust::sort(rmm::exec_policy(stream),
+      thrust::sort(rmm::exec_policy_nosync(stream),
                    mutable_indices_view.begin<size_type>(),
                    mutable_indices_view.end<size_type>(),
                    comparator);

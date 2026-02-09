@@ -37,7 +37,7 @@ class Gather(Expr):
         )
         n = values.size
         lo, hi = plc.reduce.minmax(indices.obj, stream=df.stream)
-        if hi.to_py() >= n or lo.to_py() < -n:  # type: ignore[operator]
+        if hi.to_py(stream=df.stream) >= n or lo.to_py(stream=df.stream) < -n:  # type: ignore[operator]
             raise ValueError("gather indices are out of bounds")
         if indices.null_count:
             bounds_policy = plc.copying.OutOfBoundsPolicy.NULLIFY

@@ -20,14 +20,14 @@ cdef extern from "cudf/scalar/scalar.hpp" namespace "cudf" nogil:
         void set_valid_async(
             bool is_valid, cuda_stream_view stream
         ) except +libcudf_exception_handler
-        bool is_valid() except +libcudf_exception_handler
+        bool is_valid(cuda_stream_view stream) except +libcudf_exception_handler
 
     cdef cppclass numeric_scalar[T](scalar):
         void set_value(
             T value,
             cuda_stream_view stream
         ) except +libcudf_exception_handler
-        T value() except +libcudf_exception_handler
+        T value(cuda_stream_view stream) except +libcudf_exception_handler
 
     cdef cppclass timestamp_scalar[T](scalar):
         void set_value(
@@ -42,10 +42,7 @@ cdef extern from "cudf/scalar/scalar.hpp" namespace "cudf" nogil:
         ) except +libcudf_exception_handler
 
     cdef cppclass string_scalar(scalar):
-        string to_string() except +libcudf_exception_handler
-
-    cdef cppclass fixed_point_scalar[T](scalar):
-        T value() except +libcudf_exception_handler
+        string to_string(cuda_stream_view stream) except +libcudf_exception_handler
 
     cdef cppclass list_scalar(scalar):
         pass
@@ -60,4 +57,4 @@ cdef extern from "cudf/scalar/scalar.hpp" namespace "cudf" nogil:
             scale_type scale,
             bool is_valid
         ) except +libcudf_exception_handler
-        T value() except +libcudf_exception_handler
+        T value(cuda_stream_view stream) except +libcudf_exception_handler
