@@ -392,9 +392,9 @@ std::unique_ptr<column> convert_case(strings_column_view const& input,
   }
 
   auto const d_strings = column_device_view::create(input.parent(), stream);
-  auto const d_flags   = get_character_flags_table();
-  auto const d_cases   = get_character_cases_table();
-  auto const d_special = get_special_case_mapping_table();
+  auto const d_flags   = get_character_flags_table(stream);
+  auto const d_cases   = get_character_cases_table(stream);
+  auto const d_special = get_special_case_mapping_table(stream);
 
   auto const first_offset = (input.offset() == 0) ? 0L
                                                   : cudf::strings::detail::get_offset_value(

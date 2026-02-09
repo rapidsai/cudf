@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -9,19 +9,20 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/row_operator/equality.cuh>
 #include <cudf/detail/row_operator/hashing.cuh>
+#include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/structs/structs_column_view.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/exec_policy.hpp>
+#include <rmm/mr/polymorphic_allocator.hpp>
 
 #include <cuco/operator.hpp>
 #include <cuco/static_set.cuh>
 #include <cuda/atomic>
 #include <cuda/functional>
-#include <thrust/copy.h>
+#include <cuda/std/tuple>
 #include <thrust/iterator/zip_iterator.h>
-#include <thrust/tuple.h>
 #include <thrust/uninitialized_fill.h>
 
 #include <optional>
@@ -43,7 +44,7 @@ struct is_not_zero {
   template <typename Pair>
   __device__ bool operator()(Pair const input) const
   {
-    return thrust::get<1>(input) != 0;
+    return cuda::std::get<1>(input) != 0;
   }
 };
 
@@ -179,14 +180,13 @@ compute_row_frequencies(table_view const& input,
 
   // Copy row indices and counts to the output if counts are non-zero
   auto const input_it = thrust::make_zip_iterator(
-    thrust::make_tuple(thrust::make_counting_iterator(0), reduction_results.begin()));
-  auto const output_it = thrust::make_zip_iterator(thrust::make_tuple(
+    cuda::std::make_tuple(thrust::make_counting_iterator(0), reduction_results.begin()));
+  auto const output_it = thrust::make_zip_iterator(cuda::std::make_tuple(
     distinct_indices->begin(), distinct_counts->mutable_view().begin<histogram_count_type>()));
 
   // Reduction results above are either group sizes of equal rows, or `0`.
   // The final output is non-zero group sizes only.
-  thrust::copy_if(
-    rmm::exec_policy_nosync(stream), input_it, input_it + num_rows, output_it, is_not_zero{});
+  cudf::detail::copy_if(input_it, input_it + num_rows, output_it, is_not_zero{}, stream);
 
   return {std::move(distinct_indices), std::move(distinct_counts)};
 }

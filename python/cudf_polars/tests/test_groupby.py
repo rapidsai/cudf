@@ -1,10 +1,11 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
 import itertools
 import random
 from datetime import date
+from decimal import Decimal
 
 import pytest
 
@@ -228,10 +229,7 @@ def test_groupby_nan_minmax_raises(op):
     "expr",
     [
         pl.lit(1).alias("value"),
-        pytest.param(
-            pl.lit([[4, 5, 6]]).alias("value"),
-            marks=pytest.mark.xfail(reason="Need to expose OtherScalar in rust IR"),
-        ),
+        pl.lit([[4, 5, 6]]).alias("value"),
         pytest.param(
             pl.Series("value", [[4, 5, 6]], dtype=pl.List(pl.Int32)),
             marks=pytest.mark.xfail(
@@ -266,9 +264,6 @@ def test_groupby_agg_broadcast_raises(df):
 
 @pytest.mark.parametrize("nrows", [30, 300, 300_000])
 @pytest.mark.parametrize("nkeys", [1, 2, 4])
-@pytest.mark.skip(
-    reason=" Hash groupby bug: See https://github.com/rapidsai/cudf/issues/20345"
-)
 def test_groupby_maintain_order_random(nrows, nkeys, with_nulls):
     key_names = [f"key{key}" for key in range(nkeys)]
     rng = random.Random(2)
@@ -422,3 +417,22 @@ def test_groupby_rank_raises(df: pl.LazyFrame) -> None:
     q = df.group_by("key1").agg(pl.col("int").rank())
 
     assert_ir_translation_raises(q, NotImplementedError)
+
+
+def test_groupby_sum_decimal_null_group() -> None:
+    df = pl.LazyFrame(
+        {"key1": [1, 1, 2, 3], "foo": [None, None, Decimal("1.00"), Decimal("2.00")]},
+        schema={"key1": pl.Int32, "foo": pl.Decimal(9, 2)},
+    )
+    q = df.group_by("key1").agg(pl.col("foo").sum())
+    assert_gpu_result_equal(q, check_row_order=False)
+
+
+@pytest.mark.xfail(
+    raises=AssertionError,
+    reason="https://github.com/rapidsai/cudf/issues/19610",
+)
+def test_groupby_literal_agg():
+    df = pl.LazyFrame({"c0": [True, False]})
+    q = df.group_by("c0").agg(pl.lit(1).is_not_null())
+    assert_gpu_result_equal(q, check_row_order=False)

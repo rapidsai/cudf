@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 import datetime
@@ -631,6 +631,38 @@ def test_parquet_reader_select_columns(datadir):
     assert_eq(expect, got)
 
 
+@pytest.mark.parametrize("ignore_missing_columns", [True, False])
+def test_parquet_reader_select_nonexistent_columns(ignore_missing_columns):
+    df = cudf.DataFrame(
+        {
+            "a": [1, 2, 3, 4, 5, 6],
+            "b": [1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+            "c": ["a", "b", "c", "d", "e", "f"],
+        }
+    )
+    buf = BytesIO()
+    df.to_parquet(buf)
+
+    if ignore_missing_columns:
+        expect = cudf.DataFrame({"a": [1, 2, 3, 4, 5, 6]})
+        got = cudf.read_parquet(
+            buf,
+            columns=["a", "d"],
+            ignore_missing_columns=ignore_missing_columns,
+        )
+        assert_eq(expect, got)
+    else:
+        with pytest.raises(
+            ValueError,
+            match="Encountered non-existent column in selected path",
+        ):
+            cudf.read_parquet(
+                buf,
+                columns=["a", "d"],
+                ignore_missing_columns=ignore_missing_columns,
+            )
+
+
 def test_parquet_reader_invalids(tmp_path):
     test_pdf = cudf.DataFrame(
         {"a": np.array([1, np.nan, np.nan, 2])}, index=cudf.Index([0, 1, 2, 3])
@@ -828,7 +860,7 @@ def test_parquet_reader_list_table(tmp_path):
     expect.to_parquet(fname)
     assert os.path.exists(fname)
     got = cudf.read_parquet(fname)
-    assert pa.Table.from_pandas(expect).equals(got.to_arrow())
+    assert_arrow_table_equal(pa.Table.from_pandas(expect), got.to_arrow())
 
 
 def int_gen(first_val, i):
@@ -986,7 +1018,7 @@ def test_parquet_reader_list_large_mixed(tmp_path):
     expect.to_parquet(fname)
     assert os.path.exists(fname)
     got = cudf.read_parquet(fname)
-    assert pa.Table.from_pandas(expect).equals(got.to_arrow())
+    assert_arrow_table_equal(pa.Table.from_pandas(expect), got.to_arrow())
 
 
 def test_parquet_reader_list_large_multi_rowgroup(tmp_path):
@@ -1203,6 +1235,63 @@ def test_parquet_reader_struct_select_columns(data, columns):
     expect = pq.ParquetFile(buff).read(columns=columns)
     got = cudf.read_parquet(buff, columns=columns)
     assert_arrow_table_equal(expect, got.to_arrow())
+
+
+def nonexistent_select_columns_params():
+    dfs = [
+        # columns that don't exist
+        (
+            [
+                {"a": 1, "b": 2},
+                {"a": 10, "b": 20},
+                {"a": None, "b": 22},
+                {"a": None, "b": None},
+                {"a": 15, "b": None},
+            ],
+            [["c"]],  # top-level missing
+        ),
+        (
+            [
+                {"a": 1, "b": 2, "c": [1, 2, 3]},
+                {"a": 10, "b": 20, "c": [4, 5]},
+                {"a": None, "b": 22, "c": [6]},
+                {"a": None, "b": None, "c": None},
+                {"a": 15, "b": None, "c": [-1, -2]},
+                None,
+                {"a": 100, "b": 200, "c": [-10, None, -20]},
+            ],
+            [
+                ["struct.b", "struct.d", "struct.c"],  # 'struct.d' missing
+            ],
+        ),
+        (
+            [
+                [{"a": 1, "b": 2}, {"a": 2, "b": 3}, {"a": 4, "b": 5}],
+                None,
+                [{"a": 10, "b": 20}],
+                [{"a": 100, "b": 200}, {"a": None, "b": 300}, None],
+            ],
+            [
+                ["struct.list.element.c"],  # subfield 'c' missing
+            ],
+        ),
+    ]
+
+    for df_col_pair in dfs:
+        for cols in df_col_pair[1]:
+            yield df_col_pair[0], cols
+
+
+@pytest.mark.parametrize("data, columns", nonexistent_select_columns_params())
+def test_parquet_reader_struct_select_columns_nonexistent_error(data, columns):
+    table = pa.Table.from_pydict({"struct": data})
+    buff = BytesIO()
+    pa.parquet.write_table(table, buff)
+
+    with pytest.raises(
+        ValueError, match="Encountered non-existent column in selected path"
+    ):
+        cudf.read_parquet(buff, columns=columns, ignore_missing_columns=False)
 
 
 def test_parquet_reader_struct_los_large(tmp_path):
@@ -2361,7 +2450,7 @@ def test_parquet_writer_list_large(tmp_path):
     assert os.path.exists(fname)
 
     got = pd.read_parquet(fname)
-    assert gdf.to_arrow().equals(pa.Table.from_pandas(got))
+    assert_arrow_table_equal(gdf.to_arrow(), pa.Table.from_pandas(got))
 
 
 def test_parquet_writer_list_large_mixed(tmp_path):
@@ -2385,10 +2474,6 @@ def test_parquet_writer_list_large_mixed(tmp_path):
 
 @pytest.mark.parametrize("store_schema", [True, False])
 def test_parquet_writer_list_chunked(tmp_path, store_schema):
-    if store_schema and version.parse(pa.__version__) < version.parse(
-        "15.0.0"
-    ):
-        pytest.skip("https://github.com/apache/arrow/pull/37792")
     table1 = cudf.DataFrame(
         {
             "a": list_gen(string_gen, 64, 40, 25),
@@ -2582,10 +2667,6 @@ def normalized_equals(value1, value2):
 @pytest.mark.parametrize("add_nulls", [True, False])
 @pytest.mark.parametrize("store_schema", [True, False])
 def test_parquet_writer_statistics(tmp_path, pdf, add_nulls, store_schema):
-    if store_schema and version.parse(pa.__version__) < version.parse(
-        "15.0.0"
-    ):
-        pytest.skip("https://github.com/apache/arrow/pull/37792")
     file_path = tmp_path / "cudf.parquet"
     if "col_category" in pdf.columns:
         pdf = pdf.drop(columns=["col_category", "col_bool"])
@@ -2735,7 +2816,23 @@ def test_parquet_writer_nested(tmp_path, data):
 
 @pytest.mark.parametrize(
     "decimal_type",
-    [cudf.Decimal32Dtype, cudf.Decimal64Dtype, cudf.Decimal128Dtype],
+    [
+        pytest.param(
+            cudf.Decimal32Dtype,
+            marks=pytest.mark.xfail(
+                reason="https://github.com/apache/arrow/issues/45570 from pandas.read_parquet",
+                condition=version.parse(pa.__version__) < version.parse("20"),
+            ),
+        ),
+        pytest.param(
+            cudf.Decimal64Dtype,
+            marks=pytest.mark.xfail(
+                reason="https://github.com/apache/arrow/issues/45570 from pandas.read_parquet",
+                condition=version.parse(pa.__version__) < version.parse("20"),
+            ),
+        ),
+        cudf.Decimal128Dtype,
+    ],
 )
 @pytest.mark.parametrize("data", [[1, 2, 3], [0.00, 0.01, None, 0.5]])
 def test_parquet_writer_decimal(decimal_type, data):
@@ -2810,7 +2907,23 @@ def test_parquet_writer_nulls_pandas_read(tmp_path, pdf):
 
 @pytest.mark.parametrize(
     "decimal_type",
-    [cudf.Decimal32Dtype, cudf.Decimal64Dtype, cudf.Decimal128Dtype],
+    [
+        pytest.param(
+            cudf.Decimal32Dtype,
+            marks=pytest.mark.xfail(
+                reason="Requires https://github.com/apache/arrow/pull/45583",
+                condition=version.parse(pa.__version__) < version.parse("20"),
+            ),
+        ),
+        pytest.param(
+            cudf.Decimal64Dtype,
+            marks=pytest.mark.xfail(
+                reason="Requires https://github.com/apache/arrow/pull/45583",
+                condition=version.parse(pa.__version__) < version.parse("20"),
+            ),
+        ),
+        cudf.Decimal128Dtype,
+    ],
 )
 def test_parquet_decimal_precision(tmp_path, decimal_type):
     df = cudf.DataFrame({"val": ["3.5", "4.2"]}).astype(decimal_type(5, 2))
@@ -2825,7 +2938,7 @@ def test_parquet_decimal_precision(tmp_path, decimal_type):
 def test_parquet_decimal_precision_empty(tmp_path):
     df = (
         cudf.DataFrame({"val": ["3.5", "4.2"]})
-        .astype(cudf.Decimal64Dtype(5, 2))
+        .astype(cudf.Decimal128Dtype(5, 2))
         .iloc[:0]
     )
     assert df.val.dtype.precision == 5
@@ -2982,10 +3095,6 @@ def test_per_column_options_string_col(tmp_path, encoding):
     assert encoding in fmd.row_group(0).column(0).encodings
 
 
-@pytest.mark.skipif(
-    version.parse(pa.__version__) < version.parse("16.0.0"),
-    reason="https://github.com/apache/arrow/pull/39748",
-)
 def test_parquet_bss_round_trip(tmp_path):
     num_rows = 200
 
@@ -3137,7 +3246,7 @@ def test_parquet_row_group_metadata(tmp_path, large_int64_gdf, size_rows):
 def test_parquet_reader_decimal_columns():
     df = cudf.DataFrame(
         {
-            "col1": cudf.Series([1, 2, 3], dtype=cudf.Decimal64Dtype(10, 2)),
+            "col1": cudf.Series([1, 2, 3], dtype=cudf.Decimal128Dtype(10, 2)),
             "col2": [10, 11, 12],
             "col3": [12, 13, 14],
             "col4": ["a", "b", "c"],
@@ -3603,9 +3712,9 @@ def test_parquet_reader_roundtrip_structs_with_arrow_schema(tmp_path, data):
 
 
 @pytest.mark.parametrize("index", [None, True, False])
-@pytest.mark.skipif(
-    version.parse(pa.__version__) < version.parse("15.0.0"),
-    reason="https://github.com/apache/arrow/pull/37792",
+@pytest.mark.xfail(
+    condition=version.parse(pa.__version__) < version.parse("20"),
+    reason="Requires https://github.com/apache/arrow/pull/45583",
 )
 def test_parquet_writer_roundtrip_with_arrow_schema(index):
     # Ensure that the concrete and nested types are faithfully being roundtripped
@@ -3649,11 +3758,6 @@ def test_parquet_writer_roundtrip_with_arrow_schema(index):
             ),
         }
     )
-
-    # Convert decimals32/64 to decimal128 if pyarrow version is < 19.0.0
-    if version.parse(pa.__version__) < version.parse("19.0.0"):
-        expected = expected.astype({"fixed32": cudf.Decimal128Dtype(9, 2)})
-        expected = expected.astype({"fixed64": cudf.Decimal128Dtype(18, 2)})
 
     # Write to Parquet with arrow schema for faithful roundtrip
     buffer = BytesIO()
@@ -3758,10 +3862,6 @@ def test_parquet_writer_int96_timestamps_and_arrow_schema():
     ],
 )
 @pytest.mark.parametrize("index", [None, True, False])
-@pytest.mark.skipif(
-    version.parse(pa.__version__) < version.parse("15.0.0"),
-    reason="https://github.com/apache/arrow/pull/37792",
-)
 def test_parquet_writer_roundtrip_structs_with_arrow_schema(data, index):
     # Ensure that the structs are faithfully being roundtripped across
     # Parquet with arrow schema
@@ -4247,6 +4347,10 @@ def test_parquet_reader_with_mismatched_schemas_error():
         )
 
 
+@pytest.mark.xfail(
+    condition=version.parse(pa.__version__) < version.parse("20"),
+    reason="Requires https://github.com/apache/arrow/pull/45583",
+)
 def test_parquet_roundtrip_zero_rows_no_column_mask():
     expected = cudf.DataFrame._from_data(
         {
@@ -4647,7 +4751,7 @@ def test_parquet_long_list(tmp_path):
     # Make sure that the cudf reader matches the pandas reader for this data
     actual = cudf.read_parquet(file_name)
     expected = pd.read_parquet(file_name)
-    assert actual.to_arrow().equals(pa.Table.from_pandas(expected))
+    assert_arrow_table_equal(pa.Table.from_pandas(expected), actual.to_arrow())
 
 
 @pytest.mark.parametrize(
@@ -4692,3 +4796,8 @@ def test_read_many_colchunks_with_threadpool():
     pq.write_table(expected, buffer, row_group_size=100, write_page_index=True)
 
     assert_eq(expected, cudf.read_parquet(buffer))
+
+
+def test_parquet_decode_column_index_thrift_bool_list(datadir):
+    fname = datadir / "column_index_thrift_bool_list.parquet"
+    cudf.read_parquet(fname)

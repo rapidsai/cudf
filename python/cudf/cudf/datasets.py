@@ -66,7 +66,7 @@ def timeseries(
     gdf = cudf.from_pandas(df)
     for col in gdf:
         mask = state.choice(
-            [True, False],
+            [False, True],
             size=len(index),
             p=[1 - nulls_frequency, nulls_frequency],
         )

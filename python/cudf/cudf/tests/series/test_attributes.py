@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 import re
 
@@ -121,7 +121,7 @@ def test_series_iter_error():
         TypeError,
         match=re.escape(
             f"{gs.__class__.__name__} object is not iterable. "
-            f"Consider using `.to_arrow()`, `.to_pandas()` or `.values_host` "
+            f"Consider using `.to_arrow()`, `.to_pandas()` or `.to_numpy()` "
             f"if you wish to iterate over the values."
         ),
     ):
@@ -131,7 +131,7 @@ def test_series_iter_error():
         TypeError,
         match=re.escape(
             f"{gs.__class__.__name__} object is not iterable. "
-            f"Consider using `.to_arrow()`, `.to_pandas()` or `.values_host` "
+            f"Consider using `.to_arrow()`, `.to_pandas()` or `.to_numpy()` "
             f"if you wish to iterate over the values."
         ),
     ):
@@ -141,7 +141,7 @@ def test_series_iter_error():
         TypeError,
         match=re.escape(
             f"{gs.__class__.__name__} object is not iterable. "
-            f"Consider using `.to_arrow()`, `.to_pandas()` or `.values_host` "
+            f"Consider using `.to_arrow()`, `.to_pandas()` or `.to_numpy()` "
             f"if you wish to iterate over the values."
         ),
     ):
@@ -405,7 +405,7 @@ def test_series_values_host_property(data):
     pds = pd.Series(data=data, dtype=None if data else float)
     gds = cudf.Series(data=data, dtype=None if data else float)
 
-    np.testing.assert_array_equal(pds.values, gds.values_host)
+    np.testing.assert_array_equal(pds.values, gds.to_numpy())
 
 
 @pytest.mark.parametrize(
@@ -430,9 +430,3 @@ def test_series_values_property(data):
     gds_vals = gds.values
     assert isinstance(gds_vals, cp.ndarray)
     np.testing.assert_array_equal(gds_vals.get(), pds.values)
-
-
-def test_series_data_property_deprecated():
-    s = cudf.Series([1, 2, 3])
-    with pytest.warns(FutureWarning, match="Series.data is deprecated"):
-        s.data

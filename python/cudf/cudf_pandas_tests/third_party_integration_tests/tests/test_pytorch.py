@@ -6,11 +6,17 @@ import pandas as pd
 import pytest
 import torch
 
-pytestmark = pytest.mark.assert_eq(
-    fn=lambda expect, got, **kwargs: torch.testing.assert_close(
-        got, expect, **kwargs
-    )
-)
+pytestmark = [
+    pytest.mark.assert_eq(
+        fn=lambda expect, got, **kwargs: torch.testing.assert_close(
+            got, expect, **kwargs
+        )
+    ),
+    pytest.mark.skipif(
+        not torch.cuda.is_available(),
+        reason="CUDA is required for these tests",
+    ),
+]
 
 
 def torch_ctor_assert_eq(expect, got, **kwargs):

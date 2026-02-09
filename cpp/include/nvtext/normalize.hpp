@@ -80,6 +80,8 @@ struct character_normalizer {
    * @brief Normalizer object constructor
    *
    * This initializes and holds the character normalizing tables and settings.
+   * The special tokens are expected to all upper case regardless of the
+   * `do_lower_case` flag.
    *
    * @param do_lower_case If true, upper-case characters are converted to
    *        lower-case and accents are stripped from those characters.
