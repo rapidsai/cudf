@@ -46,10 +46,6 @@ cache_t::cache_t(std::string cache_dir, cache_limits const& limits)
   CUDF_EXPECTS(limits.num_blobs >= 2, "Blob cache limit must be at least 2");
   CUDF_EXPECTS(limits.num_fragments >= 2, "Fragment cache limit must be at least 2");
   CUDF_EXPECTS(limits.num_libraries >= 2, "Library cache limit must be at least 2");
-  // Create cache directory if it doesn't exist
-  if (mkdir(cache_dir_.c_str(), S_IRWXU | S_IRWXG | S_IRWXO) == -1) {
-    if (errno != EEXIST) { throw_posix("Failed to create RTC cache directory", "mkdir"); }
-  }
 }
 
 std::string const& cache_t::get_cache_dir() { return cache_dir_; }
@@ -88,12 +84,15 @@ std::optional<blob_t> blob_t::from_file(char const* path)
 
 namespace {
 
+/// @brief retrieves a blob from disk based on the given sha256 hash and object type (e.g. "blob",
+/// "fragment", "library"). Returns nullopt if the file doesn't exist on disk, and throws if any
+/// other error occurs.
 std::optional<blob> get_disk_blob(std::string const& cache_dir,
                                   std::string const& object_type,
                                   sha256_hash const& sha)
 {
   auto hex  = sha.to_hex_string();
-  auto path = std::format("{}/{}.{}.bin", cache_dir, object_type, hex.view());
+  auto path = std::format("{}/{}.{}.bin", cache_dir, hex.view(), object_type);
 
   auto blob = blob_t::from_file(path.c_str());
 
@@ -103,12 +102,14 @@ std::optional<blob> get_disk_blob(std::string const& cache_dir,
   }
 }
 
+/// @brief atomically writes a blob to disk by first writing to a temporary file and then renaming
+/// it to the final path.
 void add_blob_to_disk(std::string const& cache_dir,
                       std::string const& object_type,
                       sha256_hash const& sha,
                       blob_view binary)
 {
-  char temp_path[] = "/tmp/cudf-blob-XXXXXX";
+  char temp_path[] = "/tmp/cudf-bin-XXXXXX";
 
   {
     int fd = mkstemp(temp_path);
@@ -124,7 +125,7 @@ void add_blob_to_disk(std::string const& cache_dir,
   }
 
   auto hex        = sha.to_hex_string();
-  auto final_path = std::format("{}/{}.{}.bin", cache_dir, object_type, hex.view());
+  auto final_path = std::format("{}/{}.{}.bin", cache_dir, hex.view(), object_type);
 
   std::filesystem::create_directories(std::filesystem::path{final_path}.parent_path());
 
@@ -163,13 +164,13 @@ std::shared_future<blob> cache_t::query_or_insert_blob(sha256_hash const& sha,
     if (!unlocked) { lock_.unlock(); }
   });
 
-  auto const it = blobs_cache_.entries_.find(sha);
   // check memory cache
-  if (it != blobs_cache_.entries_.end()) {
+  if (auto it = blobs_cache_.entries_.find(sha); it != blobs_cache_.entries_.end()) {
     counter_.hit_memory_blob();
 
     // update LRU tick
     it->second.hit(current_tick);
+
     return it->second.value;
 
   } else {
@@ -178,23 +179,25 @@ std::shared_future<blob> cache_t::query_or_insert_blob(sha256_hash const& sha,
     // check disk cache
     auto disk_blob = get_disk_blob(cache_dir_, "blob", sha);
 
+    std::promise<blob> promise;
+    auto fut       = promise.get_future().share();
+    auto cache_fut = fut;
+    auto ret_fut   = fut;
+
     if (disk_blob.has_value()) {
       counter_.hit_disk_blob();
-      std::promise<blob> promise;
+
       promise.set_value(std::move(*disk_blob));
 
-      auto fut = promise.get_future();
-
       // insert into cache
-      blobs_cache_.insert(sha, fut.share(), current_tick);
-      return fut.share();
+      blobs_cache_.insert(sha, std::move(cache_fut), current_tick);
+
+      return ret_fut;
 
     } else {
       counter_.miss_disk_blob();
 
-      std::promise<blob> promise;
-      auto fut = promise.get_future();
-      blobs_cache_.insert(sha, fut.share(), current_tick);
+      blobs_cache_.insert(sha, std::move(cache_fut), current_tick);
 
       // we can release the lock while calling the maker function since it may be expensive and we
       // have already reserved a spot in the cache for this sha
@@ -207,7 +210,7 @@ std::shared_future<blob> cache_t::query_or_insert_blob(sha256_hash const& sha,
       // store result to disk
       add_blob_to_disk(cache_dir_, "blob", sha, result->view());
 
-      return fut.share();
+      return ret_fut;
     }
   }
 }
@@ -228,24 +231,31 @@ std::shared_future<fragment> cache_t::query_or_insert_fragment(sha256_hash const
     if (!unlocked) { lock_.unlock(); }
   });
 
-  auto const it = fragments_cache_.entries_.find(sha);
   // check memory cache
-  if (it != fragments_cache_.entries_.end()) {
+  if (auto it = fragments_cache_.entries_.find(sha); it != fragments_cache_.entries_.end()) {
     counter_.hit_memory_fragment();
+
     // update LRU tick
+
     it->second.hit(current_tick);
+
     return it->second.value;
+
   } else {
     counter_.miss_memory_fragment();
 
     // check disk cache
     auto disk_blob = get_disk_blob(cache_dir_, "fragment", sha);
+
+    std::promise<fragment> promise;
+    auto fut       = promise.get_future().share();
+    auto cache_fut = fut;
+    auto ret_fut   = fut;
+
     if (disk_blob.has_value()) {
       counter_.hit_disk_fragment();
 
-      std::promise<fragment> promise;
-      auto fut = promise.get_future();
-      fragments_cache_.insert(sha, fut.share(), current_tick);
+      fragments_cache_.insert(sha, std::move(cache_fut), current_tick);
 
       // we can release the lock while calling the maker function since it may be expensive and we
       // have already reserved a spot in the cache for this sha
@@ -257,15 +267,12 @@ std::shared_future<fragment> cache_t::query_or_insert_fragment(sha256_hash const
       auto frag = fragment_t::load(load_params);
       promise.set_value(std::move(frag));
 
-      return fut.share();
+      return ret_fut;
 
     } else {
       counter_.miss_disk_fragment();
 
-      std::promise<fragment> promise;
-
-      auto fut = promise.get_future();
-      fragments_cache_.insert(sha, fut.share(), current_tick);
+      fragments_cache_.insert(sha, std::move(cache_fut), current_tick);
 
       // we can release the lock while calling the maker function since it may be expensive and we
       // have already reserved a spot in the cache for this sha
@@ -278,7 +285,7 @@ std::shared_future<fragment> cache_t::query_or_insert_fragment(sha256_hash const
       // store result to disk
       add_blob_to_disk(cache_dir_, "fragment", sha, result->get(type)->view());
 
-      return fut.share();
+      return ret_fut;
     }
   }
 }
@@ -298,24 +305,30 @@ std::shared_future<library> cache_t::query_or_insert_library(
     if (!unlocked) { lock_.unlock(); }
   });
 
-  auto const it = libraries_cache_.entries_.find(sha);
   // check memory cache
-  if (it != libraries_cache_.entries_.end()) {
+  if (auto it = libraries_cache_.entries_.find(sha); it != libraries_cache_.entries_.end()) {
     counter_.hit_memory_library();
+
     // update LRU tick
     it->second.hit(current_tick);
+
     return it->second.value;
+
   } else {
     counter_.miss_memory_library();
 
     // check disk cache
     auto disk_blob = get_disk_blob(cache_dir_, "library", sha);
+
+    std::promise<library> promise;
+    auto fut       = promise.get_future().share();
+    auto cache_fut = fut;
+    auto ret_fut   = fut;
+
     if (disk_blob.has_value()) {
       counter_.hit_disk_library();
 
-      std::promise<library> promise;
-      auto fut = promise.get_future();
-      libraries_cache_.insert(sha, fut.share(), current_tick);
+      libraries_cache_.insert(sha, std::move(cache_fut), current_tick);
 
       // we can release the lock while calling the maker function since it may be expensive and we
       // have already reserved a spot in the cache for this sha
@@ -327,15 +340,12 @@ std::shared_future<library> cache_t::query_or_insert_library(
       auto lib = library_t::load(load_params);
       promise.set_value(std::move(lib));
 
-      return fut.share();
+      return ret_fut;
 
     } else {
       counter_.miss_disk_library();
 
-      std::promise<library> promise;
-
-      auto fut = promise.get_future();
-      libraries_cache_.insert(sha, fut.share(), current_tick);
+      libraries_cache_.insert(sha, std::move(cache_fut), current_tick);
 
       // we can release the lock while calling the maker function since it may be expensive and we
       // have already reserved a spot in the cache for this sha
@@ -348,7 +358,7 @@ std::shared_future<library> cache_t::query_or_insert_library(
       // store result to disk
       add_blob_to_disk(cache_dir_, "library", sha, blob->view());
 
-      return fut.share();
+      return ret_fut;
     }
   }
 }

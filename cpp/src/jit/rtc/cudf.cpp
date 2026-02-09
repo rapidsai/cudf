@@ -28,10 +28,6 @@
 #include <filesystem>
 #include <format>
 #include <future>
-#include <iostream>
-
-// TODO: remove
-#define CHECKPOINT std::cout << "Checkpoint: " << __FILE__ << ":" << __LINE__ << std::endl
 
 #define CUDFRTC_CHECK_CUDART(msg, ...)                                              \
   do {                                                                              \
@@ -137,17 +133,17 @@ void install_file_set(char const* target_dir,
                +std::format("Unsupported compression type specified: {}", compression),
                std::runtime_error);
 
-  auto decompressed     = decompress_blob(compressed_binary, uncompressed_size, compression);
-  auto const files_data = decompressed.data();
+  auto decompressed = decompress_blob(compressed_binary, uncompressed_size, compression);
+  auto files_data   = decompressed.data();
 
   for (size_t i = 0; i < file_ranges.size(); ++i) {
-    auto const file_data_range = file_ranges[i];
-    auto const dst_range       = dst.ranges[i];
-    auto const file_data = std::span{files_data + file_data_range.offset, file_data_range.size};
-    auto const dst_path  = std::string_view{
+    auto file_data_range = file_ranges[i];
+    auto dst_range       = dst.ranges[i];
+    auto file_data       = std::span{files_data + file_data_range.offset, file_data_range.size};
+    auto dst_path        = std::string_view{
       reinterpret_cast<char const*>(dst.bytes.data) + dst_range.offset, dst_range.size};
 
-    auto const target_path = std::format("{}/{}", target_dir, dst_path);
+    auto target_path = std::format("{}/{}", target_dir, dst_path);
 
     std::filesystem::create_directories(std::filesystem::path{target_path}.parent_path());
     install_file(target_path.c_str(), file_data);
@@ -233,20 +229,17 @@ void jit_bundle_t::preload_lto_library()
 
   auto bundle_hash = get_hash();
 
-  auto const cache_key = std::format(R"***(
-      fragment_type=FATBIN,
-      key={},
-      bundle={}
-      )***",
-                                     "cudf_lto_library",
-                                     bundle_hash);
+  auto cache_key = std::format(R"***(fragment_type=FATBIN
+key={}
+bundle={})***",
+                               "cudf_lto_library",
+                               bundle_hash);
 
-  auto const cache_key_sha256 = hash_string(cache_key);
+  auto cache_key_sha256 = hash_string(cache_key);
 
   auto compile = [&] {
-    auto directory = get_directory();
-    auto path      = std::format("{}/{}", directory, "cudf_lto_library.fatbin");
-    auto cubin     = blob_t::from_file(path.c_str());
+    auto path  = std::format("{}/{}", get_directory(), "cudf_lto_library.fatbin");
+    auto cubin = blob_t::from_file(path.c_str());
     CUDF_EXPECTS(cubin.has_value(),
                  +std::format("Failed to load LTO library cubin from disk at ({})", path),
                  std::runtime_error);
@@ -269,8 +262,7 @@ std::string jit_bundle_t::get_hash() const
 
 std::string jit_bundle_t::get_directory() const
 {
-  auto hash = get_hash();
-  return std::format("{}/{}", install_dir_, hash);
+  return std::format("{}/{}", install_dir_, get_hash());
 }
 
 fragment jit_bundle_t::get_lto_library() const { return lto_library_; }
@@ -351,28 +343,24 @@ fragment get_or_compile_fragment(char const* name, char const* source_code_cstr,
   auto sm          = get_current_device_physical_model();
   auto bundle_hash = bundle.get_hash();
 
-  auto const cache_key = std::format(R"***(
-      fragment_type=LTO_IR,
-      key={},
-      cuda_runtime={},
-      cuda_driver={},
-      arch={},
-      bundle={}
-      )***",
-                                     key,
-                                     runtime,
-                                     driver,
-                                     sm,
-                                     bundle_hash);
+  auto cache_key = std::format(R"***(fragment_type=LTO_IR
+key={}
+cuda_runtime={}
+cuda_driver={}
+arch={}
+bundle={})***",
+                               key,
+                               runtime,
+                               driver,
+                               sm,
+                               bundle_hash);
 
-  auto const cache_key_sha256 = hash_string(cache_key);
+  auto cache_key_sha256 = hash_string(cache_key);
 
   // TODO: add time function in cache
 
   auto compile = [&] {
-    auto begin       = std::chrono::high_resolution_clock::now();
-    auto cache_dir   = cache.get_cache_dir();
-    auto install_dir = std::format("{}/jit-install", cache_dir);
+    auto begin = std::chrono::high_resolution_clock::now();
 
     auto include_dirs    = bundle.get_include_directories();
     auto compile_options = bundle.get_compile_options();
@@ -407,11 +395,11 @@ fragment get_or_compile_fragment(char const* name, char const* source_code_cstr,
       options_cstr.emplace_back(option.c_str());
     }
 
-    auto const params = fragment_t::compile_params{.name        = name,
-                                                   .source      = source_code_cstr,
-                                                   .headers     = {},
-                                                   .options     = options_cstr,
-                                                   .target_type = binary_type::LTO_IR};
+    auto params = fragment_t::compile_params{.name        = name,
+                                             .source      = source_code_cstr,
+                                             .headers     = {},
+                                             .options     = options_cstr,
+                                             .target_type = binary_type::LTO_IR};
 
     auto frag = fragment_t::compile(params);
 
@@ -452,14 +440,15 @@ library compile_and_link_udf(char const* name,
     auto library  = bundle.get_lto_library();
     auto fragment = get_or_compile_fragment(name, udf_code, udf_key);
 
+    // TODO: sass dump
+    // TODO: time dump
+
     // TODO: experiment with:
     // optimization flags
     // split compile
     // split-compile-extended
     // lineinfo and debug info options
     // -kernels-used=
-    // sass dump
-    // time dump
     // env variable to control options
     // fma
     // variables-used
@@ -478,19 +467,19 @@ library compile_and_link_udf(char const* name,
       options_cstr.emplace_back(option.c_str());
     }
 
-    blob_view const link_fragments[] = {library->get(binary_type::FATBIN)->view(),
-                                        fragment->get(binary_type::LTO_IR)->view()};
+    blob_view link_fragments[] = {library->get(binary_type::FATBIN)->view(),
+                                  fragment->get(binary_type::LTO_IR)->view()};
 
-    binary_type const fragment_binary_types[] = {binary_type::FATBIN, binary_type::LTO_IR};
+    binary_type fragment_binary_types[] = {binary_type::FATBIN, binary_type::LTO_IR};
 
-    char const* const fragment_names[] = {"cudf_lto_library", "cudf_udf_fragment"};
+    char const* fragment_names[] = {"cudf_lto_library", name};
 
-    auto const params = library_t::link_params{.name                  = name,
-                                               .output_type           = binary_type::CUBIN,
-                                               .fragments             = link_fragments,
-                                               .fragment_binary_types = fragment_binary_types,
-                                               .fragment_names        = fragment_names,
-                                               .link_options          = options_cstr};
+    auto params = library_t::link_params{.name                  = name,
+                                         .output_type           = binary_type::CUBIN,
+                                         .fragments             = link_fragments,
+                                         .fragment_binary_types = fragment_binary_types,
+                                         .fragment_names        = fragment_names,
+                                         .link_options          = options_cstr};
 
     auto blob = library_t::link_as_blob(params);
 
@@ -510,19 +499,18 @@ library compile_and_link_udf(char const* name,
     return std::make_tuple(linked_library, blob);
   };
 
-  auto library_cache_key              = std::format(R"***(
-      library_type=CUBIN,
-      kernels={},
-      udf={},
-      cuda_runtime={},
-      cuda_driver={},
-      arch={})***",
+  auto library_cache_key        = std::format(R"***(library_type=CUBIN
+kernels={}
+udf={}
+cuda_runtime={}
+cuda_driver={}
+arch={})***",
                                        kernel_symbol,
                                        udf_key,
                                        runtime,
                                        driver,
                                        sm);
-  auto const library_cache_key_sha256 = hash_string(library_cache_key);
+  auto library_cache_key_sha256 = hash_string(library_cache_key);
 
   auto library =
     cache.query_or_insert_library(library_cache_key_sha256, binary_type::CUBIN, compile);

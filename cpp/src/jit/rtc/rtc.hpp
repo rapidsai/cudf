@@ -160,7 +160,7 @@ struct [[nodiscard]] kernel_ref {
               uint32_t block_dim_z,
               uint32_t shared_mem_bytes,
               CUstream stream,
-              void** kernel_params);
+              void** kernel_params) const;
 
   [[nodiscard]] std::string_view get_name() const;
 };

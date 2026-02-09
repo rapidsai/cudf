@@ -374,7 +374,7 @@ void kernel_ref::launch(uint32_t grid_dim_x,
                         uint32_t block_dim_z,
                         uint32_t shared_mem_bytes,
                         CUstream stream,
-                        void** kernel_params)
+                        void** kernel_params) const
 {
   CUDF_FUNC_RANGE();
 

@@ -61,31 +61,38 @@ struct alignas(CACHELINE_ALIGNMENT) lru_memory_cache {
   explicit lru_memory_cache(size_t limit) : entries_{}, limit_{limit}
   {
     // reserve space to avoid rehashing
+    CUDF_EXPECTS(limit > 0, "Cache limit must be greater than 0");
     entries_.reserve(limit * 2);
+  }
+
+  void purge()
+  {
+    if (entries_.empty()) { return; }
+
+    auto num_to_purge = std::max(entries_.size() / 2, static_cast<size_t>(1));
+
+    std::vector<std::pair<sha256_hash, uint64_t>> rankings;
+    rankings.reserve(entries_.size());
+
+    for (auto const& [key, entry] : entries_) {
+      rankings.emplace_back(key, entry.last_touched_tick);
+    }
+
+    std::sort(rankings.begin(), rankings.end(), [](auto const& a, auto const& b) {
+      return a.second < b.second;
+    });
+
+    // purge least recently used half
+    rankings.resize(num_to_purge);
+
+    for (auto [key, _] : rankings) {
+      entries_.erase(key);
+    }
   }
 
   void insert(sha256_hash const& sha, T&& value, uint64_t tick)
   {
-    if ((entries_.size() + 1) > limit_) {
-      std::vector<std::pair<sha256_hash, uint64_t>> rankings;
-      rankings.reserve(entries_.size());
-
-      for (auto const& [key, ent] : entries_) {
-        rankings.emplace_back(key, ent.last_touched_tick);
-      }
-
-      std::sort(rankings.begin(), rankings.end(), [](auto const& a, auto const& b) {
-        return a.second < b.second;
-      });
-
-      // purge least recently used half
-
-      auto num_to_purge = rankings.size() / 2;
-
-      for (size_t i = 0; i < num_to_purge; ++i) {
-        entries_.erase(rankings[i].first);
-      }
-    }
+    if ((entries_.size() + 1) > limit_) { purge(); }
 
     entries_.emplace(sha, entry{tick, std::move(value)});
   }
