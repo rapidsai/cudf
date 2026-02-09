@@ -351,8 +351,22 @@ class CategoricalColumn(column.ColumnBase):
         elif isinstance(other.dtype, CategoricalDtype):
             other = other.codes  # type: ignore[union-attr]
 
-        result = self.codes.copy_if_else(other, cond)  # type: ignore[arg-type]
-        return column.ColumnBase.create(result.plc_column, self.dtype)
+        with column.access_columns(
+            self.codes,
+            other,
+            cond,
+            mode="read",
+            scope="internal",
+        ) as (codes, other, cond):
+            other_plc = (
+                other.plc_column if isinstance(other, ColumnBase) else other
+            )
+            result_plc = plc.copying.copy_if_else(
+                codes.plc_column,
+                other_plc,
+                cond.plc_column,
+            )
+        return column.ColumnBase.create(result_plc, self.dtype)
 
     def _encode(self, value: ScalarLike) -> ScalarLike:
         return self.categories.find_first_value(value)
@@ -384,10 +398,32 @@ class CategoricalColumn(column.ColumnBase):
                 f"got to_replace dtype: {to_replace_col.dtype} and "
                 f"value dtype: {replacement_col.dtype}"
             )
+        with to_replace_col.access(mode="read", scope="internal"):
+            with replacement_col.access(mode="read", scope="internal"):
+                distinct_table = plc.stream_compaction.stable_distinct(
+                    plc.Table(
+                        [
+                            to_replace_col.plc_column,
+                            replacement_col.plc_column,
+                        ]
+                    ),
+                    [0],
+                    plc.stream_compaction.DuplicateKeepOption.KEEP_LAST,
+                    plc.types.NullEquality.EQUAL,
+                    plc.types.NanEquality.ALL_EQUAL,
+                )
         df = cudf.DataFrame._from_data(
-            {"old": to_replace_col, "new": replacement_col}
+            {
+                "old": ColumnBase.create(
+                    distinct_table.columns()[0],
+                    to_replace_col.dtype,
+                ),
+                "new": ColumnBase.create(
+                    distinct_table.columns()[1],
+                    replacement_col.dtype,
+                ),
+            }
         )
-        df = df.drop_duplicates(subset=["old"], keep="last", ignore_index=True)
         if df._data["old"].null_count == 1:
             fill_value = (
                 df._data["new"]
@@ -614,17 +650,16 @@ class CategoricalColumn(column.ColumnBase):
             else:
                 # Otherwise if both categories are of different Column types,
                 # return a column full of nulls.
-                codes = cast(
-                    "cudf.core.column.numerical.NumericalColumn",
-                    column.as_column(
-                        _DEFAULT_CATEGORICAL_VALUE,
-                        length=self.size,
-                        dtype=self.dtype._codes_dtype,
+                codes_plc = plc.Column.from_scalar(
+                    plc.Scalar.from_py(
+                        None,
+                        dtype_to_pylibcudf_type(dtype._codes_dtype),
                     ),
+                    self.size,
                 )
                 return cast(
                     "Self",
-                    ColumnBase.create(codes.plc_column, dtype),
+                    ColumnBase.create(codes_plc, dtype),
                 )
 
         return self.set_categories(
@@ -770,21 +805,21 @@ class CategoricalColumn(column.ColumnBase):
             if type(out_col.categories) is not type(new_categories):
                 # If both categories are of different Column types,
                 # return a column full of Nulls.
-                new_codes = cast(
-                    "cudf.core.column.numerical.NumericalColumn",
-                    column.as_column(
-                        _DEFAULT_CATEGORICAL_VALUE,
-                        length=self.size,
-                        dtype=self.dtype._codes_dtype,
+                new_dtype = CategoricalDtype(
+                    categories=new_categories, ordered=ordered
+                )
+                new_codes_plc = plc.Column.from_scalar(
+                    plc.Scalar.from_py(
+                        None,
+                        dtype_to_pylibcudf_type(new_dtype._codes_dtype),
                     ),
+                    self.size,
                 )
                 out_col = cast(
                     "Self",
                     ColumnBase.create(
-                        new_codes.plc_column,
-                        CategoricalDtype(
-                            categories=new_categories, ordered=ordered
-                        ),
+                        new_codes_plc,
+                        new_dtype,
                     ),
                 )
             elif (
