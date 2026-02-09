@@ -95,6 +95,7 @@ async def _tree_distinct(
     metadata_in: ChannelMetadata,
     initial_chunks: list[TableChunk],
     n_ary: int,
+    *,
     collective_id: int | None = None,
     tracer: ActorTracer | None = None,
 ) -> None:
@@ -283,8 +284,9 @@ async def _shuffle_distinct(
     output_count: int,
     collective_id: int,
     key_indices: tuple[int, ...],
-    tracer: ActorTracer | None = None,
+    *,
     shuffle_context: Context | None = None,
+    tracer: ActorTracer | None = None,
 ) -> None:
     """
     Shuffle-based distinct.
@@ -314,12 +316,12 @@ async def _shuffle_distinct(
         The collective ID for the shuffle operation.
     key_indices
         The column indices of the distinct keys.
-    tracer
-        Optional tracer for runtime metrics.
     shuffle_context
         Optional context for shuffle operations. If provided, uses this
         context for ShuffleManager (e.g., a local context with single-rank
         communicator for local-only shuffle). Defaults to main context.
+    tracer
+        Optional tracer for runtime metrics.
     """
     # Use shuffle_context for ShuffleManager if provided
     shuf_ctx = shuffle_context if shuffle_context is not None else context
@@ -415,6 +417,7 @@ async def _chunkwise_distinct(
     ch_in: Channel[TableChunk],
     metadata_in: ChannelMetadata,
     initial_chunks: list[TableChunk],
+    *,
     tracer: ActorTracer | None = None,
 ) -> None:
     """
@@ -490,6 +493,7 @@ async def _local_shuffle_distinct(
     output_count: int,
     collective_id: int,
     key_indices: tuple[int, ...],
+    *,
     tracer: ActorTracer | None = None,
 ) -> None:
     """
@@ -541,8 +545,8 @@ async def _local_shuffle_distinct(
         output_count,
         collective_id,
         key_indices,
-        tracer,
         shuffle_context=local_context,
+        tracer=tracer,
     )
 
 
@@ -691,7 +695,7 @@ async def distinct_node(
                 ch_in,
                 metadata_in,
                 initial_chunks,
-                tracer,
+                tracer=tracer,
             )
         elif can_skip_global_comm:
             # No global communication needed
@@ -727,7 +731,7 @@ async def distinct_node(
                     output_count,
                     collective_ids.pop(),
                     key_indices,
-                    tracer,
+                    tracer=tracer,
                 )
         elif estimated_total_size < target_partition_size:
             # Small output - use tree reduction with allgather to merge across ranks
@@ -742,8 +746,8 @@ async def distinct_node(
                 metadata_in,
                 initial_chunks,
                 adaptive_n_ary,
-                collective_ids.pop(),
-                tracer,
+                collective_id=collective_ids.pop(),
+                tracer=tracer,
             )
         else:
             # Large output - use shuffle
@@ -763,7 +767,7 @@ async def distinct_node(
                 output_count,
                 collective_ids.pop(),
                 key_indices,
-                tracer,
+                tracer=tracer,
             )
 
 
