@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -14,6 +14,7 @@
 #include <cudf/detail/transform.hpp>
 #include <cudf/detail/unary.hpp>
 #include <cudf/interop.hpp>
+#include <cudf/strings/detail/strings_column_factories.cuh>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
@@ -125,6 +126,27 @@ dispatch_tuple_t dispatch_from_arrow_device::operator()<bool>(ArrowSchemaView* s
   return std::make_tuple<column_view, owned_columns_t>(std::move(out_view), std::move(owned));
 }
 
+struct binary_view_to_string_index_pair {
+  ArrowBinaryView const* d_items;
+  char const** d_ptrs;
+  bitmask_type const* d_mask;  // real mask to make sure data is not read
+  bool skip_mask;              // skip_mask to return empty string instead of nullptr
+
+  __device__ cudf::strings::detail::string_index_pair operator()(size_type idx) const
+  {
+    if (d_mask && !bit_is_set(d_mask, idx)) {
+      return cudf::strings::detail::string_index_pair{skip_mask ? "" : nullptr, 0};
+    }
+    auto const& item = d_items[idx];
+    auto const size  = static_cast<cudf::size_type>(item.inlined.size);
+    auto const data  = (size <= NANOARROW_BINARY_VIEW_INLINE_SIZE)
+                         ? reinterpret_cast<char const*>(item.inlined.data)
+                        //: "abcdefghijklmnopqrstuvwxyz";
+                         : d_ptrs[item.ref.buffer_index] + item.ref.offset;
+    return {data, size};
+  }
+};
+
 template <>
 dispatch_tuple_t dispatch_from_arrow_device::operator()<cudf::string_view>(
   ArrowSchemaView* schema,
@@ -134,17 +156,52 @@ dispatch_tuple_t dispatch_from_arrow_device::operator()<cudf::string_view>(
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
+  auto null_mask = skip_mask
+                     ? nullptr
+                     : reinterpret_cast<bitmask_type const*>(input->buffers[validity_buffer_idx]);
   if (input->length == 0) {
-    return std::make_tuple<column_view, owned_columns_t>(
-      {type,
-       0,
-       nullptr,
-       skip_mask ? nullptr
-                 : reinterpret_cast<bitmask_type const*>(input->buffers[validity_buffer_idx]),
-       0},
-      {});
+    return std::make_tuple<column_view, owned_columns_t>({type, 0, nullptr, null_mask, 0}, {});
   }
 
+  auto const size       = static_cast<size_type>(input->length);
+  auto const null_count = static_cast<size_type>(input->null_count);
+  auto const offset     = static_cast<size_type>(input->offset);
+
+  if (schema->type == NANOARROW_TYPE_STRING_VIEW) {
+    ArrowArrayView view;
+    NANOARROW_THROW_NOT_OK(ArrowArrayViewInitFromSchema(&view, schema->schema, nullptr));
+    NANOARROW_THROW_NOT_OK(ArrowArrayViewSetArray(&view, input, nullptr));
+
+    constexpr int binary_view_vector_idx = 1;
+    auto const d_items = view.buffer_views[binary_view_vector_idx].data.as_binary_view;
+    auto variadic_ptrs = std::vector<char const*>();
+    for (auto i = 0L; i < view.n_variadic_buffers; ++i) {
+      auto variadic_buf =
+        ArrowArrayBuffer(const_cast<ArrowArray*>(input), i + NANOARROW_BINARY_VIEW_FIXED_BUFFERS);
+      variadic_ptrs.push_back(reinterpret_cast<char const*>(variadic_buf->data));
+    }
+    auto d_variadic_ptrs = cudf::detail::make_device_uvector_async(
+      variadic_ptrs, stream, cudf::get_current_device_resource_ref());
+    auto d_ptrs       = d_variadic_ptrs.data();
+    auto const d_mask = reinterpret_cast<bitmask_type const*>(input->buffers[validity_buffer_idx]);
+    // build strings into gather input form
+    auto d_indices =
+      rmm::device_uvector<cudf::strings::detail::string_index_pair>(size, stream, mr);
+    thrust::transform(rmm::exec_policy_nosync(stream),
+                      thrust::counting_iterator<cudf::size_type>(offset),
+                      thrust::counting_iterator<cudf::size_type>(offset + size),
+                      d_indices.begin(),
+                      binary_view_to_string_index_pair{d_items, d_ptrs, d_mask, skip_mask});
+    // gather strings into output column
+    auto out_col =
+      cudf::strings::detail::make_strings_column(d_indices.begin(), d_indices.end(), stream, mr);
+    auto out_view = out_col->view();
+    owned_columns_t owned;
+    owned.emplace_back(std::move(out_col));
+    return std::make_tuple<column_view, owned_columns_t>(std::move(out_view), std::move(owned));
+  }
+
+  // expects TYPE_STRING and TYPE_LARGE_STRING types
   data_type offsets_type(type_id::INT32);
   if (schema->type == NANOARROW_TYPE_LARGE_STRING) { offsets_type = data_type(type_id::INT64); }
   auto offsets_view = column_view{offsets_type,
@@ -155,15 +212,7 @@ dispatch_tuple_t dispatch_from_arrow_device::operator()<cudf::string_view>(
                                   0};
 
   return std::make_tuple<column_view, owned_columns_t>(
-    {type,
-     static_cast<size_type>(input->length),
-     input->buffers[2],
-     skip_mask ? nullptr
-               : reinterpret_cast<bitmask_type const*>(input->buffers[validity_buffer_idx]),
-     static_cast<size_type>(input->null_count),
-     static_cast<size_type>(input->offset),
-     {offsets_view}},
-    {});
+    {type, size, input->buffers[2], null_mask, null_count, offset, {offsets_view}}, {});
 }
 
 template <>
