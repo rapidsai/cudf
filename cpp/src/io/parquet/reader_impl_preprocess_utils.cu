@@ -28,6 +28,7 @@
 #include <thrust/transform.h>
 #include <thrust/transform_scan.h>
 
+#include <algorithm>
 #include <bitset>
 #include <iostream>
 #include <numeric>
@@ -185,15 +186,11 @@ void generate_depth_remappings(
   }
 
   // Allocate one buffer per source
-  for (size_t src = 0; src < sources.size(); ++src) {
-    if (source_total_size[src] > 0) {
-      // Buffer needs to be padded. Required by `gpuDecodePageData`.
-      page_data[src] =
-        rmm::device_buffer(cudf::util::round_up_safe(source_total_size[src],
-                                                     cudf::io::detail::BUFFER_PADDING_MULTIPLE),
-                           stream);
-    }
-  }
+  std::transform(
+    source_total_size.begin(), source_total_size.end(), page_data.begin(), [&](size_t total_size) {
+      return rmm::device_buffer(
+        cudf::util::round_up_safe(total_size, cudf::io::detail::BUFFER_PADDING_MULTIPLE), stream);
+    });
 
   // Issue reads, coalescing adjacent chunks
   std::vector<std::future<size_t>> read_tasks;
@@ -204,7 +201,6 @@ void generate_depth_remappings(
     size_t const first_chunk = chunk;
     size_t next_chunk        = chunk + 1;
 
-    // Coalesce adjacent chunks from same source that are contiguous in file
     while (next_chunk < end_chunk) {
       if (chunk_source_map[next_chunk] != source_idx) { break; }
       auto const next_offset = column_chunk_offsets[next_chunk];
