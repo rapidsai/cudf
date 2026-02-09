@@ -2257,6 +2257,11 @@ TEST_F(ParquetChunkedReaderTest, StringColumnSizeOverflow)
   // (not output size limit, since chunk_read_limit > total table size)
   EXPECT_EQ(tables.size(), 2);
 
-  auto result = cudf::concatenate(cudf::detail::tables_to_views(tables));
+  std::vector<cudf::table_view> views;
+  views.reserve(tables.size());
+  for (auto const& tbl : tables) {
+    views.emplace_back(tbl->view());
+  }
+  auto result = cudf::concatenate(views);
   CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
 }
