@@ -192,12 +192,9 @@ inline __device__ uint32_t Log2Floor(uint32_t value) { return 32 - __clz(value);
 /// @brief Safely read up to 4 bytes with bounds checking, handling end-of-buffer cases
 inline __device__ uint32_t safe_load_u32(uint8_t const* p, uint8_t const* end)
 {
-  // If p is already at or beyond end, nothing to read.
   if (p >= end) { return 0; }
 
-  // Compute remaining bytes without forming out-of-range pointers.
-  size_t remaining = static_cast<size_t>(end - p);
-
+  auto const remaining = static_cast<size_t>(end - p);
   if (remaining >= 4) {
     return unaligned_load<uint32_t>(p);
   } else {
