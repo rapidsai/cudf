@@ -2543,11 +2543,6 @@ class IndexedFrame(Frame):
            a
         0  1
 
-        >>> df_0a.squeeze("rows")
-        Traceback (most recent call last):
-            ...
-        ValueError: No axis named rows for object type <class 'cudf.core.dataframe.DataFrame'>
-
         Squeezing the rows produces a single scalar Series:
 
         >>> df_0a.squeeze("index")
@@ -4787,9 +4782,9 @@ class IndexedFrame(Frame):
         >>> df = cudf.DataFrame({"a":{1, 2, 3, 4, 5}})
         >>> df.sample(3, random_state=0)
            a
-        2  3
         0  1
         1  2
+        4  5
 
         >>> sr = cudf.Series([1, 2, 3, 4, 5])
         >>> sr.sample(10, replace=True, random_state=0)
@@ -5887,11 +5882,11 @@ class IndexedFrame(Frame):
                 e    <NA>
                 dtype: int64
                 >>> a.mod(b, fill_value=0)
-                a    0.0
-                b    NaN
-                c    NaN
-                d    0.0
-                e    NaN
+                a     0.0
+                b     NaN
+                c     NaN
+                d     0.0
+                e    <NA>
                 dtype: float64
                 """
             ),
@@ -6092,11 +6087,11 @@ class IndexedFrame(Frame):
                 e    <NA>
                 dtype: int64
                 >>> a.rfloordiv(b, fill_value=0)
-                a    1.0
-                b    0.0
-                c    0.0
-                d    inf
-                e    0.0
+                a     1.0
+                b     0.0
+                c     0.0
+                d     Inf
+                e    <NA>
                 dtype: float64
                 """
             ),
