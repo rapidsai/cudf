@@ -55,6 +55,10 @@ test_getitem_boolean_columns[cudf] or \
 test_check_row_order[cudf-False] or \
 test_self_equal[cudf] or \
 test_schema_from_pandas_like[cudf] or \
+test_to_datetime_infer_fmt or \
+test_to_datetime or \
+test_to_datetime_series or \
+test_to_datetime_series_infer_fmt or \
 test_with_columns_dtypes_single_row[cudf] or \
 test_first_last_different_orders[cudf] or \
 test_series_rfloordiv_by_zero[cudf-0] or \
