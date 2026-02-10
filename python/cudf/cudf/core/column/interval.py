@@ -11,8 +11,12 @@ from pandas.core.arrays.arrow.extension_types import ArrowIntervalType
 
 import pylibcudf as plc
 
-import cudf
-from cudf.core.column.column import ColumnBase, _handle_nulls, as_column
+from cudf.core.column.column import (
+    ColumnBase,
+    _handle_nulls,
+    as_column,
+    dtype_from_pylibcudf_column,
+)
 from cudf.core.dtype.validators import is_dtype_obj_interval
 from cudf.core.dtypes import IntervalDtype, _dtype_to_metadata
 from cudf.utils.scalar import maybe_nested_pa_scalar_to_py
@@ -64,7 +68,9 @@ class IntervalColumn(ColumnBase):
         """
         if isinstance(dtype, IntervalDtype):
             new_children = tuple(
-                ColumnBase.from_pylibcudf(child).astype(dtype.subtype)
+                ColumnBase.create(
+                    child, dtype_from_pylibcudf_column(child)
+                ).astype(dtype.subtype)
                 for child in self.plc_column.children()
             )
             new_plc_column = plc.Column(
@@ -223,7 +229,9 @@ class IntervalColumn(ColumnBase):
         # If subtype is changing, cast children to match new subtype
         if dtype.subtype != self.dtype.subtype:  # type: ignore[union-attr]
             new_children = tuple(
-                ColumnBase.from_pylibcudf(child).astype(dtype.subtype)
+                ColumnBase.create(
+                    child, dtype_from_pylibcudf_column(child)
+                ).astype(dtype.subtype)
                 for child in self.plc_column.children()
             )
             # Reconstruct plc_column with cast children
@@ -267,8 +275,6 @@ class IntervalColumn(ColumnBase):
         if isinstance(result, pa.Scalar):
             py_element = maybe_nested_pa_scalar_to_py(result)
             result = self.dtype._recursively_replace_fields(py_element)  # type: ignore[union-attr]
-        if isinstance(result, dict) and cudf.get_option(
-            "mode.pandas_compatible"
-        ):
+        if isinstance(result, dict):
             return pd.Interval(**result, closed=self.dtype.closed)  # type: ignore[union-attr]
         return result

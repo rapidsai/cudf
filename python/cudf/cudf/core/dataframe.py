@@ -2092,10 +2092,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 out.index.dtype, CategoricalDtype
             ):
                 out = out.set_index(out.index)
-        for name, col in out._column_labels_and_values:
-            out._data[name] = col._with_type_metadata(
-                tables[0]._data[name].dtype,
-            )
+        out = out._copy_type_metadata(tables[0])
 
         # Reassign index and column names
         if objs[0]._data.multiindex:
@@ -7690,7 +7687,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 "numeric_only is currently not supported."
             )
 
-        if self.isna().any().any():
+        if any(col.has_nulls(include_nan=True) for col in self._columns):
             raise NotImplementedError("cupy-based cov does not support nulls")
 
         cov = cupy.cov(self.values, ddof=ddof, rowvar=False)
@@ -7722,7 +7719,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         DataFrame
             The requested correlation matrix.
         """
-        if self.isna().any().any():
+        if any(col.has_nulls(include_nan=True) for col in self._columns):
             raise NotImplementedError("cupy-based corr does not support nulls")
 
         if method == "pearson":

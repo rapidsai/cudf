@@ -30,6 +30,7 @@ from cudf.utils.dtypes import (
     cudf_dtype_from_pa_type,
     cudf_dtype_to_pa_type,
     is_pandas_nullable_extension_dtype,
+    min_unsigned_type,
 )
 
 if PANDAS_GE_210:
@@ -250,6 +251,11 @@ class CategoricalDtype(_BaseDtype):
         Whether the categories have an ordered relationship.
         """
         return self._ordered
+
+    @cached_property
+    def _codes_dtype(self) -> np.dtype:
+        """Return the dtype used for categorical codes."""
+        return min_unsigned_type(len(self.categories))
 
     def to_pandas(self) -> pd.CategoricalDtype:
         """
@@ -1065,14 +1071,12 @@ class IntervalDtype(_BaseDtype):
         )
 
     def to_pandas(self) -> pd.IntervalDtype:
-        if cudf.get_option("mode.pandas_compatible"):
-            return pd.IntervalDtype(
-                subtype=self.subtype.numpy_dtype
-                if is_pandas_nullable_extension_dtype(self.subtype)
-                else self.subtype,
-                closed=self.closed,
-            )
-        return pd.IntervalDtype(subtype=self.subtype, closed=self.closed)
+        return pd.IntervalDtype(
+            subtype=self.subtype.numpy_dtype
+            if is_pandas_nullable_extension_dtype(self.subtype)
+            else self.subtype,
+            closed=self.closed,
+        )
 
     def __eq__(self, other) -> bool:
         if isinstance(other, str):

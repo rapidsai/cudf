@@ -517,14 +517,10 @@ class IndexedFrame(Frame):
                     result_col = col
 
             if cast_to_int and result_col.dtype.kind in "uib":
-                # For reductions that accumulate a value (e.g. sum, not max)
                 # pandas returns an int64 dtype for all int or bool dtypes.
-                if cudf.get_option("mode.pandas_compatible"):
-                    dtype = get_dtype_of_same_kind(
-                        result_col.dtype, np.dtype(np.int64)
-                    )
-                else:
-                    dtype = np.dtype(np.int64)
+                dtype = get_dtype_of_same_kind(
+                    result_col.dtype, np.dtype(np.int64)
+                )
                 result_col = result_col.astype(dtype)
             results.append(getattr(result_col, op)(inclusive=True))
         return self._from_data_like_self(
@@ -4432,9 +4428,7 @@ class IndexedFrame(Frame):
 
         for name, col in df._column_labels_and_values:
             check_col = col.nans_to_nulls()
-            no_threshold_valid_count = (
-                len(col) - check_col.null_count
-            ) < thresh
+            no_threshold_valid_count = check_col.valid_count < thresh
             if no_threshold_valid_count:
                 continue
             out_cols.append(name)
@@ -5488,6 +5482,17 @@ class IndexedFrame(Frame):
         else:
             idx_cols = ()
 
+        explode_column_idx = column_index + len(idx_cols)
+        # We must copy inner datatype of the exploded list column to
+        # maintain struct dtype key names
+        exploded_type = cast(
+            "ListDtype", self._columns[column_index].dtype
+        ).element_type
+        result_types = (
+            exploded_type if i == explode_column_idx else col.dtype
+            for i, col in enumerate(itertools.chain(idx_cols, self._columns))
+        )
+
         with access_columns(
             *itertools.chain(idx_cols, self._columns),
             mode="read",
@@ -5500,33 +5505,14 @@ class IndexedFrame(Frame):
                         for col in itertools.chain(idx_cols, self._columns)
                     ]
                 ),
-                column_index + len(idx_cols),
+                explode_column_idx,
             )
             exploded = [
-                ColumnBase.from_pylibcudf(col) for col in plc_table.columns()
-            ]
-        # We must copy inner datatype of the exploded list column to
-        # maintain struct dtype key names
-        element_type = cast(
-            ListDtype, self._columns[column_index].dtype
-        ).element_type
-
-        column_index += len(idx_cols)
-        exploded = [
-            ColumnBase.create(
-                new_column.plc_column,
-                element_type,
-            )
-            if i == column_index
-            else ColumnBase.create(new_column.plc_column, old_column.dtype)
-            for i, (new_column, old_column) in enumerate(
-                zip(
-                    exploded,
-                    itertools.chain(idx_cols, self._columns),
-                    strict=True,
+                ColumnBase.create(plc_column, dtype=dtype)
+                for plc_column, dtype in zip(
+                    plc_table.columns(), result_types, strict=True
                 )
-            )
-        ]
+            ]
 
         data = type(self._data)(
             dict(
@@ -6670,9 +6656,9 @@ class IndexedFrame(Frame):
             cols = []
             for col in self._columns:
                 if col.dtype.kind == "f":
-                    col = col.fillna(0)
-                    as_int = col.astype(np.dtype(np.int64))
-                    if cp.allclose(col, as_int):
+                    col_filled = col.fillna(0)
+                    as_int = col_filled.astype(np.dtype(np.int64))
+                    if cp.allclose(col_filled, as_int):
                         cols.append(as_int)
                         continue
                 cols.append(col)
@@ -7053,34 +7039,34 @@ def _append_new_row_inplace(col: ColumnBase, value: ScalarLike) -> None:
         val_col = val_col.astype(col.dtype)
         to_type = col.dtype
     else:
-        if (
-            cudf.get_option("mode.pandas_compatible")
-            and is_pandas_nullable_extension_dtype(col.dtype)
-            and val_col.dtype.kind == "f"
-        ):
-            # If the column is a pandas nullable extension type, we need to
-            # convert the nans to a nullable type as well.
-            val_col = val_col.nans_to_nulls()
-            if len(val_col) == val_col.null_count:
-                # If the column is all nulls, we can use the column dtype
-                # to avoid unnecessary casting.
-                val_col = val_col.astype(col.dtype)
-        to_type = find_common_type([val_col.dtype, col.dtype])
+        to_type = None
+        if is_pandas_nullable_extension_dtype(col.dtype):
+            if val_col.dtype.kind == "f":
+                # If the column is a pandas nullable extension type, we need to
+                # convert the nans to a nullable type as well.
+                val_col = val_col.nans_to_nulls()
+                if len(val_col) == val_col.null_count:
+                    # If the column is all nulls, we can use the column dtype
+                    # to avoid unnecessary casting.
+                    val_col = val_col.astype(col.dtype)
+            if val_col.can_cast_safely(col.dtype):
+                to_type = col.dtype
+        if to_type is None:
+            to_type = find_common_type([val_col.dtype, col.dtype])
+
         if (
             cudf.get_option("mode.pandas_compatible")
             and is_string_dtype(to_type)
             and is_mixed_with_object_dtype(val_col, col)
         ):
             raise MixedTypeError("Cannot append mixed types")
-        if cudf.get_option(
-            "mode.pandas_compatible"
+        if is_pandas_nullable_extension_dtype(
+            col.dtype
         ) and val_col.can_cast_safely(col.dtype):
             to_type = col.dtype
     val_col = val_col.astype(to_type)
     old_col = col.astype(to_type)
-    res_col = ColumnBase.create(
-        concat_columns([old_col, val_col]).plc_column, to_type
-    )
+    res_col = concat_columns([old_col, val_col])
     if (
         cudf.get_option("mode.pandas_compatible")
         and res_col.dtype != col.dtype
