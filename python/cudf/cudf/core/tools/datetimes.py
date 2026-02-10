@@ -6,7 +6,7 @@ import math
 import re
 import warnings
 from functools import lru_cache
-from typing import TYPE_CHECKING, Literal, Self
+from typing import TYPE_CHECKING, Literal, Self, cast
 
 import numpy as np
 import pandas as pd
@@ -26,6 +26,7 @@ from cudf.utils.temporal import infer_format, unit_to_nanoseconds_conversion
 
 if TYPE_CHECKING:
     from cudf.core.column.datetime import DatetimeColumn
+    from cudf.core.column.string import StringColumn
 
 
 # https://github.com/pandas-dev/pandas/blob/2.2.x/pandas/core/tools/datetimes.py#L1112
@@ -234,7 +235,8 @@ def to_datetime(
                         )
                         break
                     elif arg_col.dtype.kind == "O":
-                        if not arg_col.is_integer().all():
+                        string_col = cast("StringColumn", arg_col)
+                        if not string_col.is_all_integer():
                             col = new_series._column.strptime(
                                 np.dtype("datetime64[ns]"), format=format
                             )
@@ -369,7 +371,7 @@ def _process_col(
             col = col.astype(dtype=np.dtype(_unit_dtype_map[unit]))
 
     elif col.dtype.kind == "O":
-        if unit not in (None, "ns") or col.null_count == len(col):
+        if unit not in (None, "ns") or col.is_all_null:
             try:
                 col = col.astype(np.dtype(np.int64))
             except ValueError:
