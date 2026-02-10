@@ -148,7 +148,7 @@ enum class use_data_page_mask : bool {
  *   reader->secondary_filters_byte_ranges(current_row_group_indices, options);
  *
  * // Optional: Prune row groups if we have valid dictionary pages
- * auto dictionary_page_filtered_row_group_indices = std::vector<size_type>{};
+ * auto dict_filtered_row_group_indices = std::vector<size_type>{};
  *
  * if (dict_page_byte_ranges.size()) {
  *   // Fetch dictionary page byte ranges into device buffers and create spans

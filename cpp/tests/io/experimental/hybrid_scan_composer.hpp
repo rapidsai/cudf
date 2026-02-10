@@ -77,7 +77,7 @@ std::unique_ptr<cudf::table> hybrid_scan_single_step(
 /**
  * @brief Read parquet file with the hybrid scan reader in a single step using chunked reading
  *
- * @param file_buffer_span Input parquet buffer span
+ * @param datasource Input datasource
  * @param filter_expression Filter expression
  * @param column_names List of column names to read, if any
  * @param stream CUDA stream
