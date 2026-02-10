@@ -11,7 +11,6 @@ from pandas.core.arrays.arrow.extension_types import ArrowIntervalType
 
 import pylibcudf as plc
 
-import cudf
 from cudf.core.column.column import (
     ColumnBase,
     _handle_nulls,
@@ -276,8 +275,6 @@ class IntervalColumn(ColumnBase):
         if isinstance(result, pa.Scalar):
             py_element = maybe_nested_pa_scalar_to_py(result)
             result = self.dtype._recursively_replace_fields(py_element)  # type: ignore[union-attr]
-        if isinstance(result, dict) and cudf.get_option(
-            "mode.pandas_compatible"
-        ):
+        if isinstance(result, dict):
             return pd.Interval(**result, closed=self.dtype.closed)  # type: ignore[union-attr]
         return result
