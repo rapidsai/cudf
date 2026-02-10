@@ -32,7 +32,7 @@ void json_read_common(cudf::io::source_info const& source,
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
   state.exec(
     nvbench::exec_tag::sync | nvbench::exec_tag::timer, [&](nvbench::launch& launch, auto& timer) {
-      try_drop_page_cache();
+      try_drop_page_cache(read_opts.get_source().filepaths());
 
       timer.start();
       auto const result = cudf::io::read_json(read_opts);

@@ -250,7 +250,10 @@ void try_drop_page_cache(std::vector<std::string> const& file_paths)
     return;
   }
 
+  if (file_paths.size() == 0) { return; }
+
   for (const auto& path : file_paths) {
+    if (path.empty()) { continue; }
     kvikio::drop_file_page_cache(path);
   }
 }

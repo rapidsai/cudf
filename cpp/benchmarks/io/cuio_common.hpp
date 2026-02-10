@@ -150,6 +150,8 @@ std::vector<cudf::size_type> segments_in_chunk(int num_segments, int num_chunks,
  * Has no effect if the environment variable is not set.
  * May require sudo access ro run successfully.
  *
+ * @param file_paths Files to be dropped from the page cache.
+ *
  * @throw cudf::logic_error if the environment variable is set and the command fails
  */
 void try_drop_page_cache(std::vector<std::string> const& file_paths);

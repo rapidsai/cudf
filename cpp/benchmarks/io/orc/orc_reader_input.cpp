@@ -35,7 +35,7 @@ void orc_read_common(cudf::size_type num_rows_to_read,
   if constexpr (is_chunked_read) {
     state.exec(
       nvbench::exec_tag::sync | nvbench::exec_tag::timer, [&](nvbench::launch&, auto& timer) {
-        try_drop_page_cache();
+        try_drop_page_cache(read_opts.get_source().filepaths());
         auto const output_limit_MB =
           static_cast<std::size_t>(state.get_int64("chunk_read_limit_MB"));
         auto const read_limit_MB = static_cast<std::size_t>(state.get_int64("pass_read_limit_MB"));
@@ -56,7 +56,7 @@ void orc_read_common(cudf::size_type num_rows_to_read,
   } else {  // not is_chunked_read
     state.exec(
       nvbench::exec_tag::sync | nvbench::exec_tag::timer, [&](nvbench::launch&, auto& timer) {
-        try_drop_page_cache();
+        try_drop_page_cache(read_opts.get_source().filepaths());
 
         timer.start();
         auto const result = cudf::io::read_orc(read_opts);

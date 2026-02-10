@@ -20,21 +20,19 @@ void cudftable_write_common(cudf::table_view const& view, io_type sink_type, nvb
   std::size_t encoded_file_size = 0;
 
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
-  state.exec(nvbench::exec_tag::sync | nvbench::exec_tag::timer,
-             [&](nvbench::launch&, auto& timer) {
-               try_drop_page_cache();
+  state.exec(
+    nvbench::exec_tag::sync | nvbench::exec_tag::timer, [&](nvbench::launch&, auto& timer) {
+      cuio_source_sink_pair source_sink(sink_type);
+      auto const& sink_info = source_sink.make_sink_info();
+      try_drop_page_cache(sink_info.filepaths());
 
-               cuio_source_sink_pair source_sink(sink_type);
+      timer.start();
+      cudf::io::experimental::write_cudftable(
+        cudf::io::experimental::cudftable_writer_options::builder(sink_info, view).build());
+      timer.stop();
 
-               timer.start();
-               cudf::io::experimental::write_cudftable(
-                 cudf::io::experimental::cudftable_writer_options::builder(
-                   source_sink.make_sink_info(), view)
-                   .build());
-               timer.stop();
-
-               encoded_file_size = source_sink.size();
-             });
+      encoded_file_size = source_sink.size();
+    });
 
   auto const time = state.get_summary("nv/cold/time/gpu/mean").get_float64("value");
   state.add_element_count(static_cast<double>(data_size) / time, "bytes_per_second");

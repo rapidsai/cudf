@@ -185,7 +185,7 @@ void BM_parquet_filter_string_row_groups_with_dicts_common(nvbench::state& state
   state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
   state.exec(nvbench::exec_tag::sync | nvbench::exec_tag::timer,
              [&](nvbench::launch& launch, auto& timer) {
-               try_drop_page_cache();
+               try_drop_page_cache(read_opts.get_source().filepaths());
                timer.start();
                std::ignore = reader->filter_row_groups_with_dictionary_pages(
                  dictionary_page_data, input_row_group_indices, read_opts, stream);

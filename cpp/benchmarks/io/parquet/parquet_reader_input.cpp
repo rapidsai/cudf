@@ -28,7 +28,7 @@ void parquet_read_common(cudf::size_type num_rows_to_read,
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
   state.exec(
     nvbench::exec_tag::sync | nvbench::exec_tag::timer, [&](nvbench::launch& launch, auto& timer) {
-      try_drop_page_cache();
+      try_drop_page_cache(read_opts.get_source().filepaths());
 
       timer.start();
       auto const result = cudf::io::read_parquet(read_opts);
@@ -243,7 +243,7 @@ void BM_parquet_read_chunks(nvbench::state& state, nvbench::type_list<nvbench::e
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
   state.exec(
     nvbench::exec_tag::sync | nvbench::exec_tag::timer, [&](nvbench::launch& launch, auto& timer) {
-      try_drop_page_cache();
+      try_drop_page_cache(read_opts.get_source().filepaths());
 
       timer.start();
       auto reader                   = cudf::io::chunked_parquet_reader(chunk_read_limit, read_opts);
@@ -301,7 +301,7 @@ void BM_parquet_read_subrowgroup_chunks(nvbench::state& state,
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
   state.exec(
     nvbench::exec_tag::sync | nvbench::exec_tag::timer, [&](nvbench::launch& launch, auto& timer) {
-      try_drop_page_cache();
+      try_drop_page_cache(read_opts.get_source().filepaths());
 
       timer.start();
       auto reader = cudf::io::chunked_parquet_reader(chunk_read_limit, pass_read_limit, read_opts);
@@ -424,7 +424,7 @@ void BM_parquet_read_file_shape(nvbench::state& state)
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
   state.exec(nvbench::exec_tag::sync | nvbench::exec_tag::timer,
              [&](nvbench::launch& launch, auto& timer) {
-               try_drop_page_cache();
+               try_drop_page_cache(read_opts.get_source().filepaths());
 
                timer.start();
                auto const result = cudf::io::read_parquet(read_opts);
