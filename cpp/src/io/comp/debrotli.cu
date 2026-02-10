@@ -193,8 +193,10 @@ inline __device__ uint32_t Log2Floor(uint32_t value) { return 32 - __clz(value);
 inline __device__ uint32_t safe_load_u32(uint8_t const* p, uint8_t const* end)
 {
   if (p >= end) { return 0; }
+
   uint32_t result = 0;
-  memcpy(&result, p, cuda::std::min<size_t>(cuda::std::distance(p, end), sizeof(uint32_t)));
+  cuda::std::memcpy(
+    &result, p, cuda::std::min<size_t>(cuda::std::distance(p, end), sizeof(uint32_t)));
   return result;
 }
 
