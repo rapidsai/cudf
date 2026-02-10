@@ -440,7 +440,6 @@ class CategoricalColumn(column.ColumnBase):
                     plc.types.NullEquality.EQUAL,
                     plc.types.NanEquality.ALL_EQUAL,
                 )
-        # Work directly with columns instead of creating DataFrame
         old_col = ColumnBase.create(
             distinct_table.columns()[0],
             to_replace_col.dtype,
@@ -510,14 +509,11 @@ class CategoricalColumn(column.ColumnBase):
                 cats_replace_plc,
                 cats_col.dtype,
             )
-        # Keep columns separate instead of creating DataFrame
-        # old_cats has: "cats" -> cats_col, "cats_replace" -> cats_replace_col
 
         # Construct the new categorical labels
         # If a category is being replaced by an existing one, we
         # want to map it to None. If it's totally new, we want to
-        # map it to the new label it is to be replaced by
-        # Use plc.search.contains and plc.copying.copy_if_else instead of Series
+        # map it to the new label it is to be replaced by.
         # plc.search.contains requires matching dtypes, so skip if types differ
         # (nothing would match anyway when types are different)
         if new_col.dtype == cats_col.dtype:
@@ -563,21 +559,14 @@ class CategoricalColumn(column.ColumnBase):
 
         # anything we mapped to None, we want to now filter out since
         # those categories don't exist anymore
-        # Resetting the index creates a column 'index' that associates
-        # the original integers to the new labels
         with new_cats_col.access(mode="read", scope="internal"):
             bmask_plc = plc.unary.is_valid(new_cats_col.plc_column)
         bmask = ColumnBase.create(bmask_plc, np.dtype("bool"))
         new_cats_col = new_cats_col.apply_boolean_mask(bmask)
-        # Keep as columns instead of DataFrame
-        # new_cats has: "index" -> range column, "cats" -> new_cats_col
         new_index_col = column.as_column(range(len(new_cats_col)))
 
-        # old_cats contains replaced categories and the ints that
-        # previously mapped to those categories and the index of
-        # new_cats is a RangeIndex that contains the new ints
-        # Use plc.join.inner_join instead of DataFrame.merge
-        # catmap = old_cats.merge(new_cats, left_on="cats_replace", right_on="cats", how="inner")
+        # Join old categories with new categories to build a mapping
+        # from old codes to new codes
         with cats_replace_col.access(mode="read", scope="internal"):
             with new_cats_col.access(mode="read", scope="internal"):
                 left_keys = plc.Table([cats_replace_col.plc_column])
@@ -971,9 +960,7 @@ class CategoricalColumn(column.ColumnBase):
             range(len(new_cats)), dtype=out_code_dtype
         )
 
-        # Use plc.join directly instead of DataFrame operations
-        # First join: map old categories to new codes via category values
-        # old_df.merge(new_df, on="cats", how="left")
+        # Left join to map old categories to new codes via category values
         with cur_cats.access(mode="read", scope="internal"):
             with new_cats.access(mode="read", scope="internal"):
                 old_cats_key = plc.Table([cur_cats.plc_column])
