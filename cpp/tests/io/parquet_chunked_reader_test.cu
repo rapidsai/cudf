@@ -2203,3 +2203,30 @@ INSTANTIATE_TEST_CASE_P(Host,
                                            ::testing::Values(cudf::io::compression_type::AUTO,
                                                              cudf::io::compression_type::SNAPPY,
                                                              cudf::io::compression_type::ZSTD)));
+
+TEST_F(ParquetChunkedReaderTest, ChunkedNrowsSkiprows)
+{
+  auto const str_iter = cudf::detail::make_counting_transform_iterator(
+    0, [](cudf::size_type i) { return "s" + std::to_string(i); });
+  std::vector<std::unique_ptr<cudf::column>> cols;
+  cols.emplace_back(strings_col(str_iter, str_iter + 2000).release());
+  auto const [_, filepath] = write_file(
+    cols, "chunked_nrows_skiprows", true, false, cudf::io::default_max_page_size_bytes, 100);
+
+  auto const src      = cudf::io::source_info{filepath};
+  auto const expected = cudf::io::read_parquet(
+    cudf::io::parquet_reader_options_builder(src).skip_rows(101).num_rows(99).build());
+
+  auto reader = cudf::io::chunked_parquet_reader(
+    256, 256, cudf::io::parquet_reader_options_builder(src).skip_rows(101).num_rows(99).build());
+  auto chunks = std::vector<std::unique_ptr<cudf::table>>{};
+  while (reader.has_next()) {
+    chunks.emplace_back(reader.read_chunk().tbl);
+  }
+  auto views = std::vector<cudf::table_view>{};
+  for (auto const& c : chunks) {
+    views.emplace_back(c->view());
+  }
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected.tbl->view(), cudf::concatenate(views)->view());
+}
