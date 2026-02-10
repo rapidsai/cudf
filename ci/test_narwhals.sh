@@ -34,7 +34,11 @@ python -c "import narwhals; print(narwhals.show_versions())"
 TESTS_THAT_NEED_NARWHALS_FIX_FOR_CUDF=" \
 test_to_numpy[cudf] or \
 test_fill_null_strategies_with_limit_as_none[cudf] or \
-test_fill_null_series_limit_as_none[cudf] \
+test_fill_null_series_limit_as_none[cudf] or \
+test_to_datetime_infer_fmt or \
+test_to_datetime or \
+test_to_datetime_series or \
+test_to_datetime_series_infer_fmt \
 "
 
 rapids-logger "Run narwhals tests for cuDF"
