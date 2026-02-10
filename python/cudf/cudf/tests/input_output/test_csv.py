@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 import codecs
@@ -1077,7 +1077,7 @@ def test_csv_reader_tabs():
     np.testing.assert_allclose(floats, df["float_point"].to_numpy())
     np.testing.assert_allclose(ints, df["integer"].to_numpy())
     for row in range(4):
-        assert str(df["date"][row]) == dates[row]
+        assert str(df["date"][row].to_numpy()) == dates[row]
 
 
 @pytest.mark.parametrize("segment_bytes", [10000, 19999, 30001, 36000])
