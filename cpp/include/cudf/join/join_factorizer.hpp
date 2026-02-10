@@ -60,7 +60,7 @@ constexpr size_type FACTORIZE_RIGHT_NULL = -2;
  * This class performs factorization of keys from a right table and optional left table(s)
  * for join operations. Each distinct key in the right table is assigned a unique non-negative
  * integer ID (factor). Rows with equal keys will map to the same ID. Keys that cannot be mapped
- * (e.g., not found in left table, or null keys when nulls are unequal) receive negative sentinel
+ * (e.g., not found in right table, or null keys when nulls are unequal) receive negative sentinel
  * values. The specific ID values are stable for the lifetime of this object but are otherwise
  * unspecified.
  *
