@@ -231,7 +231,7 @@ void log_page_cache_warning_once()
 std::pair<bool, bool> parse_cache_dropping_env()
 {
   bool is_drop_cache_enabled{false};
-  bool is_file_scope{false};
+  bool is_file_scope{true};
 
   auto const* env = std::getenv("CUDF_BENCHMARK_DROP_CACHE");
   if (env == nullptr) { return {is_drop_cache_enabled, is_file_scope}; }
@@ -250,7 +250,7 @@ std::pair<bool, bool> parse_cache_dropping_env()
   if (env_sanitized == "true" or env_sanitized == "on" or env_sanitized == "yes" or
       env_sanitized == "1" or env_sanitized == "system" or env_sanitized == "file") {
     is_drop_cache_enabled = true;
-    is_file_scope         = (env_sanitized == "file");
+    is_file_scope         = (env_sanitized != "system");
     return {is_drop_cache_enabled, is_file_scope};
   }
 

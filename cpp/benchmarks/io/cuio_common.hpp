@@ -149,9 +149,11 @@ std::vector<cudf::size_type> segments_in_chunk(int num_segments, int num_chunks,
  * (case-insensitive).
  *
  * The environment variable controls whether and how page cache is dropped:
- * - `file`: Drops page cache for each file in `file_paths` (recommended, no privileges required)
- * - `true`, `on`, `yes`, `1`, `system`: Drops the system-wide page cache (may require privileges)
- * - `false`, `off`, `no`, `0`, or unset: No cache dropping (logs a warning)
+ * - Unset, `false`, `off`, `no`, `0`: No cache dropping. The benchmark is to be run with hot
+ * cache with a warning logged.
+ * - `true`, `on`, `yes`, `1`, `file`: Drops page cache for each file in `file_paths` (recommended,
+ * no privileges required)
+ * - `system`: Drops the system-wide page cache (legacy behavior, may require privileges)
  *
  * @param file_paths Files for which to drop the page cache. Only used when the environment variable
  * is set to `file`.
