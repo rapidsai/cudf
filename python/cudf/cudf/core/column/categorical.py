@@ -26,6 +26,7 @@ from cudf.core.dtypes import CategoricalDtype, IntervalDtype
 from cudf.utils.dtypes import (
     SIZE_TYPE_DTYPE,
     cudf_dtype_to_pa_type,
+    dtype_from_pylibcudf_column,
     dtype_to_pylibcudf_type,
     find_common_type,
     is_mixed_with_object_dtype,
@@ -417,7 +418,7 @@ class CategoricalColumn(ColumnBase):
             )
         with to_replace_col.access(mode="read", scope="internal"):
             with replacement_col.access(mode="read", scope="internal"):
-                distinct_table = plc.stream_compaction.stable_distinct(
+                old_plc, new_plc = plc.stream_compaction.stable_distinct(
                     plc.Table(
                         [
                             to_replace_col.plc_column,
@@ -428,12 +429,9 @@ class CategoricalColumn(ColumnBase):
                     plc.stream_compaction.DuplicateKeepOption.KEEP_LAST,
                     plc.types.NullEquality.EQUAL,
                     plc.types.NanEquality.ALL_EQUAL,
-                )
+                ).columns()
 
-        # Work directly with plc columns, only wrap when needed for high-level ops
-        old_plc = distinct_table.columns()[0]
-        new_plc = distinct_table.columns()[1]
-
+        replaced = self
         if old_plc.null_count() == 1:
             # Get the replacement value for the null in old_col
             old_isnull_plc = plc.unary.is_null(old_plc)
@@ -441,33 +439,26 @@ class CategoricalColumn(ColumnBase):
                 plc.Table([new_plc]), old_isnull_plc
             )
             # We know there's exactly 1 null, so filtered result has 1 row
-            fill_scalar = plc.copying.get_element(
-                filtered_table.columns()[0], 0
+            fill_value = (
+                plc.copying.get_element(filtered_table.columns()[0], 0)
+                .to_arrow()
+                .as_py()
             )
-            fill_value = fill_scalar.to_arrow().as_py()
 
             # The `in` operator will only work on certain column types
             # (NumericalColumn, StringColumn).
-            if fill_value in self.categories:  # type: ignore[operator]
-                replaced = self.fillna(fill_value)
-            else:
-                new_categories = self.categories.append(
-                    as_column([fill_value])
-                )
-                replaced = self._set_categories(new_categories)
-                replaced = replaced.fillna(fill_value)
+            if fill_value not in self.categories:  # type: ignore[operator]
+                self.add_categories(fill_value)
+            replaced = replaced.fillna(fill_value)
 
-            # Drop rows where "old" column is null
-            dropped = plc.stream_compaction.drop_nulls(
+            # Once we've replaced self's values with the fill_value, we can drop the
+            # mapping from old_plc and new_plc to simplify the rest of the logic
+            old_plc, new_plc = plc.stream_compaction.drop_nulls(
                 plc.Table([old_plc, new_plc]), [0], 1
-            )
-            old_plc = dropped.columns()[0]
-            new_plc = dropped.columns()[1]
-        else:
-            replaced = self
+            ).columns()
 
         if new_plc.null_count() > 0:
-            # Get old values where new is null (these categories will be dropped)
+            # Any value mapped to null is dropped in the result
             new_isnull_plc = plc.unary.is_null(new_plc)
             filtered_table = plc.stream_compaction.apply_boolean_mask(
                 plc.Table([old_plc]), new_isnull_plc
@@ -481,123 +472,67 @@ class CategoricalColumn(ColumnBase):
             )
             replaced = replaced._set_categories(new_categories)
 
-            # Drop rows where "new" column is null
-            dropped = plc.stream_compaction.drop_nulls(
+            old_plc, new_plc = plc.stream_compaction.drop_nulls(
                 plc.Table([old_plc, new_plc]), [1], 1
-            )
-            old_plc = dropped.columns()[0]
-            new_plc = dropped.columns()[1]
+            ).columns()
 
-        # Wrap for remaining operations that need ColumnBase
-        old_col = ColumnBase.create(old_plc, to_replace_col.dtype)
-        new_col = ColumnBase.create(new_plc, replacement_col.dtype)
-
-        # create a dataframe containing the pre-replacement categories
-        # and a column with the appropriate labels replaced.
-        # The index of this dataframe represents the original
-        # ints that map to the categories
-        cats_col = as_column(replaced.dtype.categories)
-        if old_col.dtype != cats_col.dtype and new_col.dtype != cats_col.dtype:
-            cats_replace_col = cats_col.copy()
-        else:
-            with cats_col.access(mode="read", scope="internal"):
+        # Construct the new categorical labels. If either the set of values to replace
+        # or the replacement values columns match the current column's dtype, we must
+        # attempt to reconcile the new category values. If a category is being replaced
+        # by an existing one, we want to map it to None. If it's totally new, we want to
+        # map it to the new label it is to be replaced by.
+        cats_col = replaced.dtype.categories._column
+        with cats_col.access(mode="read", scope="internal"):
+            if (
+                to_replace_col.dtype == cats_col.dtype
+                or replacement_col.dtype == cats_col.dtype
+            ):
+                null_scalar = plc.Scalar.from_py(None, new_plc.type())
+                is_in_cats = plc.search.contains(cats_col.plc_column, new_plc)
                 cats_replace_plc = plc.replace.find_and_replace_all(
                     cats_col.plc_column,
-                    old_col.plc_column,
-                    new_col.plc_column,
+                    old_plc,
+                    new_plc,
                 )
-            cats_replace_col = ColumnBase.create(
-                cats_replace_plc,
-                cats_col.dtype,
-            )
-
-        # Construct the new categorical labels
-        # If a category is being replaced by an existing one, we
-        # want to map it to None. If it's totally new, we want to
-        # map it to the new label it is to be replaced by.
-        # plc.search.contains requires matching dtypes, so skip if types differ
-        # (nothing would match anyway when types are different)
-        if new_col.dtype == cats_col.dtype:
-            with new_col.access(mode="read", scope="internal"):
-                with cats_col.access(mode="read", scope="internal"):
-                    # Check which replacement values are in categories
-                    is_in_cats = plc.search.contains(
-                        cats_col.plc_column,  # haystack
-                        new_col.plc_column,  # needles
-                    )
-                    # Create a null scalar for replacement
-                    null_scalar = plc.Scalar.from_py(
-                        None,
-                        new_col.plc_column.type(),
-                    )
-                    # Where is_in_cats is True, replace with null; otherwise keep original
-                    dtype_replace_plc = plc.copying.copy_if_else(
-                        null_scalar,  # value when True
-                        new_col.plc_column,  # value when False
-                        is_in_cats,
-                    )
-            dtype_replace_col = ColumnBase.create(
-                dtype_replace_plc, new_col.dtype
-            )
-        else:
-            # Types don't match, nothing in new_col can be in cats_col
-            dtype_replace_col = new_col
-
-        if (
-            old_col.dtype != cats_col.dtype
-            and dtype_replace_col.dtype != cats_col.dtype
-        ):
-            new_cats_col = cats_col.copy()
-        else:
-            with cats_col.access(mode="read", scope="internal"):
-                with dtype_replace_col.access(mode="read", scope="internal"):
-                    new_cats_plc = plc.replace.find_and_replace_all(
-                        cats_col.plc_column,
-                        old_col.plc_column,
-                        dtype_replace_col.plc_column,
-                    )
-            new_cats_col = ColumnBase.create(new_cats_plc, cats_col.dtype)
-
-        # Filter out categories that were mapped to None
-        with new_cats_col.access(mode="read", scope="internal"):
-            dropped = plc.stream_compaction.drop_nulls(
-                plc.Table([new_cats_col.plc_column]), [0], 1
-            )
-        new_cats_col = ColumnBase.create(dropped.columns()[0], cats_col.dtype)
-        new_index_col = as_column(range(len(new_cats_col)))
-
-        # Join old categories with new categories to build a mapping
-        # from old codes to new codes
-        with cats_replace_col.access(mode="read", scope="internal"):
-            with new_cats_col.access(mode="read", scope="internal"):
-                left_keys = plc.Table([cats_replace_col.plc_column])
-                right_keys = plc.Table([new_cats_col.plc_column])
-
-                # Perform inner join - returns gather maps
-                # Use NullEquality.UNEQUAL to match pandas behavior
-                left_gather_map, right_gather_map = plc.join.inner_join(
-                    left_keys,
-                    right_keys,
-                    plc.types.NullEquality.UNEQUAL,
+                dtype_replace_plc = plc.copying.copy_if_else(
+                    null_scalar,
+                    new_plc,
+                    is_in_cats,
                 )
+                new_cats_plc = plc.replace.find_and_replace_all(
+                    cats_col.plc_column,
+                    old_plc,
+                    dtype_replace_plc,
+                )
+            else:
+                new_cats_plc = cats_col.plc_column
+                cats_replace_plc = cats_col.plc_column
 
-        # Build result by gathering from source columns
-        # We need the index from left (old category positions) and "index" from right (new codes)
-        # Left table is old_cats: columns are [cats_col, cats_replace_col]
-        # The left gather map gives us which rows from old_cats matched
-        # The row indices in old_cats ARE the old code values (0, 1, 2, ..., n-1)
+            # Filter out categories that were mapped to None
+            (new_cats_plc,) = plc.stream_compaction.drop_nulls(
+                plc.Table([new_cats_plc]), [0], 1
+            ).columns()
 
-        # Gather from new_index_col using right_gather_map to get new codes
-        with new_index_col.access(mode="read", scope="internal"):
-            right_table = plc.Table([new_index_col.plc_column])
-            gathered_right = plc.copying.gather(
-                right_table,
-                right_gather_map,
-                plc.copying.OutOfBoundsPolicy.DONT_CHECK,
+            # Build a mapping from old codes to new codes
+            # Use NullEquality.UNEQUAL to match pandas behavior
+            left_gather_map, right_gather_map = plc.join.inner_join(
+                plc.Table([cats_replace_plc]),
+                plc.Table([new_cats_plc]),
+                plc.types.NullEquality.UNEQUAL,
             )
-        gathered_new_index = ColumnBase.create(
-            gathered_right.columns()[0], new_index_col.dtype
+
+        # Gather from a range column using right_gather_map to get new codes
+        new_index_plc = plc.Column.from_iterable_of_py(
+            range(new_cats_plc.size())
         )
+        (gathered_right,) = plc.copying.gather(
+            plc.Table([new_index_plc]),
+            right_gather_map,
+            plc.copying.OutOfBoundsPolicy.DONT_CHECK,
+        ).columns()
+        codes_replacement = ColumnBase.create(
+            gathered_right, dtype_from_pylibcudf_column(new_index_plc)
+        ).astype(replaced.codes.dtype)
 
         # The left_gather_map contains the old category indices that matched
         # These are the "to_replace" codes
@@ -605,21 +540,22 @@ class CategoricalColumn(ColumnBase):
         codes_to_replace = ColumnBase.create(
             left_gather_map, np.dtype("int32")
         ).astype(replaced.codes.dtype)
-        codes_replacement = gathered_new_index.astype(replaced.codes.dtype)
 
-        with replaced.codes.access(mode="read", scope="internal"):
+        with access_columns(
+            replaced.codes,
+            codes_to_replace,
+            codes_replacement,
+            mode="read",
+            scope="internal",
+        ) as (codes, codes_to_replace, codes_replacement):
             new_codes = plc.replace.find_and_replace_all(
-                replaced.codes.plc_column,
+                codes.plc_column,
                 codes_to_replace.plc_column,
                 codes_replacement.plc_column,
             )
-        result = ColumnBase.create(
-            new_codes,
-            CategoricalDtype(
-                categories=new_cats_col, ordered=self.dtype.ordered
-            ),
-        )
-        if result.dtype != self.dtype:
+        new_cats_col = ColumnBase.create(new_cats_plc, cats_col.dtype)
+        result_dtype = CategoricalDtype(new_cats_col, self.dtype.ordered)
+        if result_dtype != self.dtype:
             warnings.warn(
                 "The behavior of replace with "
                 "CategoricalDtype is deprecated. In a future version, replace "
@@ -628,7 +564,7 @@ class CategoricalColumn(ColumnBase):
                 "instead.",
                 FutureWarning,
             )
-        return result  # type: ignore[return-value]
+        return cast("Self", ColumnBase.create(new_codes, result_dtype))
 
     def isnull(self) -> ColumnBase:
         """
