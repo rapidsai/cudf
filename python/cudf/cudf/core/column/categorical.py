@@ -147,27 +147,47 @@ class CategoricalColumn(ColumnBase):
         return self.dtype.ordered
 
     def __setitem__(self, key: Any, value: Any) -> None:
-        if is_scalar(value) and is_na_like(value):
-            to_add_categories = 0
-        else:
-            length = 1 if is_scalar(value) else None
+        # Ensure that we are not setting a non-existent category.
+        val_is_scalar = is_scalar(value)
+        if not val_is_scalar or not is_na_like(value):
+            length = 1 if val_is_scalar else None
             arr = as_column(value, length=length, nan_as_null=False)
-            to_add_categories = len(
-                cudf.Index._from_column(arr).difference(
-                    cudf.Index._from_column(self.categories)
-                )
-            )
+            if isinstance(arr, CategoricalColumn):
+                arr = arr._get_decategorized_column()
+            if arr.dtype != self.categories.dtype:
+                arr = arr.astype(self.categories.dtype)
+            if arr.null_count != len(arr):
+                with arr.access(mode="read", scope="internal"):
+                    arr_plc = arr.plc_column
+                    if arr_plc.null_count() > 0:
+                        (arr_plc,) = plc.stream_compaction.drop_nulls(
+                            plc.Table([arr_plc]), [0], 1
+                        ).columns()
+                    if arr_plc.size() > 0:
+                        with self.categories.access(
+                            mode="read", scope="internal"
+                        ):
+                            contains_col = plc.search.contains(
+                                self.categories.plc_column,
+                                arr_plc,
+                            )
+                        contains_all = plc.reduce.reduce(
+                            contains_col,
+                            plc.aggregation.all(),
+                            dtype_to_pylibcudf_type(np.dtype("bool")),
+                        )
+                        if not contains_all.to_arrow().as_py():
+                            raise TypeError(
+                                "Cannot setitem on a Categorical with a new "
+                                "category, set the categories first"
+                            )
 
-        if to_add_categories > 0:
-            raise TypeError(
-                "Cannot setitem on a Categorical with a new "
-                "category, set the categories first"
-            )
-
-        if is_scalar(value):
+        if val_is_scalar:
             value = self._encode(value) if value is not None else value
         else:
-            value = as_column(value).astype(self.dtype)
+            value = cast(
+                "CategoricalColumn", as_column(value).astype(self.dtype)
+            )
             value = value.codes
         codes = self.codes
         codes[key] = value
