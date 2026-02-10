@@ -85,6 +85,50 @@ else:
 ExecutorType = Literal["in-memory", "streaming", "cpu"]
 
 
+# The pre-computed expected results come from DuckDB, which has
+# different casting rules than Polars. This dictionary maps
+# query ID to the casts to apply to the DuckDB results necessary
+# to match the cudf-polars results.
+# TODO: this depends on the input types...
+EXPECTED_CASTS = {
+    1: [
+        pl.col("sum_qty").cast(pl.Decimal(15, 2)),
+        pl.col("sum_base_price").cast(pl.Decimal(15, 2)),
+        pl.col("sum_disc_price").cast(pl.Float64()),
+        pl.col("sum_charge").cast(pl.Float64()),
+        pl.col("avg_disc").cast(pl.Float64()),
+        pl.col("avg_price").cast(pl.Float64()),
+        pl.col("avg_qty").cast(pl.Float64()),
+        pl.col("count_order").cast(pl.UInt32()),
+    ],
+    3: [pl.col("revenue").cast(pl.Decimal(38, 2))],
+    4: [pl.col("order_count").cast(pl.UInt32())],
+    5: [pl.col("revenue").cast(pl.Decimal(38, 2))],
+    6: [pl.col("revenue").cast(pl.Decimal(38, 2))],
+    7: [pl.col("l_year").cast(pl.Int32()), pl.col("revenue").cast(pl.Decimal(38, 2))],
+    8: [pl.col("o_year").cast(pl.Int32()), pl.col("mkt_share").cast(pl.Decimal(38, 2))],
+    9: [
+        pl.col("o_year").cast(pl.Int32()),
+        pl.col("sum_profit").cast(pl.Decimal(38, 2)),
+    ],
+    10: [pl.col("revenue").cast(pl.Decimal(38, 2))],
+    12: [
+        pl.col("high_line_count").cast(pl.Int32()),
+        pl.col("low_line_count").cast(pl.Int32()),
+    ],
+    13: [pl.col("c_count").cast(pl.UInt32()), pl.col("custdist").cast(pl.UInt32())],
+    15: [pl.col("total_revenue").cast(pl.Decimal(38, 2))],
+    16: [pl.col("supplier_cnt").cast(pl.UInt32())],
+    18: [pl.col("sum(l_quantity)").cast(pl.Decimal(15, 2))],
+    19: [pl.col("revenue").cast(pl.Decimal(38, 2))],
+    21: [pl.col("numwait").cast(pl.UInt32())],
+    22: [
+        pl.col("numcust").cast(pl.UInt32()),
+        pl.col("totacctbal").cast(pl.Decimal(15, 2)),
+    ],
+}
+
+
 @dataclasses.dataclass
 class ValidationResult:
     """
@@ -1258,10 +1302,14 @@ def run_polars(
             if args.validate_directory is not None:
                 expected = pl.read_parquet(
                     args.validate_directory / f"q{q_id:02d}.parquet"
-                )
+                ).with_columns(*EXPECTED_CASTS.get(q_id, []))
 
                 try:
-                    polars.testing.assert_frame_equal(result, expected)
+                    polars.testing.assert_frame_equal(
+                        result,
+                        expected,
+                        **POLARS_VALIDATION_OPTIONS,  # type: ignore[arg-type]
+                    )
                 except AssertionError as e:
                     print(f"❌ Query {q_id} failed validation:\n{e}")
 
