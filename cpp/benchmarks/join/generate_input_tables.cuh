@@ -186,21 +186,24 @@ std::pair<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::table>> generate_i
                    cuda::proclaim_return_type<cudf::size_type>(
                      [multiplicity] __device__(cudf::size_type idx) { return idx / multiplicity; }));
 
-  auto const rand_max         = build_table_numrows;
+  auto const rand_max        = build_table_numrows;
+  auto const num_unique_keys = build_table_numrows / multiplicity;
+  auto const num_matching    = static_cast<cudf::size_type>(selectivity * probe_table_numrows);
   auto probe_table_gather_map = cudf::make_numeric_column(
     cudf::data_type{cudf::type_id::INT32}, probe_table_numrows, cudf::mask_state::ALL_VALID);
-  init_probe_tbl<cudf::size_type, cudf::size_type>
-    <<<num_sms * num_blocks_init_build_tbl, BLOCK_SIZE, 0, cudf::get_default_stream().value()>>>(
-      probe_table_gather_map->mutable_view().data<cudf::size_type>(),
-      probe_table_numrows,
-      build_table_numrows,
-      rand_max,
-      selectivity,
-      multiplicity,
-      devStates.data(),
-      num_states);
-
-  CUDF_CHECK_CUDA(0);
+  thrust::tabulate(rmm::exec_policy(cudf::get_default_stream()),
+                   probe_table_gather_map->mutable_view().begin<cudf::size_type>(),
+                   probe_table_gather_map->mutable_view().end<cudf::size_type>(),
+                   cuda::proclaim_return_type<cudf::size_type>(
+                     [num_unique_keys, num_matching] __device__(cudf::size_type idx) {
+                       if (idx < num_matching) {
+                         // Matching key: cycle through unique build keys
+                         return idx % num_unique_keys;
+                       } else {
+                         // Non-matching key: use values beyond unique key range
+                         return num_unique_keys + (idx - num_matching);
+                       }
+                     }));
 
   auto build_table = cudf::gather(unique_rows_build_table->view(),
                                   build_table_gather_map->view(),
