@@ -1362,8 +1362,6 @@ NODEIDS_THAT_FAIL_WITH_CUDF_PANDAS = {
     "tests/copy_view/test_replace.py::test_replace_categorical[1]",
     "tests/copy_view/test_replace.py::test_replace_categorical_inplace[1.5]",
     "tests/copy_view/test_replace.py::test_replace_categorical_inplace[1]",
-    "tests/copy_view/test_replace.py::test_replace_categorical_inplace_reference[1-1]",
-    "tests/copy_view/test_replace.py::test_replace_categorical_inplace_reference[1-to_replace1]",
     "tests/copy_view/test_replace.py::test_replace_chained_assignment",
     "tests/copy_view/test_replace.py::test_replace_coerce_single_column",
     "tests/copy_view/test_replace.py::test_replace_columnwise_no_op",
