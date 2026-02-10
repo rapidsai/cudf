@@ -5506,10 +5506,18 @@ class IndexedFrame(Frame):
             return result
 
         column_index = self._column_names.index(explode_column)
-        if not ignore_index:
-            idx_cols = self.index._columns
-        else:
-            idx_cols = ()
+        idx_cols = self.index._columns if not ignore_index else ()
+
+        # Build result dtypes: for the exploded column, use its element type
+        # to preserve struct dtype key names; for all others, preserve original dtype
+        element_type = cast(
+            ListDtype, self._columns[column_index].dtype
+        ).element_type
+        explode_column_idx = column_index + len(idx_cols)
+        result_dtypes = [
+            element_type if i == explode_column_idx else col.dtype
+            for i, col in enumerate(itertools.chain(idx_cols, self._columns))
+        ]
 
         with access_columns(
             *itertools.chain(idx_cols, self._columns),
@@ -5523,33 +5531,14 @@ class IndexedFrame(Frame):
                         for col in itertools.chain(idx_cols, self._columns)
                     ]
                 ),
-                column_index + len(idx_cols),
+                explode_column_idx,
             )
             exploded = [
-                ColumnBase.from_pylibcudf(col) for col in plc_table.columns()
-            ]
-        # We must copy inner datatype of the exploded list column to
-        # maintain struct dtype key names
-        element_type = cast(
-            ListDtype, self._columns[column_index].dtype
-        ).element_type
-
-        column_index += len(idx_cols)
-        exploded = [
-            ColumnBase.create(
-                new_column.plc_column,
-                element_type,
-            )
-            if i == column_index
-            else ColumnBase.create(new_column.plc_column, old_column.dtype)
-            for i, (new_column, old_column) in enumerate(
-                zip(
-                    exploded,
-                    itertools.chain(idx_cols, self._columns),
-                    strict=True,
+                ColumnBase.create(col, dtype)
+                for col, dtype in zip(
+                    plc_table.columns(), result_dtypes, strict=True
                 )
-            )
-        ]
+            ]
 
         data = type(self._data)(
             dict(
@@ -5575,11 +5564,10 @@ class IndexedFrame(Frame):
                 index = type(self.index)._from_data(index._data)
             if isinstance(self.index, cudf.MultiIndex):
                 index.names = self.index.names
-            elif isinstance(self.index, cudf.DatetimeIndex):
-                index._freq = self.index._freq
-                index.name = self.index.name
             else:
                 index.name = self.index.name
+                if isinstance(self.index, cudf.DatetimeIndex):
+                    index._freq = self.index._freq
         else:
             index = None
 
