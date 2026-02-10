@@ -72,11 +72,11 @@ struct typed_casted_writer {
     } else if constexpr (is_fixed_point<Element>()) {
       auto const scale = numeric::scale_type{col.type().scale()};
       if constexpr (is_fixed_point<FromType>()) {
-        col.data<Element::rep>()[i] = val.rescaled(scale).value();
+        col.data<template Element::rep>()[i] = val.rescaled(scale).value();
       } else if constexpr (cuda::std::is_constructible_v<Element, FromType>) {
-        col.data<Element::rep>()[i] = Element{val, scale}.value();
+        col.data<template Element::rep>()[i] = Element{val, scale}.value();
       } else if constexpr (cuda::std::is_floating_point_v<FromType>) {
-        col.data<Element::rep>()[i] = convert_floating_to_fixed<Element>(val, scale).value();
+        col.data<template Element::rep>()[i] = convert_floating_to_fixed<Element>(val, scale).value();
       }
     } else if constexpr (cuda::std::is_floating_point_v<Element> and is_fixed_point<FromType>()) {
       col.data<Element>()[i] = convert_fixed_to_floating<Element>(val);
