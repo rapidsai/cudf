@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 """Benchmarks of DataFrame methods."""
@@ -346,7 +346,7 @@ def bench_where(benchmark, dataframe, cond, other):
 
 
 @benchmark_with_object(
-    cls="dataframe", dtype="float", nulls=False, cols=20, rows=20
+    cls="dataframe", dtype="float", nulls=False, cols=20, rows=100
 )
 @pytest.mark.pandas_incompatible
 def bench_to_cupy(benchmark, dataframe):
