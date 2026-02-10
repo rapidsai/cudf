@@ -819,22 +819,57 @@ class NumericalColumn(NumericalBaseColumn):
         elif len(replacement_col) == 1 and len(to_replace_col) == 0:
             return self.copy()
         replaced = cast(Self, self.astype(common_type))
-        df = cudf.DataFrame._from_data(
-            {
-                "old": to_replace_col.astype(common_type),
-                "new": replacement_col.astype(common_type),
-            }
-        )
-        df = df.drop_duplicates(subset=["old"], keep="last", ignore_index=True)
-        if df._data["old"].null_count == 1:
-            replaced = replaced.fillna(
-                df._data["new"]
-                .apply_boolean_mask(df._data["old"].isnull())
-                .element_indexing(0)
-            )
-            df = df.dropna(subset=["old"])
+        old_col = to_replace_col.astype(common_type)
+        new_col = replacement_col.astype(common_type)
 
-        return replaced.replace(df._data["old"], df._data["new"])
+        # Deduplicate by old values, keeping last occurrence
+        # Use pylibcudf directly instead of DataFrame.drop_duplicates
+        with old_col.access(mode="read", scope="internal"):
+            with new_col.access(mode="read", scope="internal"):
+                deduped_table = plc.stream_compaction.stable_distinct(
+                    plc.Table([old_col.plc_column, new_col.plc_column]),
+                    keys=[0],  # Deduplicate by first column (old values)
+                    keep=plc.stream_compaction.DuplicateKeepOption.KEEP_LAST,
+                    nulls_equal=plc.types.NullEquality.EQUAL,
+                    nans_equal=plc.types.NanEquality.ALL_EQUAL,
+                )
+        old_col = cast(
+            Self, ColumnBase.create(deduped_table.columns()[0], common_type)
+        )
+        new_col = cast(
+            Self, ColumnBase.create(deduped_table.columns()[1], common_type)
+        )
+
+        # Handle null replacement separately if there's a null in old values
+        if old_col.null_count == 1:
+            with old_col.access(mode="read", scope="internal"):
+                # Find the replacement value for null
+                null_mask_col = ColumnBase.create(
+                    plc.unary.is_null(old_col.plc_column), np.dtype(np.bool_)
+                )
+            replacement_for_null = new_col.apply_boolean_mask(
+                null_mask_col
+            ).element_indexing(0)
+            replaced = replaced.fillna(replacement_for_null)
+
+            # Drop the null row from old/new columns
+            with old_col.access(mode="read", scope="internal"):
+                with new_col.access(mode="read", scope="internal"):
+                    non_null_table = plc.stream_compaction.drop_nulls(
+                        plc.Table([old_col.plc_column, new_col.plc_column]),
+                        keys=[0],  # Check nulls in first column only
+                        keep_threshold=1,  # Keep rows with at least 1 non-null in keys
+                    )
+            old_col = cast(
+                Self,
+                ColumnBase.create(non_null_table.columns()[0], common_type),
+            )
+            new_col = cast(
+                Self,
+                ColumnBase.create(non_null_table.columns()[1], common_type),
+            )
+
+        return replaced.replace(old_col, new_col)
 
     def _validate_fillna_value(
         self, fill_value: ScalarLike | ColumnLike
