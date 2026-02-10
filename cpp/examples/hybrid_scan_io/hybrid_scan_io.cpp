@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#include "benchmark.hpp"
 #include "common_utils.hpp"
 #include "io_source.hpp"
 #include "timer.hpp"
@@ -74,6 +75,7 @@ enum class parquet_filter_type : uint8_t {
  * @return Tuple of filter table, payload table, filter metadata, payload metadata, and the final
  *         row validity column
  */
+template <bool verbose>
 auto hybrid_scan(io_source const& io_source,
                  cudf::ast::operation const& filter_expression,
                  std::unordered_set<parquet_filter_type> const& filters,
@@ -85,40 +87,44 @@ auto hybrid_scan(io_source const& io_source,
   auto options = cudf::io::parquet_reader_options::builder().filter(filter_expression).build();
 
   // Input file buffer span
-  auto const file_buffer_span = io_source.get_host_buffer_span();
+  auto datasource     = std::move(cudf::io::make_datasources(io_source.get_source_info()).front());
+  auto datasource_ref = std::ref(*datasource);
 
-  std::cout << "\nREADER: Setup, metadata and page index...\n";
+  if constexpr (verbose) { std::cout << "\nREADER: Setup, metadata and page index...\n"; }
   timer timer;
 
   // Fetch footer bytes and setup reader
-  auto const footer_buffer = fetch_footer_bytes(file_buffer_span);
-  auto const reader =
-    std::make_unique<cudf::io::parquet::experimental::hybrid_scan_reader>(footer_buffer, options);
+  auto const footer_buffer = fetch_footer_bytes(datasource_ref);
+  auto const reader        = std::make_unique<cudf::io::parquet::experimental::hybrid_scan_reader>(
+    make_host_span(*footer_buffer), options);
 
   // Get page index byte range from the reader
   auto const page_index_byte_range = reader->page_index_byte_range();
-  auto const page_index_buffer = fetch_page_index_bytes(file_buffer_span, page_index_byte_range);
-  reader->setup_page_index(page_index_buffer);
+  auto const page_index_buffer     = fetch_page_index_bytes(datasource_ref, page_index_byte_range);
+  reader->setup_page_index(make_host_span(*page_index_buffer));
 
   // Get all row groups from the reader
   auto input_row_group_indices   = reader->all_row_groups(options);
   auto current_row_group_indices = cudf::host_span<cudf::size_type>(input_row_group_indices);
-  std::cout << "Current row group indices size: " << current_row_group_indices.size() << "\n";
-
-  timer.print_elapsed_millis();
+  if constexpr (verbose) {
+    std::cout << "Current row group indices size: " << current_row_group_indices.size() << "\n";
+    timer.print_elapsed_millis();
+  }
 
   // Filter row groups with stats
   auto stats_filtered_row_group_indices = std::vector<cudf::size_type>{};
   if (filters.contains(parquet_filter_type::ROW_GROUPS_WITH_STATS)) {
-    std::cout << "READER: Filter row groups with stats...\n";
+    if constexpr (verbose) { std::cout << "READER: Filter row groups with stats...\n"; }
     timer.reset();
     stats_filtered_row_group_indices =
       reader->filter_row_groups_with_stats(current_row_group_indices, options, stream);
 
     // Update current row group indices
     current_row_group_indices = stats_filtered_row_group_indices;
-    std::cout << "Current row group indices size: " << current_row_group_indices.size() << "\n";
-    timer.print_elapsed_millis();
+    if constexpr (verbose) {
+      std::cout << "Current row group indices size: " << current_row_group_indices.size() << "\n";
+      timer.print_elapsed_millis();
+    }
   }
 
   std::vector<cudf::io::text::byte_range_info> bloom_filter_byte_ranges;
@@ -127,11 +133,13 @@ auto hybrid_scan(io_source const& io_source,
   // Get bloom filter and dictionary page byte ranges from the reader
   if (filters.contains(parquet_filter_type::ROW_GROUPS_WITH_DICT_PAGES) or
       filters.contains(parquet_filter_type::ROW_GROUPS_WITH_BLOOM_FILTERS)) {
-    std::cout << "READER: Get bloom filter and dictionary page byte ranges...\n";
+    if constexpr (verbose) {
+      std::cout << "READER: Get bloom filter and dictionary page byte ranges...\n";
+    }
     timer.reset();
     std::tie(bloom_filter_byte_ranges, dict_page_byte_ranges) =
       reader->secondary_filters_byte_ranges(current_row_group_indices, options);
-    timer.print_elapsed_millis();
+    if constexpr (verbose) { timer.print_elapsed_millis(); }
   }
 
   // Filter row groups with dictionary pages
@@ -139,21 +147,25 @@ auto hybrid_scan(io_source const& io_source,
   dictionary_page_filtered_row_group_indices.reserve(current_row_group_indices.size());
   if (filters.contains(parquet_filter_type::ROW_GROUPS_WITH_DICT_PAGES) and
       dict_page_byte_ranges.size()) {
-    std::cout << "READER: Filter row groups with dictionary pages...\n";
+    if constexpr (verbose) { std::cout << "READER: Filter row groups with dictionary pages...\n"; }
     timer.reset();
     // Fetch dictionary page buffers and corresponding device spans from the input file buffer
-    auto dictionary_page_buffers =
-      fetch_byte_ranges(file_buffer_span, dict_page_byte_ranges, stream, mr);
-    auto dictionary_page_data = make_device_spans<uint8_t>(dictionary_page_buffers);
+    auto [dictionary_page_buffers, dictionary_page_data, dict_read_tasks] =
+      fetch_byte_ranges(datasource_ref, dict_page_byte_ranges, stream, mr);
+    dict_read_tasks.get();
     dictionary_page_filtered_row_group_indices = reader->filter_row_groups_with_dictionary_pages(
       dictionary_page_data, current_row_group_indices, options, stream);
 
     // Update current row group indices
     current_row_group_indices = dictionary_page_filtered_row_group_indices;
-    std::cout << "Current row group indices size: " << current_row_group_indices.size() << "\n";
-    timer.print_elapsed_millis();
+    if constexpr (verbose) {
+      std::cout << "Current row group indices size: " << current_row_group_indices.size() << "\n";
+      timer.print_elapsed_millis();
+    }
   } else {
-    std::cout << "SKIP: Row group filtering with dictionary pages...\n\n";
+    if constexpr (verbose) {
+      std::cout << "SKIP: Row group filtering with dictionary pages...\n\n";
+    }
   }
 
   // Filter row groups with bloom filters
@@ -165,21 +177,23 @@ auto hybrid_scan(io_source const& io_source,
     auto constexpr bloom_filter_alignment = rmm::CUDA_ALLOCATION_ALIGNMENT;
     auto aligned_mr = rmm::mr::aligned_resource_adaptor<rmm::mr::device_memory_resource>(
       mr, bloom_filter_alignment);
-    std::cout << "READER: Filter row groups with bloom filters...\n";
+    if constexpr (verbose) { std::cout << "READER: Filter row groups with bloom filters...\n"; }
     timer.reset();
-    auto bloom_filter_buffers =
-      fetch_byte_ranges(file_buffer_span, bloom_filter_byte_ranges, stream, aligned_mr);
-    auto bloom_filter_data = make_device_spans<uint8_t>(bloom_filter_buffers);
+    auto [bloom_filter_buffers, bloom_filter_data, bloom_read_tasks] =
+      fetch_byte_ranges(datasource_ref, bloom_filter_byte_ranges, stream, aligned_mr);
+    bloom_read_tasks.get();
     // Filter row groups with bloom filters
     bloom_filtered_row_group_indices = reader->filter_row_groups_with_bloom_filters(
       bloom_filter_data, current_row_group_indices, options, stream);
 
     // Update current row group indices
     current_row_group_indices = bloom_filtered_row_group_indices;
-    std::cout << "Current row group indices size: " << current_row_group_indices.size() << "\n";
-    timer.print_elapsed_millis();
+    if constexpr (verbose) {
+      std::cout << "Current row group indices size: " << current_row_group_indices.size() << "\n";
+      timer.print_elapsed_millis();
+    }
   } else {
-    std::cout << "SKIP: Row group filtering with bloom filters...\n\n";
+    if constexpr (verbose) { std::cout << "SKIP: Row group filtering with bloom filters...\n\n"; }
   }
 
   // Check whether to prune filter column data pages
@@ -189,27 +203,31 @@ auto hybrid_scan(io_source const& io_source,
 
   auto row_mask = std::unique_ptr<cudf::column>{};
   if (prune_filter_data_pages) {
-    std::cout << "READER: Filter data pages of filter columns with page index stats...\n";
+    if constexpr (verbose) {
+      std::cout << "READER: Filter data pages of filter columns with page index stats...\n";
+    }
     timer.reset();
     // Filter data pages with page index stats
     row_mask =
       reader->build_row_mask_with_page_index_stats(current_row_group_indices, options, stream, mr);
-    timer.print_elapsed_millis();
+    if constexpr (verbose) { timer.print_elapsed_millis(); }
   } else {
-    std::cout << "SKIP: Filter column data page filtering with page index stats...\n\n";
+    if constexpr (verbose) {
+      std::cout << "SKIP: Filter column data page filtering with page index stats...\n\n";
+    }
     timer.reset();
     row_mask = reader->build_all_true_row_mask(current_row_group_indices, stream, mr);
-    timer.print_elapsed_millis();
+    if constexpr (verbose) { timer.print_elapsed_millis(); }
   }
 
-  std::cout << "READER: Materialize filter columns...\n";
+  if constexpr (verbose) { std::cout << "READER: Materialize filter columns...\n"; }
   timer.reset();
   // Get column chunk byte ranges from the reader
   auto const filter_column_chunk_byte_ranges =
     reader->filter_column_chunks_byte_ranges(current_row_group_indices, options);
-  auto filter_column_chunk_buffers =
-    fetch_byte_ranges(file_buffer_span, filter_column_chunk_byte_ranges, stream, mr);
-  auto filter_column_chunk_data = make_device_spans<uint8_t>(filter_column_chunk_buffers);
+  auto [filter_column_chunk_buffers, filter_column_chunk_data, filter_col_read_tasks] =
+    fetch_byte_ranges(datasource_ref, filter_column_chunk_byte_ranges, stream, mr);
+  filter_col_read_tasks.get();
 
   // Materialize the table with only the filter columns
   auto row_mask_mutable_view = row_mask->mutable_view();
@@ -221,28 +239,31 @@ auto hybrid_scan(io_source const& io_source,
         row_mask_mutable_view,
         prune_filter_data_pages ? use_data_page_mask::YES : use_data_page_mask::NO,
         options,
-        stream)
+        stream,
+        mr)
       .tbl;
-  timer.print_elapsed_millis();
+  if constexpr (verbose) { timer.print_elapsed_millis(); }
 
   // Check whether to prune payload column data pages
   auto const prune_payload_data_pages =
     filters.contains(parquet_filter_type::PAYLOAD_COLUMN_PAGES_WITH_ROW_MASK);
 
-  if (prune_payload_data_pages) {
-    std::cout << "READER: Filter data pages of payload columns with row mask...\n";
-  } else {
-    std::cout << "SKIP: Payload column data page filtering with row mask...\n\n";
+  if constexpr (verbose) {
+    if (prune_payload_data_pages) {
+      std::cout << "READER: Filter data pages of payload columns with row mask...\n";
+    } else {
+      std::cout << "SKIP: Payload column data page filtering with row mask...\n\n";
+    }
   }
 
-  std::cout << "READER: Materialize payload columns...\n";
+  if constexpr (verbose) { std::cout << "READER: Materialize payload columns...\n"; }
   timer.reset();
   // Get column chunk byte ranges from the reader
   auto const payload_column_chunk_byte_ranges =
     reader->payload_column_chunks_byte_ranges(current_row_group_indices, options);
-  auto payload_column_chunk_buffers =
-    fetch_byte_ranges(file_buffer_span, payload_column_chunk_byte_ranges, stream, mr);
-  auto payload_column_chunk_data = make_device_spans<uint8_t>(payload_column_chunk_buffers);
+  auto [payload_column_chunk_buffers, payload_column_chunk_data, payload_col_read_tasks] =
+    fetch_byte_ranges(datasource_ref, payload_column_chunk_byte_ranges, stream, mr);
+  payload_col_read_tasks.get();
 
   // Materialize the table with only the payload columns
   auto payload_table =
@@ -253,9 +274,10 @@ auto hybrid_scan(io_source const& io_source,
         row_mask->view(),
         prune_payload_data_pages ? use_data_page_mask::YES : use_data_page_mask::NO,
         options,
-        stream)
+        stream,
+        mr)
       .tbl;
-  timer.print_elapsed_millis();
+  if constexpr (verbose) { timer.print_elapsed_millis(); }
 
   return std::make_tuple(combine_tables(std::move(filter_table), std::move(payload_table)),
                          std::move(row_mask));
@@ -269,7 +291,8 @@ void inline print_usage()
   std::cout
     << std::endl
     << "Usage: hybrid_scan <input parquet file> <column name> <literal> <io source type>\n\n"
-    << "Available IO source types: HOST_BUFFER, PINNED_BUFFER (Default) \n\n"
+    << "Available IO source types: FILEPATH, HOST_BUFFER, PINNED_BUFFER (Default), DEVICE_BUFFER "
+       "\n\n"
     << "Note: Both the column name and literal must be of `string` type. The constructed filter "
        "expression\n      will be of the form <column name> == <literal>\n\n"
     << "Example usage: hybrid_scan example.parquet string_col 0000001 PINNED_BUFFER \n\n";
@@ -285,6 +308,8 @@ void inline print_usage()
  * 2. column name for filter expression (default: "string_col")
  * 3. literal for filter expression (default: "0000001")
  * 4. io source type (default: "PINNED_BUFFER")
+ * 5. iterations (default: 4)
+ * 6. verbose (default: false)
  *
  * The filter expression will be of the form col_name == literal (default: string_col == 0000001)
  *
@@ -298,8 +323,12 @@ int main(int argc, char const** argv)
   auto column_name    = std::string{"string_col"};
   auto literal_value  = std::string{"0000001"};
   auto io_source_type = io_source_type::PINNED_BUFFER;
+  auto iterations     = 4;
+  auto verbose        = false;
 
   switch (argc) {
+    case 7: verbose = get_boolean(argv[6]); [[fallthrough]];
+    case 6: iterations = std::stoi(argv[5]); [[fallthrough]];
     case 5: io_source_type = get_io_source_type(argv[4]); [[fallthrough]];
     case 4: literal_value = argv[3]; [[fallthrough]];
     case 3: column_name = argv[2]; [[fallthrough]];
@@ -335,14 +364,6 @@ int main(int argc, char const** argv)
   // Create io source
   auto const data_source = io_source{input_filepath, io_source_type, stream};
 
-  // Read with the main reader without timing
-  {
-    std::cout << "\nReading " << input_filepath << "...\n";
-    std::cout << "Note: Not timing this initial parquet read as it may include\n"
-                 "times for nvcomp, cufile loading and RMM growth.\n\n";
-    std::ignore = read_parquet(data_source, filter_expression, stream);
-  }
-
   // Insert which filters to apply
   std::unordered_set<parquet_filter_type> filters;
   {
@@ -354,19 +375,30 @@ int main(int argc, char const** argv)
     filters.insert(parquet_filter_type::PAYLOAD_COLUMN_PAGES_WITH_ROW_MASK);
   }
 
-  timer timer;
-  std::cout << "Reading " << input_filepath << " with next-gen parquet reader...\n";
-  timer.reset();
-  auto [table_next_gen_reader, row_mask] =
-    hybrid_scan(data_source, filter_expression, filters, stream, stats_mr);
-  timer.print_elapsed_millis();
+  {
+    std::cout << "Reading " << input_filepath << " with next-gen parquet reader...\n";
+    benchmark(
+      [&] {
+        std::ignore = hybrid_scan<false>(data_source, filter_expression, filters, stream, stats_mr);
+      },
+      iterations);
 
-  std::cout << "Reading " << input_filepath << " with main parquet reader...\n";
-  timer.reset();
-  auto [table_main_reader, metadata] = read_parquet(data_source, filter_expression, stream);
-  timer.print_elapsed_millis();
+    std::cout << "Reading " << input_filepath << " with main parquet reader...\n";
+    benchmark([&] { std::ignore = read_parquet(data_source, filter_expression, stream); },
+              iterations);
+  }
 
   // Check for validity
+  auto table_next_gen_reader = [&] {
+    if (verbose) {
+      return std::move(
+        std::get<0>(hybrid_scan<true>(data_source, filter_expression, filters, stream, stats_mr)));
+    } else {
+      return std::move(
+        std::get<0>(hybrid_scan<false>(data_source, filter_expression, filters, stream, stats_mr)));
+    }
+  }();
+  auto table_main_reader = std::move(read_parquet(data_source, filter_expression, stream).tbl);
   check_tables_equal(table_next_gen_reader->view(), table_main_reader->view(), stream);
 
   return 0;

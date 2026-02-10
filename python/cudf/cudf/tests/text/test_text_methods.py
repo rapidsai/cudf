@@ -794,34 +794,6 @@ def test_edit_distance():
     assert_eq(expected, actual)
 
 
-def test_edit_distance_matrix():
-    # normal
-    sr = cudf.Series(["rounded", "bounded", "bounce", "trounce", "ounce"])
-
-    expected = cudf.Series(
-        [
-            [0, 1, 3, 3, 3],
-            [1, 0, 2, 4, 3],
-            [3, 2, 0, 2, 1],
-            [3, 4, 2, 0, 2],
-            [3, 3, 1, 2, 0],
-        ]
-    )
-    got = sr.str.edit_distance_matrix()
-
-    assert_eq(expected, got, check_dtype=False)
-
-    # 1-row series
-    sr2 = cudf.Series(["x"])
-    with pytest.raises(ValueError, match="Require size >= 2"):
-        sr2.str.edit_distance_matrix()
-
-    # null rows
-    sr3 = cudf.Series(["rounded", None, "bounce", "trounce", "ounce"])
-    with pytest.raises(ValueError, match="Cannot compute"):
-        sr3.str.edit_distance_matrix()
-
-
 def test_porter_stemmer_measure():
     strings = cudf.Series(
         [

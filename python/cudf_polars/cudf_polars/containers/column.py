@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING
 from polars.exceptions import InvalidOperationError
 
 import pylibcudf as plc
+from pylibcudf.strings.convert.convert_booleans import from_booleans
 from pylibcudf.strings.convert.convert_floats import from_floats, is_float, to_floats
 from pylibcudf.strings.convert.convert_integers import (
     from_integers,
@@ -352,6 +353,13 @@ class Column:
                 return from_floats(self.obj, stream=stream)
             elif plc.traits.is_integral_not_bool(self.obj.type()):
                 return from_integers(self.obj, stream=stream)
+            elif plc.traits.is_boolean(self.obj.type()):
+                return from_booleans(
+                    self.obj,
+                    plc.Scalar.from_py("true", dtype, stream=stream),
+                    plc.Scalar.from_py("false", dtype, stream=stream),
+                    stream=stream,
+                )
             else:
                 raise InvalidOperationError(
                     f"Unsupported casting from {self.dtype.id()} to {dtype.id()}."

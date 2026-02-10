@@ -218,7 +218,7 @@ hybrid_scan(cudf::host_span<uint8_t const> file_buffer_span,
     cudf::io::parquet_reader_options::builder().filter(filter_expression);
 
   // Set payload column names if provided
-  if (payload_column_names.has_value()) { options.set_columns(payload_column_names.value()); }
+  if (payload_column_names.has_value()) { options.set_column_names(payload_column_names.value()); }
 
   auto [reader, filtered_row_group_indices, row_mask] =
     apply_parquet_filters(file_buffer_span, options, stream, mr);
@@ -242,7 +242,8 @@ hybrid_scan(cudf::host_span<uint8_t const> file_buffer_span,
                                        row_mask_mutable_view,
                                        cudf::io::parquet::experimental::use_data_page_mask::YES,
                                        options,
-                                       stream);
+                                       stream,
+                                       mr);
 
   // Get column chunk byte ranges from the reader
   auto const payload_column_chunk_byte_ranges =
@@ -260,7 +261,8 @@ hybrid_scan(cudf::host_span<uint8_t const> file_buffer_span,
                                         row_mask->view(),
                                         cudf::io::parquet::experimental::use_data_page_mask::YES,
                                         options,
-                                        stream);
+                                        stream,
+                                        mr);
 
   return std::tuple{std::move(filter_table),
                     std::move(payload_table),
@@ -287,7 +289,7 @@ chunked_hybrid_scan(cudf::host_span<uint8_t const> file_buffer_span,
     cudf::io::parquet_reader_options::builder().filter(filter_expression);
 
   // Set payload column names if provided
-  if (payload_column_names.has_value()) { options.set_columns(payload_column_names.value()); }
+  if (payload_column_names.has_value()) { options.set_column_names(payload_column_names.value()); }
 
   auto [reader, filtered_row_group_indices, row_mask] =
     apply_parquet_filters(file_buffer_span, options, stream, mr);
@@ -315,11 +317,12 @@ chunked_hybrid_scan(cudf::host_span<uint8_t const> file_buffer_span,
         cudf::io::parquet::experimental::use_data_page_mask::YES,
         filter_column_chunk_data,
         options,
-        stream);
+        stream,
+        mr);
 
       auto row_mask_mutable_view = row_mask->mutable_view();
       while (reader->has_next_table_chunk()) {
-        auto chunk = reader->materialize_filter_columns_chunk(row_mask_mutable_view, stream);
+        auto chunk = reader->materialize_filter_columns_chunk(row_mask_mutable_view);
         tables.push_back(std::move(chunk.tbl));
         filter_metadata = std::move(chunk.metadata);
       }
@@ -359,10 +362,11 @@ chunked_hybrid_scan(cudf::host_span<uint8_t const> file_buffer_span,
         cudf::io::parquet::experimental::use_data_page_mask::YES,
         payload_column_chunk_data,
         options,
-        stream);
+        stream,
+        mr);
 
       while (reader->has_next_table_chunk()) {
-        auto chunk = reader->materialize_payload_columns_chunk(row_mask->view(), stream);
+        auto chunk = reader->materialize_payload_columns_chunk(row_mask->view());
         tables.push_back(std::move(chunk.tbl));
         payload_metadata = std::move(chunk.metadata);
       }
@@ -399,7 +403,7 @@ cudf::io::table_with_metadata hybrid_scan_single_step(
   // Create reader options with empty source info
   cudf::io::parquet_reader_options options = cudf::io::parquet_reader_options::builder().build();
 
-  if (column_names.has_value()) { options.set_columns(column_names.value()); }
+  if (column_names.has_value()) { options.set_column_names(column_names.value()); }
   if (filter_expression.has_value()) { options.set_filter(filter_expression.value()); }
 
   auto [reader, filtered_row_group_indices, _ /*row_mask*/] =
@@ -418,5 +422,62 @@ cudf::io::table_with_metadata hybrid_scan_single_step(
 
   // Materialize the table with all columns
   return reader->materialize_all_columns(
-    current_row_group_indices, all_column_chunk_data, options, stream);
+    current_row_group_indices, all_column_chunk_data, options, stream, mr);
+}
+
+cudf::io::table_with_metadata chunked_hybrid_scan_single_step(
+  cudf::host_span<uint8_t const> file_buffer_span,
+  std::optional<cudf::ast::operation> filter_expression,
+  std::optional<std::vector<std::string>> const& column_names,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
+{
+  // Create reader options with empty source info
+  cudf::io::parquet_reader_options options = cudf::io::parquet_reader_options::builder().build();
+
+  if (column_names.has_value()) { options.set_column_names(column_names.value()); }
+  if (filter_expression.has_value()) { options.set_filter(filter_expression.value()); }
+
+  auto [reader, filtered_row_group_indices, _ /*row_mask*/] =
+    apply_parquet_filters(file_buffer_span, options, stream, mr);
+
+  auto current_row_group_indices = cudf::host_span<cudf::size_type>(filtered_row_group_indices);
+
+  // Helper to split the materialization of all columns into chunks
+  auto tables   = std::vector<std::unique_ptr<cudf::table>>{};
+  auto metadata = cudf::io::table_metadata{};
+  auto const materialize_all_columns =
+    [&](cudf::host_span<cudf::size_type const> row_group_indices) {
+      // Get column chunk byte ranges from the reader and fetch device buffers
+      auto const all_column_chunk_byte_ranges =
+        reader->all_column_chunks_byte_ranges(row_group_indices, options);
+      auto all_column_chunk_buffers =
+        fetch_byte_ranges(file_buffer_span, all_column_chunk_byte_ranges, stream, mr);
+      auto all_column_chunk_data = make_device_spans<uint8_t>(all_column_chunk_buffers);
+
+      // Setup chunking for all columns and materialize the columns
+      reader->setup_chunking_for_all_columns(
+        1024, 10240, row_group_indices, all_column_chunk_data, options, stream, mr);
+
+      while (reader->has_next_table_chunk()) {
+        auto chunk = reader->materialize_all_columns_chunk();
+        tables.push_back(std::move(chunk.tbl));
+        metadata = std::move(chunk.metadata);
+      }
+    };
+
+  if (current_row_group_indices.size() > 1) {
+    auto const row_group_split = current_row_group_indices.size() / 2;
+    materialize_all_columns(
+      cudf::host_span<cudf::size_type const>{current_row_group_indices.begin(), row_group_split});
+    materialize_all_columns(
+      cudf::host_span<cudf::size_type const>{current_row_group_indices.begin() + row_group_split,
+                                             current_row_group_indices.size() - row_group_split});
+  } else {
+    materialize_all_columns(current_row_group_indices);
+  }
+
+  auto result_table = concatenate_tables(std::move(tables), stream);
+
+  return cudf::io::table_with_metadata{std::move(result_table), std::move(metadata)};
 }

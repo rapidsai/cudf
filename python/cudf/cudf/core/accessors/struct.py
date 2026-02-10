@@ -7,8 +7,9 @@ from typing import TYPE_CHECKING
 
 from cudf.core.accessors.base_accessor import BaseAccessor
 from cudf.core.column.struct import StructColumn
+from cudf.core.dtype.validators import is_dtype_obj_struct
 from cudf.core.dtypes import StructDtype
-from cudf.utils.dtypes import get_dtype_of_same_kind, is_dtype_obj_struct
+from cudf.utils.dtypes import get_dtype_of_same_kind
 
 if TYPE_CHECKING:
     from cudf.core.dataframe import DataFrame
@@ -94,6 +95,7 @@ class StructMethods(BaseAccessor):
 
         Examples
         --------
+        >>> s = cudf.Series([{'a': 1, 'b': 'x'}, {'a': 2, 'b': 'y'}, {'a': 3, 'b': 'z'}, {'a': 4, 'b': 'a'}])
         >>> s
         0    {'a': 1, 'b': 'x'}
         1    {'a': 2, 'b': 'y'}
