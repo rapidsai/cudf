@@ -295,6 +295,7 @@ CUDF_KERNEL void __launch_bounds__(csvparse_block_dim)
  * @param[out] columns The output column data
  * @param[out] valids The bitmaps indicating whether column fields are valid
  * @param[out] valid_counts The number of valid fields in each column
+ * @param[out] is_quoted_flags Per-column boolean arrays tracking which rows were quoted fields
  */
 CUDF_KERNEL void __launch_bounds__(csvparse_block_dim)
   convert_csv_to_cudf(cudf::io::parse_options_view options,
@@ -304,7 +305,8 @@ CUDF_KERNEL void __launch_bounds__(csvparse_block_dim)
                       device_span<cudf::data_type const> dtypes,
                       device_span<void* const> columns,
                       device_span<cudf::bitmask_type* const> valids,
-                      device_span<size_type> valid_counts)
+                      device_span<size_type> valid_counts,
+                      device_span<bool* const> is_quoted_flags)
 {
   auto const raw_csv = data.data();
   // thread IDs range per block, so also need the block id.
@@ -338,15 +340,19 @@ CUDF_KERNEL void __launch_bounds__(csvparse_block_dim)
         field_start = trimmed_field.first;
         field_end   = trimmed_field.second;
       }
+      bool* const is_quoted_output =
+        is_quoted_flags.empty() ? nullptr : is_quoted_flags[actual_col];
       if (is_valid) {
         // Type dispatcher does not handle STRING
         if (dtypes[actual_col].id() == cudf::type_id::STRING) {
-          auto end = next_delimiter;
+          auto end        = next_delimiter;
+          bool was_quoted = false;
           if (not options.keepquotes) {
             if (not options.detect_whitespace_around_quotes) {
               if ((*field_start == options.quotechar) && (*(end - 1) == options.quotechar)) {
                 ++field_start;
                 --end;
+                was_quoted = true;
               }
             } else {
               // If the string is quoted, whitespace around the quotes get removed as well
@@ -355,9 +361,12 @@ CUDF_KERNEL void __launch_bounds__(csvparse_block_dim)
                   (*(trimmed_field.second - 1) == options.quotechar)) {
                 field_start = trimmed_field.first + 1;
                 end         = trimmed_field.second - 1;
+                was_quoted  = true;
               }
             }
           }
+          // Track whether this field was quoted (for doublequote unescaping)
+          if (is_quoted_output != nullptr) { is_quoted_output[rec_id] = was_quoted; }
           auto str_list = static_cast<std::pair<char const*, size_t>*>(columns[actual_col]);
           str_list[rec_id].first  = field_start;
           str_list[rec_id].second = end - field_start;
@@ -380,6 +389,7 @@ CUDF_KERNEL void __launch_bounds__(csvparse_block_dim)
         auto str_list           = static_cast<std::pair<char const*, size_t>*>(columns[actual_col]);
         str_list[rec_id].first  = nullptr;
         str_list[rec_id].second = 0;
+        if (is_quoted_output != nullptr) { is_quoted_output[rec_id] = false; }
       }
       ++actual_col;
     }
@@ -676,16 +686,28 @@ CUDF_KERNEL void __launch_bounds__(rowofs_block_dim)
           ctx = make_char_context(ROW_CTX_NONE, ROW_CTX_QUOTE, ROW_CTX_NONE, 1, 0, 1);
         }
       } else if (c == quotechar) {
-        if (c_prev == delimiter || c_prev == quotechar) {
-          // Quoted string after delimiter, quoted string ending in delimiter, or double-quote
-          ctx = make_char_context(ROW_CTX_QUOTE, ROW_CTX_NONE);
+        // Quote handling uses ROW_CTX_COMMENT as a "pending exit" state to correctly handle
+        // escaped quotes (""). When in QUOTE state and we see a quote, we can't immediately
+        // exit because it might be the first quote of a "" escape sequence. We transition to
+        // COMMENT (pending exit) and wait for the next character:
+        //   - If next char is quote: it's a "" escape, return to QUOTE
+        //   - If next char is anything else: exit confirmed, go to NONE
+        // This doesn't conflict with actual comment handling because comments are only
+        // detected at row boundaries (after newline), where COMMENT state is set with row
+        // counting. Mid-row, COMMENT is purely used for this pending exit mechanism.
+        if (c_prev == delimiter) {
+          // Quote after delimiter: start field or pending exit
+          ctx = make_char_context(ROW_CTX_QUOTE, ROW_CTX_COMMENT);
+        } else if (c_prev == quotechar) {
+          // Quote after quote: "" escape or stay NONE (Spark compatibility)
+          ctx = make_char_context(ROW_CTX_NONE, ROW_CTX_COMMENT, ROW_CTX_QUOTE);
         } else {
-          // Closing or ignored quote
-          ctx = make_char_context(ROW_CTX_NONE, ROW_CTX_NONE);
+          // Quote after regular char: pending exit or stay NONE
+          ctx = make_char_context(ROW_CTX_NONE, ROW_CTX_COMMENT);
         }
       } else {
-        // Neutral character
-        ctx = make_char_context(ROW_CTX_NONE, ROW_CTX_QUOTE);
+        // Non-quote char: stay in current state, or exit from pending
+        ctx = make_char_context(ROW_CTX_NONE, ROW_CTX_QUOTE, ROW_CTX_NONE);
       }
     } else {
       char const* data_end = start + data_size - start_offset;
@@ -817,6 +839,7 @@ void decode_row_column_data(cudf::io::parse_options_view const& options,
                             device_span<void* const> columns,
                             device_span<cudf::bitmask_type* const> valids,
                             device_span<size_type> valid_counts,
+                            device_span<bool* const> is_quoted_flags,
                             rmm::cuda_stream_view stream)
 {
   // Calculate actual block count to use based on records count
@@ -824,8 +847,15 @@ void decode_row_column_data(cudf::io::parse_options_view const& options,
   auto const num_rows   = row_offsets.size() - 1;
   auto const grid_size  = cudf::util::div_rounding_up_safe<size_t>(num_rows, block_size);
 
-  convert_csv_to_cudf<<<grid_size, block_size, 0, stream.value()>>>(
-    options, data, column_flags, row_offsets, dtypes, columns, valids, valid_counts);
+  convert_csv_to_cudf<<<grid_size, block_size, 0, stream.value()>>>(options,
+                                                                    data,
+                                                                    column_flags,
+                                                                    row_offsets,
+                                                                    dtypes,
+                                                                    columns,
+                                                                    valids,
+                                                                    valid_counts,
+                                                                    is_quoted_flags);
 }
 
 uint32_t __host__ gather_row_offsets(parse_options_view const& options,

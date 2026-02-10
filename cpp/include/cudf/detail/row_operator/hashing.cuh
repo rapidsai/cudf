@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -11,6 +11,7 @@
 #include <cudf/detail/row_operator/preprocessed_table.cuh>
 #include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/detail/utilities/assert.cuh>
+#include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/hashing/detail/default_hash.cuh>
 #include <cudf/hashing/detail/hashing.hpp>
 #include <cudf/lists/list_device_view.cuh>
@@ -153,9 +154,24 @@ class device_row_hasher {
     template <typename T>
     __device__ result_type operator()(column_device_view const& col,
                                       size_type row_index) const noexcept
-      requires(not cudf::is_nested<T>())
+      requires(not cudf::is_nested<T>() and not cudf::is_dictionary<T>())
     {
       return _element_hasher.template operator()<T>(col, row_index);
+    }
+
+    template <typename T>
+    __device__ result_type operator()(column_device_view const& col,
+                                      size_type row_index) const noexcept
+      requires(cudf::is_dictionary<T>())
+    {
+      if (_check_nulls && col.is_null(row_index)) { return NULL_HASH; }
+
+      auto const keys = col.child(dictionary_column_view::keys_column_index);
+      return type_dispatcher<dispatch_storage_type>(
+        keys.type(),
+        _element_hasher,
+        keys,
+        static_cast<size_type>(col.element<dictionary32>(row_index)));
     }
 
     template <typename T>

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -11,7 +11,6 @@ from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
     assert_ir_translation_raises,
 )
-from cudf_polars.utils.versions import POLARS_VERSION_LT_130
 
 _supported_dtypes = [(pl.Int8(), pl.Int64())]
 
@@ -68,11 +67,7 @@ def test_cast_strict_false_string_to_numeric(dtype, strict):
     df = pl.LazyFrame({"c0": ["1969-12-08 17:00:01", "1", None]})
     query = df.with_columns(pl.col("c0").cast(dtype, strict=strict))
     if strict:
-        cudf_except = (
-            pl.exceptions.ComputeError
-            if POLARS_VERSION_LT_130
-            else pl.exceptions.InvalidOperationError
-        )
+        cudf_except = pl.exceptions.InvalidOperationError
         assert_collect_raises(
             query,
             polars_except=pl.exceptions.InvalidOperationError,

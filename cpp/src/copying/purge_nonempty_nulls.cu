@@ -6,10 +6,10 @@
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/gather.cuh>
 #include <cudf/detail/offsets_iterator_factory.cuh>
+#include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
-#include <thrust/count.h>
 #include <thrust/iterator/counting_iterator.h>
 
 namespace cudf {
@@ -45,7 +45,7 @@ bool has_nonempty_null_rows(cudf::column_view const& input, rmm::cuda_stream_vie
 
   auto const row_begin = thrust::counting_iterator<cudf::size_type>(0);
   auto const row_end   = row_begin + input.size();
-  return thrust::count_if(rmm::exec_policy_nosync(stream), row_begin, row_end, is_dirty_row) > 0;
+  return cudf::detail::count_if(row_begin, row_end, is_dirty_row, stream) > 0;
 }
 
 }  // namespace

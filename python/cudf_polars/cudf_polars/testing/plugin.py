@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 """Plugin for running polars test suite setting GPU engine as default."""
@@ -13,6 +13,7 @@ import pytest
 import polars
 
 from cudf_polars.utils.config import StreamingFallbackMode
+from cudf_polars.utils.versions import POLARS_VERSION_LT_135
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -93,6 +94,10 @@ EXPECTED_FAILURES: Mapping[str, str | tuple[str, bool]] = {
     "tests/unit/io/test_delta.py::test_scan_delta_schema_evolution_nested_struct_field_19915": "Need to expose hive partitioning",
     "tests/unit/io/test_delta.py::test_scan_delta_nanosecond_timestamp": "polars generates the wrong schema: https://github.com/pola-rs/polars/issues/23949",
     "tests/unit/io/test_delta.py::test_scan_delta_nanosecond_timestamp_nested": "polars generates the wrong schema: https://github.com/pola-rs/polars/issues/23949",
+    "tests/unit/io/test_delta.py::test_scan_delta_loads_aws_profile_endpoint_url": (
+        "See https://github.com/rapidsai/cudf/pull/20791#issuecomment-3750528419",
+        not POLARS_VERSION_LT_135,
+    ),
     "tests/unit/io/test_lazy_count_star.py::test_count_compressed_csv_18057": "Need to determine if file is compressed",
     "tests/unit/io/test_lazy_count_star.py::test_count_parquet[small.parquet-4]": "Debug output on stderr doesn't match",
     "tests/unit/io/test_lazy_count_star.py::test_count_parquet[foods*.parquet-54]": "Debug output on stderr doesn't match",
@@ -186,9 +191,7 @@ EXPECTED_FAILURES: Mapping[str, str | tuple[str, bool]] = {
     "tests/unit/sql/test_cast.py::test_cast_errors[values2-values::int1-conversion from `i64` to `i8` failed]": "Casting that raises not supported on GPU",
     "tests/unit/sql/test_cast.py::test_cast_errors[values5-values::int4-conversion from `str` to `i32` failed]": "Cast raises, but error user receives is wrong",
     "tests/unit/sql/test_miscellaneous.py::test_read_csv": "Incorrect handling of missing_is_null in read_csv",
-    "tests/unit/sql/test_wildcard_opts.py::test_select_wildcard_errors": "Raises correctly but with different exception",
     "tests/unit/test_cse.py::test_cse_predicate_self_join": "Debug output on stderr doesn't match",
-    "tests/unit/test_cse.py::test_nested_cache_no_panic_16553": "Needs https://github.com/rapidsai/cudf/issues/18630",
     "tests/unit/test_errors.py::test_error_on_empty_group_by": "Incorrect exception raised",
     "tests/unit/test_predicates.py::test_predicate_pushdown_split_pushable": "Casting that raises not supported on GPU",
     "tests/unit/io/test_scan_row_deletion.py::test_scan_row_deletion_skips_file_with_all_rows_deleted": "The test intentionally corrupts the parquet file, so we cannot read the row count from the header.",
@@ -213,25 +216,16 @@ EXPECTED_FAILURES: Mapping[str, str | tuple[str, bool]] = {
     "tests/unit/io/test_scan.py::test_scan_empty_paths_friendly_error[scan_ipc-failed to retrieve first file schema (ipc)-'ipc scan']": "Debug output on stderr doesn't match",
     "tests/unit/io/test_scan.py::test_scan_empty_paths_friendly_error[scan_csv-failed to retrieve file schemas (csv)-'csv scan']": "Debug output on stderr doesn't match",
     "tests/unit/io/test_scan.py::test_scan_empty_paths_friendly_error[scan_ndjson-failed to retrieve first file schema (ndjson)-'ndjson scan']": "Debug output on stderr doesn't match",
-    "tests/unit/operations/test_slice.py::test_schema_gather_get_on_literal_24101[lit1-idx2-False]": "Aggregating a list literal: cudf#19610",
-    "tests/unit/operations/test_slice.py::test_schema_gather_get_on_literal_24101[lit2-idx2-False]": "Aggregating a list literal: cudf#19610",
-    "tests/unit/operations/test_slice.py::test_schema_gather_get_on_literal_24101[lit1-0-False]": "Aggregating a list literal: cudf#19610",
-    "tests/unit/operations/test_slice.py::test_schema_gather_get_on_literal_24101[lit1-idx1-False]": "Aggregating a list literal: cudf#19610",
-    "tests/unit/operations/test_slice.py::test_schema_gather_get_on_literal_24101[lit2-0-False]": "Aggregating a list literal: cudf#19610",
-    "tests/unit/operations/test_slice.py::test_schema_gather_get_on_literal_24101[lit2-idx1-False]": "Aggregating a list literal: cudf#19610",
-    "tests/unit/operations/test_slice.py::test_schema_head_tail_on_literal_24102[lit1-1-False]": "Aggregating a list literal: cudf#19610",
-    "tests/unit/operations/test_slice.py::test_schema_head_tail_on_literal_24102[lit1-len1-False]": "Aggregating a list literal: cudf#19610",
-    "tests/unit/operations/test_slice.py::test_schema_head_tail_on_literal_24102[lit2-1-False]": "Aggregating a list literal: cudf#19610",
-    "tests/unit/operations/test_slice.py::test_schema_head_tail_on_literal_24102[lit2-len1-False]": "Aggregating a list literal: cudf#19610",
-    "tests/unit/operations/test_slice.py::test_schema_slice_on_literal_23999[lit2-offset1-0-False]": "Aggregating a list literal: cudf#19610",
-    "tests/unit/operations/test_slice.py::test_schema_slice_on_literal_23999[lit2-offset1-len1-False]": "Aggregating a list literal: cudf#19610",
-    "tests/unit/operations/test_slice.py::test_schema_slice_on_literal_23999[lit1-0-len1-False]": "Aggregating a list literal: cudf#19610",
-    "tests/unit/operations/test_slice.py::test_schema_slice_on_literal_23999[lit1-offset1-0-False]": "Aggregating a list literal: cudf#19610",
-    "tests/unit/operations/test_slice.py::test_schema_slice_on_literal_23999[lit1-offset1-len1-False]": "Aggregating a list literal: cudf#19610",
-    "tests/unit/operations/test_slice.py::test_schema_slice_on_literal_23999[lit2-0-0-False]": "Aggregating a list literal: cudf#19610",
-    "tests/unit/operations/test_slice.py::test_schema_slice_on_literal_23999[lit2-0-len1-False]": "Aggregating a list literal: cudf#19610",
-    "tests/unit/operations/test_slice.py::test_schema_slice_on_literal_23999[lit1-0-0-False]": "Aggregating a list literal: cudf#19610",
-    "tests/unit/operations/namespaces/test_binary.py::test_binary_compounded_literal_aggstate_24460": "Aggregating a list literal: cudf#19610",
+    "tests/unit/operations/namespaces/test_binary.py::test_binary_compounded_literal_aggstate_24460": "List literal loses nesting in gather: cudf#19610",
+    "tests/unit/operations/test_slice.py::test_schema_gather_get_on_literal_24101[lit1-0-False]": "List literal loses nesting in gather: cudf#19610",
+    "tests/unit/operations/test_slice.py::test_schema_gather_get_on_literal_24101[lit1-idx1-False]": "List literal loses nesting in gather: cudf#19610",
+    "tests/unit/operations/test_slice.py::test_schema_gather_get_on_literal_24101[lit1-idx2-False]": "List literal loses nesting in gather: cudf#19610",
+    "tests/unit/operations/test_slice.py::test_schema_head_tail_on_literal_24102[lit1-1-False]": "List literal loses nesting in head/tail: cudf#19610",
+    "tests/unit/operations/test_slice.py::test_schema_head_tail_on_literal_24102[lit1-len1-False]": "List literal loses nesting in head/tail: cudf#19610",
+    "tests/unit/operations/test_slice.py::test_schema_slice_on_literal_23999[lit1-0-0-False]": "List literal loses nesting in slice: cudf#19610",
+    "tests/unit/operations/test_slice.py::test_schema_slice_on_literal_23999[lit1-0-len1-False]": "List literal loses nesting in slice: cudf#19610",
+    "tests/unit/operations/test_slice.py::test_schema_slice_on_literal_23999[lit1-offset1-0-False]": "List literal loses nesting in slice: cudf#19610",
+    "tests/unit/operations/test_slice.py::test_schema_slice_on_literal_23999[lit1-offset1-len1-False]": "List literal loses nesting in slice: cudf#19610",
 }
 
 

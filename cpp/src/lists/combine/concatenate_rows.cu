@@ -9,6 +9,7 @@
 #include <cudf/detail/gather.cuh>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/lists/combine.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
@@ -22,7 +23,6 @@
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/discard_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
-#include <thrust/reduce.h>
 #include <thrust/scan.h>
 
 namespace cudf {
@@ -101,12 +101,13 @@ generate_regrouped_offsets_and_null_mask(table_device_view const& input,
       return offsets[row_index + 1] - offsets[row_index];
     }));
 
-  thrust::reduce_by_key(rmm::exec_policy_nosync(stream),
-                        keys,
-                        keys + (input.num_rows() * input.num_columns()),
-                        values,
-                        thrust::make_discard_iterator(),
-                        offsets->mutable_view().begin<size_type>());
+  cudf::detail::reduce_by_key_async(keys,
+                                    keys + (input.num_rows() * input.num_columns()),
+                                    values,
+                                    thrust::make_discard_iterator(),
+                                    offsets->mutable_view().begin<size_type>(),
+                                    cuda::std::plus<size_type>(),
+                                    stream);
 
   // convert to offsets
   thrust::exclusive_scan(rmm::exec_policy_nosync(stream),
@@ -165,12 +166,13 @@ rmm::device_uvector<size_type> generate_null_counts(table_device_view const& inp
       return col.null_mask() ? (bit_is_set(col.null_mask(), row_index + col.offset()) ? 0 : 1) : 0;
     }));
 
-  thrust::reduce_by_key(rmm::exec_policy_nosync(stream),
-                        keys,
-                        keys + (input.num_rows() * input.num_columns()),
-                        null_values,
-                        thrust::make_discard_iterator(),
-                        null_counts.data());
+  cudf::detail::reduce_by_key_async(keys,
+                                    keys + (input.num_rows() * input.num_columns()),
+                                    null_values,
+                                    thrust::make_discard_iterator(),
+                                    null_counts.data(),
+                                    cuda::std::plus<size_type>(),
+                                    stream);
 
   return null_counts;
 }

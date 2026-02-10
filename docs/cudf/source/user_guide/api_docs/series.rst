@@ -422,6 +422,7 @@ String handling
    slice_from
    slice_replace
    split
+   split_part
    startswith
    strip
    swapcase

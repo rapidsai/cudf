@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -34,6 +34,7 @@
 #include <cuda/std/optional>
 #include <cuda/std/utility>
 #include <thrust/scan.h>
+#include <thrust/tuple.h>
 
 namespace cudf {
 namespace detail {

@@ -37,15 +37,18 @@ def _flatten_and_access(
 class _AccessColumnsStack(ExitStack):
     """ExitStack subclass that returns all input objects on __enter__."""
 
-    __slots__ = ("_objects",)
+    __slots__ = ("_objects_generator",)
 
-    def __init__(self, objects: tuple[Any, ...]):
+    def __init__(self, objects_generator: Any) -> None:
         super().__init__()
-        self._objects = objects
+        self._objects_generator = objects_generator
 
     def __enter__(self) -> tuple[Any, ...]:  # type: ignore[override]
         super().__enter__()
-        return self._objects
+        # Consume generator and enter contexts here, not in __init__
+        # _flatten_and_access will call enter_context on this stack
+        # while yielding objects - consume and return directly
+        return tuple(self._objects_generator)
 
 
 def access_columns(
@@ -74,12 +77,10 @@ def access_columns(
     >>> with access_columns(col, scalar, mode="read", scope="internal") as (c, s):
     ...     result = plc.operation(c.plc_column, s)
     """
-    stack = _AccessColumnsStack(tuple())
-
-    # Flatten and access all objects, collecting them in order
-    all_objects = tuple(_flatten_and_access(objs, stack, kwargs))
-
-    # Store the tuple of all objects (accessed columns + unchanged non-columns)
-    stack._objects = all_objects
+    # Create stack first, then assign generator
+    # (can't use stack in generator before it exists)
+    stack = object.__new__(_AccessColumnsStack)
+    ExitStack.__init__(stack)
+    stack._objects_generator = _flatten_and_access(objs, stack, kwargs)
 
     return stack

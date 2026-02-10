@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 [tool.mypy]
@@ -41,7 +41,7 @@ quiet-level = 3
 
 [tool.ruff]
 line-length = 79
-target-version = "py310"
+target-version = "py311"
 
 [tool.ruff.lint]
 typing-modules = ["cudf._typing"]
