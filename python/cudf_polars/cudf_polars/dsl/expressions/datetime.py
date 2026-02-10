@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 # TODO: Document TemporalFunction to remove noqa
 # ruff: noqa: D101
@@ -15,7 +15,7 @@ from cudf_polars.containers import Column
 from cudf_polars.dsl.expressions.base import ExecutionContext, Expr
 
 if TYPE_CHECKING:
-    from typing_extensions import Self
+    from typing import Self
 
     from polars import polars  # type: ignore[attr-defined]
 
@@ -145,10 +145,22 @@ class TemporalFunction(Expr):
                 dtype=self.dtype,
             )
         if self.name == TemporalFunction.Name.ToString:
+            (format_string,) = self.options
+            if format_string == "":
+                # libcudf doesn't support empty format strings, but polars
+                # returns empty strings for each row in this case
+                return Column(
+                    plc.Column.from_scalar(
+                        plc.Scalar.from_py("", self.dtype.plc_type, stream=df.stream),
+                        column.size,
+                        stream=df.stream,
+                    ),
+                    dtype=self.dtype,
+                )
             return Column(
                 plc.strings.convert.convert_datetime.from_timestamps(
                     column.obj,
-                    self.options[0],
+                    format_string,
                     plc.Column.from_iterable_of_py(
                         [], dtype=self.dtype.plc_type, stream=df.stream
                     ),

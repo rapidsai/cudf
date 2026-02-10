@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -437,7 +437,7 @@ metadata::~metadata()
   if (row_groups.size() > 0 and
       row_groups.front().columns.size() * row_groups.size() > defer_threshold) {
     // Defer destruction to the worker pool when there are many vectors to destroy
-    cudf::detail::host_worker_pool().detach_task(
+    cudf::detail::host_worker_pool().submit_task(
       [schema_to_destroy        = std::move(schema),
        row_groups_to_destroy    = std::move(row_groups),
        key_value_to_destroy     = std::move(key_value_metadata),

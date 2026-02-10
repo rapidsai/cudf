@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 import re
 from concurrent.futures import ThreadPoolExecutor
@@ -7,9 +7,7 @@ from decimal import Decimal
 import cupy as cp
 import numpy as np
 import pandas as pd
-import pyarrow as pa
 import pytest
-from packaging.version import parse
 
 import cudf
 from cudf.core._compat import PANDAS_GE_230
@@ -474,34 +472,10 @@ def test_sum_string(middle, expected):
 @pytest.mark.parametrize(
     "dtype",
     [
-        pytest.param(
-            cudf.Decimal64Dtype(6, 3),
-            marks=pytest.mark.skipif(
-                parse(pa.__version__) < parse("19.0.0"),
-                reason="decimal64 format string only supported in pyarrow >=19",
-            ),
-        ),
-        pytest.param(
-            cudf.Decimal64Dtype(10, 6),
-            marks=pytest.mark.skipif(
-                parse(pa.__version__) < parse("19.0.0"),
-                reason="decimal64 format string only supported in pyarrow >=19",
-            ),
-        ),
-        pytest.param(
-            cudf.Decimal64Dtype(16, 7),
-            marks=pytest.mark.skipif(
-                parse(pa.__version__) < parse("19.0.0"),
-                reason="decimal64 format string only supported in pyarrow >=19",
-            ),
-        ),
-        pytest.param(
-            cudf.Decimal32Dtype(6, 3),
-            marks=pytest.mark.skipif(
-                parse(pa.__version__) < parse("19.0.0"),
-                reason="decimal32 format string only supported in pyarrow >=19",
-            ),
-        ),
+        cudf.Decimal64Dtype(6, 3),
+        cudf.Decimal64Dtype(10, 6),
+        cudf.Decimal64Dtype(16, 7),
+        cudf.Decimal32Dtype(6, 3),
         cudf.Decimal128Dtype(20, 7),
     ],
 )
@@ -527,34 +501,10 @@ def test_product(numeric_types_as_str):
 @pytest.mark.parametrize(
     "dtype",
     [
-        pytest.param(
-            cudf.Decimal64Dtype(6, 2),
-            marks=pytest.mark.skipif(
-                parse(pa.__version__) < parse("19.0.0"),
-                reason="decimal64 format string only supported in pyarrow >=19",
-            ),
-        ),
-        pytest.param(
-            cudf.Decimal64Dtype(8, 4),
-            marks=pytest.mark.skipif(
-                parse(pa.__version__) < parse("19.0.0"),
-                reason="decimal64 format string only supported in pyarrow >=19",
-            ),
-        ),
-        pytest.param(
-            cudf.Decimal64Dtype(10, 5),
-            marks=pytest.mark.skipif(
-                parse(pa.__version__) < parse("19.0.0"),
-                reason="decimal64 format string only supported in pyarrow >=19",
-            ),
-        ),
-        pytest.param(
-            cudf.Decimal32Dtype(6, 2),
-            marks=pytest.mark.skipif(
-                parse(pa.__version__) < parse("19.0.0"),
-                reason="decimal32 format string only supported in pyarrow >=19",
-            ),
-        ),
+        cudf.Decimal64Dtype(6, 2),
+        cudf.Decimal64Dtype(8, 4),
+        cudf.Decimal64Dtype(10, 5),
+        cudf.Decimal32Dtype(6, 2),
         cudf.Decimal128Dtype(20, 5),
     ],
 )
@@ -594,35 +544,11 @@ def test_sum_of_squares(numeric_types_as_str):
 @pytest.mark.parametrize(
     "dtype",
     [
-        pytest.param(
-            cudf.Decimal64Dtype(6, 2),
-            marks=pytest.mark.skipif(
-                parse(pa.__version__) < parse("19.0.0"),
-                reason="decimal64 format string only supported in pyarrow >=19",
-            ),
-        ),
-        pytest.param(
-            cudf.Decimal64Dtype(8, 4),
-            marks=pytest.mark.skipif(
-                parse(pa.__version__) < parse("19.0.0"),
-                reason="decimal64 format string only supported in pyarrow >=19",
-            ),
-        ),
-        pytest.param(
-            cudf.Decimal64Dtype(10, 5),
-            marks=pytest.mark.skipif(
-                parse(pa.__version__) < parse("19.0.0"),
-                reason="decimal64 format string only supported in pyarrow >=19",
-            ),
-        ),
+        cudf.Decimal64Dtype(6, 2),
+        cudf.Decimal64Dtype(8, 4),
+        cudf.Decimal64Dtype(10, 5),
         cudf.Decimal128Dtype(20, 7),
-        pytest.param(
-            cudf.Decimal32Dtype(6, 2),
-            marks=pytest.mark.skipif(
-                parse(pa.__version__) < parse("19.0.0"),
-                reason="decimal32 format string only supported in pyarrow >=19",
-            ),
-        ),
+        cudf.Decimal32Dtype(6, 2),
     ],
 )
 def test_sum_of_squares_decimal(dtype):
@@ -647,34 +573,10 @@ def test_min(numeric_types_as_str):
 @pytest.mark.parametrize(
     "dtype",
     [
-        pytest.param(
-            cudf.Decimal64Dtype(6, 3),
-            marks=pytest.mark.skipif(
-                parse(pa.__version__) < parse("19.0.0"),
-                reason="decimal64 format string only supported in pyarrow >=19",
-            ),
-        ),
-        pytest.param(
-            cudf.Decimal64Dtype(10, 6),
-            marks=pytest.mark.skipif(
-                parse(pa.__version__) < parse("19.0.0"),
-                reason="decimal64 format string only supported in pyarrow >=19",
-            ),
-        ),
-        pytest.param(
-            cudf.Decimal64Dtype(16, 7),
-            marks=pytest.mark.skipif(
-                parse(pa.__version__) < parse("19.0.0"),
-                reason="decimal64 format string only supported in pyarrow >=19",
-            ),
-        ),
-        pytest.param(
-            cudf.Decimal32Dtype(6, 3),
-            marks=pytest.mark.skipif(
-                parse(pa.__version__) < parse("19.0.0"),
-                reason="decimal32 format string only supported in pyarrow >=19",
-            ),
-        ),
+        cudf.Decimal64Dtype(6, 3),
+        cudf.Decimal64Dtype(10, 6),
+        cudf.Decimal64Dtype(16, 7),
+        cudf.Decimal32Dtype(6, 3),
         cudf.Decimal128Dtype(20, 7),
     ],
 )
@@ -700,34 +602,10 @@ def test_max(numeric_types_as_str):
 @pytest.mark.parametrize(
     "dtype",
     [
-        pytest.param(
-            cudf.Decimal64Dtype(6, 3),
-            marks=pytest.mark.skipif(
-                parse(pa.__version__) < parse("19.0.0"),
-                reason="decimal64 format string only supported in pyarrow >=19",
-            ),
-        ),
-        pytest.param(
-            cudf.Decimal64Dtype(10, 6),
-            marks=pytest.mark.skipif(
-                parse(pa.__version__) < parse("19.0.0"),
-                reason="decimal64 format string only supported in pyarrow >=19",
-            ),
-        ),
-        pytest.param(
-            cudf.Decimal64Dtype(16, 7),
-            marks=pytest.mark.skipif(
-                parse(pa.__version__) < parse("19.0.0"),
-                reason="decimal64 format string only supported in pyarrow >=19",
-            ),
-        ),
-        pytest.param(
-            cudf.Decimal32Dtype(6, 3),
-            marks=pytest.mark.skipif(
-                parse(pa.__version__) < parse("19.0.0"),
-                reason="decimal32 format string only supported in pyarrow >=19",
-            ),
-        ),
+        cudf.Decimal64Dtype(6, 3),
+        cudf.Decimal64Dtype(10, 6),
+        cudf.Decimal64Dtype(16, 7),
+        cudf.Decimal32Dtype(6, 3),
         cudf.Decimal128Dtype(20, 7),
     ],
 )
@@ -802,7 +680,7 @@ def test_timedelta_unsupported_reductions(op):
 def test_categorical_reductions(request, reduction_methods):
     request.applymarker(
         pytest.mark.xfail(
-            reduction_methods in ["quantile", "all", "any"],
+            reduction_methods in ["quantile"],
             reason=f"{reduction_methods} didn't fail",
         )
     )

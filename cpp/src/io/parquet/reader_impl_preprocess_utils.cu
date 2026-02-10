@@ -28,6 +28,7 @@
 #include <thrust/transform.h>
 #include <thrust/transform_scan.h>
 
+#include <algorithm>
 #include <bitset>
 #include <iostream>
 #include <numeric>
@@ -174,53 +175,73 @@ void generate_depth_remappings(
   std::vector<size_type> const& chunk_source_map,
   rmm::cuda_stream_view stream)
 {
-  // Transfer chunk data, coalescing adjacent chunks
+  // Calculate total size per source and offset for each chunk
+  std::vector<size_t> source_total_size(sources.size(), 0);
+  std::vector<size_t> chunk_buffer_offset(end_chunk - begin_chunk);
+
+  for (size_t chunk = begin_chunk; chunk < end_chunk; ++chunk) {
+    auto const source_idx                    = chunk_source_map[chunk];
+    chunk_buffer_offset[chunk - begin_chunk] = source_total_size[source_idx];
+    source_total_size[source_idx] += chunks[chunk].compressed_size;
+  }
+
+  // Allocate one buffer per source
+  std::transform(
+    source_total_size.begin(), source_total_size.end(), page_data.begin(), [&](size_t total_size) {
+      return rmm::device_buffer(
+        cudf::util::round_up_safe(total_size, cudf::io::detail::BUFFER_PADDING_MULTIPLE), stream);
+    });
+  // device_read_async is not guaranteed to follow stream-ordering (see datasource API docs).
+  stream.synchronize();
+
+  // Issue reads, coalescing adjacent chunks
   std::vector<std::future<size_t>> read_tasks;
   for (size_t chunk = begin_chunk; chunk < end_chunk;) {
-    size_t const io_offset = column_chunk_offsets[chunk];
-    size_t io_size         = chunks[chunk].compressed_size;
-    size_t next_chunk      = chunk + 1;
+    auto const source_idx    = chunk_source_map[chunk];
+    auto const io_offset     = column_chunk_offsets[chunk];
+    size_t io_size           = chunks[chunk].compressed_size;
+    size_t const first_chunk = chunk;
+    size_t next_chunk        = chunk + 1;
+
     while (next_chunk < end_chunk) {
-      size_t const next_offset = column_chunk_offsets[next_chunk];
-      if (next_offset != io_offset + io_size ||
-          chunk_source_map[chunk] != chunk_source_map[next_chunk]) {
-        break;
-      }
+      if (chunk_source_map[next_chunk] != source_idx) { break; }
+      auto const next_offset = column_chunk_offsets[next_chunk];
+      if (next_offset != io_offset + io_size) { break; }
       io_size += chunks[next_chunk].compressed_size;
       next_chunk++;
     }
+
     if (io_size != 0) {
-      auto& source = sources[chunk_source_map[chunk]];
+      auto& source = sources[source_idx];
+      auto* dest   = static_cast<uint8_t*>(page_data[source_idx].data()) +
+                   chunk_buffer_offset[first_chunk - begin_chunk];
+
       if (source->is_device_read_preferred(io_size)) {
-        // Buffer needs to be padded.
-        // Required by `gpuDecodePageData`.
-        page_data[chunk] = rmm::device_buffer(
-          cudf::util::round_up_safe(io_size, cudf::io::detail::BUFFER_PADDING_MULTIPLE), stream);
-        auto fut_read_size = source->device_read_async(
-          io_offset, io_size, static_cast<uint8_t*>(page_data[chunk].data()), stream);
-        read_tasks.emplace_back(std::move(fut_read_size));
+        auto fut = source->device_read_async(io_offset, io_size, dest, stream);
+        read_tasks.emplace_back(std::move(fut));
       } else {
-        auto const read_buffer = source->host_read(io_offset, io_size);
-        // Buffer needs to be padded.
-        // Required by `gpuDecodePageData`.
-        page_data[chunk] = rmm::device_buffer(
-          cudf::util::round_up_safe(read_buffer->size(), cudf::io::detail::BUFFER_PADDING_MULTIPLE),
-          stream);
-        CUDF_CUDA_TRY(cudaMemcpyAsync(page_data[chunk].data(),
-                                      read_buffer->data(),
-                                      read_buffer->size(),
-                                      cudaMemcpyDefault,
-                                      stream));
+        read_tasks.emplace_back(std::async(
+          std::launch::deferred, [source = std::ref(*source), io_offset, io_size, dest, stream]() {
+            auto const read_buffer = source.get().host_read(io_offset, io_size);
+            cudf::detail::cuda_memcpy_async(
+              cudf::device_span<uint8_t>{static_cast<uint8_t*>(dest), io_size},
+              cudf::host_span<uint8_t const>{read_buffer->data(), io_size},
+              stream);
+            return io_size;
+          }));
       }
-      auto d_compdata = static_cast<uint8_t const*>(page_data[chunk].data());
-      do {
-        chunks[chunk].compressed_data = d_compdata;
-        d_compdata += chunks[chunk].compressed_size;
-      } while (++chunk != next_chunk);
-    } else {
-      chunk = next_chunk;
+
+      // Set compressed_data pointers for all coalesced chunks
+      auto* ptr = static_cast<uint8_t const*>(dest);
+      for (size_t c = first_chunk; c < next_chunk; ++c) {
+        chunks[c].compressed_data = ptr;
+        ptr += chunks[c].compressed_size;
+      }
     }
+
+    chunk = next_chunk;
   }
+
   auto sync_fn = [](decltype(read_tasks) read_tasks) {
     for (auto& task : read_tasks) {
       task.get();

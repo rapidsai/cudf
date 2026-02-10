@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -1020,6 +1020,11 @@ void parquet_writer_options_base::set_compression_statistics(
 
 void parquet_writer_options_base::enable_write_v2_headers(bool val) { _v2_page_headers = val; }
 
+void parquet_writer_options_base::enable_page_level_compression(bool val)
+{
+  _page_level_compression = val;
+}
+
 void parquet_writer_options_base::set_sorting_columns(std::vector<sorting_column> sorting_columns)
 {
   _sorting_columns = std::move(sorting_columns);
@@ -1175,6 +1180,14 @@ template <class BuilderT, class OptionsT>
 BuilderT& parquet_writer_options_builder_base<BuilderT, OptionsT>::write_v2_headers(bool enabled)
 {
   _options.enable_write_v2_headers(enabled);
+  return static_cast<BuilderT&>(*this);
+}
+
+template <class BuilderT, class OptionsT>
+BuilderT& parquet_writer_options_builder_base<BuilderT, OptionsT>::page_level_compression(
+  bool enabled)
+{
+  _options.enable_page_level_compression(enabled);
   return static_cast<BuilderT&>(*this);
 }
 

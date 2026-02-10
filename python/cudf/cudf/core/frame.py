@@ -7,21 +7,17 @@ import itertools
 import operator
 import warnings
 from collections.abc import Mapping
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any, Literal, Self
 
 import cupy
 import numpy as np
 import pandas as pd
 import pyarrow as pa
-from typing_extensions import Self
 
 import pylibcudf as plc
 
 import cudf
 from cudf.api.extensions import no_default
-
-# TODO: The `numpy` import is needed for typing purposes during doc builds
-# only, need to figure out why the `np` alias is insufficient then remove.
 from cudf.api.types import is_dtype_equal, is_scalar, is_string_dtype
 from cudf.core._compat import PANDAS_LT_300
 from cudf.core._internals import copying, sorting
@@ -34,10 +30,11 @@ from cudf.core.column import (
     serialize_columns,
 )
 from cudf.core.column_accessor import ColumnAccessor
+from cudf.core.dtype.validators import is_dtype_obj_numeric
 from cudf.core.mixins import BinaryOperand, Scannable
 from cudf.utils.dtypes import (
+    dtype_from_pylibcudf_column,
     find_common_type,
-    is_dtype_obj_numeric,
     is_pandas_nullable_extension_dtype,
 )
 from cudf.utils.performance_tracking import _performance_tracking
@@ -54,6 +51,7 @@ if TYPE_CHECKING:
     from types import ModuleType
 
     from cudf._typing import Axis, Dtype, DtypeObj, ScalarLike
+    from cudf.core.buffer import Buffer
     from cudf.core.series import Series
 
 
@@ -235,6 +233,60 @@ class Frame(BinaryOperand, Scannable, Serializable):
         data = dict(zip(column_names, columns, strict=True))
         frame = self.__class__._from_data(data)
         return frame._copy_type_metadata(self)
+
+    def _drop_duplicates_columns(
+        self,
+        columns: list[ColumnBase],
+        keys: list[int],
+        keep: Literal["first", "last", False],
+        nulls_are_equal: bool,
+    ) -> list[plc.Column]:
+        """Core stable_distinct implementation shared by Index and IndexedFrame."""
+        _keep_options = {
+            "first": plc.stream_compaction.DuplicateKeepOption.KEEP_FIRST,
+            "last": plc.stream_compaction.DuplicateKeepOption.KEEP_LAST,
+            False: plc.stream_compaction.DuplicateKeepOption.KEEP_NONE,
+        }
+        if (keep_option := _keep_options.get(keep)) is None:
+            raise ValueError('keep must be either "first", "last" or False')
+
+        with access_columns(*columns, mode="read", scope="internal") as cols:
+            plc_table = plc.stream_compaction.stable_distinct(
+                plc.Table([col.plc_column for col in cols]),
+                keys,
+                keep_option,
+                plc.types.NullEquality.EQUAL
+                if nulls_are_equal
+                else plc.types.NullEquality.UNEQUAL,
+                plc.types.NanEquality.ALL_EQUAL,
+            )
+            return plc_table.columns()
+
+    def _drop_nulls_columns(
+        self,
+        columns: list[ColumnBase],
+        keys: list[int],
+        how: Literal["any", "all"],
+        thresh: int | None = None,
+    ) -> list[plc.Column]:
+        """Core drop_nulls implementation shared by Index and IndexedFrame."""
+        if how not in {"any", "all"}:
+            raise ValueError("how must be 'any' or 'all'")
+
+        if thresh is not None:
+            keep_threshold = thresh
+        elif how == "all":
+            keep_threshold = 1
+        else:
+            keep_threshold = len(keys)
+
+        with access_columns(*columns, mode="read", scope="internal") as cols:
+            plc_table = plc.stream_compaction.drop_nulls(
+                plc.Table([col.plc_column for col in cols]),
+                keys,
+                keep_threshold,
+            )
+            return plc_table.columns()
 
     @_performance_tracking
     def _mimic_inplace(
@@ -547,11 +599,21 @@ class Frame(BinaryOperand, Scannable, Serializable):
         Only the values in the DataFrame will be returned, the axes labels will
         be removed.
 
+        .. deprecated:: 26.04
+            `values_host` is deprecated and will be removed in a future version.
+            Use `to_numpy()` instead.
+
         Returns
         -------
         numpy.ndarray
             A host representation of the underlying data.
         """
+        warnings.warn(
+            "values_host is deprecated and will be removed in a future version. "
+            "Use to_numpy() instead.",
+            FutureWarning,
+            stacklevel=2,
+        )
         return self.to_numpy()
 
     @_performance_tracking
@@ -605,8 +667,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
             array = get_array(col)
 
             if (
-                cudf.get_option("mode.pandas_compatible")
-                and is_pandas_nullable_extension_dtype(col.dtype)
+                is_pandas_nullable_extension_dtype(col.dtype)
                 and col.dtype.kind in "iuf"
                 and to_dtype is None
             ):
@@ -624,7 +685,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
                 and dtype is not None
                 and is_string_dtype(dtype)
             ):
-                casted_array[col.isnull().values_host] = (
+                casted_array[col.isnull().to_numpy()] = (
                     cudf.NA if na_value is no_default else na_value
                 )
             if copy and casted_array is array:
@@ -662,9 +723,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
                     elif to_dtype.kind in "ui":
                         to_dtype = np.dtype("float64")
 
-            if cudf.get_option(
-                "mode.pandas_compatible"
-            ) and is_pandas_nullable_extension_dtype(to_dtype):
+            if is_pandas_nullable_extension_dtype(to_dtype):
                 to_dtype = getattr(to_dtype, "numpy_dtype", to_dtype)
                 if getattr(to_dtype, "kind", None) == "U":
                     to_dtype = np.dtype(object)
@@ -847,7 +906,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
             )
 
         return self._to_array(
-            lambda col: col.values_host, np, copy, dtype, na_value
+            lambda col: col.to_numpy(), np, copy, dtype, na_value
         )
 
     @_performance_tracking
@@ -1456,17 +1515,17 @@ class Frame(BinaryOperand, Scannable, Serializable):
             )
         ]
 
-        outcol = ColumnBase.from_pylibcudf(
-            sorting.search_sorted(
-                sources,
-                values,
-                side,
-                ascending=itertools.repeat(ascending, times=len(sources)),
-                na_position=itertools.repeat(na_position, times=len(sources)),
-            )
+        plc_outcol = sorting.search_sorted(
+            sources,
+            values,
+            side,
+            ascending=itertools.repeat(ascending, times=len(sources)),
+            na_position=itertools.repeat(na_position, times=len(sources)),
         )
-        if cudf.get_option("mode.pandas_compatible"):
-            outcol = outcol.astype(np.dtype("int64"))
+        outcol = ColumnBase.create(
+            plc.unary.cast(plc_outcol, plc.DataType(plc.TypeId.INT64)),
+            np.dtype("int64"),
+        )
 
         # Return result as cupy array if the values is non-scalar
         # If values is scalar, result is expected to be scalar.
@@ -1585,13 +1644,14 @@ class Frame(BinaryOperand, Scannable, Serializable):
             )
         else:
             ascending_iter = ascending
-        return ColumnBase.from_pylibcudf(
-            sorting.order_by(
-                to_sort,
-                ascending_iter,
-                itertools.repeat(na_position, times=len(to_sort)),
-                stable=True,
-            )
+        plc_result = sorting.order_by(
+            to_sort,
+            ascending_iter,
+            itertools.repeat(na_position, times=len(to_sort)),
+            stable=True,
+        )
+        return ColumnBase.create(
+            plc_result, dtype_from_pylibcudf_column(plc_result)
         )
 
     @_performance_tracking
@@ -1608,7 +1668,12 @@ class Frame(BinaryOperand, Scannable, Serializable):
             return []
         return [
             self._from_columns_like_self(
-                [ColumnBase.from_pylibcudf(col) for col in split],
+                [
+                    ColumnBase.create(col, dtype)
+                    for col, (_, dtype) in zip(
+                        split, self._dtypes, strict=True
+                    )
+                ],
                 self._column_names,
             )
             for split in copying.columns_split(self._columns, splits)
@@ -1620,9 +1685,14 @@ class Frame(BinaryOperand, Scannable, Serializable):
             plc.Table([col.plc_column for col in self._columns])
         )
         columns = [
-            ColumnBase.from_pylibcudf(col) for col in plc_table.columns()
+            ColumnBase.create(col, dtype)
+            for col, (_, dtype) in zip(
+                plc_table.columns(), self._dtypes, strict=True
+            )
         ]
-        indices = ColumnBase.from_pylibcudf(plc_column)
+        indices = ColumnBase.create(
+            plc_column, dtype_from_pylibcudf_column(plc_column)
+        )
         keys = self._from_columns_like_self(columns)
         return keys, indices
 
@@ -1667,7 +1737,8 @@ class Frame(BinaryOperand, Scannable, Serializable):
             col,
             (left_column, right_column, reflect, fill_value),
         ) in operands.items():
-            output_mask = None
+            output_mask: Buffer | None = None
+            output_null_count: int | None = None
             left_is_column = isinstance(left_column, ColumnBase)
             right_is_column = isinstance(right_column, ColumnBase)
             if fill_value is not None:
@@ -1676,7 +1747,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
                     # that nulls that are present in both left_column and
                     # right_column are not filled.
                     if left_column.nullable and right_column.nullable:
-                        output_mask = (
+                        output_mask, output_null_count = (
                             left_column._get_mask_as_column()
                             | right_column._get_mask_as_column()
                         ).as_mask()
@@ -1716,7 +1787,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
                 )
 
             if output_mask is not None:
-                outcol = outcol.set_mask(output_mask)
+                outcol = outcol.set_mask(output_mask, output_null_count)
 
             output[col] = outcol
 
@@ -1767,9 +1838,14 @@ class Frame(BinaryOperand, Scannable, Serializable):
                 cp_output = cupy_func(*cupy_inputs, **kwargs)
                 if ufunc.nout == 1:
                     cp_output = (cp_output,)
+                if mask is None:
+                    mask_buff = None
+                    null_count = 0
+                else:
+                    mask_buff, null_count = mask.as_mask()
                 for i, out in enumerate(cp_output):
                     data[i][name] = as_column(out).set_mask(
-                        mask if mask is None else mask.as_mask()
+                        mask_buff, null_count
                     )
             return data
 
@@ -2076,8 +2152,12 @@ class Frame(BinaryOperand, Scannable, Serializable):
             else:
                 repeats_plc = repeats
             return [
-                ColumnBase.from_pylibcudf(col)
-                for col in plc.filling.repeat(plc_table, repeats_plc).columns()
+                ColumnBase.create(col, reference_col.dtype)
+                for col, reference_col in zip(
+                    plc.filling.repeat(plc_table, repeats_plc).columns(),
+                    columns,
+                    strict=True,
+                )
             ]
 
     @_performance_tracking

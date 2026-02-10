@@ -32,10 +32,12 @@
 #include <cuco/utility/error.hpp>
 
 #include <algorithm>
+#include <future>
 #include <iterator>
 #include <limits>
 #include <memory>
 #include <numeric>
+#include <thread>
 #include <utility>
 #include <vector>
 
@@ -169,7 +171,7 @@ std::vector<cudf::size_type> inner_join_size_per_row(
   auto per_row_counts = obj.inner_join_match_context(
     left_selected, cudf::sorted::NO, stream, cudf::get_current_device_resource_ref());
 
-  return cudf::detail::make_std_vector<cudf::size_type>(*per_row_counts._match_counts, stream);
+  return cudf::detail::make_std_vector<cudf::size_type>(*per_row_counts->_match_counts, stream);
 }
 
 std::unique_ptr<cudf::table> left_join(
@@ -3041,6 +3043,98 @@ TEST_P(JoinParameterizedTestLists, ListWithNullsUnequalLeftJoin)
   auto const left_gold_map  = column_wrapper<int32_t>({0, 1, 2, 3, 4});
   auto const right_gold_map = column_wrapper<int32_t>({NoneValue, 0, NoneValue, 3, NoneValue});
   this->left_join(left_gold_map, right_gold_map, cudf::null_equality::UNEQUAL, algo);
+}
+
+// Thread safety tests for sort_merge_join
+struct SortMergeJoinThreadSafetyTest : public cudf::test::BaseFixture {
+  void SetUp() override
+  {
+    // Create test data
+    col0 = column_wrapper<int32_t>{{3, 1, 2, 0, 2}};
+    col1 = column_wrapper<int32_t>{{2, 2, 0, 4, 3}};
+  }
+
+  column_wrapper<int32_t> col0;
+  column_wrapper<int32_t> col1;
+};
+
+TEST_F(SortMergeJoinThreadSafetyTest, ConcurrentMatchContext)
+{
+  // Test that multiple threads can call inner_join_match_context() concurrently
+  auto const t0 = cudf::table_view{{col0}};
+  auto const t1 = cudf::table_view{{col1}};
+
+  cudf::sort_merge_join join_obj(t1, cudf::sorted::NO, cudf::null_equality::EQUAL);
+
+  // Get expected result from single-threaded execution
+  auto expected_ctx    = join_obj.inner_join_match_context(t0, cudf::sorted::NO);
+  auto expected_counts = cudf::detail::make_std_vector<cudf::size_type>(
+    *expected_ctx->_match_counts, cudf::get_default_stream());
+
+  // Run concurrent calls
+  constexpr int num_threads = 4;
+  std::vector<std::future<std::vector<cudf::size_type>>> futures;
+
+  for (int i = 0; i < num_threads; ++i) {
+    futures.push_back(std::async(std::launch::async, [&]() {
+      auto ctx = join_obj.inner_join_match_context(
+        t0, cudf::sorted::NO, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
+      auto counts = cudf::detail::make_std_vector<cudf::size_type>(*ctx->_match_counts,
+                                                                   cudf::get_default_stream());
+      return counts;
+    }));
+  }
+
+  // Verify all threads got correct results
+  for (auto& future : futures) {
+    auto counts = future.get();
+    EXPECT_EQ(counts, expected_counts);
+  }
+}
+
+TEST_F(SortMergeJoinThreadSafetyTest, ConcurrentPartitionedJoins)
+{
+  // Test that multiple threads can do full partitioned join workflow concurrently
+  auto const t0     = cudf::table_view{{col0}};
+  auto const t1     = cudf::table_view{{col1}};
+  auto const stream = cudf::get_default_stream();
+
+  cudf::sort_merge_join join_obj(t1, cudf::sorted::NO, cudf::null_equality::EQUAL, stream);
+
+  // Get expected result from single-threaded inner_join
+  auto [expected_left, expected_right] =
+    join_obj.inner_join(t0, cudf::sorted::NO, stream, cudf::get_current_device_resource_ref());
+  auto expected_size = expected_left->size();
+
+  // Run concurrent partitioned joins
+  constexpr int num_threads = 4;
+  std::vector<std::future<size_t>> futures;
+
+  for (int i = 0; i < num_threads; ++i) {
+    futures.push_back(std::async(std::launch::async, [&]() {
+      // Each thread does full partitioned workflow
+      auto match_ctx = join_obj.inner_join_match_context(
+        t0, cudf::sorted::NO, stream, cudf::get_current_device_resource_ref());
+
+      cudf::join_partition_context part_ctx{std::move(match_ctx), 0, 0};
+
+      size_t total_results = 0;
+      for (cudf::size_type row = 0; row < t0.num_rows(); ++row) {
+        part_ctx.left_start_idx            = row;
+        part_ctx.left_end_idx              = row + 1;
+        auto [left_indices, right_indices] = join_obj.partitioned_inner_join(
+          part_ctx, stream, cudf::get_current_device_resource_ref());
+        total_results += left_indices->size();
+      }
+      return total_results;
+    }));
+  }
+
+  // Verify all threads got correct total result count
+  for (auto& future : futures) {
+    auto result_size = future.get();
+    EXPECT_EQ(result_size, expected_size);
+  }
 }
 
 CUDF_TEST_PROGRAM_MAIN()

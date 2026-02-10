@@ -14,6 +14,7 @@ import cudf
 from cudf.api.types import (
     _is_scalar_or_zero_d_array,
     is_integer,
+    is_list_like,
 )
 from cudf.core.column.column import as_column
 from cudf.core.copy_types import BooleanMask, GatherMap
@@ -67,6 +68,30 @@ class ScalarIndexer:
 IndexingSpec: TypeAlias = (
     EmptyIndexer | MapIndexer | MaskIndexer | ScalarIndexer | SliceIndexer
 )
+
+
+def validate_scalar_key(key: Any, error_msg: str) -> None:
+    """Validate that key contains only scalar values for .at/.iat indexers.
+
+    Parameters
+    ----------
+    key : Any
+        The key to validate
+    error_msg : str
+        The error message to raise if validation fails
+
+    Raises
+    ------
+    ValueError
+        If the key contains list-like indexers
+    """
+    if not isinstance(key, tuple):
+        if is_list_like(key):
+            raise ValueError(error_msg)
+    else:
+        for k in key:
+            if is_list_like(k):
+                raise ValueError(error_msg)
 
 
 # Helpers for code-sharing between loc and iloc paths
