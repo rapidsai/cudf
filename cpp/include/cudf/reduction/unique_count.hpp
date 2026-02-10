@@ -15,7 +15,7 @@
 
 namespace CUDF_EXPORT cudf {
 /**
- * @addtogroup reduction_functions
+ * @addtogroup column_reduction
  * @{
  * @file
  * @brief APIs for unique counting operations
