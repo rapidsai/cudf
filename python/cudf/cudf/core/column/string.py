@@ -149,7 +149,7 @@ class StringColumn(ColumnBase, Scannable):
         # All null string columns fail to convert in libcudf, so we must short-circuit
         # the call to super().to_arrow().
         # TODO: Investigate if the above is a bug in libcudf and fix it there.
-        if self.plc_column.num_children() == 0 or self.null_count == len(self):
+        if self.plc_column.num_children() == 0 or self.is_all_null:
             return pa.NullArray.from_buffers(
                 pa.null(), len(self), [pa.py_buffer(b"")]
             )
@@ -167,7 +167,7 @@ class StringColumn(ColumnBase, Scannable):
         if skipna:
             col = col.dropna()
 
-        if min_count > 0 and len(col) - col.null_count < min_count:
+        if min_count > 0 and col.valid_count < min_count:
             return pd.NA
 
         return (
@@ -257,14 +257,14 @@ class StringColumn(ColumnBase, Scannable):
 
         cast_func: Callable[[plc.Column, plc.DataType], plc.Column]
         if dtype.kind in {"i", "u"}:
-            if not self.is_integer().all():
+            if not self.is_all_integer():
                 raise ValueError(
                     "Could not convert strings to integer "
                     "type due to presence of non-integer values."
                 )
             cast_func = plc.strings.convert.convert_integers.to_integers
         elif dtype.kind == "f":
-            if not self.is_float().all():
+            if not self.is_all_float():
                 raise ValueError(
                     "Could not convert strings to float "
                     "type due to presence of non-floating values."
@@ -288,7 +288,7 @@ class StringColumn(ColumnBase, Scannable):
             raise ValueError(
                 f"dtype must be datetime or timedelta type, not {dtype}"
             )
-        elif self.null_count == len(self):
+        elif self.is_all_null:
             return column_empty(len(self), dtype=dtype)  # type: ignore[return-value]
         elif (self == "None").any():
             raise ValueError(
@@ -407,9 +407,9 @@ class StringColumn(ColumnBase, Scannable):
     def can_cast_safely(self, to_dtype: DtypeObj) -> bool:
         if self.dtype == to_dtype:
             return True
-        elif to_dtype.kind in {"i", "u"} and self.is_integer().all():
+        elif to_dtype.kind in {"i", "u"} and self.is_all_integer():
             return True
-        elif to_dtype.kind == "f" and self.is_float().all():
+        elif to_dtype.kind == "f" and self.is_all_float():
             return True
         else:
             return False
@@ -463,7 +463,7 @@ class StringColumn(ColumnBase, Scannable):
         # division between an empty string column and a (nonempty) integer
         # column. Ideally we would disable these operators entirely, but until
         # the above issue is resolved we cannot avoid this problem.
-        if self.null_count == len(self):
+        if self.is_all_null:
             if op in {
                 "__add__",
                 "__sub__",
@@ -725,7 +725,7 @@ class StringColumn(ColumnBase, Scannable):
                 ColumnBase.create(
                     result,
                     cudf.ListDtype(
-                        get_dtype_of_same_kind(self.dtype, np.dtype(np.int16))
+                        get_dtype_of_same_kind(self.dtype, np.dtype(np.int32))
                     ),
                 ),
             )
@@ -1339,6 +1339,52 @@ class StringColumn(ColumnBase, Scannable):
                     get_dtype_of_same_kind(self.dtype, np.dtype(np.bool_)),
                 ),
             )
+
+    def is_all_integer(self) -> bool:
+        """Check if all non-null strings in the column are integers.
+
+        This is an optimized version of `is_integer().all()` that avoids
+        creating an intermediate boolean column.
+
+        Returns
+        -------
+        bool
+            True if all non-null strings are valid integers, False otherwise.
+        """
+        with self.access(mode="read", scope="internal"):
+            bool_plc = plc.strings.convert.convert_integers.is_integer(
+                self.plc_column
+            )
+            return self._reduce_bool_column(bool_plc)
+
+    def is_all_float(self) -> bool:
+        """Check if all non-null strings in the column are floats.
+
+        This is an optimized version of `is_float().all()` that avoids
+        creating an intermediate boolean column.
+
+        Returns
+        -------
+        bool
+            True if all non-null strings are valid floats, False otherwise.
+        """
+        with self.access(mode="read", scope="internal"):
+            bool_plc = plc.strings.convert.convert_floats.is_float(
+                self.plc_column
+            )
+            return self._reduce_bool_column(bool_plc)
+
+    @staticmethod
+    def _reduce_bool_column(bool_plc: plc.Column) -> bool:
+        """Reduce a boolean column to a single bool using all()."""
+        result_scalar = plc.reduce.reduce(
+            bool_plc,
+            plc.aggregation.all(),
+            plc.types.DataType(plc.types.TypeId.BOOL8),
+        )
+        result = result_scalar.to_py()
+        assert isinstance(result, bool), f"Expected bool, got {type(result)}"
+        return result
 
     def count_characters(self) -> NumericalColumn:
         with self.access(mode="read", scope="internal"):

@@ -205,15 +205,17 @@ class NumericalColumn(NumericalBaseColumn):
             return as_column(False, length=len(self))
 
         with self.access(mode="read", scope="internal"):
-            result = ColumnBase.create(
-                plc.unary.is_null(self.plc_column), np.dtype(np.bool_)
-            )
-
-        if self.dtype.kind == "f":
-            # For floats, NaN should be considered null
-            result = result | self.isnan()
-
-        return result
+            is_null_plc = plc.unary.is_null(self.plc_column)
+            if self.dtype.kind == "f":
+                is_nan_plc = plc.unary.is_nan(self.plc_column)
+                result_plc = plc.binaryop.binary_operation(
+                    is_null_plc,
+                    is_nan_plc,
+                    plc.binaryop.BinaryOperator.BITWISE_OR,
+                    plc.types.DataType(plc.types.TypeId.BOOL8),
+                )
+                return ColumnBase.create(result_plc, np.dtype(np.bool_))
+            return ColumnBase.create(is_null_plc, np.dtype(np.bool_))
 
     def notnull(self) -> ColumnBase:
         """Identify non-missing values in a Column.
@@ -224,20 +226,22 @@ class NumericalColumn(NumericalBaseColumn):
             result = as_column(True, length=len(self))
         else:
             with self.access(mode="read", scope="internal"):
-                result = ColumnBase.create(
-                    plc.unary.is_valid(self.plc_column), np.dtype(np.bool_)
-                )
+                is_valid_plc = plc.unary.is_valid(self.plc_column)
+                if self.dtype.kind == "f":
+                    is_not_nan_plc = plc.unary.is_not_nan(self.plc_column)
+                    result_plc = plc.binaryop.binary_operation(
+                        is_valid_plc,
+                        is_not_nan_plc,
+                        plc.binaryop.BinaryOperator.BITWISE_AND,
+                        plc.types.DataType(plc.types.TypeId.BOOL8),
+                    )
+                    result = ColumnBase.create(result_plc, np.dtype(np.bool_))
+                else:
+                    result = ColumnBase.create(
+                        is_valid_plc, np.dtype(np.bool_)
+                    )
 
-            if self.dtype.kind == "f":
-                # For floats, NaN should be considered null
-                result = result & self.notnan()
-
-        if cudf.get_option("mode.pandas_compatible"):
-            return result
-
-        return result._with_type_metadata(
-            get_dtype_of_same_kind(self.dtype, np.dtype(np.bool_))
-        )
+        return result
 
     def element_indexing(self, index: int) -> ScalarLike | None:
         result = super().element_indexing(index)
@@ -277,9 +281,9 @@ class NumericalColumn(NumericalBaseColumn):
             return col.astype(self.dtype)
 
     def __invert__(self) -> ColumnBase:
-        if self.dtype.kind in "ui":
+        if (dtype_kind := self.dtype.kind) in "ui":
             return self.unary_operator("invert")
-        elif self.dtype.kind == "b":
+        elif dtype_kind == "b":
             return self.unary_operator("not")
         else:
             return super().__invert__()
@@ -720,10 +724,10 @@ class NumericalColumn(NumericalBaseColumn):
         """
         Return the smallest dtype which can represent all elements of self.
         """
-        if self.null_count == len(self):
+        if self.is_all_null:
             return self.dtype
 
-        min_value, max_value = self.min(), self.max()
+        min_value, max_value = self.minmax()
         either_is_inf = np.isinf(min_value) or np.isinf(max_value)
         if not either_is_inf and expected_type.kind == "i":
             max_bound_dtype = min_signed_type(max_value)
@@ -762,11 +766,11 @@ class NumericalColumn(NumericalBaseColumn):
         # float64 column too, Hence we will need to type-cast
         # to self.dtype.
         to_replace_col = as_column(to_replace)
-        if to_replace_col.null_count == len(to_replace_col):
+        if to_replace_col.is_all_null:
             to_replace_col = to_replace_col.astype(self.dtype)
 
         replacement_col = as_column(replacement)
-        if replacement_col.null_count == len(replacement_col):
+        if replacement_col.is_all_null:
             replacement_col = replacement_col.astype(self.dtype)
 
         if not isinstance(to_replace_col, type(replacement_col)):
@@ -965,7 +969,8 @@ class NumericalColumn(NumericalBaseColumn):
             # best we can do is hope to catch it here and avoid compare
             # Use Python floats, which have precise comparison for float64.
             # NOTE(seberg): it would make sense to limit to the mantissa range.
-            if (float(self.min()) >= min_) and (float(self.max()) <= max_):
+            min_val, max_val = self.minmax()
+            if (float(min_val) >= min_) and (float(max_val) <= max_):
                 filled = self.fillna(0)
                 return (filled % 1 == 0).all()
             else:
@@ -1073,7 +1078,7 @@ def _normalize_find_and_replace_input(
     )
     col_to_normalize_dtype = normalized_column.dtype
     if isinstance(col_to_normalize, list):
-        if normalized_column.null_count == len(normalized_column):
+        if normalized_column.is_all_null:
             normalized_column = normalized_column.astype(input_column_dtype)
         if normalized_column.can_cast_safely(input_column_dtype):
             return normalized_column.astype(input_column_dtype)

@@ -89,6 +89,7 @@ class StructMethods(BaseAccessor):
 
         Examples
         --------
+        >>> s = cudf.Series([{'a': 1, 'b': 'x'}, {'a': 2, 'b': 'y'}, {'a': 3, 'b': 'z'}, {'a': 4, 'b': 'a'}])
         >>> s
         0    {'a': 1, 'b': 'x'}
         1    {'a': 2, 'b': 'y'}
