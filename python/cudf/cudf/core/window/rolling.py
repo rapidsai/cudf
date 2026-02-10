@@ -92,47 +92,50 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
     Examples
     --------
     >>> import cudf
+    >>> import numpy as np
+    >>> import pandas as pd
     >>> a = cudf.Series([1, 2, 3, None, 4])
 
     Rolling sum with window size 2.
 
     >>> print(a.rolling(2).sum())
-    0
-    1    3
-    2    5
-    3
-    4
-    dtype: int64
+    0    <NA>
+    1     3.0
+    2     5.0
+    3    <NA>
+    4    <NA>
+    dtype: float64
 
     Rolling sum with window size 2 and min_periods 1.
 
     >>> print(a.rolling(2, min_periods=1).sum())
-    0    1
-    1    3
-    2    5
-    3    3
-    4    4
-    dtype: int64
+    0    1.0
+    1    3.0
+    2    5.0
+    3    3.0
+    4    4.0
+    dtype: float64
 
     Rolling count with window size 3.
 
     >>> print(a.rolling(3).count())
-    0    1
-    1    2
-    2    3
-    3    2
-    4    2
-    dtype: int64
+    0    <NA>
+    1    <NA>
+    2     3.0
+    3     2.0
+    4     2.0
+    dtype: float64
 
     Rolling count with window size 3, but with the result set at the
     center of the window.
 
     >>> print(a.rolling(3, center=True).count())
-    0    2
-    1    3
-    2    2
-    3    2
-    4    1 dtype: int64
+    0    <NA>
+    1     3.0
+    2     2.0
+    3     2.0
+    4    <NA>
+    dtype: float64
 
     Rolling max with variable window size specified by an offset;
     only valid for datetime index.
@@ -150,17 +153,16 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
     ... )
 
     >>> print(a.rolling('2s').max())
-    2019-01-01T09:00:00.000    1
-    2019-01-01T09:00:01.000    9
-    2019-01-01T09:00:02.000    9
-    2019-01-01T09:00:04.000    4
-    2019-01-01T09:00:07.000
-    2019-01-01T09:00:08.000    1
-    dtype: int64
+    2019-01-01 09:00:00     1.0
+    2019-01-01 09:00:01     9.0
+    2019-01-01 09:00:02     9.0
+    2019-01-01 09:00:04     4.0
+    2019-01-01 09:00:07    <NA>
+    2019-01-01 09:00:08     1.0
+    dtype: float64
 
     Apply custom function on the window with the *apply* method
 
-    >>> import numpy as np
     >>> import math
     >>> b = cudf.Series([16, 25, 36, 49, 64, 81], dtype=np.float64)
     >>> def some_func(A):
@@ -180,7 +182,6 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
 
     And this also works for window rolling set by an offset
 
-    >>> import pandas as pd
     >>> c = cudf.Series(
     ...     [16, 25, 36, 49, 64, 81],
     ...     index=[
@@ -194,12 +195,12 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
     ...     dtype=np.float64
     ... )
     >>> print(c.rolling('2s').apply(some_func))
-    2019-01-01T09:00:00.000     4.0
-    2019-01-01T09:00:01.000     9.0
-    2019-01-01T09:00:02.000    11.0
-    2019-01-01T09:00:04.000     7.0
-    2019-01-01T09:00:07.000     8.0
-    2019-01-01T09:00:08.000    17.0
+    2019-01-01 09:00:00     4.0
+    2019-01-01 09:00:01     9.0
+    2019-01-01 09:00:02    11.0
+    2019-01-01 09:00:04     7.0
+    2019-01-01 09:00:07     8.0
+    2019-01-01 09:00:08    17.0
     dtype: float64
     """
 

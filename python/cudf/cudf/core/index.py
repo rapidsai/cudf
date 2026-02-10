@@ -5201,17 +5201,14 @@ def interval_range(
     >>> import cudf
     >>> import pandas as pd
     >>> cudf.interval_range(start=0,end=5)
-    IntervalIndex([(0, 0], (1, 1], (2, 2], (3, 3], (4, 4], (5, 5]],
-    ...closed='right',dtype='interval')
+    IntervalIndex([(0, 1], (1, 2], (2, 3], (3, 4], (4, 5]], dtype='interval[int64, right]')
     >>> cudf.interval_range(start=0,end=10, freq=2,closed='left')
-    IntervalIndex([[0, 2), [2, 4), [4, 6), [6, 8), [8, 10)],
-    ...closed='left',dtype='interval')
+    IntervalIndex([[0, 2), [2, 4), [4, 6), [6, 8), [8, 10)], dtype='interval[int64, left]')
     >>> cudf.interval_range(start=0,end=10, periods=3,closed='left')
-    ...IntervalIndex([[0.0, 3.3333333333333335),
-            [3.3333333333333335, 6.666666666666667),
-            [6.666666666666667, 10.0)],
-            closed='left',
-            dtype='interval')
+    IntervalIndex([              [0.0, 3.3333333333333335),
+                   [3.3333333333333335, 6.666666666666667),
+                                 [6.666666666666667, 10.0)],
+                  dtype='interval[float64, left]')
     """
     nargs = sum(_ is not None for _ in (start, end, periods, freq))
 

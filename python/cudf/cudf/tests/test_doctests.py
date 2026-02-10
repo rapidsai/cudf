@@ -70,10 +70,17 @@ def _find_doctests_in_obj(obj, finder=None, criteria=None):
             )
         # Recurse over the public API of classes (attributes not prefixed with
         # an underscore)
-        if inspect.isclass(member):
+        elif inspect.isclass(member):
             yield from _find_doctests_in_obj(
                 member, finder, criteria=_is_public_name
             )
+        # Pick up doctests from re-exported functions (whose __module__
+        # differs from the parent module, so finder.find(obj) above
+        # skips them).
+        elif inspect.isfunction(member) or inspect.isbuiltin(member):
+            for docstring in finder.find(member):
+                if docstring.examples:
+                    yield docstring
 
 
 class TestDoctests:

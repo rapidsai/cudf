@@ -78,7 +78,10 @@ def to_numeric(
     1       2.0
     2    3000.0
     dtype: float32
-    >>> cudf.to_numeric(s, downcast='signed')
+    >>> import warnings
+    >>> with warnings.catch_warnings():
+    ...     warnings.simplefilter("ignore", UserWarning)
+    ...     cudf.to_numeric(s, downcast='signed')
     0       1
     1       2
     2    3000
