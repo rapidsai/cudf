@@ -81,7 +81,8 @@ def to_numeric(
     >>> import warnings
     >>> with warnings.catch_warnings():
     ...     warnings.simplefilter("ignore", UserWarning)
-    ...     cudf.to_numeric(s, downcast='signed')
+    ...     ser = cudf.to_numeric(s, downcast='signed')
+    >>> ser
     0       1
     1       2
     2    3000

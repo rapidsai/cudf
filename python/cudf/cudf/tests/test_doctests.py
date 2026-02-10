@@ -34,7 +34,7 @@ def _is_public_name(parent, name):
     return not name.startswith("_")
 
 
-def _find_doctests_in_obj(obj, finder=None, criteria=None):
+def _find_doctests_in_obj(obj, finder=None, criteria=None, seen=None):
     """Find all doctests in an object.
 
     Parameters
@@ -45,6 +45,9 @@ def _find_doctests_in_obj(obj, finder=None, criteria=None):
         Callable indicating whether to recurse over members of the provided
         object. If not provided, names not defined in the object's ``__all__``
         property are ignored.
+    seen : set, optional
+        Set of already-yielded doctest names, used to deduplicate doctests
+        that are reachable via multiple discovery paths.
 
     Yields
     ------
@@ -55,8 +58,11 @@ def _find_doctests_in_obj(obj, finder=None, criteria=None):
         finder = doctest.DocTestFinder()
     if criteria is None:
         criteria = _name_in_all
+    if seen is None:
+        seen = set()
     for docstring in finder.find(obj):
-        if docstring.examples:
+        if docstring.examples and docstring.name not in seen:
+            seen.add(docstring.name)
             yield docstring
     for name, member in inspect.getmembers(obj):
         # Only recurse over members matching the criteria
@@ -66,20 +72,21 @@ def _find_doctests_in_obj(obj, finder=None, criteria=None):
         # module's __all__)
         if inspect.ismodule(member):
             yield from _find_doctests_in_obj(
-                member, finder, criteria=_name_in_all
+                member, finder, criteria=_name_in_all, seen=seen
             )
         # Recurse over the public API of classes (attributes not prefixed with
         # an underscore)
         elif inspect.isclass(member):
             yield from _find_doctests_in_obj(
-                member, finder, criteria=_is_public_name
+                member, finder, criteria=_is_public_name, seen=seen
             )
         # Pick up doctests from re-exported functions (whose __module__
         # differs from the parent module, so finder.find(obj) above
         # skips them).
         elif inspect.isfunction(member) or inspect.isbuiltin(member):
             for docstring in finder.find(member):
-                if docstring.examples:
+                if docstring.examples and docstring.name not in seen:
+                    seen.add(docstring.name)
                     yield docstring
 
 
