@@ -446,12 +446,8 @@ class CategoricalColumn(ColumnBase):
             )
             fill_value = fill_scalar.to_arrow().as_py()
 
-            # TODO: This line of code does not work because we cannot use the
-            # `in` operator on self.categories (which is a column). mypy
-            # realizes that this is wrong because __iter__ is not implemented.
-            # However, it seems that this functionality has been broken for a
-            # long time so for now we're just having mypy ignore and we'll come
-            # back to this.
+            # The `in` operator will only work on certain column types
+            # (NumericalColumn, StringColumn).
             if fill_value in self.categories:  # type: ignore[operator]
                 replaced = self.fillna(fill_value)
             else:
@@ -562,12 +558,12 @@ class CategoricalColumn(ColumnBase):
                     )
             new_cats_col = ColumnBase.create(new_cats_plc, cats_col.dtype)
 
-        # anything we mapped to None, we want to now filter out since
-        # those categories don't exist anymore
+        # Filter out categories that were mapped to None
         with new_cats_col.access(mode="read", scope="internal"):
-            bmask_plc = plc.unary.is_valid(new_cats_col.plc_column)
-        bmask = ColumnBase.create(bmask_plc, np.dtype("bool"))
-        new_cats_col = new_cats_col.apply_boolean_mask(bmask)
+            dropped = plc.stream_compaction.drop_nulls(
+                plc.Table([new_cats_col.plc_column]), [0], 1
+            )
+        new_cats_col = ColumnBase.create(dropped.columns()[0], cats_col.dtype)
         new_index_col = as_column(range(len(new_cats_col)))
 
         # Join old categories with new categories to build a mapping
