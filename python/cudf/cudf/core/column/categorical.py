@@ -15,8 +15,13 @@ import pylibcudf as plc
 
 import cudf
 from cudf.api.types import is_scalar
-from cudf.core.column import column
-from cudf.core.column.column import ColumnBase
+from cudf.core.column.column import (
+    ColumnBase,
+    as_column,
+    column_empty,
+    concat_columns,
+)
+from cudf.core.column.utils import access_columns
 from cudf.core.dtypes import CategoricalDtype, IntervalDtype
 from cudf.utils.dtypes import (
     SIZE_TYPE_DTYPE,
@@ -80,7 +85,7 @@ def _sort_column(col: ColumnBase) -> ColumnBase:
     return ColumnBase.create(sorted_table.columns()[0], col.dtype)
 
 
-class CategoricalColumn(column.ColumnBase):
+class CategoricalColumn(ColumnBase):
     """Implements operations for Columns of Categorical type"""
 
     dtype: CategoricalDtype
@@ -135,7 +140,7 @@ class CategoricalColumn(column.ColumnBase):
         self, values: Sequence
     ) -> tuple[ColumnBase, ColumnBase]:
         # Convert values to categorical dtype like self
-        return self, column.as_column(values, dtype=self.dtype)
+        return self, as_column(values, dtype=self.dtype)
 
     @property
     def categories(self) -> ColumnBase:
@@ -160,10 +165,8 @@ class CategoricalColumn(column.ColumnBase):
         if is_scalar(value) and is_na_like(value):
             to_add_categories = 0
         else:
-            if is_scalar(value):
-                arr = column.as_column(value, length=1, nan_as_null=False)
-            else:
-                arr = column.as_column(value, nan_as_null=False)
+            length = 1 if is_scalar(value) else None
+            arr = as_column(value, length=length, nan_as_null=False)
             to_add_categories = len(
                 cudf.Index._from_column(arr).difference(
                     cudf.Index._from_column(self.categories)
@@ -179,7 +182,7 @@ class CategoricalColumn(column.ColumnBase):
         if is_scalar(value):
             value = self._encode(value) if value is not None else value
         else:
-            value = cudf.core.column.as_column(value).astype(self.dtype)
+            value = as_column(value).astype(self.dtype)
             value = value.codes
         codes = self.codes
         codes[key] = value
@@ -244,7 +247,7 @@ class CategoricalColumn(column.ColumnBase):
         )
 
     def _binaryop(self, other: ColumnBinaryOperand, op: str) -> ColumnBase:
-        if isinstance(other, column.ColumnBase):
+        if isinstance(other, ColumnBase):
             if isinstance(other, CategoricalColumn):
                 if self.dtype == other.dtype:
                     # Dtypes are the same, but ordering may differ
@@ -379,7 +382,7 @@ class CategoricalColumn(column.ColumnBase):
         elif isinstance(other.dtype, CategoricalDtype):
             other = other.codes  # type: ignore[union-attr]
 
-        with column.access_columns(
+        with access_columns(
             self.codes,
             other,
             cond,
@@ -394,7 +397,7 @@ class CategoricalColumn(column.ColumnBase):
                 other_plc,
                 cond.plc_column,
             )
-        return column.ColumnBase.create(result_plc, self.dtype)
+        return ColumnBase.create(result_plc, self.dtype)
 
     def _encode(self, value: ScalarLike) -> ScalarLike:
         return self.categories.find_first_value(value)
@@ -413,20 +416,22 @@ class CategoricalColumn(column.ColumnBase):
         """
         Return col with *to_replace* replaced with *replacement*.
         """
-        to_replace_col = column.as_column(to_replace)
+        to_replace_col = as_column(to_replace)
         if to_replace_col.is_all_null:
             to_replace_col = to_replace_col.astype(self.categories.dtype)
-        replacement_col = column.as_column(replacement)
+        replacement_col = as_column(replacement)
         if replacement_col.is_all_null:
             replacement_col = replacement_col.astype(self.categories.dtype)
 
+        # TODO: This check looks incorrect, should we be checking the dtypes of the
+        # columns instead of the column objects themselves?
         if type(to_replace_col) is not type(replacement_col):
             raise TypeError(
                 f"to_replace and value should be of same types,"
                 f"got to_replace dtype: {to_replace_col.dtype} and "
                 f"value dtype: {replacement_col.dtype}"
             )
-        with to_replace_col.access(mode="read", scope="internal"):
+        with access_columns(mode="read", scope="internal"):
             with replacement_col.access(mode="read", scope="internal"):
                 distinct_table = plc.stream_compaction.stable_distinct(
                     plc.Table(
@@ -468,7 +473,7 @@ class CategoricalColumn(column.ColumnBase):
                 replaced = self.fillna(fill_value)
             else:
                 new_categories = self.categories.append(
-                    column.as_column([fill_value])
+                    as_column([fill_value])
                 )
                 replaced = self._set_categories(new_categories)
                 replaced = replaced.fillna(fill_value)
@@ -495,7 +500,7 @@ class CategoricalColumn(column.ColumnBase):
         # and a column with the appropriate labels replaced.
         # The index of this dataframe represents the original
         # ints that map to the categories
-        cats_col = column.as_column(replaced.dtype.categories)
+        cats_col = as_column(replaced.dtype.categories)
         if old_col.dtype != cats_col.dtype and new_col.dtype != cats_col.dtype:
             cats_replace_col = cats_col.copy()
         else:
@@ -563,7 +568,7 @@ class CategoricalColumn(column.ColumnBase):
             bmask_plc = plc.unary.is_valid(new_cats_col.plc_column)
         bmask = ColumnBase.create(bmask_plc, np.dtype("bool"))
         new_cats_col = new_cats_col.apply_boolean_mask(bmask)
-        new_index_col = column.as_column(range(len(new_cats_col)))
+        new_index_col = as_column(range(len(new_cats_col)))
 
         # Join old categories with new categories to build a mapping
         # from old codes to new codes
@@ -680,7 +685,7 @@ class CategoricalColumn(column.ColumnBase):
                 )
             )
         else:
-            fill_value = column.as_column(fill_value, nan_as_null=False)
+            fill_value = as_column(fill_value, nan_as_null=False)
             if isinstance(fill_value.dtype, CategoricalDtype):
                 if self.dtype != fill_value.dtype:
                     raise TypeError(
@@ -804,7 +809,7 @@ class CategoricalColumn(column.ColumnBase):
         )
 
         # Combine and de-dupe the categories
-        cats = column.concat_columns([o.categories for o in objs]).unique()
+        cats = concat_columns([o.categories for o in objs]).unique()
         objs = [o._set_categories(cats, is_unique=True) for o in objs]
         codes = [o.codes for o in objs]
 
@@ -814,9 +819,9 @@ class CategoricalColumn(column.ColumnBase):
                 f"Result of concat cannot have size > {SIZE_TYPE_DTYPE}_MAX"
             )
         elif newsize == 0:
-            codes_col = column.column_empty(0, head.codes.dtype)
+            codes_col = column_empty(0, head.codes.dtype)
         else:
-            codes_col = column.concat_columns(codes)
+            codes_col = concat_columns(codes)
 
         return cast(
             "Self",
@@ -844,7 +849,7 @@ class CategoricalColumn(column.ColumnBase):
         # See CategoricalAccessor.set_categories.
 
         ordered = ordered if ordered is not None else self.ordered
-        new_categories = column.as_column(new_categories)
+        new_categories = as_column(new_categories)
 
         if isinstance(new_categories, CategoricalColumn):
             new_categories = new_categories.categories
@@ -928,8 +933,8 @@ class CategoricalColumn(column.ColumnBase):
         Assumes ``new_categories`` is the same dtype as the current categories
         """
 
-        cur_cats = column.as_column(self.categories)
-        new_cats = column.as_column(new_categories)
+        cur_cats = as_column(self.categories)
+        new_cats = as_column(new_categories)
 
         # Join the old and new categories to build a map from
         # old to new codes, inserting na_sentinel for any old
@@ -956,9 +961,7 @@ class CategoricalColumn(column.ColumnBase):
         cur_codes = self.codes
         out_code_dtype = min_unsigned_type(max(len(cur_cats), len(new_cats)))
 
-        new_codes_col = column.as_column(
-            range(len(new_cats)), dtype=out_code_dtype
-        )
+        new_codes_col = as_column(range(len(new_cats)), dtype=out_code_dtype)
 
         # Left join to map old categories to new codes via category values
         with cur_cats.access(mode="read", scope="internal"):
@@ -1073,7 +1076,7 @@ class CategoricalColumn(column.ColumnBase):
 
     def add_categories(self, new_categories: Any) -> Self:
         old_categories = self.categories
-        new_categories = column.as_column(
+        new_categories = as_column(
             new_categories,
             dtype=old_categories.dtype if len(new_categories) == 0 else None,
         )
@@ -1104,7 +1107,7 @@ class CategoricalColumn(column.ColumnBase):
         self,
         removals: Any,
     ) -> Self:
-        removals = column.as_column(removals).astype(self.categories.dtype)
+        removals = as_column(removals).astype(self.categories.dtype)
         removals_mask = removals.isin(self.categories)
 
         # ensure all the removals are in the current categories
@@ -1124,7 +1127,7 @@ class CategoricalColumn(column.ColumnBase):
         new_categories: Any,
         ordered: bool = False,
     ) -> CategoricalColumn:
-        new_categories = column.as_column(new_categories)
+        new_categories = as_column(new_categories)
         # Compare new_categories against current categories.
         # Ignore order for comparison because we're only interested
         # in whether new_categories has all the same values as the
