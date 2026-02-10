@@ -907,6 +907,7 @@ class GroupBy(Serializable, Reducible, Scannable):
                 "All requested aggregations are unsupported."
             )
 
+        key_dtypes = [col.dtype for col in self.grouping._key_columns]
         with access_columns(*values, mode="read", scope="internal"):
             with self._groupby as plc_groupby:
                 keys, results = (
@@ -921,8 +922,8 @@ class GroupBy(Serializable, Reducible, Scannable):
         return (
             result_columns,
             [
-                ColumnBase.create(key, dtype_from_pylibcudf_column(key))
-                for key in keys.columns()
+                ColumnBase.create(key, dtype)
+                for key, dtype in zip(keys.columns(), key_dtypes, strict=True)
             ],
             included_aggregations,
         )
