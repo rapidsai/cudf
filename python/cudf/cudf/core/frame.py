@@ -18,9 +18,6 @@ import pylibcudf as plc
 
 import cudf
 from cudf.api.extensions import no_default
-
-# TODO: The `numpy` import is needed for typing purposes during doc builds
-# only, need to figure out why the `np` alias is insufficient then remove.
 from cudf.api.types import is_dtype_equal, is_scalar, is_string_dtype
 from cudf.core._internals import copying, sorting
 from cudf.core.abc import Serializable
@@ -38,6 +35,7 @@ from cudf.core.dtype.validators import (
 )
 from cudf.core.mixins import BinaryOperand, Scannable
 from cudf.utils.dtypes import (
+    dtype_from_pylibcudf_column,
     find_common_type,
     is_pandas_nullable_extension_dtype,
 )
@@ -735,9 +733,8 @@ class Frame(BinaryOperand, Scannable, Serializable):
                     elif to_dtype.kind in "ui":
                         to_dtype = np.dtype("float64")
 
-            if (
-                cudf.get_option("mode.pandas_compatible")
-                and is_pandas_nullable_extension_dtype(to_dtype)
+            if is_pandas_nullable_extension_dtype(
+                to_dtype
             ) or is_dtype_obj_string(to_dtype):
                 to_dtype = getattr(to_dtype, "numpy_dtype", to_dtype)
                 if getattr(to_dtype, "kind", None) in {"U", "O"}:
@@ -1418,16 +1415,17 @@ class Frame(BinaryOperand, Scannable, Serializable):
             )
         ]
 
-        outcol = ColumnBase.from_pylibcudf(
-            sorting.search_sorted(
-                sources,
-                values,
-                side,
-                ascending=itertools.repeat(ascending, times=len(sources)),
-                na_position=itertools.repeat(na_position, times=len(sources)),
-            )
+        plc_outcol = sorting.search_sorted(
+            sources,
+            values,
+            side,
+            ascending=itertools.repeat(ascending, times=len(sources)),
+            na_position=itertools.repeat(na_position, times=len(sources)),
         )
-        outcol = outcol.astype(np.dtype("int64"))
+        outcol = ColumnBase.create(
+            plc.unary.cast(plc_outcol, plc.DataType(plc.TypeId.INT64)),
+            np.dtype("int64"),
+        )
 
         # Return result as cupy array if the values is non-scalar
         # If values is scalar, result is expected to be scalar.
@@ -1546,13 +1544,14 @@ class Frame(BinaryOperand, Scannable, Serializable):
             )
         else:
             ascending_iter = ascending
-        return ColumnBase.from_pylibcudf(
-            sorting.order_by(
-                to_sort,
-                ascending_iter,
-                itertools.repeat(na_position, times=len(to_sort)),
-                stable=True,
-            )
+        plc_result = sorting.order_by(
+            to_sort,
+            ascending_iter,
+            itertools.repeat(na_position, times=len(to_sort)),
+            stable=True,
+        )
+        return ColumnBase.create(
+            plc_result, dtype_from_pylibcudf_column(plc_result)
         )
 
     @_performance_tracking
@@ -1569,7 +1568,12 @@ class Frame(BinaryOperand, Scannable, Serializable):
             return []
         return [
             self._from_columns_like_self(
-                [ColumnBase.from_pylibcudf(col) for col in split],
+                [
+                    ColumnBase.create(col, dtype)
+                    for col, (_, dtype) in zip(
+                        split, self._dtypes, strict=True
+                    )
+                ],
                 self._column_names,
             )
             for split in copying.columns_split(self._columns, splits)
@@ -1581,9 +1585,14 @@ class Frame(BinaryOperand, Scannable, Serializable):
             plc.Table([col.plc_column for col in self._columns])
         )
         columns = [
-            ColumnBase.from_pylibcudf(col) for col in plc_table.columns()
+            ColumnBase.create(col, dtype)
+            for col, (_, dtype) in zip(
+                plc_table.columns(), self._dtypes, strict=True
+            )
         ]
-        indices = ColumnBase.from_pylibcudf(plc_column)
+        indices = ColumnBase.create(
+            plc_column, dtype_from_pylibcudf_column(plc_column)
+        )
         keys = self._from_columns_like_self(columns)
         return keys, indices
 
@@ -2043,8 +2052,12 @@ class Frame(BinaryOperand, Scannable, Serializable):
             else:
                 repeats_plc = repeats
             return [
-                ColumnBase.from_pylibcudf(col)
-                for col in plc.filling.repeat(plc_table, repeats_plc).columns()
+                ColumnBase.create(col, reference_col.dtype)
+                for col, reference_col in zip(
+                    plc.filling.repeat(plc_table, repeats_plc).columns(),
+                    columns,
+                    strict=True,
+                )
             ]
 
     @_performance_tracking

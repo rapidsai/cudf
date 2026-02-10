@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import warnings
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Literal, cast
 
 import numpy as np
 import pandas as pd
@@ -202,7 +202,8 @@ def _convert_str_col(
     if not is_dtype_obj_string(col.dtype):
         raise TypeError("col must be string dtype.")
 
-    if col.is_integer().all():
+    string_col = cast("StringColumn", col)
+    if string_col.is_all_integer():
         return col.astype(dtype=np.dtype(np.int64))  # type: ignore[return-value]
 
     # TODO: This can be handled by libcudf in
