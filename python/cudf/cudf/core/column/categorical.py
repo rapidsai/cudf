@@ -884,147 +884,96 @@ class CategoricalColumn(ColumnBase):
         -----
         Assumes ``new_categories`` is the same dtype as the current categories
         """
-
-        cur_cats = as_column(self.categories)
         new_cats = as_column(new_categories)
-
-        # Join the old and new categories to build a map from
-        # old to new codes, inserting na_sentinel for any old
-        # categories that don't exist in the new categories
-
-        # Ensure new_categories is unique first
         if not (is_unique or new_cats.is_unique):
             new_cats = new_cats.unique()
 
+        cur_cats = self.categories
         if cur_cats.equals(new_cats, check_dtypes=True):
             # TODO: Internal usages don't always need a copy; add a copy keyword
             # as_ordered shallow copies
             return self.copy().as_ordered(ordered=ordered)
 
-        # Keep original new_cats for the result, but may need casted version for join
-        result_cats = new_cats
-
-        # Cast to common dtype for the join (the original DataFrame merge did this)
-        if cur_cats.dtype != new_cats.dtype:
-            common_dtype = find_common_type([cur_cats.dtype, new_cats.dtype])
-            cur_cats = cur_cats.astype(common_dtype)
-            new_cats = new_cats.astype(common_dtype)
+        # Construct the output dtype now since we may cast the categories to join later
+        ordered = ordered if ordered is not None else self.ordered
+        result_dtype = CategoricalDtype(categories=new_cats, ordered=ordered)
 
         cur_codes = self.codes
-        out_code_dtype = min_unsigned_type(max(len(cur_cats), len(new_cats)))
+        out_plc_dtype = dtype_to_pylibcudf_type(
+            min_unsigned_type(max(len(cur_cats), len(new_cats)))
+        )
+        null_scalar = plc.Scalar.from_py(None, out_plc_dtype)
 
-        new_codes_col = as_column(range(len(new_cats)), dtype=out_code_dtype)
-
-        # Left join to map old categories to new codes via category values
-        with cur_cats.access(mode="read", scope="internal"):
-            with new_cats.access(mode="read", scope="internal"):
-                old_cats_key = plc.Table([cur_cats.plc_column])
-                new_cats_key = plc.Table([new_cats.plc_column])
-
-                # Left join to find matching categories
-                # Use NullEquality.UNEQUAL to match pandas behavior (nulls don't match)
-                left_map1, right_map1 = plc.join.left_join(
-                    old_cats_key,
-                    new_cats_key,
-                    plc.types.NullEquality.UNEQUAL,
+        if cur_codes.null_count == len(cur_codes):
+            result_codes = plc.Column.from_scalar(null_scalar, len(cur_codes))
+        else:
+            # Cast to common dtype for the join
+            if cur_cats.dtype != new_cats.dtype:
+                common_dtype = find_common_type(
+                    [cur_cats.dtype, new_cats.dtype]
                 )
+                cur_cats = cur_cats.astype(common_dtype)
+                new_cats = new_cats.astype(common_dtype)
 
-        # Gather new_codes using right_map (may have nulls for non-matches)
-        with new_codes_col.access(mode="read", scope="internal"):
-            new_codes_table = plc.Table([new_codes_col.plc_column])
+            # Left join to map old categories to new codes via category values
+            with cur_cats.access(mode="read", scope="internal"):
+                with new_cats.access(mode="read", scope="internal"):
+                    # Use NullEquality.UNEQUAL to match pandas behavior (nulls don't match)
+                    left_map, right_map = plc.join.left_join(
+                        plc.Table([cur_cats.plc_column]),
+                        plc.Table([new_cats.plc_column]),
+                        plc.types.NullEquality.UNEQUAL,
+                    )
+            new_codes_plc = plc.Column.from_iterable_of_py(
+                range(len(new_cats)), dtype=out_plc_dtype
+            )
             joined_new_codes_table = plc.copying.gather(
-                new_codes_table,
-                right_map1,
+                plc.Table([new_codes_plc]),
+                right_map,
                 plc.copying.OutOfBoundsPolicy.NULLIFY,
             )
 
-        # The join may have reordered results. We need to create a lookup table
-        # where position i contains the new code for old category i.
-        # Scatter the joined_new_codes back to positions indicated by left_map1
-        # Create a null-initialized target table of size len(cur_cats)
-        null_target = plc.Column.from_scalar(
-            plc.Scalar.from_py(None, dtype_to_pylibcudf_type(out_code_dtype)),
-            len(cur_cats),
-        )
-        # Scatter joined new codes to positions indicated by left_map1
-        matched_new_codes_table = plc.copying.scatter(
-            joined_new_codes_table,
-            left_map1,
-            plc.Table([null_target]),
-        )
-        # Now matched_new_codes_table[i] = new code for old category i (or null if not found)
-
-        # Apply the mapping to actual data codes
-        # For each code in cur_codes, look up the new code in matched_new_codes
-        # This is just a gather operation since matched_new_codes is indexed by old code
-        # BUT: cur_codes may have nulls (representing missing categorical values)
-        # gather doesn't accept null indices, so we need to handle them specially
-        with cur_codes.access(mode="read", scope="internal"):
-            # Get validity mask for cur_codes
-            cur_codes_valid_plc = plc.unary.is_valid(cur_codes.plc_column)
-        cur_codes_valid = ColumnBase.create(
-            cur_codes_valid_plc, np.dtype("bool")
-        )
-        with cur_codes.access(mode="read", scope="internal"):
-            if cur_codes.null_count == 0:
-                # No nulls, can gather directly
-                final_new_codes_table = plc.copying.gather(
-                    matched_new_codes_table,
-                    cur_codes.plc_column,
-                    plc.copying.OutOfBoundsPolicy.NULLIFY,
-                )
-            elif cur_codes.null_count == len(cur_codes):
-                # All nulls, result is all nulls
-                final_new_codes_table = plc.Table(
-                    [
-                        plc.Column.from_scalar(
-                            plc.Scalar.from_py(
-                                None, dtype_to_pylibcudf_type(out_code_dtype)
-                            ),
-                            len(cur_codes),
-                        )
-                    ]
-                )
-            else:
-                # Mixed: fill nulls with 0 temporarily, gather, then restore nulls
-                with cur_codes_valid.access(mode="read", scope="internal"):
-                    # Replace nulls with 0 (a valid index)
+            # We must scatter the joins according to the left_map in order to reverse
+            # any shuffling of order caused by the join.
+            null_target = plc.Column.from_scalar(null_scalar, len(cur_cats))
+            matched_new_codes_table = plc.copying.scatter(
+                joined_new_codes_table,
+                left_map,
+                plc.Table([null_target]),
+            )
+            with cur_codes.access(mode="read", scope="internal"):
+                # Applying the mapping to the actual codes is just a gather from
+                # matched_new_codes_table using cur_codes as indices, but gather doesn't
+                # accept nulls in cur_codes, so if there are nulls we need to replace
+                # nulls with a valid index, gather, then restore nulls in the result.
+                if cur_codes.null_count == 0:
+                    (result_codes,) = plc.copying.gather(
+                        matched_new_codes_table,
+                        cur_codes.plc_column,
+                        plc.copying.OutOfBoundsPolicy.NULLIFY,
+                    ).columns()
+                else:
                     zero_scalar = plc.Scalar.from_py(
                         0, cur_codes.plc_column.type()
                     )
+                    cur_codes_valid = plc.unary.is_valid(cur_codes.plc_column)
                     filled_codes = plc.copying.copy_if_else(
                         cur_codes.plc_column,
                         zero_scalar,
-                        cur_codes_valid.plc_column,
+                        cur_codes_valid,
                     )
-                    # Gather using filled codes
                     gathered_table = plc.copying.gather(
                         matched_new_codes_table,
                         filled_codes,
                         plc.copying.OutOfBoundsPolicy.NULLIFY,
                     )
-                    # Restore nulls where cur_codes was null
-                    null_scalar = plc.Scalar.from_py(
-                        None, dtype_to_pylibcudf_type(out_code_dtype)
-                    )
-                    final_codes = plc.copying.copy_if_else(
+                    result_codes = plc.copying.copy_if_else(
                         gathered_table.columns()[0],
                         null_scalar,
-                        cur_codes_valid.plc_column,
+                        cur_codes_valid,
                     )
-                final_new_codes_table = plc.Table([final_codes])
 
-        ordered = ordered if ordered is not None else self.ordered
-        new_codes_result = ColumnBase.create(
-            final_new_codes_table.columns()[0], out_code_dtype
-        )
-        return cast(
-            "Self",
-            ColumnBase.create(
-                new_codes_result.plc_column,
-                CategoricalDtype(categories=result_cats, ordered=ordered),
-            ),
-        )
+        return cast("Self", ColumnBase.create(result_codes, result_dtype))
 
     def add_categories(self, new_categories: Any) -> Self:
         old_categories = self.categories
