@@ -1,6 +1,6 @@
 /*
  *
- *  SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ *  SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  *  SPDX-License-Identifier: Apache-2.0
  *
  */
@@ -510,13 +510,15 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    *    Mixing of types isn't allowed, the resulting vector will be the same type as the original.
    *      e.g. You can't replace an integer vector with values from a long vector
    *
-   * Usage:
-   *    this = {1, 4, 5, 1, 5}
-   *    oldValues = {1, 5, 7}
-   *    newValues = {2, 6, 9}
-   *
-   *    result = this.findAndReplaceAll(oldValues, newValues);
-   *    result = {2, 4, 6, 2, 6}  (1 and 5 replaced with 2 and 6 but 7 wasn't found so no change)
+   * Example:
+   * <pre>{@code
+   * // col       = [1, 4, 5, 1, 5],  DType = INT32
+   * // oldValues = [1, 5, 7],        DType = INT32
+   * // newValues = [2, 6, 9],        DType = INT32
+   * ColumnVector result = col.findAndReplaceAll(oldValues, newValues);
+   * // result    = [2, 4, 6, 2, 6],  DType = INT32
+   * // (1 and 5 replaced with 2 and 6, but 7 wasn't found so no change)
+   * }</pre>
    *
    * @param oldValues - A vector containing values that should be replaced
    * @param newValues - A vector containing new values
@@ -530,6 +532,14 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Returns a ColumnVector with any null values replaced with a scalar.
    * The types of the input ColumnVector and Scalar must match, else an error is thrown.
    *
+   * Example:
+   * <pre>{@code
+   * // col    = [1, null, 3, null, 5], DType = INT32
+   * // scalar = 0,                     DType = INT32
+   * ColumnVector result = col.replaceNulls(scalar);
+   * // result = [1, 0, 3, 0, 5],       DType = INT32
+   * }</pre>
+   *
    * @param scalar - Scalar value to use as replacement
    * @return - ColumnVector with nulls replaced by scalar
    */
@@ -542,6 +552,14 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * specified replacement column.
    * This column and the replacement column must have the same type and number of rows.
    *
+   * Example:
+   * <pre>{@code
+   * // col          = [1, null, 3, null, 5], DType = INT32
+   * // replacements = [10, 20, 30, 40, 50],  DType = INT32
+   * ColumnVector result = col.replaceNulls(replacements);
+   * // result       = [1, 20, 3, 40, 5],     DType = INT32
+   * }</pre>
+   *
    * @param replacements column of replacement values
    * @return column with nulls replaced by corresponding row of replacements column
    */
@@ -549,6 +567,20 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     return new ColumnVector(replaceNullsColumn(getNativeView(), replacements.getNativeView()));
   }
 
+  /**
+   * Returns a ColumnVector with any null values replaced with the preceding or following
+   * non-null value based on the specified policy.
+   *
+   * Example:
+   * <pre>{@code
+   * // col    = [1, null, null, 4, 5], DType = INT32
+   * ColumnVector result = col.replaceNulls(ReplacePolicy.PRECEDING);
+   * // result = [1, 1, 1, 4, 5],       DType = INT32
+   * }</pre>
+   *
+   * @param policy whether to use preceding or following non-null values
+   * @return column with nulls replaced by non-null values based on policy
+   */
   public final ColumnVector replaceNulls(ReplacePolicy policy) {
     return new ColumnVector(replaceNullsPolicy(getNativeView(), policy.isPreceding));
   }
@@ -560,6 +592,16 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * otherwise the corresponding row from falseValues is selected.
    * Note that trueValues and falseValues vectors must be the same length as this vector,
    * and trueValues and falseValues must have the same data type.
+   *
+   * Example:
+   * <pre>{@code
+   * // condition   = [true, false, true, false], DType = BOOL8
+   * // trueValues  = [1, 2, 3, 4],               DType = INT32
+   * // falseValues = [10, 20, 30, 40],           DType = INT32
+   * ColumnVector result = condition.ifElse(trueValues, falseValues);
+   * // result      = [1, 20, 3, 40],             DType = INT32
+   * }</pre>
+   *
    * @param trueValues the values to select if a row in this column is true
    * @param falseValues the values to select if a row in this column is not true
    * @return the computed vector
@@ -579,7 +621,16 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * otherwise the value from falseValue is selected.
    * Note that trueValues must be the same length as this vector,
    * and trueValues and falseValue must have the same data type.
-   * Note that the trueValues vector and falseValue scalar must have the same data type.
+   *
+   * Example:
+   * <pre>{@code
+   * // condition  = [true, false, true, false], DType = BOOL8
+   * // trueValues = [1, 2, 3, 4],               DType = INT32
+   * // falseValue = 99,                         DType = INT32
+   * ColumnVector result = condition.ifElse(trueValues, falseValue);
+   * // result     = [1, 99, 3, 99],             DType = INT32
+   * }</pre>
+   *
    * @param trueValues the values to select if a row in this column is true
    * @param falseValue the value to select if a row in this column is not true
    * @return the computed vector
@@ -599,7 +650,16 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * otherwise the corresponding row from falseValues is selected.
    * Note that falseValues must be the same length as this vector,
    * and trueValue and falseValues must have the same data type.
-   * Note that the trueValue scalar and falseValues vector must have the same data type.
+   *
+   * Example:
+   * <pre>{@code
+   * // condition   = [true, false, true, false], DType = BOOL8
+   * // trueValue   = 99,                         DType = INT32
+   * // falseValues = [10, 20, 30, 40],           DType = INT32
+   * ColumnVector result = condition.ifElse(trueValue, falseValues);
+   * // result      = [99, 20, 99, 40],           DType = INT32
+   * }</pre>
+   *
    * @param trueValue the value to select if a row in this column is true
    * @param falseValues the values to select if a row in this column is not true
    * @return the computed vector
@@ -618,6 +678,16 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * If the boolean value in a row is true, the value from trueValue is selected
    * otherwise the value from falseValue is selected.
    * Note that the trueValue and falseValue scalars must have the same data type.
+   *
+   * Example:
+   * <pre>{@code
+   * // condition  = [true, false, true, false], DType = BOOL8
+   * // trueValue  = 1,                          DType = INT32
+   * // falseValue = 0,                          DType = INT32
+   * ColumnVector result = condition.ifElse(trueValue, falseValue);
+   * // result     = [1, 0, 1, 0],               DType = INT32
+   * }</pre>
+   *
    * @param trueValue the value to select if a row in this column is true
    * @param falseValue the value to select if a row in this column is not true
    * @return the computed vector
@@ -2579,6 +2649,13 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Copy the current column to a new column, each string or list of the output column will have
    * reverse order of characters or elements.
    *
+   * Example:
+   * <pre>{@code
+   * // col    = ["abc", "def", null], DType = STRING
+   * ColumnVector result = col.reverseStringsOrLists();
+   * // result = ["cba", "fed", null], DType = STRING
+   * }</pre>
+   *
    * @return A new column with lists or strings having reverse order.
    */
   public final ColumnVector reverseStringsOrLists() {
@@ -2589,6 +2666,15 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   /**
    * Convert a string to upper case.
+   *
+   * Example:
+   * <pre>{@code
+   * // col    = ["Hello", "World", null], DType = STRING
+   * ColumnVector result = col.upper();
+   * // result = ["HELLO", "WORLD", null], DType = STRING
+   * }</pre>
+   *
+   * @return A new column with strings converted to upper case.
    */
   public final ColumnVector upper() {
     assert type.equals(DType.STRING) : "A column of type string is required for .upper() operation";
@@ -2597,6 +2683,15 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   /**
    * Convert a string to lower case.
+   *
+   * Example:
+   * <pre>{@code
+   * // col    = ["Hello", "World", null], DType = STRING
+   * ColumnVector result = col.lower();
+   * // result = ["hello", "world", null], DType = STRING
+   * }</pre>
+   *
+   * @return A new column with strings converted to lower case.
    */
   public final ColumnVector lower() {
     assert type.equals(DType.STRING) : "A column of type string is required for .lower() operation";
@@ -2607,7 +2702,17 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Locates the starting index of the first instance of the given string in each row of a column.
    * 0 indexing, returns -1 if the substring is not found. Overloading stringLocate to support
    * default values for start (0) and end index.
+   *
+   * Example:
+   * <pre>{@code
+   * // col       = ["hello", "world", "foo"], DType = STRING
+   * // substring = "o",                       DType = STRING
+   * ColumnVector result = col.stringLocate(substring);
+   * // result    = [4, 1, 1],                 DType = INT32
+   * }</pre>
+   *
    * @param substring scalar containing the string to locate within each row.
+   * @return A new INT32 column with the index of the first occurrence, or -1 if not found.
    */
   public final ColumnVector stringLocate(Scalar substring) {
     return stringLocate(substring, 0);
@@ -2617,8 +2722,19 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Locates the starting index of the first instance of the given string in each row of a column.
    * 0 indexing, returns -1 if the substring is not found. Overloading stringLocate to support
    * default value for end index (-1, the end of each string).
+   *
+   * Example:
+   * <pre>{@code
+   * // col       = ["hello", "world", "foo"], DType = STRING
+   * // substring = "o",                       DType = STRING
+   * // start     = 2
+   * ColumnVector result = col.stringLocate(substring, start);
+   * // result    = [4, -1, -1],               DType = INT32
+   * }</pre>
+   *
    * @param substring scalar containing the string to locate within each row.
    * @param start character index to start the search from (inclusive).
+   * @return A new INT32 column with the index of the first occurrence, or -1 if not found.
    */
   public final ColumnVector stringLocate(Scalar substring, int start) {
     return stringLocate(substring, start, -1);
@@ -2626,11 +2742,22 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   /**
    * Locates the starting index of the first instance of the given string in each row of a column.
-   * 0 indexing, returns -1 if the substring is not found. Can be be configured to start or end
+   * 0 indexing, returns -1 if the substring is not found. Can be configured to start or end
    * the search mid string.
+   *
+   * Example:
+   * <pre>{@code
+   * // col       = ["hello", "world", "foo"], DType = STRING
+   * // substring = "o",                       DType = STRING
+   * // start     = 0, end = 3
+   * ColumnVector result = col.stringLocate(substring, start, end);
+   * // result    = [-1, 1, 1],                DType = INT32
+   * }</pre>
+   *
    * @param substring scalar containing the string scalar to locate within each row.
    * @param start character index to start the search from (inclusive).
    * @param end character index to end the search on (exclusive).
+   * @return A new INT32 column with the index of the first occurrence, or -1 if not found.
    */
   public final ColumnVector stringLocate(Scalar substring, int start, int end) {
     assert type.equals(DType.STRING) : "column type must be a String";
@@ -2648,6 +2775,16 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * rows in the output columns will be the same as the input column. Null entries are added for a
    * row where split results have been exhausted. Null input entries result in all nulls in the
    * corresponding rows of the output columns.
+   *
+   * Example:
+   * <pre>{@code
+   * // col = ["a-b-c", "d-e", "f"], DType = STRING
+   * Table result = col.stringSplit("-", -1, false);
+   * // result is a Table with 3 columns:
+   * //   col0 = ["a", "d", "f"],    DType = STRING
+   * //   col1 = ["b", "e", null],   DType = STRING
+   * //   col2 = ["c", null, null],  DType = STRING
+   * }</pre>
    *
    * @param pattern UTF-8 encoded string identifying the split pattern for each input string.
    * @param limit the maximum size of the list resulting from splitting each input string,
@@ -2672,6 +2809,17 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * are added for the rows where split results have been exhausted. Null input entries result in
    * all nulls in the corresponding rows of the output columns.
    *
+   * Example:
+   * <pre>{@code
+   * // col = ["a1b2c", "d3e", "f"], DType = STRING
+   * RegexProgram regexProg = new RegexProgram("\\d+", CaptureGroups.NON_CAPTURE);
+   * Table result = col.stringSplit(regexProg, -1);
+   * // result is a Table with 3 columns:
+   * //   col0 = ["a", "d", "f"],    DType = STRING
+   * //   col1 = ["b", "e", null],   DType = STRING
+   * //   col2 = ["c", null, null],  DType = STRING
+   * }</pre>
+   *
    * @param regexProg the regex program with UTF-8 encoded string identifying the split pattern
    *                  for each input string.
    * @param limit the maximum size of the list resulting from splitting each input string,
@@ -2693,6 +2841,16 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * row where split results have been exhausted. Null input entries result in all nulls in the
    * corresponding rows of the output columns.
    *
+   * Example:
+   * <pre>{@code
+   * // col = ["a-b-c", "d-e", "f"], DType = STRING
+   * Table result = col.stringSplit("-", false);
+   * // result is a Table with 3 columns:
+   * //   col0 = ["a", "d", "f"],    DType = STRING
+   * //   col1 = ["b", "e", null],   DType = STRING
+   * //   col2 = ["c", null, null],  DType = STRING
+   * }</pre>
+   *
    * @param pattern UTF-8 encoded string identifying the split pattern for each input string.
    * @param splitByRegex a boolean flag indicating whether the input strings will be split by a
    *                     regular expression pattern or just by a string literal delimiter.
@@ -2708,6 +2866,15 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * delimiter. The number of rows in the output columns will be the same as the input column.
    * Null entries are added for a row where split results have been exhausted. Null input entries
    * result in all nulls in the corresponding rows of the output columns.
+   *
+   * Example:
+   * <pre>{@code
+   * // col = ["a-b-c", "d-e", "f"], DType = STRING
+   * Table result = col.stringSplit("-", 2);
+   * // result is a Table with 2 columns (limited to 2 splits):
+   * //   col0 = ["a", "d", "f"],    DType = STRING
+   * //   col1 = ["b-c", "e", null], DType = STRING
+   * }</pre>
    *
    * @param delimiter UTF-8 encoded string identifying the split delimiter for each input string.
    * @param limit the maximum size of the list resulting from splitting each input string,
@@ -2728,6 +2895,16 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Null entries are added for a row where split results have been exhausted. Null input entries
    * result in all nulls in the corresponding rows of the output columns.
    *
+   * Example:
+   * <pre>{@code
+   * // col = ["a-b-c", "d-e", "f"], DType = STRING
+   * Table result = col.stringSplit("-");
+   * // result is a Table with 3 columns:
+   * //   col0 = ["a", "d", "f"], DType = STRING
+   * //   col1 = ["b", "e", null], DType = STRING
+   * //   col2 = ["c", null, null], DType = STRING
+   * }</pre>
+   *
    * @param delimiter UTF-8 encoded string identifying the split delimiter for each input string.
    * @return list of strings columns as a table.
    */
@@ -2741,6 +2918,17 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * are added for the rows where split results have been exhausted. Null input entries result in
    * all nulls in the corresponding rows of the output columns.
    *
+   * Example:
+   * <pre>{@code
+   * // col = ["a1b2c", "d3e", "f"], DType = STRING
+   * RegexProgram regexProg = new RegexProgram("\\d+", CaptureGroups.NON_CAPTURE);
+   * Table result = col.stringSplit(regexProg);
+   * // result is a Table with 3 columns:
+   * //   col0 = ["a", "d", "f"],    DType = STRING
+   * //   col1 = ["b", "e", null],   DType = STRING
+   * //   col2 = ["c", null, null],  DType = STRING
+   * }</pre>
+   *
    * @param regexProg the regex program with UTF-8 encoded string identifying the split pattern
    *                  for each input string.
    * @return list of strings columns as a table.
@@ -2752,6 +2940,13 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   /**
    * Returns a column that are lists of strings in which each list is made by splitting the
    * corresponding input string using the specified pattern.
+   *
+   * Example:
+   * <pre>{@code
+   * // col    = ["a-b-c", "d-e", "f"], DType = STRING
+   * ColumnVector result = col.stringSplitRecord("-", -1, false);
+   * // result = [["a", "b", "c"], ["d", "e"], ["f"]], DType = LIST of STRING
+   * }</pre>
    *
    * @param pattern UTF-8 encoded string identifying the split pattern for each input string.
    * @param limit the maximum size of the list resulting from splitting each input string,
@@ -2774,6 +2969,14 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Returns a column that are lists of strings in which each list is made by splitting the
    * corresponding input string using the specified regex program pattern.
    *
+   * Example:
+   * <pre>{@code
+   * // col = ["a1b2c", "d3e", "f"], DType = STRING
+   * RegexProgram regexProg = new RegexProgram("\\d+", CaptureGroups.NON_CAPTURE);
+   * ColumnVector result = col.stringSplitRecord(regexProg, -1);
+   * // result = [["a", "b", "c"], ["d", "e"], ["f"]], DType = LIST of STRING
+   * }</pre>
+   *
    * @param regexProg the regex program with UTF-8 encoded string identifying the split pattern
    *                  for each input string.
    * @param limit the maximum size of the list resulting from splitting each input string,
@@ -2794,6 +2997,13 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Returns a column that are lists of strings in which each list is made by splitting the
    * corresponding input string using the specified pattern.
    *
+   * Example:
+   * <pre>{@code
+   * // col    = ["a-b-c", "d-e", "f"], DType = STRING
+   * ColumnVector result = col.stringSplitRecord("-", false);
+   * // result = [["a", "b", "c"], ["d", "e"], ["f"]], DType = LIST of STRING
+   * }</pre>
+   *
    * @param pattern UTF-8 encoded string identifying the split pattern for each input string.
    * @param splitByRegex a boolean flag indicating whether the input strings will be split by a
    *                     regular expression pattern or just by a string literal delimiter.
@@ -2807,6 +3017,13 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   /**
    * Returns a column that are lists of strings in which each list is made by splitting the
    * corresponding input string using the specified string literal delimiter.
+   *
+   * Example:
+   * <pre>{@code
+   * // col    = ["a-b-c", "d-e", "f"], DType = STRING
+   * ColumnVector result = col.stringSplitRecord("-", 2);
+   * // result = [["a", "b-c"], ["d", "e"], ["f"]], DType = LIST of STRING
+   * }</pre>
    *
    * @param delimiter UTF-8 encoded string identifying the split delimiter for each input string.
    * @param limit the maximum size of the list resulting from splitting each input string,
@@ -2825,6 +3042,13 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Returns a column that are lists of strings in which each list is made by splitting the
    * corresponding input string using the specified string literal delimiter.
    *
+   * Example:
+   * <pre>{@code
+   * // col    = ["a-b-c", "d-e", "f"], DType = STRING
+   * ColumnVector result = col.stringSplitRecord("-");
+   * // result = [["a", "b", "c"], ["d", "e"], ["f"]], DType = LIST of STRING
+   * }</pre>
+   *
    * @param delimiter UTF-8 encoded string identifying the split delimiter for each input string.
    * @return a LIST column of string elements.
    */
@@ -2836,6 +3060,14 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Returns a column that are lists of strings in which each list is made by splitting the
    * corresponding input string using the specified regex program pattern.
    *
+   * Example:
+   * <pre>{@code
+   * // col = ["a1b2c", "d3e", "f"], DType = STRING
+   * RegexProgram regexProg = new RegexProgram("\\d+", CaptureGroups.NON_CAPTURE);
+   * ColumnVector result = col.stringSplitRecord(regexProg);
+   * // result = [["a", "b", "c"], ["d", "e"], ["f"]], DType = LIST of STRING
+   * }</pre>
+   *
    * @param regexProg the regex program with UTF-8 encoded string identifying the split pattern
    *                  for each input string.
    * @return a LIST column of string elements.
@@ -2846,9 +3078,17 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   /**
    * Returns a new strings column that contains substrings of the strings in the provided column.
-   * The character positions to retrieve in each string are `[start, <the string end>)`..
+   * The character positions to retrieve in each string are `[start, <the string end>)`.
+   *
+   * Example:
+   * <pre>{@code
+   * // col    = ["hello", "world", "test"], DType = STRING
+   * ColumnVector result = col.substring(2);
+   * // result = ["llo", "rld", "st"],       DType = STRING
+   * }</pre>
    *
    * @param start first character index to begin the substring(inclusive).
+   * @return A new strings column containing the substrings.
    */
   public final ColumnVector substring(int start) {
     assert type.equals(DType.STRING) : "column type must be a String";
@@ -2857,8 +3097,16 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   /**
    * Returns a new strings column that contains substrings of the strings in the provided column.
-   * 0-based indexing, If the stop position is past end of a string's length, then end of string is
+   * 0-based indexing. If the stop position is past end of a string's length, then end of string is
    * used as stop position for that string.
+   *
+   * Example:
+   * <pre>{@code
+   * // col    = ["hello", "world", "test"], DType = STRING
+   * ColumnVector result = col.substring(1, 4);
+   * // result = ["ell", "orl", "est"],      DType = STRING
+   * }</pre>
+   *
    * @param start first character index to begin the substring(inclusive).
    * @param end   last character index to stop the substring(exclusive)
    * @return A new java column vector containing the substrings.
@@ -2870,10 +3118,20 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   /**
    * Returns a new strings column that contains substrings of the strings in the provided column
-   * which uses unique ranges for each string
-   * @param start Vector containing start indices of each string
-   * @param end   Vector containing end indices of each string. -1 indicated to read until end of string.
-   * @return A new java column vector containing the substrings/
+   * which uses unique ranges for each string.
+   *
+   * Example:
+   * <pre>{@code
+   * // col    = ["hello", "world", "test"], DType = STRING
+   * // start  = [1, 0, 2],                  DType = INT32
+   * // end    = [4, 3, -1],                 DType = INT32
+   * ColumnVector result = col.substring(start, end);
+   * // result = ["ell", "wor", "st"],       DType = STRING
+   * }</pre>
+   *
+   * @param start Vector containing start indices of each string.
+   * @param end   Vector containing end indices of each string. -1 indicates to read until end of string.
+   * @return A new java column vector containing the substrings.
    */
   public final ColumnVector substring(ColumnView start, ColumnView end) {
     assert type.equals(DType.STRING) : "column type must be a String";
@@ -2887,8 +3145,17 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Given a lists column of strings (each row is a list of strings), concatenates the strings
    * within each row and returns a single strings column result. Each new string is created by
    * concatenating the strings from the same row (same list element) delimited by the separator
-   * provided. This version of the function relaces nulls with empty string and returns null
+   * provided. This version of the function replaces nulls with empty string and returns null
    * for empty list.
+   *
+   * Example:
+   * <pre>{@code
+   * // col    = [["a", "b", "c"], ["d", "e"], ["f"]], DType = LIST of STRING
+   * // sepCol = ["-", "+", "/"],                      DType = STRING
+   * ColumnVector result = col.stringConcatenateListElements(sepCol);
+   * // result = ["a-b-c", "d+e", "f"],                DType = STRING
+   * }</pre>
+   *
    * @param sepCol strings column that provides separators for concatenation.
    * @return A new java column vector containing the concatenated strings with separator between.
    */
@@ -2971,8 +3238,15 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    *  - A null input string will always result in a null output string regardless of the value of
    *    the <code>repeatTimes</code> parameter.
    *
+   * Example:
+   * <pre>{@code
+   * // col    = ["ab", "cd", null], DType = STRING
+   * ColumnVector result = col.repeatStrings(3);
+   * // result = ["ababab", "cdcdcd", null], DType = STRING
+   * }</pre>
+   *
    * @param repeatTimes The number of times each input string is repeated.
-   * @return A new java column vector containing repeated strings.
+   * @return A new column containing repeated strings.
    */
   public final ColumnVector repeatStrings(int repeatTimes) {
     assert type.equals(DType.STRING) : "column type must be String";
@@ -2989,6 +3263,14 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    *    will always result in a null output string.
    *  - If any value in the <code>repeatTimes</code> column is not a positive number and its
    *    corresponding input string is not null, the output string will be an empty string.
+   *
+   * Example:
+   * <pre>{@code
+   * // col         = ["ab", "cd", "ef"],  DType = STRING
+   * // repeatTimes = [2, 3, 1],           DType = INT32
+   * ColumnVector result = col.repeatStrings(repeatTimes);
+   * // result      = ["abab", "cdcdcd", "ef"], DType = STRING
+   * }</pre>
    *
    * @param repeatTimes The column containing numbers of times each input string is repeated.
    * @return A new java column vector containing repeated strings.
@@ -3008,8 +3290,17 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * For reference, https://tools.ietf.org/id/draft-goessner-dispatch-jsonpath-00.html
    * Note: Only implements the operators: $ . [] *
    *
+   * Example:
+   * <pre>{@code
+   * // col     = ["{\"a\": {\"b\": 1}}", "{\"a\": {\"b\": 2}}"], DType = STRING
+   * // path    = "$.a.b",                                        DType = STRING
+   * // options = GetJsonObjectOptions.builder().build()
+   * ColumnVector result = col.getJSONObject(path, options);
+   * // result  = ["1", "2"],                                     DType = STRING
+   * }</pre>
+   *
    * @param path The JSONPath string to be applied to each row
-   * @param path The GetJsonObjectOptions to control get_json_object behaviour
+   * @param options The GetJsonObjectOptions to control get_json_object behaviour
    * @return new strings ColumnVector containing the retrieved json object strings
    */
   public final ColumnVector getJSONObject(Scalar path, GetJsonObjectOptions options) {
@@ -3025,6 +3316,14 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    *
    * For reference, https://tools.ietf.org/id/draft-goessner-dispatch-jsonpath-00.html
    * Note: Only implements the operators: $ . [] *
+   *
+   * Example:
+   * <pre>{@code
+   * // col    = ["{\"name\": \"Alice\"}", "{\"name\": \"Bob\"}"], DType = STRING
+   * // path   = "$.name",                                         DType = STRING
+   * ColumnVector result = col.getJSONObject(path);
+   * // result = ["\"Alice\"", "\"Bob\""],                         DType = STRING
+   * }</pre>
    *
    * @param path The JSONPath string to be applied to each row
    * @return new strings ColumnVector containing the retrieved json object strings
@@ -3043,6 +3342,15 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Null string entries will return null output string entries.
    * target Scalar should be string and should not be empty or null.
    *
+   * Example:
+   * <pre>{@code
+   * // col     = ["hello", "world", null], DType = STRING
+   * // target  = "o",                      DType = STRING
+   * // replace = "0",                      DType = STRING
+   * ColumnVector result = col.stringReplace(target, replace);
+   * // result  = ["hell0", "w0rld", null], DType = STRING
+   * }</pre>
+   *
    * @param target String to search for within each string.
    * @param replace Replacement string if target is found.
    * @return A new java column vector containing replaced strings
@@ -3059,7 +3367,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   }
 
   /**
-   * Returns a new strings column where target strings with each string are replaced with
+   * Returns a new strings column where target strings within each string are replaced with
    * corresponding replacement strings. For each string in the column, the list of targets
    * is searched within that string. If a target string is found, it is replaced by the
    * corresponding entry in the repls column. All occurrences found in each string are replaced.
@@ -3067,16 +3375,13 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * target substrings will be replaced by that single string.
    *
    * Example:
-   * cv = ["hello", "goodbye"]
-   * targets = ["e","o"]
-   * repls = ["EE","OO"]
-   * r1 = cv.stringReplace(targets, repls)
-   * r1 is now ["hEEllO", "gOOOOdbyEE"]
-   *
-   * targets = ["e", "o"]
-   * repls = ["_"]
-   * r2 = cv.stringReplace(targets, repls)
-   * r2 is now ["h_ll_", "g__dby_"]
+   * <pre>{@code
+   * // col     = ["hello", "goodbye"],  DType = STRING
+   * // targets = ["e", "o"],            DType = STRING
+   * // repls   = ["EE", "OO"],          DType = STRING
+   * ColumnVector result = col.stringReplace(targets, repls);
+   * // result  = ["hEEllOO", "gOOOOdbyEE"], DType = STRING
+   * }</pre>
    *
    * @param targets Strings to search for in each string.
    * @param repls Corresponding replacement strings for target strings.
@@ -3096,6 +3401,14 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   /**
    * For each string, replaces any character sequence matching the given pattern using the
    * replacement string scalar.
+   *
+   * Example:
+   * <pre>{@code
+   * // col  = ["a1b2c", "d3e4f", null], DType = STRING
+   * // repl = "X",                      DType = STRING
+   * ColumnVector result = col.replaceRegex("\\d+", repl);
+   * // result = ["aXbXc", "dXeXf", null], DType = STRING
+   * }</pre>
    *
    * @param pattern The regular expression pattern to search within each string.
    * @param repl The string scalar to replace for each pattern match.
