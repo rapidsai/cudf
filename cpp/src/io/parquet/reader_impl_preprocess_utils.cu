@@ -191,6 +191,8 @@ void generate_depth_remappings(
       return rmm::device_buffer(
         cudf::util::round_up_safe(total_size, cudf::io::detail::BUFFER_PADDING_MULTIPLE), stream);
     });
+  // device_read_async is not guaranteed to follow stream-ordering (see datasource API docs).
+  stream.synchronize();
 
   // Issue reads, coalescing adjacent chunks
   std::vector<std::future<size_t>> read_tasks;
