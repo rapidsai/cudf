@@ -4800,7 +4800,6 @@ NODEIDS_THAT_FAIL_WITH_CUDF_PANDAS = {
     "tests/indexing/test_partial.py::TestEmptyFrameSetitemExpansion::test_partial_set_empty_frame3",
     "tests/indexing/test_partial.py::TestEmptyFrameSetitemExpansion::test_partial_set_empty_frame5",
     "tests/indexing/test_partial.py::TestPartialSetting::test_loc_with_list_of_strings_representing_datetimes[DataFrame-idx1-labels1-expected_idx1]",
-    "tests/indexing/test_partial.py::TestPartialSetting::test_partial_setting",
     "tests/indexing/test_partial.py::TestPartialSetting::test_partial_setting_frame",
     "tests/indexing/test_partial.py::TestPartialSetting::test_partial_setting_mixed_dtype",
     "tests/indexing/test_scalar.py::TestMultiIndexScalar::test_multiindex_at_get_one_level",
