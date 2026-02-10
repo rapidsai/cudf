@@ -871,11 +871,10 @@ class DatetimeTZColumn(DatetimeColumn):
                 local_time.plc_column,
                 field,
             )
-            # extract_datetime_component returns INT16, cast to int32 for
-            # pandas compatibility
             result = ColumnBase.create(
                 plc_result, dtype_from_pylibcudf_column(plc_result)
             )
+            # cast to int32 for pandas compatibility
             if result.dtype == np.dtype("int16"):
                 result = result.astype(np.dtype("int32"))
             return result

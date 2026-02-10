@@ -811,14 +811,15 @@ class NumericalColumn(NumericalBaseColumn):
                     replacement,
                     dtype=self.dtype if len(replacement) <= 0 else None,
                 )
-        common_type = find_common_type(
-            (to_replace_col.dtype, replacement_col.dtype, self.dtype)
-        )
         if len(replacement_col) == 1 and len(to_replace_col) > 1:
             replacement_col = replacement_col.repeat(len(to_replace_col))
         elif len(replacement_col) == 1 and len(to_replace_col) == 0:
             return self.copy()
-        replaced = cast(Self, self.astype(common_type))
+
+        common_type = find_common_type(
+            (to_replace_col.dtype, replacement_col.dtype, self.dtype)
+        )
+        replaced = cast("Self", self.astype(common_type))
         old_col = to_replace_col.astype(common_type)
         new_col = replacement_col.astype(common_type)
 
@@ -838,14 +839,12 @@ class NumericalColumn(NumericalBaseColumn):
         if old_plc.null_count() == 1:
             # Find the replacement value for null
             old_isnull_plc = plc.unary.is_null(old_plc)
-            filtered_table = plc.stream_compaction.apply_boolean_mask(
+            (filtered_column,) = plc.stream_compaction.apply_boolean_mask(
                 plc.Table([new_plc]), old_isnull_plc
-            )
+            ).columns()
             # We know there's exactly 1 null, so filtered result has 1 row
             replacement_for_null = (
-                plc.copying.get_element(filtered_table.columns()[0], 0)
-                .to_arrow()
-                .as_py()
+                plc.copying.get_element(filtered_column, 0).to_arrow().as_py()
             )
             replaced = replaced.fillna(replacement_for_null)
 
@@ -858,17 +857,12 @@ class NumericalColumn(NumericalBaseColumn):
 
         # Perform replace operation directly at plc level
         with replaced.access(mode="read", scope="internal"):
-            return cast(
-                Self,
-                ColumnBase.create(
-                    plc.replace.find_and_replace_all(
-                        replaced.plc_column,
-                        old_plc,
-                        new_plc,
-                    ),
-                    common_type,
-                ),
+            result_plc = plc.replace.find_and_replace_all(
+                replaced.plc_column,
+                old_plc,
+                new_plc,
             )
+        return cast("Self", ColumnBase.create(result_plc, common_type))
 
     def _validate_fillna_value(
         self, fill_value: ScalarLike | ColumnLike
