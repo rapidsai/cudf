@@ -106,8 +106,8 @@ TEST_F(HybridScanTest, DictionaryPageFiltering)
   auto datasource_ref      = std::ref(*datasource);
   auto const footer_buffer = cudf::io::parquet::fetch_footer_to_host(datasource_ref);
 
-  auto const reader = std::make_unique<cudf::io::parquet::experimental::hybrid_scan_reader>(*footer_buffer,
-    in_opts);
+  auto const reader =
+    std::make_unique<cudf::io::parquet::experimental::hybrid_scan_reader>(*footer_buffer, in_opts);
 
   auto const page_index_byte_range = reader->page_index_byte_range();
   auto const page_index_buffer =
