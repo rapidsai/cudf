@@ -87,7 +87,7 @@ OutputIterator copy_if(InputIterator begin,
   auto const num_items = cuda::std::distance(begin, end);
 
   auto num_selected =
-    cudf::detail::device_scalar<std::size_t>(stream, cudf::get_current_device_resource_ref());
+    cudf::detail::device_scalar<cuda::std::size_t>(stream, cudf::get_current_device_resource_ref());
 
   auto temp_storage_bytes = std::size_t{0};
   CUDF_CUDA_TRY(cub::DeviceSelect::FlaggedIf(nullptr,
