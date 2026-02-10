@@ -31,6 +31,7 @@ using uint16_t = unsigned short;
 using uint32_t = unsigned int;
 using uint64_t = unsigned long long;
 
+using size_t    = unsigned long;
 using intptr_t  = int64_t;
 using uintptr_t = uint64_t;
 
@@ -270,6 +271,153 @@ struct CUDF_LTO_ALIAS optional {
 template <typename T>
 optional(T) -> optional<T>;
 
+template <typename T>
+struct [[nodiscard]] device_span {
+ private:
+  T* __data     = nullptr;
+  size_t __size = 0;
+};
+
+template <typename T>
+struct [[nodiscard]] device_optional_span {
+ private:
+  T* __data                 = nullptr;
+  size_t __size             = 0;
+  bitmask_type* __null_mask = nullptr;
+
+ public:
+  __device__ T* data() const { return __data; }
+
+  __device__ size_t size() const { return __size; }
+
+  __device__ bool empty() const { return __size == 0; }
+
+  __device__ T& operator[](size_t pos) const { return __data[pos]; }
+
+  __device__ T* begin() const { return __data; }
+
+  __device__ T* end() const { return __data + __size; }
+
+  __device__ device_optional_span<T const> as_const() const
+  {
+    return device_optional_span<T const>{__data, __size, __null_mask};
+  }
+
+  __device__ bool nullable() const { return __null_mask != nullptr; }
+
+  __device__ static constexpr bool bit_is_set(bitmask_type const* bitmask, size_t bit_index)
+  {
+    constexpr auto bits_per_word = sizeof(bitmask_type) * 8;
+    return bitmask[bit_index / bits_per_word] & (bitmask_type{1} << (bit_index % bits_per_word));
+  }
+
+  [[nodiscard]] __device__ bool is_valid_nocheck(size_t element_index) const
+  {
+    return bit_is_set(__null_mask, element_index);
+  }
+
+  __device__ bool is_valid(size_t element_index) const
+  {
+    return not nullable() or is_valid_nocheck(element_index);
+  }
+
+  __device__ bool is_null(size_t element_index) const { return !is_valid(element_index); }
+
+  __device__ T& element(size_t idx) const { return __data[idx]; }
+
+  __device__ optional<T> nullable_element(size_t idx) const;
+
+  __device__ void assign(size_t idx, T value) const { __data[idx] = value; }
+};
+
+#define FOREACH_CUDF_LTO_COLUMN_HEAD_TYPE \
+  DO_IT(bool)                             \
+  DO_IT(int8_t)                           \
+  DO_IT(int16_t)                          \
+  DO_IT(int32_t)                          \
+  DO_IT(int64_t)                          \
+  DO_IT(uint8_t)                          \
+  DO_IT(uint16_t)                         \
+  DO_IT(uint32_t)                         \
+  DO_IT(uint64_t)                         \
+  DO_IT(float32_t)                        \
+  DO_IT(float64_t)                        \
+  DO_IT(timestamp_D)                      \
+  DO_IT(timestamp_h)                      \
+  DO_IT(timestamp_m)                      \
+  DO_IT(timestamp_s)                      \
+  DO_IT(timestamp_ms)                     \
+  DO_IT(timestamp_us)                     \
+  DO_IT(timestamp_ns)                     \
+  DO_IT(duration_D)                       \
+  DO_IT(duration_h)                       \
+  DO_IT(duration_m)                       \
+  DO_IT(duration_s)                       \
+  DO_IT(duration_ms)                      \
+  DO_IT(duration_us)                      \
+  DO_IT(duration_ns)
+
+#define FOREACH_CUDF_LTO_COLUMN_ELEMENT_TYPE \
+  DO_IT(bool)                                \
+  DO_IT(int8_t)                              \
+  DO_IT(int16_t)                             \
+  DO_IT(int32_t)                             \
+  DO_IT(int64_t)                             \
+  DO_IT(uint8_t)                             \
+  DO_IT(uint16_t)                            \
+  DO_IT(uint32_t)                            \
+  DO_IT(uint64_t)                            \
+  DO_IT(decimal32)                           \
+  DO_IT(decimal64)                           \
+  DO_IT(decimal128)                          \
+  DO_IT(float32_t)                           \
+  DO_IT(float64_t)                           \
+  DO_IT(string_view)                         \
+  DO_IT(timestamp_D)                         \
+  DO_IT(timestamp_h)                         \
+  DO_IT(timestamp_m)                         \
+  DO_IT(timestamp_s)                         \
+  DO_IT(timestamp_ms)                        \
+  DO_IT(timestamp_us)                        \
+  DO_IT(timestamp_ns)                        \
+  DO_IT(duration_D)                          \
+  DO_IT(duration_h)                          \
+  DO_IT(duration_m)                          \
+  DO_IT(duration_s)                          \
+  DO_IT(duration_ms)                         \
+  DO_IT(duration_us)                         \
+  DO_IT(duration_ns)
+
+#define FOREACH_CUDF_LTO_COLUMN_ASSIGN_TYPE \
+  DO_IT(bool)                               \
+  DO_IT(int8_t)                             \
+  DO_IT(int16_t)                            \
+  DO_IT(int32_t)                            \
+  DO_IT(int64_t)                            \
+  DO_IT(uint8_t)                            \
+  DO_IT(uint16_t)                           \
+  DO_IT(uint32_t)                           \
+  DO_IT(uint64_t)                           \
+  DO_IT(decimal32)                          \
+  DO_IT(decimal64)                          \
+  DO_IT(decimal128)                         \
+  DO_IT(float32_t)                          \
+  DO_IT(float64_t)                          \
+  DO_IT(timestamp_D)                        \
+  DO_IT(timestamp_h)                        \
+  DO_IT(timestamp_m)                        \
+  DO_IT(timestamp_s)                        \
+  DO_IT(timestamp_ms)                       \
+  DO_IT(timestamp_us)                       \
+  DO_IT(timestamp_ns)                       \
+  DO_IT(duration_D)                         \
+  DO_IT(duration_h)                         \
+  DO_IT(duration_m)                         \
+  DO_IT(duration_s)                         \
+  DO_IT(duration_ms)                        \
+  DO_IT(duration_us)                        \
+  DO_IT(duration_ns)
+
 struct alignas(16) CUDF_LTO_ALIAS column_device_view_core {
  private:
   data_type __type                      = {};
@@ -305,74 +453,33 @@ struct alignas(16) CUDF_LTO_ALIAS column_device_view_core {
   template <typename T>
   __device__ T element(size_type idx) const;
 
+  template <typename T>
+  __device__ optional<T> nullable_element(size_type idx) const;
+
   __device__ size_type num_child_columns() const;
 };
 
-#define CUDF_LTO_DECL(Type) \
+#define DO_IT(Type) \
   extern template __device__ Type const* column_device_view_core::head<Type>() const;
 
-CUDF_LTO_DECL(bool)
-CUDF_LTO_DECL(int8_t)
-CUDF_LTO_DECL(int16_t)
-CUDF_LTO_DECL(int32_t)
-CUDF_LTO_DECL(int64_t)
-CUDF_LTO_DECL(uint8_t)
-CUDF_LTO_DECL(uint16_t)
-CUDF_LTO_DECL(uint32_t)
-CUDF_LTO_DECL(uint64_t)
-CUDF_LTO_DECL(float32_t)
-CUDF_LTO_DECL(float64_t)
-CUDF_LTO_DECL(timestamp_D)
-CUDF_LTO_DECL(timestamp_h)
-CUDF_LTO_DECL(timestamp_m)
-CUDF_LTO_DECL(timestamp_s)
-CUDF_LTO_DECL(timestamp_ms)
-CUDF_LTO_DECL(timestamp_us)
-CUDF_LTO_DECL(timestamp_ns)
-CUDF_LTO_DECL(duration_D)
-CUDF_LTO_DECL(duration_h)
-CUDF_LTO_DECL(duration_m)
-CUDF_LTO_DECL(duration_s)
-CUDF_LTO_DECL(duration_ms)
-CUDF_LTO_DECL(duration_us)
-CUDF_LTO_DECL(duration_ns)
+FOREACH_CUDF_LTO_COLUMN_HEAD_TYPE
 
-#undef CUDF_LTO_DECL
+#undef DO_IT
 
-#define CUDF_LTO_DECL(Type) \
+#define DO_IT(Type) \
   extern template __device__ Type column_device_view_core::element<Type>(size_type idx) const;
 
-CUDF_LTO_DECL(bool)
-CUDF_LTO_DECL(int8_t)
-CUDF_LTO_DECL(int16_t)
-CUDF_LTO_DECL(int32_t)
-CUDF_LTO_DECL(int64_t)
-CUDF_LTO_DECL(uint8_t)
-CUDF_LTO_DECL(uint16_t)
-CUDF_LTO_DECL(uint32_t)
-CUDF_LTO_DECL(uint64_t)
-CUDF_LTO_DECL(decimal32)
-CUDF_LTO_DECL(decimal64)
-CUDF_LTO_DECL(decimal128)
-CUDF_LTO_DECL(float32_t)
-CUDF_LTO_DECL(float64_t)
-CUDF_LTO_DECL(string_view)
-CUDF_LTO_DECL(timestamp_D)
-CUDF_LTO_DECL(timestamp_h)
-CUDF_LTO_DECL(timestamp_m)
-CUDF_LTO_DECL(timestamp_s)
-CUDF_LTO_DECL(timestamp_ms)
-CUDF_LTO_DECL(timestamp_us)
-CUDF_LTO_DECL(timestamp_ns)
-CUDF_LTO_DECL(duration_D)
-CUDF_LTO_DECL(duration_h)
-CUDF_LTO_DECL(duration_m)
-CUDF_LTO_DECL(duration_s)
-CUDF_LTO_DECL(duration_ms)
-CUDF_LTO_DECL(duration_us)
-CUDF_LTO_DECL(duration_ns)
+FOREACH_CUDF_LTO_COLUMN_ELEMENT_TYPE
 
-#undef CUDF_LTO_DECL
+#undef DO_IT
+
+#define DO_IT(Type)                                                                          \
+  extern template __device__ optional<Type> column_device_view_core::nullable_element<Type>( \
+    size_type idx) const;
+
+FOREACH_CUDF_LTO_COLUMN_ELEMENT_TYPE
+
+#undef DO_IT
 
 struct alignas(16) CUDF_LTO_ALIAS mutable_column_device_view_core {
  private:
@@ -408,74 +515,44 @@ struct alignas(16) CUDF_LTO_ALIAS mutable_column_device_view_core {
 
   template <typename T>
   __device__ T element(size_type idx) const;
+
+  template <typename T>
+  __device__ optional<T> nullable_element(size_type idx) const;
+
+  template <typename T>
+  __device__ void assign(size_type idx, T value) const;
 };
 
-#define CUDF_LTO_DECL(Type) \
+#define DO_IT(Type) \
   extern template __device__ Type* mutable_column_device_view_core::head<Type>() const;
 
-CUDF_LTO_DECL(bool)
-CUDF_LTO_DECL(int8_t)
-CUDF_LTO_DECL(int16_t)
-CUDF_LTO_DECL(int32_t)
-CUDF_LTO_DECL(int64_t)
-CUDF_LTO_DECL(uint8_t)
-CUDF_LTO_DECL(uint16_t)
-CUDF_LTO_DECL(uint32_t)
-CUDF_LTO_DECL(uint64_t)
-CUDF_LTO_DECL(float32_t)
-CUDF_LTO_DECL(float64_t)
-CUDF_LTO_DECL(timestamp_D)
-CUDF_LTO_DECL(timestamp_h)
-CUDF_LTO_DECL(timestamp_m)
-CUDF_LTO_DECL(timestamp_s)
-CUDF_LTO_DECL(timestamp_ms)
-CUDF_LTO_DECL(timestamp_us)
-CUDF_LTO_DECL(timestamp_ns)
-CUDF_LTO_DECL(duration_D)
-CUDF_LTO_DECL(duration_h)
-CUDF_LTO_DECL(duration_m)
-CUDF_LTO_DECL(duration_s)
-CUDF_LTO_DECL(duration_ms)
-CUDF_LTO_DECL(duration_us)
-CUDF_LTO_DECL(duration_ns)
+FOREACH_CUDF_LTO_COLUMN_HEAD_TYPE
 
-#undef CUDF_LTO_DECL
+#undef DO_IT
 
-#define CUDF_LTO_DECL(Type)                                                                     \
+#define DO_IT(Type)                                                                             \
   extern template __device__ Type mutable_column_device_view_core::element<Type>(size_type idx) \
     const;
 
-CUDF_LTO_DECL(bool)
-CUDF_LTO_DECL(int8_t)
-CUDF_LTO_DECL(int16_t)
-CUDF_LTO_DECL(int32_t)
-CUDF_LTO_DECL(int64_t)
-CUDF_LTO_DECL(uint8_t)
-CUDF_LTO_DECL(uint16_t)
-CUDF_LTO_DECL(uint32_t)
-CUDF_LTO_DECL(uint64_t)
-CUDF_LTO_DECL(decimal32)
-CUDF_LTO_DECL(decimal64)
-CUDF_LTO_DECL(decimal128)
-CUDF_LTO_DECL(float32_t)
-CUDF_LTO_DECL(float64_t)
-CUDF_LTO_DECL(string_view)
-CUDF_LTO_DECL(timestamp_D)
-CUDF_LTO_DECL(timestamp_h)
-CUDF_LTO_DECL(timestamp_m)
-CUDF_LTO_DECL(timestamp_s)
-CUDF_LTO_DECL(timestamp_ms)
-CUDF_LTO_DECL(timestamp_us)
-CUDF_LTO_DECL(timestamp_ns)
-CUDF_LTO_DECL(duration_D)
-CUDF_LTO_DECL(duration_h)
-CUDF_LTO_DECL(duration_m)
-CUDF_LTO_DECL(duration_s)
-CUDF_LTO_DECL(duration_ms)
-CUDF_LTO_DECL(duration_us)
-CUDF_LTO_DECL(duration_ns)
+FOREACH_CUDF_LTO_COLUMN_ELEMENT_TYPE
 
-#undef CUDF_LTO_DECL
+#undef DO_IT
+
+#define DO_IT(Type)                         \
+  extern template __device__ optional<Type> \
+  mutable_column_device_view_core::nullable_element<Type>(size_type idx) const;
+
+FOREACH_CUDF_LTO_COLUMN_ELEMENT_TYPE
+
+#undef DO_IT
+
+#define DO_IT(Type)                                                                            \
+  extern template __device__ void mutable_column_device_view_core::assign<Type>(size_type idx, \
+                                                                                Type value) const;
+
+FOREACH_CUDF_LTO_COLUMN_ASSIGN_TYPE
+
+#undef DO_IT
 
 }  // namespace lto
 }  // namespace CUDF_LTO_EXPORT cudf

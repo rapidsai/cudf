@@ -127,36 +127,11 @@ __device__ T const* column_device_view_core::head() const
   return lto::lower(lto::lift(this)->head<lto::lifted_type_of<T>>());
 }
 
-#define CUDF_LTO_INST(Type) \
-  template __device__ Type const* column_device_view_core::head<Type>() const
+#define DO_IT(Type) template __device__ Type const* column_device_view_core::head<Type>() const
 
-CUDF_LTO_INST(bool);
-CUDF_LTO_INST(int8_t);
-CUDF_LTO_INST(int16_t);
-CUDF_LTO_INST(int32_t);
-CUDF_LTO_INST(int64_t);
-CUDF_LTO_INST(uint8_t);
-CUDF_LTO_INST(uint16_t);
-CUDF_LTO_INST(uint32_t);
-CUDF_LTO_INST(uint64_t);
-CUDF_LTO_INST(float32_t);
-CUDF_LTO_INST(float64_t);
-CUDF_LTO_INST(timestamp_D);
-CUDF_LTO_INST(timestamp_h);
-CUDF_LTO_INST(timestamp_m);
-CUDF_LTO_INST(timestamp_s);
-CUDF_LTO_INST(timestamp_ms);
-CUDF_LTO_INST(timestamp_us);
-CUDF_LTO_INST(timestamp_ns);
-CUDF_LTO_INST(duration_D);
-CUDF_LTO_INST(duration_h);
-CUDF_LTO_INST(duration_m);
-CUDF_LTO_INST(duration_s);
-CUDF_LTO_INST(duration_ms);
-CUDF_LTO_INST(duration_us);
-CUDF_LTO_INST(duration_ns);
+FOREACH_CUDF_LTO_COLUMN_HEAD_TYPE
 
-#undef CUDF_LTO_INST
+#undef DO_IT
 
 __device__ size_type column_device_view_core::size() const { return lto::lift(this)->size(); }
 
@@ -201,40 +176,27 @@ __device__ T column_device_view_core::element(size_type index) const
   return *lto::lower(&ret);
 }
 
-#define CUDF_LTO_INST(Type) \
+#define DO_IT(Type) \
   template __device__ Type column_device_view_core::element<Type>(size_type idx) const
 
-CUDF_LTO_INST(bool);
-CUDF_LTO_INST(int8_t);
-CUDF_LTO_INST(int16_t);
-CUDF_LTO_INST(int32_t);
-CUDF_LTO_INST(int64_t);
-CUDF_LTO_INST(uint8_t);
-CUDF_LTO_INST(uint16_t);
-CUDF_LTO_INST(uint32_t);
-CUDF_LTO_INST(uint64_t);
-CUDF_LTO_INST(decimal32);
-CUDF_LTO_INST(decimal64);
-CUDF_LTO_INST(decimal128);
-CUDF_LTO_INST(float32_t);
-CUDF_LTO_INST(float64_t);
-CUDF_LTO_INST(string_view);
-CUDF_LTO_INST(timestamp_D);
-CUDF_LTO_INST(timestamp_h);
-CUDF_LTO_INST(timestamp_m);
-CUDF_LTO_INST(timestamp_s);
-CUDF_LTO_INST(timestamp_ms);
-CUDF_LTO_INST(timestamp_us);
-CUDF_LTO_INST(timestamp_ns);
-CUDF_LTO_INST(duration_D);
-CUDF_LTO_INST(duration_h);
-CUDF_LTO_INST(duration_m);
-CUDF_LTO_INST(duration_s);
-CUDF_LTO_INST(duration_ms);
-CUDF_LTO_INST(duration_us);
-CUDF_LTO_INST(duration_ns);
+FOREACH_CUDF_LTO_COLUMN_ELEMENT_TYPE
 
-#undef CUDF_LTO_INST
+#undef DO_IT
+
+template <typename T>
+__device__ optional<T> column_device_view_core::nullable_element(size_type index) const
+{
+  auto ret = lto::lift(this)->nullable_element<lto::lifted_type_of<T>>(index);
+  return *lto::lower(&ret);
+}
+
+#define DO_IT(Type)                                                                   \
+  template __device__ optional<Type> column_device_view_core::nullable_element<Type>( \
+    size_type idx) const;
+
+FOREACH_CUDF_LTO_COLUMN_ELEMENT_TYPE
+
+#undef DO_IT
 
 __device__ size_type column_device_view_core::num_child_columns() const
 {
@@ -247,36 +209,11 @@ __device__ T* mutable_column_device_view_core::head() const
   return lto::lower(lto::lift(this)->head<lto::lifted_type_of<T>>());
 }
 
-#define CUDF_LTO_INST(Type) \
-  template __device__ Type* mutable_column_device_view_core::head<Type>() const
+#define DO_IT(Type) template __device__ Type* mutable_column_device_view_core::head<Type>() const
 
-CUDF_LTO_INST(bool);
-CUDF_LTO_INST(int8_t);
-CUDF_LTO_INST(int16_t);
-CUDF_LTO_INST(int32_t);
-CUDF_LTO_INST(int64_t);
-CUDF_LTO_INST(uint8_t);
-CUDF_LTO_INST(uint16_t);
-CUDF_LTO_INST(uint32_t);
-CUDF_LTO_INST(uint64_t);
-CUDF_LTO_INST(float32_t);
-CUDF_LTO_INST(float64_t);
-CUDF_LTO_INST(timestamp_D);
-CUDF_LTO_INST(timestamp_h);
-CUDF_LTO_INST(timestamp_m);
-CUDF_LTO_INST(timestamp_s);
-CUDF_LTO_INST(timestamp_ms);
-CUDF_LTO_INST(timestamp_us);
-CUDF_LTO_INST(timestamp_ns);
-CUDF_LTO_INST(duration_D);
-CUDF_LTO_INST(duration_h);
-CUDF_LTO_INST(duration_m);
-CUDF_LTO_INST(duration_s);
-CUDF_LTO_INST(duration_ms);
-CUDF_LTO_INST(duration_us);
-CUDF_LTO_INST(duration_ns);
+FOREACH_CUDF_LTO_COLUMN_HEAD_TYPE
 
-#undef CUDF_LTO_INST
+#undef DO_IT
 
 __device__ size_type mutable_column_device_view_core::size() const
 {
@@ -330,36 +267,35 @@ __device__ T mutable_column_device_view_core::element(size_type index) const
   return *lto::lower(&ret);
 }
 
-#define CUDF_LTO_INST(Type) \
+#define DO_IT(Type) \
   template __device__ Type mutable_column_device_view_core::element<Type>(size_type idx) const
 
-CUDF_LTO_INST(bool);
-CUDF_LTO_INST(int8_t);
-CUDF_LTO_INST(int16_t);
-CUDF_LTO_INST(int32_t);
-CUDF_LTO_INST(int64_t);
-CUDF_LTO_INST(uint8_t);
-CUDF_LTO_INST(uint16_t);
-CUDF_LTO_INST(uint32_t);
-CUDF_LTO_INST(uint64_t);
-CUDF_LTO_INST(float32_t);
-CUDF_LTO_INST(float64_t);
-CUDF_LTO_INST(timestamp_D);
-CUDF_LTO_INST(timestamp_h);
-CUDF_LTO_INST(timestamp_m);
-CUDF_LTO_INST(timestamp_s);
-CUDF_LTO_INST(timestamp_ms);
-CUDF_LTO_INST(timestamp_us);
-CUDF_LTO_INST(timestamp_ns);
-CUDF_LTO_INST(duration_D);
-CUDF_LTO_INST(duration_h);
-CUDF_LTO_INST(duration_m);
-CUDF_LTO_INST(duration_s);
-CUDF_LTO_INST(duration_ms);
-CUDF_LTO_INST(duration_us);
-CUDF_LTO_INST(duration_ns);
+FOREACH_CUDF_LTO_COLUMN_ELEMENT_TYPE
 
-#undef CUDF_LTO_INST
+#undef DO_IT
+
+template <typename T>
+__device__ optional<T> mutable_column_device_view_core::nullable_element(size_type index) const
+{
+  auto ret = lto::lift(this)->nullable_element<lto::lifted_type_of<T>>(index);
+  return *lto::lower(&ret);
+}
+
+#define DO_IT(Type)                                                                           \
+  template __device__ optional<Type> mutable_column_device_view_core::nullable_element<Type>( \
+    size_type idx) const;
+
+FOREACH_CUDF_LTO_COLUMN_ELEMENT_TYPE
+
+#undef DO_IT
+
+#define DO_IT(Type)                                                                     \
+  template __device__ void mutable_column_device_view_core::assign<Type>(size_type idx, \
+                                                                         Type value) const;
+
+FOREACH_CUDF_LTO_COLUMN_HEAD_TYPE
+
+#undef DO_IT
 
 }  // namespace lto
 }  // namespace CUDF_LTO_EXPORT cudf
