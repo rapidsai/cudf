@@ -22,9 +22,11 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/functional>
 #include <cuda/std/iterator>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/sequence.h>
+#include <thrust/tabulate.h>
 
 #include <curand.h>
 #include <curand_kernel.h>
@@ -178,15 +180,11 @@ std::pair<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::table>> generate_i
 
   auto build_table_gather_map = cudf::make_numeric_column(
     cudf::data_type{cudf::type_id::INT32}, build_table_numrows, cudf::mask_state::ALL_VALID);
-  init_build_tbl<cudf::size_type, cudf::size_type>
-    <<<num_sms * num_blocks_init_build_tbl, BLOCK_SIZE, 0, cudf::get_default_stream().value()>>>(
-      build_table_gather_map->mutable_view().data<cudf::size_type>(),
-      build_table_numrows,
-      multiplicity,
-      devStates.data(),
-      num_states);
-
-  CUDF_CHECK_CUDA(0);
+  thrust::tabulate(rmm::exec_policy(cudf::get_default_stream()),
+                   build_table_gather_map->mutable_view().begin<cudf::size_type>(),
+                   build_table_gather_map->mutable_view().end<cudf::size_type>(),
+                   cuda::proclaim_return_type<cudf::size_type>(
+                     [multiplicity] __device__(cudf::size_type idx) { return idx / multiplicity; }));
 
   auto const rand_max         = build_table_numrows;
   auto probe_table_gather_map = cudf::make_numeric_column(
