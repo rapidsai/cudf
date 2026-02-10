@@ -43,6 +43,7 @@ from cudf_polars.experimental.rapidsmpf.utils import (
     send_metadata,
     shutdown_on_error,
 )
+from cudf_polars.experimental.repartition import Repartition
 from cudf_polars.experimental.utils import _concat
 from cudf_polars.utils.config import StreamingExecutor
 
@@ -458,6 +459,27 @@ async def distinct_node(
         # disjoint keys - we can do simple chunkwise distinct
         fully_partitioned = partitioned_inter_rank and partitioned_local
 
+        # Detect if lowering already collapsed input to single partition
+        # (e.g., for KEEP_NONE with ordering, complex slices)
+        fallback_case = (
+            metadata_in.local_count == 1
+            and (metadata_in.duplicated or nranks == 1)
+            and isinstance(ir.children[0], Repartition)
+        )
+
+        # If already fully partitioned or concatenated, use chunkwise evaluation
+        if fully_partitioned or fallback_case:
+            await chunkwise_evaluate(
+                context,
+                ir,
+                ir_context,
+                ch_out,
+                ch_in,
+                metadata_in,
+                tracer=tracer,
+            )
+            return
+
         # Sample chunks and apply local distinct
         initial_chunks: list[TableChunk] = []
         total_distinct_size = 0
@@ -524,22 +546,7 @@ async def distinct_node(
             plc.stream_compaction.DuplicateKeepOption.KEEP_LAST,
         )
 
-        if fully_partitioned:
-            # Fully partitioned on keys - each chunk has disjoint keys
-            # Just apply distinct to each chunk independently
-            if tracer is not None:
-                tracer.decision = "chunkwise"
-            await chunkwise_evaluate(
-                context,
-                ir,
-                ir_context,
-                ch_out,
-                ch_in,
-                metadata_in,
-                initial_chunks,
-                tracer=tracer,
-            )
-        elif can_skip_global_comm:
+        if can_skip_global_comm:
             # No global communication needed
             if local_estimate < target_partition_size or require_tree:
                 # Small output or ordering required - use local tree reduction
