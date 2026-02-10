@@ -159,8 +159,9 @@ class StructColumn(ColumnBase):
             from cudf.core.column.interval import IntervalColumn
 
             # Determine the current subtype from the first child
-            first_child = ColumnBase.from_pylibcudf(
-                self.plc_column.children()[0]
+            first_child_plc = self.plc_column.children()[0]
+            first_child = ColumnBase.create(
+                first_child_plc, dtype_from_pylibcudf_column(first_child_plc)
             )
             current_dtype = IntervalDtype(
                 subtype=first_child.dtype, closed=dtype.closed

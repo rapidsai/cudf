@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2022, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 """Benchmarks of IndexedFrame methods."""
@@ -8,13 +8,13 @@ from utils import benchmark_with_object
 
 
 @benchmark_with_object(cls="indexedframe", dtype="int")
-@pytest.mark.parametrize("op", ["cumsum", "cumprod", "cummax"])
+@pytest.mark.parametrize("op", ["cumsum", "cummax"])
 def bench_scans(benchmark, op, indexedframe):
     benchmark(getattr(indexedframe, op))
 
 
 @benchmark_with_object(cls="indexedframe", dtype="int")
-@pytest.mark.parametrize("op", ["sum", "product", "mean"])
+@pytest.mark.parametrize("op", ["sum", "mean"])
 def bench_reductions(benchmark, op, indexedframe):
     benchmark(getattr(indexedframe, op))
 

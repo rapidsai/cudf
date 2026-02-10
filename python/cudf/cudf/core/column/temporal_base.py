@@ -260,7 +260,9 @@ class TemporalBaseColumn(ColumnBase, Scannable):
         )
         return cast(
             cudf.core.column.numerical.NumericalColumn,
-            type(self).from_pylibcudf(new_plc_column).astype(dtype),
+            ColumnBase.create(new_plc_column, self._UNDERLYING_DTYPE).astype(
+                dtype
+            ),
         )
 
     def ceil(self, freq: str) -> ColumnBase:
