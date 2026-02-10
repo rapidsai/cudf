@@ -17,7 +17,7 @@ public class JoinFactorizerTest extends CudfTestBase {
 
   @Test
   void testBasicIntegerKeys() {
-    // Build table with some duplicate keys: [1, 2, 3, 2, 1]
+    // Right table with some duplicate keys: [1, 2, 3, 2, 1]
     try (Table rightTable = new Table.TestBuilder()
             .column(1, 2, 3, 2, 1)
             .build();
@@ -32,7 +32,7 @@ public class JoinFactorizerTest extends CudfTestBase {
            HostColumnVector hostResult = result.copyToHost()) {
         assertEquals(5, hostResult.getRowCount());
         for (int i = 0; i < hostResult.getRowCount(); i++) {
-          assertTrue(hostResult.getInt(i) >= 0, "Build IDs should be non-negative");
+          assertTrue(hostResult.getInt(i) >= 0, "Right IDs should be non-negative");
         }
       }
     }
@@ -133,16 +133,16 @@ public class JoinFactorizerTest extends CudfTestBase {
   }
 
   @Test
-  void testReleaseBuildKeys() {
+  void testReleaseRightKeys() {
     Table rightTable = new Table.TestBuilder()
             .column(1, 2, 3)
             .build();
     try (JoinFactorizer remap = new JoinFactorizer(rightTable)) {
-      assertFalse(remap.isBuildKeysReleased());
+      assertFalse(remap.isRightKeysReleased());
 
       // Release the right keys
-      Table released = remap.releaseBuildKeys();
-      assertTrue(remap.isBuildKeysReleased());
+      Table released = remap.releaseRightKeys();
+      assertTrue(remap.isRightKeysReleased());
 
       // Can still use remap
       assertEquals(3, remap.getDistinctCount());

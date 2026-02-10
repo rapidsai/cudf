@@ -31,7 +31,7 @@ import org.slf4j.LoggerFactory;
  * affected and the caller retains ownership of it.
  * </p>
  * <p>
- * For advanced memory management (e.g., spilling), use {@link #releaseBuildKeys()} to take
+ * For advanced memory management (e.g., spilling), use {@link #releaseRightKeys()} to take
  * ownership of the internal right keys table. After calling this method, the caller is
  * responsible for ensuring the returned table remains valid for the lifetime of this object
  * and for closing it when appropriate.
@@ -79,7 +79,7 @@ public class JoinFactorizer implements AutoCloseable {
   private static class JoinFactorizerCleaner extends MemoryCleaner.Cleaner {
     private Table rightKeys;
     private long nativeHandle;
-    private boolean buildKeysReleased = false;
+    private boolean rightKeysReleased = false;
 
     JoinFactorizerCleaner(Table rightKeys, long nativeHandle) {
       this.rightKeys = rightKeys;
@@ -95,7 +95,7 @@ public class JoinFactorizer implements AutoCloseable {
         try {
           destroy(nativeHandle);
           // Only close rightKeys if it wasn't released to the caller
-          if (!buildKeysReleased && rightKeys != null) {
+          if (!rightKeysReleased && rightKeys != null) {
             rightKeys.close();
           }
           rightKeys = null;
@@ -103,7 +103,7 @@ public class JoinFactorizer implements AutoCloseable {
           nativeHandle = 0;
         }
         if (logErrorIfNotClean) {
-          log.error("A JOINT FACTORIZER WAS LEAKED (ID: " + id + " " + Long.toHexString(origAddress));
+          log.error("A JOIN FACTORIZER WAS LEAKED (ID: " + id + " " + Long.toHexString(origAddress));
         }
       }
       return neededCleanup;
@@ -218,7 +218,7 @@ public class JoinFactorizer implements AutoCloseable {
   /**
    * Get the number of distinct keys in the right table.
    *
-   * @return The count of unique key combinations found during build
+   * @return The count of unique key combinations in the right table
    * @throws IllegalStateException if computeMetrics was false during construction
    */
   public int getDistinctCount() {
@@ -265,27 +265,27 @@ public class JoinFactorizer implements AutoCloseable {
    * @return The right keys Table. The caller takes ownership and must close it when done.
    * @throws IllegalStateException if already closed or if right keys were already released
    */
-  public synchronized Table releaseBuildKeys() {
+  public synchronized Table releaseRightKeys() {
     if (isClosed) {
       throw new IllegalStateException("JoinFactorizer is already closed");
     }
-    if (cleaner.buildKeysReleased) {
-      throw new IllegalStateException("Build keys have already been released");
+    if (cleaner.rightKeysReleased) {
+      throw new IllegalStateException("Right keys have already been released");
     }
     if (cleaner.rightKeys == null) {
-      throw new IllegalStateException("Build keys are not available");
+      throw new IllegalStateException("Right keys are not available");
     }
-    cleaner.buildKeysReleased = true;
+    cleaner.rightKeysReleased = true;
     return cleaner.rightKeys;
   }
 
   /**
-   * Check if the right keys have been released via {@link #releaseBuildKeys()}.
+   * Check if the right keys have been released via {@link #releaseRightKeys()}.
    *
    * @return true if right keys have been released, false otherwise
    */
-  public boolean isBuildKeysReleased() {
-    return cleaner.buildKeysReleased;
+  public boolean isRightKeysReleased() {
+    return cleaner.rightKeysReleased;
   }
 
   /**

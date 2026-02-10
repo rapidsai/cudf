@@ -35,9 +35,9 @@
  */
 
 enum class heuristic_method : int32_t {
-  DISTINCT_COUNT   = 0,  // cudf::distinct_count API
-  GROUPBY_MAX      = 1,  // groupby count + max reduction
-  JOINT_FACTORIZER = 2   // join_factorizer with metrics
+  DISTINCT_COUNT  = 0,  // cudf::distinct_count API
+  GROUPBY_MAX     = 1,  // groupby count + max reduction
+  JOIN_FACTORIZER = 2   // join_factorizer with metrics
 };
 
 NVBENCH_DECLARE_ENUM_TYPE_STRINGS(
@@ -46,7 +46,7 @@ NVBENCH_DECLARE_ENUM_TYPE_STRINGS(
     switch (value) {
       case heuristic_method::DISTINCT_COUNT: return "DISTINCT_COUNT";
       case heuristic_method::GROUPBY_MAX: return "GROUPBY_MAX";
-      case heuristic_method::JOINT_FACTORIZER: return "JOINT_FACTORIZER";
+      case heuristic_method::JOIN_FACTORIZER: return "JOIN_FACTORIZER";
       default: return "Unknown";
     }
   },
@@ -75,7 +75,7 @@ NVBENCH_DECLARE_ENUM_TYPE_STRINGS(
 
 using HEURISTIC_METHODS = nvbench::enum_type_list<heuristic_method::DISTINCT_COUNT,
                                                   heuristic_method::GROUPBY_MAX,
-                                                  heuristic_method::JOINT_FACTORIZER>;
+                                                  heuristic_method::JOIN_FACTORIZER>;
 
 using CARDINALITY_RATIOS = nvbench::enum_type_list<cardinality_ratio::ALL_UNIQUE,
                                                    cardinality_ratio::HIGH_UNIQUE,
@@ -161,7 +161,7 @@ void nvbench_join_heuristics(nvbench::state& state,
         cudf::reduce(*counts_column,
                      *cudf::make_max_aggregation<cudf::reduce_aggregation>(),
                      counts_column->type());
-    } else if constexpr (Method == heuristic_method::JOINT_FACTORIZER) {
+    } else if constexpr (Method == heuristic_method::JOIN_FACTORIZER) {
       // Approach 3: join_factorizer with metrics
       cudf::join_factorizer remap(keys,
                                   cudf::null_equality::EQUAL,

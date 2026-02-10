@@ -457,11 +457,11 @@ TEST_F(JoinFactorizerTest, LargeTable)
   }
 
   // Left with values 0-99 (all exist) and 100-104 (don't exist)
-  std::vector<int32_t> probe_data;
+  std::vector<int32_t> left_data;
   for (int i = 0; i < 105; ++i) {
-    probe_data.push_back(i);
+    left_data.push_back(i);
   }
-  column_wrapper<int32_t> left_col(probe_data.begin(), probe_data.end());
+  column_wrapper<int32_t> left_col(left_data.begin(), left_data.end());
   auto left_table = cudf::table_view{{left_col}};
 
   auto left_result   = remap.factorize_left_keys(left_table);
@@ -469,12 +469,12 @@ TEST_F(JoinFactorizerTest, LargeTable)
 
   // Keys 0-99 should match right
   for (int i = 0; i < 100; ++i) {
-    EXPECT_EQ(host_left_ids[i], key_to_id[i]) << "Probe key " << i << " mismatch";
+    EXPECT_EQ(host_left_ids[i], key_to_id[i]) << "Left key " << i << " mismatch";
   }
   // Keys 100-104 should be NOT_FOUND
   for (int i = 100; i < 105; ++i) {
     EXPECT_EQ(host_left_ids[i], cudf::FACTORIZE_NOT_FOUND)
-      << "Probe key " << i << " should be NOT_FOUND";
+      << "Left key " << i << " should be NOT_FOUND";
   }
 }
 
@@ -653,7 +653,7 @@ TEST_F(JoinFactorizerTest, DoubleWithNulls)
 
 TEST_F(JoinFactorizerTest, LeftSchemaMismatchColumnCount)
 {
-  // Build with 2 columns
+  // Right with 2 columns
   column_wrapper<int32_t> right_col1{1, 2, 3};
   column_wrapper<int32_t> right_col2{4, 5, 6};
   auto right_table = cudf::table_view{{right_col1, right_col2}};
@@ -670,7 +670,7 @@ TEST_F(JoinFactorizerTest, LeftSchemaMismatchColumnCount)
 
 TEST_F(JoinFactorizerTest, LeftSchemaMismatchColumnType)
 {
-  // Build with INT32
+  // Right with INT32
   column_wrapper<int32_t> right_col{1, 2, 3};
   auto right_table = cudf::table_view{{right_col}};
 
@@ -686,7 +686,7 @@ TEST_F(JoinFactorizerTest, LeftSchemaMismatchColumnType)
 
 TEST_F(JoinFactorizerTest, LeftSchemaMismatchNestedVsPrimitive)
 {
-  // Build with struct column
+  // Right with struct column
   column_wrapper<int32_t> child1{1, 2, 3};
   strcol_wrapper child2{"a", "b", "c"};
   auto struct_col  = cudf::test::structs_column_wrapper{{child1, child2}};
@@ -704,19 +704,19 @@ TEST_F(JoinFactorizerTest, LeftSchemaMismatchNestedVsPrimitive)
 
 TEST_F(JoinFactorizerTest, LeftSchemaMismatchStructFields)
 {
-  // Build with struct{INT32, STRING}
-  column_wrapper<int32_t> build_child1{1, 2, 3};
-  strcol_wrapper build_child2{"a", "b", "c"};
-  auto build_struct = cudf::test::structs_column_wrapper{{build_child1, build_child2}};
-  auto right_table  = cudf::table_view{{build_struct}};
+  // Right with struct{INT32, STRING}
+  column_wrapper<int32_t> right_child1{1, 2, 3};
+  strcol_wrapper right_child2{"a", "b", "c"};
+  auto right_struct = cudf::test::structs_column_wrapper{{right_child1, right_child2}};
+  auto right_table  = cudf::table_view{{right_struct}};
 
   cudf::join_factorizer remap{right_table};
 
   // Left with struct{INT32, INT32} - different field types, should throw
-  column_wrapper<int32_t> probe_child1{1, 2, 3};
-  column_wrapper<int32_t> probe_child2{4, 5, 6};
-  auto probe_struct = cudf::test::structs_column_wrapper{{probe_child1, probe_child2}};
-  auto left_table   = cudf::table_view{{probe_struct}};
+  column_wrapper<int32_t> left_child1{1, 2, 3};
+  column_wrapper<int32_t> left_child2{4, 5, 6};
+  auto left_struct = cudf::test::structs_column_wrapper{{left_child1, left_child2}};
+  auto left_table  = cudf::table_view{{left_struct}};
 
   EXPECT_THROW((void)remap.factorize_left_keys(left_table), cudf::data_type_error);
   EXPECT_THROW((void)remap.factorize_left_keys(left_table), cudf::data_type_error);
@@ -724,7 +724,7 @@ TEST_F(JoinFactorizerTest, LeftSchemaMismatchStructFields)
 
 TEST_F(JoinFactorizerTest, EmptyLeftSchemaMismatchColumnCount)
 {
-  // Build with 2 columns
+  // Right with 2 columns
   column_wrapper<int32_t> right_col1{1, 2, 3};
   column_wrapper<int32_t> right_col2{4, 5, 6};
   auto right_table = cudf::table_view{{right_col1, right_col2}};
