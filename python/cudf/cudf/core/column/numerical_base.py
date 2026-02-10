@@ -16,7 +16,7 @@ from cudf.core.column.column import ColumnBase
 from cudf.core.column.utils import access_columns
 from cudf.core.missing import NA
 from cudf.core.mixins import Scannable
-from cudf.utils.dtypes import _get_nan_for_dtype
+from cudf.utils.dtypes import _get_nan_for_dtype, dtype_from_pylibcudf_column
 
 if TYPE_CHECKING:
     from cudf._typing import ScalarLike
@@ -170,7 +170,9 @@ class NumericalBaseColumn(ColumnBase, Scannable):
                 )
                 result = cast(
                     cudf.core.column.numerical_base.NumericalBaseColumn,
-                    type(self).from_pylibcudf(plc_column),
+                    ColumnBase.create(
+                        plc_column, dtype_from_pylibcudf_column(plc_column)
+                    ),
                 )
         if return_scalar:
             scalar_result = result.element_indexing(0)
@@ -247,10 +249,12 @@ class NumericalBaseColumn(ColumnBase, Scannable):
             raise ValueError(f"{how=} must be either 'half_even' or 'half_up'")
         plc_how = plc.round.RoundingMethod[how.upper()]
         with self.access(mode="read", scope="internal"):
+            plc_result = plc.round.round(self.plc_column, decimals, plc_how)
             return cast(
                 cudf.core.column.numerical_base.NumericalBaseColumn,
-                type(self).from_pylibcudf(
-                    plc.round.round(self.plc_column, decimals, plc_how)
+                ColumnBase.create(
+                    plc_result,
+                    dtype_from_pylibcudf_column(plc_result),
                 ),
             )
 
