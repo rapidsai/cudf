@@ -52,6 +52,34 @@ if TYPE_CHECKING:
 _DEFAULT_CATEGORICAL_VALUE = np.int8(-1)
 
 
+def _drop_nulls_from_columns(
+    col1: ColumnBase, col2: ColumnBase, null_column_idx: int
+) -> tuple[ColumnBase, ColumnBase]:
+    """Drop rows where the specified column (0 or 1) is null."""
+    with col1.access(mode="read", scope="internal"):
+        with col2.access(mode="read", scope="internal"):
+            table = plc.Table([col1.plc_column, col2.plc_column])
+            dropped = plc.stream_compaction.drop_nulls(
+                table, [null_column_idx], 1
+            )
+    return (
+        ColumnBase.create(dropped.columns()[0], col1.dtype),
+        ColumnBase.create(dropped.columns()[1], col2.dtype),
+    )
+
+
+def _sort_column(col: ColumnBase) -> ColumnBase:
+    """Sort a column in ascending order with nulls after."""
+    with col.access(mode="read", scope="internal"):
+        table = plc.Table([col.plc_column])
+        sorted_table = plc.sorting.sort(
+            table,
+            column_order=[plc.types.Order.ASCENDING],
+            null_precedence=[plc.types.NullOrder.AFTER],
+        )
+    return ColumnBase.create(sorted_table.columns()[0], col.dtype)
+
+
 class CategoricalColumn(column.ColumnBase):
     """Implements operations for Columns of Categorical type"""
 
@@ -445,25 +473,8 @@ class CategoricalColumn(column.ColumnBase):
                 )
                 replaced = self._set_categories(new_categories)
                 replaced = replaced.fillna(fill_value)
-            # Drop rows where "old" column is null using plc.stream_compaction.drop_nulls
-            with old_col.access(mode="read", scope="internal"):
-                with new_col.access(mode="read", scope="internal"):
-                    table_to_drop = plc.Table(
-                        [old_col.plc_column, new_col.plc_column]
-                    )
-                    dropped_table = plc.stream_compaction.drop_nulls(
-                        table_to_drop,
-                        [0],  # column index for "old"
-                        1,  # keep_threshold=1
-                    )
-            old_col = ColumnBase.create(
-                dropped_table.columns()[0], old_col.dtype
-            )
-            new_col = ColumnBase.create(
-                dropped_table.columns()[1], new_col.dtype
-            )
-            to_replace_col = old_col
-            replacement_col = new_col
+            # Drop rows where "old" column is null
+            old_col, new_col = _drop_nulls_from_columns(old_col, new_col, 0)
         else:
             replaced = self
         if new_col.null_count > 0:
@@ -478,42 +489,22 @@ class CategoricalColumn(column.ColumnBase):
                 cur_categories.isin(drop_values).unary_operator("not")  # type: ignore[arg-type]
             )
             replaced = replaced._set_categories(new_categories)
-            # Drop rows where "new" column is null using plc.stream_compaction.drop_nulls
-            with old_col.access(mode="read", scope="internal"):
-                with new_col.access(mode="read", scope="internal"):
-                    table_to_drop = plc.Table(
-                        [old_col.plc_column, new_col.plc_column]
-                    )
-                    dropped_table = plc.stream_compaction.drop_nulls(
-                        table_to_drop,
-                        [1],  # column index for "new"
-                        1,  # keep_threshold=1
-                    )
-            old_col = ColumnBase.create(
-                dropped_table.columns()[0], old_col.dtype
-            )
-            new_col = ColumnBase.create(
-                dropped_table.columns()[1], new_col.dtype
-            )
-            to_replace_col = old_col
-            replacement_col = new_col
+            # Drop rows where "new" column is null
+            old_col, new_col = _drop_nulls_from_columns(old_col, new_col, 1)
 
         # create a dataframe containing the pre-replacement categories
         # and a column with the appropriate labels replaced.
         # The index of this dataframe represents the original
         # ints that map to the categories
         cats_col = column.as_column(replaced.dtype.categories)
-        if (
-            to_replace_col.dtype != cats_col.dtype
-            and replacement_col.dtype != cats_col.dtype
-        ):
+        if old_col.dtype != cats_col.dtype and new_col.dtype != cats_col.dtype:
             cats_replace_col = cats_col.copy()
         else:
             with cats_col.access(mode="read", scope="internal"):
                 cats_replace_plc = plc.replace.find_and_replace_all(
                     cats_col.plc_column,
-                    to_replace_col.plc_column,
-                    replacement_col.plc_column,
+                    old_col.plc_column,
+                    new_col.plc_column,
                 )
             cats_replace_col = ColumnBase.create(
                 cats_replace_plc,
@@ -529,34 +520,34 @@ class CategoricalColumn(column.ColumnBase):
         # Use plc.search.contains and plc.copying.copy_if_else instead of Series
         # plc.search.contains requires matching dtypes, so skip if types differ
         # (nothing would match anyway when types are different)
-        if replacement_col.dtype == cats_col.dtype:
-            with replacement_col.access(mode="read", scope="internal"):
+        if new_col.dtype == cats_col.dtype:
+            with new_col.access(mode="read", scope="internal"):
                 with cats_col.access(mode="read", scope="internal"):
                     # Check which replacement values are in categories
                     is_in_cats = plc.search.contains(
                         cats_col.plc_column,  # haystack
-                        replacement_col.plc_column,  # needles
+                        new_col.plc_column,  # needles
                     )
                     # Create a null scalar for replacement
                     null_scalar = plc.Scalar.from_py(
                         None,
-                        replacement_col.plc_column.type(),
+                        new_col.plc_column.type(),
                     )
                     # Where is_in_cats is True, replace with null; otherwise keep original
                     dtype_replace_plc = plc.copying.copy_if_else(
                         null_scalar,  # value when True
-                        replacement_col.plc_column,  # value when False
+                        new_col.plc_column,  # value when False
                         is_in_cats,
                     )
             dtype_replace_col = ColumnBase.create(
-                dtype_replace_plc, replacement_col.dtype
+                dtype_replace_plc, new_col.dtype
             )
         else:
-            # Types don't match, nothing in replacement_col can be in cats_col
-            dtype_replace_col = replacement_col
+            # Types don't match, nothing in new_col can be in cats_col
+            dtype_replace_col = new_col
 
         if (
-            to_replace_col.dtype != cats_col.dtype
+            old_col.dtype != cats_col.dtype
             and dtype_replace_col.dtype != cats_col.dtype
         ):
             new_cats_col = cats_col.copy()
@@ -565,7 +556,7 @@ class CategoricalColumn(column.ColumnBase):
                 with dtype_replace_col.access(mode="read", scope="internal"):
                     new_cats_plc = plc.replace.find_and_replace_all(
                         cats_col.plc_column,
-                        to_replace_col.plc_column,
+                        old_col.plc_column,
                         dtype_replace_col.plc_column,
                     )
             new_cats_col = ColumnBase.create(new_cats_plc, cats_col.dtype)
@@ -621,16 +612,16 @@ class CategoricalColumn(column.ColumnBase):
         # The left_gather_map contains the old category indices that matched
         # These are the "to_replace" codes
         # left_gather_map is INT32 from pylibcudf, need to cast to codes dtype
-        to_replace_col = ColumnBase.create(
+        codes_to_replace = ColumnBase.create(
             left_gather_map, np.dtype("int32")
         ).astype(replaced.codes.dtype)
-        replacement_col = gathered_new_index.astype(replaced.codes.dtype)
+        codes_replacement = gathered_new_index.astype(replaced.codes.dtype)
 
         with replaced.codes.access(mode="read", scope="internal"):
             new_codes = plc.replace.find_and_replace_all(
                 replaced.codes.plc_column,
-                to_replace_col.plc_column,
-                replacement_col.plc_column,
+                codes_to_replace.plc_column,
+                codes_replacement.plc_column,
             )
         result = ColumnBase.create(
             new_codes,
@@ -930,27 +921,8 @@ class CategoricalColumn(column.ColumnBase):
             return False
         # if order doesn't matter, sort before the equals call below
         if not ordered:
-            # Sort using plc.sorting.sort directly
-            with cur_categories.access(mode="read", scope="internal"):
-                cur_table = plc.Table([cur_categories.plc_column])
-                cur_sorted_table = plc.sorting.sort(
-                    cur_table,
-                    column_order=[plc.types.Order.ASCENDING],
-                    null_precedence=[plc.types.NullOrder.AFTER],
-                )
-            cur_categories = ColumnBase.create(
-                cur_sorted_table.columns()[0], cur_categories.dtype
-            )
-            with new_categories.access(mode="read", scope="internal"):
-                new_table = plc.Table([new_categories.plc_column])
-                new_sorted_table = plc.sorting.sort(
-                    new_table,
-                    column_order=[plc.types.Order.ASCENDING],
-                    null_precedence=[plc.types.NullOrder.AFTER],
-                )
-            new_categories = ColumnBase.create(
-                new_sorted_table.columns()[0], new_categories.dtype
-            )
+            cur_categories = _sort_column(cur_categories)
+            new_categories = _sort_column(new_categories)
         return cur_categories.equals(new_categories)
 
     def _set_categories(
