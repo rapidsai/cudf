@@ -444,10 +444,10 @@ class StringColumn(ColumnBase, Scannable):
             return self.copy()
 
         # Deduplicate by old values, keeping last occurrence
-        # Use pylibcudf directly instead of DataFrame.drop_duplicates
+        # Work with plc.Column objects directly to avoid creating intermediate ColumnBases
         with to_replace_col.access(mode="read", scope="internal"):
             with replacement_col.access(mode="read", scope="internal"):
-                deduped_table = plc.stream_compaction.stable_distinct(
+                old_plc, new_plc = plc.stream_compaction.stable_distinct(
                     plc.Table(
                         [to_replace_col.plc_column, replacement_col.plc_column]
                     ),
@@ -455,45 +455,34 @@ class StringColumn(ColumnBase, Scannable):
                     keep=plc.stream_compaction.DuplicateKeepOption.KEEP_LAST,
                     nulls_equal=plc.types.NullEquality.EQUAL,
                     nans_equal=plc.types.NanEquality.ALL_EQUAL,
-                )
-        old_col = cast(
-            Self, ColumnBase.create(deduped_table.columns()[0], self.dtype)
-        )
-        new_col = cast(
-            Self, ColumnBase.create(deduped_table.columns()[1], self.dtype)
-        )
+                ).columns()
 
         # Handle null replacement separately if there's a null in old values
-        if old_col.null_count == 1:
-            with old_col.access(mode="read", scope="internal"):
-                # Find the replacement value for null
-                null_mask_col = ColumnBase.create(
-                    plc.unary.is_null(old_col.plc_column), np.dtype(np.bool_)
-                )
-            replacement_for_null = new_col.apply_boolean_mask(
-                null_mask_col
-            ).element_indexing(0)
+        res = self
+        if old_plc.null_count() == 1:
+            # Find the replacement value for null
+            old_isnull_plc = plc.unary.is_null(old_plc)
+            filtered_table = plc.stream_compaction.apply_boolean_mask(
+                plc.Table([new_plc]), old_isnull_plc
+            )
+            # We know there's exactly 1 null, so filtered result has 1 row
+            replacement_for_null = (
+                plc.copying.get_element(filtered_table.columns()[0], 0)
+                .to_arrow()
+                .as_py()
+            )
             res = self.fillna(replacement_for_null)
 
             # Drop the null row from old/new columns
-            with old_col.access(mode="read", scope="internal"):
-                with new_col.access(mode="read", scope="internal"):
-                    non_null_table = plc.stream_compaction.drop_nulls(
-                        plc.Table([old_col.plc_column, new_col.plc_column]),
-                        keys=[0],  # Check nulls in first column only
-                        keep_threshold=1,  # Keep rows with at least 1 non-null in keys
-                    )
-            old_col = cast(
-                Self,
-                ColumnBase.create(non_null_table.columns()[0], self.dtype),
-            )
-            new_col = cast(
-                Self,
-                ColumnBase.create(non_null_table.columns()[1], self.dtype),
-            )
-        else:
-            res = self
+            old_plc, new_plc = plc.stream_compaction.drop_nulls(
+                plc.Table([old_plc, new_plc]),
+                keys=[0],  # Check nulls in first column only
+                keep_threshold=1,  # Keep rows with at least 1 non-null in keys
+            ).columns()
 
+        # Create ColumnBases only when needed for replace operation
+        old_col = cast(Self, ColumnBase.create(old_plc, self.dtype))
+        new_col = cast(Self, ColumnBase.create(new_plc, self.dtype))
         return res.replace(old_col, new_col)
 
     def _binaryop(self, other: ColumnBinaryOperand, op: str) -> ColumnBase:
