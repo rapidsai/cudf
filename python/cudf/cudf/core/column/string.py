@@ -117,7 +117,13 @@ class StringColumn(ColumnBase, Scannable):
     ) -> tuple[plc.Column, np.dtype]:
         plc_column, dtype = super()._validate_args(plc_column, dtype)
         if not is_dtype_obj_string(dtype):
-            raise ValueError("dtype must be a valid cuDF string dtype")
+            if dtype.kind == "U":
+                # User _passed_ e.g. np.dtype(str), but we store np.dtype(object) like pandas
+                # In [3]: pd.Series(["a"], dtype=np.dtype(str)).dtype
+                # Out[3]: dtype('O')
+                dtype = np.dtype(object)
+            else:
+                raise ValueError("dtype must be a valid cuDF string dtype")
         return plc_column, dtype
 
     @property
