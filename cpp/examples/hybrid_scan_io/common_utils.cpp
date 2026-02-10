@@ -131,13 +131,6 @@ std::unique_ptr<cudf::io::datasource::buffer> fetch_page_index_bytes(
   return datasource.host_read(page_index_bytes.offset(), page_index_bytes.size());
 }
 
-cudf::host_span<uint8_t const> make_host_span(
-  std::reference_wrapper<cudf::io::datasource::buffer const> buffer)
-{
-  return cudf::host_span<uint8_t const>{static_cast<uint8_t const*>(buffer.get().data()),
-                                        buffer.get().size()};
-}
-
 std::tuple<std::vector<rmm::device_buffer>,
            std::vector<cudf::device_span<uint8_t const>>,
            std::future<void>>

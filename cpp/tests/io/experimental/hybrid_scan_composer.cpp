@@ -21,18 +21,6 @@ using cudf::io::parquet::experimental::hybrid_scan_reader;
 namespace {
 
 /**
- * @brief Converts a datasource buffer to a host span
- *
- * @param buffer Datasource buffer
- *
- * @return Host span of the datasource buffer
- */
-cudf::host_span<uint8_t const> make_host_span(cudf::io::datasource::buffer const& buffer)
-{
-  return cudf::host_span<uint8_t const>{static_cast<uint8_t const*>(buffer.data()), buffer.size()};
-}
-
-/**
  * @brief Sets up the a hybrid scan reader instance and page index if present
  *
  * @param datasource Data source
@@ -47,13 +35,13 @@ std::unique_ptr<hybrid_scan_reader> setup_reader(cudf::io::datasource& datasourc
 {
   // Fetch footer bytes and setup reader
   auto const footer_buffer = cudf::io::parquet::fetch_footer_to_host(datasource);
-  auto reader = std::make_unique<hybrid_scan_reader>(make_host_span(*footer_buffer), options);
+  auto reader = std::make_unique<hybrid_scan_reader>(*footer_buffer, options);
 
   auto const page_index_byte_range = reader->page_index_byte_range();
   if (not page_index_byte_range.is_empty()) {
     auto const page_index_buffer =
       cudf::io::parquet::fetch_page_index_to_host(datasource, page_index_byte_range);
-    reader->setup_page_index(make_host_span(*page_index_buffer));
+    reader->setup_page_index(*page_index_buffer);
   }
 
   return reader;
@@ -157,7 +145,8 @@ auto apply_hybrid_scan_filters(cudf::io::datasource& datasource,
  * @return Unique pointer to the resultant concatenated table.
  */
 std::unique_ptr<cudf::table> concatenate_tables(std::vector<std::unique_ptr<cudf::table>> tables,
-                                                rmm::cuda_stream_view stream)
+                                                rmm::cuda_stream_view stream,
+                                                rmm::device_async_resource_ref mr)
 {
   if (tables.size() == 1) { return std::move(tables[0]); }
 
@@ -168,23 +157,20 @@ std::unique_ptr<cudf::table> concatenate_tables(std::vector<std::unique_ptr<cudf
       return tbl->view();
     });
   // Construct the final table
-  return cudf::concatenate(table_views, stream);
+  return cudf::concatenate(table_views, stream, mr);
 }
 
 }  // namespace
 
-std::tuple<std::unique_ptr<cudf::table>,
-           std::unique_ptr<cudf::table>,
-           cudf::io::table_metadata,
-           cudf::io::table_metadata,
-           std::unique_ptr<cudf::column>>
-hybrid_scan(cudf::io::datasource& datasource,
-            cudf::ast::operation const& filter_expression,
-            cudf::size_type num_filter_columns,
-            std::optional<std::vector<std::string>> const& payload_column_names,
-            rmm::cuda_stream_view stream,
-            rmm::device_async_resource_ref mr,
-            rmm::mr::aligned_resource_adaptor<rmm::mr::device_memory_resource>& aligned_mr)
+std::
+  tuple<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::table>, std::unique_ptr<cudf::column>>
+  hybrid_scan(cudf::io::datasource& datasource,
+              cudf::ast::operation const& filter_expression,
+              cudf::size_type num_filter_columns,
+              std::optional<std::vector<std::string>> const& payload_column_names,
+              rmm::cuda_stream_view stream,
+              rmm::device_async_resource_ref mr,
+              rmm::mr::aligned_resource_adaptor<rmm::mr::device_memory_resource>& aligned_mr)
 {
   // Create reader options with empty source info
   cudf::io::parquet_reader_options options =
@@ -242,17 +228,11 @@ hybrid_scan(cudf::io::datasource& datasource,
                                         stream,
                                         mr);
 
-  return std::tuple{std::move(filter_table),
-                    std::move(payload_table),
-                    std::move(filter_metadata),
-                    std::move(payload_metadata),
-                    std::move(row_mask)};
+  return std::tuple{std::move(filter_table), std::move(payload_table), std::move(row_mask)};
 }
 
 std::tuple<std::unique_ptr<cudf::table>,
            std::unique_ptr<cudf::table>,
-           cudf::io::table_metadata,
-           cudf::io::table_metadata,
            std::unique_ptr<cudf::column>>
 chunked_hybrid_scan(cudf::io::datasource& datasource,
                     cudf::ast::operation const& filter_expression,
@@ -321,7 +301,7 @@ chunked_hybrid_scan(cudf::io::datasource& datasource,
     materialize_filter_columns(current_row_group_indices);
   }
 
-  auto filter_table = concatenate_tables(std::move(tables), stream);
+  auto filter_table = concatenate_tables(std::move(tables), stream, mr);
 
   // Helper to split the materialization of payload columns into chunks
   tables.clear();
@@ -366,14 +346,10 @@ chunked_hybrid_scan(cudf::io::datasource& datasource,
     materialize_payload_columns(current_row_group_indices);
   }
 
-  auto payload_table = concatenate_tables(std::move(tables), stream);
+  auto payload_table = concatenate_tables(std::move(tables), stream, mr);
 
   // Return the filter table and metadata, payload table and metadata, and the final row mask
-  return std::tuple{std::move(filter_table),
-                    std::move(payload_table),
-                    std::move(filter_metadata),
-                    std::move(payload_metadata),
-                    std::move(row_mask)};
+  return std::tuple{std::move(filter_table), std::move(payload_table), std::move(row_mask)};
 }
 
 cudf::io::table_with_metadata hybrid_scan_single_step(
@@ -468,7 +444,7 @@ cudf::io::table_with_metadata chunked_hybrid_scan_single_step(
     materialize_all_columns(current_row_group_indices);
   }
 
-  auto result_table = concatenate_tables(std::move(tables), stream);
+  auto result_table = concatenate_tables(std::move(tables), stream, mr);
 
   return cudf::io::table_with_metadata{std::move(result_table), std::move(metadata)};
 }

@@ -95,13 +95,13 @@ auto hybrid_scan(io_source const& io_source,
 
   // Fetch footer bytes and setup reader
   auto const footer_buffer = fetch_footer_bytes(datasource_ref);
-  auto const reader        = std::make_unique<cudf::io::parquet::experimental::hybrid_scan_reader>(
-    make_host_span(*footer_buffer), options);
+  auto const reader =
+    std::make_unique<cudf::io::parquet::experimental::hybrid_scan_reader>(*footer_buffer, options);
 
   // Get page index byte range from the reader
   auto const page_index_byte_range = reader->page_index_byte_range();
   auto const page_index_buffer     = fetch_page_index_bytes(datasource_ref, page_index_byte_range);
-  reader->setup_page_index(make_host_span(*page_index_buffer));
+  reader->setup_page_index(*page_index_buffer);
 
   // Get all row groups from the reader
   auto input_row_group_indices   = reader->all_row_groups(options);

@@ -59,6 +59,19 @@ class datasource {
     virtual ~buffer() = default;
 
     /**
+     * @brief Implicit conversion operator to host_span<uint8_t const>
+     *
+     * Allows a buffer to be implicitly converted to a host_span for convenient use
+     * in APIs that accept spans.
+     *
+     * @return A host_span view of the buffer's data
+     */
+    operator cudf::host_span<uint8_t const>() const
+    {
+      return cudf::host_span<uint8_t const>{data(), size()};
+    }
+
+    /**
      * @brief Factory to construct a datasource buffer object from a container.
      *
      * @tparam Container Type of the container to construct the buffer from

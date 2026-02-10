@@ -133,15 +133,11 @@ void test_hybrid_scan(std::vector<cudf::column_view> const& columns)
   auto datasource_ref = std::ref(*datasource);
 
   // Read parquet using the hybrid scan reader
-  auto [read_filter_table, read_payload_table, read_filter_meta, read_payload_meta, row_mask] =
+  auto [read_filter_table, read_payload_table, row_mask] =
     hybrid_scan(datasource_ref, filter_expression, num_filter_columns, {}, stream, mr, aligned_mr);
 
   // Read parquet using the chunked hybrid scan reader
-  auto [read_filter_table_chunked,
-        read_payload_table_chunked,
-        read_filter_meta_chunked,
-        read_payload_meta_chunked,
-        row_mask_chunked] =
+  auto [read_filter_table_chunked, read_payload_table_chunked, row_mask_chunked] =
     chunked_hybrid_scan(
       datasource_ref, filter_expression, num_filter_columns, {}, stream, mr, aligned_mr);
 
@@ -223,15 +219,11 @@ TEST_F(HybridScanTest, PruneRowGroupsOnlyAndScanAllColumns)
   auto datasource_ref = std::ref(*datasource);
 
   // Read parquet using the hybrid scan reader
-  auto [read_filter_table, read_payload_table, read_filter_meta, read_payload_meta, row_mask] =
+  auto [read_filter_table, read_payload_table, row_mask] =
     hybrid_scan(datasource_ref, filter_expression, num_filter_columns, {}, stream, mr, aligned_mr);
 
   // Read parquet using the chunked hybrid scan reader
-  auto [read_filter_table_chunked,
-        read_payload_table_chunked,
-        read_filter_meta_chunked,
-        read_payload_meta_chunked,
-        row_mask_chunked] =
+  auto [read_filter_table_chunked, read_payload_table_chunked, row_mask_chunked] =
     chunked_hybrid_scan(
       datasource_ref, filter_expression, num_filter_columns, {}, stream, mr, aligned_mr);
 
@@ -285,26 +277,22 @@ TEST_F(HybridScanTest, PruneRowGroupsOnlyAndScanSelectColumns)
   {
     auto const payload_column_names = std::vector<std::string>{"col0", "col2"};
     // Read parquet using the hybrid scan reader
-    auto [read_filter_table, read_payload_table, read_filter_meta, read_payload_meta, row_mask] =
-      hybrid_scan(datasource_ref,
-                  filter_expression,
-                  num_filter_columns,
-                  payload_column_names,
-                  stream,
-                  mr,
-                  aligned_mr);
+    auto [read_filter_table, read_payload_table, row_mask] = hybrid_scan(datasource_ref,
+                                                                         filter_expression,
+                                                                         num_filter_columns,
+                                                                         payload_column_names,
+                                                                         stream,
+                                                                         mr,
+                                                                         aligned_mr);
     // Read parquet using the chunked hybrid scan reader
-    auto [read_filter_table_chunked,
-          read_payload_table_chunked,
-          read_filter_meta_chunked,
-          read_payload_meta_chunked,
-          row_mask_chunked] = chunked_hybrid_scan(datasource_ref,
-                                                  filter_expression,
-                                                  num_filter_columns,
-                                                  payload_column_names,
-                                                  stream,
-                                                  mr,
-                                                  aligned_mr);
+    auto [read_filter_table_chunked, read_payload_table_chunked, row_mask_chunked] =
+      chunked_hybrid_scan(datasource_ref,
+                          filter_expression,
+                          num_filter_columns,
+                          payload_column_names,
+                          stream,
+                          mr,
+                          aligned_mr);
 
     CUDF_EXPECTS(read_filter_table->num_rows() == read_payload_table->num_rows(),
                  "Filter and payload tables should have the same number of rows");
@@ -327,14 +315,13 @@ TEST_F(HybridScanTest, PruneRowGroupsOnlyAndScanSelectColumns)
   {
     auto const payload_column_names = std::vector<std::string>{"col2", "col1"};
     // Read parquet using the hybrid scan reader
-    auto [read_filter_table, read_payload_table, read_filter_meta, read_payload_meta, row_mask] =
-      hybrid_scan(datasource_ref,
-                  filter_expression,
-                  num_filter_columns,
-                  payload_column_names,
-                  stream,
-                  mr,
-                  aligned_mr);
+    auto [read_filter_table, read_payload_table, row_mask] = hybrid_scan(datasource_ref,
+                                                                         filter_expression,
+                                                                         num_filter_columns,
+                                                                         payload_column_names,
+                                                                         stream,
+                                                                         mr,
+                                                                         aligned_mr);
 
     CUDF_EXPECTS(read_filter_table->num_rows() == read_payload_table->num_rows(),
                  "Filter and payload tables should have the same number of rows");
@@ -376,15 +363,11 @@ TEST_F(HybridScanTest, PruneDataPagesOnlyAndScanAllColumns)
   auto datasource_ref = std::ref(*datasource);
 
   // Read parquet using the hybrid scan reader
-  auto [read_filter_table, read_payload_table, read_filter_meta, read_payload_meta, row_mask] =
+  auto [read_filter_table, read_payload_table, row_mask] =
     hybrid_scan(datasource_ref, filter_expression, num_filter_columns, {}, stream, mr, aligned_mr);
 
   // Read parquet using the chunked hybrid scan reader
-  auto [read_filter_table_chunked,
-        read_payload_table_chunked,
-        read_filter_meta_chunked,
-        read_payload_meta_chunked,
-        row_mask_chunked] =
+  auto [read_filter_table_chunked, read_payload_table_chunked, row_mask_chunked] =
     chunked_hybrid_scan(
       datasource_ref, filter_expression, num_filter_columns, {}, stream, mr, aligned_mr);
 

@@ -87,15 +87,6 @@ std::unique_ptr<cudf::io::datasource::buffer> fetch_page_index_bytes(
   cudf::io::datasource& datasource, cudf::io::text::byte_range_info const page_index_bytes);
 
 /**
- * @brief Converts a host buffer into a host span
- *
- * @param buffer Host buffer
- * @return Host span of input host buffer
- */
-cudf::host_span<uint8_t const> make_host_span(
-  std::reference_wrapper<cudf::io::datasource::buffer const> buffer);
-
-/**
  * @brief Fetches a list of byte ranges from a host buffer into device buffers
  *
  * @param datasource Input datasource
