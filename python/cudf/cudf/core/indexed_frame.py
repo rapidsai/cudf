@@ -4432,9 +4432,7 @@ class IndexedFrame(Frame):
 
         for name, col in df._column_labels_and_values:
             check_col = col.nans_to_nulls()
-            no_threshold_valid_count = (
-                len(col) - check_col.null_count
-            ) < thresh
+            no_threshold_valid_count = check_col.valid_count < thresh
             if no_threshold_valid_count:
                 continue
             out_cols.append(name)
@@ -6662,9 +6660,9 @@ class IndexedFrame(Frame):
             cols = []
             for col in self._columns:
                 if col.dtype.kind == "f":
-                    col = col.fillna(0)
-                    as_int = col.astype(np.dtype(np.int64))
-                    if cp.allclose(col, as_int):
+                    col_filled = col.fillna(0)
+                    as_int = col_filled.astype(np.dtype(np.int64))
+                    if cp.allclose(col_filled, as_int):
                         cols.append(as_int)
                         continue
                 cols.append(col)
