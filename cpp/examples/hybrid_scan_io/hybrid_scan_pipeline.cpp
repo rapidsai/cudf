@@ -6,6 +6,7 @@
 #include "benchmark.hpp"
 #include "common_utils.hpp"
 #include "io_source.hpp"
+#include "io_utils.hpp"
 #include "timer.hpp"
 
 #include <cudf/column/column_factories.hpp>
@@ -95,7 +96,7 @@ struct hybrid_scan_fn {
     auto const all_column_chunk_byte_ranges =
       reader->all_column_chunks_byte_ranges(row_groups_indices, options);
     auto [all_column_chunk_buffers, all_column_chunk_data, all_col_read_tasks] =
-      fetch_byte_ranges(datasource, all_column_chunk_byte_ranges, stream, mr);
+      fetch_byte_ranges_async(datasource, all_column_chunk_byte_ranges, stream, mr);
     all_col_read_tasks.get();
     table.get() = std::move(
       reader
