@@ -725,7 +725,7 @@ class StringColumn(ColumnBase, Scannable):
                 ColumnBase.create(
                     result,
                     cudf.ListDtype(
-                        get_dtype_of_same_kind(self.dtype, np.dtype(np.int16))
+                        get_dtype_of_same_kind(self.dtype, np.dtype(np.int32))
                     ),
                 ),
             )

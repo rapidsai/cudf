@@ -241,12 +241,7 @@ class NumericalColumn(NumericalBaseColumn):
                         is_valid_plc, np.dtype(np.bool_)
                     )
 
-        if cudf.get_option("mode.pandas_compatible"):
-            return result
-
-        return result._with_type_metadata(
-            get_dtype_of_same_kind(self.dtype, np.dtype(np.bool_))
-        )
+        return result
 
     def element_indexing(self, index: int) -> ScalarLike | None:
         result = super().element_indexing(index)
