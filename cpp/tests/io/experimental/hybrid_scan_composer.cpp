@@ -35,7 +35,7 @@ std::unique_ptr<hybrid_scan_reader> setup_reader(cudf::io::datasource& datasourc
 {
   // Fetch footer bytes and setup reader
   auto const footer_buffer = cudf::io::parquet::fetch_footer_to_host(datasource);
-  auto reader = std::make_unique<hybrid_scan_reader>(*footer_buffer, options);
+  auto reader              = std::make_unique<hybrid_scan_reader>(*footer_buffer, options);
 
   auto const page_index_byte_range = reader->page_index_byte_range();
   if (not page_index_byte_range.is_empty()) {
@@ -162,15 +162,14 @@ std::unique_ptr<cudf::table> concatenate_tables(std::vector<std::unique_ptr<cudf
 
 }  // namespace
 
-std::
-  tuple<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::table>, std::unique_ptr<cudf::column>>
-  hybrid_scan(cudf::io::datasource& datasource,
-              cudf::ast::operation const& filter_expression,
-              cudf::size_type num_filter_columns,
-              std::optional<std::vector<std::string>> const& payload_column_names,
-              rmm::cuda_stream_view stream,
-              rmm::device_async_resource_ref mr,
-              rmm::mr::aligned_resource_adaptor<rmm::mr::device_memory_resource>& aligned_mr)
+std::tuple<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::table>> hybrid_scan(
+  cudf::io::datasource& datasource,
+  cudf::ast::operation const& filter_expression,
+  cudf::size_type num_filter_columns,
+  std::optional<std::vector<std::string>> const& payload_column_names,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr,
+  rmm::mr::aligned_resource_adaptor<rmm::mr::device_memory_resource>& aligned_mr)
 {
   // Create reader options with empty source info
   cudf::io::parquet_reader_options options =
@@ -228,19 +227,17 @@ std::
                                         stream,
                                         mr);
 
-  return std::tuple{std::move(filter_table), std::move(payload_table), std::move(row_mask)};
+  return std::tuple{std::move(filter_table), std::move(payload_table)};
 }
 
-std::tuple<std::unique_ptr<cudf::table>,
-           std::unique_ptr<cudf::table>,
-           std::unique_ptr<cudf::column>>
-chunked_hybrid_scan(cudf::io::datasource& datasource,
-                    cudf::ast::operation const& filter_expression,
-                    cudf::size_type num_filter_columns,
-                    std::optional<std::vector<std::string>> const& payload_column_names,
-                    rmm::cuda_stream_view stream,
-                    rmm::device_async_resource_ref mr,
-                    rmm::mr::aligned_resource_adaptor<rmm::mr::device_memory_resource>& aligned_mr)
+std::tuple<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::table>> chunked_hybrid_scan(
+  cudf::io::datasource& datasource,
+  cudf::ast::operation const& filter_expression,
+  cudf::size_type num_filter_columns,
+  std::optional<std::vector<std::string>> const& payload_column_names,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr,
+  rmm::mr::aligned_resource_adaptor<rmm::mr::device_memory_resource>& aligned_mr)
 {
   // Create reader options with empty source info
   cudf::io::parquet_reader_options options =
@@ -348,11 +345,10 @@ chunked_hybrid_scan(cudf::io::datasource& datasource,
 
   auto payload_table = concatenate_tables(std::move(tables), stream, mr);
 
-  // Return the filter table and metadata, payload table and metadata, and the final row mask
-  return std::tuple{std::move(filter_table), std::move(payload_table), std::move(row_mask)};
+  return std::tuple{std::move(filter_table), std::move(payload_table)};
 }
 
-cudf::io::table_with_metadata hybrid_scan_single_step(
+std::unique_ptr<cudf::table> hybrid_scan_single_step(
   cudf::io::datasource& datasource,
   cudf::ast::operation const& filter_expression,
   std::optional<std::vector<std::string>> const& column_names,
@@ -384,11 +380,12 @@ cudf::io::table_with_metadata hybrid_scan_single_step(
   all_col_tasks.get();
 
   // Materialize the table with all columns
-  return reader->materialize_all_columns(
-    current_row_group_indices, all_col_data, options, stream, mr);
+  return reader
+    ->materialize_all_columns(current_row_group_indices, all_col_data, options, stream, mr)
+    .tbl;
 }
 
-cudf::io::table_with_metadata chunked_hybrid_scan_single_step(
+std::unique_ptr<cudf::table> chunked_hybrid_scan_single_step(
   cudf::io::datasource& datasource,
   cudf::ast::operation const& filter_expression,
   std::optional<std::vector<std::string>> const& column_names,
@@ -444,7 +441,5 @@ cudf::io::table_with_metadata chunked_hybrid_scan_single_step(
     materialize_all_columns(current_row_group_indices);
   }
 
-  auto result_table = concatenate_tables(std::move(tables), stream, mr);
-
-  return cudf::io::table_with_metadata{std::move(result_table), std::move(metadata)};
+  return concatenate_tables(std::move(tables), stream, mr);
 }
