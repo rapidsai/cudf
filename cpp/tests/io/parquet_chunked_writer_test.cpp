@@ -69,7 +69,7 @@ TEST_F(ParquetChunkedWriterTest, LargeTables)
   cudf::io::chunked_parquet_writer_options args =
     cudf::io::chunked_parquet_writer_options::builder(cudf::io::sink_info{filepath});
   auto md = cudf::io::chunked_parquet_writer(args).write(*table1).write(*table2).close();
-  ASSERT_NE(md, nullptr);
+  EXPECT_NE(md, nullptr);
 
   cudf::io::parquet_reader_options read_opts =
     cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath});
