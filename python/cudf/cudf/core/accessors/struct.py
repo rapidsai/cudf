@@ -51,11 +51,11 @@ class StructMethods(BaseAccessor):
         >>> s.struct.field(0)
         0    1
         1    3
-        dtype: int64
+        Name: a, dtype: int64
         >>> s.struct.field('a')
         0    1
         1    3
-        dtype: int64
+        Name: a, dtype: int64
         """
         struct_dtype_fields = StructDtype.from_struct_dtype(
             self._column.dtype
