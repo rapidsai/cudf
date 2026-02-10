@@ -7,6 +7,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from rapidsmpf.streaming.core.message import Message
+from rapidsmpf.streaming.cudf.channel_metadata import ChannelMetadata
 from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 
 from cudf_polars.dsl.ir import Union
@@ -16,7 +17,6 @@ from cudf_polars.experimental.rapidsmpf.dispatch import (
 from cudf_polars.experimental.rapidsmpf.nodes import define_py_node, shutdown_on_error
 from cudf_polars.experimental.rapidsmpf.utils import (
     ChannelManager,
-    Metadata,
     process_children,
     recv_metadata,
     send_metadata,
@@ -59,20 +59,16 @@ async def union_node(
         # Union loses partitioning/ordering info since sources may differ.
         # TODO: Warn users that Union does NOT preserve order?
         total_local_count = 0
-        total_global_count: int | None = None
         duplicated = True
         for ch_in in chs_in:
             metadata = await recv_metadata(ch_in, context)
             total_local_count += metadata.local_count
-            if metadata.global_count is not None:
-                total_global_count = (total_global_count or 0) + metadata.global_count
             duplicated = duplicated and metadata.duplicated
         await send_metadata(
             ch_out,
             context,
-            Metadata(
+            ChannelMetadata(
                 local_count=total_local_count,
-                global_count=total_global_count,
                 duplicated=duplicated,
             ),
         )

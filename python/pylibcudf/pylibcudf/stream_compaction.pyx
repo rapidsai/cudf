@@ -1,6 +1,7 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
+from cython.operator cimport dereference
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
@@ -22,6 +23,7 @@ from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from rmm.pylibrmm.stream cimport Stream
 
 from .column cimport Column
+from .expressions cimport Expression
 from .table cimport Table
 from .utils cimport _get_stream, _get_memory_resource
 
@@ -33,6 +35,7 @@ __all__ = [
     "distinct_indices",
     "drop_nans",
     "drop_nulls",
+    "filter",
     "stable_distinct",
     "unique",
     "unique_count",
@@ -392,5 +395,46 @@ cpdef size_type distinct_count(
     return cpp_stream_compaction.distinct_count(
         source.view(), null_handling, nan_handling, stream.view()
     )
+
+
+cpdef Table filter(
+    Table predicate_table,
+    Expression predicate_expr,
+    Table filter_table,
+    Stream stream=None,
+    DeviceMemoryResource mr=None,
+):
+    """Filters a table using a predicate expression.
+
+    For details, see :cpp:func:`filter`.
+
+    Parameters
+    ----------
+    predicate_table : Table
+        The table used for predicate expression evaluation.
+    predicate_expr : Expression
+        The predicate filter expression.
+    filter_table : Table
+        The table to be filtered.
+
+    Returns
+    -------
+    Table
+        The filtered table.
+    """
+    cdef unique_ptr[table] c_result
+
+    stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
+
+    with nogil:
+        c_result = cpp_stream_compaction.filter(
+            predicate_table.view(),
+            dereference(predicate_expr.c_obj.get()),
+            filter_table.view(),
+            stream.view(),
+            mr.get_mr()
+        )
+    return Table.from_libcudf(move(c_result), stream, mr)
 
 DuplicateKeepOption.__str__ = DuplicateKeepOption.__repr__

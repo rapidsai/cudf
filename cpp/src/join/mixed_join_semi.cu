@@ -12,6 +12,7 @@
 #include <cudf/ast/expressions.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/detail/utilities/grid_1d.cuh>
 #include <cudf/join/join.hpp>
 #include <cudf/join/mixed_join.hpp>
@@ -193,15 +194,15 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
   auto gather_map = std::make_unique<rmm::device_uvector<size_type>>(probe.num_rows(), stream, mr);
 
   // gather_map_end will be the end of valid data in gather_map
-  auto gather_map_end =
-    thrust::copy_if(rmm::exec_policy_nosync(stream),
-                    thrust::counting_iterator<size_type>(0),
-                    thrust::counting_iterator<size_type>(probe.num_rows()),
-                    left_table_keep_mask.begin(),
-                    gather_map->begin(),
-                    [join_type] __device__(bool keep_row) {
-                      return keep_row == (join_type == join_kind::LEFT_SEMI_JOIN);
-                    });
+  auto gather_map_end = cudf::detail::copy_if(
+    thrust::counting_iterator<size_type>(0),
+    thrust::counting_iterator<size_type>(probe.num_rows()),
+    left_table_keep_mask.begin(),
+    gather_map->begin(),
+    [join_type] __device__(bool keep_row) {
+      return keep_row == (join_type == join_kind::LEFT_SEMI_JOIN);
+    },
+    stream);
 
   gather_map->resize(cuda::std::distance(gather_map->begin(), gather_map_end), stream);
   return gather_map;

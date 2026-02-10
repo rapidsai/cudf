@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 
 from cudf.api.types import is_dtype_equal
+from cudf.core.dtype.validators import is_dtype_obj_numeric
 from cudf.core.dtypes import (
     CategoricalDtype,
     Decimal32Dtype,
@@ -20,7 +21,6 @@ from cudf.core.reshape import concat
 from cudf.utils.dtypes import (
     find_common_type,
     get_dtype_of_same_kind,
-    is_dtype_obj_numeric,
 )
 
 if TYPE_CHECKING:
@@ -124,7 +124,7 @@ def _match_join_keys(
 
     if how == "left" and rcol.fillna(0).can_cast_safely(ltype):
         return lcol, rcol.astype(ltype)
-    elif common_type is None:
+    if common_type is None:
         common_type = np.dtype(np.float64)
     return lcol.astype(common_type), rcol.astype(common_type)
 

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -15,6 +15,7 @@
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/structs/utilities.hpp>
 #include <cudf/detail/transform.hpp>
+#include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/config_utils.hpp>
@@ -28,7 +29,6 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/std/utility>
-#include <thrust/copy.h>
 #include <thrust/fill.h>
 #include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
@@ -292,13 +292,14 @@ void update_null_mask(cudf::detail::hostdevice_2dvector<column_desc>& chunks,
       if (child_valid_map_base != nullptr) {
         rmm::device_uvector<uint32_t> dst_idx(child_mask_len, stream);
         // Copy indexes at which the parent has valid value.
-        thrust::copy_if(rmm::exec_policy_nosync(stream),
-                        thrust::make_counting_iterator(0),
-                        thrust::make_counting_iterator(0) + parent_mask_len,
-                        dst_idx.begin(),
-                        [parent_valid_map_base] __device__(auto idx) {
-                          return bit_is_set(parent_valid_map_base, idx);
-                        });
+        cudf::detail::copy_if(
+          thrust::counting_iterator<size_type>(0),
+          thrust::counting_iterator<size_type>(parent_mask_len),
+          dst_idx.begin(),
+          [parent_valid_map_base] __device__(auto idx) {
+            return bit_is_set(parent_valid_map_base, idx);
+          },
+          stream);
 
         auto merged_null_mask = cudf::detail::create_null_mask(
           parent_mask_len, mask_state::ALL_NULL, rmm::cuda_stream_view(stream), mr);

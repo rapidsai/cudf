@@ -346,6 +346,15 @@ class hybrid_scan_reader {
     cudf::host_span<size_type const> row_group_indices) const;
 
   /**
+   * @brief Resets the current column selection
+   *
+   * Resets the current column selection state forcing column re-selection in subsequent filter,
+   * byte range, setup chunking and materialization APIs. This is useful if the filter expression
+   * has been cascaded (and-ed) to include new columns
+   */
+  void reset_column_selection() const;
+
+  /**
    * @brief Filter the row groups using the specified byte range specified by [`bytes_to_skip`,
    * `bytes_to_skip + bytes_to_read`)
    *
@@ -476,6 +485,7 @@ class hybrid_scan_reader {
    * @param mask_data_pages Whether to build and use a data page mask using the row mask
    * @param options Parquet reader options
    * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource used to allocate the device memory for the output table
    * @return Table of materialized filter columns and metadata
    */
   [[nodiscard]] table_with_metadata materialize_filter_columns(
@@ -484,7 +494,8 @@ class hybrid_scan_reader {
     cudf::mutable_column_view& row_mask,
     use_data_page_mask mask_data_pages,
     parquet_reader_options const& options,
-    rmm::cuda_stream_view stream) const;
+    rmm::cuda_stream_view stream,
+    rmm::device_async_resource_ref mr) const;
 
   /**
    * @brief Get byte ranges of column chunks of payload columns
@@ -506,6 +517,7 @@ class hybrid_scan_reader {
    * @param mask_data_pages Whether to build and use a data page mask using the row mask
    * @param options Parquet reader options
    * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource used to allocate the device memory for the output table
    * @return Table of materialized payload columns and metadata
    */
   [[nodiscard]] table_with_metadata materialize_payload_columns(
@@ -514,7 +526,8 @@ class hybrid_scan_reader {
     cudf::column_view const& row_mask,
     use_data_page_mask mask_data_pages,
     parquet_reader_options const& options,
-    rmm::cuda_stream_view stream) const;
+    rmm::cuda_stream_view stream,
+    rmm::device_async_resource_ref mr) const;
 
   /**
    * @brief Get byte ranges of column chunks of all (or selected) columns
@@ -534,13 +547,15 @@ class hybrid_scan_reader {
    * @param column_chunk_data Device spans of column chunk data of all columns
    * @param options Parquet reader options
    * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource used to allocate the device memory for the output table
    * @return Table of all materialized columns and metadata
    */
   [[nodiscard]] table_with_metadata materialize_all_columns(
     cudf::host_span<size_type const> row_group_indices,
     cudf::host_span<cudf::device_span<uint8_t const> const> column_chunk_data,
     parquet_reader_options const& options,
-    rmm::cuda_stream_view stream) const;
+    rmm::cuda_stream_view stream,
+    rmm::device_async_resource_ref mr) const;
   /**
    * @brief Setup chunking information for filter columns and preprocess the input data pages
    *
@@ -553,6 +568,7 @@ class hybrid_scan_reader {
    * @param mask_data_pages Whether to build and use a data page mask using the row mask
    * @param column_chunk_data Device spans of column chunk data of filter columns
    * @param options Parquet reader options
+   * @param mr Device memory resource used to allocate the device memory for the output table chunks
    * @param stream CUDA stream used for device memory operations and kernel launches
    */
   void setup_chunking_for_filter_columns(
@@ -563,19 +579,19 @@ class hybrid_scan_reader {
     use_data_page_mask mask_data_pages,
     cudf::host_span<cudf::device_span<uint8_t const> const> column_chunk_data,
     parquet_reader_options const& options,
-    rmm::cuda_stream_view stream) const;
+    rmm::cuda_stream_view stream,
+    rmm::device_async_resource_ref mr) const;
 
   /**
    * @brief Materializes a chunk of filter columns and updates the corresponding range of input row
    * mask to only the rows that exist in the output table
    *
    * @param[in,out] row_mask Mutable boolean column indicating surviving rows from page pruning
-   * @param stream CUDA stream used for device memory operations and kernel launches
    *
    * @return Table chunk of materialized filter columns and metadata
    */
   [[nodiscard]] table_with_metadata materialize_filter_columns_chunk(
-    cudf::mutable_column_view& row_mask, rmm::cuda_stream_view stream) const;
+    cudf::mutable_column_view& row_mask) const;
 
   /**
    * @brief Setup chunking information for payload columns and preprocess the input data pages
@@ -590,6 +606,7 @@ class hybrid_scan_reader {
    * @param column_chunk_data Device spans of column chunk data of payload columns
    * @param options Parquet reader options
    * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource used to allocate the device memory for the output table chunks
    */
   void setup_chunking_for_payload_columns(
     std::size_t chunk_read_limit,
@@ -599,19 +616,49 @@ class hybrid_scan_reader {
     use_data_page_mask mask_data_pages,
     cudf::host_span<cudf::device_span<uint8_t const> const> column_chunk_data,
     parquet_reader_options const& options,
-    rmm::cuda_stream_view stream) const;
+    rmm::cuda_stream_view stream,
+    rmm::device_async_resource_ref mr) const;
 
   /**
    * @brief Materializes a chunk of payload columns and applies the corresponding range of input row
    * mask to the output table chunk
    *
    * @param row_mask Boolean column indicating which rows need to be read. All rows read if empty
-   * @param stream CUDA stream used for device memory operations and kernel launches
    *
    * @return Table chunk of materialized filter columns and metadata
    */
   [[nodiscard]] table_with_metadata materialize_payload_columns_chunk(
-    cudf::column_view const& row_mask, rmm::cuda_stream_view stream) const;
+    cudf::column_view const& row_mask) const;
+
+  /**
+   * @brief Setup chunking information for all (or selected) columns and preprocess the input data
+   * pages
+   *
+   * @param chunk_read_limit Limit on total number of bytes to be returned per table chunk. `0` if
+   * there is no limit
+   * @param pass_read_limit Limit on the memory used for reading and decompressing data. `0` if
+   * there is no limit
+   * @param row_group_indices Input row groups indices
+   * @param column_chunk_data Device spans of column chunk data of all columns
+   * @param options Parquet reader options
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource used to allocate the device memory for the output table chunks
+   */
+  void setup_chunking_for_all_columns(
+    std::size_t chunk_read_limit,
+    std::size_t pass_read_limit,
+    cudf::host_span<size_type const> row_group_indices,
+    cudf::host_span<cudf::device_span<uint8_t const> const> column_chunk_data,
+    parquet_reader_options const& options,
+    rmm::cuda_stream_view stream,
+    rmm::device_async_resource_ref mr) const;
+
+  /**
+   * @brief Materializes all (or selected) columns and returns the final output table
+   *
+   * @return Table of materialized all (or selected) columns and metadata
+   */
+  [[nodiscard]] table_with_metadata materialize_all_columns_chunk() const;
 
   /**
    * @brief Check if there is any parquet data left to read for the current setup
