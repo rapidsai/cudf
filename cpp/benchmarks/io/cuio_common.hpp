@@ -145,14 +145,20 @@ std::vector<std::string> select_column_names(std::vector<std::string> const& col
 std::vector<cudf::size_type> segments_in_chunk(int num_segments, int num_chunks, int chunk);
 
 /**
- * @brief Drops the page cache if `CUDF_BENCHMARK_DROP_CACHE` environment variable is set.
+ * @brief Drops the page cache based on the `CUDF_BENCHMARK_DROP_CACHE` environment variable
+ * (case-insensitive).
  *
- * Has no effect if the environment variable is not set.
- * May require sudo access ro run successfully.
+ * The environment variable controls whether and how page cache is dropped:
+ * - `file`: Drops page cache for each file in `file_paths` (recommended, no privileges required)
+ * - `true`, `on`, `yes`, `1`, `system`: Drops the system-wide page cache (may require privileges)
+ * - `false`, `off`, `no`, `0`, or unset: No cache dropping (logs a warning)
  *
- * @param file_paths Files to be dropped from the page cache.
+ * @param file_paths Files for which to drop the page cache. Only used when the environment variable
+ * is set to `file`.
  *
- * @throw cudf::logic_error if the environment variable is set and the command fails
+ * @throw std::invalid_argument if the environment variable has an unrecognized value
+ * @throw cudf::logic_error if system-wide cache dropping is requested but fails
+ * @throw kvikio::GenericSystemError if file-specific cache dropping fails
  */
 void try_drop_page_cache(std::vector<std::string> const& file_paths);
 

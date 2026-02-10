@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#include "cudf/utilities/error.hpp"
+
 #include <benchmarks/io/cuio_common.hpp>
 
 #include <cudf/detail/utilities/integer_utils.hpp>
@@ -19,6 +21,7 @@
 #include <cstdio>
 #include <fstream>
 #include <numeric>
+#include <regex>
 #include <string>
 #include <utility>
 
@@ -213,24 +216,7 @@ std::vector<cudf::size_type> segments_in_chunk(int num_segments, int num_chunks,
   return selected_segments;
 }
 
-// Executes the command and returns stderr output
-std::string exec_cmd(std::string_view cmd)
-{
-  // Prevent the output from the command from mixing with the original process' output
-  std::fflush(nullptr);
-  // Switch stderr and stdout to only capture stderr
-  auto const redirected_cmd = std::string{"( "}.append(cmd).append(" 3>&2 2>&1 1>&3) 2>/dev/null");
-  std::unique_ptr<FILE, int (*)(FILE*)> pipe(popen(redirected_cmd.c_str(), "r"), pclose);
-  CUDF_EXPECTS(pipe != nullptr, "popen() failed");
-
-  std::array<char, 128> buffer;
-  std::string error_out;
-  while (fgets(buffer.data(), buffer.size(), pipe.get()) != nullptr) {
-    error_out += buffer.data();
-  }
-  return error_out;
-}
-
+namespace {
 void log_page_cache_warning_once()
 {
   static bool is_logged = false;
@@ -242,15 +228,63 @@ void log_page_cache_warning_once()
   }
 }
 
+std::pair<bool, bool> parse_cache_dropping_env()
+{
+  bool is_drop_cache_enabled{false};
+  bool is_file_scope{false};
+
+  auto const* env = std::getenv("CUDF_BENCHMARK_DROP_CACHE");
+  if (env == nullptr) { return {is_drop_cache_enabled, is_file_scope}; }
+
+  // Trim leading/trailing whitespace
+  std::regex const static pattern{R"(^\s+|\s+$)"};
+  auto env_sanitized = std::regex_replace(env, pattern, "");
+
+  // Convert to lowercase
+  std::transform(
+    env_sanitized.begin(), env_sanitized.end(), env_sanitized.begin(), [](unsigned char c) {
+      return std::tolower(c);
+    });
+
+  // Interpret value
+  if (env_sanitized == "true" or env_sanitized == "on" or env_sanitized == "yes" or
+      env_sanitized == "1" or env_sanitized == "system" or env_sanitized == "file") {
+    is_drop_cache_enabled = true;
+    is_file_scope         = (env_sanitized == "file");
+    return {is_drop_cache_enabled, is_file_scope};
+  }
+
+  if (env_sanitized == "false" or env_sanitized == "off" or env_sanitized == "no" or
+      env_sanitized == "0") {
+    return {is_drop_cache_enabled, is_file_scope};
+  }
+
+  CUDF_FAIL(
+    "Environment variable CUDF_BENCHMARK_DROP_CACHE has an unknown value: " + std::string{env},
+    std::invalid_argument);
+}
+}  // namespace
+
 void try_drop_page_cache(std::vector<std::string> const& file_paths)
 {
-  static bool is_drop_cache_enabled = std::getenv("CUDF_BENCHMARK_DROP_CACHE") != nullptr;
+  static auto const parsed_env                = parse_cache_dropping_env();
+  auto [is_drop_cache_enabled, is_file_scope] = parsed_env;
   if (not is_drop_cache_enabled) {
     log_page_cache_warning_once();
     return;
   }
 
-  if (file_paths.size() == 0) { return; }
+  if (not is_file_scope) {
+    if (not kvikio::drop_system_page_cache()) {
+      CUDF_FAIL("Failed to execute the drop cache command");
+    }
+    return;
+  }
+
+  if (file_paths.empty()) {
+    CUDF_LOG_WARN("No file is specified for page cache dropping");
+    return;
+  }
 
   for (const auto& path : file_paths) {
     if (path.empty()) { continue; }
