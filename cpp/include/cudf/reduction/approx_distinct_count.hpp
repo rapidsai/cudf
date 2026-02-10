@@ -19,6 +19,7 @@
 #include <memory>
 
 namespace CUDF_EXPORT cudf {
+
 /**
  * @addtogroup column_reduction
  * @{

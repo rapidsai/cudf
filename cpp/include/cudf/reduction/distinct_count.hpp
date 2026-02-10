@@ -14,6 +14,7 @@
 #include <rmm/cuda_stream_view.hpp>
 
 namespace CUDF_EXPORT cudf {
+
 /**
  * @addtogroup column_reduction
  * @{
