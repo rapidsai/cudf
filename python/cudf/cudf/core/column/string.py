@@ -119,8 +119,8 @@ class StringColumn(ColumnBase, Scannable):
         if not is_dtype_obj_string(dtype):
             if dtype.kind == "U":
                 # User _passed_ e.g. np.dtype(str), but we store np.dtype(object) like pandas
-                # In [3]: pd.Series(["a"], dtype=np.dtype(str)).dtype
-                # Out[3]: dtype('O')
+                # >>> pd.Series(["a"], dtype=np.dtype(str)).dtype
+                # dtype('O')
                 dtype = np.dtype(object)
             else:
                 raise ValueError("dtype must be a valid cuDF string dtype")
