@@ -154,9 +154,9 @@ class CategoricalColumn(ColumnBase):
             arr = as_column(value, length=length, nan_as_null=False)
             if isinstance(arr, CategoricalColumn):
                 arr = arr._get_decategorized_column()
-            if arr.dtype != self.categories.dtype:
-                arr = arr.astype(self.categories.dtype)
             if arr.null_count != len(arr):
+                if arr.dtype != self.categories.dtype:
+                    arr = arr.astype(self.categories.dtype)
                 with arr.access(mode="read", scope="internal"):
                     arr_plc = arr.plc_column
                     if arr_plc.null_count() > 0:
@@ -428,8 +428,7 @@ class CategoricalColumn(ColumnBase):
         if replacement_col.is_all_null:
             replacement_col = replacement_col.astype(self.categories.dtype)
 
-        # TODO: This check looks incorrect, should we be checking the dtypes of the
-        # columns instead of the column objects themselves?
+        # We must have two categoricals (with possibly different categories)
         if type(to_replace_col) is not type(replacement_col):
             raise TypeError(
                 f"to_replace and value should be of same types,"
@@ -534,7 +533,6 @@ class CategoricalColumn(ColumnBase):
             ).columns()
 
             # Build a mapping from old codes to new codes
-            # Use NullEquality.UNEQUAL to match pandas behavior
             left_gather_map, right_gather_map = plc.join.inner_join(
                 plc.Table([cats_replace_plc]),
                 plc.Table([new_cats_plc]),
@@ -918,7 +916,6 @@ class CategoricalColumn(ColumnBase):
             # Left join to map old categories to new codes via category values
             with cur_cats.access(mode="read", scope="internal"):
                 with new_cats.access(mode="read", scope="internal"):
-                    # Use NullEquality.UNEQUAL to match pandas behavior (nulls don't match)
                     left_map, right_map = plc.join.left_join(
                         plc.Table([cur_cats.plc_column]),
                         plc.Table([new_cats.plc_column]),
