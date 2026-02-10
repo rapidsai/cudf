@@ -193,18 +193,9 @@ inline __device__ uint32_t Log2Floor(uint32_t value) { return 32 - __clz(value);
 inline __device__ uint32_t safe_load_u32(uint8_t const* p, uint8_t const* end)
 {
   if (p >= end) { return 0; }
-
-  auto const remaining = static_cast<size_t>(end - p);
-  if (remaining >= 4) {
-    return unaligned_load<uint32_t>(p);
-  } else {
-    // Read individual bytes to avoid out-of-bounds access
-    uint32_t result = 0;
-    for (size_t i = 0; i < remaining; ++i) {
-      result |= static_cast<uint32_t>(p[i]) << static_cast<uint32_t>(i * 8);
-    }
-    return result;
-  }
+  uint32_t result = 0;
+  memcpy(&result, p, std::min(static_cast<size_t>(end - p), sizeof(uint32_t)));
+  return result;
 }
 
 /// @brief initializes the bit reader
