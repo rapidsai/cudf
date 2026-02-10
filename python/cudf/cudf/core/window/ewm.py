@@ -7,11 +7,27 @@ from typing import TYPE_CHECKING, Literal
 
 import numpy as np
 
+import pylibcudf as plc
+
 from cudf.core.dtype.validators import is_dtype_obj_numeric
 from cudf.core.window.rolling import _RollingBase
 
 if TYPE_CHECKING:
     from cudf.core.column.column import ColumnBase
+
+
+def _leading_nulls_count(plc_col: plc.Column, size: int) -> int:
+    if size == 0 or plc_col.null_count() == 0:
+        return 0
+
+    bitmask = plc_col.null_mask()
+    if bitmask is None:
+        return 0
+
+    offset = plc_col.offset()
+
+    # index_of_first_set_bit returns a relative index from start
+    return plc.null_mask.index_of_first_set_bit(bitmask, offset, offset + size)
 
 
 class ExponentialMovingWindow(_RollingBase):
@@ -194,11 +210,36 @@ class ExponentialMovingWindow(_RollingBase):
         # as such we need to convert the nans to nulls before
         # passing them in.
         to_libcudf_column = source_column.astype(
-            np.dtype(np.float64)
+            np.dtype("float64")
         ).nans_to_nulls()
-        return getattr(to_libcudf_column, agg_name)(
-            inclusive=True, com=self.com, adjust=self.adjust
+        size = len(to_libcudf_column)
+        # pandas excludes leading nulls from the exponential weighting window,
+        # so we skip the initial null run entirely and only compute the EWM
+        # starting from the first valid value.
+        # TODO: Use libcudf to match pandas' semantics instead of
+        # removing the leading nulls, computing ewm, and stitching
+        # the columns back together
+        plc_col = to_libcudf_column.to_pylibcudf()
+        leading_nulls = _leading_nulls_count(plc_col, size)
+
+        if leading_nulls == 0:
+            return getattr(to_libcudf_column, agg_name)(
+                inclusive=True, com=self.com, adjust=self.adjust
+            )
+
+        head_plc_col, tail_plc_col = plc.copying.split(
+            plc_col, [leading_nulls]
         )
+        head = type(to_libcudf_column).create(
+            head_plc_col, to_libcudf_column.dtype
+        )
+        tail = getattr(
+            type(to_libcudf_column).create(
+                tail_plc_col, to_libcudf_column.dtype
+            ),
+            agg_name,
+        )(inclusive=True, com=self.com, adjust=self.adjust)
+        return head.append(tail)
 
 
 def get_center_of_mass(
