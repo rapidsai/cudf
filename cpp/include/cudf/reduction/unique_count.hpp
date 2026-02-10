@@ -19,7 +19,6 @@ namespace CUDF_EXPORT cudf {
  * @addtogroup column_reduction
  * @{
  * @file
- * @brief APIs for unique counting operations
  */
 
 /**
@@ -58,4 +57,5 @@ cudf::size_type unique_count(table_view const& input,
                              rmm::cuda_stream_view stream = cudf::get_default_stream());
 
 /** @} */
+
 }  // namespace CUDF_EXPORT cudf

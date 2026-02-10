@@ -24,7 +24,6 @@ namespace CUDF_EXPORT cudf {
  * @addtogroup column_reduction
  * @{
  * @file
- * @brief APIs for approximate distinct counting using HyperLogLog
  */
 
 // Forward declarations
@@ -233,4 +232,5 @@ class approx_distinct_count {
 };
 
 /** @} */
+
 }  // namespace CUDF_EXPORT cudf
