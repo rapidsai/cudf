@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 # TODO: remove need for this
 # ruff: noqa: D101
@@ -56,6 +56,10 @@ class Literal(Expr):
         raise NotImplementedError(
             "Not expecting to require agg request of literal"
         )  # pragma: no cover
+
+    def get_hashable(self) -> Hashable:
+        """Get the hash of the literal."""
+        return (type(self), self.dtype.plc_type, id(self.value))
 
     def astype(self, dtype: DataType) -> Literal:
         """Cast self to dtype."""

@@ -934,6 +934,8 @@ def _(
                 dtype, pl.Series([node.value], dtype=dtype.polars_type)
             )
         return expr.LiteralColumn(dtype, pl.Series(node.value))
+    if dtype.id() == plc.TypeId.STRUCT:
+        raise NotImplementedError("Struct literals are not supported")
     return expr.Literal(dtype, node.value)
 
 
