@@ -359,13 +359,23 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
             else agg_kwargs,
         ).plc_obj
 
+        min_periods = 1 if self.min_periods is None else self.min_periods
+        if self.min_periods == 0 and isinstance(agg_name, str):
+            # libcudf supports min_periods=0 and returns identity values for windows with
+            # insufficient observations: SUM and COUNT return 0, MIN returns the maximum
+            # value for the type, MAX returns the minimum value for the type. Only SUM and
+            # COUNT match pandas behavior (pandas returns NaN for all aggregations when
+            # min_periods is not met). Force min_periods=1 for other aggregations.
+            if agg_name not in {"sum", "count"}:
+                min_periods = 1
+
         with source_column.access(mode="read", scope="internal"):
             col = ColumnBase.from_pylibcudf(
                 plc.rolling.rolling_window(
                     source_column.plc_column,
                     pre,
                     fwd,
-                    1 if self.min_periods is None else self.min_periods,
+                    min_periods,
                     rolling_agg,
                 )
             )
