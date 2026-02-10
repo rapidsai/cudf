@@ -154,7 +154,7 @@ class CategoricalColumn(ColumnBase):
             arr = as_column(value, length=length, nan_as_null=False)
             if isinstance(arr, CategoricalColumn):
                 arr = arr._get_decategorized_column()
-            if arr.null_count != len(arr):
+            if not arr.is_all_null:
                 if arr.dtype != self.categories.dtype:
                     arr = arr.astype(self.categories.dtype)
                 with arr.access(mode="read", scope="internal"):
@@ -176,7 +176,7 @@ class CategoricalColumn(ColumnBase):
                             plc.aggregation.all(),
                             dtype_to_pylibcudf_type(np.dtype("bool")),
                         )
-                        if not contains_all.to_arrow().as_py():
+                        if not contains_all.to_py():
                             raise TypeError(
                                 "Cannot setitem on a Categorical with a new "
                                 "category, set the categories first"
@@ -458,11 +458,7 @@ class CategoricalColumn(ColumnBase):
                 plc.Table([new_plc]), old_isnull_plc
             )
             # We know there's exactly 1 null, so filtered result has 1 row
-            fill_value = (
-                plc.copying.get_element(filtered_table.columns()[0], 0)
-                .to_arrow()
-                .as_py()
-            )
+            fill_value = filtered_table.columns()[0].to_scalar().to_py()
 
             # The `in` operator will only work on certain column types
             # (NumericalColumn, StringColumn).
@@ -556,7 +552,7 @@ class CategoricalColumn(ColumnBase):
         # These are the "to_replace" codes
         # left_gather_map is INT32 from pylibcudf, need to cast to codes dtype
         codes_to_replace = ColumnBase.create(
-            left_gather_map, np.dtype("int32")
+            left_gather_map, dtype_from_pylibcudf_column(left_gather_map)
         ).astype(replaced.codes.dtype)
 
         with access_columns(
@@ -730,15 +726,16 @@ class CategoricalColumn(ColumnBase):
         return out
 
     def copy(self, deep: bool = True) -> Self:
-        if deep:
-            dtype_copy = CategoricalDtype(
-                categories=self.categories.copy(),
-                ordered=self.ordered,
-            )
-        else:
-            dtype_copy = self.dtype
-        plc_col = self.plc_column.copy() if deep else self.plc_column
-        return cast("Self", ColumnBase.create(plc_col, dtype_copy))
+        if not deep:
+            return cast("Self", super().copy(deep=deep))
+        dtype_copy = CategoricalDtype(
+            categories=self.categories.copy(),
+            ordered=self.ordered,
+        )
+        return cast(
+            "Self",
+            ColumnBase.create(self.plc_column.copy(), dtype_copy),
+        )
 
     @cached_property
     def memory_usage(self) -> int:
