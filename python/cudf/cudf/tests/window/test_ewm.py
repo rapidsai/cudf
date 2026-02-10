@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 import pytest
 
@@ -42,4 +42,15 @@ def test_ewma(data, params, adjust):
     expect = psr.ewm(**params, adjust=adjust).mean()
     got = gsr.ewm(**params, adjust=adjust).mean()
 
+    assert_eq(expect, got)
+
+
+def test_ewm_leading_nulls():
+    gsr = cudf.Series([None, 1.0, None, 1.0, 1.0], dtype="float64")
+    psr = gsr.to_pandas()
+
+    got = gsr.ewm(com=3, adjust=False, ignore_na=False, min_periods=0).mean()
+    expect = psr.ewm(
+        com=3, adjust=False, ignore_na=False, min_periods=0
+    ).mean()
     assert_eq(expect, got)
