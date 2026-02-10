@@ -448,7 +448,7 @@ class CategoricalColumn(ColumnBase):
             # The `in` operator will only work on certain column types
             # (NumericalColumn, StringColumn).
             if fill_value not in self.categories:  # type: ignore[operator]
-                self.add_categories(fill_value)
+                replaced = replaced.add_categories(fill_value)
             replaced = replaced.fillna(fill_value)
 
             # Once we've replaced self's values with the fill_value, we can drop the
