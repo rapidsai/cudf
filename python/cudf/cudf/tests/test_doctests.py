@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 import contextlib
 import doctest
@@ -16,7 +16,14 @@ from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 pytestmark = pytest.mark.filterwarnings("ignore::FutureWarning")
 
 # modules that will be searched for doctests
-tests = [cudf, cudf.core.groupby]
+tests = [
+    cudf,
+    cudf.core.groupby,
+    cudf.core.accessors.string.StringMethods,
+    cudf.core.accessors.lists.ListMethods,
+    cudf.core.accessors.struct.StructMethods,
+    cudf.core.accessors.categorical.CategoricalAccessor,
+]
 
 
 def _name_in_all(parent, name):
