@@ -210,7 +210,7 @@ cpdef size_type unique_count(
 ):
     """Returns the number of unique consecutive elements in the input column.
 
-    For details, see :cpp:func:`unique_count`.
+    For details, see :cpp:func:`cudf::unique_count`.
 
     Parameters
     ----------
@@ -246,7 +246,7 @@ cpdef size_type distinct_count(
 ):
     """Returns the number of distinct elements in the input column.
 
-    For details, see :cpp:func:`distinct_count`.
+    For details, see :cpp:func:`cudf::distinct_count`.
 
     Parameters
     ----------
