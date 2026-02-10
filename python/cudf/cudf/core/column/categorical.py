@@ -57,22 +57,6 @@ if TYPE_CHECKING:
 _DEFAULT_CATEGORICAL_VALUE = np.int8(-1)
 
 
-def _drop_nulls_from_columns(
-    col1: ColumnBase, col2: ColumnBase, null_column_idx: int
-) -> tuple[ColumnBase, ColumnBase]:
-    """Drop rows where the specified column (0 or 1) is null."""
-    with col1.access(mode="read", scope="internal"):
-        with col2.access(mode="read", scope="internal"):
-            table = plc.Table([col1.plc_column, col2.plc_column])
-            dropped = plc.stream_compaction.drop_nulls(
-                table, [null_column_idx], 1
-            )
-    return (
-        ColumnBase.create(dropped.columns()[0], col1.dtype),
-        ColumnBase.create(dropped.columns()[1], col2.dtype),
-    )
-
-
 def _sort_column(col: ColumnBase) -> ColumnBase:
     """Sort a column in ascending order with nulls after."""
     with col.access(mode="read", scope="internal"):
@@ -431,7 +415,7 @@ class CategoricalColumn(ColumnBase):
                 f"got to_replace dtype: {to_replace_col.dtype} and "
                 f"value dtype: {replacement_col.dtype}"
             )
-        with access_columns(mode="read", scope="internal"):
+        with to_replace_col.access(mode="read", scope="internal"):
             with replacement_col.access(mode="read", scope="internal"):
                 distinct_table = plc.stream_compaction.stable_distinct(
                     plc.Table(
@@ -445,24 +429,23 @@ class CategoricalColumn(ColumnBase):
                     plc.types.NullEquality.EQUAL,
                     plc.types.NanEquality.ALL_EQUAL,
                 )
-        old_col = ColumnBase.create(
-            distinct_table.columns()[0],
-            to_replace_col.dtype,
-        )
-        new_col = ColumnBase.create(
-            distinct_table.columns()[1],
-            replacement_col.dtype,
-        )
 
-        if old_col.null_count == 1:
-            with old_col.access(mode="read", scope="internal"):
-                old_col_isnull_plc = plc.unary.is_null(old_col.plc_column)
-            old_col_isnull = ColumnBase.create(
-                old_col_isnull_plc, np.dtype("bool")
+        # Work directly with plc columns, only wrap when needed for high-level ops
+        old_plc = distinct_table.columns()[0]
+        new_plc = distinct_table.columns()[1]
+
+        if old_plc.null_count() == 1:
+            # Get the replacement value for the null in old_col
+            old_isnull_plc = plc.unary.is_null(old_plc)
+            filtered_table = plc.stream_compaction.apply_boolean_mask(
+                plc.Table([new_plc]), old_isnull_plc
             )
-            fill_value = new_col.apply_boolean_mask(
-                old_col_isnull
-            ).element_indexing(0)
+            # We know there's exactly 1 null, so filtered result has 1 row
+            fill_scalar = plc.copying.get_element(
+                filtered_table.columns()[0], 0
+            )
+            fill_value = fill_scalar.to_arrow().as_py()
+
             # TODO: This line of code does not work because we cannot use the
             # `in` operator on self.categories (which is a column). mypy
             # realizes that this is wrong because __iter__ is not implemented.
@@ -477,24 +460,41 @@ class CategoricalColumn(ColumnBase):
                 )
                 replaced = self._set_categories(new_categories)
                 replaced = replaced.fillna(fill_value)
+
             # Drop rows where "old" column is null
-            old_col, new_col = _drop_nulls_from_columns(old_col, new_col, 0)
+            dropped = plc.stream_compaction.drop_nulls(
+                plc.Table([old_plc, new_plc]), [0], 1
+            )
+            old_plc = dropped.columns()[0]
+            new_plc = dropped.columns()[1]
         else:
             replaced = self
-        if new_col.null_count > 0:
-            with new_col.access(mode="read", scope="internal"):
-                new_col_isnull_plc = plc.unary.is_null(new_col.plc_column)
-            new_col_isnull = ColumnBase.create(
-                new_col_isnull_plc, np.dtype("bool")
+
+        if new_plc.null_count() > 0:
+            # Get old values where new is null (these categories will be dropped)
+            new_isnull_plc = plc.unary.is_null(new_plc)
+            filtered_table = plc.stream_compaction.apply_boolean_mask(
+                plc.Table([old_plc]), new_isnull_plc
             )
-            drop_values = old_col.apply_boolean_mask(new_col_isnull)
+            drop_values = ColumnBase.create(
+                filtered_table.columns()[0], to_replace_col.dtype
+            )
             cur_categories = replaced.categories
             new_categories = cur_categories.apply_boolean_mask(
                 cur_categories.isin(drop_values).unary_operator("not")  # type: ignore[arg-type]
             )
             replaced = replaced._set_categories(new_categories)
+
             # Drop rows where "new" column is null
-            old_col, new_col = _drop_nulls_from_columns(old_col, new_col, 1)
+            dropped = plc.stream_compaction.drop_nulls(
+                plc.Table([old_plc, new_plc]), [1], 1
+            )
+            old_plc = dropped.columns()[0]
+            new_plc = dropped.columns()[1]
+
+        # Wrap for remaining operations that need ColumnBase
+        old_col = ColumnBase.create(old_plc, to_replace_col.dtype)
+        new_col = ColumnBase.create(new_plc, replacement_col.dtype)
 
         # create a dataframe containing the pre-replacement categories
         # and a column with the appropriate labels replaced.
