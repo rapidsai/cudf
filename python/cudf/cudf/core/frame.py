@@ -231,8 +231,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
         if column_names is None:
             column_names = self._column_names
         data = dict(zip(column_names, columns, strict=True))
-        frame = self.__class__._from_data(data)
-        return frame._copy_type_metadata(self)
+        return self.__class__._from_data(data)
 
     def _drop_duplicates_columns(
         self,
@@ -1211,21 +1210,6 @@ class Frame(BinaryOperand, Scannable, Serializable):
                 for name, col in self._column_labels_and_values
             }
         )
-
-    @_performance_tracking
-    def _copy_type_metadata(self: Self, other: Self) -> Self:
-        """
-        Copy type metadata from `other` to `self`.
-
-        This is a no-op for Frame. Subclasses like DatetimeIndex and
-        MultiIndex override this to copy index-specific metadata
-        (like _freq or _names).
-
-        Column-level dtype metadata is no longer copied here because
-        columns should be constructed with correct dtypes upfront
-        using ColumnBase.create.
-        """
-        return self
 
     @_performance_tracking
     def isna(self) -> Self:

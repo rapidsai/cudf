@@ -416,7 +416,7 @@ class IndexedFrame(Frame):
             index = _index_from_data(
                 dict(enumerate(columns[:n_index_columns]))
             )
-            # TODO: Should this if statement be handled in Index._copy_type_metadata?
+            # Handle special index types that need to be reconstructed
             if (
                 isinstance(self.index, cudf.CategoricalIndex)
                 and not isinstance(index, cudf.CategoricalIndex)
@@ -2117,7 +2117,7 @@ class IndexedFrame(Frame):
         )
         return self._from_data_like_self(
             self._data._from_columns_like_self(data_columns)
-        )._copy_type_metadata(self)
+        )
 
     @_performance_tracking
     def truncate(self, before=None, after=None, axis=0, copy=True):
@@ -5564,7 +5564,7 @@ class IndexedFrame(Frame):
         if len(idx_cols):
             index = _index_from_data(
                 dict(enumerate(exploded[: len(idx_cols)]))
-            )._copy_type_metadata(self.index)
+            )
             if (
                 isinstance(self.index, cudf.CategoricalIndex)
                 and not isinstance(index, cudf.CategoricalIndex)
@@ -5575,6 +5575,9 @@ class IndexedFrame(Frame):
                 index = type(self.index)._from_data(index._data)
             if isinstance(self.index, cudf.MultiIndex):
                 index.names = self.index.names
+            elif isinstance(self.index, cudf.DatetimeIndex):
+                index._freq = self.index._freq
+                index.name = self.index.name
             else:
                 index.name = self.index.name
         else:

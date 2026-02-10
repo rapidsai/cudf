@@ -2719,8 +2719,7 @@ class GroupBy(Serializable, Reducible, Scannable):
                 )
             )
         )
-        result = self._mimic_pandas_order(result)
-        return result._copy_type_metadata(values)
+        return self._mimic_pandas_order(result)
 
     def ffill(self, limit=None):
         """Forward fill NA values.
@@ -2889,8 +2888,7 @@ class GroupBy(Serializable, Reducible, Scannable):
                 )
             )
         )
-        result = self._mimic_pandas_order(result)
-        return result._copy_type_metadata(values)
+        return self._mimic_pandas_order(result)
 
     @_performance_tracking
     def pct_change(

@@ -2581,11 +2581,6 @@ class RangeIndex(Index):
                     raise ValueError("Step must not be zero.") from err
                 raise
 
-    def _copy_type_metadata(self: Self, other: Self) -> Self:
-        # There is no metadata to be copied for RangeIndex since it does not
-        # have an underlying column.
-        return self
-
     @property
     @_performance_tracking
     def name(self) -> Hashable:
@@ -3629,10 +3624,14 @@ class DatetimeIndex(Index):
         return obj
 
     @_performance_tracking
-    def _copy_type_metadata(self: Self, other: Self) -> Self:
-        # Only copy _freq, not column-level metadata (which is now a no-op in Frame)
-        self._freq = _validate_freq(other._freq)
-        return self
+    def _from_columns_like_self(
+        self,
+        columns: list[ColumnBase],
+        column_names: Iterable[str] | None = None,
+    ):
+        result = super()._from_columns_like_self(columns, column_names)
+        result._freq = _validate_freq(self._freq)
+        return result
 
     @classmethod
     def _from_data(
@@ -3685,7 +3684,8 @@ class DatetimeIndex(Index):
     @_performance_tracking
     def copy(self, name=None, deep=False):
         idx_copy = super().copy(name=name, deep=deep)
-        return idx_copy._copy_type_metadata(self)
+        idx_copy._freq = _validate_freq(self._freq)
+        return idx_copy
 
     def as_unit(self, unit: str, round_ok: bool = True) -> Self:
         """

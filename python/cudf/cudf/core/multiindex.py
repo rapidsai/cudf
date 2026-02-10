@@ -50,7 +50,7 @@ from cudf.utils.utils import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Generator, Hashable, MutableMapping
+    from collections.abc import Generator, Hashable, Iterable, MutableMapping
     from typing import Self
 
     import pyarrow as pa
@@ -2181,11 +2181,14 @@ class MultiIndex(Index):
         return midx
 
     @_performance_tracking
-    def _copy_type_metadata(self: Self, other: Self) -> Self:
-        # Only copy _names, not column-level metadata (which is now a no-op in Frame)
-        if isinstance(other, MultiIndex):
-            self._names = other._names
-        return self
+    def _from_columns_like_self(
+        self,
+        columns: list[column.ColumnBase],
+        column_names: Iterable[str] | None = None,
+    ):
+        result = super()._from_columns_like_self(columns, column_names)
+        result._names = self._names
+        return result
 
     @_performance_tracking
     def _split_columns_by_levels(
