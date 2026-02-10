@@ -30,6 +30,7 @@ from cudf.utils.dtypes import (
     cudf_dtype_from_pa_type,
     cudf_dtype_to_pa_type,
     is_pandas_nullable_extension_dtype,
+    min_unsigned_type,
 )
 
 if PANDAS_GE_210:
@@ -250,6 +251,11 @@ class CategoricalDtype(_BaseDtype):
         Whether the categories have an ordered relationship.
         """
         return self._ordered
+
+    @cached_property
+    def _codes_dtype(self) -> np.dtype:
+        """Return the dtype used for categorical codes."""
+        return min_unsigned_type(len(self.categories))
 
     def to_pandas(self) -> pd.CategoricalDtype:
         """
@@ -851,11 +857,13 @@ class DecimalDtype(_BaseDtype):
         # might need to account for precision and scale here
         return decimal.Decimal
 
-    def to_arrow(self) -> pa.Decimal128Type:
+    def to_arrow(
+        self,
+    ) -> pa.Decimal128Type | pa.Decimal32Type | pa.Decimal64Type:
         """
         Return the equivalent ``pyarrow`` dtype.
         """
-        return pa.decimal128(self.precision, self.scale)
+        return type(self).PA_TYPE(self.precision, self.scale)
 
     @classmethod
     def from_arrow(
@@ -949,6 +957,7 @@ class Decimal32Dtype(DecimalDtype):
     name = "decimal32"
     MAX_PRECISION = np.floor(np.log10(np.iinfo("int32").max))
     ITEMSIZE = 4
+    PA_TYPE = pa.decimal32
 
 
 @doc_apply(
@@ -960,6 +969,7 @@ class Decimal64Dtype(DecimalDtype):
     name = "decimal64"
     MAX_PRECISION = np.floor(np.log10(np.iinfo("int64").max))
     ITEMSIZE = 8
+    PA_TYPE = pa.decimal64
 
 
 @doc_apply(
@@ -971,6 +981,7 @@ class Decimal128Dtype(DecimalDtype):
     name = "decimal128"
     MAX_PRECISION = 38
     ITEMSIZE = 16
+    PA_TYPE = pa.decimal128
 
 
 class IntervalDtype(_BaseDtype):
@@ -1060,14 +1071,12 @@ class IntervalDtype(_BaseDtype):
         )
 
     def to_pandas(self) -> pd.IntervalDtype:
-        if cudf.get_option("mode.pandas_compatible"):
-            return pd.IntervalDtype(
-                subtype=self.subtype.numpy_dtype
-                if is_pandas_nullable_extension_dtype(self.subtype)
-                else self.subtype,
-                closed=self.closed,
-            )
-        return pd.IntervalDtype(subtype=self.subtype, closed=self.closed)
+        return pd.IntervalDtype(
+            subtype=self.subtype.numpy_dtype
+            if is_pandas_nullable_extension_dtype(self.subtype)
+            else self.subtype,
+            closed=self.closed,
+        )
 
     def __eq__(self, other) -> bool:
         if isinstance(other, str):
