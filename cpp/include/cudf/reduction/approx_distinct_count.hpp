@@ -44,13 +44,13 @@ class approx_distinct_count;
  * The precision parameter (p) is the number of bits used to index into the register array.
  * It determines the number of registers (m = 2^p) in the HLL sketch:
  * - Memory usage: 2^p * 4 bytes (m registers of 4 bytes each for GPU atomics)
- * - Standard error: 1.04 / sqrt(m) = 1.04 / sqrt(2^p)
+ * - Standard deviation: 1.04 / sqrt(m) = 1.04 / sqrt(2^p)
  *
  * Common precision values:
- * - p = 10: m = 1,024 registers, ~3.2% standard error, 4KB memory
- * - p = 12 (default): m = 4,096 registers, ~1.6% standard error, 16KB memory
- * - p = 14: m = 16,384 registers, ~0.8% standard error, 64KB memory
- * - p = 16: m = 65,536 registers, ~0.4% standard error, 256KB memory
+ * - p = 10: m = 1,024 registers, ~3.2% standard deviation, 4KB memory
+ * - p = 12 (default): m = 4,096 registers, ~1.6% standard deviation, 16KB memory
+ * - p = 14: m = 16,384 registers, ~0.8% standard deviation, 64KB memory
+ * - p = 16: m = 65,536 registers, ~0.4% standard deviation, 256KB memory
  *
  * Valid range: p ∈ [4, 18]. This is not a hard theoretical limit but an empirically
  * recommended range:
@@ -79,7 +79,7 @@ class approx_distinct_count {
     cudf::detail::approx_distinct_count<cudf::hashing::detail::XXHash_64>;  ///< Implementation type
 
   /**
-   * @brief Constructs an approximate distinct count sketch from a table
+   * @brief Constructs an approximate distinct count sketch from a table with specified precision
    *
    * @param input Table whose rows will be added to the sketch
    * @param precision The precision parameter for HyperLogLog (4-18). Higher precision gives
@@ -95,28 +95,52 @@ class approx_distinct_count {
                         rmm::cuda_stream_view stream = cudf::get_default_stream());
 
   /**
-   * @brief Constructs an approximate distinct count sketch from serialized sketch bytes
+   * @brief Constructs an approximate distinct count sketch from a table with specified standard
+   * deviation
    *
-   * This constructor enables distributed distinct counting by allowing sketches to be
-   * constructed from serialized data. The sketch data is copied into the newly created
-   * object, which then owns its own independent storage.
+   * This constructor allows specifying the desired standard deviation (error tolerance) directly,
+   * which is more intuitive than specifying the precision parameter. The precision is calculated
+   * as: `ceil(2 * log2(1.04 / standard_deviation))`.
    *
-   * @warning The precision parameter must match the precision used to create the original
-   * sketch. The size of the sketch span must be exactly 2^precision bytes. The null and
-   * NaN handling policies must match those used when creating the original sketch.
-   * Providing incompatible parameters will produce incorrect results or errors.
+   * Since precision must be an integer, the actual standard deviation may be better (smaller)
+   * than requested. Use the `standard_deviation()` getter to retrieve the actual value.
    *
-   * @param sketch_span The serialized sketch bytes to reconstruct from
-   * @param precision The precision parameter that was used to create the sketch (4-18)
+   * @note This overload is disambiguated from the precision constructor by parameter type:
+   *       `int` selects precision, `double` selects standard deviation.
+   *
+   * @param input Table whose rows will be added to the sketch
+   * @param standard_deviation The desired standard deviation for approximation (e.g., 0.01 for ~1%)
    * @param null_handling `INCLUDE` or `EXCLUDE` rows with nulls (default: `EXCLUDE`)
    * @param nan_handling `NAN_IS_VALID` or `NAN_IS_NULL` (default: `NAN_IS_NULL`)
    * @param stream CUDA stream used for device memory operations and kernel launches
+   *
+   * @throws std::invalid_argument if standard_deviation is not in the valid range
    */
-  approx_distinct_count(cuda::std::span<cuda::std::byte> sketch_span,
-                        std::int32_t precision,
+  approx_distinct_count(table_view const& input,
+                        double standard_deviation,
                         null_policy null_handling    = null_policy::EXCLUDE,
                         nan_policy nan_handling      = nan_policy::NAN_IS_NULL,
                         rmm::cuda_stream_view stream = cudf::get_default_stream());
+
+  /**
+   * @brief Constructs a non-owning sketch that operates on user-allocated storage
+   *
+   * This constructor creates a sketch that operates directly on the provided storage
+   * without copying. This enables zero-copy operations on pre-existing buffers, such as
+   * sketch data stored in a column or received from another process.
+   *
+   * @warning The caller must ensure the storage remains valid for the lifetime of this
+   * object. The sketch will read from and write to the provided storage directly.
+   *
+   * @param sketch_span The sketch bytes to operate on (must remain valid)
+   * @param precision The precision parameter for the sketch (4-18)
+   * @param null_handling `INCLUDE` or `EXCLUDE` rows with nulls (default: `EXCLUDE`)
+   * @param nan_handling `NAN_IS_VALID` or `NAN_IS_NULL` (default: `NAN_IS_NULL`)
+   */
+  approx_distinct_count(cuda::std::span<cuda::std::byte> sketch_span,
+                        std::int32_t precision,
+                        null_policy null_handling = null_policy::EXCLUDE,
+                        nan_policy nan_handling   = nan_policy::NAN_IS_NULL);
 
   ~approx_distinct_count();
 
@@ -166,7 +190,7 @@ class approx_distinct_count {
    * @param sketch_span The sketch bytes to merge into this sketch
    * @param stream CUDA stream used for device memory operations and kernel launches
    */
-  void merge(cuda::std::span<cuda::std::byte> sketch_span,
+  void merge(cuda::std::span<cuda::std::byte const> sketch_span,
              rmm::cuda_stream_view stream = cudf::get_default_stream());
 
   /**
@@ -220,6 +244,24 @@ class approx_distinct_count {
    * @return The precision value set at construction
    */
   [[nodiscard]] std::int32_t precision() const noexcept;
+
+  /**
+   * @brief Gets the standard deviation (error tolerance) for this sketch
+   *
+   * The standard deviation is calculated from precision as: `1.04 / sqrt(2^precision)`.
+   * This represents the expected relative error of the cardinality estimate.
+   *
+   * @return The actual standard deviation based on the sketch's precision
+   */
+  [[nodiscard]] double standard_deviation() const noexcept;
+
+  /**
+   * @brief Checks whether this sketch owns its storage
+   *
+   * @return true if the sketch owns its storage (allocated internally),
+   *         false if non-owning (operating on external storage)
+   */
+  [[nodiscard]] bool owns_storage() const noexcept;
 
  private:
   std::unique_ptr<impl_type> _impl;
