@@ -856,10 +856,19 @@ class NumericalColumn(NumericalBaseColumn):
                 keep_threshold=1,  # Keep rows with at least 1 non-null in keys
             ).columns()
 
-        # Create ColumnBases only when needed for replace operation
-        old_col = cast(Self, ColumnBase.create(old_plc, common_type))
-        new_col = cast(Self, ColumnBase.create(new_plc, common_type))
-        return replaced.replace(old_col, new_col)
+        # Perform replace operation directly at plc level
+        with replaced.access(mode="read", scope="internal"):
+            return cast(
+                Self,
+                ColumnBase.create(
+                    plc.replace.find_and_replace_all(
+                        replaced.plc_column,
+                        old_plc,
+                        new_plc,
+                    ),
+                    common_type,
+                ),
+            )
 
     def _validate_fillna_value(
         self, fill_value: ScalarLike | ColumnLike

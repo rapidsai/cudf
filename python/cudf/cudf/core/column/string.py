@@ -480,10 +480,19 @@ class StringColumn(ColumnBase, Scannable):
                 keep_threshold=1,  # Keep rows with at least 1 non-null in keys
             ).columns()
 
-        # Create ColumnBases only when needed for replace operation
-        old_col = cast(Self, ColumnBase.create(old_plc, self.dtype))
-        new_col = cast(Self, ColumnBase.create(new_plc, self.dtype))
-        return res.replace(old_col, new_col)
+        # Perform replace operation directly at plc level
+        with res.access(mode="read", scope="internal"):
+            return cast(
+                Self,
+                ColumnBase.create(
+                    plc.replace.find_and_replace_all(
+                        res.plc_column,
+                        old_plc,
+                        new_plc,
+                    ),
+                    self.dtype,
+                ),
+            )
 
     def _binaryop(self, other: ColumnBinaryOperand, op: str) -> ColumnBase:
         reflect, op = self._check_reflected_op(op)
