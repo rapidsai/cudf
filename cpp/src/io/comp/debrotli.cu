@@ -194,7 +194,7 @@ inline __device__ uint32_t safe_load_u32(uint8_t const* p, uint8_t const* end)
 {
   if (p >= end) { return 0; }
   uint32_t result = 0;
-  memcpy(&result, p, std::min(static_cast<size_t>(cuda::std::distance(p, end), sizeof(uint32_t)));
+  memcpy(&result, p, cuda::std::min<size_t>(cuda::std::distance(p, end), sizeof(uint32_t)));
   return result;
 }
 
