@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -1042,6 +1042,53 @@ TEST_F(JsonPathTests, QueriesContainingQuotes)
 
   // Set 2
   do_test(R"($.'A)", R"({"B'": 3})");
+}
+
+// Test that get_json_object creates valid string columns for empty/whitespace JSONPath queries
+// This test currently FAILS due to a bug where empty paths create columns with no children.
+// After fixing cpp/src/json/json_path.cu lines 982-990, this test should PASS.
+TEST_F(JsonPathTests, EmptyPathCreatesValidColumn)
+{
+  auto const input = cudf::test::strings_column_wrapper{R"({"a":"b"})"};
+
+  // Test 1: Empty path should create VALID all-null column
+  {
+    std::string_view json_path("");
+    auto result = cudf::get_json_object(cudf::strings_column_view(input), json_path);
+
+    EXPECT_EQ(result->size(), 1);
+    EXPECT_EQ(result->type().id(), cudf::type_id::STRING);
+    EXPECT_EQ(result->null_count(), 1);
+
+    // EXPECTED: A valid string column MUST have children (offsets and chars)
+    // Currently FAILS because num_children() == 0
+    EXPECT_GT(result->num_children(), 0) << "String column must have children (offsets and chars)";
+  }
+
+  // Test 2: Whitespace path should also create VALID all-null column
+  {
+    std::string_view json_path(" ");
+    auto result = cudf::get_json_object(cudf::strings_column_view(input), json_path);
+
+    EXPECT_EQ(result->size(), 1);
+    EXPECT_EQ(result->null_count(), 1);
+
+    // Currently FAILS because num_children() == 0
+    EXPECT_GT(result->num_children(), 0) << "String column must have children";
+  }
+
+  // Test 3: Valid path that doesn't match should also create proper all-null column (this already
+  // works)
+  {
+    std::string_view json_path("$.nonexistent");
+    auto result = cudf::get_json_object(cudf::strings_column_view(input), json_path);
+
+    EXPECT_EQ(result->size(), 1);
+    EXPECT_EQ(result->null_count(), 1);
+
+    // This case already works correctly
+    EXPECT_GT(result->num_children(), 0) << "Valid column has children";
+  }
 }
 
 CUDF_TEST_PROGRAM_MAIN()
