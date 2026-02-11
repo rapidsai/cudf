@@ -53,6 +53,7 @@ from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
     SIZE_TYPE_DTYPE,
     cudf_dtype_to_pa_type,
+    dtype_from_pylibcudf_column,
     get_dtype_of_same_kind,
 )
 from cudf.utils.performance_tracking import _performance_tracking
@@ -650,6 +651,7 @@ class GroupBy(Serializable, Reducible, Scannable):
             [as_column(range(len(self.obj)), dtype=SIZE_TYPE_DTYPE)]
         )
 
+        key_dtypes = [col.dtype for col in group_keys]
         with access_columns(
             *group_keys, mode="read", scope="internal"
         ) as cols:
@@ -661,7 +663,10 @@ class GroupBy(Serializable, Reducible, Scannable):
                 plc.types.NanEquality.ALL_EQUAL,
             )
             group_keys = [
-                ColumnBase.from_pylibcudf(col) for col in plc_table.columns()
+                ColumnBase.create(col, dtype)
+                for col, dtype in zip(
+                    plc_table.columns(), key_dtypes, strict=True
+                )
             ]
         if len(group_keys) > 1:
             index = MultiIndex.from_arrays(group_keys)
@@ -822,6 +827,8 @@ class GroupBy(Serializable, Reducible, Scannable):
     ) -> tuple[list[int], list[ColumnBase], list[ColumnBase]]:
         # Materialize iterator to avoid consuming it during access context setup
         values_list = list(values)
+        key_dtypes = [col.dtype for col in self.grouping._key_columns]
+        value_dtypes = [col.dtype for col in values_list]
         with access_columns(*values_list, mode="read", scope="internal"):
             plc_columns = [col.plc_column for col in values_list]
             if not plc_columns:
@@ -836,11 +843,18 @@ class GroupBy(Serializable, Reducible, Scannable):
 
         return (
             offsets,
-            [ColumnBase.from_pylibcudf(col) for col in grouped_keys.columns()],
+            [
+                ColumnBase.create(col, dtype)
+                for col, dtype in zip(
+                    grouped_keys.columns(), key_dtypes, strict=True
+                )
+            ],
             (
                 [
-                    ColumnBase.from_pylibcudf(col)
-                    for col in grouped_values.columns()
+                    ColumnBase.create(col, dtype)
+                    for col, dtype in zip(
+                        grouped_values.columns(), value_dtypes, strict=True
+                    )
                 ]
                 if grouped_values is not None
                 else []
@@ -850,16 +864,14 @@ class GroupBy(Serializable, Reducible, Scannable):
     def _aggregate(
         self, values: tuple[ColumnBase, ...], aggregations
     ) -> tuple[
-        list[list[ColumnBase]],
+        list[list[plc.Column]],
         list[ColumnBase],
         list[list[tuple[str, str]]],
     ]:
         included_aggregations = []
         column_included = []
         requests = []
-        # For any post-processing needed after pylibcudf aggregations
-        adjustments = []
-        result_columns: list[list[ColumnBase]] = []
+        result_columns: list[list[plc.Column]] = []
 
         for i, (col, aggs) in enumerate(
             zip(values, aggregations, strict=True)
@@ -867,7 +879,6 @@ class GroupBy(Serializable, Reducible, Scannable):
             valid_aggregations = get_valid_aggregation(col.dtype)
             included_aggregations_i = []
             col_aggregations = []
-            adjustments_i = []
             for agg in aggs:
                 str_agg = str(agg)
                 if _is_unsupported_agg_for_type(col.dtype, str_agg):
@@ -881,12 +892,6 @@ class GroupBy(Serializable, Reducible, Scannable):
                 ):
                     included_aggregations_i.append((agg, agg_obj.kind))
                     col_aggregations.append(agg_obj.plc_obj)
-                    if str_agg == "cumcount":
-                        # pandas 0-indexes cumulative count, see
-                        # https://github.com/rapidsai/cudf/issues/10237
-                        adjustments_i.append(lambda col: (col - 1))
-                    else:
-                        adjustments_i.append(lambda col: col)
             included_aggregations.append(included_aggregations_i)
             result_columns.append([])
             if col_aggregations:
@@ -896,13 +901,13 @@ class GroupBy(Serializable, Reducible, Scannable):
                     )
                 )
                 column_included.append(i)
-                adjustments.append(adjustments_i)
 
         if not requests and any(len(v) > 0 for v in aggregations):
             raise pd.errors.DataError(
                 "All requested aggregations are unsupported."
             )
 
+        key_dtypes = [col.dtype for col in self.grouping._key_columns]
         with access_columns(*values, mode="read", scope="internal"):
             with self._groupby as plc_groupby:
                 keys, results = (
@@ -911,19 +916,15 @@ class GroupBy(Serializable, Reducible, Scannable):
                     else plc_groupby.aggregate(requests)
                 )
 
-        for i, result, adjustments_i in zip(
-            column_included, results, adjustments, strict=True
-        ):
-            result_columns[i] = [
-                adj(ColumnBase.from_pylibcudf(col))
-                for col, adj in zip(
-                    result.columns(), adjustments_i, strict=True
-                )
-            ]
+        for i, result in zip(column_included, results, strict=True):
+            result_columns[i] = result.columns()
 
         return (
             result_columns,
-            [ColumnBase.from_pylibcudf(key) for key in keys.columns()],
+            [
+                ColumnBase.create(key, dtype)
+                for key, dtype in zip(keys.columns(), key_dtypes, strict=True)
+            ],
             included_aggregations,
         )
 
@@ -945,7 +946,8 @@ class GroupBy(Serializable, Reducible, Scannable):
                     ],
                 )
                 return (
-                    ColumnBase.from_pylibcudf(col) for col in shifts.columns()
+                    ColumnBase.create(col, orig.dtype)
+                    for col, orig in zip(shifts.columns(), values, strict=True)
                 )
 
     def _replace_nulls(
@@ -964,8 +966,10 @@ class GroupBy(Serializable, Reducible, Scannable):
                 )
 
                 return (
-                    ColumnBase.from_pylibcudf(col)
-                    for col in replaced.columns()
+                    ColumnBase.create(col, orig.dtype)
+                    for col, orig in zip(
+                        replaced.columns(), values, strict=True
+                    )
                 )
 
     @_performance_tracking
@@ -1096,27 +1100,25 @@ class GroupBy(Serializable, Reducible, Scannable):
             orig_dtypes,
             strict=True,
         ):
-            for agg_tuple, col in zip(aggs, cols, strict=True):
+            for agg_tuple, plc_result in zip(aggs, cols, strict=True):
                 agg, agg_kind = agg_tuple
                 agg_name = agg.__name__ if callable(agg) else agg
                 if multilevel:
                     key = (col_name, agg_name)
                 else:
                     key = col_name
+
+                create_dtype = dtype_from_pylibcudf_column(plc_result)
+                cast_dtype = None
                 if agg in {list, "collect"}:
                     # Collect wraps the original dtype in ListDtype (e.g., int -> list<int>)
-                    new_dtype = get_dtype_of_same_kind(
+                    create_dtype = get_dtype_of_same_kind(
                         orig_dtype, ListDtype(orig_dtype)
                     )
-                    col = ColumnBase.create(col.plc_column, new_dtype)
-
-                # Default: use column as-is
-                data[key] = col
-
                 # Override for specific aggregation types that need dtype adjustments
                 if agg_kind in {"COUNT", "SIZE", "ARGMIN", "ARGMAX"}:
-                    data[key] = col.astype(
-                        get_dtype_of_same_kind(orig_dtype, np.dtype(np.int64))
+                    cast_dtype = get_dtype_of_same_kind(
+                        orig_dtype, np.dtype(np.int64)
                     )
                 elif (
                     self.obj.empty
@@ -1124,24 +1126,26 @@ class GroupBy(Serializable, Reducible, Scannable):
                         isinstance(agg_name, str)
                         and agg_name in Reducible._SUPPORTED_REDUCTIONS
                     )
-                    and len(col) == 0
+                    and plc_result.size() == 0
                     and not isinstance(
-                        col.dtype,
+                        create_dtype,
                         (ListDtype, StructDtype, DecimalDtype),
                     )
                 ):
-                    data[key] = col.astype(orig_dtype)
+                    cast_dtype = orig_dtype
                 elif agg not in {list, "collect"}:
-                    # For non-collect aggregations, apply original dtype metadata
-                    if isinstance(orig_dtype, DecimalDtype):
-                        # `col` has a different precision than `orig_dtype`
-                        # hence we only preserve the kind of the dtype
-                        # and not the precision.
-                        data[key] = col._with_type_metadata(
-                            get_dtype_of_same_kind(orig_dtype, col.dtype)
-                        )
-                    else:
-                        data[key] = col._with_type_metadata(orig_dtype)
+                    create_dtype = get_dtype_of_same_kind(
+                        orig_dtype, create_dtype
+                    )
+
+                result_col = ColumnBase.create(plc_result, create_dtype)
+                if agg == "cumcount":
+                    # pandas 0-indexes cumulative count, see
+                    # https://github.com/rapidsai/cudf/issues/10237
+                    result_col = result_col - 1
+                if cast_dtype is not None:
+                    result_col = result_col.astype(cast_dtype)
+                data[key] = result_col
         data = ColumnAccessor(data, multiindex=multilevel)
         if not multilevel:
             data = data.rename_levels({np.nan: None}, level=0)
@@ -2716,8 +2720,7 @@ class GroupBy(Serializable, Reducible, Scannable):
                 )
             )
         )
-        result = self._mimic_pandas_order(result)
-        return result._copy_type_metadata(values)
+        return self._mimic_pandas_order(result)
 
     def ffill(self, limit=None):
         """Forward fill NA values.
@@ -2886,8 +2889,7 @@ class GroupBy(Serializable, Reducible, Scannable):
                 )
             )
         )
-        result = self._mimic_pandas_order(result)
-        return result._copy_type_metadata(values)
+        return self._mimic_pandas_order(result)
 
     @_performance_tracking
     def pct_change(
