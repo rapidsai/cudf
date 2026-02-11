@@ -5,15 +5,14 @@
 #pragma once
 
 #include <cudf/detail/utilities/grid_1d.cuh>
-#include <cudf/jit/transform_params.cuh>
+#include <cudf/jit/lto/transform_params.cuh>
 #include <cudf/types.hpp>
 
 extern "C" {
 
 __device__ void transform_operator(cudf::lto::transform_params params);
 
-__global__ void transform_kernel(void* __restrict__ const* __restrict__ scope,
-                                 int32_t num_rows)
+__global__ void transform_kernel(void* __restrict__ const* __restrict__ scope, int32_t num_rows)
 {
   auto start  = cudf::detail::grid_1d::global_thread_id();
   auto stride = cudf::detail::grid_1d::grid_stride();

@@ -8,7 +8,6 @@
 #include <cudf/jit/lto/types.cuh>
 
 namespace CUDF_LTO_EXPORT cudf {
-
 namespace lto {
 
 /// @brief Type-erased parameters for LTO-JIT-compiled transform operations.

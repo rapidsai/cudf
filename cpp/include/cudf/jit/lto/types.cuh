@@ -20,6 +20,17 @@ namespace lto {
  * will be included and compiled at JIT compile time. Including other headers will lead to longer
  * JIT compile times which can be unbounded and cause slowdowns.
  *
+ * This essentially serves as the ABI for LTO-JIT compiled code to interact with the rest of cuDF.
+ * Any changes to this header should be made with ABI stability in mind as it can break existing
+ * LTO-JIT compiled code and lead to undefined behavior. For example, adding new member variables to
+ * these structs will change their size and layout which can break existing code. Adding new
+ * functions is generally safe as long as they don't change the existing function signatures, but it
+ * can still lead to issues if the new functions are called from existing code that wasn't compiled
+ * with them. Removing or changing existing functions is not safe and will break existing code.
+ * Changing the types of existing member variables can also break existing code if it changes the
+ * size or layout of the structs. In general, any change to this header should be made with caution
+ * and thorough testing to ensure ABI compatibility.
+ *
  */
 
 using int8_t   = signed char;
@@ -53,15 +64,15 @@ enum scale_type : int32_t {};
 
 struct CUDF_LTO_ALIAS data_type {
  private:
-  type_id __id                = {};
-  int32_t __fixed_point_scale = 0;
+  type_id _id                = {};
+  int32_t _fixed_point_scale = 0;
 };
 
 struct CUDF_LTO_ALIAS string_view {
  private:
-  char const* __data         = nullptr;
-  size_type __bytes          = 0;
-  mutable size_type __length = 0;
+  char const* _data         = nullptr;
+  size_type _bytes          = 0;
+  mutable size_type _length = 0;
 
  public:
   [[nodiscard]] __device__ size_type size_bytes() const;
@@ -125,97 +136,97 @@ struct CUDF_LTO_ALIAS string_view {
 
 struct CUDF_LTO_ALIAS decimal32 {
  private:
-  int32_t __value    = 0;
-  scale_type __scale = scale_type{};
+  int32_t _value    = 0;
+  scale_type _scale = scale_type{};
 };
 
 struct CUDF_LTO_ALIAS decimal64 {
  private:
-  int64_t __value    = 0;
-  scale_type __scale = scale_type{};
+  int64_t _value    = 0;
+  scale_type _scale = scale_type{};
 };
 
 struct CUDF_LTO_ALIAS decimal128 {
  private:
-  __int128_t __value = 0;
-  scale_type __scale = scale_type{};
+  __int128_t _value = 0;
+  scale_type _scale = scale_type{};
 };
 
 struct CUDF_LTO_ALIAS timestamp_D {
  private:
-  int32_t __rep = 0;
+  int32_t _rep = 0;
 };
 
 struct CUDF_LTO_ALIAS timestamp_h {
  private:
-  int32_t __rep = 0;
+  int32_t _rep = 0;
 };
 
 struct CUDF_LTO_ALIAS timestamp_m {
  private:
-  int32_t __rep = 0;
+  int32_t _rep = 0;
 };
 
 struct CUDF_LTO_ALIAS timestamp_s {
  private:
-  int64_t __rep = 0;
+  int64_t _rep = 0;
 };
 
 struct CUDF_LTO_ALIAS timestamp_ms {
  private:
-  int64_t __rep = 0;
+  int64_t _rep = 0;
 };
 
 struct CUDF_LTO_ALIAS timestamp_us {
  private:
-  int64_t __rep = 0;
+  int64_t _rep = 0;
 };
 
 struct CUDF_LTO_ALIAS timestamp_ns {
  private:
-  int64_t __rep = 0;
+  int64_t _rep = 0;
 };
 
 struct CUDF_LTO_ALIAS duration_D {
  private:
-  int32_t __rep = 0;
+  int32_t _rep = 0;
 };
 
 struct CUDF_LTO_ALIAS duration_h {
  private:
-  int32_t __rep = 0;
+  int32_t _rep = 0;
 };
 
 struct CUDF_LTO_ALIAS duration_m {
  private:
-  int32_t __rep = 0;
+  int32_t _rep = 0;
 };
 
 struct CUDF_LTO_ALIAS duration_s {
  private:
-  int64_t __rep = 0;
+  int64_t _rep = 0;
 };
 
 struct CUDF_LTO_ALIAS duration_ms {
  private:
-  int64_t __rep = 0;
+  int64_t _rep = 0;
 };
 
 struct CUDF_LTO_ALIAS duration_us {
  private:
-  int64_t __rep = 0;
+  int64_t _rep = 0;
 };
 
 struct CUDF_LTO_ALIAS duration_ns {
  private:
-  int64_t __rep = 0;
+  int64_t _rep = 0;
 };
 
 struct inplace_t {};
 
 inline constexpr inplace_t inplace{};
 
-// [ ] assumes T is trivially copyable
+// TODO: assumes T is trivially copyable
 template <typename T>
 struct CUDF_LTO_ALIAS optional {
  private:
@@ -274,46 +285,46 @@ optional(T) -> optional<T>;
 template <typename T>
 struct [[nodiscard]] device_span {
  private:
-  T* __data     = nullptr;
-  size_t __size = 0;
+  T* _data     = nullptr;
+  size_t _size = 0;
 };
+
+__device__ constexpr bool bit_is_set(bitmask_type const* bitmask, size_t bit_index)
+{
+  constexpr auto bits_per_word = sizeof(bitmask_type) * 8;
+  return bitmask[bit_index / bits_per_word] & (bitmask_type{1} << (bit_index % bits_per_word));
+}
 
 template <typename T>
 struct [[nodiscard]] device_optional_span {
  private:
-  T* __data                 = nullptr;
-  size_t __size             = 0;
-  bitmask_type* __null_mask = nullptr;
+  T* _data                 = nullptr;
+  size_t _size             = 0;
+  bitmask_type* _null_mask = nullptr;
 
  public:
-  __device__ T* data() const { return __data; }
+  __device__ T* data() const { return _data; }
 
-  __device__ size_t size() const { return __size; }
+  __device__ size_t size() const { return _size; }
 
-  __device__ bool empty() const { return __size == 0; }
+  __device__ bool empty() const { return _size == 0; }
 
-  __device__ T& operator[](size_t pos) const { return __data[pos]; }
+  __device__ T& operator[](size_t pos) const { return _data[pos]; }
 
-  __device__ T* begin() const { return __data; }
+  __device__ T* begin() const { return _data; }
 
-  __device__ T* end() const { return __data + __size; }
+  __device__ T* end() const { return _data + _size; }
 
   __device__ device_optional_span<T const> as_const() const
   {
-    return device_optional_span<T const>{__data, __size, __null_mask};
+    return device_optional_span<T const>{_data, _size, _null_mask};
   }
 
-  __device__ bool nullable() const { return __null_mask != nullptr; }
-
-  __device__ static constexpr bool bit_is_set(bitmask_type const* bitmask, size_t bit_index)
-  {
-    constexpr auto bits_per_word = sizeof(bitmask_type) * 8;
-    return bitmask[bit_index / bits_per_word] & (bitmask_type{1} << (bit_index % bits_per_word));
-  }
+  __device__ bool nullable() const { return _null_mask != nullptr; }
 
   [[nodiscard]] __device__ bool is_valid_nocheck(size_t element_index) const
   {
-    return bit_is_set(__null_mask, element_index);
+    return bit_is_set(_null_mask, element_index);
   }
 
   __device__ bool is_valid(size_t element_index) const
@@ -323,11 +334,11 @@ struct [[nodiscard]] device_optional_span {
 
   __device__ bool is_null(size_t element_index) const { return !is_valid(element_index); }
 
-  __device__ T& element(size_t idx) const { return __data[idx]; }
+  __device__ T& element(size_t idx) const { return _data[idx]; }
 
   __device__ optional<T> nullable_element(size_t idx) const;
 
-  __device__ void assign(size_t idx, T value) const { __data[idx] = value; }
+  __device__ void assign(size_t idx, T value) const { _data[idx] = value; }
 };
 
 #define FOREACH_CUDF_LTO_COLUMN_HEAD_TYPE \
@@ -420,13 +431,13 @@ struct [[nodiscard]] device_optional_span {
 
 struct alignas(16) CUDF_LTO_ALIAS column_device_view_core {
  private:
-  data_type __type                      = {};
-  size_type __size                      = 0;
-  void const* __data                    = nullptr;
-  bitmask_type const* __null_mask       = nullptr;
-  size_type __offset                    = 0;
-  column_device_view_core* __d_children = nullptr;
-  size_type __num_children              = 0;
+  data_type _type                      = {};
+  size_type _size                      = 0;
+  void const* _data                    = nullptr;
+  bitmask_type const* _null_mask       = nullptr;
+  size_type _offset                    = 0;
+  column_device_view_core* _d_children = nullptr;
+  size_type _num_children              = 0;
 
  public:
   template <typename T>
@@ -459,37 +470,15 @@ struct alignas(16) CUDF_LTO_ALIAS column_device_view_core {
   __device__ size_type num_child_columns() const;
 };
 
-#define DO_IT(Type) \
-  extern template __device__ Type const* column_device_view_core::head<Type>() const;
-
-FOREACH_CUDF_LTO_COLUMN_HEAD_TYPE
-
-#undef DO_IT
-
-#define DO_IT(Type) \
-  extern template __device__ Type column_device_view_core::element<Type>(size_type idx) const;
-
-FOREACH_CUDF_LTO_COLUMN_ELEMENT_TYPE
-
-#undef DO_IT
-
-#define DO_IT(Type)                                                                          \
-  extern template __device__ optional<Type> column_device_view_core::nullable_element<Type>( \
-    size_type idx) const;
-
-FOREACH_CUDF_LTO_COLUMN_ELEMENT_TYPE
-
-#undef DO_IT
-
 struct alignas(16) CUDF_LTO_ALIAS mutable_column_device_view_core {
  private:
-  data_type __type                              = {};
-  size_type __size                              = 0;
-  void const* __data                            = nullptr;
-  bitmask_type const* __null_mask               = nullptr;
-  size_type __offset                            = 0;
-  mutable_column_device_view_core* __d_children = nullptr;
-  size_type __num_children                      = 0;
+  data_type _type                              = {};
+  size_type _size                              = 0;
+  void const* _data                            = nullptr;
+  bitmask_type const* _null_mask               = nullptr;
+  size_type _offset                            = 0;
+  mutable_column_device_view_core* _d_children = nullptr;
+  size_type _num_children                      = 0;
 
  public:
   template <typename T>
@@ -523,32 +512,51 @@ struct alignas(16) CUDF_LTO_ALIAS mutable_column_device_view_core {
   __device__ void assign(size_type idx, T value) const;
 };
 
-#define DO_IT(Type) \
-  extern template __device__ Type* mutable_column_device_view_core::head<Type>() const;
+#define DO_IT(T) extern template __device__ T const* column_device_view_core::head<T>() const;
 
 FOREACH_CUDF_LTO_COLUMN_HEAD_TYPE
 
 #undef DO_IT
 
-#define DO_IT(Type)                                                                             \
-  extern template __device__ Type mutable_column_device_view_core::element<Type>(size_type idx) \
-    const;
+#define DO_IT(T) \
+  extern template __device__ T column_device_view_core::element<T>(size_type idx) const;
 
 FOREACH_CUDF_LTO_COLUMN_ELEMENT_TYPE
 
 #undef DO_IT
 
-#define DO_IT(Type)                         \
-  extern template __device__ optional<Type> \
-  mutable_column_device_view_core::nullable_element<Type>(size_type idx) const;
+#define DO_IT(T)                                                                       \
+  extern template __device__ optional<T> column_device_view_core::nullable_element<T>( \
+    size_type idx) const;
 
 FOREACH_CUDF_LTO_COLUMN_ELEMENT_TYPE
 
 #undef DO_IT
 
-#define DO_IT(Type)                                                                            \
-  extern template __device__ void mutable_column_device_view_core::assign<Type>(size_type idx, \
-                                                                                Type value) const;
+#define DO_IT(T) extern template __device__ T* mutable_column_device_view_core::head<T>() const;
+
+FOREACH_CUDF_LTO_COLUMN_HEAD_TYPE
+
+#undef DO_IT
+
+#define DO_IT(T) \
+  extern template __device__ T mutable_column_device_view_core::element<T>(size_type idx) const;
+
+FOREACH_CUDF_LTO_COLUMN_ELEMENT_TYPE
+
+#undef DO_IT
+
+#define DO_IT(T)                                                                               \
+  extern template __device__ optional<T> mutable_column_device_view_core::nullable_element<T>( \
+    size_type idx) const;
+
+FOREACH_CUDF_LTO_COLUMN_ELEMENT_TYPE
+
+#undef DO_IT
+
+#define DO_IT(T)                                                                            \
+  extern template __device__ void mutable_column_device_view_core::assign<T>(size_type idx, \
+                                                                             T value) const;
 
 FOREACH_CUDF_LTO_COLUMN_ASSIGN_TYPE
 
