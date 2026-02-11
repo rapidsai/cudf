@@ -2033,19 +2033,34 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 )
                 for table in tables
             ]
+            # Preserve dtypes from the first table
+            if ignore:
+                reference_dtypes = [col.dtype for col in tables[0]._columns]
+            else:
+                reference_dtypes = [
+                    col.dtype
+                    for col in itertools.chain(
+                        tables[0].index._columns, tables[0]._columns
+                    )
+                ]
             plc_result = plc.concatenate.concatenate(plc_tables)
             if ignore:
                 index = None
                 data = {
-                    col_name: ColumnBase.from_pylibcudf(col)
-                    for col_name, col in zip(
-                        column_names, plc_result.columns(), strict=True
+                    col_name: ColumnBase.create(col, dtype)
+                    for col_name, col, dtype in zip(
+                        column_names,
+                        plc_result.columns(),
+                        reference_dtypes,
+                        strict=True,
                     )
                 }
             else:
                 result_columns = [
-                    ColumnBase.from_pylibcudf(col)
-                    for col in plc_result.columns()
+                    ColumnBase.create(col, dtype)
+                    for col, dtype in zip(
+                        plc_result.columns(), reference_dtypes, strict=True
+                    )
                 ]
                 index = _index_from_data(
                     dict(
