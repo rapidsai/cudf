@@ -17,11 +17,9 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
-#include <rmm/exec_policy.hpp>
 
 #include <cuco/hyperloglog_ref.cuh>
 #include <cuda/functional>
-#include <thrust/fill.h>
 #include <thrust/iterator/counting_iterator.h>
 
 #include <bit>
@@ -180,8 +178,8 @@ approx_distinct_count<Hasher>::approx_distinct_count(table_view const& input,
     _null_handling{null_handling},
     _nan_handling{nan_handling}
 {
-  auto& uvec = std::get<rmm::device_uvector<register_type>>(_storage);
-  thrust::fill(rmm::exec_policy_nosync(stream), uvec.begin(), uvec.end(), register_type{0});
+  auto sketch_span = sketch();
+  CUDF_CUDA_TRY(cudaMemsetAsync(sketch_span.data(), 0, sketch_span.size(), stream.value()));
 
   if (input.num_rows() > 0) { add(input, stream); }
 }
