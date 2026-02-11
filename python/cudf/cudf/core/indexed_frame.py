@@ -3074,25 +3074,22 @@ class IndexedFrame(Frame):
                 keep_index=keep_index,
             )
 
-        columns_to_slice = (
+        cols_list = list(
             itertools.chain(self.index._columns, self._columns)
             if keep_index and not has_range_index
             else self._columns
         )
-        # Materialize iterator to avoid consuming it during access context setup
-        cols_list = list(columns_to_slice)
-        original_dtypes = [col.dtype for col in cols_list]
-        with access_columns(  # type: ignore[assignment]
+        with access_columns(
             *cols_list, mode="read", scope="internal"
-        ) as cols_list:
+        ) as flattened_cols_list:
             plc_tables = plc.copying.slice(
-                plc.Table([col.plc_column for col in cols_list]),
+                plc.Table([col.plc_column for col in flattened_cols_list]),
                 [start, stop],
             )
             sliced = [
-                ColumnBase.create(col, dtype)
-                for col, dtype in zip(
-                    plc_tables[0].columns(), original_dtypes, strict=True
+                ColumnBase.create(plc_result, dtype=reference_col.dtype)
+                for plc_result, reference_col in zip(
+                    plc_tables[0].columns(), flattened_cols_list, strict=True
                 )
             ]
         result = self._from_columns_like_self(

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 import array
 import datetime
@@ -1573,3 +1573,12 @@ def test_series_type_invalid_error():
     with cudf.option_context("mode.pandas_compatible", True):
         with pytest.raises(ValueError):
             cudf.Series(["a", "b", "c"], dtype="Int64")
+
+
+def test_series_constructor_numpy_dtype_str(pandas_compatible):
+    data = ["a"]
+    dtype = np.dtype(str)
+    expected = pd.Series(data, dtype=dtype)
+    result = cudf.Series(data, dtype=dtype)
+    assert result.dtype == np.dtype(object)
+    assert_eq(result, expected)
