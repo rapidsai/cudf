@@ -8,7 +8,7 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
-#include <cudf/detail/utilities/reduce.cuh>
+#include <cudf/detail/algorithms/reduce.cuh>
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/utilities/memory_resource.hpp>

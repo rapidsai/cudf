@@ -6,6 +6,7 @@
 #include "join_common_utils.hpp"
 
 #include <cudf/copying.hpp>
+#include <cudf/detail/algorithms/reduce.cuh>
 #include <cudf/detail/cuco_helpers.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/join/hash_join.cuh>
@@ -14,7 +15,6 @@
 #include <cudf/detail/row_operator/hashing.cuh>
 #include <cudf/detail/row_operator/primitive_row_operators.cuh>
 #include <cudf/detail/structs/utilities.hpp>
-#include <cudf/detail/utilities/reduce.cuh>
 #include <cudf/join/hash_join.hpp>
 #include <cudf/join/join.hpp>
 #include <cudf/utilities/error.hpp>

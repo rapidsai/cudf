@@ -3,10 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 #include <cudf/copying.hpp>
+#include <cudf/detail/algorithms/reduce.cuh>
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/gather.cuh>
 #include <cudf/detail/offsets_iterator_factory.cuh>
-#include <cudf/detail/utilities/reduce.cuh>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 

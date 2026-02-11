@@ -6,10 +6,10 @@
 #include "io/utilities/parsing_utils.cuh"
 #include "nested_json.hpp"
 
+#include <cudf/detail/algorithms/copy_if.cuh>
+#include <cudf/detail/algorithms/reduce.cuh>
 #include <cudf/detail/cuco_helpers.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/detail/utilities/copy_if.cuh>
-#include <cudf/detail/utilities/reduce.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/hashing/detail/default_hash.cuh>
 #include <cudf/hashing/detail/hashing.hpp>

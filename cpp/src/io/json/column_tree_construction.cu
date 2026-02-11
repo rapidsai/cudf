@@ -5,8 +5,8 @@
 
 #include "nested_json.hpp"
 
+#include <cudf/detail/algorithms/reduce.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/detail/utilities/reduce.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
