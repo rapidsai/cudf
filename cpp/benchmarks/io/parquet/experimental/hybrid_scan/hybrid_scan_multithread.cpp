@@ -112,6 +112,7 @@ void BM_hybrid_scan_multithreaded_read_common(nvbench::state& state,
                  auto const stream = streams[index % num_threads];
                  cudf::io::parquet_reader_options read_opts =
                    cudf::io::parquet_reader_options::builder(source_info_vector[index]);
+                 try_drop_l3_cache();
                  for (int i = 0; i < num_iterations; ++i) {
                    hybrid_scan(read_opts, filters, stream, cudf::get_current_device_resource_ref());
                  }
