@@ -124,7 +124,7 @@ def _match_join_keys(
 
     if how == "left" and rcol.fillna(0).can_cast_safely(ltype):
         return lcol, rcol.astype(ltype)
-    elif common_type is None:
+    if common_type is None:
         common_type = np.dtype(np.float64)
     return lcol.astype(common_type), rcol.astype(common_type)
 
