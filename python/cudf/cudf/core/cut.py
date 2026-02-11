@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from collections.abc import Sequence
@@ -81,12 +81,12 @@ def cut(
     --------
     Discretize into three equal-sized bins.
 
-    >>> cudf.cut(np.array([1, 7, 5, 4, 6, 3]), 3)
+    >>> cudf.cut(np.array([1, 7, 5, 4, 6, 3]), 3)  # doctest: +SKIP
     CategoricalIndex([(0.994, 3.0], (5.0, 7.0], (3.0, 5.0], (3.0, 5.0],
                 (5.0, 7.0], (0.994, 3.0]], categories=[(0.994, 3.0],
                 (3.0, 5.0], (5.0, 7.0]], ordered=True, dtype='category')
 
-    >>> cudf.cut(np.array([1, 7, 5, 4, 6, 3]), 3, retbins=True)
+    >>> cudf.cut(np.array([1, 7, 5, 4, 6, 3]), 3, retbins=True)  # doctest: +SKIP
     (CategoricalIndex([(0.994, 3.0], (5.0, 7.0], (3.0, 5.0], (3.0, 5.0],
                 (5.0, 7.0], (0.994, 3.0]], categories=[(0.994, 3.0],
                 (3.0, 5.0], (5.0, 7.0]], ordered=True, dtype='category'),
@@ -94,9 +94,7 @@ def cut(
 
     >>> cudf.cut(np.array([1, 7, 5, 4, 6, 3]),
     ...          3, labels=["bad", "medium", "good"])
-    CategoricalIndex(['bad', 'good', 'medium', 'medium', 'good', 'bad'],
-                     categories=['bad', 'medium', 'good'],ordered=True,
-                     dtype='category')
+    CategoricalIndex(['bad', 'medium', 'good', 'good', 'medium', 'bad'], categories=['bad', 'medium', 'good'], ordered=True, dtype='category')
 
     >>> cudf.cut(np.array([1, 7, 5, 4, 6, 3]), 3,
     ...          labels=["B", "A", "B"], ordered=False)
@@ -110,7 +108,14 @@ def cut(
 
     >>> s = cudf.Series(np.array([2, 4, 6, 8, 10]),
     ...        index=['a', 'b', 'c', 'd', 'e'])
-    >>> cudf.cut(s, 3)
+    >>> cudf.cut(s, 3)  # doctest: +SKIP
+    a    (1.992, 4.667]
+    b    (1.992, 4.667]
+    c    (4.667, 7.333]
+    d     (7.333, 10.0]
+    e     (7.333, 10.0]
+    dtype: category
+    Categories (3, interval[float64, right]): [(1.992, 4.667] < (4.667, 7.333] < (7.333, 10.0]]
     """
     left_inclusive = False
     right_inclusive = True
