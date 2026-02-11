@@ -29,8 +29,17 @@
 
 using cudf::io::parquet::experimental::hybrid_scan_reader;
 
-namespace detail {
+namespace {
 
+/**
+ * @brief Sets up the a hybrid scan reader instance
+ *
+ * @param datasource Data source
+ * @param options Parquet reader options
+ * @param verbose Whether to print verbose output
+ *
+ * @return Hybrid scan reader
+ */
 std::unique_ptr<hybrid_scan_reader> setup_reader(cudf::io::datasource& datasource,
                                                  cudf::io::parquet_reader_options const& options,
                                                  bool verbose)
@@ -46,6 +55,14 @@ std::unique_ptr<hybrid_scan_reader> setup_reader(cudf::io::datasource& datasourc
   return std::move(reader);
 }
 
+/**
+ * @brief Sets up the page index for the hybrid scan reader
+ *
+ * @param datasource Data source
+ * @param reader Hybrid scan reader
+ * @param single_step_read Whether to use single step read mode
+ * @param verbose Whether to print verbose output
+ */
 void setup_page_index(cudf::io::datasource& datasource,
                       hybrid_scan_reader const& reader,
                       bool single_step_read,
@@ -65,6 +82,19 @@ void setup_page_index(cudf::io::datasource& datasource,
   if (verbose) { timer.print_elapsed_millis(); }
 }
 
+/**
+ * @brief Applies specified row group filters
+ *
+ * @param datasource Data source
+ * @param reader Hybrid scan reader
+ * @param filters Set of hybrid scanfilters to apply
+ * @param input_row_group_indices Span of input row group indices
+ * @param options Parquet reader options
+ * @param verbose Whether to print verbose output
+ * @param stream CUDA stream
+ *
+ * @return Filtered row group indices
+ */
 std::vector<cudf::size_type> apply_row_group_filters(
   cudf::io::datasource& datasource,
   hybrid_scan_reader const& reader,
@@ -178,6 +208,19 @@ std::vector<cudf::size_type> apply_row_group_filters(
                                       current_row_group_indices.end());
 }
 
+/**
+ * @brief Materializes all parquet columns in single step mode
+ *
+ * @param datasource Data source
+ * @param reader Hybrid scan reader
+ * @param current_row_group_indices Span of current row group indices
+ * @param options Parquet reader options
+ * @param verbose Whether to print verbose output
+ * @param stream CUDA stream
+ * @param mr Device memory resource to allocate memory for the read table
+ *
+ * @return Unique pointer to the read table
+ */
 std::unique_ptr<cudf::table> single_step_materialize(
   cudf::io::datasource& datasource,
   hybrid_scan_reader const& reader,
@@ -210,6 +253,20 @@ std::unique_ptr<cudf::table> single_step_materialize(
   return std::move(read_table);
 }
 
+/**
+ * @brief Materializes all parquet columns in two step mode
+ *
+ * @param datasource Data source
+ * @param reader Hybrid scan reader
+ * @param filters Set of hybrid scan filters to apply
+ * @param current_row_group_indices Span of current row group indices
+ * @param options Parquet reader options
+ * @param verbose Whether to print verbose output
+ * @param stream CUDA stream
+ * @param mr Device memory resource
+ *
+ * @return Unique pointer to the read table
+ */
 std::unique_ptr<cudf::table> two_step_materialize(
   cudf::io::datasource& datasource,
   hybrid_scan_reader const& reader,
@@ -315,4 +372,99 @@ std::unique_ptr<cudf::table> two_step_materialize(
   return combine_tables(std::move(filter_table), std::move(payload_table));
 }
 
-}  // namespace detail
+}  // namespace
+
+template <bool single_step_read, bool use_page_index>
+std::unique_ptr<cudf::table> inline hybrid_scan(
+  io_source const& io_source,
+  std::optional<cudf::ast::operation const> filter_expression,
+  std::unordered_set<hybrid_scan_filter_type> const& filters,
+  bool verbose,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
+{
+  CUDF_FUNC_RANGE();
+
+  auto const has_filter_expr = filter_expression.has_value();
+  if (not single_step_read and not has_filter_expr) {
+    throw std::runtime_error("Filter expression must be provided for two-step hybrid scan");
+  }
+
+  auto options = cudf::io::parquet_reader_options::builder().build();
+  if (has_filter_expr) { options.set_filter(filter_expression.value()); }
+
+  // Input file buffer span
+  auto datasource     = std::move(cudf::io::make_datasources(io_source.get_source_info()).front());
+  auto datasource_ref = std::ref(*datasource);
+
+  // Setup reader
+  auto reader           = setup_reader(datasource_ref, options, verbose);
+  auto const reader_ref = std::cref(*reader);
+
+  // Setup page index if needed
+  if constexpr (use_page_index) {
+    setup_page_index(datasource_ref, reader_ref, single_step_read, verbose);
+  }
+
+  // Start with all row groups
+  auto row_group_indices         = reader->all_row_groups(options);
+  auto current_row_group_indices = cudf::host_span<cudf::size_type>(row_group_indices);
+
+  // Filter row groups
+  if (has_filter_expr) {
+    row_group_indices = apply_row_group_filters(
+      datasource_ref, reader_ref, filters, current_row_group_indices, options, verbose, stream);
+    current_row_group_indices = cudf::host_span<cudf::size_type>(row_group_indices);
+  }
+
+  // Materialize filter and payload columns separately
+  if constexpr (single_step_read) {
+    return single_step_materialize(
+      datasource_ref, reader_ref, current_row_group_indices, options, verbose, stream, mr);
+  } else {
+    return two_step_materialize(
+      datasource_ref, reader_ref, filters, current_row_group_indices, options, verbose, stream, mr);
+  }
+}
+
+// Specialization for two-step read without page index
+template <bool single_step_read, bool use_page_index>
+  requires(not single_step_read and not use_page_index)
+std::unique_ptr<cudf::table> inline hybrid_scan(
+  io_source const& io_source,
+  std::optional<cudf::ast::operation const> filter_expression,
+  std::unordered_set<hybrid_scan_filter_type> const& filters,
+  bool verbose,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
+{
+  static_assert(single_step_read or use_page_index,
+                "Hybrid scan requires parquet page index for two-step parquet read");
+  return nullptr;
+}
+
+// Instantiations for hybrid_scan template
+
+template std::unique_ptr<cudf::table> hybrid_scan<true, false>(
+  io_source const&,
+  std::optional<cudf::ast::operation const>,
+  std::unordered_set<hybrid_scan_filter_type> const&,
+  bool,
+  rmm::cuda_stream_view,
+  rmm::device_async_resource_ref);
+
+template std::unique_ptr<cudf::table> hybrid_scan<true, true>(
+  io_source const&,
+  std::optional<cudf::ast::operation const>,
+  std::unordered_set<hybrid_scan_filter_type> const&,
+  bool,
+  rmm::cuda_stream_view,
+  rmm::device_async_resource_ref);
+
+template std::unique_ptr<cudf::table> hybrid_scan<false, true>(
+  io_source const&,
+  std::optional<cudf::ast::operation const>,
+  std::unordered_set<hybrid_scan_filter_type> const&,
+  bool,
+  rmm::cuda_stream_view,
+  rmm::device_async_resource_ref);
