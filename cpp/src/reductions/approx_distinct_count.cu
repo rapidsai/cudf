@@ -32,39 +32,8 @@ namespace detail {
 
 namespace {
 
-/**
- * @brief Converts standard deviation to HLL precision
- *
- * Formula: precision = ceil(2 * log2(1.04 / standard_deviation))
- *
- * @param standard_deviation The desired standard deviation
- * @return The calculated precision, clamped to valid range [4, 18]
- */
-constexpr std::int32_t precision_from_standard_deviation(double standard_deviation)
-{
-  constexpr double hll_constant        = 1.04;
-  constexpr std::int32_t min_precision = 4;
-  constexpr std::int32_t max_precision = 18;
-
-  auto const ratio     = hll_constant / standard_deviation;
-  auto const precision = static_cast<std::int32_t>(std::ceil(2.0 * std::log2(ratio)));
-
-  return std::clamp(precision, min_precision, max_precision);
-}
-
-/**
- * @brief Converts HLL precision to standard deviation
- *
- * Formula: standard_deviation = 1.04 / sqrt(2^precision)
- *
- * @param precision The HLL precision parameter
- * @return The standard deviation for the given precision
- */
-constexpr double standard_deviation_from_precision(std::int32_t precision)
-{
-  constexpr double hll_constant = 1.04;
-  return hll_constant / std::sqrt(static_cast<double>(1 << precision));
-}
+constexpr std::int32_t min_precision = 4;
+constexpr std::int32_t max_precision = 18;
 
 /**
  * @brief Returns the number of registers for a given precision
@@ -72,6 +41,64 @@ constexpr double standard_deviation_from_precision(std::int32_t precision)
 constexpr std::size_t num_registers(std::int32_t precision)
 {
   return static_cast<std::size_t>(1) << precision;
+}
+
+/**
+ * @brief Converts standard error to HLL precision
+ *
+ * Formula: precision = ceil(2 * log2(1.04 / standard_error))
+ *
+ * @param standard_error The desired standard error
+ * @return The calculated precision, clamped to valid range [4, 18]
+ */
+std::int32_t precision_from_standard_error(double standard_error)
+{
+  CUDF_EXPECTS(standard_error > 0, "Standard error must be positive", std::invalid_argument);
+
+  constexpr double hll_constant = 1.04;
+
+  auto const ratio     = hll_constant / standard_error;
+  auto const precision = static_cast<std::int32_t>(std::ceil(2.0 * std::log2(ratio)));
+
+  return std::clamp(precision, min_precision, max_precision);
+}
+
+/**
+ * @brief Converts HLL precision to standard error
+ *
+ * Formula: standard_error = 1.04 / sqrt(2^precision)
+ *
+ * @param precision The HLL precision parameter
+ * @return The standard error for the given precision
+ */
+constexpr double standard_error_from_precision(std::int32_t precision)
+{
+  constexpr double hll_constant = 1.04;
+  return hll_constant / std::sqrt(static_cast<double>(1 << precision));
+}
+
+/**
+ * @brief Validates that precision is within the valid range [4, 18]
+ */
+void validate_precision(std::int32_t precision)
+{
+  CUDF_EXPECTS(precision >= min_precision && precision <= max_precision,
+               "Precision must be in range [4, 18]",
+               std::invalid_argument);
+}
+
+/**
+ * @brief Validates sketch span size and alignment for the given precision
+ */
+void validate_sketch_span(void const* data, std::size_t size, std::int32_t precision)
+{
+  auto const expected_size = num_registers(precision) * sizeof(std::int32_t);
+  CUDF_EXPECTS(size == expected_size,
+               "Sketch span size does not match expected size for precision",
+               std::invalid_argument);
+  CUDF_EXPECTS(reinterpret_cast<std::uintptr_t>(data) % alignof(std::int32_t) == 0,
+               "Sketch span must be 4-byte aligned",
+               std::invalid_argument);
 }
 
 /**
@@ -147,12 +174,12 @@ approx_distinct_count<Hasher>::approx_distinct_count(table_view const& input,
                                                      null_policy null_handling,
                                                      nan_policy nan_handling,
                                                      rmm::cuda_stream_view stream)
-  : _storage{rmm::device_uvector<register_type>{num_registers(precision), stream}},
+  : _storage{(validate_precision(precision),
+              rmm::device_uvector<register_type>{num_registers(precision), stream})},
     _precision{precision},
     _null_handling{null_handling},
     _nan_handling{nan_handling}
 {
-  // Initialize registers to zero
   auto& uvec = std::get<rmm::device_uvector<register_type>>(_storage);
   thrust::fill(rmm::exec_policy_nosync(stream), uvec.begin(), uvec.end(), register_type{0});
 
@@ -161,15 +188,12 @@ approx_distinct_count<Hasher>::approx_distinct_count(table_view const& input,
 
 template <template <typename> class Hasher>
 approx_distinct_count<Hasher>::approx_distinct_count(table_view const& input,
-                                                     double standard_deviation,
+                                                     double standard_error,
                                                      null_policy null_handling,
                                                      nan_policy nan_handling,
                                                      rmm::cuda_stream_view stream)
-  : approx_distinct_count{input,
-                          precision_from_standard_deviation(standard_deviation),
-                          null_handling,
-                          nan_handling,
-                          stream}
+  : approx_distinct_count{
+      input, precision_from_standard_error(standard_error), null_handling, nan_handling, stream}
 {
 }
 
@@ -178,15 +202,13 @@ approx_distinct_count<Hasher>::approx_distinct_count(cuda::std::span<cuda::std::
                                                      std::int32_t precision,
                                                      null_policy null_handling,
                                                      nan_policy nan_handling)
-  : _storage{sketch_span},
+  : _storage{(validate_precision(precision),
+              validate_sketch_span(sketch_span.data(), sketch_span.size(), precision),
+              sketch_span)},
     _precision{precision},
     _null_handling{null_handling},
     _nan_handling{nan_handling}
 {
-  auto const expected_size = num_registers(precision) * sizeof(register_type);
-  CUDF_EXPECTS(sketch_span.size() == expected_size,
-               "Sketch span size does not match expected size for precision",
-               std::invalid_argument);
 }
 
 template <template <typename> class Hasher>
@@ -265,10 +287,7 @@ template <template <typename> class Hasher>
 void approx_distinct_count<Hasher>::merge(cuda::std::span<cuda::std::byte const> sketch_span,
                                           rmm::cuda_stream_view stream)
 {
-  auto const expected_size = num_registers(_precision) * sizeof(register_type);
-  CUDF_EXPECTS(sketch_span.size() == expected_size,
-               "Sketch span size does not match this sketch's size",
-               std::invalid_argument);
+  validate_sketch_span(sketch_span.data(), sketch_span.size(), _precision);
 
   hll_ref_type ref{sketch(), cuda::std::identity{}};
   hll_ref_type other_ref{cuda::std::span<cuda::std::byte>{
@@ -335,9 +354,9 @@ std::int32_t approx_distinct_count<Hasher>::precision() const noexcept
 }
 
 template <template <typename> class Hasher>
-double approx_distinct_count<Hasher>::standard_deviation() const noexcept
+double approx_distinct_count<Hasher>::standard_error() const noexcept
 {
-  return standard_deviation_from_precision(_precision);
+  return standard_error_from_precision(_precision);
 }
 
 template <template <typename> class Hasher>
@@ -363,12 +382,11 @@ approx_distinct_count::approx_distinct_count(table_view const& input,
 }
 
 approx_distinct_count::approx_distinct_count(table_view const& input,
-                                             double standard_deviation,
+                                             double standard_error,
                                              null_policy null_handling,
                                              nan_policy nan_handling,
                                              rmm::cuda_stream_view stream)
-  : _impl(
-      std::make_unique<impl_type>(input, standard_deviation, null_handling, nan_handling, stream))
+  : _impl(std::make_unique<impl_type>(input, standard_error, null_handling, nan_handling, stream))
 {
 }
 
@@ -417,10 +435,7 @@ nan_policy approx_distinct_count::nan_handling() const noexcept { return _impl->
 
 std::int32_t approx_distinct_count::precision() const noexcept { return _impl->precision(); }
 
-double approx_distinct_count::standard_deviation() const noexcept
-{
-  return _impl->standard_deviation();
-}
+double approx_distinct_count::standard_error() const noexcept { return _impl->standard_error(); }
 
 bool approx_distinct_count::owns_storage() const noexcept { return _impl->owns_storage(); }
 

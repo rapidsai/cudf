@@ -44,13 +44,13 @@ class approx_distinct_count;
  * The precision parameter (p) is the number of bits used to index into the register array.
  * It determines the number of registers (m = 2^p) in the HLL sketch:
  * - Memory usage: 2^p * 4 bytes (m registers of 4 bytes each for GPU atomics)
- * - Standard deviation: 1.04 / sqrt(m) = 1.04 / sqrt(2^p)
+ * - Standard error: 1.04 / sqrt(m) = 1.04 / sqrt(2^p)
  *
  * Common precision values:
- * - p = 10: m = 1,024 registers, ~3.2% standard deviation, 4KB memory
- * - p = 12 (default): m = 4,096 registers, ~1.6% standard deviation, 16KB memory
- * - p = 14: m = 16,384 registers, ~0.8% standard deviation, 64KB memory
- * - p = 16: m = 65,536 registers, ~0.4% standard deviation, 256KB memory
+ * - p = 10: m = 1,024 registers, ~3.2% standard error, 4KB memory
+ * - p = 12 (default): m = 4,096 registers, ~1.6% standard error, 16KB memory
+ * - p = 14: m = 16,384 registers, ~0.8% standard error, 64KB memory
+ * - p = 16: m = 65,536 registers, ~0.4% standard error, 256KB memory
  *
  * Valid range: p ∈ [4, 18]. This is not a hard theoretical limit but an empirically
  * recommended range:
@@ -96,28 +96,28 @@ class approx_distinct_count {
 
   /**
    * @brief Constructs an approximate distinct count sketch from a table with specified standard
-   * deviation
+   * error
    *
-   * This constructor allows specifying the desired standard deviation (error tolerance) directly,
+   * This constructor allows specifying the desired standard error (error tolerance) directly,
    * which is more intuitive than specifying the precision parameter. The precision is calculated
-   * as: `ceil(2 * log2(1.04 / standard_deviation))`.
+   * as: `ceil(2 * log2(1.04 / standard_error))`.
    *
-   * Since precision must be an integer, the actual standard deviation may be better (smaller)
-   * than requested. Use the `standard_deviation()` getter to retrieve the actual value.
+   * Since precision must be an integer, the actual standard error may be better (smaller)
+   * than requested. Use the `standard_error()` getter to retrieve the actual value.
    *
    * @note This overload is disambiguated from the precision constructor by parameter type:
-   *       `int` selects precision, `double` selects standard deviation.
+   *       `int` selects precision, `double` selects standard error.
    *
    * @param input Table whose rows will be added to the sketch
-   * @param standard_deviation The desired standard deviation for approximation (e.g., 0.01 for ~1%)
+   * @param standard_error The desired standard error for approximation (e.g., 0.01 for ~1%)
    * @param null_handling `INCLUDE` or `EXCLUDE` rows with nulls (default: `EXCLUDE`)
    * @param nan_handling `NAN_IS_VALID` or `NAN_IS_NULL` (default: `NAN_IS_NULL`)
    * @param stream CUDA stream used for device memory operations and kernel launches
    *
-   * @throws std::invalid_argument if standard_deviation is not in the valid range
+   * @throws std::invalid_argument if standard_error is not in the valid range
    */
   approx_distinct_count(table_view const& input,
-                        double standard_deviation,
+                        double standard_error,
                         null_policy null_handling    = null_policy::EXCLUDE,
                         nan_policy nan_handling      = nan_policy::NAN_IS_NULL,
                         rmm::cuda_stream_view stream = cudf::get_default_stream());
@@ -246,14 +246,14 @@ class approx_distinct_count {
   [[nodiscard]] std::int32_t precision() const noexcept;
 
   /**
-   * @brief Gets the standard deviation (error tolerance) for this sketch
+   * @brief Gets the standard error (error tolerance) for this sketch
    *
-   * The standard deviation is calculated from precision as: `1.04 / sqrt(2^precision)`.
+   * The standard error is calculated from precision as: `1.04 / sqrt(2^precision)`.
    * This represents the expected relative error of the cardinality estimate.
    *
-   * @return The actual standard deviation based on the sketch's precision
+   * @return The actual standard error based on the sketch's precision
    */
-  [[nodiscard]] double standard_deviation() const noexcept;
+  [[nodiscard]] double standard_error() const noexcept;
 
   /**
    * @brief Checks whether this sketch owns its storage

@@ -85,23 +85,23 @@ class approx_distinct_count {
 
   /**
    * @brief Constructs an owning approximate distinct count sketch from a table with standard
-   * deviation
+   * error
    *
-   * This constructor allows specifying the desired standard deviation (error tolerance) directly,
+   * This constructor allows specifying the desired standard error (error tolerance) directly,
    * which is more intuitive than specifying the precision parameter. The precision is calculated
-   * as: `ceil(2 * log2(1.04 / standard_deviation))`.
+   * as: `ceil(2 * log2(1.04 / standard_error))`.
    *
-   * Since precision must be an integer, the actual standard deviation may be better (smaller)
-   * than requested. Use the `standard_deviation()` getter to retrieve the actual value.
+   * Since precision must be an integer, the actual standard error may be better (smaller)
+   * than requested. Use the `standard_error()` getter to retrieve the actual value.
    *
    * @param input Table whose rows will be added to the sketch
-   * @param standard_deviation The desired standard deviation for approximation (e.g., 0.01 for ~1%)
+   * @param standard_error The desired standard error for approximation (e.g., 0.01 for ~1%)
    * @param null_handling `INCLUDE` or `EXCLUDE` rows with nulls
    * @param nan_handling `NAN_IS_VALID` or `NAN_IS_NULL`
    * @param stream CUDA stream used for device memory operations and kernel launches
    */
   approx_distinct_count(table_view const& input,
-                        double standard_deviation,
+                        double standard_error,
                         null_policy null_handling,
                         nan_policy nan_handling,
                         rmm::cuda_stream_view stream);
@@ -219,11 +219,11 @@ class approx_distinct_count {
   [[nodiscard]] std::int32_t precision() const noexcept;
 
   /**
-   * @brief Gets the standard deviation (error tolerance) for this sketch
+   * @brief Gets the standard error (error tolerance) for this sketch
    *
-   * @return The actual standard deviation based on the sketch's precision
+   * @return The actual standard error based on the sketch's precision
    */
-  [[nodiscard]] double standard_deviation() const noexcept;
+  [[nodiscard]] double standard_error() const noexcept;
 
   /**
    * @brief Checks whether this sketch owns its storage
