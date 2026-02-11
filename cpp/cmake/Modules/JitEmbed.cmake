@@ -133,9 +133,22 @@ function(jit_add_blob)
 
   set(blob_files ${jitembed_${TARGET}_blob__files})
   set(blob_dests ${jitembed_${TARGET}_blob__dests})
+  set(blob_target_deps ${jitembed_${TARGET}_blob__target_deps})
 
   list(APPEND blob_files "${ARG_FILE}")
   list(APPEND blob_dests "${ARG_DEST}")
+
+  # If FILE is a $<TARGET_OBJECTS:name> generator expression, record the target
+  # name so jit_embed() can add an explicit ordering dependency via
+  # add_dependencies(). A plain file dependency on the evaluated paths is not
+  # sufficient to guarantee build ordering in parallel builds.
+  if(ARG_FILE MATCHES "\\$<TARGET_OBJECTS:([^>]+)>")
+    list(APPEND blob_target_deps "${CMAKE_MATCH_1}")
+    set(jitembed_${TARGET}_blob__target_deps
+        ${blob_target_deps}
+        PARENT_SCOPE
+    )
+  endif()
 
   set(jitembed_${TARGET}_blob__files
       ${blob_files}
@@ -268,7 +281,15 @@ function(jit_embed)
     VERBATIM
   )
 
-  add_custom_target(${TARGET} ALL DEPENDS ${OUTPUT_DIR}/embed.hpp ${OUTPUT_DIR}/embed.s)
+  add_custom_target(${TARGET} ALL DEPENDS ${OUTPUT_DIR}/embed.hpp ${OUTPUT_DIR}/embed.s
+                                          ${OUTPUT_DIR}/embed.bin)
+
+  # Ensure any CMake targets whose objects are embedded are fully built before
+  # the custom command runs. File-level DEPENDS on $<TARGET_OBJECTS:...> paths
+  # does not guarantee target build ordering in parallel builds.
+  if(DEFINED jitembed_${TARGET}_blob__target_deps)
+    add_dependencies(${TARGET} ${jitembed_${TARGET}_blob__target_deps})
+  endif()
 
   message(
     STATUS
