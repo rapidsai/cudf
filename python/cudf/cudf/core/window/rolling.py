@@ -23,7 +23,7 @@ from cudf.core.column.column import ColumnBase, as_column
 from cudf.core.copy_types import GatherMap
 from cudf.core.mixins import GetAttrGetItemMixin, Reducible
 from cudf.core.multiindex import MultiIndex
-from cudf.utils.dtypes import SIZE_TYPE_DTYPE
+from cudf.utils.dtypes import SIZE_TYPE_DTYPE, dtype_from_pylibcudf_column
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -371,14 +371,15 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
                 min_periods = 1
 
         with source_column.access(mode="read", scope="internal"):
-            col = ColumnBase.from_pylibcudf(
-                plc.rolling.rolling_window(
-                    source_column.plc_column,
-                    pre,
-                    fwd,
-                    min_periods,
-                    rolling_agg,
-                )
+            plc_result = plc.rolling.rolling_window(
+                source_column.plc_column,
+                pre,
+                fwd,
+                min_periods,
+                rolling_agg,
+            )
+            col = ColumnBase.create(
+                plc_result, dtype_from_pylibcudf_column(plc_result)
             )
 
         if isinstance(agg_name, str):
