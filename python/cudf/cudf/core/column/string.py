@@ -432,20 +432,47 @@ class StringColumn(ColumnBase, Scannable):
             and replacement_col.dtype != self.dtype
         ):
             return self.copy()
-        df = cudf.DataFrame._from_data(
-            {"old": to_replace_col, "new": replacement_col}
-        )
-        df = df.drop_duplicates(subset=["old"], keep="last", ignore_index=True)
-        if df._data["old"].null_count == 1:
-            res = self.fillna(
-                df._data["new"]
-                .apply_boolean_mask(df._data["old"].isnull())
-                .element_indexing(0)
+
+        # Deduplicate by old values, keeping last occurrence.
+        # This replicates pandas' behavior when to_replace has duplicates:
+        # pandas processes replacements sequentially, so the last occurrence wins.
+        # For example, df.replace([1, 2, 1], [10, 20, 30]) replaces 1→30 (not 1→10).
+        with to_replace_col.access(mode="read", scope="internal"):
+            with replacement_col.access(mode="read", scope="internal"):
+                old_plc, new_plc = plc.stream_compaction.stable_distinct(
+                    plc.Table(
+                        [to_replace_col.plc_column, replacement_col.plc_column]
+                    ),
+                    keys=[0],  # Deduplicate by first column (old values)
+                    keep=plc.stream_compaction.DuplicateKeepOption.KEEP_LAST,
+                    nulls_equal=plc.types.NullEquality.EQUAL,
+                    nans_equal=plc.types.NanEquality.ALL_EQUAL,
+                ).columns()
+
+        # Handle null replacement separately if there's a null in old values
+        res = self
+        if old_plc.null_count() == 1:
+            # Find the replacement value for null
+            old_isnull_plc = plc.unary.is_null(old_plc)
+            (filtered_column,) = plc.stream_compaction.apply_boolean_mask(
+                plc.Table([new_plc]), old_isnull_plc
+            ).columns()
+            replacement_for_null = filtered_column.to_scalar().to_py()
+            res = res.fillna(replacement_for_null)
+
+            old_plc, new_plc = plc.stream_compaction.drop_nulls(
+                plc.Table([old_plc, new_plc]),
+                keys=[0],
+                keep_threshold=1,
+            ).columns()
+
+        with res.access(mode="read", scope="internal"):
+            result_plc = plc.replace.find_and_replace_all(
+                res.plc_column,
+                old_plc,
+                new_plc,
             )
-            df = df.dropna(subset=["old"])
-        else:
-            res = self
-        return res.replace(df._data["old"], df._data["new"])
+        return cast("Self", ColumnBase.create(result_plc, self.dtype))
 
     def _binaryop(self, other: ColumnBinaryOperand, op: str) -> ColumnBase:
         reflect, op = self._check_reflected_op(op)
