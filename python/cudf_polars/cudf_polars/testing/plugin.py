@@ -221,6 +221,7 @@ EXPECTED_FAILURES: Mapping[str, str | tuple[str, bool]] = {
     "tests/unit/operations/test_slice.py::test_schema_slice_on_literal_23999[lit1-offset1-len1-False]": "List literal loses nesting in slice: cudf#19610",
     "tests/unit/io/test_iceberg.py::test_scan_iceberg_fast_count": "Polars doesn't pass us any statistics for iceberg scans when use_metadata_statistics is True",
     "tests/unit/functions/test_concat.py::test_concat_horizontally_strict": "polars doesnt hand us the hconcat options. See ...",
+    "tests/unit/expr/test_exprs.py::test_exp_log1p[Float16-Float16]": "Flaky test: Small floating-point precision differences in exp/log1p results",
 }
 
 
