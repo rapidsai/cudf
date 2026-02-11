@@ -312,7 +312,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     _VALID_PLC_TYPES: ClassVar[set[plc.TypeId]] = set()
     plc_column: plc.Column
     _dtype: DtypeObj
-    _pandas_dtype: DtypeObj | None
     _distinct_count: dict[bool, int]
     _has_nulls: dict[bool, bool]
     _exposed_buffers: set[Buffer]
@@ -761,7 +760,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         suitable shallow copies of the buffers wrapped in cudf Buffers to ensure
         consistent behavior with respect to memory semantics like copy-on-write.
         """
-        pandas_dtype = dtype if isinstance(dtype, pd.ArrowDtype) else None
+        original_dtype = dtype
         dispatch_dtype = dtype
         if isinstance(dispatch_dtype, pd.ArrowDtype):
             dispatch_dtype = pyarrow_dtype_to_cudf_dtype(dispatch_dtype)
@@ -791,8 +790,10 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             dtype=dispatch_dtype,
             validate=False,
         )
-        if pandas_dtype is not None:
-            result._pandas_dtype = pandas_dtype
+        if is_pandas_nullable_extension_dtype(original_dtype) or isinstance(
+            original_dtype, pd.ArrowDtype
+        ):
+            result._dtype = original_dtype
         return result
 
     @staticmethod
@@ -803,14 +804,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         This function determines which ColumnBase subclass should be used
         to construct a column with the given dtype.
         """
-        if isinstance(dtype, pd.ArrowDtype):
-            dtype = pyarrow_dtype_to_cudf_dtype(dtype)
-        if isinstance(dtype, type):
-            try:
-                dtype = np.dtype(dtype)
-            except TypeError:
-                pass
-        dtype_kind = getattr(dtype, "kind", None)
+        dtype_kind = dtype.kind
 
         # Special pandas extension types
         if isinstance(dtype, pd.DatetimeTZDtype):
@@ -829,7 +823,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             dtype == CUDF_STRING_DTYPE
             or dtype_kind == "U"
             or isinstance(dtype, pd.StringDtype)
-            or (isinstance(dtype, pd.ArrowDtype) and dtype.kind == "U")
         ):
             return cudf.core.column.StringColumn
 
@@ -850,7 +843,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             return cudf.core.column.Decimal32Column
 
         # Numerical types
-        if isinstance(dtype_kind, str) and dtype_kind in "iufb":
+        if dtype_kind in "iufb":
             return cudf.core.column.NumericalColumn
 
         raise TypeError(f"Unrecognized dtype: {dtype}")
@@ -936,7 +929,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             plc_column, dtype = self._validate_args(plc_column, dtype)
         self.plc_column = plc_column
         self._dtype = dtype
-        self._pandas_dtype = None
         self._distinct_count = {}
         self._has_nulls = {}
         # The set of exposed buffers associated with this column. These buffers must be
@@ -1054,12 +1046,9 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             )
         pa_array = self.to_arrow()
 
-        pandas_dtype = getattr(self, "_pandas_dtype", None)
         arrow_dtype = (
-            pandas_dtype if isinstance(pandas_dtype, pd.ArrowDtype) else None
+            self.dtype if isinstance(self.dtype, pd.ArrowDtype) else None
         )
-        if arrow_dtype is None and isinstance(self.dtype, pd.ArrowDtype):
-            arrow_dtype = self.dtype
         if arrow_type or (not nullable and arrow_dtype is not None):
             return pd.Index(
                 pd.arrays.ArrowExtensionArray(pa_array), copy=False
@@ -3248,19 +3237,7 @@ def as_column(
                     and result.dtype.kind == "f"
                 ):
                     result = result.nans_to_nulls()
-                if isinstance(arbitrary.dtype, pd.ArrowDtype) and (
-                    arbitrary.dtype.kind not in "iufbU"
-                ):
-                    # TODO: Support Arrow/nullable extension dtypes directly in
-                    # ColumnBase subclass dispatch/validation to avoid this
-                    # compatibility construction step.
-                    base_dtype = cudf.dtype(arbitrary.dtype)
-                    result = ColumnBase.create(result.plc_column, base_dtype)
-                    result._dtype = arbitrary.dtype
-                else:
-                    result = ColumnBase.create(
-                        result.plc_column, arbitrary.dtype
-                    )
+                result = ColumnBase.create(result.plc_column, arbitrary.dtype)
             return result
         elif isinstance(
             arbitrary.dtype, pd.api.extensions.ExtensionDtype
