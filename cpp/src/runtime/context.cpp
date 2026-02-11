@@ -56,7 +56,6 @@ void context::ensure_jit_bundle_initialized()
 jit::program_cache& context::program_cache()
 {
   ensure_jit_cache_initialized();
-  ensure_jit_cache_initialized();
   return *_program_cache;
 }
 

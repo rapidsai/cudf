@@ -35,8 +35,6 @@ struct [[nodiscard]] context_config {
 /// It helps to ensure structured and well-defined construction and destruction of global
 /// objects/state across translation units.
 class context {
- public:
- public:
  private:
   context_config _config;
   std::once_flag _program_cache_init_flag;
