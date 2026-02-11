@@ -1,5 +1,6 @@
 /*
  * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -9,6 +10,7 @@
 #include <cudf/utilities/export.hpp>
 
 #include <memory>
+#include <mutex>
 #include <mutex>
 
 namespace cudf {
@@ -33,6 +35,7 @@ struct [[nodiscard]] context_config {
 /// It helps to ensure structured and well-defined construction and destruction of global
 /// objects/state across translation units.
 class context {
+ public:
  public:
  private:
   context_config _config;
