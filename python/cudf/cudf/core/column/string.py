@@ -444,7 +444,6 @@ class StringColumn(ColumnBase, Scannable):
             return self.copy()
 
         # Deduplicate by old values, keeping last occurrence
-        # Work with plc.Column objects directly to avoid creating intermediate ColumnBases
         with to_replace_col.access(mode="read", scope="internal"):
             with replacement_col.access(mode="read", scope="internal"):
                 old_plc, new_plc = plc.stream_compaction.stable_distinct(
@@ -462,37 +461,25 @@ class StringColumn(ColumnBase, Scannable):
         if old_plc.null_count() == 1:
             # Find the replacement value for null
             old_isnull_plc = plc.unary.is_null(old_plc)
-            filtered_table = plc.stream_compaction.apply_boolean_mask(
+            (filtered_column,) = plc.stream_compaction.apply_boolean_mask(
                 plc.Table([new_plc]), old_isnull_plc
-            )
-            # We know there's exactly 1 null, so filtered result has 1 row
-            replacement_for_null = (
-                plc.copying.get_element(filtered_table.columns()[0], 0)
-                .to_arrow()
-                .as_py()
-            )
-            res = self.fillna(replacement_for_null)
+            ).columns()
+            replacement_for_null = filtered_column.to_scalar().to_py()
+            res = res.fillna(replacement_for_null)
 
-            # Drop the null row from old/new columns
             old_plc, new_plc = plc.stream_compaction.drop_nulls(
                 plc.Table([old_plc, new_plc]),
-                keys=[0],  # Check nulls in first column only
-                keep_threshold=1,  # Keep rows with at least 1 non-null in keys
+                keys=[0],
+                keep_threshold=1,
             ).columns()
 
-        # Perform replace operation directly at plc level
         with res.access(mode="read", scope="internal"):
-            return cast(
-                Self,
-                ColumnBase.create(
-                    plc.replace.find_and_replace_all(
-                        res.plc_column,
-                        old_plc,
-                        new_plc,
-                    ),
-                    self.dtype,
-                ),
+            result_plc = plc.replace.find_and_replace_all(
+                res.plc_column,
+                old_plc,
+                new_plc,
             )
+        return cast("Self", ColumnBase.create(result_plc, self.dtype))
 
     def _binaryop(self, other: ColumnBinaryOperand, op: str) -> ColumnBase:
         reflect, op = self._check_reflected_op(op)

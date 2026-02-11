@@ -855,7 +855,6 @@ class NumericalColumn(NumericalBaseColumn):
                 keep_threshold=1,  # Keep rows with at least 1 non-null in keys
             ).columns()
 
-        # Perform replace operation directly at plc level
         with replaced.access(mode="read", scope="internal"):
             result_plc = plc.replace.find_and_replace_all(
                 replaced.plc_column,
