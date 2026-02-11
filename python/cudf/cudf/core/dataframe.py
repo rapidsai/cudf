@@ -8475,19 +8475,17 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             tbl = table
             if not (
                 isinstance(metadata, dict)
-                and 1 <= len(metadata) <= 2
+                and 1 <= len(metadata) <= 3
                 and "columns" in metadata
-                and (
-                    len(metadata) != 2 or {"columns", "index"} == set(metadata)
-                )
+                and (not set(metadata) - {"columns", "child_names", "index"})
             ):
                 raise ValueError(
-                    "Must pass a metadata dict with column names and optionally indices only "
+                    "Must pass a metadata dict with keys 'columns' and "
+                    "optionally 'child_names' and 'index' only "
                     "when table is a pylibcudf.Table "
                 )
             column_names = metadata["columns"]
-            # TODO: Allow user to include this in metadata?
-            child_names = None
+            child_names = metadata.get("child_names")  # type: ignore[assignment]
             index = metadata.get("index")
         else:
             raise ValueError(
