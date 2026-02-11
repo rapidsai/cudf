@@ -12,10 +12,14 @@ namespace lto {
 
 /// @brief Type-erased parameters for LTO-JIT-compiled transform operations.
 struct [[nodiscard]] transform_params {
-  void* __restrict__ const* __restrict__ scope =
-    nullptr;                ///< Pointer to scope data (e.g. column views, scalars, etc.).
-  size_type num_rows  = 0;  ///< Total number of rows to process.
-  size_type row_index = 0;  ///< Current row index.
+  /// @brief Pointer to scope data (e.g. column views, scalars, etc.).
+  void* __restrict__ const* __restrict__ scope = nullptr;
+
+  /// @brief Total number of rows to process.
+  size_type num_rows = 0;
+
+  /// @brief Current row index.
+  size_type row_index = 0;
 };
 
 }  // namespace lto
