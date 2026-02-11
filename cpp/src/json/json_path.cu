@@ -981,12 +981,21 @@ std::unique_ptr<cudf::column> get_json_object(cudf::strings_column_view const& c
 
   // if the query is empty, return a string column containing all nulls
   if (!std::get<0>(preprocess).has_value()) {
-    return std::make_unique<column>(
-      data_type{type_id::STRING},
+    // Create a proper all-null strings column with valid structure (offsets + chars children)
+    // All offsets are zero for an all-null column
+    rmm::device_uvector<size_type> sizes(
+      col.size(), stream, cudf::get_current_device_resource_ref());
+    thrust::fill(rmm::exec_policy_nosync(stream), sizes.begin(), sizes.end(), 0);
+
+    auto [offsets, output_size] =
+      cudf::strings::detail::make_offsets_child_column(sizes.begin(), sizes.end(), stream, mr);
+
+    return make_strings_column(
       col.size(),
-      rmm::device_buffer{0, stream, mr},  // no data
-      cudf::detail::create_null_mask(col.size(), mask_state::ALL_NULL, stream, mr),
-      col.size());  // null count
+      std::move(offsets),
+      rmm::device_buffer{0, stream, mr},  // empty chars
+      col.size(),                         // null_count
+      cudf::detail::create_null_mask(col.size(), mask_state::ALL_NULL, stream, mr));
   }
 
   // compute output sizes
