@@ -374,11 +374,13 @@ async def distinct_node(
         evaluated_chunks: list[TableChunk] = []
         total_size = 0
         merge_count = 0
+        chunks_sampled = 0
 
         for _ in range(sample_chunk_count):
             msg = await ch_in.recv(context)
             if msg is None:
                 break
+            chunks_sampled += 1
             chunk = await evaluate_chunk(
                 context, TableChunk.from_message(msg), ir, ir_context
             )
@@ -396,13 +398,23 @@ async def distinct_node(
 
         local_count = metadata_in.local_count
         if can_skip_global_comm:
-            global_size = total_size
             global_chunk_count = local_count
+            global_chunks_sampled = chunks_sampled
         else:
-            global_size, global_chunk_count = await allgather_reduce(
-                context, collective_ids.pop(), total_size, local_count
+            (
+                total_size,
+                global_chunk_count,
+                global_chunks_sampled,
+            ) = await allgather_reduce(
+                context, collective_ids.pop(), total_size, local_count, chunks_sampled
             )
 
+        if global_chunks_sampled > 0:
+            global_size = (total_size // global_chunks_sampled) * global_chunk_count
+        else:
+            global_size = 0
+
+        # TODO: Fast return if we already have the slice ready
         if ir.zlice is not None and ir.zlice[1] is not None and evaluated_chunks:
             total_rows = sum(c.table_view().num_rows() for c in evaluated_chunks)
             if total_rows > 0:
