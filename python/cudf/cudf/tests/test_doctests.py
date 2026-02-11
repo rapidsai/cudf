@@ -4,6 +4,7 @@ import contextlib
 import doctest
 import inspect
 import io
+import os
 
 import numpy as np
 import pytest
@@ -13,6 +14,13 @@ import cudf
 from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 
 pytestmark = pytest.mark.filterwarnings("ignore::FutureWarning")
+_SKIP_DOCTESTS = frozenset(
+    {
+        "register_dataframe_accessor",
+        "register_index_accessor",
+        "register_series_accessor",
+    }
+)
 
 # modules that will be searched for doctests
 tests = [
@@ -33,7 +41,7 @@ def _is_public_name(parent, name):
     return not name.startswith("_")
 
 
-def _find_doctests_in_obj(obj, finder=None, criteria=None, _seen=None):
+def _find_doctests_in_obj(obj, finder=None, criteria=None):
     """Find all doctests in an object.
 
     Parameters
@@ -54,11 +62,8 @@ def _find_doctests_in_obj(obj, finder=None, criteria=None, _seen=None):
         finder = doctest.DocTestFinder()
     if criteria is None:
         criteria = _name_in_all
-    if _seen is None:
-        _seen = set()
     for docstring in finder.find(obj):
-        if docstring.examples and docstring.name not in _seen:
-            _seen.add(docstring.name)
+        if docstring.examples:
             yield docstring
     for name, member in inspect.getmembers(obj):
         # Only recurse over members matching the criteria
@@ -68,21 +73,20 @@ def _find_doctests_in_obj(obj, finder=None, criteria=None, _seen=None):
         # module's __all__)
         if inspect.ismodule(member):
             yield from _find_doctests_in_obj(
-                member, finder, criteria=_name_in_all, _seen=_seen
+                member, finder, criteria=_name_in_all
             )
         # Recurse over the public API of classes (attributes not prefixed with
         # an underscore)
         elif inspect.isclass(member):
             yield from _find_doctests_in_obj(
-                member, finder, criteria=_is_public_name, _seen=_seen
+                member, finder, criteria=_is_public_name
             )
         # Pick up doctests from re-exported functions (whose __module__
         # differs from the parent module, so finder.find(obj) above
         # skips them).
         elif inspect.isfunction(member) or inspect.isbuiltin(member):
             for docstring in finder.find(member):
-                if docstring.examples and docstring.name not in _seen:
-                    _seen.add(docstring.name)
+                if docstring.examples:
                     yield docstring
 
 
@@ -93,10 +97,9 @@ def _collect_doctests():
     that can be safely shared across pytest-xdist workers without any
     mutable shared state.
     """
-    seen = set()
     results = []
     for mod in tests:
-        for docstring in _find_doctests_in_obj(mod, _seen=seen):
+        for docstring in _find_doctests_in_obj(mod):
             results.append(docstring)
     return results
 
@@ -125,6 +128,15 @@ class TestDoctests:
         reason="Doctests not expected to pass on older versions of pandas",
     )
     def test_docstring(self, docstring, monkeypatch, tmp_path):
+        if (
+            docstring.name == "copy"
+            and os.environ.get("CUDF_TEST_COPY_ON_WRITE") == "1"
+        ):
+            pytest.skip(
+                "copy doctest not compatible with CUDF_TEST_COPY_ON_WRITE=1"
+            )
+        if docstring.name in _SKIP_DOCTESTS:
+            pytest.skip(f"{docstring.name} doctest is not runnable")
         # We ignore differences in whitespace in the doctest output, and enable
         # the use of an ellipsis "..." to match any string in the doctest
         # output. An ellipsis is useful for, e.g., memory addresses or

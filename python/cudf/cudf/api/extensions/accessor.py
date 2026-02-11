@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 import warnings
@@ -41,7 +41,7 @@ _dataframe_example = """
     In your library code:
 
         >>> import cudf
-        >>> @cudf.api.extensions.register_dataframe_accessor("point") # doctest: +SKIP
+        >>> @cudf.api.extensions.register_dataframe_accessor("point")
         ... class PointsAccessor:
         ...     def __init__(self, obj):
         ...         self._validate(obj)
@@ -70,7 +70,7 @@ _index_example = """
     In your library code:
 
         >>> import cudf
-        >>> @cudf.api.extensions.register_index_accessor("odd") # doctest: +SKIP
+        >>> @cudf.api.extensions.register_index_accessor("odd")
         ... class OddRowAccessor:
         ...     def __init__(self, obj):
         ...         self._obj = obj
@@ -93,7 +93,7 @@ _series_example = """
     In your library code:
 
         >>> import cudf
-        >>> @cudf.api.extensions.register_series_accessor("odd") # doctest: +SKIP
+        >>> @cudf.api.extensions.register_series_accessor("odd")
         ... class OddRowAccessor:
         ...     def __init__(self, obj):
         ...         self._obj = obj
