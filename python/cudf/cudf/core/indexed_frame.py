@@ -73,6 +73,7 @@ from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
     SIZE_TYPE_DTYPE,
     can_convert_to_column,
+    dtype_from_pylibcudf_column,
     find_common_type,
     get_dtype_of_same_kind,
     is_column_like,
@@ -517,14 +518,10 @@ class IndexedFrame(Frame):
                     result_col = col
 
             if cast_to_int and result_col.dtype.kind in "uib":
-                # For reductions that accumulate a value (e.g. sum, not max)
                 # pandas returns an int64 dtype for all int or bool dtypes.
-                if cudf.get_option("mode.pandas_compatible"):
-                    dtype = get_dtype_of_same_kind(
-                        result_col.dtype, np.dtype(np.int64)
-                    )
-                else:
-                    dtype = np.dtype(np.int64)
+                dtype = get_dtype_of_same_kind(
+                    result_col.dtype, np.dtype(np.int64)
+                )
                 result_col = result_col.astype(dtype)
             results.append(getattr(result_col, op)(inclusive=True))
         return self._from_data_like_self(
@@ -2958,7 +2955,9 @@ class IndexedFrame(Frame):
                 plc_column = plc.hashing.sha512(plc_table)
             else:
                 raise ValueError(f"Unsupported hashing algorithm {method}.")
-            result = ColumnBase.from_pylibcudf(plc_column)
+            result = ColumnBase.create(
+                plc_column, dtype=dtype_from_pylibcudf_column(plc_column)
+            )
         return cudf.Series._from_column(
             result,
             index=self.index,
@@ -3075,23 +3074,23 @@ class IndexedFrame(Frame):
                 keep_index=keep_index,
             )
 
-        columns_to_slice = (
+        cols_list = [
             itertools.chain(self.index._columns, self._columns)
             if keep_index and not has_range_index
             else self._columns
-        )
-        # Materialize iterator to avoid consuming it during access context setup
-        cols_list = list(columns_to_slice)
-        with access_columns(  # type: ignore[assignment]
+        ]
+        with access_columns(
             *cols_list, mode="read", scope="internal"
-        ) as cols_list:
+        ) as flattened_cols_list:
             plc_tables = plc.copying.slice(
-                plc.Table([col.plc_column for col in cols_list]),
+                plc.Table([col.plc_column for col in flattened_cols_list]),
                 [start, stop],
             )
             sliced = [
-                ColumnBase.from_pylibcudf(col)
-                for col in plc_tables[0].columns()
+                ColumnBase.create(plc_result, dtype=reference_col.dtype)
+                for plc_result, reference_col in zip(
+                    plc_tables[0].columns(), flattened_cols_list, strict=True
+                )
             ]
         result = self._from_columns_like_self(
             sliced,
@@ -3166,7 +3165,12 @@ class IndexedFrame(Frame):
             nulls_are_equal=nulls_are_equal,
         )
         return self._from_columns_like_self(
-            [ColumnBase.from_pylibcudf(col) for col in result_columns],
+            [
+                ColumnBase.create(plc_result, dtype=reference_col.dtype)
+                for plc_result, reference_col in zip(
+                    result_columns, columns, strict=True
+                )
+            ],
             self._column_names,
             self.index.names if not ignore_index else None,
         )
@@ -3291,7 +3295,9 @@ class IndexedFrame(Frame):
                 plc.types.NullEquality.EQUAL,
                 plc.types.NanEquality.ALL_EQUAL,
             )
-            distinct = ColumnBase.from_pylibcudf(plc_column)
+            distinct = ColumnBase.create(
+                plc_column, dtype=dtype_from_pylibcudf_column(plc_column)
+            )
         result = as_column(
             True, length=len(self), dtype=bool
         )._scatter_by_column(
@@ -3305,26 +3311,26 @@ class IndexedFrame(Frame):
 
     @_performance_tracking
     def _empty_like(self, keep_index: bool = True) -> Self:
-        columns_to_access = (
+        columns_to_access = [
             itertools.chain(self.index._columns, self._columns)
             if keep_index
             else self._columns
-        )
-        with access_columns(*columns_to_access, mode="read", scope="internal"):
+        ]
+        with access_columns(
+            *columns_to_access, mode="read", scope="internal"
+        ) as flattened_columns_to_access:
             plc_table = plc.copying.empty_like(
                 plc.Table(
-                    [
-                        col.plc_column
-                        for col in (
-                            itertools.chain(self.index._columns, self._columns)
-                            if keep_index
-                            else self._columns
-                        )
-                    ]
+                    [col.plc_column for col in flattened_columns_to_access]
                 )
             )
             columns = [
-                ColumnBase.from_pylibcudf(col) for col in plc_table.columns()
+                ColumnBase.create(plc_result, dtype=reference_col.dtype)
+                for plc_result, reference_col in zip(
+                    plc_table.columns(),
+                    flattened_columns_to_access,
+                    strict=True,
+                )
             ]
         result = self._from_columns_like_self(
             columns,
@@ -3353,14 +3359,16 @@ class IndexedFrame(Frame):
                 splits,
             )
 
-            def split_from_pylibcudf(
-                split: list[plc.Column],
-            ) -> list[ColumnBase]:
-                return [ColumnBase.from_pylibcudf(col) for col in split]
-
             return [
                 self._from_columns_like_self(
-                    split_from_pylibcudf(split),
+                    [
+                        ColumnBase.create(
+                            plc_result, dtype=reference_col.dtype
+                        )
+                        for plc_result, reference_col in zip(
+                            split, source_columns_list, strict=True
+                        )
+                    ],
                     self._column_names,
                     self.index.names if keep_index else None,
                 )
@@ -3612,8 +3620,11 @@ class IndexedFrame(Frame):
             raise RuntimeError("UDF kernel execution failed.") from e
 
         if retty == CUDF_STRING_DTYPE:
-            col = ColumnBase.from_pylibcudf(
-                strings_udf.column_from_managed_udf_string_array(ans_col)
+            plc_result = strings_udf.column_from_managed_udf_string_array(
+                ans_col
+            )
+            col = ColumnBase.create(
+                plc_result, dtype=dtype_from_pylibcudf_column(plc_result)
             )
             free_kernel = _make_free_string_kernel()
             with _CUDFNumbaConfig():
@@ -4432,9 +4443,7 @@ class IndexedFrame(Frame):
 
         for name, col in df._column_labels_and_values:
             check_col = col.nans_to_nulls()
-            no_threshold_valid_count = (
-                len(col) - check_col.null_count
-            ) < thresh
+            no_threshold_valid_count = check_col.valid_count < thresh
             if no_threshold_valid_count:
                 continue
             out_cols.append(name)
@@ -4461,8 +4470,12 @@ class IndexedFrame(Frame):
         if len(subset) == 0:
             return self.copy(deep=True)
 
-        data_columns = [col.nans_to_nulls() for col in self._columns]
-        columns = [*self.index._columns, *data_columns]
+        columns = list(
+            itertools.chain(
+                self.index._columns,
+                (col.nans_to_nulls() for col in self._columns),
+            )
+        )
         keys = self._positions_from_column_names(subset)
 
         result_columns = self._drop_nulls_columns(
@@ -4472,7 +4485,12 @@ class IndexedFrame(Frame):
             thresh=thresh,
         )
         return self._from_columns_like_self(
-            [ColumnBase.from_pylibcudf(col) for col in result_columns],
+            [
+                ColumnBase.create(plc_result, dtype=reference_col.dtype)
+                for plc_result, reference_col in zip(
+                    result_columns, columns, strict=True
+                )
+            ],
             self._column_names,
             self.index.names,
         )
@@ -4505,8 +4523,10 @@ class IndexedFrame(Frame):
             )
             return self._from_columns_like_self(
                 [
-                    ColumnBase.from_pylibcudf(col)
-                    for col in plc_table.columns()
+                    ColumnBase.create(plc_result, dtype=reference_col.dtype)
+                    for plc_result, reference_col in zip(
+                        plc_table.columns(), columns, strict=True
+                    )
                 ],
                 column_names=self._column_names,
                 index_names=self.index.names if keep_index else None,
@@ -5594,7 +5614,12 @@ class IndexedFrame(Frame):
                 count,
             )
             tiled = [
-                ColumnBase.from_pylibcudf(plc) for plc in plc_table.columns()
+                ColumnBase.create(plc_result, dtype=dtype)
+                for plc_result, (_, dtype) in zip(
+                    plc_table.columns(),
+                    itertools.chain(self.index._dtypes, self._dtypes),
+                    strict=True,
+                )
             ]
         return self._from_columns_like_self(
             tiled,
@@ -6662,9 +6687,9 @@ class IndexedFrame(Frame):
             cols = []
             for col in self._columns:
                 if col.dtype.kind == "f":
-                    col = col.fillna(0)
-                    as_int = col.astype(np.dtype(np.int64))
-                    if cp.allclose(col, as_int):
+                    col_filled = col.fillna(0)
+                    as_int = col_filled.astype(np.dtype(np.int64))
+                    if cp.allclose(col_filled, as_int):
                         cols.append(as_int)
                         continue
                 cols.append(col)
@@ -7045,27 +7070,29 @@ def _append_new_row_inplace(col: ColumnBase, value: ScalarLike) -> None:
         val_col = val_col.astype(col.dtype)
         to_type = col.dtype
     else:
-        if (
-            cudf.get_option("mode.pandas_compatible")
-            and is_pandas_nullable_extension_dtype(col.dtype)
-            and val_col.dtype.kind == "f"
-        ):
-            # If the column is a pandas nullable extension type, we need to
-            # convert the nans to a nullable type as well.
-            val_col = val_col.nans_to_nulls()
-            if len(val_col) == val_col.null_count:
-                # If the column is all nulls, we can use the column dtype
-                # to avoid unnecessary casting.
-                val_col = val_col.astype(col.dtype)
-        to_type = find_common_type([val_col.dtype, col.dtype])
+        to_type = None
+        if is_pandas_nullable_extension_dtype(col.dtype):
+            if val_col.dtype.kind == "f":
+                # If the column is a pandas nullable extension type, we need to
+                # convert the nans to a nullable type as well.
+                val_col = val_col.nans_to_nulls()
+                if len(val_col) == val_col.null_count:
+                    # If the column is all nulls, we can use the column dtype
+                    # to avoid unnecessary casting.
+                    val_col = val_col.astype(col.dtype)
+            if val_col.can_cast_safely(col.dtype):
+                to_type = col.dtype
+        if to_type is None:
+            to_type = find_common_type([val_col.dtype, col.dtype])
+
         if (
             cudf.get_option("mode.pandas_compatible")
             and is_string_dtype(to_type)
             and is_mixed_with_object_dtype(val_col, col)
         ):
             raise MixedTypeError("Cannot append mixed types")
-        if cudf.get_option(
-            "mode.pandas_compatible"
+        if is_pandas_nullable_extension_dtype(
+            col.dtype
         ) and val_col.can_cast_safely(col.dtype):
             to_type = col.dtype
     val_col = val_col.astype(to_type)
