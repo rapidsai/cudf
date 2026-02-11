@@ -95,14 +95,13 @@ class approx_distinct_count {
    * than requested. Use the `standard_error()` getter to retrieve the actual value.
    *
    * @param input Table whose rows will be added to the sketch
-   * @param error The desired standard error for approximation (e.g., `standard_error{0.01}` for
-   * ~1%)
+   * @param error The desired standard error (e.g., `approx_standard_error{0.01}` for ~1%)
    * @param null_handling `INCLUDE` or `EXCLUDE` rows with nulls
    * @param nan_handling `NAN_IS_VALID` or `NAN_IS_NULL`
    * @param stream CUDA stream used for device memory operations and kernel launches
    */
   approx_distinct_count(table_view const& input,
-                        cudf::standard_error error,
+                        cudf::approx_standard_error error,
                         null_policy null_handling,
                         nan_policy nan_handling,
                         rmm::cuda_stream_view stream);
