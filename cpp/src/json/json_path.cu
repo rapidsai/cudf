@@ -982,13 +982,8 @@ std::unique_ptr<cudf::column> get_json_object(cudf::strings_column_view const& c
   // if the query is empty, return a string column containing all nulls
   if (!std::get<0>(preprocess).has_value()) {
     // Create a proper all-null strings column with valid structure (offsets + chars children)
-    // All offsets are zero for an all-null column
-    rmm::device_uvector<size_type> sizes(
-      col.size(), stream, cudf::get_current_device_resource_ref());
-    thrust::fill(rmm::exec_policy_nosync(stream), sizes.begin(), sizes.end(), 0);
-
-    auto [offsets, output_size] =
-      cudf::strings::detail::make_offsets_child_column(sizes.begin(), sizes.end(), stream, mr);
+    auto offsets = cudf::make_column_from_scalar(
+      cudf::numeric_scalar<int32_t>(0, true, stream), col.size() + 1, stream, mr);
 
     return make_strings_column(
       col.size(),
