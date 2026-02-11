@@ -26,6 +26,7 @@ from pylibcudf import expressions as plc_expr
 
 from cudf.api.types import is_list_like
 from cudf.core.column import (
+    ColumnBase,
     access_columns,
     as_column,
     column_empty,

@@ -4,7 +4,6 @@ import contextlib
 import doctest
 import inspect
 import io
-import itertools
 
 import numpy as np
 import pytest
@@ -34,7 +33,7 @@ def _is_public_name(parent, name):
     return not name.startswith("_")
 
 
-def _find_doctests_in_obj(obj, finder=None, criteria=None, seen=None):
+def _find_doctests_in_obj(obj, finder=None, criteria=None, _seen=None):
     """Find all doctests in an object.
 
     Parameters
@@ -45,9 +44,6 @@ def _find_doctests_in_obj(obj, finder=None, criteria=None, seen=None):
         Callable indicating whether to recurse over members of the provided
         object. If not provided, names not defined in the object's ``__all__``
         property are ignored.
-    seen : set, optional
-        Set of already-yielded doctest names, used to deduplicate doctests
-        that are reachable via multiple discovery paths.
 
     Yields
     ------
@@ -58,11 +54,11 @@ def _find_doctests_in_obj(obj, finder=None, criteria=None, seen=None):
         finder = doctest.DocTestFinder()
     if criteria is None:
         criteria = _name_in_all
-    if seen is None:
-        seen = set()
+    if _seen is None:
+        _seen = set()
     for docstring in finder.find(obj):
-        if docstring.examples and docstring.name not in seen:
-            seen.add(docstring.name)
+        if docstring.examples and docstring.name not in _seen:
+            _seen.add(docstring.name)
             yield docstring
     for name, member in inspect.getmembers(obj):
         # Only recurse over members matching the criteria
@@ -72,22 +68,40 @@ def _find_doctests_in_obj(obj, finder=None, criteria=None, seen=None):
         # module's __all__)
         if inspect.ismodule(member):
             yield from _find_doctests_in_obj(
-                member, finder, criteria=_name_in_all, seen=seen
+                member, finder, criteria=_name_in_all, _seen=_seen
             )
         # Recurse over the public API of classes (attributes not prefixed with
         # an underscore)
         elif inspect.isclass(member):
             yield from _find_doctests_in_obj(
-                member, finder, criteria=_is_public_name, seen=seen
+                member, finder, criteria=_is_public_name, _seen=_seen
             )
         # Pick up doctests from re-exported functions (whose __module__
         # differs from the parent module, so finder.find(obj) above
         # skips them).
         elif inspect.isfunction(member) or inspect.isbuiltin(member):
             for docstring in finder.find(member):
-                if docstring.examples and docstring.name not in seen:
-                    seen.add(docstring.name)
+                if docstring.examples and docstring.name not in _seen:
+                    _seen.add(docstring.name)
                     yield docstring
+
+
+def _collect_doctests():
+    """Eagerly collect all unique doctests into a list.
+
+    This runs once at import time so the result is an immutable snapshot
+    that can be safely shared across pytest-xdist workers without any
+    mutable shared state.
+    """
+    seen = set()
+    results = []
+    for mod in tests:
+        for docstring in _find_doctests_in_obj(mod, _seen=seen):
+            results.append(docstring)
+    return results
+
+
+_all_doctests = _collect_doctests()
 
 
 class TestDoctests:
@@ -103,9 +117,7 @@ class TestDoctests:
 
     @pytest.mark.parametrize(
         "docstring",
-        itertools.chain.from_iterable(
-            _find_doctests_in_obj(mod) for mod in tests
-        ),
+        _all_doctests,
         ids=lambda docstring: docstring.name,
     )
     @pytest.mark.skipif(
