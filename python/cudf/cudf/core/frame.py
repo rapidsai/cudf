@@ -1248,10 +1248,10 @@ class Frame(BinaryOperand, Scannable, Serializable):
         ...                    'name': ['Alfred', 'Batman', ''],
         ...                    'toy': [None, 'Batmobile', 'Joker']})
         >>> df
-            age                        born    name        toy
-        0     5                        <NA>  Alfred       <NA>
-        1     6  1939-05-27 00:00:00.000000  Batman  Batmobile
-        2  <NA>  1940-04-25 00:00:00.000000              Joker
+            age                           born    name        toy
+        0     5                           NaT  Alfred       <NA>
+        1     6  1939-05-27 00:00:00.000000000  Batman  Batmobile
+        2  <NA>  1940-04-25 00:00:00.000000000              Joker
         >>> df.isna()
              age   born   name    toy
         0  False   True  False   True
@@ -1329,10 +1329,10 @@ class Frame(BinaryOperand, Scannable, Serializable):
         ...                    'name': ['Alfred', 'Batman', ''],
         ...                    'toy': [None, 'Batmobile', 'Joker']})
         >>> df
-            age                        born    name        toy
-        0     5                        <NA>  Alfred       <NA>
-        1     6  1939-05-27 00:00:00.000000  Batman  Batmobile
-        2  <NA>  1940-04-25 00:00:00.000000              Joker
+            age                           born    name        toy
+        0     5                           NaT  Alfred       <NA>
+        1     6  1939-05-27 00:00:00.000000000  Batman  Batmobile
+        2  <NA>  1940-04-25 00:00:00.000000000              Joker
         >>> df.notna()
              age   born  name    toy
         0   True  False  True  False
@@ -1410,18 +1410,18 @@ class Frame(BinaryOperand, Scannable, Serializable):
         >>> s.searchsorted(4)
         3
         >>> s.searchsorted([0, 4])
-        array([0, 3], dtype=int32)
+        array([0, 3])
         >>> s.searchsorted([1, 3], side='left')
-        array([0, 2], dtype=int32)
+        array([0, 2])
         >>> s.searchsorted([1, 3], side='right')
-        array([1, 3], dtype=int32)
+        array([1, 3])
 
         If the values are not monotonically sorted, wrong
         locations may be returned:
 
         >>> s = cudf.Series([2, 1, 3])
         >>> s.searchsorted(1)
-        0   # wrong result, correct would be 1
+        0
 
         >>> df = cudf.DataFrame({'a': [1, 3, 5, 7], 'b': [10, 12, 14, 16]})
         >>> df
@@ -1435,11 +1435,11 @@ class Frame(BinaryOperand, Scannable, Serializable):
         >>> values_df
            a   b
         0  0  10
-        1  2  17
+        1  2  11
         2  5  13
         3  6  15
         >>> df.searchsorted(values_df, ascending=False)
-        array([4, 4, 4, 0], dtype=int32)
+        array([4, 4, 4, 0])
         """
         # Note: pandas.DataFrame does not support searchsorted
 
