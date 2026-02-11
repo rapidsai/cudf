@@ -73,7 +73,6 @@ from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
     SIZE_TYPE_DTYPE,
     can_convert_to_column,
-    dtype_from_pylibcudf_column,
     find_common_type,
     get_dtype_of_same_kind,
     is_column_like,
@@ -417,8 +416,7 @@ class IndexedFrame(Frame):
             index = _index_from_data(
                 dict(enumerate(columns[:n_index_columns]))
             )
-            index = index._copy_type_metadata(self.index)
-            # TODO: Should this if statement be handled in Index._copy_type_metadata?
+            # Handle special index types that need to be reconstructed
             if (
                 isinstance(self.index, cudf.CategoricalIndex)
                 and not isinstance(index, cudf.CategoricalIndex)
@@ -431,10 +429,14 @@ class IndexedFrame(Frame):
                 index.names = index_names
             else:
                 index.name = index_names[0]
+            # Preserve DatetimeIndex frequency if the original index had one
+            if isinstance(self.index, cudf.DatetimeIndex) and isinstance(
+                index, cudf.DatetimeIndex
+            ):
+                index._freq = self.index._freq
 
         data = dict(zip(column_names, data_columns, strict=True))
-        frame = type(self)._from_data(data, index, attrs=self.attrs)
-        return frame._copy_type_metadata(self)
+        return type(self)._from_data(data, index, attrs=self.attrs)
 
     def __round__(self, digits=0):
         # Shouldn't be added to BinaryOperand
@@ -2115,7 +2117,7 @@ class IndexedFrame(Frame):
         )
         return self._from_data_like_self(
             self._data._from_columns_like_self(data_columns)
-        )._copy_type_metadata(self)
+        )
 
     @_performance_tracking
     def truncate(self, before=None, after=None, axis=0, copy=True):
@@ -2955,9 +2957,7 @@ class IndexedFrame(Frame):
                 plc_column = plc.hashing.sha512(plc_table)
             else:
                 raise ValueError(f"Unsupported hashing algorithm {method}.")
-            result = ColumnBase.create(
-                plc_column, dtype=dtype_from_pylibcudf_column(plc_column)
-            )
+            result = ColumnBase.from_pylibcudf(plc_column)
         return cudf.Series._from_column(
             result,
             index=self.index,
@@ -3074,11 +3074,11 @@ class IndexedFrame(Frame):
                 keep_index=keep_index,
             )
 
-        cols_list = [
+        cols_list = list(
             itertools.chain(self.index._columns, self._columns)
             if keep_index and not has_range_index
             else self._columns
-        ]
+        )
         with access_columns(
             *cols_list, mode="read", scope="internal"
         ) as flattened_cols_list:
@@ -3155,6 +3155,7 @@ class IndexedFrame(Frame):
             if ignore_index
             else list(self.index._columns + self._columns)
         )
+        original_dtypes = [col.dtype for col in columns]
         keys = self._positions_from_column_names(
             subset, offset_by_index_columns=not ignore_index
         )
@@ -3166,9 +3167,9 @@ class IndexedFrame(Frame):
         )
         return self._from_columns_like_self(
             [
-                ColumnBase.create(plc_result, dtype=reference_col.dtype)
-                for plc_result, reference_col in zip(
-                    result_columns, columns, strict=True
+                ColumnBase.create(col, dtype)
+                for col, dtype in zip(
+                    result_columns, original_dtypes, strict=True
                 )
             ],
             self._column_names,
@@ -3295,9 +3296,7 @@ class IndexedFrame(Frame):
                 plc.types.NullEquality.EQUAL,
                 plc.types.NanEquality.ALL_EQUAL,
             )
-            distinct = ColumnBase.create(
-                plc_column, dtype=dtype_from_pylibcudf_column(plc_column)
-            )
+            distinct = ColumnBase.from_pylibcudf(plc_column)
         result = as_column(
             True, length=len(self), dtype=bool
         )._scatter_by_column(
@@ -3311,25 +3310,29 @@ class IndexedFrame(Frame):
 
     @_performance_tracking
     def _empty_like(self, keep_index: bool = True) -> Self:
-        columns_to_access = [
+        columns_to_access = list(
             itertools.chain(self.index._columns, self._columns)
             if keep_index
             else self._columns
-        ]
-        with access_columns(
-            *columns_to_access, mode="read", scope="internal"
-        ) as flattened_columns_to_access:
+        )
+        original_dtypes = [col.dtype for col in columns_to_access]
+        with access_columns(*columns_to_access, mode="read", scope="internal"):
             plc_table = plc.copying.empty_like(
                 plc.Table(
-                    [col.plc_column for col in flattened_columns_to_access]
+                    [
+                        col.plc_column
+                        for col in (
+                            itertools.chain(self.index._columns, self._columns)
+                            if keep_index
+                            else self._columns
+                        )
+                    ]
                 )
             )
             columns = [
-                ColumnBase.create(plc_result, dtype=reference_col.dtype)
-                for plc_result, reference_col in zip(
-                    plc_table.columns(),
-                    flattened_columns_to_access,
-                    strict=True,
+                ColumnBase.create(col, dtype)
+                for col, dtype in zip(
+                    plc_table.columns(), original_dtypes, strict=True
                 )
             ]
         result = self._from_columns_like_self(
@@ -3351,6 +3354,7 @@ class IndexedFrame(Frame):
             if keep_index
             else self._columns
         )
+        original_dtypes = [col.dtype for col in source_columns_list]
         with access_columns(
             *source_columns_list, mode="read", scope="internal"
         ):
@@ -3359,16 +3363,17 @@ class IndexedFrame(Frame):
                 splits,
             )
 
+            def split_with_dtypes(
+                split: list[plc.Column],
+            ) -> list[ColumnBase]:
+                return [
+                    ColumnBase.create(col, dtype)
+                    for col, dtype in zip(split, original_dtypes, strict=True)
+                ]
+
             return [
                 self._from_columns_like_self(
-                    [
-                        ColumnBase.create(
-                            plc_result, dtype=reference_col.dtype
-                        )
-                        for plc_result, reference_col in zip(
-                            split, source_columns_list, strict=True
-                        )
-                    ],
+                    split_with_dtypes(split),
                     self._column_names,
                     self.index.names if keep_index else None,
                 )
@@ -3620,11 +3625,8 @@ class IndexedFrame(Frame):
             raise RuntimeError("UDF kernel execution failed.") from e
 
         if retty == CUDF_STRING_DTYPE:
-            plc_result = strings_udf.column_from_managed_udf_string_array(
-                ans_col
-            )
-            col = ColumnBase.create(
-                plc_result, dtype=dtype_from_pylibcudf_column(plc_result)
+            col = ColumnBase.from_pylibcudf(
+                strings_udf.column_from_managed_udf_string_array(ans_col)
             )
             free_kernel = _make_free_string_kernel()
             with _CUDFNumbaConfig():
@@ -4470,12 +4472,9 @@ class IndexedFrame(Frame):
         if len(subset) == 0:
             return self.copy(deep=True)
 
-        columns = list(
-            itertools.chain(
-                self.index._columns,
-                (col.nans_to_nulls() for col in self._columns),
-            )
-        )
+        data_columns = [col.nans_to_nulls() for col in self._columns]
+        columns = [*self.index._columns, *data_columns]
+        original_dtypes = [col.dtype for col in columns]
         keys = self._positions_from_column_names(subset)
 
         result_columns = self._drop_nulls_columns(
@@ -4486,9 +4485,9 @@ class IndexedFrame(Frame):
         )
         return self._from_columns_like_self(
             [
-                ColumnBase.create(plc_result, dtype=reference_col.dtype)
-                for plc_result, reference_col in zip(
-                    result_columns, columns, strict=True
+                ColumnBase.create(col, dtype)
+                for col, dtype in zip(
+                    result_columns, original_dtypes, strict=True
                 )
             ],
             self._column_names,
@@ -4512,6 +4511,7 @@ class IndexedFrame(Frame):
             if keep_index
             else list(self._columns)
         )
+        original_dtypes = [col.dtype for col in columns]
         mask = boolean_mask.column
         with access_columns(*columns, mask, mode="read", scope="internal") as (
             *cols,
@@ -4523,9 +4523,9 @@ class IndexedFrame(Frame):
             )
             return self._from_columns_like_self(
                 [
-                    ColumnBase.create(plc_result, dtype=reference_col.dtype)
-                    for plc_result, reference_col in zip(
-                        plc_table.columns(), columns, strict=True
+                    ColumnBase.create(col, dtype)
+                    for col, dtype in zip(
+                        plc_table.columns(), original_dtypes, strict=True
                     )
                 ],
                 column_names=self._column_names,
@@ -5503,21 +5503,18 @@ class IndexedFrame(Frame):
             return result
 
         column_index = self._column_names.index(explode_column)
-        if not ignore_index:
-            idx_cols = self.index._columns
-        else:
-            idx_cols = ()
+        idx_cols = self.index._columns if not ignore_index else ()
 
-        explode_column_idx = column_index + len(idx_cols)
-        # We must copy inner datatype of the exploded list column to
-        # maintain struct dtype key names
-        exploded_type = cast(
-            "ListDtype", self._columns[column_index].dtype
+        # Build result dtypes: for the exploded column, use its element type
+        # to preserve struct dtype key names; for all others, preserve original dtype
+        element_type = cast(
+            ListDtype, self._columns[column_index].dtype
         ).element_type
-        result_types = (
-            exploded_type if i == explode_column_idx else col.dtype
+        explode_column_idx = column_index + len(idx_cols)
+        result_dtypes = [
+            element_type if i == explode_column_idx else col.dtype
             for i, col in enumerate(itertools.chain(idx_cols, self._columns))
-        )
+        ]
 
         with access_columns(
             *itertools.chain(idx_cols, self._columns),
@@ -5534,9 +5531,9 @@ class IndexedFrame(Frame):
                 explode_column_idx,
             )
             exploded = [
-                ColumnBase.create(plc_column, dtype=dtype)
-                for plc_column, dtype in zip(
-                    plc_table.columns(), result_types, strict=True
+                ColumnBase.create(col, dtype)
+                for col, dtype in zip(
+                    plc_table.columns(), result_dtypes, strict=True
                 )
             ]
 
@@ -5553,7 +5550,7 @@ class IndexedFrame(Frame):
         if len(idx_cols):
             index = _index_from_data(
                 dict(enumerate(exploded[: len(idx_cols)]))
-            )._copy_type_metadata(self.index)
+            )
             if (
                 isinstance(self.index, cudf.CategoricalIndex)
                 and not isinstance(index, cudf.CategoricalIndex)
@@ -5566,6 +5563,8 @@ class IndexedFrame(Frame):
                 index.names = self.index.names
             else:
                 index.name = self.index.name
+                if isinstance(self.index, cudf.DatetimeIndex):
+                    index._freq = self.index._freq
         else:
             index = None
 
@@ -5597,28 +5596,23 @@ class IndexedFrame(Frame):
         -------
         The indexed frame containing the tiled "rows".
         """
+        source_columns = list(
+            itertools.chain(self.index._columns, self._columns)
+        )
+        original_dtypes = [col.dtype for col in source_columns]
         with access_columns(
-            *itertools.chain(self.index._columns, self._columns),
+            *source_columns,
             mode="read",
             scope="internal",
         ):
             plc_table = plc.reshape.tile(
-                plc.Table(
-                    [
-                        col.plc_column
-                        for col in itertools.chain(
-                            self.index._columns, self._columns
-                        )
-                    ]
-                ),
+                plc.Table([col.plc_column for col in source_columns]),
                 count,
             )
             tiled = [
-                ColumnBase.create(plc_result, dtype=dtype)
-                for plc_result, (_, dtype) in zip(
-                    plc_table.columns(),
-                    itertools.chain(self.index._dtypes, self._dtypes),
-                    strict=True,
+                ColumnBase.create(plc, dtype)
+                for plc, dtype in zip(
+                    plc_table.columns(), original_dtypes, strict=True
                 )
             ]
         return self._from_columns_like_self(
@@ -7097,7 +7091,9 @@ def _append_new_row_inplace(col: ColumnBase, value: ScalarLike) -> None:
             to_type = col.dtype
     val_col = val_col.astype(to_type)
     old_col = col.astype(to_type)
-    res_col = concat_columns([old_col, val_col])
+    res_col = ColumnBase.create(
+        concat_columns([old_col, val_col]).plc_column, to_type
+    )
     if (
         cudf.get_option("mode.pandas_compatible")
         and res_col.dtype != col.dtype
