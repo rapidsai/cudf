@@ -26,7 +26,6 @@ from pylibcudf import expressions as plc_expr
 
 from cudf.api.types import is_list_like
 from cudf.core.column import (
-    ColumnBase,
     access_columns,
     as_column,
     column_empty,
@@ -1415,14 +1414,14 @@ def _read_parquet(
                         [concatenated_columns[i], columns.pop()]
                     )
 
-            data = {
-                name: ColumnBase.from_pylibcudf(col)
-                for name, col in zip(
-                    column_names, concatenated_columns, strict=True
-                )
-            }
-            df = DataFrame._from_data(data)
-            ioutils._add_df_col_struct_names(df, child_names)
+            plc_table = plc.Table(concatenated_columns)
+            df = DataFrame.from_pylibcudf(
+                plc_table,
+                metadata={
+                    "columns": column_names,
+                    "child_names": child_names,
+                },
+            )
             df = _process_metadata(
                 df,
                 column_names,
