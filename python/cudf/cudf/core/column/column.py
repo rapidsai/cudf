@@ -922,8 +922,8 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         # be done in from_pylibcudf, so it is only ever safe to call this in situations
         # where we know that the plc_column and children are already properly wrapped.
         # Ideally we should get rid of this altogether eventually and inline its logic
-        # in from_pylibcudf, but for now it is necessary for internal reconstruction
-        # paths that already guarantee wrapped buffers.
+        # in from_pylibcudf, but for now it is necessary for the various
+        # _with_type_metadata calls.
         self = cls.__new__(cls)
         if validate:
             plc_column, dtype = self._validate_args(plc_column, dtype)
@@ -1046,10 +1046,9 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             )
         pa_array = self.to_arrow()
 
-        arrow_dtype = (
-            self.dtype if isinstance(self.dtype, pd.ArrowDtype) else None
-        )
-        if arrow_type or (not nullable and arrow_dtype is not None):
+        if arrow_type or (
+            not nullable and isinstance(self.dtype, pd.ArrowDtype)
+        ):
             return pd.Index(
                 pd.arrays.ArrowExtensionArray(pa_array), copy=False
             )
