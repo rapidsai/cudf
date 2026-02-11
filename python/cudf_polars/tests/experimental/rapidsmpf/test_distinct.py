@@ -32,7 +32,7 @@ def _make_engine(target_partition_size: int = 1_000_000) -> pl.GPUEngine:
             "max_rows_per_partition": 50,
             "runtime": "rapidsmpf",
             "dynamic_planning": {
-                "sample_chunk_count": 2,
+                "sample_chunk_count_distinct": 2,
             },
             "target_partition_size": target_partition_size,
         },

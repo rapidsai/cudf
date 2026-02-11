@@ -4,13 +4,11 @@
 
 from __future__ import annotations
 
-import asyncio
 from typing import TYPE_CHECKING, Any
 
 from rapidsmpf.communicator.single import new_communicator as single_comm
 from rapidsmpf.config import Options, get_environment_variables
 from rapidsmpf.memory.buffer import MemoryType
-from rapidsmpf.memory.memory_reservation import opaque_memory_usage
 from rapidsmpf.streaming.core.context import Context
 from rapidsmpf.streaming.core.message import Message
 from rapidsmpf.streaming.core.node import define_py_node
@@ -19,14 +17,10 @@ from rapidsmpf.streaming.cudf.channel_metadata import (
     HashScheme,
     Partitioning,
 )
-from rapidsmpf.streaming.cudf.table_chunk import (
-    TableChunk,
-    make_table_chunks_available_or_wait,
-)
+from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 
 import pylibcudf as plc
 
-from cudf_polars.containers import DataFrame
 from cudf_polars.dsl.ir import IR, Distinct
 from cudf_polars.experimental.rapidsmpf.collectives.allgather import AllGatherManager
 from cudf_polars.experimental.rapidsmpf.collectives.shuffle import ShuffleManager
@@ -36,6 +30,7 @@ from cudf_polars.experimental.rapidsmpf.utils import (
     allgather_reduce,
     chunkwise_evaluate,
     empty_table_chunk,
+    evaluate_batch,
     evaluate_chunk,
     is_partitioned_on_keys,
     process_children,
@@ -44,7 +39,6 @@ from cudf_polars.experimental.rapidsmpf.utils import (
     shutdown_on_error,
 )
 from cudf_polars.experimental.repartition import Repartition
-from cudf_polars.experimental.utils import _concat
 from cudf_polars.utils.config import StreamingExecutor
 
 if TYPE_CHECKING:
@@ -54,11 +48,6 @@ if TYPE_CHECKING:
     from cudf_polars.experimental.rapidsmpf.tracing import ActorTracer
 
 
-# ============================================================================
-# Distinct Strategies
-# ============================================================================
-
-
 async def _tree_distinct(
     context: Context,
     ir: Distinct,
@@ -66,19 +55,16 @@ async def _tree_distinct(
     ch_out: Channel[TableChunk],
     ch_in: Channel[TableChunk],
     metadata_in: ChannelMetadata,
-    initial_chunks: list[TableChunk],
-    n_ary: int,
+    target_partition_size: int,
     *,
+    evaluated_chunks: list[TableChunk] | None = None,
     collective_id: int | None = None,
     tracer: ActorTracer | None = None,
 ) -> None:
     """
     Tree-based distinct reduction.
 
-    Collects all chunks, applies local distinct, then performs k-ary tree
-    reduction by concatenating and re-applying distinct until a single
-    chunk remains.
-
+    Reads chunks from input, applies distinct, and reduces incrementally.
     When collective_id is provided, uses allgather to collect partial
     results from all ranks before final distinct.
 
@@ -96,16 +82,15 @@ async def _tree_distinct(
         The input channel.
     metadata_in
         The input channel metadata.
-    initial_chunks
-        Chunks already received during sampling.
-    n_ary
-        The fan-in for tree reduction.
+    target_partition_size
+        Target size in bytes for output partitions.
+    evaluated_chunks
+        Chunks that have already been evaluated (e.g., during sampling).
     collective_id
         Optional collective ID for allgather. If None, no allgather is performed.
     tracer
         Optional tracer for runtime metrics.
     """
-    # Output: single chunk, duplicated if allgather is used
     metadata_out = ChannelMetadata(
         local_count=1,
         partitioning=None,
@@ -113,116 +98,47 @@ async def _tree_distinct(
     )
     await send_metadata(ch_out, context, metadata_out)
 
-    # Collect all chunks, applying local distinct
-    distinct_chunks: list[TableChunk] = list(initial_chunks)
+    distinct_chunks: list[TableChunk] = list(evaluated_chunks or [])
+    total_size = sum(c.data_alloc_size() for c in distinct_chunks)
 
-    # Apply distinct to remaining chunks from input channel
-    while (msg := await ch_in.recv(context)) is not None:
-        chunk = TableChunk.from_message(msg)
-        del msg
-        chunk, extra = await make_table_chunks_available_or_wait(
-            context,
-            chunk,
-            reserve_extra=chunk.data_alloc_size(),
-            net_memory_delta=0,
-        )
-        with opaque_memory_usage(extra):
-            distinct_chunk = await asyncio.to_thread(
-                evaluate_chunk, chunk, ir, ir_context
-            )
-            distinct_chunks.append(distinct_chunk)
-            del chunk
-
-    # Tree reduction
-    k = n_ary
-    input_schema = ir.children[0].schema
-    while len(distinct_chunks) > 1:
-        new_chunks: list[TableChunk] = []
-        for i in range(0, len(distinct_chunks), k):
-            batch = distinct_chunks[i : i + k]
-            if len(batch) == 1:
-                new_chunks.append(batch[0])
+    receiving = True
+    while receiving or len(distinct_chunks) > 1:
+        if receiving:
+            msg = await ch_in.recv(context)
+            if msg is None:
+                receiving = False
             else:
-                batch, extra = await make_table_chunks_available_or_wait(
-                    context,
-                    batch,
-                    reserve_extra=sum(c.data_alloc_size() for c in batch),
-                    net_memory_delta=0,
+                chunk = await evaluate_chunk(
+                    context, TableChunk.from_message(msg), ir, ir_context
                 )
-                with opaque_memory_usage(extra):
-                    concatenated = await asyncio.to_thread(
-                        _concat,
-                        *[
-                            DataFrame.from_table(
-                                c.table_view(),
-                                list(input_schema.keys()),
-                                list(input_schema.values()),
-                                c.stream,
-                            )
-                            for c in batch
-                        ],
-                        context=ir_context,
-                    )
-                    df = await asyncio.to_thread(
-                        ir.do_evaluate,
-                        *ir._non_child_args,
-                        concatenated,
-                        context=ir_context,
-                    )
-                    del concatenated
-                    new_chunks.append(
-                        TableChunk.from_pylibcudf_table(
-                            df.table, df.stream, exclusive_view=True
-                        )
-                    )
-                    del df
-        distinct_chunks = new_chunks
+                del msg
+                distinct_chunks.append(chunk)
+                total_size += chunk.data_alloc_size()
 
-    # Allgather partial results from all ranks if needed
+        if len(distinct_chunks) > 1 and (
+            not receiving or total_size > target_partition_size
+        ):
+            merged = await evaluate_batch(distinct_chunks, context, ir, ir_context)
+            distinct_chunks = [merged]
+            total_size = merged.data_alloc_size()
+
     if collective_id is not None:
         allgather = AllGatherManager(context, collective_id)
         stream = ir_context.get_cuda_stream()
 
-        # Insert the local distinct result (or empty if no local data)
         if distinct_chunks:
-            chunk = distinct_chunks[0]
-            allgather.insert(0, chunk)
-        # else: No local data - don't insert anything into allgather
-        # Empty table chunks can have schema mismatches (e.g., STRING columns
-        # with 0 children vs 1 child), so we skip them entirely
+            allgather.insert(0, distinct_chunks[0])
         allgather.insert_finished()
 
-        # Extract concatenated results from all ranks
-        gathered_table = await allgather.extract_concatenated(stream)
-        distinct_chunks = [
-            TableChunk.from_pylibcudf_table(gathered_table, stream, exclusive_view=True)
-        ]
-
-        # One more distinct round to merge results from all ranks
-        chunk = distinct_chunks[0]
-        chunk, extra = await make_table_chunks_available_or_wait(
-            context,
-            chunk,
-            reserve_extra=chunk.data_alloc_size(),
-            net_memory_delta=0,
+        gathered_chunk = TableChunk.from_pylibcudf_table(
+            await allgather.extract_concatenated(stream),
+            stream,
+            exclusive_view=True,
         )
-        with opaque_memory_usage(extra):
-            df = await asyncio.to_thread(
-                ir.do_evaluate,
-                *ir._non_child_args,
-                DataFrame.from_table(
-                    chunk.table_view(),
-                    list(input_schema.keys()),
-                    list(input_schema.values()),
-                    chunk.stream,
-                ),
-                context=ir_context,
-            )
-            output_chunk = TableChunk.from_pylibcudf_table(
-                df.table, df.stream, exclusive_view=True
-            )
-            del df, chunk
-        distinct_chunks = [output_chunk]
+        distinct_chunks = [
+            await evaluate_chunk(context, gathered_chunk, ir, ir_context)
+        ]
+        del gathered_chunk
 
     # Send final result
     if distinct_chunks:
@@ -246,11 +162,11 @@ async def _shuffle_distinct(
     ch_out: Channel[TableChunk],
     ch_in: Channel[TableChunk],
     metadata_in: ChannelMetadata,
-    initial_chunks: list[TableChunk],
     output_count: int,
     collective_id: int,
     key_indices: tuple[int, ...],
     *,
+    evaluated_chunks: list[TableChunk] | None = None,
     shuffle_context: Context | None = None,
     tracer: ActorTracer | None = None,
 ) -> None:
@@ -274,14 +190,14 @@ async def _shuffle_distinct(
         The input channel.
     metadata_in
         The input channel metadata.
-    initial_chunks
-        Chunks already received during sampling.
     output_count
         The number of output partitions per rank.
     collective_id
         The collective ID for the shuffle operation.
     key_indices
         The column indices of the distinct keys.
+    evaluated_chunks
+        Chunks that have already been evaluated (e.g., during sampling).
     shuffle_context
         Optional context for shuffle operations.
         Defaults to a temporary local context.
@@ -321,25 +237,25 @@ async def _shuffle_distinct(
     # Create shuffle manager with shuffle context
     shuffle = ShuffleManager(shuffle_context, output_count, key_indices, collective_id)
 
-    # Insert initial chunks
-    for chunk in initial_chunks:
+    for chunk in evaluated_chunks or []:
         shuffle.insert_chunk(
             chunk.make_available_and_spill(shuffle_context.br(), allow_overbooking=True)
         )
 
-    # Insert remaining chunks from channel
+    # Apply distinct to remaining chunks before inserting into shuffler
     while (msg := await ch_in.recv(context)) is not None:
+        distinct_chunk = await evaluate_chunk(
+            context, TableChunk.from_message(msg), ir, ir_context
+        )
+        del msg
         shuffle.insert_chunk(
-            TableChunk.from_message(msg).make_available_and_spill(
+            distinct_chunk.make_available_and_spill(
                 shuffle_context.br(), allow_overbooking=True
             )
         )
-        del msg
 
     await shuffle.insert_finished()
 
-    # Extract shuffled partitions and apply local distinct
-    input_schema = ir.children[0].schema
     stream = ir_context.get_cuda_stream()
     for seq_num, partition_id in enumerate(range(shuf_rank, output_count, shuf_nranks)):
         partition_chunk = TableChunk.from_pylibcudf_table(
@@ -347,40 +263,13 @@ async def _shuffle_distinct(
             stream,
             exclusive_view=True,
         )
-
-        partition_chunk, extra = await make_table_chunks_available_or_wait(
-            context,
-            partition_chunk,
-            reserve_extra=partition_chunk.data_alloc_size(),
-            net_memory_delta=0,
-        )
-        with opaque_memory_usage(extra):
-            df = await asyncio.to_thread(
-                ir.do_evaluate,
-                *ir._non_child_args,
-                DataFrame.from_table(
-                    partition_chunk.table_view(),
-                    list(input_schema.keys()),
-                    list(input_schema.values()),
-                    partition_chunk.stream,
-                ),
-                context=ir_context,
-            )
-            output_chunk = TableChunk.from_pylibcudf_table(
-                df.table, df.stream, exclusive_view=True
-            )
-            if tracer is not None:
-                tracer.add_chunk(table=output_chunk.table_view())
-            del df, partition_chunk
-
+        output_chunk = await evaluate_chunk(context, partition_chunk, ir, ir_context)
+        del partition_chunk
+        if tracer is not None:
+            tracer.add_chunk(table=output_chunk.table_view())
         await ch_out.send(context, Message(seq_num, output_chunk))
 
     await ch_out.drain(context)
-
-
-# ============================================================================
-# Dynamic Distinct Node
-# ============================================================================
 
 
 @define_py_node()
@@ -392,7 +281,6 @@ async def distinct_node(
     ch_in: Channel[TableChunk],
     sample_chunk_count: int,
     target_partition_size: int,
-    n_ary: int,
     collective_ids: list[int],
 ) -> None:
     """
@@ -426,8 +314,6 @@ async def distinct_node(
         Number of chunks to sample for size estimation.
     target_partition_size
         Target size (in bytes) for output partitions.
-    n_ary
-        Default fan-in for tree reduction (may be adapted based on chunk sizes).
     collective_ids
         Pool of collective IDs for allgather and shuffle operations.
     """
@@ -480,76 +366,53 @@ async def distinct_node(
             )
             return
 
-        # Sample chunks and apply local distinct
-        initial_chunks: list[TableChunk] = []
-        total_distinct_size = 0
-
-        for _ in range(sample_chunk_count):
-            msg = await ch_in.recv(context)
-            if msg is None:
-                break
-            chunk = TableChunk.from_message(msg)
-            del msg
-
-            chunk, extra = await make_table_chunks_available_or_wait(
-                context,
-                chunk,
-                reserve_extra=chunk.data_alloc_size(),
-                net_memory_delta=0,
-            )
-            with opaque_memory_usage(extra):
-                distinct_chunk = await asyncio.to_thread(
-                    evaluate_chunk, chunk, ir, ir_context
-                )
-                total_distinct_size += distinct_chunk.data_alloc_size(MemoryType.DEVICE)
-                initial_chunks.append(distinct_chunk)
-                del chunk
-
-        # Estimate total size: avg_sample_size * local_count, summed across ranks
-        local_count = metadata_in.local_count
-        if initial_chunks and total_distinct_size > 0:
-            avg_sample_size = total_distinct_size / len(initial_chunks)
-            local_estimate = int(avg_sample_size * local_count)
-            # Adaptive n-ary: how many chunks can fit in target_partition_size?
-            # Bounded between 2 (minimum progress) and 256 (reasonable upper limit)
-            chunks_per_partition = max(1, target_partition_size // avg_sample_size)
-            adaptive_n_ary = max(2, min(256, int(chunks_per_partition)))
-        else:
-            local_estimate = 0
-            adaptive_n_ary = n_ary  # fallback to configured value
-
-        if can_skip_global_comm:
-            estimated_total_size = local_estimate
-            global_chunk_count = local_count
-        else:
-            estimated_total_size, global_chunk_count = await allgather_reduce(
-                context, collective_ids.pop(), local_estimate, local_count
-            )
-
-        # Cap estimated size based on zlice limit (e.g., head(100) caps output)
-        if ir.zlice is not None and ir.zlice[1] is not None and initial_chunks:
-            # Estimate avg row size from samples
-            total_rows = sum(c.table_view().num_rows() for c in initial_chunks)
-            if total_rows > 0:
-                avg_row_size = total_distinct_size / total_rows
-                max_zlice_size = int(avg_row_size * ir.zlice[1])
-                estimated_total_size = min(estimated_total_size, max_zlice_size)
-                local_estimate = min(local_estimate, max_zlice_size)
-
-        # =====================================================================
-        # Strategy Selection
-        # =====================================================================
-
-        # Check for ordering requirements (shuffle strategies are not stable)
         require_tree = ir.stable or ir.keep in (
             plc.stream_compaction.DuplicateKeepOption.KEEP_FIRST,
             plc.stream_compaction.DuplicateKeepOption.KEEP_LAST,
         )
 
+        evaluated_chunks: list[TableChunk] = []
+        total_size = 0
+        merge_count = 0
+
+        for _ in range(sample_chunk_count):
+            msg = await ch_in.recv(context)
+            if msg is None:
+                break
+            chunk = await evaluate_chunk(
+                context, TableChunk.from_message(msg), ir, ir_context
+            )
+            del msg
+            total_size += chunk.data_alloc_size(MemoryType.DEVICE)
+            evaluated_chunks.append(chunk)
+
+            if total_size > target_partition_size and len(evaluated_chunks) > 1:
+                merged = await evaluate_batch(evaluated_chunks, context, ir, ir_context)
+                total_size = merged.data_alloc_size(MemoryType.DEVICE)
+                evaluated_chunks = [merged]
+                merge_count += 1
+                if total_size > target_partition_size:
+                    break
+
+        local_count = metadata_in.local_count
         if can_skip_global_comm:
-            # No global communication needed
-            if local_estimate < target_partition_size or require_tree:
-                # Small output or ordering required - use local tree reduction
+            global_size = total_size
+            global_chunk_count = local_count
+        else:
+            global_size, global_chunk_count = await allgather_reduce(
+                context, collective_ids.pop(), total_size, local_count
+            )
+
+        if ir.zlice is not None and ir.zlice[1] is not None and evaluated_chunks:
+            total_rows = sum(c.table_view().num_rows() for c in evaluated_chunks)
+            if total_rows > 0:
+                avg_row_size = total_size / total_rows
+                global_size = min(global_size, int(avg_row_size * ir.zlice[1]))
+
+        use_tree = global_size < target_partition_size or require_tree
+
+        if can_skip_global_comm:
+            if use_tree:
                 if tracer is not None:
                     tracer.decision = "tree_local"
                 await _tree_distinct(
@@ -559,15 +422,14 @@ async def distinct_node(
                     ch_out,
                     ch_in,
                     metadata_in,
-                    initial_chunks,
-                    adaptive_n_ary,
+                    target_partition_size,
+                    evaluated_chunks=evaluated_chunks,
                     tracer=tracer,
                 )
             else:
-                # Large output - use local shuffle (no inter-rank communication)
                 if tracer is not None:
                     tracer.decision = "shuffle_local"
-                ideal_count = max(1, local_estimate // target_partition_size)
+                ideal_count = max(1, global_size // target_partition_size)
                 output_count = max(1, min(ideal_count, local_count))
                 await _shuffle_distinct(
                     context,
@@ -576,15 +438,14 @@ async def distinct_node(
                     ch_out,
                     ch_in,
                     metadata_in,
-                    initial_chunks,
                     output_count,
                     collective_ids.pop(),
                     key_indices,
+                    evaluated_chunks=evaluated_chunks,
                     shuffle_context=context if nranks == 1 else None,
                     tracer=tracer,
                 )
-        elif estimated_total_size < target_partition_size or require_tree:
-            # Small output or ordering required - use tree reduction with allgather
+        elif use_tree:
             if tracer is not None:
                 tracer.decision = "tree_allgather"
             await _tree_distinct(
@@ -594,17 +455,15 @@ async def distinct_node(
                 ch_out,
                 ch_in,
                 metadata_in,
-                initial_chunks,
-                adaptive_n_ary,
+                target_partition_size,
+                evaluated_chunks=evaluated_chunks,
                 collective_id=collective_ids.pop(),
                 tracer=tracer,
             )
         else:
-            # Large output - use shuffle
             if tracer is not None:
                 tracer.decision = "shuffle"
-            ideal_count = max(1, estimated_total_size // target_partition_size)
-            # Cap at global chunk count, but use the rank count if it's larger
+            ideal_count = max(1, global_size // target_partition_size)
             output_count = max(nranks, min(ideal_count, global_chunk_count))
             await _shuffle_distinct(
                 context,
@@ -613,18 +472,13 @@ async def distinct_node(
                 ch_out,
                 ch_in,
                 metadata_in,
-                initial_chunks,
                 output_count,
                 collective_ids.pop(),
                 key_indices,
+                evaluated_chunks=evaluated_chunks,
                 shuffle_context=context,
                 tracer=tracer,
             )
-
-
-# ============================================================================
-# Network Generation
-# ============================================================================
 
 
 @generate_ir_sub_network.register(Distinct)
@@ -638,19 +492,12 @@ def _(
         # Fall back to the default IR handler (bypass Distinct dispatch)
         return generate_ir_sub_network.dispatch(IR)(ir, rec)
 
-    # For type narrowing after the early return
-    dynamic_planning = executor.dynamic_planning
-
-    # Process children
     nodes, channels = process_children(ir, rec)
-
-    # Create output ChannelManager
     channels[ir] = ChannelManager(rec.state["context"])
-
-    # Get collective IDs for this Distinct (may be empty if not reserved)
     collective_ids = list(rec.state["collective_id_map"].get(ir, []))
-
-    # Create the dynamic unique node
+    assert len(collective_ids) == 2, (
+        f"Distinct requires 2 collective IDs, got {len(collective_ids)}"
+    )
     nodes[ir] = [
         distinct_node(
             rec.state["context"],
@@ -658,11 +505,9 @@ def _(
             rec.state["ir_context"],
             channels[ir].reserve_input_slot(),
             channels[ir.children[0]].reserve_output_slot(),
-            dynamic_planning.sample_chunk_count,
+            executor.dynamic_planning.sample_chunk_count_distinct,
             executor.target_partition_size,
-            executor.groupby_n_ary,  # Reuse groupby n_ary for now
             collective_ids,
         )
     ]
-
     return nodes, channels
