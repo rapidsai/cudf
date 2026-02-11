@@ -710,22 +710,30 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             if isinstance(dtype, IntervalDtype):
                 interval_subtype = dtype.subtype
                 assert interval_subtype is not None
-                interval_children = (
-                    ColumnBase.create(
-                        child, dtype_from_pylibcudf_column(child)
-                    ).astype(interval_subtype)
+                interval_type = dtype_to_pylibcudf_type(interval_subtype)
+                children = [
+                    plc.unary.cast(child, interval_type)
+                    if child.type() != interval_type
+                    else child
                     for child in col.children()
+                ]
+                col = ColumnBase._with_children(
+                    col,
+                    children,
+                    data_type=plc.DataType(plc.TypeId.STRUCT),
                 )
-                children = [child.plc_column for child in interval_children]
             elif isinstance(dtype, StructDtype):
                 children = ColumnBase._normalize_children(
                     col.children(), dtype.fields.values()
                 )
-            col = ColumnBase._with_children(
-                col,
-                children,
-                data_type=plc.DataType(plc.TypeId.STRUCT),
-            )
+                # TODO: Once we stop handling None dtype inputs this creation can be
+                # deindented and we can remove the duplicate code in the IntervalDtype
+                # branch above
+                col = ColumnBase._with_children(
+                    col,
+                    children,
+                    data_type=plc.DataType(plc.TypeId.STRUCT),
+                )
 
         # TODO: This branch can be removed when we remove from_pylibcudf
         if dtype is None and col.children():
