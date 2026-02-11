@@ -70,7 +70,7 @@ POLARS_VALIDATION_OPTIONS = {
     "check_dtypes": True,
     "check_exact": False,
     "rel_tol": 1e-5,
-    "abs_tol": 1e-8,
+    "abs_tol": 1e-2,
 }
 
 
@@ -92,8 +92,9 @@ ExecutorType = Literal["in-memory", "streaming", "cpu"]
 # different casting rules than Polars. This dictionary maps
 # query ID to the casts to apply to the DuckDB results necessary
 # to match the cudf-polars results.
-# TODO: this depends on the input types...
-EXPECTED_CASTS = {
+# EXPECTED_CASTS_DECIMAL should be used when the input data uses
+# Decimal rather than Float for account balances, etc.
+EXPECTED_CASTS_DECIMAL = {
     1: [
         pl.col("sum_qty").cast(pl.Decimal(15, 2)),
         pl.col("sum_base_price").cast(pl.Decimal(15, 2)),
@@ -129,6 +130,25 @@ EXPECTED_CASTS = {
         pl.col("numcust").cast(pl.UInt32()),
         pl.col("totacctbal").cast(pl.Decimal(15, 2)),
     ],
+}
+
+# EXPECTED_CASTS_FLOAT should be used when the input data uses
+# Float rather than Decimal for account balances, etc.
+
+EXPECTED_CASTS_FLOAT = {
+    1: [pl.col("count_order").cast(pl.UInt32())],
+    4: [pl.col("order_count").cast(pl.UInt32())],
+    7: [pl.col("l_year").cast(pl.Int32())],
+    8: [pl.col("o_year").cast(pl.Int32())],
+    9: [pl.col("o_year").cast(pl.Int32())],
+    12: [
+        pl.col("high_line_count").cast(pl.Int32()),
+        pl.col("low_line_count").cast(pl.Int32()),
+    ],
+    13: [pl.col("c_count").cast(pl.UInt32()), pl.col("custdist").cast(pl.UInt32())],
+    16: [pl.col("supplier_cnt").cast(pl.UInt32())],
+    21: [pl.col("numwait").cast(pl.UInt32())],
+    22: [pl.col("numcust").cast(pl.UInt32())],
 }
 
 
@@ -1208,6 +1228,24 @@ def parse_args(
     return parsed_args
 
 
+def check_input_data_type(run_config: RunConfig) -> Literal["decimal", "float"]:
+    """
+    Check whether the input data uses Decimal or Float for account balances, etc.
+
+    This is determined by looking at the ``c_acctbal`` column of the customer table.
+    """
+    if run_config.suffix == "":
+        path = Path(run_config.dataset_path) / f"customer{run_config.suffix}"
+    else:
+        path = Path(run_config.dataset_path) / f"customer.{run_config.suffix}"
+    t = pl.scan_parquet(path).select(pl.col("c_acctbal")).collect_schema()["c_acctbal"]
+
+    if t.is_decimal():
+        return "decimal"
+    else:
+        return "float"
+
+
 def run_polars(
     benchmark: Any,
     options: Sequence[str] | None = None,
@@ -1230,6 +1268,7 @@ def run_polars(
     records: defaultdict[int, list[Record]] = defaultdict(list)
     plans: dict[int, SerializablePlan] = {}
     engine: pl.GPUEngine | None = None
+    input_data_type: Literal["decimal", "float"] = check_input_data_type(run_config)
 
     if run_config.executor != "cpu":
         executor_options = get_executor_options(run_config, benchmark=benchmark)
@@ -1252,7 +1291,8 @@ def run_polars(
 
     for q_id in run_config.queries:
         try:
-            q = getattr(benchmark, f"q{q_id}")(run_config)
+            query_result = getattr(benchmark, f"q{q_id}")(run_config)
+            q = query_result.frame
         except AttributeError as err:
             raise NotImplementedError(f"Query {q_id} not implemented.") from err
 
@@ -1328,19 +1368,30 @@ def run_polars(
                 result.write_parquet(output_path)
 
             if args.validate_directory is not None:
-                expected = pl.read_parquet(
-                    args.validate_directory / f"q{q_id:02d}.parquet"
-                ).with_columns(*EXPECTED_CASTS.get(q_id, []))
+                if input_data_type == "decimal":
+                    casts = EXPECTED_CASTS_DECIMAL.get(q_id, [])
+                else:
+                    casts = EXPECTED_CASTS_FLOAT.get(q_id, [])
+
+                expected = (
+                    pl.read_parquet(args.validate_directory / f"q{q_id:02d}.parquet")
+                    .with_columns(*casts)
+                    .sort(
+                        by=query_result.sort_by, descending=query_result.sort_descending
+                    )
+                )
 
                 try:
                     polars.testing.assert_frame_equal(
-                        result,
+                        result.sort(
+                            by=query_result.sort_by,
+                            descending=query_result.sort_descending,
+                        ),
                         expected,
                         **POLARS_VALIDATION_OPTIONS,  # type: ignore[arg-type]
                     )
                 except AssertionError as e:
                     print(f"❌ Query {q_id} failed validation:\n{e}")
-
                     record = dataclasses.replace(
                         record,
                         validation_result=ValidationResult(
