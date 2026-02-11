@@ -18,7 +18,7 @@ from cudf_polars.testing.io import make_partitioned_source
 from cudf_polars.utils.versions import (
     POLARS_VERSION_LT_131,
     POLARS_VERSION_LT_135,
-    POLARS_VERSION_LT_137,
+    POLARS_VERSION_LT_138,
 )
 
 if TYPE_CHECKING:
@@ -218,14 +218,7 @@ def test_scan_csv_column_renames_projection_schema(tmp_path):
         (4, 2),
     ],
 )
-def test_scan_csv_multi(request, tmp_path, filename, glob, nrows_skiprows):
-    request.applymarker(
-        pytest.mark.xfail(
-            # Fixed in 1.38. See https://github.com/pola-rs/polars/pull/26128
-            condition=not POLARS_VERSION_LT_137,
-            reason="Polars 1.37 has overflow bug with skip_rows + n_rows > file length",
-        )
-    )
+def test_scan_csv_multi(tmp_path, filename, glob, nrows_skiprows):
     n_rows, skiprows = nrows_skiprows
     with (tmp_path / "test1.csv").open("w") as f:
         f.write("""foo,bar,baz\n1,2,3\n3,4,5""")
@@ -648,7 +641,7 @@ polars"""
 def test_hits_scan_row_index_duplicate(request, tmp_path):
     request.applymarker(
         pytest.mark.xfail(
-            condition=not POLARS_VERSION_LT_137,
+            condition=not POLARS_VERSION_LT_138,
             reason="polars fails ahead of time",
         )
     )

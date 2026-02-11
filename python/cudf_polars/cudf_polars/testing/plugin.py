@@ -13,7 +13,6 @@ import pytest
 import polars
 
 from cudf_polars.utils.config import StreamingFallbackMode
-from cudf_polars.utils.versions import POLARS_VERSION_LT_135
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -94,10 +93,6 @@ EXPECTED_FAILURES: Mapping[str, str | tuple[str, bool]] = {
     "tests/unit/io/test_delta.py::test_scan_delta_schema_evolution_nested_struct_field_19915": "Need to expose hive partitioning",
     "tests/unit/io/test_delta.py::test_scan_delta_nanosecond_timestamp": "polars generates the wrong schema: https://github.com/pola-rs/polars/issues/23949",
     "tests/unit/io/test_delta.py::test_scan_delta_nanosecond_timestamp_nested": "polars generates the wrong schema: https://github.com/pola-rs/polars/issues/23949",
-    "tests/unit/io/test_delta.py::test_scan_delta_loads_aws_profile_endpoint_url": (
-        "See https://github.com/rapidsai/cudf/pull/20791#issuecomment-3750528419",
-        not POLARS_VERSION_LT_135,
-    ),
     "tests/unit/io/test_lazy_count_star.py::test_count_compressed_csv_18057": "Need to determine if file is compressed",
     "tests/unit/io/test_lazy_count_star.py::test_count_parquet[small.parquet-4]": "Debug output on stderr doesn't match",
     "tests/unit/io/test_lazy_count_star.py::test_count_parquet[foods*.parquet-54]": "Debug output on stderr doesn't match",
@@ -131,6 +126,7 @@ EXPECTED_FAILURES: Mapping[str, str | tuple[str, bool]] = {
     "tests/unit/io/test_partition.py::test_partition_to_memory_sort_by[df1-a-io_type0]": "partition sinks not yet supported in standard engine.",
     "tests/unit/io/test_partition.py::test_partition_to_memory_sort_by[df1-a-io_type1]": "partition sinks not yet supported in standard engine.",
     "tests/unit/io/test_partition.py::test_partition_to_memory_sort_by[df1-a-io_type2]": "partition sinks not yet supported in standard engine.",
+    "tests/unit/io/test_sink.py::test_collect_all_lazy": "SinkMultiple not supported by InMemory CPU Engine, which we fallback to. See",
     "tests/unit/io/test_lazy_parquet.py::test_scan_parquet_ignores_dtype_mismatch_for_non_projected_columns_19249[False-False]": "Needs some variant of cudf#16394",
     "tests/unit/io/test_lazy_parquet.py::test_scan_parquet_ignores_dtype_mismatch_for_non_projected_columns_19249[True-False]": "Needs some variant of cudf#16394",
     "tests/unit/io/test_lazy_parquet.py::test_parquet_unaligned_schema_read[False]": "Incomplete handling of projected reads with mismatching schemas, cudf#16394",
@@ -219,7 +215,6 @@ EXPECTED_FAILURES: Mapping[str, str | tuple[str, bool]] = {
     "tests/unit/operations/test_slice.py::test_schema_slice_on_literal_23999[lit1-0-len1-False]": "List literal loses nesting in slice: cudf#19610",
     "tests/unit/operations/test_slice.py::test_schema_slice_on_literal_23999[lit1-offset1-0-False]": "List literal loses nesting in slice: cudf#19610",
     "tests/unit/operations/test_slice.py::test_schema_slice_on_literal_23999[lit1-offset1-len1-False]": "List literal loses nesting in slice: cudf#19610",
-    "tests/unit/io/test_iceberg.py::test_scan_iceberg_fast_count": "Polars doesn't pass us any statistics for iceberg scans when use_metadata_statistics is True",
     "tests/unit/functions/test_concat.py::test_concat_horizontally_strict": "polars doesnt hand us the hconcat options. See ...",
 }
 
@@ -261,11 +256,7 @@ TESTS_TO_SKIP: Mapping[str, str] = {
 
 
 STREAMING_ONLY_EXPECTED_FAILURES: Mapping[str, str] = {
-    "tests/unit/io/test_parquet.py::test_field_overwrites_metadata": "cannot serialize in-memory sink target.",
-    "tests/unit/io/test_parquet_field_overwrites.py::test_required_flat": "cannot serialize in-memory sink target.",
-    "tests/unit/io/test_parquet_field_overwrites.py::test_required_list[dtype0]": "cannot serialize in-memory sink target.",
-    "tests/unit/io/test_parquet_field_overwrites.py::test_required_list[dtype1]": "cannot serialize in-memory sink target.",
-    "tests/unit/io/test_parquet_field_overwrites.py::test_required_struct": "cannot serialize in-memory sink target.",
+    # Add tests that are expected to fail with the streaming executor
 }
 
 
