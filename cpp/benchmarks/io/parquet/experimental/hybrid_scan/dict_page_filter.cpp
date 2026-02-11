@@ -8,6 +8,7 @@
 #include <benchmarks/io/cuio_common.hpp>
 #include <benchmarks/io/nvbench_helpers.hpp>
 
+#include <cudf/io/datasource.hpp>
 #include <cudf/io/experimental/hybrid_scan.hpp>
 #include <cudf/io/parquet.hpp>
 #include <cudf/io/parquet_io_utils.hpp>
@@ -49,17 +50,14 @@ void BM_filter_string_row_groups_with_dicts_common(nvbench::state& state,
   auto const stream    = cudf::get_default_stream();
   auto const read_opts = cudf::io::parquet_reader_options::builder().filter(filter_expr).build();
 
-  // Read table from parquet
-  auto const io_source = cudf::io::source_info(cudf::host_span<std::byte const>(
+  // Create datasource from parquet buffer
+  auto const datasource = cudf::io::datasource::create(cudf::host_span<std::byte const>(
     reinterpret_cast<std::byte const*>(parquet_buffer.data()), parquet_buffer.size()));
-  auto datasource      = std::move(cudf::io::make_datasources(io_source).front());
-  auto datasource_ref  = std::ref(*datasource);
+  auto datasource_ref   = std::ref(*datasource);
 
   auto const footer_buffer = cudf::io::parquet::fetch_footer_to_host(datasource_ref);
   auto const reader        = std::make_unique<cudf::io::parquet::experimental::hybrid_scan_reader>(
-    cudf::host_span<uint8_t const>{static_cast<uint8_t const*>(footer_buffer->data()),
-                                          footer_buffer->size()},
-    read_opts);
+    *footer_buffer, read_opts);
 
   auto const page_index_byte_range = reader->page_index_byte_range();
   CUDF_EXPECTS(not page_index_byte_range.is_empty(),
@@ -68,8 +66,7 @@ void BM_filter_string_row_groups_with_dicts_common(nvbench::state& state,
   // Setup page index
   auto const page_index_buffer =
     cudf::io::parquet::fetch_page_index_to_host(datasource_ref, page_index_byte_range);
-  reader->setup_page_index(cudf::host_span<uint8_t const>{
-    static_cast<uint8_t const*>(page_index_buffer->data()), page_index_buffer->size()});
+  reader->setup_page_index(*page_index_buffer);
 
   auto input_row_group_indices = reader->all_row_groups(read_opts);
   auto dict_page_byte_ranges   = std::vector<cudf::io::text::byte_range_info>{};
@@ -135,6 +132,7 @@ void BM_filter_string_rowgroups_with_dicts(nvbench::state& state)
 
   auto filter_expr_few_literals =
     cudf::ast::operation(cudf::ast::ast_operator::LOGICAL_AND, expr1, expr2);
+
   auto filter_expr_many_literals =
     cudf::ast::operation(cudf::ast::ast_operator::LOGICAL_OR, filter_expr_few_literals, expr3);
 
