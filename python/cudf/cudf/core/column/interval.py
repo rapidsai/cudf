@@ -59,30 +59,6 @@ class IntervalColumn(ColumnBase):
         return plc_column, dtype
 
     @classmethod
-    def _from_struct_with_dtype(
-        cls, plc_column: plc.Column, dtype: IntervalDtype
-    ) -> Self:
-        new_children = tuple(
-            ColumnBase.create(
-                child, dtype_from_pylibcudf_column(child)
-            ).astype(dtype.subtype)
-            for child in plc_column.children()
-        )
-        new_plc_column = plc.Column(
-            plc.DataType(plc.TypeId.STRUCT),
-            plc_column.size(),
-            plc_column.data(),
-            plc_column.null_mask(),
-            plc_column.null_count(),
-            plc_column.offset(),
-            [child.plc_column for child in new_children],
-        )
-        return cls._from_preprocessed(
-            plc_column=new_plc_column,
-            dtype=dtype,
-        )
-
-    @classmethod
     def from_arrow(cls, array: pa.Array | pa.ChunkedArray) -> Self:
         if not isinstance(array, pa.ExtensionArray):
             raise ValueError("Expected ExtensionArray for interval data")

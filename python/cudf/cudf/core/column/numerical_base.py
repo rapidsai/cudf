@@ -7,6 +7,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Literal, cast
 
 import numpy as np
+import pandas as pd
 
 import pylibcudf as plc
 
@@ -263,7 +264,14 @@ class NumericalBaseColumn(ColumnBase, Scannable):
         unaryop_str = _unaryop_map.get(unaryop_str, unaryop_str)
         unaryop_enum = plc.unary.UnaryOperator[unaryop_str]
         with self.access(mode="read", scope="internal"):
-            return ColumnBase.create(
+            result = ColumnBase.create(
                 plc.unary.unary_operation(self.plc_column, unaryop_enum),
                 self.dtype,
             )
+        pandas_dtype = getattr(self, "_pandas_dtype", None)
+        if (
+            isinstance(pandas_dtype, pd.ArrowDtype)
+            and result.dtype == self.dtype
+        ):
+            result._pandas_dtype = pandas_dtype
+        return result
