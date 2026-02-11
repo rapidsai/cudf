@@ -39,8 +39,6 @@ class sort_merge_join;
  */
 class sort_merge_join {
  public:
-  using impl_type = cudf::detail::sort_merge_join;  ///< Implementation type
-
   sort_merge_join() = delete;
   ~sort_merge_join();
   sort_merge_join(sort_merge_join const&)            = delete;
@@ -204,7 +202,7 @@ class sort_merge_join {
     rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref()) const;
 
  private:
-  std::unique_ptr<impl_type const> _impl;  ///< Pointer to implementation
+  std::unique_ptr<cudf::detail::sort_merge_join const> _impl;  ///< Pointer to implementation
 };
 
 /** @} */  // end of group
