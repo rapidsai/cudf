@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -29,6 +29,7 @@
 #include <cudf/null_mask.hpp>
 #include <cudf/quantiles.hpp>
 #include <cudf/reduction.hpp>
+#include <cudf/reduction/distinct_count.hpp>
 #include <cudf/replace.hpp>
 #include <cudf/reshape.hpp>
 #include <cudf/rolling.hpp>
