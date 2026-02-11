@@ -1073,7 +1073,9 @@ target_compile_definitions(cudf PRIVATE THRUST_FORCE_32_BIT_OFFSET_TYPE=1 CCCL_A
 # Compile stringified JIT sources first
 add_dependencies(cudf jitify_preprocess_run)
 
-# Specify the target module library dependencies TODO: use runtime nvrtc and nvjitlink and driver
+# Specify the target module library dependencies 
+
+# TODO: use runtime nvrtc and nvjitlink and driver
 target_link_libraries(
   cudf
   PUBLIC CCCL::CCCL rapids_logger::rapids_logger rmm::rmm $<BUILD_LOCAL_INTERFACE:BS::thread_pool>

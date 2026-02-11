@@ -15,7 +15,7 @@
 #include <future>
 #include <unordered_map>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 namespace rtc {
 
 struct [[nodiscard]] cache_statistics {
@@ -266,4 +266,4 @@ struct cache_t {
 };
 
 }  // namespace rtc
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

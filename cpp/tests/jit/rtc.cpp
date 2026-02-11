@@ -8,9 +8,6 @@
 
 #include <cudf_test/debug_utilities.hpp>
 #include <cudf_test/testing_main.hpp>
-
-#include <cudf/jit/lto/transform_params.cuh>
-
 #include <jit/rtc/cudf.hpp>
 
 #include <chrono>
@@ -39,6 +36,16 @@ struct element_operation {
   }
 };
 */
+
+  // TODO: take optional pointer to this for it to be written to
+  // TODO: take optional list of extra compile flags for linking and compiling
+struct jit_statistics{
+  std::chrono::nanoseconds cpp_compile_time{};
+  std::chrono::nanoseconds fragment_link_time{};
+  std::chrono::nanoseconds total_time{};
+  // TODO: cache hit statistics
+  // global cache statistics before and after?
+};
 
 TEST_F(RTCTest, CreateFragment)
 {

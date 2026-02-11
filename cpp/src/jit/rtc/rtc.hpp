@@ -10,6 +10,7 @@
 #include <optional>
 #include <span>
 #include <vector>
+#include <cudf/utilities/export.hpp>
 
 extern "C" {
 typedef struct CUlib_st* CUlibrary;
@@ -17,7 +18,7 @@ typedef struct CUkern_st* CUkernel;
 typedef struct CUstream_st* CUstream;
 }
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 namespace rtc {
 
 enum class binary_type : int8_t { LTO_IR = 0, CUBIN = 2, FATBIN = 3, PTX = 4 };

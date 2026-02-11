@@ -41,7 +41,7 @@
     }                                                                               \
   } while (0)
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 namespace rtc {
 
 namespace {

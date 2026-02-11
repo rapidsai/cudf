@@ -20,7 +20,7 @@
 #include <filesystem>
 #include <format>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 namespace rtc {
 
 namespace {
@@ -446,4 +446,4 @@ void cache_t::clear_disk_store()
 }
 
 }  // namespace rtc
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf
