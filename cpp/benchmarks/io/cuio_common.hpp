@@ -145,10 +145,10 @@ std::vector<std::string> select_column_names(std::vector<std::string> const& col
 std::vector<cudf::size_type> segments_in_chunk(int num_segments, int num_chunks, int chunk);
 
 /**
- * @brief Drops the page cache based on the `CUDF_BENCHMARK_DROP_CACHE` environment variable
- * (case-insensitive).
+ * @brief Drops the page cache based on the `CUDF_BENCHMARK_DROP_CACHE` environment variable.
  *
- * The environment variable controls whether and how page cache is dropped:
+ * The environment variable controls whether and how page cache is dropped. All options are
+ * case-insensitive.
  * - Unset, `false`, `off`, `no`, `0`: No cache dropping. The benchmark is to be run with hot
  * cache with a warning logged.
  * - `true`, `on`, `yes`, `1`, `file`: Drops page cache for each file in `file_paths` (recommended,
