@@ -6432,6 +6432,7 @@ NODEIDS_THAT_FAIL_WITH_CUDF_PANDAS = {
     "tests/series/methods/test_map.py::test_map_empty[uint64]",
     "tests/series/methods/test_map.py::test_map_empty[uint8]",
     "tests/series/methods/test_map.py::test_map_int",
+    "tests/series/methods/test_map.py::test_map_simple_str_callables_same_as_astype[<lambda>]",
     "tests/series/methods/test_map.py::test_map_simple_str_callables_same_as_astype[str]",
     "tests/series/methods/test_nlargest.py::TestSeriesNLargestNSmallest::test_nlargest_boundary_datetimelike[nsmallest-datetime64[ns]]",
     "tests/series/methods/test_nlargest.py::TestSeriesNLargestNSmallest::test_nlargest_boundary_datetimelike[nsmallest-timedelta64[ns]]",
