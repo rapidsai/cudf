@@ -24,6 +24,7 @@ from cudf.core.mixins import Scannable
 from cudf.errors import MixedTypeError
 from cudf.utils.dtypes import (
     cudf_dtype_to_pa_type,
+    dtype_from_pylibcudf_column,
     dtype_to_pylibcudf_type,
     get_dtype_of_same_kind,
     is_pandas_nullable_extension_dtype,
@@ -108,7 +109,13 @@ class StringColumn(ColumnBase, Scannable):
     ) -> tuple[plc.Column, np.dtype]:
         plc_column, dtype = super()._validate_args(plc_column, dtype)
         if not is_dtype_obj_string(dtype):
-            raise ValueError("dtype must be a valid cuDF string dtype")
+            if dtype.kind == "U":
+                # User _passed_ e.g. np.dtype(str), but we store np.dtype(object) like pandas
+                # >>> pd.Series(["a"], dtype=np.dtype(str)).dtype
+                # dtype('O')
+                dtype = np.dtype(object)
+            else:
+                raise ValueError("dtype must be a valid cuDF string dtype")
         return plc_column, dtype
 
     @property
@@ -127,11 +134,7 @@ class StringColumn(ColumnBase, Scannable):
         self, fill_value: ScalarLike | ColumnLike
     ) -> plc.Scalar | ColumnBase:
         """Align fill_value for .fillna based on column type."""
-        if (
-            cudf.get_option("mode.pandas_compatible")
-            and is_scalar(fill_value)
-            and fill_value is np.nan
-        ):
+        if is_scalar(fill_value) and fill_value is np.nan:
             raise MixedTypeError("Cannot fill `np.nan` in string column")
         return super()._validate_fillna_value(fill_value)
 
@@ -969,16 +972,15 @@ class StringColumn(ColumnBase, Scannable):
                 ),
             )
 
-        # Handle Greek final sigma (ς) special case in pandas compatibility mode
+        # Handle Greek final sigma (ς) special case
         # Greek capital sigma (Σ) lowercases to regular sigma (σ) at libcudf level,  # noqa: RUF003
         # but should become final sigma (ς) when at the end of a word.
         # Replace σ with ς when followed by end-of-string or non-letter character.  # noqa: RUF003
-        if cudf.get_option("mode.pandas_compatible"):
-            has_sigma = result.str_contains("σ")
-            if has_sigma.any():
-                result = result.replace_with_backrefs(
-                    r"σ($|[^a-zA-Zα-ωΑ-Ωά-ώΆ-Ώ])", r"ς\1"
-                )
+        has_sigma = result.str_contains("σ")
+        if has_sigma.any():
+            result = result.replace_with_backrefs(
+                r"σ($|[^a-zA-Zα-ωΑ-Ωά-ώΆ-Ώ])", r"ς\1"
+            )
 
         return result
 
@@ -1767,9 +1769,11 @@ class StringColumn(ColumnBase, Scannable):
                     pat, plc_flags_from_re_flags(flags)
                 ),
             )
-            res = type(self).from_pylibcudf(plc_result)
-            res = res._with_type_metadata(
-                get_dtype_of_same_kind(self.dtype, res.dtype)
+            res = ColumnBase.create(
+                plc_result,
+                get_dtype_of_same_kind(
+                    self.dtype, dtype_from_pylibcudf_column(plc_result)
+                ),
             )
             return cast(Self, res)
 
@@ -1840,17 +1844,16 @@ class StringColumn(ColumnBase, Scannable):
                 start,
                 end,
             )
-            base_dtype = get_dtype_of_same_kind(self.dtype, np.dtype(np.int32))
-            target_dtype = base_dtype
-            if cudf.get_option("mode.pandas_compatible"):
-                target_dtype = self._get_pandas_compatible_dtype(
-                    np.dtype("int64")
-                )
-            if target_dtype != base_dtype:
-                plc_result = plc.unary.cast(
-                    plc_result, dtype_to_pylibcudf_type(np.dtype("int64"))
-                )
-            return cast(Self, ColumnBase.create(plc_result, target_dtype))
+            plc_result = plc.unary.cast(
+                plc_result, plc.DataType(plc.TypeId.INT64)
+            )
+            return cast(
+                Self,
+                ColumnBase.create(
+                    plc_result,
+                    self._get_pandas_compatible_dtype(np.dtype("int64")),
+                ),
+            )
 
     def matches_re(self, pattern: str, flags: int) -> Self:
         with self.access(mode="read", scope="internal"):

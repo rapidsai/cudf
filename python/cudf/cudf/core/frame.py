@@ -241,8 +241,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
         if column_names is None:
             column_names = self._column_names
         data = dict(zip(column_names, columns, strict=True))
-        frame = self.__class__._from_data(data)
-        return frame._copy_type_metadata(self)
+        return self.__class__._from_data(data)
 
     def _drop_duplicates_columns(
         self,
@@ -1111,28 +1110,6 @@ class Frame(BinaryOperand, Scannable, Serializable):
                 for name, col in self._column_labels_and_values
             }
         )
-
-    @_performance_tracking
-    def _copy_type_metadata(self: Self, other: Self) -> Self:
-        """
-        Copy type metadata from each column of `other` to the corresponding
-        column of `self`.
-
-        See `ColumnBase._with_type_metadata` for more information.
-        """
-        for (name, self_col), (_, other_col) in zip(
-            self._column_labels_and_values,
-            other._column_labels_and_values,
-            strict=True,
-        ):
-            self._data.set_by_label(
-                name,
-                self_col._with_type_metadata(
-                    other_col.dtype,
-                ),
-            )
-
-        return self
 
     @_performance_tracking
     def isna(self) -> Self:

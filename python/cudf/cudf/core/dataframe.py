@@ -2032,19 +2032,34 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 )
                 for table in tables
             ]
+            # Preserve dtypes from the first table
+            if ignore:
+                reference_dtypes = [col.dtype for col in tables[0]._columns]
+            else:
+                reference_dtypes = [
+                    col.dtype
+                    for col in itertools.chain(
+                        tables[0].index._columns, tables[0]._columns
+                    )
+                ]
             plc_result = plc.concatenate.concatenate(plc_tables)
             if ignore:
                 index = None
                 data = {
-                    col_name: ColumnBase.from_pylibcudf(col)
-                    for col_name, col in zip(
-                        column_names, plc_result.columns(), strict=True
+                    col_name: ColumnBase.create(col, dtype)
+                    for col_name, col, dtype in zip(
+                        column_names,
+                        plc_result.columns(),
+                        reference_dtypes,
+                        strict=True,
                     )
                 }
             else:
                 result_columns = [
-                    ColumnBase.from_pylibcudf(col)
-                    for col in plc_result.columns()
+                    ColumnBase.create(col, dtype)
+                    for col, dtype in zip(
+                        plc_result.columns(), reference_dtypes, strict=True
+                    )
                 ]
                 index = _index_from_data(
                     dict(
@@ -2087,14 +2102,10 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                     out.index._data,
                     indices[:first_data_column_position],
                 )
-            if not isinstance(out.index, MultiIndex) and isinstance(
-                out.index.dtype, CategoricalDtype
-            ):
-                out = out.set_index(out.index)
-        for name, col in out._column_labels_and_values:
-            out._data[name] = col._with_type_metadata(
-                tables[0]._data[name].dtype,
-            )
+        if not isinstance(out.index, MultiIndex) and isinstance(
+            out.index.dtype, CategoricalDtype
+        ):
+            out = out.set_index(out.index)
 
         # Reassign index and column names
         if objs[0]._data.multiindex:
@@ -5198,8 +5209,18 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
     ) -> list[Self]:
         # Remove first element (always 0) and last element (total row count) from offsets
         offsets = offsets[1:-1]
+        # Get the original dtypes to preserve (index columns + data columns if keep_index)
+        original_dtypes = (
+            [col.dtype for col in self.index._columns]
+            + [col.dtype for col in self._columns]
+            if keep_index
+            else [col.dtype for col in self._columns]
+        )
         output_columns = [
-            ColumnBase.from_pylibcudf(col) for col in table.columns()
+            ColumnBase.create(col, dtype)
+            for col, dtype in zip(
+                table.columns(), original_dtypes, strict=True
+            )
         ]
         partitioned = self._from_columns_like_self(
             output_columns,
@@ -8335,19 +8356,17 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             tbl = table
             if not (
                 isinstance(metadata, dict)
-                and 1 <= len(metadata) <= 2
+                and 1 <= len(metadata) <= 3
                 and "columns" in metadata
-                and (
-                    len(metadata) != 2 or {"columns", "index"} == set(metadata)
-                )
+                and (not set(metadata) - {"columns", "child_names", "index"})
             ):
                 raise ValueError(
-                    "Must pass a metadata dict with column names and optionally indices only "
+                    "Must pass a metadata dict with keys 'columns' and "
+                    "optionally 'child_names' and 'index' only "
                     "when table is a pylibcudf.Table "
                 )
             column_names = metadata["columns"]
-            # TODO: Allow user to include this in metadata?
-            child_names = None
+            child_names = metadata.get("child_names")  # type: ignore[assignment]
             index = metadata.get("index")
         else:
             raise ValueError(

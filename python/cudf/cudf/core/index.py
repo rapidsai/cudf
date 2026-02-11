@@ -1239,6 +1239,7 @@ class Index(SingleColumnFrame):
             Null elements are considered equal to other null elements.
         """
         columns = list(self._columns)
+        original_dtypes = [col.dtype for col in columns]
         result_columns = self._drop_duplicates_columns(
             columns,
             keys=list(range(len(columns))),
@@ -1246,7 +1247,12 @@ class Index(SingleColumnFrame):
             nulls_are_equal=nulls_are_equal,
         )
         return self._from_columns_like_self(
-            [ColumnBase.from_pylibcudf(col) for col in result_columns],
+            [
+                ColumnBase.create(col, dtype)
+                for col, dtype in zip(
+                    result_columns, original_dtypes, strict=True
+                )
+            ],
             self._column_names,
         )
 
@@ -1326,13 +1332,19 @@ class Index(SingleColumnFrame):
 
         # Convert nans to nulls to be consistent with IndexedFrame.dropna
         data_columns = [col.nans_to_nulls() for col in self._columns]
+        original_dtypes = [col.dtype for col in self._columns]
         result_columns = self._drop_nulls_columns(
             data_columns,
             keys=list(range(len(data_columns))),
             how=how,
         )
         return self._from_columns_like_self(
-            [ColumnBase.from_pylibcudf(col) for col in result_columns],
+            [
+                ColumnBase.create(col, dtype)
+                for col, dtype in zip(
+                    result_columns, original_dtypes, strict=True
+                )
+            ],
             self._column_names,
         )
 
@@ -1355,11 +1367,14 @@ class Index(SingleColumnFrame):
         # check_bounds is True, require instead that the caller
         # provides a GatherMap.
         GatherMap(gather_map, len(self), nullify=not check_bounds or nullify)
+        original_dtypes = [col.dtype for col in self._columns]
         return self._from_columns_like_self(
             [
-                ColumnBase.from_pylibcudf(col)
-                for col in copying.gather(
-                    self._columns, gather_map, nullify=nullify
+                ColumnBase.create(col, dtype)
+                for col, dtype in zip(
+                    copying.gather(self._columns, gather_map, nullify=nullify),
+                    original_dtypes,
+                    strict=True,
                 )
             ],
             self._column_names,
@@ -2200,11 +2215,6 @@ class RangeIndex(Index):
                 if step == 0:
                     raise ValueError("Step must not be zero.") from err
                 raise
-
-    def _copy_type_metadata(self: Self, other: Self) -> Self:
-        # There is no metadata to be copied for RangeIndex since it does not
-        # have an underlying column.
-        return self
 
     @property
     @_performance_tracking
@@ -3212,10 +3222,14 @@ class DatetimeIndex(Index):
         return obj
 
     @_performance_tracking
-    def _copy_type_metadata(self: Self, other: Self) -> Self:
-        super()._copy_type_metadata(other)
-        self._freq = _validate_freq(other._freq)
-        return self
+    def _from_columns_like_self(
+        self,
+        columns: list[ColumnBase],
+        column_names: Iterable[str] | None = None,
+    ):
+        result = super()._from_columns_like_self(columns, column_names)
+        result._freq = _validate_freq(self._freq)
+        return result
 
     @classmethod
     def _from_data(
@@ -3268,7 +3282,8 @@ class DatetimeIndex(Index):
     @_performance_tracking
     def copy(self, name=None, deep=False):
         idx_copy = super().copy(name=name, deep=deep)
-        return idx_copy._copy_type_metadata(self)
+        idx_copy._freq = _validate_freq(self._freq)
+        return idx_copy
 
     def as_unit(self, unit: str, round_ok: bool = True) -> Self:
         """
@@ -4580,10 +4595,12 @@ class CategoricalIndex(Index):
         name : Hashable, optional
             The name of the CategoricalIndex.
         """
-        codes = as_column(codes, dtype=np.dtype(np.int32))
         categories = as_column(categories)
-        cat_col = codes._with_type_metadata(
-            cudf.CategoricalDtype(categories=categories, ordered=ordered)
+        dtype = cudf.CategoricalDtype(categories=categories, ordered=ordered)
+        codes = as_column(codes, dtype=dtype._codes_dtype)
+        cat_col = ColumnBase.create(
+            codes.plc_column,
+            dtype,
         )
         return cls._from_column(cat_col, name=name)
 
