@@ -12,7 +12,7 @@ import pandas as pd
 
 import pylibcudf as plc
 
-from cudf.core.column import ColumnBase, access_columns
+from cudf.core.column import access_columns
 from cudf.core.dataframe import DataFrame
 from cudf.core.dtypes import (
     CategoricalDtype,
@@ -208,14 +208,13 @@ def read_json(
                     )
                 )
             )
-            data = {
-                name: ColumnBase.from_pylibcudf(col)
-                for name, col in zip(res_col_names, res_cols, strict=True)
-            }
-            df = DataFrame._from_data(data)
-            # TODO: _add_df_col_struct_names expects dict but receives Mapping
-            ioutils._add_df_col_struct_names(df, res_child_names)
-            return df
+            return DataFrame.from_pylibcudf(
+                plc.Table(res_cols),
+                metadata={
+                    "columns": res_col_names,
+                    "child_names": res_child_names,
+                },
+            )
         else:
             table_w_meta = plc.io.json.read_json(
                 plc.io.json._setup_json_reader_options(
