@@ -24,21 +24,16 @@ auto constexpr bloom_filter_alignment = rmm::CUDA_ALLOCATION_ALIGNMENT;
  * @param stream CUDA stream for hybrid scan reader
  * @param mr Device memory resource
  *
- * @return Tuple of filter table, payload table, filter metadata, payload metadata, and the final
- *         row validity column
+ * @return Tuple of filter and payload tables
  */
-std::tuple<std::unique_ptr<cudf::table>,
-           std::unique_ptr<cudf::table>,
-           cudf::io::table_metadata,
-           cudf::io::table_metadata,
-           std::unique_ptr<cudf::column>>
-hybrid_scan(cudf::io::datasource& datasource,
-            cudf::ast::operation const& filter_expression,
-            cudf::size_type num_filter_columns,
-            std::optional<std::vector<std::string>> const& payload_column_names,
-            rmm::cuda_stream_view stream,
-            rmm::device_async_resource_ref mr,
-            rmm::mr::aligned_resource_adaptor<rmm::mr::device_memory_resource>& aligned_mr);
+std::tuple<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::table>> hybrid_scan(
+  cudf::io::datasource& datasource,
+  cudf::ast::operation const& filter_expression,
+  cudf::size_type num_filter_columns,
+  std::optional<std::vector<std::string>> const& payload_column_names,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr,
+  rmm::mr::aligned_resource_adaptor<rmm::mr::device_memory_resource>& aligned_mr);
 
 /**
  * @brief Read parquet file with the hybrid scan reader
@@ -50,21 +45,16 @@ hybrid_scan(cudf::io::datasource& datasource,
  * @param stream CUDA stream for hybrid scan reader
  * @param mr Device memory resource
  *
- * @return Tuple of filter table, payload table, filter metadata, payload metadata, and the final
- *         row validity column
+ * @return Tuple of filter and payload tables
  */
-std::tuple<std::unique_ptr<cudf::table>,
-           std::unique_ptr<cudf::table>,
-           cudf::io::table_metadata,
-           cudf::io::table_metadata,
-           std::unique_ptr<cudf::column>>
-chunked_hybrid_scan(cudf::io::datasource& datasource,
-                    cudf::ast::operation const& filter_expression,
-                    cudf::size_type num_filter_columns,
-                    std::optional<std::vector<std::string>> const& payload_column_names,
-                    rmm::cuda_stream_view stream,
-                    rmm::device_async_resource_ref mr,
-                    rmm::mr::aligned_resource_adaptor<rmm::mr::device_memory_resource>& aligned_mr);
+std::tuple<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::table>> chunked_hybrid_scan(
+  cudf::io::datasource& datasource,
+  cudf::ast::operation const& filter_expression,
+  cudf::size_type num_filter_columns,
+  std::optional<std::vector<std::string>> const& payload_column_names,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr,
+  rmm::mr::aligned_resource_adaptor<rmm::mr::device_memory_resource>& aligned_mr);
 
 /**
  * @brief Read parquet file with the hybrid scan reader in a single step
@@ -75,9 +65,9 @@ chunked_hybrid_scan(cudf::io::datasource& datasource,
  * @param stream CUDA stream
  * @param mr Device memory resource
  *
- * @return Read table and metadata
+ * @return Materialized table
  */
-cudf::io::table_with_metadata hybrid_scan_single_step(
+std::unique_ptr<cudf::table> hybrid_scan_single_step(
   cudf::io::datasource& datasource,
   cudf::ast::operation const& filter_expression,
   std::optional<std::vector<std::string>> const& column_names,
@@ -87,15 +77,15 @@ cudf::io::table_with_metadata hybrid_scan_single_step(
 /**
  * @brief Read parquet file with the hybrid scan reader in a single step using chunked reading
  *
- * @param file_buffer_span Input parquet buffer span
+ * @param datasource Input datasource
  * @param filter_expression Filter expression
  * @param column_names List of column names to read, if any
  * @param stream CUDA stream
  * @param mr Device memory resource
  *
- * @return Read table and metadata
+ * @return Materialized table
  */
-cudf::io::table_with_metadata chunked_hybrid_scan_single_step(
+std::unique_ptr<cudf::table> chunked_hybrid_scan_single_step(
   cudf::io::datasource& datasource,
   cudf::ast::operation const& filter_expression,
   std::optional<std::vector<std::string>> const& column_names,

@@ -106,16 +106,13 @@ TEST_F(HybridScanTest, DictionaryPageFiltering)
   auto datasource_ref      = std::ref(*datasource);
   auto const footer_buffer = cudf::io::parquet::fetch_footer_to_host(datasource_ref);
 
-  auto const reader = std::make_unique<cudf::io::parquet::experimental::hybrid_scan_reader>(
-    cudf::host_span<uint8_t const>{static_cast<uint8_t const*>(footer_buffer->data()),
-                                   footer_buffer->size()},
-    in_opts);
+  auto const reader =
+    std::make_unique<cudf::io::parquet::experimental::hybrid_scan_reader>(*footer_buffer, in_opts);
 
   auto const page_index_byte_range = reader->page_index_byte_range();
   auto const page_index_buffer =
     cudf::io::parquet::fetch_page_index_to_host(datasource_ref, page_index_byte_range);
-  reader->setup_page_index(cudf::host_span<uint8_t const>{
-    static_cast<uint8_t const*>(page_index_buffer->data()), page_index_buffer->size()});
+  reader->setup_page_index(*page_index_buffer);
 
   auto input_row_group_indices = reader->all_row_groups(in_opts);
 

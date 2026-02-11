@@ -9,24 +9,17 @@
 #include <cudf/io/text/byte_range_info.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_buffer.hpp>
 #include <rmm/mr/device_memory_resource.hpp>
 
 #include <future>
+#include <tuple>
 #include <vector>
 
 /**
  * @file io_utils.hpp
  * @brief IO utilities for hybrid_scan examples
  */
-
-/**
- * @brief Converts a host buffer into a host span
- *
- * @param buffer Host buffer
- * @return Host span of input host buffer
- */
-cudf::host_span<uint8_t const> make_host_span(
-  std::reference_wrapper<cudf::io::datasource::buffer const> buffer);
 
 /**
  * @brief Fetches a host buffer of Parquet footer bytes from the input data source

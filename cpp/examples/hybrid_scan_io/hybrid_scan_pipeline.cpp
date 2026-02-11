@@ -112,7 +112,7 @@ struct hybrid_scan_fn {
       auto const page_index_byte_range = reader->page_index_byte_range();
       if (not page_index_byte_range.is_empty()) {
         auto const page_index_buffer = fetch_page_index_bytes(datasource, page_index_byte_range);
-        reader->setup_page_index(make_host_span(*page_index_buffer));
+        reader->setup_page_index(*page_index_buffer);
       }
     }
 
@@ -162,8 +162,8 @@ auto hybrid_scan_pipelined(io_source const& io_source,
   auto const footer_buffer = fetch_footer_bytes(datasource_ref);
   auto const options       = cudf::io::parquet_reader_options::builder().build();
 
-  auto reader = std::make_unique<cudf::io::parquet::experimental::hybrid_scan_reader>(
-    make_host_span(*footer_buffer), options);
+  auto reader =
+    std::make_unique<cudf::io::parquet::experimental::hybrid_scan_reader>(*footer_buffer, options);
 
   auto const metadata = std::move(reader->parquet_metadata());
 

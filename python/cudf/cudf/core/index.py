@@ -757,14 +757,18 @@ class Index(SingleColumnFrame):
             )
 
         if cudf.get_option("mode.pandas_compatible"):
-            if (self.dtype.kind == "b" and other.dtype.kind != "b") or (
-                self.dtype.kind != "b" and other.dtype.kind == "b"
+            # Cache dtype.kind to avoid repeated attribute access
+            self_kind = self.dtype.kind
+            other_kind = other.dtype.kind
+
+            if (self_kind == "b" and other_kind != "b") or (
+                self_kind != "b" and other_kind == "b"
             ):
                 # Bools + other types will result in mixed type.
                 # This is not yet consistent in pandas and specific to APIs.
                 raise MixedTypeError("Cannot perform union with mixed types")
-            if (self.dtype.kind == "i" and other.dtype.kind == "u") or (
-                self.dtype.kind == "u" and other.dtype.kind == "i"
+            if (self_kind == "i" and other_kind == "u") or (
+                self_kind == "u" and other_kind == "i"
             ):
                 # signed + unsigned types will result in
                 # mixed type for union in pandas.
@@ -5009,10 +5013,12 @@ class CategoricalIndex(Index):
         name : Hashable, optional
             The name of the CategoricalIndex.
         """
-        codes = as_column(codes, dtype=np.dtype(np.int32))
         categories = as_column(categories)
-        cat_col = codes._with_type_metadata(
-            cudf.CategoricalDtype(categories=categories, ordered=ordered)
+        dtype = cudf.CategoricalDtype(categories=categories, ordered=ordered)
+        codes = as_column(codes, dtype=dtype._codes_dtype)
+        cat_col = ColumnBase.create(
+            codes.plc_column,
+            dtype,
         )
         return cls._from_column(cat_col, name=name)
 

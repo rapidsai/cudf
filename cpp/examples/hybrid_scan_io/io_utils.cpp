@@ -15,13 +15,6 @@
  * @brief Definitions for IO utilities for hybrid_scan examples
  */
 
-cudf::host_span<uint8_t const> make_host_span(
-  std::reference_wrapper<cudf::io::datasource::buffer const> buffer)
-{
-  return cudf::host_span<uint8_t const>{static_cast<uint8_t const*>(buffer.get().data()),
-                                        buffer.get().size()};
-}
-
 std::unique_ptr<cudf::io::datasource::buffer> fetch_footer_bytes(cudf::io::datasource& datasource)
 {
   // Using libcudf utility but may have custom implementation in the future
