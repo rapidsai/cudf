@@ -307,6 +307,7 @@ fragment fragment_t::compile(compile_params const& params)
 
   CUDF_DEFER([&] { nvrtcDestroyProgram(&program); });
 
+  // TODO: log is printed twice when warnings are raised
   CUDFRTC_CHECK_NVRTC(
     params,
     program,
