@@ -234,25 +234,17 @@ async def _shuffle_distinct(
     )
     await send_metadata(ch_out, context, metadata_out)
 
-    # Create shuffle manager with shuffle context
     shuffle = ShuffleManager(shuffle_context, output_count, key_indices, collective_id)
 
     for chunk in evaluated_chunks or []:
-        shuffle.insert_chunk(
-            chunk.make_available_and_spill(shuffle_context.br(), allow_overbooking=True)
-        )
+        # Evaluated chunks are already available
+        shuffle.insert_chunk(chunk)
 
-    # Apply distinct to remaining chunks before inserting into shuffler
     while (msg := await ch_in.recv(context)) is not None:
-        distinct_chunk = await evaluate_chunk(
-            context, TableChunk.from_message(msg), ir, ir_context
+        shuffle.insert_chunk(
+            await evaluate_chunk(context, TableChunk.from_message(msg), ir, ir_context)
         )
         del msg
-        shuffle.insert_chunk(
-            distinct_chunk.make_available_and_spill(
-                shuffle_context.br(), allow_overbooking=True
-            )
-        )
 
     await shuffle.insert_finished()
 
@@ -318,10 +310,8 @@ async def distinct_node(
         Pool of collective IDs for allgather and shuffle operations.
     """
     async with shutdown_on_error(context, ch_in, ch_out, trace_ir=ir) as tracer:
-        # Receive input metadata
         metadata_in = await recv_metadata(ch_in, context)
 
-        # Get distinct key column indices
         input_schema_keys = list(ir.children[0].schema.keys())
         subset = ir.subset or frozenset(ir.schema)
         key_indices = tuple(
@@ -337,13 +327,8 @@ async def distinct_node(
             key_indices,
             nranks,
         )
-
-        # Determine if we can skip global communication
-        can_skip_global_comm = metadata_in.duplicated or partitioned_inter_rank
-
-        # If both inter-rank and local are partitioned, each chunk has
-        # disjoint keys - we can do simple chunkwise distinct
         fully_partitioned = partitioned_inter_rank and partitioned_local
+        can_skip_global_comm = metadata_in.duplicated or partitioned_inter_rank
 
         # Detect if lowering already collapsed input to single partition
         # (e.g., for KEEP_NONE with ordering, complex slices)
@@ -366,6 +351,7 @@ async def distinct_node(
             )
             return
 
+        # TODO: Handle these cases with shuffle
         require_tree = ir.stable or ir.keep in (
             plc.stream_compaction.DuplicateKeepOption.KEEP_FIRST,
             plc.stream_compaction.DuplicateKeepOption.KEEP_LAST,
