@@ -645,7 +645,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     @staticmethod
     def _with_children(
         target_col: plc.Column,
-        children: Iterable[plc.Column],
+        children: list[plc.Column],
         data_type: plc.DataType | None = None,
     ) -> plc.Column:
         return plc.Column(
@@ -655,7 +655,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             target_col.null_mask(),
             target_col.null_count(),
             target_col.offset(),
-            list(children),
+            children,
         )
 
     @staticmethod
@@ -708,8 +708,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             )
         elif type_id == plc.TypeId.STRUCT:
             if isinstance(dtype, IntervalDtype):
-                interval_dtype = cast(IntervalDtype, dtype)
-                interval_subtype = interval_dtype.subtype
+                interval_subtype = dtype.subtype
                 assert interval_subtype is not None
                 interval_children = (
                     ColumnBase.create(
@@ -717,21 +716,18 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                     ).astype(interval_subtype)
                     for child in col.children()
                 )
-                col = ColumnBase._with_children(
-                    col,
-                    (child.plc_column for child in interval_children),
-                    data_type=plc.DataType(plc.TypeId.STRUCT),
-                )
+                children = [child.plc_column for child in interval_children]
             elif isinstance(dtype, StructDtype):
-                struct_children = ColumnBase._normalize_children(
+                children = ColumnBase._normalize_children(
                     col.children(), dtype.fields.values()
                 )
-                col = ColumnBase._with_children(
-                    col,
-                    struct_children,
-                    data_type=plc.DataType(plc.TypeId.STRUCT),
-                )
+            col = ColumnBase._with_children(
+                col,
+                children,
+                data_type=plc.DataType(plc.TypeId.STRUCT),
+            )
 
+        # TODO: This branch can be removed when we remove from_pylibcudf
         if dtype is None and col.children():
             normalized_children = ColumnBase._normalize_children(
                 col.children(), [None] * len(col.children())
@@ -906,6 +902,8 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         pylibcudf.Column
             A new pylibcudf.Column referencing the same data.
         """
+        # TODO: When we delete from_pylibcudf we can also remove the None handling
+        # branch in _normalize_plc_column_for_dtype
         normalized = ColumnBase._normalize_plc_column_for_dtype(col, None)
         # Wrap buffers first so that dtypes are compatible with dtype_from_pylibcudf_column
         wrapped = ColumnBase._wrap_buffers(normalized)
