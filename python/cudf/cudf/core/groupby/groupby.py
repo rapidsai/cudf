@@ -651,6 +651,7 @@ class GroupBy(Serializable, Reducible, Scannable):
             [as_column(range(len(self.obj)), dtype=SIZE_TYPE_DTYPE)]
         )
 
+        key_dtypes = [col.dtype for col in group_keys]
         with access_columns(
             *group_keys, mode="read", scope="internal"
         ) as cols:
@@ -662,7 +663,10 @@ class GroupBy(Serializable, Reducible, Scannable):
                 plc.types.NanEquality.ALL_EQUAL,
             )
             group_keys = [
-                ColumnBase.from_pylibcudf(col) for col in plc_table.columns()
+                ColumnBase.create(col, dtype)
+                for col, dtype in zip(
+                    plc_table.columns(), key_dtypes, strict=True
+                )
             ]
         if len(group_keys) > 1:
             index = MultiIndex.from_arrays(group_keys)
@@ -823,6 +827,8 @@ class GroupBy(Serializable, Reducible, Scannable):
     ) -> tuple[list[int], list[ColumnBase], list[ColumnBase]]:
         # Materialize iterator to avoid consuming it during access context setup
         values_list = list(values)
+        key_dtypes = [col.dtype for col in self.grouping._key_columns]
+        value_dtypes = [col.dtype for col in values_list]
         with access_columns(*values_list, mode="read", scope="internal"):
             plc_columns = [col.plc_column for col in values_list]
             if not plc_columns:
@@ -837,11 +843,18 @@ class GroupBy(Serializable, Reducible, Scannable):
 
         return (
             offsets,
-            [ColumnBase.from_pylibcudf(col) for col in grouped_keys.columns()],
+            [
+                ColumnBase.create(col, dtype)
+                for col, dtype in zip(
+                    grouped_keys.columns(), key_dtypes, strict=True
+                )
+            ],
             (
                 [
-                    ColumnBase.from_pylibcudf(col)
-                    for col in grouped_values.columns()
+                    ColumnBase.create(col, dtype)
+                    for col, dtype in zip(
+                        grouped_values.columns(), value_dtypes, strict=True
+                    )
                 ]
                 if grouped_values is not None
                 else []
@@ -894,6 +907,7 @@ class GroupBy(Serializable, Reducible, Scannable):
                 "All requested aggregations are unsupported."
             )
 
+        key_dtypes = [col.dtype for col in self.grouping._key_columns]
         with access_columns(*values, mode="read", scope="internal"):
             with self._groupby as plc_groupby:
                 keys, results = (
@@ -908,8 +922,8 @@ class GroupBy(Serializable, Reducible, Scannable):
         return (
             result_columns,
             [
-                ColumnBase.create(key, dtype_from_pylibcudf_column(key))
-                for key in keys.columns()
+                ColumnBase.create(key, dtype)
+                for key, dtype in zip(keys.columns(), key_dtypes, strict=True)
             ],
             included_aggregations,
         )
@@ -932,7 +946,8 @@ class GroupBy(Serializable, Reducible, Scannable):
                     ],
                 )
                 return (
-                    ColumnBase.from_pylibcudf(col) for col in shifts.columns()
+                    ColumnBase.create(col, orig.dtype)
+                    for col, orig in zip(shifts.columns(), values, strict=True)
                 )
 
     def _replace_nulls(
@@ -951,8 +966,10 @@ class GroupBy(Serializable, Reducible, Scannable):
                 )
 
                 return (
-                    ColumnBase.from_pylibcudf(col)
-                    for col in replaced.columns()
+                    ColumnBase.create(col, orig.dtype)
+                    for col, orig in zip(
+                        replaced.columns(), values, strict=True
+                    )
                 )
 
     @_performance_tracking
@@ -2703,8 +2720,7 @@ class GroupBy(Serializable, Reducible, Scannable):
                 )
             )
         )
-        result = self._mimic_pandas_order(result)
-        return result._copy_type_metadata(values)
+        return self._mimic_pandas_order(result)
 
     def ffill(self, limit=None):
         """Forward fill NA values.
@@ -2873,8 +2889,7 @@ class GroupBy(Serializable, Reducible, Scannable):
                 )
             )
         )
-        result = self._mimic_pandas_order(result)
-        return result._copy_type_metadata(values)
+        return self._mimic_pandas_order(result)
 
     @_performance_tracking
     def pct_change(

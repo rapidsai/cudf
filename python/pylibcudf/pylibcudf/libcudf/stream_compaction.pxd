@@ -11,9 +11,7 @@ from pylibcudf.libcudf.table.table cimport table
 from pylibcudf.libcudf.table.table_view cimport table_view
 from pylibcudf.libcudf.types cimport (
     nan_equality,
-    nan_policy,
     null_equality,
-    null_policy,
     size_type,
 )
 from rmm.librmm.cuda_stream_view cimport cuda_stream_view
@@ -87,26 +85,6 @@ cdef extern from "cudf/stream_compaction.hpp" namespace "cudf" nogil:
         cuda_stream_view stream,
         device_memory_resource* mr
     ) except +libcudf_exception_handler
-
-    cdef size_type unique_count(
-        column_view column,
-        null_policy null_handling,
-        nan_policy nan_handling,
-        cuda_stream_view stream) except +libcudf_exception_handler
-
-    cdef size_type unique_count(
-        table_view source_table,
-        null_policy null_handling) except +libcudf_exception_handler
-
-    cdef size_type distinct_count(
-        column_view column,
-        null_policy null_handling,
-        nan_policy nan_handling,
-        cuda_stream_view stream) except +libcudf_exception_handler
-
-    cdef size_type distinct_count(
-        table_view source_table,
-        null_policy null_handling) except +libcudf_exception_handler
 
     cdef unique_ptr[table] filter(
         table_view predicate_table,
