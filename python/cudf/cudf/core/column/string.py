@@ -210,17 +210,6 @@ class StringColumn(ColumnBase, Scannable):
         other = [item] if is_scalar(item) else item
         return self.contains(as_column(other, dtype=self.dtype)).any()
 
-    def _with_type_metadata(self: Self, dtype: DtypeObj) -> Self:
-        """
-        Copies type metadata from self onto other, returning a new column.
-        """
-        # For pandas dtypes, store them directly in the column's dtype property
-        if (
-            isinstance(dtype, pd.ArrowDtype) and dtype.kind == "U"
-        ) or isinstance(dtype, pd.StringDtype):
-            self._dtype = dtype
-        return self
-
     def _get_pandas_compatible_dtype(self, target_dtype: np.dtype) -> DtypeObj:
         """
         Get the appropriate dtype for pandas-compatible mode.
@@ -246,7 +235,10 @@ class StringColumn(ColumnBase, Scannable):
             result = self.count_characters() > np.int8(0)
             if not is_pandas_nullable_extension_dtype(dtype):
                 result = result.fillna(False)
-            return result._with_type_metadata(dtype)
+            return cast(
+                cudf.core.column.numerical.NumericalColumn,
+                ColumnBase.create(result.plc_column, dtype),
+            )
 
         cast_func: Callable[[plc.Column, plc.DataType], plc.Column]
         if dtype.kind in {"i", "u"}:
@@ -528,9 +520,8 @@ class StringColumn(ColumnBase, Scannable):
                         as_column(other, length=len(self)),
                     )
                 lhs, rhs = (other, self) if reflect else (self, other)
-                return lhs.concatenate([rhs], "", None)._with_type_metadata(
-                    self.dtype
-                )
+                concatenated = lhs.concatenate([rhs], "", None)
+                return ColumnBase.create(concatenated.plc_column, self.dtype)
             elif op in {
                 "__eq__",
                 "__ne__",

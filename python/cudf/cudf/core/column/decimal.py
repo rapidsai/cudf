@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import warnings
 from decimal import Decimal
-from typing import TYPE_CHECKING, Any, ClassVar, Self, cast
+from typing import TYPE_CHECKING, Any, ClassVar, cast
 
 import numpy as np
 import pandas as pd
@@ -34,7 +34,6 @@ from cudf.core.mixins import BinaryOperand
 from cudf.utils.dtypes import (
     cudf_dtype_to_pa_type,
     get_dtype_of_same_kind,
-    get_dtype_of_same_type,
 )
 from cudf.utils.scalar import pa_scalar_to_plc_scalar
 from cudf.utils.utils import is_na_like
@@ -73,10 +72,6 @@ class DecimalBaseColumn(NumericalBaseColumn):
                 f"{dtype=} must be a valid decimal dtype instance"
             )
         return plc_column, dtype
-
-    def _with_type_metadata(self: Self, dtype: DtypeObj) -> Self:
-        self._dtype = get_dtype_of_same_type(dtype, self.dtype)
-        return self
 
     def _adjust_reduce_result_dtype(
         self,

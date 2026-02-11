@@ -7,7 +7,6 @@ from typing import TYPE_CHECKING, Any, Literal, Self
 
 import pandas as pd
 import pyarrow as pa
-from pandas.core.arrays.arrow.extension_types import ArrowIntervalType
 
 import pylibcudf as plc
 
@@ -59,40 +58,29 @@ class IntervalColumn(ColumnBase):
 
         return plc_column, dtype
 
-    def _with_type_metadata(self, dtype: DtypeObj) -> ColumnBase:
-        """
-        Apply IntervalDtype metadata to this column.
-
-        Creates new children with the subtype metadata applied and
-        reconstructs the plc.Column.
-        """
-        if isinstance(dtype, IntervalDtype):
-            new_children = tuple(
-                ColumnBase.create(
-                    child, dtype_from_pylibcudf_column(child)
-                ).astype(dtype.subtype)
-                for child in self.plc_column.children()
-            )
-            new_plc_column = plc.Column(
-                plc.DataType(plc.TypeId.STRUCT),
-                self.plc_column.size(),
-                self.plc_column.data(),
-                self.plc_column.null_mask(),
-                self.plc_column.null_count(),
-                self.plc_column.offset(),
-                [child.plc_column for child in new_children],
-            )
-            return type(self)._from_preprocessed(
-                plc_column=new_plc_column,
-                dtype=dtype,
-            )
-        # For pandas dtypes, store them directly in the column's dtype property
-        elif isinstance(dtype, pd.ArrowDtype) and isinstance(
-            dtype.pyarrow_dtype, ArrowIntervalType
-        ):
-            self._dtype = dtype
-
-        return self
+    @classmethod
+    def _from_struct_with_dtype(
+        cls, plc_column: plc.Column, dtype: IntervalDtype
+    ) -> Self:
+        new_children = tuple(
+            ColumnBase.create(
+                child, dtype_from_pylibcudf_column(child)
+            ).astype(dtype.subtype)
+            for child in plc_column.children()
+        )
+        new_plc_column = plc.Column(
+            plc.DataType(plc.TypeId.STRUCT),
+            plc_column.size(),
+            plc_column.data(),
+            plc_column.null_mask(),
+            plc_column.null_count(),
+            plc_column.offset(),
+            [child.plc_column for child in new_children],
+        )
+        return cls._from_preprocessed(
+            plc_column=new_plc_column,
+            dtype=dtype,
+        )
 
     @classmethod
     def from_arrow(cls, array: pa.Array | pa.ChunkedArray) -> Self:

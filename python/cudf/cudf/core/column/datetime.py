@@ -34,7 +34,6 @@ from cudf.utils.dtypes import (
     cudf_dtype_to_pa_type,
     dtype_from_pylibcudf_column,
     get_dtype_of_same_kind,
-    get_dtype_of_same_type,
 )
 from cudf.utils.scalar import pa_scalar_to_plc_scalar
 from cudf.utils.utils import _EQUALITY_OPS, is_na_like
@@ -758,16 +757,6 @@ class DatetimeColumn(TemporalBaseColumn):
             return result_col.fillna(op == "__ne__")
         else:
             return result_col
-
-    def _with_type_metadata(self, dtype: DtypeObj) -> DatetimeColumn:
-        if isinstance(dtype, pd.DatetimeTZDtype):
-            return DatetimeTZColumn._from_preprocessed(
-                plc_column=self.plc_column,
-                dtype=dtype,
-            )
-        self._dtype = get_dtype_of_same_type(dtype, self.dtype)
-
-        return self
 
     def _find_ambiguous_and_nonexistent(
         self, zone_name: str

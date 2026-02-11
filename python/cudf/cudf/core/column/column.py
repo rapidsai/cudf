@@ -811,8 +811,8 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         # be done in from_pylibcudf, so it is only ever safe to call this in situations
         # where we know that the plc_column and children are already properly wrapped.
         # Ideally we should get rid of this altogether eventually and inline its logic
-        # in from_pylibcudf, but for now it is necessary for the various
-        # _with_type_metadata calls.
+        # in from_pylibcudf, but for now it is necessary for internal reconstruction
+        # paths that already guarantee wrapped buffers.
         self = cls.__new__(cls)
         if validate:
             plc_column, dtype = self._validate_args(plc_column, dtype)
@@ -1196,10 +1196,11 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                     plc.Column.from_arrow(dictionary), categories_dtype
                 )
 
-            return result._with_type_metadata(
+            return ColumnBase.create(
+                result.plc_column,
                 CategoricalDtype(
                     categories=categories, ordered=array.type.ordered
-                )
+                ),
             )
         else:
             return cls.create(
@@ -2070,9 +2071,11 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             if cats.has_nulls():
                 cats = cats.dropna()
             dtype = CategoricalDtype(categories=cats, ordered=dtype.ordered)
-        return codes.set_mask(self.mask, self.null_count)._with_type_metadata(
-            dtype
-        )  # type: ignore[return-value]
+        codes_with_mask = codes.set_mask(self.mask, self.null_count)
+        codes_typed = cast(
+            "cudf.core.column.numerical.NumericalColumn", codes_with_mask
+        ).astype(dtype._codes_dtype)
+        return ColumnBase.create(codes_typed.plc_column, dtype)  # type: ignore[return-value]
 
     def as_numerical_column(self, dtype: np.dtype) -> NumericalColumn:
         raise NotImplementedError()
@@ -2467,17 +2470,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         if op in {"any", "all"}:
             return np.dtype(np.bool_)
         return self.dtype
-
-    def _with_type_metadata(self: ColumnBase, dtype: DtypeObj) -> ColumnBase:
-        """
-        Copies type metadata from self onto other, returning a new column.
-        When ``self`` is a nested column, recursively apply this function on
-        the children of ``self``.
-        """
-        # For Arrow dtypes, store them directly in the column's dtype property
-        if isinstance(dtype, pd.ArrowDtype):
-            self._dtype = cudf.dtype(dtype)
-        return self
 
     def _label_encoding(
         self,
@@ -3077,11 +3069,14 @@ def as_column(
             )
             if isinstance(arbitrary.dtype, pd.IntervalDtype):
                 # Wrap StructColumn as IntervalColumn with proper metadata
-                result = result._with_type_metadata(
+                from cudf.core.column.interval import IntervalColumn
+
+                result = IntervalColumn._from_struct_with_dtype(
+                    result.plc_column,
                     IntervalDtype(
                         subtype=arbitrary.dtype.subtype,
                         closed=arbitrary.dtype.closed,
-                    )
+                    ),
                 )
             elif (
                 isinstance(arbitrary.dtype, pd.CategoricalDtype)
@@ -3093,11 +3088,12 @@ def as_column(
                 # Store pandas extension dtype directly in the column's dtype property
                 # TODO: Move this to near isinstance(arbitrary.dtype.categories.dtype, pd.IntervalDtype)
                 # check above, for which merge should be working fully with pandas nullable extension dtypes.
-                result = result._with_type_metadata(
+                result = ColumnBase.create(
+                    result.plc_column,
                     CategoricalDtype(
                         categories=arbitrary.dtype.categories,
                         ordered=arbitrary.dtype.ordered,
-                    )
+                    ),
                 )
             return result
         elif is_pandas_nullable_extension_dtype(arbitrary.dtype):
@@ -3125,7 +3121,22 @@ def as_column(
             )
             if cudf.get_option("mode.pandas_compatible"):
                 # Store pandas extension dtype directly in the column's dtype property
-                result = result._with_type_metadata(arbitrary.dtype)
+                if (
+                    is_pandas_nullable_extension_dtype(arbitrary.dtype)
+                    and isinstance(result.dtype, np.dtype)
+                    and result.dtype.kind == "f"
+                ):
+                    result = result.nans_to_nulls()
+                if isinstance(arbitrary.dtype, pd.ArrowDtype) and (
+                    arbitrary.dtype.kind not in "iufbU"
+                ):
+                    base_dtype = cudf.dtype(arbitrary.dtype)
+                    result = ColumnBase.create(result.plc_column, base_dtype)
+                    result._dtype = arbitrary.dtype
+                else:
+                    result = ColumnBase.create(
+                        result.plc_column, arbitrary.dtype
+                    )
             return result
         elif isinstance(
             arbitrary.dtype, pd.api.extensions.ExtensionDtype

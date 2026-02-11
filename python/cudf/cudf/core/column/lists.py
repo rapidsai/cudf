@@ -117,15 +117,6 @@ class ListColumn(ColumnBase):
             "Lists are not yet supported via `__cuda_array_interface__`"
         )
 
-    def _with_type_metadata(self: Self, dtype: DtypeObj) -> Self:
-        if isinstance(dtype, ListDtype):
-            self._dtype = dtype
-        elif isinstance(dtype, pd.ArrowDtype) and isinstance(
-            dtype.pyarrow_dtype, pa.ListType
-        ):
-            self._dtype = dtype
-        return self
-
     def copy(self, deep: bool = True) -> Self:
         # Since list columns are immutable, both deep and shallow copies share
         # the underlying device data and mask.
