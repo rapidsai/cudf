@@ -18,6 +18,7 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/span.hpp>
 
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
@@ -26,6 +27,7 @@
 #include <cuda/std/iterator>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/sequence.h>
+#include <thrust/shuffle.h>
 #include <thrust/tabulate.h>
 
 #include <curand.h>
@@ -186,7 +188,6 @@ std::pair<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::table>> generate_i
                    cuda::proclaim_return_type<cudf::size_type>(
                      [multiplicity] __device__(cudf::size_type idx) { return idx / multiplicity; }));
 
-  auto const rand_max        = build_table_numrows;
   auto const num_unique_keys = build_table_numrows / multiplicity;
   auto const num_matching    = static_cast<cudf::size_type>(selectivity * probe_table_numrows);
   auto probe_table_gather_map = cudf::make_numeric_column(
@@ -204,6 +205,34 @@ std::pair<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::table>> generate_i
                          return num_unique_keys + (idx - num_matching);
                        }
                      }));
+
+  // Shuffle gather maps to avoid cache effects
+  thrust::shuffle(rmm::exec_policy(cudf::get_default_stream()),
+                  build_table_gather_map->mutable_view().begin<cudf::size_type>(),
+                  build_table_gather_map->mutable_view().end<cudf::size_type>(),
+                  thrust::default_random_engine{12345});
+  thrust::shuffle(rmm::exec_policy(cudf::get_default_stream()),
+                  probe_table_gather_map->mutable_view().begin<cudf::size_type>(),
+                  probe_table_gather_map->mutable_view().end<cudf::size_type>(),
+                  thrust::default_random_engine{67890});
+
+#if 0
+  // Debug: print gather maps
+  auto print_gather_map = [](cudf::column_view const& col, std::string const& name) {
+    auto host_data = cudf::detail::make_host_vector(
+      cudf::device_span<cudf::size_type const>(col.data<cudf::size_type>(), col.size()),
+      cudf::get_default_stream());
+    std::cerr << name << " (" << col.size() << " elements): [";
+    for (size_t i = 0; i < std::min(host_data.size(), size_t{20}); ++i) {
+      if (i > 0) std::cerr << ", ";
+      std::cerr << host_data[i];
+    }
+    if (host_data.size() > 20) std::cerr << ", ...";
+    std::cerr << "]\n";
+  };
+  print_gather_map(build_table_gather_map->view(), "build_gather_map");
+  print_gather_map(probe_table_gather_map->view(), "probe_gather_map");
+#endif
 
   auto build_table = cudf::gather(unique_rows_build_table->view(),
                                   build_table_gather_map->view(),
