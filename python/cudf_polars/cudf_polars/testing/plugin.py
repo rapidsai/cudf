@@ -221,7 +221,6 @@ EXPECTED_FAILURES: Mapping[str, str | tuple[str, bool]] = {
     "tests/unit/operations/test_slice.py::test_schema_slice_on_literal_23999[lit1-offset1-len1-False]": "List literal loses nesting in slice: cudf#19610",
     "tests/unit/io/test_iceberg.py::test_scan_iceberg_fast_count": "Polars doesn't pass us any statistics for iceberg scans when use_metadata_statistics is True",
     "tests/unit/functions/test_concat.py::test_concat_horizontally_strict": "polars doesnt hand us the hconcat options. See ...",
-    "tests/unit/expr/test_exprs.py::test_exp_log1p[Float16-Float16]": "Flaky test: Small floating-point precision differences in exp/log1p results",
 }
 
 
@@ -257,6 +256,7 @@ TESTS_TO_SKIP: Mapping[str, str] = {
     "tests/unit/io/test_iceberg.py::test_fill_missing_fields_with_identity_partition_values[False]": "https://github.com/pola-rs/polars/pull/24456",
     "tests/unit/operations/test_rolling.py::test_rolling_agg_bad_input_types[str]": "https://github.com/rapidsai/cudf/issues/20551",
     "tests/unit/operations/test_group_by_dynamic.py::test_group_by_dynamic_agg_bad_input_types[str]": "TODO: Need to investigate why this fails in CI but passes locally. We should fallback to CPU for group_by_dynamic",
+    "tests/unit/expr/test_exprs.py::test_exp_log1p[Float16-Float16]": "Flaky test: Small floating-point precision differences in exp/log1p results",
 }
 
 
