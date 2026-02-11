@@ -179,7 +179,9 @@ std::pair<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::table>> generate_i
     build_table_gather_map->mutable_view().begin<cudf::size_type>(),
     build_table_gather_map->mutable_view().end<cudf::size_type>(),
     cuda::proclaim_return_type<cudf::size_type>(
-      [multiplicity] __device__(cudf::size_type idx) { return idx / multiplicity; }));
+      [unique_rows_build_table_numrows] __device__(cudf::size_type idx) {
+        return idx % unique_rows_build_table_numrows;
+      }));
 
   auto const num_matching    = static_cast<cudf::size_type>(selectivity * probe_table_numrows);
   auto probe_table_gather_map = cudf::make_numeric_column(
