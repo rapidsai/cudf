@@ -874,9 +874,8 @@ class DatetimeTZColumn(DatetimeColumn):
             result = ColumnBase.create(
                 plc_result, dtype_from_pylibcudf_column(plc_result)
             )
-            # cast to int32 for pandas compatibility
-            if result.dtype == np.dtype("int16"):
-                result = result.astype(np.dtype("int32"))
+            # cast to int32 for pandas compatibility (no-op if already int32)
+            result = result.astype(np.dtype("int32"))
             return result
 
     def __repr__(self) -> str:

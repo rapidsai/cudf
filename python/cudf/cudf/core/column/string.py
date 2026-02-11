@@ -443,7 +443,10 @@ class StringColumn(ColumnBase, Scannable):
         ):
             return self.copy()
 
-        # Deduplicate by old values, keeping last occurrence
+        # Deduplicate by old values, keeping last occurrence.
+        # This replicates pandas' behavior when to_replace has duplicates:
+        # pandas processes replacements sequentially, so the last occurrence wins.
+        # For example, df.replace([1, 2, 1], [10, 20, 30]) replaces 1→30 (not 1→10).
         with to_replace_col.access(mode="read", scope="internal"):
             with replacement_col.access(mode="read", scope="internal"):
                 old_plc, new_plc = plc.stream_compaction.stable_distinct(

@@ -823,8 +823,11 @@ class NumericalColumn(NumericalBaseColumn):
         old_col = to_replace_col.astype(common_type)
         new_col = replacement_col.astype(common_type)
 
-        # Deduplicate by old values, keeping last occurrence
-        # Work with plc.Column objects directly to avoid creating intermediate ColumnBases
+        # Deduplicate by old values, keeping last occurrence.
+        # This replicates pandas' behavior when to_replace has duplicates:
+        # pandas processes replacements sequentially, so the last occurrence wins.
+        # For example, df.replace([1, 2, 1], [10, 20, 30]) replaces 1→30 (not 1→10).
+        # Work with plc.Column objects directly to avoid creating intermediate ColumnBases.
         with old_col.access(mode="read", scope="internal"):
             with new_col.access(mode="read", scope="internal"):
                 old_plc, new_plc = plc.stream_compaction.stable_distinct(
