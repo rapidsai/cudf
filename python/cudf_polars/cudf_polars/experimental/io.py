@@ -822,7 +822,7 @@ class ParquetSourceInfo(DataSourceInfo):
         ):
             self._real_rg_size[name] = column.device_buffer_size() // n_sampled
             if name in key_columns:
-                row_group_unique_count = plc.stream_compaction.distinct_count(
+                row_group_unique_count = plc.reduce.distinct_count(
                     column,
                     plc.types.NullPolicy.INCLUDE,
                     plc.types.NanPolicy.NAN_IS_NULL,
