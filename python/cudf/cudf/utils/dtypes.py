@@ -126,9 +126,7 @@ def cudf_dtype_to_pa_type(dtype: DtypeObj) -> pa.DataType:
 
 
 def cudf_dtype_from_pa_type(typ: pa.DataType) -> DtypeObj:
-    """Given a cuDF pyarrow dtype, converts it into the equivalent
-    cudf pandas dtype.
-    """
+    """Given a pyarrow dtype, converts it into the equivalent cudf dtype."""
     if pa.types.is_list(typ):
         return cudf.core.dtypes.ListDtype.from_arrow(typ)
     elif pa.types.is_struct(typ):
@@ -136,9 +134,21 @@ def cudf_dtype_from_pa_type(typ: pa.DataType) -> DtypeObj:
     elif pa.types.is_decimal(typ):
         if isinstance(typ, pa.Decimal256Type):
             raise NotImplementedError("cudf does not support Decimal256Type")
+        if isinstance(typ, pa.Decimal32Type):
+            return cudf.core.dtypes.Decimal32Dtype.from_arrow(typ)
+        if isinstance(typ, pa.Decimal64Type):
+            return cudf.core.dtypes.Decimal64Dtype.from_arrow(typ)
         return cudf.core.dtypes.Decimal128Dtype.from_arrow(typ)
     elif pa.types.is_large_string(typ) or pa.types.is_string(typ):
         return CUDF_STRING_DTYPE
+    elif pa.types.is_date(typ):
+        # typ.to_pandas_dtype() produces an ms resolution numpy datetime type.
+        # Conversely pylibcudf will produce TIMESTAMP_DAYS for date types - the most
+        # correct answer - and to match pandas cudf will cast to TIMESTAMP_SECONDS
+        # (see ColumnBase._wrap_buffers). Therefore we should return a seconds
+        # resolution datetime type here. The pyarrow conversion seems incorrect, so if
+        # that is ever fixed to return a more appropriate type we can remove this branch.
+        return np.dtype("datetime64[s]")
     else:
         return cudf.api.types.pandas_dtype(typ.to_pandas_dtype())
 

@@ -6,13 +6,14 @@
 #pragma once
 
 #include <cudf/io/datasource.hpp>
-#include <cudf/io/detail/parquet_io_utils.hpp>
 #include <cudf/io/text/byte_range_info.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_buffer.hpp>
 #include <rmm/mr/device_memory_resource.hpp>
 
 #include <future>
+#include <tuple>
 #include <vector>
 
 /**
@@ -22,6 +23,9 @@
 
 namespace CUDF_EXPORT cudf {
 namespace io::parquet {
+
+//! Using `byte_range_info` from cudf::io::text
+using cudf::io::text::byte_range_info;
 
 /**
  * @brief Fetches a host buffer of Parquet footer bytes from the input data source
@@ -44,10 +48,10 @@ std::unique_ptr<cudf::io::datasource::buffer> fetch_footer_to_host(
  * @return Host buffer containing page index bytes
  */
 std::unique_ptr<cudf::io::datasource::buffer> fetch_page_index_to_host(
-  cudf::io::datasource& datasource, cudf::io::text::byte_range_info const page_index_bytes);
+  cudf::io::datasource& datasource, byte_range_info const page_index_bytes);
 
 /**
- * @brief Fetches a list of byte ranges from a host buffer into device buffers
+ * @brief Fetches a list of byte ranges from a datasource into device buffers
  *
  * @ingroup io_readers
  *
@@ -62,11 +66,10 @@ std::unique_ptr<cudf::io::datasource::buffer> fetch_page_index_to_host(
 std::tuple<std::vector<rmm::device_buffer>,
            std::vector<cudf::device_span<uint8_t const>>,
            std::future<void>>
-fetch_byte_ranges_to_device_async(
-  cudf::io::datasource& datasource,
-  cudf::host_span<cudf::io::text::byte_range_info const> byte_ranges,
-  rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr);
+fetch_byte_ranges_to_device_async(cudf::io::datasource& datasource,
+                                  cudf::host_span<byte_range_info const> byte_ranges,
+                                  rmm::cuda_stream_view stream,
+                                  rmm::device_async_resource_ref mr);
 
 }  // namespace io::parquet
 }  // namespace CUDF_EXPORT cudf

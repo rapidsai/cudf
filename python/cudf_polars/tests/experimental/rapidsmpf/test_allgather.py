@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 """Tests for RapidsMPF AllGather functionality."""
@@ -14,6 +14,7 @@ from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 import pylibcudf as plc
 
 from cudf_polars.experimental.rapidsmpf.collectives.allgather import AllGatherManager
+from cudf_polars.experimental.rapidsmpf.utils import allgather_reduce
 
 if TYPE_CHECKING:
     from rapidsmpf.streaming.core.context import Context
@@ -52,3 +53,18 @@ async def _test_allgather(context: Context) -> None:
 
 def test_allgather(local_context: Context) -> None:
     asyncio.run(_test_allgather(local_context))
+
+
+async def _test_allgather_reduce(context: Context) -> None:
+    """Test allgather_reduce with single and multiple values."""
+    # Test with a single value
+    (result,) = await allgather_reduce(context, 0, 42)
+    assert result == 42  # Single rank, so sum is just the local value
+
+    # Test with multiple values
+    results = await allgather_reduce(context, 1, 10, 20, 30)
+    assert results == (10, 20, 30)  # Single rank, so sums are just the local values
+
+
+def test_allgather_reduce(local_context: Context) -> None:
+    asyncio.run(_test_allgather_reduce(local_context))

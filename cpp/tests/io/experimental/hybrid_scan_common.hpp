@@ -15,13 +15,23 @@
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/traits.hpp>
 
+#include <format>
+
 /**
  * @brief Creates a strings column with a constant stringified value between 0 and 9999
  *
  * @param value String value between 0 and 9999
  * @return Strings column wrapper
  */
-cudf::test::strings_column_wrapper constant_strings(cudf::size_type value);
+
+cudf::test::strings_column_wrapper inline constant_strings(cudf::size_type value)
+{
+  CUDF_EXPECTS(value >= 0 && value <= 9999, "String value must be between 0000 and 9999");
+
+  auto elements = thrust::make_transform_iterator(thrust::make_constant_iterator(value),
+                                                  [](auto i) { return std::format("{:04d}", i); });
+  return cudf::test::strings_column_wrapper(elements, elements + num_ordered_rows);
+}
 
 /**
  * @brief Fail for types other than duration or timestamp

@@ -120,9 +120,10 @@ TEST_F(HybridScanFiltersTest, TestMetadata)
   // Input file buffer span
   auto const datasource = cudf::io::datasource::create(cudf::host_span<std::byte const>(
     reinterpret_cast<std::byte const*>(file_buffer.data()), file_buffer.size()));
+  auto datasource_ref   = std::ref(*datasource);
 
   // Fetch footer and page index bytes from the buffer.
-  auto const footer_buffer = cudf::io::parquet::fetch_footer_to_host(*datasource);
+  auto const footer_buffer = cudf::io::parquet::fetch_footer_to_host(datasource_ref);
 
   // Create hybrid scan reader with footer bytes
   auto const reader = std::make_unique<cudf::io::parquet::experimental::hybrid_scan_reader>(
@@ -142,7 +143,7 @@ TEST_F(HybridScanFiltersTest, TestMetadata)
 
   // Fetch page index bytes from the input buffer
   auto const page_index_buffer =
-    cudf::io::parquet::fetch_page_index_to_host(*datasource, page_index_byte_range);
+    cudf::io::parquet::fetch_page_index_to_host(datasource_ref, page_index_byte_range);
 
   // Setup page index
   reader->setup_page_index(cudf::host_span<uint8_t const>{
@@ -181,9 +182,10 @@ TEST_F(HybridScanFiltersTest, TestExternalMetadata)
     // Input file buffer span
     auto const datasource = cudf::io::datasource::create(cudf::host_span<std::byte const>(
       reinterpret_cast<std::byte const*>(file_buffer.data()), file_buffer.size()));
+    auto datasource_ref   = std::ref(*datasource);
 
     // Fetch footer and page index bytes from the buffer.
-    auto const footer_buffer = cudf::io::parquet::fetch_footer_to_host(*datasource);
+    auto const footer_buffer = cudf::io::parquet::fetch_footer_to_host(datasource_ref);
 
     auto const reader = std::make_unique<cudf::io::parquet::experimental::hybrid_scan_reader>(
       cudf::host_span<uint8_t const>{static_cast<uint8_t const*>(footer_buffer->data()),
@@ -195,7 +197,7 @@ TEST_F(HybridScanFiltersTest, TestExternalMetadata)
 
     // Fetch page index bytes from the input buffer
     auto const page_index_buffer =
-      cudf::io::parquet::fetch_page_index_to_host(*datasource, page_index_byte_range);
+      cudf::io::parquet::fetch_page_index_to_host(datasource_ref, page_index_byte_range);
 
     // Setup page index
     reader->setup_page_index(cudf::host_span<uint8_t const>{
@@ -725,6 +727,7 @@ TEST_F(HybridScanFiltersTest, FilterRowGroupsWithDictBasic)
   // Input datasource
   auto const datasource = cudf::io::datasource::create(cudf::host_span<std::byte const>(
     reinterpret_cast<std::byte const*>(buffer.data()), buffer.size()));
+  auto datasource_ref   = std::ref(*datasource);
 
   {
     // Filtering - table[0] != 1000
@@ -735,7 +738,7 @@ TEST_F(HybridScanFiltersTest, FilterRowGroupsWithDictBasic)
       cudf::ast::operation(cudf::ast::ast_operator::NOT_EQUAL, uint_col_ref, uint_literal);
     constexpr size_t expected_row_groups = 4;
     EXPECT_EQ(
-      filter_row_groups_with_dictionaries(*datasource, filter_expression, stream, mr).size(),
+      filter_row_groups_with_dictionaries(datasource_ref, filter_expression, stream, mr).size(),
       expected_row_groups);
   }
 
@@ -748,7 +751,7 @@ TEST_F(HybridScanFiltersTest, FilterRowGroupsWithDictBasic)
       cudf::ast::operation(cudf::ast::ast_operator::EQUAL, uint_col_ref, uint_literal);
     constexpr size_t expected_row_groups = 0;
     EXPECT_EQ(
-      filter_row_groups_with_dictionaries(*datasource, filter_expression, stream, mr).size(),
+      filter_row_groups_with_dictionaries(datasource_ref, filter_expression, stream, mr).size(),
       expected_row_groups);
   }
 
@@ -762,7 +765,7 @@ TEST_F(HybridScanFiltersTest, FilterRowGroupsWithDictBasic)
 
     constexpr size_t expected_row_groups = 0;
     EXPECT_EQ(
-      filter_row_groups_with_dictionaries(*datasource, filter_expression, stream, mr).size(),
+      filter_row_groups_with_dictionaries(datasource_ref, filter_expression, stream, mr).size(),
       expected_row_groups);
   }
 
@@ -776,7 +779,7 @@ TEST_F(HybridScanFiltersTest, FilterRowGroupsWithDictBasic)
 
     constexpr size_t expected_row_groups = 4;
     EXPECT_EQ(
-      filter_row_groups_with_dictionaries(*datasource, filter_expression, stream, mr).size(),
+      filter_row_groups_with_dictionaries(datasource_ref, filter_expression, stream, mr).size(),
       expected_row_groups);
   }
 
@@ -798,7 +801,7 @@ TEST_F(HybridScanFiltersTest, FilterRowGroupsWithDictBasic)
 
     constexpr size_t expected_row_groups = 4;
     EXPECT_EQ(
-      filter_row_groups_with_dictionaries(*datasource, filter_expression, stream, mr).size(),
+      filter_row_groups_with_dictionaries(datasource_ref, filter_expression, stream, mr).size(),
       expected_row_groups);
   }
 
@@ -818,7 +821,7 @@ TEST_F(HybridScanFiltersTest, FilterRowGroupsWithDictBasic)
 
     constexpr size_t expected_row_groups = 4;
     EXPECT_EQ(
-      filter_row_groups_with_dictionaries(*datasource, filter_expression, stream, mr).size(),
+      filter_row_groups_with_dictionaries(datasource_ref, filter_expression, stream, mr).size(),
       expected_row_groups);
   }
 
@@ -838,7 +841,7 @@ TEST_F(HybridScanFiltersTest, FilterRowGroupsWithDictBasic)
 
     constexpr size_t expected_row_groups = 1;
     EXPECT_EQ(
-      filter_row_groups_with_dictionaries(*datasource, filter_expression, stream, mr).size(),
+      filter_row_groups_with_dictionaries(datasource_ref, filter_expression, stream, mr).size(),
       expected_row_groups);
   }
 
@@ -858,7 +861,7 @@ TEST_F(HybridScanFiltersTest, FilterRowGroupsWithDictBasic)
 
     constexpr size_t expected_row_groups = 4;
     EXPECT_EQ(
-      filter_row_groups_with_dictionaries(*datasource, filter_expression, stream, mr).size(),
+      filter_row_groups_with_dictionaries(datasource_ref, filter_expression, stream, mr).size(),
       expected_row_groups);
   }
 
@@ -880,7 +883,7 @@ TEST_F(HybridScanFiltersTest, FilterRowGroupsWithDictBasic)
 
     constexpr size_t expected_row_groups = 4;
     EXPECT_EQ(
-      filter_row_groups_with_dictionaries(*datasource, filter_expression, stream, mr).size(),
+      filter_row_groups_with_dictionaries(datasource_ref, filter_expression, stream, mr).size(),
       expected_row_groups);
   }
 
@@ -902,7 +905,7 @@ TEST_F(HybridScanFiltersTest, FilterRowGroupsWithDictBasic)
 
     constexpr size_t expected_row_groups = 0;
     EXPECT_EQ(
-      filter_row_groups_with_dictionaries(*datasource, filter_expression, stream, mr).size(),
+      filter_row_groups_with_dictionaries(datasource_ref, filter_expression, stream, mr).size(),
       expected_row_groups);
   }
 
@@ -928,7 +931,7 @@ TEST_F(HybridScanFiltersTest, FilterRowGroupsWithDictBasic)
 
     constexpr size_t expected_row_groups = 3;
     EXPECT_EQ(
-      filter_row_groups_with_dictionaries(*datasource, filter_expression, stream, mr).size(),
+      filter_row_groups_with_dictionaries(datasource_ref, filter_expression, stream, mr).size(),
       expected_row_groups);
   }
 
@@ -954,7 +957,7 @@ TEST_F(HybridScanFiltersTest, FilterRowGroupsWithDictBasic)
 
     constexpr size_t expected_row_groups = 4;
     EXPECT_EQ(
-      filter_row_groups_with_dictionaries(*datasource, filter_expression, stream, mr).size(),
+      filter_row_groups_with_dictionaries(datasource_ref, filter_expression, stream, mr).size(),
       expected_row_groups);
   }
 
@@ -980,7 +983,7 @@ TEST_F(HybridScanFiltersTest, FilterRowGroupsWithDictBasic)
 
     constexpr size_t expected_row_groups = 0;
     EXPECT_EQ(
-      filter_row_groups_with_dictionaries(*datasource, filter_expression, stream, mr).size(),
+      filter_row_groups_with_dictionaries(datasource_ref, filter_expression, stream, mr).size(),
       expected_row_groups);
   }
 }
@@ -1038,6 +1041,7 @@ TYPED_TEST(RowGroupFilteringWithDictTest, FilterFewLiteralsTyped)
   // Input datasource
   auto const datasource = cudf::io::datasource::create(cudf::host_span<std::byte const>(
     reinterpret_cast<std::byte const*>(buffer.data()), buffer.size()));
+  auto datasource_ref   = std::ref(*datasource);
 
   // Filtering AST
   auto literal_value = []() {
@@ -1077,7 +1081,7 @@ TYPED_TEST(RowGroupFilteringWithDictTest, FilterFewLiteralsTyped)
       cudf::ast::operation(cudf::ast::ast_operator::EQUAL, col_ref, literal);
 
     // Check the results
-    EXPECT_EQ(filter_row_groups_with_dictionaries(*datasource, filter_expression, stream, mr),
+    EXPECT_EQ(filter_row_groups_with_dictionaries(datasource_ref, filter_expression, stream, mr),
               expected_row_groups);
   }
 
@@ -1098,7 +1102,7 @@ TYPED_TEST(RowGroupFilteringWithDictTest, FilterFewLiteralsTyped)
       cudf::ast::operation(cudf::ast::ast_operator::NOT_EQUAL, col_name, literal);
 
     // Check the results
-    EXPECT_EQ(filter_row_groups_with_dictionaries(*datasource, filter_expression, stream, mr),
+    EXPECT_EQ(filter_row_groups_with_dictionaries(datasource_ref, filter_expression, stream, mr),
               expected_row_groups);
   }
 }
@@ -1147,6 +1151,7 @@ TYPED_TEST(RowGroupFilteringWithDictTest, FilterManyLiteralsTyped)
   // Input datasource
   auto const datasource = cudf::io::datasource::create(cudf::host_span<std::byte const>(
     reinterpret_cast<std::byte const*>(buffer.data()), buffer.size()));
+  auto datasource_ref   = std::ref(*datasource);
 
   // First literal value
   auto literal_value1 = []() {
@@ -1235,7 +1240,7 @@ TYPED_TEST(RowGroupFilteringWithDictTest, FilterManyLiteralsTyped)
       cudf::ast::ast_operator::LOGICAL_OR, filter_expression12, filter_expression3);
 
     // Check the results
-    EXPECT_EQ(filter_row_groups_with_dictionaries(*datasource, filter_expression, stream, mr),
+    EXPECT_EQ(filter_row_groups_with_dictionaries(datasource_ref, filter_expression, stream, mr),
               expected_row_groups);
   }
 
@@ -1267,7 +1272,7 @@ TYPED_TEST(RowGroupFilteringWithDictTest, FilterManyLiteralsTyped)
       cudf::ast::ast_operator::LOGICAL_AND, filter_expression12, filter_expression3);
 
     // Check the results
-    EXPECT_EQ(filter_row_groups_with_dictionaries(*datasource, filter_expression, stream, mr),
+    EXPECT_EQ(filter_row_groups_with_dictionaries(datasource_ref, filter_expression, stream, mr),
               expected_row_groups);
   }
 }

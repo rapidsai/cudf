@@ -3,9 +3,14 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#include "io/comp/common.hpp"
+#include "io/parquet/parquet_common.hpp"
+
+#include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/parquet.hpp>
 #include <cudf/io/parquet_io_utils.hpp>
+#include <cudf/io/parquet_schema.hpp>
 #include <cudf/io/text/byte_range_info.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -22,8 +27,6 @@ namespace cudf::io::parquet {
 
 std::unique_ptr<cudf::io::datasource::buffer> fetch_footer_to_host(cudf::io::datasource& datasource)
 {
-  using namespace cudf::io::parquet;
-
   constexpr auto header_len = sizeof(file_header_s);
   constexpr auto ender_len  = sizeof(file_ender_s);
   size_t const len          = datasource.size();
@@ -33,9 +36,8 @@ std::unique_ptr<cudf::io::datasource::buffer> fetch_footer_to_host(cudf::io::dat
   auto ender_buffer  = datasource.host_read(len - ender_len, ender_len);
   auto const ender   = reinterpret_cast<file_ender_s const*>(ender_buffer->data());
   CUDF_EXPECTS(len > header_len + ender_len, "Incorrect data source");
-  constexpr uint32_t parquet_magic = (('P' << 0) | ('A' << 8) | ('R' << 16) | ('1' << 24));
-  CUDF_EXPECTS(header->magic == parquet_magic && ender->magic == parquet_magic,
-               "Corrupted header or footer");
+  CUDF_EXPECTS(header->magic == detail::parquet_magic, "Corrupted header");
+  CUDF_EXPECTS(ender->magic == detail::parquet_magic, "Corrupted footer");
   CUDF_EXPECTS(ender->footer_len != 0 && ender->footer_len <= (len - header_len - ender_len),
                "Incorrect footer length");
 
@@ -70,7 +72,9 @@ fetch_byte_ranges_to_device_async(
 
   // Allocate single device buffer for all column chunks
   std::vector<rmm::device_buffer> column_chunk_buffers{};
-  column_chunk_buffers.emplace_back(total_size, stream, mr);
+  // Buffer needs to be padded. Required by `gpuDecodePageData`.
+  column_chunk_buffers.emplace_back(
+    cudf::util::round_up_safe(total_size, cudf::io::detail::BUFFER_PADDING_MULTIPLE), stream, mr);
   auto buffer_data = static_cast<uint8_t*>(column_chunk_buffers.back().data());
   std::ignore      = std::accumulate(
     byte_ranges.begin(), byte_ranges.end(), std::size_t{0}, [&](auto acc, auto const& range) {
@@ -78,47 +82,68 @@ fetch_byte_ranges_to_device_async(
       return acc + range.size();
     });
 
+  std::vector<size_t> io_offsets;
+  std::vector<size_t> io_sizes;
+  std::vector<uint8_t*> destinations;
+
+  for (size_t chunk = 0; chunk < byte_ranges.size();) {
+    auto const io_offset = static_cast<size_t>(byte_ranges[chunk].offset());
+    auto io_size         = static_cast<size_t>(byte_ranges[chunk].size());
+    size_t next_chunk    = chunk + 1;
+    while (next_chunk < byte_ranges.size()) {
+      size_t const next_offset = byte_ranges[next_chunk].offset();
+      if (next_offset != io_offset + io_size) { break; }
+      io_size += byte_ranges[next_chunk].size();
+      next_chunk++;
+    }
+    if (io_size != 0) {
+      io_offsets.push_back(io_offset);
+      io_sizes.push_back(io_size);
+      destinations.push_back(const_cast<uint8_t*>(column_chunk_data[chunk].data()));
+    }
+    chunk = next_chunk;
+  }
+  CUDF_EXPECTS(io_offsets.size() == io_sizes.size() and io_sizes.size() == destinations.size(),
+               "Unexpected number of IO offsets, sizes, or destinations");
+
   std::vector<std::future<size_t>> device_read_tasks{};
   std::vector<std::future<size_t>> host_read_tasks{};
   device_read_tasks.reserve(byte_ranges.size());
   host_read_tasks.reserve(byte_ranges.size());
+
+  // device_read_async is not guaranteed to follow stream-ordering (see datasource API docs).
+  stream.synchronize();
+
   {
+    auto iter =
+      thrust::make_zip_iterator(io_offsets.begin(), io_sizes.begin(), destinations.begin());
+
     std::lock_guard<std::mutex> lock(mutex);
 
-    for (size_t chunk = 0; chunk < byte_ranges.size();) {
-      auto const io_offset = static_cast<size_t>(byte_ranges[chunk].offset());
-      auto io_size         = static_cast<size_t>(byte_ranges[chunk].size());
-      size_t next_chunk    = chunk + 1;
-      while (next_chunk < byte_ranges.size()) {
-        size_t const next_offset = byte_ranges[next_chunk].offset();
-        if (next_offset != io_offset + io_size) { break; }
-        io_size += byte_ranges[next_chunk].size();
-        next_chunk++;
-      }
+    std::for_each(iter, iter + io_offsets.size(), [&](auto const& tuple) {
+      auto const io_offset = thrust::get<0>(tuple);
+      auto const io_size   = thrust::get<1>(tuple);
+      auto const dest      = thrust::get<2>(tuple);
 
-      if (io_size != 0) {
-        auto dest = const_cast<uint8_t*>(column_chunk_data[chunk].data());
-        // Directly read the column chunk data to the device
-        // buffer if supported
-        if (datasource.supports_device_read() and datasource.is_device_read_preferred(io_size)) {
-          device_read_tasks.emplace_back(
-            datasource.device_read_async(io_offset, io_size, dest, stream));
-        } else {
-          // Read the column chunk data to the host buffer and
-          // copy it to the device buffer
-          host_read_tasks.emplace_back(
-            std::async(std::launch::deferred, [&datasource, io_offset, io_size, dest, stream]() {
-              auto host_buffer = datasource.host_read(io_offset, io_size);
-              cudf::detail::cuda_memcpy_async(
-                cudf::device_span<uint8_t>{dest, io_size},
-                cudf::host_span<uint8_t const>{host_buffer->data(), io_size},
-                stream);
-              return io_size;
-            }));
-        }
+      // Directly read the column chunk data to the device
+      // buffer if supported
+      if (datasource.supports_device_read() and datasource.is_device_read_preferred(io_size)) {
+        device_read_tasks.emplace_back(
+          datasource.device_read_async(io_offset, io_size, dest, stream));
+      } else {
+        // Read the column chunk data to the host buffer and
+        // copy it to the device buffer
+        host_read_tasks.emplace_back(
+          std::async(std::launch::deferred, [&datasource, io_offset, io_size, dest, stream]() {
+            auto host_buffer = datasource.host_read(io_offset, io_size);
+            cudf::detail::cuda_memcpy_async(
+              cudf::device_span<uint8_t>{dest, io_size},
+              cudf::host_span<uint8_t const>{host_buffer->data(), io_size},
+              stream);
+            return io_size;
+          }));
       }
-      chunk = next_chunk;
-    }
+    });
   }
 
   auto sync_function = [](decltype(host_read_tasks) host_read_tasks,
