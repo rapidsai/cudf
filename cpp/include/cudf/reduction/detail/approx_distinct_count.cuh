@@ -225,13 +225,6 @@ class approx_distinct_count {
    */
   [[nodiscard]] double standard_error() const noexcept;
 
-  /**
-   * @brief Checks whether this sketch owns its storage
-   *
-   * @return true if owning storage, false if non-owning (view mode)
-   */
-  [[nodiscard]] bool owns_storage() const noexcept;
-
  private:
   /**
    * @brief Storage type supporting both owning and non-owning modes

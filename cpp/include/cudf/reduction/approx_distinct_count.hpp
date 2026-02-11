@@ -274,14 +274,6 @@ class approx_distinct_count {
    */
   [[nodiscard]] double standard_error() const noexcept;
 
-  /**
-   * @brief Checks whether this sketch owns its storage
-   *
-   * @return true if the sketch owns its storage (allocated internally),
-   *         false if non-owning (operating on external storage)
-   */
-  [[nodiscard]] bool owns_storage() const noexcept;
-
  private:
   std::unique_ptr<impl_type> _impl;
 };

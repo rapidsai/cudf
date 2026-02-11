@@ -825,29 +825,6 @@ TEST_F(ApproxDistinctCount, StandardErrorGetter)
   EXPECT_DOUBLE_EQ(expected_se_14, adc14.standard_error());
 }
 
-TEST_F(ApproxDistinctCount, OwnsStorageOwning)
-{
-  auto data = generate_data<int32_t>(1000, 50);
-  cudf::test::fixed_width_column_wrapper<int32_t> col(data.begin(), data.end());
-  cudf::table_view table({col});
-
-  auto adc = cudf::approx_distinct_count(table, 12);
-  EXPECT_TRUE(adc.owns_storage());
-}
-
-TEST_F(ApproxDistinctCount, OwnsStorageNonOwning)
-{
-  auto data = generate_data<int32_t>(1000, 50);
-  cudf::test::fixed_width_column_wrapper<int32_t> col(data.begin(), data.end());
-  cudf::table_view table({col});
-
-  auto adc_owning = cudf::approx_distinct_count(table, 12);
-  auto sketch     = adc_owning.sketch();
-
-  auto adc_non_owning = cudf::approx_distinct_count(sketch, 12);
-  EXPECT_FALSE(adc_non_owning.owns_storage());
-}
-
 TEST_F(ApproxDistinctCount, InvalidPrecisionThrows)
 {
   auto data = generate_data<int32_t>(100, 10);

@@ -359,12 +359,6 @@ double approx_distinct_count<Hasher>::standard_error() const noexcept
   return standard_error_from_precision(_precision);
 }
 
-template <template <typename> class Hasher>
-bool approx_distinct_count<Hasher>::owns_storage() const noexcept
-{
-  return std::holds_alternative<rmm::device_uvector<register_type>>(_storage);
-}
-
 // Explicit instantiation for the default hasher
 template class approx_distinct_count<cudf::hashing::detail::XXHash_64>;
 
@@ -436,7 +430,5 @@ nan_policy approx_distinct_count::nan_handling() const noexcept { return _impl->
 std::int32_t approx_distinct_count::precision() const noexcept { return _impl->precision(); }
 
 double approx_distinct_count::standard_error() const noexcept { return _impl->standard_error(); }
-
-bool approx_distinct_count::owns_storage() const noexcept { return _impl->owns_storage(); }
 
 }  // namespace cudf
