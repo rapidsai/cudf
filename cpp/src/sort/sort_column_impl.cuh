@@ -119,7 +119,8 @@ struct column_sorted_order_fn {
     }
   }
 
-  template <typename T, CUDF_ENABLE_IF(cudf::is_relationally_comparable<T, T>())>
+  template <typename T>
+    requires(cudf::is_relationally_comparable<T, T>() and not cudf::is_dictionary<T>())
   void operator()(column_view const& input,
                   mutable_column_view& indices,
                   bool ascending,
@@ -129,10 +130,30 @@ struct column_sorted_order_fn {
     sorted_order<T>(input, indices, ascending, null_precedence, stream);
   }
 
-  template <typename T, CUDF_ENABLE_IF(not cudf::is_relationally_comparable<T, T>())>
+  template <typename T>
+    requires(not cudf::is_relationally_comparable<T, T>())
   void operator()(column_view const&, mutable_column_view&, bool, null_order, rmm::cuda_stream_view)
   {
     CUDF_FAIL("Column type must be relationally comparable");
+  }
+
+  template <typename T>
+    requires(is_dictionary<T>())
+  void operator()(column_view const& input,
+                  mutable_column_view& indices,
+                  bool ascending,
+                  null_order null_precedence,
+                  rmm::cuda_stream_view stream)
+  {
+    // sorted_order<T>(input, indices, ascending, null_precedence, stream);
+    auto const dispatch_type = dictionary_column_view(input).keys().type();
+    cudf::type_dispatcher<dispatch_storage_type>(dispatch_type,
+                                                 column_sorted_order_fn<sort_method::UNSTABLE>{},
+                                                 input,
+                                                 indices,
+                                                 ascending,
+                                                 null_precedence,
+                                                 stream);
   }
 };
 
