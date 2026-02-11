@@ -108,11 +108,12 @@ void BM_hybrid_scan_multithreaded_read_common(nvbench::state& state,
   nvtxRangePushA(("(read) " + label).c_str());
   state.exec(nvbench::exec_tag::sync | nvbench::exec_tag::timer,
              [&, num_files = num_files](nvbench::launch& launch, auto& timer) {
+               try_drop_l3_cache();
+
                auto read_func = [&](int index) {
                  auto const stream = streams[index % num_threads];
                  cudf::io::parquet_reader_options read_opts =
                    cudf::io::parquet_reader_options::builder(source_info_vector[index]);
-                 try_drop_l3_cache();
                  for (int i = 0; i < num_iterations; ++i) {
                    hybrid_scan(read_opts, filters, stream, cudf::get_current_device_resource_ref());
                  }
