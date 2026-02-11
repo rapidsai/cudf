@@ -55,12 +55,14 @@ def _nonempty_index(idx):
         return cudf.RangeIndex(2, name=idx.name)
     elif isinstance(idx, cudf.DatetimeIndex):
         data = np.array(["1970-01-01", "1970-01-02"], dtype=idx.dtype)
-        values = cudf.core.column.as_column(data)
-        return cudf.DatetimeIndex(values, name=idx.name)
+        return cudf.DatetimeIndex(data, name=idx.name)
     elif isinstance(idx, cudf.CategoricalIndex):
-        codes = cudf.core.column.as_column([0, 0], dtype=np.dtype(np.uint8))
-        column = codes._with_type_metadata(idx.dtype)
-        return cudf.CategoricalIndex._from_column(column, name=idx.name)
+        return cudf.CategoricalIndex.from_codes(
+            [0, 0],
+            categories=idx.dtype.categories,
+            ordered=idx.dtype.ordered,
+            name=idx.name,
+        )
     elif isinstance(idx, cudf.MultiIndex):
         levels = [meta_nonempty(lev) for lev in idx.levels]
         codes = [[0, 0]] * idx.nlevels
@@ -101,10 +103,11 @@ def _get_non_empty_data(
             dtype=np.dtype(np.uint8),
             length=2,
         )
-        return codes._with_type_metadata(
+        return cudf.core.column.ColumnBase.create(
+            codes.plc_column,
             cudf.CategoricalDtype(
                 categories=categories, ordered=s.dtype.ordered
-            )
+            ),
         )
     elif isinstance(s.dtype, cudf.ListDtype):
         leaf_type = s.dtype.leaf_type
