@@ -2088,11 +2088,10 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                     out.index._data,
                     indices[:first_data_column_position],
                 )
-            if not isinstance(out.index, MultiIndex) and isinstance(
-                out.index.dtype, CategoricalDtype
-            ):
-                out = out.set_index(out.index)
-        out = out._copy_type_metadata(tables[0])
+        if not isinstance(out.index, MultiIndex) and isinstance(
+            out.index.dtype, CategoricalDtype
+        ):
+            out = out.set_index(out.index)
 
         # Reassign index and column names
         if objs[0]._data.multiindex:
