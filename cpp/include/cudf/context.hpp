@@ -25,8 +25,8 @@ enum class init_flags : std::uint32_t {
   /// @brief Initialize the JIT bundle during initialization
   INIT_JIT_BUNDLE = 1 << 3,
   /// @brief The default initialization steps performed by `initialize()` if no flags are provided
-  DEFAULT =  INIT_JIT_CACHE | INIT_RTC_CACHE | INIT_JIT_BUNDLE,
-  /// @brief All initialization steps 
+  DEFAULT = INIT_JIT_CACHE | INIT_RTC_CACHE | INIT_JIT_BUNDLE,
+  /// @brief All initialization steps
   ALL = LOAD_NVCOMP | INIT_JIT_CACHE | INIT_RTC_CACHE | INIT_JIT_BUNDLE
 };
 

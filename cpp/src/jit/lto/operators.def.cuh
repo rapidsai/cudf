@@ -537,6 +537,10 @@ CUDF_LTO_DEF(is_null, IS_NULL, string_view);
 
 #undef CUDF_LTO_DEF
 
+// TODO: lamarrr, remove ABI-lock to cuda::std::optional and other types.
+// CUDF should probably have its own set of types used in kernels for columns.
+// JIT should have its own type set
+
 #define CUDF_LTO_DEF(op, OP, type)                                            \
   __device__ void operators::op(bool* out, type const* a)                     \
   {                                                                           \

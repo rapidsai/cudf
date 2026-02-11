@@ -1,6 +1,5 @@
 /*
  * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
- * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -10,7 +9,6 @@
 #include <cudf/utilities/export.hpp>
 
 #include <memory>
-#include <mutex>
 #include <mutex>
 
 namespace cudf {

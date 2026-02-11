@@ -14,6 +14,7 @@ namespace lto {
 struct [[nodiscard]] transform_params {
   void* __restrict__ const* __restrict__ scope =
     nullptr;                ///< Pointer to scope data (e.g. column views, scalars, etc.).
+  size_type num_rows  = 0;  ///< Total number of rows to process.
   size_type row_index = 0;  ///< Current row index.
 };
 
