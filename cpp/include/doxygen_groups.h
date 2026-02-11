@@ -137,6 +137,7 @@
  *   @defgroup io_datasources Data Sources
  *   @defgroup io_datasinks Data Sinks
  *   @defgroup io_configuration IO Configuration
+ *   @defgroup io_utils IO Utilities
  * @}
  * @defgroup json_apis JSON
  * @{
