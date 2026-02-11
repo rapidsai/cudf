@@ -32,6 +32,27 @@ class approx_distinct_count;
 }
 
 /**
+ * @brief Strong type wrapper for HyperLogLog standard error parameter
+ *
+ * Use this type to construct an `approx_distinct_count` with a desired error tolerance
+ * instead of specifying precision directly.
+ *
+ * Example:
+ * @code{.cpp}
+ *   auto sketch = cudf::approx_distinct_count(table, cudf::standard_error{0.01});  // ~1% error
+ * @endcode
+ */
+struct standard_error {
+  double value;  ///< The standard error value (must be positive)
+
+  /**
+   * @brief Constructs a standard_error with the given value
+   * @param v The standard error value (must be positive, e.g., 0.01 for ~1% error)
+   */
+  explicit constexpr standard_error(double v) : value{v} {}
+};
+
+/**
  * @brief Object-oriented HyperLogLog sketch for approximate distinct counting.
  *
  * This class provides an object-oriented interface to HyperLogLog sketches, allowing
@@ -105,19 +126,17 @@ class approx_distinct_count {
    * Since precision must be an integer, the actual standard error may be better (smaller)
    * than requested. Use the `standard_error()` getter to retrieve the actual value.
    *
-   * @note This overload is disambiguated from the precision constructor by parameter type:
-   *       `int` selects precision, `double` selects standard error.
-   *
    * @param input Table whose rows will be added to the sketch
-   * @param standard_error The desired standard error for approximation (e.g., 0.01 for ~1%)
+   * @param error The desired standard error for approximation (e.g., `standard_error{0.01}` for
+   * ~1%)
    * @param null_handling `INCLUDE` or `EXCLUDE` rows with nulls (default: `EXCLUDE`)
    * @param nan_handling `NAN_IS_VALID` or `NAN_IS_NULL` (default: `NAN_IS_NULL`)
    * @param stream CUDA stream used for device memory operations and kernel launches
    *
-   * @throws std::invalid_argument if standard_error is not in the valid range
+   * @throws std::invalid_argument if standard_error value is not positive
    */
   approx_distinct_count(table_view const& input,
-                        double standard_error,
+                        cudf::standard_error error,
                         null_policy null_handling    = null_policy::EXCLUDE,
                         nan_policy nan_handling      = nan_policy::NAN_IS_NULL,
                         rmm::cuda_stream_view stream = cudf::get_default_stream());
