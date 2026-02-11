@@ -1,13 +1,13 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2023, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <benchmarks/common/generate_input.hpp>
 
 #include <cudf/column/column_view.hpp>
+#include <cudf/reduction/unique_count.hpp>
 #include <cudf/sorting.hpp>
-#include <cudf/stream_compaction.hpp>
 #include <cudf/types.hpp>
 
 #include <nvbench/nvbench.cuh>
