@@ -6,6 +6,7 @@
 #include "benchmark.hpp"
 #include "common_utils.hpp"
 #include "io_source.hpp"
+#include "io_utils.hpp"
 #include "timer.hpp"
 
 #include <cudf/column/column_factories.hpp>
@@ -95,13 +96,13 @@ auto hybrid_scan(io_source const& io_source,
 
   // Fetch footer bytes and setup reader
   auto const footer_buffer = fetch_footer_bytes(datasource_ref);
-  auto const reader        = std::make_unique<cudf::io::parquet::experimental::hybrid_scan_reader>(
-    make_host_span(*footer_buffer), options);
+  auto const reader =
+    std::make_unique<cudf::io::parquet::experimental::hybrid_scan_reader>(*footer_buffer, options);
 
   // Get page index byte range from the reader
   auto const page_index_byte_range = reader->page_index_byte_range();
   auto const page_index_buffer     = fetch_page_index_bytes(datasource_ref, page_index_byte_range);
-  reader->setup_page_index(make_host_span(*page_index_buffer));
+  reader->setup_page_index(*page_index_buffer);
 
   // Get all row groups from the reader
   auto input_row_group_indices   = reader->all_row_groups(options);
@@ -151,7 +152,7 @@ auto hybrid_scan(io_source const& io_source,
     timer.reset();
     // Fetch dictionary page buffers and corresponding device spans from the input file buffer
     auto [dictionary_page_buffers, dictionary_page_data, dict_read_tasks] =
-      fetch_byte_ranges(datasource_ref, dict_page_byte_ranges, stream, mr);
+      fetch_byte_ranges_async(datasource_ref, dict_page_byte_ranges, stream, mr);
     dict_read_tasks.get();
     dictionary_page_filtered_row_group_indices = reader->filter_row_groups_with_dictionary_pages(
       dictionary_page_data, current_row_group_indices, options, stream);
@@ -180,7 +181,7 @@ auto hybrid_scan(io_source const& io_source,
     if constexpr (verbose) { std::cout << "READER: Filter row groups with bloom filters...\n"; }
     timer.reset();
     auto [bloom_filter_buffers, bloom_filter_data, bloom_read_tasks] =
-      fetch_byte_ranges(datasource_ref, bloom_filter_byte_ranges, stream, aligned_mr);
+      fetch_byte_ranges_async(datasource_ref, bloom_filter_byte_ranges, stream, aligned_mr);
     bloom_read_tasks.get();
     // Filter row groups with bloom filters
     bloom_filtered_row_group_indices = reader->filter_row_groups_with_bloom_filters(
@@ -226,7 +227,7 @@ auto hybrid_scan(io_source const& io_source,
   auto const filter_column_chunk_byte_ranges =
     reader->filter_column_chunks_byte_ranges(current_row_group_indices, options);
   auto [filter_column_chunk_buffers, filter_column_chunk_data, filter_col_read_tasks] =
-    fetch_byte_ranges(datasource_ref, filter_column_chunk_byte_ranges, stream, mr);
+    fetch_byte_ranges_async(datasource_ref, filter_column_chunk_byte_ranges, stream, mr);
   filter_col_read_tasks.get();
 
   // Materialize the table with only the filter columns
@@ -262,7 +263,7 @@ auto hybrid_scan(io_source const& io_source,
   auto const payload_column_chunk_byte_ranges =
     reader->payload_column_chunks_byte_ranges(current_row_group_indices, options);
   auto [payload_column_chunk_buffers, payload_column_chunk_data, payload_col_read_tasks] =
-    fetch_byte_ranges(datasource_ref, payload_column_chunk_byte_ranges, stream, mr);
+    fetch_byte_ranges_async(datasource_ref, payload_column_chunk_byte_ranges, stream, mr);
   payload_col_read_tasks.get();
 
   // Materialize the table with only the payload columns
