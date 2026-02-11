@@ -318,12 +318,8 @@ void reader_impl::allocate_level_decode_space()
 
     // Clamp kernel level reads to the actual decoded count (may be less than num_input_values
     // for flat columns with skip_rows/num_rows).
-    auto const level_type_size = pass.level_type_size;
-    auto const decoded_def     = level_type_size ? (def_level_sizes[idx] / level_type_size) : 0;
-    auto const decoded_rep     = level_type_size ? (rep_level_sizes[idx] / level_type_size) : 0;
-    pages[idx].num_decoded_level_values = (decoded_def > 0 && decoded_rep > 0)
-                                            ? std::min(decoded_def, decoded_rep)
-                                            : std::max(decoded_def, decoded_rep);
+    pages[idx].num_decoded_level_values =
+      std::max(def_level_sizes[idx], rep_level_sizes[idx]) / pass.level_type_size;
   }
 }
 
