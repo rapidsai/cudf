@@ -643,20 +643,47 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         )
 
     @staticmethod
+    def _with_children(
+        target_col: plc.Column,
+        children: Iterable[plc.Column],
+        data_type: plc.DataType | None = None,
+    ) -> plc.Column:
+        return plc.Column(
+            data_type or target_col.type(),
+            target_col.size(),
+            target_col.data(),
+            target_col.null_mask(),
+            target_col.null_count(),
+            target_col.offset(),
+            list(children),
+        )
+
+    @staticmethod
+    def _normalize_children(
+        children: Iterable[plc.Column],
+        dtypes: Iterable[DtypeObj | None],
+    ) -> list[plc.Column]:
+        return [
+            ColumnBase._normalize_plc_column_for_dtype(child, child_dtype)
+            for child, child_dtype in zip(children, dtypes, strict=True)
+        ]
+
+    @staticmethod
     def _normalize_plc_column_for_dtype(
         col: plc.Column, dtype: DtypeObj | None
     ) -> plc.Column:
         if isinstance(dtype, pd.ArrowDtype):
             dtype = pyarrow_dtype_to_cudf_dtype(dtype)
+        type_id = col.type().id()
         # Convert unsupported types to supported types
         # TODO: Removing this conversion causes some pandas tests to fail, but others
         # pass, so we need to investigate further to understand whether we should be
         # doing this conversion on a more per-algorithm basis or something.
-        if col.type().id() == plc.TypeId.TIMESTAMP_DAYS:
+        if type_id == plc.TypeId.TIMESTAMP_DAYS:
             col = plc.unary.cast(
                 col, plc.DataType(plc.TypeId.TIMESTAMP_SECONDS)
             )
-        elif col.type().id() == plc.TypeId.EMPTY:
+        elif type_id == plc.TypeId.EMPTY:
             if isinstance(dtype, CategoricalDtype):
                 new_dtype = dtype_to_pylibcudf_type(dtype._codes_dtype)
             else:
@@ -669,74 +696,47 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             codes_dtype = dtype_to_pylibcudf_type(dtype._codes_dtype)
             if col.type() != codes_dtype:
                 col = plc.unary.cast(col, codes_dtype)
-        elif (
-            isinstance(dtype, ListDtype) and col.type().id() == plc.TypeId.LIST
-        ):
+        elif isinstance(dtype, ListDtype) and type_id == plc.TypeId.LIST:
             list_view = col.list_view()
             child = ColumnBase._normalize_plc_column_for_dtype(
                 list_view.child(), dtype.element_type
             )
-            col = plc.Column(
-                plc.DataType(plc.TypeId.LIST),
-                col.size(),
-                None,
-                col.null_mask(),
-                col.null_count(),
-                col.offset(),
+            col = ColumnBase._with_children(
+                col,
                 [list_view.offsets(), child],
+                data_type=plc.DataType(plc.TypeId.LIST),
             )
-        elif col.type().id() == plc.TypeId.STRUCT and isinstance(
-            dtype, IntervalDtype
-        ):
-            interval_dtype = cast(IntervalDtype, dtype)
-            interval_children = tuple(
-                ColumnBase.create(
-                    child, dtype_from_pylibcudf_column(child)
-                ).astype(interval_dtype.subtype)
-                for child in col.children()
-            )
-            col = plc.Column(
-                plc.DataType(plc.TypeId.STRUCT),
-                col.size(),
-                col.data(),
-                col.null_mask(),
-                col.null_count(),
-                col.offset(),
-                [child.plc_column for child in interval_children],
-            )
-        elif col.type().id() == plc.TypeId.STRUCT and isinstance(
-            dtype, StructDtype
-        ):
-            struct_children = tuple(
-                ColumnBase._normalize_plc_column_for_dtype(child, field_dtype)
-                for child, field_dtype in zip(
-                    col.children(), dtype.fields.values(), strict=True
+        elif type_id == plc.TypeId.STRUCT:
+            if isinstance(dtype, IntervalDtype):
+                interval_dtype = cast(IntervalDtype, dtype)
+                interval_subtype = interval_dtype.subtype
+                assert interval_subtype is not None
+                interval_children = (
+                    ColumnBase.create(
+                        child, dtype_from_pylibcudf_column(child)
+                    ).astype(interval_subtype)
+                    for child in col.children()
                 )
-            )
-            col = plc.Column(
-                plc.DataType(plc.TypeId.STRUCT),
-                col.size(),
-                col.data(),
-                col.null_mask(),
-                col.null_count(),
-                col.offset(),
-                list(struct_children),
-            )
+                col = ColumnBase._with_children(
+                    col,
+                    (child.plc_column for child in interval_children),
+                    data_type=plc.DataType(plc.TypeId.STRUCT),
+                )
+            elif isinstance(dtype, StructDtype):
+                struct_children = ColumnBase._normalize_children(
+                    col.children(), dtype.fields.values()
+                )
+                col = ColumnBase._with_children(
+                    col,
+                    struct_children,
+                    data_type=plc.DataType(plc.TypeId.STRUCT),
+                )
 
         if dtype is None and col.children():
-            normalized_children = [
-                ColumnBase._normalize_plc_column_for_dtype(child, None)
-                for child in col.children()
-            ]
-            col = plc.Column(
-                col.type(),
-                col.size(),
-                col.data(),
-                col.null_mask(),
-                col.null_count(),
-                col.offset(),
-                normalized_children,
+            normalized_children = ColumnBase._normalize_children(
+                col.children(), [None] * len(col.children())
             )
+            col = ColumnBase._with_children(col, normalized_children)
 
         return col
 
