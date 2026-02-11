@@ -181,8 +181,7 @@ std::pair<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::table>> generate_i
     cuda::proclaim_return_type<cudf::size_type>(
       [multiplicity] __device__(cudf::size_type idx) { return idx / multiplicity; }));
 
-  // auto const num_matching    = static_cast<cudf::size_type>(selectivity * probe_table_numrows);
-  auto const num_matching     = static_cast<cudf::size_type>(1);
+  auto const num_matching    = static_cast<cudf::size_type>(selectivity * probe_table_numrows);
   auto probe_table_gather_map = cudf::make_numeric_column(
     cudf::data_type{cudf::type_id::INT32}, probe_table_numrows, cudf::mask_state::ALL_VALID);
   thrust::tabulate(
