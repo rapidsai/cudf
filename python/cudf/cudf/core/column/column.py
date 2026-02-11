@@ -3130,6 +3130,9 @@ def as_column(
                 if isinstance(arbitrary.dtype, pd.ArrowDtype) and (
                     arbitrary.dtype.kind not in "iufbU"
                 ):
+                    # TODO: Support Arrow/nullable extension dtypes directly in
+                    # ColumnBase subclass dispatch/validation to avoid this
+                    # compatibility construction step.
                     base_dtype = cudf.dtype(arbitrary.dtype)
                     result = ColumnBase.create(result.plc_column, base_dtype)
                     result._dtype = arbitrary.dtype
