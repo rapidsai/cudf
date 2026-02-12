@@ -766,10 +766,10 @@ class IndexedFrame(Frame):
         dtype: object
         >>> s.replace({'a': None})
         0       b
-        1    <NA>
-        2    <NA>
+        1    None
+        2    None
         3       b
-        4    <NA>
+        4    None
         dtype: object
 
         If there is a mismatch in types of the values in
@@ -4340,7 +4340,7 @@ class IndexedFrame(Frame):
         >>> df
                name        toy                           born
         0    Alfred  Batmobile  1940-04-25 00:00:00.000000000
-        1    Batman       <NA>                            NaT
+        1    Batman       None                            NaT
         2  Catwoman   Bullwhip                            NaT
 
         Drop the rows where at least one element is null.
@@ -4362,7 +4362,7 @@ class IndexedFrame(Frame):
         >>> df.dropna(how='all')
                name        toy                           born
         0    Alfred  Batmobile  1940-04-25 00:00:00.000000000
-        1    Batman       <NA>                            NaT
+        1    Batman       None                            NaT
         2  Catwoman   Bullwhip                            NaT
 
         Keep only the rows with at least 2 non-null values.
