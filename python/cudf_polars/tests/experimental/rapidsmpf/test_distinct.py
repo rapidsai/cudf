@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
-"""Tests for dynamic Distinct node in rapidsmpf runtime."""
+"""Tests for dynamic Distinct operations using the rapidsmpf runtime."""
 
 from __future__ import annotations
 
@@ -32,7 +32,7 @@ def _make_engine(target_partition_size: int = 1_000_000) -> pl.GPUEngine:
             "max_rows_per_partition": 50,
             "runtime": "rapidsmpf",
             "dynamic_planning": {
-                "sample_chunk_count_distinct": 2,
+                "sample_chunk_count_reduce": 2,
             },
             "target_partition_size": target_partition_size,
         },
