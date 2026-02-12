@@ -561,9 +561,6 @@ struct create_rand_col_fn {
                                            thrust::minstd_rand& engine,
                                            cudf::size_type num_rows)
   {
-#if 0
-    std::cout << "num_rows = " << num_rows << ", cardinality = " << profile.get_cardinality() << std::endl;
-#endif
     if (profile.get_cardinality() >= num_rows) {
       return create_distinct_rows_column<T>(profile, engine, num_rows);
     }
@@ -762,18 +759,12 @@ std::unique_ptr<cudf::column> create_random_column<cudf::list_view>(data_profile
                                                                     thrust::minstd_rand& engine,
                                                                     cudf::size_type num_rows)
 {
-#if 0
-  std::cout << "create_random_column::list_view!\n";
-#endif
   auto const dist_params       = profile.get_distribution_params<cudf::list_view>();
   auto const single_level_mean = get_distribution_mean(dist_params.length_params);
   auto const raw_num_elements =
     static_cast<double>(num_rows) * std::pow(single_level_mean, dist_params.max_depth);
   cudf::size_type const num_elements = static_cast<cudf::size_type>(
     std::min(raw_num_elements, static_cast<double>(std::numeric_limits<cudf::size_type>::max())));
-#if 0
-  std::cout << "num_elements = " << num_elements << std::endl;
-#endif
 
   auto leaf_column = cudf::type_dispatcher(
     cudf::data_type(dist_params.element_type), create_rand_col_fn{}, profile, engine, num_elements);
@@ -860,9 +851,6 @@ std::unique_ptr<cudf::column> create_distinct_rows_column(data_profile const& pr
                                                           thrust::minstd_rand& engine,
                                                           cudf::size_type num_rows)
 {
-#if 0
-  std::cout << "should not be here\n";
-#endif
   return create_random_column<T>(profile, engine, num_rows);
 }
 
@@ -881,9 +869,6 @@ template <>
 std::unique_ptr<cudf::column> create_distinct_rows_column<cudf::list_view>(
   data_profile const& profile, thrust::minstd_rand& engine, cudf::size_type num_rows)
 {
-#if 0
-  std::cout << "create_distinct_rows_column::list_view!\n";
-#endif
   auto const dist_params = profile.get_distribution_params<cudf::list_view>();
   auto col               = create_random_column<cudf::list_view>(profile, engine, num_rows);
   auto zero              = cudf::make_fixed_width_scalar<cudf::size_type>(0);
@@ -992,18 +977,12 @@ std::unique_ptr<cudf::table> create_random_table(std::vector<cudf::type_id> cons
                                                  data_profile const& profile,
                                                  unsigned seed)
 {
-#if 0
-  std::cout << "inside create_random_column\n";
-#endif
   auto seed_engine = deterministic_engine(seed);
   thrust::uniform_int_distribution<unsigned> seed_dist;
 
   std::vector<std::unique_ptr<cudf::column>> output_columns;
   std::transform(
     dtype_ids.begin(), dtype_ids.end(), std::back_inserter(output_columns), [&](auto tid) mutable {
-#if 0
-      std::cout << "dtype_id: " << static_cast<int>(tid) << " (" << cudf::type_to_name(cudf::data_type(tid)) << ")\n";
-#endif
       return create_random_column(tid, num_rows, profile, seed_dist(seed_engine));
     });
   return std::make_unique<cudf::table>(std::move(output_columns));
