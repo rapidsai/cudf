@@ -881,13 +881,29 @@ class DatetimeTZColumn(DatetimeColumn):
     def _validate_args(
         cls, plc_column: plc.Column, dtype: DtypeObj
     ) -> tuple[plc.Column, DtypeObj]:
-        plc_column, _ = super()._validate_args(
-            plc_column, _get_base_dtype(dtype)
-        )
+        # TODO: Uncomment below so validation goes through parent class
+        #  but uncovers subsequent issues in to_pandas and DatetimeColumn.as_datetime_column
+        # plc_column, _ = super()._validate_args(
+        #     plc_column, _get_base_dtype(dtype)
+        # )
+        # if not is_dtype_obj_datetime_tz(dtype):
+        #     raise ValueError(
+        #         f"dtype must be a datetime with timezone type: Got {dtype}."
+        #     )
+        # Manually validate TypeId since we can't call parent (different dtype type)
+        if not (
+            isinstance(plc_column, plc.Column)
+            and plc_column.type().id() in DatetimeColumn._VALID_PLC_TYPES
+        ):
+            raise ValueError(
+                f"plc_column must be a pylibcudf.Column with a TypeId in {DatetimeColumn._VALID_PLC_TYPES}"
+            )
         if not is_dtype_obj_datetime_tz(dtype):
             raise ValueError(
                 f"dtype must be a datetime with timezone type: Got {dtype}."
             )
+        if isinstance(dtype, pd.DatetimeTZDtype):
+            dtype = get_compatible_timezone(dtype)
         return plc_column, dtype
 
     def to_pandas(
@@ -943,13 +959,16 @@ class DatetimeTZColumn(DatetimeColumn):
     ) -> DatetimeColumn:
         if isinstance(dtype, pd.DatetimeTZDtype) and dtype != self.dtype:
             if dtype.unit != self.time_unit:
-                casted_plc = (
-                    super()
-                    .as_datetime_column(_get_base_dtype(dtype))
-                    .plc_column
-                )
+                # TODO: Doesn't check that new unit is valid.
+                # Uncomment below to cast correctly, but uncovers a potential bug in
+                # DatetimeColumn.tz_localize
+                # casted_plc = (
+                #     super()
+                #     .as_datetime_column(_get_base_dtype(dtype))
+                #     .plc_column
+                # )
                 casted = cast(
-                    DatetimeTZColumn, ColumnBase.create(casted_plc, dtype)
+                    DatetimeTZColumn, ColumnBase.create(self.plc_column, dtype)
                 )
             else:
                 casted = self
