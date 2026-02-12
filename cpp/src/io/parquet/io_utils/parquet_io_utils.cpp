@@ -16,6 +16,9 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/mr/device_memory_resource.hpp>
 
+#include <cuda/std/tuple>
+#include <thrust/iterator/zip_iterator.h>
+
 #include <numeric>
 
 /**
@@ -121,9 +124,9 @@ fetch_byte_ranges_to_device_async(
     std::lock_guard<std::mutex> lock(mutex);
 
     std::for_each(iter, iter + io_offsets.size(), [&](auto const& tuple) {
-      auto const io_offset = thrust::get<0>(tuple);
-      auto const io_size   = thrust::get<1>(tuple);
-      auto const dest      = thrust::get<2>(tuple);
+      auto const io_offset = cuda::std::get<0>(tuple);
+      auto const io_size   = cuda::std::get<1>(tuple);
+      auto const dest      = cuda::std::get<2>(tuple);
 
       // Directly read the column chunk data to the device
       // buffer if supported

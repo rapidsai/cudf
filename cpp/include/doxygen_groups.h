@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -72,6 +72,7 @@
  *   @defgroup column_merge Merging
  *   @defgroup column_join Joining
  *   @defgroup column_quantiles Quantiles
+ *   @defgroup column_reduction Reduction
  *   @defgroup column_aggregation Aggregation
  *   @{
  *     @defgroup aggregation_factories Aggregation Factories
