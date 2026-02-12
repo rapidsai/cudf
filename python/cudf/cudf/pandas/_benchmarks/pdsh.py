@@ -320,17 +320,29 @@ class PDSHQueries:
         """Query 8."""
         customer = get_data(
             run_config.dataset_path, "customer", run_config.suffix
-        )
+        )[["c_custkey", "c_nationkey"]]
         lineitem = get_data(
             run_config.dataset_path, "lineitem", run_config.suffix
-        )
+        )[
+            [
+                "l_partkey",
+                "l_suppkey",
+                "l_orderkey",
+                "l_extendedprice",
+                "l_discount",
+            ]
+        ]
         nation = get_data(run_config.dataset_path, "nation", run_config.suffix)
-        orders = get_data(run_config.dataset_path, "orders", run_config.suffix)
-        part = get_data(run_config.dataset_path, "part", run_config.suffix)
+        orders = get_data(
+            run_config.dataset_path, "orders", run_config.suffix
+        )[["o_orderkey", "o_custkey", "o_orderdate"]]
+        part = get_data(run_config.dataset_path, "part", run_config.suffix)[
+            ["p_partkey", "p_type"]
+        ]
         region = get_data(run_config.dataset_path, "region", run_config.suffix)
         supplier = get_data(
             run_config.dataset_path, "supplier", run_config.suffix
-        )
+        )[["s_suppkey", "s_nationkey"]]
 
         var1 = "BRAZIL"
         var2 = "AMERICA"
@@ -340,20 +352,22 @@ class PDSHQueries:
 
         n1 = nation.loc[:, ["n_nationkey", "n_regionkey"]]
         n2 = nation.loc[:, ["n_nationkey", "n_name"]]
+        region = region[region["r_name"] == var2]
+        n1 = n1.merge(region, left_on="n_regionkey", right_on="r_regionkey")[
+            ["n_nationkey"]
+        ]
 
         jn1 = part.merge(lineitem, left_on="p_partkey", right_on="l_partkey")
         jn2 = jn1.merge(supplier, left_on="l_suppkey", right_on="s_suppkey")
         jn3 = jn2.merge(orders, left_on="l_orderkey", right_on="o_orderkey")
         jn4 = jn3.merge(customer, left_on="o_custkey", right_on="c_custkey")
-        jn5 = jn4.merge(n1, left_on="c_nationkey", right_on="n_nationkey")
-        jn6 = jn5.merge(region, left_on="n_regionkey", right_on="r_regionkey")
-
-        jn6 = jn6[(jn6["r_name"] == var2)]
+        jn6 = jn4.merge(n1, left_on="c_nationkey", right_on="n_nationkey")
 
         jn7 = jn6.merge(n2, left_on="s_nationkey", right_on="n_nationkey")
 
         jn7 = jn7[(jn7["o_orderdate"] >= var4) & (jn7["o_orderdate"] <= var5)]
         jn7 = jn7[jn7["p_type"] == var3]
+        jn7["o_orderdate"] = jn7["o_orderdate"].astype("datetime64[s]")
 
         jn7["o_year"] = jn7["o_orderdate"].dt.year
         jn7["volume"] = jn7["l_extendedprice"] * (1.0 - jn7["l_discount"])
@@ -381,6 +395,24 @@ class PDSHQueries:
         part = get_data(path, "part", suffix)
         partsupp = get_data(path, "partsupp", suffix)
         supplier = get_data(path, "supplier", suffix)
+
+        # Column projection: keep only columns needed downstream to
+        # reduce gather volume through the merge chain.
+        part = part[["p_partkey", "p_name"]]
+        partsupp = partsupp[["ps_partkey", "ps_suppkey", "ps_supplycost"]]
+        supplier = supplier[["s_suppkey", "s_nationkey"]]
+        lineitem = lineitem[
+            [
+                "l_partkey",
+                "l_suppkey",
+                "l_orderkey",
+                "l_extendedprice",
+                "l_discount",
+                "l_quantity",
+            ]
+        ]
+        orders = orders[["o_orderkey", "o_orderdate"]]
+        nation = nation[["n_nationkey", "n_name"]]
 
         jn1 = part.merge(partsupp, left_on="p_partkey", right_on="ps_partkey")
         jn2 = jn1.merge(supplier, left_on="ps_suppkey", right_on="s_suppkey")
@@ -419,6 +451,25 @@ class PDSHQueries:
 
         var1 = datetime64("1993-10-01")
         var2 = datetime64("1994-01-01")
+
+        # Column projection: keep only columns needed downstream to
+        # reduce gather volume through the merge chain.
+        customer = customer[
+            [
+                "c_custkey",
+                "c_name",
+                "c_address",
+                "c_nationkey",
+                "c_phone",
+                "c_acctbal",
+                "c_comment",
+            ]
+        ]
+        orders = orders[["o_custkey", "o_orderkey", "o_orderdate"]]
+        lineitem = lineitem[
+            ["l_orderkey", "l_returnflag", "l_extendedprice", "l_discount"]
+        ]
+        nation = nation[["n_nationkey", "n_name"]]
 
         jn1 = customer.merge(orders, left_on="c_custkey", right_on="o_custkey")
         jn2 = jn1.merge(lineitem, left_on="o_orderkey", right_on="l_orderkey")
