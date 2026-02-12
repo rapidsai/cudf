@@ -121,7 +121,7 @@ void BM_parquet_reader_construction(nvbench::state& state)
     });
 
   auto const time = state.get_summary("nv/cold/time/gpu/mean").get_float64("value");
-  state.add_element_count(static_cast<double>(num_cols) / time, "columns_per_second");
+  state.add_element_count(static_cast<double>(num_cols) / time, "cols_per_sec");
 }
 
 // Benchmark to measure parquet column selection time
