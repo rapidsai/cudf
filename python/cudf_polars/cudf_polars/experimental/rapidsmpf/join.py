@@ -83,7 +83,9 @@ async def broadcast_join_node(
     target_partition_size
         The target partition size in bytes.
     """
-    async with shutdown_on_error(context, ch_left, ch_right, ch_out):
+    async with shutdown_on_error(
+        context, ch_left, ch_right, ch_out, trace_ir=ir
+    ) as tracer:
         # Receive metadata.
         left_metadata, right_metadata = await asyncio.gather(
             recv_metadata(ch_left, context),
@@ -114,6 +116,9 @@ async def broadcast_join_node(
                 partitioning = right_metadata.partitioning
             # Check if the right-side is already broadcasted
             small_duplicated = left_metadata.duplicated
+
+        if tracer is not None:
+            tracer.decision = f"broadcast_{broadcast_side}"
 
         # Send metadata.
         output_metadata = ChannelMetadata(
@@ -239,15 +244,13 @@ async def broadcast_join_node(
                 del large_df
 
             # Send output chunk
-            await ch_out.send(
-                context,
-                Message(
-                    seq_num,
-                    TableChunk.from_pylibcudf_table(
-                        df.table, df.stream, exclusive_view=True
-                    ),
-                ),
+            output_chunk = TableChunk.from_pylibcudf_table(
+                df.table, df.stream, exclusive_view=True
             )
+            if tracer is not None:
+                tracer.add_chunk(table=output_chunk.table_view())
+            await ch_out.send(context, Message(seq_num, output_chunk))
+            del df, output_chunk
 
         del small_dfs, small_chunks
         await ch_out.drain(context)
