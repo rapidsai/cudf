@@ -392,7 +392,9 @@ async def _shuffle_groupby(
     )
     await send_metadata(ch_out, context, metadata_out)
 
-    shuffle = ShuffleManager(context, output_count, shuffle_key_indices, collective_id)
+    shuffle = ShuffleManager(
+        shuffle_context, output_count, shuffle_key_indices, collective_id
+    )
 
     for chunk in evaluated_chunks or []:
         shuffle.insert_chunk(chunk)
