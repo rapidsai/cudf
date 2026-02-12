@@ -6,8 +6,8 @@
 #pragma once
 
 #include "sort.hpp"
-#include "sort_column_impl.cuh"
 
+#include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/row_operator/lexicographic.cuh>
 #include <cudf/utilities/memory_resource.hpp>
