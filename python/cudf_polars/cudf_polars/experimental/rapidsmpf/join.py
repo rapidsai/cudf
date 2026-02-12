@@ -104,6 +104,7 @@ async def broadcast_join_node(
             partitioning = left_metadata.partitioning
             # Check if the right-side is already broadcasted
             small_duplicated = right_metadata.duplicated
+            large_duplicated = left_metadata.duplicated
         else:
             # Broadcast left, stream right
             small_ch = ch_left
@@ -116,6 +117,8 @@ async def broadcast_join_node(
                 partitioning = right_metadata.partitioning
             # Check if the right-side is already broadcasted
             small_duplicated = left_metadata.duplicated
+            large_duplicated = right_metadata.duplicated
+        need_allgather = context.comm().nranks > 1 and not small_duplicated
 
         if tracer is not None:
             tracer.decision = f"broadcast_{broadcast_side}"
@@ -125,9 +128,11 @@ async def broadcast_join_node(
             local_count=local_count,
             partitioning=partitioning,
             # The result is only "duplicated" if both sides are duplicated
-            duplicated=left_metadata.duplicated and right_metadata.duplicated,
+            duplicated=large_duplicated and (small_duplicated or need_allgather),
         )
         await send_metadata(ch_out, context, output_metadata)
+        if tracer is not None:
+            tracer.set_duplicated(duplicated=output_metadata.duplicated)
 
         # Collect small-side (may be empty if no data received)
         small_chunks: list[TableChunk] = []
@@ -142,7 +147,6 @@ async def broadcast_join_node(
             small_size += small_chunks[-1].data_alloc_size(MemoryType.DEVICE)
 
         # Allgather is a collective - all ranks must participate even with no local data
-        need_allgather = context.comm().nranks > 1 and not small_duplicated
         if need_allgather:
             allgather = AllGatherManager(context, collective_id)
             for s_id in range(len(small_chunks)):
