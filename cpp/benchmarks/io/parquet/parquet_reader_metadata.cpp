@@ -7,6 +7,7 @@
 #include <benchmarks/io/cuio_common.hpp>
 #include <benchmarks/io/nvbench_helpers.hpp>
 
+#include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/parquet.hpp>
 #include <cudf/io/parquet_metadata.hpp>
@@ -21,11 +22,9 @@ auto const mixed_dtypes = get_type_or_group({static_cast<int32_t>(data_type::STR
                                              static_cast<int32_t>(data_type::DECIMAL),
                                              static_cast<int32_t>(data_type::LIST)});
 
-constexpr cudf::size_type rows_per_row_group = 5000;
-
 namespace {
 
-// Helper to generate and write parquet data
+// Helper to generate and write parquet data using chunked writer
 auto write_file_data(cudf::size_type num_cols,
                      cudf::size_type num_row_groups,
                      io_type source_type,
@@ -33,22 +32,39 @@ auto write_file_data(cudf::size_type num_cols,
 {
   cuio_source_sink_pair source_sink(source_type);
 
-  auto const num_rows = rows_per_row_group * num_row_groups;
+  // Minimum row group size that cudf will almost always follow
+  constexpr auto rows_per_row_group = 5000;
+  constexpr auto min_row_groups     = 10;
+  constexpr auto table_rows         = min_row_groups * rows_per_row_group;
 
+  CUDF_EXPECTS(num_row_groups > 0 and num_row_groups % min_row_groups == 0,
+               "Number of requested row groups must be non-zero and a multiple of " +
+                 std::to_string(min_row_groups));
+
+  // Create a table with the enough rows to cover min_row_groups
   auto const tbl  = create_random_table(cycle_dtypes(mixed_dtypes, num_cols),
-                                       row_count{num_rows},
+                                       row_count{table_rows},
                                        data_profile_builder().cardinality(0).avg_run_length(1));
   auto const view = tbl->view();
 
   auto const stats_level = write_page_index ? cudf::io::statistics_freq::STATISTICS_COLUMN
                                             : cudf::io::statistics_freq::STATISTICS_ROWGROUP;
-  cudf::io::parquet_writer_options write_opts =
-    cudf::io::parquet_writer_options::builder(source_sink.make_sink_info(), view)
-      .compression(cudf::io::compression_type::NONE)
+  auto const options =
+    cudf::io::chunked_parquet_writer_options::builder(source_sink.make_sink_info())
       .row_group_size_rows(rows_per_row_group)
-      .stats_level(stats_level);
+      .compression(cudf::io::compression_type::NONE)
+      .stats_level(stats_level)
+      .build();
+  auto writer = cudf::io::chunked_parquet_writer(options, cudf::get_default_stream());
 
-  cudf::io::write_parquet(write_opts, cudf::get_default_stream());
+  // Compute the number of times the table needs to be written to cover the requested number of row
+  // groups
+  auto num_writes = cudf::util::div_rounding_up_unsafe(num_row_groups, min_row_groups);
+  std::for_each(thrust::counting_iterator(0), thrust::counting_iterator(num_writes), [&](auto) {
+    writer.write(view);
+  });
+
+  std::ignore = writer.close();
 
   return source_sink;
 }
@@ -86,7 +102,7 @@ void BM_parquet_read_footer(nvbench::state& state)
 
   auto const time = state.get_summary("nv/cold/time/gpu/mean").get_float64("value");
   state.add_element_count(static_cast<double>(num_cols * num_row_groups) / time,
-                          "metadata_per_sec");
+                          "colchunks_per_sec");
 }
 
 // Benchmark to measure chunked parquet reader construction time
@@ -119,6 +135,10 @@ void BM_parquet_reader_construction(nvbench::state& state)
       // Validate
       CUDF_EXPECTS(reader.has_next(), "Expected reader to have data");
     });
+
+  auto const time = state.get_summary("nv/cold/time/gpu/mean").get_float64("value");
+  state.add_element_count(static_cast<double>(num_cols * num_row_groups) / time,
+                          "colchunks_per_sec");
 }
 
 // Benchmark to measure parquet column selection time
@@ -176,7 +196,7 @@ NVBENCH_BENCH(BM_parquet_read_footer)
   .add_string_axis("io_type", {"FILEPATH"})
   .add_int64_axis("page_index", {true, false})
   .add_int64_axis("num_cols", {64, 256, 512})
-  .add_int64_axis("num_row_groups", {10, 25});
+  .add_int64_axis("num_row_groups", {10, 50});
 
 NVBENCH_BENCH(BM_parquet_reader_construction)
   .set_name("parquet_reader_construction")
@@ -184,7 +204,7 @@ NVBENCH_BENCH(BM_parquet_reader_construction)
   .add_string_axis("io_type", {"FILEPATH"})
   .add_int64_axis("page_index", {true, false})
   .add_int64_axis("num_cols", {64, 256, 512})
-  .add_int64_axis("num_row_groups", {10, 25});
+  .add_int64_axis("num_row_groups", {10, 50});
 
 NVBENCH_BENCH(BM_parquet_column_selection)
   .set_name("parquet_column_selection")
