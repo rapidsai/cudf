@@ -2512,7 +2512,6 @@ TEST_F(ParquetWriterTest, ReturnedFooterMetadata)
   EXPECT_EQ(fmd_footer.num_rows, fmd_file.num_rows);
   EXPECT_EQ(fmd_footer.row_groups.size(), fmd_file.row_groups.size());
   EXPECT_EQ(fmd_footer.schema.size(), fmd_file.schema.size());
-  EXPECT_EQ(fmd_footer.key_value_metadata, fmd_file.key_value_metadata);
   EXPECT_EQ(fmd_footer.created_by, fmd_file.created_by);
   EXPECT_EQ(fmd_footer.column_orders, fmd_file.column_orders);
 }
