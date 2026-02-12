@@ -119,9 +119,6 @@ void BM_parquet_reader_construction(nvbench::state& state)
       // Validate
       CUDF_EXPECTS(reader.has_next(), "Expected reader to have data");
     });
-
-  auto const time = state.get_summary("nv/cold/time/gpu/mean").get_float64("value");
-  state.add_element_count(static_cast<double>(num_cols) / time, "cols_per_sec");
 }
 
 // Benchmark to measure parquet column selection time
@@ -168,6 +165,9 @@ void BM_parquet_column_selection(nvbench::state& state)
       // Validate
       CUDF_EXPECTS(reader.has_next(), "Expected reader to have data");
     });
+
+  auto const time = state.get_summary("nv/cold/time/gpu/mean").get_float64("value");
+  state.add_element_count(static_cast<double>(num_cols) / time, "cols_per_sec");
 }
 
 NVBENCH_BENCH(BM_parquet_read_footer)
