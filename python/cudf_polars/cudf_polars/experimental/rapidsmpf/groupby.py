@@ -313,7 +313,7 @@ async def _shuffle_groupby(
     ch_out: Channel[TableChunk],
     ch_in: Channel[TableChunk],
     metadata_in: ChannelMetadata,
-    output_count: int,
+    modulus: int,
     collective_id: int,
     *,
     evaluated_chunks: list[TableChunk] | None = None,
@@ -341,8 +341,8 @@ async def _shuffle_groupby(
         The input channel.
     metadata_in
         The input channel metadata.
-    output_count
-        The number of output partitions per rank.
+    modulus
+        The modulus for the shuffle operation.
     collective_id
         The collective ID for the shuffle operation.
     key_indices
@@ -365,9 +365,7 @@ async def _shuffle_groupby(
         shuffle_context = Context(local_comm, context.br(), options)
     shuf_nranks = shuffle_context.comm().nranks
     shuf_rank = shuffle_context.comm().rank
-    modulus = shuf_nranks * output_count
 
-    is_local_shuffle = shuf_nranks == 1 and metadata_in.partitioning is not None
     output_key_indices = _key_indices(decomposed.ir, decomposed.ir.schema)
     if isinstance(decomposed.ir, Distinct):
         shuffle_key_indices = output_key_indices
@@ -376,24 +374,28 @@ async def _shuffle_groupby(
             decomposed.piecewise_ir, decomposed.piecewise_ir.schema
         )
 
-    if is_local_shuffle:
+    if shuf_nranks == 1:
+        # Local shuffle
         inter_rank_scheme = metadata_in.partitioning.inter_rank
         local_scheme = HashScheme(column_indices=output_key_indices, modulus=modulus)
+        local_output_count = modulus
     else:
+        # Global shuffle
         inter_rank_scheme = HashScheme(
             column_indices=output_key_indices, modulus=modulus
         )
         local_scheme = "inherit"
+        local_output_count = (modulus - shuf_rank + shuf_nranks - 1) // shuf_nranks
 
     metadata_out = ChannelMetadata(
-        local_count=max(1, output_count // shuf_nranks),
+        local_count=local_output_count,
         partitioning=Partitioning(inter_rank_scheme, local_scheme),
-        duplicated=False,
+        duplicated=metadata_in.duplicated,
     )
     await send_metadata(ch_out, context, metadata_out)
 
     shuffle = ShuffleManager(
-        shuffle_context, output_count, shuffle_key_indices, collective_id
+        shuffle_context, modulus, shuffle_key_indices, collective_id
     )
 
     for chunk in evaluated_chunks or []:
@@ -420,7 +422,7 @@ async def _shuffle_groupby(
     extract_ir: list[IR] = [decomposed.reduction_ir]
     if decomposed.select_ir is not None:
         extract_ir.append(decomposed.select_ir)
-    for partition_id in range(shuf_rank, output_count, shuf_nranks):
+    for partition_id in range(shuf_rank, modulus, shuf_nranks):
         partition_chunk = TableChunk.from_pylibcudf_table(
             await shuffle.extract_chunk(partition_id, stream),
             stream,
@@ -568,33 +570,24 @@ async def keyed_reduction_node(
                 if total_size > target_partition_size:
                     break
 
+        reduction_ran = merge_count > 0
         local_count = metadata_in.local_count
         if can_skip_global_comm:
-            global_chunk_count = local_count
-            global_chunks_sampled = chunks_sampled
+            total_chunk_count = local_count
+            total_chunks_sampled = chunks_sampled
         else:
             (
                 total_size,
-                global_chunk_count,
-                global_chunks_sampled,
+                total_chunk_count,
+                total_chunks_sampled,
             ) = await allgather_reduce(
                 context, collective_ids.pop(), total_size, local_count, chunks_sampled
             )
-        reduction_ran = merge_count > 0
 
-        if global_chunks_sampled > 0:
-            global_size = (total_size // global_chunks_sampled) * global_chunk_count
-        else:
-            global_size = 0
-
-        # TODO: Fast return if we already have the slice ready
-        if ir.zlice is not None and ir.zlice[1] is not None and evaluated_chunks:
-            total_rows = sum(c.table_view().num_rows() for c in evaluated_chunks)
-            if total_rows > 0:
-                avg_row_size = total_size / total_rows
-                global_size = min(global_size, int(avg_row_size * ir.zlice[1]))
-
-        use_tree = global_size < target_partition_size or require_tree
+        if total_chunks_sampled > 0:
+            total_size = (total_size // total_chunks_sampled) * total_chunk_count
+        use_tree = total_size < target_partition_size or require_tree
+        ideal_count = max(1, total_size // target_partition_size)
 
         if can_skip_global_comm:
             if use_tree:
@@ -615,8 +608,6 @@ async def keyed_reduction_node(
             else:
                 if tracer is not None:
                     tracer.decision = "shuffle_local"
-                ideal_count = max(1, global_size // target_partition_size)
-                output_count = max(1, min(ideal_count, local_count))
                 await _shuffle_groupby(
                     context,
                     decomposed,
@@ -624,7 +615,7 @@ async def keyed_reduction_node(
                     ch_out,
                     ch_in,
                     metadata_in,
-                    output_count,
+                    max(1, min(ideal_count, local_count)),
                     collective_ids.pop(),
                     evaluated_chunks=evaluated_chunks,
                     reduction_ran=reduction_ran,
@@ -650,8 +641,6 @@ async def keyed_reduction_node(
         else:
             if tracer is not None:
                 tracer.decision = "shuffle"
-            ideal_count = max(1, global_size // target_partition_size)
-            output_count = max(nranks, min(ideal_count, global_chunk_count))
             await _shuffle_groupby(
                 context,
                 decomposed,
@@ -659,10 +648,11 @@ async def keyed_reduction_node(
                 ch_out,
                 ch_in,
                 metadata_in,
-                output_count,
+                max(nranks, min(ideal_count, total_chunk_count)),
                 collective_ids.pop(),
                 evaluated_chunks=evaluated_chunks,
                 reduction_ran=reduction_ran,
+                shuffle_context=context,
                 tracer=tracer,
             )
 
