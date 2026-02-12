@@ -37,6 +37,7 @@ from cudf_polars.utils.versions import (
     POLARS_VERSION_LT_133,
     POLARS_VERSION_LT_134,
     POLARS_VERSION_LT_136,
+    POLARS_VERSION_LT_138,
     POLARS_VERSION_LT_1323,
 )
 
@@ -598,21 +599,37 @@ def _(node: plrs._ir_nodes.Sink, translator: Translator, schema: Schema) -> ir.I
     if isinstance(sink_kind_options, dict):
         if len(sink_kind_options) != 1:  # pragma: no cover; not sure if this can happen
             raise NotImplementedError("Sink options dict with more than one entry.")
-        sink_kind, options = next(iter(sink_kind_options.items()))
+        sink_kind, format_options = next(iter(sink_kind_options.items()))
     else:
         raise NotImplementedError(
             "Unsupported sink options structure"
         )  # pragma: no cover
 
-    sink_options = file.get("sink_options", {})
-    cloud_options = file.get("cloud_options")
+    if POLARS_VERSION_LT_138:
+        sink_options = file.get("sink_options", {})
+        cloud_options = file.get("cloud_options")
+        options = format_options.copy()
+        options.update(sink_options)
+    else:
+        unified_args = file.get("unified_sink_args", {})
+        cloud_options = unified_args.get("cloud_options")
+        options = {} if sink_kind == "NDJson" else format_options.copy()
 
-    options.update(sink_options)
+        for k, v in unified_args.items():
+            if k in {"mkdir", "maintain_order", "sync_on_close"}:
+                options[k] = v
+
+    if POLARS_VERSION_LT_132:  # pragma: no cover
+        path = file["target"]
+    elif POLARS_VERSION_LT_138:  # pragma: no cover
+        path = file["target"]["Local"]
+    else:
+        path = file["target"]["inner"]
 
     return ir.Sink(
         schema=schema,
         kind=sink_kind,
-        path=file["target"] if POLARS_VERSION_LT_132 else file["target"]["Local"],
+        path=path,
         parquet_options=translator.config_options.parquet_options,
         options=options,
         cloud_options=cloud_options,

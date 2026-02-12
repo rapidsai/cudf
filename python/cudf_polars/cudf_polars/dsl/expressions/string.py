@@ -268,10 +268,9 @@ class StringFunction(Expr):
             (_, inclusive) = self.options
             if inclusive:
                 raise NotImplementedError(f"{inclusive=} is not supported for split")
-        elif (
-            POLARS_VERSION_LT_138 and self.name is StringFunction.Name.SplitRegex
-        ):  # pragma: no cover
+        elif not POLARS_VERSION_LT_138 and self.name is StringFunction.Name.SplitRegex:
             # See https://github.com/pola-rs/polars/pull/26060
+            # SplitRegex introduced in polars>=1.38, but we don't support it yet
             raise NotImplementedError(
                 "String split with regex (literal=False) is not supported."
             )
