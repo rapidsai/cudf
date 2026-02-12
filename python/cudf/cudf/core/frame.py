@@ -1039,7 +1039,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
         >>> ser
         0       a
         1       b
-        2    <NA>
+        2    None
         3       c
         dtype: object
         >>> ser.fillna('z')
@@ -1249,7 +1249,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
         ...                    'toy': [None, 'Batmobile', 'Joker']})
         >>> df
             age                           born    name        toy
-        0     5                           NaT  Alfred       <NA>
+        0     5                           NaT  Alfred        None
         1     6  1939-05-27 00:00:00.000000000  Batman  Batmobile
         2  <NA>  1940-04-25 00:00:00.000000000              Joker
         >>> df.isna()
@@ -1330,7 +1330,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
         ...                    'toy': [None, 'Batmobile', 'Joker']})
         >>> df
             age                           born    name        toy
-        0     5                           NaT  Alfred       <NA>
+        0     5                           NaT  Alfred        None
         1     6  1939-05-27 00:00:00.000000000  Batman  Batmobile
         2  <NA>  1940-04-25 00:00:00.000000000              Joker
         >>> df.notna()
