@@ -552,16 +552,10 @@ dependencies:
     common:
       - output_types: [conda]
         packages:
-          - pyarrow>=15.0.0
+          - pyarrow>=19.0.0
       - output_types: [requirements, pyproject]
         packages:
-          # pyarrow 17.0.0 wheels have a subtle issue around threading that
-          # can cause segmentation faults around imports on arm. It appears to
-          # be highly dependent on the exact build configuration, so we'll just
-          # avoid 17.0.0 for now unless we observe similar issues in future
-          # releases as well.
-          - pyarrow>=15.0.0; platform_machine=='x86_64'
-          - pyarrow>=15.0.0,!=17.0.0; platform_machine=='aarch64'
+          - pyarrow>=19.0.0
   cuda_version:
     specific:
       - output_types: conda
@@ -671,10 +665,6 @@ dependencies:
       - output_types: conda
         matrices:
           - matrix:
-              py: "3.10"
-            packages:
-              - python=3.10
-          - matrix:
               py: "3.11"
             packages:
               - python=3.11
@@ -688,7 +678,7 @@ dependencies:
               - python=3.13
           - matrix:
             packages:
-              - python>=3.10,<3.14
+              - python>=3.11,<3.14
   run_common:
     common:
       - output_types: [conda, requirements, pyproject]
@@ -723,11 +713,6 @@ dependencies:
           - packaging
           - rich
           - typing_extensions>=4.0.0
-      - output_types: requirements
-        packages:
-          # pip recognizes the index as a global option for the requirements.txt file
-          - --extra-index-url=https://pypi.nvidia.com
-          - --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple
     specific:
       - output_types: [conda, requirements, pyproject]
         matrices:
@@ -924,10 +909,7 @@ dependencies:
           - matrix: {dependencies: "oldest"}
             packages:
               - numpy==1.23.*
-              # pyarrow 14 is fine in some circumstances but we require pyarrow
-              # 15 in our CI tests in order to get a lz4-c that is compatible
-              # with cudf_kafka's dependencies.
-              - pyarrow==15.*
+              - pyarrow==19.*
           - matrix:
             packages:
       - output_types: conda
@@ -954,6 +936,8 @@ dependencies:
               - sqlframe
               - ibis-framework[duckdb]
               - duckdb<1.4.0
+              # Exclude broken version: https://github.com/tobymao/sqlglot/issues/6908
+              - sqlglot!=28.7.*
   depends_on_libcudf:
     common:
       - output_types: conda
@@ -962,7 +946,6 @@ dependencies:
       - output_types: requirements
         packages:
           # pip recognizes the index as a global option for the requirements.txt file
-          - --extra-index-url=https://pypi.nvidia.com
           - --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple
     specific:
       - output_types: [requirements, pyproject]
@@ -982,18 +965,24 @@ dependencies:
     common:
       - output_types: [conda]
         packages:
-        - numba-cuda>=0.22.2,<0.23.0
+        - &numba_cuda numba-cuda>=0.22.2
     specific:
       - output_types: [requirements, pyproject]
         matrices:
           - matrix:
               cuda: "12.*"
+              cuda_suffixed: "true"
             packages:
-              - numba-cuda[cu12]>=0.22.2,<0.23.0
-          # fallback to CUDA 13 versions if 'cuda' is '13.*' or not provided
+              - numba-cuda[cu12]>=0.22.2
+          - matrix:
+              cuda: "13.*"
+              cuda_suffixed: "true"
+            packages:
+              - numba-cuda[cu13]>=0.22.2
+          # fallback to numba-cuda with no extra CUDA packages if 'cuda_suffixed' isn't true
           - matrix:
             packages:
-              - numba-cuda[cu13]>=0.22.2,<0.23.0
+              - *numba_cuda
   depends_on_pylibcudf:
     common:
       - output_types: conda
@@ -1002,7 +991,6 @@ dependencies:
       - output_types: requirements
         packages:
           # pip recognizes the index as a global option for the requirements.txt file
-          - --extra-index-url=https://pypi.nvidia.com
           - --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple
     specific:
       - output_types: [requirements, pyproject]
@@ -1026,7 +1014,6 @@ dependencies:
       - output_types: requirements
         packages:
           # pip recognizes the index as a global option for the requirements.txt file
-          - --extra-index-url=https://pypi.nvidia.com
           - --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple
     specific:
       - output_types: [requirements, pyproject]
@@ -1050,7 +1037,6 @@ dependencies:
       - output_types: requirements
         packages:
           # pip recognizes the index as a global option for the requirements.txt file
-          - --extra-index-url=https://pypi.nvidia.com
           - --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple
     specific:
       - output_types: [requirements, pyproject]
@@ -1068,28 +1054,9 @@ dependencies:
           - {matrix: null, packages: [*cudf_unsuffixed]}
   depends_on_cudf_kafka:
     common:
-      - output_types: conda
+      - output_types: [conda, pyproject]
         packages:
           - &cudf_kafka_unsuffixed cudf_kafka==26.4.*,>=0.0.0a0
-      - output_types: requirements
-        packages:
-          # pip recognizes the index as a global option for the requirements.txt file
-          - --extra-index-url=https://pypi.nvidia.com
-          - --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple
-    specific:
-      - output_types: [requirements, pyproject]
-        matrices:
-          - matrix:
-              cuda: "12.*"
-              cuda_suffixed: "true"
-            packages:
-              - cudf_kafka-cu12==26.4.*,>=0.0.0a0
-          - matrix:
-              cuda: "13.*"
-              cuda_suffixed: "true"
-            packages:
-              - cudf_kafka-cu13==26.4.*,>=0.0.0a0
-          - {matrix: null, packages: [*cudf_kafka_unsuffixed]}
   depends_on_cupy:
     common:
       - output_types: conda
@@ -1116,7 +1083,6 @@ dependencies:
           - &libkvikio_unsuffixed libkvikio==26.4.*,>=0.0.0a0
       - output_types: requirements
         packages:
-          - --extra-index-url=https://pypi.nvidia.com
           - --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple
     specific:
       - output_types: [requirements, pyproject]
@@ -1142,7 +1108,6 @@ dependencies:
       - output_types: requirements
         packages:
           # pip recognizes the index as a global option for the requirements.txt file
-          - --extra-index-url=https://pypi.nvidia.com
           - --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple
     specific:
       - output_types: [requirements, pyproject]
@@ -1168,7 +1133,6 @@ dependencies:
       - output_types: requirements
         packages:
           # pip recognizes the index as a global option for the requirements.txt file
-          - --extra-index-url=https://pypi.nvidia.com
           - --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple
     specific:
       - output_types: [requirements, pyproject]
@@ -1194,7 +1158,6 @@ dependencies:
       - output_types: requirements
         packages:
           # pip recognizes the index as a global option for the requirements.txt file
-          - --extra-index-url=https://pypi.nvidia.com
           - --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple
     specific:
       - output_types: [requirements, pyproject]
@@ -1254,7 +1217,6 @@ dependencies:
       - output_types: requirements
         packages:
           # pip recognizes the index as a global option for the requirements.txt file
-          - --extra-index-url=https://pypi.nvidia.com
           - --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple
     specific:
       - output_types: [requirements, pyproject]

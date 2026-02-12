@@ -1,21 +1,31 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
 
+import dataclasses
+import json
 import re
+from typing import TYPE_CHECKING
 
 import pytest
 
 import polars as pl
 
-from cudf_polars.experimental.explain import _fmt_row_count, explain_query
+from cudf_polars.experimental.explain import (
+    _fmt_row_count,
+    explain_query,
+    serialize_query,
+)
 from cudf_polars.testing.asserts import (
     DEFAULT_CLUSTER,
     DEFAULT_RUNTIME,
     assert_gpu_result_equal,
 )
 from cudf_polars.testing.io import make_lazy_frame, make_partitioned_source
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 @pytest.fixture(scope="module")
@@ -495,3 +505,180 @@ def test_explain_logical_io_then_concat_then_groupby(engine, tmp_path, kind):
         assert re.search(
             rf"^\s*SORT.*row_count=\'~{final_count_2}\'\s*$", repr, re.MULTILINE
         )
+
+
+def test_serialize_query():
+    # this test is sensitive to the polars version.
+    # we get a different query plan for polars < 1.35.0.
+    pytest.importorskip("polars", minversion="1.35.0")
+
+    left = pl.LazyFrame({"a": ["a", "b", "a"], "b": [1, 2, 3]})
+    right = pl.LazyFrame({"a": ["a", "b", "c"], "c": [4, 5, 6]})
+
+    q = (
+        left.join(right, on="a", how="inner")
+        .group_by("a")
+        .agg(pl.col("b").sum(), pl.col("c").max())
+    )
+    engine = pl.GPUEngine(executor="streaming", raise_on_fail=True)
+    dag = serialize_query(q, engine)
+
+    # We don't know the exact node IDs, but we can check the structure.
+    assert len(dag.roots) == 1
+    node_types = sorted({x.type for x in dag.nodes.values()})
+    assert node_types == ["DataFrameScan", "GroupBy", "Join", "Projection", "Select"]
+    assert len(dag.nodes) == 6
+    assert len(dag.partition_info) == 6
+    node_ids = set(dag.nodes)
+
+    for node_id, node in dag.nodes.items():
+        assert node.id == node_id
+        assert node_id in node_ids
+        assert set(node.children) <= node_ids
+
+        match node.type:
+            case "DataFrameScan":
+                assert node.children == []
+                assert node.schema == {"a": "STRING", "b": "INT64"} or node.schema == {
+                    "a": "STRING",
+                    "c": "INT64",
+                }
+                assert node_id not in dag.roots
+
+            case "Projection":
+                assert len(node.children) == 1
+                assert node.schema == {"b": "INT64", "c": "INT64", "a": "STRING"}
+                assert node.properties == {}
+
+            case "GroupBy":
+                assert len(node.children) == 1
+                assert node.schema == {"a": "STRING", "b": "INT64", "c": "INT64"}
+                assert node.properties == {"keys": ["a"]}
+                assert node_id not in dag.roots
+
+            case "Select":
+                assert len(node.children) == 1
+                assert node.schema == {"a": "STRING", "b": "INT64", "c": "INT64"}
+                assert node.properties == {"columns": ["a", "b", "c"]}
+                assert node_id in dag.roots
+
+            case "Join":
+                assert len(node.children) == 2
+                assert node.schema == {"a": "STRING", "b": "INT64", "c": "INT64"}
+                assert node.properties == {
+                    "how": "Inner",
+                    "left_on": ["a"],
+                    "right_on": ["a"],
+                }
+                assert node_id not in dag.roots
+
+    # smoke test to ensure that the output is JSON serializable
+    json.dumps(dataclasses.asdict(dag))
+
+
+def test_scan_properties(tmp_path: Path):
+    pl.DataFrame({"a": [1, 2, 3]}).write_parquet(tmp_path / "test.parquet")
+
+    q = pl.scan_parquet(tmp_path / "test.parquet")
+    engine = pl.GPUEngine(executor="streaming", raise_on_fail=True)
+    dag = serialize_query(q, engine)
+
+    # walk Union -> Scan
+    node = dag.nodes[dag.nodes[dag.roots[0]].children[0]]
+    assert node.type == "Scan"
+    assert node.properties == {
+        "paths": [str(tmp_path / "test.parquet")],
+        "typ": "parquet",
+    }
+
+
+@pytest.mark.parametrize("descending", [False, True])
+def test_sort_properties(*, descending: bool):
+    q = pl.LazyFrame({"a": [1, 3, 2]}).sort("a", descending=descending)
+    dag = serialize_query(q, pl.GPUEngine(executor="streaming"))
+
+    order = "DESCENDING" if descending else "ASCENDING"
+    node = dag.nodes[dag.roots[0]]
+    assert node.type == "Sort"
+    assert node.properties == {"by": ["a"], "order": [order]}
+
+
+@pytest.mark.parametrize(
+    "predicate, expected",
+    [
+        (
+            pl.col("a") > 1,
+            {
+                "predicate": "a",
+                "op": "GREATER",
+                "left": {"type": "Col", "name": "a"},
+                "right": {"type": "Literal", "value": 1},
+            },
+        ),
+        (
+            pl.col("a") == pl.col("b"),
+            {
+                "predicate": "a",
+                "op": "EQUAL",
+                "left": {"type": "Col", "name": "a"},
+                "right": {"type": "Col", "name": "b"},
+            },
+        ),
+    ],
+)
+def test_filter_properties(predicate: pl.Expr, expected: dict):
+    q = pl.LazyFrame({"a": [1, 2, 3], "b": [2, 2, 2]}).filter(predicate)
+    dag = serialize_query(q, pl.GPUEngine(executor="streaming"))
+
+    node = dag.nodes[dag.roots[0]]
+    assert node.type == "Filter"
+    assert node.properties == expected
+
+
+def test_select_properties():
+    q = pl.LazyFrame({"a": [1, 2, 3]}).select(pl.col("a") + 1)
+    dag = serialize_query(q, pl.GPUEngine(executor="streaming"))
+
+    node = dag.nodes[dag.roots[0]]
+    assert node.type == "Select"
+    assert node.properties == {"columns": ["a"]}
+
+
+def test_hstack_properties():
+    left = pl.LazyFrame({"a": [1, 2, 3]})
+    q = left.with_columns(pl.col("a"), (pl.col("a") + 1).alias("b"))
+    dag = serialize_query(q, pl.GPUEngine(executor="streaming"))
+
+    node = dag.nodes[dag.roots[0]]
+    assert node.type == "HStack"
+    assert node.properties == {"columns": ["a", "b"]}
+
+
+@pytest.mark.skipif(
+    DEFAULT_RUNTIME != "rapidsmpf",
+    reason="Requires the rapidsmpf runtime",
+)
+@pytest.mark.parametrize("op", ["sort", "sum"])
+def test_dynamic_planning_adds_repartition(df, op):
+    # With dynamic planning, even single-partition data needs a REPARTITION
+    # since partition count may increase at runtime.
+    q = df.lazy()
+    if op == "sort":
+        q = q.sort("x")
+    elif op == "sum":
+        q = q.select(pl.sum("x"))
+
+    engine = pl.GPUEngine(
+        executor="streaming",
+        raise_on_fail=True,
+        executor_options={
+            "runtime": "rapidsmpf",
+            "dynamic_planning": {},
+            "max_rows_per_partition": 1_000_000,
+        },
+    )
+    plan = explain_query(q, engine, physical=True)
+
+    # With dynamic planning enabled, these operations should include
+    # a REPARTITION to collapse partitions.
+    assert "REPARTITION" in plan

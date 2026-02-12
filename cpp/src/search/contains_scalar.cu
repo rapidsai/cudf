@@ -8,6 +8,7 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/row_operator/equality.cuh>
 #include <cudf/detail/search.hpp>
+#include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/dictionary/detail/search.hpp>
 #include <cudf/dictionary/detail/update_keys.hpp>
 #include <cudf/scalar/scalar.hpp>
@@ -22,7 +23,6 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <thrust/count.h>
 #include <thrust/transform.h>
 
 namespace cudf {
@@ -70,13 +70,14 @@ struct contains_scalar_dispatch {
       d_haystack->optional_begin<DType>(cudf::nullate::DYNAMIC{haystack.has_nulls()});
     auto const end = d_haystack->optional_end<DType>(cudf::nullate::DYNAMIC{haystack.has_nulls()});
 
-    return thrust::count_if(rmm::exec_policy_nosync(stream),
-                            begin,
-                            end,
-                            [d_needle] __device__(auto const val_pair) {
-                              auto needle = get_scalar_value<Element>(d_needle);
-                              return val_pair.has_value() && (needle == *val_pair);
-                            }) > 0;
+    return cudf::detail::count_if(
+             begin,
+             end,
+             [d_needle] __device__(auto const val_pair) {
+               auto needle = get_scalar_value<Element>(d_needle);
+               return val_pair.has_value() && (needle == *val_pair);
+             },
+             stream) > 0;
   }
 
   template <typename Element>

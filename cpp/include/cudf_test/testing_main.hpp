@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -231,11 +231,11 @@ inline void init_cudf_test(int argc, char** argv, cudf::test::config const& conf
       cudf::set_current_device_resource(&mr);                                                    \
       auto rc = RUN_ALL_TESTS();                                                                 \
       std::cout << "Peak memory usage " << mr.get_bytes_counter().peak << " bytes" << std::endl; \
-      cudf::deinitialize();                                                                      \
+      cudf::teardown();                                                                          \
       return rc;                                                                                 \
     } else {                                                                                     \
       auto rc = RUN_ALL_TESTS();                                                                 \
-      cudf::deinitialize();                                                                      \
+      cudf::teardown();                                                                          \
       return rc;                                                                                 \
     }                                                                                            \
   }
