@@ -448,3 +448,9 @@ def test_groupby_literal_agg():
     df = pl.LazyFrame({"c0": [True, False]})
     q = df.group_by("c0").agg(pl.lit(1).is_not_null())
     assert_gpu_result_equal(q, check_row_order=False)
+
+
+def test_groupby_empty_keys_raises():
+    df = pl.LazyFrame({"x": [1, 2, 3]})
+    q = df.group_by([]).agg(pl.len())
+    assert_ir_translation_raises(q, NotImplementedError)

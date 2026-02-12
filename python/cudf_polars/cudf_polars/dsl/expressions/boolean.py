@@ -98,9 +98,8 @@ class BooleanFunction(Expr):
                 f"Boolean function {self.name}"
             )  # pragma: no cover
         if self.name is BooleanFunction.Name.IsIn and len(children) == 2:
-            # Polars should raise an error ahead of time
+            # TODO: Polars should raise an error ahead of time
             # for us for these kind of shape mismatches
-            # See ...
             needles, haystack = children
             if (
                 isinstance(needles, LiteralColumn)

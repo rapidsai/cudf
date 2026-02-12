@@ -30,6 +30,9 @@ DESELECTED_TESTS=(
     "tests/unit/io/test_sink.py::test_mkdir[streaming-scan_parquet-sink_parquet]" # kvikio file creation error in CI
     "tests/unit/io/test_sink.py::test_mkdir[streaming-scan_csv-sink_csv]" # kvikio file creation error in CI
     "tests/unit/io/test_sink.py::test_mkdir[streaming-scan_ndjson-sink_ndjson]" # kvikio file creation error in CI
+    "tests/unit/io/test_write.py::test_write_async[read_parquet-<lambda>]" # kvikio file creation error in CI
+    "tests/unit/io/test_write.py::test_write_async[<lambda>-<lambda>0]" # kvikio file creation error in CI
+    "tests/unit/io/test_write.py::test_write_async[<lambda>-<lambda>2]" # kvikio file creation error in CI
 )
 
 if [[ $(arch) == "aarch64" ]]; then

@@ -2,10 +2,13 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
+import gzip
+import zlib
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
 import pytest
+import zstandard as zstd
 from werkzeug import Response
 
 import polars as pl
@@ -656,3 +659,46 @@ def test_hits_scan_row_index_duplicate(request, tmp_path):
         assert_gpu_result_equal(q)
     else:
         assert_ir_translation_raises(q, NotImplementedError)
+
+
+def test_scan_zero_width_raises(tmp_path):
+    df = pl.DataFrame(height=10)
+    df.write_parquet(tmp_path / "df.parquet")
+    q = pl.scan_parquet(tmp_path / "df.parquet")
+    assert_ir_translation_raises(q, NotImplementedError)
+
+
+@pytest.mark.parametrize("compression", ["gzip", "zlib", "zstd"])
+@pytest.mark.parametrize("file_type", ["csv", "ndjson"])
+def test_scan_compressed_file_raises(tmp_path, compression, file_type):
+    if file_type == "csv":
+        data = b"a,b\n1,2\n3,4\n"
+        scan_fn = pl.scan_csv
+    else:
+        data = b'{"a":1,"b":2}\n{"a":3,"b":4}\n'
+        scan_fn = pl.scan_ndjson
+
+    path = tmp_path / f"data.{file_type}"
+    if compression == "gzip":
+        with gzip.open(path, "wb") as f:
+            f.write(data)
+    elif compression == "zlib":
+        with path.open("wb") as f:
+            f.write(zlib.compress(data))
+    else:
+        cctx = zstd.ZstdCompressor()
+        with path.open("wb") as f:
+            f.write(cctx.compress(data))
+
+    q = scan_fn(path)
+    assert_ir_translation_raises(q, NotImplementedError)
+
+
+def test_scan_tiny_file_not_compressed(tmp_path):
+    # code coverage for the case where we try to
+    # detect compression but the file is too small
+    # to have a valid signature.
+    path = tmp_path / "tiny.csv"
+    path.write_bytes(b"a\n")
+    q = pl.scan_csv(path, has_header=False, new_columns=["a"])
+    assert_gpu_result_equal(q)
