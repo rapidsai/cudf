@@ -63,6 +63,8 @@ class Literal(Expr):
 
     def astype(self, dtype: DataType) -> Literal:
         """Cast self to dtype."""
+        if dtype.id() == plc.TypeId.STRUCT:
+            raise NotImplementedError("Struct literals are not supported")
         if self.value is None:
             return Literal(dtype, self.value)
         else:

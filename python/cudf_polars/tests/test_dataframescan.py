@@ -11,6 +11,7 @@ import polars as pl
 
 from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
+    assert_ir_translation_raises,
 )
 
 
@@ -84,3 +85,9 @@ def test_dataframescan_zero_width_with_rows():
     df = pl.LazyFrame(height=5)
     q = df.select(pl.len())
     assert_gpu_result_equal(q)
+
+
+def test_struct_literal_not_supported():
+    dtype = pl.Struct([pl.Field("a", pl.Int64), pl.Field("b", pl.String)])
+    q = pl.LazyFrame().select(pl.lit(None, dtype=pl.Null).cast(dtype, strict=True))
+    assert_ir_translation_raises(q, NotImplementedError)
