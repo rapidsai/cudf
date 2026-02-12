@@ -44,9 +44,9 @@ struct simple_comparator {
       }
     }
 
-    auto const left_elememt  = d_column.element<T>(lhs);
-    auto const right_elememt = d_column.element<T>(rhs);
-    return relational_compare(left_elememt, right_elememt) ==
+    auto const left_element  = d_column.element<T>(lhs);
+    auto const right_element = d_column.element<T>(rhs);
+    return relational_compare(left_element, right_element) ==
            (ascending ? weak_ordering::LESS : weak_ordering::GREATER);
   }
   column_device_view const d_column;
