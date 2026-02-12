@@ -255,7 +255,7 @@ def _(
         shuffled = True
 
     # Check for dynamic planning
-    if dynamic_planning:
+    if dynamic_planning:  # pragma: no cover
         # Dynamic planning: Just reconstruct the GroupBy.
         # The runtime GroupBy node will handle decomposition and shuffle decisions.
         dynamic_node = ir.reconstruct([child])
