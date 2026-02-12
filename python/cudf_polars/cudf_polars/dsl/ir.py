@@ -678,6 +678,18 @@ class Scan(IR):
             total_rows = min(total_rows, self.n_rows)
         return max(total_rows, 0)
 
+    @staticmethod
+    def _get_parquet_row_count_from_metadata(
+        paths: list[str], skip_rows: int, n_rows: int
+    ) -> int:
+        # Zero-width parquet files lose their row count when read through
+        # pylibcudf. See https://github.com/rapidsai/cudf/issues/21428
+        meta = plc.io.parquet_metadata.read_parquet_metadata(plc.io.SourceInfo(paths))
+        num_rows = meta.num_rows() - skip_rows
+        if n_rows != -1:
+            num_rows = min(num_rows, n_rows)
+        return max(num_rows, 0)
+
     @classmethod
     @log_do_evaluate
     @nvtx_annotate_cudf_polars(message="Scan")
@@ -851,11 +863,17 @@ class Scan(IR):
                         concatenated_columns[i] = plc.concatenate.concatenate(
                             [concatenated_columns[i], columns.pop()], stream=stream
                         )
+                num_rows = (
+                    cls._get_parquet_row_count_from_metadata(paths, skip_rows, n_rows)
+                    if not names
+                    else None
+                )
                 df = DataFrame.from_table(
                     plc.Table(concatenated_columns),
                     names=names,
                     dtypes=[schema[name] for name in names],
                     stream=stream,
+                    num_rows=num_rows,
                 )
                 df = _align_parquet_schema(df, schema)
                 if include_file_paths is not None:
@@ -868,11 +886,17 @@ class Scan(IR):
                 )
                 # TODO: consider nested column names?
                 col_names = tbl_w_meta.column_names(include_children=False)
+                num_rows = (
+                    cls._get_parquet_row_count_from_metadata(paths, skip_rows, n_rows)
+                    if not col_names
+                    else None
+                )
                 df = DataFrame.from_table(
                     tbl_w_meta.tbl,
                     col_names,
                     [schema[name] for name in col_names],
                     stream=stream,
+                    num_rows=num_rows,
                 )
                 df = _align_parquet_schema(df, schema)
                 if include_file_paths is not None:
@@ -1425,8 +1449,17 @@ class DataFrameScan(IR):
         context: IRExecutionContext,
     ) -> DataFrame:
         """Evaluate and return a dataframe."""
+        pl_df = pl.DataFrame._from_pydf(df) if not isinstance(df, pl.DataFrame) else df
+        height = pl_df.height
+
         if projection is not None:
             df = df.select(projection)
+
+        # Zero-width dataframes lose their row count when converted through
+        # pylibcudf. See https://github.com/rapidsai/cudf/issues/21428
+        if len(schema) == 0:
+            return DataFrame([], stream=context.get_cuda_stream(), num_rows=height)
+
         df = DataFrame.from_polars(df, stream=context.get_cuda_stream())
         assert all(
             c.obj.type() == dtype.plc_type

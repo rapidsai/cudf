@@ -661,13 +661,6 @@ def test_hits_scan_row_index_duplicate(request, tmp_path):
         assert_ir_translation_raises(q, NotImplementedError)
 
 
-def test_scan_zero_width_raises(tmp_path):
-    df = pl.DataFrame(height=10)
-    df.write_parquet(tmp_path / "df.parquet")
-    q = pl.scan_parquet(tmp_path / "df.parquet")
-    assert_ir_translation_raises(q, NotImplementedError)
-
-
 @pytest.mark.parametrize("compression", ["gzip", "zlib", "zstd"])
 @pytest.mark.parametrize("file_type", ["csv", "ndjson"])
 def test_scan_compressed_file_raises(tmp_path, compression, file_type):
@@ -702,3 +695,11 @@ def test_scan_tiny_file_not_compressed(tmp_path):
     path.write_bytes(b"a\n")
     q = pl.scan_csv(path, has_header=False, new_columns=["a"])
     assert_gpu_result_equal(q)
+
+
+@pytest.mark.parametrize("engine", [None, NO_CHUNK_ENGINE])
+def test_scan_parquet_zero_width_with_limit(tmp_path, engine):
+    path = tmp_path / "zero_width.parquet"
+    pl.LazyFrame(height=20).sink_parquet(path)
+    q = pl.scan_parquet(path).head(5)
+    assert_gpu_result_equal(q, engine=engine)

@@ -321,14 +321,6 @@ def _(node: plrs._ir_nodes.Scan, translator: Translator, schema: Schema) -> ir.I
                     f"Reading compressed {typ.upper()} files is not supported."
                 )
 
-    # Zero-width scans lose their row count when converted through
-    # Arrow/pylibcudf. See https://github.com/rapidsai/cudf/issues/21428
-    effective_columns = (
-        with_columns if with_columns is not None else list(schema.keys())
-    )
-    if not effective_columns:
-        raise NotImplementedError("Scanning files with no columns is not supported.")
-
     return ir.Scan(
         schema,
         typ,
@@ -370,10 +362,6 @@ def _(node: plrs._ir_nodes.Cache, translator: Translator, schema: Schema) -> ir.
 def _(
     node: plrs._ir_nodes.DataFrameScan, translator: Translator, schema: Schema
 ) -> ir.IR:
-    # Zero-width dataframes lose their row count when converted
-    # through Arrow/pylibcudf. See https://github.com/rapidsai/cudf/issues/21428
-    if len(schema) == 0:
-        raise NotImplementedError("Zero-width DataFrames are not supported.")
     return ir.DataFrameScan(
         schema,
         node.df,
@@ -398,10 +386,6 @@ def _(node: plrs._ir_nodes.GroupBy, translator: Translator, schema: Schema) -> i
         keys = [
             translate_named_expr(translator, n=e, schema=inp.schema) for e in node.keys
         ]
-        if not keys:
-            raise NotImplementedError(
-                "at least one key is required in a group_by operation"
-            )
         with set_expr_context(translator, ExecutionContext.GROUPBY):
             original_aggs = [
                 translate_named_expr(translator, n=e, schema=inp.schema)
@@ -416,6 +400,11 @@ def _(node: plrs._ir_nodes.GroupBy, translator: Translator, schema: Schema) -> i
             node.options, schema, keys, original_aggs, translator.config_options, inp
         )
     else:
+        # TODO: Investigate whether polars can raise ahead of time
+        if not keys:
+            raise NotImplementedError(
+                "at least one key is required in a group_by operation"
+            )
         return rewrite_groupby(node, schema, keys, original_aggs, inp)
 
 

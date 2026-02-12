@@ -11,7 +11,6 @@ import polars as pl
 
 from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
-    assert_ir_translation_raises,
 )
 
 
@@ -81,6 +80,7 @@ def test_dataframescan_with_decimals():
     assert_gpu_result_equal(q)
 
 
-def test_dataframescan_zero_width_raises():
-    q = pl.LazyFrame(height=5)
-    assert_ir_translation_raises(q, NotImplementedError)
+def test_dataframescan_zero_width_with_rows():
+    df = pl.LazyFrame(height=5)
+    q = df.select(pl.len())
+    assert_gpu_result_equal(q)
