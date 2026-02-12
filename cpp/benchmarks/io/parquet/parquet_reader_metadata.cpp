@@ -21,7 +21,7 @@ auto const mixed_dtypes = get_type_or_group({static_cast<int32_t>(data_type::INT
                                              static_cast<int32_t>(data_type::LIST),
                                              static_cast<int32_t>(data_type::STRUCT)});
 
-constexpr cudf::size_type rows_per_row_group = 2000;
+constexpr cudf::size_type rows_per_row_group = 5000;
 
 namespace {
 
@@ -77,7 +77,9 @@ void BM_parquet_read_footer(nvbench::state& state)
       // Validate metadata
       CUDF_EXPECTS(std::cmp_equal(metadatas.size(), 1), "Expected one metadata object");
       CUDF_EXPECTS(std::cmp_equal(metadatas.front().row_groups.size(), num_row_groups),
-                   "Unexpected number of row groups in metadata");
+                   "Unexpected number of row groups in metadata. Got: " +
+                     std::to_string(metadatas.front().row_groups.size()) +
+                     " Expected: " + std::to_string(num_row_groups));
       // Using >= here as we have struct columns in the input
       CUDF_EXPECTS(
         std::cmp_greater_equal(metadatas.front().row_groups.front().columns.size(), num_cols),
@@ -177,7 +179,7 @@ NVBENCH_BENCH(BM_parquet_read_footer)
   .add_string_axis("io_type", {"FILEPATH"})
   .add_int64_axis("page_index", {true, false})
   .add_int64_axis("num_cols", {64, 256, 512})
-  .add_int64_axis("num_row_groups", {10, 20, 50});
+  .add_int64_axis("num_row_groups", {10, 25});
 
 NVBENCH_BENCH(BM_parquet_reader_construction)
   .set_name("parquet_reader_construction")
@@ -185,7 +187,7 @@ NVBENCH_BENCH(BM_parquet_reader_construction)
   .add_string_axis("io_type", {"FILEPATH"})
   .add_int64_axis("page_index", {true, false})
   .add_int64_axis("num_cols", {64, 256, 512})
-  .add_int64_axis("num_row_groups", {10, 20, 50});
+  .add_int64_axis("num_row_groups", {10, 25});
 
 NVBENCH_BENCH(BM_parquet_column_selection)
   .set_name("parquet_column_selection")
