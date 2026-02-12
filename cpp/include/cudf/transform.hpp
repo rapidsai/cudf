@@ -11,8 +11,6 @@
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <memory>
-#include <span>
-#include <variant>
 
 namespace CUDF_EXPORT cudf {
 
@@ -65,31 +63,6 @@ std::unique_ptr<column> transform(
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
-enum class [[nodiscard]] udf_source_type : uint8_t { LTOIR_BINARY = 0, PTX_BINARY = 1, CUDA = 2 };
-
-struct [[nodiscard]] transform_params {
-  using input_type = std::variant<column_view, scalar, void*>;
-
-  std::vector<input_type> inputs = {};
-
-  std::optional<size_type> output_size = std::nullopt;
-
-  std::vector<data_type> output_types = {};
-
-  null_aware is_null_aware = null_aware::NO;
-
-  std::span<char const> udf = {};
-
-  udf_source_type type = udf_source_type::LTOIR_BINARY;
-
-  output_nullability null_policy = output_nullability::PRESERVE;
-
-  rmm::cuda_stream_view stream = cudf::get_default_stream();
-
-  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref();
-};
-
-std::unique_ptr<table> transform2(transform_params const& params);
 
 /**
  * @brief Creates a null_mask from `input` by converting `NaN` to null and
