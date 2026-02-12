@@ -15,11 +15,11 @@
 #include <nvbench/nvbench.cuh>
 
 // Common mixed dtypes used by all benchmarks in this file
-auto const mixed_dtypes = get_type_or_group({static_cast<int32_t>(data_type::INTEGRAL),
+auto const mixed_dtypes = get_type_or_group({static_cast<int32_t>(data_type::STRING),
+                                             static_cast<int32_t>(data_type::INTEGRAL),
                                              static_cast<int32_t>(data_type::FLOAT),
-                                             static_cast<int32_t>(data_type::STRING),
-                                             static_cast<int32_t>(data_type::LIST),
-                                             static_cast<int32_t>(data_type::STRUCT)});
+                                             static_cast<int32_t>(data_type::DECIMAL),
+                                             static_cast<int32_t>(data_type::LIST)});
 
 constexpr cudf::size_type rows_per_row_group = 5000;
 
@@ -80,10 +80,8 @@ void BM_parquet_read_footer(nvbench::state& state)
                    "Unexpected number of row groups in metadata. Got: " +
                      std::to_string(metadatas.front().row_groups.size()) +
                      " Expected: " + std::to_string(num_row_groups));
-      // Using >= here as we have struct columns in the input
-      CUDF_EXPECTS(
-        std::cmp_greater_equal(metadatas.front().row_groups.front().columns.size(), num_cols),
-        "Unexpected number of columns in metadata");
+      CUDF_EXPECTS(std::cmp_equal(metadatas.front().row_groups.front().columns.size(), num_cols),
+                   "Unexpected number of columns in metadata");
     });
 
   auto const time = state.get_summary("nv/cold/time/gpu/mean").get_float64("value");
