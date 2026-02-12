@@ -1302,7 +1302,9 @@ def validate_result(
             status="Failed", message="Schema mismatch", details=detail
         )
 
-    # Now: cast all the decimal columns to float and do approximate comparison
+    # For reasons... the polars / cudf-polars Decimal implementation differs
+    # slightly from the DuckDB implementation, in ways that can result in *small*
+    # but *real* differences in the results (off by 1%).
     float_casts = [
         pl.col(col).cast(pl.Float64())
         for col in result.columns
