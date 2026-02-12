@@ -14,6 +14,7 @@ import pylibcudf as plc
 
 from cudf_polars.containers import Column, DataType
 from cudf_polars.utils import conversion
+from cudf_polars.utils.versions import POLARS_VERSION_LT_138
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping, Sequence, Set
@@ -118,6 +119,8 @@ class DataFrame:
     def to_polars(self) -> pl.DataFrame:
         """Convert to a polars DataFrame."""
         if self._num_rows_override is not None and len(self.column_map) == 0:
+            if POLARS_VERSION_LT_138:  # pragma: no cover
+                return pl.DataFrame()
             return pl.DataFrame(height=self._num_rows_override)
 
         # If the arrow table has empty names, from_arrow produces

@@ -697,6 +697,10 @@ def test_scan_tiny_file_not_compressed(tmp_path):
     assert_gpu_result_equal(q)
 
 
+@pytest.mark.skipif(
+    POLARS_VERSION_LT_138,
+    reason="height parameter added in Polars 1.38",
+)
 @pytest.mark.parametrize("engine", [None, NO_CHUNK_ENGINE])
 def test_scan_parquet_zero_width_with_limit(tmp_path, engine):
     path = tmp_path / "zero_width.parquet"
