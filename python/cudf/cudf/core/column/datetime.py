@@ -899,10 +899,10 @@ class DatetimeTZColumn(DatetimeColumn):
         if arrow_type or nullable or isinstance(self.dtype, pd.ArrowDtype):
             return super().to_pandas(nullable=nullable, arrow_type=arrow_type)
         else:
-            return self._local_time.to_pandas().tz_localize(
-                self.dtype.tz,  # type: ignore[union-attr]
-                ambiguous="NaT",
-                nonexistent="NaT",
+            return (
+                self._utc_time.to_pandas()
+                .tz_localize("UTC")
+                .tz_convert(self.dtype.tz)  # type: ignore[union-attr]
             )
 
     def to_arrow(self) -> pa.Array:
