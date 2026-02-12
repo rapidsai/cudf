@@ -46,10 +46,11 @@ class QueryResult:
     Representation of a query's result.
 
     ``sort_by`` should specify the columns that the query sorts by.
+    Each tuple contains (column_name, descending_flag).
     """
 
     frame: pl.LazyFrame
-    sort_by: list[str]
+    sort_by: list[tuple[str, bool]]
     limit: int | None = None
 
 
@@ -97,7 +98,7 @@ class PDSHQueries:
                 )
                 .sort("l_returnflag", "l_linestatus")
             ),
-            sort_by=["l_returnflag", "l_linestatus"],
+            sort_by=[("l_returnflag", False), ("l_linestatus", False)],
         )
 
     @staticmethod
@@ -144,7 +145,12 @@ class PDSHQueries:
                 )
                 .head(100)
             ),
-            sort_by=["s_acctbal", "n_name", "s_name", "p_partkey"],
+            sort_by=[
+                ("s_acctbal", True),
+                ("n_name", False),
+                ("s_name", False),
+                ("p_partkey", False),
+            ],
             limit=100,
         )
 
@@ -181,7 +187,7 @@ class PDSHQueries:
                 .sort(by=["revenue", "o_orderdate"], descending=[True, False])
                 .head(10)
             ),
-            sort_by=["revenue", "o_orderdate"],
+            sort_by=[("revenue", True), ("o_orderdate", False)],
             limit=10,
         )
 
@@ -208,7 +214,7 @@ class PDSHQueries:
                 .agg(pl.len().alias("order_count"))
                 .sort("o_orderpriority")
             ),
-            sort_by=["o_orderpriority"],
+            sort_by=[("o_orderpriority", False)],
         )
 
     @staticmethod
@@ -249,7 +255,7 @@ class PDSHQueries:
                 .agg(pl.sum("revenue"))
                 .sort(by="revenue", descending=True)
             ),
-            sort_by=["revenue"],
+            sort_by=[("revenue", True)],
         )
 
     @staticmethod
@@ -331,7 +337,7 @@ class PDSHQueries:
                 .agg(pl.sum("volume").alias("revenue"))
                 .sort(by=["supp_nation", "cust_nation", "l_year"])
             ),
-            sort_by=["supp_nation", "cust_nation", "l_year"],
+            sort_by=[("supp_nation", False), ("cust_nation", False), ("l_year", False)],
         )
 
     @staticmethod
@@ -383,7 +389,7 @@ class PDSHQueries:
                 .agg((pl.sum("_tmp") / pl.sum("volume")).alias("mkt_share"))
                 .sort("o_year")
             ),
-            sort_by=["o_year"],
+            sort_by=[("o_year", False)],
         )
 
     @staticmethod
@@ -422,7 +428,7 @@ class PDSHQueries:
                 .agg(pl.sum("amount").round(2).alias("sum_profit"))
                 .sort(by=["nation", "o_year"], descending=[False, True])
             ),
-            sort_by=["nation", "o_year"],
+            sort_by=[("nation", False), ("o_year", True)],
         )
 
     @staticmethod
@@ -473,7 +479,7 @@ class PDSHQueries:
                 .sort(by="revenue", descending=True)
                 .head(20)
             ),
-            sort_by=["revenue"],
+            sort_by=[("revenue", True)],
             limit=20,
         )
 
@@ -514,7 +520,7 @@ class PDSHQueries:
                 .select("ps_partkey", "value")
                 .sort("value", descending=True)
             ),
-            sort_by=["value"],
+            sort_by=[("value", True)],
         )
 
     @staticmethod
@@ -551,7 +557,7 @@ class PDSHQueries:
                 .agg(pl.col("high_line_count").sum(), pl.col("low_line_count").sum())
                 .sort("l_shipmode")
             ),
-            sort_by=["l_shipmode"],
+            sort_by=[("l_shipmode", False)],
         )
 
     @staticmethod
@@ -578,7 +584,7 @@ class PDSHQueries:
                 .select(pl.col("c_count"), pl.col("len").alias("custdist"))
                 .sort(by=["custdist", "c_count"], descending=[True, True])
             ),
-            sort_by=["custdist", "c_count"],
+            sort_by=[("custdist", True), ("c_count", True)],
         )
 
     @staticmethod
@@ -638,7 +644,7 @@ class PDSHQueries:
                 .select("s_suppkey", "s_name", "s_address", "s_phone", "total_revenue")
                 .sort("s_suppkey")
             ),
-            sort_by=["s_suppkey"],
+            sort_by=[("s_suppkey", False)],
         )
 
     @staticmethod
@@ -669,7 +675,12 @@ class PDSHQueries:
                     descending=[True, False, False, False],
                 )
             ),
-            sort_by=["supplier_cnt", "p_brand", "p_type", "p_size"],
+            sort_by=[
+                ("supplier_cnt", True),
+                ("p_brand", False),
+                ("p_type", False),
+                ("p_size", False),
+            ],
         )
 
     @staticmethod
@@ -738,7 +749,7 @@ class PDSHQueries:
                 .sort(by=["o_totalprice", "o_orderdate"], descending=[True, False])
                 .head(100)
             ),
-            sort_by=["o_totalprice", "o_orderdate"],
+            sort_by=[("o_totalprice", True), ("o_orderdate", False)],
             limit=100,
         )
 
@@ -827,7 +838,7 @@ class PDSHQueries:
                 .select("s_name", "s_address")
                 .sort("s_name")
             ),
-            sort_by=["s_name"],
+            sort_by=[("s_name", False)],
         )
 
     @staticmethod
@@ -866,7 +877,7 @@ class PDSHQueries:
                 .sort(by=["numwait", "s_name"], descending=[True, False])
                 .head(100)
             ),
-            sort_by=["numwait", "s_name"],
+            sort_by=[("numwait", True), ("s_name", False)],
             limit=100,
         )
 
@@ -903,7 +914,7 @@ class PDSHQueries:
                 )
                 .sort("cntrycode")
             ),
-            sort_by=["cntrycode"],
+            sort_by=[("cntrycode", False)],
         )
 
 

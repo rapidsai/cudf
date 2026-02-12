@@ -1234,7 +1234,7 @@ def parse_args(
 def validate_result(
     result: pl.DataFrame,
     expected: pl.DataFrame,
-    sort_by: list[str],
+    sort_by: list[tuple[str, bool]],
     limit: int | None = None,
     **kwargs: Any,
 ) -> ValidationResult:
@@ -1313,15 +1313,36 @@ def validate_result(
     expected = expected.with_columns(*float_casts)
     result = result.with_columns(*float_casts)
 
+    if sort_by:
+        sort_by_cols, sort_by_descending = zip(*sort_by, strict=False)
+    else:
+        sort_by_cols = ()
+        sort_by_descending = ()
+
     if sort_by and limit:
         # Handle the .sort_by(...).head(n) case; First, split the data into two parts
         # "before" and "ties"
-        (split_at,) = result.select(sort_by).max().to_dicts()
+        sort_by_cols, sort_by_descending = zip(*sort_by, strict=False)
+        (split_at,) = result.select(sort_by_cols).max().to_dicts()
         # This will be True before the ties and False for the ties.
         expr = pl.Expr.or_(*[pl.col(col).lt(val) for col, val in split_at.items()])
 
         result_first = result.filter(expr)
         expected_first = expected.filter(expr)
+
+        # Before we compare, we need to sort the result and expected.
+        # We need to sort by *all* the columns, starting with the
+        # columns in `sort_by`; We don't care about the sort order of the remaining
+        # columns, just that they're in the same order.
+        by = list(sort_by_cols) + [
+            col for col in result.columns if col not in sort_by_cols
+        ]
+        descending = list(sort_by_descending) + [False] * (
+            len(result.columns) - len(sort_by_cols)
+        )
+
+        result_first = result_first.sort(by=by, descending=descending)
+        expected_first = expected_first.sort(by=by, descending=descending)
 
         # validate this part normally:
         try:
@@ -1347,6 +1368,20 @@ def validate_result(
                 },
             )
     else:
+        # Before we compare, we need to sort the result and expected.
+        # We need to sort by *all* the columns, starting with the
+        # columns in `sort_by`; We don't care about the sort order of the remaining
+        # columns, just that they're in the same order.
+        by = list(sort_by_cols) + [
+            col for col in result.columns if col not in sort_by_cols
+        ]
+        descending = list(sort_by_descending) + [False] * (
+            len(result.columns) - len(sort_by_cols)
+        )
+
+        result = result.sort(by=by, descending=descending)
+        expected = expected.sort(by=by, descending=descending)
+
         try:
             polars.testing.assert_frame_equal(result, expected, **kwargs)
         except AssertionError as e:
