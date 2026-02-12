@@ -39,6 +39,7 @@ from cudf.errors import MixedTypeError
 from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
     SIZE_TYPE_DTYPE,
+    dtype_from_pylibcudf_column,
     is_column_like,
     is_pandas_nullable_extension_dtype,
 )
@@ -2005,8 +2006,12 @@ class MultiIndex(Index):
                 plc_tables[1],
                 plc.types.NullEquality.EQUAL,
             )
-            scatter_map = ColumnBase.from_pylibcudf(left_plc)
-            indices = ColumnBase.from_pylibcudf(right_plc)
+            scatter_map = ColumnBase.create(
+                left_plc, dtype=dtype_from_pylibcudf_column(left_plc)
+            )
+            indices = ColumnBase.create(
+                right_plc, dtype=dtype_from_pylibcudf_column(right_plc)
+            )
         result_series = cudf.Series._from_column(
             result._scatter_by_column(scatter_map, indices)
         )
