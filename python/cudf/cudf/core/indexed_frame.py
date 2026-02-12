@@ -506,15 +506,14 @@ class IndexedFrame(Frame):
             raise TypeError(
                 "got an unexpected keyword argument 'numeric_only'"
             )
-        if cudf.get_option("mode.pandas_compatible"):
-            import pyarrow as pa
 
-            for col in self._columns:
-                if isinstance(col.dtype, pd.ArrowDtype):
-                    if pa.types.is_decimal(col.dtype.pyarrow_dtype):
-                        raise NotImplementedError(
-                            "Decimal ArrowDtype does not support cumulative operations"
-                        )
+        for col in self._columns:
+            if isinstance(col.dtype, pd.ArrowDtype):
+                if pa.types.is_decimal(col.dtype.pyarrow_dtype):
+                    raise NotImplementedError(
+                        "Decimal ArrowDtype does not support cumulative operations"
+                    )
+
         cast_to_int = op in ("cumsum", "cumprod")
         skipna = True if skipna is None else skipna
 
