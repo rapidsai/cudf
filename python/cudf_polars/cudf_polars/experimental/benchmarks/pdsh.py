@@ -62,6 +62,7 @@ class QueryResult:
     frame: pl.LazyFrame
     sort_by: list[str]
     sort_descending: list[bool]
+    limit: int | None = None
 
 
 class PDSHQueries:
@@ -76,6 +77,7 @@ class PDSHQueries:
             frame=pl.LazyFrame(),
             sort_by=[],
             sort_descending=[],
+            limit=None,
         )
 
     @staticmethod
@@ -179,6 +181,7 @@ class PDSHQueries:
                 "s_comment",
             ],
             sort_descending=[True, False, False, False, False, False, False, False],
+            limit=100,
         )
 
     @staticmethod
@@ -216,6 +219,7 @@ class PDSHQueries:
             ),
             sort_by=["revenue", "o_orderdate", "l_orderkey", "o_shippriority"],
             sort_descending=[True, False, False, False],
+            limit=10,
         )
 
     @staticmethod
@@ -417,7 +421,7 @@ class PDSHQueries:
                     .alias("_tmp")
                 )
                 .group_by("o_year")
-                .agg((pl.sum("_tmp") / pl.sum("volume")).round(2).alias("mkt_share"))
+                .agg((pl.sum("_tmp") / pl.sum("volume")).alias("mkt_share"))
                 .sort("o_year")
             ),
             sort_by=["o_year", "mkt_share"],
@@ -523,6 +527,7 @@ class PDSHQueries:
                 "c_comment",
             ],
             sort_descending=[True, False, False, False, False, False, False, False],
+            limit=20,
         )
 
     @staticmethod
@@ -802,6 +807,7 @@ class PDSHQueries:
                 "sum(l_quantity)",
             ],
             sort_descending=[True, False, False, False, False, False],
+            limit=100,
         )
 
     @staticmethod
@@ -932,6 +938,7 @@ class PDSHQueries:
             ),
             sort_by=["numwait", "s_name"],
             sort_descending=[True, False],
+            limit=100,
         )
 
     @staticmethod

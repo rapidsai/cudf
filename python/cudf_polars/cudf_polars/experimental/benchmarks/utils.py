@@ -164,10 +164,13 @@ class ValidationResult:
     message
         The message from the validation. This should be ``None`` if
         the validation passed, and a string describing the failure otherwise.
+    details
+        Additional details about the validation failure.
     """
 
     status: Literal["Passed", "Failed"]
     message: str | None
+    details: dict[str, Any] | None = None
 
 
 @dataclasses.dataclass
@@ -1228,6 +1231,128 @@ def parse_args(
     return parsed_args
 
 
+def validate_result(
+    result: pl.DataFrame,
+    expected: pl.DataFrame,
+    sort_by: list[str],
+    limit: int | None = None,
+    **kwargs: Any,
+) -> ValidationResult:
+    """
+    Validate the computed result against the expected answer.
+
+    This validates several aspects of the result, in order:
+
+    1. That the schema (column names and data types) match
+    2. That the values match, with some special handling for
+       approximate comparison and for queries with a
+       ``.sort(...).head(n)`` component.
+
+    Consider a query that does some operation to derive a ``value`` column,
+    sorts on ``value``, and then returns the first ``n`` rows. When there
+    are ties in the ``value`` column and the ``.head(n)`` cuts off some of
+    the records with that same value, the result and expected results may
+    differ for completely innocuous reasons like sort stability. There isn't
+    any way to say that one of the results is more correct than the other.
+
+    To handle this, this comparison function does the value comparison in two parts:
+
+    1. For all the values "before" the last value (defined by ``sort_by``), we
+       compare the results directly using ``pl.testing.assert_frame_equal``.
+    2. For the "ties", we make sure that the lengths of the two dataframes match,
+       but we *don't* compare the values since, aside from the columns in ``sort_by``,
+       the values may differ, and that's OK.
+    """
+    # We want to split
+    # First, check the column names
+    detail: dict[str, Any]
+    if result.columns != expected.columns:
+        extra = set(result.columns) - set(expected.columns)
+        missing = set(expected.columns) - set(result.columns)
+        detail = {
+            "type": "column_names_mismatch",
+            "expected_columns": expected.columns,
+            "result_columns": result.columns,
+            "mismatched_columns": {
+                "extra": extra,
+                "missing": missing,
+            },
+        }
+        return ValidationResult(
+            status="Failed", message="Column names mismatch", details=detail
+        )
+
+    # Then, check the schema
+    if result.schema != expected.schema:
+        detail = {
+            "type": "schema_mismatch",
+            "expected_schema": expected.schema,
+            "result_schema": result.schema,
+            "mismatched_columns": {
+                {
+                    "name": col,
+                    "expected_type": str(expected.schema[col]),
+                    "result_type": str(result.schema[col]),
+                }
+                for col in result.columns
+                if result.schema[col] != expected.schema[col]
+            },
+        }
+        return ValidationResult(
+            status="Failed", message="Schema mismatch", details=detail
+        )
+
+    # Now: cast all the decimal columns to float and do approximate comparison
+    float_casts = [
+        pl.col(col).cast(pl.Float64())
+        for col in result.columns
+        if result.schema[col].is_decimal()
+    ]
+    expected = expected.with_columns(*float_casts)
+    result = result.with_columns(*float_casts)
+
+    if sort_by and limit:
+        # Handle the .sort_by(...).head(n) case; First, split the data into two parts
+        # "before" and "ties"
+        (split_at,) = result.select(sort_by).max().to_dicts()
+        # This will be True before the ties and False for the ties.
+        expr = pl.Expr.or_(*[pl.col(col).lt(val) for col, val in split_at.items()])
+
+        result_first = result.filter(expr)
+        expected_first = expected.filter(expr)
+
+        # validate this part normally:
+        try:
+            pl.testing.assert_frame_equal(result_first, expected_first, **kwargs)
+        except AssertionError as e:
+            return ValidationResult(status="Failed", message=str(e))
+
+        # Now for the ties:
+        result_ties = result.filter(~expr)
+        expected_ties = expected.filter(~expr)
+
+        # We already know that
+        # 1. the schema matches (checked above)
+        # 2. the values in ``sort_by`` match (else the Expr above would be False)
+        # so all that's left to check is that the lengths match.
+        if len(result_ties) != len(expected_ties):
+            return ValidationResult(
+                status="Failed",
+                message="Ties length mismatch",
+                details={
+                    "expected_length": len(expected_ties),
+                    "result_length": len(result_ties),
+                },
+            )
+    else:
+        try:
+            polars.testing.assert_frame_equal(result, expected, **kwargs)
+        except AssertionError as e:
+            return ValidationResult(status="Failed", message=str(e))
+
+    return ValidationResult(status="Passed", message=None)
+
+
 def check_input_data_type(run_config: RunConfig) -> Literal["decimal", "float"]:
     """
     Check whether the input data uses Decimal or Float for account balances, etc.
@@ -1373,39 +1498,50 @@ def run_polars(
                 else:
                     casts = EXPECTED_CASTS_FLOAT.get(q_id, [])
 
-                expected = (
-                    pl.read_parquet(args.validate_directory / f"q{q_id:02d}.parquet")
-                    .with_columns(*casts)
-                    .sort(
-                        by=query_result.sort_by, descending=query_result.sort_descending
-                    )
-                )
+                expected = pl.read_parquet(
+                    args.validate_directory / f"q{q_id:02d}.parquet"
+                ).with_columns(*casts)
 
-                try:
-                    polars.testing.assert_frame_equal(
-                        result.sort(
-                            by=query_result.sort_by,
-                            descending=query_result.sort_descending,
-                        ),
-                        expected,
-                        **POLARS_VALIDATION_OPTIONS,  # type: ignore[arg-type]
-                    )
-                except AssertionError as e:
-                    print(f"❌ Query {q_id} failed validation:\n{e}")
+                # first, validate the schema matches
+                if result.schema != expected.schema:
+                    print(f"❌ Query {q_id} failed validation: schema mismatch")
                     record = dataclasses.replace(
                         record,
                         validation_result=ValidationResult(
-                            status="Failed",
-                            message=str(e),
+                            status="Failed", message="Schema mismatch"
                         ),
                     )
-                else:
-                    record = dataclasses.replace(
-                        record,
-                        validation_result=ValidationResult(
-                            status="Passed", message=None
-                        ),
-                    )
+
+                validation_result = validate_result(
+                    result,
+                    expected,
+                    query_result.sort_by,
+                    limit=query_result.limit,
+                    **POLARS_VALIDATION_OPTIONS,
+                )
+                # try:
+                #     polars.testing.assert_frame_equal(
+                #         result,
+                #         expected,
+                #         **POLARS_VALIDATION_OPTIONS,  # type: ignore[arg-type]
+                #     )
+                # except AssertionError as e:
+                #     breakpoint()
+                #     print(f"❌ Query {q_id} failed validation:\n{e}")
+                #     record = dataclasses.replace(
+                #         record,
+                #         validation_result=ValidationResult(
+                #             status="Failed",
+                #             message=str(e),
+                #         ),
+                #     )
+                # else:
+                #     record = dataclasses.replace(
+                #         record,
+                #         validation_result=ValidationResult(
+                #             status="Passed", message=None
+                #         ),
+                #     )
 
             print(
                 f"Query {q_id} - Iteration {i} finished in {record.duration:0.4f}s",
