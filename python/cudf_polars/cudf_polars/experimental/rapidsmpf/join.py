@@ -34,6 +34,7 @@ from cudf_polars.experimental.rapidsmpf.utils import (
     empty_table_chunk,
     process_children,
     recv_metadata,
+    remap_partitioning,
     send_metadata,
 )
 from cudf_polars.experimental.utils import _concat
@@ -101,10 +102,12 @@ async def broadcast_join_node(
             large_child = ir.children[0]
             # Preserve left-side partitioning metadata
             local_count = left_metadata.local_count
-            partitioning = left_metadata.partitioning
+            # Remap partitioning from child schema to output schema
+            partitioning = remap_partitioning(
+                left_metadata.partitioning, large_child.schema, ir.schema
+            )
             # Check if the right-side is already broadcasted
             small_duplicated = right_metadata.duplicated
-            large_duplicated = left_metadata.duplicated
         else:
             # Broadcast left, stream right
             small_ch = ch_left
@@ -114,21 +117,34 @@ async def broadcast_join_node(
             # Preserve right-side partitioning metadata
             local_count = right_metadata.local_count
             if ir.options[0] == "Right":
-                partitioning = right_metadata.partitioning
+                # Remap partitioning from child schema to output schema
+                partitioning = remap_partitioning(
+                    right_metadata.partitioning, large_child.schema, ir.schema
+                )
             # Check if the right-side is already broadcasted
             small_duplicated = left_metadata.duplicated
-            large_duplicated = right_metadata.duplicated
-        need_allgather = context.comm().nranks > 1 and not small_duplicated
 
         if tracer is not None:
             tracer.decision = f"broadcast_{broadcast_side}"
+
+        # Determine which metadata belongs to the large side
+        large_metadata = left_metadata if broadcast_side == "right" else right_metadata
+
+        # Allgather is a collective - all ranks must participate even with no local data
+        need_allgather = context.comm().nranks > 1 and not small_duplicated
+
+        # The result is duplicated if:
+        # - The small side is/will be duplicated (already duplicated OR will be AllGathered)
+        # - AND the large side is already duplicated
+        output_duplicated = (
+            small_duplicated or need_allgather
+        ) and large_metadata.duplicated
 
         # Send metadata.
         output_metadata = ChannelMetadata(
             local_count=local_count,
             partitioning=partitioning,
-            # The result is only "duplicated" if both sides are duplicated
-            duplicated=large_duplicated and (small_duplicated or need_allgather),
+            duplicated=output_duplicated,
         )
         await send_metadata(ch_out, context, output_metadata)
         if tracer is not None:
@@ -146,7 +162,6 @@ async def broadcast_join_node(
             del msg
             small_size += small_chunks[-1].data_alloc_size(MemoryType.DEVICE)
 
-        # Allgather is a collective - all ranks must participate even with no local data
         if need_allgather:
             allgather = AllGatherManager(context, collective_id)
             for s_id in range(len(small_chunks)):
