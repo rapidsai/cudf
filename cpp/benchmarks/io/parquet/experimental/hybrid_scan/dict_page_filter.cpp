@@ -28,7 +28,7 @@ void BM_filter_string_row_groups_with_dicts_common(nvbench::state& state,
                                                    cudf::size_type cardinality)
 {
   auto const num_row_groups = static_cast<cudf::size_type>(state.get_int64("num_row_groups"));
-  auto constexpr rows_per_row_group = 2000;
+  auto constexpr rows_per_row_group = 5000;
   auto const num_rows               = num_row_groups * rows_per_row_group;
 
   std::vector<char> parquet_buffer;
