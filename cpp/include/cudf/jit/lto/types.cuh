@@ -10,6 +10,7 @@ namespace CUDF_LTO_EXPORT cudf {
 
 namespace lto {
 
+  // TODO: update doc, and specify this is our ABI for JIT code and should be kept different from normal code
 /**
  * @brief LTO-JIT functions and thunk types
  *

@@ -38,10 +38,37 @@ class jit_bundle_t {
   std::vector<std::string> get_compile_options() const;
 };
 
-library compile_and_link_udf(char const* name,
-                             char const* udf_code,
-                             char const* udf_key,
-                             char const* kernel_symbol);
+struct [[nodiscard]] udf_compile_params {
+  std::string_view name = {};
+
+  std::span<char const> udf = {};
+
+  std::string_view key = {};
+
+  std::string_view kernel_symbol = {};
+
+  std::span<std::string_view const> extra_compile_flags = {};
+
+  std::span<std::string_view const> extra_link_flags = {};
+};
+
+library compile_and_link_cuda_udf(udf_compile_params const& params);
+
+struct [[nodiscard]] udf_link_params {
+  std::string_view name = {};
+
+  std::span<char const> udf_binary = {};
+
+  binary_type type = binary_type::LTO_IR;
+
+  std::string_view key = {};
+
+  std::string_view kernel_symbol = {};
+
+  std::span<std::string_view const> extra_link_flags = {};
+};
+
+library link_udf(udf_link_params const& params);
 
 }  // namespace rtc
 }  // namespace CUDF_EXPORT cudf

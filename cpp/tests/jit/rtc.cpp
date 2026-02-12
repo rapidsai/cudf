@@ -8,6 +8,7 @@
 
 #include <cudf_test/debug_utilities.hpp>
 #include <cudf_test/testing_main.hpp>
+
 #include <jit/rtc/cudf.hpp>
 
 #include <chrono>
@@ -37,15 +38,23 @@ struct element_operation {
 };
 */
 
-  // TODO: take optional pointer to this for it to be written to
-  // TODO: take optional list of extra compile flags for linking and compiling
-struct jit_compilation_stats{
+// TODO: cache control policy: ignore cache
+// TODO: statistics callback, in cudf layer?
+// TODO: extra compile and link flags for LTO library and final kernel, use in CUDF layer, not
+// here?
+//
+// TODO: ??
+// TODO: take optional pointer/callback to this for it to be written to
+// TODO: take optional list of extra compile flags for linking and compiling
+struct jit_compile_stats {
   std::chrono::nanoseconds cpp_compile_time{};
   std::chrono::nanoseconds fragment_link_time{};
   std::chrono::nanoseconds total_time{};
   // TODO: cache hit statistics
   // global cache statistics before and after?
 };
+
+TEST_F(RTCTest, CreateFragmentBasic) {}
 
 TEST_F(RTCTest, CreateFragment)
 {
@@ -55,8 +64,7 @@ TEST_F(RTCTest, CreateFragment)
   // they should use the provided LTO functions; might need a planner
 
   auto fn = []() {
-    auto lib = rtc::compile_and_link_udf("test_fragment",
-                                         R"***(
+    char const udf[] = R"***(
     #include "cudf/jit/lto/transform_params.cuh"
     #include "cudf/jit/lto/operators.cuh"
     #include "cudf/jit/lto/scope.cuh"
@@ -68,26 +76,34 @@ TEST_F(RTCTest, CreateFragment)
 
     extern "C" __device__ void transform_operator(cudf::lto::transform_params p){
       using namespace cudf::lto;
+      using ops = operators;
 
       /// <-- BEGIN OF INPUT UNPACKING: Defined by input planner
 
       // unpack inputs from scope using the appropriate getters based on the LTO context
-      using col_user_data = scope::user_data<0>;
-      using col0          = scope::column<1, column_view_core, int, false, false>;
-      using col1          = scope::column<2, column_view_core, int, false, false>;
-      using col2          = scope::column<3, column_view_core, double, false, false>;
-      using col3          = scope::column<4, column_view_core, float, false, false>;
-      using col4          = scope::column<5, span<float>, float, false, false>;
-      using col5          = scope::column<6, optional_span<float>, float, false, true>;
-      using out_col       = scope::column<7, mutable_column_view_core, double, false, false>;
+      using s0          = scope::user_data<0>;
+      using s1          = scope::column<1, column_view_core, int, false, false>;
+      using s2          = scope::column<2, column_view_core, int, false, false>;
+      using s3          = scope::column<3, column_view_core, double, false, false>;
+      using s4          = scope::column<4, column_view_core, float, false, false>;
+      using s4          = scope::column<4, string_view, float, false, false>;
+      using s4          = scope::column<4, decimal32, float, false, false>;
+      using s4          = scope::column<5, column_view_core, float, false, true>;
+      using s4          = scope::column<6, column_view_core, float, true, false>;
+      using s5          = scope::column<7, span<float>, float, false, false>;
+      using s6          = scope::column<8, optional_span<float>, float, false, true>;
+      using s7          = scope::column<9, mutable_column_view_core, double, false, false>;
 
-      auto user_data = col_user_data::element(p.scope, p.row_index);
-      auto in0 = col0::element(p.scope, p.row_index);
-      auto in1 = col1::element(p.scope, p.row_index);
-      auto in2 = col2::element(p.scope, p.row_index);
-      auto in3 = col3::element(p.scope, p.row_index);
-      auto in4 = col4::element(p.scope, p.row_index);
-      auto in5 = col5::element(p.scope, p.row_index);
+      auto a0 = s0::element(p.scope, p.row_index);
+      auto a1 = s1::element(p.scope, p.row_index);
+      auto a2 = s2::element(p.scope, p.row_index);
+      auto a3 = s3::element(p.scope, p.row_index);
+      auto a4 = s4::element(p.scope, p.row_index);
+      auto a5 = s5::element(p.scope, p.row_index);
+      auto a6 = s6::element(p.scope, p.row_index);
+      auto a7 = s7::element(p.scope, p.row_index);
+      auto a7 = s8::element(p.scope, p.row_index);
+      auto a7 = s9::element(p.scope, p.row_index);
 
       auto result = 0.0;
 
@@ -98,15 +114,15 @@ TEST_F(RTCTest, CreateFragment)
 
       // run operation using the LTO-compiled operators; these should be inlined into the final kernel and optimized together by NVJITLink
 
-      operators::add(&c, &a, &b);
-      operators::sub(&c, &a, &b);
-      operators::mul(&c, &a, &b);
-      operators::mul(&c, &a, &b);
-      operators::arctan(&c, &a, &b);
-      operators::sqrt(&c, &a, &b);
-      operators::cbrt(&c, &a, &b);
-      operators::arccos(&c, &a, &b);
-      operators::cast_to_float64(&d, &c);
+      ops::add(&c, &a, &b);
+      ops::sub(&c, &a, &b);
+      ops::mul(&c, &a, &b);
+      ops::mul(&c, &a, &b);
+      ops::arctan(&c, &a, &b);
+      ops::sqrt(&c, &a, &b);
+      ops::cbrt(&c, &a, &b);
+      ops::arccos(&c, &a, &b);
+      ops::cast_to_float64(&d, &c);
 
       /// <-- END OF USER-DEFINED OPERATOR
 
@@ -120,9 +136,18 @@ TEST_F(RTCTest, CreateFragment)
 
       /// <-- END OF OUTPUT PACKING
     }
-    )***",
-                                         "test_udf_key",
-                                         "transform_kernel");
+    )***";
+
+    // TODO: bincode dump arguments?
+    // TODO: add a bypass cache argument that forces recompilation for testing purposes
+    auto params = rtc::udf_compile_params{.name                = "test_fragment",
+                                          .udf                 = udf,
+                                          .key                 = "test_udf_key",
+                                          .kernel_symbol       = "transform_kernel",
+                                          .extra_compile_flags = {},
+                                          .extra_link_flags    = {}};
+
+    auto lib = rtc::compile_and_link_cuda_udf(params);
 
     auto kernel = lib->get_kernel("transform_kernel");
 
