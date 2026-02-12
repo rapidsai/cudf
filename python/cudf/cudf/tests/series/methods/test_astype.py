@@ -812,7 +812,10 @@ def test_astype_aware_to_aware(unit):
         expected.dtype.unit, zoneinfo.ZoneInfo(str(expected.dtype.tz))
     )
     expected = ser.astype(zoneinfo_type)
-    assert_eq(result, expected)
+    # pandas < 3, uses pytz timezones while cuDF uses zoneinfo.ZoneInfo
+    assert isinstance(result.dtype, type(expected.dtype))
+    assert result.dtype.unit == expected.dtype.unit
+    assert_eq(result, expected, check_dtype=False)
 
 
 def test_astype_naive_to_aware_raises():
