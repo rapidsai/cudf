@@ -1286,9 +1286,9 @@ def validate_result(
     if result.schema != expected.schema:
         detail = {
             "type": "schema_mismatch",
-            "expected_schema": expected.schema,
-            "result_schema": result.schema,
-            "mismatched_columns": {
+            "expected_schema": {k: str(v) for k, v in expected.schema.items()},
+            "result_schema": {k: str(v) for k, v in result.schema.items()},
+            "mismatched_columns": [
                 {
                     "name": col,
                     "expected_type": str(expected.schema[col]),
@@ -1296,7 +1296,7 @@ def validate_result(
                 }
                 for col in result.columns
                 if result.schema[col] != expected.schema[col]
-            },
+            ],
         }
         return ValidationResult(
             status="Failed", message="Schema mismatch", details=detail
@@ -1467,8 +1467,6 @@ def run_polars(
                     )
                     print(f"✅ Query {q_id} passed validation!")
                 except AssertionError as e:
-                    validation_failures.append(q_id)
-                    print(f"❌ Query {q_id} failed validation!\n{e}")
                     validation_result = ValidationResult(
                         status="Failed", message=str(e)
                     )
@@ -1502,16 +1500,6 @@ def run_polars(
                     args.validate_directory / f"q{q_id:02d}.parquet"
                 ).with_columns(*casts)
 
-                # first, validate the schema matches
-                if result.schema != expected.schema:
-                    print(f"❌ Query {q_id} failed validation: schema mismatch")
-                    record = dataclasses.replace(
-                        record,
-                        validation_result=ValidationResult(
-                            status="Failed", message="Schema mismatch"
-                        ),
-                    )
-
                 validation_result = validate_result(
                     result,
                     expected,
@@ -1519,34 +1507,22 @@ def run_polars(
                     limit=query_result.limit,
                     **POLARS_VALIDATION_OPTIONS,
                 )
-                # try:
-                #     polars.testing.assert_frame_equal(
-                #         result,
-                #         expected,
-                #         **POLARS_VALIDATION_OPTIONS,  # type: ignore[arg-type]
-                #     )
-                # except AssertionError as e:
-                #     breakpoint()
-                #     print(f"❌ Query {q_id} failed validation:\n{e}")
-                #     record = dataclasses.replace(
-                #         record,
-                #         validation_result=ValidationResult(
-                #             status="Failed",
-                #             message=str(e),
-                #         ),
-                #     )
-                # else:
-                #     record = dataclasses.replace(
-                #         record,
-                #         validation_result=ValidationResult(
-                #             status="Passed", message=None
-                #         ),
-                #     )
-
-            print(
-                f"Query {q_id} - Iteration {i} finished in {record.duration:0.4f}s",
-                flush=True,
+            record = dataclasses.replace(
+                record,
+                validation_result=validation_result,
             )
+
+            if validation_result and validation_result.status == "Failed":
+                validation_failures.append(q_id)
+                print(
+                    f"❌ Query {q_id} failed validation!\n{validation_result.message}"
+                )
+
+            else:
+                print(
+                    f"Query {q_id} - Iteration {i} finished in {record.duration:0.4f}s",
+                    flush=True,
+                )
             records[q_id].append(record)
 
     run_config = dataclasses.replace(run_config, records=dict(records), plans=plans)
