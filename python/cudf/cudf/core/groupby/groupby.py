@@ -18,6 +18,7 @@ import pyarrow as pa
 
 import pylibcudf as plc
 
+import cudf
 from cudf.api.extensions import no_default
 from cudf.api.types import is_list_like, is_scalar
 from cudf.core._compat import PANDAS_LT_300
@@ -742,6 +743,14 @@ class GroupBy(Serializable, Reducible, Scannable):
             .groupby(self.grouping, sort=self._sort, dropna=self._dropna)
             .agg("size")
         )
+        if cudf.get_option("mode.pandas_compatible") and isinstance(
+            getattr(self.obj, "dtype", None), pd.ArrowDtype
+        ):
+            arrow_dtype = pd.ArrowDtype(pa.int64())
+            if isinstance(result, Series):
+                result._column._dtype = arrow_dtype
+            elif "size" in result._column_names:
+                result._data["size"]._dtype = arrow_dtype
         if not self._as_index:
             result = result.rename("size").reset_index()
         return result
