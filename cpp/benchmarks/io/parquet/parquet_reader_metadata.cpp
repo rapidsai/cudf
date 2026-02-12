@@ -104,6 +104,8 @@ void BM_parquet_reader_construction(nvbench::state& state)
 
   auto const read_opts = cudf::io::parquet_reader_options::builder(source_sink.make_source_info())
                            .use_arrow_schema(false)
+                           .allow_mismatched_pq_schemas(false)
+                           .convert_strings_to_categories(false)
                            .build();
 
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
