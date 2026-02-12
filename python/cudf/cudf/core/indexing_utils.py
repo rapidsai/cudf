@@ -22,6 +22,7 @@ from cudf.core.dtypes import CategoricalDtype, IntervalDtype
 from cudf.core.index import Index
 from cudf.core.multiindex import MultiIndex
 from cudf.core.series import Series
+from cudf.utils.dtypes import dtype_from_pylibcudf_column
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -568,7 +569,7 @@ def ordered_find(needles: ColumnBase, haystack: ColumnBase) -> GatherMap:
         plc.copying.OutOfBoundsPolicy.DONT_CHECK,
     ).columns()[0]
 
-    right_rows = plc.sorting.stable_sort_by_key(
+    plc_right_rows = plc.sorting.stable_sort_by_key(
         plc.Table([right_rows]),
         plc.Table([left_order, right_order]),
         [plc.types.Order.ASCENDING] * 2,
@@ -577,7 +578,10 @@ def ordered_find(needles: ColumnBase, haystack: ColumnBase) -> GatherMap:
     return GatherMap.from_column_unchecked(
         cast(
             cudf.core.column.NumericalColumn,
-            type(haystack).from_pylibcudf(right_rows),
+            type(haystack).create(
+                plc_right_rows,
+                dtype=dtype_from_pylibcudf_column(plc_right_rows),
+            ),
         ),
         len(haystack),
         nullify=False,

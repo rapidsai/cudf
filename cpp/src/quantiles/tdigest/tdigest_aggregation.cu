@@ -1149,10 +1149,10 @@ struct typed_group_tdigest {
       return generate_group_cluster_info(
         delta,
         num_groups,
-        nearest_value_scalar_weights_grouped{group_offsets.begin()},
-        scalar_group_info_grouped{group_valid_counts.begin(), group_offsets.begin()},
+        nearest_value_scalar_weights_grouped{group_offsets.data()},
+        scalar_group_info_grouped{group_valid_counts.data(), group_offsets.data()},
         cumulative_scalar_weight_grouped{
-          cuda::std::span<size_type const>{group_offsets.begin(), group_offsets.size()}},
+          cuda::std::span<size_type const>{group_offsets.data(), group_offsets.size()}},
         col.null_count() > 0,
         stream,
         mr);
@@ -1173,7 +1173,7 @@ struct typed_group_tdigest {
       thrust::make_counting_iterator(0) + num_groups,
       thrust::make_zip_iterator(cuda::std::make_tuple(min_col->mutable_view().begin<double>(),
                                                       max_col->mutable_view().begin<double>())),
-      get_scalar_minmax_grouped<T>{*d_col, group_offsets, group_valid_counts.begin()});
+      get_scalar_minmax_grouped<T>{*d_col, group_offsets, group_valid_counts.data()});
 
     // for simple input values, the "centroids" all have a weight of 1.
     auto scalar_to_centroid =
