@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -406,7 +406,7 @@ void roundtrip_test(cudf::io::compression_type compression)
       d_comp.resize(hd_stats[0].bytes_written, stream);
     }
 
-    auto d_got = cudf::detail::hostdevice_vector<uint8_t>(expected.size(), stream);
+    auto d_got = rmm::device_uvector<uint8_t>(expected.size(), stream);
     {
       auto hd_srcs = cudf::detail::hostdevice_vector<device_span<uint8_t const>>(1, stream);
       hd_srcs[0]   = d_comp;
