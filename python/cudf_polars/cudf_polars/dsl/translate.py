@@ -9,6 +9,7 @@ import functools
 import json
 from contextlib import AbstractContextManager, nullcontext
 from functools import singledispatch
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, assert_never
 
 import polars as pl
@@ -47,6 +48,33 @@ if TYPE_CHECKING:
     from cudf_polars.typing import NodeTraverser
 
 __all__ = ["Translator", "translate_named_expr"]
+
+
+def _check_compression(data: bytes) -> str | None:
+    # Vendored from Polars' SupportedCompression::check in
+    # polars-io/src/utils/compression.rs
+
+    # TODO: Make polars hand us the compression info in the plan
+    if len(data) < 4:
+        return None
+
+    # See https://en.wikipedia.org/wiki/List_of_file_signatures
+    # for the specific hex signatures.
+    if data[0] == 0x1F and data[1] == 0x8B:
+        return "gzip"
+
+    if data[0] == 0x78 and data[1] in (0x01, 0x5E, 0x9C, 0xDA):
+        return "zlib"
+
+    if data[:4] == b"\x28\xb5\x2f\xfd":
+        return "zstd"
+
+    return None
+
+
+def _read_file_bytes(path: Path, num_bytes: int = 4) -> bytes:
+    with path.open("rb") as f:
+        return f.read(num_bytes)
 
 
 class Translator:
@@ -280,6 +308,16 @@ def _(node: plrs._ir_nodes.Scan, translator: Translator, schema: Schema) -> ir.I
         if (n_rows == 2**32 - 1) or (n_rows == 2**64 - 1):
             # Polars translates slice(10, None) -> (10, u32/64max)
             n_rows = -1
+
+    # TODO: Get compression info from Polars plan
+    if typ in ("csv", "ndjson"):
+        for p in paths:
+            data = _read_file_bytes(Path(p))
+            compression = _check_compression(data)
+            if compression is not None:
+                raise NotImplementedError(
+                    f"Reading compressed {typ.upper()} files is not supported."
+                )
 
     return ir.Scan(
         schema,
@@ -605,7 +643,7 @@ def _(node: plrs._ir_nodes.Sink, translator: Translator, schema: Schema) -> ir.I
             "Unsupported sink options structure"
         )  # pragma: no cover
 
-    if POLARS_VERSION_LT_138:
+    if POLARS_VERSION_LT_138:  # pragma: no cover
         sink_options = file.get("sink_options", {})
         cloud_options = file.get("cloud_options")
         options = format_options.copy()
@@ -618,6 +656,13 @@ def _(node: plrs._ir_nodes.Sink, translator: Translator, schema: Schema) -> ir.I
         for k, v in unified_args.items():
             if k in {"mkdir", "maintain_order", "sync_on_close"}:
                 options[k] = v
+
+    if sink_kind in ("Csv", "NDJson"):
+        compression = format_options.get("compression")
+        if compression and compression != "Uncompressed":
+            raise NotImplementedError(
+                f"{sink_kind} compression ('{compression}') is not supported."
+            )
 
     if POLARS_VERSION_LT_132:  # pragma: no cover
         path = file["target"]

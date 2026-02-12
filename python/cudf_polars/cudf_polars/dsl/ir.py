@@ -54,6 +54,7 @@ from cudf_polars.utils.versions import (
     POLARS_VERSION_LT_134,
     POLARS_VERSION_LT_136,
     POLARS_VERSION_LT_137,
+    POLARS_VERSION_LT_138,
 )
 
 if TYPE_CHECKING:
@@ -3057,7 +3058,7 @@ class MapFunction(IR):
             )
         elif self.name == "row_index":
             col_name, offset = options
-            if col_name in df.schema:
+            if POLARS_VERSION_LT_138 and col_name in df.schema:  # pragma: no cover
                 raise NotImplementedError("Duplicate row index name")
             self.options = (col_name, offset)
         elif self.name == "fast_count":
