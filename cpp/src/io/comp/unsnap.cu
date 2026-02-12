@@ -635,8 +635,8 @@ CUDF_KERNEL void __launch_bounds__(block_size)
   if (!t) {
     s->src         = inputs[strm_id];
     s->dst         = outputs[strm_id];
-    auto cur       = s->src.begin();
-    auto const end = s->src.end();
+    auto cur       = s->src.data();
+    auto const end = s->src.data() + s->src.size();
     s->error       = 0;
     if (cur < end) {
       // Read uncompressed size (varint), limited to 32-bit
@@ -715,8 +715,8 @@ __global__ void get_snappy_uncompressed_size_kernel(
   auto const idx = cudf::detail::grid_1d::global_thread_id();
   if (idx >= inputs.size()) return;
 
-  auto cur       = inputs[idx].begin();
-  auto const end = inputs[idx].end();
+  auto cur       = inputs[idx].data();
+  auto const end = inputs[idx].data() + inputs[idx].size();
 
   constexpr int payload_bits_per_byte = 7;
   constexpr size_t payload_mask       = (1 << payload_bits_per_byte) - 1;

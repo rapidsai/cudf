@@ -105,12 +105,12 @@ class StringColumn(ColumnBase, Scannable):
 
     @property
     def _PANDAS_NA_VALUE(self) -> ScalarLike:
-        """String columns return None as NA value in pandas compatibility mode."""
-        if cudf.get_option("mode.pandas_compatible"):
-            if is_pandas_nullable_extension_dtype(self.dtype):
-                return self.dtype.na_value
-            return None
-        return pd.NA
+        """Pandas NA value, mostly for a repr"""
+        if isinstance(self.dtype, (pd.StringDtype, pd.ArrowDtype)):
+            return self.dtype.na_value
+        # np.nan is also a valid NA value if dtype=object
+        # https://github.com/pandas-dev/pandas/pull/63900#discussion_r2740653899
+        return None
 
     @classmethod
     def _validate_args(
@@ -377,11 +377,10 @@ class StringColumn(ColumnBase, Scannable):
         nullable: bool = False,
         arrow_type: bool = False,
     ) -> pd.Index:
-        if (
-            cudf.get_option("mode.pandas_compatible")
-            and isinstance(self.dtype, pd.StringDtype)
-            and self.dtype.storage in ["pyarrow", "python"]
-        ):
+        if isinstance(self.dtype, pd.StringDtype) and self.dtype.storage in [
+            "pyarrow",
+            "python",
+        ]:
             if self.dtype.storage == "pyarrow":
                 pandas_array = self.dtype.__from_arrow__(
                     self.to_arrow().cast(pa.large_string())
