@@ -754,10 +754,10 @@ def get_dummies(
     2  0     False     False
 
     >>> cudf.get_dummies(df, dummy_na=True)
-       b  a_<NA>  a_value1  a_value2
-    0  0   False      True     False
-    1  0   False     False      True
-    2  0    True     False     False
+       b  a_value1  a_value2  a_<NA>
+    0  0      True     False   False
+    1  0     False      True   False
+    2  0     False     False    True
 
     >>> import numpy as np
     >>> df = cudf.DataFrame({"a":cudf.Series([1, 2, np.nan, None],
@@ -770,11 +770,11 @@ def get_dummies(
     3  <NA>
 
     >>> cudf.get_dummies(df, dummy_na=True, columns=["a"])
-       a_<NA>  a_1.0  a_2.0  a_nan
-    0   False   True  False  False
-    1   False  False   True  False
-    2   False  False  False   True
-    3    True  False  False  False
+       a_1.0  a_2.0  a_nan  a_<NA>
+    0   True  False  False   False
+    1  False   True  False   False
+    2  False  False   True   False
+    3  False  False  False    True
 
     >>> series = cudf.Series([1, 2, None, 2, 4])
     >>> series
@@ -785,12 +785,12 @@ def get_dummies(
     4       4
     dtype: int64
     >>> cudf.get_dummies(series, dummy_na=True)
-        <NA>      1      2      4
-    0  False   True  False  False
-    1  False  False   True  False
-    2   True  False  False  False
-    3  False  False   True  False
-    4  False  False  False   True
+           1      2      4   <NA>
+    0   True  False  False  False
+    1  False   True  False  False
+    2  False  False  False   True
+    3  False   True  False  False
+    4  False  False   True  False
     """
     if sparse:
         raise NotImplementedError("sparse is not supported yet")

@@ -628,6 +628,11 @@ PYLIBCUDF_TO_SUPPORTED_NUMPY_TYPES = {
 # columns from libcudf to ``int8`` columns of all nulls in Python.
 # ``int8`` is chosen because it uses the least amount of memory.
 PYLIBCUDF_TO_SUPPORTED_NUMPY_TYPES[plc.types.TypeId.EMPTY] = np.dtype("int8")
+# TIMESTAMP_DAYS is converted to TIMESTAMP_SECONDS to match the default resolution
+# choice used by pandas for datetime.date objects.
+PYLIBCUDF_TO_SUPPORTED_NUMPY_TYPES[plc.types.TypeId.TIMESTAMP_DAYS] = np.dtype(
+    "datetime64[s]"
+)
 PYLIBCUDF_TO_SUPPORTED_NUMPY_TYPES[plc.types.TypeId.STRUCT] = np.dtype(
     "object"
 )

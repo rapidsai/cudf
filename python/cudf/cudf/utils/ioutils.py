@@ -75,18 +75,16 @@ Notes
 
 Examples
 --------
->>> import pandavro
->>> import pandas as pd
+>>> import fastavro
 >>> import cudf
->>> pandas_df = pd.DataFrame()
->>> pandas_df['numbers'] = [10, 20, 30]
->>> pandas_df['text'] = ["hello", "rapids", "ai"]
->>> pandas_df
-   numbers    text
-0       10   hello
-1       20  rapids
-2       30      ai
->>> pandavro.to_avro("data.avro", pandas_df)
+>>> schema = {{"type": "record", "name": "test",
+...     "fields": [{{"name": "numbers", "type": "long"}},
+...                {{"name": "text", "type": "string"}}]}}
+>>> records = [{{"numbers": 10, "text": "hello"}},
+...            {{"numbers": 20, "text": "rapids"}},
+...            {{"numbers": 30, "text": "ai"}}]
+>>> with open("data.avro", "wb") as f:
+...     fastavro.writer(f, schema, records)
 >>> cudf.read_avro("data.avro")
    numbers    text
 0       10   hello
@@ -225,12 +223,13 @@ Notes
 Examples
 --------
 >>> import cudf
->>> df = cudf.read_parquet(filename)
->>> df
-  num1                datetime text
-0  123 2018-11-13T12:00:00.000 5451
-1  456 2018-11-14T12:35:01.000 5784
-2  789 2018-11-15T18:02:59.000 6117
+>>> df = cudf.DataFrame({{'a': [1, 2, 3], 'b': ['x', 'y', 'z']}})
+>>> df.to_parquet('test.parquet')
+>>> cudf.read_parquet('test.parquet')
+   a  b
+0  1  x
+1  2  y
+2  3  z
 
 See Also
 --------
@@ -510,12 +509,13 @@ Notes
 Examples
 --------
 >>> import cudf
->>> df = cudf.read_orc(filename)
->>> df
-  num1                datetime text
-0  123 2018-11-13T12:00:00.000 5451
-1  456 2018-11-14T12:35:01.000 5784
-2  789 2018-11-15T18:02:59.000 6117
+>>> df = cudf.DataFrame({{'a': [1, 2, 3], 'b': ['x', 'y', 'z']}})
+>>> df.to_orc('test.orc')
+>>> cudf.read_orc('test.orc')
+   a  b
+0  1  x
+1  2  y
+2  3  z
 
 See Also
 --------
@@ -801,12 +801,15 @@ cudf.DataFrame.to_json
 Examples
 --------
 >>> import cudf
+>>> import warnings
 >>> df = cudf.DataFrame({'a': ["hello", "rapids"], 'b': ["hello", "worlds"]})
 >>> df
         a       b
 0   hello   hello
 1  rapids  worlds
->>> json_str = df.to_json(orient='records', lines=True)
+>>> with warnings.catch_warnings():
+...     warnings.simplefilter("ignore", UserWarning)
+...     json_str = df.to_json(orient='records', lines=True)
 >>> json_str
 '{"a":"hello","b":"hello"}\n{"a":"rapids","b":"worlds"}\n'
 >>> cudf.read_json(json_str,  engine="cudf", lines=True)
@@ -1061,12 +1064,19 @@ DataFrame
 Examples
 --------
 >>> import cudf
->>> df = cudf.read_feather(filename)
->>> df
-  num1                datetime text
-0  123 2018-11-13T12:00:00.000 5451
-1  456 2018-11-14T12:35:01.000 5784
-2  789 2018-11-15T18:02:59.000 6117
+>>> import warnings
+>>> df = cudf.DataFrame({'a': [1, 2, 3], 'b': ['x', 'y', 'z']})
+>>> with warnings.catch_warnings():
+...     warnings.simplefilter("ignore", UserWarning)
+...     df.to_feather('test.feather')
+>>> with warnings.catch_warnings():
+...     warnings.simplefilter("ignore", UserWarning)
+...     result = cudf.read_feather('test.feather')
+>>> result
+   a  b
+0  1  x
+1  2  y
+2  3  z
 
 See Also
 --------
@@ -1233,15 +1243,15 @@ Create a test csv file
 ...   "789,2018-11-15T18:02:59,ghi"
 ... ]
 >>> with open(filename, 'w') as fp:
-...     fp.write('\\n'.join(lines)+'\\n')
+...     _ = fp.write('\\n'.join(lines)+'\\n')
 
 Read the file with ``cudf.read_csv``
 
 >>> cudf.read_csv(filename)
-  num1                datetime text
-0  123 2018-11-13T12:00:00.000 5451
-1  456 2018-11-14T12:35:01.000 5784
-2  789 2018-11-15T18:02:59.000 6117
+   num1             datetime text
+0   123  2018-11-13T12:00:00  abc
+1   456  2018-11-14T12:35:01  def
+2   789  2018-11-15T18:02:59  ghi
 
 See Also
 --------

@@ -817,30 +817,60 @@ class NumericalColumn(NumericalBaseColumn):
                     replacement,
                     dtype=self.dtype if len(replacement) <= 0 else None,
                 )
-        common_type = find_common_type(
-            (to_replace_col.dtype, replacement_col.dtype, self.dtype)
-        )
         if len(replacement_col) == 1 and len(to_replace_col) > 1:
             replacement_col = replacement_col.repeat(len(to_replace_col))
         elif len(replacement_col) == 1 and len(to_replace_col) == 0:
             return self.copy()
-        replaced = cast(Self, self.astype(common_type))
-        df = cudf.DataFrame._from_data(
-            {
-                "old": to_replace_col.astype(common_type),
-                "new": replacement_col.astype(common_type),
-            }
-        )
-        df = df.drop_duplicates(subset=["old"], keep="last", ignore_index=True)
-        if df._data["old"].null_count == 1:
-            replaced = replaced.fillna(
-                df._data["new"]
-                .apply_boolean_mask(df._data["old"].isnull())
-                .element_indexing(0)
-            )
-            df = df.dropna(subset=["old"])
 
-        return replaced.replace(df._data["old"], df._data["new"])
+        common_type = find_common_type(
+            (to_replace_col.dtype, replacement_col.dtype, self.dtype)
+        )
+        replaced = cast("Self", self.astype(common_type))
+        old_col = to_replace_col.astype(common_type)
+        new_col = replacement_col.astype(common_type)
+
+        # Deduplicate by old values, keeping last occurrence.
+        # This replicates pandas' behavior when to_replace has duplicates:
+        # pandas processes replacements sequentially, so the last occurrence wins.
+        # For example, df.replace([1, 2, 1], [10, 20, 30]) replaces 1→30 (not 1→10).
+        # Work with plc.Column objects directly to avoid creating intermediate ColumnBases.
+        with old_col.access(mode="read", scope="internal"):
+            with new_col.access(mode="read", scope="internal"):
+                old_plc, new_plc = plc.stream_compaction.stable_distinct(
+                    plc.Table([old_col.plc_column, new_col.plc_column]),
+                    keys=[0],  # Deduplicate by first column (old values)
+                    keep=plc.stream_compaction.DuplicateKeepOption.KEEP_LAST,
+                    nulls_equal=plc.types.NullEquality.EQUAL,
+                    nans_equal=plc.types.NanEquality.ALL_EQUAL,
+                ).columns()
+
+        # Handle null replacement separately if there's a null in old values
+        if old_plc.null_count() == 1:
+            # Find the replacement value for null
+            old_isnull_plc = plc.unary.is_null(old_plc)
+            (filtered_column,) = plc.stream_compaction.apply_boolean_mask(
+                plc.Table([new_plc]), old_isnull_plc
+            ).columns()
+            # We know there's exactly 1 null, so filtered result has 1 row
+            replacement_for_null = (
+                plc.copying.get_element(filtered_column, 0).to_arrow().as_py()
+            )
+            replaced = replaced.fillna(replacement_for_null)
+
+            # Drop the null row from old/new columns
+            old_plc, new_plc = plc.stream_compaction.drop_nulls(
+                plc.Table([old_plc, new_plc]),
+                keys=[0],  # Check nulls in first column only
+                keep_threshold=1,  # Keep rows with at least 1 non-null in keys
+            ).columns()
+
+        with replaced.access(mode="read", scope="internal"):
+            result_plc = plc.replace.find_and_replace_all(
+                replaced.plc_column,
+                old_plc,
+                new_plc,
+            )
+        return cast("Self", ColumnBase.create(result_plc, common_type))
 
     def _validate_fillna_value(
         self, fill_value: ScalarLike | ColumnLike

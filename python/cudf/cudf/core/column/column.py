@@ -1986,7 +1986,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             return self._distinct_count[dropna]
         except KeyError:
             with self.access(mode="read", scope="internal"):
-                result = plc.stream_compaction.distinct_count(
+                result = plc.reduce.distinct_count(
                     self.plc_column,
                     plc.types.NullPolicy.EXCLUDE
                     if dropna

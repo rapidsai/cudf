@@ -482,17 +482,18 @@ class IndexedFrame(Frame):
         >>> import cudf
         >>> ser = cudf.Series([1, 5, 2, 4, 3])
         >>> ser.cumsum()
-        0    1
-        1    6
-        2    8
+        0     1
+        1     6
+        2     8
         3    12
         4    15
+        dtype: int64
 
         **DataFrame**
 
         >>> import cudf
         >>> df = cudf.DataFrame({{'a': [1, 2, 3, 4], 'b': [7, 8, 9, 10]}})
-        >>> s.cumsum()
+        >>> df.cumsum()
             a   b
         0   1   7
         1   3  15
@@ -771,8 +772,7 @@ class IndexedFrame(Frame):
 
         If there is a mismatch in types of the values in
         ``to_replace`` & ``value`` with the actual series, then
-        cudf exhibits different behavior with respect to pandas
-        and the pairs are ignored silently:
+        cudf raises a ``TypeError``:
 
         >>> s = cudf.Series(['b', 'a', 'a', 'b', 'a'])
         >>> s
@@ -783,19 +783,13 @@ class IndexedFrame(Frame):
         4    a
         dtype: object
         >>> s.replace('a', 1)
-        0    b
-        1    a
-        2    a
-        3    b
-        4    a
-        dtype: object
+        Traceback (most recent call last):
+            ...
+        TypeError: to_replace and value should be of same types,got to_replace dtype: object and value dtype: int64
         >>> s.replace(['a', 'c'], [1, 2])
-        0    b
-        1    a
-        2    a
-        3    b
-        4    a
-        dtype: object
+        Traceback (most recent call last):
+            ...
+        TypeError: to_replace and value should be of same types,got to_replace dtype: object and value dtype: int64
 
         **DataFrame**
 
@@ -962,13 +956,14 @@ class IndexedFrame(Frame):
         2  3  c
         3  4  d
 
-        >>> df.clip(lower=2, upper=3, inplace=True)
+        >>> df = cudf.DataFrame({"a":[1, 2, 3, 4], "b":[5, 6, 7, 8]})
+        >>> df.clip(lower=2, upper=7, inplace=True)
         >>> df
            a  b
-        0  2  2
-        1  2  3
-        2  3  3
-        3  3  3
+        0  2  5
+        1  2  6
+        2  3  7
+        3  4  7
 
         >>> import cudf
         >>> sr = cudf.Series([1, 2, 3, 4])
@@ -1273,6 +1268,7 @@ class IndexedFrame(Frame):
         >>> ser.tail(2)
         3    1
         4    0
+        dtype: int64
         """
         if n == 0:
             return self.iloc[0:0]
@@ -1304,25 +1300,17 @@ class IndexedFrame(Frame):
         Examples
         --------
         Use ``.pipe`` when chaining together functions that expect
-        Series, DataFrames or GroupBy objects. Instead of writing
+        Series, DataFrames or GroupBy objects.
 
-        >>> func(g(h(df), arg1=a), arg2=b, arg3=c)
-
-        You can write
-
-        >>> (df.pipe(h)
-        ...    .pipe(g, arg1=a)
-        ...    .pipe(func, arg2=b, arg3=c)
-        ... )
-
-        If you have a function that takes the data as (say) the second
-        argument, pass a tuple indicating which keyword expects the
-        data. For example, suppose ``f`` takes its data as ``arg2``:
-
-        >>> (df.pipe(h)
-        ...    .pipe(g, arg1=a)
-        ...    .pipe((func, 'arg2'), arg1=a, arg3=c)
-        ...  )
+        >>> import cudf
+        >>> df = cudf.DataFrame({'a': [1, 2, 3]})
+        >>> def add_one(x):
+        ...     return x + 1
+        >>> df.pipe(add_one)
+           a
+        0  2
+        1  3
+        2  4
         """
         return pipe(self, func, *args, **kwargs)
 
@@ -1677,7 +1665,7 @@ class IndexedFrame(Frame):
         >>> import cudf
         >>> series = cudf.Series([1, 2, 3, 4])
         >>> series.kurtosis()
-        -1.1999999999999904
+        -1.200000000000001
 
         **DataFrame**
 
@@ -2128,32 +2116,13 @@ class IndexedFrame(Frame):
         2021-01-01 23:45:02     2
         2021-01-01 23:45:03     3
         2021-01-01 23:45:04     4
-        2021-01-01 23:45:05     5
-        2021-01-01 23:45:06     6
-        2021-01-01 23:45:07     7
-        2021-01-01 23:45:08     8
-        2021-01-01 23:45:09     9
-        2021-01-01 23:45:10    10
-        2021-01-01 23:45:11    11
-        2021-01-01 23:45:12    12
-        2021-01-01 23:45:13    13
-        2021-01-01 23:45:14    14
-        2021-01-01 23:45:15    15
-        2021-01-01 23:45:16    16
-        2021-01-01 23:45:17    17
-        2021-01-01 23:45:18    18
-        2021-01-01 23:45:19    19
-        2021-01-01 23:45:20    20
-        2021-01-01 23:45:21    21
-        2021-01-01 23:45:22    22
-        2021-01-01 23:45:23    23
-        2021-01-01 23:45:24    24
-        ...
+                                ..
         2021-01-01 23:45:56    56
         2021-01-01 23:45:57    57
         2021-01-01 23:45:58    58
         2021-01-01 23:45:59    59
-        dtype: int64
+        2021-01-01 23:46:00    60
+        Length: 61, dtype: int64
 
 
         >>> cs2.truncate(
@@ -2530,7 +2499,7 @@ class IndexedFrame(Frame):
 
         Squeezing the rows produces a single scalar Series:
 
-        >>> df_0a.squeeze("rows")
+        >>> df_0a.squeeze("index")
         a    1
         Name: 0, dtype: int64
 
@@ -2843,19 +2812,19 @@ class IndexedFrame(Frame):
         2     30
         dtype: int64
         >>> series.hash_values(method="murmur3")
-        0   -1930516747
-        1     422619251
-        2    -941520876
-        dtype: int32
+        0    4004982076
+        1    2063150778
+        2     699010651
+        dtype: uint32
         >>> series.hash_values(method="md5")
         0    7be4bbacbfdb05fb3044e36c22b41e8b
         1    947ca8d2c5f0f27437f156cfbfab0969
         2    d0580ef52d27c043c8e341fd5039b166
         dtype: object
         >>> series.hash_values(method="murmur3", seed=42)
-        0    2364453205
-        1     422621911
-        2    3353449140
+        0    4279022973
+        1    1654398277
+        2    1497690768
         dtype: uint32
 
         **DataFrame**
@@ -2868,10 +2837,10 @@ class IndexedFrame(Frame):
         1  120  0.25
         2   30  0.50
         >>> df.hash_values(method="murmur3")
-        0    -330519225
-        1    -397962448
-        2   -1345834934
-        dtype: int32
+        0      92443192
+        1     116637743
+        2    2602001908
+        dtype: uint32
         >>> df.hash_values(method="md5")
         0    57ce879751b5169c525907d5c563fae1
         1    948d6221a7c4963d4be411bcead7e32b
@@ -4150,11 +4119,13 @@ class IndexedFrame(Frame):
         5     18     100    2018-02-05
         6     17      40    2018-02-12
         7     19      50    2018-02-19
-        >>> df.resample("M", on="week_starting").mean()
-                       price     volume
+        >>> df.resample("2W", on="week_starting").mean()
+                       price  volume
         week_starting
-        2018-01-31      11.4  60.000000
-        2018-02-28      18.0  63.333333
+        2017-12-31      10.5    55.0
+        2018-01-14      11.0    70.0
+        2018-01-28      16.0    75.0
+        2018-02-11      18.0    45.0
 
 
         .. pandas-compat::
@@ -4245,10 +4216,10 @@ class IndexedFrame(Frame):
         ...                             np.datetime64("NaT"),
         ...                             np.datetime64("NaT")]})
         >>> df
-               name        toy                 born
-        0    Alfred  Batmobile  1940-04-25 00:00:00
-        1    Batman       <NA>                 <NA>
-        2  Catwoman   Bullwhip                 <NA>
+               name        toy                           born
+        0    Alfred  Batmobile  1940-04-25 00:00:00.000000000
+        1    Batman       <NA>                            NaT
+        2  Catwoman   Bullwhip                            NaT
 
         Drop the rows where at least one element is null.
 
@@ -4267,17 +4238,17 @@ class IndexedFrame(Frame):
         Drop the rows where all elements are null.
 
         >>> df.dropna(how='all')
-               name        toy                 born
-        0    Alfred  Batmobile  1940-04-25 00:00:00
-        1    Batman       <NA>                 <NA>
-        2  Catwoman   Bullwhip                 <NA>
+               name        toy                           born
+        0    Alfred  Batmobile  1940-04-25 00:00:00.000000000
+        1    Batman       <NA>                            NaT
+        2  Catwoman   Bullwhip                            NaT
 
         Keep only the rows with at least 2 non-null values.
 
         >>> df.dropna(thresh=2)
-               name        toy                 born
-        0    Alfred  Batmobile  1940-04-25 00:00:00
-        2  Catwoman   Bullwhip                 <NA>
+               name        toy                           born
+        0    Alfred  Batmobile  1940-04-25 00:00:00.000000000
+        2  Catwoman   Bullwhip                            NaT
 
         Define in which columns to look for null values.
 
@@ -4450,10 +4421,6 @@ class IndexedFrame(Frame):
         0  1.0  a
         2  3.0  c
         2  3.0  c
-        >>> a.take([True, False, True])
-             a  b
-        0  1.0  a
-        2  3.0  c
         """
         if self._get_axis_from_axis_arg(axis) != 0:
             raise NotImplementedError("Only axis=0 is supported.")
@@ -4576,33 +4543,33 @@ class IndexedFrame(Frame):
         --------
         >>> import cudf
         >>> df = cudf.DataFrame({"a":{1, 2, 3, 4, 5}})
-        >>> df.sample(3)
+        >>> df.sample(3, random_state=0)
            a
-        1  2
-        3  4
         0  1
+        1  2
+        4  5
 
         >>> sr = cudf.Series([1, 2, 3, 4, 5])
-        >>> sr.sample(10, replace=True)
-        1    4
-        3    1
-        2    4
-        0    5
-        0    1
+        >>> sr.sample(10, replace=True, random_state=0)
+        1    2
         4    5
-        4    1
-        0    2
-        0    3
-        3    2
+        1    2
+        2    3
+        4    5
+        1    2
+        4    5
+        2    3
+        4    5
+        1    2
         dtype: int64
 
         >>> df = cudf.DataFrame(
         ...     {"a": [1, 2], "b": [2, 3], "c": [3, 4], "d": [4, 5]}
         ... )
-        >>> df.sample(2, axis=1)
-           a  c
-        0  1  3
-        1  2  4
+        >>> df.sample(2, axis=1, random_state=0)
+           c  d
+        0  3  4
+        1  4  5
 
         .. pandas-compat::
             :meth:`pandas.DataFrame.sample`, :meth:`pandas.Series.sample`
@@ -5105,7 +5072,7 @@ class IndexedFrame(Frame):
         0  x    0
         1  x    2
         2  x    4
-        Name: 2, dtype: int64
+        dtype: int64
 
         **DataFrame**
 
@@ -5320,9 +5287,9 @@ class IndexedFrame(Frame):
         Examples
         --------
         >>> import cudf
-        >>> df  = cudf.Dataframe([[8, 4, 7], [5, 2, 3]])
+        >>> df  = cudf.DataFrame([[8, 4, 7], [5, 2, 3]])
         >>> count = 2
-        >>> df.tile(df, count)
+        >>> df.tile(count)
            0  1  2
         0  8  4  7
         1  5  2  3
@@ -5509,7 +5476,7 @@ class IndexedFrame(Frame):
                 e    <NA>
                 dtype: int64
                 >>> a.sub(b, fill_value=0)
-                a       2
+                a       0
                 b       1
                 c       1
                 d      -1
@@ -5677,12 +5644,12 @@ class IndexedFrame(Frame):
                 e    <NA>
                 dtype: int64
                 >>> a.mod(b, fill_value=0)
-                a             0
-                b    4294967295
-                c    4294967295
-                d             0
-                e          <NA>
-                dtype: int64
+                a     0.0
+                b     NaN
+                c     NaN
+                d     0.0
+                e    <NA>
+                dtype: float64
                 """
             ),
         )
@@ -5702,10 +5669,10 @@ class IndexedFrame(Frame):
             df_op_example=textwrap.dedent(
                 """
                 >>> df.rmod(1)
-                            angles  degrees
-                circle     4294967295        1
-                triangle            1        1
-                rectangle           1        1
+                           angles  degrees
+                circle        NaN        1
+                triangle      1.0        1
+                rectangle     1.0        1
                 """
             ),
             ser_op_example=textwrap.dedent(
@@ -5718,12 +5685,12 @@ class IndexedFrame(Frame):
                 e    <NA>
                 dtype: int64
                 >>> a.rmod(b, fill_value=0)
-                a             0
-                b             0
-                c             0
-                d    4294967295
-                e          <NA>
-                dtype: int64
+                a     0.0
+                b     0.0
+                c     0.0
+                d     NaN
+                e    <NA>
+                dtype: float64
                 """
             ),
         )
@@ -5743,9 +5710,9 @@ class IndexedFrame(Frame):
             df_op_example=textwrap.dedent(
                 """
                 >>> df.pow(1)
-                        angles  degrees
+                           angles  degrees
                 circle          0      360
-                triangle        2      180
+                triangle        3      180
                 rectangle       4      360
                 """
             ),
@@ -5841,12 +5808,12 @@ class IndexedFrame(Frame):
                 e    <NA>
                 dtype: int64
                 >>> a.floordiv(b, fill_value=0)
-                a                      1
-                b    9223372036854775807
-                c    9223372036854775807
-                d                      0
-                e                   <NA>
-                dtype: int64
+                a     1.0
+                b     Inf
+                c     Inf
+                d     0.0
+                e    <NA>
+                dtype: float64
                 """
             ),
         )
@@ -5866,10 +5833,10 @@ class IndexedFrame(Frame):
             df_op_example=textwrap.dedent(
                 """
                 >>> df.rfloordiv(1)
-                                        angles  degrees
-                circle     9223372036854775807        0
-                triangle                     0        0
-                rectangle                    0        0
+                           angles  degrees
+                circle        inf        0
+                triangle      0.0        0
+                rectangle     0.0        0
                 """
             ),
             ser_op_example=textwrap.dedent(
@@ -5882,12 +5849,12 @@ class IndexedFrame(Frame):
                 e    <NA>
                 dtype: int64
                 >>> a.rfloordiv(b, fill_value=0)
-                a                      1
-                b                      0
-                c                      0
-                d    9223372036854775807
-                e                   <NA>
-                dtype: int64
+                a     1.0
+                b     0.0
+                c     0.0
+                d     Inf
+                e    <NA>
+                dtype: float64
                 """
             ),
         )

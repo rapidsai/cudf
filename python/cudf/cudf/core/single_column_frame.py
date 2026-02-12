@@ -211,16 +211,16 @@ class SingleColumnFrame(Frame, NotIterable):
         --------
         >>> import cudf
         >>> sr = cudf.Series(["a", "b", None])
-        >>> sr.to_arrow()
-        <pyarrow.lib.StringArray object at 0x7f796b0e7600>
+        >>> sr.to_arrow() # doctest: +ELLIPSIS
+        <pyarrow.lib.StringArray object at ...>
         [
           "a",
           "b",
           null
         ]
         >>> ind = cudf.Index(["a", "b", None])
-        >>> ind.to_arrow()
-        <pyarrow.lib.StringArray object at 0x7f796b0e7750>
+        >>> ind.to_arrow() # doctest: +ELLIPSIS
+        <pyarrow.lib.StringArray object at ...>
         [
           "a",
           "b",
@@ -339,7 +339,7 @@ class SingleColumnFrame(Frame, NotIterable):
         >>> s = cudf.Series(['a', 'a', 'c'])
         >>> codes, uniques = s.factorize()
         >>> codes
-        array([0, 0, 1], dtype=int8)
+        array([0, 0, 1])
         >>> uniques
         Index(['a', 'c'], dtype='object')
         """
