@@ -538,7 +538,7 @@ struct scalar_column_view : private column_view {
    * @brief Returns a reference to the underlying `column_view` of this `scalar_column_view`.
    * @return A reference to the underlying `column_view`
    */
-  base const& as_column_view() const noexcept { return *this; }
+  [[nodiscard]] base const& as_column_view() const noexcept { return *this; }
 };
 
 /**
