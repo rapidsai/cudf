@@ -462,8 +462,9 @@ class NumericalColumn(NumericalBaseColumn):
         if self.dtype.kind != "f" or self.nan_count == 0:
             return self
         with self.access(mode="read", scope="internal"):
-            result = type(self).from_pylibcudf(
-                plc.transform.column_nans_to_nulls(self.plc_column)
+            result = type(self).create(
+                plc.transform.column_nans_to_nulls(self.plc_column),
+                dtype=self.dtype,
             )
             return cast(Self, result)
 
