@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -21,12 +21,12 @@ namespace detail {
 
 /**
  * @brief JIT implementation of filter_join_indices
- * 
+ *
  * Internal implementation that provides JIT-compiled filtering of join indices.
  * This is the implementation behind the public jit_filter_join_indices function.
  *
  * @param left The left table for predicate evaluation
- * @param right The right table for predicate evaluation  
+ * @param right The right table for predicate evaluation
  * @param left_indices Device span of row indices in left table from join
  * @param right_indices Device span of row indices in right table from join
  * @param predicate_code String containing CUDA device code for predicate

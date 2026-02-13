@@ -1,10 +1,10 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include "jit_filter_join_indices_kernel.cuh"
 #include "jit/filter_join_kernel.cuh"
+#include "jit_filter_join_indices_kernel.cuh"
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/detail/cuco_helpers.hpp>
@@ -53,69 +53,66 @@ jitify2::Kernel get_join_filter_kernel(std::string const& kernel_name,
 {
   CUDF_FUNC_RANGE();
   return cudf::jit::get_program_cache(*join_jit_filter_join_kernel_cu_jit)
-    .get_kernel(
-      kernel_name, {}, {{"cudf/detail/operation-udf.hpp", cuda_source}}, {"-arch=sm_."});
+    .get_kernel(kernel_name, {}, {{"cudf/detail/operation-udf.hpp", cuda_source}}, {"-arch=sm_."});
 }
 
 // Build template parameters for JIT kernel
-jitify2::StringVec build_join_filter_template_params(
-  std::vector<column_view> const& left_columns,
-  std::vector<column_view> const& right_columns,
-  bool has_user_data)
+jitify2::StringVec build_join_filter_template_params(std::vector<column_view> const& left_columns,
+                                                     std::vector<column_view> const& right_columns,
+                                                     bool has_user_data)
 {
   jitify2::StringVec template_params;
-  
+
   // Add has_user_data template parameter
   template_params.emplace_back(jitify2::reflection::reflect(has_user_data));
-  
+
   // Add left column accessors
   for (size_t i = 0; i < left_columns.size(); ++i) {
-    auto const& col = left_columns[i];
+    auto const& col       = left_columns[i];
     std::string type_name = cudf::type_to_name(col.type());
     template_params.emplace_back(
       jitify2::reflection::Template("cudf::jit::join_left_column_accessor")
         .instantiate(type_name, std::to_string(i)));
   }
-  
-  // Add right column accessors  
+
+  // Add right column accessors
   for (size_t i = 0; i < right_columns.size(); ++i) {
-    auto const& col = right_columns[i];
+    auto const& col       = right_columns[i];
     std::string type_name = cudf::type_to_name(col.type());
     template_params.emplace_back(
       jitify2::reflection::Template("cudf::jit::join_right_column_accessor")
         .instantiate(type_name, std::to_string(i)));
   }
-  
+
   return template_params;
 }
 
 // Build the JIT kernel for join filtering
-jitify2::ConfiguredKernel build_join_filter_kernel(
-  std::string const& predicate_code,
-  std::vector<column_view> const& left_columns,
-  std::vector<column_view> const& right_columns,
-  bool is_ptx,
-  bool has_user_data,
-  rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
+jitify2::ConfiguredKernel build_join_filter_kernel(std::string const& predicate_code,
+                                                   std::vector<column_view> const& left_columns,
+                                                   std::vector<column_view> const& right_columns,
+                                                   bool is_ptx,
+                                                   bool has_user_data,
+                                                   rmm::cuda_stream_view stream,
+                                                   rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  
+
   // Parse predicate code
-  auto const cuda_source = is_ptx 
-    ? cudf::jit::parse_single_function_ptx(
-        predicate_code, 
-        "GENERIC_JOIN_FILTER_OP",
-        cudf::jit::build_ptx_params(
-          cudf::jit::column_type_names(left_columns),
-          cudf::jit::column_type_names(right_columns),
-          has_user_data))
-    : cudf::jit::parse_single_function_cuda(predicate_code, "GENERIC_JOIN_FILTER_OP");
-  
+  auto const cuda_source =
+    is_ptx ? cudf::jit::parse_single_function_ptx(
+               predicate_code,
+               "GENERIC_JOIN_FILTER_OP",
+               cudf::jit::build_ptx_params(cudf::jit::column_type_names(left_columns),
+                                           cudf::jit::column_type_names(right_columns),
+                                           has_user_data))
+           : cudf::jit::parse_single_function_cuda(predicate_code, "GENERIC_JOIN_FILTER_OP");
+
   // Build template parameters and kernel name
-  auto template_args = build_join_filter_template_params(left_columns, right_columns, has_user_data);
-  auto kernel_name   = jitify2::reflection::Template("cudf::join::jit::filter_join_kernel")
-                         .instantiate(template_args);
+  auto template_args =
+    build_join_filter_template_params(left_columns, right_columns, has_user_data);
+  auto kernel_name =
+    jitify2::reflection::Template("cudf::join::jit::filter_join_kernel").instantiate(template_args);
 
   // Get compiled kernel
   auto kernel = get_join_filter_kernel(kernel_name, cuda_source);
@@ -124,19 +121,18 @@ jitify2::ConfiguredKernel build_join_filter_kernel(
 }
 
 // Launch the JIT kernel for join filtering
-void launch_join_filter_kernel(
-  jitify2::ConfiguredKernel& kernel,
-  cudf::table_view const& left,
-  cudf::table_view const& right,
-  cudf::device_span<size_type const> left_indices,
-  cudf::device_span<size_type const> right_indices,
-  bool* predicate_results,
-  std::optional<void*> user_data,
-  rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
+void launch_join_filter_kernel(jitify2::ConfiguredKernel& kernel,
+                               cudf::table_view const& left,
+                               cudf::table_view const& right,
+                               cudf::device_span<size_type const> left_indices,
+                               cudf::device_span<size_type const> right_indices,
+                               bool* predicate_results,
+                               std::optional<void*> user_data,
+                               rmm::cuda_stream_view stream,
+                               rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  
+
   // Create device views of tables
   std::vector<column_view> left_cols(left.begin(), left.end());
   std::vector<column_view> right_cols(right.begin(), right.end());
@@ -145,7 +141,7 @@ void launch_join_filter_kernel(
     cudf::jit::column_views_to_device<column_device_view, column_view>(left_cols, stream, mr);
   auto [right_handles, right_device_views] =
     cudf::jit::column_views_to_device<column_device_view, column_view>(right_cols, stream, mr);
-  
+
   // Set up kernel parameters - use JIT-compatible span type
   cudf::jit::device_span<cudf::size_type const> left_span{left_indices.data(), left_indices.size()};
   cudf::jit::device_span<cudf::size_type const> right_span{right_indices.data(),
@@ -153,16 +149,14 @@ void launch_join_filter_kernel(
   cudf::column_device_view_core const* left_tables_ptr  = left_device_views.data();
   cudf::column_device_view_core const* right_tables_ptr = right_device_views.data();
   void* user_data_ptr                                   = user_data.value_or(nullptr);
-  
-  std::array<void*, 6> args{
-    &left_span,
-    &right_span, 
-    &left_tables_ptr,
-    &right_tables_ptr,
-    &predicate_results,
-    &user_data_ptr
-  };
-  
+
+  std::array<void*, 6> args{&left_span,
+                            &right_span,
+                            &left_tables_ptr,
+                            &right_tables_ptr,
+                            &predicate_results,
+                            &user_data_ptr};
+
   kernel->launch_raw(args.data());
 }
 
@@ -170,13 +164,13 @@ void launch_join_filter_kernel(
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
 apply_join_semantics(cudf::table_view const& left,
-                    cudf::table_view const& right,
-                    cudf::device_span<size_type const> left_indices,
-                    cudf::device_span<size_type const> right_indices,
-                    rmm::device_uvector<bool> const& predicate_results,
-                    join_kind join_kind,
-                    rmm::cuda_stream_view stream,
-                    rmm::device_async_resource_ref mr)
+                     cudf::table_view const& right,
+                     cudf::device_span<size_type const> left_indices,
+                     cudf::device_span<size_type const> right_indices,
+                     rmm::device_uvector<bool> const& predicate_results,
+                     join_kind join_kind,
+                     rmm::cuda_stream_view stream,
+                     rmm::device_async_resource_ref mr)
 {
   auto make_empty_result = [&]() {
     return std::pair{std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr),
@@ -412,7 +406,7 @@ jit_filter_join_indices(cudf::table_view const& left,
                         rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  
+
   // Validate inputs - same as AST version
   CUDF_EXPECTS(left_indices.size() == right_indices.size(),
                "Left and right index arrays must have the same size",
@@ -435,30 +429,30 @@ jit_filter_join_indices(cudf::table_view const& left,
   std::vector<column_view> right_cols(right.begin(), right.end());
 
   auto kernel = build_join_filter_kernel(predicate_code,
-                                        left_cols,
-                                        right_cols,
-                                        is_ptx,
-                                        false,  // has_user_data = false for now
-                                        stream,
-                                        mr);
-  
+                                         left_cols,
+                                         right_cols,
+                                         is_ptx,
+                                         false,  // has_user_data = false for now
+                                         stream,
+                                         mr);
+
   // Allocate predicate results
   auto predicate_results = rmm::device_uvector<bool>(left_indices.size(), stream);
-  
+
   // Launch kernel
-  launch_join_filter_kernel(kernel, 
-                           left, 
-                           right, 
-                           left_indices, 
-                           right_indices,
-                           predicate_results.data(), 
-                           std::nullopt, // no user data for now
-                           stream, 
-                           mr);
-  
+  launch_join_filter_kernel(kernel,
+                            left,
+                            right,
+                            left_indices,
+                            right_indices,
+                            predicate_results.data(),
+                            std::nullopt,  // no user data for now
+                            stream,
+                            mr);
+
   // Apply same join semantics as AST version
-  return apply_join_semantics(left, right, left_indices, right_indices,
-                            predicate_results, join_kind, stream, mr);
+  return apply_join_semantics(
+    left, right, left_indices, right_indices, predicate_results, join_kind, stream, mr);
 }
 
 }  // namespace detail

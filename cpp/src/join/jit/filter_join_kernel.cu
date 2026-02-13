@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -35,14 +35,14 @@ CUDF_KERNEL void filter_join_kernel(cudf::jit::device_span<cudf::size_type const
                                     bool* predicate_results,
                                     void* user_data)
 {
-  auto const start = cudf::detail::grid_1d::global_thread_id();
+  auto const start  = cudf::detail::grid_1d::global_thread_id();
   auto const stride = cudf::detail::grid_1d::grid_stride();
-  auto const size = left_indices.size();
+  auto const size   = left_indices.size();
 
   for (auto i = start; i < size; i += stride) {
-    auto const left_idx = left_indices[i];
+    auto const left_idx  = left_indices[i];
     auto const right_idx = right_indices[i];
-    
+
     // Skip if either index is JoinNoMatch
     if (left_idx == JoinNoMatch || right_idx == JoinNoMatch) {
       predicate_results[i] = false;
@@ -61,8 +61,7 @@ CUDF_KERNEL void filter_join_kernel(cudf::jit::device_span<cudf::size_type const
         InputAccessors::element(left_tables, right_tables, left_idx, right_idx, i)...);
     } else {
       GENERIC_JOIN_FILTER_OP(
-        &result,
-        InputAccessors::element(left_tables, right_tables, left_idx, right_idx, i)...);
+        &result, InputAccessors::element(left_tables, right_tables, left_idx, right_idx, i)...);
     }
 
     predicate_results[i] = result;

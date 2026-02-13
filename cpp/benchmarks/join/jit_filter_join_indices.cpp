@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -10,9 +10,8 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
-#include <cudf/utilities/span.hpp>
-
 #include <cudf/utilities/memory_resource.hpp>
+#include <cudf/utilities/span.hpp>
 
 #include <rmm/device_uvector.hpp>
 
@@ -55,7 +54,8 @@ void jit_filter_join_indices_inner_join(nvbench::state& state)
   cudf::device_span<cudf::size_type const> right_span{right_indices_d.data(),
                                                       right_indices_d.size()};
 
-  // Predicate: left.col1 > right.col1 (receives output pointer, then all columns: left cols, then right cols)
+  // Predicate: left.col1 > right.col1 (receives output pointer, then all columns: left cols, then
+  // right cols)
   std::string predicate_code = R"(
     __device__ void predicate(bool* output, int32_t left_col0, int32_t left_col1,
                               int32_t right_col0, int32_t right_col1) {
@@ -66,12 +66,13 @@ void jit_filter_join_indices_inner_join(nvbench::state& state)
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
 
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
-    auto [filtered_left, filtered_right] = cudf::jit_filter_join_indices(left_table.view(),
-                                                                         right_table.view(),
-                                                                         left_span,
-                                                                         right_span,
-                                                                         predicate_code,
-                                                                         cudf::join_kind::INNER_JOIN);
+    auto [filtered_left, filtered_right] =
+      cudf::jit_filter_join_indices(left_table.view(),
+                                    right_table.view(),
+                                    left_span,
+                                    right_span,
+                                    predicate_code,
+                                    cudf::join_kind::INNER_JOIN);
   });
 }
 
@@ -117,12 +118,13 @@ void jit_filter_join_indices_left_join(nvbench::state& state)
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
 
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
-    auto [filtered_left, filtered_right] = cudf::jit_filter_join_indices(left_table.view(),
-                                                                         right_table.view(),
-                                                                         left_span,
-                                                                         right_span,
-                                                                         predicate_code,
-                                                                         cudf::join_kind::LEFT_JOIN);
+    auto [filtered_left, filtered_right] =
+      cudf::jit_filter_join_indices(left_table.view(),
+                                    right_table.view(),
+                                    left_span,
+                                    right_span,
+                                    predicate_code,
+                                    cudf::join_kind::LEFT_JOIN);
   });
 }
 

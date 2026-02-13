@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -44,12 +44,10 @@ TEST_F(JitFilterJoinIndicesTest, BasicInnerJoinGreaterThan)
   // Simulate join indices from equality-based hash join (all pairs match on col0)
   auto left_indices_h  = std::vector<cudf::size_type>{0, 1, 2};
   auto right_indices_h = std::vector<cudf::size_type>{0, 1, 2};
-  auto left_indices_d =
-    cudf::detail::make_device_uvector_async(left_indices_h, cudf::get_default_stream(),
-                                            cudf::get_current_device_resource_ref());
-  auto right_indices_d =
-    cudf::detail::make_device_uvector_async(right_indices_h, cudf::get_default_stream(),
-                                            cudf::get_current_device_resource_ref());
+  auto left_indices_d  = cudf::detail::make_device_uvector_async(
+    left_indices_h, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
+  auto right_indices_d = cudf::detail::make_device_uvector_async(
+    right_indices_h, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
 
   // JIT predicate: left.col1 > right.col1 (20 > 15, 30 > 25 should pass)
   // Predicate receives output pointer, then all columns: left cols, then right cols
@@ -61,13 +59,13 @@ TEST_F(JitFilterJoinIndicesTest, BasicInnerJoinGreaterThan)
   )";
 
   // Call JIT filter join indices
-  auto [filtered_left, filtered_right] = cudf::jit_filter_join_indices(
-    left_table,
-    right_table,
-    cudf::device_span<cudf::size_type const>(left_indices_d),
-    cudf::device_span<cudf::size_type const>(right_indices_d),
-    predicate_code,
-    cudf::join_kind::INNER_JOIN);
+  auto [filtered_left, filtered_right] =
+    cudf::jit_filter_join_indices(left_table,
+                                  right_table,
+                                  cudf::device_span<cudf::size_type const>(left_indices_d),
+                                  cudf::device_span<cudf::size_type const>(right_indices_d),
+                                  predicate_code,
+                                  cudf::join_kind::INNER_JOIN);
 
   // Verify results
   EXPECT_EQ(filtered_left->size(), 2);
@@ -87,12 +85,10 @@ TEST_F(JitFilterJoinIndicesTest, BasicLeftJoinGreaterThan)
 
   auto left_indices_h  = std::vector<cudf::size_type>{0, 1, 2};
   auto right_indices_h = std::vector<cudf::size_type>{0, 1, 2};
-  auto left_indices_d =
-    cudf::detail::make_device_uvector_async(left_indices_h, cudf::get_default_stream(),
-                                            cudf::get_current_device_resource_ref());
-  auto right_indices_d =
-    cudf::detail::make_device_uvector_async(right_indices_h, cudf::get_default_stream(),
-                                            cudf::get_current_device_resource_ref());
+  auto left_indices_d  = cudf::detail::make_device_uvector_async(
+    left_indices_h, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
+  auto right_indices_d = cudf::detail::make_device_uvector_async(
+    right_indices_h, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
 
   // Predicate receives output pointer, then all columns: left cols, then right cols
   std::string predicate_code = R"(
@@ -103,13 +99,13 @@ TEST_F(JitFilterJoinIndicesTest, BasicLeftJoinGreaterThan)
   )";
 
   // Call JIT filter join indices with LEFT_JOIN
-  auto [filtered_left, filtered_right] = cudf::jit_filter_join_indices(
-    left_table,
-    right_table,
-    cudf::device_span<cudf::size_type const>(left_indices_d),
-    cudf::device_span<cudf::size_type const>(right_indices_d),
-    predicate_code,
-    cudf::join_kind::LEFT_JOIN);
+  auto [filtered_left, filtered_right] =
+    cudf::jit_filter_join_indices(left_table,
+                                  right_table,
+                                  cudf::device_span<cudf::size_type const>(left_indices_d),
+                                  cudf::device_span<cudf::size_type const>(right_indices_d),
+                                  predicate_code,
+                                  cudf::join_kind::LEFT_JOIN);
 
   // Expected result: all left rows preserved
   // Row 0: 10 <= 15 -> (0, JoinNoMatch)
@@ -137,9 +133,12 @@ TEST_F(JitFilterJoinIndicesTest, EmptyInput)
     }
   )";
 
-  auto [filtered_left, filtered_right] = cudf::jit_filter_join_indices(
-    left_table, right_table, left_indices, right_indices, predicate_code,
-    cudf::join_kind::INNER_JOIN);
+  auto [filtered_left, filtered_right] = cudf::jit_filter_join_indices(left_table,
+                                                                       right_table,
+                                                                       left_indices,
+                                                                       right_indices,
+                                                                       predicate_code,
+                                                                       cudf::join_kind::INNER_JOIN);
 
   // Should return empty results
   EXPECT_EQ(filtered_left->size(), 0);
@@ -155,12 +154,10 @@ TEST_F(JitFilterJoinIndicesTest, InvalidJoinKind)
 
   auto left_indices_h  = std::vector<cudf::size_type>{0};
   auto right_indices_h = std::vector<cudf::size_type>{0};
-  auto left_indices_d =
-    cudf::detail::make_device_uvector_async(left_indices_h, cudf::get_default_stream(),
-                                            cudf::get_current_device_resource_ref());
-  auto right_indices_d =
-    cudf::detail::make_device_uvector_async(right_indices_h, cudf::get_default_stream(),
-                                            cudf::get_current_device_resource_ref());
+  auto left_indices_d  = cudf::detail::make_device_uvector_async(
+    left_indices_h, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
+  auto right_indices_d = cudf::detail::make_device_uvector_async(
+    right_indices_h, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
 
   std::string predicate_code = R"(
     __device__ void predicate(bool* output, int32_t left_val, int32_t right_val) {

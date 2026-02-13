@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -37,9 +37,9 @@ class AstVsJitFilterJoinTest : public cudf::test::BaseFixture {};
 TEST_F(AstVsJitFilterJoinTest, SimpleGreaterThanComparison)
 {
   // Create test tables
-  auto left_col0   = cudf::test::fixed_width_column_wrapper<int32_t>{1, 2, 3, 4};
-  auto left_col1   = cudf::test::fixed_width_column_wrapper<int32_t>{10, 20, 30, 40};
-  auto left_table  = cudf::table_view{{left_col0, left_col1}};
+  auto left_col0  = cudf::test::fixed_width_column_wrapper<int32_t>{1, 2, 3, 4};
+  auto left_col1  = cudf::test::fixed_width_column_wrapper<int32_t>{10, 20, 30, 40};
+  auto left_table = cudf::table_view{{left_col0, left_col1}};
 
   auto right_col0  = cudf::test::fixed_width_column_wrapper<int32_t>{1, 2, 3, 4};
   auto right_col1  = cudf::test::fixed_width_column_wrapper<int32_t>{15, 15, 25, 35};
@@ -48,19 +48,19 @@ TEST_F(AstVsJitFilterJoinTest, SimpleGreaterThanComparison)
   // Simulate join indices from equality-based join
   auto left_indices_h  = std::vector<cudf::size_type>{0, 1, 2, 3};
   auto right_indices_h = std::vector<cudf::size_type>{0, 1, 2, 3};
-  auto left_indices_d =
-    cudf::detail::make_device_uvector_async(left_indices_h, cudf::get_default_stream(),
-                                            cudf::get_current_device_resource_ref());
-  auto right_indices_d =
-    cudf::detail::make_device_uvector_async(right_indices_h, cudf::get_default_stream(),
-                                            cudf::get_current_device_resource_ref());
+  auto left_indices_d  = cudf::detail::make_device_uvector_async(
+    left_indices_h, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
+  auto right_indices_d = cudf::detail::make_device_uvector_async(
+    right_indices_h, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
 
   // Create AST predicate: left.col1 > right.col1
-  auto left_col_ref    = cudf::ast::column_reference(1, cudf::ast::table_reference::LEFT);
-  auto right_col_ref   = cudf::ast::column_reference(1, cudf::ast::table_reference::RIGHT);
-  auto ast_predicate   = cudf::ast::operation(cudf::ast::ast_operator::GREATER, left_col_ref, right_col_ref);
+  auto left_col_ref  = cudf::ast::column_reference(1, cudf::ast::table_reference::LEFT);
+  auto right_col_ref = cudf::ast::column_reference(1, cudf::ast::table_reference::RIGHT);
+  auto ast_predicate =
+    cudf::ast::operation(cudf::ast::ast_operator::GREATER, left_col_ref, right_col_ref);
 
-  // Create JIT predicate equivalent (receives output pointer, then all columns: left cols, then right cols)
+  // Create JIT predicate equivalent (receives output pointer, then all columns: left cols, then
+  // right cols)
   std::string jit_predicate = R"(
     __device__ void predicate(bool* output, int32_t left_col0, int32_t left_col1,
                               int32_t right_col0, int32_t right_col1) {
@@ -102,9 +102,9 @@ TEST_F(AstVsJitFilterJoinTest, SimpleGreaterThanComparison)
 TEST_F(AstVsJitFilterJoinTest, FloatingPointComparison)
 {
   // Test with floating point data
-  auto left_col0   = cudf::test::fixed_width_column_wrapper<int32_t>{1, 2, 3};
-  auto left_col1   = cudf::test::fixed_width_column_wrapper<double>{1.5, 2.7, 3.1};
-  auto left_table  = cudf::table_view{{left_col0, left_col1}};
+  auto left_col0  = cudf::test::fixed_width_column_wrapper<int32_t>{1, 2, 3};
+  auto left_col1  = cudf::test::fixed_width_column_wrapper<double>{1.5, 2.7, 3.1};
+  auto left_table = cudf::table_view{{left_col0, left_col1}};
 
   auto right_col0  = cudf::test::fixed_width_column_wrapper<int32_t>{1, 2, 3};
   auto right_col1  = cudf::test::fixed_width_column_wrapper<double>{1.2, 2.8, 3.0};
@@ -112,12 +112,10 @@ TEST_F(AstVsJitFilterJoinTest, FloatingPointComparison)
 
   auto left_indices_h  = std::vector<cudf::size_type>{0, 1, 2};
   auto right_indices_h = std::vector<cudf::size_type>{0, 1, 2};
-  auto left_indices_d =
-    cudf::detail::make_device_uvector_async(left_indices_h, cudf::get_default_stream(),
-                                            cudf::get_current_device_resource_ref());
-  auto right_indices_d =
-    cudf::detail::make_device_uvector_async(right_indices_h, cudf::get_default_stream(),
-                                            cudf::get_current_device_resource_ref());
+  auto left_indices_d  = cudf::detail::make_device_uvector_async(
+    left_indices_h, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
+  auto right_indices_d = cudf::detail::make_device_uvector_async(
+    right_indices_h, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
 
   // AST predicate: left.col1 >= right.col1
   auto left_col_ref  = cudf::ast::column_reference(1, cudf::ast::table_reference::LEFT);
@@ -125,7 +123,8 @@ TEST_F(AstVsJitFilterJoinTest, FloatingPointComparison)
   auto ast_predicate =
     cudf::ast::operation(cudf::ast::ast_operator::GREATER_EQUAL, left_col_ref, right_col_ref);
 
-  // JIT predicate equivalent (receives output pointer, then all columns: left cols, then right cols)
+  // JIT predicate equivalent (receives output pointer, then all columns: left cols, then right
+  // cols)
   std::string jit_predicate = R"(
     __device__ void predicate(bool* output, int32_t left_col0, double left_col1,
                               int32_t right_col0, double right_col1) {
@@ -158,10 +157,10 @@ TEST_F(AstVsJitFilterJoinTest, FloatingPointComparison)
 TEST_F(AstVsJitFilterJoinTest, ComplexPredicateMultipleColumns)
 {
   // Test with predicate involving multiple columns
-  auto left_col0   = cudf::test::fixed_width_column_wrapper<int32_t>{1, 2, 3, 4};
-  auto left_col1   = cudf::test::fixed_width_column_wrapper<int32_t>{10, 20, 30, 40};
-  auto left_col2   = cudf::test::fixed_width_column_wrapper<int32_t>{100, 200, 300, 400};
-  auto left_table  = cudf::table_view{{left_col0, left_col1, left_col2}};
+  auto left_col0  = cudf::test::fixed_width_column_wrapper<int32_t>{1, 2, 3, 4};
+  auto left_col1  = cudf::test::fixed_width_column_wrapper<int32_t>{10, 20, 30, 40};
+  auto left_col2  = cudf::test::fixed_width_column_wrapper<int32_t>{100, 200, 300, 400};
+  auto left_table = cudf::table_view{{left_col0, left_col1, left_col2}};
 
   auto right_col0  = cudf::test::fixed_width_column_wrapper<int32_t>{1, 2, 3, 4};
   auto right_col1  = cudf::test::fixed_width_column_wrapper<int32_t>{15, 15, 25, 35};
@@ -170,12 +169,10 @@ TEST_F(AstVsJitFilterJoinTest, ComplexPredicateMultipleColumns)
 
   auto left_indices_h  = std::vector<cudf::size_type>{0, 1, 2, 3};
   auto right_indices_h = std::vector<cudf::size_type>{0, 1, 2, 3};
-  auto left_indices_d =
-    cudf::detail::make_device_uvector_async(left_indices_h, cudf::get_default_stream(),
-                                            cudf::get_current_device_resource_ref());
-  auto right_indices_d =
-    cudf::detail::make_device_uvector_async(right_indices_h, cudf::get_default_stream(),
-                                            cudf::get_current_device_resource_ref());
+  auto left_indices_d  = cudf::detail::make_device_uvector_async(
+    left_indices_h, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
+  auto right_indices_d = cudf::detail::make_device_uvector_async(
+    right_indices_h, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
 
   // AST predicate: (left.col1 > right.col1) AND (left.col2 > right.col2)
   auto left_col1_ref  = cudf::ast::column_reference(1, cudf::ast::table_reference::LEFT);
@@ -183,8 +180,8 @@ TEST_F(AstVsJitFilterJoinTest, ComplexPredicateMultipleColumns)
   auto left_col2_ref  = cudf::ast::column_reference(2, cudf::ast::table_reference::LEFT);
   auto right_col2_ref = cudf::ast::column_reference(2, cudf::ast::table_reference::RIGHT);
 
-  auto cmp1          = cudf::ast::operation(cudf::ast::ast_operator::GREATER, left_col1_ref, right_col1_ref);
-  auto cmp2          = cudf::ast::operation(cudf::ast::ast_operator::GREATER, left_col2_ref, right_col2_ref);
+  auto cmp1 = cudf::ast::operation(cudf::ast::ast_operator::GREATER, left_col1_ref, right_col1_ref);
+  auto cmp2 = cudf::ast::operation(cudf::ast::ast_operator::GREATER, left_col2_ref, right_col2_ref);
   auto ast_predicate = cudf::ast::operation(cudf::ast::ast_operator::LOGICAL_AND, cmp1, cmp2);
 
   // JIT predicate equivalent (columns are passed in table order: left cols then right cols)
@@ -220,27 +217,27 @@ TEST_F(AstVsJitFilterJoinTest, ComplexPredicateMultipleColumns)
 TEST_F(AstVsJitFilterJoinTest, EdgeCaseEmptyResults)
 {
   // Test case where predicate filters out all results
-  auto left_col0   = cudf::test::fixed_width_column_wrapper<int32_t>{1, 2, 3};
-  auto left_col1   = cudf::test::fixed_width_column_wrapper<int32_t>{10, 20, 30};
-  auto left_table  = cudf::table_view{{left_col0, left_col1}};
+  auto left_col0  = cudf::test::fixed_width_column_wrapper<int32_t>{1, 2, 3};
+  auto left_col1  = cudf::test::fixed_width_column_wrapper<int32_t>{10, 20, 30};
+  auto left_table = cudf::table_view{{left_col0, left_col1}};
 
-  auto right_col0  = cudf::test::fixed_width_column_wrapper<int32_t>{1, 2, 3};
-  auto right_col1  = cudf::test::fixed_width_column_wrapper<int32_t>{50, 60, 70};  // All larger than left
+  auto right_col0 = cudf::test::fixed_width_column_wrapper<int32_t>{1, 2, 3};
+  auto right_col1 =
+    cudf::test::fixed_width_column_wrapper<int32_t>{50, 60, 70};  // All larger than left
   auto right_table = cudf::table_view{{right_col0, right_col1}};
 
   auto left_indices_h  = std::vector<cudf::size_type>{0, 1, 2};
   auto right_indices_h = std::vector<cudf::size_type>{0, 1, 2};
-  auto left_indices_d =
-    cudf::detail::make_device_uvector_async(left_indices_h, cudf::get_default_stream(),
-                                            cudf::get_current_device_resource_ref());
-  auto right_indices_d =
-    cudf::detail::make_device_uvector_async(right_indices_h, cudf::get_default_stream(),
-                                            cudf::get_current_device_resource_ref());
+  auto left_indices_d  = cudf::detail::make_device_uvector_async(
+    left_indices_h, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
+  auto right_indices_d = cudf::detail::make_device_uvector_async(
+    right_indices_h, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
 
   // Predicate: left.col1 > right.col1 (will be false for all)
   auto left_col_ref  = cudf::ast::column_reference(1, cudf::ast::table_reference::LEFT);
   auto right_col_ref = cudf::ast::column_reference(1, cudf::ast::table_reference::RIGHT);
-  auto ast_predicate = cudf::ast::operation(cudf::ast::ast_operator::GREATER, left_col_ref, right_col_ref);
+  auto ast_predicate =
+    cudf::ast::operation(cudf::ast::ast_operator::GREATER, left_col_ref, right_col_ref);
 
   // JIT predicate (receives output pointer, then all columns: left cols, then right cols)
   std::string jit_predicate = R"(
