@@ -107,6 +107,7 @@ from cudf.utils.dtypes import (
     SIZE_TYPE_DTYPE,
     SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES,
     can_convert_to_column,
+    dtype_from_pylibcudf_column,
     find_common_type,
     get_dtype_of_same_kind,
     is_column_like,
@@ -6232,7 +6233,9 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                     [],
                 )
                 columns = [
-                    ColumnBase.from_pylibcudf(col)
+                    ColumnBase.create(
+                        col, dtype=dtype_from_pylibcudf_column(col)
+                    )
                     for col in plc_table.columns()
                 ]
             result = self._from_columns_like_self(
@@ -7507,7 +7510,8 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 self.shape[0],
             )
             tiled_index = [
-                ColumnBase.from_pylibcudf(plc) for plc in plc_table.columns()
+                ColumnBase.create(plc, dtype=dtype_from_pylibcudf_column(plc))
+                for plc in plc_table.columns()
             ]
 
         # Assemble the final index
@@ -8048,10 +8052,12 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 "interleave_columns does not support 'category' dtype."
             )
         with access_columns(*self._columns, mode="read", scope="internal"):
-            result_col = ColumnBase.from_pylibcudf(
+            _, result_dtype = next(iter(self._dtypes))
+            result_col = ColumnBase.create(
                 plc.reshape.interleave_columns(
                     plc.Table([col.plc_column for col in self._columns])
-                )
+                ),
+                result_dtype,
             )
         return self._constructor_sliced._from_column(result_col)
 
@@ -8062,7 +8068,9 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 plc.Table([col.plc_column for col in self._columns]),
                 plc.expressions.to_expression(expr, self._column_names),
             )
-            return ColumnBase.from_pylibcudf(plc_column)
+            return ColumnBase.create(
+                plc_column, dtype=dtype_from_pylibcudf_column(plc_column)
+            )
 
     @_performance_tracking
     def eval(self, expr: str, inplace: bool = False, **kwargs):

@@ -71,8 +71,10 @@ from cudf.utils import docutils, ioutils
 from cudf.utils._numba import _CUDFNumbaConfig
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
+    DEFAULT_STRING_DTYPE,
     SIZE_TYPE_DTYPE,
     can_convert_to_column,
+    dtype_from_pylibcudf_column,
     find_common_type,
     get_dtype_of_same_kind,
     is_column_like,
@@ -2877,7 +2879,9 @@ class IndexedFrame(Frame):
                 plc_column = plc.hashing.sha512(plc_table)
             else:
                 raise ValueError(f"Unsupported hashing algorithm {method}.")
-            result = ColumnBase.from_pylibcudf(plc_column)
+            result = ColumnBase.create(
+                plc_column, dtype=dtype_from_pylibcudf_column(plc_column)
+            )
         return cudf.Series._from_column(
             result,
             index=self.index,
@@ -3216,7 +3220,9 @@ class IndexedFrame(Frame):
                 plc.types.NullEquality.EQUAL,
                 plc.types.NanEquality.ALL_EQUAL,
             )
-            distinct = ColumnBase.from_pylibcudf(plc_column)
+            distinct = ColumnBase.create(
+                plc_column, dtype=dtype_from_pylibcudf_column(plc_column)
+            )
         result = as_column(
             True, length=len(self), dtype=bool
         )._scatter_by_column(
@@ -3492,9 +3498,10 @@ class IndexedFrame(Frame):
         except Exception as e:
             raise RuntimeError("UDF kernel execution failed.") from e
 
-        if retty == np.dtype("object"):
-            col = ColumnBase.from_pylibcudf(
-                strings_udf.column_from_managed_udf_string_array(ans_col)
+        if retty == DEFAULT_STRING_DTYPE:
+            plc_col = strings_udf.column_from_managed_udf_string_array(ans_col)
+            col = ColumnBase.create(
+                plc_col, dtype=dtype_from_pylibcudf_column(plc_col)
             )
             free_kernel = _make_free_string_kernel()
             with _CUDFNumbaConfig():

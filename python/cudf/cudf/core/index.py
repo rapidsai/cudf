@@ -58,6 +58,7 @@ from cudf.utils.dtypes import (
     _maybe_convert_to_default_type,
     cudf_dtype_from_pa_type,
     cudf_dtype_to_pa_type,
+    dtype_from_pylibcudf_column,
     dtype_to_pylibcudf_type,
     find_common_type,
     is_mixed_with_object_dtype,
@@ -111,30 +112,28 @@ def _lexsorted_equal_range(
         sort_vals = idx
     sources = sort_vals._columns
     len_sources = len(sources)
-    lower_bound = ColumnBase.from_pylibcudf(
-        sorting.search_sorted(
-            sort_vals._columns,
-            keys,
-            side="left",
-            ascending=itertools.repeat(
-                sort_vals.is_monotonic_increasing, times=len_sources
-            ),
-            na_position=itertools.repeat("last", times=len_sources),
-        )
-    ).element_indexing(0)
-    upper_bound = ColumnBase.from_pylibcudf(
-        sorting.search_sorted(
-            sources,
-            keys,
-            side="right",
-            ascending=itertools.repeat(
-                sort_vals.is_monotonic_increasing, times=len_sources
-            ),
-            na_position=itertools.repeat("last", times=len_sources),
-        )
-    ).element_indexing(0)
+    plc_lower_bound = sorting.search_sorted(
+        sort_vals._columns,
+        keys,
+        side="left",
+        ascending=itertools.repeat(
+            sort_vals.is_monotonic_increasing, times=len_sources
+        ),
+        na_position=itertools.repeat("last", times=len_sources),
+    )
+    lower_bound = plc.copying.get_element(plc_lower_bound, 0).to_py()
+    plc_upper_bound = sorting.search_sorted(
+        sources,
+        keys,
+        side="right",
+        ascending=itertools.repeat(
+            sort_vals.is_monotonic_increasing, times=len_sources
+        ),
+        na_position=itertools.repeat("last", times=len_sources),
+    )
+    upper_bound = plc.copying.get_element(plc_upper_bound, 0).to_py()
 
-    return lower_bound, upper_bound, sort_inds
+    return cast(int, lower_bound), cast(int, upper_bound), sort_inds
 
 
 def _index_from_data(data: MutableMapping, name: Any = no_default):
@@ -1650,8 +1649,12 @@ class Index(SingleColumnFrame):
                 plc.Table([rcol.plc_column]),
                 plc.types.NullEquality.EQUAL,
             )
-            scatter_map = ColumnBase.from_pylibcudf(left_plc)
-            indices = ColumnBase.from_pylibcudf(right_plc)
+            scatter_map = ColumnBase.create(
+                left_plc, dtype=dtype_from_pylibcudf_column(left_plc)
+            )
+            indices = ColumnBase.create(
+                right_plc, dtype=dtype_from_pylibcudf_column(right_plc)
+            )
         result = result._scatter_by_column(scatter_map, indices)
         result_series = cudf.Series._from_column(result)
 
@@ -4838,17 +4841,13 @@ def interval_range(
     pa_start = pa_start.cast(cudf_dtype_to_pa_type(common_dtype))
     pa_freq = pa_freq.cast(cudf_dtype_to_pa_type(common_dtype))
 
-    # No columns to access here - sequence creates new data
-    bin_edges = ColumnBase.from_pylibcudf(
-        plc.filling.sequence(
-            size=periods + 1,
-            init=pa_scalar_to_plc_scalar(pa_start),
-            step=pa_scalar_to_plc_scalar(pa_freq),
-        )
+    plc_result = plc.filling.sequence(
+        size=periods + 1,
+        init=pa_scalar_to_plc_scalar(pa_start),
+        step=pa_scalar_to_plc_scalar(pa_freq),
     )
-    return IntervalIndex.from_breaks(
-        bin_edges.astype(common_dtype), closed=closed, name=name
-    )
+    bin_edges = ColumnBase.create(plc_result, dtype=common_dtype)
+    return IntervalIndex.from_breaks(bin_edges, closed=closed, name=name)
 
 
 class IntervalIndex(Index):
