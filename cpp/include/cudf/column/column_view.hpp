@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -491,23 +491,54 @@ class column_view : public detail::column_view_base {
                                          ///< may contain additional data
 };  // namespace cudf
 
+/**
+ * @brief A non-owning, immutable view of device data as a column of elements,
+ * some of which may be null as indicated by a bitmask.
+ *
+ * @ingroup column_classes
+ *
+ * A `scalar_column_view` can be constructed explicitly from a `cudf::column_view`.
+ *
+ * Unless otherwise noted, the memory layout of the `scalar_column_view`'s data and
+ * bitmask is expected to adhere to the Arrow Physical Memory Layout
+ * Specification: https://arrow.apache.org/docs/memory_layout.html
+ *
+ * Because `scalar_column_view` is non-owning, no device memory is allocated nor freed
+ * when `scalar_column_view` objects are created or destroyed.
+ *
+ */
 struct scalar_column_view : private column_view {
+ private:
+  using base = column_view;
+
  public:
+  /**
+   * @brief Construct a `scalar_column_view` from a `column_view`.
+   * @throws cudf::logic_error if the column view does not have exactly one element.
+   * @param view The column view to construct from
+   */
   explicit scalar_column_view(column_view view) : column_view(std::move(view))
   {
     CUDF_EXPECTS(
       this->size() == 1, "A scalar column view must have exactly one element.", std::logic_error);
   }
 
-  using column_view::data;
-  using column_view::null_count;
-  using column_view::null_mask;
-  using column_view::nullable;
-  using column_view::offset;
-  using column_view::size;
-  using column_view::type;
+  using base::data;
+  using base::has_nulls;
+  using base::head;
+  using base::is_empty;
+  using base::null_count;
+  using base::null_mask;
+  using base::nullable;
+  using base::offset;
+  using base::size;
+  using base::type;
 
-  column_view const& as_column_view() const noexcept { return *this; }
+  /**
+   * @brief Returns a reference to the underlying `column_view` of this `scalar_column_view`.
+   * @return A reference to the underlying `column_view`
+   */
+  base const& as_column_view() const noexcept { return *this; }
 };
 
 /**

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -238,6 +238,12 @@ std::tuple<rmm::device_buffer, size_type> and_null_mask(size_type row_size,
     }
   }
 
+  if (bitmask_columns.empty()) {
+    // if there are no non-scalar columns contributing to the null-mask, then the output is all
+    // valid (scalar projection) given that the scalar is not null (checked above)
+    return std::make_tuple(create_null_mask(row_size, mask_state::ALL_VALID, stream, mr), 0);
+  }
+
   return cudf::bitmask_and(table_view{bitmask_columns}, stream, mr);
 }
 
@@ -250,7 +256,7 @@ bool may_evaluate_null(InputsView inputs, null_aware is_null_aware, output_nulla
     /// null-unaware UDFs will evaluate nulls if any input is nullable unless explicitly marked
     /// as not producing nulls
     bool any_nullable = std::any_of(inputs.begin(), inputs.end(), [](auto const& input) {
-      return std::visit([](auto const& col) { return col.has_nulls(); }, input);
+      return std::visit([](auto const& col) { return col.nullable(); }, input);
     });
     return any_nullable && null_out == output_nullability::PRESERVE;
   }
@@ -283,10 +289,11 @@ std::unique_ptr<column> transform_operation(size_type row_size,
     if (may_return_nulls) { intermediate_null_mask.emplace(row_size, stream, mr); }
   }
 
-  auto kernel = build_transform_kernel(is_fixed_point(output_type)
+  mutable_column_view outputs[] = {{*output}};
+  auto kernel                   = build_transform_kernel(is_fixed_point(output_type)
                                          ? "cudf::transformation::jit::fixed_point_kernel"
                                          : "cudf::transformation::jit::kernel",
-                                       {*output},
+                                       outputs,
                                        inputs,
                                        is_null_aware,
                                        may_return_nulls,
@@ -297,7 +304,7 @@ std::unique_ptr<column> transform_operation(size_type row_size,
                                        mr);
 
   launch_column_output_kernel(kernel,
-                              {*output},
+                              outputs,
                               inputs,
                               intermediate_null_mask.has_value()
                                 ? std::optional<bool*>(intermediate_null_mask->data())
@@ -348,8 +355,10 @@ std::unique_ptr<column> string_view_operation(size_type row_size,
     cudf::jit::device_span<string_view>{string_views.data(), string_views.size()},
     and_mask.has_value() ? static_cast<bitmask_type*>(std::get<0>(*and_mask).data()) : nullptr};
 
+  std::string output_typenames[] = {"cudf::string_view"};
+
   auto kernel = build_span_kernel("cudf::transformation::jit::span_kernel",
-                                  {"cudf::string_view"},
+                                  output_typenames,
                                   inputs,
                                   is_null_aware,
                                   may_return_nulls,
@@ -491,23 +500,24 @@ std::unique_ptr<column> transform(InputsView inputs,
 
 }  // namespace detail
 
-std::unique_ptr<column> transform(InputsView inputs,
-                                  std::string const& udf,
-                                  data_type output_type,
-                                  bool is_ptx,
-                                  std::optional<void*> user_data,
-                                  null_aware is_null_aware,
-                                  std::optional<size_type> row_size,
-                                  output_nullability null_policy,
-                                  rmm::cuda_stream_view stream,
-                                  rmm::device_async_resource_ref mr)
+std::unique_ptr<column> transform_ex(
+  std::vector<std::variant<column_view, scalar_column_view>> const& inputs,
+  std::string const& udf,
+  data_type output_type,
+  bool is_ptx,
+  std::optional<void*> user_data,
+  null_aware is_null_aware,
+  std::optional<size_type> row_size,
+  output_nullability null_policy,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::transform(
     inputs, udf, output_type, is_ptx, user_data, is_null_aware, row_size, null_policy, stream, mr);
 }
 
-std::unique_ptr<column> transform(std::vector<column_view> const& inputs,
+std::unique_ptr<column> transform(std::vector<column_view> const& columns,
                                   std::string const& transform_udf,
                                   data_type output_type,
                                   bool is_ptx,
@@ -518,8 +528,27 @@ std::unique_ptr<column> transform(std::vector<column_view> const& inputs,
                                   rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
- // TODO: preserve legacy behaviour
-  return nullptr;
+  // legacy behavior was to detect which column were scalars based on their sizes
+  std::vector<std::variant<column_view, scalar_column_view>> inputs;
+  auto base_column = jit::deprecated::get_transform_base_column(columns);
+  for (auto const& col : columns) {
+    if (jit::deprecated::is_scalar(base_column->size(), col.size())) {
+      inputs.emplace_back(scalar_column_view{col});
+    } else {
+      inputs.emplace_back(col);
+    }
+  }
+
+  return detail::transform(inputs,
+                           transform_udf,
+                           output_type,
+                           is_ptx,
+                           user_data,
+                           is_null_aware,
+                           base_column->size(),
+                           null_policy,
+                           stream,
+                           mr);
 }
 
 std::unique_ptr<column> compute_column_jit(table_view const& table,
@@ -531,7 +560,16 @@ std::unique_ptr<column> compute_column_jit(table_view const& table,
   auto args = cudf::detail::row_ir::ast_converter::compute_column(
     cudf::detail::row_ir::target::CUDA, expr, ast_args, stream, mr);
 
-  return cudf::transform(args.params, stream, mr);
+  return cudf::transform_ex(args.inputs,
+                            args.udf,
+                            args.output_type,
+                            args.is_ptx,
+                            args.user_data,
+                            args.is_null_aware,
+                            args.row_size,
+                            args.null_policy,
+                            stream,
+                            mr);
 }
 
 }  // namespace cudf

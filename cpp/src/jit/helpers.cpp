@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -7,6 +7,28 @@
 
 namespace cudf {
 namespace jit {
+
+bool deprecated::is_scalar(cudf::size_type base_column_size, cudf::size_type column_size)
+{
+  return column_size == 1 && column_size != base_column_size;
+}
+
+typename std::vector<column_view>::const_iterator deprecated::get_transform_base_column(
+  std::vector<column_view> const& inputs)
+{
+  if (inputs.empty()) { return inputs.end(); }
+
+  auto [smallest, largest] = std::minmax_element(
+    inputs.begin(), inputs.end(), [](auto const& a, auto const& b) { return a.size() < b.size(); });
+
+  /// when the largest size is 1, the size-1 column could be a scalar or an actual column, it would
+  /// be a scalar if it has columns that are zero-sized
+  if (largest->size() != 1) { return largest; }
+
+  if (smallest->size() == 0) { return smallest; }
+
+  return largest;
+}
 
 size_type get_major_size(column_view const& col) { return col.size(); }
 

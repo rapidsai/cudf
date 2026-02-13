@@ -52,7 +52,7 @@ namespace CUDF_EXPORT cudf {
  * @return              The column resulting from applying the transform function to
  *                      every element of the input
  */
-[[deprecated]] std::unique_ptr<column> transform(
+[[deprecated("Use transform_ex instead")]] std::unique_ptr<column> transform(
   std::vector<column_view> const& inputs,
   std::string const& transform_udf,
   data_type output_type,
@@ -70,14 +70,14 @@ namespace CUDF_EXPORT cudf {
  * Computes:
  * `out[i] = F(inputs[i]...)`.
  *
- * Note that for every scalar in `inputs` (columns of size 1), `input[i] == input[0]`
  *
- *
- * @throws std::invalid_argument if any of the input columns have different sizes (except scalars of
- * size 1)
+ * @throws std::invalid_argument if any of the input columns have different sizes (except scalars)
  * @throws std::invalid_argument if `output_type` or any of the inputs are not fixed-width or string
  * types
  * @throws std::invalid_argument if any of the input columns have nulls
+ * @throws std::invalid_argument if the inputs only have a scalar with no column inputs and
+ * `row_size` is not provided. This is because the row size cannot be inferred from the inputs in
+ * this case.
  * @throws std::logic_error if JIT is not supported by the runtime
  *
  * The size of the resulting column is the `row_size` if provided, otherwise it is inferred from
@@ -97,8 +97,8 @@ namespace CUDF_EXPORT cudf {
  * @return              The column resulting from applying the transform function to
  *                      every element of the input
  */
-std::unique_ptr<column> transform(
-  std::vector<std::variant<column_view, scalar_column_view>> inputs,
+std::unique_ptr<column> transform_ex(
+  std::vector<std::variant<column_view, scalar_column_view>> const& inputs,
   std::string const& udf,
   data_type output_type,
   bool is_ptx,

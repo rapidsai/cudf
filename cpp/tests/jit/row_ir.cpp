@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -266,17 +266,19 @@ TEST_F(RowIRCudaCodeGenTest, AstConversionBasic)
   EXPECT_EQ(transform_args.is_null_aware, null_aware::NO);
   EXPECT_EQ(transform_args.null_policy, output_nullability::ALL_VALID);
   EXPECT_EQ(transform_args.output_type, data_type{type_id::INT32});
-  ASSERT_EQ(transform_args.columns.size(), 2);
+  ASSERT_EQ(transform_args.inputs.size(), 2);
 
-  /// Scalar column should be represented as a column of size 1
-  ASSERT_EQ(transform_args.columns[0].size(), 1);
-  EXPECT_EQ(transform_args.columns[0].type(), data_type{type_id::INT32});
-  EXPECT_EQ(transform_args.columns[0].null_count(), 0);
+  /// The first input should be a scalar value of 42
+  ASSERT_TRUE(std::holds_alternative<scalar_column_view>(transform_args.inputs[0]));
+  EXPECT_EQ(std::get<scalar_column_view>(transform_args.inputs[0]).type(),
+            data_type{type_id::INT32});
+  EXPECT_EQ(std::get<scalar_column_view>(transform_args.inputs[0]).null_count(), 0);
 
   /// The input column should be the second column in the transform args
-  ASSERT_EQ(transform_args.columns[1].size(), column->size());
-  EXPECT_EQ(transform_args.columns[1].type(), column->type());
-  EXPECT_EQ(transform_args.columns[1].null_count(), column->null_count());
+  ASSERT_TRUE(std::holds_alternative<column_view>(transform_args.inputs[1]));
+  ASSERT_EQ(std::get<column_view>(transform_args.inputs[1]).size(), column->size());
+  EXPECT_EQ(std::get<column_view>(transform_args.inputs[1]).type(), column->type());
+  EXPECT_EQ(std::get<column_view>(transform_args.inputs[1]).null_count(), column->null_count());
 
   auto expected_udf = R"***(
 __device__ void expression(int32_t* out_0, int32_t in_0, int32_t in_1)
@@ -293,15 +295,52 @@ return;
 
   EXPECT_EQ(transform_args.udf, expected_udf);
 
-  auto result = cudf::transform(transform_args.columns,
-                                transform_args.udf,
-                                transform_args.output_type,
-                                transform_args.is_ptx,
-                                transform_args.user_data,
-                                transform_args.is_null_aware,
-                                transform_args.null_policy);
+  auto result = cudf::transform_ex(transform_args.inputs,
+                                   transform_args.udf,
+                                   transform_args.output_type,
+                                   transform_args.is_ptx,
+                                   transform_args.user_data,
+                                   transform_args.is_null_aware,
+                                   transform_args.row_size,
+                                   transform_args.null_policy);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
+TEST_F(RowIRCudaCodeGenTest, FilterPredicate)
+{
+  row_ir::target_info target_info{row_ir::target::CUDA};
+
+  row_ir::var_info inputs[] = {{"in_0", {data_type{type_id::BOOL8}}}};
+
+  row_ir::instance_info info{inputs, {}};
+
+  {
+    row_ir::instance_context ctx{};
+    row_ir::filter_predicate filter_predicate(std::make_unique<row_ir::get_input>(0));
+    filter_predicate.instantiate(ctx, info);
+    auto code = filter_predicate.generate_code(ctx, target_info, info);
+
+    auto expected_code = R"***(bool tmp_0 = in_0;
+bool tmp_1 = cudf::ast::detail::flatten_predicate(tmp_0);
+)***";
+
+    EXPECT_EQ(code, expected_code);
+  }
+
+  {
+    row_ir::instance_context ctx{};
+    row_ir::filter_predicate filter_predicate(std::make_unique<row_ir::get_input>(0));
+    ctx.set_has_nulls(true);
+    filter_predicate.instantiate(ctx, info);
+    auto null_code = filter_predicate.generate_code(ctx, target_info, info);
+
+    auto expected_code = R"***(cuda::std::optional<bool> tmp_0 = in_0;
+bool tmp_1 = cudf::ast::detail::flatten_predicate(tmp_0);
+)***";
+
+    EXPECT_EQ(null_code, expected_code);
+  }
 }
 
 CUDF_TEST_PROGRAM_MAIN()

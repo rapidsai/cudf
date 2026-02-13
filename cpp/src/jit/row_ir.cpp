@@ -619,11 +619,9 @@ transform_args ast_converter::compute_column(target target_id,
   auto& out               = converter.output_irs_[0];
   auto output_column_type = out->get_type();
 
-  auto udf = std::move(converter.code_);
-
   auto result = transform_args{.scalar_columns = std::move(scalar_columns),
                                .inputs         = inputs,
-                               .udf            = std::move(udf),
+                               .udf            = std::move(converter.code_),
                                .output_type    = output_column_type,
                                .is_ptx         = false,
                                .user_data      = std::nullopt,
@@ -658,13 +656,14 @@ filter_args ast_converter::filter(target target_id,
                  std::back_inserter(filter_columns),
                  [](auto const& col) { return col; });
 
-  auto result = filter_args{.scalar_columns = std::move(transform.scalar_columns),
-                            .inputs         = std::move(transform.inputs),
-                            .filter_columns = std::move(filter_columns),
-                            .udf            = std::move(transform.udf),
-                            .is_ptx         = transform.is_ptx,
-                            .user_data      = transform.user_data,
-                            .is_null_aware  = transform.is_null_aware};
+  auto result = filter_args{.scalar_columns        = std::move(transform.scalar_columns),
+                            .inputs                = std::move(transform.inputs),
+                            .filter_columns        = std::move(filter_columns),
+                            .udf                   = std::move(transform.udf),
+                            .is_ptx                = transform.is_ptx,
+                            .user_data             = transform.user_data,
+                            .is_null_aware         = transform.is_null_aware,
+                            .predicate_nullability = transform.null_policy};
 
   return result;
 }

@@ -501,6 +501,8 @@ struct [[nodiscard]] filter_args {
   bool is_ptx                    = false;  ///< Whether the filter is a PTX device function
   std::optional<void*> user_data = std::nullopt;    ///< User data to pass to the filter
   null_aware is_null_aware       = null_aware::NO;  ///< Whether the filter is null-aware
+  output_nullability predicate_nullability =
+    output_nullability::PRESERVE;  ///< Null-transformation policy for the predicate output
 };
 
 /**

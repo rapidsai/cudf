@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -21,6 +21,14 @@
 namespace cudf {
 namespace jit {
 
+namespace deprecated {
+
+bool is_scalar(cudf::size_type base_column_size, cudf::size_type column_size);
+
+typename std::vector<column_view>::const_iterator get_transform_base_column(
+  std::vector<column_view> const& inputs);
+
+};  // namespace deprecated
 
 size_type get_transform_major_size(
   std::span<std::variant<column_view, scalar_column_view> const> inputs);

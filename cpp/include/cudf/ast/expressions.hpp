@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -507,8 +507,15 @@ class operation : public expression {
 
 namespace detail {
 
+/// @brief An expression that represents a filter predicate. This is an internal expression used in
+/// filter operations. It is not intended to be used by external code and is not a part of the
+/// public API.
 class filter_predicate : public expression {
  public:
+  /**
+   * @brief Construct a new filter predicate object
+   * @param source The source expression from which the predicate value is taken
+   */
   filter_predicate(expression const& source) : source_{source} {}
 
   /**
@@ -532,10 +539,10 @@ class filter_predicate : public expression {
   [[nodiscard]] std::unique_ptr<cudf::detail::row_ir::node> accept(
     cudf::detail::row_ir::ast_converter& visitor) const override;
 
-    /**
-    * @brief Get the operand expression.
-    * @return The operand expression
-     */
+  /**
+   * @brief Get the operand expression.
+   * @return The operand expression
+   */
   [[nodiscard]] expression const& get_operand() const { return source_; }
 
  private:
