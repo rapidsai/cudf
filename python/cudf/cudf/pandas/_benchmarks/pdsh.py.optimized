@@ -46,10 +46,11 @@ class PDSHQueries:
     def q1(run_config: RunConfig) -> pd.DataFrame:
         """Query 1."""
         lineitem = get_data(
-            run_config.dataset_path,
-            "lineitem",
-            run_config.suffix,
-            columns=[
+            run_config.dataset_path, "lineitem", run_config.suffix
+        )
+
+        lineitem = lineitem[
+            [
                 "l_orderkey",
                 "l_quantity",
                 "l_extendedprice",
@@ -58,8 +59,8 @@ class PDSHQueries:
                 "l_returnflag",
                 "l_linestatus",
                 "l_shipdate",
-            ],
-        )
+            ]
+        ]
 
         var1 = datetime64("1998-09-02")
 
@@ -92,41 +93,26 @@ class PDSHQueries:
     @staticmethod
     def q2(run_config: RunConfig) -> pd.DataFrame:
         """Query 2."""
-        nation = get_data(
-            run_config.dataset_path,
-            "nation",
-            run_config.suffix,
-            columns=["n_nationkey", "n_regionkey", "n_name"],
-        )
-        part = get_data(
-            run_config.dataset_path,
-            "part",
-            run_config.suffix,
-            columns=["p_partkey", "p_size", "p_type", "p_mfgr"],
-        )
+        nation = get_data(run_config.dataset_path, "nation", run_config.suffix)
+        part = get_data(run_config.dataset_path, "part", run_config.suffix)
         partsupp = get_data(
-            run_config.dataset_path,
-            "partsupp",
-            run_config.suffix,
-            columns=["ps_partkey", "ps_suppkey", "ps_supplycost"],
+            run_config.dataset_path, "partsupp", run_config.suffix
         )
-        region = get_data(
-            run_config.dataset_path,
-            "region",
-            run_config.suffix,
-            columns=["r_regionkey", "r_name"],
-        )
+        region = get_data(run_config.dataset_path, "region", run_config.suffix)
         supplier = get_data(
             run_config.dataset_path, "supplier", run_config.suffix
         )
+
+        nation = nation[["n_nationkey", "n_regionkey", "n_name"]]
+        part = part[["p_partkey", "p_size", "p_type", "p_mfgr"]]
+        partsupp = partsupp[["ps_partkey", "ps_suppkey", "ps_supplycost"]]
+        region = region[["r_regionkey", "r_name"]]
 
         var1 = 15
         var2 = "BRASS"
         var3 = "EUROPE"
 
-        part = part[
-            (part["p_size"] == var1) & part["p_type"].str.endswith(var2)
-        ]
+        part = part[(part["p_size"] == var1) & part["p_type"].str.endswith(var2)]
         region = region[region["r_name"] == var3]
 
         jn = (
@@ -164,33 +150,20 @@ class PDSHQueries:
     def q3(run_config: RunConfig) -> pd.DataFrame:
         """Query 3."""
         customer = get_data(
-            run_config.dataset_path,
-            "customer",
-            run_config.suffix,
-            columns=["c_custkey", "c_mktsegment"],
+            run_config.dataset_path, "customer", run_config.suffix
         )
         lineitem = get_data(
-            run_config.dataset_path,
-            "lineitem",
-            run_config.suffix,
-            columns=[
-                "l_orderkey",
-                "l_extendedprice",
-                "l_discount",
-                "l_shipdate",
-            ],
+            run_config.dataset_path, "lineitem", run_config.suffix
         )
-        orders = get_data(
-            run_config.dataset_path,
-            "orders",
-            run_config.suffix,
-            columns=[
-                "o_custkey",
-                "o_orderkey",
-                "o_orderdate",
-                "o_shippriority",
-            ],
-        )
+        orders = get_data(run_config.dataset_path, "orders", run_config.suffix)
+
+        customer = customer[["c_custkey", "c_mktsegment"]]
+        lineitem = lineitem[
+            ["l_orderkey", "l_extendedprice", "l_discount", "l_shipdate"]
+        ]
+        orders = orders[
+            ["o_custkey", "o_orderkey", "o_orderdate", "o_shippriority"]
+        ]
 
         var1 = "BUILDING"
         var2 = datetime64("1995-03-15")
@@ -224,17 +197,12 @@ class PDSHQueries:
     def q4(run_config: RunConfig) -> pd.DataFrame:
         """Query 4."""
         lineitem = get_data(
-            run_config.dataset_path,
-            "lineitem",
-            run_config.suffix,
-            columns=["l_orderkey", "l_commitdate", "l_receiptdate"],
+            run_config.dataset_path, "lineitem", run_config.suffix
         )
-        orders = get_data(
-            run_config.dataset_path,
-            "orders",
-            run_config.suffix,
-            columns=["o_orderkey", "o_orderdate", "o_orderpriority"],
-        )
+        orders = get_data(run_config.dataset_path, "orders", run_config.suffix)
+
+        lineitem = lineitem[["l_orderkey", "l_commitdate", "l_receiptdate"]]
+        orders = orders[["o_orderkey", "o_orderdate", "o_orderpriority"]]
 
         var1 = datetime64("1993-07-01")
         var2 = datetime64("1993-10-01")
@@ -264,47 +232,21 @@ class PDSHQueries:
         """Query 5."""
         path = run_config.dataset_path
         suffix = run_config.suffix
-        customer = get_data(
-            path,
-            "customer",
-            suffix,
-            columns=["c_custkey", "c_nationkey"],
-        )
-        lineitem = get_data(
-            path,
-            "lineitem",
-            suffix,
-            columns=[
-                "l_orderkey",
-                "l_suppkey",
-                "l_extendedprice",
-                "l_discount",
-            ],
-        )
-        nation = get_data(
-            path,
-            "nation",
-            suffix,
-            columns=["n_nationkey", "n_name", "n_regionkey"],
-        )
-        orders = get_data(
-            path,
-            "orders",
-            suffix,
-            columns=["o_orderkey", "o_custkey", "o_orderdate"],
-        )
-        region = get_data(
-            path,
-            "region",
-            suffix,
-            columns=["r_regionkey", "r_name"],
-        )
-        supplier = get_data(
-            path,
-            "supplier",
-            suffix,
-            columns=["s_suppkey", "s_nationkey"],
-        )
+        customer = get_data(path, "customer", suffix)
+        lineitem = get_data(path, "lineitem", suffix)
+        nation = get_data(path, "nation", suffix)
+        orders = get_data(path, "orders", suffix)
+        region = get_data(path, "region", suffix)
+        supplier = get_data(path, "supplier", suffix)
+
+        region = region[["r_regionkey", "r_name"]]
+        nation = nation[["n_nationkey", "n_name", "n_regionkey"]]
+        customer = customer[["c_custkey", "c_nationkey"]]
+        orders = orders[["o_orderkey", "o_custkey", "o_orderdate"]]
+        lineitem = lineitem[
+            ["l_orderkey", "l_suppkey", "l_extendedprice", "l_discount"]
+        ]
+        supplier = supplier[["s_suppkey", "s_nationkey"]]
 
         var1 = "ASIA"
         var2 = datetime64("1994-01-01")
@@ -337,17 +279,11 @@ class PDSHQueries:
         """Query 6."""
         path = run_config.dataset_path
         suffix = run_config.suffix
-        lineitem = get_data(
-            path,
-            "lineitem",
-            suffix,
-            columns=[
-                "l_shipdate",
-                "l_discount",
-                "l_quantity",
-                "l_extendedprice",
-            ],
-        )
+        lineitem = get_data(path, "lineitem", suffix)
+
+        lineitem = lineitem[
+            ["l_shipdate", "l_discount", "l_quantity", "l_extendedprice"]
+        ]
 
         var1 = datetime64("1994-01-01")
         var2 = datetime64("1995-01-01")
@@ -369,41 +305,30 @@ class PDSHQueries:
     def q7(run_config: RunConfig) -> pd.DataFrame:
         """Query 7."""
         customer = get_data(
-            run_config.dataset_path,
-            "customer",
-            run_config.suffix,
-            columns=["c_custkey", "c_nationkey"],
+            run_config.dataset_path, "customer", run_config.suffix
         )
         lineitem = get_data(
-            run_config.dataset_path,
-            "lineitem",
-            run_config.suffix,
-            columns=[
+            run_config.dataset_path, "lineitem", run_config.suffix
+        )
+        nation = get_data(run_config.dataset_path, "nation", run_config.suffix)
+        orders = get_data(run_config.dataset_path, "orders", run_config.suffix)
+        supplier = get_data(
+            run_config.dataset_path, "supplier", run_config.suffix
+        )
+
+        nation = nation[["n_nationkey", "n_name"]]
+        customer = customer[["c_custkey", "c_nationkey"]]
+        orders = orders[["o_custkey", "o_orderkey"]]
+        lineitem = lineitem[
+            [
                 "l_orderkey",
                 "l_suppkey",
                 "l_extendedprice",
                 "l_discount",
                 "l_shipdate",
-            ],
-        )
-        nation = get_data(
-            run_config.dataset_path,
-            "nation",
-            run_config.suffix,
-            columns=["n_nationkey", "n_name"],
-        )
-        orders = get_data(
-            run_config.dataset_path,
-            "orders",
-            run_config.suffix,
-            columns=["o_custkey", "o_orderkey"],
-        )
-        supplier = get_data(
-            run_config.dataset_path,
-            "supplier",
-            run_config.suffix,
-            columns=["s_suppkey", "s_nationkey"],
-        )
+            ]
+        ]
+        supplier = supplier[["s_suppkey", "s_nationkey"]]
 
         var1 = "FRANCE"
         var2 = "GERMANY"
@@ -453,43 +378,30 @@ class PDSHQueries:
     def q8(run_config: RunConfig) -> pd.DataFrame:
         """Query 8."""
         customer = get_data(
-            run_config.dataset_path,
-            "customer",
-            run_config.suffix,
-            columns=["c_custkey", "c_nationkey"],
-        )
+            run_config.dataset_path, "customer", run_config.suffix
+        )[["c_custkey", "c_nationkey"]]
         lineitem = get_data(
-            run_config.dataset_path,
-            "lineitem",
-            run_config.suffix,
-            columns=[
+            run_config.dataset_path, "lineitem", run_config.suffix
+        )[
+            [
                 "l_partkey",
                 "l_suppkey",
                 "l_orderkey",
                 "l_extendedprice",
                 "l_discount",
-            ],
-        )
+            ]
+        ]
         nation = get_data(run_config.dataset_path, "nation", run_config.suffix)
         orders = get_data(
-            run_config.dataset_path,
-            "orders",
-            run_config.suffix,
-            columns=["o_orderkey", "o_custkey", "o_orderdate"],
-        )
-        part = get_data(
-            run_config.dataset_path,
-            "part",
-            run_config.suffix,
-            columns=["p_partkey", "p_type"],
-        )
+            run_config.dataset_path, "orders", run_config.suffix
+        )[["o_orderkey", "o_custkey", "o_orderdate"]]
+        part = get_data(run_config.dataset_path, "part", run_config.suffix)[
+            ["p_partkey", "p_type"]
+        ]
         region = get_data(run_config.dataset_path, "region", run_config.suffix)
         supplier = get_data(
-            run_config.dataset_path,
-            "supplier",
-            run_config.suffix,
-            columns=["s_suppkey", "s_nationkey"],
-        )
+            run_config.dataset_path, "supplier", run_config.suffix
+        )[["s_suppkey", "s_nationkey"]]
 
         var1 = "BRAZIL"
         var2 = "AMERICA"
@@ -536,49 +448,30 @@ class PDSHQueries:
         """Query 9."""
         path = run_config.dataset_path
         suffix = run_config.suffix
-        lineitem = get_data(
-            path,
-            "lineitem",
-            suffix,
-            columns=[
+        lineitem = get_data(path, "lineitem", suffix)
+        nation = get_data(path, "nation", suffix)
+        orders = get_data(path, "orders", suffix)
+        part = get_data(path, "part", suffix)
+        partsupp = get_data(path, "partsupp", suffix)
+        supplier = get_data(path, "supplier", suffix)
+
+        # Column projection: keep only columns needed downstream to
+        # reduce gather volume through the merge chain.
+        part = part[["p_partkey", "p_name"]]
+        partsupp = partsupp[["ps_partkey", "ps_suppkey", "ps_supplycost"]]
+        supplier = supplier[["s_suppkey", "s_nationkey"]]
+        lineitem = lineitem[
+            [
                 "l_partkey",
                 "l_suppkey",
                 "l_orderkey",
                 "l_extendedprice",
                 "l_discount",
                 "l_quantity",
-            ],
-        )
-        nation = get_data(
-            path,
-            "nation",
-            suffix,
-            columns=["n_nationkey", "n_name"],
-        )
-        orders = get_data(
-            path,
-            "orders",
-            suffix,
-            columns=["o_orderkey", "o_orderdate"],
-        )
-        part = get_data(
-            path,
-            "part",
-            suffix,
-            columns=["p_partkey", "p_name"],
-        )
-        partsupp = get_data(
-            path,
-            "partsupp",
-            suffix,
-            columns=["ps_partkey", "ps_suppkey", "ps_supplycost"],
-        )
-        supplier = get_data(
-            path,
-            "supplier",
-            suffix,
-            columns=["s_suppkey", "s_nationkey"],
-        )
+            ]
+        ]
+        orders = orders[["o_orderkey", "o_orderdate"]]
+        nation = nation[["n_nationkey", "n_name"]]
 
         jn1 = part.merge(partsupp, left_on="p_partkey", right_on="ps_partkey")
         jn2 = jn1.merge(supplier, left_on="ps_suppkey", right_on="s_suppkey")
@@ -610,11 +503,18 @@ class PDSHQueries:
         """Query 10."""
         path = run_config.dataset_path
         suffix = run_config.suffix
-        customer = get_data(
-            path,
-            "customer",
-            suffix,
-            columns=[
+        customer = get_data(path, "customer", suffix)
+        lineitem = get_data(path, "lineitem", suffix)
+        nation = get_data(path, "nation", suffix)
+        orders = get_data(path, "orders", suffix)
+
+        var1 = datetime64("1993-10-01")
+        var2 = datetime64("1994-01-01")
+
+        # Column projection: keep only columns needed downstream to
+        # reduce gather volume through the merge chain.
+        customer = customer[
+            [
                 "c_custkey",
                 "c_name",
                 "c_address",
@@ -622,34 +522,13 @@ class PDSHQueries:
                 "c_phone",
                 "c_acctbal",
                 "c_comment",
-            ],
-        )
-        lineitem = get_data(
-            path,
-            "lineitem",
-            suffix,
-            columns=[
-                "l_orderkey",
-                "l_returnflag",
-                "l_extendedprice",
-                "l_discount",
-            ],
-        )
-        nation = get_data(
-            path,
-            "nation",
-            suffix,
-            columns=["n_nationkey", "n_name"],
-        )
-        orders = get_data(
-            path,
-            "orders",
-            suffix,
-            columns=["o_custkey", "o_orderkey", "o_orderdate"],
-        )
-
-        var1 = datetime64("1993-10-01")
-        var2 = datetime64("1994-01-01")
+            ]
+        ]
+        orders = orders[["o_custkey", "o_orderkey", "o_orderdate"]]
+        lineitem = lineitem[
+            ["l_orderkey", "l_returnflag", "l_extendedprice", "l_discount"]
+        ]
+        nation = nation[["n_nationkey", "n_name"]]
 
         jn1 = customer.merge(orders, left_on="c_custkey", right_on="o_custkey")
         jn2 = jn1.merge(lineitem, left_on="o_orderkey", right_on="l_orderkey")
@@ -693,29 +572,19 @@ class PDSHQueries:
     @staticmethod
     def q11(run_config: RunConfig) -> pd.DataFrame:
         """Query 11."""
-        nation = get_data(
-            run_config.dataset_path,
-            "nation",
-            run_config.suffix,
-            columns=["n_nationkey", "n_name"],
-        )
+        nation = get_data(run_config.dataset_path, "nation", run_config.suffix)
         partsupp = get_data(
-            run_config.dataset_path,
-            "partsupp",
-            run_config.suffix,
-            columns=[
-                "ps_suppkey",
-                "ps_supplycost",
-                "ps_availqty",
-                "ps_partkey",
-            ],
+            run_config.dataset_path, "partsupp", run_config.suffix
         )
         supplier = get_data(
-            run_config.dataset_path,
-            "supplier",
-            run_config.suffix,
-            columns=["s_suppkey", "s_nationkey"],
+            run_config.dataset_path, "supplier", run_config.suffix
         )
+
+        nation = nation[["n_nationkey", "n_name"]]
+        partsupp = partsupp[
+            ["ps_suppkey", "ps_supplycost", "ps_availqty", "ps_partkey"]
+        ]
+        supplier = supplier[["s_suppkey", "s_nationkey"]]
 
         var1 = "GERMANY"
         var2 = 0.0001 / run_config.scale_factor
@@ -741,23 +610,20 @@ class PDSHQueries:
     def q12(run_config: RunConfig) -> pd.DataFrame:
         """Query 12."""
         lineitem = get_data(
-            run_config.dataset_path,
-            "lineitem",
-            run_config.suffix,
-            columns=[
+            run_config.dataset_path, "lineitem", run_config.suffix
+        )
+        orders = get_data(run_config.dataset_path, "orders", run_config.suffix)
+
+        lineitem = lineitem[
+            [
                 "l_orderkey",
                 "l_shipmode",
                 "l_commitdate",
                 "l_receiptdate",
                 "l_shipdate",
-            ],
-        )
-        orders = get_data(
-            run_config.dataset_path,
-            "orders",
-            run_config.suffix,
-            columns=["o_orderkey", "o_orderpriority"],
-        )
+            ]
+        ]
+        orders = orders[["o_orderkey", "o_orderpriority"]]
 
         var1 = "MAIL"
         var2 = "SHIP"
@@ -765,9 +631,7 @@ class PDSHQueries:
         var4 = datetime64("1995-01-01")
 
         lineitem = lineitem[lineitem["l_shipmode"].isin([var1, var2])]
-        lineitem = lineitem[
-            lineitem["l_commitdate"] < lineitem["l_receiptdate"]
-        ]
+        lineitem = lineitem[lineitem["l_commitdate"] < lineitem["l_receiptdate"]]
         lineitem = lineitem[lineitem["l_shipdate"] < lineitem["l_commitdate"]]
         lineitem = lineitem[
             (lineitem["l_receiptdate"] >= var3)
@@ -799,17 +663,12 @@ class PDSHQueries:
     def q13(run_config: RunConfig) -> pd.DataFrame:
         """Query 13."""
         customer = get_data(
-            run_config.dataset_path,
-            "customer",
-            run_config.suffix,
-            columns=["c_custkey"],
+            run_config.dataset_path, "customer", run_config.suffix
         )
-        orders = get_data(
-            run_config.dataset_path,
-            "orders",
-            run_config.suffix,
-            columns=["o_custkey", "o_orderkey", "o_comment"],
-        )
+        orders = get_data(run_config.dataset_path, "orders", run_config.suffix)
+
+        customer = customer[["c_custkey"]]
+        orders = orders[["o_custkey", "o_orderkey", "o_comment"]]
 
         var1 = "special"
         var2 = "requests"
@@ -844,22 +703,14 @@ class PDSHQueries:
     def q14(run_config: RunConfig) -> pd.DataFrame:
         """Query 14."""
         lineitem = get_data(
-            run_config.dataset_path,
-            "lineitem",
-            run_config.suffix,
-            columns=[
-                "l_partkey",
-                "l_shipdate",
-                "l_extendedprice",
-                "l_discount",
-            ],
+            run_config.dataset_path, "lineitem", run_config.suffix
         )
-        part = get_data(
-            run_config.dataset_path,
-            "part",
-            run_config.suffix,
-            columns=["p_partkey", "p_type"],
-        )
+        part = get_data(run_config.dataset_path, "part", run_config.suffix)
+
+        lineitem = lineitem[
+            ["l_partkey", "l_shipdate", "l_extendedprice", "l_discount"]
+        ]
+        part = part[["p_partkey", "p_type"]]
 
         var1 = datetime64("1995-09-01")
         var2 = datetime64("1995-10-01")
@@ -885,22 +736,18 @@ class PDSHQueries:
     def q15(run_config: RunConfig) -> pd.DataFrame:
         """Query 15."""
         lineitem = get_data(
-            run_config.dataset_path,
-            "lineitem",
-            run_config.suffix,
-            columns=[
-                "l_suppkey",
-                "l_shipdate",
-                "l_extendedprice",
-                "l_discount",
-            ],
+            run_config.dataset_path, "lineitem", run_config.suffix
         )
         supplier = get_data(
-            run_config.dataset_path,
-            "supplier",
-            run_config.suffix,
-            columns=["s_suppkey", "s_name", "s_address", "s_phone"],
+            run_config.dataset_path, "supplier", run_config.suffix
         )
+
+        lineitem = lineitem[
+            ["l_suppkey", "l_shipdate", "l_extendedprice", "l_discount"]
+        ]
+        supplier = supplier[
+            ["s_suppkey", "s_name", "s_address", "s_phone"]
+        ]
 
         var1 = datetime64("1996-01-01")
         var2 = datetime64("1996-04-01")
@@ -934,24 +781,17 @@ class PDSHQueries:
     @staticmethod
     def q16(run_config: RunConfig) -> pd.DataFrame:
         """Query 16."""
-        part = get_data(
-            run_config.dataset_path,
-            "part",
-            run_config.suffix,
-            columns=["p_partkey", "p_brand", "p_type", "p_size"],
-        )
+        part = get_data(run_config.dataset_path, "part", run_config.suffix)
         partsupp = get_data(
-            run_config.dataset_path,
-            "partsupp",
-            run_config.suffix,
-            columns=["ps_partkey", "ps_suppkey"],
+            run_config.dataset_path, "partsupp", run_config.suffix
         )
         supplier = get_data(
-            run_config.dataset_path,
-            "supplier",
-            run_config.suffix,
-            columns=["s_suppkey", "s_comment"],
+            run_config.dataset_path, "supplier", run_config.suffix
         )
+
+        part = part[["p_partkey", "p_brand", "p_type", "p_size"]]
+        partsupp = partsupp[["ps_partkey", "ps_suppkey"]]
+        supplier = supplier[["s_suppkey", "s_comment"]]
 
         var1 = "Brand#45"
 
@@ -991,17 +831,12 @@ class PDSHQueries:
     def q17(run_config: RunConfig) -> pd.DataFrame:
         """Query 17."""
         lineitem = get_data(
-            run_config.dataset_path,
-            "lineitem",
-            run_config.suffix,
-            columns=["l_partkey", "l_quantity", "l_extendedprice"],
+            run_config.dataset_path, "lineitem", run_config.suffix
         )
-        part = get_data(
-            run_config.dataset_path,
-            "part",
-            run_config.suffix,
-            columns=["p_partkey", "p_brand", "p_container"],
-        )
+        part = get_data(run_config.dataset_path, "part", run_config.suffix)
+
+        lineitem = lineitem[["l_partkey", "l_quantity", "l_extendedprice"]]
+        part = part[["p_partkey", "p_brand", "p_container"]]
 
         var1 = "Brand#23"
         var2 = "MED BOX"
@@ -1032,29 +867,15 @@ class PDSHQueries:
         """Query 18."""
         path = run_config.dataset_path
         suffix = run_config.suffix
-        customer = get_data(
-            path,
-            "customer",
-            suffix,
-            columns=["c_custkey", "c_name"],
-        )
-        lineitem = get_data(
-            path,
-            "lineitem",
-            suffix,
-            columns=["l_orderkey", "l_quantity"],
-        )
-        orders = get_data(
-            path,
-            "orders",
-            suffix,
-            columns=[
-                "o_orderkey",
-                "o_custkey",
-                "o_orderdate",
-                "o_totalprice",
-            ],
-        )
+        customer = get_data(path, "customer", suffix)
+        lineitem = get_data(path, "lineitem", suffix)
+        orders = get_data(path, "orders", suffix)
+
+        customer = customer[["c_custkey", "c_name"]]
+        lineitem = lineitem[["l_orderkey", "l_quantity"]]
+        orders = orders[
+            ["o_orderkey", "o_custkey", "o_orderdate", "o_totalprice"]
+        ]
 
         var1 = 300
 
@@ -1108,27 +929,26 @@ class PDSHQueries:
     def q19(run_config: RunConfig) -> pd.DataFrame:
         """Query 19."""
         lineitem = get_data(
-            run_config.dataset_path,
-            "lineitem",
-            run_config.suffix,
-            columns=[
+            run_config.dataset_path, "lineitem", run_config.suffix
+        )
+        part = get_data(run_config.dataset_path, "part", run_config.suffix)
+
+        lineitem = lineitem[
+            [
                 "l_partkey",
                 "l_shipmode",
                 "l_shipinstruct",
                 "l_quantity",
                 "l_extendedprice",
                 "l_discount",
-            ],
-        )
-        part = get_data(
-            run_config.dataset_path,
-            "part",
-            run_config.suffix,
-            columns=["p_partkey", "p_brand", "p_container", "p_size"],
-        )
+            ]
+        ]
+        part = part[["p_partkey", "p_brand", "p_container", "p_size"]]
 
         lineitem = lineitem[lineitem["l_shipmode"].isin(["AIR", "AIR REG"])]
-        lineitem = lineitem[lineitem["l_shipinstruct"] == "DELIVER IN PERSON"]
+        lineitem = lineitem[
+            lineitem["l_shipinstruct"] == "DELIVER IN PERSON"
+        ]
 
         jn = part.merge(lineitem, left_on="p_partkey", right_on="l_partkey")
 
@@ -1178,35 +998,26 @@ class PDSHQueries:
     def q20(run_config: RunConfig) -> pd.DataFrame:
         """Query 20."""
         lineitem = get_data(
-            run_config.dataset_path,
-            "lineitem",
-            run_config.suffix,
-            columns=["l_shipdate", "l_partkey", "l_suppkey", "l_quantity"],
+            run_config.dataset_path, "lineitem", run_config.suffix
         )
-        nation = get_data(
-            run_config.dataset_path,
-            "nation",
-            run_config.suffix,
-            columns=["n_nationkey", "n_name"],
-        )
-        part = get_data(
-            run_config.dataset_path,
-            "part",
-            run_config.suffix,
-            columns=["p_partkey", "p_name"],
-        )
+        nation = get_data(run_config.dataset_path, "nation", run_config.suffix)
+        part = get_data(run_config.dataset_path, "part", run_config.suffix)
         partsupp = get_data(
-            run_config.dataset_path,
-            "partsupp",
-            run_config.suffix,
-            columns=["ps_partkey", "ps_suppkey", "ps_availqty"],
+            run_config.dataset_path, "partsupp", run_config.suffix
         )
         supplier = get_data(
-            run_config.dataset_path,
-            "supplier",
-            run_config.suffix,
-            columns=["s_suppkey", "s_nationkey", "s_name", "s_address"],
+            run_config.dataset_path, "supplier", run_config.suffix
         )
+
+        lineitem = lineitem[
+            ["l_shipdate", "l_partkey", "l_suppkey", "l_quantity"]
+        ]
+        nation = nation[["n_nationkey", "n_name"]]
+        part = part[["p_partkey", "p_name"]]
+        partsupp = partsupp[["ps_partkey", "ps_suppkey", "ps_availqty"]]
+        supplier = supplier[
+            ["s_suppkey", "s_nationkey", "s_name", "s_address"]
+        ]
 
         var1 = datetime64("1994-01-01")
         var2 = datetime64("1995-01-01")
@@ -1264,34 +1075,20 @@ class PDSHQueries:
     def q21(run_config: RunConfig) -> pd.DataFrame:
         """Query 21."""
         lineitem = get_data(
-            run_config.dataset_path,
-            "lineitem",
-            run_config.suffix,
-            columns=[
-                "l_orderkey",
-                "l_suppkey",
-                "l_receiptdate",
-                "l_commitdate",
-            ],
+            run_config.dataset_path, "lineitem", run_config.suffix
         )
-        nation = get_data(
-            run_config.dataset_path,
-            "nation",
-            run_config.suffix,
-            columns=["n_nationkey", "n_name"],
-        )
-        orders = get_data(
-            run_config.dataset_path,
-            "orders",
-            run_config.suffix,
-            columns=["o_orderkey", "o_orderstatus"],
-        )
+        nation = get_data(run_config.dataset_path, "nation", run_config.suffix)
+        orders = get_data(run_config.dataset_path, "orders", run_config.suffix)
         supplier = get_data(
-            run_config.dataset_path,
-            "supplier",
-            run_config.suffix,
-            columns=["s_suppkey", "s_nationkey", "s_name"],
+            run_config.dataset_path, "supplier", run_config.suffix
         )
+
+        lineitem = lineitem[
+            ["l_orderkey", "l_suppkey", "l_receiptdate", "l_commitdate"]
+        ]
+        nation = nation[["n_nationkey", "n_name"]]
+        orders = orders[["o_orderkey", "o_orderstatus"]]
+        supplier = supplier[["s_suppkey", "s_nationkey", "s_name"]]
 
         var1 = "SAUDI ARABIA"
 
@@ -1343,17 +1140,12 @@ class PDSHQueries:
     def q22(run_config: RunConfig) -> pd.DataFrame:
         """Query 22."""
         customer = get_data(
-            run_config.dataset_path,
-            "customer",
-            run_config.suffix,
-            columns=["c_custkey", "c_phone", "c_acctbal"],
+            run_config.dataset_path, "customer", run_config.suffix
         )
-        orders = get_data(
-            run_config.dataset_path,
-            "orders",
-            run_config.suffix,
-            columns=["o_custkey"],
-        )
+        orders = get_data(run_config.dataset_path, "orders", run_config.suffix)
+
+        customer = customer[["c_custkey", "c_phone", "c_acctbal"]]
+        orders = orders[["o_custkey"]]
 
         # Extract country code (first 2 chars of phone)
         customer_with_cntry = customer.copy()
