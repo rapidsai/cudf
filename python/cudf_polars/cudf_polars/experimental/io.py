@@ -64,10 +64,6 @@ def _(
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
     config_options = rec.state["config_options"]
 
-    assert config_options.executor.name == "streaming", (
-        "'in-memory' executor not supported in 'generate_ir_tasks'"
-    )
-
     # RapidsMPF runtime: Use rapidsmpf-specific lowering
     if (
         config_options.executor.runtime == "rapidsmpf"
@@ -99,15 +95,11 @@ def _(
 
 
 def scan_partition_plan(
-    ir: Scan, stats: StatsCollector, config_options: ConfigOptions
+    ir: Scan, stats: StatsCollector, config_options: ConfigOptions[StreamingExecutor]
 ) -> IOPartitionPlan:
     """Extract the partitioning plan of a Scan operation."""
     if ir.typ == "parquet":
         # TODO: Use system info to set default blocksize
-        assert config_options.executor.name == "streaming", (
-            "'in-memory' executor not supported in 'generate_ir_tasks'"
-        )
-
         blocksize: int = config_options.executor.target_partition_size
         column_stats = stats.column_stats.get(ir, {})
         column_sizes: list[int] = []
@@ -907,13 +899,10 @@ def _sample_pq_stats(
 
 def _extract_scan_stats(
     ir: Scan,
-    config_options: ConfigOptions,
+    config_options: ConfigOptions[StreamingExecutor],
 ) -> dict[str, ColumnStats]:
     """Extract base ColumnStats for a Scan node."""
     if ir.typ == "parquet":
-        assert config_options.executor.name == "streaming", (
-            "Only streaming executor is supported in _extract_scan_stats"
-        )
         table_source_info = _sample_pq_stats(
             tuple(ir.paths),
             config_options.parquet_options.max_footer_samples,
@@ -989,12 +978,9 @@ class DataFrameSourceInfo(DataSourceInfo):
 
 
 def _extract_dataframescan_stats(
-    ir: DataFrameScan, config_options: ConfigOptions
+    ir: DataFrameScan, config_options: ConfigOptions[StreamingExecutor]
 ) -> dict[str, ColumnStats]:
     """Extract base ColumnStats for a DataFrameScan node."""
-    assert config_options.executor.name == "streaming", (
-        "Only streaming executor is supported in _extract_dataframescan_stats"
-    )
     table_source_info = DataFrameSourceInfo(
         pl.DataFrame._from_pydf(ir.df),
         config_options.executor.stats_planning,

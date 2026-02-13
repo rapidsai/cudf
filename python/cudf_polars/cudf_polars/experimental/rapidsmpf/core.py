@@ -67,11 +67,12 @@ if TYPE_CHECKING:
         GenState,
         SubNetGenerator,
     )
+    from cudf_polars.utils.config import StreamingExecutor
 
 
 def evaluate_logical_plan(
     ir: IR,
-    config_options: ConfigOptions,
+    config_options: ConfigOptions[StreamingExecutor],
     *,
     collect_metadata: bool = False,
 ) -> tuple[pl.DataFrame, list[ChannelMetadata] | None]:
@@ -91,7 +92,6 @@ def evaluate_logical_plan(
     -------
     The output DataFrame and metadata collector.
     """
-    assert config_options.executor.name == "streaming", "Executor must be streaming"
     assert config_options.executor.runtime == "rapidsmpf", "Runtime must be rapidsmpf"
 
     # Lower the IR graph on the client process (for now).
@@ -139,7 +139,7 @@ def evaluate_logical_plan(
 def evaluate_pipeline(
     ir: IR,
     partition_info: MutableMapping[IR, PartitionInfo],
-    config_options: ConfigOptions,
+    config_options: ConfigOptions[StreamingExecutor],
     stats: StatsCollector,
     collective_id_map: dict[IR, list[int]],
     rmpf_context: Context | None = None,
@@ -305,7 +305,7 @@ def evaluate_pipeline(
 
 def lower_ir_graph(
     ir: IR,
-    config_options: ConfigOptions,
+    config_options: ConfigOptions[StreamingExecutor],
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo], StatsCollector]:
     """
     Rewrite an IR graph and extract partitioning information.
@@ -464,7 +464,6 @@ def generate_network(
     fanout_nodes = determine_fanout_nodes(ir, partition_info, ir_dep_count)
 
     # Get max_io_threads from config (default: 2)
-    assert config_options.executor.name == "streaming", "Executor must be streaming"
     max_io_threads_global = config_options.executor.max_io_threads
     max_io_threads_local = max(1, max_io_threads_global // max(1, num_io_nodes))
 

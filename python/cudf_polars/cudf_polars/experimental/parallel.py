@@ -52,7 +52,7 @@ if TYPE_CHECKING:
 
     from cudf_polars.experimental.base import StatsCollector
     from cudf_polars.experimental.dispatch import LowerIRTransformer, State
-    from cudf_polars.utils.config import ConfigOptions
+    from cudf_polars.utils.config import ConfigOptions, StreamingExecutor
 
 
 @lower_ir_node.register(IR)
@@ -66,7 +66,7 @@ def _(
 
 
 def lower_ir_graph(
-    ir: IR, config_options: ConfigOptions
+    ir: IR, config_options: ConfigOptions[StreamingExecutor]
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo], StatsCollector]:
     """
     Rewrite an IR graph and extract partitioning information.
@@ -170,12 +170,8 @@ def task_graph(
 # The true type signature for get_scheduler() needs an overload. Not worth it.
 
 
-def get_scheduler(config_options: ConfigOptions) -> Any:
+def get_scheduler(config_options: ConfigOptions[StreamingExecutor]) -> Any:
     """Get appropriate task scheduler."""
-    assert config_options.executor.name == "streaming", (
-        "'in-memory' executor not supported in 'generate_ir_tasks'"
-    )
-
     cluster = config_options.executor.cluster
 
     if (
@@ -200,7 +196,7 @@ def get_scheduler(config_options: ConfigOptions) -> Any:
 def post_process_task_graph(
     graph: MutableMapping[Any, Any],
     key: str | tuple[str, int],
-    config_options: ConfigOptions,
+    config_options: ConfigOptions[StreamingExecutor],
 ) -> MutableMapping[Any, Any]:
     """
     Post-process the task graph.
@@ -219,10 +215,6 @@ def post_process_task_graph(
     graph
         A Dask-compatible task graph.
     """
-    assert config_options.executor.name == "streaming", (
-        "'in-memory' executor not supported in 'post_process_task_graph'"
-    )
-
     if config_options.executor.rapidsmpf_spill:  # pragma: no cover
         from cudf_polars.experimental.spilling import wrap_dataframe_in_spillable
 
@@ -234,7 +226,7 @@ def post_process_task_graph(
 
 def evaluate_rapidsmpf(
     ir: IR,
-    config_options: ConfigOptions,
+    config_options: ConfigOptions[StreamingExecutor],
 ) -> pl.DataFrame:  # pragma: no cover; rapidsmpf runtime not tested in CI yet
     """
     Evaluate with the RapidsMPF streaming runtime.
@@ -258,7 +250,7 @@ def evaluate_rapidsmpf(
 
 def evaluate_streaming(
     ir: IR,
-    config_options: ConfigOptions,
+    config_options: ConfigOptions[StreamingExecutor],
 ) -> pl.DataFrame:
     """
     Evaluate an IR graph with partitioning.
@@ -277,7 +269,6 @@ def evaluate_streaming(
     # Clear source info cache in case data was overwritten
     _clear_source_info_cache()
 
-    assert config_options.executor.name == "streaming", "Executor must be streaming"
     if (
         config_options.executor.runtime == "rapidsmpf"
     ):  # pragma: no cover; rapidsmpf runtime not tested in CI yet
