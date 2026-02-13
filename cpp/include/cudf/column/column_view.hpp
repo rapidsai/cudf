@@ -489,7 +489,6 @@ class column_view : public detail::column_view_base {
  */
 struct scalar_column_view : private column_view {
  private:
-  using base = column_view;
 
  public:
   /**
@@ -503,22 +502,22 @@ struct scalar_column_view : private column_view {
       this->size() == 1, "A scalar column view must have exactly one element.", std::logic_error);
   }
 
-  using base::data;
-  using base::has_nulls;
-  using base::head;
-  using base::is_empty;
-  using base::null_count;
-  using base::null_mask;
-  using base::nullable;
-  using base::offset;
-  using base::size;
-  using base::type;
+  using column_view::data;
+  using column_view::has_nulls;
+  using column_view::head;
+  using column_view::is_empty;
+  using column_view::null_count;
+  using column_view::null_mask;
+  using column_view::nullable;
+  using column_view::offset;
+  using column_view::size;
+  using column_view::type;
 
   /**
    * @brief Returns a reference to the underlying `column_view` of this `scalar_column_view`.
    * @return A reference to the underlying `column_view`
    */
-  [[nodiscard]] base const& as_column_view() const noexcept { return *this; }
+  [[nodiscard]] column_view const& as_column_view() const noexcept { return *this; }
 };
 
 /**
