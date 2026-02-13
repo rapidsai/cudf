@@ -181,16 +181,13 @@ def _wrap_column(col: plc.Column) -> plc.Column:
 def _wrap_and_validate(
     col: plc.Column, dtype: DtypeObj
 ) -> tuple[plc.Column, DtypeObj]:
-    if not isinstance(col, plc.Column):
-        raise ValueError("plc_column must be a pylibcudf.Column")
-
     if col.type().id() == plc.TypeId.INT8 and col.null_count() == col.size():
         return _wrap_column(col), dtype
 
     dispatch_dtype = dtype
     if isinstance(dispatch_dtype, pd.ArrowDtype):
         dispatch_dtype = pyarrow_dtype_to_cudf_dtype(dispatch_dtype)
-    dtype_kind = cast("str | None", getattr(dispatch_dtype, "kind", None))
+    dtype_kind = dispatch_dtype.kind
 
     if isinstance(dispatch_dtype, ListDtype):
         if col.type().id() != plc.TypeId.LIST:
