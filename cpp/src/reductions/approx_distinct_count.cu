@@ -275,12 +275,12 @@ template <template <typename> class Hasher>
 void approx_distinct_count<Hasher>::merge(cuda::std::span<cuda::std::byte const> sketch_span,
                                           rmm::cuda_stream_view stream)
 {
-  check_sketch_span(sketch_span, _precision);
+  auto const checked = check_sketch_span(sketch_span, _precision);
 
   hll_ref_type ref{sketch(), cuda::std::identity{}};
-  hll_ref_type other_ref{cuda::std::span<cuda::std::byte>{
-                           const_cast<cuda::std::byte*>(sketch_span.data()), sketch_span.size()},
-                         cuda::std::identity{}};
+  hll_ref_type other_ref{
+    cuda::std::span<cuda::std::byte>{const_cast<cuda::std::byte*>(checked.data()), checked.size()},
+    cuda::std::identity{}};
   ref.merge_async(other_ref, stream);
 }
 
