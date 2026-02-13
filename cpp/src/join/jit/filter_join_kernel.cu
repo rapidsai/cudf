@@ -8,6 +8,7 @@
 #include <cudf/types.hpp>
 
 #include <cuda/std/cstddef>
+#include <cuda/std/limits>
 
 #include <jit/accessors.cuh>
 #include <jit/span.cuh>
@@ -21,6 +22,10 @@
 namespace cudf {
 namespace join {
 namespace jit {
+
+// TODO: Create a JIT-compatible header for JoinNoMatch to avoid this duplication.
+// This must match the definition in cudf/join/join.hpp
+constexpr cudf::size_type JoinNoMatch = cuda::std::numeric_limits<cudf::size_type>::min();
 
 template <bool has_user_data, typename... InputAccessors>
 CUDF_KERNEL void filter_join_kernel(cudf::jit::device_span<cudf::size_type const> left_indices,
@@ -39,7 +44,7 @@ CUDF_KERNEL void filter_join_kernel(cudf::jit::device_span<cudf::size_type const
     auto const right_idx = right_indices[i];
     
     // Skip if either index is JoinNoMatch
-    if (left_idx == cudf::JoinNoMatch || right_idx == cudf::JoinNoMatch) {
+    if (left_idx == JoinNoMatch || right_idx == JoinNoMatch) {
       predicate_results[i] = false;
       continue;
     }

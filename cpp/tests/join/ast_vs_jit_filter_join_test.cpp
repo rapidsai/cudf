@@ -16,6 +16,7 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/device_uvector.hpp>
@@ -59,11 +60,11 @@ TEST_F(AstVsJitFilterJoinTest, SimpleGreaterThanComparison)
   auto right_col_ref   = cudf::ast::column_reference(1, cudf::ast::table_reference::RIGHT);
   auto ast_predicate   = cudf::ast::operation(cudf::ast::ast_operator::GREATER, left_col_ref, right_col_ref);
 
-  // Create JIT predicate equivalent (receives all columns: left cols, then right cols)
+  // Create JIT predicate equivalent (receives output pointer, then all columns: left cols, then right cols)
   std::string jit_predicate = R"(
-    __device__ bool predicate(int32_t left_col0, int32_t left_col1,
+    __device__ void predicate(bool* output, int32_t left_col0, int32_t left_col1,
                               int32_t right_col0, int32_t right_col1) {
-      return left_col1 > right_col1;
+      *output = left_col1 > right_col1;
     }
   )";
 
@@ -124,11 +125,11 @@ TEST_F(AstVsJitFilterJoinTest, FloatingPointComparison)
   auto ast_predicate =
     cudf::ast::operation(cudf::ast::ast_operator::GREATER_EQUAL, left_col_ref, right_col_ref);
 
-  // JIT predicate equivalent (receives all columns: left cols, then right cols)
+  // JIT predicate equivalent (receives output pointer, then all columns: left cols, then right cols)
   std::string jit_predicate = R"(
-    __device__ bool predicate(int32_t left_col0, double left_col1,
+    __device__ void predicate(bool* output, int32_t left_col0, double left_col1,
                               int32_t right_col0, double right_col1) {
-      return left_col1 >= right_col1;
+      *output = left_col1 >= right_col1;
     }
   )";
 
@@ -188,9 +189,9 @@ TEST_F(AstVsJitFilterJoinTest, ComplexPredicateMultipleColumns)
 
   // JIT predicate equivalent (columns are passed in table order: left cols then right cols)
   std::string jit_predicate = R"(
-    __device__ bool predicate(int32_t left_col0, int32_t left_col1, int32_t left_col2,
+    __device__ void predicate(bool* output, int32_t left_col0, int32_t left_col1, int32_t left_col2,
                               int32_t right_col0, int32_t right_col1, int32_t right_col2) {
-      return (left_col1 > right_col1) && (left_col2 > right_col2);
+      *output = (left_col1 > right_col1) && (left_col2 > right_col2);
     }
   )";
 
@@ -241,11 +242,11 @@ TEST_F(AstVsJitFilterJoinTest, EdgeCaseEmptyResults)
   auto right_col_ref = cudf::ast::column_reference(1, cudf::ast::table_reference::RIGHT);
   auto ast_predicate = cudf::ast::operation(cudf::ast::ast_operator::GREATER, left_col_ref, right_col_ref);
 
-  // JIT predicate (receives all columns: left cols, then right cols)
+  // JIT predicate (receives output pointer, then all columns: left cols, then right cols)
   std::string jit_predicate = R"(
-    __device__ bool predicate(int32_t left_col0, int32_t left_col1,
+    __device__ void predicate(bool* output, int32_t left_col0, int32_t left_col1,
                               int32_t right_col0, int32_t right_col1) {
-      return left_col1 > right_col1;
+      *output = left_col1 > right_col1;
     }
   )";
 

@@ -55,11 +55,11 @@ void jit_filter_join_indices_inner_join(nvbench::state& state)
   cudf::device_span<cudf::size_type const> right_span{right_indices_d.data(),
                                                       right_indices_d.size()};
 
-  // Predicate: left.col1 > right.col1 (receives all columns: left cols, then right cols)
+  // Predicate: left.col1 > right.col1 (receives output pointer, then all columns: left cols, then right cols)
   std::string predicate_code = R"(
-    __device__ bool predicate(int32_t left_col0, int32_t left_col1,
+    __device__ void predicate(bool* output, int32_t left_col0, int32_t left_col1,
                               int32_t right_col0, int32_t right_col1) {
-      return left_col1 > right_col1;
+      *output = left_col1 > right_col1;
     }
   )";
 
@@ -108,9 +108,9 @@ void jit_filter_join_indices_left_join(nvbench::state& state)
                                                       right_indices_d.size()};
 
   std::string predicate_code = R"(
-    __device__ bool predicate(int32_t left_col0, int32_t left_col1,
+    __device__ void predicate(bool* output, int32_t left_col0, int32_t left_col1,
                               int32_t right_col0, int32_t right_col1) {
-      return left_col1 > right_col1;
+      *output = left_col1 > right_col1;
     }
   )";
 

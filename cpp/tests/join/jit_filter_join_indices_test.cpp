@@ -16,6 +16,7 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/device_uvector.hpp>
@@ -51,11 +52,11 @@ TEST_F(JitFilterJoinIndicesTest, BasicInnerJoinGreaterThan)
                                             cudf::get_current_device_resource_ref());
 
   // JIT predicate: left.col1 > right.col1 (20 > 15, 30 > 25 should pass)
-  // Predicate receives all columns from both tables in order: left cols, then right cols
+  // Predicate receives output pointer, then all columns: left cols, then right cols
   std::string predicate_code = R"(
-    __device__ bool predicate(int32_t left_col0, int32_t left_col1,
+    __device__ void predicate(bool* output, int32_t left_col0, int32_t left_col1,
                               int32_t right_col0, int32_t right_col1) {
-      return left_col1 > right_col1;
+      *output = left_col1 > right_col1;
     }
   )";
 
@@ -93,11 +94,11 @@ TEST_F(JitFilterJoinIndicesTest, BasicLeftJoinGreaterThan)
     cudf::detail::make_device_uvector_async(right_indices_h, cudf::get_default_stream(),
                                             cudf::get_current_device_resource_ref());
 
-  // Predicate receives all columns from both tables in order: left cols, then right cols
+  // Predicate receives output pointer, then all columns: left cols, then right cols
   std::string predicate_code = R"(
-    __device__ bool predicate(int32_t left_col0, int32_t left_col1,
+    __device__ void predicate(bool* output, int32_t left_col0, int32_t left_col1,
                               int32_t right_col0, int32_t right_col1) {
-      return left_col1 > right_col1;
+      *output = left_col1 > right_col1;
     }
   )";
 
@@ -131,8 +132,8 @@ TEST_F(JitFilterJoinIndicesTest, EmptyInput)
   cudf::device_span<cudf::size_type const> right_indices{};
 
   std::string predicate_code = R"(
-    __device__ bool predicate(int32_t left_val, int32_t right_val) {
-      return left_val > right_val;
+    __device__ void predicate(bool* output, int32_t left_val, int32_t right_val) {
+      *output = left_val > right_val;
     }
   )";
 
@@ -162,8 +163,8 @@ TEST_F(JitFilterJoinIndicesTest, InvalidJoinKind)
                                             cudf::get_current_device_resource_ref());
 
   std::string predicate_code = R"(
-    __device__ bool predicate(int32_t left_val, int32_t right_val) {
-      return left_val > right_val;
+    __device__ void predicate(bool* output, int32_t left_val, int32_t right_val) {
+      *output = left_val > right_val;
     }
   )";
 
@@ -175,5 +176,5 @@ TEST_F(JitFilterJoinIndicesTest, InvalidJoinKind)
                                   cudf::device_span<cudf::size_type const>(right_indices_d),
                                   predicate_code,
                                   cudf::join_kind::LEFT_SEMI_JOIN),
-    cudf::logic_error);
+    std::invalid_argument);
 }
