@@ -12,6 +12,8 @@
 #include <cudf/detail/row_operator/lexicographic.cuh>
 #include <cudf/utilities/memory_resource.hpp>
 
+#include <rmm/exec_policy.hpp>
+
 #include <thrust/sequence.h>
 #include <thrust/sort.h>
 
