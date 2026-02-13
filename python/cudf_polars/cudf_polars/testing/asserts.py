@@ -487,8 +487,8 @@ def assert_tpch_result_equal(
     check_column_order: bool = True,
     check_dtypes: bool = True,
     check_exact: bool = True,
-    rtol: float = 1e-05,
-    atol: float = 1e-08,
+    rel_tol: float = 1e-05,
+    abs_tol: float = 1e-08,
     categorical_as_str: bool = False,
     sort_by: list[tuple[str, bool]],
     limit: int | None = None,
@@ -502,7 +502,7 @@ def assert_tpch_result_equal(
         The computed result to validate.
     right : pl.DataFrame
         The expected answer to validate against.
-    check_row_order, check_column_order, check_dtypes, check_exact, categorical_as_str, rtol, atol
+    check_row_order, check_column_order, check_dtypes, check_exact, categorical_as_str, rel_tol, abs_tol
         Same meaning as in polars.
     sort_by : list[tuple[str, bool]]
         The columns to sort by, and the sort order. This *must* be the same
@@ -563,10 +563,11 @@ def assert_tpch_result_equal(
         "categorical_as_str": categorical_as_str,
     }
 
+    breakpoint()
     if POLARS_VERSION_LT_1323:  # pragma: no cover
-        tol_kwargs = {"rtol": rtol, "atol": atol}
+        tol_kwargs = {"rtol": rel_tol, "atol": abs_tol}
     else:
-        tol_kwargs = {"rel_tol": rtol, "abs_tol": atol}
+        tol_kwargs = {"rel_tol": rel_tol, "abs_tol": abs_tol}
     polars_kwargs.update(tol_kwargs)
 
     if left.columns != right.columns:
