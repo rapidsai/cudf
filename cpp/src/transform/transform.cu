@@ -24,6 +24,8 @@
 #include <jit/span.cuh>
 #include <jit/util.hpp>
 #include <jit_preprocessed_files/transform/jit/kernel.cu.jit.hpp>
+#include <span>
+#include <variant>
 
 namespace cudf {
 using InputsView = std::span<std::variant<column_view, scalar_column_view> const>;
