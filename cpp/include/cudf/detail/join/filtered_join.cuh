@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -9,6 +9,7 @@
 #include <cudf/detail/row_operator/equality.cuh>
 #include <cudf/detail/row_operator/hashing.cuh>
 #include <cudf/detail/row_operator/primitive_row_operators.cuh>
+#include <cudf/join/filtered_join.hpp>
 #include <cudf/join/join.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
@@ -50,13 +51,14 @@ class filtered_join {
    *
    * Returns result of self comparator passed
    */
-  template <typename T>
+  template <typename T, set_as_build_table reuse_table = set_as_build_table::RIGHT>
   struct insertion_adapter {
     insertion_adapter(T const& _c) : _comparator{_c} {}
     __device__ constexpr bool operator()(
       cuco::pair<hash_value_type, lhs_index_type> const& lhs,
       cuco::pair<hash_value_type, lhs_index_type> const& rhs) const noexcept
     {
+      if constexpr (reuse_table == set_as_build_table::LEFT) { return false; }
       if (lhs.first != rhs.first) { return false; }
       auto const lhs_index = static_cast<size_type>(lhs.second);
       auto const rhs_index = static_cast<size_type>(rhs.second);
@@ -108,6 +110,14 @@ class filtered_join {
   template <typename Equal>
   struct comparator_adapter {
     comparator_adapter(Equal const& d_equal) : _d_equal{d_equal} {}
+
+    __device__ constexpr auto operator()(
+      cuco::pair<hash_value_type, lhs_index_type> const& lhs,
+      cuco::pair<hash_value_type, rhs_index_type> const& rhs) const noexcept
+    {
+      if (lhs.first != rhs.first) { return false; }
+      return _d_equal(lhs.second, rhs.second);
+    }
 
     __device__ constexpr auto operator()(
       cuco::pair<hash_value_type, rhs_index_type> const& rhs,
