@@ -6,9 +6,10 @@
 #include "io/utilities/parsing_utils.cuh"
 #include "nested_json.hpp"
 
+#include <cudf/detail/algorithms/copy_if.cuh>
+#include <cudf/detail/algorithms/reduce.cuh>
 #include <cudf/detail/cuco_helpers.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/hashing/detail/default_hash.cuh>
 #include <cudf/hashing/detail/hashing.hpp>
@@ -469,7 +470,7 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
         // add +1 to include end symbol.
         return i + 1;
       });
-    auto stencil = thrust::make_transform_iterator(token_id.begin(), is_nested_end{tokens.begin()});
+    auto stencil = thrust::make_transform_iterator(token_id.begin(), is_nested_end{tokens.data()});
     thrust::scatter_if(rmm::exec_policy_nosync(stream),
                        token_indices_it,
                        token_indices_it + num_nested,

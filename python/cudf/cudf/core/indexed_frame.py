@@ -73,6 +73,7 @@ from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
     SIZE_TYPE_DTYPE,
     can_convert_to_column,
+    dtype_from_pylibcudf_column,
     find_common_type,
     get_dtype_of_same_kind,
     is_column_like,
@@ -766,10 +767,10 @@ class IndexedFrame(Frame):
         dtype: object
         >>> s.replace({'a': None})
         0       b
-        1    <NA>
-        2    <NA>
+        1    None
+        2    None
         3       b
-        4    <NA>
+        4    None
         dtype: object
 
         If there is a mismatch in types of the values in
@@ -2926,7 +2927,9 @@ class IndexedFrame(Frame):
                 plc_column = plc.hashing.sha512(plc_table)
             else:
                 raise ValueError(f"Unsupported hashing algorithm {method}.")
-            result = ColumnBase.from_pylibcudf(plc_column)
+            result = ColumnBase.create(
+                plc_column, dtype=dtype_from_pylibcudf_column(plc_column)
+            )
         return cudf.Series._from_column(
             result,
             index=self.index,
@@ -3265,7 +3268,9 @@ class IndexedFrame(Frame):
                 plc.types.NullEquality.EQUAL,
                 plc.types.NanEquality.ALL_EQUAL,
             )
-            distinct = ColumnBase.from_pylibcudf(plc_column)
+            distinct = ColumnBase.create(
+                plc_column, dtype=dtype_from_pylibcudf_column(plc_column)
+            )
         result = as_column(
             True, length=len(self), dtype=bool
         )._scatter_by_column(
@@ -3594,8 +3599,9 @@ class IndexedFrame(Frame):
             raise RuntimeError("UDF kernel execution failed.") from e
 
         if retty == CUDF_STRING_DTYPE:
-            col = ColumnBase.from_pylibcudf(
-                strings_udf.column_from_managed_udf_string_array(ans_col)
+            plc_col = strings_udf.column_from_managed_udf_string_array(ans_col)
+            col = ColumnBase.create(
+                plc_col, dtype=dtype_from_pylibcudf_column(plc_col)
             )
             free_kernel = _make_free_string_kernel()
             with _CUDFNumbaConfig():
@@ -4340,7 +4346,7 @@ class IndexedFrame(Frame):
         >>> df
                name        toy                           born
         0    Alfred  Batmobile  1940-04-25 00:00:00.000000000
-        1    Batman       <NA>                            NaT
+        1    Batman       None                            NaT
         2  Catwoman   Bullwhip                            NaT
 
         Drop the rows where at least one element is null.
@@ -4362,7 +4368,7 @@ class IndexedFrame(Frame):
         >>> df.dropna(how='all')
                name        toy                           born
         0    Alfred  Batmobile  1940-04-25 00:00:00.000000000
-        1    Batman       <NA>                            NaT
+        1    Batman       None                            NaT
         2  Catwoman   Bullwhip                            NaT
 
         Keep only the rows with at least 2 non-null values.
