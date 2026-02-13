@@ -1004,7 +1004,103 @@ class Frame(BinaryOperand, Scannable, Serializable):
         limit: int | None = None,
         limit_area: Literal["inside", "outside", None] = None,
     ) -> Self | None:
-        """Helper function for .fillna, .bfill, .ffill."""
+        """Fill null values with ``value`` or specified ``method``.
+
+        Parameters
+        ----------
+        value : scalar, Series-like or dict
+            Value to use to fill nulls. If Series-like, null values
+            are filled with values in corresponding indices.
+            A dict can be used to provide different values to fill nulls
+            in different columns. Cannot be used with ``method``.
+        method : {'ffill', 'bfill'}, default None
+            Method to use for filling null values in the dataframe or series.
+            `ffill` propagates the last non-null values forward to the next
+            non-null value. `bfill` propagates backward with the next non-null
+            value. Cannot be used with ``value``.
+
+            .. deprecated:: 24.04
+                `method` is deprecated.
+
+        Returns
+        -------
+        result : DataFrame, Series, or Index
+            Copy with nulls filled.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({'a': [1, 2, None], 'b': [3, None, 5]})
+        >>> df
+              a     b
+        0     1     3
+        1     2  <NA>
+        2  <NA>     5
+        >>> df.fillna(4)
+           a  b
+        0  1  3
+        1  2  4
+        2  4  5
+        >>> df.fillna({'a': 3, 'b': 4})
+           a  b
+        0  1  3
+        1  2  4
+        2  3  5
+
+        ``fillna`` on a Series object:
+
+        >>> ser = cudf.Series(['a', 'b', None, 'c'])
+        >>> ser
+        0       a
+        1       b
+        2    None
+        3       c
+        dtype: object
+        >>> ser.fillna('z')
+        0    a
+        1    b
+        2    z
+        3    c
+        dtype: object
+
+        ``fillna`` can also supports inplace operation:
+
+        >>> ser.fillna('z', inplace=True)
+        >>> ser
+        0    a
+        1    b
+        2    z
+        3    c
+        dtype: object
+        >>> df.fillna({'a': 3, 'b': 4}, inplace=True)
+        >>> df
+           a  b
+        0  1  3
+        1  2  4
+        2  3  5
+
+        ``fillna`` specified with fill ``method``
+
+        >>> ser = cudf.Series([1, None, None, 2, 3, None, None])
+        >>> ser.fillna(method='ffill')
+        0    1
+        1    1
+        2    1
+        3    2
+        4    3
+        5    3
+        6    3
+        dtype: int64
+        >>> ser.fillna(method='bfill')
+        0       1
+        1       2
+        2       2
+        3       2
+        4       3
+        5    <NA>
+        6    <NA>
+        dtype: int64
+        """
         if limit is not None:
             raise NotImplementedError("The limit keyword is not supported")
         if limit_area is not None:
@@ -1149,7 +1245,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
         ...                    'toy': [None, 'Batmobile', 'Joker']})
         >>> df
             age                           born    name        toy
-        0     5                           NaT  Alfred       <NA>
+        0     5                           NaT  Alfred        None
         1     6  1939-05-27 00:00:00.000000000  Batman  Batmobile
         2  <NA>  1940-04-25 00:00:00.000000000              Joker
         >>> df.isna()
@@ -1230,7 +1326,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
         ...                    'toy': [None, 'Batmobile', 'Joker']})
         >>> df
             age                           born    name        toy
-        0     5                           NaT  Alfred       <NA>
+        0     5                           NaT  Alfred        None
         1     6  1939-05-27 00:00:00.000000000  Batman  Batmobile
         2  <NA>  1940-04-25 00:00:00.000000000              Joker
         >>> df.notna()

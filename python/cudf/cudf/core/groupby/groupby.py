@@ -1149,22 +1149,31 @@ class GroupBy(Serializable, Reducible, Scannable):
                         plc_tables[1],
                         plc.types.NullEquality.EQUAL,
                     )
-                    left_order = ColumnBase.from_pylibcudf(left_plc)
-                    right_order = ColumnBase.from_pylibcudf(right_plc)
+                    left_order = ColumnBase.create(
+                        left_plc, dtype=dtype_from_pylibcudf_column(left_plc)
+                    )
+                    right_order = ColumnBase.create(
+                        right_plc, dtype=dtype_from_pylibcudf_column(right_plc)
+                    )
+                # TODO: Perform inner_join and sort_by_key all in pylibcudf
                 # left order is some permutation of the ordering we
                 # want, and right order is a matching gather map for
                 # the result table. Get the correct order by sorting
                 # the right gather map.
-                right_order = sorting.sort_by_key(
+                plc_right_order = sorting.sort_by_key(
                     [right_order],
                     [left_order],
                     [True],
                     ["first"],
                     stable=False,
                 )[0]
+
                 result = result._gather(
                     GatherMap.from_column_unchecked(
-                        ColumnBase.from_pylibcudf(right_order),
+                        ColumnBase.create(
+                            plc_right_order,
+                            dtype=dtype_from_pylibcudf_column(plc_right_order),
+                        ),
                         len(result),
                         nullify=False,
                     )
@@ -1645,16 +1654,14 @@ class GroupBy(Serializable, Reducible, Scannable):
                     mode="read",
                     scope="internal",
                 ) as (indices_col, keys_col, group_offsets_col):
-                    plc_table = plc.sorting.stable_segmented_sort_by_key(
+                    plc_column = plc.sorting.stable_segmented_sort_by_key(
                         plc.Table([indices_col.plc_column]),
                         plc.Table([keys_col.plc_column]),
                         group_offsets_col.plc_column,
                         [plc.types.Order.ASCENDING],
                         [plc.types.NullOrder.AFTER],
-                    )
-                    indices = ColumnBase.from_pylibcudf(
-                        plc_table.columns()[0]
-                    ).values
+                    ).columns()[0]
+                    indices = cp.array(plc_column.data())
             # Which indices are we going to want?
             want = np.arange(samples_per_group.sum(), dtype=SIZE_TYPE_DTYPE)
             scan = np.empty_like(samples_per_group)
@@ -2452,13 +2459,14 @@ class GroupBy(Serializable, Reducible, Scannable):
                 )
                 x, y = str(x), str(y)
 
-            struct_column = ColumnBase.from_pylibcudf(
-                plc.Column.struct_from_children(
-                    [
-                        self.obj._data[x].plc_column,
-                        self.obj._data[y].plc_column,
-                    ]
-                )
+            plc_column = plc.Column.struct_from_children(
+                [
+                    self.obj._data[x].plc_column,
+                    self.obj._data[y].plc_column,
+                ]
+            )
+            struct_column = ColumnBase.create(
+                plc_column, dtype=dtype_from_pylibcudf_column(plc_column)
             ).set_mask(None, 0)
             column_pair_structs[(x, y)] = struct_column
 
@@ -2491,14 +2499,19 @@ class GroupBy(Serializable, Reducible, Scannable):
         # interleave: combines the correlation or covariance results for each
         # column-pair into a single column
 
-        def interleave_columns(source_columns):
+        def interleave_columns(source_columns: list[ColumnBase]) -> ColumnBase:
+            # Note: assume non-empty
+            result_type = source_columns[0].dtype
             with access_columns(
                 *source_columns, mode="read", scope="internal"
-            ) as source_columns:
-                return ColumnBase.from_pylibcudf(
+            ) as accessed_source_columns:
+                return ColumnBase.create(
                     plc.reshape.interleave_columns(
-                        plc.Table([c.plc_column for c in source_columns])
-                    )
+                        plc.Table(
+                            [c.plc_column for c in accessed_source_columns]
+                        )
+                    ),
+                    result_type,
                 )
 
         res = DataFrame._from_data(

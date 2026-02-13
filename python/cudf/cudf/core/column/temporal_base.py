@@ -83,10 +83,8 @@ class TemporalBaseColumn(ColumnBase, Scannable):
             # call-overload must be ignored because numpy stubs only accept literal
             # time unit strings, but we're passing self.time_unit which is valid at runtime
             fill_value = self._NP_SCALAR(fill_value, self.time_unit)  # type: ignore[call-overload]
-        elif (
-            cudf.get_option("mode.pandas_compatible")
-            and is_scalar(fill_value)
-            and not isinstance(fill_value, (self._NP_SCALAR, self._PD_SCALAR))
+        elif is_scalar(fill_value) and not isinstance(
+            fill_value, (self._NP_SCALAR, self._PD_SCALAR)
         ):
             raise MixedTypeError(
                 f"Cannot use fill_value of type {type(fill_value)} with "

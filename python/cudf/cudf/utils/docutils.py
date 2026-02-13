@@ -263,13 +263,13 @@ doc_describe = docfmt_partial(
         unique           3    <NA>      3
         top              d    <NA>      a
         freq             1    <NA>      1
-        mean           NaN     2.0    NaN
-        std            NaN     1.0    NaN
-        min            NaN     1.0    NaN
-        25%            NaN     1.5    NaN
-        50%            NaN     2.0    NaN
-        75%            NaN     2.5    NaN
-        max            NaN     3.0    NaN
+        mean          None     2.0   None
+        std           None     1.0   None
+        min           None     1.0   None
+        25%           None     1.5   None
+        50%           None     2.0   None
+        75%           None     2.5   None
+        max           None     3.0   None
 
         Describing a column from a ``DataFrame`` by accessing it as an
         attribute.
@@ -333,12 +333,12 @@ doc_describe = docfmt_partial(
         unique           3    <NA>
         top              d    <NA>
         freq             1    <NA>
-        mean           NaN     2.0
-        std            NaN     1.0
-        min            NaN     1.0
-        25%            NaN     1.5
-        50%            NaN     2.0
-        75%            NaN     2.5
-        max            NaN     3.0
+        mean          None     2.0
+        std           None     1.0
+        min           None     1.0
+        25%           None     1.5
+        50%           None     2.0
+        75%           None     2.5
+        max           None     3.0
 """
 )

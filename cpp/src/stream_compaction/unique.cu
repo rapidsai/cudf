@@ -8,6 +8,7 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
+#include <cudf/detail/algorithms/copy_if.cuh>
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/iterator.cuh>
@@ -15,7 +16,6 @@
 #include <cudf/detail/row_operator/equality.cuh>
 #include <cudf/detail/sorting.hpp>
 #include <cudf/detail/stream_compaction.hpp>
-#include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/stream_compaction.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>

@@ -495,10 +495,10 @@ class Series(SingleColumnFrame, IndexedFrame):
         >>> import cudf
         >>> import pyarrow as pa
         >>> cudf.Series.from_arrow(pa.array(["a", "b", None]))
-        0        a
-        1        b
-        2      NaN
-        dtype: str
+        0       a
+        1       b
+        2    None
+        dtype: object
         """
         return cls._from_column(ColumnBase.from_arrow(array))
 
@@ -1004,7 +1004,7 @@ class Series(SingleColumnFrame, IndexedFrame):
         10       a
         11       b
         12       c
-        13     NaN
+        13    None
         15       d
         Name: sample, dtype: str
         >>> series.to_frame()
@@ -1012,7 +1012,7 @@ class Series(SingleColumnFrame, IndexedFrame):
         10      a
         11      b
         12      c
-        13    NaN
+        13   None
         15      d
         """
         res = self._to_frame(name=name, index=self.index)
@@ -1143,7 +1143,7 @@ class Series(SingleColumnFrame, IndexedFrame):
         >>> s
         0      cat
         1      dog
-        2      NaN
+        2     None
         3   rabbit
         dtype: str
 
@@ -1154,9 +1154,9 @@ class Series(SingleColumnFrame, IndexedFrame):
         >>> s.map({'cat': 'kitten', 'dog': 'puppy'})
         0   kitten
         1    puppy
-        2      NaN
-        3      NaN
-        dtype: str
+        2     None
+        3     None
+        dtype: object
 
         It also accepts numeric functions:
 
@@ -1631,7 +1631,7 @@ class Series(SingleColumnFrame, IndexedFrame):
         >>> ser = cudf.Series(['', None, 'abc'])
         >>> ser
         0
-        1     NaN
+        1    None
         2     abc
         dtype: str
         >>> ser.dropna()
@@ -3028,15 +3028,15 @@ class Series(SingleColumnFrame, IndexedFrame):
         0       a
         1       a
         2       b
-        3     NaN
+        3    None
         4       b
-        5     NaN
+        5    None
         6       c
         dtype: str
         >>> series.unique()
         0       a
         1       b
-        2     NaN
+        2    None
         3       c
         dtype: str
         """

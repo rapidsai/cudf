@@ -246,8 +246,8 @@ def concat(
     1      d       4    dog
     >>> cudf.concat([df1, df3], sort=False)
       letter  number animal
-    0      a       1   <NA>
-    1      b       2   <NA>
+    0      a       1   None
+    1      b       2   None
     0      c       3    cat
     1      d       4    dog
 
@@ -966,8 +966,8 @@ def pivot(
               c
         b     1     2      3
         a
-        1   one   two    NaN
-        2   NaN   NaN  three
+        1   one   two   None
+        2  None  None  three
 
     """
     values_is_list = True
