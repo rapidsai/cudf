@@ -34,6 +34,15 @@ if TYPE_CHECKING:
 __all__ = ["BooleanFunction"]
 
 
+def _nesting_level(dtype: pl.DataType) -> int:
+    level = 0
+    current = dtype
+    while isinstance(current, pl.List):
+        level += 1
+        current = cast(pl.DataType, current.inner)
+    return level
+
+
 class BooleanFunction(Expr):
     class Name(IntEnum):
         """Internal and picklable representation of polars' `BooleanFunction`."""
@@ -104,12 +113,15 @@ class BooleanFunction(Expr):
             if (
                 isinstance(needles, LiteralColumn)
                 and isinstance(haystack, LiteralColumn)
-                and isinstance(haystack.dtype.polars_type, pl.List)
                 and len(needles.value) != len(haystack.value)
             ):
-                raise NotImplementedError(
-                    f"arguments for `is_in` have different lengths ({len(needles.value)} != {len(haystack.value)})"
-                )
+                needles_level = _nesting_level(needles.dtype.polars_type)
+                haystack_level = _nesting_level(haystack.dtype.polars_type)
+
+                if needles_level != haystack_level:
+                    raise NotImplementedError(
+                        f"arguments for `is_in` have different lengths ({len(needles.value)} != {len(haystack.value)})"
+                    )
 
     @staticmethod
     def _distinct(

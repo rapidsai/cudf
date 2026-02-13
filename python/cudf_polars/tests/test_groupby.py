@@ -266,6 +266,25 @@ def test_groupby_agg_broadcast_raises(df):
     assert_ir_translation_raises(q, NotImplementedError)
 
 
+@pytest.mark.parametrize(
+    "dtype",
+    [
+        pl.List(pl.Struct({"foo": pl.Int64, "bar": pl.String})),
+        pl.List(pl.List(pl.Struct({"foo": pl.Int64, "bar ": pl.String}))),
+        pl.List(pl.List(pl.List(pl.Struct({"foo": pl.Int64, "bar": pl.String})))),
+    ],
+)
+def test_groupby_nested_list_struct_raises(dtype):
+    ldf = pl.LazyFrame(
+        {
+            "key": [1, 2, 3],
+            "value": pl.Series([[], [], []], dtype=dtype),
+        }
+    )
+    q = ldf.group_by("key").agg(pl.col("value"))
+    assert_ir_translation_raises(q, NotImplementedError)
+
+
 @pytest.mark.parametrize("nrows", [30, 300, 300_000])
 @pytest.mark.parametrize("nkeys", [1, 2, 4])
 def test_groupby_maintain_order_random(nrows, nkeys, with_nulls):

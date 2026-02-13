@@ -241,10 +241,16 @@ def test_expr_is_in_empty_list():
     assert_gpu_result_equal(q)
 
 
-def test_is_in_shape_mismatch_raises():
-    q = pl.LazyFrame().select(
-        pl.lit(pl.Series([0, 1, 2, 3, 4])).is_in(pl.Series([[3], [1]]))
-    )
+@pytest.mark.parametrize(
+    "needles,haystack",
+    [
+        (pl.Series([0, 1, 2, 3, 4]), pl.Series([[3], [1]])),
+        (pl.Series([1, 2, 3]), pl.Series([[1, 2], [3, 4]])),
+        (pl.Series(["a", "b", "c", "d"]), pl.Series([["a"], ["b"]])),
+    ],
+)
+def test_is_in_shape_mismatch_raises(needles, haystack):
+    q = pl.LazyFrame().select(pl.lit(needles).is_in(haystack))
     assert_ir_translation_raises(q, NotImplementedError)
 
 

@@ -1798,6 +1798,15 @@ class Rolling(IR):
         ).slice(zlice)
 
 
+def _has_struct_in_list(polars_type: pl.DataType) -> bool:
+    if not isinstance(polars_type, pl.List):
+        return False
+    current = polars_type.inner
+    while isinstance(current, pl.List):
+        current = current.inner
+    return isinstance(current, pl.Struct)
+
+
 class GroupBy(IR):
     """Perform a groupby."""
 
@@ -1836,9 +1845,7 @@ class GroupBy(IR):
         self.schema = schema
         self.keys = tuple(keys)
         for dtype in schema.values():
-            if isinstance(dtype.polars_type, pl.List) and isinstance(
-                dtype.polars_type.inner, pl.Struct
-            ):
+            if _has_struct_in_list(dtype.polars_type):
                 raise NotImplementedError("Nested list[struct] types not supported")
         for request in agg_requests:
             expr = request.value
