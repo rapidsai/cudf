@@ -173,32 +173,23 @@ def _make_wrapped(col: plc.Column, children: list[plc.Column]) -> plc.Column:
     )
 
 
+def _wrap_column(col: plc.Column) -> plc.Column:
+    wrapped_children = [_wrap_column(child) for child in col.children()]
+    return _make_wrapped(col, wrapped_children)
+
+
 def _wrap_and_validate(
-    col: plc.Column, dtype: DtypeObj | None
-) -> tuple[plc.Column, DtypeObj | None]:
+    col: plc.Column, dtype: DtypeObj
+) -> tuple[plc.Column, DtypeObj]:
     if not isinstance(col, plc.Column):
         raise ValueError("plc_column must be a pylibcudf.Column")
 
-    if dtype is None:
-        wrapped_children = [
-            _wrap_and_validate(child, None)[0] for child in col.children()
-        ]
-        return _make_wrapped(col, wrapped_children), None
-
     if col.type().id() == plc.TypeId.INT8 and col.null_count() == col.size():
-        wrapped_children = [
-            _wrap_and_validate(child, None)[0] for child in col.children()
-        ]
-        return _make_wrapped(col, wrapped_children), dtype
+        return _wrap_column(col), dtype
 
     dispatch_dtype = dtype
     if isinstance(dispatch_dtype, pd.ArrowDtype):
         dispatch_dtype = pyarrow_dtype_to_cudf_dtype(dispatch_dtype)
-    if isinstance(dispatch_dtype, type):
-        try:
-            dispatch_dtype = np.dtype(dispatch_dtype)
-        except TypeError:
-            pass
     dtype_kind = cast("str | None", getattr(dispatch_dtype, "kind", None))
 
     if isinstance(dispatch_dtype, ListDtype):
@@ -226,13 +217,17 @@ def _wrap_and_validate(
             element_index = len(children) - 1
         wrapped_children = []
         for i, child in enumerate(children):
-            child_dtype = (
-                dispatch_dtype.element_type
-                if element_index is not None and i == element_index
-                else None
-            )
             try:
-                wrapped_child, _ = _wrap_and_validate(child, child_dtype)
+                if element_index is not None and i == element_index:
+                    element_dtype = dispatch_dtype.element_type
+                    if element_dtype is None:
+                        wrapped_child = _wrap_column(child)
+                    else:
+                        wrapped_child, _ = _wrap_and_validate(
+                            child, element_dtype
+                        )
+                else:
+                    wrapped_child = _wrap_column(child)
             except ValueError as e:
                 if element_index is not None and i == element_index:
                     raise ValueError(
@@ -254,12 +249,16 @@ def _wrap_and_validate(
             )
         if not is_dtype_obj_interval(dispatch_dtype):
             raise ValueError("dtype must be a IntervalDtype.")
+        interval_subtype = dispatch_dtype.subtype
         wrapped_children = []
         for i, child in enumerate(col.children()):
             try:
-                wrapped_child, _ = _wrap_and_validate(
-                    child, dispatch_dtype.subtype
-                )
+                if interval_subtype is None:
+                    wrapped_child = _wrap_column(child)
+                else:
+                    wrapped_child, _ = _wrap_and_validate(
+                        child, interval_subtype
+                    )
             except ValueError as e:
                 bound = "Right" if i else "Left"
                 raise ValueError(
@@ -305,10 +304,7 @@ def _wrap_and_validate(
         wrapped = _make_wrapped(col, wrapped_children)
         return wrapped, dispatch_dtype
 
-    wrapped_children = [
-        _wrap_and_validate(child, None)[0] for child in col.children()
-    ]
-    wrapped = _make_wrapped(col, wrapped_children)
+    wrapped = _wrap_column(col)
 
     if isinstance(dispatch_dtype, pd.DatetimeTZDtype):
         valid_types = {
@@ -513,7 +509,7 @@ def _validate_args_new(
     plc_column: plc.Column, dtype: DtypeObj
 ) -> tuple[plc.Column, DtypeObj]:
     wrapped, dispatch_dtype = _wrap_and_validate(plc_column, dtype)
-    return wrapped, cast("DtypeObj", dispatch_dtype)
+    return wrapped, dispatch_dtype
 
 
 class MaskCAIWrapper:
