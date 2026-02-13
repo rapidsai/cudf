@@ -67,21 +67,16 @@ constexpr double standard_error_from_precision(std::int32_t precision)
   return hll_constant / std::sqrt(static_cast<double>(1 << precision));
 }
 
-/**
- * @brief Validates that precision is within the valid range [4, 18]
- */
-void validate_precision(std::int32_t precision)
+[[nodiscard]] std::int32_t check_precision(std::int32_t precision)
 {
   CUDF_EXPECTS(precision >= min_precision && precision <= max_precision,
                "Precision must be in range [4, 18]",
                std::invalid_argument);
+  return precision;
 }
 
-/**
- * @brief Validates sketch span size and alignment for the given precision
- */
-void validate_sketch_span(cuda::std::span<cuda::std::byte const> sketch_span,
-                          std::int32_t precision)
+template <typename SpanT>
+[[nodiscard]] SpanT check_sketch_span(SpanT sketch_span, std::int32_t precision)
 {
   auto const expected_size = hll_ref_type::sketch_bytes(cuco::precision{precision});
   CUDF_EXPECTS(sketch_span.size() == expected_size,
@@ -91,6 +86,7 @@ void validate_sketch_span(cuda::std::span<cuda::std::byte const> sketch_span,
     reinterpret_cast<std::uintptr_t>(sketch_span.data()) % hll_ref_type::sketch_alignment() == 0,
     "Sketch span must be 4-byte aligned",
     std::invalid_argument);
+  return sketch_span;
 }
 
 /**
@@ -166,10 +162,10 @@ approx_distinct_count<Hasher>::approx_distinct_count(table_view const& input,
                                                      null_policy null_handling,
                                                      nan_policy nan_handling,
                                                      rmm::cuda_stream_view stream)
-  : _storage{(
-      validate_precision(precision),
-      rmm::device_uvector<register_type>{
-        hll_ref_type::sketch_bytes(cuco::precision{precision}) / sizeof(register_type), stream})},
+  : _storage{rmm::device_uvector<register_type>{
+      hll_ref_type::sketch_bytes(cuco::precision{check_precision(precision)}) /
+        sizeof(register_type),
+      stream}},
     _precision{precision},
     _null_handling{null_handling},
     _nan_handling{nan_handling}
@@ -196,8 +192,7 @@ approx_distinct_count<Hasher>::approx_distinct_count(cuda::std::span<cuda::std::
                                                      std::int32_t precision,
                                                      null_policy null_handling,
                                                      nan_policy nan_handling)
-  : _storage{(
-      validate_precision(precision), validate_sketch_span(sketch_span, precision), sketch_span)},
+  : _storage{check_sketch_span(sketch_span, check_precision(precision))},
     _precision{precision},
     _null_handling{null_handling},
     _nan_handling{nan_handling}
@@ -280,7 +275,7 @@ template <template <typename> class Hasher>
 void approx_distinct_count<Hasher>::merge(cuda::std::span<cuda::std::byte const> sketch_span,
                                           rmm::cuda_stream_view stream)
 {
-  validate_sketch_span(sketch_span, _precision);
+  check_sketch_span(sketch_span, _precision);
 
   hll_ref_type ref{sketch(), cuda::std::identity{}};
   hll_ref_type other_ref{cuda::std::span<cuda::std::byte>{
