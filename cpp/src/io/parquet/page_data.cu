@@ -6,7 +6,7 @@
 #include "page_data.cuh"
 #include "page_decode.cuh"
 
-#include <cudf/detail/utilities/algorithm.cuh>
+#include <cudf/detail/algorithms/reduce.cuh>
 #include <cudf/detail/utilities/batched_memcpy.hpp>
 
 #include <rmm/exec_policy.hpp>
