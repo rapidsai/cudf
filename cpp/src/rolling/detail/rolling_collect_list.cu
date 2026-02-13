@@ -5,9 +5,10 @@
 
 #include "rolling_collect_list.cuh"
 
+#include <cudf/detail/algorithms/copy_if.cuh>
+#include <cudf/detail/algorithms/reduce.cuh>
 #include <cudf/detail/get_value.cuh>
 #include <cudf/detail/iterator.cuh>
-#include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/device_uvector.hpp>

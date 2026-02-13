@@ -105,12 +105,12 @@ class StringColumn(ColumnBase, Scannable):
 
     @property
     def _PANDAS_NA_VALUE(self) -> ScalarLike:
-        """String columns return None as NA value in pandas compatibility mode."""
-        if cudf.get_option("mode.pandas_compatible"):
-            if is_pandas_nullable_extension_dtype(self.dtype):
-                return self.dtype.na_value
-            return None
-        return pd.NA
+        """Pandas NA value, mostly for a repr"""
+        if isinstance(self.dtype, (pd.StringDtype, pd.ArrowDtype)):
+            return self.dtype.na_value
+        # np.nan is also a valid NA value if dtype=object
+        # https://github.com/pandas-dev/pandas/pull/63900#discussion_r2740653899
+        return None
 
     @classmethod
     def _validate_args(
@@ -147,16 +147,6 @@ class StringColumn(ColumnBase, Scannable):
         if isinstance(result, pa.Scalar):
             return result.as_py()
         return result
-
-    def to_arrow(self) -> pa.Array:
-        # All null string columns fail to convert in libcudf, so we must short-circuit
-        # the call to super().to_arrow().
-        # TODO: Investigate if the above is a bug in libcudf and fix it there.
-        if self.plc_column.num_children() == 0 or self.is_all_null:
-            return pa.NullArray.from_buffers(
-                pa.null(), len(self), [pa.py_buffer(b"")]
-            )
-        return super().to_arrow()
 
     def sum(
         self,
@@ -387,11 +377,10 @@ class StringColumn(ColumnBase, Scannable):
         nullable: bool = False,
         arrow_type: bool = False,
     ) -> pd.Index:
-        if (
-            cudf.get_option("mode.pandas_compatible")
-            and isinstance(self.dtype, pd.StringDtype)
-            and self.dtype.storage in ["pyarrow", "python"]
-        ):
+        if isinstance(self.dtype, pd.StringDtype) and self.dtype.storage in [
+            "pyarrow",
+            "python",
+        ]:
             if self.dtype.storage == "pyarrow":
                 pandas_array = self.dtype.__from_arrow__(
                     self.to_arrow().cast(pa.large_string())
@@ -442,20 +431,47 @@ class StringColumn(ColumnBase, Scannable):
             and replacement_col.dtype != self.dtype
         ):
             return self.copy()
-        df = cudf.DataFrame._from_data(
-            {"old": to_replace_col, "new": replacement_col}
-        )
-        df = df.drop_duplicates(subset=["old"], keep="last", ignore_index=True)
-        if df._data["old"].null_count == 1:
-            res = self.fillna(
-                df._data["new"]
-                .apply_boolean_mask(df._data["old"].isnull())
-                .element_indexing(0)
+
+        # Deduplicate by old values, keeping last occurrence.
+        # This replicates pandas' behavior when to_replace has duplicates:
+        # pandas processes replacements sequentially, so the last occurrence wins.
+        # For example, df.replace([1, 2, 1], [10, 20, 30]) replaces 1→30 (not 1→10).
+        with to_replace_col.access(mode="read", scope="internal"):
+            with replacement_col.access(mode="read", scope="internal"):
+                old_plc, new_plc = plc.stream_compaction.stable_distinct(
+                    plc.Table(
+                        [to_replace_col.plc_column, replacement_col.plc_column]
+                    ),
+                    keys=[0],  # Deduplicate by first column (old values)
+                    keep=plc.stream_compaction.DuplicateKeepOption.KEEP_LAST,
+                    nulls_equal=plc.types.NullEquality.EQUAL,
+                    nans_equal=plc.types.NanEquality.ALL_EQUAL,
+                ).columns()
+
+        # Handle null replacement separately if there's a null in old values
+        res = self
+        if old_plc.null_count() == 1:
+            # Find the replacement value for null
+            old_isnull_plc = plc.unary.is_null(old_plc)
+            (filtered_column,) = plc.stream_compaction.apply_boolean_mask(
+                plc.Table([new_plc]), old_isnull_plc
+            ).columns()
+            replacement_for_null = filtered_column.to_scalar().to_py()
+            res = res.fillna(replacement_for_null)
+
+            old_plc, new_plc = plc.stream_compaction.drop_nulls(
+                plc.Table([old_plc, new_plc]),
+                keys=[0],
+                keep_threshold=1,
+            ).columns()
+
+        with res.access(mode="read", scope="internal"):
+            result_plc = plc.replace.find_and_replace_all(
+                res.plc_column,
+                old_plc,
+                new_plc,
             )
-            df = df.dropna(subset=["old"])
-        else:
-            res = self
-        return res.replace(df._data["old"], df._data["new"])
+        return cast("Self", ColumnBase.create(result_plc, self.dtype))
 
     def _binaryop(self, other: ColumnBinaryOperand, op: str) -> ColumnBase:
         reflect, op = self._check_reflected_op(op)
