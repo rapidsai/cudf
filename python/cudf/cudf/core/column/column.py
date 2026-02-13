@@ -940,42 +940,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         return ColumnBase._unwrap_buffers(self.plc_column)
 
     @staticmethod
-    def _wrap_buffers(col: plc.Column) -> plc.Column:
-        """Recursively wrap all buffers in a pylibcudf.Column.
-
-        This function will traverse the provided pylibcudf Column and wrap
-        all data and mask buffers in cudf Buffers, ensuring that cudf memory
-        semantics are preserved when using the resulting Column.
-
-        Parameters
-        ----------
-        col : pylibcudf.Column
-            The column to wrap.
-
-        Returns
-        -------
-        pylibcudf.Column
-            A new pylibcudf.Column with wrapped buffers.
-        """
-        data = _wrap_buffer_or_span(col.data())
-        mask = _wrap_buffer_or_span(col.null_mask())
-
-        wrapped_children = [
-            ColumnBase._wrap_buffers(child) for child in col.children()
-        ]
-
-        return plc.Column(
-            data_type=col.type(),
-            size=col.size(),
-            data=data,
-            mask=mask,
-            null_count=col.null_count(),
-            offset=col.offset(),
-            children=wrapped_children,
-            validate=False,
-        )
-
-    @staticmethod
     def _with_children(
         target_col: plc.Column,
         children: list[plc.Column],
@@ -1228,13 +1192,8 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         pylibcudf.Column
             A new pylibcudf.Column referencing the same data.
         """
-        # TODO: When we delete from_pylibcudf we can also remove the None handling
-        # branch in _normalize_plc_column_for_dtype
-        normalized = ColumnBase._normalize_plc_column_for_dtype(col, None)
-        # Wrap buffers first so that dtypes are compatible with dtype_from_pylibcudf_column
-        wrapped = ColumnBase._wrap_buffers(normalized)
-        dtype = dtype_from_pylibcudf_column(wrapped)
-        return ColumnBase.create(wrapped, dtype)
+        dtype = dtype_from_pylibcudf_column(col)
+        return ColumnBase.create(col, dtype)
 
     @classmethod
     def _from_preprocessed(
