@@ -6,6 +6,7 @@
 #include "benchmark.hpp"
 #include "common_utils.hpp"
 #include "io_source.hpp"
+#include "io_utils.hpp"
 #include "timer.hpp"
 
 #include <cudf/column/column_factories.hpp>
@@ -88,14 +89,14 @@ struct hybrid_scan_fn {
       auto const page_index_byte_range = reader->page_index_byte_range();
       if (not page_index_byte_range.is_empty()) {
         auto const page_index_buffer = fetch_page_index_bytes(datasource, page_index_byte_range);
-        reader->setup_page_index(make_host_span(*page_index_buffer));
+        reader->setup_page_index(*page_index_buffer);
       }
     }
 
     auto const all_column_chunk_byte_ranges =
       reader->all_column_chunks_byte_ranges(row_groups_indices, options);
     auto [all_column_chunk_buffers, all_column_chunk_data, all_col_read_tasks] =
-      fetch_byte_ranges(datasource, all_column_chunk_byte_ranges, stream, mr);
+      fetch_byte_ranges_async(datasource, all_column_chunk_byte_ranges, stream, mr);
     all_col_read_tasks.get();
     table.get() = std::move(
       reader
@@ -138,8 +139,8 @@ auto hybrid_scan_pipelined(io_source const& io_source,
   auto const footer_buffer = fetch_footer_bytes(datasource_ref);
   auto const options       = cudf::io::parquet_reader_options::builder().build();
 
-  auto reader = std::make_unique<cudf::io::parquet::experimental::hybrid_scan_reader>(
-    make_host_span(*footer_buffer), options);
+  auto reader =
+    std::make_unique<cudf::io::parquet::experimental::hybrid_scan_reader>(*footer_buffer, options);
 
   auto const metadata = std::move(reader->parquet_metadata());
 

@@ -536,6 +536,7 @@ add_library(
   src/io/parquet/experimental/hybrid_scan_preprocess.cu
   src/io/parquet/experimental/page_index_filter.cu
   src/io/parquet/experimental/page_index_filter_utils.cu
+  src/io/parquet/io_utils/parquet_io_utils.cpp
   src/io/parquet/page_data.cu
   src/io/parquet/chunk_dict.cu
   src/io/parquet/page_enc.cu
@@ -637,6 +638,7 @@ add_library(
   src/reductions/bitwise.cu
   src/reductions/collect_ops.cu
   src/reductions/count.cpp
+  src/reductions/distinct_count.cu
   src/reductions/histogram.cu
   src/reductions/max.cu
   src/reductions/mean.cu
@@ -647,8 +649,8 @@ add_library(
   src/reductions/product.cu
   src/reductions/quantile.cu
   src/reductions/reductions.cpp
-  src/reductions/scan/rank_scan.cu
   src/reductions/scan/ewm.cu
+  src/reductions/scan/rank_scan.cu
   src/reductions/scan/scan.cpp
   src/reductions/scan/scan_exclusive.cu
   src/reductions/scan/scan_inclusive.cu
@@ -670,6 +672,8 @@ add_library(
   src/reductions/sum.cu
   src/reductions/sum_of_squares.cu
   src/reductions/sum_with_overflow.cu
+  src/reductions/unique_count.cu
+  src/reductions/unique_count_column.cu
   src/reductions/var.cu
   src/replace/clamp.cu
   src/replace/nans.cu
@@ -715,15 +719,12 @@ add_library(
   src/sort/top_k.cu
   src/stream_compaction/apply_boolean_mask.cu
   src/stream_compaction/distinct.cu
-  src/stream_compaction/distinct_count.cu
   src/stream_compaction/distinct_helpers.cu
   src/stream_compaction/drop_nans.cu
   src/stream_compaction/drop_nulls.cu
   src/stream_compaction/filter/filter.cu
   src/stream_compaction/stable_distinct.cu
   src/stream_compaction/unique.cu
-  src/stream_compaction/unique_count.cu
-  src/stream_compaction/unique_count_column.cu
   src/strings/attributes.cu
   src/strings/capitalize.cu
   src/strings/case.cu
