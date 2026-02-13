@@ -3630,7 +3630,6 @@ class DatetimeIndex(Index):
         column_names: Iterable[str] | None = None,
     ):
         result = super()._from_columns_like_self(columns, column_names)
-        result._freq = _validate_freq(self._freq)
         return result
 
     @classmethod
