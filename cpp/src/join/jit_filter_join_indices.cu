@@ -36,11 +36,11 @@
 #include <jit/cache.hpp>
 #include <jit/helpers.hpp>
 #include <jit/parser.hpp>
+#include <jit/span.cuh>
+#include <jit_preprocessed_files/join/jit/filter_join_kernel.cu.jit.hpp>
 
 #include <memory>
 #include <utility>
-
-// Note: No need for JITIFY_HASH_CUSTOM_TYPE for function templates
 
 namespace cudf {
 namespace detail {
@@ -49,27 +49,12 @@ namespace {
 
 // Get the JIT kernel program for join filtering
 jitify2::Kernel get_join_filter_kernel(std::string const& kernel_name,
-                                      std::string const& cuda_source,
-                                      jitify2::StringVec const& template_args)
+                                       std::string const& cuda_source)
 {
   CUDF_FUNC_RANGE();
-
-  // Create a program from source files
-  static jitify2::Program program = jitify2::Program::create("filter_join_kernel",
-                                                             {"join/jit/filter_join_kernel.cu"});
-
-  // Preprocess the program
-  auto preprog = program.value().preprocess({"-std=c++20"});
-
-  // Get program cache
-  auto& cache = cudf::jit::get_program_cache(preprog.value());
-
-  // Get kernel with custom header sources
-  std::map<std::string, std::string> header_sources = {
-    {"cudf/detail/operation-udf.hpp", cuda_source}
-  };
-
-  return cache.get_kernel(kernel_name, template_args, header_sources, {"-arch=sm_."});
+  return cudf::jit::get_program_cache(*join_jit_filter_join_kernel_cu_jit)
+    .get_kernel(
+      kernel_name, {}, {{"cudf/detail/operation-udf.hpp", cuda_source}}, {"-arch=sm_."});
 }
 
 // Build template parameters for JIT kernel
@@ -127,16 +112,14 @@ jitify2::ConfiguredKernel build_join_filter_kernel(
           has_user_data))
     : cudf::jit::parse_single_function_cuda(predicate_code, "GENERIC_JOIN_FILTER_OP");
   
-  // Build template parameters
+  // Build template parameters and kernel name
   auto template_args = build_join_filter_template_params(left_columns, right_columns, has_user_data);
-  
+  auto kernel_name   = jitify2::reflection::Template("cudf::join::jit::filter_join_kernel")
+                         .instantiate(template_args);
+
   // Get compiled kernel
-  auto kernel = get_join_filter_kernel(
-    jitify2::reflection::Template("cudf::join::jit::filter_join_kernel")
-      .instantiate(template_args),
-    cuda_source,
-    template_args);
-    
+  auto kernel = get_join_filter_kernel(kernel_name, cuda_source);
+
   return kernel->configure_1d_max_occupancy(0, 0, nullptr, stream.value());
 }
 
@@ -163,12 +146,13 @@ void launch_join_filter_kernel(
   auto [right_handles, right_device_views] =
     cudf::jit::column_views_to_device<column_device_view, column_view>(right_cols, stream, mr);
   
-  // Set up kernel parameters
-  cudf::device_span<cudf::size_type const> left_span = left_indices;
-  cudf::device_span<cudf::size_type const> right_span = right_indices;
-  cudf::column_device_view_core const* left_tables_ptr = left_device_views.data();
+  // Set up kernel parameters - use JIT-compatible span type
+  cudf::jit::device_span<cudf::size_type const> left_span{left_indices.data(), left_indices.size()};
+  cudf::jit::device_span<cudf::size_type const> right_span{right_indices.data(),
+                                                           right_indices.size()};
+  cudf::column_device_view_core const* left_tables_ptr  = left_device_views.data();
   cudf::column_device_view_core const* right_tables_ptr = right_device_views.data();
-  void* user_data_ptr = user_data.value_or(nullptr);
+  void* user_data_ptr                                   = user_data.value_or(nullptr);
   
   std::array<void*, 6> args{
     &left_span,

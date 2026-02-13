@@ -6,7 +6,6 @@
 #include <cudf/column/column_device_view_base.cuh>
 #include <cudf/detail/utilities/grid_1d.cuh>
 #include <cudf/types.hpp>
-#include <cudf/utilities/span.hpp>
 
 #include <cuda/std/cstddef>
 
@@ -24,12 +23,12 @@ namespace join {
 namespace jit {
 
 template <bool has_user_data, typename... InputAccessors>
-CUDF_KERNEL void filter_join_kernel(cudf::device_span<cudf::size_type const> left_indices,
-                                   cudf::device_span<cudf::size_type const> right_indices,
-                                   cudf::column_device_view_core const* left_tables,
-                                   cudf::column_device_view_core const* right_tables,
-                                   bool* predicate_results,
-                                   void* user_data)
+CUDF_KERNEL void filter_join_kernel(cudf::jit::device_span<cudf::size_type const> left_indices,
+                                    cudf::jit::device_span<cudf::size_type const> right_indices,
+                                    cudf::column_device_view_core const* left_tables,
+                                    cudf::column_device_view_core const* right_tables,
+                                    bool* predicate_results,
+                                    void* user_data)
 {
   auto const start = cudf::detail::grid_1d::global_thread_id();
   auto const stride = cudf::detail::grid_1d::grid_stride();
@@ -46,17 +45,21 @@ CUDF_KERNEL void filter_join_kernel(cudf::device_span<cudf::size_type const> lef
     }
 
     bool result = false;
-    
+
+    // Each accessor receives both tables and both indices, and internally selects
+    // the appropriate table based on whether it's a left or right accessor.
     if constexpr (has_user_data) {
-      GENERIC_JOIN_FILTER_OP(user_data, i, &result, 
-                            InputAccessors::element(left_tables, left_idx, i)...,
-                            InputAccessors::element(right_tables, right_idx, i)...);
+      GENERIC_JOIN_FILTER_OP(
+        user_data,
+        i,
+        &result,
+        InputAccessors::element(left_tables, right_tables, left_idx, right_idx, i)...);
     } else {
-      GENERIC_JOIN_FILTER_OP(&result,
-                           InputAccessors::element(left_tables, left_idx, i)...,
-                           InputAccessors::element(right_tables, right_idx, i)...);
+      GENERIC_JOIN_FILTER_OP(
+        &result,
+        InputAccessors::element(left_tables, right_tables, left_idx, right_idx, i)...);
     }
-    
+
     predicate_results[i] = result;
   }
 }
