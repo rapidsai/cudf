@@ -1234,8 +1234,6 @@ def parse_args(
             f"--validate-directory: {parsed_args.validate_directory} does not exist."
         )
     if parsed_args.validate_directory:
-        # Verify that the directory contains a a parquet file for each query
-        # missing_files: list[str] = []
         validation_files = list_validation_files(parsed_args.validate_directory)
         missing_files = [
             str(x) for x in set(parsed_args.query) - set(validation_files.keys())
@@ -1268,21 +1266,56 @@ def validate_result(
     """
     Validate the computed result against the expected answer.
 
-    This validates several aspects of the result, in order:
+    Parameters
+    ----------
+    result : pl.DataFrame
+        The computed result to validate.
+    expected : pl.DataFrame
+        The expected answer to validate against.
+    sort_by : list[tuple[str, bool]]
+        The columns to sort by, and the sort order. This *must* be the same
+        as the ``sort_by`` and ``descending`` required by the query
+    limit : int | None, optional
+        The limit (passed to ``.head``) used in the query, if any. This is
+        used to break ties in the ``sort_by`` columns. See notes below.
+    kwargs : Any
+        Additional keyword arguments passed to ``polars.testing.assert_frame_equal``.
 
-    1. That the schema (column names and data types) match
-    2. That the values match, with some special handling for
-       approximate comparison and for queries with a
-       ``.sort(...).head(n)`` component.
+    Returns
+    -------
+    validation_result
 
-    Consider a query that does some operation to derive a ``value`` column,
-    sorts on ``value``, and then returns the first ``n`` rows. When there
-    are ties in the ``value`` column and the ``.head(n)`` cuts off some of
-    the records with that same value, the result and expected results may
-    differ for completely innocuous reasons like sort stability. There isn't
-    any way to say that one of the results is more correct than the other.
+    Notes
+    -----
+    This validates that:
 
-    To handle this, this comparison function does the value comparison in two parts:
+    1. The schema (column names and data types) match
+    2. The values match, with some special handling
+       - approximate comparison (for floating point values)
+       - sorting stability / distributed execution
+
+    Consider a set of ``(key, value)`` records like::
+
+       ("a", 1)
+       ("b", 1)
+       ("c", 1)
+       ("d", 1)
+
+    Now suppose we run a query that sorts on ``value``. *Any* ordering of those
+    records is as correct as any other, since the ``value`` is the same and they
+    query says nothing about the sorting of the other columns.
+
+    To handle this, this function sorts the result and expected dataframes, taking
+    care to sort by the ``sort_by`` columns *first* (preserving the semantics of the
+    query) and then by the remaining columns.
+
+    After sorting by all the columns, any remaining differences are should be
+    real, *unless* the query includes a ``limit`` / ``.head(n)`` component. Consider
+    a query that includes a ``.sort_by("value").head(2)`` component. In our example,
+    any result that returns exactly two rows is as good as any other.
+
+    To handle this, this comparison function does the value comparison in two
+    parts when there's a ``.sort_by(...).head(n)`` component:
 
     1. For all the values "before" the last value (defined by ``sort_by``), we
        compare the results directly using ``pl.testing.assert_frame_equal``.
