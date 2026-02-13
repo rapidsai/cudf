@@ -23,7 +23,6 @@ from cudf.core.column.column import (
 )
 from cudf.core.column.numerical_base import NumericalBaseColumn
 from cudf.core.column.utils import access_columns
-from cudf.core.dtype.validators import is_dtype_obj_numeric
 from cudf.core.mixins import BinaryOperand
 from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
@@ -83,15 +82,6 @@ class NumericalColumn(NumericalBaseColumn):
         ):
             return np.nan
         return super()._PANDAS_NA_VALUE
-
-    @classmethod
-    def _validate_args(
-        cls, plc_column: plc.Column, dtype: DtypeObj
-    ) -> tuple[plc.Column, DtypeObj]:
-        plc_column, dtype = super()._validate_args(plc_column, dtype)
-        if not is_dtype_obj_numeric(dtype, include_decimal=False):
-            raise ValueError(f"dtype must be a numeric type. Got: {dtype}")
-        return plc_column, dtype
 
     def __contains__(self, item: ScalarLike) -> bool:
         """

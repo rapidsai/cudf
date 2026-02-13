@@ -98,22 +98,6 @@ class CategoricalColumn(ColumnBase):
         plc.TypeId.UINT64,
     }
 
-    @staticmethod
-    def _validate_dtype_to_plc_column(
-        plc_column: plc.Column, dtype: DtypeObj
-    ) -> None:
-        """Validate that the dtype matches the equivalent type of the plc_column"""
-        return None
-
-    @classmethod
-    def _validate_args(
-        cls, plc_column: plc.Column, dtype: DtypeObj
-    ) -> tuple[plc.Column, DtypeObj]:
-        plc_column, dtype = super()._validate_args(plc_column, dtype)
-        if not isinstance(dtype, CategoricalDtype):
-            raise ValueError(f"{dtype=} must be a CategoricalDtype instance")
-        return plc_column, dtype
-
     def __contains__(self, item: ScalarLike) -> bool:
         try:
             encoded = self._encode(item)

@@ -195,15 +195,6 @@ class DatetimeColumn(TemporalBaseColumn):
         plc.TypeId.TIMESTAMP_NANOSECONDS,
     }
 
-    @classmethod
-    def _validate_args(
-        cls, plc_column: plc.Column, dtype: DtypeObj
-    ) -> tuple[plc.Column, DtypeObj]:
-        plc_column, dtype = super()._validate_args(plc_column, dtype)
-        if dtype.kind != "M":
-            raise ValueError(f"dtype must be a datetime, got {dtype}")
-        return plc_column, dtype
-
     def _reduce(
         self,
         op: str,
@@ -866,35 +857,6 @@ class DatetimeColumn(TemporalBaseColumn):
 
 
 class DatetimeTZColumn(DatetimeColumn):
-    @classmethod
-    def _validate_args(
-        cls, plc_column: plc.Column, dtype: DtypeObj
-    ) -> tuple[plc.Column, DtypeObj]:
-        # TODO: Uncomment below so validation goes through parent class
-        #  but uncovers subsequent issues in to_pandas and DatetimeColumn.as_datetime_column
-        # plc_column, _ = super()._validate_args(
-        #     plc_column, _get_base_dtype(dtype)
-        # )
-        # if not is_dtype_obj_datetime_tz(dtype):
-        #     raise ValueError(
-        #         f"dtype must be a datetime with timezone type: Got {dtype}."
-        #     )
-        # Manually validate TypeId since we can't call parent (different dtype type)
-        if not (
-            isinstance(plc_column, plc.Column)
-            and plc_column.type().id() in DatetimeColumn._VALID_PLC_TYPES
-        ):
-            raise ValueError(
-                f"plc_column must be a pylibcudf.Column with a TypeId in {DatetimeColumn._VALID_PLC_TYPES}"
-            )
-        if not is_dtype_obj_datetime_tz(dtype):
-            raise ValueError(
-                f"dtype must be a datetime with timezone type: Got {dtype}."
-            )
-        if isinstance(dtype, pd.DatetimeTZDtype):
-            dtype = get_compatible_timezone(dtype)
-        return plc_column, dtype
-
     def to_pandas(
         self,
         *,

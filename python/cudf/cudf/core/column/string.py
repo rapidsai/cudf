@@ -19,7 +19,6 @@ import cudf
 from cudf.api.types import is_scalar
 from cudf.core._internals import binaryop
 from cudf.core.column.column import ColumnBase, as_column, column_empty
-from cudf.core.dtype.validators import is_dtype_obj_string
 from cudf.core.mixins import Scannable
 from cudf.errors import MixedTypeError
 from cudf.utils.dtypes import (
@@ -111,21 +110,6 @@ class StringColumn(ColumnBase, Scannable):
         # np.nan is also a valid NA value if dtype=object
         # https://github.com/pandas-dev/pandas/pull/63900#discussion_r2740653899
         return None
-
-    @classmethod
-    def _validate_args(
-        cls, plc_column: plc.Column, dtype: DtypeObj
-    ) -> tuple[plc.Column, DtypeObj]:
-        plc_column, dtype = super()._validate_args(plc_column, dtype)
-        if not is_dtype_obj_string(dtype):
-            if dtype.kind == "U":
-                # User _passed_ e.g. np.dtype(str), but we store np.dtype(object) like pandas
-                # >>> pd.Series(["a"], dtype=np.dtype(str)).dtype
-                # dtype('O')
-                dtype = np.dtype(object)
-            else:
-                raise ValueError("dtype must be a valid cuDF string dtype")
-        return plc_column, dtype
 
     @property
     def __cuda_array_interface__(self) -> Mapping[str, Any]:

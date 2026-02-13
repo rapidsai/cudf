@@ -138,14 +138,14 @@ def _validate_args_new(
     plc_column: plc.Column, dtype: DtypeObj
 ) -> tuple[plc.Column, DtypeObj]:
     def validate_dtype_recursively(
-        col: plc.Column, child_dtype: DtypeObj
+        col: plc.Column, child_dtype: DtypeObj | None
     ) -> None:
         if (
             col.type().id() == plc.TypeId.INT8
             and col.null_count() == col.size()
         ):
             return
-        _validate_args_new(col, child_dtype)
+        _validate_args_new(col, cast("DtypeObj", child_dtype))
 
     if not isinstance(plc_column, plc.Column):
         raise ValueError("plc_column must be a pylibcudf.Column")
@@ -158,6 +158,7 @@ def _validate_args_new(
             dispatch_dtype = np.dtype(dispatch_dtype)
         except TypeError:
             pass
+    dtype_kind = cast("str | None", getattr(dispatch_dtype, "kind", None))
 
     if isinstance(dispatch_dtype, pd.DatetimeTZDtype):
         valid_types = {
@@ -348,7 +349,7 @@ def _validate_args_new(
             raise ValueError("dtype must be a valid cuDF string dtype")
         return plc_column, dispatch_dtype
 
-    if getattr(dispatch_dtype, "kind", None) == "M":
+    if dtype_kind == "M":
         valid_types = {
             plc.TypeId.TIMESTAMP_SECONDS,
             plc.TypeId.TIMESTAMP_MILLISECONDS,
@@ -370,7 +371,7 @@ def _validate_args_new(
             raise ValueError(f"dtype must be a datetime, got {dispatch_dtype}")
         return plc_column, dispatch_dtype
 
-    if getattr(dispatch_dtype, "kind", None) == "m":
+    if dtype_kind == "m":
         valid_types = {
             plc.TypeId.DURATION_SECONDS,
             plc.TypeId.DURATION_MILLISECONDS,
@@ -388,11 +389,11 @@ def _validate_args_new(
                 f"{dispatch_dtype} does not match the type of the plc_column "
                 f"{plc_column.type().id()}"
             )
-        if dispatch_dtype.kind != "m":
+        if dtype_kind != "m":
             raise ValueError("dtype must be a timedelta dtype.")
         return plc_column, dispatch_dtype
 
-    if getattr(dispatch_dtype, "kind", None) in "iufb":
+    if dtype_kind is not None and dtype_kind in "iufb":
         valid_types = {
             plc.TypeId.INT8,
             plc.TypeId.INT16,
@@ -419,12 +420,11 @@ def _validate_args_new(
             )
         if (
             cudf.get_option("mode.pandas_compatible")
-            and dispatch_dtype.kind not in "iufb"
+            and dtype_kind not in "iufb"
         ) or (
             not cudf.get_option("mode.pandas_compatible")
             and not (
-                isinstance(dispatch_dtype, np.dtype)
-                and dispatch_dtype.kind in "iufb"
+                isinstance(dispatch_dtype, np.dtype) and dtype_kind in "iufb"
             )
         ):
             raise ValueError(
@@ -637,32 +637,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         raise ValueError(
             "ColumnBase and its subclasses must be instantiated via from_pylibcudf."
         )
-
-    @staticmethod
-    def _validate_dtype_to_plc_column(
-        plc_column: plc.Column, dtype: DtypeObj
-    ) -> None:
-        """Validate that the dtype matches the equivalent type of the plc_column"""
-        if dtype_to_pylibcudf_type(dtype) != plc_column.type():
-            # TODO: Override ListColumn, StructColumn, IntervalColumn to also validate children
-            raise ValueError(
-                f"dtype {dtype} does not match the type of the plc_column {plc_column.type().id()}"
-            )
-
-    @classmethod
-    def _validate_args(
-        cls, plc_column: plc.Column, dtype: DtypeObj
-    ) -> tuple[plc.Column, DtypeObj]:
-        """Validate and return plc_column and dtype arguments for column construction."""
-        if not (
-            isinstance(plc_column, plc.Column)
-            and plc_column.type().id() in cls._VALID_PLC_TYPES
-        ):
-            raise ValueError(
-                f"plc_column must be a pylibcudf.Column with a TypeId in {cls._VALID_PLC_TYPES}"
-            )
-        cls._validate_dtype_to_plc_column(plc_column, dtype)
-        return plc_column, dtype
 
     @property
     def _PANDAS_NA_VALUE(self) -> ScalarLike:
@@ -1181,9 +1155,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         ):
             return
 
-        # Dispatch to the appropriate subclass and use its _validate_args
-        target_cls = ColumnBase._dispatch_subclass_from_dtype(dtype)
-        target_cls._validate_args(col, dtype)
+        _validate_args_new(col, dtype)
 
     @staticmethod
     def from_pylibcudf(col: plc.Column) -> ColumnBase:
@@ -1227,7 +1199,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         # _with_type_metadata calls.
         self = cls.__new__(cls)
         if validate:
-            plc_column, dtype = self._validate_args(plc_column, dtype)
+            plc_column, dtype = _validate_args_new(plc_column, dtype)
         self.plc_column = plc_column
         self._dtype = dtype
         self._distinct_count = {}

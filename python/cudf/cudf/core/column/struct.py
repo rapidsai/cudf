@@ -11,7 +11,6 @@ import pylibcudf as plc
 
 import cudf
 from cudf.core.column.column import ColumnBase
-from cudf.core.dtype.validators import is_dtype_obj_struct
 from cudf.core.dtypes import StructDtype
 from cudf.utils.dtypes import (
     get_dtype_of_same_kind,
@@ -49,37 +48,6 @@ class StructColumn(ColumnBase):
     """
 
     _VALID_PLC_TYPES = {plc.TypeId.STRUCT}
-
-    @classmethod
-    def _validate_args(
-        cls, plc_column: plc.Column, dtype: DtypeObj
-    ) -> tuple[plc.Column, DtypeObj]:
-        plc_column, dtype = super()._validate_args(plc_column, dtype)
-        if not is_dtype_obj_struct(dtype):
-            raise ValueError(f"{type(dtype).__name__} must be a StructDtype.")
-
-        equiv_dtype = StructDtype.from_struct_dtype(dtype)
-        # Check field count
-        if (
-            num_fields := len(equiv_dtype.fields)
-        ) != plc_column.num_children():
-            raise ValueError(
-                f"{dtype} has {num_fields} fields, "
-                f"but column has {plc_column.num_children()} children"
-            )
-
-        for i, (field_name, field_dtype) in enumerate(
-            equiv_dtype.fields.items()
-        ):
-            child = plc_column.child(i)
-            try:
-                ColumnBase._validate_dtype_recursively(child, field_dtype)
-            except ValueError as e:
-                raise ValueError(
-                    f"Field '{field_name}' (index {i}) validation failed: {e}"
-                ) from e
-
-        return plc_column, dtype
 
     def _get_sliced_child(self, idx: int) -> ColumnBase:
         """
