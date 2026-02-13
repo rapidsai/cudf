@@ -24,13 +24,19 @@
 namespace CUDF_EXPORT cudf {
 namespace io::parquet {
 
+/**
+ * @addtogroup io_utils
+ * @{
+ * @file
+ */
+
 //! Using `byte_range_info` from cudf::io::text
 using cudf::io::text::byte_range_info;
 
 /**
  * @brief Fetches a host buffer of Parquet footer bytes from the input data source
  *
- * @ingroup io_readers
+ * @ingroup io_utils
  *
  * @param datasource Input data source
  * @return Host buffer containing footer bytes
@@ -41,7 +47,7 @@ std::unique_ptr<cudf::io::datasource::buffer> fetch_footer_to_host(
 /**
  * @brief Fetches a host buffer of Parquet page index from the input data source
  *
- * @ingroup io_readers
+ * @ingroup io_utils
  *
  * @param datasource Input datasource
  * @param page_index_bytes Byte range of page index
@@ -53,7 +59,7 @@ std::unique_ptr<cudf::io::datasource::buffer> fetch_page_index_to_host(
 /**
  * @brief Fetches a list of byte ranges from a datasource into device buffers
  *
- * @ingroup io_readers
+ * @ingroup io_utils
  *
  * @param datasource Input datasource
  * @param byte_ranges Byte ranges to fetch
@@ -71,5 +77,6 @@ fetch_byte_ranges_to_device_async(cudf::io::datasource& datasource,
                                   rmm::cuda_stream_view stream,
                                   rmm::device_async_resource_ref mr);
 
+/** @} */  // end of group
 }  // namespace io::parquet
 }  // namespace CUDF_EXPORT cudf

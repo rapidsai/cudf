@@ -8,7 +8,6 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/row_operator/common_utils.cuh>
-#include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/detail/utilities/assert.cuh>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/lists/detail/dremel.hpp>
