@@ -32,13 +32,14 @@ namespace {
 using hll_ref_type =
   cuco::hyperloglog_ref<std::uint64_t, cuda::thread_scope_device, cuda::std::identity>;
 
+constexpr double hll_constant        = 1.04;  // ≈ β∞ = √(3ln2 − 1) from Flajolet et al.
 constexpr std::int32_t min_precision = 4;
 constexpr std::int32_t max_precision = 18;
 
 /**
  * @brief Converts standard error to HLL precision
  *
- * Formula: precision = ceil(2 * log2(1.04 / standard_error))
+ * Formula: precision = ceil(2 * log2(hll_constant / standard_error))
  *
  * @param standard_error The desired standard error
  * @return The calculated precision, clamped to valid range [4, 18]
@@ -46,8 +47,6 @@ constexpr std::int32_t max_precision = 18;
 std::int32_t precision_from_standard_error(double standard_error)
 {
   CUDF_EXPECTS(standard_error > 0, "Standard error must be positive", std::invalid_argument);
-
-  constexpr double hll_constant = 1.04;
 
   auto const ratio     = hll_constant / standard_error;
   auto const precision = static_cast<std::int32_t>(std::ceil(2.0 * std::log2(ratio)));
@@ -58,14 +57,13 @@ std::int32_t precision_from_standard_error(double standard_error)
 /**
  * @brief Converts HLL precision to standard error
  *
- * Formula: standard_error = 1.04 / sqrt(2^precision)
+ * Formula: standard_error = hll_constant / sqrt(2^precision)
  *
  * @param precision The HLL precision parameter
  * @return The standard error for the given precision
  */
 constexpr double standard_error_from_precision(std::int32_t precision)
 {
-  constexpr double hll_constant = 1.04;
   return hll_constant / std::sqrt(static_cast<double>(1 << precision));
 }
 
@@ -82,15 +80,17 @@ void validate_precision(std::int32_t precision)
 /**
  * @brief Validates sketch span size and alignment for the given precision
  */
-void validate_sketch_span(void const* data, std::size_t size, std::int32_t precision)
+void validate_sketch_span(cuda::std::span<cuda::std::byte const> sketch_span,
+                          std::int32_t precision)
 {
   auto const expected_size = hll_ref_type::sketch_bytes(cuco::precision{precision});
-  CUDF_EXPECTS(size == expected_size,
+  CUDF_EXPECTS(sketch_span.size() == expected_size,
                "Sketch span size does not match expected size for precision",
                std::invalid_argument);
-  CUDF_EXPECTS(reinterpret_cast<std::uintptr_t>(data) % hll_ref_type::sketch_alignment() == 0,
-               "Sketch span must be 4-byte aligned",
-               std::invalid_argument);
+  CUDF_EXPECTS(
+    reinterpret_cast<std::uintptr_t>(sketch_span.data()) % hll_ref_type::sketch_alignment() == 0,
+    "Sketch span must be 4-byte aligned",
+    std::invalid_argument);
 }
 
 /**
@@ -196,9 +196,8 @@ approx_distinct_count<Hasher>::approx_distinct_count(cuda::std::span<cuda::std::
                                                      std::int32_t precision,
                                                      null_policy null_handling,
                                                      nan_policy nan_handling)
-  : _storage{(validate_precision(precision),
-              validate_sketch_span(sketch_span.data(), sketch_span.size(), precision),
-              sketch_span)},
+  : _storage{(
+      validate_precision(precision), validate_sketch_span(sketch_span, precision), sketch_span)},
     _precision{precision},
     _null_handling{null_handling},
     _nan_handling{nan_handling}
@@ -281,7 +280,7 @@ template <template <typename> class Hasher>
 void approx_distinct_count<Hasher>::merge(cuda::std::span<cuda::std::byte const> sketch_span,
                                           rmm::cuda_stream_view stream)
 {
-  validate_sketch_span(sketch_span.data(), sketch_span.size(), _precision);
+  validate_sketch_span(sketch_span, _precision);
 
   hll_ref_type ref{sketch(), cuda::std::identity{}};
   hll_ref_type other_ref{cuda::std::span<cuda::std::byte>{

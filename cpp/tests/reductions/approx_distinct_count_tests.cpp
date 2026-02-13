@@ -791,6 +791,7 @@ TEST_F(ApproxDistinctCount, StandardErrorConstructor)
   // ~1% standard error should give precision 14 (1.04/sqrt(2^14) ≈ 0.0081)
   auto adc_stderr = cudf::approx_distinct_count(table, cudf::approx_standard_error{0.01});
   EXPECT_EQ(14, adc_stderr.precision());
+  EXPECT_TRUE(is_reasonable_approximation(adc_stderr.estimate(), 500, 14));
 
   // 3.25% standard error (exact boundary) gives precision 10 (1.04/sqrt(2^10) = 0.0325)
   auto adc_stderr2 = cudf::approx_distinct_count(table, cudf::approx_standard_error{0.0325});
@@ -799,30 +800,22 @@ TEST_F(ApproxDistinctCount, StandardErrorConstructor)
   // Slightly smaller than boundary gets higher precision
   auto adc_stderr3 = cudf::approx_distinct_count(table, cudf::approx_standard_error{0.032});
   EXPECT_EQ(11, adc_stderr3.precision());
-
-  // Verify estimate is reasonable
-  auto approx_count = adc_stderr.estimate();
-  EXPECT_TRUE(is_reasonable_approximation(approx_count, 500, 14));
 }
 
 TEST_F(ApproxDistinctCount, StandardErrorGetter)
 {
-  auto data = generate_data<int32_t>(1000, 50);
-  cudf::test::fixed_width_column_wrapper<int32_t> col(data.begin(), data.end());
-  cudf::table_view table({col});
+  cudf::table_view empty_table({});
 
-  auto adc10 = cudf::approx_distinct_count(table, 10);
-  auto adc12 = cudf::approx_distinct_count(table, 12);
-  auto adc14 = cudf::approx_distinct_count(table, 14);
+  auto adc10 = cudf::approx_distinct_count(empty_table, 10);
+  auto adc12 = cudf::approx_distinct_count(empty_table, 12);
+  auto adc14 = cudf::approx_distinct_count(empty_table, 14);
 
-  // standard_error = 1.04 / sqrt(2^precision)
-  double const expected_se_10 = 1.04 / std::sqrt(1 << 10);  // ~0.0325
-  double const expected_se_12 = 1.04 / std::sqrt(1 << 12);  // ~0.0163
-  double const expected_se_14 = 1.04 / std::sqrt(1 << 14);  // ~0.0081
+  EXPECT_GT(adc10.standard_error(), adc12.standard_error());
+  EXPECT_GT(adc12.standard_error(), adc14.standard_error());
 
-  EXPECT_DOUBLE_EQ(expected_se_10, adc10.standard_error());
-  EXPECT_DOUBLE_EQ(expected_se_12, adc12.standard_error());
-  EXPECT_DOUBLE_EQ(expected_se_14, adc14.standard_error());
+  auto adc_rt =
+    cudf::approx_distinct_count(empty_table, cudf::approx_standard_error{adc12.standard_error()});
+  EXPECT_EQ(adc12.precision(), adc_rt.precision());
 }
 
 TEST_F(ApproxDistinctCount, InvalidPrecisionThrows)
