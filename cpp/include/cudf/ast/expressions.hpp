@@ -505,6 +505,45 @@ class operation : public expression {
   std::vector<std::reference_wrapper<expression const>> operands;
 };
 
+namespace detail {
+
+class filter_predicate : public expression {
+ public:
+  filter_predicate(expression const& source) : source_{source} {}
+
+  /**
+   * @copydoc expression::accept
+   */
+  cudf::size_type accept(detail::expression_parser& visitor) const override;
+
+  /**
+   * @copydoc expression::accept
+   */
+  std::reference_wrapper<expression const> accept(
+    detail::expression_transformer& visitor) const override;
+
+  [[nodiscard]] bool may_evaluate_null(table_view const& left,
+                                       table_view const& right,
+                                       rmm::cuda_stream_view stream) const override;
+
+  /**
+   * @copydoc expression::accept
+   */
+  [[nodiscard]] std::unique_ptr<cudf::detail::row_ir::node> accept(
+    cudf::detail::row_ir::ast_converter& visitor) const override;
+
+    /**
+    * @brief Get the operand expression.
+    * @return The operand expression
+     */
+  [[nodiscard]] expression const& get_operand() const { return source_; }
+
+ private:
+  std::reference_wrapper<expression const> source_;
+};
+
+}  // namespace detail
+
 /**
  * @brief A expression referring to data from a column in a table.
  */

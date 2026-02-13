@@ -335,6 +335,49 @@ std::string operation::generate_code(instance_context& ctx,
   return operands_code + operation_code;
 }
 
+filter_predicate::filter_predicate(std::unique_ptr<node> source) : id_(), source_(std::move(source))
+{
+}
+
+std::string_view filter_predicate::get_id() { return id_; }
+
+data_type filter_predicate::get_type() { return data_type{type_id::BOOL8}; }
+
+bool filter_predicate::is_null_aware() { return source_->is_null_aware(); }
+
+bool filter_predicate::is_always_valid() { return true; }
+
+node& filter_predicate::get_source() { return *source_; }
+
+void filter_predicate::instantiate(instance_context& ctx, instance_info const& info)
+{
+  source_->instantiate(ctx, info);
+  CUDF_EXPECTS(source_->get_type().id() == type_id::BOOL8,
+               "Filter predicate source must be boolean.",
+               std::invalid_argument);
+  id_ = ctx.make_tmp_id();
+}
+
+[[nodiscard]] std::string filter_predicate::generate_code(instance_context& ctx,
+                                                          target_info const& info,
+                                                          instance_info const& instance)
+{
+  switch (info.id) {
+    case target::CUDA: {
+      auto source_code = source_->generate_code(ctx, info, instance);
+      return std::format(
+        "{}\n"
+        "bool {} = cudf::ast::detail::flatten_predicate({});\n",
+        source_code,
+        id_,
+        source_->get_id());
+    }
+    default:
+      CUDF_FAIL("Unsupported target: " + std::to_string(static_cast<int>(info.id)),
+                std::invalid_argument);
+  }
+}
+
 std::span<ast_input_spec const> ast_converter::get_input_specs() const { return input_specs_; }
 
 int32_t ast_converter::add_ast_input(ast_input_spec in)
@@ -372,6 +415,12 @@ std::unique_ptr<row_ir::node> ast_converter::add_ir_node(ast::operation const& e
   return std::make_unique<row_ir::operation>(expr.get_operator(), std::move(operands));
 }
 
+std::unique_ptr<row_ir::node> ast_converter::add_ir_node(ast::detail::filter_predicate const& expr)
+{
+  auto operand = expr.get_operand().accept(*this);
+  return std::make_unique<row_ir::filter_predicate>(std::move(operand));
+}
+
 void ast_converter::add_input_var(ast_column_input_spec const& in, ast_args const& args)
 {
   // TODO(lamarrr): consider mangling column name to make debugging easier
@@ -406,7 +455,8 @@ decltype(auto) dispatch_input_spec(ast_input_spec const& in, Fn&& fn, Args&&... 
   }
 }
 
-column_view get_column_view(ast_column_input_spec const& spec, ast_args const& args)
+std::variant<column_view, scalar_column_view> get_column_view(ast_column_input_spec const& spec,
+                                                              ast_args const& args)
 {
   CUDF_EXPECTS(spec.table == ast::table_reference::LEFT,
                "Table reference must be LEFT",
@@ -414,9 +464,10 @@ column_view get_column_view(ast_column_input_spec const& spec, ast_args const& a
   return args.table.column(spec.column);
 }
 
-column_view get_column_view(ast_scalar_input_spec const& spec, ast_args const& args)
+std::variant<column_view, scalar_column_view> get_column_view(ast_scalar_input_spec const& spec,
+                                                              ast_args const& args)
 {
-  return spec.broadcast_column->view();
+  return scalar_column_view{spec.broadcast_column->view()};
 }
 
 std::tuple<null_aware, output_nullability> ast_converter::generate_code(target target_id,
@@ -426,19 +477,6 @@ std::tuple<null_aware, output_nullability> ast_converter::generate_code(target t
   auto output_expr_ir = expr.accept(*this);
   output_irs_.emplace_back(std::make_unique<row_ir::set_output>(0, std::move(output_expr_ir)));
 
-  bool uses_input_table =
-    std::any_of(input_specs_.begin(), input_specs_.end(), [](auto const& spec) {
-      return std::holds_alternative<ast_column_input_spec>(spec);
-    });
-
-  if (!uses_input_table && args.table.num_columns() > 0) {
-    // this means none of the inputs tables to the IR are actually used in the expression. In
-    // order to still run the transform-equivalent operation of AST, we need to add one of the
-    // table's columns as an unused input. This is done because the output size of a transform is
-    // determined by the largest input column.
-    input_specs_.emplace_back(ast_column_input_spec{ast::table_reference::LEFT, 0});
-  }
-
   // resolve the flattened input references into IR input variables
   for (auto const& input : input_specs_) {
     dispatch_input_spec(input, [this](auto&... args) { add_input_var(args...); }, args);
@@ -447,8 +485,12 @@ std::tuple<null_aware, output_nullability> ast_converter::generate_code(target t
   bool has_nullable_inputs =
     std::any_of(input_specs_.begin(), input_specs_.end(), [&](auto const& input) {
       return dispatch_input_spec(
-               input, [](auto&... args) { return get_column_view(args...); }, args)
-        .nullable();
+        input,
+        [](auto&... args) {
+          auto col = get_column_view(args...);
+          return std::visit([](auto& view) { return view.nullable(); }, col);
+        },
+        args);
     });
 
   // add 1 auto-deduced output variable
@@ -560,13 +602,13 @@ transform_args ast_converter::compute_column(target target_id,
 
   auto [is_null_aware, output_nullability] = converter.generate_code(target_id, expr, args);
 
-  std::vector<column_view> columns;
+  std::vector<std::variant<column_view, scalar_column_view>> inputs;
   std::vector<std::unique_ptr<column>> scalar_columns;
 
   for (auto& input : converter.input_specs_) {
     auto column_view =
       dispatch_input_spec(input, [](auto&... args) { return get_column_view(args...); }, args);
-    columns.push_back(column_view);
+    inputs.emplace_back(column_view);
 
     if (std::holds_alternative<ast_scalar_input_spec>(input)) {
       auto& scalar_input = std::get<ast_scalar_input_spec>(input);
@@ -577,20 +619,23 @@ transform_args ast_converter::compute_column(target target_id,
   auto& out               = converter.output_irs_[0];
   auto output_column_type = out->get_type();
 
-  transform_args transform{std::move(scalar_columns),
-                           std::move(columns),
-                           std::move(converter.code_),
-                           output_column_type,
-                           false,
-                           std::nullopt,
-                           is_null_aware,
-                           output_nullability};
+  auto udf = std::move(converter.code_);
+
+  auto result = transform_args{.scalar_columns = std::move(scalar_columns),
+                               .inputs         = inputs,
+                               .udf            = std::move(udf),
+                               .output_type    = output_column_type,
+                               .is_ptx         = false,
+                               .user_data      = std::nullopt,
+                               .is_null_aware  = is_null_aware,
+                               .null_policy    = output_nullability,
+                               .row_size       = args.table.num_rows()};
 
   if (get_context().dump_codegen()) {
-    std::cout << "Generated code for transform: " << transform.udf << std::endl;
+    std::cout << "Generated code for transform: " << result.udf << std::endl;
   }
 
-  return transform;
+  return result;
 }
 
 filter_args ast_converter::filter(target target_id,
@@ -600,34 +645,12 @@ filter_args ast_converter::filter(target target_id,
                                   rmm::cuda_stream_view stream,
                                   rmm::device_async_resource_ref mr)
 {
-  ast_converter converter{stream, mr};
-  auto [is_null_aware, _null_output] = converter.generate_code(target_id, expr, args);
+  auto filter    = ast::detail::filter_predicate{expr};
+  auto transform = compute_column(target_id, filter, args, stream, mr);
 
-  CUDF_EXPECTS(converter.output_irs_.size() == 1,
-               "Filter expression must return a single output.",
-               std::invalid_argument);
-
-  auto& out_ir = converter.output_irs_[0];
-
-  CUDF_EXPECTS(out_ir->get_type() == data_type{type_id::BOOL8},
+  CUDF_EXPECTS(transform.output_type.id() == type_id::BOOL8,
                "Filter expression must return a boolean type.",
                std::invalid_argument);
-
-  std::vector<column_view> predicate_columns;
-  std::vector<std::unique_ptr<column>> scalar_columns;
-
-  for (auto& input : converter.input_specs_) {
-    auto column_view =
-      dispatch_input_spec(input, [](auto&... args) { return get_column_view(args...); }, args);
-    predicate_columns.push_back(column_view);
-
-    // move the scalar broadcast column so the user can make it live long enough
-    // to be used in the filter result.
-    if (std::holds_alternative<ast_scalar_input_spec>(input)) {
-      auto& scalar_input = std::get<ast_scalar_input_spec>(input);
-      scalar_columns.push_back(std::move(scalar_input.broadcast_column));
-    }
-  }
 
   std::vector<column_view> filter_columns;
   std::transform(filter_table.begin(),
@@ -635,19 +658,15 @@ filter_args ast_converter::filter(target target_id,
                  std::back_inserter(filter_columns),
                  [](auto const& col) { return col; });
 
-  filter_args filter{std::move(scalar_columns),
-                     std::move(predicate_columns),
-                     std::move(converter.code_),
-                     std::move(filter_columns),
-                     false,
-                     std::nullopt,
-                     is_null_aware};
+  auto result = filter_args{.scalar_columns = std::move(transform.scalar_columns),
+                            .inputs         = std::move(transform.inputs),
+                            .filter_columns = std::move(filter_columns),
+                            .udf            = std::move(transform.udf),
+                            .is_ptx         = transform.is_ptx,
+                            .user_data      = transform.user_data,
+                            .is_null_aware  = transform.is_null_aware};
 
-  if (get_context().dump_codegen()) {
-    std::cout << "Generated code for filter: " << filter.predicate_udf << std::endl;
-  }
-
-  return filter;
+  return result;
 }
 
 }  // namespace row_ir

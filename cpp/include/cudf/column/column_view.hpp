@@ -491,6 +491,25 @@ class column_view : public detail::column_view_base {
                                          ///< may contain additional data
 };  // namespace cudf
 
+struct scalar_column_view : private column_view {
+ public:
+  explicit scalar_column_view(column_view view) : column_view(std::move(view))
+  {
+    CUDF_EXPECTS(
+      this->size() == 1, "A scalar column view must have exactly one element.", std::logic_error);
+  }
+
+  using column_view::data;
+  using column_view::null_count;
+  using column_view::null_mask;
+  using column_view::nullable;
+  using column_view::offset;
+  using column_view::size;
+  using column_view::type;
+
+  column_view const& as_column_view() const noexcept { return *this; }
+};
+
 /**
  * @brief A non-owning, mutable view of device data as a column of elements,
  * some of which may be null as indicated by a bitmask.
