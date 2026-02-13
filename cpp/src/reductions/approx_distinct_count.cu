@@ -22,7 +22,6 @@
 #include <cuda/functional>
 #include <thrust/iterator/counting_iterator.h>
 
-#include <bit>
 #include <cmath>
 
 namespace cudf {
@@ -30,16 +29,11 @@ namespace detail {
 
 namespace {
 
+using hll_ref_type =
+  cuco::hyperloglog_ref<std::uint64_t, cuda::thread_scope_device, cuda::std::identity>;
+
 constexpr std::int32_t min_precision = 4;
 constexpr std::int32_t max_precision = 18;
-
-/**
- * @brief Returns the number of registers for a given precision
- */
-constexpr std::size_t num_registers(std::int32_t precision)
-{
-  return static_cast<std::size_t>(1) << precision;
-}
 
 /**
  * @brief Converts standard error to HLL precision
@@ -90,11 +84,11 @@ void validate_precision(std::int32_t precision)
  */
 void validate_sketch_span(void const* data, std::size_t size, std::int32_t precision)
 {
-  auto const expected_size = num_registers(precision) * sizeof(std::int32_t);
+  auto const expected_size = hll_ref_type::sketch_bytes(cuco::precision{precision});
   CUDF_EXPECTS(size == expected_size,
                "Sketch span size does not match expected size for precision",
                std::invalid_argument);
-  CUDF_EXPECTS(reinterpret_cast<std::uintptr_t>(data) % alignof(std::int32_t) == 0,
+  CUDF_EXPECTS(reinterpret_cast<std::uintptr_t>(data) % hll_ref_type::sketch_alignment() == 0,
                "Sketch span must be 4-byte aligned",
                std::invalid_argument);
 }
@@ -172,8 +166,10 @@ approx_distinct_count<Hasher>::approx_distinct_count(table_view const& input,
                                                      null_policy null_handling,
                                                      nan_policy nan_handling,
                                                      rmm::cuda_stream_view stream)
-  : _storage{(validate_precision(precision),
-              rmm::device_uvector<register_type>{num_registers(precision), stream})},
+  : _storage{(
+      validate_precision(precision),
+      rmm::device_uvector<register_type>{
+        hll_ref_type::sketch_bytes(cuco::precision{precision}) / sizeof(register_type), stream})},
     _precision{precision},
     _null_handling{null_handling},
     _nan_handling{nan_handling}
