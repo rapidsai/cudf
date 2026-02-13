@@ -51,9 +51,6 @@ from cudf.core.column.utils import access_columns
 from cudf.core.copy_types import GatherMap
 from cudf.core.dtype.validators import (
     is_dtype_obj_decimal,
-    is_dtype_obj_decimal32,
-    is_dtype_obj_decimal64,
-    is_dtype_obj_decimal128,
     is_dtype_obj_interval,
     is_dtype_obj_list,
     is_dtype_obj_numeric,
@@ -201,39 +198,12 @@ def _wrap_and_validate(
                 f"{dispatch_dtype} does not match the type of the plc_column "
                 f"{col.type().id()}"
             )
-        if not is_dtype_obj_list(dispatch_dtype):
-            raise ValueError("dtype must be a cudf.ListDtype")
-        children = list(col.children())
-        element_child = col.list_view().child()
-        element_index = None
-        for i, child in enumerate(children):
-            if child is element_child:
-                element_index = i
-                break
-        if element_index is None and children:
-            element_index = len(children) - 1
-        wrapped_children = []
-        for i, child in enumerate(children):
-            try:
-                if element_index is not None and i == element_index:
-                    element_dtype = dispatch_dtype.element_type
-                    if element_dtype is None:
-                        wrapped_child = _wrap_column(child)
-                    else:
-                        wrapped_child, _ = _wrap_and_validate(
-                            child, element_dtype
-                        )
-                else:
-                    wrapped_child = _wrap_column(child)
-            except ValueError as e:
-                if element_index is not None and i == element_index:
-                    raise ValueError(
-                        f"List element type validation failed: {e}"
-                    ) from e
-                raise
-            wrapped_children.append(wrapped_child)
-        wrapped = _make_wrapped(col, wrapped_children)
-        return wrapped, dispatch_dtype
+        values, values_dtype = _wrap_and_validate(
+            col.list_view().child(), dispatch_dtype.element_type
+        )
+        offsets = _wrap_column(col.list_view().offsets())
+        wrapped = _make_wrapped(col, [offsets, values])
+        return wrapped, ListDtype(values_dtype)
 
     if isinstance(dispatch_dtype, IntervalDtype):
         if col.type().id() != plc.TypeId.STRUCT:
@@ -244,8 +214,6 @@ def _wrap_and_validate(
             raise ValueError(
                 "plc_column must have two children (left edges, right edges)."
             )
-        if not is_dtype_obj_interval(dispatch_dtype):
-            raise ValueError("dtype must be a IntervalDtype.")
         interval_subtype = dispatch_dtype.subtype
         wrapped_children = []
         for i, child in enumerate(col.children()):
@@ -277,25 +245,15 @@ def _wrap_and_validate(
                 f"{dispatch_dtype} does not match the type of the plc_column "
                 f"{col.type().id()}"
             )
-        if not is_dtype_obj_struct(dispatch_dtype):
-            raise ValueError(
-                f"{type(dispatch_dtype).__name__} must be a StructDtype."
-            )
-        if len(dispatch_dtype.fields) != col.num_children():
-            raise ValueError(
-                f"StructDtype has {len(dispatch_dtype.fields)} fields, "
-                f"but column has {col.num_children()} children"
-            )
         wrapped_children = []
-        for i, (field_name, field_dtype) in enumerate(
-            dispatch_dtype.fields.items()
+        for child, (field_name, field_dtype) in zip(
+            col.children(), dispatch_dtype.fields.items(), strict=True
         ):
-            child = col.child(i)
             try:
                 wrapped_child, _ = _wrap_and_validate(child, field_dtype)
             except ValueError as e:
                 raise ValueError(
-                    f"Field '{field_name}' (index {i}) validation failed: {e}"
+                    f"Field '{field_name}' validation failed: {e}"
                 ) from e
             wrapped_children.append(wrapped_child)
         wrapped = _make_wrapped(col, wrapped_children)
@@ -315,8 +273,6 @@ def _wrap_and_validate(
                 "plc_column must be a pylibcudf.Column with a TypeId in "
                 f"{valid_types}"
             )
-        if not isinstance(dispatch_dtype, pd.DatetimeTZDtype):
-            raise ValueError("dtype must be a pandas.DatetimeTZDtype")
         return wrapped, get_compatible_timezone(dispatch_dtype)
 
     if isinstance(dispatch_dtype, CategoricalDtype):
@@ -335,10 +291,6 @@ def _wrap_and_validate(
                 "plc_column must be a pylibcudf.Column with a TypeId in "
                 f"{valid_types}"
             )
-        if not isinstance(dispatch_dtype, CategoricalDtype):
-            raise ValueError(
-                f"{dispatch_dtype=} must be a CategoricalDtype instance"
-            )
         return wrapped, dispatch_dtype
 
     if isinstance(dispatch_dtype, cudf.Decimal128Dtype):
@@ -352,10 +304,6 @@ def _wrap_and_validate(
                 "dtype "
                 f"{dispatch_dtype} does not match the type of the plc_column "
                 f"{col.type().id()}"
-            )
-        if not is_dtype_obj_decimal128(dispatch_dtype):
-            raise ValueError(
-                f"{dispatch_dtype=} must be a valid decimal dtype instance"
             )
         return wrapped, dispatch_dtype
 
@@ -371,10 +319,6 @@ def _wrap_and_validate(
                 f"{dispatch_dtype} does not match the type of the plc_column "
                 f"{col.type().id()}"
             )
-        if not is_dtype_obj_decimal64(dispatch_dtype):
-            raise ValueError(
-                f"{dispatch_dtype=} must be a valid decimal dtype instance"
-            )
         return wrapped, dispatch_dtype
 
     if isinstance(dispatch_dtype, cudf.Decimal32Dtype):
@@ -388,10 +332,6 @@ def _wrap_and_validate(
                 "dtype "
                 f"{dispatch_dtype} does not match the type of the plc_column "
                 f"{col.type().id()}"
-            )
-        if not is_dtype_obj_decimal32(dispatch_dtype):
-            raise ValueError(
-                f"{dispatch_dtype=} must be a valid decimal dtype instance"
             )
         return wrapped, dispatch_dtype
 
@@ -409,10 +349,6 @@ def _wrap_and_validate(
                 f"{dispatch_dtype} does not match the type of the plc_column "
                 f"{col.type().id()}"
             )
-        if not is_dtype_obj_string(dispatch_dtype):
-            if getattr(dispatch_dtype, "kind", None) == "U":
-                return wrapped, np.dtype(object)
-            raise ValueError("dtype must be a valid cuDF string dtype")
         return wrapped, dispatch_dtype
 
     if dtype_kind == "M":
@@ -433,8 +369,6 @@ def _wrap_and_validate(
                 f"{dispatch_dtype} does not match the type of the plc_column "
                 f"{col.type().id()}"
             )
-        if not getattr(dispatch_dtype, "kind", None) == "M":
-            raise ValueError(f"dtype must be a datetime, got {dispatch_dtype}")
         return wrapped, dispatch_dtype
 
     if dtype_kind == "m":
@@ -455,8 +389,6 @@ def _wrap_and_validate(
                 f"{dispatch_dtype} does not match the type of the plc_column "
                 f"{col.type().id()}"
             )
-        if dtype_kind != "m":
-            raise ValueError("dtype must be a timedelta dtype.")
         return wrapped, dispatch_dtype
 
     if dtype_kind is not None and dtype_kind in "iufb":
@@ -483,19 +415,6 @@ def _wrap_and_validate(
                 "dtype "
                 f"{dispatch_dtype} does not match the type of the plc_column "
                 f"{col.type().id()}"
-            )
-        if (
-            cudf.get_option("mode.pandas_compatible")
-            and dtype_kind not in "iufb"
-        ) or (
-            not cudf.get_option("mode.pandas_compatible")
-            and not (
-                isinstance(dispatch_dtype, np.dtype) and dtype_kind in "iufb"
-            )
-        ):
-            raise ValueError(
-                "dtype must be a floating, integer or boolean dtype. Got: "
-                f"{dispatch_dtype}"
             )
         return wrapped, dispatch_dtype
 
