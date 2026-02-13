@@ -170,7 +170,7 @@ class ValidationResult:
     Parameters
     ----------
     status
-        The status of the validation.
+        The status of the validation. Either 'Passed' or 'Failed'.
     message
         The message from the validation. This should be ``None`` if
         the validation passed, and a string describing the failure otherwise.
@@ -1181,7 +1181,7 @@ def parse_args(
         type=Path,
         default=None,
         help=(
-            "Optionally validate the results against a directory with a pre-computed set of 'golden' results. "
+            "Validate the results against a directory with a pre-computed set of 'golden' results. "
             "The directory should contain one parquet file per query, named 'qDD.parquet', where DD is the "
             "zero-padded query number."
         ),
@@ -1235,16 +1235,27 @@ def parse_args(
         )
     if parsed_args.validate_directory:
         # Verify that the directory contains a a parquet file for each query
-        missing_files: list[str] = []
-        for q_id in parsed_args.query:
-            q_path = parsed_args.validate_directory / f"q{q_id:02d}.parquet"
-            if not q_path.exists():
-                missing_files.append(q_path.name)
+        # missing_files: list[str] = []
+        validation_files = list_validation_files(parsed_args.validate_directory)
+        missing_files = [
+            str(x) for x in set(parsed_args.query) - set(validation_files.keys())
+        ]
 
         if missing_files:
             raise ValueError(f"Missing files for queries: {','.join(missing_files)}")
 
     return parsed_args
+
+
+def list_validation_files(
+    validate_directory: Path,
+) -> dict[int, Path]:
+    """List the validation files in the given directory."""
+    validation_files: dict[int, Path] = {}
+    for q_path in validate_directory.glob("q*.parquet"):
+        q_id = int(q_path.stem.lstrip("q").lstrip("_"))
+        validation_files[q_id] = q_path
+    return validation_files
 
 
 def validate_result(
@@ -1448,6 +1459,9 @@ def run_polars(
     engine: pl.GPUEngine | None = None
     input_data_type: Literal["decimal", "float"] = check_input_data_type(run_config)
 
+    if args.validate_directory is not None:
+        validation_files = list_validation_files(args.validate_directory)
+
     if run_config.executor != "cpu":
         executor_options = get_executor_options(run_config, benchmark=benchmark)
         if run_config.runtime == "rapidsmpf":
@@ -1549,10 +1563,7 @@ def run_polars(
                 else:
                     casts = EXPECTED_CASTS_FLOAT.get(q_id, [])
 
-                expected = pl.read_parquet(
-                    args.validate_directory / f"q{q_id:02d}.parquet"
-                ).with_columns(*casts)
-
+                expected = pl.read_parquet(validation_files[q_id]).with_columns(*casts)
                 validation_result = validate_result(
                     result,
                     expected,
