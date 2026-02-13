@@ -488,9 +488,6 @@ class column_view : public detail::column_view_base {
  *
  */
 struct scalar_column_view : private column_view {
- private:
-
- public:
   /**
    * @brief Construct a `scalar_column_view` from a `column_view`.
    * @throws cudf::logic_error if the column view does not have exactly one element.
