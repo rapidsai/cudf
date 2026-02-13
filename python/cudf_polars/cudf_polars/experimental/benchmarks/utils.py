@@ -1375,6 +1375,19 @@ def validate_result(
 
     if sort_by:
         sort_by_cols, sort_by_descending = zip(*sort_by, strict=False)
+
+        # Before we do any sorting, we want to verify that the `sort_by` columns match exactly.
+        try:
+            pl.testing.assert_frame_equal(
+                result.select(sort_by_cols), expected.select(sort_by_cols), **kwargs
+            )
+        except AssertionError as e:
+            return ValidationResult(
+                status="Failed",
+                message="sort_by columns mismatch",
+                details={"error": str(e)},
+            )
+
     else:
         sort_by_cols = ()
         sort_by_descending = ()
