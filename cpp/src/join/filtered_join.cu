@@ -608,13 +608,14 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> distinct_filtered_join::an
 std::unique_ptr<rmm::device_uvector<cudf::size_type>> multiset_filtered_join::anti_join(
   cudf::table_view const& probe, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
 {
-  // Early return for empty probe table
-  if (probe.num_rows() == 0) {
+  // Early return for empty build table
+  if (_build.num_rows() == 0) {
     return std::make_unique<rmm::device_uvector<cudf::size_type>>(0, stream, mr);
   }
-  if (_build.num_rows() == 0) {
+  // Early return for empty probe table - all build rows have no match
+  if (probe.num_rows() == 0) {
     auto result =
-      std::make_unique<rmm::device_uvector<cudf::size_type>>(probe.num_rows(), stream, mr);
+      std::make_unique<rmm::device_uvector<cudf::size_type>>(_build.num_rows(), stream, mr);
     thrust::sequence(rmm::exec_policy_nosync(stream), result->begin(), result->end());
     return result;
   }
