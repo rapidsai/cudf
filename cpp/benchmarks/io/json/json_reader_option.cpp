@@ -49,7 +49,7 @@ void BM_json_read_options(nvbench::state& state, nvbench::type_list<nvbench::enu
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
   state.exec(
     nvbench::exec_tag::sync | nvbench::exec_tag::timer, [&](nvbench::launch& launch, auto& timer) {
-      try_drop_page_cache(read_options.get_source().filepaths());
+      drop_page_cache_if_enabled(read_options.get_source().filepaths());
       timer.start();
       auto const result        = cudf::io::read_json(read_options);
       auto const num_rows_read = result.tbl->num_rows();
@@ -125,7 +125,7 @@ void BM_jsonlines_read_options(nvbench::state& state,
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
   state.exec(
     nvbench::exec_tag::sync | nvbench::exec_tag::timer, [&](nvbench::launch& launch, auto& timer) {
-      try_drop_page_cache(read_options.get_source().filepaths());
+      drop_page_cache_if_enabled(read_options.get_source().filepaths());
       cudf::size_type num_rows_read = 0;
       cudf::size_type num_cols_read = 0;
       timer.start();

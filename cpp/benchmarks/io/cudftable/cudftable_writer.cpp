@@ -24,7 +24,7 @@ void cudftable_write_common(cudf::table_view const& view, io_type sink_type, nvb
     nvbench::exec_tag::sync | nvbench::exec_tag::timer, [&](nvbench::launch&, auto& timer) {
       cuio_source_sink_pair source_sink(sink_type);
       auto const& sink_info = source_sink.make_sink_info();
-      try_drop_page_cache(sink_info.filepaths());
+      drop_page_cache_if_enabled(sink_info.filepaths());
 
       timer.start();
       cudf::io::experimental::write_cudftable(

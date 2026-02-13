@@ -85,7 +85,7 @@ void BM_orc_read_varying_options(nvbench::state& state,
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
   state.exec(
     nvbench::exec_tag::sync | nvbench::exec_tag::timer, [&](nvbench::launch& launch, auto& timer) {
-      try_drop_page_cache(read_options.get_source().filepaths());
+      drop_page_cache_if_enabled(read_options.get_source().filepaths());
       cudf::size_type num_rows_read = 0;
       timer.start();
       for (int32_t chunk = 0; chunk < num_chunks; ++chunk) {

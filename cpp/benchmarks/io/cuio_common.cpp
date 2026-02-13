@@ -264,7 +264,7 @@ std::pair<bool, bool> parse_cache_dropping_env()
 }
 }  // namespace
 
-void try_drop_page_cache(std::vector<std::string> const& file_paths)
+void drop_page_cache_if_enabled(std::vector<std::string> const& file_paths)
 {
   static auto const parsed_env                = parse_cache_dropping_env();
   auto [is_drop_cache_enabled, is_file_scope] = parsed_env;

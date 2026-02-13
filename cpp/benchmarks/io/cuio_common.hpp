@@ -162,7 +162,7 @@ std::vector<cudf::size_type> segments_in_chunk(int num_segments, int num_chunks,
  * @throw cudf::logic_error if system-wide cache dropping is requested but fails
  * @throw kvikio::GenericSystemError if file-specific cache dropping fails
  */
-void try_drop_page_cache(std::vector<std::string> const& file_paths);
+void drop_page_cache_if_enabled(std::vector<std::string> const& file_paths);
 
 /**
  * @brief Convert a string to the corresponding io_type enum value.

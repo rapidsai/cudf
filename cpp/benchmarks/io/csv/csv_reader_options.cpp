@@ -61,45 +61,44 @@ void BM_csv_read_varying_options(
     cudf::util::div_rounding_up_safe(view.num_rows(), static_cast<cudf::size_type>(num_chunks));
   auto const mem_stats_logger = cudf::memory_stats_logger();
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
-  state.exec(
-    nvbench::exec_tag::sync | nvbench::exec_tag::timer, [&](nvbench::launch& launch, auto& timer) {
-      try_drop_page_cache(
-        read_options.get_source().filepaths());  // Drop the page cache for accurate measurement
-      cudf::size_type num_rows_read = 0;
-      timer.start();
-      for (auto chunk = 0u; chunk < num_chunks; ++chunk) {
-        switch (RowSelection) {
-          case row_selection::ALL: break;
-          case row_selection::BYTE_RANGE:
-            // with byte_range, we can't read the header in any chunk but the first
-            read_options.set_header(chunk == 0 ? 0 : -1);
-            read_options.set_byte_range_offset(chunk * chunk_size);
-            read_options.set_byte_range_size(chunk_size);
-            break;
-          case row_selection::NROWS:
-            read_options.set_skiprows(chunk * chunk_row_cnt);
-            read_options.set_nrows(chunk_row_cnt);
-            break;
-          case row_selection::SKIPFOOTER: {
-            read_options.set_skiprows(chunk * chunk_row_cnt);
-            cudf::size_type const next_chunk_start = (chunk + 1) * chunk_row_cnt;
-            auto const skip_footer =
-              view.num_rows() > next_chunk_start ? view.num_rows() - next_chunk_start : 0;
-            read_options.set_skipfooter(skip_footer);
-            break;
-          }
-          default: CUDF_FAIL("Unsupported row selection method");
-        }
+  state.exec(nvbench::exec_tag::sync | nvbench::exec_tag::timer,
+             [&](nvbench::launch& launch, auto& timer) {
+               drop_page_cache_if_enabled(read_options.get_source().filepaths());
+               cudf::size_type num_rows_read = 0;
+               timer.start();
+               for (auto chunk = 0u; chunk < num_chunks; ++chunk) {
+                 switch (RowSelection) {
+                   case row_selection::ALL: break;
+                   case row_selection::BYTE_RANGE:
+                     // with byte_range, we can't read the header in any chunk but the first
+                     read_options.set_header(chunk == 0 ? 0 : -1);
+                     read_options.set_byte_range_offset(chunk * chunk_size);
+                     read_options.set_byte_range_size(chunk_size);
+                     break;
+                   case row_selection::NROWS:
+                     read_options.set_skiprows(chunk * chunk_row_cnt);
+                     read_options.set_nrows(chunk_row_cnt);
+                     break;
+                   case row_selection::SKIPFOOTER: {
+                     read_options.set_skiprows(chunk * chunk_row_cnt);
+                     cudf::size_type const next_chunk_start = (chunk + 1) * chunk_row_cnt;
+                     auto const skip_footer =
+                       view.num_rows() > next_chunk_start ? view.num_rows() - next_chunk_start : 0;
+                     read_options.set_skipfooter(skip_footer);
+                     break;
+                   }
+                   default: CUDF_FAIL("Unsupported row selection method");
+                 }
 
-        auto const result = cudf::io::read_csv(read_options);
+                 auto const result = cudf::io::read_csv(read_options);
 
-        num_rows_read += result.tbl->num_rows();
-        CUDF_EXPECTS(result.tbl->num_columns() == expected_num_cols,
-                     "Unexpected number of columns");
-      }
-      timer.stop();
-      CUDF_EXPECTS(num_rows_read == view.num_rows(), "Unexpected number of rows");
-    });
+                 num_rows_read += result.tbl->num_rows();
+                 CUDF_EXPECTS(result.tbl->num_columns() == expected_num_cols,
+                              "Unexpected number of columns");
+               }
+               timer.stop();
+               CUDF_EXPECTS(num_rows_read == view.num_rows(), "Unexpected number of rows");
+             });
 
   auto const elapsed_time   = state.get_summary("nv/cold/time/gpu/mean").get_float64("value");
   auto const data_processed = data_size * cols_to_read.size() / view.num_columns();
