@@ -51,9 +51,13 @@ from cudf.core.column.utils import access_columns
 from cudf.core.copy_types import GatherMap
 from cudf.core.dtype.validators import (
     is_dtype_obj_decimal,
+    is_dtype_obj_decimal32,
+    is_dtype_obj_decimal64,
+    is_dtype_obj_decimal128,
     is_dtype_obj_interval,
     is_dtype_obj_list,
     is_dtype_obj_numeric,
+    is_dtype_obj_string,
     is_dtype_obj_struct,
 )
 from cudf.core.dtypes import (
@@ -128,6 +132,308 @@ def _can_values_be_equal(left: DtypeObj, right: DtypeObj) -> bool:
     elif left.kind == right.kind and left.kind in "mM":
         return True
     return False
+
+
+def _validate_args_new(
+    plc_column: plc.Column, dtype: DtypeObj
+) -> tuple[plc.Column, DtypeObj]:
+    def validate_dtype_recursively(
+        col: plc.Column, child_dtype: DtypeObj
+    ) -> None:
+        if (
+            col.type().id() == plc.TypeId.INT8
+            and col.null_count() == col.size()
+        ):
+            return
+        _validate_args_new(col, child_dtype)
+
+    if not isinstance(plc_column, plc.Column):
+        raise ValueError("plc_column must be a pylibcudf.Column")
+
+    dispatch_dtype = dtype
+    if isinstance(dispatch_dtype, pd.ArrowDtype):
+        dispatch_dtype = pyarrow_dtype_to_cudf_dtype(dispatch_dtype)
+    if isinstance(dispatch_dtype, type):
+        try:
+            dispatch_dtype = np.dtype(dispatch_dtype)
+        except TypeError:
+            pass
+
+    if isinstance(dispatch_dtype, pd.DatetimeTZDtype):
+        valid_types = {
+            plc.TypeId.TIMESTAMP_SECONDS,
+            plc.TypeId.TIMESTAMP_MILLISECONDS,
+            plc.TypeId.TIMESTAMP_MICROSECONDS,
+            plc.TypeId.TIMESTAMP_NANOSECONDS,
+        }
+        if plc_column.type().id() not in valid_types:
+            raise ValueError(
+                "plc_column must be a pylibcudf.Column with a TypeId in "
+                f"{valid_types}"
+            )
+        if not isinstance(dispatch_dtype, pd.DatetimeTZDtype):
+            raise ValueError("dtype must be a pandas.DatetimeTZDtype")
+        return plc_column, get_compatible_timezone(dispatch_dtype)
+
+    if isinstance(dispatch_dtype, CategoricalDtype):
+        valid_types = {
+            plc.TypeId.INT8,
+            plc.TypeId.INT16,
+            plc.TypeId.INT32,
+            plc.TypeId.INT64,
+            plc.TypeId.UINT8,
+            plc.TypeId.UINT16,
+            plc.TypeId.UINT32,
+            plc.TypeId.UINT64,
+        }
+        if plc_column.type().id() not in valid_types:
+            raise ValueError(
+                "plc_column must be a pylibcudf.Column with a TypeId in "
+                f"{valid_types}"
+            )
+        if not isinstance(dispatch_dtype, CategoricalDtype):
+            raise ValueError(
+                f"{dispatch_dtype=} must be a CategoricalDtype instance"
+            )
+        return plc_column, dispatch_dtype
+
+    if isinstance(dispatch_dtype, ListDtype):
+        if plc_column.type().id() != plc.TypeId.LIST:
+            raise ValueError(
+                "plc_column must be a pylibcudf.Column with a TypeId in "
+                f"{{{plc.TypeId.LIST}}}"
+            )
+        if dtype_to_pylibcudf_type(dispatch_dtype) != plc_column.type():
+            raise ValueError(
+                "dtype "
+                f"{dispatch_dtype} does not match the type of the plc_column "
+                f"{plc_column.type().id()}"
+            )
+        if not is_dtype_obj_list(dispatch_dtype):
+            raise ValueError("dtype must be a cudf.ListDtype")
+        child = plc_column.list_view().child()
+        try:
+            validate_dtype_recursively(child, dispatch_dtype.element_type)
+        except ValueError as e:
+            raise ValueError(
+                f"List element type validation failed: {e}"
+            ) from e
+        return plc_column, dispatch_dtype
+
+    if isinstance(dispatch_dtype, IntervalDtype):
+        if plc_column.type().id() != plc.TypeId.STRUCT:
+            raise ValueError(
+                "plc_column must be a pylibcudf.Column with TypeId STRUCT"
+            )
+        if plc_column.num_children() != 2:
+            raise ValueError(
+                "plc_column must have two children (left edges, right edges)."
+            )
+        if not is_dtype_obj_interval(dispatch_dtype):
+            raise ValueError("dtype must be a IntervalDtype.")
+        for i, child in enumerate(plc_column.children()):
+            try:
+                validate_dtype_recursively(child, dispatch_dtype.subtype)
+            except ValueError as e:
+                bound = "Right" if i else "Left"
+                raise ValueError(
+                    f"{bound} interval bound validation failed: {e}"
+                ) from e
+        return plc_column, dispatch_dtype
+
+    if isinstance(dispatch_dtype, StructDtype):
+        if plc_column.type().id() != plc.TypeId.STRUCT:
+            raise ValueError(
+                "plc_column must be a pylibcudf.Column with a TypeId in "
+                f"{{{plc.TypeId.STRUCT}}}"
+            )
+        if dtype_to_pylibcudf_type(dispatch_dtype) != plc_column.type():
+            raise ValueError(
+                "dtype "
+                f"{dispatch_dtype} does not match the type of the plc_column "
+                f"{plc_column.type().id()}"
+            )
+        if not is_dtype_obj_struct(dispatch_dtype):
+            raise ValueError(
+                f"{type(dispatch_dtype).__name__} must be a StructDtype."
+            )
+        if len(dispatch_dtype.fields) != plc_column.num_children():
+            raise ValueError(
+                f"StructDtype has {len(dispatch_dtype.fields)} fields, "
+                f"but column has {plc_column.num_children()} children"
+            )
+        for i, (field_name, field_dtype) in enumerate(
+            dispatch_dtype.fields.items()
+        ):
+            child = plc_column.child(i)
+            try:
+                validate_dtype_recursively(child, field_dtype)
+            except ValueError as e:
+                raise ValueError(
+                    f"Field '{field_name}' (index {i}) validation failed: {e}"
+                ) from e
+        return plc_column, dispatch_dtype
+
+    if isinstance(dispatch_dtype, cudf.Decimal128Dtype):
+        if plc_column.type().id() != plc.TypeId.DECIMAL128:
+            raise ValueError(
+                "plc_column must be a pylibcudf.Column with a TypeId in "
+                f"{{{plc.TypeId.DECIMAL128}}}"
+            )
+        if dtype_to_pylibcudf_type(dispatch_dtype) != plc_column.type():
+            raise ValueError(
+                "dtype "
+                f"{dispatch_dtype} does not match the type of the plc_column "
+                f"{plc_column.type().id()}"
+            )
+        if not is_dtype_obj_decimal128(dispatch_dtype):
+            raise ValueError(
+                f"{dispatch_dtype=} must be a valid decimal dtype instance"
+            )
+        return plc_column, dispatch_dtype
+
+    if isinstance(dispatch_dtype, cudf.Decimal64Dtype):
+        if plc_column.type().id() != plc.TypeId.DECIMAL64:
+            raise ValueError(
+                "plc_column must be a pylibcudf.Column with a TypeId in "
+                f"{{{plc.TypeId.DECIMAL64}}}"
+            )
+        if dtype_to_pylibcudf_type(dispatch_dtype) != plc_column.type():
+            raise ValueError(
+                "dtype "
+                f"{dispatch_dtype} does not match the type of the plc_column "
+                f"{plc_column.type().id()}"
+            )
+        if not is_dtype_obj_decimal64(dispatch_dtype):
+            raise ValueError(
+                f"{dispatch_dtype=} must be a valid decimal dtype instance"
+            )
+        return plc_column, dispatch_dtype
+
+    if isinstance(dispatch_dtype, cudf.Decimal32Dtype):
+        if plc_column.type().id() != plc.TypeId.DECIMAL32:
+            raise ValueError(
+                "plc_column must be a pylibcudf.Column with a TypeId in "
+                f"{{{plc.TypeId.DECIMAL32}}}"
+            )
+        if dtype_to_pylibcudf_type(dispatch_dtype) != plc_column.type():
+            raise ValueError(
+                "dtype "
+                f"{dispatch_dtype} does not match the type of the plc_column "
+                f"{plc_column.type().id()}"
+            )
+        if not is_dtype_obj_decimal32(dispatch_dtype):
+            raise ValueError(
+                f"{dispatch_dtype=} must be a valid decimal dtype instance"
+            )
+        return plc_column, dispatch_dtype
+
+    if is_dtype_obj_string(dispatch_dtype) or (
+        isinstance(dispatch_dtype, np.dtype) and dispatch_dtype.kind == "U"
+    ):
+        if plc_column.type().id() != plc.TypeId.STRING:
+            raise ValueError(
+                "plc_column must be a pylibcudf.Column with a TypeId in "
+                f"{{{plc.TypeId.STRING}}}"
+            )
+        if dtype_to_pylibcudf_type(dispatch_dtype) != plc_column.type():
+            raise ValueError(
+                "dtype "
+                f"{dispatch_dtype} does not match the type of the plc_column "
+                f"{plc_column.type().id()}"
+            )
+        if not is_dtype_obj_string(dispatch_dtype):
+            if getattr(dispatch_dtype, "kind", None) == "U":
+                return plc_column, np.dtype(object)
+            raise ValueError("dtype must be a valid cuDF string dtype")
+        return plc_column, dispatch_dtype
+
+    if getattr(dispatch_dtype, "kind", None) == "M":
+        valid_types = {
+            plc.TypeId.TIMESTAMP_SECONDS,
+            plc.TypeId.TIMESTAMP_MILLISECONDS,
+            plc.TypeId.TIMESTAMP_MICROSECONDS,
+            plc.TypeId.TIMESTAMP_NANOSECONDS,
+        }
+        if plc_column.type().id() not in valid_types:
+            raise ValueError(
+                "plc_column must be a pylibcudf.Column with a TypeId in "
+                f"{valid_types}"
+            )
+        if dtype_to_pylibcudf_type(dispatch_dtype) != plc_column.type():
+            raise ValueError(
+                "dtype "
+                f"{dispatch_dtype} does not match the type of the plc_column "
+                f"{plc_column.type().id()}"
+            )
+        if not getattr(dispatch_dtype, "kind", None) == "M":
+            raise ValueError(f"dtype must be a datetime, got {dispatch_dtype}")
+        return plc_column, dispatch_dtype
+
+    if getattr(dispatch_dtype, "kind", None) == "m":
+        valid_types = {
+            plc.TypeId.DURATION_SECONDS,
+            plc.TypeId.DURATION_MILLISECONDS,
+            plc.TypeId.DURATION_MICROSECONDS,
+            plc.TypeId.DURATION_NANOSECONDS,
+        }
+        if plc_column.type().id() not in valid_types:
+            raise ValueError(
+                "plc_column must be a pylibcudf.Column with a TypeId in "
+                f"{valid_types}"
+            )
+        if dtype_to_pylibcudf_type(dispatch_dtype) != plc_column.type():
+            raise ValueError(
+                "dtype "
+                f"{dispatch_dtype} does not match the type of the plc_column "
+                f"{plc_column.type().id()}"
+            )
+        if dispatch_dtype.kind != "m":
+            raise ValueError("dtype must be a timedelta dtype.")
+        return plc_column, dispatch_dtype
+
+    if getattr(dispatch_dtype, "kind", None) in "iufb":
+        valid_types = {
+            plc.TypeId.INT8,
+            plc.TypeId.INT16,
+            plc.TypeId.INT32,
+            plc.TypeId.INT64,
+            plc.TypeId.UINT8,
+            plc.TypeId.UINT16,
+            plc.TypeId.UINT32,
+            plc.TypeId.UINT64,
+            plc.TypeId.FLOAT32,
+            plc.TypeId.FLOAT64,
+            plc.TypeId.BOOL8,
+        }
+        if plc_column.type().id() not in valid_types:
+            raise ValueError(
+                "plc_column must be a pylibcudf.Column with a TypeId in "
+                f"{valid_types}"
+            )
+        if dtype_to_pylibcudf_type(dispatch_dtype) != plc_column.type():
+            raise ValueError(
+                "dtype "
+                f"{dispatch_dtype} does not match the type of the plc_column "
+                f"{plc_column.type().id()}"
+            )
+        if (
+            cudf.get_option("mode.pandas_compatible")
+            and dispatch_dtype.kind not in "iufb"
+        ) or (
+            not cudf.get_option("mode.pandas_compatible")
+            and not (
+                isinstance(dispatch_dtype, np.dtype)
+                and dispatch_dtype.kind in "iufb"
+            )
+        ):
+            raise ValueError(
+                "dtype must be a floating, integer or boolean dtype. Got: "
+                f"{dispatch_dtype}"
+            )
+        return plc_column, dispatch_dtype
+
+    raise TypeError(f"Unrecognized dtype: {dispatch_dtype}")
 
 
 class MaskCAIWrapper:
@@ -776,9 +1082,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
         # Validate dtype compatibility with the column structure using the
         # target subclass's _validate_args method (includes recursive validation)
-        wrapped, dispatch_dtype = target_cls._validate_args(
-            wrapped, dispatch_dtype
-        )
+        wrapped, dispatch_dtype = _validate_args_new(wrapped, dispatch_dtype)
 
         # Construct the instance using the subclass's _from_preprocessed method
         # Skip validation since we already validated above
