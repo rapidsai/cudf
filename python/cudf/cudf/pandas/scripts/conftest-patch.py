@@ -1466,7 +1466,6 @@ NODEIDS_THAT_FAIL_WITH_CUDF_PANDAS = {
     "tests/extension/test_arrow.py::TestArrowArray::test_accumulate_series[bool-cumprod-False]",
     "tests/extension/test_arrow.py::TestArrowArray::test_accumulate_series[bool-cumprod-True]",
     "tests/extension/test_arrow.py::TestArrowArray::test_reduce_frame[decimal128(7, 3)-mean-False]",
-    "tests/extension/test_arrow.py::TestArrowArray::test_reduce_frame[decimal128(7, 3)-median-True]",
     "tests/extension/test_arrow.py::TestArrowArray::test_reduce_frame[decimal128(7, 3)-prod-False]",
     "tests/extension/test_arrow.py::TestArrowArray::test_reduce_frame[decimal128(7, 3)-sum-False]",
     "tests/extension/test_arrow.py::TestArrowArray::test_reduce_frame[double-skew-True]",
