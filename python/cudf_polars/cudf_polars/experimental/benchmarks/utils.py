@@ -13,6 +13,7 @@ import itertools
 import json
 import logging
 import os
+import pprint
 import statistics
 import sys
 import textwrap
@@ -74,6 +75,14 @@ POLARS_VALIDATION_OPTIONS = {
 }
 
 
+def get_validation_options(args: Any) -> dict[str, Any]:
+    """Get validation options dict from parsed arguments."""
+    return {
+        **POLARS_VALIDATION_OPTIONS,
+        "abs_tol": args.validation_abs_tol,
+    }
+
+
 try:
     import structlog
     import structlog.contextvars
@@ -89,11 +98,15 @@ ExecutorType = Literal["in-memory", "streaming", "cpu"]
 
 
 # The pre-computed expected results come from DuckDB, which has
-# different casting rules than Polars. This dictionary maps
-# query ID to the casts to apply to the DuckDB results necessary
-# to match the cudf-polars results.
+# different casting rules than Polars. For example, in polars
+# Series[Decimal].mean() returns a Float64, while DuckDB returns a Decimal.
+#
+# This dictionary maps query ID to the casts to apply to the DuckDB
+# results necessary to match the cudf-polars results.
 # EXPECTED_CASTS_DECIMAL should be used when the input data uses
-# Decimal rather than Float for account balances, etc.
+# Decimal (rather than Float) for account balances, etc.
+# EXPECTED_CASTS_FLOATS should be used when the input data uses
+# Float (rather than Decimal) for account balances, etc.
 EXPECTED_CASTS_DECIMAL = {
     1: [
         pl.col("sum_qty").cast(pl.Decimal(15, 2)),
@@ -131,9 +144,6 @@ EXPECTED_CASTS_DECIMAL = {
         pl.col("totacctbal").cast(pl.Decimal(15, 2)),
     ],
 }
-
-# EXPECTED_CASTS_FLOAT should be used when the input data uses
-# Float rather than Decimal for account balances, etc.
 
 EXPECTED_CASTS_FLOAT = {
     1: [pl.col("count_order").cast(pl.UInt32())],
@@ -488,13 +498,13 @@ class RunConfig:
             validation_method = ValidationMethod(
                 expected_source="duckdb",
                 comparison_method="polars",
-                comparison_options=POLARS_VALIDATION_OPTIONS,
+                comparison_options=get_validation_options(args),
             )
         elif args.validate:
             validation_method = ValidationMethod(
                 expected_source="polars-cpu",
                 comparison_method="polars",
-                comparison_options=POLARS_VALIDATION_OPTIONS,
+                comparison_options=get_validation_options(args),
             )
         else:
             validation_method = None
@@ -1177,6 +1187,12 @@ def parse_args(
         ),
     )
     parser.add_argument(
+        "--validation-abs-tol",
+        type=float,
+        default=0.01,
+        help="Absolute tolerance for assert_frame_equal validation. Default: 0.01",
+    )
+    parser.add_argument(
         "--spill-to-pinned-memory",
         action=argparse.BooleanOptionalAction,
         default=False,
@@ -1542,7 +1558,7 @@ def run_polars(
                     expected,
                     query_result.sort_by,
                     limit=query_result.limit,
-                    **POLARS_VALIDATION_OPTIONS,
+                    **get_validation_options(args),
                 )
             record = dataclasses.replace(
                 record,
@@ -1554,6 +1570,8 @@ def run_polars(
                 print(
                     f"❌ Query {q_id} failed validation!\n{validation_result.message}"
                 )
+                if validation_result.details:
+                    pprint.pprint(validation_result.details)
 
             else:
                 print(
