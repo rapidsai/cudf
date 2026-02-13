@@ -16,7 +16,6 @@ import pylibcudf as plc
 import cudf
 from cudf.api.types import is_scalar
 from cudf.core._internals import binaryop
-from cudf.core.buffer import as_buffer
 from cudf.core.column.categorical import CategoricalColumn
 from cudf.core.column.column import (
     ColumnBase,
@@ -25,6 +24,7 @@ from cudf.core.column.column import (
 )
 from cudf.core.column.numerical_base import NumericalBaseColumn
 from cudf.core.column.utils import access_columns
+from cudf.core.dtype.validators import is_dtype_obj_numeric
 from cudf.core.dtypes import CategoricalDtype
 from cudf.core.mixins import BinaryOperand
 from cudf.utils.dtypes import (
@@ -89,19 +89,11 @@ class NumericalColumn(NumericalBaseColumn):
 
     @classmethod
     def _validate_args(
-        cls, plc_column: plc.Column, dtype: np.dtype
-    ) -> tuple[plc.Column, np.dtype]:
+        cls, plc_column: plc.Column, dtype: DtypeObj
+    ) -> tuple[plc.Column, DtypeObj]:
         plc_column, dtype = super()._validate_args(plc_column, dtype)
-        if (
-            cudf.get_option("mode.pandas_compatible")
-            and dtype.kind not in "iufb"
-        ) or (
-            not cudf.get_option("mode.pandas_compatible")
-            and not (isinstance(dtype, np.dtype) and dtype.kind in "iufb")
-        ):
-            raise ValueError(
-                f"dtype must be a floating, integer or boolean dtype. Got: {dtype}"
-            )
+        if not is_dtype_obj_numeric(dtype, include_decimal=False):
+            raise ValueError(f"dtype must be a numeric type. Got: {dtype}")
         return plc_column, dtype
 
     def __contains__(self, item: ScalarLike) -> bool:
@@ -460,25 +452,14 @@ class NumericalColumn(NumericalBaseColumn):
         return res
 
     def nans_to_nulls(self: Self) -> Self:
-        # Only floats can contain nan.
         if self.dtype.kind != "f" or self.nan_count == 0:
             return self
         with self.access(mode="read", scope="internal"):
-            # When computing a null mask to set back to the column, since the column may
-            # have been sliced and have an offset, we need to compute the mask of the
-            # equivalent unsliced column so that the mask bits will be appropriately
-            # shifted..
-            shifted_column = plc.Column(
-                self.plc_column.type(),
-                self.plc_column.size() + self.plc_column.offset(),
-                self.plc_column.data(),
-                self.plc_column.null_mask(),
-                self.plc_column.null_count(),
-                0,
-                self.plc_column.children(),
+            result = type(self).create(
+                plc.transform.column_nans_to_nulls(self.plc_column),
+                dtype=self.dtype,
             )
-            mask, null_count = plc.transform.nans_to_nulls(shifted_column)
-            return self.set_mask(as_buffer(mask), null_count)
+            return cast(Self, result)
 
     def _normalize_binop_operand(self, other: Any) -> pa.Scalar | ColumnBase:
         if isinstance(other, ColumnBase):
