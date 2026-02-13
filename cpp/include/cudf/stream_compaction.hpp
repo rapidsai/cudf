@@ -13,8 +13,8 @@
 
 #include <memory>
 #include <optional>
-#include <vector>
 #include <variant>
+#include <vector>
 
 namespace CUDF_EXPORT cudf {
 /**

@@ -11,9 +11,9 @@
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <memory>
+#include <optional>
 #include <variant>
 #include <vector>
-#include <optional>
 
 namespace CUDF_EXPORT cudf {
 
