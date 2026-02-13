@@ -318,6 +318,10 @@ void reader_impl::allocate_level_decode_space()
 
     // Clamp kernel level reads to the actual decoded count (may be less than num_input_values
     // for flat columns with skip_rows/num_rows).
+    CUDF_EXPECTS(def_level_sizes[idx] % pass.level_type_size == 0,
+                 "Definition level size is not a multiple of the level type size");
+    CUDF_EXPECTS(rep_level_sizes[idx] % pass.level_type_size == 0,
+                 "Repetition level size is not a multiple of the level type size");
     pages[idx].num_decoded_level_values =
       std::max(def_level_sizes[idx], rep_level_sizes[idx]) / pass.level_type_size;
   }
