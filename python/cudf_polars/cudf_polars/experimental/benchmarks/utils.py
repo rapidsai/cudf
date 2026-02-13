@@ -1976,7 +1976,7 @@ def run_validate(
         except AttributeError as err:
             raise NotImplementedError(f"Query {q_id} not implemented.") from err
 
-        polars_query = get_pl(run_config)
+        polars_query = get_pl(run_config).frame
         if baseline == "duckdb":
             base_sql = get_ddb(run_config)
             base_result = execute_duckdb_query(
