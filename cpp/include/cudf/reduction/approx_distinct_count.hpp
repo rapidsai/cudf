@@ -280,6 +280,21 @@ class approx_distinct_count {
    */
   [[nodiscard]] double standard_error() const noexcept;
 
+  /**
+   * @brief Gets the number of bytes required for sketch storage at a given precision
+   *
+   * @param precision The HLL precision parameter (4-18)
+   * @return The number of bytes required for the sketch
+   */
+  [[nodiscard]] static std::size_t sketch_bytes(std::int32_t precision);
+
+  /**
+   * @brief Gets the alignment required for sketch storage
+   *
+   * @return The required alignment in bytes
+   */
+  [[nodiscard]] static std::size_t sketch_alignment();
+
  private:
   std::unique_ptr<impl_type> _impl;
 };

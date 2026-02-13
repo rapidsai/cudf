@@ -424,4 +424,11 @@ std::int32_t approx_distinct_count::precision() const noexcept { return _impl->p
 
 double approx_distinct_count::standard_error() const noexcept { return _impl->standard_error(); }
 
+std::size_t approx_distinct_count::sketch_bytes(std::int32_t precision)
+{
+  return impl_type::sketch_bytes(precision);
+}
+
+std::size_t approx_distinct_count::sketch_alignment() { return impl_type::sketch_alignment(); }
+
 }  // namespace cudf

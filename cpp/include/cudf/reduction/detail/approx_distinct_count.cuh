@@ -225,6 +225,16 @@ class approx_distinct_count {
    */
   [[nodiscard]] double standard_error() const noexcept;
 
+  [[nodiscard]] static constexpr std::size_t sketch_bytes(std::int32_t precision)
+  {
+    return hll_ref_type::sketch_bytes(cuco::precision{precision});
+  }
+
+  [[nodiscard]] static constexpr std::size_t sketch_alignment()
+  {
+    return hll_ref_type::sketch_alignment();
+  }
+
  private:
   /**
    * @brief Storage type supporting both owning and non-owning modes

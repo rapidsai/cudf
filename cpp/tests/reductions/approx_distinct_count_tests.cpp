@@ -11,6 +11,8 @@
 #include <cudf/reduction/distinct_count.hpp>
 #include <cudf/table/table_view.hpp>
 
+#include <rmm/device_buffer.hpp>
+
 #include <thrust/host_vector.h>
 
 #include <cstddef>
@@ -804,7 +806,7 @@ TEST_F(ApproxDistinctCount, StandardErrorConstructor)
 
 TEST_F(ApproxDistinctCount, StandardErrorGetter)
 {
-  cudf::table_view empty_table({});
+  cudf::table_view empty_table{std::vector<cudf::column_view>{}};
 
   auto adc10 = cudf::approx_distinct_count(empty_table, 10);
   auto adc12 = cudf::approx_distinct_count(empty_table, 12);
@@ -842,4 +844,13 @@ TEST_F(ApproxDistinctCount, InvalidStandardErrorThrows)
                std::invalid_argument);
   EXPECT_THROW(cudf::approx_distinct_count(table, cudf::approx_standard_error{-0.01}),
                std::invalid_argument);
+}
+
+TEST_F(ApproxDistinctCount, SketchBytesAndAlignment)
+{
+  EXPECT_EQ(cudf::approx_distinct_count::sketch_bytes(10), (1 << 10) * sizeof(std::int32_t));
+  EXPECT_EQ(cudf::approx_distinct_count::sketch_bytes(12), (1 << 12) * sizeof(std::int32_t));
+  EXPECT_GT(cudf::approx_distinct_count::sketch_bytes(14),
+            cudf::approx_distinct_count::sketch_bytes(12));
+  EXPECT_GE(cudf::approx_distinct_count::sketch_alignment(), alignof(std::int32_t));
 }
