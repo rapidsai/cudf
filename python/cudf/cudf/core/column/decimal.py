@@ -64,10 +64,10 @@ class DecimalBaseColumn(NumericalBaseColumn):
     _decimal_type_check: ClassVar[Callable[[DtypeObj], bool]]
 
     @classmethod
-    def _validate_args(  # type: ignore[override]
-        cls, plc_column: plc.Column, dtype: DecimalDtype
-    ) -> tuple[plc.Column, DecimalDtype]:
-        plc_column, dtype = super()._validate_args(plc_column, dtype)  # type: ignore[assignment]
+    def _validate_args(
+        cls, plc_column: plc.Column, dtype: DtypeObj
+    ) -> tuple[plc.Column, DtypeObj]:
+        plc_column, dtype = super()._validate_args(plc_column, dtype)
         if not cls._decimal_type_check(dtype):
             raise ValueError(
                 f"{dtype=} must be a valid decimal dtype instance"
