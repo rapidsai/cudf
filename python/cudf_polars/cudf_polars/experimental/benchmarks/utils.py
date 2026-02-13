@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import argparse
 import dataclasses
+import functools
 import importlib
 import io
 import itertools
@@ -52,7 +53,11 @@ try:
     from cudf_polars.dsl.translate import Translator
     from cudf_polars.experimental.explain import explain_query
     from cudf_polars.experimental.parallel import evaluate_streaming
-    from cudf_polars.testing.asserts import assert_gpu_result_equal
+    from cudf_polars.testing.asserts import (
+        ValidationError,
+        assert_gpu_result_equal,
+        assert_tpch_result_equal,
+    )
     from cudf_polars.utils.config import ConfigOptions
 
     CUDF_POLARS_AVAILABLE = True
@@ -181,6 +186,30 @@ class ValidationResult:
     status: Literal["Passed", "Failed"]
     message: str | None
     details: dict[str, Any] | None = None
+
+    @classmethod
+    def from_error(cls, error: Exception) -> ValidationResult:
+        """
+        Create a ValidationResult from some exception.
+
+        Parameters
+        ----------
+        error : Exception
+            The error to create a ValidationResult from.
+
+            This will correctly propagate "message" and "details" from
+            ``cudf_polars.testing.asserts.ValidationError``.
+
+        Returns
+        -------
+        ValidationResult
+            The ValidationResult created from the error.
+        """
+        match error:
+            case ValidationError(message=message, details=details):
+                return cls(status="Failed", message=message, details=details)
+            case _:
+                return cls(status="Failed", message=str(error))
 
 
 @dataclasses.dataclass
@@ -1266,201 +1295,21 @@ def validate_result(
     """
     Validate the computed result against the expected answer.
 
-    Parameters
-    ----------
-    result : pl.DataFrame
-        The computed result to validate.
-    expected : pl.DataFrame
-        The expected answer to validate against.
-    sort_by : list[tuple[str, bool]]
-        The columns to sort by, and the sort order. This *must* be the same
-        as the ``sort_by`` and ``descending`` required by the query
-    limit : int | None, optional
-        The limit (passed to ``.head``) used in the query, if any. This is
-        used to break ties in the ``sort_by`` columns. See notes below.
-    kwargs : Any
-        Additional keyword arguments passed to ``polars.testing.assert_frame_equal``.
+    This takes care of special handling for validating TPC-H queries,
+    where multiple results might be considered correct.
 
-    Returns
-    -------
-    validation_result
-
-    Notes
-    -----
-    This validates that:
-
-    1. The schema (column names and data types) match
-    2. The values match, with some special handling
-       - approximate comparison (for floating point values)
-       - sorting stability / distributed execution
-
-    Consider a set of ``(key, value)`` records like::
-
-       ("a", 1)
-       ("b", 1)
-       ("c", 1)
-       ("d", 1)
-
-    Now suppose we run a query that sorts on ``value``. *Any* ordering of those
-    records is as correct as any other, since the ``value`` is the same and they
-    query says nothing about the sorting of the other columns.
-
-    To handle this, this function sorts the result and expected dataframes, taking
-    care to sort by the ``sort_by`` columns *first* (preserving the semantics of the
-    query) and then by the remaining columns.
-
-    After sorting by all the columns, any remaining differences are should be
-    real, *unless* the query includes a ``limit`` / ``.head(n)`` component. Consider
-    a query that includes a ``.sort_by("value").head(2)`` component. In our example,
-    any result that returns exactly two rows is as good as any other.
-
-    To handle this, this comparison function does the value comparison in two
-    parts when there's a ``.sort_by(...).head(n)`` component:
-
-    1. For all the values "before" the last value (defined by ``sort_by``), we
-       compare the results directly using ``pl.testing.assert_frame_equal``.
-    2. For the "ties", we make sure that the lengths of the two dataframes match,
-       but we *don't* compare the values since, aside from the columns in ``sort_by``,
-       the values may differ, and that's OK.
+    See Also
+    --------
+    cudf_polars.testing.asserts.assert_tpch_result_equal
     """
-    # We want to split
-    # First, check the column names
-    detail: dict[str, Any]
-    if result.columns != expected.columns:
-        extra = set(result.columns) - set(expected.columns)
-        missing = set(expected.columns) - set(result.columns)
-        detail = {
-            "type": "column_names_mismatch",
-            "expected_columns": expected.columns,
-            "result_columns": result.columns,
-            "mismatched_columns": {
-                "extra": extra,
-                "missing": missing,
-            },
-        }
-        return ValidationResult(
-            status="Failed", message="Column names mismatch", details=detail
+    try:
+        assert_tpch_result_equal(
+            result, expected, sort_by=sort_by, limit=limit, **kwargs
         )
-
-    # Then, check the schema
-    if result.schema != expected.schema:
-        detail = {
-            "type": "schema_mismatch",
-            "expected_schema": {k: str(v) for k, v in expected.schema.items()},
-            "result_schema": {k: str(v) for k, v in result.schema.items()},
-            "mismatched_columns": [
-                {
-                    "name": col,
-                    "expected_type": str(expected.schema[col]),
-                    "result_type": str(result.schema[col]),
-                }
-                for col in result.columns
-                if result.schema[col] != expected.schema[col]
-            ],
-        }
-        return ValidationResult(
-            status="Failed", message="Schema mismatch", details=detail
-        )
-
-    # For reasons... the polars / cudf-polars Decimal implementation differs
-    # slightly from the DuckDB implementation, in ways that can result in *small*
-    # but *real* differences in the results (off by 1%).
-    float_casts = [
-        pl.col(col).cast(pl.Float64())
-        for col in result.columns
-        if result.schema[col].is_decimal()
-    ]
-    expected = expected.with_columns(*float_casts)
-    result = result.with_columns(*float_casts)
-
-    if sort_by:
-        sort_by_cols, sort_by_descending = zip(*sort_by, strict=False)
-
-        # Before we do any sorting, we want to verify that the `sort_by` columns match exactly.
-        try:
-            pl.testing.assert_frame_equal(
-                result.select(sort_by_cols), expected.select(sort_by_cols), **kwargs
-            )
-        except AssertionError as e:
-            return ValidationResult(
-                status="Failed",
-                message="sort_by columns mismatch",
-                details={"error": str(e)},
-            )
-
+    except Exception as e:
+        return ValidationResult.from_error(e)
     else:
-        sort_by_cols = ()
-        sort_by_descending = ()
-
-    if sort_by and limit:
-        # Handle the .sort_by(...).head(n) case; First, split the data into two parts
-        # "before" and "ties"
-        sort_by_cols, sort_by_descending = zip(*sort_by, strict=False)
-        (split_at,) = result.select(sort_by_cols).max().to_dicts()
-        # This will be True before the ties and False for the ties.
-        expr = pl.Expr.or_(*[pl.col(col).lt(val) for col, val in split_at.items()])
-
-        result_first = result.filter(expr)
-        expected_first = expected.filter(expr)
-
-        # Before we compare, we need to sort the result and expected.
-        # We need to sort by *all* the columns, starting with the
-        # columns in `sort_by`; We don't care about the sort order of the remaining
-        # columns, just that they're in the same order.
-        by = list(sort_by_cols) + [
-            col for col in result.columns if col not in sort_by_cols
-        ]
-        descending = list(sort_by_descending) + [False] * (
-            len(result.columns) - len(sort_by_cols)
-        )
-
-        result_first = result_first.sort(by=by, descending=descending)
-        expected_first = expected_first.sort(by=by, descending=descending)
-
-        # validate this part normally:
-        try:
-            pl.testing.assert_frame_equal(result_first, expected_first, **kwargs)
-        except AssertionError as e:
-            return ValidationResult(status="Failed", message=str(e))
-
-        # Now for the ties:
-        result_ties = result.filter(~expr)
-        expected_ties = expected.filter(~expr)
-
-        # We already know that
-        # 1. the schema matches (checked above)
-        # 2. the values in ``sort_by`` match (else the Expr above would be False)
-        # so all that's left to check is that the lengths match.
-        if len(result_ties) != len(expected_ties):
-            return ValidationResult(
-                status="Failed",
-                message="Ties length mismatch",
-                details={
-                    "expected_length": len(expected_ties),
-                    "result_length": len(result_ties),
-                },
-            )
-    else:
-        # Before we compare, we need to sort the result and expected.
-        # We need to sort by *all* the columns, starting with the
-        # columns in `sort_by`; We don't care about the sort order of the remaining
-        # columns, just that they're in the same order.
-        by = list(sort_by_cols) + [
-            col for col in result.columns if col not in sort_by_cols
-        ]
-        descending = list(sort_by_descending) + [False] * (
-            len(result.columns) - len(sort_by_cols)
-        )
-
-        result = result.sort(by=by, descending=descending)
-        expected = expected.sort(by=by, descending=descending)
-
-        try:
-            polars.testing.assert_frame_equal(result, expected, **kwargs)
-        except AssertionError as e:
-            return ValidationResult(status="Failed", message=str(e))
-
-    return ValidationResult(status="Passed", message=None)
+        return ValidationResult(status="Passed", message=None)
 
 
 def check_input_data_type(run_config: RunConfig) -> Literal["decimal", "float"]:
@@ -1577,12 +1426,15 @@ def run_polars(
                         engine=engine,
                         executor=run_config.executor,
                         check_exact=False,
+                        validate_with=functools.partial(
+                            assert_tpch_result_equal,
+                            sort_by=query_result.sort_by,
+                            limit=query_result.limit,
+                        ),
                     )
                     print(f"✅ Query {q_id} passed validation!")
-                except AssertionError as e:
-                    validation_result = ValidationResult(
-                        status="Failed", message=str(e)
-                    )
+                except Exception as e:
+                    validation_result = ValidationResult.from_error(e)
                 else:
                     validation_result = ValidationResult(status="Passed", message=None)
 
