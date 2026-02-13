@@ -711,6 +711,8 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 assert interval_subtype is not None
                 interval_type = dtype_to_pylibcudf_type(interval_subtype)
                 children = [
+                    # TODO: Investigate when we encounter this case and if it can be
+                    # handled before create is called instead.
                     plc.unary.cast(child, interval_type)
                     if child.type() != interval_type
                     else child
@@ -764,11 +766,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         dispatch_dtype = dtype
         if isinstance(dispatch_dtype, pd.ArrowDtype):
             dispatch_dtype = pyarrow_dtype_to_cudf_dtype(dispatch_dtype)
-        if isinstance(dispatch_dtype, type):
-            try:
-                dispatch_dtype = np.dtype(dispatch_dtype)
-            except TypeError:
-                pass
         normalized = ColumnBase._normalize_plc_column_for_dtype(
             col, dispatch_dtype
         )
@@ -785,16 +782,16 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
         # Construct the instance using the subclass's _from_preprocessed method
         # Skip validation since we already validated above
-        result = target_cls._from_preprocessed(
+        output_dtype = (
+            original_dtype
+            if is_pandas_nullable_extension_dtype(original_dtype)
+            else dispatch_dtype
+        )
+        return target_cls._from_preprocessed(
             plc_column=wrapped,
-            dtype=dispatch_dtype,
+            dtype=output_dtype,
             validate=False,
         )
-        if is_pandas_nullable_extension_dtype(original_dtype) or isinstance(
-            original_dtype, pd.ArrowDtype
-        ):
-            result._dtype = original_dtype
-        return result
 
     @staticmethod
     def _dispatch_subclass_from_dtype(dtype: DtypeObj) -> type[ColumnBase]:

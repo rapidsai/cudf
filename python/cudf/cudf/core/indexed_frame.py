@@ -6651,9 +6651,7 @@ class IndexedFrame(Frame):
                     if col.null_count == len(col)
                     else cudf_dtype_to_pa_type(col.dtype)
                 )
-                new_col = col.copy(deep=False)
-                new_col._dtype = arrow_dtype
-                cols.append(new_col)
+                cols.append(ColumnBase.create(col.plc_column, arrow_dtype))
             return self._from_data_like_self(
                 self._data._from_columns_like_self(cols, verify=False)
             )
