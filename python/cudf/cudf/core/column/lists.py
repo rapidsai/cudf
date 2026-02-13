@@ -38,16 +38,18 @@ class ListColumn(ColumnBase):
     _VALID_PLC_TYPES = {plc.TypeId.LIST}
 
     @classmethod
-    def _validate_args(  # type: ignore[override]
-        cls, plc_column: plc.Column, dtype: ListDtype
-    ) -> tuple[plc.Column, ListDtype]:
-        plc_column, dtype = super()._validate_args(plc_column, dtype)  # type: ignore[assignment]
+    def _validate_args(
+        cls, plc_column: plc.Column, dtype: DtypeObj
+    ) -> tuple[plc.Column, DtypeObj]:
+        plc_column, dtype = super()._validate_args(plc_column, dtype)
         if not is_dtype_obj_list(dtype):
             raise ValueError("dtype must be a cudf.ListDtype")
 
         child = plc_column.list_view().child()
         try:
-            ColumnBase._validate_dtype_recursively(child, dtype.element_type)
+            ColumnBase._validate_dtype_recursively(
+                child, ListDtype.from_list_dtype(dtype).element_type
+            )
         except ValueError as e:
             raise ValueError(
                 f"List element type validation failed: {e}"

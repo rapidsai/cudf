@@ -29,9 +29,9 @@ class IntervalColumn(ColumnBase):
     _VALID_PLC_TYPES = {plc.TypeId.STRUCT}
 
     @classmethod
-    def _validate_args(  # type: ignore[override]
-        cls, plc_column: plc.Column, dtype: IntervalDtype
-    ) -> tuple[plc.Column, IntervalDtype]:
+    def _validate_args(
+        cls, plc_column: plc.Column, dtype: DtypeObj
+    ) -> tuple[plc.Column, DtypeObj]:
         # Validate plc_column TypeId - IntervalColumn uses STRUCT type
         if not (
             isinstance(plc_column, plc.Column)
@@ -45,12 +45,14 @@ class IntervalColumn(ColumnBase):
                 "plc_column must have two children (left edges, right edges)."
             )
         if not is_dtype_obj_interval(dtype):
-            raise ValueError("dtype must be a IntervalDtype.")
+            raise ValueError(f"dtype must be an interval type: Got {dtype}.")
 
         # Validate that children dtypes are compatible with target subtype
         for i, child in enumerate(plc_column.children()):
             try:
-                ColumnBase._validate_dtype_recursively(child, dtype.subtype)
+                ColumnBase._validate_dtype_recursively(
+                    child, IntervalDtype.from_interval_dtype(dtype).subtype
+                )
             except ValueError as e:
                 raise ValueError(
                     f"{'Right' if i else 'Left'} interval bound validation failed: {e}"

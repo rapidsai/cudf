@@ -2109,24 +2109,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             plc_column = plc.unary.cast(
                 self.plc_column, dtype_to_pylibcudf_type(dtype)
             )
-            result = ColumnBase.create(
-                plc_column, dtype_from_pylibcudf_column(plc_column)
-            )
-            # Adjust decimal result: in pandas compat mode with non-decimal target,
-            # preserve the target dtype wrapper; otherwise update precision from target
-            if isinstance(result.dtype, DecimalDtype):
-                if cudf.get_option(
-                    "mode.pandas_compatible"
-                ) and not isinstance(dtype, DecimalDtype):
-                    result._dtype = dtype
-                else:
-                    result.dtype.precision = dtype.precision  # type: ignore[union-attr]
-            if (
-                cudf.get_option("mode.pandas_compatible")
-                and result.dtype != dtype
-            ):
-                result._dtype = dtype
-            return result
+            return ColumnBase.create(plc_column, dtype)
 
     def astype(self, dtype: DtypeObj, copy: bool | None = False) -> ColumnBase:
         if self.dtype == dtype:

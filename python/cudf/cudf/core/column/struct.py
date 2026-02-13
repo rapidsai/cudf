@@ -26,6 +26,7 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
     from typing import Self
 
+    from cudf._typing import DtypeObj
     from cudf.core.column.string import StringColumn
 
 
@@ -50,21 +51,26 @@ class StructColumn(ColumnBase):
     _VALID_PLC_TYPES = {plc.TypeId.STRUCT}
 
     @classmethod
-    def _validate_args(  # type: ignore[override]
-        cls, plc_column: plc.Column, dtype: StructDtype
-    ) -> tuple[plc.Column, StructDtype]:
-        plc_column, dtype = super()._validate_args(plc_column, dtype)  # type: ignore[assignment]
+    def _validate_args(
+        cls, plc_column: plc.Column, dtype: DtypeObj
+    ) -> tuple[plc.Column, DtypeObj]:
+        plc_column, dtype = super()._validate_args(plc_column, dtype)
         if not is_dtype_obj_struct(dtype):
             raise ValueError(f"{type(dtype).__name__} must be a StructDtype.")
 
+        equiv_dtype = StructDtype.from_struct_dtype(dtype)
         # Check field count
-        if len(dtype.fields) != plc_column.num_children():
+        if (
+            num_fields := len(equiv_dtype.fields)
+        ) != plc_column.num_children():
             raise ValueError(
-                f"StructDtype has {len(dtype.fields)} fields, "
+                f"{dtype} has {num_fields} fields, "
                 f"but column has {plc_column.num_children()} children"
             )
 
-        for i, (field_name, field_dtype) in enumerate(dtype.fields.items()):
+        for i, (field_name, field_dtype) in enumerate(
+            equiv_dtype.fields.items()
+        ):
             child = plc_column.child(i)
             try:
                 ColumnBase._validate_dtype_recursively(child, field_dtype)
