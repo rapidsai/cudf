@@ -940,8 +940,8 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
     ... ])
     >>> df
        0     1     2     3             4
-    0  5  cats  jump  <NA>          <NA>
-    1  2  dogs   dig   7.5          <NA>
+    0  5  cats  jump  <NA>          None
+    1  2  dogs   dig   7.5          None
     2  3  cows   moo  -2.1  occasionally
 
     Convert from a Pandas DataFrame:
@@ -6803,7 +6803,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         >>> df.mode()
           species  legs  wings
         0    bird     2    0.0
-        1    <NA>  <NA>    2.0
+        1    None  <NA>    2.0
 
         Setting ``dropna=False``, ``NA`` values are considered and they can be
         the mode (like for wings).
