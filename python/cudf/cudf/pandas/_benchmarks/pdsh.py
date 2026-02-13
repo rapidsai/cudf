@@ -208,9 +208,20 @@ class PDSHQueries:
         region = get_data(path, "region", suffix)
         supplier = get_data(path, "supplier", suffix)
 
+        region = region[["r_regionkey", "r_name"]]
+        nation = nation[["n_nationkey", "n_name", "n_regionkey"]]
+        customer = customer[["c_custkey", "c_nationkey"]]
+        orders = orders[["o_orderkey", "o_custkey", "o_orderdate"]]
+        lineitem = lineitem[
+            ["l_orderkey", "l_suppkey", "l_extendedprice", "l_discount"]
+        ]
+        supplier = supplier[["s_suppkey", "s_nationkey"]]
+
         var1 = "ASIA"
         var2 = datetime64("1994-01-01")
         var3 = datetime64("1995-01-01")
+
+        region = region[region["r_name"] == var1]
 
         jn1 = region.merge(
             nation, left_on="r_regionkey", right_on="n_regionkey"
@@ -226,7 +237,6 @@ class PDSHQueries:
             right_on=["s_suppkey", "s_nationkey"],
         )
 
-        jn5 = jn5[jn5["r_name"] == var1]
         jn5 = jn5[(jn5["o_orderdate"] >= var2) & (jn5["o_orderdate"] < var3)]
         jn5["revenue"] = jn5.l_extendedprice * (1.0 - jn5.l_discount)
 
