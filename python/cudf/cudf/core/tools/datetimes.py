@@ -20,7 +20,7 @@ from cudf.core.column.column import ColumnBase, as_column
 from cudf.core.dataframe import DataFrame
 from cudf.core.index import DatetimeIndex, Index, ensure_index
 from cudf.core.series import Series
-from cudf.utils.dtypes import CUDF_STRING_DTYPE
+from cudf.utils.dtypes import CUDF_STRING_DTYPE, dtype_from_pylibcudf_column
 from cudf.utils.scalar import pa_scalar_to_plc_scalar
 from cudf.utils.temporal import infer_format, unit_to_nanoseconds_conversion
 
@@ -687,11 +687,13 @@ class DateOffset:
                 value = -value if op == "__sub__" else value
                 if unit == "months":
                     with datetime_col.access(mode="read", scope="internal"):
-                        datetime_col = type(datetime_col).from_pylibcudf(
-                            plc.datetime.add_calendrical_months(
-                                datetime_col.plc_column,
-                                pa_scalar_to_plc_scalar(pa.scalar(value)),
-                            )
+                        plc_column = plc.datetime.add_calendrical_months(
+                            datetime_col.plc_column,
+                            pa_scalar_to_plc_scalar(pa.scalar(value)),
+                        )
+                        datetime_col = ColumnBase.create(
+                            plc_column,
+                            dtype=dtype_from_pylibcudf_column(plc_column),
                         )
                 else:
                     datetime_col += as_column(value, length=len(datetime_col))
@@ -980,12 +982,13 @@ def date_range(
             "months", 0
         )
         # No columns to access here - calendrical_month_sequence creates new data
-        res = ColumnBase.from_pylibcudf(
-            plc.filling.calendrical_month_sequence(
-                periods,
-                pa_scalar_to_plc_scalar(pa.scalar(start)),
-                months,
-            )
+        plc_column = plc.filling.calendrical_month_sequence(
+            periods,
+            pa_scalar_to_plc_scalar(pa.scalar(start)),
+            months,
+        )
+        res = ColumnBase.create(
+            plc_column, dtype=dtype_from_pylibcudf_column(plc_column)
         )
         if _periods_not_specified:
             # As mentioned in [1], this is a post processing step to trim extra
