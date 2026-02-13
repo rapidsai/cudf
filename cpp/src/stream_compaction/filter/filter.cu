@@ -5,16 +5,18 @@
 
 #include "jit/row_ir.hpp"
 
-#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/column/column_device_view.cuh>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/stream_compaction.hpp>
 #include <cudf/transform.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+
+#include <jit/helpers.hpp>
+
 #include <variant>
 #include <vector>
-#include <jit/helpers.hpp>
 
 namespace cudf {
 
