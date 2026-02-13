@@ -662,7 +662,7 @@ def assert_tpch_result_equal(
             assert_frame_equal(result_first, expected_first, **polars_kwargs)  # type: ignore[arg-type]
         except AssertionError as e:
             raise ValidationError(
-                message="Ties length mismatch", details={"error": str(e)}
+                message="Result mismatch in non-ties part", details={"error": str(e)}
             ) from e
 
         # Now for the ties:
