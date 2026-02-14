@@ -587,10 +587,8 @@ def make_rapidsmpf_read_parquet_node(
                 _cast_literals_to_physical_types(
                     ir.predicate.value,
                     _parquet_physical_types(
-                        ir.schema,
                         ir.paths,
                         ir.with_columns or list(ir.schema.keys()),
-                        stream,
                     ),
                 ),
                 stream=stream,

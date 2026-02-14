@@ -2746,6 +2746,49 @@ TEST_F(ParquetMetadataReaderTest, TestNested)
   EXPECT_EQ(out_float_col.name(), "float_field");
   EXPECT_EQ(out_float_col.type(), cudf::io::parquet::Type::FLOAT);
 }
+TEST_F(ParquetMetadataReaderTest, TestCudfTypes)
+{
+  auto const num_rows = 100;
+
+  auto ints    = random_values<int32_t>(num_rows);
+  auto longs   = random_values<int64_t>(num_rows);
+  auto floats  = random_values<float>(num_rows);
+  auto doubles = random_values<double>(num_rows);
+  column_wrapper<int32_t> int_col(ints.begin(), ints.end());
+  column_wrapper<int64_t> long_col(longs.begin(), longs.end());
+  column_wrapper<float> float_col(floats.begin(), floats.end());
+  column_wrapper<double> double_col(doubles.begin(), doubles.end());
+
+  table_view expected({int_col, long_col, float_col, double_col});
+
+  cudf::io::table_input_metadata expected_metadata(expected);
+  expected_metadata.column_metadata[0].set_name("int_col");
+  expected_metadata.column_metadata[1].set_name("long_col");
+  expected_metadata.column_metadata[2].set_name("float_col");
+  expected_metadata.column_metadata[3].set_name("double_col");
+
+  auto filepath = temp_env->get_temp_filepath("MetadataTestCudfTypes.parquet");
+  cudf::io::parquet_writer_options out_opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
+      .metadata(std::move(expected_metadata));
+  cudf::io::write_parquet(out_opts);
+
+  auto meta = read_parquet_metadata(cudf::io::source_info{filepath});
+
+  ASSERT_EQ(meta.schema().root().num_children(), 4);
+
+  EXPECT_EQ(meta.schema().root().child(0).name(), "int_col");
+  EXPECT_EQ(meta.schema().root().child(0).cudf_type().id(), cudf::type_id::INT32);
+
+  EXPECT_EQ(meta.schema().root().child(1).name(), "long_col");
+  EXPECT_EQ(meta.schema().root().child(1).cudf_type().id(), cudf::type_id::INT64);
+
+  EXPECT_EQ(meta.schema().root().child(2).name(), "float_col");
+  EXPECT_EQ(meta.schema().root().child(2).cudf_type().id(), cudf::type_id::FLOAT32);
+
+  EXPECT_EQ(meta.schema().root().child(3).name(), "double_col");
+  EXPECT_EQ(meta.schema().root().child(3).cudf_type().id(), cudf::type_id::FLOAT64);
+}
 
 ///////////////////////
 // reader source tests
