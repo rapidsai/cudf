@@ -2980,6 +2980,38 @@ def check_invalid_array(shape: tuple, dtype: np.dtype) -> None:
         raise TypeError("Unsupported type float16")
 
 
+class UnderlyingDtypeReplaceMixin(ColumnBase):
+    _UNDERLYING_DTYPE: np.dtype
+
+    def find_and_replace(
+        self,
+        to_replace: ColumnBase | list,
+        replacement: ColumnBase | list,
+        all_nan: bool = False,
+    ) -> Self:
+        if not isinstance(to_replace, type(self)):
+            to_replace = as_column(to_replace)
+            if to_replace.can_cast_safely(self.dtype):
+                to_replace = to_replace.astype(self.dtype)
+        if not isinstance(replacement, type(self)):
+            replacement = as_column(replacement)
+            if replacement.can_cast_safely(self.dtype):
+                replacement = replacement.astype(self.dtype)
+        if isinstance(to_replace, type(self)):
+            to_replace = to_replace.astype(self._UNDERLYING_DTYPE)
+        if isinstance(replacement, type(self)):
+            replacement = replacement.astype(self._UNDERLYING_DTYPE)
+        try:
+            result = (
+                self.astype(self._UNDERLYING_DTYPE)
+                .find_and_replace(to_replace, replacement, all_nan)
+                .astype(self.dtype)
+            )
+        except TypeError:
+            return cast("Self", self.copy(deep=True))
+        return cast("Self", result)
+
+
 def as_column(
     arbitrary: Any,
     nan_as_null: bool | None = None,
