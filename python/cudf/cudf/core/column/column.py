@@ -869,7 +869,9 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         )
 
     @staticmethod
-    def create(col: plc.Column, dtype: DtypeObj) -> ColumnBase:
+    def create(
+        col: plc.Column, dtype: DtypeObj, validate: bool = True
+    ) -> ColumnBase:
         """
         Create a Column from a pylibcudf.Column with an explicit cudf dtype.
 
@@ -880,29 +882,37 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             dtype = dtype_from_pylibcudf_column(plc_col)
             col = ColumnBase.create(plc_col, dtype)
 
-        Note that the input col is never directly placed into the resulting ColumnBase.
-        Rather, a new plc.Column is created with the exact same properties but with
-        suitable shallow copies of the buffers wrapped in cudf Buffers to ensure
-        consistent behavior with respect to memory semantics like copy-on-write.
+        Note that when validation is enabled, the input col is never directly placed
+        into the resulting ColumnBase. Rather, a new plc.Column is created with the
+        exact same properties but with suitable shallow copies of the buffers wrapped
+        in cudf Buffers to ensure consistent behavior with respect to memory semantics
+        like copy-on-write. When validation is disabled, the caller is responsible for
+        ensuring that col and its children are already normalized and wrapped.
         """
         original_dtype = dtype
-        wrapped, dispatch_dtype = _validate_args_new(col, dtype)
-
+        wrapped, dispatch_dtype = (
+            _validate_args_new(col, dtype) if validate else (col, dtype)
+        )
         # Dispatch to the appropriate subclass based on dtype
         target_cls = ColumnBase._dispatch_subclass_from_dtype(dispatch_dtype)
 
-        # Construct the instance using the subclass's _from_preprocessed method
-        # Skip validation since we already validated above
         output_dtype = (
             original_dtype
             if is_pandas_nullable_extension_dtype(original_dtype)
             else dispatch_dtype
         )
-        return target_cls._from_preprocessed(
-            plc_column=wrapped,
-            dtype=output_dtype,
-            validate=False,
-        )
+        self = target_cls.__new__(target_cls)
+        self.plc_column = wrapped
+        self._dtype = output_dtype
+        self._distinct_count = {}
+        self._has_nulls = {}
+        # The set of exposed buffers associated with this column. These buffers must be
+        # kept alive for the lifetime of this column since anything that accessed the
+        # CAI of this column will still be pointing to those buffers. As such objects
+        # are destroyed, all references to this column will be removed as well,
+        # triggering the destruction of the exposed buffers.
+        self._exposed_buffers = set()
+        return self
 
     @staticmethod
     def _dispatch_subclass_from_dtype(dtype: DtypeObj) -> type[ColumnBase]:
@@ -977,34 +987,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         """
         dtype = dtype_from_pylibcudf_column(col)
         return ColumnBase.create(col, dtype)
-
-    @classmethod
-    def _from_preprocessed(
-        cls,
-        plc_column: plc.Column,
-        dtype: DtypeObj,
-        validate: bool = True,
-    ) -> Self:
-        # TODO: This function bypassess some of the buffer copying/wrapping that would
-        # be done in from_pylibcudf, so it is only ever safe to call this in situations
-        # where we know that the plc_column and children are already properly wrapped.
-        # Ideally we should get rid of this altogether eventually and inline its logic
-        # in from_pylibcudf, but for now it is necessary for the various
-        # _with_type_metadata calls.
-        self = cls.__new__(cls)
-        if validate:
-            plc_column, dtype = _validate_args_new(plc_column, dtype)
-        self.plc_column = plc_column
-        self._dtype = dtype
-        self._distinct_count = {}
-        self._has_nulls = {}
-        # The set of exposed buffers associated with this column. These buffers must be
-        # kept alive for the lifetime of this column since anything that accessed the
-        # CAI of this column will still be pointing to those buffers. As such objects
-        # are destroyed, all references to this column will be removed as well,
-        # triggering the destruction of the exposed buffers.
-        self._exposed_buffers = set()
-        return self
 
     @classmethod
     def from_cuda_array_interface(cls, arbitrary: Any) -> ColumnBase:

@@ -122,8 +122,11 @@ class CategoricalColumn(ColumnBase):
         This is a NumericalColumn wrapping self.plc_column, which is necessary because
         many operations on categoricals need to delegate to the codes column.
         """
-        return cudf.core.column.NumericalColumn._from_preprocessed(
-            self.plc_column, self.dtype._codes_dtype
+        return cast(
+            "NumericalColumn",
+            cudf.core.column.NumericalColumn.create(
+                self.plc_column, self.dtype._codes_dtype, validate=False
+            ),
         )
 
     @property
