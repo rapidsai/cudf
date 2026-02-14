@@ -49,7 +49,13 @@ from cudf_polars.utils.cuda_stream import (
     get_new_cuda_stream,
     join_cuda_streams,
 )
-from cudf_polars.utils.versions import POLARS_VERSION_LT_131, POLARS_VERSION_LT_134
+from cudf_polars.utils.versions import (
+    POLARS_VERSION_LT_131,
+    POLARS_VERSION_LT_134,
+    POLARS_VERSION_LT_136,
+    POLARS_VERSION_LT_137,
+    POLARS_VERSION_LT_138,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Generator, Hashable, Iterable, Sequence
@@ -672,6 +678,18 @@ class Scan(IR):
             total_rows = min(total_rows, self.n_rows)
         return max(total_rows, 0)
 
+    @staticmethod
+    def _get_parquet_row_count_from_metadata(
+        paths: list[str], skip_rows: int, n_rows: int
+    ) -> int:
+        # Zero-width parquet files lose their row count when read through
+        # pylibcudf. See https://github.com/rapidsai/cudf/issues/21428
+        meta = plc.io.parquet_metadata.read_parquet_metadata(plc.io.SourceInfo(paths))
+        num_rows = meta.num_rows() - skip_rows
+        if n_rows != -1:
+            num_rows = min(num_rows, n_rows)
+        return max(num_rows, 0)
+
     @classmethod
     @log_do_evaluate
     @nvtx_annotate_cudf_polars(message="Scan")
@@ -845,11 +863,17 @@ class Scan(IR):
                         concatenated_columns[i] = plc.concatenate.concatenate(
                             [concatenated_columns[i], columns.pop()], stream=stream
                         )
+                num_rows = (
+                    cls._get_parquet_row_count_from_metadata(paths, skip_rows, n_rows)
+                    if not names
+                    else None
+                )
                 df = DataFrame.from_table(
                     plc.Table(concatenated_columns),
                     names=names,
                     dtypes=[schema[name] for name in names],
                     stream=stream,
+                    num_rows=num_rows,
                 )
                 df = _align_parquet_schema(df, schema)
                 if include_file_paths is not None:
@@ -862,11 +886,17 @@ class Scan(IR):
                 )
                 # TODO: consider nested column names?
                 col_names = tbl_w_meta.column_names(include_children=False)
+                num_rows = (
+                    cls._get_parquet_row_count_from_metadata(paths, skip_rows, n_rows)
+                    if not col_names
+                    else None
+                )
                 df = DataFrame.from_table(
                     tbl_w_meta.tbl,
                     col_names,
                     [schema[name] for name in col_names],
                     stream=stream,
+                    num_rows=num_rows,
                 )
                 df = _align_parquet_schema(df, schema)
                 if include_file_paths is not None:
@@ -1041,7 +1071,7 @@ class Sink(IR):
                     f"Compression type '{compression}' is not supported."
                 )
         elif (
-            kind == "Json"
+            kind == "Json" if POLARS_VERSION_LT_137 else "NDJson"
         ):  # pragma: no cover; options are validated on the polars side
             if not all(
                 plc.io.json.is_supported_write_json(dtype.plc_type)
@@ -1225,13 +1255,13 @@ class Sink(IR):
         """Write the dataframe to a file."""
         target = plc.io.SinkInfo([path])
 
-        if options.get("mkdir", False):
-            Path(path).parent.mkdir(parents=True, exist_ok=True)
+        if POLARS_VERSION_LT_136 and options.get("mkdir", False):
+            Path(path).parent.mkdir(parents=True, exist_ok=True)  # pragma: no cover
         if kind == "Csv":
             cls._write_csv(target, options, df)
         elif kind == "Parquet":
             cls._write_parquet(target, parquet_options, options, df)
-        elif kind == "Json":
+        elif kind == "Json" if POLARS_VERSION_LT_137 else "NDJson":
             cls._write_json(target, df)
 
         return DataFrame([], stream=df.stream)
@@ -1419,8 +1449,17 @@ class DataFrameScan(IR):
         context: IRExecutionContext,
     ) -> DataFrame:
         """Evaluate and return a dataframe."""
+        pl_df = pl.DataFrame._from_pydf(df) if not isinstance(df, pl.DataFrame) else df
+        height = pl_df.height
+
         if projection is not None:
             df = df.select(projection)
+
+        # Zero-width dataframes lose their row count when converted through
+        # pylibcudf. See https://github.com/rapidsai/cudf/issues/21428
+        if len(schema) == 0:
+            return DataFrame([], stream=context.get_cuda_stream(), num_rows=height)
+
         df = DataFrame.from_polars(df, stream=context.get_cuda_stream())
         assert all(
             c.obj.type() == dtype.plc_type
@@ -1759,6 +1798,15 @@ class Rolling(IR):
         ).slice(zlice)
 
 
+def _has_struct_in_list(polars_type: pl.DataType) -> bool:
+    if not isinstance(polars_type, pl.List):
+        return False
+    current = polars_type.inner
+    while isinstance(current, pl.List):
+        current = current.inner
+    return isinstance(current, pl.Struct)
+
+
 class GroupBy(IR):
     """Perform a groupby."""
 
@@ -1796,10 +1844,19 @@ class GroupBy(IR):
     ):
         self.schema = schema
         self.keys = tuple(keys)
+        for dtype in schema.values():
+            if _has_struct_in_list(dtype.polars_type):
+                raise NotImplementedError("Nested list[struct] types not supported")
         for request in agg_requests:
             expr = request.value
-            if isinstance(expr, unary.UnaryFunction) and expr.name == "value_counts":
-                raise NotImplementedError("value_counts is not supported in groupby")
+            if (
+                POLARS_VERSION_LT_136
+                and isinstance(expr, unary.UnaryFunction)
+                and expr.name == "value_counts"
+            ):
+                raise NotImplementedError(
+                    "value_counts is not supported in groupby"
+                )  # pragma: no cover; Nested list[struct] types not supported
             if any(
                 isinstance(child, unary.UnaryFunction) and child.name == "value_counts"
                 for child in expr.children
@@ -2978,6 +3035,7 @@ class MapFunction(IR):
             "unpivot",
             "row_index",
             "fast_count",
+            "hint_sorted",
         ]
     )
 
@@ -2993,7 +3051,14 @@ class MapFunction(IR):
                 f"Unhandled map function {self.name}"
             )  # pragma: no cover
         if self.name == "explode":
-            (to_explode,) = self.options
+            if POLARS_VERSION_LT_136 or len(self.options) == 1:
+                (to_explode,) = self.options
+            else:
+                (to_explode, empty_as_null, keep_nulls) = self.options
+                if (POLARS_VERSION_LT_136 and not empty_as_null) or not keep_nulls:
+                    raise NotImplementedError(
+                        "Explode an empty or null list/array"
+                    )  # pragma: no cover
             if len(to_explode) > 1:
                 # TODO: straightforward, but need to error check
                 # polars requires that all to-explode columns have the
@@ -3014,7 +3079,7 @@ class MapFunction(IR):
             indices, pivotees, variable_name, value_name = self.options
             value_name = "value" if value_name is None else value_name
             variable_name = "variable" if variable_name is None else variable_name
-            if len(pivotees) == 0:
+            if POLARS_VERSION_LT_136 and len(pivotees) == 0:  # pragma: no cover
                 index = frozenset(indices)
                 pivotees = [name for name in df.schema if name not in index]
             if not all(
@@ -3033,7 +3098,7 @@ class MapFunction(IR):
             )
         elif self.name == "row_index":
             col_name, offset = options
-            if col_name in df.schema:
+            if POLARS_VERSION_LT_138 and col_name in df.schema:  # pragma: no cover
                 raise NotImplementedError("Duplicate row index name")
             self.options = (col_name, offset)
         elif self.name == "fast_count":
@@ -3045,6 +3110,10 @@ class MapFunction(IR):
             raise NotImplementedError(
                 "Fast count unsupported for CSV scans"
             )  # pragma: no cover
+        elif (
+            self.name == "hint_sorted"
+        ):  # pragma: no cover; polars prunes hints in some cases
+            raise NotImplementedError("Hint sorted unsupported")
         self._non_child_args = (schema, name, self.options)
 
     def get_hashable(self) -> Hashable:
