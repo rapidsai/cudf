@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -20,20 +20,20 @@ void nvbench_left_anti_join(nvbench::state& state,
   auto const reuse_left_table = state.get_string("reuse_table") == "left"
                                   ? cudf::set_as_build_table::LEFT
                                   : cudf::set_as_build_table::RIGHT;
-  if (reuse_left_table == cudf::set_as_build_table::LEFT) {
-    state.skip("Not yet implemented");
-    return;
-  }
   auto dtypes = cycle_dtypes(get_type_or_group(static_cast<int32_t>(DataType)), num_keys);
 
   auto join = [num_operations, reuse_left_table](cudf::table_view const& left,
                                                  cudf::table_view const& right,
                                                  cudf::null_equality compare_nulls) {
-    cudf::filtered_join obj(right, compare_nulls, reuse_left_table, cudf::get_default_stream());
+    auto const& build_table = (reuse_left_table == cudf::set_as_build_table::LEFT) ? left : right;
+    auto const& probe_table = (reuse_left_table == cudf::set_as_build_table::LEFT) ? right : left;
+
+    cudf::filtered_join obj(
+      build_table, compare_nulls, reuse_left_table, cudf::get_default_stream());
     for (auto i = 0; i < num_operations - 1; i++) {
-      [[maybe_unused]] auto result = obj.anti_join(left);
+      [[maybe_unused]] auto result = obj.anti_join(probe_table);
     }
-    return obj.anti_join(left);
+    return obj.anti_join(probe_table);
   };
 
   BM_join<Nullable, join_t::HASH, NullEquality>(state, dtypes, join);
@@ -49,20 +49,20 @@ void nvbench_left_semi_join(nvbench::state& state,
   auto const reuse_left_table = state.get_string("reuse_table") == "left"
                                   ? cudf::set_as_build_table::LEFT
                                   : cudf::set_as_build_table::RIGHT;
-  if (reuse_left_table == cudf::set_as_build_table::LEFT) {
-    state.skip("Not yet implemented");
-    return;
-  }
   auto dtypes = cycle_dtypes(get_type_or_group(static_cast<int32_t>(DataType)), num_keys);
 
   auto join = [num_operations, reuse_left_table](cudf::table_view const& left,
                                                  cudf::table_view const& right,
                                                  cudf::null_equality compare_nulls) {
-    cudf::filtered_join obj(right, compare_nulls, reuse_left_table, cudf::get_default_stream());
+    auto const& build_table = (reuse_left_table == cudf::set_as_build_table::LEFT) ? left : right;
+    auto const& probe_table = (reuse_left_table == cudf::set_as_build_table::LEFT) ? right : left;
+
+    cudf::filtered_join obj(
+      build_table, compare_nulls, reuse_left_table, cudf::get_default_stream());
     for (auto i = 0; i < num_operations - 1; i++) {
-      [[maybe_unused]] auto result = obj.semi_join(left);
+      [[maybe_unused]] auto result = obj.semi_join(probe_table);
     }
-    return obj.semi_join(left);
+    return obj.semi_join(probe_table);
   };
   BM_join<Nullable, join_t::HASH, NullEquality>(state, dtypes, join);
 }
