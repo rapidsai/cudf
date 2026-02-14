@@ -92,6 +92,7 @@ def test_cast_to_string_unsupported():
 
 
 def test_float_to_decimal_rounding():
+    # See https://github.com/rapidsai/cudf/pull/21450
     df = pl.LazyFrame(
         {
             "foo": [Decimal("16954168.35")],
