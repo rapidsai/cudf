@@ -796,14 +796,13 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         # Dispatch to the appropriate subclass based on dtype
         target_cls = ColumnBase._dispatch_subclass_from_dtype(dispatch_dtype)
 
-        output_dtype = (
+        self = target_cls.__new__(target_cls)
+        self.plc_column = wrapped
+        self._dtype = (
             original_dtype
             if is_pandas_nullable_extension_dtype(original_dtype)
             else dispatch_dtype
         )
-        self = target_cls.__new__(target_cls)
-        self.plc_column = wrapped
-        self._dtype = output_dtype
         self._distinct_count = {}
         self._has_nulls = {}
         # The set of exposed buffers associated with this column. These buffers must be
