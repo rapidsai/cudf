@@ -853,22 +853,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         return ColumnBase._unwrap_buffers(self.plc_column)
 
     @staticmethod
-    def _with_children(
-        target_col: plc.Column,
-        children: list[plc.Column],
-        data_type: plc.DataType | None = None,
-    ) -> plc.Column:
-        return plc.Column(
-            data_type or target_col.type(),
-            target_col.size(),
-            target_col.data(),
-            target_col.null_mask(),
-            target_col.null_count(),
-            target_col.offset(),
-            children,
-        )
-
-    @staticmethod
     def create(
         col: plc.Column, dtype: DtypeObj, validate: bool = True
     ) -> ColumnBase:
