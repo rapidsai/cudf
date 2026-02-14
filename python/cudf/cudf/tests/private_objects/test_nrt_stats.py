@@ -1,5 +1,6 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
+import numpy as np
 import pytest
 from numba.cuda import config
 from numba.cuda.memory_management.nrt import rtsys
@@ -77,8 +78,9 @@ def test_string_udf_free_kernel(monkeypatch):
 
     with _CUDFNumbaConfig():
         kernel.forall(len(sr))(*launch_args)
-    col = ColumnBase.from_pylibcudf(
-        strings_udf.column_from_managed_udf_string_array(ans_col)
+    col = ColumnBase.create(
+        strings_udf.column_from_managed_udf_string_array(ans_col),
+        dtype=np.dtype(object),
     )
 
     # MemInfos that own the strings should still be alive
