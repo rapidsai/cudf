@@ -820,6 +820,16 @@ std::pair<rmm::device_buffer, size_type> bitmask_and(table_view const& view,
   return detail::bitmask_and(view, stream, mr);
 }
 
+std::pair<rmm::device_buffer, size_type> bitmask_and(host_span<bitmask_type const* const> masks,
+                                                     host_span<size_type const> begin_bits,
+                                                     size_type mask_size,
+                                                     rmm::cuda_stream_view stream,
+                                                     rmm::device_async_resource_ref mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::bitmask_and(masks, begin_bits, mask_size, stream, mr);
+}
+
 std::pair<std::vector<std::unique_ptr<rmm::device_buffer>>, std::vector<size_type>>
 segmented_bitmask_and(host_span<column_view const> colviews,
                       host_span<size_type const> segment_offsets,
