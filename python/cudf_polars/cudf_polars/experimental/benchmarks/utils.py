@@ -7,12 +7,14 @@ from __future__ import annotations
 
 import argparse
 import dataclasses
+import functools
 import importlib
 import io
 import itertools
 import json
 import logging
 import os
+import pprint
 import statistics
 import sys
 import textwrap
@@ -28,6 +30,7 @@ from typing import TYPE_CHECKING, Any, Literal, assert_never
 import nvtx
 
 import polars as pl
+import polars.testing
 
 import rmm.statistics
 
@@ -50,7 +53,11 @@ try:
     from cudf_polars.dsl.translate import Translator
     from cudf_polars.experimental.explain import explain_query
     from cudf_polars.experimental.parallel import evaluate_streaming
-    from cudf_polars.testing.asserts import assert_gpu_result_equal
+    from cudf_polars.testing.asserts import (
+        ValidationError,
+        assert_gpu_result_equal,
+        assert_tpch_result_equal,
+    )
     from cudf_polars.utils.config import ConfigOptions
 
     CUDF_POLARS_AVAILABLE = True
@@ -61,6 +68,24 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
 
     from cudf_polars.experimental.explain import SerializablePlan
+
+
+POLARS_VALIDATION_OPTIONS = {
+    "check_row_order": True,
+    "check_column_order": True,
+    "check_dtypes": True,
+    "check_exact": False,
+    "rel_tol": 1e-5,
+    "abs_tol": 1e-2,
+}
+
+
+def get_validation_options(args: Any) -> dict[str, Any]:
+    """Get validation options dict from parsed arguments."""
+    return {
+        **POLARS_VALIDATION_OPTIONS,
+        "abs_tol": args.validation_abs_tol,
+    }
 
 
 try:
@@ -77,6 +102,144 @@ else:
 ExecutorType = Literal["in-memory", "streaming", "cpu"]
 
 
+# The pre-computed expected results come from DuckDB, which has
+# different casting rules than Polars. For example, in polars
+# Series[Decimal].mean() returns a Float64, while DuckDB returns a Decimal.
+#
+# This dictionary maps query ID to the casts to apply to the DuckDB
+# results necessary to match the cudf-polars results.
+# EXPECTED_CASTS_DECIMAL should be used when the input data uses
+# Decimal (rather than Float) for account balances, etc.
+# EXPECTED_CASTS_FLOATS should be used when the input data uses
+# Float (rather than Decimal) for account balances, etc.
+EXPECTED_CASTS_DECIMAL = {
+    1: [
+        pl.col("sum_qty").cast(pl.Decimal(15, 2)),
+        pl.col("sum_base_price").cast(pl.Decimal(15, 2)),
+        pl.col("sum_disc_price").cast(pl.Float64()),
+        pl.col("sum_charge").cast(pl.Float64()),
+        pl.col("avg_disc").cast(pl.Float64()),
+        pl.col("avg_price").cast(pl.Float64()),
+        pl.col("avg_qty").cast(pl.Float64()),
+        pl.col("count_order").cast(pl.UInt32()),
+    ],
+    3: [pl.col("revenue").cast(pl.Decimal(38, 2))],
+    4: [pl.col("order_count").cast(pl.UInt32())],
+    5: [pl.col("revenue").cast(pl.Decimal(38, 2))],
+    6: [pl.col("revenue").cast(pl.Decimal(38, 2))],
+    7: [pl.col("l_year").cast(pl.Int32()), pl.col("revenue").cast(pl.Decimal(38, 2))],
+    8: [pl.col("o_year").cast(pl.Int32()), pl.col("mkt_share").cast(pl.Decimal(38, 2))],
+    9: [
+        pl.col("o_year").cast(pl.Int32()),
+        pl.col("sum_profit").cast(pl.Decimal(38, 2)),
+    ],
+    10: [pl.col("revenue").cast(pl.Decimal(38, 2))],
+    12: [
+        pl.col("high_line_count").cast(pl.Int32()),
+        pl.col("low_line_count").cast(pl.Int32()),
+    ],
+    13: [pl.col("c_count").cast(pl.UInt32()), pl.col("custdist").cast(pl.UInt32())],
+    15: [pl.col("total_revenue").cast(pl.Decimal(38, 2))],
+    16: [pl.col("supplier_cnt").cast(pl.UInt32())],
+    18: [pl.col("sum(l_quantity)").cast(pl.Decimal(15, 2))],
+    19: [pl.col("revenue").cast(pl.Decimal(38, 2))],
+    21: [pl.col("numwait").cast(pl.UInt32())],
+    22: [
+        pl.col("numcust").cast(pl.UInt32()),
+        pl.col("totacctbal").cast(pl.Decimal(15, 2)),
+    ],
+}
+
+EXPECTED_CASTS_FLOAT = {
+    1: [pl.col("count_order").cast(pl.UInt32())],
+    4: [pl.col("order_count").cast(pl.UInt32())],
+    7: [pl.col("l_year").cast(pl.Int32())],
+    8: [pl.col("o_year").cast(pl.Int32())],
+    9: [pl.col("o_year").cast(pl.Int32())],
+    12: [
+        pl.col("high_line_count").cast(pl.Int32()),
+        pl.col("low_line_count").cast(pl.Int32()),
+    ],
+    13: [pl.col("c_count").cast(pl.UInt32()), pl.col("custdist").cast(pl.UInt32())],
+    16: [pl.col("supplier_cnt").cast(pl.UInt32())],
+    21: [pl.col("numwait").cast(pl.UInt32())],
+    22: [pl.col("numcust").cast(pl.UInt32())],
+}
+
+
+@dataclasses.dataclass
+class ValidationResult:
+    """
+    Result of a validation run.
+
+    Parameters
+    ----------
+    status
+        The status of the validation. Either 'Passed' or 'Failed'.
+    message
+        The message from the validation. This should be ``None`` if
+        the validation passed, and a string describing the failure otherwise.
+    details
+        Additional details about the validation failure.
+    """
+
+    status: Literal["Passed", "Failed"]
+    message: str | None
+    details: dict[str, Any] | None = None
+
+    @classmethod
+    def from_error(cls, error: Exception) -> ValidationResult:
+        """
+        Create a ValidationResult from some exception.
+
+        Parameters
+        ----------
+        error : Exception
+            The error to create a ValidationResult from.
+
+            This will correctly propagate "message" and "details" from
+            ``cudf_polars.testing.asserts.ValidationError``.
+
+        Returns
+        -------
+        ValidationResult
+            The ValidationResult created from the error.
+        """
+        match error:
+            case ValidationError(message=message, details=details):
+                return cls(status="Failed", message=message, details=details)
+            case _:
+                return cls(status="Failed", message=str(error))
+
+
+@dataclasses.dataclass
+class ValidationMethod:
+    """
+    Information about how the validation was performed.
+
+    Parameters
+    ----------
+    expected_source
+        A name indicating the source of the expected results.
+
+        - 'polars-cpu': Run polars against the same data
+        - 'duckdb': Compare against pre-computed DuckDB results
+
+    comparison_method
+        How the comparison was performed. Currently, only
+        'polars' is supported, which indicates that ``polars.testing.assert_frame_equal``
+        was used.
+
+    comparison_options
+        Additional options passed to the comparison method, controlling
+        things like the tolerance for floating point comparisons.
+    """
+
+    expected_source: Literal["polars-cpu", "duckdb"]
+    comparison_method: Literal["polars"]
+    comparison_options: dict[str, Any]
+
+
 @dataclasses.dataclass
 class Record:
     """Results for a single run of a single PDS-H query."""
@@ -86,6 +249,7 @@ class Record:
     duration: float
     shuffle_stats: dict[str, dict[str, int | float]] | None = None
     traces: list[dict[str, Any]] | None = None
+    validation_result: ValidationResult | None = None
 
     @classmethod
     def new(
@@ -268,6 +432,7 @@ class RunConfig:
     spill_to_pinned_memory: bool
     extra_info: dict[str, Any] = dataclasses.field(default_factory=dict)
     fallback_mode: str | None = None
+    validation_method: ValidationMethod | None = None
 
     def __post_init__(self) -> None:  # noqa: D105
         if self.gather_shuffle_stats and self.shuffle != "rapidsmpf":
@@ -358,6 +523,21 @@ class RunConfig:
                     f"but the inferred scale factor is {sf_inf}."
                 )
 
+        if args.validate_directory:
+            validation_method = ValidationMethod(
+                expected_source="duckdb",
+                comparison_method="polars",
+                comparison_options=get_validation_options(args),
+            )
+        elif args.validate:
+            validation_method = ValidationMethod(
+                expected_source="polars-cpu",
+                comparison_method="polars",
+                comparison_options=get_validation_options(args),
+            )
+        else:
+            validation_method = None
+
         return cls(
             queries=args.query,
             executor=executor,
@@ -389,6 +569,7 @@ class RunConfig:
             extra_info=args.extra_info,
             spill_to_pinned_memory=args.spill_to_pinned_memory,
             fallback_mode=args.fallback_mode,
+            validation_method=validation_method,
         )
 
     def serialize(self, engine: pl.GPUEngine | None) -> dict:
@@ -972,7 +1153,13 @@ def parse_args(
         "--validate",
         action=argparse.BooleanOptionalAction,
         default=False,
-        help="Validate the result against CPU execution.",
+        help=(
+            "Validate the result against CPU execution. This will "
+            "run the query with both GPU and CPU polars engines, collect the "
+            "results in memory, and compare them using polars' assert_frame_equal function. "
+            "At larger scale factors, computing the expected result can be slow so "
+            "--validate-directory should be used instead."
+        ),
     )
     parser.add_argument(
         "--baseline",
@@ -1019,6 +1206,22 @@ def parse_args(
         help="Optional directory to write query results as parquet files.",
     )
     parser.add_argument(
+        "--validate-directory",
+        type=Path,
+        default=None,
+        help=(
+            "Validate the results against a directory with a pre-computed set of 'golden' results. "
+            "The directory should contain one parquet file per query, named 'qDD.parquet', where DD is the "
+            "zero-padded query number."
+        ),
+    )
+    parser.add_argument(
+        "--validation-abs-tol",
+        type=float,
+        default=0.01,
+        help="Absolute tolerance for assert_frame_equal validation. Default: 0.01",
+    )
+    parser.add_argument(
         "--spill-to-pinned-memory",
         action=argparse.BooleanOptionalAction,
         default=False,
@@ -1050,7 +1253,81 @@ def parse_args(
         # The default rmm pool size depends on the rmm_async flag
         parsed_args.rmm_pool_size = 0.5
 
+    if parsed_args.validate_directory and parsed_args.validate:
+        raise ValueError("Specify either --validate-directory or --validate, not both.")
+    if (
+        parsed_args.validate_directory is not None
+        and not parsed_args.validate_directory.exists()
+    ):
+        raise FileNotFoundError(
+            f"--validate-directory: {parsed_args.validate_directory} does not exist."
+        )
+    if parsed_args.validate_directory:
+        validation_files = list_validation_files(parsed_args.validate_directory)
+        missing_files = [
+            str(x) for x in set(parsed_args.query) - set(validation_files.keys())
+        ]
+
+        if missing_files:
+            raise ValueError(f"Missing files for queries: {','.join(missing_files)}")
+
     return parsed_args
+
+
+def list_validation_files(
+    validate_directory: Path,
+) -> dict[int, Path]:
+    """List the validation files in the given directory."""
+    validation_files: dict[int, Path] = {}
+    for q_path in validate_directory.glob("q*.parquet"):
+        q_id = int(q_path.stem.lstrip("q").lstrip("_"))
+        validation_files[q_id] = q_path
+    return validation_files
+
+
+def validate_result(
+    result: pl.DataFrame,
+    expected: pl.DataFrame,
+    sort_by: list[tuple[str, bool]],
+    limit: int | None = None,
+    **kwargs: Any,
+) -> ValidationResult:
+    """
+    Validate the computed result against the expected answer.
+
+    This takes care of special handling for validating TPC-H queries,
+    where multiple results might be considered correct.
+
+    See Also
+    --------
+    cudf_polars.testing.asserts.assert_tpch_result_equal
+    """
+    try:
+        assert_tpch_result_equal(
+            result, expected, sort_by=sort_by, limit=limit, **kwargs
+        )
+    except Exception as e:
+        return ValidationResult.from_error(e)
+    else:
+        return ValidationResult(status="Passed", message=None)
+
+
+def check_input_data_type(run_config: RunConfig) -> Literal["decimal", "float"]:
+    """
+    Check whether the input data uses Decimal or Float for account balances, etc.
+
+    This is determined by looking at the ``c_acctbal`` column of the customer table.
+    """
+    if run_config.suffix == "":
+        path = Path(run_config.dataset_path) / f"customer{run_config.suffix}"
+    else:
+        path = Path(run_config.dataset_path) / f"customer.{run_config.suffix}"
+    t = pl.scan_parquet(path).select(pl.col("c_acctbal")).collect_schema()["c_acctbal"]
+
+    if t.is_decimal():
+        return "decimal"
+    else:
+        return "float"
 
 
 def run_polars(
@@ -1075,6 +1352,10 @@ def run_polars(
     records: defaultdict[int, list[Record]] = defaultdict(list)
     plans: dict[int, SerializablePlan] = {}
     engine: pl.GPUEngine | None = None
+    input_data_type: Literal["decimal", "float"] = check_input_data_type(run_config)
+
+    if args.validate_directory is not None:
+        validation_files = list_validation_files(args.validate_directory)
 
     if run_config.executor != "cpu":
         executor_options = get_executor_options(run_config, benchmark=benchmark)
@@ -1097,7 +1378,8 @@ def run_polars(
 
     for q_id in run_config.queries:
         try:
-            q = getattr(benchmark, f"q{q_id}")(run_config)
+            query_result = getattr(benchmark, f"q{q_id}")(run_config)
+            q = query_result.frame
         except AttributeError as err:
             raise NotImplementedError(f"Query {q_id} not implemented.") from err
 
@@ -1136,6 +1418,7 @@ def run_polars(
             else:
                 shuffle_stats = None
 
+            validation_result = None
             if args.validate and run_config.executor != "cpu":
                 try:
                     assert_gpu_result_equal(
@@ -1143,15 +1426,25 @@ def run_polars(
                         engine=engine,
                         executor=run_config.executor,
                         check_exact=False,
+                        validate_with=functools.partial(
+                            assert_tpch_result_equal,
+                            sort_by=query_result.sort_by,
+                            limit=query_result.limit,
+                        ),
                     )
                     print(f"✅ Query {q_id} passed validation!")
-                except AssertionError as e:
-                    validation_failures.append(q_id)
-                    print(f"❌ Query {q_id} failed validation!\n{e}")
+                except Exception as e:
+                    validation_result = ValidationResult.from_error(e)
+                else:
+                    validation_result = ValidationResult(status="Passed", message=None)
 
             t1 = time.monotonic()
             record = Record(
-                query=q_id, iteration=i, duration=t1 - t0, shuffle_stats=shuffle_stats
+                query=q_id,
+                iteration=i,
+                duration=t1 - t0,
+                shuffle_stats=shuffle_stats,
+                validation_result=validation_result,
             )
             if args.print_results:
                 print(result)
@@ -1162,10 +1455,38 @@ def run_polars(
                 output_path = results_dir / f"q_{q_id:02d}.parquet"
                 result.write_parquet(output_path)
 
-            print(
-                f"Query {q_id} - Iteration {i} finished in {record.duration:0.4f}s",
-                flush=True,
+            if args.validate_directory is not None:
+                if input_data_type == "decimal":
+                    casts = EXPECTED_CASTS_DECIMAL.get(q_id, [])
+                else:
+                    casts = EXPECTED_CASTS_FLOAT.get(q_id, [])
+
+                expected = pl.read_parquet(validation_files[q_id]).with_columns(*casts)
+                validation_result = validate_result(
+                    result,
+                    expected,
+                    query_result.sort_by,
+                    limit=query_result.limit,
+                    **get_validation_options(args),
+                )
+            record = dataclasses.replace(
+                record,
+                validation_result=validation_result,
             )
+
+            if validation_result and validation_result.status == "Failed":
+                validation_failures.append(q_id)
+                print(
+                    f"❌ Query {q_id} failed validation!\n{validation_result.message}"
+                )
+                if validation_result.details:
+                    pprint.pprint(validation_result.details)
+
+            else:
+                print(
+                    f"Query {q_id} - Iteration {i} finished in {record.duration:0.4f}s",
+                    flush=True,
+                )
             records[q_id].append(record)
 
     run_config = dataclasses.replace(run_config, records=dict(records), plans=plans)
@@ -1510,7 +1831,7 @@ def run_validate(
         except AttributeError as err:
             raise NotImplementedError(f"Query {q_id} not implemented.") from err
 
-        polars_query = get_pl(run_config)
+        polars_query = get_pl(run_config).frame
         if baseline == "duckdb":
             base_sql = get_ddb(run_config)
             base_result = execute_duckdb_query(
