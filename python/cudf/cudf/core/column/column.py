@@ -334,7 +334,7 @@ def _wrap_and_validate(
     return wrapped, dispatch_dtype
 
 
-def _validate_args_new(
+def _validate_args(
     plc_column: plc.Column, dtype: DtypeObj
 ) -> tuple[plc.Column, DtypeObj]:
     wrapped, dispatch_dtype = _wrap_and_validate(plc_column, dtype)
@@ -786,7 +786,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         """
         original_dtype = dtype
         wrapped, dispatch_dtype = (
-            _validate_args_new(col, dtype) if validate else (col, dtype)
+            _validate_args(col, dtype) if validate else (col, dtype)
         )
         # Dispatch to the appropriate subclass based on dtype
         target_cls = ColumnBase._dispatch_subclass_from_dtype(dispatch_dtype)
