@@ -23,27 +23,6 @@ namespace cudf {
 namespace detail {
 
 /**
- * @brief Sort indices of a single column.
- *
- * This API offers fast sorting for primitive types. It cannot handle nested types and will not
- * consider `NaN` as equivalent to other `NaN`.
- *
- * @tparam method Whether to use stable sort
- * @param input Column to sort. The column data is not modified.
- * @param column_order Ascending or descending sort order
- * @param null_precedence How null rows are to be ordered
- * @param stream CUDA stream used for device memory operations and kernel launches
- * @param mr Device memory resource used to allocate the returned column's device memory
- * @return Sorted indices for the input column.
- */
-template <sort_method method>
-std::unique_ptr<column> sorted_order(column_view const& input,
-                                     order column_order,
-                                     null_order null_precedence,
-                                     rmm::cuda_stream_view stream,
-                                     rmm::device_async_resource_ref mr);
-
-/**
  * @brief Comparator functor needed for single column sort.
  *
  * @tparam Column element type.
@@ -61,16 +40,16 @@ struct simple_comparator {
       }
     }
 
-    auto left_elememt  = d_column.type().id() == type_id::DICTIONARY32
+    auto left_element  = d_column.type().id() == type_id::DICTIONARY32
                            ? d_column.child(dictionary_column_view::keys_column_index)
                               .element<T>(d_column.element<dictionary32>(lhs).value())
                            : d_column.element<T>(lhs);
-    auto right_elememt = d_column.type().id() == type_id::DICTIONARY32
+    auto right_element = d_column.type().id() == type_id::DICTIONARY32
                            ? d_column.child(dictionary_column_view::keys_column_index)
                                .element<T>(d_column.element<dictionary32>(rhs).value())
                            : d_column.element<T>(rhs);
 
-    return relational_compare(left_elememt, right_elememt) ==
+    return relational_compare(left_element, right_element) ==
            (ascending ? weak_ordering::LESS : weak_ordering::GREATER);
   }
   column_device_view const d_column;
