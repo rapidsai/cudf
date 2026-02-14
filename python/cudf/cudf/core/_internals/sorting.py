@@ -149,6 +149,7 @@ def _order_by_plc(
         plc.sorting.stable_sorted_order if stable else plc.sorting.sorted_order
     )
     (plc_columns,) = columns_to_plc_columns(columns_from_table)
+    plc_columns = list(plc_columns)
     return (
         func,
         (
