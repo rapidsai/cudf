@@ -1031,6 +1031,52 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         """Return a CuPy representation of the Column."""
         raise NotImplementedError(f"CuPy does not support {self.dtype}")
 
+    @staticmethod
+    def _prepare_find_and_replace_columns(
+        to_replace: ColumnBase | list,
+        replacement: ColumnBase | list,
+        *,
+        null_cast_dtype: DtypeObj | None = None,
+        strict_type: bool = True,
+    ) -> tuple[ColumnBase, ColumnBase]:
+        to_replace_col = as_column(to_replace)
+        if null_cast_dtype is not None and to_replace_col.is_all_null:
+            to_replace_col = to_replace_col.astype(null_cast_dtype)
+
+        replacement_col = as_column(replacement)
+        if null_cast_dtype is not None and replacement_col.is_all_null:
+            replacement_col = replacement_col.astype(null_cast_dtype)
+
+        if strict_type:
+            type_matches = type(to_replace_col) is type(replacement_col)
+        else:
+            type_matches = isinstance(to_replace_col, type(replacement_col))
+
+        if not type_matches:
+            raise TypeError(
+                f"to_replace and value should be of same types,"
+                f"got to_replace dtype: {to_replace_col.dtype} and "
+                f"value dtype: {replacement_col.dtype}"
+            )
+
+        return to_replace_col, replacement_col
+
+    @staticmethod
+    def _dedupe_find_and_replace_mapping(
+        old_col: ColumnBase,
+        new_col: ColumnBase,
+    ) -> tuple[plc.Column, plc.Column]:
+        with old_col.access(mode="read", scope="internal"):
+            with new_col.access(mode="read", scope="internal"):
+                columns = plc.stream_compaction.stable_distinct(
+                    plc.Table([old_col.plc_column, new_col.plc_column]),
+                    keys=[0],
+                    keep=plc.stream_compaction.DuplicateKeepOption.KEEP_LAST,
+                    nulls_equal=plc.types.NullEquality.EQUAL,
+                    nans_equal=plc.types.NanEquality.ALL_EQUAL,
+                ).columns()
+        return cast(tuple[plc.Column, plc.Column], tuple(columns))
+
     def find_and_replace(
         self,
         to_replace: ColumnBase | list,

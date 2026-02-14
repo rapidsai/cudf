@@ -721,20 +721,14 @@ class NumericalColumn(NumericalBaseColumn):
         # is inferred as `string`, but this is a valid
         # float64 column too, Hence we will need to type-cast
         # to self.dtype.
-        to_replace_col = as_column(to_replace)
-        if to_replace_col.is_all_null:
-            to_replace_col = to_replace_col.astype(self.dtype)
-
-        replacement_col = as_column(replacement)
-        if replacement_col.is_all_null:
-            replacement_col = replacement_col.astype(self.dtype)
-
-        if not isinstance(to_replace_col, type(replacement_col)):
-            raise TypeError(
-                f"to_replace and value should be of same types,"
-                f"got to_replace dtype: {to_replace_col.dtype} and "
-                f"value dtype: {replacement_col.dtype}"
+        to_replace_col, replacement_col = (
+            ColumnBase._prepare_find_and_replace_columns(
+                to_replace,
+                replacement,
+                null_cast_dtype=self.dtype,
+                strict_type=False,
             )
+        )
 
         if not isinstance(to_replace_col, NumericalColumn) and not isinstance(
             replacement_col, NumericalColumn
@@ -784,15 +778,9 @@ class NumericalColumn(NumericalBaseColumn):
         # pandas processes replacements sequentially, so the last occurrence wins.
         # For example, df.replace([1, 2, 1], [10, 20, 30]) replaces 1→30 (not 1→10).
         # Work with plc.Column objects directly to avoid creating intermediate ColumnBases.
-        with old_col.access(mode="read", scope="internal"):
-            with new_col.access(mode="read", scope="internal"):
-                old_plc, new_plc = plc.stream_compaction.stable_distinct(
-                    plc.Table([old_col.plc_column, new_col.plc_column]),
-                    keys=[0],  # Deduplicate by first column (old values)
-                    keep=plc.stream_compaction.DuplicateKeepOption.KEEP_LAST,
-                    nulls_equal=plc.types.NullEquality.EQUAL,
-                    nans_equal=plc.types.NanEquality.ALL_EQUAL,
-                ).columns()
+        old_plc, new_plc = ColumnBase._dedupe_find_and_replace_mapping(
+            old_col, new_col
+        )
 
         # Handle null replacement separately if there's a null in old values
         if old_plc.null_count() == 1:
