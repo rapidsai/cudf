@@ -2,14 +2,18 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 import pylibcudf as plc
 
-from cudf.core.column.utils import access_columns
+from cudf.core.column.utils import (
+    access_columns,
+    columns_to_plc_columns,
+    plc_column_op,
+)
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Sequence
+    from collections.abc import Callable, Iterable, Sequence
 
     from cudf.core.column import ColumnBase
 
@@ -119,21 +123,41 @@ def order_by(
     -------
     Column of indices that sorts the table
     """
+    return _order_by_plc(
+        columns_from_table, ascending, na_position, stable=stable
+    )
+
+
+@plc_column_op(
+    column_args=("columns_from_table",),
+    returns_plc_fn=True,
+    wrap_output=False,
+)
+def _order_by_plc(
+    columns_from_table: Sequence[ColumnBase],
+    ascending: Iterable[bool],
+    na_position: Iterable[Literal["first", "last"]],
+    *,
+    stable: bool,
+) -> tuple[
+    Callable[..., Any],
+    tuple[plc.Table, list[plc.types.Order], list[plc.types.NullOrder]],
+    dict[str, Any],
+]:
     column_order, null_precedence = ordering(ascending, na_position)
     func = (
         plc.sorting.stable_sorted_order if stable else plc.sorting.sorted_order
     )
-
-    with access_columns(
-        *columns_from_table, mode="read", scope="internal"
-    ) as columns_from_table:
-        return func(
-            plc.Table(
-                [col.plc_column for col in columns_from_table],
-            ),
+    (plc_columns,) = columns_to_plc_columns(columns_from_table)
+    return (
+        func,
+        (
+            plc.Table(plc_columns),
             column_order,
             null_precedence,
-        )
+        ),
+        {},
+    )
 
 
 def sort_by_key(

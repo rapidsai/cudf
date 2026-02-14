@@ -22,7 +22,8 @@ from cudf.core.column.column import (
     column_empty,
 )
 from cudf.core.column.numerical_base import NumericalBaseColumn
-from cudf.core.column.utils import access_columns
+from cudf.core.column.utils import PylibcudfFunction, access_columns
+from cudf.core.dtype.validators import is_dtype_obj_numeric
 from cudf.core.mixins import BinaryOperand
 from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
@@ -145,10 +146,12 @@ class NumericalColumn(NumericalBaseColumn):
         """
         if self.dtype.kind != "f":
             return as_column(False, length=len(self))
-        with self.access(mode="read", scope="internal"):
-            return ColumnBase.create(
-                plc.unary.is_nan(self.plc_column), np.dtype(np.bool_)
-            )
+        op = PylibcudfFunction(
+            plc.unary.is_nan,
+            dtype_policy=lambda _dtypes: np.dtype(np.bool_),
+            mode="read",
+        )
+        return op(self)
 
     def notnan(self) -> ColumnBase:
         """Identify non-NaN values in a Column.
@@ -1007,24 +1010,20 @@ class NumericalColumn(NumericalBaseColumn):
         if bin_col.nullable:
             raise ValueError("`bins` cannot contain null entries.")
 
-        with access_columns(bin_col, self, mode="read", scope="internal") as (
-            bin_col,
-            self,
-        ):
-            return cast(
-                Self,
-                ColumnBase.create(
-                    getattr(
-                        plc.search, "lower_bound" if right else "upper_bound"
-                    )(
-                        plc.Table([bin_col.plc_column]),
-                        plc.Table([self.plc_column]),
-                        [plc.types.Order.ASCENDING],
-                        [plc.types.NullOrder.BEFORE],
-                    ),
-                    get_dtype_of_same_kind(self.dtype, np.dtype(np.int32)),
-                ),
-            )
+        func = plc.search.lower_bound if right else plc.search.upper_bound
+        op = PylibcudfFunction(
+            lambda bin_plc, self_plc: func(
+                plc.Table([bin_plc]),
+                plc.Table([self_plc]),
+                [plc.types.Order.ASCENDING],
+                [plc.types.NullOrder.BEFORE],
+            ),
+            dtype_policy=lambda _dtypes: get_dtype_of_same_kind(
+                self.dtype, np.dtype(np.int32)
+            ),
+            mode="read",
+        )
+        return cast(Self, op(bin_col, self))
 
 
 def _normalize_find_and_replace_input(
