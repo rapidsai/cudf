@@ -907,15 +907,13 @@ class DatetimeTZColumn(DatetimeColumn):
         if isinstance(dtype, pd.DatetimeTZDtype) and dtype != self.dtype:
             if dtype.unit != self.time_unit:
                 # TODO: Doesn't check that new unit is valid.
-                # Uncomment below to cast correctly, but uncovers a potential bug in
-                # DatetimeColumn.tz_localize
-                # casted_plc = (
-                #     super()
-                #     .as_datetime_column(_get_base_dtype(dtype))
-                #     .plc_column
-                # )
+                casted_plc = (
+                    super()
+                    .as_datetime_column(_get_base_dtype(dtype))
+                    .plc_column
+                )
                 casted = cast(
-                    DatetimeTZColumn, ColumnBase.create(self.plc_column, dtype)
+                    DatetimeTZColumn, ColumnBase.create(casted_plc, dtype)
                 )
             else:
                 casted = self

@@ -292,10 +292,6 @@ def _wrap_and_validate(
         }
         if isinstance(dispatch_dtype, pd.DatetimeTZDtype):
             dispatch_dtype = get_compatible_timezone(dispatch_dtype)
-            if (
-                _tz_cast_type := dtype_to_pylibcudf_type(dispatch_dtype)
-            ) != col.type():
-                wrapped = _wrap_column(plc.unary.cast(wrapped, _tz_cast_type))
 
     if dtype_kind == "m":
         valid_types = {
