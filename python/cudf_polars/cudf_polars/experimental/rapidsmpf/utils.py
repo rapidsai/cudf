@@ -19,6 +19,7 @@ try:
 except ImportError:
     pass
 
+from rapidsmpf.memory.memory_reservation import opaque_memory_usage
 from rapidsmpf.memory.packed_data import PackedData
 from rapidsmpf.streaming.coll.allgather import AllGather
 from rapidsmpf.streaming.core.message import Message
@@ -27,11 +28,15 @@ from rapidsmpf.streaming.cudf.channel_metadata import (
     HashScheme,
     Partitioning,
 )
-from rapidsmpf.streaming.cudf.table_chunk import TableChunk
+from rapidsmpf.streaming.cudf.table_chunk import (
+    TableChunk,
+    make_table_chunks_available_or_wait,
+)
 
 import pylibcudf as plc
 
 from cudf_polars.containers import DataFrame
+from cudf_polars.experimental.utils import _concat
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator, Callable, Mapping
@@ -161,6 +166,73 @@ def remap_partitioning(
     return Partitioning(inter_rank=new_inter_rank, local=new_local)
 
 
+def select_preserves_partitioning(
+    ir: IR,
+    partitioning: Partitioning | None,
+    old_schema: Mapping[str, DataType],
+    new_schema: Mapping[str, DataType],
+) -> Partitioning | None:
+    """
+    Check if a Select node preserves partitioning and remap if so.
+
+    A Select preserves partitioning if all partition key columns are
+    output as simple Col references (unchanged values). Other columns
+    can be computed expressions - only the partition keys matter.
+
+    Parameters
+    ----------
+    ir
+        The Select IR node.
+    partitioning
+        The input partitioning.
+    old_schema
+        The input schema (child schema).
+    new_schema
+        The output schema (Select's schema).
+
+    Returns
+    -------
+    The remapped partitioning if partition keys are preserved, else None.
+    """
+    from cudf_polars.dsl.expr import Col
+    from cudf_polars.dsl.ir import Select
+
+    if partitioning is None:
+        return None
+
+    if not isinstance(ir, Select):
+        return None
+
+    inter_rank = partitioning.inter_rank
+    if inter_rank is None or inter_rank == "inherit":
+        # No specific partitioning to preserve
+        return remap_partitioning(partitioning, old_schema, new_schema)
+
+    # Get partition key column names from indices
+    old_names = list(old_schema.keys())
+    try:
+        partition_key_names = {old_names[i] for i in inter_rank.column_indices}
+    except IndexError:
+        return None
+
+    # Build a map from output column name to its expression
+    output_expr_map = {ne.name: ne.value for ne in ir.exprs}
+
+    # Check if each partition key column is output as a simple Col reference
+    # with the same name (meaning the values are unchanged)
+    for key_name in partition_key_names:
+        if key_name not in output_expr_map:
+            # Partition key column not in output
+            return None
+        expr = output_expr_map[key_name]
+        if not isinstance(expr, Col) or expr.name != key_name:
+            # Not a simple Col reference or different source column
+            return None
+
+    # All partition keys are preserved, remap the partitioning
+    return remap_partitioning(partitioning, old_schema, new_schema)
+
+
 async def send_metadata(
     ch: Channel[TableChunk], ctx: Context, metadata: ChannelMetadata
 ) -> None:
@@ -214,6 +286,291 @@ async def recv_metadata(ch: Channel[TableChunk], ctx: Context) -> ChannelMetadat
     msg = await ch.recv_metadata(ctx)
     assert msg is not None, f"Expected ChannelMetadata message, got {msg}."
     return ChannelMetadata.from_message(msg)
+
+
+def _evaluate_chunk_sync(
+    chunk: TableChunk,
+    ir: IR,
+    ir_context: Any,
+) -> TableChunk:
+    """
+    Apply an IR node's do_evaluate to a table chunk (synchronous).
+
+    This is an internal helper. Use `evaluate_chunk` for the async version
+    with memory reservation.
+
+    Parameters
+    ----------
+    chunk
+        The input table chunk (must be available).
+    ir
+        The IR node to evaluate.
+    ir_context
+        The IR execution context.
+
+    Returns
+    -------
+    The resulting table chunk after evaluation.
+    """
+    input_schema = ir.children[0].schema
+    names = list(input_schema.keys())
+    dtypes = list(input_schema.values())
+    df = ir.do_evaluate(
+        *ir._non_child_args,
+        DataFrame.from_table(chunk.table_view(), names, dtypes, chunk.stream),
+        context=ir_context,
+    )
+    return TableChunk.from_pylibcudf_table(df.table, chunk.stream, exclusive_view=True)
+
+
+async def evaluate_chunk(
+    context: Context,
+    chunk: TableChunk,
+    ir: IR | list[IR],
+    ir_context: Any,
+) -> TableChunk:
+    """
+    Make chunk available, reserve memory, and evaluate.
+
+    Parameters
+    ----------
+    context
+        The rapidsmpf streaming context.
+    chunk
+        The input table chunk.
+    ir
+        The IR node(s) to evaluate. If a list, evaluations are chained
+        in order within a single memory reservation.
+    ir_context
+        The IR execution context.
+
+    Returns
+    -------
+    The resulting table chunk after evaluation.
+    """
+    irs = ir if isinstance(ir, list) else [ir]
+    chunk, extra = await make_table_chunks_available_or_wait(
+        context,
+        chunk,
+        reserve_extra=chunk.data_alloc_size(),
+        net_memory_delta=0,
+    )
+    with opaque_memory_usage(extra):
+        for single_ir in irs:
+            chunk = await asyncio.to_thread(
+                _evaluate_chunk_sync, chunk, single_ir, ir_context
+            )
+        return chunk
+
+
+async def concat_batch(
+    batch: list[TableChunk],
+    context: Context,
+    schema: Mapping[str, DataType],
+    ir_context: Any,
+) -> TableChunk:
+    """
+    Concatenate a list of table chunks.
+
+    Parameters
+    ----------
+    batch
+        The list of table chunks to concatenate.
+    context
+        The rapidsmpf context.
+    schema
+        The schema of the table chunks.
+    ir_context
+        The IR execution context.
+
+    Returns
+    -------
+    The table chunk after concatenation.
+    """
+    batch, extra = await make_table_chunks_available_or_wait(
+        context,
+        batch,
+        reserve_extra=sum(c.data_alloc_size() for c in batch),
+        net_memory_delta=0,
+    )
+    with opaque_memory_usage(extra):
+        df = await asyncio.to_thread(
+            _concat,
+            *[
+                DataFrame.from_table(
+                    c.table_view(),
+                    list(schema.keys()),
+                    list(schema.values()),
+                    c.stream,
+                )
+                for c in batch
+            ],
+            context=ir_context,
+        )
+        del batch
+    return TableChunk.from_pylibcudf_table(df.table, df.stream, exclusive_view=True)
+
+
+async def evaluate_batch(
+    batch: list[TableChunk],
+    context: Context,
+    ir: IR | list[IR],
+    ir_context: Any,
+) -> TableChunk:
+    """
+    Concatenate a list of table chunks and evaluate the result.
+
+    Parameters
+    ----------
+    batch
+        The list of table chunks to evaluate.
+    context
+        The rapidsmpf context.
+    ir
+        The IR node(s) to evaluate. If a list, evaluations are chained
+        in order within a single memory reservation.
+    ir_context
+        The IR execution context.
+
+    Returns
+    -------
+    The table chunk after evaluation.
+    """
+    irs = ir if isinstance(ir, list) else [ir]
+    first_ir = irs[0]
+    input_schema = first_ir.children[0].schema
+    chunk = await concat_batch(batch, context, input_schema, ir_context)
+    del batch
+    return await evaluate_chunk(context, chunk, irs, ir_context)
+
+
+async def chunkwise_evaluate(
+    context: Context,
+    ir: IR,
+    ir_context: Any,
+    ch_out: Channel[TableChunk],
+    ch_in: Channel[TableChunk],
+    metadata: ChannelMetadata,
+    initial_chunks: list[TableChunk] | None = None,
+    *,
+    handle_empty_input: bool = False,
+    tracer: ActorTracer | None = None,
+) -> None:
+    """
+    Apply IR evaluation chunk-by-chunk, preserving partitioning.
+
+    Use when data is already partitioned on the relevant keys and each
+    chunk can be processed independently.
+
+    Parameters
+    ----------
+    context
+        The rapidsmpf streaming context.
+    ir
+        The IR node to evaluate.
+    ir_context
+        The IR execution context.
+    ch_out
+        The output channel.
+    ch_in
+        The input channel.
+    metadata
+        The channel metadata to forward (partitioning preserved).
+    initial_chunks
+        Optional chunks already received (e.g., during sampling) that should
+        be forwarded without re-evaluation.
+    handle_empty_input
+        If True and no chunks are received, create an empty chunk and evaluate
+        it. Use for operations like aggregations that always produce output.
+    tracer
+        Optional tracer for runtime metrics.
+    """
+    # Send output metadata preserving partitioning
+    await send_metadata(ch_out, context, metadata)
+    if tracer is not None and metadata.duplicated:
+        tracer.set_duplicated()
+
+    seq_num = 0
+    received_any = bool(initial_chunks)
+
+    # Forward initial chunks without re-evaluation (if any)
+    if initial_chunks:
+        for chunk in initial_chunks:
+            if tracer is not None:
+                tracer.add_chunk(table=chunk.table_view())
+            await ch_out.send(context, Message(seq_num, chunk))
+            seq_num += 1
+
+    # Process remaining chunks
+    while (msg := await ch_in.recv(context)) is not None:
+        received_any = True
+        result = await evaluate_chunk(
+            context, TableChunk.from_message(msg), ir, ir_context
+        )
+        del msg
+        if tracer is not None:
+            tracer.add_chunk(table=result.table_view())
+        await ch_out.send(context, Message(seq_num, result))
+        seq_num += 1
+
+    # Handle empty input for aggregation-like operations
+    if handle_empty_input and not received_any:
+        chunk = empty_table_chunk(ir.children[0], context, ir_context.get_cuda_stream())
+        result = await evaluate_chunk(context, chunk, ir, ir_context)
+        del chunk
+        if tracer is not None:
+            tracer.add_chunk(table=result.table_view())
+        await ch_out.send(context, Message(seq_num, result))
+
+    await ch_out.drain(context)
+
+
+def is_partitioned_on_keys(
+    metadata: ChannelMetadata,
+    key_indices: tuple[int, ...],
+    nranks: int,
+) -> tuple[bool, bool]:
+    """
+    Check if data is already partitioned on the given keys.
+
+    Parameters
+    ----------
+    metadata
+        The channel metadata.
+    key_indices
+        The column indices of the keys.
+    nranks
+        The number of ranks.
+
+    Returns
+    -------
+    already_partitioned_inter_rank
+        Whether the data is already partitioned between ranks.
+    already_partitioned_local
+        Whether the data is already partitioned within a rank.
+    """
+    if metadata.partitioning is None:
+        return nranks == 1, False
+
+    inter_rank = metadata.partitioning.inter_rank
+    local = metadata.partitioning.local
+    if nranks > 1 and (
+        inter_rank is None
+        or inter_rank == "inherit"
+        or inter_rank.column_indices != key_indices
+    ):
+        return False, False
+
+    # Inter-rank is partitioned on keys. Check local.
+    if local == "inherit":
+        # Local inherits from inter_rank, which is partitioned on keys
+        return True, True
+    elif local is not None and local.column_indices == key_indices:
+        # Local is explicitly partitioned on the same keys
+        return True, True
+    else:
+        # Inter-rank matches but local doesn't
+        return True, False
 
 
 class ChannelManager:

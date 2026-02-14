@@ -34,6 +34,7 @@ from cudf_polars.experimental.rapidsmpf.utils import (
     empty_table_chunk,
     process_children,
     recv_metadata,
+    remap_partitioning,
     send_metadata,
 )
 from cudf_polars.experimental.utils import _concat
@@ -83,7 +84,9 @@ async def broadcast_join_node(
     target_partition_size
         The target partition size in bytes.
     """
-    async with shutdown_on_error(context, ch_left, ch_right, ch_out):
+    async with shutdown_on_error(
+        context, ch_left, ch_right, ch_out, trace_ir=ir
+    ) as tracer:
         # Receive metadata.
         left_metadata, right_metadata = await asyncio.gather(
             recv_metadata(ch_left, context),
@@ -99,7 +102,10 @@ async def broadcast_join_node(
             large_child = ir.children[0]
             # Preserve left-side partitioning metadata
             local_count = left_metadata.local_count
-            partitioning = left_metadata.partitioning
+            # Remap partitioning from child schema to output schema
+            partitioning = remap_partitioning(
+                left_metadata.partitioning, large_child.schema, ir.schema
+            )
             # Check if the right-side is already broadcasted
             small_duplicated = right_metadata.duplicated
         else:
@@ -111,18 +117,38 @@ async def broadcast_join_node(
             # Preserve right-side partitioning metadata
             local_count = right_metadata.local_count
             if ir.options[0] == "Right":
-                partitioning = right_metadata.partitioning
+                # Remap partitioning from child schema to output schema
+                partitioning = remap_partitioning(
+                    right_metadata.partitioning, large_child.schema, ir.schema
+                )
             # Check if the right-side is already broadcasted
             small_duplicated = left_metadata.duplicated
+
+        if tracer is not None:
+            tracer.decision = f"broadcast_{broadcast_side}"
+
+        # Determine which metadata belongs to the large side
+        large_metadata = left_metadata if broadcast_side == "right" else right_metadata
+
+        # Allgather is a collective - all ranks must participate even with no local data
+        need_allgather = context.comm().nranks > 1 and not small_duplicated
+
+        # The result is duplicated if:
+        # - The small side is/will be duplicated (already duplicated OR will be AllGathered)
+        # - AND the large side is already duplicated
+        output_duplicated = (
+            small_duplicated or need_allgather
+        ) and large_metadata.duplicated
 
         # Send metadata.
         output_metadata = ChannelMetadata(
             local_count=local_count,
             partitioning=partitioning,
-            # The result is only "duplicated" if both sides are duplicated
-            duplicated=left_metadata.duplicated and right_metadata.duplicated,
+            duplicated=output_duplicated,
         )
         await send_metadata(ch_out, context, output_metadata)
+        if tracer is not None:
+            tracer.set_duplicated(duplicated=output_metadata.duplicated)
 
         # Collect small-side (may be empty if no data received)
         small_chunks: list[TableChunk] = []
@@ -136,8 +162,6 @@ async def broadcast_join_node(
             del msg
             small_size += small_chunks[-1].data_alloc_size(MemoryType.DEVICE)
 
-        # Allgather is a collective - all ranks must participate even with no local data
-        need_allgather = context.comm().nranks > 1 and not small_duplicated
         if need_allgather:
             allgather = AllGatherManager(context, collective_id)
             for s_id in range(len(small_chunks)):
@@ -239,15 +263,13 @@ async def broadcast_join_node(
                 del large_df
 
             # Send output chunk
-            await ch_out.send(
-                context,
-                Message(
-                    seq_num,
-                    TableChunk.from_pylibcudf_table(
-                        df.table, df.stream, exclusive_view=True
-                    ),
-                ),
+            output_chunk = TableChunk.from_pylibcudf_table(
+                df.table, df.stream, exclusive_view=True
             )
+            if tracer is not None:
+                tracer.add_chunk(table=output_chunk.table_view())
+            await ch_out.send(context, Message(seq_num, output_chunk))
+            del df, output_chunk
 
         del small_dfs, small_chunks
         await ch_out.drain(context)
