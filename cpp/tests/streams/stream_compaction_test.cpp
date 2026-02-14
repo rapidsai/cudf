@@ -383,6 +383,7 @@ __device__ void filter(bool * out, int32_t a){
                                    false,
                                    std::nullopt,
                                    cudf::null_aware::NO,
+                                   cudf::output_nullability::PRESERVE,
                                    cudf::test::get_default_stream());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*expected, *result[0]);
 }

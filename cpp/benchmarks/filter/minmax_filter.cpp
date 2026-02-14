@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -137,6 +137,7 @@ void BM_filter_min_max(nvbench::state& state)
           false,
           std::nullopt,
           cudf::null_aware::NO,
+          cudf::output_nullability::PRESERVE,
           stream,
           mr);
       } break;
