@@ -82,6 +82,7 @@ from cudf.utils.dtypes import (
     is_pandas_nullable_extension_dtype,
     min_signed_type,
     np_dtypes_to_pandas_dtypes,
+    pyarrow_dtype_to_cudf_dtype,
 )
 from cudf.utils.scalar import pa_scalar_to_plc_scalar
 from cudf.utils.utils import (
@@ -622,20 +623,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         pylibcudf.Column
             A new pylibcudf.Column with wrapped buffers.
         """
-        # Convert unsupported types to supported types
-        # TODO: Removing this conversion causes some pandas tests to fail, but others
-        # pass, so we need to investigate further to understand whether we should be
-        # doing this conversion on a more per-algorithm basis or something.
-        if col.type().id() == plc.TypeId.TIMESTAMP_DAYS:
-            col = plc.unary.cast(
-                col, plc.DataType(plc.TypeId.TIMESTAMP_SECONDS)
-            )
-        elif col.type().id() == plc.TypeId.EMPTY:
-            new_dtype = plc.DataType(plc.TypeId.INT8)
-            col = plc.column_factories.make_numeric_column(
-                new_dtype, col.size(), plc.types.MaskState.ALL_NULL
-            )
-
         data = ColumnBase._wrap_buffer_or_span(col.data())
         mask = ColumnBase._wrap_buffer_or_span(col.null_mask())
 
@@ -655,6 +642,110 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         )
 
     @staticmethod
+    def _with_children(
+        target_col: plc.Column,
+        children: list[plc.Column],
+        data_type: plc.DataType | None = None,
+    ) -> plc.Column:
+        return plc.Column(
+            data_type or target_col.type(),
+            target_col.size(),
+            target_col.data(),
+            target_col.null_mask(),
+            target_col.null_count(),
+            target_col.offset(),
+            children,
+        )
+
+    @staticmethod
+    def _normalize_children(
+        children: Iterable[plc.Column],
+        dtypes: Iterable[DtypeObj | None],
+    ) -> list[plc.Column]:
+        return [
+            ColumnBase._normalize_plc_column_for_dtype(child, child_dtype)
+            for child, child_dtype in zip(children, dtypes, strict=True)
+        ]
+
+    @staticmethod
+    def _normalize_plc_column_for_dtype(
+        col: plc.Column, dtype: DtypeObj | None
+    ) -> plc.Column:
+        if isinstance(dtype, pd.ArrowDtype):
+            dtype = pyarrow_dtype_to_cudf_dtype(dtype)
+        type_id = col.type().id()
+        # Convert unsupported types to supported types
+        # TODO: Removing this conversion causes some pandas tests to fail, but others
+        # pass, so we need to investigate further to understand whether we should be
+        # doing this conversion on a more per-algorithm basis or something.
+        if type_id == plc.TypeId.TIMESTAMP_DAYS:
+            col = plc.unary.cast(
+                col, plc.DataType(plc.TypeId.TIMESTAMP_SECONDS)
+            )
+        elif type_id == plc.TypeId.EMPTY:
+            if isinstance(dtype, CategoricalDtype):
+                new_dtype = dtype_to_pylibcudf_type(dtype._codes_dtype)
+            else:
+                new_dtype = plc.DataType(plc.TypeId.INT8)
+            col = plc.column_factories.make_numeric_column(
+                new_dtype, col.size(), plc.types.MaskState.ALL_NULL
+            )
+
+        elif isinstance(dtype, CategoricalDtype):
+            codes_dtype = dtype_to_pylibcudf_type(dtype._codes_dtype)
+            if col.type() != codes_dtype:
+                col = plc.unary.cast(col, codes_dtype)
+        elif isinstance(dtype, ListDtype) and type_id == plc.TypeId.LIST:
+            list_view = col.list_view()
+            child = ColumnBase._normalize_plc_column_for_dtype(
+                list_view.child(), dtype.element_type
+            )
+            col = ColumnBase._with_children(
+                col,
+                [list_view.offsets(), child],
+                data_type=plc.DataType(plc.TypeId.LIST),
+            )
+        elif type_id == plc.TypeId.STRUCT:
+            if isinstance(dtype, IntervalDtype):
+                interval_subtype = dtype.subtype
+                assert interval_subtype is not None
+                interval_type = dtype_to_pylibcudf_type(interval_subtype)
+                children = [
+                    # TODO: Investigate when we encounter this case and if it can be
+                    # handled before create is called instead.
+                    plc.unary.cast(child, interval_type)
+                    if child.type() != interval_type
+                    else child
+                    for child in col.children()
+                ]
+                col = ColumnBase._with_children(
+                    col,
+                    children,
+                    data_type=plc.DataType(plc.TypeId.STRUCT),
+                )
+            elif isinstance(dtype, StructDtype):
+                children = ColumnBase._normalize_children(
+                    col.children(), dtype.fields.values()
+                )
+                # TODO: Once we stop handling None dtype inputs this creation can be
+                # deindented and we can remove the duplicate code in the IntervalDtype
+                # branch above
+                col = ColumnBase._with_children(
+                    col,
+                    children,
+                    data_type=plc.DataType(plc.TypeId.STRUCT),
+                )
+
+        # TODO: This branch can be removed when we remove from_pylibcudf
+        if dtype is None and col.children():
+            normalized_children = ColumnBase._normalize_children(
+                col.children(), [None] * len(col.children())
+            )
+            col = ColumnBase._with_children(col, normalized_children)
+
+        return col
+
+    @staticmethod
     def create(col: plc.Column, dtype: DtypeObj) -> ColumnBase:
         """
         Create a Column from a pylibcudf.Column with an explicit cudf dtype.
@@ -671,21 +762,34 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         suitable shallow copies of the buffers wrapped in cudf Buffers to ensure
         consistent behavior with respect to memory semantics like copy-on-write.
         """
-        # Wrap buffers recursively
-        wrapped = ColumnBase._wrap_buffers(col)
+        original_dtype = dtype
+        dispatch_dtype = dtype
+        if isinstance(dispatch_dtype, pd.ArrowDtype):
+            dispatch_dtype = pyarrow_dtype_to_cudf_dtype(dispatch_dtype)
+        normalized = ColumnBase._normalize_plc_column_for_dtype(
+            col, dispatch_dtype
+        )
+        wrapped = ColumnBase._wrap_buffers(normalized)
 
         # Dispatch to the appropriate subclass based on dtype
-        target_cls = ColumnBase._dispatch_subclass_from_dtype(dtype)
+        target_cls = ColumnBase._dispatch_subclass_from_dtype(dispatch_dtype)
 
         # Validate dtype compatibility with the column structure using the
         # target subclass's _validate_args method (includes recursive validation)
-        wrapped, dtype = target_cls._validate_args(wrapped, dtype)
+        wrapped, dispatch_dtype = target_cls._validate_args(
+            wrapped, dispatch_dtype
+        )
 
         # Construct the instance using the subclass's _from_preprocessed method
         # Skip validation since we already validated above
+        output_dtype = (
+            original_dtype
+            if is_pandas_nullable_extension_dtype(original_dtype)
+            else dispatch_dtype
+        )
         return target_cls._from_preprocessed(
             plc_column=wrapped,
-            dtype=dtype,
+            dtype=output_dtype,
             validate=False,
         )
 
@@ -697,6 +801,8 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         This function determines which ColumnBase subclass should be used
         to construct a column with the given dtype.
         """
+        dtype_kind = dtype.kind
+
         # Special pandas extension types
         if isinstance(dtype, pd.DatetimeTZDtype):
             return cudf.core.column.datetime.DatetimeTZColumn
@@ -704,17 +810,16 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             return cudf.core.column.CategoricalColumn
 
         # Temporal types (by kind)
-        if dtype.kind == "M":
+        if dtype_kind == "M":
             return cudf.core.column.DatetimeColumn
-        if dtype.kind == "m":
+        if dtype_kind == "m":
             return cudf.core.column.TimeDeltaColumn
 
         # String types
         if (
             dtype == CUDF_STRING_DTYPE
-            or (hasattr(dtype, "kind") and dtype.kind == "U")
+            or dtype_kind == "U"
             or isinstance(dtype, pd.StringDtype)
-            or (isinstance(dtype, pd.ArrowDtype) and dtype.kind == "U")
         ):
             return cudf.core.column.StringColumn
 
@@ -735,7 +840,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             return cudf.core.column.Decimal32Column
 
         # Numerical types
-        if dtype.kind in "iufb":
+        if dtype_kind in "iufb":
             return cudf.core.column.NumericalColumn
 
         raise TypeError(f"Unrecognized dtype: {dtype}")
@@ -795,8 +900,11 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         pylibcudf.Column
             A new pylibcudf.Column referencing the same data.
         """
+        # TODO: When we delete from_pylibcudf we can also remove the None handling
+        # branch in _normalize_plc_column_for_dtype
+        normalized = ColumnBase._normalize_plc_column_for_dtype(col, None)
         # Wrap buffers first so that dtypes are compatible with dtype_from_pylibcudf_column
-        wrapped = ColumnBase._wrap_buffers(col)
+        wrapped = ColumnBase._wrap_buffers(normalized)
         dtype = dtype_from_pylibcudf_column(wrapped)
         return ColumnBase.create(wrapped, dtype)
 
@@ -1196,10 +1304,11 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                     plc.Column.from_arrow(dictionary), categories_dtype
                 )
 
-            return result._with_type_metadata(
+            return ColumnBase.create(
+                result.plc_column,
                 CategoricalDtype(
                     categories=categories, ordered=array.type.ordered
-                )
+                ),
             )
         else:
             return cls.create(
@@ -2053,9 +2162,11 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             if cats.has_nulls():
                 cats = cats.dropna()
             dtype = CategoricalDtype(categories=cats, ordered=dtype.ordered)
-        return codes.set_mask(self.mask, self.null_count)._with_type_metadata(
-            dtype
-        )  # type: ignore[return-value]
+        codes_with_mask = codes.set_mask(self.mask, self.null_count)
+        codes_typed = cast(
+            "cudf.core.column.numerical.NumericalColumn", codes_with_mask
+        ).astype(dtype._codes_dtype)
+        return ColumnBase.create(codes_typed.plc_column, dtype)  # type: ignore[return-value]
 
     def as_numerical_column(self, dtype: np.dtype) -> NumericalColumn:
         raise NotImplementedError()
@@ -2450,17 +2561,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         if op in {"any", "all"}:
             return np.dtype(np.bool_)
         return self.dtype
-
-    def _with_type_metadata(self: ColumnBase, dtype: DtypeObj) -> ColumnBase:
-        """
-        Copies type metadata from self onto other, returning a new column.
-        When ``self`` is a nested column, recursively apply this function on
-        the children of ``self``.
-        """
-        # For Arrow dtypes, store them directly in the column's dtype property
-        if isinstance(dtype, pd.ArrowDtype):
-            self._dtype = cudf.dtype(dtype)
-        return self
 
     def _label_encoding(
         self,
@@ -3060,11 +3160,12 @@ def as_column(
             )
             if isinstance(arbitrary.dtype, pd.IntervalDtype):
                 # Wrap StructColumn as IntervalColumn with proper metadata
-                result = result._with_type_metadata(
+                result = ColumnBase.create(
+                    result.plc_column,
                     IntervalDtype(
                         subtype=arbitrary.dtype.subtype,
                         closed=arbitrary.dtype.closed,
-                    )
+                    ),
                 )
             elif (
                 isinstance(arbitrary.dtype, pd.CategoricalDtype)
@@ -3076,11 +3177,12 @@ def as_column(
                 # Store pandas extension dtype directly in the column's dtype property
                 # TODO: Move this to near isinstance(arbitrary.dtype.categories.dtype, pd.IntervalDtype)
                 # check above, for which merge should be working fully with pandas nullable extension dtypes.
-                result = result._with_type_metadata(
+                result = ColumnBase.create(
+                    result.plc_column,
                     CategoricalDtype(
                         categories=arbitrary.dtype.categories,
                         ordered=arbitrary.dtype.ordered,
-                    )
+                    ),
                 )
             return result
         elif is_pandas_nullable_extension_dtype(arbitrary.dtype):
@@ -3108,7 +3210,13 @@ def as_column(
             )
             if cudf.get_option("mode.pandas_compatible"):
                 # Store pandas extension dtype directly in the column's dtype property
-                result = result._with_type_metadata(arbitrary.dtype)
+                if (
+                    is_pandas_nullable_extension_dtype(arbitrary.dtype)
+                    and isinstance(result.dtype, np.dtype)
+                    and result.dtype.kind == "f"
+                ):
+                    result = result.nans_to_nulls()
+                result = ColumnBase.create(result.plc_column, arbitrary.dtype)
             return result
         elif isinstance(
             arbitrary.dtype, pd.api.extensions.ExtensionDtype
