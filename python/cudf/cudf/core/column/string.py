@@ -96,7 +96,6 @@ class StringColumn(ColumnBase, Scannable):
         "__truediv__",
         "__floordiv__",
     }
-    _VALID_PLC_TYPES = {plc.TypeId.STRING}
     _VALID_SCANS = {
         "cummin",
         "cummax",

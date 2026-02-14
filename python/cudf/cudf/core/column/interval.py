@@ -25,8 +25,6 @@ if TYPE_CHECKING:
 
 
 class IntervalColumn(ColumnBase):
-    _VALID_PLC_TYPES = {plc.TypeId.STRUCT}
-
     @classmethod
     def from_arrow(cls, array: pa.Array | pa.ChunkedArray) -> Self:
         if not isinstance(array, pa.ExtensionArray):

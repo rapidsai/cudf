@@ -86,17 +86,6 @@ class CategoricalColumn(ColumnBase):
         "__gt__",
         "__ge__",
     }
-    # TODO: See if we can narrow these integer types
-    _VALID_PLC_TYPES = {
-        plc.TypeId.INT8,
-        plc.TypeId.INT16,
-        plc.TypeId.INT32,
-        plc.TypeId.INT64,
-        plc.TypeId.UINT8,
-        plc.TypeId.UINT16,
-        plc.TypeId.UINT32,
-        plc.TypeId.UINT64,
-    }
 
     def __contains__(self, item: ScalarLike) -> bool:
         try:

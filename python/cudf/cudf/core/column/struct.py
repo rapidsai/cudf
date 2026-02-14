@@ -7,8 +7,6 @@ from typing import TYPE_CHECKING, Any
 import pandas as pd
 import pyarrow as pa
 
-import pylibcudf as plc
-
 import cudf
 from cudf.core.column.column import ColumnBase
 from cudf.core.dtypes import StructDtype
@@ -25,7 +23,8 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
     from typing import Self
 
-    from cudf._typing import DtypeObj
+    import pylibcudf as plc
+
     from cudf.core.column.string import StringColumn
 
 
@@ -46,8 +45,6 @@ class StructColumn(ColumnBase):
     Every column has n children, where n is
     the number of fields in the Struct Dtype.
     """
-
-    _VALID_PLC_TYPES = {plc.TypeId.STRUCT}
 
     def _get_sliced_child(self, idx: int) -> ColumnBase:
         """

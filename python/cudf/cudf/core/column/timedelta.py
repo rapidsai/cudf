@@ -77,12 +77,6 @@ class TimeDeltaColumn(TemporalBaseColumn):
         "__rtruediv__",
         "__rfloordiv__",
     }
-    _VALID_PLC_TYPES = {
-        plc.TypeId.DURATION_SECONDS,
-        plc.TypeId.DURATION_MILLISECONDS,
-        plc.TypeId.DURATION_MICROSECONDS,
-        plc.TypeId.DURATION_NANOSECONDS,
-    }
 
     def _reduce(
         self,

@@ -187,12 +187,6 @@ class DatetimeColumn(TemporalBaseColumn):
         "__radd__",
         "__rsub__",
     }
-    _VALID_PLC_TYPES = {
-        plc.TypeId.TIMESTAMP_SECONDS,
-        plc.TypeId.TIMESTAMP_MILLISECONDS,
-        plc.TypeId.TIMESTAMP_MICROSECONDS,
-        plc.TypeId.TIMESTAMP_NANOSECONDS,
-    }
 
     def _reduce(
         self,

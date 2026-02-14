@@ -34,7 +34,6 @@ if TYPE_CHECKING:
 
 class ListColumn(ColumnBase):
     _VALID_BINARY_OPERATIONS = {"__add__", "__radd__", "__eq__", "__ne__"}
-    _VALID_PLC_TYPES = {plc.TypeId.LIST}
 
     def _get_sliced_child(self) -> ColumnBase:
         """Get a child column properly sliced to match the parent's view."""

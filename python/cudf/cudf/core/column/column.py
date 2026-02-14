@@ -608,7 +608,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         "min",
         "max",
     }
-    _VALID_PLC_TYPES: ClassVar[set[plc.TypeId]] = set()
     plc_column: plc.Column
     _dtype: DtypeObj
     _distinct_count: dict[bool, int]
