@@ -200,10 +200,6 @@ def _wrap_and_validate(
         )
         type_id = new_dtype.id()
     elif isinstance(dispatch_dtype, CategoricalDtype):
-        codes_dtype = dtype_to_pylibcudf_type(dispatch_dtype._codes_dtype)
-        if col.type() != codes_dtype:
-            col = plc.unary.cast(col, codes_dtype)
-            type_id = col.type().id()
         return _wrap_column(col), dispatch_dtype
 
     if type_id == plc.TypeId.INT8 and col.null_count() == col.size():
@@ -1246,12 +1242,18 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                     plc.Column.from_arrow(dictionary), categories_dtype
                 )
 
-            return ColumnBase.create(
-                result.plc_column,
-                CategoricalDtype(
-                    categories=categories, ordered=array.type.ordered
-                ),
+            categorical_dtype = CategoricalDtype(
+                categories=categories, ordered=array.type.ordered
             )
+            expected_codes_dtype = dtype_to_pylibcudf_type(
+                categorical_dtype._codes_dtype
+            )
+            codes_plc_column = result.plc_column
+            if codes_plc_column.type() != expected_codes_dtype:
+                codes_plc_column = plc.unary.cast(
+                    codes_plc_column, expected_codes_dtype
+                )
+            return ColumnBase.create(codes_plc_column, categorical_dtype)
         else:
             return cls.create(
                 plc.Column.from_arrow(array),
