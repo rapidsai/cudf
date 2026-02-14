@@ -188,8 +188,8 @@ def _wrap_and_validate(
     type_id = col.type().id()
 
     if type_id == plc.TypeId.TIMESTAMP_DAYS:
-        col = plc.unary.cast(col, plc.DataType(plc.TypeId.TIMESTAMP_SECONDS))
-        type_id = col.type().id()
+        type_id = plc.TypeId.TIMESTAMP_SECONDS
+        col = plc.unary.cast(col, plc.DataType(type_id))
     elif type_id == plc.TypeId.EMPTY:
         if isinstance(dispatch_dtype, CategoricalDtype):
             new_dtype = dtype_to_pylibcudf_type(dispatch_dtype._codes_dtype)
@@ -198,7 +198,7 @@ def _wrap_and_validate(
         col = plc.column_factories.make_numeric_column(
             new_dtype, col.size(), plc.types.MaskState.ALL_NULL
         )
-        type_id = col.type().id()
+        type_id = new_dtype.id()
     elif isinstance(dispatch_dtype, CategoricalDtype):
         codes_dtype = dtype_to_pylibcudf_type(dispatch_dtype._codes_dtype)
         if col.type() != codes_dtype:
@@ -238,15 +238,14 @@ def _wrap_and_validate(
         assert interval_subtype is not None
         interval_type = dtype_to_pylibcudf_type(interval_subtype)
         wrapped_children = []
-        for i, child in enumerate(col.children()):
+        for side, child in zip(("Left", "Right"), col.children(), strict=True):
             try:
                 if child.type() != interval_type:
                     child = plc.unary.cast(child, interval_type)
                 wrapped_child, _ = _wrap_and_validate(child, interval_subtype)
             except ValueError as e:
-                bound = "Right" if i else "Left"
                 raise ValueError(
-                    f"{bound} interval bound validation failed: {e}"
+                    f"{side} interval bound validation failed: {e}"
                 ) from e
             wrapped_children.append(wrapped_child)
         wrapped = _make_wrapped(
