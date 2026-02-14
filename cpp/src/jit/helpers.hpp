@@ -21,16 +21,13 @@
 namespace cudf {
 namespace jit {
 
-namespace deprecated {
+[[deprecated("Use scalar_column_view instead")]] bool is_scalar(cudf::size_type base_column_size,
+                                                                cudf::size_type column_size);
 
-bool is_scalar(cudf::size_type base_column_size, cudf::size_type column_size);
+[[deprecated("Use get_projection_size instead")]] typename std::vector<column_view>::const_iterator
+get_transform_base_column(std::vector<column_view> const& inputs);
 
-typename std::vector<column_view>::const_iterator get_transform_base_column(
-  std::vector<column_view> const& inputs);
-
-};  // namespace deprecated
-
-size_type get_transform_major_size(
+size_type get_projection_size(
   std::span<std::variant<column_view, scalar_column_view> const> inputs);
 
 struct input_reflection {

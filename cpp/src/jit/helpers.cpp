@@ -8,12 +8,12 @@
 namespace cudf {
 namespace jit {
 
-bool deprecated::is_scalar(cudf::size_type base_column_size, cudf::size_type column_size)
+bool is_scalar(cudf::size_type base_column_size, cudf::size_type column_size)
 {
   return column_size == 1 && column_size != base_column_size;
 }
 
-typename std::vector<column_view>::const_iterator deprecated::get_transform_base_column(
+typename std::vector<column_view>::const_iterator get_transform_base_column(
   std::vector<column_view> const& inputs)
 {
   if (inputs.empty()) { return inputs.end(); }
@@ -30,19 +30,18 @@ typename std::vector<column_view>::const_iterator deprecated::get_transform_base
   return largest;
 }
 
-size_type get_major_size(column_view const& col) { return col.size(); }
+size_type get_projection_size(column_view const& col) { return col.size(); }
 
 /// @brief Scalar columns don't contribute to the row-size of a transform.
-size_type get_major_size(scalar_column_view const& col) { return 0; }
+size_type get_projection_size(scalar_column_view const& col) { return 0; }
 
-size_type get_transform_major_size(
-  std::span<std::variant<column_view, scalar_column_view> const> inputs)
+size_type get_projection_size(std::span<std::variant<column_view, scalar_column_view> const> inputs)
 {
   CUDF_EXPECTS(
     !inputs.empty(), "Transform must have at least 1 input column", std::invalid_argument);
 
   auto get_size = [](auto const& var) {
-    return std::visit([](auto& a) { return get_major_size(a); }, var);
+    return std::visit([](auto& a) { return get_projection_size(a); }, var);
   };
 
   return *std::max_element(thrust::make_transform_iterator(inputs.begin(), get_size),

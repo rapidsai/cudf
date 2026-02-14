@@ -402,7 +402,7 @@ std::unique_ptr<column> string_view_operation(size_type row_size,
 
 void check_row_size(std::optional<size_type> in_row_size, InputsView inputs)
 {
-  auto row_size = in_row_size.value_or(cudf::jit::get_transform_major_size(inputs));
+  auto row_size = in_row_size.value_or(cudf::jit::get_projection_size(inputs));
 
   if (!in_row_size.has_value()) {
     CUDF_EXPECTS(
@@ -472,7 +472,7 @@ std::unique_ptr<column> transform(InputsView inputs,
 
   transformation::jit::perform_checks(in_row_size, output_type, inputs);
 
-  auto row_size = in_row_size.value_or(cudf::jit::get_transform_major_size(inputs));
+  auto row_size = in_row_size.value_or(cudf::jit::get_projection_size(inputs));
 
   if (is_fixed_width(output_type)) {
     return transformation::jit::transform_operation(row_size,
@@ -503,7 +503,7 @@ std::unique_ptr<column> transform(InputsView inputs,
 
 }  // namespace detail
 
-std::unique_ptr<column> transform_ex(
+std::unique_ptr<column> transform_extended(
   std::vector<std::variant<column_view, scalar_column_view>> const& inputs,
   std::string const& udf,
   data_type output_type,
@@ -533,9 +533,9 @@ std::unique_ptr<column> transform(std::vector<column_view> const& columns,
   CUDF_FUNC_RANGE();
   // legacy behavior was to detect which column were scalars based on their sizes
   std::vector<std::variant<column_view, scalar_column_view>> inputs;
-  auto base_column = jit::deprecated::get_transform_base_column(columns);
+  auto base_column = jit::get_transform_base_column(columns);
   for (auto const& col : columns) {
-    if (jit::deprecated::is_scalar(base_column->size(), col.size())) {
+    if (jit::is_scalar(base_column->size(), col.size())) {
       inputs.emplace_back(scalar_column_view{col});
     } else {
       inputs.emplace_back(col);
@@ -563,16 +563,16 @@ std::unique_ptr<column> compute_column_jit(table_view const& table,
   auto args = cudf::detail::row_ir::ast_converter::compute_column(
     cudf::detail::row_ir::target::CUDA, expr, ast_args, stream, mr);
 
-  return cudf::transform_ex(args.inputs,
-                            args.udf,
-                            args.output_type,
-                            args.is_ptx,
-                            args.user_data,
-                            args.is_null_aware,
-                            args.row_size,
-                            args.null_policy,
-                            stream,
-                            mr);
+  return cudf::transform_extended(args.inputs,
+                                  args.udf,
+                                  args.output_type,
+                                  args.is_ptx,
+                                  args.user_data,
+                                  args.is_null_aware,
+                                  args.row_size,
+                                  args.null_policy,
+                                  stream,
+                                  mr);
 }
 
 }  // namespace cudf

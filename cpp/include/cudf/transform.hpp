@@ -55,7 +55,7 @@ namespace CUDF_EXPORT cudf {
  * @return              The column resulting from applying the transform function to
  *                      every element of the input
  */
-[[deprecated("Use transform_ex instead")]] std::unique_ptr<column> transform(
+[[deprecated("Use transform_extended instead")]] std::unique_ptr<column> transform(
   std::vector<column_view> const& inputs,
   std::string const& transform_udf,
   data_type output_type,
@@ -100,7 +100,7 @@ namespace CUDF_EXPORT cudf {
  * @return              The column resulting from applying the transform function to
  *                      every element of the input
  */
-std::unique_ptr<column> transform_ex(
+std::unique_ptr<column> transform_extended(
   std::vector<std::variant<column_view, scalar_column_view>> const& inputs,
   std::string const& udf,
   data_type output_type,

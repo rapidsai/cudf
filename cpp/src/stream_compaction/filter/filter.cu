@@ -42,16 +42,16 @@ std::vector<std::unique_ptr<column>> filter(
                "All columns to filter must have the same number of rows.",
                std::invalid_argument);
 
-  auto predicate = cudf::transform_ex(predicate_inputs,
-                                      predicate_udf,
-                                      data_type{type_id::BOOL8},
-                                      is_ptx,
-                                      user_data,
-                                      is_null_aware,
-                                      row_size,
-                                      predicate_nullability,
-                                      stream,
-                                      mr);
+  auto predicate = cudf::transform_extended(predicate_inputs,
+                                            predicate_udf,
+                                            data_type{type_id::BOOL8},
+                                            is_ptx,
+                                            user_data,
+                                            is_null_aware,
+                                            row_size,
+                                            predicate_nullability,
+                                            stream,
+                                            mr);
 
   return apply_boolean_mask(cudf::table_view{filter_columns}, predicate->view(), stream, mr)
     ->release();
@@ -80,7 +80,7 @@ std::unique_ptr<table> filter(table_view const& predicate_table,
                                                       mr));
 }
 
-std::vector<std::unique_ptr<column>> filter_ex(
+std::vector<std::unique_ptr<column>> filter_extended(
   std::vector<std::variant<column_view, scalar_column_view>> const& predicate_inputs,
   std::string const& predicate_udf,
   std::vector<column_view> const& filter_columns,
@@ -115,9 +115,9 @@ std::vector<std::unique_ptr<column>> filter(std::vector<column_view> const& pred
 {
   // legacy behavior was to detect which column were scalars based on their sizes
   std::vector<std::variant<column_view, scalar_column_view>> inputs;
-  auto base_column = jit::deprecated::get_transform_base_column(predicate_columns);
+  auto base_column = jit::get_transform_base_column(predicate_columns);
   for (auto const& col : predicate_columns) {
-    if (jit::deprecated::is_scalar(base_column->size(), col.size())) {
+    if (jit::is_scalar(base_column->size(), col.size())) {
       inputs.emplace_back(scalar_column_view{col});
     } else {
       inputs.emplace_back(col);

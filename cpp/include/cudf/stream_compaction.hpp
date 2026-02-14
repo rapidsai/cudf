@@ -376,7 +376,7 @@ std::unique_ptr<table> stable_distinct(
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return The filtered target columns
  */
-[[deprecated("Use filter_ex instead")]] std::vector<std::unique_ptr<column>> filter(
+[[deprecated("Use filter_extended instead")]] std::vector<std::unique_ptr<column>> filter(
   std::vector<column_view> const& predicate_columns,
   std::string const& predicate_udf,
   std::vector<column_view> const& filter_columns,
@@ -421,7 +421,7 @@ std::unique_ptr<table> stable_distinct(
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return The filtered target columns
  */
-std::vector<std::unique_ptr<column>> filter_ex(
+std::vector<std::unique_ptr<column>> filter_extended(
   std::vector<std::variant<column_view, scalar_column_view>> const& predicate_inputs,
   std::string const& predicate_udf,
   std::vector<column_view> const& filter_columns,

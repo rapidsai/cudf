@@ -295,14 +295,14 @@ return;
 
   EXPECT_EQ(transform_args.udf, expected_udf);
 
-  auto result = cudf::transform_ex(transform_args.inputs,
-                                   transform_args.udf,
-                                   transform_args.output_type,
-                                   transform_args.is_ptx,
-                                   transform_args.user_data,
-                                   transform_args.is_null_aware,
-                                   transform_args.row_size,
-                                   transform_args.null_policy);
+  auto result = cudf::transform_extended(transform_args.inputs,
+                                         transform_args.udf,
+                                         transform_args.output_type,
+                                         transform_args.is_ptx,
+                                         transform_args.user_data,
+                                         transform_args.is_null_aware,
+                                         transform_args.row_size,
+                                         transform_args.null_policy);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
