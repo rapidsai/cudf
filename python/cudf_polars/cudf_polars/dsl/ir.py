@@ -394,33 +394,6 @@ def _cast_literals_to_physical_types(
     return node
 
 
-def _align_parquet_schema(df: DataFrame, schema: Schema) -> DataFrame:
-    # TODO: Alternatively set the schema of the parquet reader to decimal128
-    cast_list = []
-
-    for name, col in df.column_map.items():
-        src = col.obj.type()
-        dst = schema[name].plc_type
-
-        if (
-            plc.traits.is_fixed_point(src)
-            and plc.traits.is_fixed_point(dst)
-            and ((src.id() != dst.id()) or (src.scale() != dst.scale()))
-        ):
-            cast_list.append(
-                Column(
-                    plc.unary.cast(col.obj, dst, stream=df.stream),
-                    name=name,
-                    dtype=schema[name],
-                )
-            )
-
-    if cast_list:
-        df = df.with_columns(cast_list, stream=df.stream)
-
-    return df
-
-
 class Scan(IR):
     """Input from files."""
 
@@ -815,9 +788,12 @@ class Scan(IR):
                     ),
                     stream=stream,
                 )
-            parquet_reader_options = plc.io.parquet.ParquetReaderOptions.builder(
-                plc.io.SourceInfo(paths)
-            ).build()
+            parquet_reader_options = (
+                plc.io.parquet.ParquetReaderOptions.builder(plc.io.SourceInfo(paths))
+                .decimal_type(plc.types.DataType(plc.types.TypeId.DECIMAL128))
+                .build()
+            )
+
             if with_columns is not None:
                 parquet_reader_options.set_column_names(with_columns)
             if filters is not None:
@@ -851,7 +827,6 @@ class Scan(IR):
                     dtypes=[schema[name] for name in names],
                     stream=stream,
                 )
-                df = _align_parquet_schema(df, schema)
                 if include_file_paths is not None:
                     df = Scan.add_file_paths(
                         include_file_paths, paths, chunk.num_rows_per_source, df
@@ -868,7 +843,6 @@ class Scan(IR):
                     [schema[name] for name in col_names],
                     stream=stream,
                 )
-                df = _align_parquet_schema(df, schema)
                 if include_file_paths is not None:
                     df = Scan.add_file_paths(
                         include_file_paths, paths, tbl_w_meta.num_rows_per_source, df

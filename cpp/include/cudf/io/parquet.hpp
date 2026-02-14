@@ -99,6 +99,8 @@ class parquet_reader_options {
   bool _ignore_missing_columns = true;
   // Cast timestamp columns to a specific type
   data_type _timestamp_type{type_id::EMPTY};
+  // Cast decimal columns to a specific type
+  data_type _decimal_type{type_id::EMPTY};
   // Whether to use JIT compilation for filtering
   bool _use_jit_filter = false;
 
@@ -268,6 +270,13 @@ class parquet_reader_options {
    * @return Timestamp type used to cast timestamp columns
    */
   [[nodiscard]] data_type get_timestamp_type() const { return _timestamp_type; }
+
+  /**
+   * @brief Returns decimal type used to cast decimal columns.
+   *
+   * @return Decimal type used to cast decimal columns
+   */
+  [[nodiscard]] data_type get_decimal_type() const { return _decimal_type; }
 
   /**
    * @brief Returns whether to use JIT compilation for filtering.
@@ -493,6 +502,13 @@ class parquet_reader_options {
    * @param type The timestamp data_type to which all timestamp columns need to be cast
    */
   void set_timestamp_type(data_type type) { _timestamp_type = type; }
+
+  /**
+   * @brief Sets decimal_type used to cast decimal columns.
+   *
+   * @param type The decimal data_type to which all decimal columns need to be cast
+   */
+  void set_decimal_type(data_type type) { _decimal_type = type; }
 };
 
 /**
@@ -713,6 +729,18 @@ class parquet_reader_options_builder {
   parquet_reader_options_builder& timestamp_type(data_type type)
   {
     options._timestamp_type = type;
+    return *this;
+  }
+
+  /**
+   * @brief decimal_type used to cast decimal columns.
+   *
+   * @param type The decimal data_type to which all decimal columns need to be cast
+   * @return this for chaining
+   */
+  parquet_reader_options_builder& decimal_type(data_type type)
+  {
+    options._decimal_type = type;
     return *this;
   }
 

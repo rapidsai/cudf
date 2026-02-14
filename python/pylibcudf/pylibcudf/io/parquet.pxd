@@ -66,6 +66,7 @@ cdef class ParquetReaderOptionsBuilder:
     cpdef ParquetReaderOptionsBuilder column_names(self, list col_names)
     cpdef ParquetReaderOptionsBuilder column_indices(self, list col_indices)
     cpdef ParquetReaderOptionsBuilder use_jit_filter(self, bool use_jit_filter)
+    cpdef ParquetReaderOptionsBuilder decimal_type(self, DataType type)
     cpdef build(self)
 
 

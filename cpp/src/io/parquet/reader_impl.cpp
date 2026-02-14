@@ -17,6 +17,7 @@
 #include <cudf/null_mask.hpp>
 #include <cudf/stream_compaction.hpp>
 #include <cudf/strings/detail/utilities.hpp>
+#include <cudf/unary.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <cuda/std/tuple>
@@ -509,6 +510,7 @@ reader_impl::reader_impl(std::size_t chunk_read_limit,
   : _stream{std::move(stream)},
     _mr{std::move(mr)},
     _options{options.get_timestamp_type(),
+             options.get_decimal_type(),
              options.get_skip_rows(),
              options.get_num_rows(),
              options.get_skip_bytes(),
@@ -562,7 +564,8 @@ reader_impl::reader_impl(std::size_t chunk_read_limit,
                               options.is_enabled_use_pandas_metadata(),
                               _strings_to_categorical,
                               options.is_enabled_ignore_missing_columns(),
-                              _options.timestamp_type.id());
+                              _options.timestamp_type.id(),
+                              _options.decimal_type.id());
 
   // Save the states of the output buffers for reuse in `chunk_read()`.
   std::transform(
@@ -858,6 +861,20 @@ table_with_metadata reader_impl::finalize_output(read_mode mode,
       out_columns.emplace_back(io::detail::empty_like(_output_buffers[i], &col_name, _stream, _mr));
     } else {
       out_columns.emplace_back(io::detail::empty_like(_output_buffers[i], nullptr, _stream, _mr));
+    }
+  }
+
+  // Apply decimal type casting if specified
+  if (_options.decimal_type.id() != type_id::EMPTY) {
+    for (size_t i = 0; i < out_columns.size(); ++i) {
+      auto const& col_type = out_columns[i]->type();
+      if (col_type.id() == type_id::DECIMAL32 || col_type.id() == type_id::DECIMAL64 ||
+          col_type.id() == type_id::DECIMAL128) {
+        if (col_type.id() != _options.decimal_type.id()) {
+          auto target_type = cudf::data_type{_options.decimal_type.id(), col_type.scale()};
+          out_columns[i]   = cudf::cast(out_columns[i]->view(), target_type, _stream, _mr);
+        }
+      }
     }
   }
 
