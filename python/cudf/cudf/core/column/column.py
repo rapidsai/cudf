@@ -200,9 +200,6 @@ def _wrap_and_validate(
         )
         type_id = new_dtype.id()
 
-    if type_id == plc.TypeId.INT8 and col.null_count() == col.size():
-        return _wrap_column(col), dispatch_dtype
-
     dtype_kind = dispatch_dtype.kind
 
     valid_types: set[plc.TypeId] = set()
