@@ -429,6 +429,11 @@ class IndexedFrame(Frame):
                 index.names = index_names
             else:
                 index.name = index_names[0]
+            # Retain DatetimeIndex freq if it is still valid
+            if isinstance(self.index, cudf.DatetimeIndex) and isinstance(
+                index, cudf.DatetimeIndex
+            ):
+                index._freq = index._check_freq(self.index._freq)
 
         data = dict(zip(column_names, data_columns, strict=True))
         return type(self)._from_data(data, index, attrs=self.attrs)
@@ -5525,6 +5530,8 @@ class IndexedFrame(Frame):
                 index.names = self.index.names
             else:
                 index.name = self.index.name
+                if isinstance(self.index, cudf.DatetimeIndex):
+                    index._freq = index._check_freq(self.index._freq)
         else:
             index = None
 

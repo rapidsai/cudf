@@ -3630,6 +3630,7 @@ class DatetimeIndex(Index):
         column_names: Iterable[str] | None = None,
     ):
         result = super()._from_columns_like_self(columns, column_names)
+        result._freq = result._check_freq(self._freq)
         return result
 
     @classmethod
@@ -3837,6 +3838,35 @@ class DatetimeIndex(Index):
     @freq.setter
     def freq(self) -> None:
         raise NotImplementedError("Setting freq is currently not supported.")
+
+    def _check_freq(self, freq):
+        """Return freq if it is consistent with the underlying data, else None.
+
+        This is used after operations like gather, boolean mask, and
+        explode to retain the frequency when the resulting data still
+        conforms to the original frequency (e.g. head/tail on sorted
+        data), while clearing it when it does not (e.g. sort_values
+        on unsorted data).
+        """
+        freq = _validate_freq(freq)
+        if freq is None or len(self) < 2:
+            return freq
+        unique_vals = self.to_series().diff().unique()
+        if freq == cudf.DateOffset(months=1):
+            possible = pd.Series(list(self.MONTHLY_PERIODS | {pd.NaT}))
+            if unique_vals.isin(possible).sum() != len(unique_vals):
+                return None
+        elif freq == cudf.DateOffset(years=1):
+            possible = pd.Series(list(self.YEARLY_PERIODS | {pd.NaT}))
+            if unique_vals.isin(possible).sum() != len(unique_vals):
+                return None
+        else:
+            if len(unique_vals) > 2 or (
+                len(unique_vals) == 2
+                and unique_vals[1] != freq._maybe_as_fast_pandas_offset()
+            ):
+                return None
+        return freq
 
     @property
     def freqstr(self) -> str:
