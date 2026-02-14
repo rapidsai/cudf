@@ -391,15 +391,12 @@ class StringColumn(ColumnBase, Scannable):
         Return col with *to_replace* replaced with *value*
         """
 
-        to_replace_col = as_column(to_replace)
-        replacement_col = as_column(replacement)
-
-        if type(to_replace_col) is not type(replacement_col):
-            raise TypeError(
-                f"to_replace and value should be of same types,"
-                f"got to_replace dtype: {to_replace_col.dtype} and "
-                f"value dtype: {replacement_col.dtype}"
+        to_replace_col, replacement_col = (
+            ColumnBase._prepare_find_and_replace_columns(
+                to_replace,
+                replacement,
             )
+        )
 
         if (
             to_replace_col.dtype != self.dtype
@@ -411,17 +408,9 @@ class StringColumn(ColumnBase, Scannable):
         # This replicates pandas' behavior when to_replace has duplicates:
         # pandas processes replacements sequentially, so the last occurrence wins.
         # For example, df.replace([1, 2, 1], [10, 20, 30]) replaces 1→30 (not 1→10).
-        with to_replace_col.access(mode="read", scope="internal"):
-            with replacement_col.access(mode="read", scope="internal"):
-                old_plc, new_plc = plc.stream_compaction.stable_distinct(
-                    plc.Table(
-                        [to_replace_col.plc_column, replacement_col.plc_column]
-                    ),
-                    keys=[0],  # Deduplicate by first column (old values)
-                    keep=plc.stream_compaction.DuplicateKeepOption.KEEP_LAST,
-                    nulls_equal=plc.types.NullEquality.EQUAL,
-                    nans_equal=plc.types.NanEquality.ALL_EQUAL,
-                ).columns()
+        old_plc, new_plc = ColumnBase._dedupe_find_and_replace_mapping(
+            to_replace_col, replacement_col
+        )
 
         # Handle null replacement separately if there's a null in old values
         res = self
