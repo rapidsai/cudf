@@ -39,7 +39,7 @@ test_fill_null_series_limit_as_none[cudf] or \
 test_to_datetime_infer_fmt or \
 test_to_datetime or \
 test_to_datetime_series or \
-test_to_datetime_series_infer_fmt \
+test_to_datetime_series_infer_fmt or \
 test_cast_datetime_tz_aware[cudf] \
 "
 
