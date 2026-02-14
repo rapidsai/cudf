@@ -86,33 +86,6 @@ class CategoricalColumn(ColumnBase):
         "__gt__",
         "__ge__",
     }
-    # TODO: See if we can narrow these integer types
-    _VALID_PLC_TYPES = {
-        plc.TypeId.INT8,
-        plc.TypeId.INT16,
-        plc.TypeId.INT32,
-        plc.TypeId.INT64,
-        plc.TypeId.UINT8,
-        plc.TypeId.UINT16,
-        plc.TypeId.UINT32,
-        plc.TypeId.UINT64,
-    }
-
-    @staticmethod
-    def _validate_dtype_to_plc_column(
-        plc_column: plc.Column, dtype: DtypeObj
-    ) -> None:
-        """Validate that the dtype matches the equivalent type of the plc_column"""
-        return None
-
-    @classmethod
-    def _validate_args(
-        cls, plc_column: plc.Column, dtype: DtypeObj
-    ) -> tuple[plc.Column, DtypeObj]:
-        plc_column, dtype = super()._validate_args(plc_column, dtype)
-        if not isinstance(dtype, CategoricalDtype):
-            raise ValueError(f"{dtype=} must be a CategoricalDtype instance")
-        return plc_column, dtype
 
     def __contains__(self, item: ScalarLike) -> bool:
         try:
@@ -138,8 +111,11 @@ class CategoricalColumn(ColumnBase):
         This is a NumericalColumn wrapping self.plc_column, which is necessary because
         many operations on categoricals need to delegate to the codes column.
         """
-        return cudf.core.column.NumericalColumn._from_preprocessed(
-            self.plc_column, self.dtype._codes_dtype
+        return cast(
+            "NumericalColumn",
+            cudf.core.column.NumericalColumn.create(
+                self.plc_column, self.dtype._codes_dtype, validate=False
+            ),
         )
 
     @property

@@ -31,6 +31,7 @@ python -c "import narwhals; print(narwhals.show_versions())"
 # test_to_numpy[cudf]: Passes as of https://github.com/rapidsai/cudf/pull/19923
 # test_fill_null_strategies_with_limit_as_none[cudf]: Narwhals passes inplace=None instead of a bool
 # test_fill_null_series_limit_as_none[cudf]: Narwhals passes inplace=None instead of a bool
+# tests/expr_and_series/cast_test.py::test_cast_datetime_tz_aware[cudf]: Passes as of https://github.com/rapidsai/cudf/pull/21451
 TESTS_THAT_NEED_NARWHALS_FIX_FOR_CUDF=" \
 test_to_numpy[cudf] or \
 test_fill_null_strategies_with_limit_as_none[cudf] or \
@@ -39,6 +40,7 @@ test_to_datetime_infer_fmt or \
 test_to_datetime or \
 test_to_datetime_series or \
 test_to_datetime_series_infer_fmt \
+tests/expr_and_series/cast_test.py::test_cast_datetime_tz_aware[cudf] \
 "
 
 rapids-logger "Run narwhals tests for cuDF"
