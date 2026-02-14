@@ -41,6 +41,13 @@ if TYPE_CHECKING:
 __all__: list[str] = ["Column"]
 
 
+# Float64 has 53-bit significand precision (52 fraction bits + 1 implicit leading bit),
+# giving 15-17 significant decimal digits. Use 17 as upper bound when casting to
+# intermediate decimal to preserve all float64 precision before rounding.
+# https://en.wikipedia.org/wiki/Double-precision_floating-point_format
+_FLOAT64_DECIMAL_PRECISION = 17
+
+
 class Column:
     """An immutable column with sortedness metadata."""
 
@@ -337,6 +344,29 @@ class Column:
             return Column(
                 plc.unary.cast(plc_col, plc_dtype, stream=stream), dtype=dtype
             ).sorted_like(self)
+        elif plc.traits.is_floating_point(
+            self.obj.type()
+        ) and plc.traits.is_fixed_point(plc_dtype):
+            # cudf::cast from float to decimal truncates instead of rounding.
+            # Polars expects rounding, so cast to higher precision decimal first to
+            # preserve float64's significant digits, then round_decimal to target scale.
+            target_scale = -plc_dtype.scale()
+            return Column(
+                plc.round.round_decimal(
+                    plc.unary.cast(
+                        self.obj,
+                        plc.DataType(
+                            plc.TypeId.DECIMAL128,
+                            scale=-max(target_scale, _FLOAT64_DECIMAL_PRECISION),
+                        ),
+                        stream=stream,
+                    ),
+                    decimal_places=target_scale,
+                    round_method=plc.round.RoundingMethod.HALF_EVEN,
+                    stream=stream,
+                ),
+                dtype=dtype,
+            )
         else:
             result = Column(
                 plc.unary.cast(self.obj, plc_dtype, stream=stream), dtype=dtype

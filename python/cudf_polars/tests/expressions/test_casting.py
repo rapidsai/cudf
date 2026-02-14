@@ -2,6 +2,8 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
+from decimal import Decimal
+
 import pytest
 
 import polars as pl
@@ -87,3 +89,14 @@ def test_cast_to_string_unsupported():
     df = pl.LazyFrame({"a": [True]})
     query = df.select(pl.col("a").cast(pl.String()))
     assert_ir_translation_raises(query, NotImplementedError)
+
+
+def test_float_to_decimal_rounding():
+    df = pl.LazyFrame(
+        {
+            "foo": [Decimal("16954168.35")],
+            "bar": [Decimal("436736374.77")],
+        }
+    )
+    q = df.select(pl.col("foo") / pl.col("bar"))
+    assert_gpu_result_equal(q)
