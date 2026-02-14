@@ -23,12 +23,11 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
-#include <cuda/std/iterator>
+#include <cuda/iterator>
 #include <thrust/binary_search.h>
 #include <thrust/execution_policy.h>
 #include <thrust/fill.h>
 #include <thrust/functional.h>
-#include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/reduce.h>
@@ -354,7 +353,7 @@ std::unique_ptr<column> percentile_approx(tdigest_column_view const& input,
                                 detail::size_begin(input) + input.size(),
                                 [] __device__(auto const x) { return x == 0; },
                                 stream) == static_cast<std::size_t>(input.size());
-  auto row_size_iter = thrust::make_constant_iterator(all_empty_rows ? 0 : percentiles.size());
+  auto row_size_iter = cuda::make_constant_iterator(all_empty_rows ? 0 : percentiles.size());
   thrust::exclusive_scan(rmm::exec_policy_nosync(stream),
                          row_size_iter,
                          row_size_iter + input.size() + 1,
