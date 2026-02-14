@@ -123,8 +123,8 @@ CUDF_LTO_MAP(duration_s, cudf::duration_s);
 CUDF_LTO_MAP(duration_ms, cudf::duration_ms);
 CUDF_LTO_MAP(duration_us, cudf::duration_us);
 CUDF_LTO_MAP(duration_ns, cudf::duration_ns);
-CUDF_LTO_MAP(column_device_view_core, cudf::column_device_view_core);
-CUDF_LTO_MAP(mutable_column_device_view_core, cudf::mutable_column_device_view_core);
+CUDF_LTO_MAP(column_view, cudf::column_device_view_core);
+CUDF_LTO_MAP(mutable_column_view, cudf::mutable_column_device_view_core);
 
 #undef CUDF_LTO_MAP
 

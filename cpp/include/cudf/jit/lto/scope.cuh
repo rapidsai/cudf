@@ -21,7 +21,7 @@ template <int ScopeIndex,
           typename T /* = int, float, fixed_point, string_view ... */,
           bool IsScalar,
           bool IsNullable>
-struct column {
+struct [[nodiscard]] column {
   static constexpr bool IS_SCALAR   = IsScalar;
   static constexpr bool IS_NULLABLE = IsNullable;
 
@@ -68,7 +68,7 @@ struct column {
 };
 
 template <int ScopeIndex>
-struct user_data {
+struct [[nodiscard]] user_data {
   using Arg = void* __restrict__;
 
   static __device__ decltype(auto) element(args scope, [[maybe_unused]] size_type i)

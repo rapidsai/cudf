@@ -12,8 +12,8 @@
 #include <cuda_runtime.h>
 
 #include <fcntl.h>
+#include <jit/jit.hpp>
 #include <jit/rtc/cache.hpp>
-#include <jit/rtc/cudf.hpp>
 #include <jit/rtc/rtc.hpp>
 #include <jit/rtc/sha256.hpp>
 #include <jit_embed/cudf_jit_embed/embed.hpp>
@@ -42,13 +42,12 @@
   } while (0)
 
 namespace CUDF_EXPORT cudf {
-namespace rtc {
 
 namespace {
 
-sha256_hash hash_string(std::span<char const> input)
+rtc::sha256_hash hash_string(std::span<char const> input)
 {
-  sha256_context ctx;
+  rtc::sha256_context ctx;
   ctx.update(std::span{reinterpret_cast<uint8_t const*>(input.data()), input.size()});
   return ctx.finalize();
 }
@@ -239,24 +238,26 @@ bundle={})***",
 
   auto compile = [&] {
     auto path  = std::format("{}/{}", get_directory(), "cudf_lto_library.fatbin");
-    auto cubin = blob_t::from_file(path.c_str());
+    auto cubin = rtc::blob_t::from_file(path.c_str());
     CUDF_EXPECTS(cubin.has_value(),
                  +std::format("Failed to load LTO library cubin from disk at ({})", path),
                  std::runtime_error);
-    fragment_t::load_params load_params{.binary = std::make_shared<blob_t>(std::move(*cubin)),
-                                        .type   = binary_type::FATBIN};
-    return fragment_t::load(load_params);
+    rtc::fragment_t::load_params load_params{
+      .binary = std::make_shared<rtc::blob_t>(std::move(*cubin)), .type = rtc::binary_type::FATBIN};
+    return rtc::fragment_t::load(load_params);
   };
 
-  auto fut = cache.query_or_insert_fragment(
-    cache_key_sha256, binary_type::FATBIN, fragment_compile_function_t::from_functor(compile));
+  auto fut =
+    cache.query_or_insert_fragment(cache_key_sha256,
+                                   rtc::binary_type::FATBIN,
+                                   rtc::fragment_compile_function_t::from_functor(compile));
 
   lto_library_ = fut.get();
 }
 
 std::string jit_bundle_t::get_hash() const
 {
-  auto str = sha256_hex_string::make(
+  auto str = rtc::sha256_hex_string::make(
     std::span{cudf_jit_embed_hash.data, static_cast<size_t>(cudf_jit_embed_hash.size)});
   return std::string{str.view()};
 }
@@ -266,7 +267,7 @@ std::string jit_bundle_t::get_directory() const
   return std::format("{}/{}", install_dir_, get_hash());
 }
 
-fragment jit_bundle_t::get_lto_library() const { return lto_library_; }
+rtc::fragment jit_bundle_t::get_lto_library() const { return lto_library_; }
 
 std::vector<std::string> jit_bundle_t::get_include_directories() const
 {
@@ -358,8 +359,6 @@ bundle={})***",
 
   auto cache_key_sha256 = hash_string(cache_key);
 
-  // TODO: add time function in cache
-
   auto compile = [&] {
     auto begin = std::chrono::steady_clock::now();
 
@@ -396,13 +395,13 @@ bundle={})***",
       options_cstr.emplace_back(option.c_str());
     }
 
-    auto params = fragment_t::compile_params{.name        = name,
-                                             .source      = source_code_cstr,
-                                             .headers     = {},
-                                             .options     = options_cstr,
-                                             .target_type = binary_type::LTO_IR};
+    auto params = rtc::fragment_t::compile_params{.name        = name,
+                                                  .source      = source_code_cstr,
+                                                  .headers     = {},
+                                                  .options     = options_cstr,
+                                                  .target_type = rtc::binary_type::LTO_IR};
 
-    auto frag = fragment_t::compile(params);
+    auto frag = rtc::fragment_t::compile(params);
 
     auto end = std::chrono::steady_clock::now();
 
@@ -416,16 +415,18 @@ bundle={})***",
     return frag;
   };
 
-  auto fut = cache.query_or_insert_fragment(
-    cache_key_sha256, binary_type::LTO_IR, fragment_compile_function_t::from_functor(compile));
+  auto fut =
+    cache.query_or_insert_fragment(cache_key_sha256,
+                                   rtc::binary_type::LTO_IR,
+                                   rtc::fragment_compile_function_t::from_functor(compile));
 
   return fut.get();
 }
 
-library compile_and_link_udf(char const* name,
-                             char const* udf_code,
-                             char const* udf_key,
-                             char const* kernel_symbol)
+rtc::library compile_and_link_udf(char const* name,
+                                  char const* udf_code,
+                                  char const* udf_key,
+                                  char const* kernel_symbol)
 {
   CUDF_FUNC_RANGE();
 
@@ -443,7 +444,7 @@ library compile_and_link_udf(char const* name,
     auto fragment = get_or_compile_fragment(name, udf_code, udf_key);
 
     // TODO: sass dump
-    // TODO: time dump
+    // TODO: time trace dump
 
     // TODO: experiment with:
     // optimization flags
@@ -469,25 +470,26 @@ library compile_and_link_udf(char const* name,
       options_cstr.emplace_back(option.c_str());
     }
 
-    blob_view link_fragments[] = {library->get(binary_type::FATBIN)->view(),
-                                  fragment->get(binary_type::LTO_IR)->view()};
+    rtc::blob_view link_fragments[] = {library->get(rtc::binary_type::FATBIN)->view(),
+                                       fragment->get(rtc::binary_type::LTO_IR)->view()};
 
-    binary_type fragment_binary_types[] = {binary_type::FATBIN, binary_type::LTO_IR};
+    rtc::binary_type fragment_binary_types[] = {rtc::binary_type::FATBIN, rtc::binary_type::LTO_IR};
 
     char const* fragment_names[] = {"cudf_lto_library", name};
 
-    auto params = library_t::link_params{.name                  = name,
-                                         .output_type           = binary_type::CUBIN,
-                                         .fragments             = link_fragments,
-                                         .fragment_binary_types = fragment_binary_types,
-                                         .fragment_names        = fragment_names,
-                                         .link_options          = options_cstr};
+    auto params = rtc::library_t::link_params{.name                  = name,
+                                              .output_type           = rtc::binary_type::CUBIN,
+                                              .fragments             = link_fragments,
+                                              .fragment_binary_types = fragment_binary_types,
+                                              .fragment_names        = fragment_names,
+                                              .link_options          = options_cstr};
 
-    auto blob = library_t::link_as_blob(params);
+    auto blob = rtc::library_t::link_as_blob(params);
 
-    auto load_params = library_t::load_params{.binary = blob->view(), .type = binary_type::CUBIN};
+    auto load_params =
+      rtc::library_t::load_params{.binary = blob->view(), .type = rtc::binary_type::CUBIN};
 
-    auto linked_library = library_t::load(load_params);
+    auto linked_library = rtc::library_t::load(load_params);
 
     auto end = std::chrono::steady_clock::now();
 
@@ -514,12 +516,12 @@ arch={})***",
                                        sm);
   auto library_cache_key_sha256 = hash_string(library_cache_key);
 
-  auto library = cache.query_or_insert_library(library_cache_key_sha256,
-                                               binary_type::CUBIN,
-                                               library_compile_function_t::from_functor(compile));
+  auto library =
+    cache.query_or_insert_library(library_cache_key_sha256,
+                                  rtc::binary_type::CUBIN,
+                                  rtc::library_compile_function_t::from_functor(compile));
 
   return library.get();
 }
 
-}  // namespace rtc
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

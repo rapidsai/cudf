@@ -19,8 +19,9 @@ class program_cache;
 
 namespace rtc {
 class cache_t;
-class jit_bundle_t;
 }  // namespace rtc
+
+class jit_bundle_t;
 
 struct [[nodiscard]] context_config {
   bool dump_codegen          = false;
@@ -40,7 +41,7 @@ class context {
   std::once_flag _rtc_cache_init_flag;
   std::unique_ptr<rtc::cache_t> _rtc_cache;
   std::once_flag _jit_bundle_init_flag;
-  std::unique_ptr<rtc::jit_bundle_t> _jit_bundle;
+  std::unique_ptr<jit_bundle_t> _jit_bundle;
 
  private:
   void ensure_nvcomp_loaded();
@@ -63,7 +64,7 @@ class context {
 
   rtc::cache_t& rtc_cache();
 
-  rtc::jit_bundle_t& jit_bundle();
+  jit_bundle_t& jit_bundle();
 
   [[nodiscard]] bool dump_codegen() const;
 

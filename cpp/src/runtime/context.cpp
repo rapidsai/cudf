@@ -8,8 +8,8 @@
 #include "io/comp/nvcomp_adapter.hpp"
 #include "io/utilities/getenv_or.hpp"
 #include "jit/cache.hpp"
+#include "jit/jit.hpp"
 #include "jit/rtc/cache.hpp"
-#include "jit/rtc/cudf.hpp"
 
 #include <cudf/context.hpp>
 #include <cudf/utilities/error.hpp>
@@ -49,7 +49,7 @@ void context::ensure_jit_bundle_initialized()
   std::call_once(_jit_bundle_init_flag, [&]() {
     // make sure the jit bundle directory exists
     std::filesystem::create_directories(_config.jit_bundle_dir);
-    _jit_bundle = std::make_unique<rtc::jit_bundle_t>(_config.jit_bundle_dir, *_rtc_cache);
+    _jit_bundle = std::make_unique<jit_bundle_t>(_config.jit_bundle_dir, *_rtc_cache);
   });
 }
 
@@ -65,7 +65,7 @@ rtc::cache_t& context::rtc_cache()
   return *_rtc_cache;
 }
 
-rtc::jit_bundle_t& context::jit_bundle()
+jit_bundle_t& context::jit_bundle()
 {
   ensure_jit_bundle_initialized();
   return *_jit_bundle;

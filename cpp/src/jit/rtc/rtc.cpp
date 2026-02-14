@@ -284,15 +284,16 @@ blob_t blob_t::from_static_data(std::span<uint8_t const> data)
 fragment fragment_t::load(load_params const& params)
 {
   CUDF_FUNC_RANGE();
-  // TODO: validate parameters
 
   return std::make_shared<fragment_t>(params.binary, params.type);
 }
 
 fragment fragment_t::compile(compile_params const& params)
 {
-  // TODO: check
   CUDF_FUNC_RANGE();
+
+  CUDF_EXPECTS(params.name != nullptr, "Fragment name must not be null", std::logic_error);
+  CUDF_EXPECTS(params.source != nullptr, "Fragment source must not be null", std ::logic_error);
 
   nvrtcProgram program = nullptr;
 
@@ -419,7 +420,6 @@ library_t::~library_t()
 
 library library_t::load(load_params const& params)
 {
-  // TODO: check
   CUDF_FUNC_RANGE();
 
   CUlibrary handle;
@@ -442,6 +442,7 @@ blob library_t::link_as_blob(link_params const& params)
 {
   CUDF_FUNC_RANGE();
 
+  CUDF_EXPECTS(params.name != nullptr, "Link output name must not be null", std::logic_error);
   CUDF_EXPECTS(params.output_type == binary_type::CUBIN || params.output_type == binary_type::PTX,
                "Only CUBIN and PTX output types are supported for linking modules",
                std::logic_error);
@@ -566,4 +567,4 @@ std::string rtc::demangle_cuda_symbol(char const* mangled_name)
   return result;
 }
 
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

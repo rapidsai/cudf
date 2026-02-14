@@ -237,16 +237,14 @@ struct cache_t {
 
   [[nodiscard]] std::string const& get_cache_dir();
 
-  std::shared_future<blob> query_or_insert_blob(sha256_hash const& sha,
-                                                blob_compile_function_t compile);
+  [[nodiscard]] std::shared_future<blob> query_or_insert_blob(sha256_hash const& sha,
+                                                              blob_compile_function_t compile);
 
-  std::shared_future<fragment> query_or_insert_fragment(sha256_hash const& sha,
-                                                        binary_type type,
-                                                        fragment_compile_function_t compile);
+  [[nodiscard]] std::shared_future<fragment> query_or_insert_fragment(
+    sha256_hash const& sha, binary_type type, fragment_compile_function_t compile);
 
-  std::shared_future<library> query_or_insert_library(sha256_hash const& sha,
-                                                      binary_type type,
-                                                      library_compile_function_t compile);
+  [[nodiscard]] std::shared_future<library> query_or_insert_library(
+    sha256_hash const& sha, binary_type type, library_compile_function_t compile);
 
   cache_statistics get_statistics();
 

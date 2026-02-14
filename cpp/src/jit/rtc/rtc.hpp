@@ -5,12 +5,13 @@
  */
 
 #pragma once
+#include <cudf/utilities/export.hpp>
+
 #include <cstdint>
 #include <memory>
 #include <optional>
 #include <span>
 #include <vector>
-#include <cudf/utilities/export.hpp>
 
 extern "C" {
 typedef struct CUlib_st* CUlibrary;
@@ -98,7 +99,7 @@ struct function_ref;
 /// @brief Zero-copy, type-erased reference to a callable entity (e.g. lambda, function pointer)
 /// that can be invoked with the given signature.
 template <typename R, typename... Args>
-struct function_ref<R(Args...)> {
+struct [[nodiscard]] function_ref<R(Args...)> {
  private:
   void* _user_data;
   R (*_thunk)(void*, Args...);
@@ -246,4 +247,4 @@ struct [[nodiscard]] library_t {
 [[nodiscard]] std::string demangle_cuda_symbol(char const* mangled_name);
 
 }  // namespace rtc
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

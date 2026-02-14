@@ -402,8 +402,7 @@ foreach(INC_DIR IN LISTS LIBCUDACXX_RAW_INCLUDE_DIRS)
     INCLUDE_DIRECTORIES CCCL/libcudacxx/${INC_DIR_NAME}
   )
 endforeach()
-# TODO(lamarrr): inspect the generated cubin and make sure it doesn't contain any unneeded symbols.
-# it should be as small as possible
+
 jit_add_options(cudf_jit_embed OPTIONS ${CUDF_JIT_COMPILE_FLAGS})
 jit_add_blob(cudf_jit_embed FILE "$<TARGET_OBJECTS:cudf_lto_library>" DEST cudf_lto_library.fatbin)
 jit_embed(cudf_jit_embed COMPRESSION zstd)
@@ -654,11 +653,11 @@ add_library(
   src/io/utilities/trie.cu
   src/jit/cache.cpp
   src/jit/helpers.cpp
+  src/jit/jit.cpp
   src/jit/parser.cpp
   src/jit/row_ir.cpp
   src/jit/util.cpp
   src/jit/rtc/cache.cpp
-  src/jit/rtc/cudf.cpp
   src/jit/rtc/rtc.cpp
   src/jit/rtc/sha256.cpp
   src/join/conditional_join.cu
@@ -1073,7 +1072,7 @@ target_compile_definitions(cudf PRIVATE THRUST_FORCE_32_BIT_OFFSET_TYPE=1 CCCL_A
 # Compile stringified JIT sources first
 add_dependencies(cudf jitify_preprocess_run)
 
-# Specify the target module library dependencies 
+# Specify the target module library dependencies
 
 # TODO: use runtime nvrtc and nvjitlink and driver
 target_link_libraries(

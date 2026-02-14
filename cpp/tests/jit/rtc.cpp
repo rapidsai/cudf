@@ -9,7 +9,7 @@
 #include <cudf_test/debug_utilities.hpp>
 #include <cudf_test/testing_main.hpp>
 
-#include <jit/rtc/cudf.hpp>
+#include <jit/jit.hpp>
 
 #include <chrono>
 
@@ -17,7 +17,6 @@ using namespace cudf;
 
 struct RTCTest : public ::testing::Test {};
 
-// TODO: use this to document how operators can use the accessors
 /*
 template <int NumInputs,
           int NumOutputs,
@@ -44,25 +43,28 @@ struct element_operation {
 // here?
 //
 // TODO: ??
+// TODO: add time function in cache
 // TODO: take optional pointer/callback to this for it to be written to
 // TODO: take optional list of extra compile flags for linking and compiling
+// TODO: cache hit statistics
+// global cache statistics before and after?
+// TODO: add configuration parameters necessary for testing
+// and profiling cache behaviour
+// TODO: declare getters and setters required for the specific LTO context of the operator
+// they should use the provided LTO functions; might need a planner
+// TODO: bincode dump arguments?
+// TODO: add a bypass cache argument that forces recompilation for testing purposes
+  // TODO: include all headers and disable them based on a macro when not needed for compilation
 struct jit_compile_stats {
   std::chrono::nanoseconds cpp_compile_time{};
   std::chrono::nanoseconds fragment_link_time{};
   std::chrono::nanoseconds total_time{};
-  // TODO: cache hit statistics
-  // global cache statistics before and after?
 };
 
 TEST_F(RTCTest, CreateFragmentBasic) {}
 
 TEST_F(RTCTest, CreateFragment)
 {
-  // TODO: add configuration parameters necessary for testing
-  // and profiling cache behaviour
-  // TODO: declare getters and setters required for the specific LTO context of the operator
-  // they should use the provided LTO functions; might need a planner
-
   auto fn = []() {
     char const udf[] = R"***(
     #include "cudf/jit/lto/transform_params.cuh"
@@ -82,17 +84,17 @@ TEST_F(RTCTest, CreateFragment)
 
       // unpack inputs from scope using the appropriate getters based on the LTO context
       using s0          = scope::user_data<0>;
-      using s1          = scope::column<1, column_view_core, int, false, false>;
-      using s2          = scope::column<2, column_view_core, int, false, false>;
-      using s3          = scope::column<3, column_view_core, double, false, false>;
-      using s4          = scope::column<4, column_view_core, float, false, false>;
+      using s1          = scope::column<1, column_view, int, false, false>;
+      using s2          = scope::column<2, column_view, int, false, false>;
+      using s3          = scope::column<3, column_view, double, false, false>;
+      using s4          = scope::column<4, column_view, float, false, false>;
       using s4          = scope::column<4, string_view, float, false, false>;
       using s4          = scope::column<4, decimal32, float, false, false>;
-      using s4          = scope::column<5, column_view_core, float, false, true>;
-      using s4          = scope::column<6, column_view_core, float, true, false>;
+      using s4          = scope::column<5, column_view, float, false, true>;
+      using s4          = scope::column<6, column_view, float, true, false>;
       using s5          = scope::column<7, span<float>, float, false, false>;
       using s6          = scope::column<8, optional_span<float>, float, false, true>;
-      using s7          = scope::column<9, mutable_column_view_core, double, false, false>;
+      using s7          = scope::column<9, mutable_column_view, double, false, false>;
 
       auto a0 = s0::element(p.scope, p.row_index);
       auto a1 = s1::element(p.scope, p.row_index);
@@ -138,16 +140,14 @@ TEST_F(RTCTest, CreateFragment)
     }
     )***";
 
-    // TODO: bincode dump arguments?
-    // TODO: add a bypass cache argument that forces recompilation for testing purposes
-    auto params = rtc::udf_compile_params{.name                = "test_fragment",
-                                          .udf                 = udf,
-                                          .key                 = "test_udf_key",
-                                          .kernel_symbol       = "transform_kernel",
-                                          .extra_compile_flags = {},
-                                          .extra_link_flags    = {}};
+    auto params = cudf::udf_compile_params{.name                = "test_fragment",
+                                           .udf                 = udf,
+                                           .key                 = "test_udf_key",
+                                           .kernel_symbol       = "transform_kernel",
+                                           .extra_compile_flags = {},
+                                           .extra_link_flags    = {}};
 
-    auto lib = rtc::compile_and_link_cuda_udf(params);
+    auto lib = cudf::compile_and_link_cuda_udf(params);
 
     auto kernel = lib->get_kernel("transform_kernel");
 

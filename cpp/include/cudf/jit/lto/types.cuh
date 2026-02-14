@@ -10,7 +10,8 @@ namespace CUDF_LTO_EXPORT cudf {
 
 namespace lto {
 
-  // TODO: update doc, and specify this is our ABI for JIT code and should be kept different from normal code
+// TODO: update doc, and specify this is our ABI for JIT code and should be kept different from
+// normal code
 /**
  * @brief LTO-JIT functions and thunk types
  *
@@ -161,9 +162,9 @@ struct CUDF_LTO_ALIAS optional;
 
 struct CUDF_LTO_ALIAS string_view;
 
-struct CUDF_LTO_ALIAS column_device_view_core;
+struct CUDF_LTO_ALIAS column_view;
 
-struct CUDF_LTO_ALIAS mutable_column_device_view_core;
+struct CUDF_LTO_ALIAS mutable_column_view;
 
 }  // namespace lto
 }  // namespace CUDF_LTO_EXPORT cudf
