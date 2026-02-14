@@ -102,7 +102,7 @@ if TYPE_CHECKING:
     from cudf.core.column.decimal import DecimalBaseColumn
     from cudf.core.column.interval import IntervalColumn
     from cudf.core.column.numerical import NumericalColumn
-    from cudf.core.column.strings import StringColumn
+    from cudf.core.column.string import StringColumn
     from cudf.core.column.timedelta import TimeDeltaColumn
     from cudf.core.index import Index
 
@@ -974,8 +974,11 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         * null (other types)= str(pd.NA)
         """
         if self.has_nulls():
-            return self.astype(CUDF_STRING_DTYPE).fillna(
-                str(self._PANDAS_NA_VALUE)
+            return cast(
+                "StringColumn",
+                self.astype(CUDF_STRING_DTYPE).fillna(
+                    str(self._PANDAS_NA_VALUE)
+                ),
             )
         return self
 
