@@ -199,14 +199,13 @@ def _wrap_and_validate(
             new_dtype, col.size(), plc.types.MaskState.ALL_NULL
         )
         type_id = new_dtype.id()
-    elif isinstance(dispatch_dtype, CategoricalDtype):
-        return _wrap_column(col), dispatch_dtype
 
     if type_id == plc.TypeId.INT8 and col.null_count() == col.size():
         return _wrap_column(col), dispatch_dtype
 
     dtype_kind = dispatch_dtype.kind
 
+    valid_types: set[plc.TypeId] = set()
     wrapped = None
     if isinstance(dispatch_dtype, ListDtype):
         valid_types = {plc.TypeId.LIST}
@@ -275,6 +274,18 @@ def _wrap_and_validate(
             plc.TypeId.DECIMAL32,
         }
 
+    if isinstance(dispatch_dtype, CategoricalDtype):
+        valid_types = {
+            plc.TypeId.INT8,
+            plc.TypeId.INT16,
+            plc.TypeId.INT32,
+            plc.TypeId.INT64,
+            plc.TypeId.UINT8,
+            plc.TypeId.UINT16,
+            plc.TypeId.UINT32,
+            plc.TypeId.UINT64,
+        }
+
     if dtype_kind == "M":
         valid_types = {
             plc.TypeId.TIMESTAMP_SECONDS,
@@ -311,7 +322,10 @@ def _wrap_and_validate(
             plc.TypeId.FLOAT64,
             plc.TypeId.BOOL8,
         }
-    if dtype_to_pylibcudf_type(dispatch_dtype) != wrapped.type():
+    if (
+        not isinstance(dispatch_dtype, CategoricalDtype)
+        and dtype_to_pylibcudf_type(dispatch_dtype) != wrapped.type()
+    ):
         raise ValueError(
             "dtype "
             f"{dispatch_dtype} does not match the type of the plc_column "
