@@ -364,6 +364,9 @@ struct PageInfo {
 
   // level decode buffers
   uint8_t* lvl_decode_buf[level_type::NUM_LEVEL_TYPES];  // NOLINT
+  // Number of level values actually decoded (may be less than num_input_values when using
+  // skip_rows/num_rows). Kernels must clamp level buffer accesses to this.
+  int32_t num_decoded_level_values{};
 
   // temporary space for decoding DELTA_BYTE_ARRAY encoded strings
   int64_t temp_string_size;
