@@ -231,18 +231,13 @@ def _wrap_and_validate(
             )
         interval_subtype = dispatch_dtype.subtype
         assert interval_subtype is not None
-        interval_type = dtype_to_pylibcudf_type(interval_subtype)
-        wrapped_children = []
-        for side, child in zip(("Left", "Right"), col.children(), strict=True):
-            try:
-                if child.type() != interval_type:
-                    child = plc.unary.cast(child, interval_type)
-                wrapped_child, _ = _wrap_and_validate(child, interval_subtype)
-            except ValueError as e:
-                raise ValueError(
-                    f"{side} interval bound validation failed: {e}"
-                ) from e
-            wrapped_children.append(wrapped_child)
+        wrapped_children = [
+            # Discarding the returned subtype since we assume it cannot have changed
+            _wrap_and_validate(child, interval_subtype)[0]
+            for side, child in zip(
+                ("Left", "Right"), col.children(), strict=True
+            )
+        ]
         wrapped = _make_wrapped(
             col,
             wrapped_children,
