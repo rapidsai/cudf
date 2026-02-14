@@ -20,8 +20,14 @@ enum class init_flags : std::uint32_t {
   LOAD_NVCOMP = 1 << 0,
   /// @brief Initialize the JIT program cache during initialization
   INIT_JIT_CACHE = 1 << 1,
-  /// @brief All initialization steps (default behavior)
-  ALL = LOAD_NVCOMP | INIT_JIT_CACHE
+  /// @brief Initialize the RTC cache during initialization
+  INIT_RTC_CACHE = 1 << 2,
+  /// @brief Initialize the JIT bundle during initialization
+  INIT_JIT_BUNDLE = 1 << 3,
+  /// @brief The default initialization steps performed by `initialize()` if no flags are provided
+  DEFAULT = INIT_JIT_CACHE | INIT_RTC_CACHE | INIT_JIT_BUNDLE,
+  /// @brief All initialization steps
+  ALL = LOAD_NVCOMP | INIT_JIT_CACHE | INIT_RTC_CACHE | INIT_JIT_BUNDLE
 };
 
 /// @brief Bitwise OR operator for init_flags
@@ -68,7 +74,7 @@ constexpr bool has_flag(init_flags flags, init_flags flag) noexcept
 /// @param flags Optional flags to control which initialization steps to perform.
 /// Can be called multiple times to initialize additional components. If all selected
 /// steps are already performed, the call has no effect.
-void initialize(init_flags flags = init_flags::INIT_JIT_CACHE);
+void initialize(init_flags flags = init_flags::DEFAULT);
 
 /// @brief Destroy the cudf global context, resetting it to an uninitialized state. This is
 /// primarily intended for testing purposes, allowing for re-initialization of the context after
