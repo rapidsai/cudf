@@ -729,15 +729,13 @@ class CategoricalColumn(ColumnBase):
         # preprocessing in that function has already been done. That should be
         # improved as the concatenation API is solidified.
 
-        # Find the first non-null column:
-        head = next(
-            (obj for obj in objs if obj.null_count != len(obj)), objs[0]
-        )
-
         # Combine and de-dupe the categories
         cats = concat_columns([o.categories for o in objs]).unique()
         objs = [o._set_categories(cats, is_unique=True) for o in objs]
+        result_dtype = CategoricalDtype(categories=cats)
+        codes_dtype = result_dtype._codes_dtype
         codes = [o.codes for o in objs]
+        expected_plc_dtype = dtype_to_pylibcudf_type(codes_dtype)
 
         newsize = sum(map(len, codes))
         if newsize > np.iinfo(SIZE_TYPE_DTYPE).max:
@@ -745,15 +743,32 @@ class CategoricalColumn(ColumnBase):
                 f"Result of concat cannot have size > {SIZE_TYPE_DTYPE}_MAX"
             )
         elif newsize == 0:
-            codes_col = column_empty(0, head.codes.dtype)
+            codes_col = column_empty(0, codes_dtype)
         else:
+            normalized_codes = []
+            for code in codes:
+                if code.plc_column.type() != expected_plc_dtype:
+                    normalized_codes.append(
+                        cast(
+                            "NumericalColumn",
+                            ColumnBase.create(
+                                plc.unary.cast(
+                                    code.plc_column, expected_plc_dtype
+                                ),
+                                codes_dtype,
+                            ),
+                        )
+                    )
+                else:
+                    normalized_codes.append(code)
+            codes = normalized_codes
             codes_col = concat_columns(codes)
 
         return cast(
             "Self",
             ColumnBase.create(
                 codes_col.plc_column,
-                CategoricalDtype(categories=cats),
+                result_dtype,
             ),
         )
 

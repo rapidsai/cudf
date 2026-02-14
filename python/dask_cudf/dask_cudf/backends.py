@@ -58,7 +58,7 @@ def _nonempty_index(idx):
         return cudf.DatetimeIndex(data, name=idx.name)
     elif isinstance(idx, cudf.CategoricalIndex):
         return cudf.CategoricalIndex.from_codes(
-            [0, 0],
+            np.array([0, 0], dtype=idx.dtype._codes_dtype),
             categories=idx.dtype.categories,
             ordered=idx.dtype.ordered,
             name=idx.name,
@@ -100,7 +100,7 @@ def _get_non_empty_data(
         )
         codes = cudf.core.column.as_column(
             0,
-            dtype=np.dtype(np.uint8),
+            dtype=s.dtype._codes_dtype,
             length=2,
         )
         return cudf.core.column.ColumnBase.create(
