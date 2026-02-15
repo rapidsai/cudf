@@ -4,7 +4,6 @@
 
 from __future__ import annotations
 
-import inspect
 from collections.abc import Callable, Iterable, Iterator
 from contextlib import AbstractContextManager, ExitStack
 from functools import wraps
@@ -90,126 +89,75 @@ def access_columns(
     return stack
 
 
-def _access_object(obj: Any, stack: ExitStack, kwargs: dict[str, Any]) -> Any:
-    access = getattr(obj, "access", None)
-    if access is not None and callable(access):
-        return stack.enter_context(
-            cast(AbstractContextManager[Any], access(**kwargs))
+class PylibcudfFunction:
+    def __init__(
+        self,
+        pylibcudf_function: Callable[..., Any],
+        *,
+        dtype_policy: Callable[[list[Any]], Any],
+        mode: Literal["read", "write"] = "read",
+        scope: Literal["internal", "external"] = "internal",
+    ) -> None:
+        self._pylibcudf_function = pylibcudf_function
+        self._dtype_policy = dtype_policy
+        self._mode = mode
+        self._scope = scope
+
+    def __call__(self, *args: Any, **kwargs: Any) -> Any:
+        from cudf.core.column.column import ColumnBase
+
+        columns = [arg for arg in args if isinstance(arg, ColumnBase)]
+        columns.extend(
+            value for value in kwargs.values() if isinstance(value, ColumnBase)
         )
-    if isinstance(obj, list):
-        return [_access_object(item, stack, kwargs) for item in obj]
-    if isinstance(obj, tuple):
-        return tuple(_access_object(item, stack, kwargs) for item in obj)
-    return obj
+        if columns:
+            with access_columns(
+                *columns, mode=self._mode, scope=self._scope
+            ) as accessed:
+                accessed_iter = iter(accessed)
+                args = tuple(
+                    next(accessed_iter) if isinstance(arg, ColumnBase) else arg
+                    for arg in args
+                )
+                kwargs = {
+                    key: (
+                        next(accessed_iter)
+                        if isinstance(value, ColumnBase)
+                        else value
+                    )
+                    for key, value in kwargs.items()
+                }
+
+        plc_args = tuple(
+            arg.plc_column if isinstance(arg, ColumnBase) else arg
+            for arg in args
+        )
+        plc_kwargs = {
+            key: (value.plc_column if isinstance(value, ColumnBase) else value)
+            for key, value in kwargs.items()
+        }
+        plc_result = self._pylibcudf_function(*plc_args, **plc_kwargs)
+        output_dtype = self._dtype_policy([column.dtype for column in columns])
+        return ColumnBase.create(plc_result, dtype=output_dtype)
 
 
-def _collect_column_dtypes(obj: Any) -> list[Any]:
-    access = getattr(obj, "access", None)
-    if access is not None and callable(access):
-        return [obj.dtype]
-    if isinstance(obj, list):
-        return [
-            dtype for item in obj for dtype in _collect_column_dtypes(item)
-        ]
-    if isinstance(obj, tuple):
-        return [
-            dtype for item in obj for dtype in _collect_column_dtypes(item)
-        ]
-    return []
-
-
-def _columns_to_plc_column(obj: Any) -> Any:
-    plc_column = getattr(obj, "plc_column", None)
-    if plc_column is not None:
-        return plc_column
-    if isinstance(obj, list):
-        return [_columns_to_plc_column(item) for item in obj]
-    if isinstance(obj, tuple):
-        return tuple(_columns_to_plc_column(item) for item in obj)
-    return obj
-
-
-def columns_to_plc_columns(*args: Any) -> tuple[Any, ...]:
-    return tuple(_columns_to_plc_column(arg) for arg in args)
-
-
-def plc_column_op(
-    plc_fn: Callable[..., Any] | None = None,
+def pylibcudf_op(
+    pylibcudf_function: Callable[..., Any],
     *,
-    column_args: tuple[str, ...],
-    dtype_policy: Callable[[list[Any], Any], Any] | None = None,
+    dtype_policy: Callable[[list[Any]], Any],
     mode: Literal["read", "write"] = "read",
     scope: Literal["internal", "external"] = "internal",
-    returns_plc_fn: bool = False,
-    wrap_output: bool = True,
 ) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
     def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
-        sig = inspect.signature(func)
-
         @wraps(func)
         def wrapper(*args: Any, **kwargs: Any) -> Any:
-            bound = sig.bind(*args, **kwargs)
-            bound.apply_defaults()
-            access_kwargs = {"mode": mode, "scope": scope}
-            column_values = [bound.arguments[name] for name in column_args]
-            with ExitStack() as stack:
-                accessed = {
-                    name: _access_object(
-                        bound.arguments[name], stack, access_kwargs
-                    )
-                    for name in column_args
-                }
-                bound.arguments.update(accessed)
-                result = func(*bound.args, **bound.kwargs)
-
-                if returns_plc_fn:
-                    if not isinstance(result, tuple) or len(result) < 2:
-                        raise TypeError(
-                            "Expected (plc_fn, args, kwargs) from decorated function"
-                        )
-                    resolved_plc_fn = result[0]
-                    plc_args = result[1]
-                    plc_kwargs = result[2] if len(result) > 2 else {}
-                else:
-                    if plc_fn is None:
-                        raise TypeError(
-                            "plc_fn must be provided when returns_plc_fn is False"
-                        )
-                    resolved_plc_fn = plc_fn
-                    if (
-                        isinstance(result, tuple)
-                        and len(result) == 2
-                        and isinstance(result[1], dict)
-                    ):
-                        plc_args, plc_kwargs = result
-                    else:
-                        plc_args, plc_kwargs = result, {}
-
-                if not isinstance(plc_args, (list, tuple)):
-                    plc_args = (plc_args,)
-                plc_args = columns_to_plc_columns(*plc_args)
-                plc_kwargs = {
-                    key: _columns_to_plc_column(value)
-                    for key, value in plc_kwargs.items()
-                }
-
-                plc_result = resolved_plc_fn(*plc_args, **plc_kwargs)
-                if not wrap_output:
-                    return plc_result
-
-                if dtype_policy is None:
-                    raise TypeError(
-                        "dtype_policy must be provided when wrap_output is True"
-                    )
-                dtypes = [
-                    dtype
-                    for value in column_values
-                    for dtype in _collect_column_dtypes(value)
-                ]
-                output_dtype = dtype_policy(dtypes, bound)
-                from cudf.core.column.column import ColumnBase
-
-                return ColumnBase.create(plc_result, dtype=output_dtype)
+            op = PylibcudfFunction(
+                pylibcudf_function,
+                dtype_policy=dtype_policy,
+                mode=mode,
+                scope=scope,
+            )
+            return op(*args, **kwargs)
 
         return wrapper
 

@@ -1009,7 +1009,6 @@ class NumericalColumn(NumericalBaseColumn):
         bin_col = as_column(bins, dtype=bins.dtype)
         if bin_col.nullable:
             raise ValueError("`bins` cannot contain null entries.")
-
         func = plc.search.lower_bound if right else plc.search.upper_bound
         op = PylibcudfFunction(
             lambda bin_plc, self_plc: func(
