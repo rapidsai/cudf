@@ -19,6 +19,8 @@ import cudf
 from cudf.api.types import is_scalar
 from cudf.core._internals import binaryop
 from cudf.core.column.column import ColumnBase, as_column, column_empty
+from cudf.core.column.utils import pylibcudf_op
+from cudf.core.dtype.validators import is_dtype_obj_string
 from cudf.core.mixins import Scannable
 from cudf.errors import MixedTypeError
 from cudf.utils.dtypes import (
@@ -987,53 +989,42 @@ class StringColumn(ColumnBase, Scannable):
 
         return result
 
-    def to_upper(self) -> Self:
-        with self.access(mode="read", scope="internal"):
-            return cast(
-                Self,
-                ColumnBase.create(
-                    plc.strings.case.to_upper(self.plc_column), self.dtype
-                ),
-            )
+    @pylibcudf_op(
+        plc.strings.case.to_upper,
+        dtype_policy=lambda dtypes: dtypes[0],
+    )
+    def to_upper(self) -> Self:  # type: ignore[empty-body]
+        pass
 
-    def capitalize(self) -> Self:
-        with self.access(mode="read", scope="internal"):
-            return cast(
-                Self,
-                ColumnBase.create(
-                    plc.strings.capitalize.capitalize(self.plc_column),
-                    self.dtype,
-                ),
-            )
+    @pylibcudf_op(
+        plc.strings.capitalize.capitalize,
+        dtype_policy=lambda dtypes: dtypes[0],
+    )
+    def capitalize(self) -> Self:  # type: ignore[empty-body]
+        pass
 
-    def swapcase(self) -> Self:
-        with self.access(mode="read", scope="internal"):
-            return cast(
-                Self,
-                ColumnBase.create(
-                    plc.strings.case.swapcase(self.plc_column), self.dtype
-                ),
-            )
+    @pylibcudf_op(
+        plc.strings.case.swapcase,
+        dtype_policy=lambda dtypes: dtypes[0],
+    )
+    def swapcase(self) -> Self:  # type: ignore[empty-body]
+        pass
 
-    def title(self) -> Self:
-        with self.access(mode="read", scope="internal"):
-            return cast(
-                Self,
-                ColumnBase.create(
-                    plc.strings.capitalize.title(self.plc_column), self.dtype
-                ),
-            )
+    @pylibcudf_op(
+        plc.strings.capitalize.title,
+        dtype_policy=lambda dtypes: dtypes[0],
+    )
+    def title(self) -> Self:  # type: ignore[empty-body]
+        pass
 
-    def is_title(self) -> Self:
-        with self.access(mode="read", scope="internal"):
-            plc_column = plc.strings.capitalize.is_title(self.plc_column)
-            return cast(
-                Self,
-                ColumnBase.create(
-                    plc_column,
-                    get_dtype_of_same_kind(self.dtype, np.dtype(np.bool_)),
-                ),
-            )
+    @pylibcudf_op(
+        plc.strings.capitalize.is_title,
+        dtype_policy=lambda dtypes: get_dtype_of_same_kind(
+            dtypes[0], np.dtype(np.bool_)
+        ),
+    )
+    def is_title(self) -> Self:  # type: ignore[empty-body]
+        pass
 
     def replace_multiple(self, pattern: Self, replacements: Self) -> Self:
         with self.access(mode="read", scope="internal"):
@@ -1047,18 +1038,14 @@ class StringColumn(ColumnBase, Scannable):
                 ColumnBase.create(plc_result, self.dtype),
             )
 
-    def is_hex(self) -> NumericalColumn:
-        with self.access(mode="read", scope="internal"):
-            plc_column = plc.strings.convert.convert_integers.is_hex(
-                self.plc_column,
-            )
-            return cast(
-                "cudf.core.column.numerical.NumericalColumn",
-                ColumnBase.create(
-                    plc_column,
-                    get_dtype_of_same_kind(self.dtype, np.dtype(np.bool_)),
-                ),
-            )
+    @pylibcudf_op(
+        plc.strings.convert.convert_integers.is_hex,
+        dtype_policy=lambda dtypes: get_dtype_of_same_kind(
+            dtypes[0], np.dtype(np.bool_)
+        ),
+    )
+    def is_hex(self) -> NumericalColumn:  # type: ignore[empty-body]
+        pass
 
     def hex_to_integers(self) -> NumericalColumn:
         with self.access(mode="read", scope="internal"):

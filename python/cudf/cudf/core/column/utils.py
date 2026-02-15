@@ -149,14 +149,15 @@ def pylibcudf_op(
     scope: Literal["internal", "external"] = "internal",
 ) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
     def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
+        op = PylibcudfFunction(
+            pylibcudf_function,
+            dtype_policy=dtype_policy,
+            mode=mode,
+            scope=scope,
+        )
+
         @wraps(func)
         def wrapper(*args: Any, **kwargs: Any) -> Any:
-            op = PylibcudfFunction(
-                pylibcudf_function,
-                dtype_policy=dtype_policy,
-                mode=mode,
-                scope=scope,
-            )
             return op(*args, **kwargs)
 
         return wrapper
