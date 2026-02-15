@@ -110,6 +110,7 @@ class PylibcudfFunction:
         columns.extend(
             value for value in kwargs.values() if isinstance(value, ColumnBase)
         )
+        output_dtype = self._dtype_policy([column.dtype for column in columns])
         if columns:
             with access_columns(
                 *columns, mode=self._mode, scope=self._scope
@@ -127,17 +128,21 @@ class PylibcudfFunction:
                     )
                     for key, value in kwargs.items()
                 }
-
-        plc_args = tuple(
-            arg.plc_column if isinstance(arg, ColumnBase) else arg
-            for arg in args
-        )
-        plc_kwargs = {
-            key: (value.plc_column if isinstance(value, ColumnBase) else value)
-            for key, value in kwargs.items()
-        }
-        plc_result = self._pylibcudf_function(*plc_args, **plc_kwargs)
-        output_dtype = self._dtype_policy([column.dtype for column in columns])
+                plc_args = tuple(
+                    arg.plc_column if isinstance(arg, ColumnBase) else arg
+                    for arg in args
+                )
+                plc_kwargs = {
+                    key: (
+                        value.plc_column
+                        if isinstance(value, ColumnBase)
+                        else value
+                    )
+                    for key, value in kwargs.items()
+                }
+                plc_result = self._pylibcudf_function(*plc_args, **plc_kwargs)
+        else:
+            plc_result = self._pylibcudf_function(*args, **kwargs)
         return ColumnBase.create(plc_result, dtype=output_dtype)
 
 
