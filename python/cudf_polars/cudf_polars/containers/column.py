@@ -362,6 +362,8 @@ class Column:
                         stream=stream,
                     ),
                     decimal_places=target_scale,
+                    # Note polars uses banker's rounding
+                    # See crates/polars-ops/src/series/ops/round.rs (RoundMethod::HalfEven)
                     round_method=plc.round.RoundingMethod.HALF_EVEN,
                     stream=stream,
                 ),
