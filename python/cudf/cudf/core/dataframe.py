@@ -8988,8 +8988,9 @@ def _cast_cols_to_common_dtypes(col_idxs, list_of_columns, dtypes, categories):
 def _reassign_categories(categories, cols, col_idxs):
     for name, idx in zip(cols, col_idxs, strict=True):
         if idx in categories:
-            cols[name] = cols[name]._with_type_metadata(
-                CategoricalDtype(categories=categories[idx], ordered=False)
+            cols[name] = ColumnBase.create(
+                cols[name].plc_column,
+                CategoricalDtype(categories=categories[idx], ordered=False),
             )
 
 
