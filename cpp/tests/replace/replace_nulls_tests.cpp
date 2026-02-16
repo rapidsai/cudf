@@ -1,7 +1,7 @@
 /*
  * SPDX-FileCopyrightText: Copyright 2018 BlazingDB, Inc.
  * SPDX-FileCopyrightText: Copyright 2018 Alexander Ocsa <cristhian@blazingdb.com>
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 /*
@@ -35,7 +35,7 @@
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 
-#include <thrust/iterator/constant_iterator.h>
+#include <cuda/iterator>
 #include <thrust/iterator/counting_iterator.h>
 
 using namespace cudf::test::iterators;
@@ -450,7 +450,7 @@ TYPED_TEST(ReplaceNullsPolicyTest, PrecedingFillLargeArray)
   auto nulls_idx_end   = nulls_idx_begin + sz - 1;
 
   // Expected: 0, 0, 0, ...
-  auto expected_begin = thrust::make_constant_iterator(0);
+  auto expected_begin = cuda::make_constant_iterator(0);
   auto expected_end   = expected_begin + sz;
 
   TestReplaceNullsWithPolicy(
@@ -471,7 +471,7 @@ TYPED_TEST(ReplaceNullsPolicyTest, FollowingFillLargeArray)
   auto nulls_idx_end   = nulls_idx_begin + sz - 1;
 
   // Expected: 999, 999, 999, ...
-  auto expected_begin = thrust::make_constant_iterator(sz - 1);
+  auto expected_begin = cuda::make_constant_iterator(sz - 1);
   auto expected_end   = expected_begin + sz;
 
   TestReplaceNullsWithPolicy(
