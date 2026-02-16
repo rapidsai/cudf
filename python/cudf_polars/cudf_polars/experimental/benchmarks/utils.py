@@ -1164,6 +1164,27 @@ def run_polars(
             )
             # Set up RMM resources for this rank (similar to RMMPlugin for Dask)
             _setup_rmm_for_rrun(args, rank)
+
+            # Initialize the rrun worker context once (similar to
+            # bootstrap_dask_cluster -> dask_worker_setup for Dask).
+            # This creates BufferResource, ProgressThread, Statistics,
+            # and spill functions that are reused across all queries.
+            from cudf_polars.experimental.rapidsmpf.bootstrap_ctx import (
+                setup_rrun_worker_context,
+            )
+
+            setup_rrun_worker_context(
+                spill_device=run_config.spill_device,
+                spill_to_pinned_memory=run_config.spill_to_pinned_memory,
+                oom_protection=run_config.rapidsmpf_oom_protection,
+                max_io_threads=run_config.max_io_threads,
+            )
+
+            # Enable RMM statistics (matches Dask's client.run(rmm.statistics.enable_statistics))
+            try:
+                rmm.statistics.enable_statistics()
+            except Exception:
+                pass
     except ImportError:
         pass  # rapidsmpf not available
 

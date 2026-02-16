@@ -117,15 +117,38 @@ def evaluate_logical_plan(
         if (
             config_options.executor.cluster == "rrun" or is_rrun
         ):  # pragma: no cover; block depends on executor type and rrun cluster
-            # SPMD execution: All ranks execute, only rank 0 returns result
-            result, metadata_collector = evaluate_pipeline(
-                ir,
-                partition_info,
-                config_options,
-                stats,
-                collective_id_map,
-                collect_metadata=collect_metadata,
+            # SPMD execution: All ranks execute, only rank 0 returns result.
+            # Get the pre-initialized worker context (set up once in run_polars)
+            # and create a lightweight streaming Context from it — same pattern
+            # as Dask's _evaluate_pipeline_dask.
+            from rapidsmpf.config import Options as RmpfOptions
+            from rapidsmpf.config import get_environment_variables
+
+            from cudf_polars.experimental.rapidsmpf.bootstrap_ctx import (
+                get_rrun_worker_context,
             )
+
+            worker_ctx = get_rrun_worker_context()
+            options = RmpfOptions(
+                {
+                    "num_streaming_threads": str(
+                        max(config_options.executor.max_io_threads, 1)
+                    )
+                }
+                | get_environment_variables()
+            )
+            with Context(
+                worker_ctx.comm, worker_ctx.br, options, worker_ctx.statistics
+            ) as rmpf_context:
+                result, metadata_collector = evaluate_pipeline(
+                    ir,
+                    partition_info,
+                    config_options,
+                    stats,
+                    collective_id_map,
+                    rmpf_context,
+                    collect_metadata=collect_metadata,
+                )
 
             # Only rank 0 returns result to caller
             rank = get_rank()
@@ -206,93 +229,13 @@ def evaluate_pipeline(
     _initial_mr: Any = None
     stream_pool: CudaStreamPool | bool = False
 
-    # Check if running with rrun
-    from cudf_polars.experimental.rapidsmpf.bootstrap_ctx import (
-        get_bootstrap_context,
-        is_running_with_rrun,
-    )
-
-    is_rrun = is_running_with_rrun()
-
     if rmpf_context is not None:
-        # Using "distributed" mode (Dask).
-        # Always use the RapidsMPF stream pool for now.
+        # Using "distributed" or "rrun" mode.
+        # The caller has already set up the Context (from a pre-initialized
+        # WorkerContext). Always use the RapidsMPF stream pool for now.
         br = rmpf_context.br()
         stream_pool = True
         rmpf_context_manager = contextlib.nullcontext(rmpf_context)
-    elif is_rrun and rmpf_context is None:
-        # Using "rrun" mode - initialize from bootstrap context
-        # Create a new distributed RapidsMPF context using the bootstrap communicator
-        _original_mr = rmm.mr.get_current_device_resource()
-        mr = RmmResourceAdaptor(_original_mr)
-        rmm.mr.set_current_device_resource(mr)
-
-        # Get the bootstrap-initialized communicator
-        bootstrap_ctx = get_bootstrap_context()
-
-        # Configure memory limits for spilling (similar to Dask workers)
-        memory_available: MutableMapping[MemoryType, LimitAvailableMemory] | None = None
-        rrun_spill_device = config_options.executor.client_device_threshold
-        if rrun_spill_device > 0.0 and rrun_spill_device < 1.0:
-            total_memory = rmm.mr.available_device_memory()[1]
-            spill_threshold = int(total_memory * rrun_spill_device)
-            memory_available = {
-                MemoryType.DEVICE: LimitAvailableMemory(mr, limit=spill_threshold)
-            }
-
-            # Debug output on rank 0
-            from cudf_polars.experimental.rapidsmpf.bootstrap_ctx import get_rank
-
-            rank = get_rank()
-            if rank == 0:
-                print(
-                    f"[RMM Config] Total device memory: {total_memory / 1e9:.2f} GB",
-                    flush=True,
-                )
-                print(
-                    f"[RMM Config] Spill threshold ({rrun_spill_device:.1%}): {spill_threshold / 1e9:.2f} GB",
-                    flush=True,
-                )
-                print(
-                    f"[RMM Config] Spill to pinned memory: {config_options.executor.spill_to_pinned_memory}",
-                    flush=True,
-                )
-
-        options = Options(
-            {
-                # By default, set the number of streaming threads to the max
-                # number of IO threads. The user may override this with an
-                # environment variable (i.e. RAPIDSMPF_NUM_STREAMING_THREADS)
-                "num_streaming_threads": str(
-                    max(config_options.executor.max_io_threads, 1)
-                )
-            }
-            | get_environment_variables()
-        )
-        pinned_mr = (
-            PinnedMemoryResource.make_if_available()
-            if config_options.executor.spill_to_pinned_memory
-            else None
-        )
-        if isinstance(config_options.cuda_stream_policy, CUDAStreamPoolConfig):
-            stream_pool = config_options.cuda_stream_policy.build()
-        else:
-            stream_pool = True  # Use stream pool for distributed execution
-
-        # Create BufferResource with memory limits for spilling
-        br = BufferResource(
-            mr,
-            pinned_mr=pinned_mr,
-            memory_available=memory_available,
-            stream_pool=stream_pool,
-        )
-        rmpf_context_manager = Context(bootstrap_ctx, br, options)
-
-        # Enable RMM statistics for monitoring (similar to Dask)
-        try:
-            rmm.statistics.enable_statistics()
-        except Exception:
-            pass  # Statistics not available or already enabled
     else:
         # Using "single" mode.
         # Create a new local RapidsMPF context.
