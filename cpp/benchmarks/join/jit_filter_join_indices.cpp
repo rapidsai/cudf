@@ -3,135 +3,101 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include <cudf/column/column_factories.hpp>
-#include <cudf/detail/utilities/vector_factories.hpp>
+#include "generate_input_tables.cuh"
+#include "join_common.hpp"
+
+#include <cudf/ast/expressions.hpp>
+#include <cudf/join/hash_join.hpp>
 #include <cudf/join/join.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
-#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
-
-#include <rmm/device_uvector.hpp>
 
 #include <nvbench/nvbench.cuh>
 
-#include <memory>
-#include <vector>
-
-void jit_filter_join_indices_inner_join(nvbench::state& state)
+template <typename JoinFunc>
+void filter_join_indices_benchmark(nvbench::state& state,
+                                   JoinFunc join_func,
+                                   cudf::join_kind join_kind)
 {
-  auto const num_rows = static_cast<cudf::size_type>(state.get_int64("num_rows"));
+  auto const build_size = static_cast<cudf::size_type>(state.get_int64("build_size"));
+  auto const probe_size = static_cast<cudf::size_type>(state.get_int64("probe_size"));
 
-  // Create test tables with integer columns
-  auto left_col0  = cudf::make_numeric_column(cudf::data_type{cudf::type_id::INT32}, num_rows);
-  auto left_col1  = cudf::make_numeric_column(cudf::data_type{cudf::type_id::INT32}, num_rows);
-  auto right_col0 = cudf::make_numeric_column(cudf::data_type{cudf::type_id::INT32}, num_rows);
-  auto right_col1 = cudf::make_numeric_column(cudf::data_type{cudf::type_id::INT32}, num_rows);
+  // Generate build (right) and probe (left) tables
+  // 1 key column + 2 payload columns = 3 columns total
+  auto [build_table, probe_table] =
+    generate_input_tables<false>({cudf::type_id::INT32}, build_size, probe_size, 2, 1, 0.3);
 
-  std::vector<std::unique_ptr<cudf::column>> left_columns;
-  left_columns.push_back(std::move(left_col0));
-  left_columns.push_back(std::move(left_col1));
-  auto left_table = cudf::table(std::move(left_columns));
+  // Perform hash join on key column (column 0) to get indices
+  auto probe_keys = probe_table->view().select({0});
+  auto build_keys = build_table->view().select({0});
 
-  std::vector<std::unique_ptr<cudf::column>> right_columns;
-  right_columns.push_back(std::move(right_col0));
-  right_columns.push_back(std::move(right_col1));
-  auto right_table = cudf::table(std::move(right_columns));
+  cudf::hash_join hash_joiner(build_keys, cudf::null_equality::EQUAL);
+  auto [left_indices, right_indices] = join_func(hash_joiner, probe_keys);
 
-  // Create join indices (simulate all pairs matching from equality join)
-  std::vector<cudf::size_type> indices_h(num_rows);
-  for (cudf::size_type i = 0; i < num_rows; ++i) {
-    indices_h[i] = i;
-  }
-  auto left_indices_d = cudf::detail::make_device_uvector_async(
-    indices_h, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
-  auto right_indices_d = cudf::detail::make_device_uvector_async(
-    indices_h, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
-
-  cudf::device_span<cudf::size_type const> left_span{left_indices_d.data(), left_indices_d.size()};
-  cudf::device_span<cudf::size_type const> right_span{right_indices_d.data(),
-                                                      right_indices_d.size()};
-
-  // Predicate: left.col1 > right.col1 (receives output pointer, then all columns: left cols, then
-  // right cols)
-  std::string predicate_code = R"(
-    __device__ void predicate(bool* output, int32_t left_col0, int32_t left_col1,
-                              int32_t right_col0, int32_t right_col1) {
-      *output = left_col1 > right_col1;
-    }
-  )";
+  cudf::device_span<cudf::size_type const> left_span{left_indices->data(), left_indices->size()};
+  cudf::device_span<cudf::size_type const> right_span{right_indices->data(), right_indices->size()};
 
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
 
-  state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
-    auto [filtered_left, filtered_right] =
-      cudf::jit_filter_join_indices(left_table.view(),
-                                    right_table.view(),
-                                    left_span,
-                                    right_span,
-                                    predicate_code,
-                                    cudf::join_kind::INNER_JOIN);
-  });
-}
+  auto const method = state.get_string("method");
 
-void jit_filter_join_indices_left_join(nvbench::state& state)
-{
-  auto const num_rows = static_cast<cudf::size_type>(state.get_int64("num_rows"));
+  if (method == "AST") {
+    auto col_ref_left_1  = cudf::ast::column_reference(1, cudf::ast::table_reference::LEFT);
+    auto col_ref_right_1 = cudf::ast::column_reference(1, cudf::ast::table_reference::RIGHT);
+    auto predicate =
+      cudf::ast::operation(cudf::ast::ast_operator::GREATER, col_ref_left_1, col_ref_right_1);
 
-  auto left_col0  = cudf::make_numeric_column(cudf::data_type{cudf::type_id::INT32}, num_rows);
-  auto left_col1  = cudf::make_numeric_column(cudf::data_type{cudf::type_id::INT32}, num_rows);
-  auto right_col0 = cudf::make_numeric_column(cudf::data_type{cudf::type_id::INT32}, num_rows);
-  auto right_col1 = cudf::make_numeric_column(cudf::data_type{cudf::type_id::INT32}, num_rows);
+    state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
+      auto result = cudf::filter_join_indices(
+        probe_table->view(), build_table->view(), left_span, right_span, predicate, join_kind);
+    });
+  } else {
+    std::string predicate_code = R"(
+      __device__ void predicate(bool* output,
+                                int32_t left_col0, int32_t left_col1, int32_t left_col2,
+                                int32_t right_col0, int32_t right_col1, int32_t right_col2) {
+        *output = left_col1 > right_col1;
+      }
+    )";
 
-  std::vector<std::unique_ptr<cudf::column>> left_columns;
-  left_columns.push_back(std::move(left_col0));
-  left_columns.push_back(std::move(left_col1));
-  auto left_table = cudf::table(std::move(left_columns));
-
-  std::vector<std::unique_ptr<cudf::column>> right_columns;
-  right_columns.push_back(std::move(right_col0));
-  right_columns.push_back(std::move(right_col1));
-  auto right_table = cudf::table(std::move(right_columns));
-
-  std::vector<cudf::size_type> indices_h(num_rows);
-  for (cudf::size_type i = 0; i < num_rows; ++i) {
-    indices_h[i] = i;
+    state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
+      auto result = cudf::jit_filter_join_indices(
+        probe_table->view(), build_table->view(), left_span, right_span, predicate_code, join_kind);
+    });
   }
-  auto left_indices_d = cudf::detail::make_device_uvector_async(
-    indices_h, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
-  auto right_indices_d = cudf::detail::make_device_uvector_async(
-    indices_h, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
-
-  cudf::device_span<cudf::size_type const> left_span{left_indices_d.data(), left_indices_d.size()};
-  cudf::device_span<cudf::size_type const> right_span{right_indices_d.data(),
-                                                      right_indices_d.size()};
-
-  std::string predicate_code = R"(
-    __device__ void predicate(bool* output, int32_t left_col0, int32_t left_col1,
-                              int32_t right_col0, int32_t right_col1) {
-      *output = left_col1 > right_col1;
-    }
-  )";
-
-  state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
-
-  state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
-    auto [filtered_left, filtered_right] =
-      cudf::jit_filter_join_indices(left_table.view(),
-                                    right_table.view(),
-                                    left_span,
-                                    right_span,
-                                    predicate_code,
-                                    cudf::join_kind::LEFT_JOIN);
-  });
 }
 
-NVBENCH_BENCH(jit_filter_join_indices_inner_join)
-  .set_name("jit_filter_join_indices_inner")
-  .add_int64_axis("num_rows", {10'000, 100'000, 1'000'000});
+void filter_join_indices_inner_join(nvbench::state& state)
+{
+  filter_join_indices_benchmark(
+    state,
+    [](cudf::hash_join& joiner, cudf::table_view probe_keys) {
+      return joiner.inner_join(probe_keys);
+    },
+    cudf::join_kind::INNER_JOIN);
+}
 
-NVBENCH_BENCH(jit_filter_join_indices_left_join)
-  .set_name("jit_filter_join_indices_left")
-  .add_int64_axis("num_rows", {10'000, 100'000, 1'000'000});
+void filter_join_indices_left_join(nvbench::state& state)
+{
+  filter_join_indices_benchmark(
+    state,
+    [](cudf::hash_join& joiner, cudf::table_view probe_keys) {
+      return joiner.left_join(probe_keys);
+    },
+    cudf::join_kind::LEFT_JOIN);
+}
+
+NVBENCH_BENCH(filter_join_indices_inner_join)
+  .set_name("filter_join_indices_inner")
+  .add_string_axis("method", {"AST", "JIT"})
+  .add_int64_axis("build_size", JOIN_SIZE_RANGE)
+  .add_int64_axis("probe_size", JOIN_SIZE_RANGE);
+
+NVBENCH_BENCH(filter_join_indices_left_join)
+  .set_name("filter_join_indices_left")
+  .add_string_axis("method", {"AST", "JIT"})
+  .add_int64_axis("build_size", JOIN_SIZE_RANGE)
+  .add_int64_axis("probe_size", JOIN_SIZE_RANGE);
