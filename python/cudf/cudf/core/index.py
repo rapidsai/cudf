@@ -3583,22 +3583,10 @@ class DatetimeIndex(Index):
         self._freq = _validate_freq(freq)
         # existing pandas index needs no additional validation
         if self._freq is not None and not was_pd_index:
-            unique_vals = self.to_series().diff().unique()
-            if self._freq == cudf.DateOffset(months=1):
-                possible = pd.Series(list(self.MONTHLY_PERIODS | {pd.NaT}))
-                if unique_vals.isin(possible).sum() != len(unique_vals):
-                    raise ValueError("No unique frequency found")
-            elif self._freq == cudf.DateOffset(years=1):
-                possible = pd.Series(list(self.YEARLY_PERIODS | {pd.NaT}))
-                if unique_vals.isin(possible).sum() != len(unique_vals):
-                    raise ValueError("No unique frequency found")
-            else:
-                if len(unique_vals) > 2 or (
-                    len(unique_vals) == 2
-                    and unique_vals[1]
-                    != self._freq._maybe_as_fast_pandas_offset()
-                ):
-                    raise ValueError("No unique frequency found")
+            validated = self._check_freq(self._freq)
+            if validated is None:
+                raise ValueError("No unique frequency found")
+            self._freq = validated
 
     @_performance_tracking
     def serialize(self):
