@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 """Query 8."""
@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
 from cudf_polars.experimental.benchmarks.utils import get_data
 
 if TYPE_CHECKING:
@@ -437,6 +438,12 @@ TARGET_ZIPS = [
 
 def duckdb_impl(run_config: RunConfig) -> str:
     """Query 8."""
+    params = load_parameters(int(run_config.scale_factor), query_id=8)
+    if params is None:
+        raise ValueError("Query 8 requires parameters but none were found")
+
+    zip_codes = params["zip_codes"]
+
     return f"""
     -- start query 8 in stream 0 using template query8.tpl
     SELECT s_store_name,
@@ -447,7 +454,7 @@ def duckdb_impl(run_config: RunConfig) -> str:
         (SELECT ca_zip
             FROM   (SELECT Substr(ca_zip, 1, 5) ca_zip
                     FROM   customer_address
-                    WHERE  Substr(ca_zip, 1, 5) IN ({", ".join(f"'{zip}'" for zip in TARGET_ZIPS)})
+                    WHERE  Substr(ca_zip, 1, 5) IN ({", ".join(f"'{zip}'" for zip in zip_codes)})
                     INTERSECT
                     SELECT ca_zip
                     FROM   (SELECT Substr(ca_zip, 1, 5) ca_zip,
@@ -472,7 +479,14 @@ def duckdb_impl(run_config: RunConfig) -> str:
 
 def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     """Query 8."""
-    # Load required tables
+    params = load_parameters(int(run_config.scale_factor), query_id=8)
+    if params is None:
+        raise ValueError("Query 8 requires parameters but none were found")
+
+    year = params["year"]
+    qoy = params["qoy"]
+    zip_codes = params["zip_codes"]
+
     store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
     store = get_data(run_config.dataset_path, "store", run_config.suffix)
@@ -481,10 +495,11 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     )
     customer = get_data(run_config.dataset_path, "customer", run_config.suffix)
 
-    # First subquery: get first 5 chars of zip codes from target list
     target_zips_5char = (
-        customer_address.select(pl.col("ca_zip").str.slice(0, 5).alias("ca_zip"))
-        .filter(pl.col("ca_zip").is_in(TARGET_ZIPS))
+        customer_address.select(
+            pl.col("ca_zip").cast(pl.Utf8).str.slice(0, 5).alias("ca_zip")
+        )
+        .filter(pl.col("ca_zip").is_in(zip_codes))
         .unique()
     )
 
@@ -494,7 +509,7 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
             customer, left_on="ca_address_sk", right_on="c_current_addr_sk"
         )
         .filter(pl.col("c_preferred_cust_flag") == "Y")
-        .group_by(pl.col("ca_zip").str.slice(0, 5).alias("ca_zip"))
+        .group_by(pl.col("ca_zip").cast(pl.Utf8).str.slice(0, 5).alias("ca_zip"))
         .agg(pl.len().alias("cnt"))
         .filter(pl.col("cnt") > 10)
         .select("ca_zip")
@@ -511,11 +526,11 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         .join(store, left_on="ss_store_sk", right_on="s_store_sk")
         .join(
             intersect_zips,
-            left_on=pl.col("s_zip").str.slice(0, 2),
+            left_on=pl.col("s_zip").cast(pl.Utf8).str.slice(0, 2),
             right_on=pl.col("ca_zip").str.slice(0, 2),
         )
-        .filter(pl.col("d_qoy") == TARGET_QUARTER)
-        .filter(pl.col("d_year") == TARGET_YEAR)
+        .filter(pl.col("d_qoy") == qoy)
+        .filter(pl.col("d_year") == year)
         .group_by("s_store_name")
         .agg(pl.col("ss_net_profit").sum().alias("sum"))
         .sort("s_store_name", nulls_last=True)

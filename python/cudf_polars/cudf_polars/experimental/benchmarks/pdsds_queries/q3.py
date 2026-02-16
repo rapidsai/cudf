@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 """Query 3."""
@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
 from cudf_polars.experimental.benchmarks.utils import get_data
 
 if TYPE_CHECKING:
@@ -17,18 +18,26 @@ if TYPE_CHECKING:
 
 def duckdb_impl(run_config: RunConfig) -> str:
     """Query 3."""
-    return """
+    params = load_parameters(int(run_config.scale_factor), query_id=3)
+    if params is None:
+        raise ValueError("Query 3 requires parameters but none were found")
+
+    aggc = params["aggc"]
+    month = params["month"]
+    manufact = params["manufact"]
+
+    return f"""
     SELECT dt.d_year,
                    item.i_brand_id          brand_id,
                    item.i_brand             brand,
-                   Sum(ss_ext_discount_amt) sum_agg
+                   Sum({aggc})              sum_agg
     FROM   date_dim dt,
            store_sales,
            item
     WHERE  dt.d_date_sk = store_sales.ss_sold_date_sk
            AND store_sales.ss_item_sk = item.i_item_sk
-           AND item.i_manufact_id = 427
-           AND dt.d_moy = 11
+           AND item.i_manufact_id = {manufact}
+           AND dt.d_moy = {month}
     GROUP  BY dt.d_year,
               item.i_brand,
               item.i_brand_id
@@ -41,17 +50,23 @@ def duckdb_impl(run_config: RunConfig) -> str:
 
 def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     """Query 3."""
-    # Load required tables
+    params = load_parameters(int(run_config.scale_factor), query_id=3)
+    if params is None:
+        raise ValueError("Query 3 requires parameters but none were found")
+
+    aggc = params["aggc"]
+    month = params["month"]
+    manufact = params["manufact"]
+
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
     store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
     item = get_data(run_config.dataset_path, "item", run_config.suffix)
-    # Execute the query following the SQL logic
     return (
         date_dim.join(store_sales, left_on="d_date_sk", right_on="ss_sold_date_sk")
         .join(item, left_on="ss_item_sk", right_on="i_item_sk")
-        .filter((pl.col("i_manufact_id") == 427) & (pl.col("d_moy") == 11))
+        .filter((pl.col("i_manufact_id") == manufact) & (pl.col("d_moy") == month))
         .group_by(["d_year", "i_brand", "i_brand_id"])
-        .agg([pl.col("ss_ext_discount_amt").sum().alias("sum_agg")])
+        .agg([pl.col(aggc).sum().alias("sum_agg")])
         .select(
             [
                 pl.col("d_year"),

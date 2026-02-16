@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 """Query 4."""
@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
 from cudf_polars.experimental.benchmarks.utils import get_data
 
 if TYPE_CHECKING:
@@ -17,7 +18,13 @@ if TYPE_CHECKING:
 
 def duckdb_impl(run_config: RunConfig) -> str:
     """Query 4."""
-    return """
+    params = load_parameters(int(run_config.scale_factor), query_id=4)
+    if params is None:
+        raise ValueError("Query 4 requires parameters but none were found")
+
+    year = params["year"]
+
+    return f"""
     WITH year_total
          AS (SELECT c_customer_id                       customer_id,
                     c_first_name                        customer_first_name,
@@ -135,12 +142,12 @@ def duckdb_impl(run_config: RunConfig) -> str:
            AND t_s_secyear.sale_type = 's'
            AND t_c_secyear.sale_type = 'c'
            AND t_w_secyear.sale_type = 'w'
-           AND t_s_firstyear.dyear = 2001
-           AND t_s_secyear.dyear = 2001 + 1
-           AND t_c_firstyear.dyear = 2001
-           AND t_c_secyear.dyear = 2001 + 1
-           AND t_w_firstyear.dyear = 2001
-           AND t_w_secyear.dyear = 2001 + 1
+           AND t_s_firstyear.dyear = {year}
+           AND t_s_secyear.dyear = {year} + 1
+           AND t_c_firstyear.dyear = {year}
+           AND t_c_secyear.dyear = {year} + 1
+           AND t_w_firstyear.dyear = {year}
+           AND t_w_secyear.dyear = {year} + 1
            AND t_s_firstyear.year_total > 0
            AND t_c_firstyear.year_total > 0
            AND t_w_firstyear.year_total > 0
@@ -231,6 +238,12 @@ def build_sales_subquery(  # noqa: D103
 
 def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     """Query 4."""
+    params = load_parameters(int(run_config.scale_factor), query_id=4)
+    if params is None:
+        raise ValueError("Query 4 requires parameters but none were found")
+
+    year = params["year"]
+
     # Load required tables
     customer = get_data(run_config.dataset_path, "customer", run_config.suffix)
     store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
@@ -239,13 +252,13 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     )
     web_sales = get_data(run_config.dataset_path, "web_sales", run_config.suffix)
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
-    date_2001 = date_dim.filter(pl.col("d_year") == 2001)
-    date_2002 = date_dim.filter(pl.col("d_year") == 2002)
+    date_firstyear = date_dim.filter(pl.col("d_year") == year)
+    date_secyear = date_dim.filter(pl.col("d_year") == year + 1)
 
     # Store sales - first year (2001)
     t_s_firstyear = build_sales_subquery(
         store_sales,
-        date_2001,
+        date_firstyear,
         customer,
         sold_date_key="ss_sold_date_sk",
         customer_key="ss_customer_sk",
@@ -257,7 +270,7 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     # Store sales - second year (2002)
     t_s_secyear = build_sales_subquery(
         store_sales,
-        date_2002,
+        date_secyear,
         customer,
         sold_date_key="ss_sold_date_sk",
         customer_key="ss_customer_sk",
@@ -269,7 +282,7 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     # Catalog sales - first year (2001)
     t_c_firstyear = build_sales_subquery(
         catalog_sales,
-        date_2001,
+        date_firstyear,
         customer,
         sold_date_key="cs_sold_date_sk",
         customer_key="cs_bill_customer_sk",
@@ -281,7 +294,7 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     # Catalog sales - first year (2002)
     t_c_secyear = build_sales_subquery(
         catalog_sales,
-        date_2002,
+        date_secyear,
         customer,
         sold_date_key="cs_sold_date_sk",
         customer_key="cs_bill_customer_sk",
@@ -293,7 +306,7 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     # Web sales - first year (2001)
     t_w_firstyear = build_sales_subquery(
         web_sales,
-        date_2001,
+        date_firstyear,
         customer,
         sold_date_key="ws_sold_date_sk",
         customer_key="ws_bill_customer_sk",
@@ -305,7 +318,7 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     # Web sales - first year (2001)
     t_w_secyear = build_sales_subquery(
         web_sales,
-        date_2002,
+        date_secyear,
         customer,
         sold_date_key="ws_sold_date_sk",
         customer_key="ws_bill_customer_sk",
