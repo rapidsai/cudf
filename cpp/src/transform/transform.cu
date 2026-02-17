@@ -36,7 +36,7 @@ jitify2::Kernel get_kernel(std::string const& kernel_name, std::string const& cu
 
   int runtime_version;
   CUDF_CUDA_TRY(cudaRuntimeGetVersion(&runtime_version));
-  auto const min_pch_runtime_version = 12800;  // CUDA 12.8
+  int constexpr min_pch_runtime_version = 12800;  // CUDA 12.8
 
   std::vector<std::string> options;
   options.emplace_back("-arch=sm_.");
