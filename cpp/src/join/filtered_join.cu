@@ -22,6 +22,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
+#include <rmm/exec_policy.hpp>
 #include <rmm/mr/polymorphic_allocator.hpp>
 #include <rmm/resource_ref.hpp>
 
@@ -32,7 +33,7 @@
 #include <cuco/operator.hpp>
 #include <cuco/static_multiset_ref.cuh>
 #include <cuco/static_set_ref.cuh>
-#include <cuda/std/iterator>
+#include <cuda/iterator>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/sequence.h>
 #include <thrust/set_operations.h>
@@ -124,7 +125,7 @@ void filtered_join::insert_build_table(Ref const& insert_ref, rmm::cuda_stream_v
         <<<grid_size, cuco::detail::default_block_size(), 0, stream.value()>>>(
           build_iter,
           _build.num_rows(),
-          thrust::constant_iterator<bool>{true},
+          cuda::constant_iterator<bool>{true},
           cuda::std::identity{},
           insert_ref);
     }
@@ -186,7 +187,7 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> distinct_filtered_join::qu
         <<<grid_size, cuco::detail::default_block_size(), 0, stream.value()>>>(
           probe_iter,
           probe.num_rows(),
-          thrust::constant_iterator<bool>{true},
+          cuda::constant_iterator<bool>{true},
           cuda::std::identity{},
           contains_iter,
           query_ref);
