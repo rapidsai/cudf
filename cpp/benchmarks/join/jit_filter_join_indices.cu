@@ -27,8 +27,10 @@ void filter_join_indices_benchmark(nvbench::state& state,
 
   // Generate build (right) and probe (left) tables
   // 1 key column + 2 payload columns = 3 columns total
+  std::vector<cudf::type_id> key_types{cudf::type_id::INT32};
+
   auto [build_table, probe_table] =
-    generate_input_tables<false>({cudf::type_id::INT32}, build_size, probe_size, 2, 1, 0.3);
+    generate_input_tables<false>(key_types, build_size, probe_size, 2, 1, 0.3);
 
   // Perform hash join on key column (column 0) to get indices
   auto probe_keys = probe_table->view().select({0});
@@ -43,6 +45,11 @@ void filter_join_indices_benchmark(nvbench::state& state,
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
 
   auto const method = state.get_string("method");
+
+  auto const join_input_size = estimate_size(build_keys) + estimate_size(probe_keys);
+  auto const filter_input_size = join_input_size + (left_indices->size() + right_indices->size()) * sizeof(cudf::size_type);
+  state.add_element_count(filter_input_size, "filter_input_size");  // number of bytes
+  state.template add_global_memory_reads<nvbench::int8_t>(filter_input_size);
 
   if (method == "AST") {
     auto col_ref_left_1  = cudf::ast::column_reference(1, cudf::ast::table_reference::LEFT);
@@ -68,6 +75,7 @@ void filter_join_indices_benchmark(nvbench::state& state,
         probe_table->view(), build_table->view(), left_span, right_span, predicate_code, join_kind);
     });
   }
+  set_throughputs(state);
 }
 
 void filter_join_indices_inner_join(nvbench::state& state)
