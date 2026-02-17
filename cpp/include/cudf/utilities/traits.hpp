@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -221,7 +221,7 @@ bool is_index_type(data_type type);
  * @return true `T` is signed numeric
  */
 template <typename T>
-constexpr inline bool is_signed()
+CUDF_HOST_DEVICE constexpr inline bool is_signed()
 {
   return cuda::std::is_signed_v<T>;
 }

@@ -234,27 +234,28 @@ hybrid_scan_reader_impl::prepare_dictionaries(
                                 : int32_t{0};
 
       // Create a column chunk descriptor - zero/null values for all fields that are not needed
-      chunks[chunk_idx] = ColumnChunkDesc(static_cast<int64_t>(dict_page_data.size()),
-                                          const_cast<uint8_t*>(dict_page_data.data()),
-                                          col_meta.num_values,
-                                          schema.type,
-                                          schema.type_length,
-                                          0,  // start_row
-                                          0,  // num_rows
-                                          0,  // max_definition_level
-                                          0,  // max_repetition_level
-                                          0,  // max_nesting_depth
-                                          0,  // def_level_bits
-                                          0,  // rep_level_bits
-                                          col_meta.codec,
-                                          schema.logical_type,
-                                          clock_rate,
-                                          0,  // src_col_index
-                                          col_schema_idx,
-                                          nullptr,  // chunk_info
-                                          0.0f,     // list_bytes_per_row_est
-                                          false,    // strings_to_categorical
-                                          rg.source_index);
+      chunks[chunk_idx] =
+        ColumnChunkDesc(static_cast<int64_t>(dict_page_data.size()),
+                        const_cast<uint8_t*>(dict_page_data.data()),
+                        col_meta.num_values,
+                        schema.type,
+                        schema.type_length,
+                        0,  // start_row
+                        0,  // num_rows
+                        0,  // max_definition_level
+                        0,  // max_repetition_level
+                        0,  // max_nesting_depth
+                        0,  // def_level_bits
+                        0,  // rep_level_bits
+                        col_meta.codec,
+                        schema.logical_type,
+                        clock_rate,
+                        0,  // src_col_index
+                        col_schema_idx,
+                        static_cast<column_chunk_info const*>(nullptr),  // chunk_info
+                        0.0f,                                            // list_bytes_per_row_est
+                        false,                                           // strings_to_categorical
+                        rg.source_index);
       // Set the number of dictionary and data pages
       chunks[chunk_idx].num_dict_pages = static_cast<int32_t>(dict_page_data.size() > 0);
       chunks[chunk_idx].num_data_pages = 0;  // Always zero at this stage

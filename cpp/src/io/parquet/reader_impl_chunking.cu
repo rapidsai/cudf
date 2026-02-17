@@ -482,7 +482,7 @@ void reader_impl::create_global_chunk_info()
         _has_page_index ? &rg.column_chunks.value()[column_mapping[i]] : nullptr;
 
       chunks.emplace_back(col_meta.total_compressed_size,
-                          nullptr,
+                          static_cast<uint8_t*>(nullptr),
                           col_meta.num_values,
                           schema.type,
                           schema.type_length,
