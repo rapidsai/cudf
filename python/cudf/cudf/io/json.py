@@ -14,8 +14,8 @@ import pylibcudf as plc
 
 from cudf.core.column import access_columns
 from cudf.core.column.column import (
-    _normalize_empty_table,
-    _normalize_empty_tbl_w_meta,
+    _normalize_types_table,
+    _normalize_types_tbl_w_meta,
 )
 from cudf.core.dataframe import DataFrame
 from cudf.core.dtypes import (
@@ -212,7 +212,7 @@ def read_json(
                     )
                 )
             )
-            normalized_table = _normalize_empty_table(plc.Table(res_cols))
+            normalized_table = _normalize_types_table(plc.Table(res_cols))
             return DataFrame.from_pylibcudf(
                 normalized_table,
                 metadata={
@@ -240,7 +240,7 @@ def read_json(
                     extra_parameters=kwargs,
                 )
             )
-            normalized, metadata = _normalize_empty_tbl_w_meta(table_w_meta)
+            normalized, metadata = _normalize_types_tbl_w_meta(table_w_meta)
             df = DataFrame.from_pylibcudf(normalized, metadata=metadata)
     else:
         warnings.warn(
