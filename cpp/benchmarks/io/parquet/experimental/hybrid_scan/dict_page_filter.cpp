@@ -28,7 +28,7 @@ void BM_filter_string_row_groups_with_dicts_common(nvbench::state& state,
                                                    cudf::size_type cardinality)
 {
   auto const num_row_groups = static_cast<cudf::size_type>(state.get_int64("num_row_groups"));
-  auto constexpr rows_per_row_group = 5000;
+  auto constexpr rows_per_row_group = 5'000;  //< Chosen such that it is not ignored by the writer
   auto const num_rows               = num_row_groups * rows_per_row_group;
 
   std::vector<char> parquet_buffer;
@@ -58,6 +58,11 @@ void BM_filter_string_row_groups_with_dicts_common(nvbench::state& state,
   auto const footer_buffer = cudf::io::parquet::fetch_footer_to_host(datasource_ref);
   auto const reader        = std::make_unique<cudf::io::parquet::experimental::hybrid_scan_reader>(
     *footer_buffer, read_opts);
+
+  auto const parquet_metadata = reader->parquet_metadata();
+  CUDF_EXPECTS(
+    parquet_metadata.row_groups.size() == num_row_groups,
+    "Number of row groups written to the file must match the number of requested row groups");
 
   auto const page_index_byte_range = reader->page_index_byte_range();
   CUDF_EXPECTS(not page_index_byte_range.is_empty(),
