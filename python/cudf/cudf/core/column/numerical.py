@@ -28,6 +28,7 @@ from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
     cudf_dtype_from_pa_type,
     cudf_dtype_to_pa_type,
+    dtype_from_pylibcudf_column,
     dtype_to_pylibcudf_type,
     find_common_type,
     get_dtype_of_same_kind,
@@ -826,10 +827,12 @@ class NumericalColumn(NumericalBaseColumn):
     ) -> plc.Scalar | ColumnBase:
         """Align fill_value for .fillna based on column type."""
         if is_scalar(fill_value):
-            cudf_obj = ColumnBase.from_pylibcudf(
-                plc.Column.from_scalar(
-                    pa_scalar_to_plc_scalar(pa.scalar(fill_value)), 1
-                )
+            plc_col = plc.Column.from_scalar(
+                pa_scalar_to_plc_scalar(pa.scalar(fill_value)), 1
+            )
+            cudf_obj = ColumnBase.create(
+                plc_col,
+                dtype=dtype_from_pylibcudf_column(plc_col),
             )
             if not cudf_obj.can_cast_safely(self.dtype):
                 raise TypeError(

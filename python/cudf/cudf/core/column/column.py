@@ -1218,21 +1218,10 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                         type=array.type.value_type,
                     )
                 )
-            # For categories, handle special cases:
-            # - NULL type (empty categoricals): use from_pylibcudf to infer type
-            # - ExtensionType (intervals): arrow conversion may return pandas dtype
-            if pa.types.is_null(dictionary.type) or isinstance(
-                dictionary.type, pa.ExtensionType
-            ):
-                categories = cls.from_pylibcudf(
-                    plc.Column.from_arrow(dictionary)
-                )
-            else:
-                categories_dtype = cudf_dtype_from_pa_type(dictionary.type)
-                categories = cls.create(
-                    plc.Column.from_arrow(dictionary), categories_dtype
-                )
-
+            categories_dtype = cudf_dtype_from_pa_type(dictionary.type)
+            categories = cls.create(
+                plc.Column.from_arrow(dictionary), categories_dtype
+            )
             categorical_dtype = CategoricalDtype(
                 categories=categories, ordered=array.type.ordered
             )
@@ -3074,33 +3063,13 @@ def as_column(
                         categories=new_cats, ordered=arbitrary.dtype.ordered
                     )
                     arbitrary = arbitrary.astype(new_dtype)
-                elif (
-                    isinstance(
-                        arbitrary.dtype.categories.dtype, pd.IntervalDtype
-                    )
-                    and dtype is None
-                ):
-                    # Conversion to arrow converts IntervalDtype to StructDtype
-                    dtype = CategoricalDtype(
-                        categories=arbitrary.dtype.categories,
-                        ordered=arbitrary.dtype.ordered,
-                    )
             result = as_column(
                 pa.array(arbitrary, from_pandas=True),
                 nan_as_null=nan_as_null,
                 dtype=dtype,
                 length=length,
             )
-            if isinstance(arbitrary.dtype, pd.IntervalDtype):
-                # Wrap StructColumn as IntervalColumn with proper metadata
-                result = ColumnBase.create(
-                    result.plc_column,
-                    IntervalDtype(
-                        subtype=arbitrary.dtype.subtype,
-                        closed=arbitrary.dtype.closed,
-                    ),
-                )
-            elif (
+            if (
                 isinstance(arbitrary.dtype, pd.CategoricalDtype)
                 and is_pandas_nullable_extension_dtype(
                     arbitrary.dtype.categories.dtype

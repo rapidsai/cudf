@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any, TypeGuard
 import numpy as np
 import pandas as pd
 import pyarrow as pa
+from pandas.core.arrays.arrow.extension_types import ArrowIntervalType
 from pandas.core.computation.common import result_type_many
 
 import pylibcudf as plc
@@ -129,17 +130,17 @@ def cudf_dtype_to_pa_type(dtype: DtypeObj) -> pa.DataType:
 def cudf_dtype_from_pa_type(typ: pa.DataType) -> DtypeObj:
     """Given a pyarrow dtype, converts it into the equivalent cudf dtype."""
     if pa.types.is_list(typ):
-        return cudf.core.dtypes.ListDtype.from_arrow(typ)
+        return cudf.ListDtype.from_arrow(typ)
     elif pa.types.is_struct(typ):
-        return cudf.core.dtypes.StructDtype.from_arrow(typ)
+        return cudf.StructDtype.from_arrow(typ)
     elif pa.types.is_decimal(typ):
         if isinstance(typ, pa.Decimal256Type):
             raise NotImplementedError("cudf does not support Decimal256Type")
         if isinstance(typ, pa.Decimal32Type):
-            return cudf.core.dtypes.Decimal32Dtype.from_arrow(typ)
+            return cudf.Decimal32Dtype.from_arrow(typ)
         if isinstance(typ, pa.Decimal64Type):
-            return cudf.core.dtypes.Decimal64Dtype.from_arrow(typ)
-        return cudf.core.dtypes.Decimal128Dtype.from_arrow(typ)
+            return cudf.Decimal64Dtype.from_arrow(typ)
+        return cudf.Decimal128Dtype.from_arrow(typ)
     elif pa.types.is_timestamp(typ) and typ.tz is not None:
         return get_compatible_timezone(pd.DatetimeTZDtype(typ.unit, typ.tz))
     elif pa.types.is_large_string(typ) or pa.types.is_string(typ):
@@ -155,6 +156,8 @@ def cudf_dtype_from_pa_type(typ: pa.DataType) -> DtypeObj:
     elif pa.types.is_null(typ):
         # Similar to PYLIBCUDF_TO_SUPPORTED_NUMPY_TYPES[plc.types.TypeId.EMPTY]
         return np.dtype(np.int8)
+    elif isinstance(typ, ArrowIntervalType):
+        return cudf.IntervalDtype.from_arrow(typ)
     else:
         return cudf.api.types.pandas_dtype(typ.to_pandas_dtype())
 
