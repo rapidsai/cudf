@@ -19,10 +19,9 @@
 #pragma nv_hdrstop  // The above headers are used by the kernel below and need to be included before
                     // it. The headers below are used by the kernel but don't need to be included
                     // before it, so they are included in the inlined header below to avoid
-                    // unnecessary recompilation of this file when they change.
-//. Each UDF will have a different operation-udf.hpp generated for it, so we need to put this pragma
-//before including it to avoid
-// header file mismatch.
+                    // unnecessary recompilation of this file when they change. Each UDF will have a
+                    // different operation-udf.hpp generated for it, so we need to put this pragma
+                    // before including it to avoid header file mismatch.
 
 // clang-format off
 // This header is an inlined header that defines the GENERIC_FILTER_OP function. It is placed here
