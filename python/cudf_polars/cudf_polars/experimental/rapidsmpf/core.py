@@ -251,7 +251,10 @@ def evaluate_pipeline(
         )
 
         # Run the network
-        executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="cpse")
+        executor = ThreadPoolExecutor(
+            max_workers=config_options.executor.rapidsmpf_py_executor_max_workers,
+            thread_name_prefix="cpse",
+        )
         run_streaming_pipeline(nodes=nodes, py_executor=executor)
 
         # Extract/return the concatenated result.
