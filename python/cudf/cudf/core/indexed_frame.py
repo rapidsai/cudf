@@ -2960,8 +2960,8 @@ class IndexedFrame(Frame):
 
         if not gather_map.nullify and len(self) != gather_map.nrows:
             raise IndexError("Gather map is out of bounds")
-        # import pdb;pdb.set_trace()
         try:
+            # No need to gather if the gather map is already in the correct order
             short_circuit = (
                 isinstance(
                     gather_map.column,
@@ -2969,23 +2969,10 @@ class IndexedFrame(Frame):
                 )
                 and len(gather_map.column) == len(self)
                 and len(self) > 0
-                and self.index._columns[0].element_indexing(0)
-                == gather_map.column.element_indexing(0)
-                and gather_map.column.is_unique
+                and len(self.index._columns) == 1
                 and gather_map.column.is_monotonic_increasing
+                and gather_map.column.equals(self.index._columns[0])
             )
-            # import pdb;pdb.set_trace()
-            # No need to gather if the gather map is already in the correct order
-            # print("shortcut")
-            # gathered_columns = columns_to_gather
-            # return self._from_columns_like_self([
-            #     ColumnBase.create(col, orig_col.dtype)
-            #     for col, orig_col in zip(
-            #         gathered_columns,
-            #         columns_to_gather,
-            #         strict=True,
-            #     )
-            # ], self._column_names, self.index.names if keep_index else None)
         except Exception:
             short_circuit = False
         if short_circuit:
