@@ -36,7 +36,7 @@ try:
 
     duckdb_err = None
 except ImportError as e:
-    duckdb = None
+    duckdb = None  # type: ignore[assignment]
     duckdb_err = e
 
 try:
@@ -1373,7 +1373,7 @@ def print_duckdb_plan(
     else:
         tbl_names = PDSH_TABLE_NAMES
 
-    with duckdb.connect() as conn:
+    with duckdb.connect() as conn:  # type: ignore[attr-defined]
         for name in tbl_names:
             pattern = (Path(dataset_path) / name).as_posix() + suffix
             conn.execute(
@@ -1409,7 +1409,7 @@ def execute_duckdb_query(
         tbl_names = PDSDS_TABLE_NAMES
     else:
         tbl_names = PDSH_TABLE_NAMES
-    with duckdb.connect() as conn:
+    with duckdb.connect() as conn:  # type: ignore[attr-defined]
         for name in tbl_names:
             pattern = (Path(dataset_path) / name).as_posix() + suffix
             conn.execute(

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -57,4 +57,14 @@ def test_scan_by_hand(expr, selection, pq_file, chunked):
     q = pq_file.filter(expr).select(*selection)
     assert_gpu_result_equal(
         q, engine=pl.GPUEngine(raise_on_fail=True, parquet_options={"chunked": chunked})
+    )
+
+
+def test_jit_filter(pq_file):
+    q = pq_file.filter((pl.col("a") >= 2) & (pl.col("a") <= 4)).select("a", "c")
+    assert_gpu_result_equal(
+        q,
+        engine=pl.GPUEngine(
+            raise_on_fail=True, parquet_options={"use_jit_filter": True}
+        ),
     )
