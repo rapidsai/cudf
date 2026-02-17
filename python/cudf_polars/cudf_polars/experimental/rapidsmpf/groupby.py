@@ -161,7 +161,7 @@ async def _tree_groupby(
     ch_out: Channel[TableChunk],
     metadata_in: ChannelMetadata,
     *,
-    aggregated: TableChunk | None = None,
+    aggregated: TableChunk,
     collective_id: int | None = None,
     tracer: ActorTracer | None = None,
 ) -> None:
@@ -203,16 +203,15 @@ async def _tree_groupby(
         assert collective_id is not None
 
         allgather = AllGatherManager(context, collective_id)
-        stream = ir_context.get_cuda_stream()
 
-        if aggregated is not None:
-            allgather.insert(
-                0,
-                _enforce_schema(aggregated, decomposed.reduction_ir.schema),
-            )
+        allgather.insert(
+            0,
+            _enforce_schema(aggregated, decomposed.reduction_ir.schema),
+        )
 
         allgather.insert_finished()
 
+        stream = ir_context.get_cuda_stream()
         aggregated = await evaluate_chunk(
             context,
             TableChunk.from_pylibcudf_table(
@@ -224,22 +223,14 @@ async def _tree_groupby(
             ir_context=ir_context,
         )
 
-    if aggregated is not None:
-        if decomposed.select_ir is not None:
-            aggregated = await evaluate_chunk(
-                context, aggregated, decomposed.select_ir, ir_context=ir_context
-            )
-        if tracer is not None:
-            tracer.add_chunk(table=aggregated.table_view())
-        await ch_out.send(context, Message(0, aggregated))
-        del aggregated
-    else:
-        stream = ir_context.get_cuda_stream()
-        if tracer is not None:
-            tracer.add_chunk()
-        await ch_out.send(
-            context, Message(0, empty_table_chunk(decomposed.ir, context, stream))
+    if decomposed.select_ir is not None:
+        aggregated = await evaluate_chunk(
+            context, aggregated, decomposed.select_ir, ir_context=ir_context
         )
+    if tracer is not None:
+        tracer.add_chunk(table=aggregated.table_view())
+    await ch_out.send(context, Message(0, aggregated))
+    del aggregated
 
     await ch_out.drain(context)
 
@@ -254,7 +245,7 @@ async def _shuffle_groupby(
     modulus: int,
     collective_id: int,
     *,
-    aggregated: TableChunk | None = None,
+    aggregated: TableChunk,
     shuffle_context: Context | None = None,
     tracer: ActorTracer | None = None,
 ) -> None:
@@ -327,14 +318,13 @@ async def _shuffle_groupby(
         shuffle_context, modulus, shuffle_key_indices, collective_id
     )
 
-    if aggregated is not None:
-        shuffle.insert_chunk(
-            _enforce_schema(
-                aggregated,
-                decomposed.reduction_ir.schema,
-            )
+    shuffle.insert_chunk(
+        _enforce_schema(
+            aggregated,
+            decomposed.reduction_ir.schema,
         )
-        del aggregated
+    )
+    del aggregated
 
     while (msg := await ch_in.recv(context)) is not None:
         shuffle.insert_chunk(
@@ -413,6 +403,8 @@ def _key_indices(ir: GroupBy | Distinct, schema: Schema) -> tuple[int, ...]:
     schema_keys = {n: i for i, n in enumerate(schema.keys())}
     if isinstance(ir, GroupBy):
         groupby_key_names = tuple(ne.name for ne in ir.keys)
+        if not all(k in schema_keys for k in groupby_key_names):
+            return ()
         return tuple(schema_keys[k] for k in groupby_key_names)
     else:
         subset = ir.subset or frozenset(ir.schema)
@@ -529,7 +521,7 @@ async def keyed_reduction_node(
                 need_shuffle = True
                 break
 
-        aggregated: TableChunk | None = None
+        aggregated: TableChunk
         if len(evaluated_chunks) > 1:
             aggregated = await evaluate_batch(
                 evaluated_chunks,
@@ -539,6 +531,12 @@ async def keyed_reduction_node(
             )
         elif evaluated_chunks:
             aggregated = evaluated_chunks[0]
+        else:
+            aggregated = empty_table_chunk(
+                decomposed.reduction_ir,
+                context,
+                ir_context.get_cuda_stream(),
+            )
         del evaluated_chunks
 
         if not need_shuffle:
