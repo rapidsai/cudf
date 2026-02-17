@@ -100,7 +100,7 @@ jitify2::Kernel get_kernel(std::string const& kernel_name, std::string const& cu
 
   if (runtime_version >= min_pch_runtime_version) { options.emplace_back("-pch"); }
 
-  return cudf::jit::get_program_cache(*transform_jit_kernel_cu_jit)
+  return cudf::jit::get_program_cache(*stream_compaction_filter_jit_kernel_cu_jit)
     .get_kernel(kernel_name, {}, {{"cudf/detail/operation-udf.hpp", cuda_source}}, options);
 }
 
