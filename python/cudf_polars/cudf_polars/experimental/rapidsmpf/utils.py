@@ -451,7 +451,6 @@ async def chunkwise_evaluate(
     ch_out: Channel[TableChunk],
     ch_in: Channel[TableChunk],
     metadata: ChannelMetadata,
-    initial_chunks: list[TableChunk] | None = None,
     *,
     handle_empty_input: bool = False,
     tracer: ActorTracer | None = None,
@@ -476,9 +475,6 @@ async def chunkwise_evaluate(
         The input channel.
     metadata
         The channel metadata to forward (partitioning preserved).
-    initial_chunks
-        Optional chunks already received (e.g., during sampling) that should
-        be forwarded without re-evaluation.
     handle_empty_input
         If True and no chunks are received, create an empty chunk and evaluate
         it. Use for operations like aggregations that always produce output.
@@ -491,17 +487,7 @@ async def chunkwise_evaluate(
         tracer.set_duplicated()
 
     seq_num = 0
-    received_any = bool(initial_chunks)
-
-    # Forward initial chunks without re-evaluation (if any)
-    if initial_chunks:
-        for chunk in initial_chunks:
-            if tracer is not None:
-                tracer.add_chunk(table=chunk.table_view())
-            await ch_out.send(context, Message(seq_num, chunk))
-            seq_num += 1
-
-    # Process remaining chunks
+    received_any = False
     while (msg := await ch_in.recv(context)) is not None:
         received_any = True
         result = await evaluate_chunk(
