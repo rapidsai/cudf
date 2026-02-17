@@ -17,12 +17,12 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
+#include <cuda/iterator>
 #include <cuda/std/tuple>
 #include <thrust/execution_policy.h>
 #include <thrust/for_each.h>
 #include <thrust/gather.h>
 #include <thrust/host_vector.h>
-#include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/discard_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
@@ -288,7 +288,7 @@ dremel_data get_encoding(column_view h_col,
 
     // Merge empty at deepest parent level with the rep, def level vals at leaf level
 
-    auto input_parent_rep_it = thrust::make_constant_iterator(level);
+    auto input_parent_rep_it = cuda::make_constant_iterator(level);
     auto input_parent_def_it =
       thrust::make_transform_iterator(empties_idx.begin(),
                                       def_level_fn{d_nesting_levels + level,
@@ -298,7 +298,7 @@ dremel_data get_encoding(column_view h_col,
                                                    always_nullable});
 
     // `nesting_levels.size()` == no of list levels + leaf. Max repetition level = no of list levels
-    auto input_child_rep_it = thrust::make_constant_iterator(nesting_levels.size() - 1);
+    auto input_child_rep_it = cuda::make_constant_iterator(nesting_levels.size() - 1);
     auto input_child_def_it =
       thrust::make_transform_iterator(thrust::make_counting_iterator(column_offsets[level + 1]),
                                       def_level_fn{d_nesting_levels + level + 1,
@@ -352,7 +352,7 @@ dremel_data get_encoding(column_view h_col,
                        });
 
     // Set rep level values at level starts to appropriate rep level
-    auto scatter_it = thrust::make_constant_iterator(level);
+    auto scatter_it = cuda::make_constant_iterator(level);
     thrust::scatter(rmm::exec_policy_nosync(stream),
                     scatter_it,
                     scatter_it + new_offsets.size() - 1,
@@ -385,7 +385,7 @@ dremel_data get_encoding(column_view h_col,
     // Merge empty at parent level with the rep, def level vals at current level
     auto transformed_empties = thrust::make_transform_iterator(empties.begin(), offset_transformer);
 
-    auto input_parent_rep_it = thrust::make_constant_iterator(level);
+    auto input_parent_rep_it = cuda::make_constant_iterator(level);
     auto input_parent_def_it =
       thrust::make_transform_iterator(empties_idx.begin(),
                                       def_level_fn{d_nesting_levels + level,
@@ -442,7 +442,7 @@ dremel_data get_encoding(column_view h_col,
     new_offsets = std::move(temp_new_offsets);
 
     // Set rep level values at level starts to appropriate rep level
-    auto scatter_it = thrust::make_constant_iterator(level);
+    auto scatter_it = cuda::make_constant_iterator(level);
     thrust::scatter(rmm::exec_policy_nosync(stream),
                     scatter_it,
                     scatter_it + new_offsets.size() - 1,
