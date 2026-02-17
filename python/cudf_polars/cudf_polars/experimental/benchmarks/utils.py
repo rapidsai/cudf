@@ -1209,7 +1209,7 @@ def run_polars(
         engine = pl.GPUEngine(
             raise_on_fail=True,
             memory_resource=rmm.mr.CudaAsyncMemoryResource()
-            if run_config.rmm_async
+            if run_config.rmm_async and not is_rrun
             else None,
             cuda_stream_policy=run_config.stream_policy,
             executor=run_config.executor,
