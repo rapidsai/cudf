@@ -96,12 +96,10 @@ class PylibcudfFunction:
         *,
         dtype_policy: Callable[[list[Any]], Any],
         mode: Literal["read", "write"] = "read",
-        scope: Literal["internal", "external"] = "internal",
     ) -> None:
         self._pylibcudf_function = pylibcudf_function
         self._dtype_policy = dtype_policy
         self._mode = mode
-        self._scope = scope
 
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
         from cudf.core.column.column import ColumnBase
@@ -113,7 +111,7 @@ class PylibcudfFunction:
         output_dtype = self._dtype_policy([column.dtype for column in columns])
         if columns:
             with access_columns(
-                *columns, mode=self._mode, scope=self._scope
+                *columns, mode=self._mode, scope="internal"
             ) as accessed:
                 accessed_iter = iter(accessed)
                 args = tuple(
@@ -151,14 +149,12 @@ def pylibcudf_op(
     *,
     dtype_policy: Callable[[list[Any]], Any],
     mode: Literal["read", "write"] = "read",
-    scope: Literal["internal", "external"] = "internal",
 ) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
     def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
         op = PylibcudfFunction(
             pylibcudf_function,
             dtype_policy=dtype_policy,
             mode=mode,
-            scope=scope,
         )
 
         @wraps(func)
