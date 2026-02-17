@@ -7,12 +7,12 @@
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/algorithms/copy_if.cuh>
 #include <cudf/detail/get_value.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/offsets_iterator_factory.cuh>
 #include <cudf/detail/sizes_to_offsets_iterator.cuh>
-#include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/grid_1d.cuh>
 #include <cudf/strings/detail/strings_children.cuh>
@@ -27,7 +27,7 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
-#include <cuda/std/iterator>
+#include <cuda/iterator>
 #include <thrust/copy.h>
 #include <thrust/execution_policy.h>
 #include <thrust/functional.h>
@@ -428,7 +428,7 @@ std::unique_ptr<cudf::column> byte_pair_encoding(cudf::strings_column_view const
     cudf::detail::copy_if(chars_begin + 1, chars_end, d_inserts, offsets_at_non_zero, stream);
 
   // this will insert the single-byte separator into positions specified in d_inserts
-  auto const sep_char = thrust::constant_iterator<char>(separator.to_string(stream)[0]);
+  auto const sep_char = cuda::constant_iterator<char>(separator.to_string(stream)[0]);
   thrust::merge_by_key(rmm::exec_policy_nosync(stream),
                        d_inserts,      // where to insert separator byte
                        copy_end,       //

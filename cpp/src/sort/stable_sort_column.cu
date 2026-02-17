@@ -3,7 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include "sort.hpp"
 #include "sort_column_impl.cuh"
 #include "sort_radix.hpp"
 

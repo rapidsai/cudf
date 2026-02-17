@@ -6,9 +6,10 @@
 #include "io/utilities/parsing_utils.cuh"
 #include "nested_json.hpp"
 
+#include <cudf/detail/algorithms/copy_if.cuh>
+#include <cudf/detail/algorithms/reduce.cuh>
 #include <cudf/detail/cuco_helpers.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/hashing/detail/default_hash.cuh>
 #include <cudf/hashing/detail/hashing.hpp>
@@ -26,7 +27,7 @@
 #include <cuco/static_map.cuh>
 #include <cuco/static_set.cuh>
 #include <cuda/functional>
-#include <cuda/std/iterator>
+#include <cuda/iterator>
 #include <cuda/std/tuple>
 #include <thrust/binary_search.h>
 #include <thrust/count.h>
@@ -733,7 +734,7 @@ get_array_children_indices(TreeDepthT row_array_children_level,
   thrust::exclusive_scan_by_key(rmm::exec_policy_nosync(stream),
                                 level2_parent_nodes,
                                 level2_parent_nodes + num_level2_nodes,
-                                thrust::make_constant_iterator(NodeIndexT{1}),
+                                cuda::make_constant_iterator(NodeIndexT{1}),
                                 level2_indices.begin());
   return std::make_pair(std::move(level2_nodes), std::move(level2_indices));
 }
@@ -1017,7 +1018,7 @@ rmm::device_uvector<size_type> compute_row_offsets(rmm::device_uvector<NodeIndex
   thrust::exclusive_scan_by_key(rmm::exec_policy_nosync(stream),
                                 parent_col_id.begin(),
                                 parent_col_id.begin() + num_list_parent,
-                                thrust::make_constant_iterator<size_type>(1),
+                                cuda::make_constant_iterator<size_type>(1),
                                 row_offsets.begin());
 
   // Using scatter instead of sort.
