@@ -48,6 +48,4 @@ def read_avro(
 
     tbl_w_meta = plc.io.avro.read_avro(options)
     normalized, metadata = _normalize_timestamp_days_tbl_w_meta(tbl_w_meta)
-    if metadata is None:
-        return DataFrame.from_pylibcudf(normalized)
     return DataFrame.from_pylibcudf(normalized, metadata=metadata)

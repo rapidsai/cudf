@@ -269,10 +269,7 @@ def read_orc(
 
         tbl_w_meta = plc.io.orc.read_orc(options)
         normalized, metadata = _normalize_timestamp_days_tbl_w_meta(tbl_w_meta)
-        if metadata is None:
-            df = DataFrame.from_pylibcudf(normalized)
-        else:
-            df = DataFrame.from_pylibcudf(normalized, metadata=metadata)
+        df = DataFrame.from_pylibcudf(normalized, metadata=metadata)
 
         if isinstance(columns, list) and len(columns) == 0:
             # Index to deselect all columns

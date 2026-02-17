@@ -1469,10 +1469,7 @@ def _read_parquet(
             normalized, metadata = _normalize_timestamp_days_tbl_w_meta(
                 tbl_w_meta
             )
-            if metadata is None:
-                df = DataFrame.from_pylibcudf(normalized)
-            else:
-                df = DataFrame.from_pylibcudf(normalized, metadata=metadata)
+            df = DataFrame.from_pylibcudf(normalized, metadata=metadata)
             df = _process_metadata(
                 df,
                 tbl_w_meta.column_names(include_children=False),

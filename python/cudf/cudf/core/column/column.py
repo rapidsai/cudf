@@ -183,8 +183,7 @@ def _normalize_timestamp_days(col: plc.Column) -> plc.Column:
     if col.type().id() == plc.TypeId.TIMESTAMP_DAYS:
         return plc.unary.cast(col, plc.DataType(plc.TypeId.TIMESTAMP_SECONDS))
 
-    children = list(col.children())
-    if not children:
+    if not (children := col.children()):
         return col
 
     normalized_children = [
