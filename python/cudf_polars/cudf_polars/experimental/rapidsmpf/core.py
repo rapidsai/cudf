@@ -170,7 +170,6 @@ def evaluate_pipeline(
     -------
     The output DataFrame and metadata collector.
     """
-    assert config_options.executor.name == "streaming", "Executor must be streaming"
     assert config_options.executor.runtime == "rapidsmpf", "Runtime must be rapidsmpf"
 
     _initial_mr: Any = None
