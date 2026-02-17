@@ -418,7 +418,7 @@ def pyarrow_dtype_to_cudf_dtype(dtype: pd.ArrowDtype) -> DtypeObj:
     elif pa.types.is_date(pyarrow_dtype):
         raise TypeError("Unsupported type")
     elif isinstance(pyarrow_dtype, pa.DataType):
-        return pyarrow_dtype.to_pandas_dtype()
+        return np.dtype(pyarrow_dtype.to_pandas_dtype())
     else:
         raise TypeError(f"Unsupported Arrow type: {pyarrow_dtype}")
 

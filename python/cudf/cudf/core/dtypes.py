@@ -573,6 +573,17 @@ class ListDtype(_BaseDtype):
             ]
         return result
 
+    @classmethod
+    def from_list_dtype(cls, obj) -> Self:
+        if isinstance(obj, ListDtype):
+            return obj
+        elif isinstance(obj, pa.ListType):
+            return cls.from_arrow(obj)
+        elif isinstance(obj, pd.ArrowDtype):
+            return cls.from_arrow(obj.pyarrow_dtype)
+        else:
+            raise TypeError(f"Cannot convert {type(obj)} to StructDtype")
+
 
 class StructDtype(_BaseDtype):
     """
@@ -1142,6 +1153,17 @@ class IntervalDtype(_BaseDtype):
         _check_type(cls, header, frames)
         subtype, closed = header["fields"]
         return cls(subtype, closed=closed)
+
+    @classmethod
+    def from_interval_dtype(cls, obj) -> Self:
+        if isinstance(obj, IntervalDtype):
+            return obj
+        elif isinstance(obj, ArrowIntervalType):
+            return cls.from_arrow(obj)
+        elif isinstance(obj, pd.ArrowDtype):
+            return cls.from_arrow(obj.pyarrow_dtype)
+        else:
+            raise TypeError(f"Cannot convert {type(obj)} to IntervalDtype")
 
 
 def _is_categorical_dtype(obj):

@@ -74,6 +74,7 @@ from cudf.utils.dtypes import (
     DEFAULT_STRING_DTYPE,
     SIZE_TYPE_DTYPE,
     can_convert_to_column,
+    cudf_dtype_to_pa_type,
     dtype_from_pylibcudf_column,
     find_common_type,
     get_dtype_of_same_kind,
@@ -506,6 +507,14 @@ class IndexedFrame(Frame):
             raise TypeError(
                 "got an unexpected keyword argument 'numeric_only'"
             )
+
+        for col in self._columns:
+            if isinstance(col.dtype, pd.ArrowDtype):
+                if pa.types.is_decimal(col.dtype.pyarrow_dtype):
+                    raise NotImplementedError(
+                        "Decimal ArrowDtype does not support cumulative operations"
+                    )
+
         cast_to_int = op in ("cumsum", "cumprod")
         skipna = True if skipna is None else skipna
 
@@ -6378,6 +6387,18 @@ class IndexedFrame(Frame):
         All other dtypes are always returned as-is as all dtypes in
         cudf are nullable.
         """
+        if dtype_backend == "pyarrow":
+            cols = []
+            for col in self._columns:
+                arrow_dtype = pd.ArrowDtype(
+                    pa.null()
+                    if col.null_count == len(col)
+                    else cudf_dtype_to_pa_type(col.dtype)
+                )
+                cols.append(ColumnBase.create(col.plc_column, arrow_dtype))
+            return self._from_data_like_self(
+                self._data._from_columns_like_self(cols, verify=False)
+            )
         if not (convert_floating and convert_integer):
             return self.copy()
         else:

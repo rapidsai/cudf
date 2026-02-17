@@ -15,6 +15,7 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/iterator>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/scan.h>
 #include <thrust/scatter.h>
@@ -88,7 +89,7 @@ std::unique_ptr<column> scan_inclusive(column_view const& input,
     // fill the null rows with out-of-bounds values so gather records them as null;
     // this prevents un-sanitized null entries in the output
     auto null_itr = cudf::detail::make_counting_transform_iterator(0, null_iterator{mask});
-    auto oob_val  = thrust::constant_iterator<size_type>(input.size());
+    auto oob_val  = cuda::constant_iterator<size_type>(input.size());
     thrust::scatter_if(rmm::exec_policy_nosync(stream),
                        oob_val,
                        oob_val + input.size(),

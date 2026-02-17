@@ -20,7 +20,6 @@
 #include <cuda/functional>
 #include <thrust/binary_search.h>
 #include <thrust/host_vector.h>
-#include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/discard_iterator.h>
 #include <thrust/transform_scan.h>
 

@@ -698,6 +698,17 @@ class GroupBy(Serializable, Reducible, Scannable):
             .groupby(self.grouping, sort=self._sort, dropna=self._dropna)
             .agg("size")
         )
+        if isinstance(getattr(self.obj, "dtype", None), pd.ArrowDtype):
+            # TODO: Remove once groupby.agg preserves pandas extension dtypes.
+            arrow_dtype = pd.ArrowDtype(pa.int64())
+            if isinstance(result, Series):
+                result._column = ColumnBase.create(
+                    result._column.plc_column, arrow_dtype
+                )
+            elif "size" in result._column_names:
+                result._data["size"] = ColumnBase.create(
+                    result._data["size"].plc_column, arrow_dtype
+                )
         if not self._as_index:
             result = result.rename("size").reset_index()
         return result
