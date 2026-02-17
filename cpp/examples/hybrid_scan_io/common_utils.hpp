@@ -52,15 +52,6 @@ cudf::ast::operation create_filter_expression(std::string const& column_name,
                                               std::string const& literal_value);
 
 /**
- * @brief Create a host span from a datasource buffer
- *
- * @param buffer Datasource buffer
- * @return Corresponding host span
- */
-[[nodiscard]] cudf::host_span<uint8_t const> make_host_span(
-  cudf::io::datasource::buffer const& buffer);
-
-/**
  * @brief Combine columns from filter and payload tables into a single table
  *
  * @param filter_table Filter table

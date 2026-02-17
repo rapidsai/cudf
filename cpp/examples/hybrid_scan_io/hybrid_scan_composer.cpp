@@ -49,7 +49,7 @@ std::unique_ptr<hybrid_scan_reader> setup_reader(cudf::io::datasource& datasourc
   timer timer;
   // Fetch footer bytes and setup reader
   auto const footer_buffer = fetch_footer_bytes(datasource);
-  auto reader = std::make_unique<hybrid_scan_reader>(make_host_span(*footer_buffer), options);
+  auto reader              = std::make_unique<hybrid_scan_reader>(*footer_buffer, options);
   if (verbose) { timer.print_elapsed_millis(); }
 
   return std::move(reader);
@@ -77,7 +77,7 @@ void setup_page_index(cudf::io::datasource& datasource,
     "Parquet source does not contain a page index, needed by the Hybrid Scan for two-step read");
   if (not page_index_byte_range.is_empty()) {
     auto const page_index_buffer = fetch_page_index_bytes(datasource, page_index_byte_range);
-    reader.setup_page_index(make_host_span(*page_index_buffer));
+    reader.setup_page_index(*page_index_buffer);
   }
   if (verbose) { timer.print_elapsed_millis(); }
 }
