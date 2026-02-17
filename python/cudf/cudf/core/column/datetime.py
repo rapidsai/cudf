@@ -906,7 +906,6 @@ class DatetimeTZColumn(DatetimeColumn):
     ) -> DatetimeColumn:
         if isinstance(dtype, pd.DatetimeTZDtype) and dtype != self.dtype:
             if dtype.unit != self.time_unit:
-                # TODO: Doesn't check that new unit is valid.
                 casted_plc = (
                     super()
                     .as_datetime_column(_get_base_dtype(dtype))

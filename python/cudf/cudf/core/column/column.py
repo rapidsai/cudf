@@ -200,10 +200,9 @@ def _wrap_and_validate(
         )
         type_id = new_dtype.id()
 
-    dtype_kind = dispatch_dtype.kind
-
     valid_types: set[plc.TypeId] = set()
-    wrapped = None
+    wrapped: plc.Column | None = None
+    dtype_kind = dispatch_dtype.kind
     if isinstance(dispatch_dtype, ListDtype):
         valid_types = {plc.TypeId.LIST}
         values, values_dtype = _wrap_and_validate(
@@ -214,8 +213,7 @@ def _wrap_and_validate(
             col, [offsets, values], data_type=plc.DataType(plc.TypeId.LIST)
         )
         dispatch_dtype = ListDtype(values_dtype)
-
-    if isinstance(dispatch_dtype, IntervalDtype):
+    elif isinstance(dispatch_dtype, IntervalDtype):
         valid_types = {plc.TypeId.STRUCT}
         if col.num_children() != 2:
             raise ValueError(
@@ -235,8 +233,7 @@ def _wrap_and_validate(
             wrapped_children,
             data_type=plc.DataType(plc.TypeId.STRUCT),
         )
-
-    if isinstance(dispatch_dtype, StructDtype):
+    elif isinstance(dispatch_dtype, StructDtype):
         valid_types = {plc.TypeId.STRUCT}
         wrapped_children = []
         for child, (field_name, field_dtype) in zip(
@@ -246,7 +243,7 @@ def _wrap_and_validate(
                 wrapped_child, _ = _wrap_and_validate(child, field_dtype)
             except ValueError as e:
                 raise ValueError(
-                    f"Field '{field_name}' validation failed: {e}"
+                    f"Field '{field_name}' validation failed"
                 ) from e
             wrapped_children.append(wrapped_child)
         wrapped = _make_wrapped(
@@ -263,15 +260,13 @@ def _wrap_and_validate(
         valid_types = {plc.TypeId.STRING}
         if isinstance(dispatch_dtype, np.dtype) and dispatch_dtype.kind == "U":
             dispatch_dtype = np.dtype(object)
-
-    if isinstance(dispatch_dtype, DecimalDtype):
+    elif isinstance(dispatch_dtype, DecimalDtype):
         valid_types = {
             plc.TypeId.DECIMAL128,
             plc.TypeId.DECIMAL64,
             plc.TypeId.DECIMAL32,
         }
-
-    if isinstance(dispatch_dtype, CategoricalDtype):
+    elif isinstance(dispatch_dtype, CategoricalDtype):
         valid_types = {
             plc.TypeId.INT8,
             plc.TypeId.INT16,
@@ -282,8 +277,7 @@ def _wrap_and_validate(
             plc.TypeId.UINT32,
             plc.TypeId.UINT64,
         }
-
-    if dtype_kind == "M":
+    elif dtype_kind == "M":
         valid_types = {
             plc.TypeId.TIMESTAMP_SECONDS,
             plc.TypeId.TIMESTAMP_MILLISECONDS,
@@ -292,16 +286,14 @@ def _wrap_and_validate(
         }
         if isinstance(dispatch_dtype, pd.DatetimeTZDtype):
             dispatch_dtype = get_compatible_timezone(dispatch_dtype)
-
-    if dtype_kind == "m":
+    elif dtype_kind == "m":
         valid_types = {
             plc.TypeId.DURATION_SECONDS,
             plc.TypeId.DURATION_MILLISECONDS,
             plc.TypeId.DURATION_MICROSECONDS,
             plc.TypeId.DURATION_NANOSECONDS,
         }
-
-    if dtype_kind in "iufb":
+    elif dtype_kind in "iufb":
         valid_types = {
             plc.TypeId.INT8,
             plc.TypeId.INT16,
