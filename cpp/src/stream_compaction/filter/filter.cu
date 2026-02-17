@@ -91,10 +91,8 @@ jitify2::Kernel get_kernel(std::string const& kernel_name, std::string const& cu
 {
   CUDF_FUNC_RANGE();
 
-  int32_t runtime_version;
-  CUDF_EXPECTS(cudaRuntimeGetVersion(&runtime_version) == cudaSuccess,
-               "Failed to get CUDA runtime version",
-               std::runtime_error);
+  int runtime_version;
+  CUDF_CUDA_TRY(cudaRuntimeGetVersion(&runtime_version));
   auto const min_pch_runtime_version = 12800;  // CUDA 12.8
 
   std::vector<std::string> options;
