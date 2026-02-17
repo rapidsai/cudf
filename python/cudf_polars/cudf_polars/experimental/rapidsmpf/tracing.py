@@ -14,7 +14,7 @@ if TYPE_CHECKING:
     import pylibcudf as plc
 
     from cudf_polars.dsl.ir import IR
-    from cudf_polars.utils.config import ConfigOptions, StreamingExecutor
+    from cudf_polars.utils.config import ConfigOptions
 
 
 class ActorTracer:
@@ -80,7 +80,7 @@ class ActorTracer:
         self.duplicated = duplicated
 
 
-def log_query_plan(ir: IR, config_options: ConfigOptions[StreamingExecutor]) -> None:
+def log_query_plan(ir: IR, config_options: ConfigOptions) -> None:
     """
     Log the IR tree structure as a structlog event.
 
