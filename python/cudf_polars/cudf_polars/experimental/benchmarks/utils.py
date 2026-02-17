@@ -100,75 +100,6 @@ else:
 
 
 ExecutorType = Literal["in-memory", "streaming", "cpu"]
-# The dtype for count() aggregations depends on the presence
-# of the polars-runtime-64 package (`polars[rt64]`).
-HAS_POLARS_RT_64 = pl.config.plr.RUNTIME_REPR == "rt64"
-COUNT_DTYPE = pl.UInt64() if HAS_POLARS_RT_64 else pl.UInt32()
-
-
-# The pre-computed expected results come from DuckDB, which has
-# different casting rules than Polars. For example, in polars
-# Series[Decimal].mean() returns a Float64, while DuckDB returns a Decimal.
-#
-# This dictionary maps query ID to the casts to apply to the DuckDB
-# results necessary to match the cudf-polars results.
-# EXPECTED_CASTS_DECIMAL should be used when the input data uses
-# Decimal (rather than Float) for account balances, etc.
-# EXPECTED_CASTS_FLOATS should be used when the input data uses
-# Float (rather than Decimal) for account balances, etc.
-EXPECTED_CASTS_DECIMAL = {
-    1: [
-        pl.col("sum_qty").cast(pl.Decimal(15, 2)),
-        pl.col("sum_base_price").cast(pl.Decimal(15, 2)),
-        pl.col("sum_disc_price").cast(pl.Float64()),
-        pl.col("sum_charge").cast(pl.Float64()),
-        pl.col("avg_disc").cast(pl.Float64()),
-        pl.col("avg_price").cast(pl.Float64()),
-        pl.col("avg_qty").cast(pl.Float64()),
-        pl.col("count_order").cast(COUNT_DTYPE),
-    ],
-    3: [pl.col("revenue").cast(pl.Decimal(38, 2))],
-    4: [pl.col("order_count").cast(COUNT_DTYPE)],
-    5: [pl.col("revenue").cast(pl.Decimal(38, 2))],
-    6: [pl.col("revenue").cast(pl.Decimal(38, 2))],
-    7: [pl.col("l_year").cast(pl.Int32()), pl.col("revenue").cast(pl.Decimal(38, 2))],
-    8: [pl.col("o_year").cast(pl.Int32()), pl.col("mkt_share").cast(pl.Decimal(38, 2))],
-    9: [
-        pl.col("o_year").cast(pl.Int32()),
-        pl.col("sum_profit").cast(pl.Decimal(38, 2)),
-    ],
-    10: [pl.col("revenue").cast(pl.Decimal(38, 2))],
-    12: [
-        pl.col("high_line_count").cast(pl.Int32()),
-        pl.col("low_line_count").cast(pl.Int32()),
-    ],
-    13: [pl.col("c_count").cast(COUNT_DTYPE), pl.col("custdist").cast(COUNT_DTYPE)],
-    15: [pl.col("total_revenue").cast(pl.Decimal(38, 2))],
-    16: [pl.col("supplier_cnt").cast(COUNT_DTYPE)],
-    18: [pl.col("sum(l_quantity)").cast(pl.Decimal(15, 2))],
-    19: [pl.col("revenue").cast(pl.Decimal(38, 2))],
-    21: [pl.col("numwait").cast(COUNT_DTYPE)],
-    22: [
-        pl.col("numcust").cast(COUNT_DTYPE),
-        pl.col("totacctbal").cast(pl.Decimal(15, 2)),
-    ],
-}
-
-EXPECTED_CASTS_FLOAT = {
-    1: [pl.col("count_order").cast(COUNT_DTYPE)],
-    4: [pl.col("order_count").cast(COUNT_DTYPE)],
-    7: [pl.col("l_year").cast(pl.Int32())],
-    8: [pl.col("o_year").cast(pl.Int32())],
-    9: [pl.col("o_year").cast(pl.Int32())],
-    12: [
-        pl.col("high_line_count").cast(pl.Int32()),
-        pl.col("low_line_count").cast(pl.Int32()),
-    ],
-    13: [pl.col("c_count").cast(COUNT_DTYPE), pl.col("custdist").cast(COUNT_DTYPE)],
-    16: [pl.col("supplier_cnt").cast(COUNT_DTYPE)],
-    21: [pl.col("numwait").cast(COUNT_DTYPE)],
-    22: [pl.col("numcust").cast(COUNT_DTYPE)],
-}
 
 
 @dataclasses.dataclass
@@ -1461,9 +1392,9 @@ def run_polars(
 
             if args.validate_directory is not None:
                 if input_data_type == "decimal":
-                    casts = EXPECTED_CASTS_DECIMAL.get(q_id, [])
+                    casts = benchmark.EXPECTED_CASTS_DECIMAL.get(q_id, [])
                 else:
-                    casts = EXPECTED_CASTS_FLOAT.get(q_id, [])
+                    casts = benchmark.EXPECTED_CASTS_FLOAT.get(q_id, [])
 
                 expected = pl.read_parquet(validation_files[q_id]).with_columns(*casts)
                 validation_result = validate_result(
