@@ -47,12 +47,12 @@ struct parquet_column_schema {
    * @param name column name
    * @param type parquet type
    * @param children child columns (empty for non-nested types)
-   * @param cudf_type cudf data type (defaults to EMPTY)
+   * @param cudf_type cudf data type
    */
   parquet_column_schema(std::string_view name,
                         Type type,
                         std::vector<parquet_column_schema> children,
-                        data_type cudf_type = data_type{type_id::EMPTY})
+                        data_type cudf_type)
     : _name{name}, _type{type}, _children{std::move(children)}, _cudf_type{cudf_type}
   {
   }
