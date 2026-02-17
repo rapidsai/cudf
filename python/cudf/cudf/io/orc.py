@@ -13,6 +13,7 @@ import pylibcudf as plc
 
 from cudf.api.types import is_list_like
 from cudf.core.column import access_columns, column_empty
+from cudf.core.column.column import _normalize_timestamp_days_table
 from cudf.core.dataframe import DataFrame
 from cudf.core.dtypes import (
     CategoricalDtype,
@@ -267,7 +268,17 @@ def read_orc(
             options.set_columns(columns)
 
         tbl_w_meta = plc.io.orc.read_orc(options)
-        df = DataFrame.from_pylibcudf(tbl_w_meta)
+        normalized = _normalize_timestamp_days_table(tbl_w_meta.tbl)
+        if normalized is tbl_w_meta.tbl:
+            df = DataFrame.from_pylibcudf(tbl_w_meta)
+        else:
+            df = DataFrame.from_pylibcudf(
+                normalized,
+                metadata={
+                    "columns": tbl_w_meta.column_names(include_children=False),
+                    "child_names": tbl_w_meta.child_names,
+                },
+            )
 
         if isinstance(columns, list) and len(columns) == 0:
             # Index to deselect all columns

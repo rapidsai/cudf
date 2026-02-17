@@ -1,8 +1,9 @@
-# SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 import pylibcudf as plc
 
+from cudf.core.column.column import _normalize_timestamp_days_table
 from cudf.core.dataframe import DataFrame
 from cudf.utils import ioutils
 
@@ -45,4 +46,14 @@ def read_avro(
     if columns is not None and len(columns) > 0:
         options.set_columns(columns)
 
-    return DataFrame.from_pylibcudf(plc.io.avro.read_avro(options))
+    tbl_w_meta = plc.io.avro.read_avro(options)
+    normalized = _normalize_timestamp_days_table(tbl_w_meta.tbl)
+    if normalized is tbl_w_meta.tbl:
+        return DataFrame.from_pylibcudf(tbl_w_meta)
+    return DataFrame.from_pylibcudf(
+        normalized,
+        metadata={
+            "columns": tbl_w_meta.column_names(include_children=False),
+            "child_names": tbl_w_meta.child_names,
+        },
+    )

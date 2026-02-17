@@ -179,6 +179,50 @@ def _wrap_column(col: plc.Column) -> plc.Column:
     return _make_wrapped(col, wrapped_children)
 
 
+def _normalize_timestamp_days(col: plc.Column) -> plc.Column:
+    if col.type().id() == plc.TypeId.TIMESTAMP_DAYS:
+        return plc.unary.cast(col, plc.DataType(plc.TypeId.TIMESTAMP_SECONDS))
+
+    children = list(col.children())
+    if not children:
+        return col
+
+    normalized_children = [
+        _normalize_timestamp_days(child) for child in children
+    ]
+    if all(
+        normalized_child is child
+        for normalized_child, child in zip(
+            normalized_children, children, strict=True
+        )
+    ):
+        return col
+
+    return plc.Column(
+        data_type=col.type(),
+        size=col.size(),
+        data=col.data(),
+        mask=col.null_mask(),
+        children=normalized_children,
+        offset=col.offset(),
+        null_count=col.null_count(),
+        validate=False,
+    )
+
+
+def _normalize_timestamp_days_table(table: plc.Table) -> plc.Table:
+    columns = table.columns()
+    normalized_columns = [_normalize_timestamp_days(col) for col in columns]
+    if all(
+        normalized_col is col
+        for normalized_col, col in zip(
+            normalized_columns, columns, strict=True
+        )
+    ):
+        return table
+    return plc.Table(normalized_columns)
+
+
 def _wrap_and_validate(
     col: plc.Column, dtype: DtypeObj
 ) -> tuple[plc.Column, DtypeObj]:
@@ -187,10 +231,7 @@ def _wrap_and_validate(
         dispatch_dtype = pyarrow_dtype_to_cudf_dtype(dispatch_dtype)
     type_id = col.type().id()
 
-    if type_id == plc.TypeId.TIMESTAMP_DAYS:
-        type_id = plc.TypeId.TIMESTAMP_SECONDS
-        col = plc.unary.cast(col, plc.DataType(type_id))
-    elif type_id == plc.TypeId.EMPTY:
+    if type_id == plc.TypeId.EMPTY:
         if isinstance(dispatch_dtype, CategoricalDtype):
             new_dtype = dtype_to_pylibcudf_type(dispatch_dtype._codes_dtype)
         else:
@@ -1233,10 +1274,9 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 codes_plc = plc.unary.cast(codes_plc, expected_codes_dtype)
             return ColumnBase.create(codes_plc, categorical_dtype)
         else:
-            return cls.create(
-                plc.Column.from_arrow(array),
-                cudf_dtype_from_pa_type(array.type),
-            )
+            plc_column = plc.Column.from_arrow(array)
+            normalized = _normalize_timestamp_days(plc_column)
+            return cls.create(normalized, cudf_dtype_from_pa_type(array.type))
 
     def _get_mask_as_column(self) -> ColumnBase:
         with self.access(mode="read", scope="internal"):
