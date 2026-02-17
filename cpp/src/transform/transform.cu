@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -33,8 +33,19 @@ namespace {
 jitify2::Kernel get_kernel(std::string const& kernel_name, std::string const& cuda_source)
 {
   CUDF_FUNC_RANGE();
+  int32_t runtime_version;
+  CUDF_EXPECTS(cudaRuntimeGetVersion(&runtime_version) == cudaSuccess,
+               "Failed to get CUDA runtime version",
+               std::runtime_error);
+  auto const min_pch_runtime_version = 12800;  // CUDA 12.8
+
+  std::vector<std::string> options;
+  options.emplace_back("-arch=sm_.");
+
+  if (runtime_version >= min_pch_runtime_version) { options.emplace_back("-pch"); }
+
   return cudf::jit::get_program_cache(*transform_jit_kernel_cu_jit)
-    .get_kernel(kernel_name, {}, {{"cudf/detail/operation-udf.hpp", cuda_source}}, {"-arch=sm_."});
+    .get_kernel(kernel_name, {}, {{"cudf/detail/operation-udf.hpp", cuda_source}}, options);
 }
 
 jitify2::StringVec build_jit_template_params(
