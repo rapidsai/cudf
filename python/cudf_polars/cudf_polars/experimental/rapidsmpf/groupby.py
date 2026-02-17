@@ -254,7 +254,10 @@ async def _tree_groupby(
         stream = ir_context.get_cuda_stream()
 
         if evaluated_chunk is not None:
-            allgather.insert(0, evaluated_chunk)
+            allgather.insert(
+                0,
+                _enforce_schema(evaluated_chunk, decomposed.reduction_ir.schema),
+            )
 
         allgather.insert_finished()
 
@@ -490,14 +493,13 @@ async def keyed_reduction_node(
     ir_context: IRExecutionContext,
     ch_out: Channel[TableChunk],
     ch_in: Channel[TableChunk],
-    sample_chunk_count: int,
     target_partition_size: int,
     collective_ids: list[int],
 ) -> None:
     """
     Dynamic GroupBy or Distinct node that selects the best strategy at runtime.
 
-    Strategy selection based on sampled data:
+    Strategy selection based on observed data:
     - Chunk-wise: Data already partitioned on the necessary keys
     - Tree reduction: Small estimated output (< target_partition_size)
     - Shuffle: Large estimated output requiring redistribution
@@ -514,8 +516,6 @@ async def keyed_reduction_node(
         The output channel.
     ch_in
         The input channel.
-    sample_chunk_count
-        The number of chunks to sample.
     target_partition_size
         The target partition size.
     collective_ids
@@ -559,15 +559,10 @@ async def keyed_reduction_node(
         decomposed = DecomposedGroupBy.from_ir(ir)
         assert not decomposed.need_preshuffle, "Should already be shuffled."
 
-        evaluated_chunks: list[TableChunk] = []
         total_size = 0
-        merge_count = 0
         chunks_sampled = 0
-
-        for _ in range(sample_chunk_count):
-            msg = await ch_in.recv(context)
-            if msg is None:
-                break
+        evaluated_chunks: list[TableChunk] = []
+        while (msg := await ch_in.recv(context)) is not None:
             chunks_sampled += 1
             chunk = await evaluate_chunk(
                 context,
@@ -578,19 +573,18 @@ async def keyed_reduction_node(
             del msg
             total_size += chunk.data_alloc_size(MemoryType.DEVICE)
             evaluated_chunks.append(chunk)
-
             if total_size > target_partition_size and len(evaluated_chunks) > 1:
-                merged = await evaluate_batch(
-                    evaluated_chunks,
-                    context,
-                    decomposed.reduction_ir,
-                    ir_context=ir_context,
-                )
-                total_size = merged.data_alloc_size(MemoryType.DEVICE)
-                evaluated_chunks = [merged]
-                merge_count += 1
-                if total_size > target_partition_size:
-                    break
+                evaluated_chunks = [
+                    await evaluate_batch(
+                        evaluated_chunks,
+                        context,
+                        decomposed.reduction_ir,
+                        ir_context=ir_context,
+                    )
+                ]
+                total_size = evaluated_chunks[0].data_alloc_size(MemoryType.DEVICE)
+            if total_size > target_partition_size:
+                break
 
         local_count = metadata_in.local_count
         if can_skip_global_comm:
@@ -701,7 +695,6 @@ def _(
             rec.state["ir_context"],
             channels[ir].reserve_input_slot(),
             channels[ir.children[0]].reserve_output_slot(),
-            config_options.executor.dynamic_planning.sample_chunk_count_reduce,
             config_options.executor.target_partition_size,
             collective_ids,
         )
