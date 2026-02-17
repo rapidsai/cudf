@@ -20,9 +20,9 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/iterator>
 #include <cuda/std/utility>
 #include <thrust/for_each.h>
-#include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
 
 #include <iterator>
@@ -299,7 +299,7 @@ std::unique_ptr<column> md5(table_view const& input,
   // Digest size in bytes
   auto constexpr digest_size = 32;
   // Result column allocation and creation
-  auto begin = thrust::make_constant_iterator(digest_size);
+  auto begin = cuda::make_constant_iterator(digest_size);
   auto [offsets_column, bytes] =
     cudf::strings::detail::make_offsets_child_column(begin, begin + input.num_rows(), stream, mr);
 
