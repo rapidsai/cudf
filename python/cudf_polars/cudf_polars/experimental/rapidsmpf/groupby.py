@@ -478,6 +478,8 @@ async def keyed_reduction_node(
         )
 
         if fully_partitioned or fallback_case:
+            if tracer is not None:
+                tracer.decision = "chunkwise"
             await chunkwise_evaluate(
                 context,
                 ir,
