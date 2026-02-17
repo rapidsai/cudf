@@ -98,7 +98,7 @@ def evaluate_logical_plan(
     ir, partition_info, stats = lower_ir_graph(ir, config_options)
 
     # Log the query plan structure for tracing (no-op if tracing disabled)
-    log_query_plan(ir)
+    log_query_plan(ir, config_options)
 
     # Reserve shuffle IDs for the entire pipeline execution
     with ReserveOpIDs(ir, config_options) as collective_id_map:
@@ -250,7 +250,10 @@ def evaluate_pipeline(
         )
 
         # Run the network
-        executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="cpse")
+        executor = ThreadPoolExecutor(
+            max_workers=config_options.executor.rapidsmpf_py_executor_max_workers,
+            thread_name_prefix="cpse",
+        )
         run_streaming_pipeline(nodes=nodes, py_executor=executor)
 
         # Extract/return the concatenated result.

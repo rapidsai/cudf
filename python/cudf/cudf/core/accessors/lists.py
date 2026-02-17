@@ -135,7 +135,9 @@ class ListMethods(BaseAccessor):
         --------
         >>> s = cudf.Series([[1, 2, 3], [3, 4, 5], [4, 5, 6]])
         >>> s.list.contains(4)
-        Series([False, True, True])
+        0    False
+        1     True
+        2     True
         dtype: bool
         """
         return self._return_or_inplace(
@@ -303,16 +305,16 @@ class ListMethods(BaseAccessor):
         --------
         >>> s = cudf.Series([[1, 1, 2, None, None], None, [4, 4], []])
         >>> s
-        0    [1.0, 1.0, 2.0, nan, nan]
-        1                         None
-        2                   [4.0, 4.0]
-        3                           []
+        0    [1, 1, 2, None, None]
+        1                     None
+        2                   [4, 4]
+        3                       []
         dtype: list
         >>> s.list.unique() # Order of list element is not guaranteed
-        0              [1.0, 2.0, nan]
-        1                         None
-        2                        [4.0]
-        3                           []
+        0    [1, 2, None]
+        1            None
+        2             [4]
+        3              []
         dtype: list
         """
         if isinstance(
@@ -354,9 +356,9 @@ class ListMethods(BaseAccessor):
         --------
         >>> s = cudf.Series([[4, 2, None, 9], [8, 8, 2], [2, 1]])
         >>> s.list.sort_values(ascending=True, na_position="last")
-        0    [2.0, 4.0, 9.0, nan]
-        1         [2.0, 8.0, 8.0]
-        2              [1.0, 2.0]
+        0    [2, 4, 9, None]
+        1          [2, 8, 8]
+        2             [1, 2]
         dtype: list
 
         .. pandas-compat::
@@ -406,6 +408,7 @@ class ListMethods(BaseAccessor):
 
         Examples
         --------
+        >>> s1 = cudf.Series([[[1.0, 2.0], [3.0, 4.0, 5.0]], [[6.0, None], [7.0], [8.0, 9.0]]])
         >>> s1
         0      [[1.0, 2.0], [3.0, 4.0, 5.0]]
         1    [[6.0, None], [7.0], [8.0, 9.0]]
@@ -417,6 +420,7 @@ class ListMethods(BaseAccessor):
 
         Null values at the top-level in each row are dropped by default:
 
+        >>> s2 = cudf.Series([[[1.0, 2.0], None, [3.0, 4.0, 5.0]], [[6.0, None], [7.0], [8.0, 9.0]]])
         >>> s2
         0    [[1.0, 2.0], None, [3.0, 4.0, 5.0]]
         1        [[6.0, None], [7.0], [8.0, 9.0]]
@@ -429,8 +433,8 @@ class ListMethods(BaseAccessor):
         Use ``dropna=False`` to produce a null instead:
 
         >>> s2.list.concat(dropna=False)
-        0                         None
-        1    [6.0, nan, 7.0, 8.0, 9.0]
+        0                          None
+        1    [6.0, None, 7.0, 8.0, 9.0]
         dtype: list
         """
         return self._return_or_inplace(

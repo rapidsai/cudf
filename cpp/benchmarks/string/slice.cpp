@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -13,7 +13,7 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
-#include <thrust/iterator/constant_iterator.h>
+#include <cuda/iterator>
 
 #include <nvbench/nvbench.cuh>
 
@@ -29,10 +29,10 @@ static void bench_slice(nvbench::state& state)
     cudf::type_id::STRING, distribution_id::NORMAL, 0, row_width);
   auto const column = create_random_column(cudf::type_id::STRING, row_count{num_rows}, profile);
   cudf::strings_column_view input(column->view());
-  auto starts_itr = thrust::constant_iterator<cudf::size_type>(row_width / 4);
+  auto starts_itr = cuda::constant_iterator<cudf::size_type>(row_width / 4);
   auto starts =
     cudf::test::fixed_width_column_wrapper<cudf::size_type>(starts_itr, starts_itr + num_rows);
-  auto stops_itr = thrust::constant_iterator<cudf::size_type>(row_width / 3);
+  auto stops_itr = cuda::constant_iterator<cudf::size_type>(row_width / 3);
   auto stops =
     cudf::test::fixed_width_column_wrapper<cudf::size_type>(stops_itr, stops_itr + num_rows);
 

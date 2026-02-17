@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 import pyarrow as pa
@@ -48,3 +48,98 @@ def test_is_valid_aggregation(agg, dt):
 def test_is_not_valid_aggregation(agg, dt):
     plc_type = plc.DataType.from_arrow(dt)
     assert not plc.reduce.is_valid_reduce_aggregation(plc_type, agg)
+
+
+@pytest.mark.parametrize(
+    "data,expected",
+    [
+        ([1, 2, 2, 3, 3, 3], 3),
+        ([1, 1, 1, 1], 1),
+        ([], 0),
+        ([1, 2, 3, 4, 5], 5),
+    ],
+)
+def test_distinct_count(data, expected):
+    arr = pa.array(data, type=pa.int32())
+    col = plc.Column.from_arrow(arr)
+    result = plc.reduce.distinct_count(
+        col,
+        plc.types.NullPolicy.INCLUDE,
+        plc.types.NanPolicy.NAN_IS_VALID,
+    )
+    assert result == expected
+
+
+@pytest.mark.parametrize(
+    "data,expected",
+    [
+        ([1, 2, 2, 3, 3, 3], 3),
+        ([1, 1, 1, 1], 1),
+        ([], 0),
+        ([1, 2, 3, 4, 5], 5),
+        ([1, None, 2, None, 3], 4),
+    ],
+)
+def test_distinct_count_with_nulls(data, expected):
+    arr = pa.array(data, type=pa.int32())
+    col = plc.Column.from_arrow(arr)
+    result = plc.reduce.distinct_count(
+        col,
+        plc.types.NullPolicy.INCLUDE,
+        plc.types.NanPolicy.NAN_IS_VALID,
+    )
+    assert result == expected
+
+
+def test_distinct_count_exclude_nulls():
+    arr = pa.array([1, None, 2, None, 3], type=pa.int32())
+    col = plc.Column.from_arrow(arr)
+    result = plc.reduce.distinct_count(
+        col,
+        plc.types.NullPolicy.EXCLUDE,
+        plc.types.NanPolicy.NAN_IS_VALID,
+    )
+    assert result == 3
+
+
+@pytest.mark.parametrize(
+    "data,expected",
+    [
+        ([1, 1, 2, 2, 3, 3], 3),
+        ([1, 2, 2, 3, 3, 3], 3),
+        ([1, 1, 1, 1], 1),
+        ([], 0),
+        ([1, 2, 3, 4, 5], 5),
+    ],
+)
+def test_unique_count(data, expected):
+    arr = pa.array(data, type=pa.int32())
+    col = plc.Column.from_arrow(arr)
+    result = plc.reduce.unique_count(
+        col,
+        plc.types.NullPolicy.INCLUDE,
+        plc.types.NanPolicy.NAN_IS_VALID,
+    )
+    assert result == expected
+
+
+def test_unique_count_with_nulls():
+    arr = pa.array([1, 1, None, None, 2, 2], type=pa.int32())
+    col = plc.Column.from_arrow(arr)
+    result = plc.reduce.unique_count(
+        col,
+        plc.types.NullPolicy.INCLUDE,
+        plc.types.NanPolicy.NAN_IS_VALID,
+    )
+    assert result == 3
+
+
+def test_unique_count_exclude_nulls():
+    arr = pa.array([1, 1, None, None, 2, 2], type=pa.int32())
+    col = plc.Column.from_arrow(arr)
+    result = plc.reduce.unique_count(
+        col,
+        plc.types.NullPolicy.EXCLUDE,
+        plc.types.NanPolicy.NAN_IS_VALID,
+    )
+    assert result == 2
