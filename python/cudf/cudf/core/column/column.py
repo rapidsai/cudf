@@ -223,6 +223,21 @@ def _normalize_timestamp_days_table(table: plc.Table) -> plc.Table:
     return plc.Table(normalized_columns)
 
 
+def _normalize_timestamp_days_tbl_w_meta(
+    tbl_w_meta: plc.io.TableWithMetadata,
+) -> tuple[plc.Table | plc.io.TableWithMetadata, dict[str, Any] | None]:
+    normalized = _normalize_timestamp_days_table(tbl_w_meta.tbl)
+    if normalized is tbl_w_meta.tbl:
+        return tbl_w_meta, None
+    return (
+        normalized,
+        {
+            "columns": tbl_w_meta.column_names(include_children=False),
+            "child_names": tbl_w_meta.child_names,
+        },
+    )
+
+
 def _wrap_and_validate(
     col: plc.Column, dtype: DtypeObj
 ) -> tuple[plc.Column, DtypeObj]:

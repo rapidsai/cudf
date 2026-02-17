@@ -31,7 +31,10 @@ from cudf.core.column import (
     as_column,
     column_empty,
 )
-from cudf.core.column.column import _normalize_timestamp_days_table
+from cudf.core.column.column import (
+    _normalize_timestamp_days_table,
+    _normalize_timestamp_days_tbl_w_meta,
+)
 from cudf.core.dataframe import DataFrame
 from cudf.core.dtypes import (
     CategoricalDtype,
@@ -1399,14 +1402,14 @@ def _read_parquet(
                 pass_read_limit=kwargs.get("_pass_read_limit", 1024000000),
             )
 
-            tbl_w_meta = reader.read_chunk()
-            column_names = tbl_w_meta.column_names(include_children=False)
-            child_names = tbl_w_meta.child_names
-            per_file_user_data = tbl_w_meta.per_file_user_data
-            concatenated_columns = tbl_w_meta.tbl.columns()
+            chunk_meta = reader.read_chunk()
+            column_names = chunk_meta.column_names(include_children=False)
+            child_names = chunk_meta.child_names
+            per_file_user_data = chunk_meta.per_file_user_data
+            concatenated_columns = chunk_meta.tbl.columns()
 
             # save memory
-            del tbl_w_meta
+            del chunk_meta
 
             while reader.has_next():
                 columns = reader.read_chunk().tbl.columns()
@@ -1417,9 +1420,9 @@ def _read_parquet(
                     )
 
             plc_table = plc.Table(concatenated_columns)
-            normalized = _normalize_timestamp_days_table(plc_table)
+            normalized_table = _normalize_timestamp_days_table(plc_table)
             df = DataFrame.from_pylibcudf(
-                normalized,
+                normalized_table,
                 metadata={
                     "columns": column_names,
                     "child_names": child_names,
@@ -1463,19 +1466,13 @@ def _read_parquet(
                 options.set_filter(filters)
 
             tbl_w_meta = plc.io.parquet.read_parquet(options)
-            normalized = _normalize_timestamp_days_table(tbl_w_meta.tbl)
-            if normalized is tbl_w_meta.tbl:
-                df = DataFrame.from_pylibcudf(tbl_w_meta)
+            normalized, metadata = _normalize_timestamp_days_tbl_w_meta(
+                tbl_w_meta
+            )
+            if metadata is None:
+                df = DataFrame.from_pylibcudf(normalized)
             else:
-                df = DataFrame.from_pylibcudf(
-                    normalized,
-                    metadata={
-                        "columns": tbl_w_meta.column_names(
-                            include_children=False
-                        ),
-                        "child_names": tbl_w_meta.child_names,
-                    },
-                )
+                df = DataFrame.from_pylibcudf(normalized, metadata=metadata)
             df = _process_metadata(
                 df,
                 tbl_w_meta.column_names(include_children=False),
