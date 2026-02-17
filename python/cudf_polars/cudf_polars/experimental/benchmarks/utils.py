@@ -51,13 +51,13 @@ try:
     from cudf_polars.dsl.ir import IRExecutionContext
     from cudf_polars.dsl.tracing import Scope
     from cudf_polars.dsl.translate import Translator
-    from cudf_polars.experimental.explain import explain_query
-    from cudf_polars.experimental.parallel import evaluate_streaming
-    from cudf_polars.testing.asserts import (
+    from cudf_polars.experimental.benchmarks.asserts import (
         ValidationError,
-        assert_gpu_result_equal,
         assert_tpch_result_equal,
     )
+    from cudf_polars.experimental.explain import explain_query
+    from cudf_polars.experimental.parallel import evaluate_streaming
+    from cudf_polars.testing.asserts import assert_gpu_result_equal
     from cudf_polars.utils.config import ConfigOptions
 
     CUDF_POLARS_AVAILABLE = True
