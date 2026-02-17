@@ -18,9 +18,9 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/iterator>
 #include <thrust/copy.h>
 #include <thrust/for_each.h>
-#include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
 
 #include <type_traits>
@@ -86,7 +86,7 @@ struct byte_list_conversion_fn<T, std::enable_if_t<cudf::is_numeric<T>()>> {
       thrust::copy_n(rmm::exec_policy_nosync(stream), d_inp, num_bytes, d_out);
     }
 
-    auto const it = thrust::make_constant_iterator(sizeof(T));
+    auto const it = cuda::make_constant_iterator(sizeof(T));
     auto offsets_column =
       std::get<0>(cudf::detail::make_offsets_child_column(it, it + input.size(), stream, mr));
 
