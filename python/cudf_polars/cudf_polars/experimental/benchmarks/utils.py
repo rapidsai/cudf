@@ -535,7 +535,7 @@ class RunConfig:
             )
         elif args.validate:
             validation_method = ValidationMethod(
-                expected_source="polars-cpu",
+                expected_source="polars-cpu" if args.baseline == "cpu" else "duckdb",
                 comparison_method="polars",
                 comparison_options=get_validation_options(args),
             )
