@@ -481,7 +481,6 @@ async def chunkwise_evaluate(
     tracer
         Optional tracer for runtime metrics.
     """
-    # Send output metadata preserving partitioning
     await send_metadata(ch_out, context, metadata)
     if tracer is not None and metadata.duplicated:
         tracer.set_duplicated()
@@ -499,7 +498,6 @@ async def chunkwise_evaluate(
         await ch_out.send(context, Message(seq_num, result))
         seq_num += 1
 
-    # Handle empty input for aggregation-like operations
     if handle_empty_input and not received_any:
         chunk = empty_table_chunk(ir.children[0], context, ir_context.get_cuda_stream())
         result = await evaluate_chunk(context, chunk, ir, ir_context=ir_context)
