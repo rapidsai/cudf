@@ -25,10 +25,8 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <cuda/std/iterator>
+#include <cuda/iterator>
 #include <thrust/execution_policy.h>
-#include <thrust/iterator/constant_iterator.h>
-#include <thrust/iterator/reverse_iterator.h>
 #include <thrust/scatter.h>
 
 #include <BS_thread_pool.hpp>
@@ -339,8 +337,8 @@ get_record_range_raw_input(host_span<std::unique_ptr<datasource>> sources,
     device_span<char const> bufsubspan =
       bufspan.subspan(first_delim_pos + shift_for_nonzero_offset,
                       requested_size - first_delim_pos - shift_for_nonzero_offset);
-    auto rev_it_begin = cuda::std::reverse_iterator(bufsubspan.end());
-    auto rev_it_end   = cuda::std::reverse_iterator(bufsubspan.begin());
+    auto rev_it_begin = cuda::std::make_reverse_iterator(bufsubspan.end());
+    auto rev_it_end   = cuda::std::make_reverse_iterator(bufsubspan.begin());
     auto const second_last_delimiter_it =
       thrust::find(rmm::exec_policy_nosync(stream), rev_it_begin, rev_it_end, delimiter);
     CUDF_EXPECTS(second_last_delimiter_it != rev_it_end,
@@ -701,7 +699,7 @@ device_span<char> ingest_raw_input(device_span<char> buffer,
   if (sources.size() > 1 && !delimiter_map.empty()) {
     static_assert(num_delimiter_chars == 1,
                   "Currently only single-character delimiters are supported");
-    auto const delimiter_source = thrust::make_constant_iterator(delimiter);
+    auto const delimiter_source = cuda::make_constant_iterator(delimiter);
     auto const d_delimiter_map  = cudf::detail::make_device_uvector_async(
       delimiter_map, stream, cudf::get_current_device_resource_ref());
     thrust::scatter(rmm::exec_policy_nosync(stream),

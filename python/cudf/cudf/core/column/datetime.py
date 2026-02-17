@@ -6,8 +6,10 @@ from __future__ import annotations
 import calendar
 import functools
 import locale
+import os
 import re
 import warnings
+import zoneinfo
 from locale import nl_langinfo
 from typing import TYPE_CHECKING, Any, Literal, cast
 
@@ -20,20 +22,19 @@ import pylibcudf as plc
 import cudf
 from cudf.core._internals import binaryop
 from cudf.core._internals.timezones import (
-    check_ambiguous_and_nonexistent,
     get_compatible_timezone,
-    get_tz_data,
 )
 from cudf.core.column import as_column, column_empty
 from cudf.core.column.column import ColumnBase
 from cudf.core.column.temporal_base import TemporalBaseColumn
+from cudf.core.dtype.validators import is_dtype_obj_datetime_tz
 from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
     _get_base_dtype,
     cudf_dtype_from_pa_type,
     cudf_dtype_to_pa_type,
+    dtype_from_pylibcudf_column,
     get_dtype_of_same_kind,
-    get_dtype_of_same_type,
 )
 from cudf.utils.scalar import pa_scalar_to_plc_scalar
 from cudf.utils.utils import _EQUALITY_OPS, is_na_like
@@ -59,13 +60,6 @@ _dtype_to_format_conversion = {
     "datetime64[s]": "%Y-%m-%d %H:%M:%S",
 }
 
-_DATETIME_SPECIAL_FORMATS = {
-    "%b",
-    "%B",
-    "%A",
-    "%a",
-}
-
 
 def _resolve_binop_resolution(
     left_unit: Literal["s", "ms", "us", "ns"],
@@ -75,6 +69,106 @@ def _resolve_binop_resolution(
     left_idx = units.index(left_unit)
     right_idx = units.index(right_unit)
     return units[max(left_idx, right_idx)]
+
+
+@functools.lru_cache(maxsize=20)
+def _get_tz_data(zone_name: str) -> tuple[ColumnBase, ColumnBase]:
+    """
+    Return timezone data (transition times and UTC offsets) for the
+    given IANA time zone.
+
+    Parameters
+    ----------
+    zone_name: str
+        IANA time zone name
+
+    Returns
+    -------
+    Tuple with two columns containing the transition times
+    and corresponding UTC offsets.
+    """
+    try:
+        # like zoneinfo, we first look in TZPATH
+        tz_table = _find_and_read_tzfile_tzpath(zone_name)
+    except zoneinfo.ZoneInfoNotFoundError:
+        # if that fails, we fall back to using `tzdata`
+        tz_table = _find_and_read_tzfile_tzdata(zone_name)
+    return tz_table
+
+
+def _find_and_read_tzfile_tzpath(
+    zone_name: str,
+) -> tuple[ColumnBase, ColumnBase]:
+    for search_path in zoneinfo.TZPATH:
+        if os.path.isfile(os.path.join(search_path, zone_name)):
+            return _read_tzfile_as_columns(search_path, zone_name)
+    raise zoneinfo.ZoneInfoNotFoundError(zone_name)
+
+
+def _find_and_read_tzfile_tzdata(
+    zone_name: str,
+) -> tuple[ColumnBase, ColumnBase]:
+    import importlib.resources
+
+    package_base = "tzdata.zoneinfo"
+    try:
+        return _read_tzfile_as_columns(
+            str(importlib.resources.files(package_base)), zone_name
+        )
+    # TODO: make it so that the call to libcudf raises a
+    # FileNotFoundError instead of a RuntimeError
+    except (ImportError, FileNotFoundError, UnicodeEncodeError, RuntimeError):
+        # the "except" part of this try-except is basically vendored
+        # from the zoneinfo library.
+        #
+        # There are three types of exception that can be raised that all amount
+        # to "we cannot find this key":
+        #
+        # ImportError: If package_name doesn't exist (e.g. if tzdata is not
+        #   installed, or if there's an error in the folder name like
+        #   Amrica/New_York)
+        # FileNotFoundError: If resource_name doesn't exist in the package
+        #   (e.g. Europe/Krasnoy)
+        # UnicodeEncodeError: If package_name or resource_name are not UTF-8,
+        #   such as keys containing a surrogate character.
+        raise zoneinfo.ZoneInfoNotFoundError(zone_name)
+
+
+def _read_tzfile_as_columns(
+    tzdir: str, zone_name: str
+) -> tuple[ColumnBase, ColumnBase]:
+    plc_table = plc.io.timezone.make_timezone_transition_table(
+        tzdir, zone_name
+    )
+    transition_times_and_offsets = plc_table.columns()
+
+    if not transition_times_and_offsets:
+        # this happens for UTC-like zones
+        min_date: np.datetime64 = np.int64(np.iinfo("int64").min + 1).astype(
+            np.dtype("M8[s]")
+        )
+        return (as_column([min_date]), as_column([np.timedelta64(0, "s")]))
+
+    result = tuple(
+        ColumnBase.create(col, dtype=dtype_from_pylibcudf_column(col))
+        for col in transition_times_and_offsets
+    )
+    assert len(result) == 2  # for mypy
+    return result
+
+
+def _check_ambiguous_and_nonexistent(
+    ambiguous: Literal["NaT"], nonexistent: Literal["NaT"]
+) -> tuple[Literal["NaT"], Literal["NaT"]]:
+    if ambiguous != "NaT":
+        raise NotImplementedError(
+            "Only ambiguous='NaT' is currently supported"
+        )
+    if nonexistent != "NaT":
+        raise NotImplementedError(
+            "Only nonexistent='NaT' is currently supported"
+        )
+    return ambiguous, nonexistent
 
 
 class DatetimeColumn(TemporalBaseColumn):
@@ -103,10 +197,10 @@ class DatetimeColumn(TemporalBaseColumn):
 
     @classmethod
     def _validate_args(
-        cls, plc_column: plc.Column, dtype: np.dtype
-    ) -> tuple[plc.Column, np.dtype]:
+        cls, plc_column: plc.Column, dtype: DtypeObj
+    ) -> tuple[plc.Column, DtypeObj]:
         plc_column, dtype = super()._validate_args(plc_column, dtype)
-        if not getattr(dtype, "kind", None) == "M":
+        if dtype.kind != "M":
             raise ValueError(f"dtype must be a datetime, got {dtype}")
         return plc_column, dtype
 
@@ -211,10 +305,10 @@ class DatetimeColumn(TemporalBaseColumn):
     @functools.cached_property
     def is_month_end(self) -> ColumnBase:
         with self.access(mode="read", scope="internal"):
-            # Currently this needs to use from_pylibcudf because we need to infer the
-            # type after _wrap_buffers so we can't use dtype_from_pylibcudf_column
-            last_day_col = ColumnBase.from_pylibcudf(
-                plc.datetime.last_day_of_month(self.plc_column),
+            plc_result = plc.datetime.last_day_of_month(self.plc_column)
+            last_day_col = ColumnBase.create(
+                plc_result,
+                dtype_from_pylibcudf_column(plc_result),
             )
         return (self.day == cast("Self", last_day_col).day).fillna(False)
 
@@ -665,16 +759,6 @@ class DatetimeColumn(TemporalBaseColumn):
         else:
             return result_col
 
-    def _with_type_metadata(self, dtype: DtypeObj) -> DatetimeColumn:
-        if isinstance(dtype, pd.DatetimeTZDtype):
-            return DatetimeTZColumn._from_preprocessed(
-                plc_column=self.plc_column,
-                dtype=dtype,
-            )
-        self._dtype = get_dtype_of_same_type(dtype, self.dtype)
-
-        return self
-
     def _find_ambiguous_and_nonexistent(
         self, zone_name: str
     ) -> tuple[NumericalColumn, NumericalColumn] | tuple[bool, bool]:
@@ -689,8 +773,8 @@ class DatetimeColumn(TemporalBaseColumn):
         transitions occur in the time zone database for the given timezone.
         If no transitions occur, the tuple `(False, False)` is returned.
         """
-        transition_times, offsets = get_tz_data(zone_name)
-        offsets = offsets.astype(np.dtype(f"timedelta64[{self.time_unit}]"))  # type: ignore[assignment]
+        transition_times, offsets = _get_tz_data(zone_name)
+        offsets = offsets.astype(np.dtype(f"timedelta64[{self.time_unit}]"))
 
         if len(offsets) == 1:  # no transitions
             return False, False
@@ -747,7 +831,7 @@ class DatetimeColumn(TemporalBaseColumn):
     ) -> DatetimeColumn:
         if tz is None:
             return self.copy()
-        ambiguous, nonexistent = check_ambiguous_and_nonexistent(
+        ambiguous, nonexistent = _check_ambiguous_and_nonexistent(
             ambiguous, nonexistent
         )
         dtype = get_compatible_timezone(pd.DatetimeTZDtype(self.time_unit, tz))
@@ -762,7 +846,7 @@ class DatetimeColumn(TemporalBaseColumn):
             ),
         )
 
-        transition_times, offsets = get_tz_data(tzname)
+        transition_times, offsets = _get_tz_data(tzname)
         transition_times_local = (transition_times + offsets).astype(
             localized.dtype
         )
@@ -784,8 +868,17 @@ class DatetimeColumn(TemporalBaseColumn):
 class DatetimeTZColumn(DatetimeColumn):
     @classmethod
     def _validate_args(
-        cls, plc_column: plc.Column, dtype: pd.DatetimeTZDtype
-    ) -> tuple[plc.Column, pd.DatetimeTZDtype]:
+        cls, plc_column: plc.Column, dtype: DtypeObj
+    ) -> tuple[plc.Column, DtypeObj]:
+        # TODO: Uncomment below so validation goes through parent class
+        #  but uncovers subsequent issues in to_pandas and DatetimeColumn.as_datetime_column
+        # plc_column, _ = super()._validate_args(
+        #     plc_column, _get_base_dtype(dtype)
+        # )
+        # if not is_dtype_obj_datetime_tz(dtype):
+        #     raise ValueError(
+        #         f"dtype must be a datetime with timezone type: Got {dtype}."
+        #     )
         # Manually validate TypeId since we can't call parent (different dtype type)
         if not (
             isinstance(plc_column, plc.Column)
@@ -794,9 +887,13 @@ class DatetimeTZColumn(DatetimeColumn):
             raise ValueError(
                 f"plc_column must be a pylibcudf.Column with a TypeId in {DatetimeColumn._VALID_PLC_TYPES}"
             )
-        if not isinstance(dtype, pd.DatetimeTZDtype):
-            raise ValueError("dtype must be a pandas.DatetimeTZDtype")
-        return plc_column, get_compatible_timezone(dtype)
+        if not is_dtype_obj_datetime_tz(dtype):
+            raise ValueError(
+                f"dtype must be a datetime with timezone type: Got {dtype}."
+            )
+        if isinstance(dtype, pd.DatetimeTZDtype):
+            dtype = get_compatible_timezone(dtype)
+        return plc_column, dtype
 
     def to_pandas(
         self,
@@ -832,7 +929,7 @@ class DatetimeTZColumn(DatetimeColumn):
     @functools.cached_property
     def _local_time(self) -> DatetimeColumn:
         """Return the local time as naive timestamps."""
-        transition_times, offsets = get_tz_data(str(self.dtype.tz))  # type: ignore[union-attr]
+        transition_times, offsets = _get_tz_data(str(self.dtype.tz))  # type: ignore[union-attr]
         base_dtype = _get_base_dtype(self.dtype)
         indices = (
             transition_times.astype(base_dtype).searchsorted(
@@ -852,6 +949,13 @@ class DatetimeTZColumn(DatetimeColumn):
         if isinstance(dtype, pd.DatetimeTZDtype) and dtype != self.dtype:
             if dtype.unit != self.time_unit:
                 # TODO: Doesn't check that new unit is valid.
+                # Uncomment below to cast correctly, but uncovers a potential bug in
+                # DatetimeColumn.tz_localize
+                # casted_plc = (
+                #     super()
+                #     .as_datetime_column(_get_base_dtype(dtype))
+                #     .plc_column
+                # )
                 casted = cast(
                     DatetimeTZColumn, ColumnBase.create(self.plc_column, dtype)
                 )
@@ -870,11 +974,11 @@ class DatetimeTZColumn(DatetimeColumn):
                 local_time.plc_column,
                 field,
             )
-            # extract_datetime_component returns INT16, use from_pylibcudf
-            # to infer the dtype, then cast to int32 for pandas compatibility
-            result = ColumnBase.from_pylibcudf(plc_result)
-            if result.dtype == np.dtype("int16"):
-                result = result.astype(np.dtype("int32"))
+            result = ColumnBase.create(
+                plc_result, dtype_from_pylibcudf_column(plc_result)
+            )
+            # cast to int32 for pandas compatibility (no-op if already int32)
+            result = result.astype(np.dtype("int32"))
             return result
 
     def __repr__(self) -> str:
@@ -895,7 +999,7 @@ class DatetimeTZColumn(DatetimeColumn):
     ) -> DatetimeColumn:
         if tz is None:
             return self._local_time
-        ambiguous, nonexistent = check_ambiguous_and_nonexistent(
+        ambiguous, nonexistent = _check_ambiguous_and_nonexistent(
             ambiguous, nonexistent
         )
         raise ValueError(
