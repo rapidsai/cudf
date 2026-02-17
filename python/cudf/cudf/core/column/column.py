@@ -1226,9 +1226,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                         type=array.type.value_type,
                     )
                 )
-            codes_dtype = cudf_dtype_from_pa_type(codes.type)
-            result = cls.create(plc.Column.from_arrow(codes), codes_dtype)
-
             # For categories, handle special cases:
             # - NULL type (empty categoricals): use from_pylibcudf to infer type
             # - ExtensionType (intervals): arrow conversion may return pandas dtype
@@ -1250,12 +1247,10 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             expected_codes_dtype = dtype_to_pylibcudf_type(
                 categorical_dtype._codes_dtype
             )
-            codes_plc_column = result.plc_column
-            if codes_plc_column.type() != expected_codes_dtype:
-                codes_plc_column = plc.unary.cast(
-                    codes_plc_column, expected_codes_dtype
-                )
-            return ColumnBase.create(codes_plc_column, categorical_dtype)
+            codes_plc = plc.Column.from_arrow(codes)
+            if codes_plc.type() != expected_codes_dtype:
+                codes_plc = plc.unary.cast(codes_plc, expected_codes_dtype)
+            return ColumnBase.create(codes_plc, categorical_dtype)
         else:
             return cls.create(
                 plc.Column.from_arrow(array),
