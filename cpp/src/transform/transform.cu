@@ -33,6 +33,7 @@ namespace {
 jitify2::Kernel get_kernel(std::string const& kernel_name, std::string const& cuda_source)
 {
   CUDF_FUNC_RANGE();
+
   int32_t runtime_version;
   CUDF_EXPECTS(cudaRuntimeGetVersion(&runtime_version) == cudaSuccess,
                "Failed to get CUDA runtime version",
