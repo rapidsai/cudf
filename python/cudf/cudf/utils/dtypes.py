@@ -422,10 +422,8 @@ def pyarrow_dtype_to_cudf_dtype(dtype: pd.ArrowDtype) -> DtypeObj:
         return cudf.ListDtype.from_arrow(pyarrow_dtype)
     elif isinstance(pyarrow_dtype, pa.StructType):
         return cudf.StructDtype.from_arrow(pyarrow_dtype)
-    elif pa.types.is_string(pyarrow_dtype) or pa.types.is_large_string(
-        pyarrow_dtype
-    ):
-        return pd.ArrowDtype(pyarrow_dtype)
+    elif str(pyarrow_dtype) == "large_string":
+        return CUDF_STRING_DTYPE
     elif pyarrow_dtype is pa.date32():
         raise TypeError("Unsupported type")
     elif isinstance(pyarrow_dtype, pa.DataType):
@@ -474,10 +472,6 @@ def is_pandas_nullable_extension_dtype(
 
 def dtype_to_pylibcudf_type(dtype) -> plc.DataType:
     if isinstance(dtype, pd.ArrowDtype):
-        if pa.types.is_string(dtype.pyarrow_dtype) or pa.types.is_large_string(
-            dtype.pyarrow_dtype
-        ):
-            return plc.DataType(plc.TypeId.STRING)
         dtype = pyarrow_dtype_to_cudf_dtype(dtype)
     if isinstance(dtype, cudf.ListDtype):
         return plc.DataType(plc.TypeId.LIST)
