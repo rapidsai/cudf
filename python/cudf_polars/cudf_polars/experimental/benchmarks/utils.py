@@ -1789,6 +1789,9 @@ def run_duckdb(
     if args.summarize:
         run_config.summarize()
 
+    args.output.write(json.dumps(run_config.serialize(engine=None)))
+    args.output.write("\n")
+
 
 def run_validate(
     polars_queries_cls: Any,

@@ -106,10 +106,10 @@ class CategoricalColumn(ColumnBase):
         return None
 
     @classmethod
-    def _validate_args(  # type: ignore[override]
-        cls, plc_column: plc.Column, dtype: CategoricalDtype
-    ) -> tuple[plc.Column, CategoricalDtype]:
-        plc_column, dtype = super()._validate_args(plc_column, dtype)  # type: ignore[assignment]
+    def _validate_args(
+        cls, plc_column: plc.Column, dtype: DtypeObj
+    ) -> tuple[plc.Column, DtypeObj]:
+        plc_column, dtype = super()._validate_args(plc_column, dtype)
         if not isinstance(dtype, CategoricalDtype):
             raise ValueError(f"{dtype=} must be a CategoricalDtype instance")
         return plc_column, dtype
@@ -780,15 +780,6 @@ class CategoricalColumn(ColumnBase):
                 CategoricalDtype(categories=cats),
             ),
         )
-
-    def _with_type_metadata(self: Self, dtype: DtypeObj) -> Self:
-        if isinstance(dtype, CategoricalDtype):
-            return type(self)._from_preprocessed(
-                plc_column=self.plc_column,
-                dtype=dtype,
-            )
-
-        return self
 
     def set_categories(
         self,
