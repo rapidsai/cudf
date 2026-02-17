@@ -773,42 +773,12 @@ class NumericalColumn(NumericalBaseColumn):
         old_col = to_replace_col.astype(common_type)
         new_col = replacement_col.astype(common_type)
 
-        # Deduplicate by old values, keeping last occurrence.
-        # This replicates pandas' behavior when to_replace has duplicates:
-        # pandas processes replacements sequentially, so the last occurrence wins.
-        # For example, df.replace([1, 2, 1], [10, 20, 30]) replaces 1→30 (not 1→10).
-        # Work with plc.Column objects directly to avoid creating intermediate ColumnBases.
-        old_plc, new_plc = ColumnBase._dedupe_find_and_replace_mapping(
-            old_col, new_col
+        result = replaced._find_and_replace_with_dedup(
+            old_col,
+            new_col,
+            common_type,
         )
-
-        # Handle null replacement separately if there's a null in old values
-        if old_plc.null_count() == 1:
-            # Find the replacement value for null
-            old_isnull_plc = plc.unary.is_null(old_plc)
-            (filtered_column,) = plc.stream_compaction.apply_boolean_mask(
-                plc.Table([new_plc]), old_isnull_plc
-            ).columns()
-            # We know there's exactly 1 null, so filtered result has 1 row
-            replacement_for_null = (
-                plc.copying.get_element(filtered_column, 0).to_arrow().as_py()
-            )
-            replaced = replaced.fillna(replacement_for_null)
-
-            # Drop the null row from old/new columns
-            old_plc, new_plc = plc.stream_compaction.drop_nulls(
-                plc.Table([old_plc, new_plc]),
-                keys=[0],  # Check nulls in first column only
-                keep_threshold=1,  # Keep rows with at least 1 non-null in keys
-            ).columns()
-
-        with replaced.access(mode="read", scope="internal"):
-            result_plc = plc.replace.find_and_replace_all(
-                replaced.plc_column,
-                old_plc,
-                new_plc,
-            )
-        return cast("Self", ColumnBase.create(result_plc, common_type))
+        return cast("Self", result)
 
     def _validate_fillna_value(
         self, fill_value: ScalarLike | ColumnLike

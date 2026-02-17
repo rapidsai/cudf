@@ -1077,6 +1077,39 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 ).columns()
         return cast(tuple[plc.Column, plc.Column], tuple(columns))
 
+    def _find_and_replace_with_dedup(
+        self,
+        old_col: ColumnBase,
+        new_col: ColumnBase,
+        result_dtype: DtypeObj,
+    ) -> ColumnBase:
+        old_plc, new_plc = ColumnBase._dedupe_find_and_replace_mapping(
+            old_col, new_col
+        )
+
+        replaced = self
+        if old_plc.null_count() == 1:
+            old_isnull_plc = plc.unary.is_null(old_plc)
+            (filtered_column,) = plc.stream_compaction.apply_boolean_mask(
+                plc.Table([new_plc]), old_isnull_plc
+            ).columns()
+            replacement_for_null = filtered_column.to_scalar().to_py()
+            replaced = replaced.fillna(replacement_for_null)
+
+            old_plc, new_plc = plc.stream_compaction.drop_nulls(
+                plc.Table([old_plc, new_plc]),
+                keys=[0],
+                keep_threshold=1,
+            ).columns()
+
+        with replaced.access(mode="read", scope="internal"):
+            result_plc = plc.replace.find_and_replace_all(
+                replaced.plc_column,
+                old_plc,
+                new_plc,
+            )
+        return ColumnBase.create(result_plc, result_dtype)
+
     def find_and_replace(
         self,
         to_replace: ColumnBase | list,
