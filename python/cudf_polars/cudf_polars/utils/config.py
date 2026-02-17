@@ -1100,6 +1100,8 @@ class ConfigOptions(Generic[ExecutorType]):
 
     raise_on_fail: bool = False
     parquet_options: ParquetOptions = dataclasses.field(default_factory=ParquetOptions)
+    # We need the type-ignore to pass type checking. Because StreamingExecutor
+    # is in ExecutorType, this is safe.
     executor: ExecutorType = dataclasses.field(
         default_factory=StreamingExecutor  # type: ignore[assignment]
     )
