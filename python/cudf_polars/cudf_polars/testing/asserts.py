@@ -563,7 +563,6 @@ def assert_tpch_result_equal(
         "categorical_as_str": categorical_as_str,
     }
 
-    breakpoint()
     if POLARS_VERSION_LT_1323:  # pragma: no cover
         tol_kwargs = {"rtol": rel_tol, "atol": abs_tol}
     else:

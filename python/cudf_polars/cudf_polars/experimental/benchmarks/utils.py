@@ -100,6 +100,10 @@ else:
 
 
 ExecutorType = Literal["in-memory", "streaming", "cpu"]
+# The dtype for count() aggregations depends on the presence
+# of the polars-runtime-64 package (`polars[rt64]`).
+HAS_POLARS_RT_64 = pl.config.plr.RUNTIME_REPR == "rt64"
+COUNT_DTYPE = pl.UInt64() if HAS_POLARS_RT_64 else pl.UInt32()
 
 
 # The pre-computed expected results come from DuckDB, which has
@@ -121,10 +125,10 @@ EXPECTED_CASTS_DECIMAL = {
         pl.col("avg_disc").cast(pl.Float64()),
         pl.col("avg_price").cast(pl.Float64()),
         pl.col("avg_qty").cast(pl.Float64()),
-        pl.col("count_order").cast(pl.UInt32()),
+        pl.col("count_order").cast(COUNT_DTYPE),
     ],
     3: [pl.col("revenue").cast(pl.Decimal(38, 2))],
-    4: [pl.col("order_count").cast(pl.UInt32())],
+    4: [pl.col("order_count").cast(COUNT_DTYPE)],
     5: [pl.col("revenue").cast(pl.Decimal(38, 2))],
     6: [pl.col("revenue").cast(pl.Decimal(38, 2))],
     7: [pl.col("l_year").cast(pl.Int32()), pl.col("revenue").cast(pl.Decimal(38, 2))],
@@ -138,21 +142,21 @@ EXPECTED_CASTS_DECIMAL = {
         pl.col("high_line_count").cast(pl.Int32()),
         pl.col("low_line_count").cast(pl.Int32()),
     ],
-    13: [pl.col("c_count").cast(pl.UInt32()), pl.col("custdist").cast(pl.UInt32())],
+    13: [pl.col("c_count").cast(COUNT_DTYPE), pl.col("custdist").cast(COUNT_DTYPE)],
     15: [pl.col("total_revenue").cast(pl.Decimal(38, 2))],
-    16: [pl.col("supplier_cnt").cast(pl.UInt32())],
+    16: [pl.col("supplier_cnt").cast(COUNT_DTYPE)],
     18: [pl.col("sum(l_quantity)").cast(pl.Decimal(15, 2))],
     19: [pl.col("revenue").cast(pl.Decimal(38, 2))],
-    21: [pl.col("numwait").cast(pl.UInt32())],
+    21: [pl.col("numwait").cast(COUNT_DTYPE)],
     22: [
-        pl.col("numcust").cast(pl.UInt32()),
+        pl.col("numcust").cast(COUNT_DTYPE),
         pl.col("totacctbal").cast(pl.Decimal(15, 2)),
     ],
 }
 
 EXPECTED_CASTS_FLOAT = {
-    1: [pl.col("count_order").cast(pl.UInt32())],
-    4: [pl.col("order_count").cast(pl.UInt32())],
+    1: [pl.col("count_order").cast(COUNT_DTYPE)],
+    4: [pl.col("order_count").cast(COUNT_DTYPE)],
     7: [pl.col("l_year").cast(pl.Int32())],
     8: [pl.col("o_year").cast(pl.Int32())],
     9: [pl.col("o_year").cast(pl.Int32())],
@@ -160,10 +164,10 @@ EXPECTED_CASTS_FLOAT = {
         pl.col("high_line_count").cast(pl.Int32()),
         pl.col("low_line_count").cast(pl.Int32()),
     ],
-    13: [pl.col("c_count").cast(pl.UInt32()), pl.col("custdist").cast(pl.UInt32())],
-    16: [pl.col("supplier_cnt").cast(pl.UInt32())],
-    21: [pl.col("numwait").cast(pl.UInt32())],
-    22: [pl.col("numcust").cast(pl.UInt32())],
+    13: [pl.col("c_count").cast(COUNT_DTYPE), pl.col("custdist").cast(COUNT_DTYPE)],
+    16: [pl.col("supplier_cnt").cast(COUNT_DTYPE)],
+    21: [pl.col("numwait").cast(COUNT_DTYPE)],
+    22: [pl.col("numcust").cast(COUNT_DTYPE)],
 }
 
 
