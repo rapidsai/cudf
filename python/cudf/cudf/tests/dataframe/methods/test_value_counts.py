@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 import pytest
 
@@ -55,10 +55,6 @@ def test_value_counts(
         # Convert the Pandas series to a cuDF one due to difference
         # in the handling of NaNs between the two (<NA> in cuDF and
         # NaN in Pandas) when dropna=False.
-        assert_eq(
-            got.sort_index(),
-            cudf.from_pandas(expected).sort_index(),
-            check_index_type=False,
-        )
+        assert_eq(got.sort_index(), cudf.from_pandas(expected).sort_index())
     else:
         assert_eq(got.sort_index(), expected.sort_index())

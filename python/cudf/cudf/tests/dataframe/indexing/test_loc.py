@@ -159,7 +159,6 @@ def test_loc_setitem_list_arg_missing_raises():
 
     cudf_msg = re.escape("[1] not in the index.")
     with pytest.raises(KeyError, match=cudf_msg):
-        # import pdb;pdb.set_trace()
         gdf.loc[[1]] = 1
 
     with pytest.raises(KeyError, match=cudf_msg):
