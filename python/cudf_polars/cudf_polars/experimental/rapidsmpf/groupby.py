@@ -345,7 +345,7 @@ async def _shuffle_groupby(
         [decomposed.select_ir] if decomposed.select_ir else []
     )
     stream = ir_context.get_cuda_stream()
-    for partition_id in range(shuf_rank, modulus, shuf_nranks):
+    for partition_id in shuffle.local_partitions():
         partition_chunk = TableChunk.from_pylibcudf_table(
             await shuffle.extract_chunk(partition_id, stream),
             stream,
