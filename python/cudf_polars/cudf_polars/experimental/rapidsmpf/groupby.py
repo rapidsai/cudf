@@ -22,6 +22,7 @@ from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 
 import pylibcudf as plc
 
+from cudf_polars.containers import DataType
 from cudf_polars.dsl.expr import Col, NamedExpr
 from cudf_polars.dsl.ir import IR, Distinct, GroupBy, Select
 from cudf_polars.dsl.utils.naming import unique_names
@@ -35,7 +36,6 @@ from cudf_polars.experimental.rapidsmpf.utils import (
     ChannelManager,
     allgather_reduce,
     chunkwise_evaluate,
-    concat_batch,
     empty_table_chunk,
     evaluate_batch,
     evaluate_chunk,
@@ -130,7 +130,6 @@ class DecomposedGroupBy:
                 piecewise_ir,
             )
 
-            # Selection IR (child is reduction_ir, not piecewise_ir)
             select_ir = Select(
                 ir.schema,
                 [
@@ -166,7 +165,6 @@ async def _tree_groupby(
     *,
     evaluated_chunks: list[TableChunk] | None = None,
     collective_id: int | None = None,
-    reduction_ran: bool = False,
     tracer: ActorTracer | None = None,
 ) -> None:
     """
@@ -196,17 +194,13 @@ async def _tree_groupby(
         Chunks that have already been evaluated (e.g., during sampling).
     collective_id
         Optional collective ID for allgather. If None, no allgather is performed.
-    reduction_ran
-        Whether evaluated_chunks have already been through reduction_ir.
     tracer
         Optional tracer for runtime metrics.
     """
-    tree_reduction_ran = reduction_ran
     nranks = context.comm().nranks
     need_allgather = (
         collective_id is not None and not metadata_in.duplicated and nranks > 1
     )
-    is_distinct = isinstance(decomposed.ir, Distinct)
 
     metadata_out = ChannelMetadata(
         local_count=1,
@@ -229,7 +223,7 @@ async def _tree_groupby(
                     context,
                     TableChunk.from_message(msg),
                     decomposed.piecewise_ir,
-                    ir_context,
+                    ir_context=ir_context,
                 )
                 del msg
                 evaluated_chunks.append(chunk)
@@ -239,17 +233,18 @@ async def _tree_groupby(
             not receiving or total_size > target_partition_size
         ):
             merged = await evaluate_batch(
-                evaluated_chunks, context, decomposed.reduction_ir, ir_context
+                evaluated_chunks,
+                context,
+                decomposed.reduction_ir,
+                ir_context=ir_context,
             )
             evaluated_chunks = [merged]
             total_size = merged.data_alloc_size()
-            tree_reduction_ran = True
 
-    chunk_schema = (
-        decomposed.reduction_ir.schema
-        if tree_reduction_ran
-        else decomposed.piecewise_ir.schema
-    )
+    evaluated_chunk: TableChunk | None = None
+    if evaluated_chunks:
+        evaluated_chunk = evaluated_chunks.pop(0)
+    assert len(evaluated_chunks) == 0, "Expected no chunks left"
 
     # Allgather partial results from all ranks if needed
     if need_allgather:
@@ -258,50 +253,39 @@ async def _tree_groupby(
         allgather = AllGatherManager(context, collective_id)
         stream = ir_context.get_cuda_stream()
 
-        if evaluated_chunks:
-            if tree_reduction_ran or is_distinct:
-                reduced_chunk = await concat_batch(
-                    evaluated_chunks, context, chunk_schema, ir_context
-                )
-            else:
-                reduced_chunk = await evaluate_batch(
-                    evaluated_chunks, context, decomposed.reduction_ir, ir_context
-                )
-            del evaluated_chunks
-            allgather.insert(0, reduced_chunk)
+        if evaluated_chunk is not None:
+            allgather.insert(0, evaluated_chunk)
 
         allgather.insert_finished()
 
-        gathered_table = await allgather.extract_concatenated(stream)
-        gathered_chunk = TableChunk.from_pylibcudf_table(
-            gathered_table, stream, exclusive_view=True
+        evaluated_chunk = await evaluate_chunk(
+            context,
+            TableChunk.from_pylibcudf_table(
+                await allgather.extract_concatenated(stream),
+                stream,
+                exclusive_view=True,
+            ),
+            decomposed.reduction_ir,
+            ir_context=ir_context,
         )
-        evaluated_chunks = [
-            await evaluate_chunk(
-                context, gathered_chunk, decomposed.reduction_ir, ir_context
-            )
-        ]
-        del gathered_chunk
 
-    if evaluated_chunks:
-        # Final result
+    if evaluated_chunk is not None:
         if decomposed.select_ir is not None:
-            chunk = await evaluate_chunk(
-                context, evaluated_chunks.pop(0), decomposed.select_ir, ir_context
+            evaluated_chunk = await evaluate_chunk(
+                context, evaluated_chunk, decomposed.select_ir, ir_context=ir_context
             )
-        else:
-            chunk = evaluated_chunks.pop(0)
         if tracer is not None:
-            tracer.add_chunk(table=chunk.table_view())
-        await ch_out.send(context, Message(0, chunk))
-        del chunk
+            tracer.add_chunk(table=evaluated_chunk.table_view())
+        await ch_out.send(context, Message(0, evaluated_chunk))
+        del evaluated_chunk
     else:
         # No data - send empty chunk
         stream = ir_context.get_cuda_stream()
-        chunk = empty_table_chunk(decomposed.ir, context, stream)
         if tracer is not None:
             tracer.add_chunk()
-        await ch_out.send(context, Message(0, chunk))
+        await ch_out.send(
+            context, Message(0, empty_table_chunk(decomposed.ir, context, stream))
+        )
 
     await ch_out.drain(context)
 
@@ -318,7 +302,6 @@ async def _shuffle_groupby(
     *,
     evaluated_chunks: list[TableChunk] | None = None,
     shuffle_context: Context | None = None,
-    reduction_ran: bool = False,
     tracer: ActorTracer | None = None,
 ) -> None:
     """
@@ -352,8 +335,6 @@ async def _shuffle_groupby(
     shuffle_context
         Optional context for shuffle operations.
         Defaults to a temporary local context.
-    reduction_ran
-        Whether evaluated_chunks have already been through reduction_ir.
     tracer
         Optional tracer for runtime metrics.
     """
@@ -398,30 +379,34 @@ async def _shuffle_groupby(
         shuffle_context, modulus, shuffle_key_indices, collective_id
     )
 
-    for chunk in evaluated_chunks or []:
-        shuffle.insert_chunk(chunk)
-
-    pwise_ir: list[IR] = [decomposed.piecewise_ir]
-    if reduction_ran:
-        pwise_ir.append(decomposed.reduction_ir)
+    evaluated_chunks = evaluated_chunks or []
+    while len(evaluated_chunks) > 0:
+        shuffle.insert_chunk(
+            _enforce_schema(
+                evaluated_chunks.pop(0),
+                decomposed.reduction_ir.schema,
+            )
+        )
 
     while (msg := await ch_in.recv(context)) is not None:
         shuffle.insert_chunk(
-            await evaluate_chunk(
-                context,
-                TableChunk.from_message(msg),
-                pwise_ir,
-                ir_context,
+            _enforce_schema(
+                await evaluate_chunk(
+                    context,
+                    TableChunk.from_message(msg),
+                    decomposed.piecewise_ir,
+                    ir_context=ir_context,
+                ),
+                decomposed.reduction_ir.schema,
             )
         )
         del msg
 
     await shuffle.insert_finished()
-
-    stream = ir_context.get_cuda_stream()
-    extract_ir: list[IR] = [decomposed.reduction_ir]
+    extract_irs: list[IR] = [decomposed.reduction_ir]
     if decomposed.select_ir is not None:
-        extract_ir.append(decomposed.select_ir)
+        extract_irs.append(decomposed.select_ir)
+    stream = ir_context.get_cuda_stream()
     for partition_id in range(shuf_rank, modulus, shuf_nranks):
         partition_chunk = TableChunk.from_pylibcudf_table(
             await shuffle.extract_chunk(partition_id, stream),
@@ -431,8 +416,8 @@ async def _shuffle_groupby(
         output_chunk = await evaluate_chunk(
             context,
             partition_chunk,
-            extract_ir,
-            ir_context,
+            *extract_irs,
+            ir_context=ir_context,
         )
         del partition_chunk
         if tracer is not None:
@@ -442,16 +427,50 @@ async def _shuffle_groupby(
     await ch_out.drain(context)
 
 
+def _enforce_schema(
+    chunk: TableChunk,
+    canonical_schema: dict[str, Any],
+) -> TableChunk:
+    """Enforce the canonical schema of a TableChunk."""
+    tbl = chunk.table_view()
+    cols = tbl.columns()
+    names = list(canonical_schema.keys())
+    if len(cols) != len(names):  # pragma: no cover
+        raise ValueError(
+            f"Column count ({len(cols)}) does not match schema ({len(names)})"
+        )
+
+    target_plcs = []
+    needs_cast = False
+    for col, name in zip(cols, names, strict=True):
+        target_dtype = canonical_schema[name]
+        if not isinstance(target_dtype, DataType):
+            target_dtype = DataType(target_dtype)
+        target_plc = target_dtype.plc_type
+        target_plcs.append(target_plc)
+        if col.type().id() != target_plc.id():
+            needs_cast = True
+    if not needs_cast:
+        return chunk
+    new_columns = [
+        plc.unary.cast(col, target_plc, stream=chunk.stream)
+        if col.type().id() != target_plc.id()
+        else col
+        for col, target_plc in zip(cols, target_plcs, strict=True)
+    ]
+    return TableChunk.from_pylibcudf_table(
+        plc.Table(new_columns), chunk.stream, exclusive_view=True
+    )
+
+
 def _key_indices(ir: GroupBy | Distinct, schema: Schema) -> tuple[int, ...]:
-    schema_keys = list(schema.keys())
+    schema_keys = {n: i for i, n in enumerate(schema.keys())}
     if isinstance(ir, GroupBy):
         groupby_key_names = tuple(ne.name for ne in ir.keys)
-        return tuple(
-            schema_keys.index(k) for k in groupby_key_names if k in schema_keys
-        )
+        return tuple(schema_keys[k] for k in groupby_key_names)
     else:
         subset = ir.subset or frozenset(ir.schema)
-        return tuple(schema_keys.index(k) for k in subset if k in schema_keys)
+        return tuple(schema_keys[k] for k in subset)
 
 
 def _require_tree(ir: GroupBy | Distinct) -> bool:
@@ -554,7 +573,7 @@ async def keyed_reduction_node(
                 context,
                 TableChunk.from_message(msg),
                 decomposed.piecewise_ir,
-                ir_context,
+                ir_context=ir_context,
             )
             del msg
             total_size += chunk.data_alloc_size(MemoryType.DEVICE)
@@ -562,7 +581,10 @@ async def keyed_reduction_node(
 
             if total_size > target_partition_size and len(evaluated_chunks) > 1:
                 merged = await evaluate_batch(
-                    evaluated_chunks, context, decomposed.reduction_ir, ir_context
+                    evaluated_chunks,
+                    context,
+                    decomposed.reduction_ir,
+                    ir_context=ir_context,
                 )
                 total_size = merged.data_alloc_size(MemoryType.DEVICE)
                 evaluated_chunks = [merged]
@@ -570,7 +592,6 @@ async def keyed_reduction_node(
                 if total_size > target_partition_size:
                     break
 
-        reduction_ran = merge_count > 0
         local_count = metadata_in.local_count
         if can_skip_global_comm:
             total_chunk_count = local_count
@@ -602,7 +623,6 @@ async def keyed_reduction_node(
                     metadata_in,
                     target_partition_size,
                     evaluated_chunks=evaluated_chunks,
-                    reduction_ran=reduction_ran,
                     tracer=tracer,
                 )
             else:
@@ -618,7 +638,6 @@ async def keyed_reduction_node(
                     max(1, min(ideal_count, local_count)),
                     collective_ids.pop(),
                     evaluated_chunks=evaluated_chunks,
-                    reduction_ran=reduction_ran,
                     shuffle_context=context if nranks == 1 else None,
                     tracer=tracer,
                 )
@@ -635,7 +654,6 @@ async def keyed_reduction_node(
                 target_partition_size,
                 evaluated_chunks=evaluated_chunks,
                 collective_id=collective_ids.pop(),
-                reduction_ran=reduction_ran,
                 tracer=tracer,
             )
         else:
@@ -651,7 +669,6 @@ async def keyed_reduction_node(
                 max(nranks, min(ideal_count, total_chunk_count)),
                 collective_ids.pop(),
                 evaluated_chunks=evaluated_chunks,
-                reduction_ran=reduction_ran,
                 shuffle_context=context,
                 tracer=tracer,
             )
