@@ -157,16 +157,22 @@ def _wrap_buffer_or_span(
     return as_buffer(buffer_or_span)
 
 
-def _make_wrapped(
+def _rebuild_column(
     col: plc.Column,
     children: list[plc.Column],
     data_type: plc.DataType | None = None,
+    wrap_buffers: bool = False,
 ) -> plc.Column:
+    data = col.data()
+    mask = col.null_mask()
+    if wrap_buffers:
+        data = _wrap_buffer_or_span(data)
+        mask = _wrap_buffer_or_span(mask)
     return plc.Column(
         data_type=data_type or col.type(),
         size=col.size(),
-        data=_wrap_buffer_or_span(col.data()),
-        mask=_wrap_buffer_or_span(col.null_mask()),
+        data=data,
+        mask=mask,
         null_count=col.null_count(),
         offset=col.offset(),
         children=children,
@@ -176,18 +182,28 @@ def _make_wrapped(
 
 def _wrap_column(col: plc.Column) -> plc.Column:
     wrapped_children = [_wrap_column(child) for child in col.children()]
-    return _make_wrapped(col, wrapped_children)
+    return _rebuild_column(col, wrapped_children, wrap_buffers=True)
 
 
-def _normalize_timestamp_days(col: plc.Column) -> plc.Column:
-    if col.type().id() == plc.TypeId.TIMESTAMP_DAYS:
+def _normalize_types_column(col: plc.Column) -> plc.Column:
+    """Normalize unsupported types from external sources."""
+    type_id = col.type().id()
+    if type_id == plc.TypeId.TIMESTAMP_DAYS:
         return plc.unary.cast(col, plc.DataType(plc.TypeId.TIMESTAMP_SECONDS))
+
+    if type_id == plc.TypeId.EMPTY:
+        plc_dtype = plc.DataType(plc.TypeId.INT8)
+        if col.size() == 0:
+            return plc.column_factories.make_empty_column(plc_dtype)
+        return plc.column_factories.make_numeric_column(
+            plc_dtype, col.size(), plc.types.MaskState.ALL_NULL
+        )
 
     if not (children := col.children()):
         return col
 
     normalized_children = [
-        _normalize_timestamp_days(child) for child in children
+        _normalize_types_column(child) for child in children
     ]
     if all(
         normalized_child is child
@@ -197,21 +213,12 @@ def _normalize_timestamp_days(col: plc.Column) -> plc.Column:
     ):
         return col
 
-    return plc.Column(
-        data_type=col.type(),
-        size=col.size(),
-        data=col.data(),
-        mask=col.null_mask(),
-        children=normalized_children,
-        offset=col.offset(),
-        null_count=col.null_count(),
-        validate=False,
-    )
+    return _rebuild_column(col, normalized_children)
 
 
-def _normalize_timestamp_days_table(table: plc.Table) -> plc.Table:
+def _normalize_types_table(table: plc.Table) -> plc.Table:
     columns = table.columns()
-    normalized_columns = [_normalize_timestamp_days(col) for col in columns]
+    normalized_columns = [_normalize_types_column(col) for col in columns]
     if all(
         normalized_col is col
         for normalized_col, col in zip(
@@ -222,21 +229,6 @@ def _normalize_timestamp_days_table(table: plc.Table) -> plc.Table:
     return plc.Table(normalized_columns)
 
 
-def _normalize_timestamp_days_tbl_w_meta(
-    tbl_w_meta: plc.io.TableWithMetadata,
-) -> tuple[plc.Table | plc.io.TableWithMetadata, dict[str, Any] | None]:
-    normalized = _normalize_timestamp_days_table(tbl_w_meta.tbl)
-    if normalized is tbl_w_meta.tbl:
-        return tbl_w_meta, None
-    return (
-        normalized,
-        {
-            "columns": tbl_w_meta.column_names(include_children=False),
-            "child_names": tbl_w_meta.child_names,
-        },
-    )
-
-
 def _wrap_and_validate(
     col: plc.Column, dtype: DtypeObj
 ) -> tuple[plc.Column, DtypeObj]:
@@ -244,28 +236,20 @@ def _wrap_and_validate(
     if isinstance(dispatch_dtype, pd.ArrowDtype):
         dispatch_dtype = pyarrow_dtype_to_cudf_dtype(dispatch_dtype)
     type_id = col.type().id()
-
-    if type_id == plc.TypeId.EMPTY:
-        if isinstance(dispatch_dtype, CategoricalDtype):
-            new_dtype = dtype_to_pylibcudf_type(dispatch_dtype._codes_dtype)
-        else:
-            new_dtype = plc.DataType(plc.TypeId.INT8)
-        col = plc.column_factories.make_numeric_column(
-            new_dtype, col.size(), plc.types.MaskState.ALL_NULL
-        )
-        type_id = new_dtype.id()
-
-    valid_types: set[plc.TypeId] = set()
-    wrapped: plc.Column | None = None
     dtype_kind = dispatch_dtype.kind
+    valid_types: set[plc.TypeId] = set()
+    wrapped = None
     if isinstance(dispatch_dtype, ListDtype):
         valid_types = {plc.TypeId.LIST}
         values, values_dtype = _wrap_and_validate(
             col.list_view().child(), dispatch_dtype.element_type
         )
         offsets = _wrap_column(col.list_view().offsets())
-        wrapped = _make_wrapped(
-            col, [offsets, values], data_type=plc.DataType(plc.TypeId.LIST)
+        wrapped = _rebuild_column(
+            col,
+            [offsets, values],
+            data_type=plc.DataType(plc.TypeId.LIST),
+            wrap_buffers=True,
         )
         dispatch_dtype = ListDtype(values_dtype)
     elif isinstance(dispatch_dtype, IntervalDtype):
@@ -283,10 +267,11 @@ def _wrap_and_validate(
                 ("Left", "Right"), col.children(), strict=True
             )
         ]
-        wrapped = _make_wrapped(
+        wrapped = _rebuild_column(
             col,
             wrapped_children,
             data_type=plc.DataType(plc.TypeId.STRUCT),
+            wrap_buffers=True,
         )
     elif isinstance(dispatch_dtype, StructDtype):
         valid_types = {plc.TypeId.STRUCT}
@@ -301,10 +286,11 @@ def _wrap_and_validate(
                     f"Field '{field_name}' validation failed"
                 ) from e
             wrapped_children.append(wrapped_child)
-        wrapped = _make_wrapped(
+        wrapped = _rebuild_column(
             col,
             wrapped_children,
             data_type=plc.DataType(plc.TypeId.STRUCT),
+            wrap_buffers=True,
         )
 
     wrapped = _wrap_column(col) if wrapped is None else wrapped
@@ -1277,6 +1263,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             categories = cls.create(
                 plc.Column.from_arrow(dictionary), categories_dtype
             )
+
             categorical_dtype = CategoricalDtype(
                 categories=categories, ordered=array.type.ordered
             )
@@ -1289,8 +1276,9 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             return ColumnBase.create(codes_plc, categorical_dtype)
         else:
             plc_column = plc.Column.from_arrow(array)
-            normalized = _normalize_timestamp_days(plc_column)
-            return cls.create(normalized, cudf_dtype_from_pa_type(array.type))
+            dtype = cudf_dtype_from_pa_type(array.type)
+            normalized = _normalize_types_column(plc_column)
+            return cls.create(normalized, dtype)
 
     def _get_mask_as_column(self) -> ColumnBase:
         with self.access(mode="read", scope="internal"):

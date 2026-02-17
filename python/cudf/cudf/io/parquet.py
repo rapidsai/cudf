@@ -32,8 +32,9 @@ from cudf.core.column import (
     column_empty,
 )
 from cudf.core.column.column import (
+    _normalize_empty_table,
+    _normalize_timestamp_days_and_empty_tbl_w_meta,
     _normalize_timestamp_days_table,
-    _normalize_timestamp_days_tbl_w_meta,
 )
 from cudf.core.dataframe import DataFrame
 from cudf.core.dtypes import (
@@ -1421,6 +1422,7 @@ def _read_parquet(
 
             plc_table = plc.Table(concatenated_columns)
             normalized_table = _normalize_timestamp_days_table(plc_table)
+            normalized_table = _normalize_empty_table(normalized_table)
             df = DataFrame.from_pylibcudf(
                 normalized_table,
                 metadata={
@@ -1466,8 +1468,8 @@ def _read_parquet(
                 options.set_filter(filters)
 
             tbl_w_meta = plc.io.parquet.read_parquet(options)
-            normalized, metadata = _normalize_timestamp_days_tbl_w_meta(
-                tbl_w_meta
+            normalized, metadata = (
+                _normalize_timestamp_days_and_empty_tbl_w_meta(tbl_w_meta)
             )
             df = DataFrame.from_pylibcudf(normalized, metadata=metadata)
             df = _process_metadata(

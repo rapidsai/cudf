@@ -1,10 +1,11 @@
-# SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from io import BytesIO, StringIO, TextIOBase
 
 import pylibcudf as plc
 
+from cudf.core.column.column import _normalize_empty_column
 from cudf.core.series import Series
 from cudf.utils import ioutils
 from cudf.utils.performance_tracking import _performance_tracking
@@ -64,4 +65,5 @@ def read_text(
         byte_range=byte_range, strip_delimiters=strip_delimiters
     )
     plc_column = plc.io.text.multibyte_split(datasource, delimiter, options)
-    return Series.from_pylibcudf(plc_column)
+    normalized = _normalize_empty_column(plc_column)
+    return Series.from_pylibcudf(normalized)

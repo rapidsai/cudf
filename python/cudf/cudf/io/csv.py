@@ -15,6 +15,7 @@ import pylibcudf as plc
 
 from cudf.api.types import is_scalar
 from cudf.core.column import access_columns
+from cudf.core.column.column import _normalize_empty_tbl_w_meta
 from cudf.core.dataframe import DataFrame
 from cudf.core.dtypes import (
     CategoricalDtype,
@@ -280,7 +281,8 @@ def read_csv(
         options.set_na_values([str(val) for val in na_values])
 
     table_w_meta = plc.io.csv.read_csv(options)
-    df = DataFrame.from_pylibcudf(table_w_meta)
+    normalized, metadata = _normalize_empty_tbl_w_meta(table_w_meta)
+    df = DataFrame.from_pylibcudf(normalized, metadata=metadata)
 
     if get_option("mode.pandas_compatible") and df.empty:
         raise pd.errors.EmptyDataError("No columns to parse from file")

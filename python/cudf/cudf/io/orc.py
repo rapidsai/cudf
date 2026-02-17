@@ -13,7 +13,9 @@ import pylibcudf as plc
 
 from cudf.api.types import is_list_like
 from cudf.core.column import access_columns, column_empty
-from cudf.core.column.column import _normalize_timestamp_days_tbl_w_meta
+from cudf.core.column.column import (
+    _normalize_timestamp_days_and_empty_tbl_w_meta,
+)
 from cudf.core.dataframe import DataFrame
 from cudf.core.dtypes import (
     CategoricalDtype,
@@ -268,7 +270,9 @@ def read_orc(
             options.set_columns(columns)
 
         tbl_w_meta = plc.io.orc.read_orc(options)
-        normalized, metadata = _normalize_timestamp_days_tbl_w_meta(tbl_w_meta)
+        normalized, metadata = _normalize_timestamp_days_and_empty_tbl_w_meta(
+            tbl_w_meta
+        )
         df = DataFrame.from_pylibcudf(normalized, metadata=metadata)
 
         if isinstance(columns, list) and len(columns) == 0:

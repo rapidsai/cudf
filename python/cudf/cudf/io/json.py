@@ -13,6 +13,10 @@ import pandas as pd
 import pylibcudf as plc
 
 from cudf.core.column import access_columns
+from cudf.core.column.column import (
+    _normalize_empty_table,
+    _normalize_empty_tbl_w_meta,
+)
 from cudf.core.dataframe import DataFrame
 from cudf.core.dtypes import (
     CategoricalDtype,
@@ -208,8 +212,9 @@ def read_json(
                     )
                 )
             )
+            normalized_table = _normalize_empty_table(plc.Table(res_cols))
             return DataFrame.from_pylibcudf(
-                plc.Table(res_cols),
+                normalized_table,
                 metadata={
                     "columns": res_col_names,
                     "child_names": res_child_names,
@@ -235,7 +240,8 @@ def read_json(
                     extra_parameters=kwargs,
                 )
             )
-            df = DataFrame.from_pylibcudf(table_w_meta)
+            normalized, metadata = _normalize_empty_tbl_w_meta(table_w_meta)
+            df = DataFrame.from_pylibcudf(normalized, metadata=metadata)
     else:
         warnings.warn(
             "Using CPU via Pandas to read JSON dataset, this may "

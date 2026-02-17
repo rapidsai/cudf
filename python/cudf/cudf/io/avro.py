@@ -3,7 +3,9 @@
 
 import pylibcudf as plc
 
-from cudf.core.column.column import _normalize_timestamp_days_tbl_w_meta
+from cudf.core.column.column import (
+    _normalize_timestamp_days_and_empty_tbl_w_meta,
+)
 from cudf.core.dataframe import DataFrame
 from cudf.utils import ioutils
 
@@ -47,5 +49,7 @@ def read_avro(
         options.set_columns(columns)
 
     tbl_w_meta = plc.io.avro.read_avro(options)
-    normalized, metadata = _normalize_timestamp_days_tbl_w_meta(tbl_w_meta)
+    normalized, metadata = _normalize_timestamp_days_and_empty_tbl_w_meta(
+        tbl_w_meta
+    )
     return DataFrame.from_pylibcudf(normalized, metadata=metadata)
