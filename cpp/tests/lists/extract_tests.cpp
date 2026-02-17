@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -25,7 +25,7 @@
 
 #include <cudf/lists/extract.hpp>
 
-#include <thrust/iterator/constant_iterator.h>
+#include <cuda/iterator>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 
@@ -226,7 +226,7 @@ TEST_F(ListsExtractTest, ExtractElementEmpty)
   cudf::test::strings_column_wrapper expected({""});
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *result);
 
-  LCW null_strings({LCW{"", "", ""}}, thrust::make_constant_iterator<int32_t>(0));
+  LCW null_strings({LCW{"", "", ""}}, cuda::make_constant_iterator<int32_t>(0));
   result = cudf::lists::extract_list_element(cudf::lists_column_view(null_strings), 1);
   cudf::test::strings_column_wrapper expected_null({""}, {0});
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_null, *result);

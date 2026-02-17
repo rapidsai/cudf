@@ -20,8 +20,8 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cub/device/device_radix_sort.cuh>
+#include <cuda/iterator>
 #include <thrust/binary_search.h>
-#include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/discard_iterator.h>
 #include <thrust/sequence.h>
 #include <thrust/transform_scan.h>
@@ -319,7 +319,7 @@ adjust_cumulative_sizes(device_span<cumulative_page_info const> c_info,
   auto page_keys             = make_page_key_iterator(pages);
   auto const key_offsets_end = cudf::detail::reduce_by_key(page_keys,
                                                            page_keys + pages.size(),
-                                                           thrust::make_constant_iterator(1),
+                                                           cuda::make_constant_iterator(1),
                                                            thrust::make_discard_iterator(),
                                                            key_offsets.begin(),
                                                            cuda::std::plus<>{},

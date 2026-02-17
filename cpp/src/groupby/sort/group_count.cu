@@ -15,8 +15,8 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
+#include <cuda/iterator>
 #include <thrust/adjacent_difference.h>
-#include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/discard_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 
@@ -59,7 +59,7 @@ std::unique_ptr<column> group_count_valid(column_view const& values,
   } else {
     cudf::detail::reduce_by_key_async(group_labels.begin(),
                                       group_labels.end(),
-                                      thrust::make_constant_iterator(1),
+                                      cuda::make_constant_iterator(1),
                                       thrust::make_discard_iterator(),
                                       result->mutable_view().begin<size_type>(),
                                       cuda::std::plus<size_type>(),

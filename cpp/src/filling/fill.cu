@@ -27,7 +27,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
-#include <thrust/iterator/constant_iterator.h>
+#include <cuda/iterator>
 
 #include <memory>
 
@@ -43,8 +43,8 @@ void in_place_fill(cudf::mutable_column_view& destination,
   auto p_scalar    = static_cast<ScalarType const*>(&value);
   T fill_value     = p_scalar->value(stream);
   bool is_valid    = p_scalar->is_valid(stream);
-  cudf::detail::copy_range(thrust::make_constant_iterator(fill_value),
-                           thrust::make_constant_iterator(is_valid),
+  cudf::detail::copy_range(cuda::make_constant_iterator(fill_value),
+                           cuda::make_constant_iterator(is_valid),
                            destination,
                            begin,
                            end,
