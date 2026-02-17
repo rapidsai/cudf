@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 """Utility functions/classes for running the PDS-H and PDS-DS benchmarks."""
@@ -283,13 +283,10 @@ class RunConfig:
 
 
 def get_data(
-    path: str | Path,
-    table_name: str,
-    suffix: str = "",
-    columns: list[str] | None = None,
+    path: str | Path, table_name: str, suffix: str = ""
 ) -> pd.DataFrame:
     """Get table from dataset."""
-    return pd.read_parquet(f"{path}/{table_name}{suffix}", columns=columns)
+    return pd.read_parquet(f"{path}/{table_name}{suffix}")
 
 
 def execute_query(
