@@ -745,7 +745,7 @@ dependencies:
           # 'nvidia-ml-py' provides the 'pynvml' module
           - &nvidia_ml_py nvidia-ml-py>=12
           - packaging
-          - polars>=1.30,<1.36
+          - polars>=1.30,<1.39
     specific:
       - output_types: [requirements, pyproject]
         matrices:
@@ -939,6 +939,7 @@ dependencies:
         packages:
           - rich
           - pytest-httpserver
+          - zstandard
   test_python_narwhals:
     common:
       - output_types: [conda, requirements, pyproject]
@@ -1290,7 +1291,7 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          - narwhals==2.0.1
+          - narwhals==2.16.0
   cudf_polars_trace:
     common:
       - output_types: [conda, requirements, pyproject]

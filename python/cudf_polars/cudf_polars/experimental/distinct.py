@@ -27,14 +27,14 @@ if TYPE_CHECKING:
 
     from cudf_polars.dsl.ir import IR
     from cudf_polars.experimental.dispatch import LowerIRTransformer
-    from cudf_polars.utils.config import ConfigOptions
+    from cudf_polars.utils.config import ConfigOptions, StreamingExecutor
 
 
 def lower_distinct(
     ir: Distinct,
     child: IR,
     partition_info: MutableMapping[IR, PartitionInfo],
-    config_options: ConfigOptions,
+    config_options: ConfigOptions[StreamingExecutor],
     *,
     unique_fraction: float | None = None,
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
@@ -117,9 +117,6 @@ def lower_distinct(
             partition_info[new_node] = PartitionInfo(count=count)
     else:
         # Shuffle
-        assert config_options.executor.name == "streaming", (
-            "'in-memory' executor not supported in 'lower_distinct'"
-        )
         new_node = Shuffle(
             new_node.schema,
             distinct_keys,
@@ -151,9 +148,6 @@ def _(
     )
 
     config_options = rec.state["config_options"]
-    assert config_options.executor.name == "streaming", (
-        "'in-memory' executor not supported in 'lower_ir_node'"
-    )
 
     # Check for ordering requirements (shuffle is not stable)
     require_tree = ir.stable or ir.keep in (
