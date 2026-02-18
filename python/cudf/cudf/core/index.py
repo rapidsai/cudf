@@ -380,7 +380,7 @@ class Index(SingleColumnFrame):
                 raise ValueError("Metadata dict must only contain a name")
             name = metadata.get("name")
         return cls._from_column(
-            ColumnBase.from_pylibcudf(col),
+            ColumnBase.create(col, dtype=dtype_from_pylibcudf_column(col)),
             name=name,
         )
 
