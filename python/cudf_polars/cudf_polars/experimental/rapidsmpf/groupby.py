@@ -400,7 +400,11 @@ async def _shuffle_reduce(
         )
 
     if shuf_nranks == 1:
-        inter_rank_scheme = metadata_in.partitioning.inter_rank
+        inter_rank_scheme = (
+            None
+            if metadata_in.partitioning is None
+            else metadata_in.partitioning.inter_rank
+        )
         local_scheme = HashScheme(column_indices=output_key_indices, modulus=modulus)
         local_output_count = modulus
     else:
