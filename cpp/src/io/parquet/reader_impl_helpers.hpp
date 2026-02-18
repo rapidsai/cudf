@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -11,6 +11,7 @@
 #include <cudf/ast/expressions.hpp>
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/io/datasource.hpp>
+#include <cudf/io/parquet.hpp>
 #include <cudf/io/parquet_schema.hpp>
 #include <cudf/types.hpp>
 
@@ -306,7 +307,7 @@ class aggregate_reader_metadata {
   /**
    * @brief Filters the row groups using bloom filters
    *
-   * @param bloom_filter_data Bloom filter data device buffers for each input row group
+   * @param bloom_filter_data Device spans of bloom filter data for each input row group
    * @param input_row_group_indices Lists of input row groups, one per source
    * @param literals Lists of equality literals, one per each input row group
    * @param total_row_groups Total number of row groups in `input_row_group_indices`
@@ -318,7 +319,7 @@ class aggregate_reader_metadata {
    * @return Surviving row group indices if any of them are filtered.
    */
   [[nodiscard]] std::optional<std::vector<std::vector<size_type>>> apply_bloom_filters(
-    cudf::host_span<rmm::device_buffer> bloom_filter_data,
+    cudf::host_span<cudf::device_span<cuda::std::byte const> const> bloom_filter_data,
     host_span<std::vector<size_type> const> input_row_group_indices,
     host_span<std::vector<ast::literal*> const> literals,
     size_type total_row_groups,
@@ -605,7 +606,9 @@ class names_from_expression : public ast::detail::expression_transformer {
   names_from_expression() = default;
 
   names_from_expression(std::optional<std::reference_wrapper<ast::expression const>> expr,
-                        std::vector<std::string> const& skip_names);
+                        std::vector<std::string> const& skip_names,
+                        cudf::io::parquet_reader_options const& options,
+                        std::vector<SchemaElement> const& schema_tree);
 
   /**
    * @copydoc ast::detail::expression_transformer::visit(ast::literal const& )
@@ -635,10 +638,11 @@ class names_from_expression : public ast::detail::expression_transformer {
    */
   [[nodiscard]] std::vector<std::string> to_vector() &&;
 
- protected:
+ private:
   void visit_operands(
     cudf::host_span<std::reference_wrapper<ast::expression const> const> operands);
 
+  std::unordered_map<cudf::size_type, std::string> _column_indices_to_names;
   std::unordered_set<std::string> _column_names;
   std::unordered_set<std::string> _skip_names;
 };
@@ -740,6 +744,17 @@ class equality_literals_collector : public ast::detail::expression_transformer {
 };
 
 /**
+ * @brief Maps indices of (all or selected) columns to their names
+ *
+ * @param options Parquet reader options
+ * @param schema_tree Parquet schema tree
+ *
+ * @return Map of column indices to their names
+ */
+[[nodiscard]] std::unordered_map<cudf::size_type, std::string> map_column_indices_to_names(
+  cudf::io::parquet_reader_options const& options, std::vector<SchemaElement> const& schema_tree);
+
+/**
  * @brief Get the column names in expression object
  *
  * @param expr The optional expression object to get the column names from
@@ -748,7 +763,9 @@ class equality_literals_collector : public ast::detail::expression_transformer {
  */
 [[nodiscard]] std::vector<std::string> get_column_names_in_expression(
   std::optional<std::reference_wrapper<ast::expression const>> expr,
-  std::vector<std::string> const& skip_names);
+  std::vector<std::string> const& skip_names,
+  cudf::io::parquet_reader_options const& options,
+  std::vector<SchemaElement> const& schema_tree);
 
 /**
  * @brief Filter table using the provided (StatsAST or BloomfilterAST) expression and

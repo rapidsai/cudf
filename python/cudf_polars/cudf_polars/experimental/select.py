@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 """Parallel Select Logic."""
 
@@ -20,6 +20,7 @@ from cudf_polars.experimental.expressions import decompose_expr_graph
 from cudf_polars.experimental.repartition import Repartition
 from cudf_polars.experimental.utils import (
     _contains_unsupported_fill_strategy,
+    _dynamic_planning_on,
     _lower_ir_fallback,
 )
 
@@ -276,7 +277,11 @@ def _(
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
     child, partition_info = rec(ir.children[0])
     pi = partition_info[child]
-    if pi.count > 1 and _contains_unsupported_fill_strategy(
+
+    config_options = rec.state["config_options"]
+    single_partition = pi.count == 1 and not _dynamic_planning_on(config_options)
+
+    if not single_partition and _contains_unsupported_fill_strategy(
         [e.value for e in ir.exprs]
     ):
         return _lower_ir_fallback(
@@ -288,8 +293,9 @@ def _(
             ),
         )
 
+    # Fast count optimization - reads parquet metadata only, works regardless of partitioning
     scan_child: Scan | None = None
-    if pi.count == 1 and Select._is_len_expr(ir.exprs):
+    if Select._is_len_expr(ir.exprs):
         if (
             isinstance(child, Union)
             and len(child.children) == 1
@@ -301,7 +307,7 @@ def _(
             # RapidsMPF case
             scan_child = child
 
-    if scan_child and scan_child.predicate is None:
+    if scan_child and scan_child.predicate is None and scan_child.typ == "parquet":
         # Special Case: Fast count.
         count = scan_child.fast_count()
         dtype = ir.exprs[0].value.dtype
@@ -328,17 +334,22 @@ def _(
         partition_info[input_ir] = partition_info[new_node] = PartitionInfo(count=1)
         return new_node, partition_info
 
-    if pi.count > 1 and not all(
+    # Check for non-pointwise expressions (e.g., aggregations)
+    has_non_pointwise = not all(
         expr.is_pointwise for expr in traversal([e.value for e in ir.exprs])
-    ):
-        # Special Case: Multiple partitions with 1+ non-pointwise expressions.
+    )
+
+    # Decompose non-pointwise expressions
+    if has_non_pointwise and not single_partition:
+        # Special Case: Non-pointwise expressions requiring global aggregation.
         try:
-            # Try decomposing the underlying expressions
+            # Try decomposing the underlying expressions.
+            # This inserts Repartition nodes to ensure global aggregation.
             return decompose_select(
                 ir,
                 child,
                 partition_info,
-                rec.state["config_options"],
+                config_options,
                 rec.state["stats"],
             )
         except NotImplementedError:

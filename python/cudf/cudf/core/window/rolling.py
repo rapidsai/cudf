@@ -5,7 +5,7 @@ from __future__ import annotations
 import functools
 import itertools
 import warnings
-from typing import TYPE_CHECKING, TypeVar
+from typing import TYPE_CHECKING, Any, TypeVar
 
 import numpy as np
 import pandas as pd
@@ -23,13 +23,11 @@ from cudf.core.column.column import ColumnBase, as_column
 from cudf.core.copy_types import GatherMap
 from cudf.core.mixins import GetAttrGetItemMixin, Reducible
 from cudf.core.multiindex import MultiIndex
-from cudf.options import get_option
-from cudf.utils.dtypes import SIZE_TYPE_DTYPE
+from cudf.utils.dtypes import SIZE_TYPE_DTYPE, dtype_from_pylibcudf_column
 
 if TYPE_CHECKING:
     from collections.abc import Callable
-
-    from typing_extensions import Self
+    from typing import Self
 
     from cudf.core.dataframe import DataFrame
     from cudf.core.index import Index
@@ -94,47 +92,50 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
     Examples
     --------
     >>> import cudf
+    >>> import numpy as np
+    >>> import pandas as pd
     >>> a = cudf.Series([1, 2, 3, None, 4])
 
     Rolling sum with window size 2.
 
     >>> print(a.rolling(2).sum())
-    0
-    1    3
-    2    5
-    3
-    4
-    dtype: int64
+    0    <NA>
+    1     3.0
+    2     5.0
+    3    <NA>
+    4    <NA>
+    dtype: float64
 
     Rolling sum with window size 2 and min_periods 1.
 
     >>> print(a.rolling(2, min_periods=1).sum())
-    0    1
-    1    3
-    2    5
-    3    3
-    4    4
-    dtype: int64
+    0    1.0
+    1    3.0
+    2    5.0
+    3    3.0
+    4    4.0
+    dtype: float64
 
     Rolling count with window size 3.
 
     >>> print(a.rolling(3).count())
-    0    1
-    1    2
-    2    3
-    3    2
-    4    2
-    dtype: int64
+    0    <NA>
+    1    <NA>
+    2     3.0
+    3     2.0
+    4     2.0
+    dtype: float64
 
     Rolling count with window size 3, but with the result set at the
     center of the window.
 
     >>> print(a.rolling(3, center=True).count())
-    0    2
-    1    3
-    2    2
-    3    2
-    4    1 dtype: int64
+    0    <NA>
+    1     3.0
+    2     2.0
+    3     2.0
+    4    <NA>
+    dtype: float64
 
     Rolling max with variable window size specified by an offset;
     only valid for datetime index.
@@ -152,17 +153,16 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
     ... )
 
     >>> print(a.rolling('2s').max())
-    2019-01-01T09:00:00.000    1
-    2019-01-01T09:00:01.000    9
-    2019-01-01T09:00:02.000    9
-    2019-01-01T09:00:04.000    4
-    2019-01-01T09:00:07.000
-    2019-01-01T09:00:08.000    1
-    dtype: int64
+    2019-01-01 09:00:00     1.0
+    2019-01-01 09:00:01     9.0
+    2019-01-01 09:00:02     9.0
+    2019-01-01 09:00:04     4.0
+    2019-01-01 09:00:07    <NA>
+    2019-01-01 09:00:08     1.0
+    dtype: float64
 
     Apply custom function on the window with the *apply* method
 
-    >>> import numpy as np
     >>> import math
     >>> b = cudf.Series([16, 25, 36, 49, 64, 81], dtype=np.float64)
     >>> def some_func(A):
@@ -182,7 +182,6 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
 
     And this also works for window rolling set by an offset
 
-    >>> import pandas as pd
     >>> c = cudf.Series(
     ...     [16, 25, 36, 49, 64, 81],
     ...     index=[
@@ -196,12 +195,12 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
     ...     dtype=np.float64
     ... )
     >>> print(c.rolling('2s').apply(some_func))
-    2019-01-01T09:00:00.000     4.0
-    2019-01-01T09:00:01.000     9.0
-    2019-01-01T09:00:02.000    11.0
-    2019-01-01T09:00:04.000     7.0
-    2019-01-01T09:00:07.000     8.0
-    2019-01-01T09:00:08.000    17.0
+    2019-01-01 09:00:00     4.0
+    2019-01-01 09:00:01     9.0
+    2019-01-01 09:00:02    11.0
+    2019-01-01 09:00:04     7.0
+    2019-01-01 09:00:07     8.0
+    2019-01-01 09:00:08    17.0
     dtype: float64
     """
 
@@ -258,8 +257,7 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
         if method != "single":
             raise NotImplementedError("method is currently not supported")
 
-        if get_option("mode.pandas_compatible"):
-            obj = obj.nans_to_nulls()
+        obj = obj.nans_to_nulls()
         self.obj = obj
 
         self.window, self.min_periods = self._normalize_window_and_min_periods(
@@ -357,27 +355,34 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
 
         rolling_agg = aggregation.make_aggregation(
             agg_name,
-            {
-                "dtype": np.dtype("float64")
-                if get_option("mode.pandas_compatible")
-                else source_column.dtype
-            }
+            {"dtype": source_column.dtype}
             if callable(agg_name)
             else agg_kwargs,
         ).plc_obj
 
+        min_periods = 1 if self.min_periods is None else self.min_periods
+        if self.min_periods == 0 and isinstance(agg_name, str):
+            # libcudf supports min_periods=0 and returns identity values for windows with
+            # insufficient observations: SUM and COUNT return 0, MIN returns the maximum
+            # value for the type, MAX returns the minimum value for the type. Only SUM and
+            # COUNT match pandas behavior (pandas returns NaN for all aggregations when
+            # min_periods is not met). Force min_periods=1 for other aggregations.
+            if agg_name not in {"sum", "count"}:
+                min_periods = 1
+
         with source_column.access(mode="read", scope="internal"):
-            col = ColumnBase.from_pylibcudf(
-                plc.rolling.rolling_window(
-                    source_column.plc_column,
-                    pre,
-                    fwd,
-                    1 if self.min_periods is None else self.min_periods,
-                    rolling_agg,
-                )
+            plc_result = plc.rolling.rolling_window(
+                source_column.plc_column,
+                pre,
+                fwd,
+                min_periods,
+                rolling_agg,
+            )
+            col = ColumnBase.create(
+                plc_result, dtype_from_pylibcudf_column(plc_result)
             )
 
-        if isinstance(agg_name, str) and get_option("mode.pandas_compatible"):
+        if isinstance(agg_name, str):
             return col.astype(np.dtype("float64"))
         return col
 
@@ -396,11 +401,21 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
         """
         return self._apply_agg(op)
 
-    def var(self, ddof: int = 1) -> DataFrame | Series:
+    def var(
+        self,
+        skipna: bool = True,
+        min_count: int = 0,
+        ddof: int = 1,
+        **kwargs: Any,
+    ) -> DataFrame | Series:
         """Calculate the rolling variance.
 
         Parameters
         ----------
+        skipna : bool, default True
+            Exclude NA/null values.
+        min_count : int, default 0
+            Minimum number of observations required.
         ddof : int, default 1
             Delta Degrees of Freedom.  The divisor used in calculations
             is ``N - ddof``, where ``N`` represents the number of
@@ -411,13 +426,23 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
         Series or DataFrame
             Return type is the same as the original object.
         """
-        return self._apply_agg("var", ddof=ddof)
+        return self._apply_agg("var", ddof=ddof, **kwargs)
 
-    def std(self, ddof: int = 1) -> DataFrame | Series:
+    def std(
+        self,
+        skipna: bool = True,
+        min_count: int = 0,
+        ddof: int = 1,
+        **kwargs: Any,
+    ) -> DataFrame | Series:
         """Calculate the rolling standard deviation.
 
         Parameters
         ----------
+        skipna : bool, default True
+            Exclude NA/null values.
+        min_count : int, default 0
+            Minimum number of observations required.
         ddof : int, default 1
             Delta Degrees of Freedom.  The divisor used in calculations
             is ``N - ddof``, where ``N`` represents the number of
@@ -428,10 +453,19 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
         Series or DataFrame
             Return type is the same as the original object.
         """
-        return self._apply_agg("std", ddof=ddof)
+        return self._apply_agg("std", ddof=ddof, **kwargs)
 
-    def count(self) -> DataFrame | Series:
+    def count(
+        self, skipna: bool = True, min_count: int = 0, **kwargs: Any
+    ) -> DataFrame | Series:
         """Calculate the rolling count of non NaN observations.
+
+        Parameters
+        ----------
+        skipna : bool, default True
+            Exclude NA/null values.
+        min_count : int, default 0
+            Minimum number of observations required.
 
         Returns
         -------
@@ -439,6 +473,52 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
             Return type is the same as the original object.
         """
         return self._apply_agg("count")
+
+    def _nan_on_empty(self, result: DataFrame | Series) -> DataFrame | Series:
+        """Mask windows with zero non-null observations as NaN."""
+        return result.mask(self._apply_agg("count") == 0)
+
+    def mean(self, *args, **kwargs) -> DataFrame | Series:
+        """Calculate the rolling mean.
+
+        Returns
+        -------
+        Series or DataFrame
+            Return type is the same as the original object.
+        """
+        if args or kwargs:
+            raise NotImplementedError(
+                "Rolling.mean() does not support args or kwargs"
+            )
+        return self._nan_on_empty(self._apply_agg("mean"))
+
+    def min(self, *args, **kwargs) -> DataFrame | Series:
+        """Calculate the rolling minimum.
+
+        Returns
+        -------
+        Series or DataFrame
+            Return type is the same as the original object.
+        """
+        if args or kwargs:
+            raise NotImplementedError(
+                "Rolling.min() does not support args or kwargs"
+            )
+        return self._nan_on_empty(self._apply_agg("min"))
+
+    def max(self, *args, **kwargs) -> DataFrame | Series:
+        """Calculate the rolling maximum.
+
+        Returns
+        -------
+        Series or DataFrame
+            Return type is the same as the original object.
+        """
+        if args or kwargs:
+            raise NotImplementedError(
+                "Rolling.max() does not support args or kwargs"
+            )
+        return self._nan_on_empty(self._apply_agg("max"))
 
     def median(self, **kwargs):
         raise NotImplementedError("Rolling.median() is not yet implemented")

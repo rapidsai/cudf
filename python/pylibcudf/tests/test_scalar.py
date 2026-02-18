@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 import datetime
 import decimal
@@ -90,6 +90,8 @@ def test_to_py(py_scalar):
         (1.5, TypeId.FLOAT64),
         ("str", TypeId.STRING),
         (True, TypeId.BOOL8),
+        (0, TypeId.BOOL8),
+        (1, TypeId.BOOL8),
         (datetime.timedelta(1), TypeId.DURATION_SECONDS),
         (datetime.timedelta(1), TypeId.DURATION_MILLISECONDS),
         (datetime.timedelta(1), TypeId.DURATION_NANOSECONDS),
@@ -133,10 +135,10 @@ def test_from_py_with_dtype(val, tid):
             "Cannot assign negative value to UINT64 scalar",
         ),
         (
-            1,
+            2,
             TypeId.BOOL8,
-            TypeError,
-            "Cannot convert int to Scalar with dtype BOOL8",
+            ValueError,
+            "Cannot convert 2 to BOOL8 scalar",
         ),
         (
             "str",

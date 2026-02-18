@@ -8,7 +8,13 @@ import asyncio
 from typing import TYPE_CHECKING, Any, Literal
 
 from rapidsmpf.memory.buffer import MemoryType
+from rapidsmpf.memory.memory_reservation import opaque_memory_usage
+from rapidsmpf.streaming.core.memory_reserve_or_wait import (
+    missing_net_memory_delta,
+    reserve_memory,
+)
 from rapidsmpf.streaming.core.message import Message
+from rapidsmpf.streaming.cudf.channel_metadata import ChannelMetadata
 from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 
 from cudf_polars.containers import DataFrame
@@ -19,35 +25,36 @@ from cudf_polars.experimental.rapidsmpf.dispatch import (
 )
 from cudf_polars.experimental.rapidsmpf.nodes import (
     default_node_multi,
-    define_py_node,
+    define_actor,
     shutdown_on_error,
 )
 from cudf_polars.experimental.rapidsmpf.utils import (
     ChannelManager,
-    Metadata,
     chunk_to_frame,
     empty_table_chunk,
-    opaque_reservation,
     process_children,
+    recv_metadata,
+    send_metadata,
 )
 from cudf_polars.experimental.utils import _concat
 
 if TYPE_CHECKING:
+    from rapidsmpf.streaming.core.channel import Channel
     from rapidsmpf.streaming.core.context import Context
+    from rapidsmpf.streaming.cudf.channel_metadata import Partitioning
 
     from cudf_polars.dsl.ir import IR, IRExecutionContext
     from cudf_polars.experimental.rapidsmpf.core import SubNetGenerator
-    from cudf_polars.experimental.rapidsmpf.utils import ChannelPair
 
 
-@define_py_node()
+@define_actor()
 async def broadcast_join_node(
     context: Context,
     ir: Join,
     ir_context: IRExecutionContext,
-    ch_out: ChannelPair,
-    ch_left: ChannelPair,
-    ch_right: ChannelPair,
+    ch_out: Channel[TableChunk],
+    ch_left: Channel[TableChunk],
+    ch_right: Channel[TableChunk],
     broadcast_side: Literal["left", "right"],
     collective_id: int,
     target_partition_size: int,
@@ -64,11 +71,11 @@ async def broadcast_join_node(
     ir_context
         The execution context for the IR node.
     ch_out
-        The output ChannelPair.
+        The output Channel[TableChunk].
     ch_left
-        The left input ChannelPair.
+        The left input Channel[TableChunk].
     ch_right
-        The right input ChannelPair.
+        The right input Channel[TableChunk].
     broadcast_side
         The side to broadcast.
     collective_id
@@ -76,30 +83,24 @@ async def broadcast_join_node(
     target_partition_size
         The target partition size in bytes.
     """
-    async with shutdown_on_error(
-        context,
-        ch_left.metadata,
-        ch_left.data,
-        ch_right.metadata,
-        ch_right.data,
-        ch_out.metadata,
-        ch_out.data,
-    ):
+    async with shutdown_on_error(context, ch_left, ch_right, ch_out):
         # Receive metadata.
         left_metadata, right_metadata = await asyncio.gather(
-            ch_left.recv_metadata(context),
-            ch_right.recv_metadata(context),
+            recv_metadata(ch_left, context),
+            recv_metadata(ch_right, context),
         )
 
-        partitioned_on: tuple[str, ...] = ()
+        partitioning: Partitioning | None = None
         if broadcast_side == "right":
             # Broadcast right, stream left
             small_ch = ch_right
             large_ch = ch_left
             small_child = ir.children[1]
             large_child = ir.children[0]
-            chunk_count = left_metadata.count
-            partitioned_on = left_metadata.partitioned_on
+            # Preserve left-side partitioning metadata
+            local_count = left_metadata.local_count
+            partitioning = left_metadata.partitioning
+            # Check if the right-side is already broadcasted
             small_duplicated = right_metadata.duplicated
         else:
             # Broadcast left, stream right
@@ -107,23 +108,26 @@ async def broadcast_join_node(
             large_ch = ch_right
             small_child = ir.children[0]
             large_child = ir.children[1]
-            chunk_count = right_metadata.count
-            small_duplicated = left_metadata.duplicated
+            # Preserve right-side partitioning metadata
+            local_count = right_metadata.local_count
             if ir.options[0] == "Right":
-                partitioned_on = right_metadata.partitioned_on
+                partitioning = right_metadata.partitioning
+            # Check if the right-side is already broadcasted
+            small_duplicated = left_metadata.duplicated
 
         # Send metadata.
-        output_metadata = Metadata(
-            chunk_count,
-            partitioned_on=partitioned_on,
+        output_metadata = ChannelMetadata(
+            local_count=local_count,
+            partitioning=partitioning,
+            # The result is only "duplicated" if both sides are duplicated
             duplicated=left_metadata.duplicated and right_metadata.duplicated,
         )
-        await ch_out.send_metadata(context, output_metadata)
+        await send_metadata(ch_out, context, output_metadata)
 
         # Collect small-side (may be empty if no data received)
         small_chunks: list[TableChunk] = []
         small_size = 0
-        while (msg := await small_ch.data.recv(context)) is not None:
+        while (msg := await small_ch.recv(context)) is not None:
             small_chunks.append(
                 TableChunk.from_message(msg).make_available_and_spill(
                     context.br(), allow_overbooking=True
@@ -172,7 +176,7 @@ async def broadcast_join_node(
         large_chunk_processed = False
         receiving_large_chunks = True
         while receiving_large_chunks:
-            msg = await large_ch.data.recv(context)
+            msg = await large_ch.recv(context)
             if msg is None:
                 receiving_large_chunks = False
                 if large_chunk_processed:
@@ -187,15 +191,15 @@ async def broadcast_join_node(
                 else:
                     # We received no data for either the small or large table.
                     # Drain the output channel and return
-                    await ch_out.data.drain(context)
+                    await ch_out.drain(context)
                     return
             else:
                 large_chunk_processed = True
-                large_chunk = TableChunk.from_message(msg).make_available_and_spill(
-                    context.br(), allow_overbooking=True
+                large_chunk = await TableChunk.from_message(msg).make_available_or_wait(
+                    context,
+                    net_memory_delta=missing_net_memory_delta,
                 )
                 seq_num = msg.sequence_number
-                del msg
 
             large_df = DataFrame.from_table(
                 large_chunk.table_view(),
@@ -203,6 +207,8 @@ async def broadcast_join_node(
                 list(large_child.schema.values()),
                 large_chunk.stream,
             )
+            large_chunk_size = large_chunk.data_alloc_size(MemoryType.DEVICE)
+            del large_chunk  # `large_df` keeps `large_chunk` alive.
 
             # Lazily create empty small table if small_dfs is empty
             if not small_dfs:
@@ -210,9 +216,10 @@ async def broadcast_join_node(
                 empty_small_chunk = empty_table_chunk(small_child, context, stream)
                 small_dfs = [chunk_to_frame(empty_small_chunk, small_child)]
 
-            large_chunk_size = large_chunk.data_alloc_size(MemoryType.DEVICE)
             input_bytes = large_chunk_size + small_size
-            with opaque_reservation(context, input_bytes):
+            with opaque_memory_usage(
+                await reserve_memory(context, size=input_bytes, net_memory_delta=0)
+            ):
                 df = _concat(
                     *[
                         await asyncio.to_thread(
@@ -229,21 +236,21 @@ async def broadcast_join_node(
                     ],
                     context=ir_context,
                 )
+                del large_df
 
-                # Send output chunk
-                await ch_out.data.send(
-                    context,
-                    Message(
-                        seq_num,
-                        TableChunk.from_pylibcudf_table(
-                            df.table, df.stream, exclusive_view=True
-                        ),
+            # Send output chunk
+            await ch_out.send(
+                context,
+                Message(
+                    seq_num,
+                    TableChunk.from_pylibcudf_table(
+                        df.table, df.stream, exclusive_view=True
                     ),
-                )
-                del df, large_df, large_chunk
+                ),
+            )
 
         del small_dfs, small_chunks
-        await ch_out.data.drain(context)
+        await ch_out.drain(context)
 
 
 @generate_ir_sub_network.register(Join)
@@ -303,7 +310,6 @@ def _(
         # Get target partition size
         config_options = rec.state["config_options"]
         executor = config_options.executor
-        assert executor.name == "streaming", "Join node requires streaming executor"
         target_partition_size = executor.target_partition_size
 
         nodes[ir] = [
@@ -315,7 +321,7 @@ def _(
                 channels[left].reserve_output_slot(),
                 channels[right].reserve_output_slot(),
                 broadcast_side=broadcast_side,
-                collective_id=rec.state["collective_id_map"][ir],
+                collective_id=rec.state["collective_id_map"][ir][0],
                 target_partition_size=target_partition_size,
             )
         ]

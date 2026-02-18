@@ -1,16 +1,16 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 """Base class for IR nodes, and utilities."""
 
 from __future__ import annotations
 
+import hashlib
 from typing import TYPE_CHECKING, Any, ClassVar, Generic, TypeVar
 
 if TYPE_CHECKING:
     from collections.abc import Generator, Hashable, Sequence
-
-    from typing_extensions import Self
+    from typing import Self
 
 
 __all__: list[str] = ["Node"]
@@ -34,8 +34,9 @@ class Node(Generic[T]):
     *children).``
     """
 
-    __slots__ = ("_hash_value", "_repr_value", "children")
+    __slots__ = ("_hash_value", "_repr_value", "_stable_hash_value", "children")
     _hash_value: int
+    _stable_hash_value: int
     _repr_value: str
     children: tuple[T, ...]
     _non_child: ClassVar[tuple[str, ...]] = ()
@@ -81,6 +82,30 @@ class Node(Generic[T]):
         :meth:`__hash__`.
         """
         return (type(self), self._ctor_arguments(self.children))
+
+    def get_stable_id(self) -> int:
+        """
+        Compute a stable identifier for Node.
+
+        Uses MD5 hash of the node's hashable representation for determinism
+        across process boundaries (Python's hash() uses PYTHONHASHSEED).
+
+        Parameters
+        ----------
+        ir_node
+            The IR node.
+
+        Returns
+        -------
+        int
+            A stable 32-bit identifier for this node.
+        """
+        try:
+            return self._stable_hash_value
+        except AttributeError:
+            content = repr(self.get_hashable()).encode("utf-8")
+            self._stable_hash_value = int(hashlib.md5(content).hexdigest()[:8], 16)
+            return self._stable_hash_value
 
     def __hash__(self) -> int:
         """

@@ -3,58 +3,35 @@
 from __future__ import annotations
 
 import functools
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any, Literal, Self
 
 import pandas as pd
 import pyarrow as pa
-from typing_extensions import Self
 
 import pylibcudf as plc
 
-import cudf
-from cudf.core.column.column import ColumnBase, _handle_nulls, as_column
-from cudf.core.column.struct import StructColumn
+from cudf.core.column.column import (
+    ColumnBase,
+    _handle_nulls,
+    as_column,
+    dtype_from_pylibcudf_column,
+)
 from cudf.core.dtypes import IntervalDtype, _dtype_to_metadata
-from cudf.utils.dtypes import is_dtype_obj_interval
+from cudf.utils.scalar import maybe_nested_pa_scalar_to_py
 
 if TYPE_CHECKING:
     from cudf._typing import DtypeObj
+    from cudf.core.buffer import Buffer
 
 
-class IntervalColumn(StructColumn):
-    @classmethod
-    def _validate_args(  # type: ignore[override]
-        cls, plc_column: plc.Column, dtype: IntervalDtype
-    ) -> tuple[plc.Column, IntervalDtype]:
-        # Validate plc_column TypeId - IntervalColumn uses STRUCT type
-        if not (
-            isinstance(plc_column, plc.Column)
-            and plc_column.type().id() == plc.TypeId.STRUCT
-        ):
-            raise ValueError(
-                "plc_column must be a pylibcudf.Column with TypeId STRUCT"
-            )
-        if plc_column.num_children() != 2:
-            raise ValueError(
-                "plc_column must have two children (left edges, right edges)."
-            )
-        if (
-            not cudf.get_option("mode.pandas_compatible")
-            and not isinstance(dtype, IntervalDtype)
-        ) or (
-            cudf.get_option("mode.pandas_compatible")
-            and not is_dtype_obj_interval(dtype)
-        ):
-            raise ValueError("dtype must be a IntervalDtype.")
-        return plc_column, dtype
-
+class IntervalColumn(ColumnBase):
     @classmethod
     def from_arrow(cls, array: pa.Array | pa.ChunkedArray) -> Self:
         if not isinstance(array, pa.ExtensionArray):
             raise ValueError("Expected ExtensionArray for interval data")
         new_col = super().from_arrow(array.storage)
-        return new_col._with_type_metadata(
-            IntervalDtype.from_arrow(array.type)
+        return ColumnBase.create(
+            new_col.plc_column, IntervalDtype.from_arrow(array.type)
         )  # type: ignore[return-value]
 
     def to_arrow(self) -> pa.Array:
@@ -76,18 +53,41 @@ class IntervalColumn(StructColumn):
             struct_arrow = pa.array([], typ.storage_type)
         return pa.ExtensionArray.from_storage(typ, struct_arrow)
 
-    def copy(self, deep: bool = True) -> Self:
-        return super().copy(deep=deep)._with_type_metadata(self.dtype)  # type: ignore[return-value]
+    @classmethod
+    def _deserialize_plc_column(
+        cls,
+        header: dict,
+        dtype: DtypeObj,
+        data: Buffer | None,
+        mask: Buffer | None,
+        children: list[plc.Column],
+    ) -> plc.Column:
+        """Construct plc.Column using STRUCT type for interval columns."""
+        offset = header.get("offset", 0)
+        if mask is None:
+            null_count = 0
+        else:
+            null_count = plc.null_mask.null_count(
+                mask, offset, header["size"] + offset
+            )
 
-    def _adjust_reduce_result(
-        self,
-        result_col: ColumnBase,
-        reduction_op: str,
-        col_dtype: DtypeObj,
-        plc_scalar: plc.Scalar,
-    ) -> ColumnBase:
-        """Preserve IntervalDtype metadata on reduction result."""
-        return result_col._with_type_metadata(col_dtype)
+        plc_type = plc.DataType(plc.TypeId.STRUCT)
+        return plc.Column(
+            plc_type,
+            header["size"],
+            data,
+            mask,
+            null_count,
+            offset,
+            children,
+            validate=False,
+        )
+
+    def copy(self, deep: bool = True) -> Self:
+        plc_col = self.plc_column
+        if deep:
+            plc_col = plc_col.copy()
+        return ColumnBase.create(plc_col, self.dtype)  # type: ignore[return-value]
 
     @functools.cached_property
     def is_empty(self) -> ColumnBase:
@@ -116,9 +116,10 @@ class IntervalColumn(StructColumn):
 
     @property
     def left(self) -> ColumnBase:
-        return ColumnBase.from_pylibcudf(
-            self.plc_column.children()[0]
-        )._with_type_metadata(self.dtype.subtype)  # type: ignore[union-attr]
+        return ColumnBase.create(
+            self.plc_column.children()[0],
+            self.dtype.subtype,  # type: ignore[union-attr]
+        )
 
     @functools.cached_property
     def mid(self) -> ColumnBase:
@@ -130,9 +131,16 @@ class IntervalColumn(StructColumn):
 
     @property
     def right(self) -> ColumnBase:
-        return ColumnBase.from_pylibcudf(
-            self.plc_column.children()[1]
-        )._with_type_metadata(self.dtype.subtype)  # type: ignore[union-attr]
+        return ColumnBase.create(
+            self.plc_column.children()[1],
+            self.dtype.subtype,  # type: ignore[union-attr]
+        )
+
+    @property
+    def __cuda_array_interface__(self) -> dict[str, Any]:
+        raise NotImplementedError(
+            "Intervals are not yet supported via `__cuda_array_interface__`"
+        )
 
     def overlaps(other) -> ColumnBase:
         raise NotImplementedError("overlaps is not currently implemented.")
@@ -140,15 +148,37 @@ class IntervalColumn(StructColumn):
     def set_closed(
         self, closed: Literal["left", "right", "both", "neither"]
     ) -> Self:
-        return self._with_type_metadata(  # type: ignore[return-value]
-            IntervalDtype(self.dtype.subtype, closed)  # type: ignore[union-attr]
+        return ColumnBase.create(  # type: ignore[return-value]
+            self.plc_column,
+            IntervalDtype(self.dtype.subtype, closed),  # type: ignore[union-attr]
         )
 
     def as_interval_column(self, dtype: IntervalDtype) -> Self:
-        if isinstance(dtype, IntervalDtype):
-            return self._with_type_metadata(dtype)  # type: ignore[return-value]
-        else:
+        if not isinstance(dtype, IntervalDtype):
             raise ValueError("dtype must be IntervalDtype")
+
+        # If subtype is changing, cast children to match new subtype
+        if dtype.subtype != self.dtype.subtype:  # type: ignore[union-attr]
+            new_children = tuple(
+                ColumnBase.create(
+                    child, dtype_from_pylibcudf_column(child)
+                ).astype(dtype.subtype)
+                for child in self.plc_column.children()
+            )
+            # Reconstruct plc_column with cast children
+            plc_column = plc.Column(
+                plc.DataType(plc.TypeId.STRUCT),
+                self.plc_column.size(),
+                self.plc_column.data(),
+                self.plc_column.null_mask(),
+                self.plc_column.null_count(),
+                self.plc_column.offset(),
+                [child.plc_column for child in new_children],
+            )
+        else:
+            plc_column = self.plc_column
+
+        return ColumnBase.create(plc_column, dtype)  # type: ignore[return-value]
 
     def to_pandas(
         self,
@@ -161,10 +191,7 @@ class IntervalColumn(StructColumn):
         # self.to_arrow) is currently the best known way to convert interval
         # types into pandas (trying to convert the underlying numerical columns
         # directly is problematic), so we're stuck with this for now.
-        if nullable or (
-            cudf.get_option("mode.pandas_compatible")
-            and isinstance(self.dtype, pd.ArrowDtype)
-        ):
+        if nullable or isinstance(self.dtype, pd.ArrowDtype):
             return super().to_pandas(nullable=nullable, arrow_type=arrow_type)
         elif arrow_type:
             raise NotImplementedError(f"{arrow_type=} is not implemented.")
@@ -176,8 +203,9 @@ class IntervalColumn(StructColumn):
         self, index: int
     ) -> pd.Interval | dict[Any, Any] | None:
         result = super().element_indexing(index)
-        if isinstance(result, dict) and cudf.get_option(
-            "mode.pandas_compatible"
-        ):
+        if isinstance(result, pa.Scalar):
+            py_element = maybe_nested_pa_scalar_to_py(result)
+            result = self.dtype._recursively_replace_fields(py_element)  # type: ignore[union-attr]
+        if isinstance(result, dict):
             return pd.Interval(**result, closed=self.dtype.closed)  # type: ignore[union-attr]
         return result

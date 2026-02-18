@@ -1,15 +1,15 @@
-# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 import warnings
 from collections.abc import Iterator
 from functools import partial
+from typing import cast
 
 import cupy as cp
 import numpy as np
 import pandas as pd
 import pyarrow as pa
-from packaging.version import Version
 
 from dask import config
 from dask.array.dispatch import percentile_lookup
@@ -46,9 +46,6 @@ import cudf
 from cudf.api.types import is_scalar, is_string_dtype
 from cudf.utils.performance_tracking import _dask_cudf_performance_tracking
 
-# Required for Arrow filesystem support in read_parquet
-PYARROW_GE_15 = Version(pa.__version__) >= Version("15.0.0")
-
 
 @meta_nonempty.register(cudf.Index)
 @_dask_cudf_performance_tracking
@@ -59,12 +56,14 @@ def _nonempty_index(idx):
         return cudf.RangeIndex(2, name=idx.name)
     elif isinstance(idx, cudf.DatetimeIndex):
         data = np.array(["1970-01-01", "1970-01-02"], dtype=idx.dtype)
-        values = cudf.core.column.as_column(data)
-        return cudf.DatetimeIndex(values, name=idx.name)
+        return cudf.DatetimeIndex(data, name=idx.name)
     elif isinstance(idx, cudf.CategoricalIndex):
-        codes = cudf.core.column.as_column([0, 0], dtype=np.dtype(np.uint8))
-        column = codes._with_type_metadata(idx.dtype)
-        return cudf.CategoricalIndex._from_column(column, name=idx.name)
+        return cudf.CategoricalIndex.from_codes(
+            np.array([0, 0], dtype=idx.codes.dtype),
+            categories=idx.dtype.categories,
+            ordered=idx.dtype.ordered,
+            name=idx.name,
+        )
     elif isinstance(idx, cudf.MultiIndex):
         levels = [meta_nonempty(lev) for lev in idx.levels]
         codes = [[0, 0]] * idx.nlevels
@@ -97,18 +96,20 @@ def _get_non_empty_data(
 ) -> cudf.core.column.ColumnBase:
     """Return a non-empty column as metadata from a column."""
     if isinstance(s.dtype, cudf.CategoricalDtype):
+        s = cast("cudf.core.column.CategoricalColumn", s)
         categories = (
-            s.categories if len(s.categories) else [UNKNOWN_CATEGORIES]  # type: ignore[attr-defined]
+            s.categories if len(s.categories) else [UNKNOWN_CATEGORIES]
         )
         codes = cudf.core.column.as_column(
             0,
-            dtype=np.dtype(np.uint8),
+            dtype=s.codes.dtype,
             length=2,
         )
-        return codes._with_type_metadata(
+        return cudf.core.column.ColumnBase.create(
+            codes.plc_column,
             cudf.CategoricalDtype(
                 categories=categories, ordered=s.dtype.ordered
-            )
+            ),
         )
     elif isinstance(s.dtype, cudf.ListDtype):
         leaf_type = s.dtype.leaf_type

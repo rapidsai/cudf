@@ -1,8 +1,9 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
 
+import datetime
 from typing import TYPE_CHECKING
 
 import pytest
@@ -296,21 +297,45 @@ def test_dtype_header_roundtrip(dtype: pl.DataType):
     assert result == dt
 
 
-def test_astype_to_string_unsupported():
-    col = Column(
-        plc.Column.from_iterable_of_py([True], plc.DataType(plc.TypeId.BOOL8)),
-        dtype=DataType(pl.Boolean()),
-    )
+@pytest.mark.parametrize(
+    "val, plc_tid, pl_type",
+    [
+        (1, plc.TypeId.INT64, pl.Int64()),
+        (True, plc.TypeId.BOOL8, pl.Boolean()),
+    ],
+)
+def test_astype_to_string(val, plc_tid, pl_type):
     stream = get_cuda_stream()
-    with pytest.raises(pl.exceptions.InvalidOperationError):
-        col.astype(DataType(pl.String()), stream=stream)
+    col = Column(
+        plc.Column.from_iterable_of_py([val], plc.DataType(plc_tid), stream=stream),
+        dtype=DataType(pl_type),
+    )
+    target_dtype = DataType(pl.String())
+    result = col.astype(target_dtype, stream=stream)
+    assert result.dtype == target_dtype
 
 
 def test_astype_from_string_unsupported():
+    stream = get_cuda_stream()
     col = Column(
-        plc.Column.from_iterable_of_py(["True"], plc.DataType(plc.TypeId.STRING)),
+        plc.Column.from_iterable_of_py(
+            ["True"], plc.DataType(plc.TypeId.STRING), stream=stream
+        ),
         dtype=DataType(pl.String()),
     )
-    stream = get_cuda_stream()
     with pytest.raises(pl.exceptions.InvalidOperationError):
         col.astype(DataType(pl.Boolean()), stream=stream)
+
+
+def test_astype_to_string_unsupported():
+    stream = get_cuda_stream()
+    col = Column(
+        plc.Column.from_scalar(
+            plc.Scalar.from_py(datetime.datetime(2020, 1, 1), stream=stream),
+            1,
+            stream=stream,
+        ),
+        dtype=DataType(pl.Datetime(time_unit="ns")),
+    )
+    with pytest.raises(pl.exceptions.InvalidOperationError):
+        col.astype(DataType(pl.String()), stream=stream)

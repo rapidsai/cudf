@@ -19,11 +19,11 @@ if TYPE_CHECKING:
     from collections.abc import MutableMapping
 
     from distributed import Client
+    from rapidsmpf.streaming.cudf.channel_metadata import ChannelMetadata
 
     from cudf_polars.dsl.ir import IR
     from cudf_polars.experimental.base import PartitionInfo, StatsCollector
-    from cudf_polars.experimental.parallel import ConfigOptions
-    from cudf_polars.experimental.rapidsmpf.utils import Metadata
+    from cudf_polars.experimental.parallel import ConfigOptions, StreamingExecutor
 
 
 class EvaluatePipelineCallback(Protocol):
@@ -33,13 +33,13 @@ class EvaluatePipelineCallback(Protocol):
         self,
         ir: IR,
         partition_info: MutableMapping[IR, PartitionInfo],
-        config_options: ConfigOptions,
+        config_options: ConfigOptions[StreamingExecutor],
         stats: StatsCollector,
-        collective_id_map: dict[IR, int],
+        collective_id_map: dict[IR, list[int]],
         rmpf_context: Context | None = None,
         *,
         collect_metadata: bool = False,
-    ) -> tuple[pl.DataFrame, list[Metadata] | None]:
+    ) -> tuple[pl.DataFrame, list[ChannelMetadata] | None]:
         """Evaluate a pipeline and return the result DataFrame and metadata."""
         ...
 
@@ -58,10 +58,10 @@ def evaluate_pipeline_dask(
     partition_info: MutableMapping[IR, PartitionInfo],
     config_options: ConfigOptions,
     stats: StatsCollector,
-    shuffle_id_map: dict[IR, int],
+    collective_id_map: dict[IR, list[int]],
     *,
     collect_metadata: bool = False,
-) -> tuple[pl.DataFrame, list[Metadata] | None]:
+) -> tuple[pl.DataFrame, list[ChannelMetadata] | None]:
     """
     Evaluate a RapidsMPF streaming pipeline on a Dask cluster.
 
@@ -77,8 +77,8 @@ def evaluate_pipeline_dask(
         The configuration options.
     stats
         The statistics collector.
-    shuffle_id_map
-        Mapping from Shuffle/Repartition/Join IR nodes to reserved shuffle IDs.
+    collective_id_map
+        Mapping from Shuffle/Repartition/Join IR nodes to reserved collective IDs.
     collect_metadata
         Whether to collect metadata.
 
@@ -94,11 +94,11 @@ def evaluate_pipeline_dask(
         partition_info,
         config_options,
         stats,
-        shuffle_id_map,
+        collective_id_map,
         collect_metadata=collect_metadata,
     )
     dfs: list[pl.DataFrame] = []
-    metadata_collector: list[Metadata] = []
+    metadata_collector: list[ChannelMetadata] = []
     for df, md in result.values():
         dfs.append(df)
         if md is not None:
@@ -111,13 +111,13 @@ def _evaluate_pipeline_dask(
     callback: EvaluatePipelineCallback,
     ir: IR,
     partition_info: MutableMapping[IR, PartitionInfo],
-    config_options: ConfigOptions,
+    config_options: ConfigOptions[StreamingExecutor],
     stats: StatsCollector,
-    shuffle_id_map: dict[IR, int],
+    collective_id_map: dict[IR, list[int]],
     dask_worker: Any = None,
     *,
     collect_metadata: bool = False,
-) -> tuple[pl.DataFrame, list[Metadata] | None]:
+) -> tuple[pl.DataFrame, list[ChannelMetadata] | None]:
     """
     Build and evaluate a RapidsMPF streaming pipeline.
 
@@ -133,8 +133,8 @@ def _evaluate_pipeline_dask(
         The configuration options.
     stats
         The statistics collector.
-    shuffle_id_map
-        Mapping from Shuffle/Repartition/Join IR nodes to reserved shuffle IDs.
+    collective_id_map
+        Mapping from Shuffle/Repartition/Join IR nodes to reserved collective IDs.
     dask_worker
         Dask worker reference.
         This kwarg is automatically populated by Dask
@@ -147,7 +147,6 @@ def _evaluate_pipeline_dask(
     The output DataFrame and metadata collector.
     """
     assert dask_worker is not None, "Dask worker must be provided"
-    assert config_options.executor.name == "streaming", "Executor must be streaming"
 
     # NOTE: The Dask-CUDA cluster must be bootstrapped
     # ahead of time using bootstrap_dask_cluster
@@ -158,14 +157,16 @@ def _evaluate_pipeline_dask(
         | get_environment_variables()
     )
     dask_context = get_worker_context(dask_worker)
-    with Context(dask_context.comm, dask_context.br, options) as rmpf_context:
+    with Context(
+        dask_context.comm, dask_context.br, options, dask_context.statistics
+    ) as rmpf_context:
         # IDs are already reserved by the caller, just pass them through
         return callback(
             ir,
             partition_info,
             config_options,
             stats,
-            shuffle_id_map,
+            collective_id_map,
             rmpf_context,
             collect_metadata=collect_metadata,
         )

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -16,6 +16,8 @@
 #include <cudf/io/types.hpp>
 #include <cudf/types.hpp>
 #include <cudf/unary.hpp>
+
+#include <cuda/iterator>
 
 #include <string>
 #include <vector>
@@ -499,7 +501,7 @@ TEST_P(JsonCompressedWriterTest, ChunkedNested)
 
 TEST_P(JsonCompressedWriterTest, StructAllNullCombinations)
 {
-  auto const_1_iter = thrust::make_constant_iterator(1);
+  auto const_1_iter = cuda::make_constant_iterator(1);
 
   auto col_a = cudf::test::fixed_width_column_wrapper<int>(
     const_1_iter, const_1_iter + 32, cudf::detail::make_counting_transform_iterator(0, [](auto i) {

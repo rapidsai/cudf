@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -34,6 +34,7 @@
 #include <cudf/lists/explode.hpp>
 #include <cudf/merge.hpp>
 #include <cudf/partitioning.hpp>
+#include <cudf/reduction/distinct_count.hpp>
 #include <cudf/replace.hpp>
 #include <cudf/reshape.hpp>
 #include <cudf/rolling.hpp>
@@ -3777,11 +3778,8 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_partition(JNIEnv* env,
     auto [partitioned_table, partition_offsets] =
       cudf::partition(*n_input_table, *n_part_column, number_of_partitions);
 
-    // for what ever reason partition returns the length of the result at then
-    // end and hash partition/round robin do not, so skip the last entry for
-    // consistency
     cudf::jni::native_jintArray n_output_offsets(env, output_offsets);
-    std::copy(partition_offsets.begin(), partition_offsets.end() - 1, n_output_offsets.begin());
+    std::copy(partition_offsets.begin(), partition_offsets.end(), n_output_offsets.begin());
 
     return convert_table_for_return(env, partitioned_table);
   }

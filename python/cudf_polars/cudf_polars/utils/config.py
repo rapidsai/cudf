@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 """
@@ -28,15 +28,13 @@ import importlib.util
 import json
 import os
 import warnings
-from typing import TYPE_CHECKING, Any, Literal, TypeVar
+from typing import TYPE_CHECKING, Any, Generic, Literal, TypeVar
 
 from rmm.pylibrmm.cuda_stream import CudaStreamFlags
 from rmm.pylibrmm.cuda_stream_pool import CudaStreamPool
 
 if TYPE_CHECKING:
     from collections.abc import Callable
-
-    from typing_extensions import Self
 
     import polars.lazyframe.engine_config
 
@@ -46,6 +44,7 @@ if TYPE_CHECKING:
 __all__ = [
     "Cluster",
     "ConfigOptions",
+    "DynamicPlanningOptions",
     "InMemoryExecutor",
     "ParquetOptions",
     "Runtime",
@@ -450,6 +449,49 @@ class StatsPlanningOptions:
             raise TypeError("default_selectivity must be a float")
 
 
+@dataclasses.dataclass(frozen=True)
+class DynamicPlanningOptions:
+    """
+    Configuration for dynamic shuffle planning.
+
+    When enabled, shuffle decisions for GroupBy/Join/Unique operations
+    are made at runtime by sampling real chunks.
+
+    To enable dynamic planning, pass a ``DynamicPlanningOptions`` instance
+    to ``StreamingExecutor(dynamic_planning=...)``. To disable it, pass
+    ``None`` (the default).
+
+    These options can be configured via environment variables
+    with the prefix ``CUDF_POLARS__EXECUTOR__DYNAMIC_PLANNING__``.
+
+    .. note::
+        Dynamic planning is not yet implemented. These options are
+        reserved for future use and currently have no effect.
+
+    Parameters
+    ----------
+    sample_chunk_count
+        The maximum number of chunks to sample before deciding whether
+        to shuffle. A higher value provides more accurate estimates but
+        increases latency before the shuffle decision is made.
+        Default is 2.
+    """
+
+    _env_prefix = "CUDF_POLARS__EXECUTOR__DYNAMIC_PLANNING"
+
+    sample_chunk_count: int = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__SAMPLE_CHUNK_COUNT", int, default=2
+        )
+    )
+
+    def __post_init__(self) -> None:  # noqa: D105
+        if not isinstance(self.sample_chunk_count, int):
+            raise TypeError("sample_chunk_count must be an int")
+        if self.sample_chunk_count < 1:
+            raise ValueError("sample_chunk_count must be at least 1")
+
+
 @dataclasses.dataclass(frozen=True, eq=True)
 class MemoryResourceConfig:
     """
@@ -646,9 +688,25 @@ class StreamingExecutor:
     stats_planning
         Options controlling statistics-based query planning. See
         :class:`~cudf_polars.utils.config.StatsPlanningOptions` for more.
+    dynamic_planning
+        Options controlling dynamic shuffle planning. See
+        :class:`~cudf_polars.utils.config.DynamicPlanningOptions` for more.
+
+        .. note::
+            Dynamic planning is not yet implemented. These options are
+            reserved for future use and currently have no effect.
     max_io_threads
         Maximum number of IO threads for the rapidsmpf runtime. Default is 2.
         This controls the parallelism of IO operations when reading data.
+    spill_to_pinned_memory
+        Whether RapidsMPF should spill to pinned host memory when available,
+        or use regular pageable host memory. Pinned host memory offers higher
+        bandwidth and lower latency for device to host transfers compared to
+        regular pageable host memory.
+    rapidsmpf_py_executor_max_workers
+        Maximum number of workers for the Python ThreadPoolExecutor used by
+        the rapidsmpf runtime. Default is None, which uses ThreadPoolExecutor's
+        default behavior. This option is only used by the "rapidsmpf" runtime.
 
     Notes
     -----
@@ -746,9 +804,20 @@ class StreamingExecutor:
     stats_planning: StatsPlanningOptions = dataclasses.field(
         default_factory=StatsPlanningOptions
     )
+    dynamic_planning: DynamicPlanningOptions | None = None
     max_io_threads: int = dataclasses.field(
         default_factory=_make_default_factory(
             f"{_env_prefix}__MAX_IO_THREADS", int, default=2
+        )
+    )
+    spill_to_pinned_memory: bool = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__SPILL_TO_PINNED_MEMORY", bool, default=False
+        )
+    )
+    rapidsmpf_py_executor_max_workers: int | None = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__RAPIDSMPF_PY_EXECUTOR_MAX_WORKERS", int, default=None
         )
     )
 
@@ -859,6 +928,15 @@ class StreamingExecutor:
                 StatsPlanningOptions(**self.stats_planning),
             )
 
+        # Handle dynamic_planning.
+        # Can be None, dict, or DynamicPlanningOptions
+        if isinstance(self.dynamic_planning, dict):
+            object.__setattr__(
+                self,
+                "dynamic_planning",
+                DynamicPlanningOptions(**self.dynamic_planning),
+            )
+
         if self.cluster == "distributed":
             if self.sink_to_directory is False:
                 raise ValueError(
@@ -887,6 +965,10 @@ class StreamingExecutor:
             raise TypeError("client_device_threshold must be a float")
         if not isinstance(self.max_io_threads, int):
             raise TypeError("max_io_threads must be an int")
+        if not isinstance(self.spill_to_pinned_memory, bool):
+            raise TypeError("spill_to_pinned_memory must be bool")
+        if not isinstance(self.rapidsmpf_py_executor_max_workers, (int, type(None))):
+            raise TypeError("rapidsmpf_py_executor_max_workers must be int or None")
 
         # RapidsMPF spill is only supported for distributed clusters for now.
         # This is because the spilling API is still within the RMPF-Dask integration.
@@ -902,6 +984,7 @@ class StreamingExecutor:
         d = dataclasses.asdict(self)
         d["unique_fraction"] = json.dumps(d["unique_fraction"])
         d["stats_planning"] = json.dumps(d["stats_planning"])
+        d["dynamic_planning"] = json.dumps(d["dynamic_planning"])
         return hash(tuple(sorted(d.items())))
 
 
@@ -914,6 +997,9 @@ class InMemoryExecutor:
     """
 
     name: Literal["in-memory"] = dataclasses.field(default="in-memory", init=False)
+
+
+ExecutorType = TypeVar("ExecutorType", StreamingExecutor, InMemoryExecutor)
 
 
 @dataclasses.dataclass(frozen=True, eq=True)
@@ -990,7 +1076,7 @@ def _convert_cuda_stream_policy(
 
 
 @dataclasses.dataclass(frozen=True, eq=True)
-class ConfigOptions:
+class ConfigOptions(Generic[ExecutorType]):
     """
     Configuration for the polars GPUEngine.
 
@@ -1014,8 +1100,10 @@ class ConfigOptions:
 
     raise_on_fail: bool = False
     parquet_options: ParquetOptions = dataclasses.field(default_factory=ParquetOptions)
-    executor: StreamingExecutor | InMemoryExecutor = dataclasses.field(
-        default_factory=StreamingExecutor
+    # We need the type-ignore to pass type checking. Because StreamingExecutor
+    # is in ExecutorType, this is safe.
+    executor: ExecutorType = dataclasses.field(
+        default_factory=StreamingExecutor  # type: ignore[assignment]
     )
     device: int | None = None
     memory_resource_config: MemoryResourceConfig | None = None
@@ -1030,7 +1118,7 @@ class ConfigOptions:
     @classmethod
     def from_polars_engine(
         cls, engine: polars.lazyframe.engine_config.GPUEngine
-    ) -> Self:
+    ) -> ConfigOptions[ExecutorType]:
         """Create a :class:`ConfigOptions` from a :class:`~polars.lazyframe.engine_config.GPUEngine`."""
         # these are the valid top-level keys in the engine.config that
         # the user passes as **kwargs to GPUEngine.
@@ -1110,6 +1198,20 @@ class ConfigOptions:
                 user_executor_options.setdefault(
                     "shuffle_method", shuffle_method_default
                 )
+
+                # Handle dynamic_planning: check user config, then env var
+                user_dynamic_planning = user_executor_options.get(
+                    "dynamic_planning", None
+                )
+                if user_dynamic_planning is None:
+                    env_dynamic_planning = os.environ.get(
+                        "CUDF_POLARS__EXECUTOR__DYNAMIC_PLANNING", "0"
+                    )
+                    if _bool_converter(env_dynamic_planning):
+                        user_executor_options["dynamic_planning"] = (
+                            DynamicPlanningOptions()
+                        )
+
                 executor = StreamingExecutor(**user_executor_options)
             case _:  # pragma: no cover; Unreachable
                 raise ValueError(f"Unsupported executor: {user_executor}")
