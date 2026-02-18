@@ -95,7 +95,6 @@ def evaluate_logical_plan(
     assert config_options.executor.name == "streaming", "Executor must be streaming"
     assert config_options.executor.runtime == "rapidsmpf", "Runtime must be rapidsmpf"
 
-    # Check if running with rrun
     from cudf_polars.experimental.rapidsmpf.bootstrap_ctx import (
         get_rank,
         is_running_with_rrun,
@@ -119,8 +118,8 @@ def evaluate_logical_plan(
         ):  # pragma: no cover; block depends on executor type and rrun cluster
             # SPMD execution: All ranks execute, only rank 0 returns result.
             # Get the pre-initialized worker context (set up once in run_polars)
-            # and create a lightweight streaming Context from it — same pattern
-            # as Dask's _evaluate_pipeline_dask.
+            # and create a lightweight streaming Context from it using the same
+            # pattern as Dask's _evaluate_pipeline_dask.
             from rapidsmpf.config import Options as RmpfOptions
             from rapidsmpf.config import get_environment_variables
 
@@ -155,7 +154,6 @@ def evaluate_logical_plan(
             if rank == 0:
                 return result, metadata_collector
             else:
-                # Non-root ranks return None
                 return None, None
 
         elif (

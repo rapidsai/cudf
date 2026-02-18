@@ -173,7 +173,6 @@ def get_scheduler(config_options: ConfigOptions) -> Any:
 
     cluster = config_options.executor.cluster
 
-    # Check if running with rrun
     from cudf_polars.experimental.rapidsmpf.bootstrap_ctx import is_running_with_rrun
 
     if is_running_with_rrun() or cluster == "rrun":

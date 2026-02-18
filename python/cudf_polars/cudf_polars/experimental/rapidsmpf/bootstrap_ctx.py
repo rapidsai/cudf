@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 """Bootstrap context management for rrun execution."""
 
@@ -34,7 +34,7 @@ class _RrunWorker:
 
 def is_running_with_rrun() -> bool:
     """
-    Check if running under rrun.
+    Check if running with rrun.
 
     Returns
     -------
@@ -47,9 +47,9 @@ def is_running_with_rrun() -> bool:
     return bootstrap.is_running_with_rrun()
 
 
-def is_running_under_slurm() -> bool:
+def is_running_with_slurm() -> bool:
     """
-    Check if running under Slurm.
+    Check if running with Slurm.
 
     Returns
     -------
@@ -75,6 +75,9 @@ def _detect_backend_type():
 
     Notes
     -----
+    The necessity of this function should be revisited. In an ideal case
+    BackendType.AUTO should suffice.
+
     Detection logic:
     1. If RAPIDSMPF_COORD_DIR is set -> use AUTO (will choose FILE)
     2. If running under Slurm without COORD_DIR -> set up FILE backend with temp dir
@@ -89,7 +92,7 @@ def _detect_backend_type():
 
     # If running under Slurm without COORD_DIR, we need to set one up
     # because the SLURM backend is not available in Python bindings yet
-    if is_running_under_slurm():
+    if is_running_with_slurm():
         # Check if SLURM backend is available in the Python bindings
         if hasattr(bootstrap.BackendType, "SLURM"):
             print(
@@ -132,7 +135,7 @@ def _detect_backend_type():
 
 def get_bootstrap_context() -> Context:
     """
-    Get or initialize bootstrap context (singleton).
+    Get or initialize bootstrap context.
 
     Returns
     -------
@@ -157,10 +160,8 @@ def get_bootstrap_context() -> Context:
                 "Use 'rrun -n <nranks> python ...' to launch with rrun."
             )
 
-        # Detect and use appropriate backend
         backend_type = _detect_backend_type()
 
-        # Debug: print environment info on rank 0
         rank = get_rank()
         if rank == 0:
             print(f"[Bootstrap] Backend type: {backend_type}", flush=True)
@@ -178,7 +179,6 @@ def get_bootstrap_context() -> Context:
             )
 
         try:
-            # Initialize the bootstrap context with detected backend
             _global_context = bootstrap.create_ucxx_comm(backend_type)
         except RuntimeError as e:
             # Provide helpful error message
@@ -214,9 +214,14 @@ def get_rank() -> int:
     -------
     int
         The rank of the current process (0 if not running under rrun).
+
+    Raises
+    ------
+    RuntimeError
+        If not running with rrun or rank could not be determined.
     """
     if not is_running_with_rrun():
-        return 0
+        raise RuntimeError("Not running with rrun.")
     # Read directly from environment variable for efficiency
     # Try RAPIDSMPF_RANK first, fall back to SLURM_PROCID for Slurm
     rank = os.environ.get("RAPIDSMPF_RANK")
@@ -226,7 +231,7 @@ def get_rank() -> int:
     rank = os.environ.get("SLURM_PROCID")
     if rank is not None:
         return int(rank)
-    return 0
+    raise RuntimeError("Could not determine rank.")
 
 
 def get_nranks() -> int:
@@ -237,19 +242,13 @@ def get_nranks() -> int:
     -------
     int
         The total number of ranks (1 if not running under rrun).
+
+    Raises
+    ------
+    RuntimeError
+        If not running with rrun or number of ranks could not be determined.
     """
-    if not is_running_with_rrun():
-        return 1
-    # Read directly from environment variable for efficiency
-    # Try RAPIDSMPF_NRANKS first, fall back to SLURM_NPROCS/SLURM_NTASKS for Slurm
-    nranks = os.environ.get("RAPIDSMPF_NRANKS")
-    if nranks is not None:
-        return int(nranks)
-    # Fall back to Slurm env vars
-    nranks = os.environ.get("SLURM_NPROCS") or os.environ.get("SLURM_NTASKS")
-    if nranks is not None:
-        return int(nranks)
-    return 1
+    return bootstrap.get_nranks()
 
 
 def setup_rrun_worker_context(
@@ -260,12 +259,12 @@ def setup_rrun_worker_context(
     max_io_threads: int = 2,
 ) -> WorkerContext:
     """
-    Initialize the rrun worker context once (singleton).
+    Initialize the rrun worker context once.
 
     This calls ``rmpf_worker_setup()`` to create a ``WorkerContext`` with
     properly configured ``BufferResource``, ``ProgressThread``, ``Statistics``,
-    and spill functions — matching the one-time setup that Dask performs via
-    ``bootstrap_dask_cluster()`` → ``dask_worker_setup()``.
+    and spill functions, matching the one-time setup that Dask performs via
+    ``bootstrap_dask_cluster()`` and ``dask_worker_setup()``.
 
     Parameters
     ----------
@@ -311,7 +310,7 @@ def setup_rrun_worker_context(
     )
 
     if rank == 0:
-        print("[rrun] Worker context initialized (one-time setup)", flush=True)
+        print("[rrun] Worker context initialized", flush=True)
 
     return _global_worker_context
 

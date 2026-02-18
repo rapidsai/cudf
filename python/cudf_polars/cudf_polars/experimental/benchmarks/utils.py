@@ -544,10 +544,6 @@ def _setup_rmm_for_rrun(args: argparse.Namespace, rank: int) -> None:  # type: i
     """
     import rmm
 
-    if rank == 0:
-        print("[RMM Setup] Configuring RMM resources for rrun mode", flush=True)
-
-    # Parse pool size if specified
     pool_size = None
     if args.rmm_pool_size is not None:
         if isinstance(args.rmm_pool_size, str):
@@ -559,26 +555,13 @@ def _setup_rmm_for_rrun(args: argparse.Namespace, rank: int) -> None:  # type: i
             total_memory = rmm.mr.available_device_memory()[1]
             pool_size = int(total_memory * args.rmm_pool_size)
 
-    # Set up RMM resource based on configuration
     if args.rmm_async:
-        # Use CudaAsyncMemoryResource (stream-ordered allocator)
-        if rank == 0:
-            print("[RMM Setup] Using CudaAsyncMemoryResource", flush=True)
-
-        # Create async resource with optional pool settings
         if pool_size is not None:
-            # Align to 256 bytes as done in dask-cuda
             initial_pool_size = (pool_size // 256) * 256
-            if rank == 0:
-                print(
-                    f"[RMM Setup] Initial pool size: {initial_pool_size / 1e9:.2f} GB",
-                    flush=True,
-                )
             mr = rmm.mr.CudaAsyncMemoryResource(initial_pool_size=initial_pool_size)
         else:
             mr = rmm.mr.CudaAsyncMemoryResource()
 
-        # Set release threshold if specified
         if hasattr(args, "rmm_release_threshold") and args.rmm_release_threshold:
             if isinstance(args.rmm_release_threshold, str):
                 from dask.utils import parse_bytes
@@ -587,38 +570,17 @@ def _setup_rmm_for_rrun(args: argparse.Namespace, rank: int) -> None:  # type: i
             else:
                 release_threshold = args.rmm_release_threshold
             mr.release_threshold = release_threshold
-            if rank == 0:
-                print(
-                    f"[RMM Setup] Release threshold: {release_threshold / 1e9:.2f} GB",
-                    flush=True,
-                )
 
         rmm.mr.set_current_device_resource(mr)
-
     elif pool_size is not None:
-        # Use PoolMemoryResource
-        if rank == 0:
-            print(
-                f"[RMM Setup] Using PoolMemoryResource with {pool_size / 1e9:.2f} GB",
-                flush=True,
-            )
-
-        # Use rmm.reinitialize similar to dask-cuda
         rmm.reinitialize(
             pool_allocator=True,
             initial_pool_size=pool_size,
             maximum_pool_size=None,  # No maximum limit
         )
-    else:
-        # No specific RMM configuration, use default
-        if rank == 0:
-            print("[RMM Setup] Using default RMM configuration", flush=True)
 
-    # Enable RMM statistics if requested
     if hasattr(args, "rmm_statistics") and args.rmm_statistics:
         rmm.statistics.enable_statistics()
-        if rank == 0:
-            print("[RMM Setup] RMM statistics enabled", flush=True)
 
 
 def initialize_dask_cluster(run_config: RunConfig, args: argparse.Namespace):  # type: ignore[no-untyped-def]
@@ -653,13 +615,9 @@ def initialize_dask_cluster(run_config: RunConfig, args: argparse.Namespace):  #
         if is_running_with_rrun():
             rank = get_rank()
             nranks = get_nranks()
-            if rank == 0:
-                print(
-                    f"[rrun] Detected rrun execution environment with {nranks} ranks"
-                )
-            return None  # No Dask client needed for rrun
+            return None  # No Dask client is used with rrun
     except ImportError:
-        pass  # rapidsmpf not available, continue with normal path
+        pass
 
     if run_config.cluster != "distributed":
         return None
@@ -1162,13 +1120,8 @@ def run_polars(
             run_config = dataclasses.replace(
                 run_config, cluster="rrun", n_workers=nranks
             )
-            # Set up RMM resources for this rank (similar to RMMPlugin for Dask)
             _setup_rmm_for_rrun(args, rank)
 
-            # Initialize the rrun worker context once (similar to
-            # bootstrap_dask_cluster -> dask_worker_setup for Dask).
-            # This creates BufferResource, ProgressThread, Statistics,
-            # and spill functions that are reused across all queries.
             from cudf_polars.experimental.rapidsmpf.bootstrap_ctx import (
                 setup_rrun_worker_context,
             )
@@ -1180,7 +1133,6 @@ def run_polars(
                 max_io_threads=run_config.max_io_threads,
             )
 
-            # Enable RMM statistics (matches Dask's client.run(rmm.statistics.enable_statistics))
             try:
                 rmm.statistics.enable_statistics()
             except Exception:
@@ -1245,7 +1197,6 @@ def run_polars(
 
             # In rrun mode, result is None for non-root ranks
             if is_rrun and result is None:
-                # Non-root ranks: skip result processing but record timing
                 t1 = time.monotonic()
                 record = Record(
                     query=q_id, iteration=i, duration=t1 - t0, shuffle_stats=None
@@ -1350,7 +1301,6 @@ def run_polars(
 
             run_config.records[query_id] = new_records
 
-    # Only rank 0 should print summaries and write output
     if not is_rrun or rank == 0:
         if args.summarize:
             run_config.summarize()
