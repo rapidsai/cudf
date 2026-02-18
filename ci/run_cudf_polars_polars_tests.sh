@@ -33,7 +33,6 @@ DESELECTED_TESTS=(
     "tests/unit/io/test_write.py::test_write_async[read_parquet-<lambda>]" # kvikio file creation error in CI
     "tests/unit/io/test_write.py::test_write_async[<lambda>-<lambda>0]" # kvikio file creation error in CI
     "tests/unit/io/test_write.py::test_write_async[<lambda>-<lambda>2]" # kvikio file creation error in CI
-    "tests/unit/io/test_lazy_parquet.py::test_scan_parquet_local_with_async" # Uncertain why this failing, to be investigated soon
 )
 
 if [[ $(arch) == "aarch64" ]]; then
