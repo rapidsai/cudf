@@ -450,8 +450,8 @@ async def _shuffle_reduce(
     extract_irs = [decomposed.reduction_ir] + (
         [decomposed.select_ir] if decomposed.select_ir else []
     )
-    stream = ir_context.get_cuda_stream()
     for partition_id in shuffle.local_partitions():
+        stream = ir_context.get_cuda_stream()
         partition_chunk = TableChunk.from_pylibcudf_table(
             await shuffle.extract_chunk(partition_id, stream),
             stream,
