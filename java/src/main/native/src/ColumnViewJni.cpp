@@ -1683,9 +1683,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_like(
     cudf::jni::auto_set_device(env);
     auto const column_view    = reinterpret_cast<cudf::column_view const*>(j_view_handle);
     auto const strings_column = cudf::strings_column_view{*column_view};
-    auto const pattern_scalar = reinterpret_cast<cudf::string_scalar const*>(pattern);
     auto const escape_scalar  = reinterpret_cast<cudf::string_scalar const*>(escapeChar);
-    return release_as_jlong(cudf::strings::like(strings_column, *pattern_scalar, *escape_scalar));
+    return release_as_jlong(cudf::strings::like(strings_column, pattern, escape_scalar));
   }
   JNI_CATCH(env, 0);
 }
@@ -2699,7 +2698,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_nansToNulls(JNIEnv* env,
     cudf::jni::auto_set_device(env);
     auto const input = *reinterpret_cast<cudf::column_view*>(handle);
     // get a new null mask by setting all the nans to null
-    auto [new_nullmask, new_null_count] = cudf::nans_to_nulls(input);
+    auto [new_nullmask, new_null_count] = cudf::column_nans_to_nulls(input);
     // create a column_view which is a no-copy wrapper around the original column without the null
     // mask
     auto const input_without_nullmask =
