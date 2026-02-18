@@ -1025,6 +1025,7 @@ def _(
         args = [
             expr.Cast(dtype, True, arg)  # noqa: FBT003
             if plc.traits.is_fixed_point(arg.dtype.plc_type)
+            and arg.dtype.plc_type != dtype.plc_type
             else arg
             for arg in args
         ]
