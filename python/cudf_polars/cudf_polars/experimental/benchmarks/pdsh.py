@@ -27,7 +27,6 @@ with contextlib.suppress(ImportError):
         get_data,
         run_duckdb,
         run_polars,
-        run_validate,
     )
 
 
@@ -136,6 +135,11 @@ class PDSHQueries:
     name: str = "pdsh"
     EXPECTED_CASTS_DECIMAL = EXPECTED_CASTS_DECIMAL
     EXPECTED_CASTS_FLOAT = EXPECTED_CASTS_FLOAT
+
+    @property
+    def duckdb_queries(self) -> PDSHDuckDBQueries:
+        """Link to the DuckDB queries for this benchmark."""
+        return PDSHDuckDBQueries()
 
     @staticmethod
     def q0(run_config: RunConfig) -> QueryResult:
@@ -1810,7 +1814,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run PDS-H benchmarks.")
     parser.add_argument(
         "--engine",
-        choices=["polars", "duckdb", "validate"],
+        choices=["polars", "duckdb"],
         default="polars",
         help="Which engine to use for executing the benchmarks or to validate results.",
     )
@@ -1820,12 +1824,5 @@ if __name__ == "__main__":
         run_polars(PDSHQueries, extra_args, num_queries=22)
     elif args.engine == "duckdb":
         run_duckdb(PDSHDuckDBQueries, extra_args, num_queries=22)
-    elif args.engine == "validate":
-        run_validate(
-            PDSHQueries,
-            PDSHDuckDBQueries,
-            extra_args,
-            num_queries=22,
-            check_dtypes=True,
-            check_column_order=True,
-        )
+    else:
+        raise ValueError(f"Invalid engine: {args.engine}")

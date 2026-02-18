@@ -1327,6 +1327,12 @@ def run_polars(
             plans[q_id] = serialize_query(q, engine)
 
         records[q_id] = []
+
+        if input_data_type == "decimal":
+            casts = benchmark.EXPECTED_CASTS_DECIMAL.get(q_id, [])
+        else:
+            casts = benchmark.EXPECTED_CASTS_FLOAT.get(q_id, [])
+
         for i in range(args.iterations):
             if _HAS_STRUCTLOG and run_config.collect_traces:
                 setup_logging(q_id, i)
@@ -1355,23 +1361,52 @@ def run_polars(
 
             validation_result = None
             if args.validate and run_config.executor != "cpu":
-                try:
-                    assert_gpu_result_equal(
-                        q,
-                        engine=engine,
-                        executor=run_config.executor,
-                        check_exact=False,
-                        validate_with=functools.partial(
-                            assert_tpch_result_equal,
-                            sort_by=query_result.sort_by,
-                            limit=query_result.limit,
-                        ),
+                # We support two modes here, depending on the baseline.
+                # The easy case is comparing against cpu polars:
+                if args.baseline == "cpu":
+                    try:
+                        assert_gpu_result_equal(
+                            q,
+                            engine=engine,
+                            executor=run_config.executor,
+                            check_exact=False,
+                            validate_with=functools.partial(
+                                assert_tpch_result_equal,
+                                sort_by=query_result.sort_by,
+                                limit=query_result.limit,
+                            ),
+                        )
+                        print(f"✅ Query {q_id} passed validation!")
+                    except Exception as e:
+                        validation_result = ValidationResult.from_error(e)
+                    else:
+                        validation_result = ValidationResult(
+                            status="Passed", message=None
+                        )
+                elif args.baseline == "duckdb":
+                    assert args.baseline == "duckdb"
+                    duckdb_queries_cls = benchmark().duckdb_queries
+
+                    get_ddb = getattr(duckdb_queries_cls, f"q{q_id}")
+
+                    base_sql = get_ddb(run_config)
+                    base_result = execute_duckdb_query(
+                        base_sql,
+                        run_config.dataset_path,
+                        query_set=duckdb_queries_cls.name,
+                        suffix=run_config.suffix,
+                    ).with_columns(*casts)
+
+                    validation_result = validate_result(
+                        result,
+                        base_result,
+                        query_result.sort_by,
+                        limit=query_result.limit,
+                        **get_validation_options(args),
                     )
-                    print(f"✅ Query {q_id} passed validation!")
-                except Exception as e:
-                    validation_result = ValidationResult.from_error(e)
                 else:
-                    validation_result = ValidationResult(status="Passed", message=None)
+                    # unreachable
+                    raise ValueError(f"Invalid baseline: {args.baseline}")
 
             t1 = time.monotonic()
             record = Record(
@@ -1391,11 +1426,6 @@ def run_polars(
                 result.write_parquet(output_path)
 
             if args.validate_directory is not None:
-                if input_data_type == "decimal":
-                    casts = benchmark.EXPECTED_CASTS_DECIMAL.get(q_id, [])
-                else:
-                    casts = benchmark.EXPECTED_CASTS_FLOAT.get(q_id, [])
-
                 expected = pl.read_parquet(validation_files[q_id]).with_columns(*casts)
                 validation_result = validate_result(
                     result,
@@ -1726,85 +1756,3 @@ def run_duckdb(
 
     args.output.write(json.dumps(run_config.serialize(engine=None)))
     args.output.write("\n")
-
-
-def run_validate(
-    polars_queries_cls: Any,
-    duckdb_queries_cls: Any,
-    options: Sequence[str] | None = None,
-    *,
-    num_queries: int,
-    check_dtypes: bool,
-    check_column_order: bool,
-) -> None:
-    """Validate Polars CPU/GPU vs DuckDB."""
-    from polars.testing import assert_frame_equal
-
-    args = parse_args(options, num_queries=num_queries)
-    vars(args).update({"query_set": polars_queries_cls.name})
-    run_config = RunConfig.from_args(args)
-
-    baseline = args.baseline
-    if baseline not in {"duckdb", "cpu"}:
-        raise ValueError("Baseline must be one of: 'duckdb', 'cpu'")
-
-    failures: list[int] = []
-
-    engine: pl.GPUEngine | None = None
-    if run_config.executor != "cpu":
-        engine = pl.GPUEngine(
-            raise_on_fail=True,
-            executor=run_config.executor,
-            executor_options=get_executor_options(run_config, polars_queries_cls),
-        )
-
-    for q_id in run_config.queries:
-        print(f"\nValidating Query {q_id}")
-        try:
-            get_pl = getattr(polars_queries_cls, f"q{q_id}")
-            get_ddb = getattr(duckdb_queries_cls, f"q{q_id}")
-        except AttributeError as err:
-            raise NotImplementedError(f"Query {q_id} not implemented.") from err
-
-        polars_query = get_pl(run_config).frame
-        if baseline == "duckdb":
-            base_sql = get_ddb(run_config)
-            base_result = execute_duckdb_query(
-                base_sql,
-                run_config.dataset_path,
-                query_set=duckdb_queries_cls.name,
-            )
-        else:
-            base_result = polars_query.collect(engine="streaming")
-
-        if run_config.executor == "cpu":
-            test_result = polars_query.collect(engine="streaming")
-        else:
-            try:
-                test_result = polars_query.collect(engine=engine)
-            except Exception as e:
-                failures.append(q_id)
-                print(f"❌ Query {q_id} failed validation: GPU execution failed.\n{e}")
-                continue
-
-        try:
-            assert_frame_equal(
-                base_result,
-                test_result,
-                check_dtypes=check_dtypes,
-                check_column_order=check_column_order,
-            )
-            print(f"✅ Query {q_id} passed validation.")
-        except AssertionError as e:
-            failures.append(q_id)
-            print(f"❌ Query {q_id} failed validation:\n{e}")
-            if args.print_results:
-                print("Baseline Result:\n", base_result)
-                print("Test Result:\n", test_result)
-
-    if failures:
-        print("\nValidation Summary:")
-        print("===================")
-        print(f"{len(failures)} query(s) failed: {failures}")
-    else:
-        print("\nAll queries passed validation.")
