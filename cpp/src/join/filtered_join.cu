@@ -35,6 +35,7 @@
 #include <cuco/static_set_ref.cuh>
 #include <cuda/iterator>
 #include <thrust/iterator/counting_iterator.h>
+#include <thrust/iterator/discard_iterator.h>
 #include <thrust/sequence.h>
 #include <thrust/set_operations.h>
 #include <thrust/sort.h>
