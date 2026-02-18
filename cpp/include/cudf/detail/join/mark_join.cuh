@@ -38,6 +38,8 @@ namespace detail {
 class mark_join : public filtered_join {
  private:
   mutable std::atomic<cudf::size_type> _num_marks{0};  ///< Number of marked entries after probe
+  cudf::size_type _build_num_valid_rows{
+    0};  ///< Number of valid build rows inserted into hash table
 
   /**
    * @brief Performs either a semi or anti join based on the specified kind

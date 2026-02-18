@@ -203,9 +203,6 @@ TEST_P(JoinTestReuse, SemiJoinWithStructsAndNulls)
 TEST_P(JoinTestReuse, SemiJoinWithStructsAndNullsNotEqual)
 {
   auto const build_side = GetParam();
-  if (build_side == cudf::set_as_build_table::LEFT) {
-    GTEST_SKIP() << "null_equality::UNEQUAL not yet implemented for LEFT build side";
-  }
   auto tables = get_saj_tables({true, true, false, true, true}, {true, true, false, true, true});
 
   auto result = left_semi_join(
@@ -274,9 +271,6 @@ TEST_P(JoinTestReuse, AntiJoinWithStructsAndNulls)
 TEST_P(JoinTestReuse, AntiJoinWithStructsAndNullsNotEqual)
 {
   auto const build_side = GetParam();
-  if (build_side == cudf::set_as_build_table::LEFT) {
-    GTEST_SKIP() << "null_equality::UNEQUAL not yet implemented for LEFT build side";
-  }
   auto tables = get_saj_tables({true, true, false, true, true}, {true, true, false, true, true});
 
   auto result = left_anti_join(
