@@ -17,7 +17,6 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/std/limits>
-#include <thrust/functional.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/reduce.h>
 #include <thrust/transform_reduce.h>

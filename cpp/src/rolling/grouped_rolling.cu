@@ -22,6 +22,8 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <cuda/std/functional>
+
 namespace cudf {
 
 namespace detail {
@@ -304,8 +306,11 @@ std::unique_ptr<table> grouped_range_rolling_window(table_view const& group_keys
           return nulls_per_group[i] < (d_offsets[i + 1] - d_offsets[i]) &&
                  d_orderby.is_null_nocheck(d_offsets[i]);
         }));
-    auto is_before = thrust::reduce(
-      rmm::exec_policy_nosync(stream), it, it + offsets.size() - 1, false, thrust::logical_or<>{});
+    auto is_before = thrust::reduce(rmm::exec_policy_nosync(stream),
+                                    it,
+                                    it + offsets.size() - 1,
+                                    false,
+                                    cuda::std::logical_or<>{});
     return is_before ? null_order::BEFORE : null_order::AFTER;
   } else {
     // Sort order is DESCENDING
@@ -322,8 +327,11 @@ std::unique_ptr<table> grouped_range_rolling_window(table_view const& group_keys
           return nulls_per_group[i] < (d_offsets[i + 1] - d_offsets[i]) &&
                  d_orderby.is_null_nocheck(d_offsets[i + 1] - 1);
         }));
-    auto is_before = thrust::reduce(
-      rmm::exec_policy_nosync(stream), it, it + offsets.size() - 1, false, thrust::logical_or<>{});
+    auto is_before = thrust::reduce(rmm::exec_policy_nosync(stream),
+                                    it,
+                                    it + offsets.size() - 1,
+                                    false,
+                                    cuda::std::logical_or<>{});
     return is_before ? null_order::BEFORE : null_order::AFTER;
   }
 }

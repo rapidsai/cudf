@@ -25,7 +25,6 @@
 
 #include <cuda/functional>
 #include <thrust/binary_search.h>
-#include <thrust/functional.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_output_iterator.h>
 #include <thrust/reduce.h>

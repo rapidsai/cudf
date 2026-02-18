@@ -26,7 +26,6 @@
 
 #include <cub/device/device_segmented_reduce.cuh>
 #include <cuda/functional>
-#include <thrust/functional.h>
 #include <thrust/reduce.h>
 
 #include <optional>

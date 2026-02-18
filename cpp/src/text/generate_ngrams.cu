@@ -32,7 +32,6 @@
 #include <cuda/functional>
 #include <cuda/std/iterator>
 #include <thrust/copy.h>
-#include <thrust/functional.h>
 #include <thrust/iterator/counting_iterator.h>
 
 #include <stdexcept>
