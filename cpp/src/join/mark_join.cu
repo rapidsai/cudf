@@ -34,6 +34,7 @@
 #include <cuco/static_multiset_ref.cuh>
 #include <cuda/atomic>
 #include <cuda/iterator>
+#include <thrust/copy.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/sequence.h>
 
@@ -63,6 +64,14 @@ std::pair<rmm::device_buffer, bitmask_type const*> build_row_bitmask(table_view 
 
   return std::pair(rmm::device_buffer{0, stream}, nullable_columns.front().null_mask());
 }
+
+struct row_is_null {
+  bitmask_type const* _row_bitmask;
+  __device__ bool operator()(size_type i) const noexcept
+  {
+    return !cudf::bit_is_set(_row_bitmask, i);
+  }
+};
 
 static constexpr int32_t mark_block_size = 1024;
 
@@ -332,8 +341,13 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> mark_join::mark_probe_and_
   auto const marked_count = d_mark_counter.value(stream);
   _num_marks.store(marked_count, std::memory_order_relaxed);
 
+  auto const null_build_rows = static_cast<size_type>(_build.num_rows()) - _build_num_valid_rows;
+  auto const is_anti         = (kind == join_kind::LEFT_ANTI_JOIN);
+  auto const unmatched_valid = _build_num_valid_rows - marked_count;
+  auto const null_contribution =
+    (is_anti && _nulls_equal == null_equality::UNEQUAL) ? null_build_rows : size_type{0};
   auto const result_count =
-    (kind == join_kind::LEFT_SEMI_JOIN) ? marked_count : (_build_num_valid_rows - marked_count);
+    (kind == join_kind::LEFT_SEMI_JOIN) ? marked_count : (unmatched_valid + null_contribution);
 
   auto result = rmm::device_uvector<size_type>(result_count, stream, mr);
   if (result_count == 0) {
@@ -376,6 +390,16 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> mark_join::mark_probe_and_
         d_scan_offset.data(),
         num_buckets);
     }
+  }
+
+  if (null_contribution > 0) {
+    auto const bitmask_buffer_and_ptr = build_row_bitmask(_build, stream);
+    auto const row_bitmask_ptr        = bitmask_buffer_and_ptr.second;
+    thrust::copy_if(rmm::exec_policy_nosync(stream),
+                    thrust::counting_iterator<size_type>(0),
+                    thrust::counting_iterator<size_type>(_build.num_rows()),
+                    result.begin() + unmatched_valid,
+                    row_is_null{row_bitmask_ptr});
   }
 
   return std::make_unique<rmm::device_uvector<size_type>>(std::move(result));
