@@ -7,35 +7,22 @@
 
 #include <cudf/detail/cuco_helpers.hpp>
 #include <cudf/detail/join/distinct_filtered_join.cuh>
-#include <cudf/detail/join/filtered_join.cuh>
 #include <cudf/detail/join/mark_join.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/row_operator/equality.cuh>
-#include <cudf/detail/row_operator/primitive_row_operators.cuh>
-#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/join/filtered_join.hpp>
 #include <cudf/join/join.hpp>
-#include <cudf/table/table_view.hpp>
-#include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 
-#include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
-#include <rmm/mr/polymorphic_allocator.hpp>
-#include <rmm/resource_ref.hpp>
 
-#include <cuco/bucket_storage.cuh>
 #include <cuco/detail/open_addressing/kernels.cuh>
-#include <cuco/extent.cuh>
 #include <cuco/operator.hpp>
 #include <cuco/static_set_ref.cuh>
 #include <cuda/iterator>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/sequence.h>
-
-#include <memory>
 
 namespace cudf {
 namespace detail {

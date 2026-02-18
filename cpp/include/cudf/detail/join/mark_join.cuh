@@ -5,21 +5,40 @@
 #pragma once
 
 #include <cudf/detail/join/filtered_join.cuh>
+#include <cudf/detail/row_operator/equality.cuh>
 #include <cudf/table/table_view.hpp>
-#include <cudf/utilities/default_stream.hpp>
+#include <cudf/types.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/resource_ref.hpp>
+#include <rmm/device_uvector.hpp>
 
-#include <atomic>
+#include <cuco/pair.cuh>
+#include <cuco/probing_scheme.cuh>
+#include <cuco/types.cuh>
+#include <cuda/std/limits>
 
-namespace cudf {
+#include <memory>
 
-// Forward declaration
-enum class join_kind : int32_t;
+namespace cudf::detail {
 
-namespace detail {
+static constexpr hash_value_type mark_bit_mask = hash_value_type{1}
+                                                 << (sizeof(hash_value_type) * 8 - 1);
+
+CUDF_HOST_DEVICE constexpr hash_value_type set_mark(hash_value_type value) noexcept
+{
+  return value | mark_bit_mask;
+}
+
+CUDF_HOST_DEVICE constexpr hash_value_type unset_mark(hash_value_type value) noexcept
+{
+  return value & ~mark_bit_mask;
+}
+
+CUDF_HOST_DEVICE constexpr bool is_marked(hash_value_type value) noexcept
+{
+  return (value & mark_bit_mask) != 0;
+}
 
 /**
  * @brief Implementation of filtered join using a mark-based multiset hash table.
@@ -31,15 +50,67 @@ namespace detail {
  *
  * Instead of the traditional two-pass retrieve + sort/dedup approach, this uses
  * a mark-based algorithm: the probe kernel atomically sets the MSB (mark bit) on
- * matching hash table entries via CAS, then a scan kernel collects marked (semi)
+ * matching hash table entries via CAS, then a retrieve kernel collects marked (semi)
  * or unmarked (anti) entries. This provides implicit deduplication and eliminates
  * O(N log N) sort overhead.
  */
+struct masked_hash_fn {
+  template <typename T>
+  __device__ constexpr hash_value_type operator()(
+    cuco::pair<hash_value_type, T> const& key) const noexcept
+  {
+    return unset_mark(key.first);
+  }
+};
+
+template <typename T, typename Hasher>
+struct masked_key_fn {
+  CUDF_HOST_DEVICE constexpr masked_key_fn(Hasher const& hasher) : _hasher{hasher} {}
+
+  __device__ __forceinline__ auto operator()(size_type i) const noexcept
+  {
+    return cuco::pair{unset_mark(_hasher(i)), T{i}};
+  }
+
+ private:
+  Hasher _hasher;
+};
+
+template <typename Equal>
+struct masked_comparator_fn {
+  masked_comparator_fn(Equal const& d_equal) : _d_equal{d_equal} {}
+
+  __device__ constexpr auto operator()(
+    cuco::pair<hash_value_type, lhs_index_type> const& lhs,
+    cuco::pair<hash_value_type, lhs_index_type> const& rhs) const noexcept
+  {
+    if (unset_mark(lhs.first) != unset_mark(rhs.first)) { return false; }
+    return _d_equal(lhs.second, rhs.second);
+  }
+
+  __device__ constexpr auto operator()(
+    cuco::pair<hash_value_type, rhs_index_type> const& probe,
+    cuco::pair<hash_value_type, lhs_index_type> const& build) const noexcept
+  {
+    if (unset_mark(probe.first) != unset_mark(build.first)) { return false; }
+    return _d_equal(build.second, probe.second);
+  }
+
+ private:
+  Equal _d_equal;
+};
+
+using masked_probing_scheme = cuco::linear_probing<1, masked_hash_fn>;
+
+static constexpr auto masked_empty_sentinel =
+  cuco::empty_key{cuco::pair{unset_mark(cuda::std::numeric_limits<hash_value_type>::max()),
+                             lhs_index_type{cudf::JoinNoMatch}}};
+
 class mark_join : public filtered_join {
  private:
-  mutable std::atomic<cudf::size_type> _num_marks{0};  ///< Number of marked entries after probe
-  cudf::size_type _build_num_valid_rows{
-    0};  ///< Number of valid build rows inserted into hash table
+  cudf::size_type _num_build_inserted{0};  ///< Number of build rows inserted into hash table
+
+  [[nodiscard]] cudf::size_type num_build_inserted() const { return _num_build_inserted; }
 
   /**
    * @brief Performs either a semi or anti join based on the specified kind
@@ -57,11 +128,11 @@ class mark_join : public filtered_join {
     rmm::device_async_resource_ref mr);
 
   /**
-   * @brief Core implementation: mark probe + mark scan
+   * @brief Core implementation: mark probe + mark retrieve
    *
-   * Performs the mark-based probe of the hash table followed by a scan to
+   * Performs the mark-based probe of the hash table followed by a retrieve to
    * collect result indices. The probe kernel walks the hash table for each
-   * probe row and atomically marks matching build entries. The scan kernel
+   * probe row and atomically marks matching build entries. The retrieve kernel
    * then iterates the hash table and collects marked (or unmarked for anti)
    * entries into the output buffer using coalesced shared-memory buffered writes.
    *
@@ -77,12 +148,11 @@ class mark_join : public filtered_join {
    * @param mr Memory resource for allocations
    * @return Device vector of indices representing the join result
    */
-  template <int32_t CGSize, typename ProbingScheme, typename Comparator>
-  std::unique_ptr<rmm::device_uvector<cudf::size_type>> mark_probe_and_scan(
+  template <typename Comparator>
+  std::unique_ptr<rmm::device_uvector<cudf::size_type>> mark_probe_and_retrieve(
     cudf::table_view const& probe,
     std::shared_ptr<cudf::detail::row::equality::preprocessed_table> preprocessed_probe,
     join_kind kind,
-    ProbingScheme probing_scheme,
     Comparator comparator,
     rmm::cuda_stream_view stream,
     rmm::device_async_resource_ref mr);
@@ -142,5 +212,4 @@ class mark_join : public filtered_join {
     rmm::device_async_resource_ref mr) override;
 };
 
-}  // namespace detail
-}  // namespace cudf
+}  // namespace cudf::detail
