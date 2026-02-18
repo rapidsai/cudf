@@ -137,18 +137,8 @@ def _wrap_buffer_or_span(
     """Wrap a buffer or span in a cudf Buffer.
 
     If the input is already a Buffer, it will be shallow-copied to track
-    that we are now sharing the same BufferOwner. If it's a gpumemoryview
-    or other span, it will be wrapped in a new Buffer.
-
-    Parameters
-    ----------
-    buffer_or_span : Buffer, gpumemoryview, or None
-        The buffer or span to wrap.
-
-    Returns
-    -------
-    Buffer or None
-        A wrapped Buffer, or None if input was None.
+    that we are now sharing the same BufferOwner. Any other non-None object will be
+    wrapped in a buffer via as_buffer.
     """
     if buffer_or_span is None:
         return None
@@ -199,16 +189,13 @@ def _normalize_types_column(col: plc.Column) -> plc.Column:
             plc_dtype, col.size(), plc.types.MaskState.ALL_NULL
         )
 
-    if not (children := col.children()):
-        return col
-
     normalized_children = [
-        _normalize_types_column(child) for child in children
+        _normalize_types_column(child) for child in col.children()
     ]
     if all(
         normalized_child is child
         for normalized_child, child in zip(
-            normalized_children, children, strict=True
+            normalized_children, col.children(), strict=True
         )
     ):
         return col
@@ -238,7 +225,7 @@ def _wrap_and_validate(
     type_id = col.type().id()
     dtype_kind = dispatch_dtype.kind
     valid_types: set[plc.TypeId] = set()
-    wrapped = None
+    wrapped: plc.Column | None = None
     if isinstance(dispatch_dtype, ListDtype):
         valid_types = {plc.TypeId.LIST}
         values, values_dtype = _wrap_and_validate(

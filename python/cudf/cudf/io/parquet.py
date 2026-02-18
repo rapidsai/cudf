@@ -1399,14 +1399,14 @@ def _read_parquet(
                 pass_read_limit=kwargs.get("_pass_read_limit", 1024000000),
             )
 
-            chunk_meta = reader.read_chunk()
-            column_names = chunk_meta.column_names(include_children=False)
-            child_names = chunk_meta.child_names
-            per_file_user_data = chunk_meta.per_file_user_data
-            concatenated_columns = chunk_meta.tbl.columns()
+            tbl_w_meta = reader.read_chunk()
+            column_names = tbl_w_meta.column_names(include_children=False)
+            child_names = tbl_w_meta.child_names
+            per_file_user_data = tbl_w_meta.per_file_user_data
+            concatenated_columns = tbl_w_meta.tbl.columns()
 
             # save memory
-            del chunk_meta
+            del tbl_w_meta
 
             while reader.has_next():
                 columns = reader.read_chunk().tbl.columns()
@@ -1417,9 +1417,8 @@ def _read_parquet(
                     )
 
             plc_table = plc.Table(concatenated_columns)
-            normalized_table = _normalize_types_table(plc_table)
             df = DataFrame.from_pylibcudf(
-                normalized_table,
+                _normalize_types_table(plc_table),
                 metadata={
                     "columns": column_names,
                     "child_names": child_names,
