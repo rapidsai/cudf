@@ -75,6 +75,10 @@ class ShuffleManager:
             num_partitions,
         )
 
+    def local_partitions(self) -> list[int]:
+        """Get the local partition IDs for this rank."""
+        return self.shuffler.local_partitions()
+
     def insert_chunk(self, chunk: TableChunk) -> None:
         """
         Insert a chunk into the ShuffleContext.
