@@ -128,21 +128,6 @@ class filtered_join {
   };
 
   /**
-   * @brief Constructor for filtered_join base class
-   *
-   * Initializes the hash table with the build table and prepares it for join operations.
-   *
-   * @param build The table to build the hash table from
-   * @param compare_nulls How null values should be compared
-   * @param load_factor Target load factor for the hash table
-   * @param stream CUDA stream on which to perform operations
-   */
-  filtered_join(cudf::table_view const& build,
-                cudf::null_equality compare_nulls,
-                double load_factor,
-                rmm::cuda_stream_view stream);
-
-  /**
    * Virtual semi join function overridden in derived classes
    */
   virtual std::unique_ptr<rmm::device_uvector<cudf::size_type>> semi_join(
@@ -166,14 +151,23 @@ class filtered_join {
  public:
   // Key type used in the hash table
   using key = cuco::pair<hash_value_type, lhs_index_type>;
-
- protected:
   // Storage type for the hash table buckets
   using storage_type =
     cuco::bucket_storage<key,
                          1,  /// fixing bucket size to be 1 i.e each thread handles one slot
                          cuco::extent<std::size_t>,
                          rmm::mr::polymorphic_allocator<char>>;
+
+ protected:
+  filtered_join(cudf::table_view const& build,
+                cudf::null_equality compare_nulls,
+                double load_factor,
+                rmm::cuda_stream_view stream);
+
+  filtered_join(cudf::table_view const& build,
+                cudf::null_equality compare_nulls,
+                std::size_t bucket_count,
+                rmm::cuda_stream_view stream);
 
   // Hasher for primitive row types
   using primitive_row_hasher =

@@ -13,6 +13,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 
+#include <cuco/hash_functions.cuh>
 #include <cuco/pair.cuh>
 #include <cuco/probing_scheme.cuh>
 #include <cuco/types.cuh>
@@ -63,6 +64,19 @@ struct masked_hash_fn {
   }
 };
 
+struct secondary_hash_fn {
+  uint32_t _seed{0};
+
+  CUDF_HOST_DEVICE secondary_hash_fn() = default;
+  CUDF_HOST_DEVICE secondary_hash_fn(uint32_t seed) : _seed{seed} {}
+
+  template <typename T>
+  CUDF_HOST_DEVICE auto operator()(cuco::pair<hash_value_type, T> const& key) const noexcept
+  {
+    return cuco::xxhash_32<hash_value_type>{_seed}(unset_mark(key.first));
+  }
+};
+
 template <typename T, typename Hasher>
 struct masked_key_fn {
   CUDF_HOST_DEVICE constexpr masked_key_fn(Hasher const& hasher) : _hasher{hasher} {}
@@ -100,7 +114,7 @@ struct masked_comparator_fn {
   Equal _d_equal;
 };
 
-using masked_probing_scheme = cuco::linear_probing<1, masked_hash_fn>;
+using masked_probing_scheme = cuco::double_hashing<1, masked_hash_fn, secondary_hash_fn>;
 
 static constexpr auto masked_empty_sentinel =
   cuco::empty_key{cuco::pair{unset_mark(cuda::std::numeric_limits<hash_value_type>::max()),

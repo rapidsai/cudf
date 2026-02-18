@@ -204,6 +204,20 @@ filtered_join::filtered_join(cudf::table_view const& build,
   _bucket_storage.initialize(empty_sentinel_key, stream);
 }
 
+filtered_join::filtered_join(cudf::table_view const& build,
+                             cudf::null_equality compare_nulls,
+                             std::size_t bucket_count,
+                             rmm::cuda_stream_view stream)
+  : _build_props{build_properties{cudf::has_nested_columns(build)}},
+    _nulls_equal{compare_nulls},
+    _build{build},
+    _preprocessed_build{cudf::detail::row::equality::preprocessed_table::create(_build, stream)},
+    _bucket_storage{cuco::extent<std::size_t>{bucket_count},
+                    rmm::mr::polymorphic_allocator<char>{},
+                    stream.value()}
+{
+}
+
 distinct_filtered_join::distinct_filtered_join(cudf::table_view const& build,
                                                cudf::null_equality compare_nulls,
                                                double load_factor,

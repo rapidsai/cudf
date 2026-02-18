@@ -385,11 +385,19 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> mark_join::mark_probe_and_
   return std::make_unique<rmm::device_uvector<size_type>>(std::move(result));
 }
 
+static std::size_t compute_mark_join_capacity(cudf::table_view tbl, double load_factor)
+{
+  using storage_type = filtered_join::storage_type;
+  return static_cast<std::size_t>(
+    cuco::make_valid_extent<masked_probing_scheme, storage_type, std::size_t>(tbl.num_rows(),
+                                                                              load_factor));
+}
+
 mark_join::mark_join(cudf::table_view const& build,
                      cudf::null_equality compare_nulls,
                      double load_factor,
                      rmm::cuda_stream_view stream)
-  : filtered_join(build, compare_nulls, load_factor, stream)
+  : filtered_join(build, compare_nulls, compute_mark_join_capacity(build, load_factor), stream)
 {
   cudf::scoped_range range{"mark_join::mark_join"};
   if (_build.num_rows() == 0) return;
