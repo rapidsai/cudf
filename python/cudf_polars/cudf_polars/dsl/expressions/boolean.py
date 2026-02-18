@@ -19,6 +19,7 @@ from cudf_polars.dsl.expressions.base import (
     ExecutionContext,
     Expr,
 )
+from cudf_polars.dsl.expressions.literal import LiteralColumn
 
 if TYPE_CHECKING:
     from typing import Self
@@ -31,6 +32,15 @@ if TYPE_CHECKING:
     from cudf_polars.containers import DataFrame
 
 __all__ = ["BooleanFunction"]
+
+
+def _nesting_level(dtype: pl.DataType) -> int:
+    level = 0
+    current = dtype
+    while isinstance(current, pl.List):
+        level += 1
+        current = cast(pl.DataType, current.inner)
+    return level
 
 
 class BooleanFunction(Expr):
@@ -96,6 +106,22 @@ class BooleanFunction(Expr):
             raise NotImplementedError(
                 f"Boolean function {self.name}"
             )  # pragma: no cover
+        if self.name is BooleanFunction.Name.IsIn and len(children) == 2:
+            # TODO: Polars should raise an error ahead of time
+            # for us for these kind of shape mismatches
+            needles, haystack = children
+            if (
+                isinstance(needles, LiteralColumn)
+                and isinstance(haystack, LiteralColumn)
+                and len(needles.value) != len(haystack.value)
+            ):
+                needles_level = _nesting_level(needles.dtype.polars_type)
+                haystack_level = _nesting_level(haystack.dtype.polars_type)
+
+                if needles_level != haystack_level:
+                    raise NotImplementedError(
+                        f"arguments for `is_in` have different lengths ({len(needles.value)} != {len(haystack.value)})"
+                    )
 
     @staticmethod
     def _distinct(
