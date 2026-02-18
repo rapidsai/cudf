@@ -1686,7 +1686,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_like(
     auto const pattern_scalar = reinterpret_cast<cudf::string_scalar const*>(pattern);
     auto const pattern_str    = pattern_scalar->to_string();
     auto const escape_scalar  = reinterpret_cast<cudf::string_scalar const*>(escapeChar);
-    return release_as_jlong(cudf::strings::like(strings_column, pattern_str, *escape_scalar));
+    auto const escape_str     = escape_scalar->to_string();
+    return release_as_jlong(cudf::strings::like(strings_column, pattern_str, escape_str));
   }
   JNI_CATCH(env, 0);
 }
