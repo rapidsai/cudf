@@ -118,10 +118,17 @@ class ShuffleManager:
         Returns
         -------
         The extracted table.
+
+        Raises
+        ------
+        KeyError
+            If the requested sequence number has already been extracted.
         """
         partition_chunks = await self.shuffler.extract_async(
             self.context, sequence_number
         )
+        if partition_chunks is None:
+            raise KeyError(f"Partition {sequence_number} has already been extracted")
         return py_unpack_and_concat(
             partitions=partition_chunks,
             stream=stream,
@@ -218,12 +225,10 @@ async def shuffle_node(
         shuffle = ShuffleManager(
             context, num_partitions, columns_to_hash, collective_id
         )
-
         # When input is duplicated, only rank 0 should contribute data.
         # Other ranks still participate in the shuffle protocol.
         skip_insert = metadata_in.duplicated and context.comm().rank != 0
 
-        # Process input chunks
         while (msg := await ch_in.recv(context)) is not None:
             if not skip_insert:
                 # Extract TableChunk from message and insert into shuffler
@@ -234,18 +239,10 @@ async def shuffle_node(
                 )
             del msg
 
-        # Insert finished
         await shuffle.insert_finished()
 
-        # Extract shuffled partitions and send them out
-        stream = ir_context.get_cuda_stream()
-        for partition_id in range(
-            # Round-robin partition assignment
-            context.comm().rank,
-            num_partitions,
-            context.comm().nranks,
-        ):
-            # Extract and send the output chunk
+        for partition_id in shuffle.shuffler.local_partitions():
+            stream = ir_context.get_cuda_stream()
             await ch_out.send(
                 context,
                 Message(

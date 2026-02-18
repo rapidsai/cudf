@@ -471,6 +471,58 @@
       "11": {
         "year": 2000,
         "select_one": "t_s_secyear.customer_preferred_cust_flag"
+      },
+      "12": {
+        "sdate": "2001-01-08",
+        "year": 2001,
+        "category": [
+          "Books",
+          "Women",
+          "Electronics"
+        ]
+      },
+      "13": {
+        "ms": [
+          "S",
+          "U",
+          "W"
+        ],
+        "es": [
+          "Secondary",
+          "4 yr Degree",
+          "2 yr Degree"
+        ],
+        "state": [
+          "IA",
+          "MN",
+          "MT",
+          "AR",
+          "IN",
+          "TX",
+          "TN",
+          "NE",
+          "WV"
+        ]
+      },
+      "14": {
+        "year": 1999,
+        "day": 15
+      },
+      "15": {
+        "year": 2001,
+        "qoy": 1
+      },
+      "16": {
+        "year": 2002,
+        "month": 3,
+        "state": "NH",
+        "county": [
+          "Williamson County",
+          "Williamson County",
+          "Williamson County",
+          "Williamson County",
+          "Williamson County"
+        ]
       }
     },
     "10": {
@@ -943,6 +995,58 @@
       "11": {
         "year": 2000,
         "select_one": "t_s_secyear.customer_preferred_cust_flag"
+      },
+      "12": {
+        "sdate": "2001-01-08",
+        "year": 2001,
+        "category": [
+          "Books",
+          "Women",
+          "Electronics"
+        ]
+      },
+      "13": {
+        "ms": [
+          "S",
+          "U",
+          "W"
+        ],
+        "es": [
+          "Secondary",
+          "4 yr Degree",
+          "2 yr Degree"
+        ],
+        "state": [
+          "IA",
+          "MN",
+          "MT",
+          "AR",
+          "IN",
+          "TX",
+          "TN",
+          "NE",
+          "WV"
+        ]
+      },
+      "14": {
+        "year": 1999,
+        "day": 15
+      },
+      "15": {
+        "year": 2001,
+        "qoy": 1
+      },
+      "16": {
+        "year": 2000,
+        "month": 4,
+        "state": "NM",
+        "county": [
+          "Ziebach County",
+          "Walker County",
+          "Williamson County",
+          "Walker County",
+          "Ziebach County"
+        ]
       }
     },
     "50": {
@@ -1415,6 +1519,58 @@
       "11": {
         "year": 2000,
         "select_one": "t_s_secyear.customer_preferred_cust_flag"
+      },
+      "12": {
+        "sdate": "2001-01-08",
+        "year": 2001,
+        "category": [
+          "Books",
+          "Women",
+          "Electronics"
+        ]
+      },
+      "13": {
+        "ms": [
+          "S",
+          "U",
+          "W"
+        ],
+        "es": [
+          "Secondary",
+          "4 yr Degree",
+          "2 yr Degree"
+        ],
+        "state": [
+          "IA",
+          "MN",
+          "MT",
+          "AR",
+          "IN",
+          "TX",
+          "TN",
+          "NE",
+          "WV"
+        ]
+      },
+      "14": {
+        "year": 1999,
+        "day": 15
+      },
+      "15": {
+        "year": 2001,
+        "qoy": 1
+      },
+      "16": {
+        "year": 2000,
+        "month": 4,
+        "state": "NM",
+        "county": [
+          "Ziebach County",
+          "Walker County",
+          "Williamson County",
+          "Walker County",
+          "Ziebach County"
+        ]
       }
     },
     "100": {
@@ -1887,6 +2043,58 @@
       "11": {
         "year": 2000,
         "select_one": "t_s_secyear.customer_preferred_cust_flag"
+      },
+      "12": {
+        "sdate": "2001-01-08",
+        "year": 2001,
+        "category": [
+          "Books",
+          "Women",
+          "Electronics"
+        ]
+      },
+      "13": {
+        "ms": [
+          "S",
+          "U",
+          "W"
+        ],
+        "es": [
+          "Secondary",
+          "4 yr Degree",
+          "2 yr Degree"
+        ],
+        "state": [
+          "IA",
+          "MN",
+          "MT",
+          "AR",
+          "IN",
+          "TX",
+          "TN",
+          "NE",
+          "WV"
+        ]
+      },
+      "14": {
+        "year": 1999,
+        "day": 15
+      },
+      "15": {
+        "year": 2001,
+        "qoy": 1
+      },
+      "16": {
+        "year": 2002,
+        "month": 2,
+        "state": "MN",
+        "county": [
+          "Barrow County",
+          "Walker County",
+          "Ziebach County",
+          "Daviess County",
+          "Richland County"
+        ]
       }
     },
     "200": {
@@ -2359,6 +2567,58 @@
       "11": {
         "year": 2000,
         "select_one": "t_s_secyear.customer_preferred_cust_flag"
+      },
+      "12": {
+        "sdate": "2001-01-08",
+        "year": 2001,
+        "category": [
+          "Books",
+          "Women",
+          "Electronics"
+        ]
+      },
+      "13": {
+        "ms": [
+          "S",
+          "U",
+          "W"
+        ],
+        "es": [
+          "Secondary",
+          "4 yr Degree",
+          "2 yr Degree"
+        ],
+        "state": [
+          "IA",
+          "MN",
+          "MT",
+          "AR",
+          "IN",
+          "TX",
+          "TN",
+          "NE",
+          "WV"
+        ]
+      },
+      "14": {
+        "year": 1999,
+        "day": 15
+      },
+      "15": {
+        "year": 2001,
+        "qoy": 1
+      },
+      "16": {
+        "year": 2000,
+        "month": 3,
+        "state": "IN",
+        "county": [
+          "Fairfield County",
+          "Ziebach County",
+          "Williamson County",
+          "Walker County",
+          "Ziebach County"
+        ]
       }
     },
     "400": {
@@ -2831,6 +3091,58 @@
       "11": {
         "year": 2000,
         "select_one": "t_s_secyear.customer_preferred_cust_flag"
+      },
+      "12": {
+        "sdate": "2001-01-08",
+        "year": 2001,
+        "category": [
+          "Books",
+          "Women",
+          "Electronics"
+        ]
+      },
+      "13": {
+        "ms": [
+          "S",
+          "U",
+          "W"
+        ],
+        "es": [
+          "Secondary",
+          "4 yr Degree",
+          "2 yr Degree"
+        ],
+        "state": [
+          "IA",
+          "MN",
+          "MT",
+          "AR",
+          "IN",
+          "TX",
+          "TN",
+          "NE",
+          "WV"
+        ]
+      },
+      "14": {
+        "year": 1999,
+        "day": 15
+      },
+      "15": {
+        "year": 2001,
+        "qoy": 1
+      },
+      "16": {
+        "year": 2001,
+        "month": 5,
+        "state": "MN",
+        "county": [
+          "Ziebach County",
+          "Williamson County",
+          "Ziebach County",
+          "Williamson County",
+          "Ziebach County"
+        ]
       }
     },
     "1000": {
@@ -3303,6 +3615,58 @@
       "11": {
         "year": 2000,
         "select_one": "t_s_secyear.customer_preferred_cust_flag"
+      },
+      "12": {
+        "sdate": "2001-01-08",
+        "year": 2001,
+        "category": [
+          "Books",
+          "Women",
+          "Electronics"
+        ]
+      },
+      "13": {
+        "ms": [
+          "S",
+          "U",
+          "W"
+        ],
+        "es": [
+          "Secondary",
+          "4 yr Degree",
+          "2 yr Degree"
+        ],
+        "state": [
+          "IA",
+          "MN",
+          "MT",
+          "AR",
+          "IN",
+          "TX",
+          "TN",
+          "NE",
+          "WV"
+        ]
+      },
+      "14": {
+        "year": 1999,
+        "day": 15
+      },
+      "15": {
+        "year": 2001,
+        "qoy": 1
+      },
+      "16": {
+        "year": 2000,
+        "month": 4,
+        "state": "MI",
+        "county": [
+          "Marshall County",
+          "Wadena County",
+          "Richland County",
+          "San Miguel County",
+          "Oglethorpe County"
+        ]
       }
     },
     "3000": {
@@ -3775,6 +4139,58 @@
       "11": {
         "year": 2000,
         "select_one": "t_s_secyear.customer_preferred_cust_flag"
+      },
+      "12": {
+        "sdate": "2001-01-08",
+        "year": 2001,
+        "category": [
+          "Books",
+          "Women",
+          "Electronics"
+        ]
+      },
+      "13": {
+        "ms": [
+          "S",
+          "U",
+          "W"
+        ],
+        "es": [
+          "Secondary",
+          "4 yr Degree",
+          "2 yr Degree"
+        ],
+        "state": [
+          "IA",
+          "MN",
+          "MT",
+          "AR",
+          "IN",
+          "TX",
+          "TN",
+          "NE",
+          "WV"
+        ]
+      },
+      "14": {
+        "year": 1999,
+        "day": 15
+      },
+      "15": {
+        "year": 2001,
+        "qoy": 1
+      },
+      "16": {
+        "year": 2000,
+        "month": 2,
+        "state": "SD",
+        "county": [
+          "Barrow County",
+          "Luce County",
+          "Mobile County",
+          "Williamson County",
+          "Marshall County"
+        ]
       }
     },
     "10000": {
@@ -4247,6 +4663,58 @@
       "11": {
         "year": 2000,
         "select_one": "t_s_secyear.customer_preferred_cust_flag"
+      },
+      "12": {
+        "sdate": "2001-01-08",
+        "year": 2001,
+        "category": [
+          "Books",
+          "Women",
+          "Electronics"
+        ]
+      },
+      "13": {
+        "ms": [
+          "S",
+          "U",
+          "W"
+        ],
+        "es": [
+          "Secondary",
+          "4 yr Degree",
+          "2 yr Degree"
+        ],
+        "state": [
+          "IA",
+          "MN",
+          "MT",
+          "AR",
+          "IN",
+          "TX",
+          "TN",
+          "NE",
+          "WV"
+        ]
+      },
+      "14": {
+        "year": 1999,
+        "day": 15
+      },
+      "15": {
+        "year": 2001,
+        "qoy": 1
+      },
+      "16": {
+        "year": 2002,
+        "month": 3,
+        "state": "ND",
+        "county": [
+          "Barrow County",
+          "Bronx County",
+          "Kittitas County",
+          "Levy County",
+          "Richland County"
+        ]
       }
     },
     "30000": {
@@ -4719,6 +5187,58 @@
       "11": {
         "year": 2000,
         "select_one": "t_s_secyear.customer_preferred_cust_flag"
+      },
+      "12": {
+        "sdate": "2001-01-08",
+        "year": 2001,
+        "category": [
+          "Books",
+          "Women",
+          "Electronics"
+        ]
+      },
+      "13": {
+        "ms": [
+          "S",
+          "U",
+          "W"
+        ],
+        "es": [
+          "Secondary",
+          "4 yr Degree",
+          "2 yr Degree"
+        ],
+        "state": [
+          "IA",
+          "MN",
+          "MT",
+          "AR",
+          "IN",
+          "TX",
+          "TN",
+          "NE",
+          "WV"
+        ]
+      },
+      "14": {
+        "year": 1999,
+        "day": 15
+      },
+      "15": {
+        "year": 2001,
+        "qoy": 1
+      },
+      "16": {
+        "year": 2002,
+        "month": 2,
+        "state": "KS",
+        "county": [
+          "Mesa County",
+          "Kittitas County",
+          "Ziebach County",
+          "Barrow County",
+          "Perry County"
+        ]
       }
     },
     "100000": {
@@ -5191,6 +5711,58 @@
       "11": {
         "year": 2000,
         "select_one": "t_s_secyear.customer_preferred_cust_flag"
+      },
+      "12": {
+        "sdate": "2001-01-08",
+        "year": 2001,
+        "category": [
+          "Books",
+          "Women",
+          "Electronics"
+        ]
+      },
+      "13": {
+        "ms": [
+          "S",
+          "U",
+          "W"
+        ],
+        "es": [
+          "Secondary",
+          "4 yr Degree",
+          "2 yr Degree"
+        ],
+        "state": [
+          "IA",
+          "MN",
+          "MT",
+          "AR",
+          "IN",
+          "TX",
+          "TN",
+          "NE",
+          "WV"
+        ]
+      },
+      "14": {
+        "year": 1999,
+        "day": 15
+      },
+      "15": {
+        "year": 2001,
+        "qoy": 1
+      },
+      "16": {
+        "year": 2002,
+        "month": 2,
+        "state": "KS",
+        "county": [
+          "Mesa County",
+          "Kittitas County",
+          "Ziebach County",
+          "Barrow County",
+          "Perry County"
+        ]
       }
     },
     "qualification": {
@@ -5657,6 +6229,58 @@
       "11": {
         "year": 2001,
         "select_one": "t_s_secyear.customer_preferred_cust_flag"
+      },
+      "12": {
+        "year": 1999,
+        "sdate": "1999-02-22",
+        "category": [
+          "Sports",
+          "Books",
+          "Home"
+        ]
+      },
+      "13": {
+        "ms": [
+          "M",
+          "S",
+          "W"
+        ],
+        "es": [
+          "Advanced Degree",
+          "College",
+          "2 yr Degree"
+        ],
+        "state": [
+          "TX",
+          "OH",
+          "TX",
+          "OR",
+          "NM",
+          "KY",
+          "VA",
+          "TX",
+          "MS"
+        ]
+      },
+      "14": {
+        "year": 1999,
+        "day": 11
+      },
+      "15": {
+        "year": 2001,
+        "qoy": 2
+      },
+      "16": {
+        "year": 2002,
+        "month": 2,
+        "state": "GA",
+        "county": [
+          "Williamson County",
+          "Williamson County",
+          "Williamson County",
+          "Williamson County",
+          "Williamson County"
+        ]
       }
     }
   }
