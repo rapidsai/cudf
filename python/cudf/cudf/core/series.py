@@ -64,6 +64,7 @@ from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
     _get_nan_for_dtype,
+    dtype_from_pylibcudf_column,
     find_common_type,
     get_dtype_of_same_kind,
     is_mixed_with_object_dtype,
@@ -3863,7 +3864,7 @@ class Series(SingleColumnFrame, IndexedFrame):
             name = metadata.get("name")
             index = metadata.get("index")
         return cls._from_column(
-            ColumnBase.from_pylibcudf(col),
+            ColumnBase.create(col, dtype=dtype_from_pylibcudf_column(col)),
             name=name,
             index=index,
         )
