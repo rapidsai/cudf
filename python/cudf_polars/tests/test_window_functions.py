@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
     assert_ir_translation_raises,
 )
-from cudf_polars.utils.versions import POLARS_VERSION_LT_132
+from cudf_polars.utils.versions import POLARS_VERSION_LT_132, POLARS_VERSION_LT_136
 
 
 @pytest.fixture
@@ -125,8 +125,12 @@ def test_over_mapping_strategy(df: pl.LazyFrame, mapping_strategy: str):
 
 
 @pytest.mark.parametrize("period", ["2d", "3d"])
-def test_rolling(df: pl.LazyFrame, agg_expr, period: str):
+def test_rolling(request, df: pl.LazyFrame, agg_expr, period: str):
     """Test rolling window functions over time series."""
+    if not POLARS_VERSION_LT_136:
+        request.applymarker(
+            pytest.mark.xfail(reason="See https://github.com/pola-rs/polars/pull/25117")
+        )
     window_expr = agg_expr.rolling(period=period, index_column="date")
     result_name = f"{agg_expr!s}_rolling_{period}"
     window_expr = window_expr.alias(result_name)
@@ -148,8 +152,12 @@ def test_rolling_unsupported(df: pl.LazyFrame, unsupported_agg_expr):
 
 
 @pytest.mark.parametrize("closed", ["left", "right", "both", "none"])
-def test_rolling_closed(df: pl.LazyFrame, closed: str):
+def test_rolling_closed(request, df: pl.LazyFrame, closed: str):
     """Test rolling window functions with different closed parameters."""
+    if not POLARS_VERSION_LT_136:
+        request.applymarker(
+            pytest.mark.xfail(reason="See https://github.com/pola-rs/polars/pull/25117")
+        )
     # ignore is for polars' ClosedInterval, which isn't publicly exported.
     # https://github.com/pola-rs/polars/issues/17420
     query = df.with_columns(
