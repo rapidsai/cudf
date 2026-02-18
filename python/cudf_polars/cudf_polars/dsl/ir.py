@@ -346,7 +346,7 @@ def _parquet_physical_types(
 
     if columns is not None:
         return {name: column_types[name] for name in columns if name in column_types}
-    return column_types
+    return column_types  # pragma: no cover
 
 
 def _cast_literal_to_decimal(
