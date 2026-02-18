@@ -16,7 +16,6 @@ import pylibcudf as plc
 import cudf
 from cudf.api.types import is_scalar
 from cudf.core._internals import binaryop
-from cudf.core.column.categorical import CategoricalColumn
 from cudf.core.column.column import (
     ColumnBase,
     as_column,
@@ -25,16 +24,15 @@ from cudf.core.column.column import (
 from cudf.core.column.numerical_base import NumericalBaseColumn
 from cudf.core.column.utils import access_columns
 from cudf.core.dtype.validators import is_dtype_obj_numeric
-from cudf.core.dtypes import CategoricalDtype
 from cudf.core.mixins import BinaryOperand
 from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
     cudf_dtype_from_pa_type,
     cudf_dtype_to_pa_type,
+    dtype_from_pylibcudf_column,
     dtype_to_pylibcudf_type,
     find_common_type,
     get_dtype_of_same_kind,
-    get_dtype_of_same_type,
     is_pandas_nullable_extension_dtype,
     min_signed_type,
     min_unsigned_type,
@@ -852,10 +850,12 @@ class NumericalColumn(NumericalBaseColumn):
     ) -> plc.Scalar | ColumnBase:
         """Align fill_value for .fillna based on column type."""
         if is_scalar(fill_value):
-            cudf_obj = ColumnBase.from_pylibcudf(
-                plc.Column.from_scalar(
-                    pa_scalar_to_plc_scalar(pa.scalar(fill_value)), 1
-                )
+            plc_col = plc.Column.from_scalar(
+                pa_scalar_to_plc_scalar(pa.scalar(fill_value)), 1
+            )
+            cudf_obj = ColumnBase.create(
+                plc_col,
+                dtype=dtype_from_pylibcudf_column(plc_col),
             )
             if not cudf_obj.can_cast_safely(self.dtype):
                 raise TypeError(
@@ -988,36 +988,6 @@ class NumericalColumn(NumericalBaseColumn):
                 return False
 
         return False
-
-    def _with_type_metadata(
-        self: Self,
-        dtype: DtypeObj,
-    ) -> ColumnBase:
-        if isinstance(dtype, CategoricalDtype):
-            codes_dtype = min_unsigned_type(len(dtype.categories))
-            # TODO: Try to avoid going via ColumnBase methods here
-            codes = cast(
-                cudf.core.column.numerical.NumericalColumn,
-                self.astype(codes_dtype),
-            )
-            return CategoricalColumn._from_preprocessed(
-                codes.plc_column, dtype
-            )
-        if cudf.get_option("mode.pandas_compatible"):
-            res_dtype = get_dtype_of_same_type(dtype, self.dtype)
-            if (
-                is_pandas_nullable_extension_dtype(res_dtype)
-                and isinstance(self.dtype, np.dtype)
-                and self.dtype.kind == "f"
-            ):
-                # If the dtype is a pandas nullable extension type, we need to
-                # float column doesn't have any NaNs.
-                res = self.nans_to_nulls()
-                res._dtype = res_dtype
-                return res
-            self._dtype = res_dtype
-
-        return self
 
     def _reduction_result_dtype(self, reduction_op: str) -> DtypeObj:
         if reduction_op in {"sum", "product"}:

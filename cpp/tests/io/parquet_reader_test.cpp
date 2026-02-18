@@ -22,7 +22,7 @@
 #include <cudf/transform.hpp>
 #include <cudf/unary.hpp>
 
-#include <thrust/iterator/constant_iterator.h>
+#include <cuda/iterator>
 
 #include <src/io/parquet/parquet_gpu.hpp>
 
@@ -2215,7 +2215,7 @@ TEST_F(ParquetReaderTest, DeltaByteArraySkipAllValid)
   constexpr int num_rows  = 500;
   constexpr int num_valid = 150;
 
-  auto const ones = thrust::make_constant_iterator("one");
+  auto const ones = cuda::make_constant_iterator("one");
 
   auto valids = cudf::detail::make_counting_transform_iterator(
     0, [num_valid](auto i) { return i < num_valid; });
@@ -3732,7 +3732,7 @@ TEST_F(ParquetReaderTest, TableTooLargeOverflows)
                 "Number of rows per file should be less than size_type::max()");
   static_assert(2 * per_file_num_rows > std::numeric_limits<cudf::size_type>::max(),
                 "Twice number of rows per file should be greather than size_type::max()");
-  auto value  = thrust::make_constant_iterator(true);
+  auto value  = cuda::make_constant_iterator(true);
   auto column = cudf::test::fixed_width_column_wrapper<T>(value, value + per_file_num_rows);
 
   auto filepath = temp_env->get_temp_filepath("TableTooLargeOverflows.parquet");
