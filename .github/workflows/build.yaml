@@ -55,7 +55,6 @@ jobs:
       node_type: cpu16
       script: ci/build_cpp.sh
       sha: ${{ inputs.sha }}
-      sccache-dist-token-secret-name: GIST_REPO_READ_ORG_GITHUB_TOKEN
   python-build:
     needs: [telemetry-setup, cpp-build]
     secrets: inherit
@@ -66,7 +65,6 @@ jobs:
       date: ${{ inputs.date }}
       script: ci/build_python.sh
       sha: ${{ inputs.sha }}
-      sccache-dist-token-secret-name: GIST_REPO_READ_ORG_GITHUB_TOKEN
       # Build a conda package for each CUDA x ARCH x minimum supported Python version
       matrix_filter: group_by({CUDA_VER, ARCH}) | map(min_by(.PY_VER | split(".") | map(tonumber)))
   python-build-noarch:
@@ -118,7 +116,6 @@ jobs:
       script: ci/build_wheel_libcudf.sh
       package-name: libcudf
       package-type: cpp
-      sccache-dist-token-secret-name: GIST_REPO_READ_ORG_GITHUB_TOKEN
   wheel-publish-libcudf:
     needs: wheel-build-libcudf
     secrets: inherit
@@ -143,7 +140,6 @@ jobs:
       script: ci/build_wheel_pylibcudf.sh
       package-name: pylibcudf
       package-type: python
-      sccache-dist-token-secret-name: GIST_REPO_READ_ORG_GITHUB_TOKEN
       # Build a wheel for each CUDA x ARCH x minimum supported Python version
       matrix_filter: group_by({CUDA_VER, ARCH}) | map(min_by(.PY_VER | split(".") | map(tonumber)))
   wheel-publish-pylibcudf:
@@ -171,7 +167,6 @@ jobs:
       script: ci/build_wheel_cudf.sh
       package-name: cudf
       package-type: python
-      sccache-dist-token-secret-name: GIST_REPO_READ_ORG_GITHUB_TOKEN
       # Build a wheel for each CUDA x ARCH x minimum supported Python version
       matrix_filter: group_by({CUDA_VER, ARCH}) | map(min_by(.PY_VER | split(".") | map(tonumber)))
   wheel-publish-cudf:
@@ -202,7 +197,6 @@ jobs:
       package-name: dask_cudf
       package-type: python
       pure-wheel: true
-      sccache-dist-token-secret-name: GIST_REPO_READ_ORG_GITHUB_TOKEN
   wheel-publish-dask-cudf:
     needs: wheel-build-dask-cudf
     secrets: inherit
@@ -230,7 +224,6 @@ jobs:
       package-name: cudf_polars
       package-type: python
       pure-wheel: true
-      sccache-dist-token-secret-name: GIST_REPO_READ_ORG_GITHUB_TOKEN
   wheel-publish-cudf-polars:
     needs: wheel-build-cudf-polars
     secrets: inherit

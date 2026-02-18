@@ -26,8 +26,8 @@
 
 #include <cooperative_groups.h>
 #include <cooperative_groups/reduce.h>
+#include <cuda/iterator>
 #include <cuda/std/utility>
-#include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform.h>
 
@@ -290,8 +290,8 @@ std::unique_ptr<column> slice_strings(strings_column_view const& input,
     if ((start_value >= 0) && (start_value < stop_value)) {
       // this is about 2x faster on long strings for this common case
       return compute_substrings_from_fn(input,
-                                        thrust::constant_iterator<size_type>(start_value),
-                                        thrust::constant_iterator<size_type>(stop_value),
+                                        cuda::constant_iterator<size_type>(start_value),
+                                        cuda::constant_iterator<size_type>(stop_value),
                                         stream,
                                         mr);
     }

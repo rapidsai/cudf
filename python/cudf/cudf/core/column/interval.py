@@ -7,11 +7,9 @@ from typing import TYPE_CHECKING, Any, Literal, Self
 
 import pandas as pd
 import pyarrow as pa
-from pandas.core.arrays.arrow.extension_types import ArrowIntervalType
 
 import pylibcudf as plc
 
-import cudf
 from cudf.core.column.column import (
     ColumnBase,
     _handle_nulls,
@@ -31,9 +29,9 @@ class IntervalColumn(ColumnBase):
     _VALID_PLC_TYPES = {plc.TypeId.STRUCT}
 
     @classmethod
-    def _validate_args(  # type: ignore[override]
-        cls, plc_column: plc.Column, dtype: IntervalDtype
-    ) -> tuple[plc.Column, IntervalDtype]:
+    def _validate_args(
+        cls, plc_column: plc.Column, dtype: DtypeObj
+    ) -> tuple[plc.Column, DtypeObj]:
         # Validate plc_column TypeId - IntervalColumn uses STRUCT type
         if not (
             isinstance(plc_column, plc.Column)
@@ -47,53 +45,20 @@ class IntervalColumn(ColumnBase):
                 "plc_column must have two children (left edges, right edges)."
             )
         if not is_dtype_obj_interval(dtype):
-            raise ValueError("dtype must be a IntervalDtype.")
+            raise ValueError(f"dtype must be an interval type: Got {dtype}.")
 
         # Validate that children dtypes are compatible with target subtype
         for i, child in enumerate(plc_column.children()):
             try:
-                ColumnBase._validate_dtype_recursively(child, dtype.subtype)
+                ColumnBase._validate_dtype_recursively(
+                    child, IntervalDtype.from_interval_dtype(dtype).subtype
+                )
             except ValueError as e:
                 raise ValueError(
                     f"{'Right' if i else 'Left'} interval bound validation failed: {e}"
                 ) from e
 
         return plc_column, dtype
-
-    def _with_type_metadata(self, dtype: DtypeObj) -> ColumnBase:
-        """
-        Apply IntervalDtype metadata to this column.
-
-        Creates new children with the subtype metadata applied and
-        reconstructs the plc.Column.
-        """
-        if isinstance(dtype, IntervalDtype):
-            new_children = tuple(
-                ColumnBase.create(
-                    child, dtype_from_pylibcudf_column(child)
-                ).astype(dtype.subtype)
-                for child in self.plc_column.children()
-            )
-            new_plc_column = plc.Column(
-                plc.DataType(plc.TypeId.STRUCT),
-                self.plc_column.size(),
-                self.plc_column.data(),
-                self.plc_column.null_mask(),
-                self.plc_column.null_count(),
-                self.plc_column.offset(),
-                [child.plc_column for child in new_children],
-            )
-            return type(self)._from_preprocessed(
-                plc_column=new_plc_column,
-                dtype=dtype,
-            )
-        # For pandas dtypes, store them directly in the column's dtype property
-        elif isinstance(dtype, pd.ArrowDtype) and isinstance(
-            dtype.pyarrow_dtype, ArrowIntervalType
-        ):
-            self._dtype = dtype
-
-        return self
 
     @classmethod
     def from_arrow(cls, array: pa.Array | pa.ChunkedArray) -> Self:
@@ -276,8 +241,6 @@ class IntervalColumn(ColumnBase):
         if isinstance(result, pa.Scalar):
             py_element = maybe_nested_pa_scalar_to_py(result)
             result = self.dtype._recursively_replace_fields(py_element)  # type: ignore[union-attr]
-        if isinstance(result, dict) and cudf.get_option(
-            "mode.pandas_compatible"
-        ):
+        if isinstance(result, dict):
             return pd.Interval(**result, closed=self.dtype.closed)  # type: ignore[union-attr]
         return result
