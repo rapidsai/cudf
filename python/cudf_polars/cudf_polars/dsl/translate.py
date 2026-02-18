@@ -1017,6 +1017,18 @@ def _(
     agg_name = node.name
     args = [translator.translate_expr(n=arg, schema=schema) for arg in node.arguments]
 
+    # libcudf does not support std/var on decimal types; cast to float first.
+    if agg_name in {"std", "var"} and dtype.plc_type.id() in {
+        plc.TypeId.FLOAT32,
+        plc.TypeId.FLOAT64,
+    }:
+        args = [
+            expr.Cast(dtype, True, arg)  # noqa: FBT003
+            if plc.traits.is_fixed_point(arg.dtype.plc_type)
+            else arg
+            for arg in args
+        ]
+
     value = expr.Agg(dtype, agg_name, node.options, translator._expr_context, *args)
 
     if agg_name in ("count", "n_unique") and value.dtype.id() != plc.TypeId.INT32:
