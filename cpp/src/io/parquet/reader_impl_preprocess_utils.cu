@@ -7,9 +7,9 @@
 #include "io/comp/common.hpp"
 #include "reader_impl_preprocess_utils.cuh"
 
+#include <cudf/detail/algorithms/reduce.cuh>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/detail/utilities/host_worker_pool.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
@@ -17,8 +17,8 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
+#include <cuda/iterator>
 #include <thrust/for_each.h>
-#include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/discard_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
@@ -28,6 +28,7 @@
 #include <thrust/transform.h>
 #include <thrust/transform_scan.h>
 
+#include <algorithm>
 #include <bitset>
 #include <iostream>
 #include <numeric>
@@ -174,57 +175,73 @@ void generate_depth_remappings(
   std::vector<size_type> const& chunk_source_map,
   rmm::cuda_stream_view stream)
 {
-  // Transfer chunk data, coalescing adjacent chunks
+  // Calculate total size per source and offset for each chunk
+  std::vector<size_t> source_total_size(sources.size(), 0);
+  std::vector<size_t> chunk_buffer_offset(end_chunk - begin_chunk);
+
+  for (size_t chunk = begin_chunk; chunk < end_chunk; ++chunk) {
+    auto const source_idx                    = chunk_source_map[chunk];
+    chunk_buffer_offset[chunk - begin_chunk] = source_total_size[source_idx];
+    source_total_size[source_idx] += chunks[chunk].compressed_size;
+  }
+
+  // Allocate one buffer per source
+  std::transform(
+    source_total_size.begin(), source_total_size.end(), page_data.begin(), [&](size_t total_size) {
+      return rmm::device_buffer(
+        cudf::util::round_up_safe(total_size, cudf::io::detail::BUFFER_PADDING_MULTIPLE), stream);
+    });
+  // device_read_async is not guaranteed to follow stream-ordering (see datasource API docs).
+  stream.synchronize();
+
+  // Issue reads, coalescing adjacent chunks
   std::vector<std::future<size_t>> read_tasks;
   for (size_t chunk = begin_chunk; chunk < end_chunk;) {
-    size_t const io_offset = column_chunk_offsets[chunk];
-    size_t io_size         = chunks[chunk].compressed_size;
-    size_t next_chunk      = chunk + 1;
+    auto const source_idx    = chunk_source_map[chunk];
+    auto const io_offset     = column_chunk_offsets[chunk];
+    size_t io_size           = chunks[chunk].compressed_size;
+    size_t const first_chunk = chunk;
+    size_t next_chunk        = chunk + 1;
+
     while (next_chunk < end_chunk) {
-      size_t const next_offset = column_chunk_offsets[next_chunk];
-      if (next_offset != io_offset + io_size ||
-          chunk_source_map[chunk] != chunk_source_map[next_chunk]) {
-        break;
-      }
+      if (chunk_source_map[next_chunk] != source_idx) { break; }
+      auto const next_offset = column_chunk_offsets[next_chunk];
+      if (next_offset != io_offset + io_size) { break; }
       io_size += chunks[next_chunk].compressed_size;
       next_chunk++;
     }
+
     if (io_size != 0) {
-      auto& source = sources[chunk_source_map[chunk]];
-      // Buffer needs to be padded.
-      // Required by `gpuDecodePageData`.
-      page_data[chunk] = rmm::device_buffer(
-        cudf::util::round_up_safe(io_size, cudf::io::detail::BUFFER_PADDING_MULTIPLE), stream);
+      auto& source = sources[source_idx];
+      auto* dest   = static_cast<uint8_t*>(page_data[source_idx].data()) +
+                   chunk_buffer_offset[first_chunk - begin_chunk];
 
       if (source->is_device_read_preferred(io_size)) {
-        auto fut_read_size = source->device_read_async(
-          io_offset, io_size, static_cast<uint8_t*>(page_data[chunk].data()), stream);
-        read_tasks.emplace_back(std::move(fut_read_size));
+        auto fut = source->device_read_async(io_offset, io_size, dest, stream);
+        read_tasks.emplace_back(std::move(fut));
       } else {
-        read_tasks.emplace_back(
-          std::async(std::launch::deferred,
-                     [source = std::ref(*source),
-                      io_offset,
-                      io_size,
-                      dest = page_data[chunk].data(),
-                      stream]() {
-                       auto const read_buffer = source.get().host_read(io_offset, io_size);
-                       cudf::detail::cuda_memcpy_async(
-                         cudf::device_span<uint8_t>{static_cast<uint8_t*>(dest), io_size},
-                         cudf::host_span<uint8_t const>{read_buffer->data(), io_size},
-                         stream);
-                       return io_size;
-                     }));
+        read_tasks.emplace_back(std::async(
+          std::launch::deferred, [source = std::ref(*source), io_offset, io_size, dest, stream]() {
+            auto const read_buffer = source.get().host_read(io_offset, io_size);
+            cudf::detail::cuda_memcpy_async(
+              cudf::device_span<uint8_t>{static_cast<uint8_t*>(dest), io_size},
+              cudf::host_span<uint8_t const>{read_buffer->data(), io_size},
+              stream);
+            return io_size;
+          }));
       }
-      auto d_compdata = static_cast<uint8_t const*>(page_data[chunk].data());
-      do {
-        chunks[chunk].compressed_data = d_compdata;
-        d_compdata += chunks[chunk].compressed_size;
-      } while (++chunk != next_chunk);
-    } else {
-      chunk = next_chunk;
+
+      // Set compressed_data pointers for all coalesced chunks
+      auto* ptr = static_cast<uint8_t const*>(dest);
+      for (size_t c = first_chunk; c < next_chunk; ++c) {
+        chunks[c].compressed_data = ptr;
+        ptr += chunks[c].compressed_size;
+      }
     }
+
+    chunk = next_chunk;
   }
+
   auto sync_fn = [](decltype(read_tasks) read_tasks) {
     for (auto& task : read_tasks) {
       task.get();
@@ -401,13 +418,12 @@ cudf::detail::hostdevice_vector<PageInfo> sort_pages(device_span<PageInfo const>
                              sort_indices.begin(),
                              cuda::std::less<int>());
   auto pass_pages = cudf::detail::hostdevice_vector<PageInfo>(unsorted_pages.size(), stream);
-  thrust::transform(
-    rmm::exec_policy_nosync(stream),
-    sort_indices.begin(),
-    sort_indices.end(),
-    pass_pages.d_begin(),
-    cuda::proclaim_return_type<PageInfo>([unsorted_pages = unsorted_pages.begin()] __device__(
-                                           int32_t i) { return unsorted_pages[i]; }));
+  thrust::transform(rmm::exec_policy_nosync(stream),
+                    sort_indices.begin(),
+                    sort_indices.end(),
+                    pass_pages.d_begin(),
+                    cuda::proclaim_return_type<PageInfo>(
+                      [p = unsorted_pages.data()] __device__(int32_t i) { return p[i]; }));
   stream.synchronize();
   return pass_pages;
 }
@@ -498,15 +514,20 @@ void decode_page_headers(pass_intermediate_data& pass,
       host_page_locations, stream, cudf::get_current_device_resource_ref());
 
     // Accelerated decode page headers, one thread per page
-    decode_page_headers_with_pgidx(pass.chunks,
-                                   unsorted_pages,
-                                   page_locations.begin(),
-                                   chunk_page_offsets.begin(),
-                                   error_code.data(),
-                                   stream);
+    decode_page_headers_with_pgidx(
+      device_span<ColumnChunkDesc const>(pass.chunks.device_ptr(), pass.chunks.size()),
+      unsorted_pages,
+      page_locations.begin(),
+      chunk_page_offsets.begin(),
+      error_code.data(),
+      stream);
   } else {
     // (Slow) decode page headers, one warp (lane) per pages of a chunk
-    decode_page_headers(pass.chunks, d_chunk_page_info.begin(), error_code.data(), stream);
+    decode_page_headers(
+      device_span<ColumnChunkDesc const>(pass.chunks.device_ptr(), pass.chunks.size()),
+      d_chunk_page_info.begin(),
+      error_code.data(),
+      stream);
   }
 
   if (auto const error = error_code.value_sync(stream); error != 0) {
@@ -535,17 +556,21 @@ void decode_page_headers(pass_intermediate_data& pass,
   pass.level_type_size = std::max<int32_t>(1, cudf::util::div_rounding_up_safe(max_level_bits, 8));
 
   // sort the pages in chunk/schema order.
-  pass.pages = sort_pages(unsorted_pages, pass.chunks, stream);
+  pass.pages =
+    sort_pages(unsorted_pages,
+               device_span<ColumnChunkDesc const>(pass.chunks.device_ptr(), pass.chunks.size()),
+               stream);
 
   // compute offsets to each group of input pages.
   // page_keys:   1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3
   //
   // result:      0,          4,          8
   rmm::device_uvector<size_type> page_counts(pass.pages.size() + 1, stream);
-  auto page_keys             = make_page_key_iterator(pass.pages);
+  auto page_keys =
+    make_page_key_iterator(device_span<PageInfo const>(pass.pages.device_ptr(), pass.pages.size()));
   auto const page_counts_end = cudf::detail::reduce_by_key(page_keys,
                                                            page_keys + pass.pages.size(),
-                                                           thrust::make_constant_iterator(1),
+                                                           cuda::make_constant_iterator(1),
                                                            thrust::make_discard_iterator(),
                                                            page_counts.begin(),
                                                            cuda::std::plus<>{},
