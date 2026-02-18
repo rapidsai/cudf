@@ -342,6 +342,7 @@ class RunConfig:
     plans: dict[int, SerializablePlan] = dataclasses.field(default_factory=dict)
     dataset_path: Path
     scale_factor: int | float
+    qualification: bool = False
     shuffle: Literal["rapidsmpf", "tasks"] | None = None
     gather_shuffle_stats: bool = False
     broadcast_join_limit: int | None = None
@@ -416,6 +417,9 @@ class RunConfig:
         name = args.query_set
         scale_factor = args.scale
 
+        if args.qualification and "pdsds" not in name:
+            raise ValueError("--qualification can only be used with PDS-DS benchmarks.")
+
         if scale_factor is None:
             if "pdsds" in name:
                 raise ValueError(
@@ -486,6 +490,7 @@ class RunConfig:
             broadcast_join_limit=args.broadcast_join_limit,
             dataset_path=path,
             scale_factor=scale_factor,
+            qualification=args.qualification,
             blocksize=args.blocksize,
             threads=args.threads,
             iterations=args.iterations,
@@ -855,6 +860,11 @@ def parse_args(
         type=str,
         default=None,
         help="Dataset scale factor.",
+    )
+    parser.add_argument(
+        "--qualification",
+        action="store_true",
+        help="Use TPC-DS qualification parameters from specification Appendix B (PDS-DS only).",
     )
     parser.add_argument(
         "--suffix",
