@@ -1,5 +1,5 @@
 #!/bin/bash
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 set -euo pipefail
@@ -17,6 +17,13 @@ python -m pytest --cache-clear "$@" tests --executor streaming
 
 # Test the "streaming" executor with small blocksize
 python -m pytest --cache-clear "$@" tests --executor streaming --blocksize-mode small
+
+# Test the "streaming" executor with "rapidsmpf" runtime and the "single" cluster mode with dynamic planning
+# TODO: Enable dynamic planning
+python -m pytest --cache-clear "$@" tests \
+    --executor streaming \
+    --cluster single \
+    --runtime rapidsmpf
 
 # Run experimental tests with Distributed cluster
 python -m pytest --cache-clear "$@" "tests/experimental" \
