@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import warnings
 from typing import TYPE_CHECKING, Any, Self
 
 import cupy as cp
@@ -168,7 +169,20 @@ class SingleColumnFrame(Frame, NotIterable):
     @property  # type: ignore[explicit-override]
     @_performance_tracking
     def values_host(self) -> np.ndarray:
-        return self._column.values_host
+        """
+        Return a numpy representation of the data.
+
+        .. deprecated:: 26.04
+            `values_host` is deprecated and will be removed in a future version.
+            Use `to_numpy()` instead.
+        """
+        warnings.warn(
+            "values_host is deprecated and will be removed in a future version. "
+            "Use to_numpy() instead.",
+            FutureWarning,
+            stacklevel=2,
+        )
+        return self._column.to_numpy()
 
     @classmethod
     @_performance_tracking
@@ -197,16 +211,16 @@ class SingleColumnFrame(Frame, NotIterable):
         --------
         >>> import cudf
         >>> sr = cudf.Series(["a", "b", None])
-        >>> sr.to_arrow()
-        <pyarrow.lib.StringArray object at 0x7f796b0e7600>
+        >>> sr.to_arrow() # doctest: +ELLIPSIS
+        <pyarrow.lib.StringArray object at ...>
         [
           "a",
           "b",
           null
         ]
         >>> ind = cudf.Index(["a", "b", None])
-        >>> ind.to_arrow()
-        <pyarrow.lib.StringArray object at 0x7f796b0e7750>
+        >>> ind.to_arrow() # doctest: +ELLIPSIS
+        <pyarrow.lib.StringArray object at ...>
         [
           "a",
           "b",
@@ -325,7 +339,7 @@ class SingleColumnFrame(Frame, NotIterable):
         >>> s = cudf.Series(['a', 'a', 'c'])
         >>> codes, uniques = s.factorize()
         >>> codes
-        array([0, 0, 1], dtype=int8)
+        array([0, 0, 1])
         >>> uniques
         Index(['a', 'c'], dtype='object')
         """

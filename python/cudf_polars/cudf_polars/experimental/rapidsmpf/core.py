@@ -15,11 +15,11 @@ from rapidsmpf.memory.buffer import MemoryType
 from rapidsmpf.memory.buffer_resource import BufferResource, LimitAvailableMemory
 from rapidsmpf.memory.pinned_memory_resource import PinnedMemoryResource
 from rapidsmpf.rmm_resource_adaptor import RmmResourceAdaptor
-from rapidsmpf.streaming.core.context import Context
-from rapidsmpf.streaming.core.leaf_node import pull_from_channel
-from rapidsmpf.streaming.core.node import (
-    run_streaming_pipeline,
+from rapidsmpf.streaming.core.actor import (
+    run_actor_network,
 )
+from rapidsmpf.streaming.core.context import Context
+from rapidsmpf.streaming.core.leaf_actor import pull_from_channel
 from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 
 import rmm
@@ -49,7 +49,7 @@ if TYPE_CHECKING:
     from collections.abc import MutableMapping
 
     from rapidsmpf.streaming.core.channel import Channel
-    from rapidsmpf.streaming.core.leaf_node import DeferredMessages
+    from rapidsmpf.streaming.core.leaf_actor import DeferredMessages
     from rapidsmpf.streaming.cudf.channel_metadata import ChannelMetadata
 
     import polars as pl
@@ -67,11 +67,12 @@ if TYPE_CHECKING:
         GenState,
         SubNetGenerator,
     )
+    from cudf_polars.utils.config import StreamingExecutor
 
 
 def evaluate_logical_plan(
     ir: IR,
-    config_options: ConfigOptions,
+    config_options: ConfigOptions[StreamingExecutor],
     *,
     collect_metadata: bool = False,
 ) -> tuple[pl.DataFrame | None, list[ChannelMetadata] | None]:
@@ -92,7 +93,6 @@ def evaluate_logical_plan(
     The output DataFrame and metadata collector.
     For rrun execution, non-root ranks return (None, None).
     """
-    assert config_options.executor.name == "streaming", "Executor must be streaming"
     assert config_options.executor.runtime == "rapidsmpf", "Runtime must be rapidsmpf"
 
     from cudf_polars.experimental.rapidsmpf.bootstrap_ctx import (
@@ -106,10 +106,10 @@ def evaluate_logical_plan(
     ir, partition_info, stats = lower_ir_graph(ir, config_options)
 
     # Log the query plan structure for tracing (no-op if tracing disabled)
-    log_query_plan(ir)
+    log_query_plan(ir, config_options)
 
     # Reserve shuffle IDs for the entire pipeline execution
-    with ReserveOpIDs(ir) as collective_id_map:
+    with ReserveOpIDs(ir, config_options) as collective_id_map:
         # Build and execute the streaming pipeline.
         # This must be done on all worker processes
         # for cluster == "distributed" or cluster == "rrun".
@@ -190,7 +190,7 @@ def evaluate_logical_plan(
 def evaluate_pipeline(
     ir: IR,
     partition_info: MutableMapping[IR, PartitionInfo],
-    config_options: ConfigOptions,
+    config_options: ConfigOptions[StreamingExecutor],
     stats: StatsCollector,
     collective_id_map: dict[IR, list[int]],
     rmpf_context: Context | None = None,
@@ -221,7 +221,6 @@ def evaluate_pipeline(
     -------
     The output DataFrame and metadata collector.
     """
-    assert config_options.executor.name == "streaming", "Executor must be streaming"
     assert config_options.executor.runtime == "rapidsmpf", "Runtime must be rapidsmpf"
 
     _initial_mr: Any = None
@@ -303,8 +302,11 @@ def evaluate_pipeline(
         )
 
         # Run the network
-        executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="cpse")
-        run_streaming_pipeline(nodes=nodes, py_executor=executor)
+        executor = ThreadPoolExecutor(
+            max_workers=config_options.executor.rapidsmpf_py_executor_max_workers,
+            thread_name_prefix="cpse",
+        )
+        run_actor_network(actors=nodes, py_executor=executor)
 
         # Extract/return the concatenated result.
         # Keep chunks alive until after concatenation to prevent
@@ -358,7 +360,7 @@ def evaluate_pipeline(
 
 def lower_ir_graph(
     ir: IR,
-    config_options: ConfigOptions,
+    config_options: ConfigOptions[StreamingExecutor],
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo], StatsCollector]:
     """
     Rewrite an IR graph and extract partitioning information.
@@ -517,7 +519,6 @@ def generate_network(
     fanout_nodes = determine_fanout_nodes(ir, partition_info, ir_dep_count)
 
     # Get max_io_threads from config (default: 2)
-    assert config_options.executor.name == "streaming", "Executor must be streaming"
     max_io_threads_global = config_options.executor.max_io_threads
     max_io_threads_local = max(1, max_io_threads_global // max(1, num_io_nodes))
 
@@ -553,7 +554,7 @@ def generate_network(
     # Add final node to pull from the output data channel
     output_node, output = pull_from_channel(context, ch_in=ch_final_data)
 
-    # Flatten the nodes dictionary into a list for run_streaming_pipeline
+    # Flatten the nodes dictionary into a list for run_actor_network
     nodes: list[Any] = [node for node_list in nodes_dict.values() for node in node_list]
     nodes.extend([drain_node, output_node])
 

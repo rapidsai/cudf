@@ -9,6 +9,10 @@ import dataclasses
 import math
 from typing import TYPE_CHECKING, Any
 
+from rapidsmpf.memory.memory_reservation import opaque_memory_usage
+from rapidsmpf.streaming.core.memory_reserve_or_wait import (
+    reserve_memory,
+)
 from rapidsmpf.streaming.core.message import Message
 from rapidsmpf.streaming.cudf.channel_metadata import ChannelMetadata
 from rapidsmpf.streaming.cudf.table_chunk import TableChunk
@@ -31,15 +35,15 @@ from cudf_polars.experimental.base import (
 from cudf_polars.experimental.io import SplitScan, scan_partition_plan
 from cudf_polars.experimental.rapidsmpf.dispatch import generate_ir_sub_network
 from cudf_polars.experimental.rapidsmpf.nodes import (
-    define_py_node,
+    define_actor,
     metadata_feeder_node,
     shutdown_on_error,
 )
 from cudf_polars.experimental.rapidsmpf.utils import (
     ChannelManager,
-    opaque_reservation,
     send_metadata,
 )
+from cudf_polars.experimental.utils import _dynamic_planning_on
 
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
@@ -116,9 +120,6 @@ def lower_dataframescan_rapidsmpf(
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
     """Lower a DataFrameScan node for the RapidsMPF streaming runtime."""
     config_options = rec.state["config_options"]
-    assert config_options.executor.name == "streaming", (
-        "'in-memory' executor not supported in 'lower_ir_node_rapidsmpf'"
-    )
 
     # NOTE: We calculate the expected partition count
     # to help trigger fallback warnings in lower_ir_graph.
@@ -132,7 +133,7 @@ def lower_dataframescan_rapidsmpf(
     return ir, {ir: PartitionInfo(count=count)}
 
 
-@define_py_node()
+@define_actor()
 async def dataframescan_node(
     context: Context,
     ir: DataFrameScan,
@@ -256,9 +257,6 @@ def _(
     ir: DataFrameScan, rec: SubNetGenerator
 ) -> tuple[dict[IR, list[Any]], dict[IR, ChannelManager]]:
     config_options = rec.state["config_options"]
-    assert config_options.executor.name == "streaming", (
-        "'in-memory' executor not supported in 'generate_ir_sub_network'"
-    )
     rows_per_partition = config_options.executor.max_rows_per_partition
     num_producers = rec.state["max_io_threads"]
     # Use target_partition_size as the estimated chunk size
@@ -345,28 +343,32 @@ async def read_chunk(
     tracer
         The actor tracer for collecting runtime statistics.
     """
-    with opaque_reservation(context, estimated_chunk_bytes):
+    with opaque_memory_usage(
+        await reserve_memory(
+            context, size=estimated_chunk_bytes, net_memory_delta=estimated_chunk_bytes
+        )
+    ):
         df = await asyncio.to_thread(
             scan.do_evaluate,
             *scan._non_child_args,
             context=ir_context,
         )
-        if tracer is not None:
-            tracer.add_chunk(table=df.table)
-        await ch_out.send(
-            context,
-            Message(
-                seq_num,
-                TableChunk.from_pylibcudf_table(
-                    df.table,
-                    df.stream,
-                    exclusive_view=True,
-                ),
+    if tracer is not None:
+        tracer.add_chunk(table=df.table)
+    await ch_out.send(
+        context,
+        Message(
+            seq_num,
+            TableChunk.from_pylibcudf_table(
+                df.table,
+                df.stream,
+                exclusive_view=True,
             ),
-        )
+        ),
+    )
 
 
-@define_py_node()
+@define_actor()
 async def scan_node(
     context: Context,
     ir: Scan,
@@ -642,10 +644,7 @@ def _(
     ir: Scan, rec: SubNetGenerator
 ) -> tuple[dict[IR, list[Any]], dict[IR, ChannelManager]]:
     config_options = rec.state["config_options"]
-    executor = rec.state["config_options"].executor
-    assert executor.name == "streaming", (
-        "'in-memory' executor not supported in 'generate_ir_sub_network'"
-    )
+    executor = config_options.executor
     parquet_options = config_options.parquet_options
     partition_info = rec.state["partition_info"][ir]
     num_producers = rec.state["max_io_threads"]
@@ -667,7 +666,7 @@ def _(
     native_node: Any = None
     if (
         parquet_options.use_rapidsmpf_native
-        and partition_info.count > 1
+        and (partition_info.count > 1 or _dynamic_planning_on(config_options))
         and ir.typ == "parquet"
         and ir.row_index is None
         and ir.include_file_paths is None

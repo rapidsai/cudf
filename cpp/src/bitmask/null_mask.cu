@@ -227,8 +227,8 @@ void set_null_masks(cudf::host_span<bitmask_type*> bitmasks,
     cudf::util::div_rounding_up_safe<size_t>(cumulative_null_mask_words, num_bitmasks);
 
   // Create device vectors from host spans
-  auto const mr     = rmm::mr::get_current_device_resource_ref();
-  auto destinations = cudf::detail::make_device_uvector_async<bitmask_type*>(bitmasks, stream, mr);
+  auto const mr           = rmm::mr::get_current_device_resource_ref();
+  auto destinations       = cudf::detail::make_device_uvector_async(bitmasks, stream, mr);
   auto const d_begin_bits = cudf::detail::make_device_uvector_async(begin_bits, stream, mr);
   auto const d_end_bits   = cudf::detail::make_device_uvector_async(end_bits, stream, mr);
   auto const d_valids     = cudf::detail::make_device_uvector_async(valids, stream, mr);
@@ -818,6 +818,16 @@ std::pair<rmm::device_buffer, size_type> bitmask_and(table_view const& view,
 {
   CUDF_FUNC_RANGE();
   return detail::bitmask_and(view, stream, mr);
+}
+
+std::pair<rmm::device_buffer, size_type> bitmask_and(host_span<bitmask_type const* const> masks,
+                                                     host_span<size_type const> begin_bits,
+                                                     size_type mask_size,
+                                                     rmm::cuda_stream_view stream,
+                                                     rmm::device_async_resource_ref mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::bitmask_and(masks, begin_bits, mask_size, stream, mr);
 }
 
 std::pair<std::vector<std::unique_ptr<rmm::device_buffer>>, std::vector<size_type>>

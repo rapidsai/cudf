@@ -40,6 +40,7 @@ from cudf_polars.experimental.base import (
 )
 from cudf_polars.experimental.dispatch import generate_ir_tasks, lower_ir_node
 from cudf_polars.utils.cuda_stream import get_cuda_stream
+from cudf_polars.utils.versions import POLARS_VERSION_LT_137
 
 if TYPE_CHECKING:
     from collections.abc import Hashable, MutableMapping
@@ -63,10 +64,6 @@ def _(
     ir: DataFrameScan, rec: LowerIRTransformer
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
     config_options = rec.state["config_options"]
-
-    assert config_options.executor.name == "streaming", (
-        "'in-memory' executor not supported in 'generate_ir_tasks'"
-    )
 
     # RapidsMPF runtime: Use rapidsmpf-specific lowering
     if (
@@ -99,15 +96,11 @@ def _(
 
 
 def scan_partition_plan(
-    ir: Scan, stats: StatsCollector, config_options: ConfigOptions
+    ir: Scan, stats: StatsCollector, config_options: ConfigOptions[StreamingExecutor]
 ) -> IOPartitionPlan:
     """Extract the partitioning plan of a Scan operation."""
     if ir.typ == "parquet":
         # TODO: Use system info to set default blocksize
-        assert config_options.executor.name == "streaming", (
-            "'in-memory' executor not supported in 'generate_ir_tasks'"
-        )
-
         blocksize: int = config_options.executor.target_partition_size
         column_stats = stats.column_stats.get(ir, {})
         column_sizes: list[int] = []
@@ -158,6 +151,7 @@ class SplitScan(IR):
         "total_splits",
         "parquet_options",
     )
+    _n_non_child_args = 13
     base_scan: Scan
     """Scan operation this node is based on."""
     split_index: int
@@ -182,7 +176,17 @@ class SplitScan(IR):
         self._non_child_args = (
             split_index,
             total_splits,
-            *base_scan._non_child_args,
+            base_scan.schema,
+            base_scan.typ,
+            base_scan.reader_options,
+            base_scan.paths,
+            base_scan.with_columns,
+            base_scan.skip_rows,
+            base_scan.n_rows,
+            base_scan.row_index,
+            base_scan.include_file_paths,
+            base_scan.predicate,
+            base_scan.parquet_options,
         )
         self.parquet_options = parquet_options
         self.children = ()
@@ -369,6 +373,7 @@ class StreamingSink(IR):
 
     __slots__ = ("executor_options", "sink")
     _non_child = ("schema", "sink", "executor_options")
+    _n_non_child_args = 0
 
     sink: Sink
     executor_options: StreamingExecutor
@@ -383,6 +388,7 @@ class StreamingSink(IR):
         self.schema = schema
         self.sink = sink
         self.executor_options = executor_options
+        self._non_child_args = ()
         self.children = (df,)
 
     def get_hashable(self) -> Hashable:
@@ -393,7 +399,7 @@ class StreamingSink(IR):
 @lower_ir_node.register(Sink)
 def _(
     ir: Sink, rec: LowerIRTransformer
-) -> tuple[StreamingSink, MutableMapping[IR, PartitionInfo]]:
+) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
     child, partition_info = rec(ir.children[0])
     executor_options = rec.state["config_options"].executor
 
@@ -407,6 +413,16 @@ def _(
             "Writing to an existing path is not supported when sinking "
             "to a directory. If you are using the 'distributed' scheduler, "
             "please remove the target directory before calling 'collect'. "
+        )
+
+    # RapidsMPF runtime: StreamingSink not supported, fall back to single partition
+    if (
+        executor_options.runtime == "rapidsmpf"
+    ):  # pragma: no cover; Requires rapidsmpf runtime
+        from cudf_polars.experimental.utils import _lower_ir_fallback
+
+        return _lower_ir_fallback(
+            ir, rec, msg=f"Class {type(ir)} does not support multiple partitions."
         )
 
     new_node = StreamingSink(
@@ -505,7 +521,7 @@ def _sink_to_file(
             # Path.open returns IO[Any] but SinkInfo needs more specific IO types
             sink = plc.io.types.SinkInfo([f])  # type: ignore[arg-type]
             Sink._write_csv(sink, use_options, df)
-    elif kind == "Json":
+    elif kind == "Json" if POLARS_VERSION_LT_137 else "NDJson":
         mode = "wb" if writer_state is None else "ab"
         with Path.open(Path(path), mode) as f:
             # Path.open returns IO[Any] but SinkInfo needs more specific IO types
@@ -588,30 +604,6 @@ def _directory_sink_graph(
     }
     graph[setup_name] = (_prepare_sink_directory, sink.path)
     return graph
-
-
-@lower_ir_node.register(StreamingSink)
-def _(
-    ir: StreamingSink, rec: LowerIRTransformer
-) -> tuple[
-    IR, MutableMapping[IR, PartitionInfo]
-]:  # pragma: no cover; Requires rapidsmpf runtime
-    from cudf_polars.experimental.parallel import _lower_ir_pwise
-    from cudf_polars.experimental.utils import _lower_ir_fallback
-
-    config_options = rec.state["config_options"]
-
-    # RapidsMPF runtime: StreamingSink not supported, fall back to single partition
-    if (
-        config_options.executor.name == "streaming"
-        and config_options.executor.runtime == "rapidsmpf"
-    ):
-        return _lower_ir_fallback(
-            ir, rec, msg=f"Class {type(ir)} does not support multiple partitions."
-        )
-
-    # Default: partition-wise lowering
-    return _lower_ir_pwise(ir, rec)
 
 
 @generate_ir_tasks.register(StreamingSink)
@@ -822,7 +814,7 @@ class ParquetSourceInfo(DataSourceInfo):
         ):
             self._real_rg_size[name] = column.device_buffer_size() // n_sampled
             if name in key_columns:
-                row_group_unique_count = plc.stream_compaction.distinct_count(
+                row_group_unique_count = plc.reduce.distinct_count(
                     column,
                     plc.types.NullPolicy.INCLUDE,
                     plc.types.NanPolicy.NAN_IS_NULL,
@@ -908,13 +900,10 @@ def _sample_pq_stats(
 
 def _extract_scan_stats(
     ir: Scan,
-    config_options: ConfigOptions,
+    config_options: ConfigOptions[StreamingExecutor],
 ) -> dict[str, ColumnStats]:
     """Extract base ColumnStats for a Scan node."""
     if ir.typ == "parquet":
-        assert config_options.executor.name == "streaming", (
-            "Only streaming executor is supported in _extract_scan_stats"
-        )
         table_source_info = _sample_pq_stats(
             tuple(ir.paths),
             config_options.parquet_options.max_footer_samples,
@@ -990,12 +979,9 @@ class DataFrameSourceInfo(DataSourceInfo):
 
 
 def _extract_dataframescan_stats(
-    ir: DataFrameScan, config_options: ConfigOptions
+    ir: DataFrameScan, config_options: ConfigOptions[StreamingExecutor]
 ) -> dict[str, ColumnStats]:
     """Extract base ColumnStats for a DataFrameScan node."""
-    assert config_options.executor.name == "streaming", (
-        "Only streaming executor is supported in _extract_dataframescan_stats"
-    )
     table_source_info = DataFrameSourceInfo(
         pl.DataFrame._from_pydf(ir.df),
         config_options.executor.stats_planning,

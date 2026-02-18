@@ -8,11 +8,15 @@ import asyncio
 from typing import TYPE_CHECKING, Any, cast
 
 from rapidsmpf.memory.buffer import MemoryType
+from rapidsmpf.memory.memory_reservation import opaque_memory_usage
+from rapidsmpf.streaming.core.actor import define_actor
 from rapidsmpf.streaming.core.message import Message
-from rapidsmpf.streaming.core.node import define_py_node
 from rapidsmpf.streaming.core.spillable_messages import SpillableMessages
 from rapidsmpf.streaming.cudf.channel_metadata import ChannelMetadata
-from rapidsmpf.streaming.cudf.table_chunk import TableChunk
+from rapidsmpf.streaming.cudf.table_chunk import (
+    TableChunk,
+    make_table_chunks_available_or_wait,
+)
 
 from cudf_polars.containers import DataFrame
 from cudf_polars.dsl.ir import IR, Cache, Empty, Filter, Projection
@@ -23,7 +27,6 @@ from cudf_polars.experimental.rapidsmpf.utils import (
     ChannelManager,
     empty_table_chunk,
     make_spill_function,
-    opaque_reservation,
     process_children,
     recv_metadata,
     remap_partitioning,
@@ -39,7 +42,7 @@ if TYPE_CHECKING:
     from cudf_polars.experimental.rapidsmpf.dispatch import SubNetGenerator
 
 
-@define_py_node()
+@define_actor()
 async def default_node_single(
     context: Context,
     ir: IR,
@@ -102,18 +105,21 @@ async def default_node_single(
                 else:
                     # Make sure we have an empty chunk in case do_evaluate
                     # always produces rows (e.g. aggregation)
-                    stream = ir_context.get_cuda_stream()
-                    chunk = empty_table_chunk(ir.children[0], context, stream)
+                    chunk = empty_table_chunk(
+                        ir.children[0], context, ir_context.get_cuda_stream()
+                    )
             else:
                 received_any = True
-                chunk = TableChunk.from_message(msg).make_available_and_spill(
-                    context.br(), allow_overbooking=True
-                )
+                chunk = TableChunk.from_message(msg)
                 seq_num = msg.sequence_number
-            del msg
 
-            input_bytes = chunk.data_alloc_size(MemoryType.DEVICE)
-            with opaque_reservation(context, input_bytes):
+            chunk, extra = await make_table_chunks_available_or_wait(
+                context,
+                chunk,
+                reserve_extra=chunk.data_alloc_size(),
+                net_memory_delta=0,
+            )
+            with opaque_memory_usage(extra):
                 df = await asyncio.to_thread(
                     ir.do_evaluate,
                     *ir._non_child_args,
@@ -125,23 +131,23 @@ async def default_node_single(
                     ),
                     context=ir_context,
                 )
-                if tracer is not None:
-                    tracer.add_chunk(table=df.table)
-                await ch_out.send(
-                    context,
-                    Message(
-                        seq_num,
-                        TableChunk.from_pylibcudf_table(
-                            df.table, chunk.stream, exclusive_view=True
-                        ),
+            if tracer is not None:
+                tracer.add_chunk(table=df.table)
+            await ch_out.send(
+                context,
+                Message(
+                    seq_num,
+                    TableChunk.from_pylibcudf_table(
+                        df.table, chunk.stream, exclusive_view=True
                     ),
-                )
-                del df, chunk
+                ),
+            )
+            del df, chunk
 
         await ch_out.drain(context)
 
 
-@define_py_node()
+@define_actor()
 async def default_node_multi(
     context: Context,
     ir: IR,
@@ -234,10 +240,15 @@ async def default_node_multi(
                     ready_chunks[ch_idx] = empty_table_chunk(child, context, stream)
 
             # Ensure all table chunks are unspilled and available.
-            ready_chunks = [
-                chunk.make_available_and_spill(context.br(), allow_overbooking=True)
-                for chunk in cast(list[TableChunk], ready_chunks)
-            ]
+            ready_chunks, extra = await make_table_chunks_available_or_wait(
+                context,
+                ready_chunks,
+                reserve_extra=sum(
+                    chunk.data_alloc_size()
+                    for chunk in cast(list[TableChunk], ready_chunks)
+                ),
+                net_memory_delta=0,
+            )
             dfs = [
                 DataFrame.from_table(
                     chunk.table_view(),  # type: ignore[union-attr]
@@ -247,40 +258,36 @@ async def default_node_multi(
                 )
                 for chunk, child in zip(ready_chunks, ir.children, strict=True)
             ]
-
-            input_bytes = sum(
-                chunk.data_alloc_size(MemoryType.DEVICE)
-                for chunk in cast(list[TableChunk], ready_chunks)
-            )
-            with opaque_reservation(context, input_bytes):
+            with opaque_memory_usage(extra):
                 df = await asyncio.to_thread(
                     ir.do_evaluate,
                     *ir._non_child_args,
                     *dfs,
                     context=ir_context,
                 )
-                if tracer is not None:
-                    tracer.add_chunk(table=df.table)
-                await ch_out.send(
-                    context,
-                    Message(
-                        seq_num,
-                        TableChunk.from_pylibcudf_table(
-                            df.table,
-                            df.stream,
-                            exclusive_view=True,
-                        ),
+                del dfs
+            if tracer is not None:
+                tracer.add_chunk(table=df.table)
+            await ch_out.send(
+                context,
+                Message(
+                    seq_num,
+                    TableChunk.from_pylibcudf_table(
+                        df.table,
+                        df.stream,
+                        exclusive_view=True,
                     ),
-                )
-                seq_num += 1
-                del df, dfs
+                ),
+            )
+            seq_num += 1
+            del df
 
         # Drain the output channel
         del ready_chunks
         await ch_out.drain(context)
 
 
-@define_py_node()
+@define_actor()
 async def fanout_node_bounded(
     context: Context,
     ch_in: Channel[TableChunk],
@@ -331,7 +338,7 @@ async def fanout_node_bounded(
         await asyncio.gather(*(ch.drain(context) for ch in chs_out))
 
 
-@define_py_node()
+@define_actor()
 async def fanout_node_unbounded(
     context: Context,
     ch_in: Channel[TableChunk],
@@ -574,7 +581,7 @@ def _(
     return nodes, channels
 
 
-@define_py_node()
+@define_actor()
 async def empty_node(
     context: Context,
     ir: Empty,
@@ -675,7 +682,7 @@ def generate_ir_sub_network_wrapper(
     return nodes, channels
 
 
-@define_py_node()
+@define_actor()
 async def metadata_feeder_node(
     context: Context,
     ir: IR,
@@ -710,7 +717,7 @@ async def metadata_feeder_node(
         await ch_out.drain(context)
 
 
-@define_py_node()
+@define_actor()
 async def metadata_drain_node(
     context: Context,
     ir: IR,

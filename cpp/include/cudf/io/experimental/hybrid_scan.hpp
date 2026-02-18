@@ -68,20 +68,24 @@ enum class use_data_page_mask : bool {
  * @code{.cpp}
  * // Example filter expression `A < 100`
  * auto filter_expression = cudf::ast::operation(cudf::ast::ast_operator::LESS,
- *                            column_name_reference{"A"}, literal{100});
+ *                                               column_name_reference{"A"},
+ *                                               literal{100});
  *
  * using namespace cudf::io;
  *
- * // Parquet reader options with empty source info
- * auto options = parquet_reader_options::builder(source_info(nullptr, 0))
- *                  .filter(filter_expression);
+ * // Input datasource
+ * auto const datasource_ptr = datasource::create(parquet_filepath);
+ * auto datasource           = std::ref(*datasource_ptr);
  *
- *  // Fetch parquet file footer bytes from the file
- *  cudf::host_span<uint8_t const> footer_bytes = fetch_parquet_footer_bytes();
+ * // Parquet reader options
+ * auto options = parquet_reader_options::builder().filter(filter_expression).build();
+ *
+ * // Fetch parquet file footer bytes from the file
+ * auto const footer_buffer = parquet::fetch_footer_to_host(datasource);
  *
  * // Create the reader
- *  auto reader =
- *    std::make_unique<parquet::experimental::hybrid_scan_reader>(footer_bytes, options);
+ * auto reader =
+ *   std::make_unique<parquet::experimental::hybrid_scan_reader>(*footer_buffer, options);
  * @endcode
  *
  * Metadata handling (OPTIONAL): Get a materialized parquet file footer metadata struct
@@ -95,18 +99,17 @@ enum class use_data_page_mask : bool {
  * auto nrows = std::accumulate(metadata.row_groups.begin(),
  *                              metadata.row_groups.end(),
  *                              size_type{0},
- *                              [](auto sum, auto const& rg) {
- *                                return sum + rg.num_rows;
- *                              });
+ *                              [](auto sum, auto const& rg) { return sum + rg.num_rows; });
  *
  * // Get the page index byte range from the reader
  * auto page_index_byte_range = reader->page_index_byte_range();
  *
  * // Fetch the page index bytes from the parquet file
- * cudf::host_span<uint8_t const> page_index_bytes = fetch_parquet_bytes(page_index_byte_range);
+ * auto const page_index_buffer =
+ *   parquet::fetch_page_index_to_host(datasource, page_index_byte_range);
  *
  * // Set up the page index
- * reader->setup_page_index(page_index_bytes);
+ * reader->setup_page_index(*page_index_buffer);
  *
  * // A new `FileMetaData` struct with populated page index structs may be obtained
  * // using `parquet_metadata()` at this point. Page index may be set up at any time.
@@ -127,8 +130,8 @@ enum class use_data_page_mask : bool {
  * auto current_row_group_indices = cudf::host_span<size_type>(all_row_group_indices);
  *
  * // Optional: Prune row group indices to the ones that start within the byte range
- * auto byte_range_filtered_row_group_indices = reader->filter_row_groups_with_byte_range(
- *   current_row_group_indices, options);
+ * auto byte_range_filtered_row_group_indices =
+ *   reader->filter_row_groups_with_byte_range(current_row_group_indices, options);
  *
  * // Update current row group indices to byte range filtered row group indices
  * current_row_group_indices = byte_range_filtered_row_group_indices;
@@ -145,20 +148,20 @@ enum class use_data_page_mask : bool {
  *   reader->secondary_filters_byte_ranges(current_row_group_indices, options);
  *
  * // Optional: Prune row groups if we have valid dictionary pages
- * auto dictionary_page_filtered_row_group_indices = std::vector<size_type>{};
+ * auto dict_filtered_row_group_indices = std::vector<size_type>{};
  *
  * if (dict_page_byte_ranges.size()) {
  *   // Fetch dictionary page byte ranges into device buffers and create spans
- *   std::vector<rmm::device_buffer> dictionary_page_buffers =
- *     fetch_device_buffers(dict_page_byte_ranges, stream, mr);
- *   auto dictionary_page_data = make_device_spans<uint8_t>(dictionary_page_buffers);
+ *   auto [dict_page_buffers, dict_page_data, dict_page_tasks] =
+ *     parquet::fetch_byte_ranges_to_device_async(datasource, dict_page_byte_ranges, stream, mr);
+ *   dict_page_tasks.get();
  *
  *   // Prune row groups using dictionaries
- *   dictionary_page_filtered_row_group_indices = reader->filter_row_groups_with_dictionary_pages(
- *     dictionary_page_data, current_row_group_indices, options, stream);
+ *   dict_filtered_row_group_indices = reader->filter_row_groups_with_dictionary_pages(
+ *     dict_page_data, current_row_group_indices, options, stream);
  *
  *   // Update current row group indices to dictionary page filtered row group indices
- *   current_row_group_indices = dictionary_page_filtered_row_group_indices;
+ *   current_row_group_indices = dict_filtered_row_group_indices;
  * }
  *
  * // Optional: Prune row groups if we have valid bloom filters
@@ -166,9 +169,9 @@ enum class use_data_page_mask : bool {
  *
  * if (bloom_filter_byte_ranges.size()) {
  *   // Fetch bloom filter byte ranges into device buffers and create spans
- *   std::vector<rmm::device_buffer> bloom_filter_buffers =
- *     fetch_device_buffers(bloom_filter_byte_ranges, stream, mr);
- *   auto bloom_filter_data = make_device_spans<uint8_t>(bloom_filter_buffers);
+ *   auto [bloom_filter_buffers, bloom_filter_data, bloom_filter_tasks] =
+ *     parquet::fetch_byte_ranges_to_device_async(datasource, bloom_filter_byte_ranges, stream, mr);
+ *   bloom_filter_tasks.get();
  *
  *   // Prune row groups using bloom filters
  *   bloom_filtered_row_group_indices = reader->filter_row_groups_with_bloom_filters(
@@ -191,20 +194,19 @@ enum class use_data_page_mask : bool {
  * auto page_index_byte_range = reader->page_index_byte_range();
  *
  * // If not already done, fetch the page index bytes from the parquet file
- * cudf::host_span<uint8_t const> page_index_bytes = fetch_parquet_bytes(page_index_byte_range);
+ * auto const page_index_buffer =
+ *   parquet::fetch_page_index_to_host(datasource, page_index_byte_range);
  *
- * // If not already done, Set up the page index now
- * reader->setup_page_index(page_index_bytes);
+ * // If not already done, set up the page index now
+ * reader->setup_page_index(*page_index_buffer);
  *
  * // Build a row mask column containing all `true` values
- * auto const num_rows = reader->total_rows_in_row_groups(current_row_group_indices);
- * auto row_mask = cudf::make_numeric_column(
- *     cudf::data_type{cudf::type_id::BOOL8}, num_rows, rmm::device_buffer{}, 0, stream, mr);
+ * auto row_mask = reader->build_all_true_row_mask(current_row_group_indices, stream, mr);
  *
  * // Alternatively, build a row mask column indicating only the rows that survive the page-level
- * statistics in the page index
- * row_mask = reader->build_row_mask_with_page_index_stats(current_row_group_indices, options,
- *                                                         stream, mr);
+ * // statistics in the page index
+ * auto row_mask = reader->build_row_mask_with_page_index_stats(
+ *   current_row_group_indices, options, stream, mr);
  * @endcode
  *
  * Materialize filter columns: Once we are done with pruning row groups and constructing the row
@@ -220,20 +222,20 @@ enum class use_data_page_mask : bool {
  * with corresponding device spans.
  * @code{.cpp}
  * // Get byte ranges of column chunk byte ranges from the reader
- * auto const filter_column_chunk_byte_ranges =
+ * auto const filter_col_byte_ranges =
  *   reader->filter_column_chunks_byte_ranges(current_row_group_indices, options);
  *
  * // Fetch column chunk data into device buffers and create spans
- * std::vector<rmm::device_buffer> filter_column_chunk_buffers =
- *   fetch_device_buffers(filter_column_chunk_byte_ranges, stream, mr);
- * auto filter_column_chunk_data = make_device_spans<uint8_t>(filter_column_chunk_buffers);
+ * auto [filter_col_buffers, filter_col_data, filter_col_tasks] =
+ *   parquet::fetch_byte_ranges_to_device_async(datasource, filter_col_byte_ranges, stream, mr);
+ * filter_col_tasks.get();
  *
  * // Materialize the table with only the filter columns
  * auto [filter_table, filter_metadata] =
  *   reader->materialize_filter_columns(current_row_group_indices,
- *                                      filter_column_chunk_data,
+ *                                      filter_col_data,
  *                                      row_mask->mutable_view(),
- *                                      use_data_page_mask::YES/NO,
+ *                                      use_data_page_mask::YES,  // or NO
  *                                      options,
  *                                      stream);
  * @endcode
@@ -247,20 +249,20 @@ enum class use_data_page_mask : bool {
  * device buffers with corresponding device spans.
  * @code{.cpp}
  * // Get column chunk byte ranges from the reader
- * auto const payload_column_chunk_byte_ranges =
+ * auto const payload_col_byte_ranges =
  *   reader->payload_column_chunks_byte_ranges(current_row_group_indices, options);
  *
  * // Fetch column chunk data into device buffers and create spans
- * std::vector<rmm::device_buffer> payload_column_chunk_buffers =
- *   fetch_device_buffers(payload_column_chunk_byte_ranges, stream, mr);
- * auto payload_column_chunk_data = make_device_spans<uint8_t>(payload_column_chunk_buffers);
+ * auto [payload_col_buffers, payload_col_data, payload_col_tasks] =
+ *   parquet::fetch_byte_ranges_to_device_async(datasource, payload_col_byte_ranges, stream, mr);
+ * payload_col_tasks.get();
  *
  * // Materialize the table with only the payload columns
  * auto [payload_table, payload_metadata] =
  *   reader->materialize_payload_columns(current_row_group_indices,
- *                                       payload_column_chunk_data,
+ *                                       payload_col_data,
  *                                       row_mask->view(),
- *                                       use_data_page_mask::YES/NO,
+ *                                       use_data_page_mask::YES, // or NO
  *                                       options,
  *                                       stream);
  * @endcode
@@ -629,6 +631,36 @@ class hybrid_scan_reader {
    */
   [[nodiscard]] table_with_metadata materialize_payload_columns_chunk(
     cudf::column_view const& row_mask) const;
+
+  /**
+   * @brief Setup chunking information for all (or selected) columns and preprocess the input data
+   * pages
+   *
+   * @param chunk_read_limit Limit on total number of bytes to be returned per table chunk. `0` if
+   * there is no limit
+   * @param pass_read_limit Limit on the memory used for reading and decompressing data. `0` if
+   * there is no limit
+   * @param row_group_indices Input row groups indices
+   * @param column_chunk_data Device spans of column chunk data of all columns
+   * @param options Parquet reader options
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource used to allocate the device memory for the output table chunks
+   */
+  void setup_chunking_for_all_columns(
+    std::size_t chunk_read_limit,
+    std::size_t pass_read_limit,
+    cudf::host_span<size_type const> row_group_indices,
+    cudf::host_span<cudf::device_span<uint8_t const> const> column_chunk_data,
+    parquet_reader_options const& options,
+    rmm::cuda_stream_view stream,
+    rmm::device_async_resource_ref mr) const;
+
+  /**
+   * @brief Materializes all (or selected) columns and returns the final output table
+   *
+   * @return Table of materialized all (or selected) columns and metadata
+   */
+  [[nodiscard]] table_with_metadata materialize_all_columns_chunk() const;
 
   /**
    * @brief Check if there is any parquet data left to read for the current setup

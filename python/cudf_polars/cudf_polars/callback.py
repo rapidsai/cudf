@@ -281,7 +281,7 @@ def _callback(
                 raise NotImplementedError(msg)
 
             return evaluate_streaming(ir, config_options)
-        assert_never(f"Unknown executor '{config_options.executor}'")
+        assert_never(config_options.executor)
 
 
 def execute_with_cudf(
