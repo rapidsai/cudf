@@ -13,7 +13,7 @@ _PARAMS_FILE = Path(__file__).parent / "parameter_substitutions.json"
 _PARAMS_CACHE = None
 
 
-def load_parameters(scale_factor: int, query_id: int) -> dict[str, Any] | None:
+def load_parameters(scale_factor: int, query_id: int) -> dict[str, Any]:
     """
     Load parameters for a specific query and scale factor.
 
@@ -26,8 +26,13 @@ def load_parameters(scale_factor: int, query_id: int) -> dict[str, Any] | None:
 
     Returns
     -------
-    dict or None
-        Dictionary of parameter names to values, or None if query has no parameters
+    dict
+        Dictionary of parameter names to values
+
+    Raises
+    ------
+    ValueError
+        If parameters are not found for the given scale factor or query ID
     """
     global _PARAMS_CACHE  # noqa: PLW0603
 
@@ -35,10 +40,17 @@ def load_parameters(scale_factor: int, query_id: int) -> dict[str, Any] | None:
         with _PARAMS_FILE.open() as f:
             _PARAMS_CACHE = json.load(f)
 
-    scale_params = _PARAMS_CACHE["scale_factors"].get(str(scale_factor), {})
-    params = scale_params.get(str(query_id))
+    scale_params = _PARAMS_CACHE["scale_factors"].get(str(scale_factor))
+    if scale_params is None:
+        msg = f"No parameters found for scale factor {scale_factor}"
+        raise ValueError(msg)
 
-    return params if params else None
+    params = scale_params.get(str(query_id))
+    if params is None:
+        msg = f"No parameters found for query {query_id} at scale factor {scale_factor}"
+        raise ValueError(msg)
+
+    return params
 
 
 __all__ = ["load_parameters"]

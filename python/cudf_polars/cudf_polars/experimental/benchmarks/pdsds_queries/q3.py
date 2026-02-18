@@ -19,8 +19,6 @@ if TYPE_CHECKING:
 def duckdb_impl(run_config: RunConfig) -> str:
     """Query 3."""
     params = load_parameters(int(run_config.scale_factor), query_id=3)
-    if params is None:
-        raise ValueError("Query 3 requires parameters but none were found")
 
     aggc = params["aggc"]
     month = params["month"]
@@ -51,8 +49,6 @@ def duckdb_impl(run_config: RunConfig) -> str:
 def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     """Query 3."""
     params = load_parameters(int(run_config.scale_factor), query_id=3)
-    if params is None:
-        raise ValueError("Query 3 requires parameters but none were found")
 
     aggc = params["aggc"]
     month = params["month"]
