@@ -25,7 +25,7 @@ from cudf_polars.experimental.rapidsmpf.dispatch import (
 )
 from cudf_polars.experimental.rapidsmpf.nodes import (
     default_node_multi,
-    define_py_node,
+    define_actor,
     shutdown_on_error,
 )
 from cudf_polars.experimental.rapidsmpf.utils import (
@@ -48,7 +48,7 @@ if TYPE_CHECKING:
     from cudf_polars.experimental.rapidsmpf.core import SubNetGenerator
 
 
-@define_py_node()
+@define_actor()
 async def broadcast_join_node(
     context: Context,
     ir: Join,
