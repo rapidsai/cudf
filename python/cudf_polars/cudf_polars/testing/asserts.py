@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal, Protocol
+from typing import TYPE_CHECKING, Any, Literal
 
 import polars as pl
 from polars import GPUEngine
@@ -35,22 +35,6 @@ DEFAULT_CLUSTER = "single"
 DEFAULT_BLOCKSIZE_MODE: Literal["small", "default"] = "default"
 
 
-class AssertFrameEqualLike(Protocol):
-    def __call__(
-        self,
-        left: pl.DataFrame,
-        right: pl.DataFrame,
-        *,
-        check_row_order: bool = True,
-        check_column_order: bool = True,
-        check_dtypes: bool = True,
-        check_exact: bool = False,
-        rel_tol: float = 1e-5,
-        abs_tol: float = 1e-8,
-        categorical_as_str: bool = False,
-    ) -> None: ...
-
-
 def assert_gpu_result_equal(
     lazydf: pl.LazyFrame,
     *,
@@ -67,7 +51,6 @@ def assert_gpu_result_equal(
     categorical_as_str: bool = False,
     executor: str | None = None,
     blocksize_mode: Literal["small", "default"] | None = None,
-    validate_with: AssertFrameEqualLike = assert_frame_equal,
 ) -> None:
     """
     Assert that collection of a lazyframe on GPU produces correct results.
@@ -114,9 +97,6 @@ def assert_gpu_result_equal(
         Set to "small" to configure small values for ``max_rows_per_partition``
         and ``target_partition_size``, which will typically cause many partitions
         to be created while executing the query.
-    validate_with
-        Function to use for the actual validation. This should be modeled after
-        ``polars.testing.asserts.assert_frame_equal``.
 
     Raises
     ------
@@ -152,12 +132,7 @@ def assert_gpu_result_equal(
     # the type checker errors with:
     # Argument 4 to "assert_frame_equal" has incompatible type "**dict[str, float]"; expected "bool"  [arg-type]
     # which seems to be a bug in the type checker / type annotations.
-    validate_with(
-        expect,
-        got,
-        **assert_kwargs_bool,
-        **tol_kwargs,  # type: ignore[arg-type]
-    )
+    assert_frame_equal(expect, got, **assert_kwargs_bool, **tol_kwargs)  # type: ignore[arg-type]
 
 
 def assert_ir_translation_raises(q: pl.LazyFrame, *exceptions: type[Exception]) -> None:

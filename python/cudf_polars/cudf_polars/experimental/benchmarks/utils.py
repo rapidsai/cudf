@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import argparse
 import dataclasses
-import functools
 import importlib
 import io
 import itertools
@@ -57,7 +56,6 @@ try:
     )
     from cudf_polars.experimental.explain import explain_query
     from cudf_polars.experimental.parallel import evaluate_streaming
-    from cudf_polars.testing.asserts import assert_gpu_result_equal
     from cudf_polars.utils.config import ConfigOptions
 
     CUDF_POLARS_AVAILABLE = True
@@ -1151,6 +1149,12 @@ def parse_args(
         help="Optional directory to write query results as parquet files.",
     )
     parser.add_argument(
+        "--output-expected-directory",
+        type=Path,
+        default=None,
+        help="Optional directory to write expected results as parquet files, when computed from CPU-polars or DuckDB.",
+    )
+    parser.add_argument(
         "--validate-directory",
         type=Path,
         default=None,
@@ -1215,6 +1219,9 @@ def parse_args(
 
         if missing_files:
             raise ValueError(f"Missing files for queries: {','.join(missing_files)}")
+
+    if parsed_args.output_expected_directory and not parsed_args.validate:
+        raise ValueError("Must specify --validate to use --output-expected-directory.")
 
     return parsed_args
 
@@ -1343,6 +1350,40 @@ def run_polars(
         else:
             casts = benchmark.EXPECTED_CASTS_FLOAT.get(q_id, [])
 
+        # First, compute / load the expected result if we're validating
+        # We assume the expected result is deterministic / the same for each iteration
+
+        expected: pl.DataFrame | None = None
+        if args.validate:
+            if args.baseline == "cpu":
+                expected = q.collect()
+            elif args.baseline == "duckdb":
+                duckdb_queries_cls = benchmark().duckdb_queries
+                get_ddb = getattr(duckdb_queries_cls, f"q{q_id}")
+
+                base_sql = get_ddb(run_config)
+                expected = execute_duckdb_query(
+                    base_sql,
+                    run_config.dataset_path,
+                    query_set=duckdb_queries_cls.name,
+                    suffix=run_config.suffix,
+                ).with_columns(*casts)
+            else:
+                raise ValueError(f"Invalid baseline: {args.baseline}")
+        elif args.validate_directory is not None:
+            expected = pl.read_parquet(validation_files[q_id]).with_columns(*casts)
+
+        else:
+            expected = None
+
+        if args.output_expected_directory is not None:
+            assert expected is not None, (
+                "Expected result must be computed before writing to disk."
+            )
+            expected_dir = Path(args.output_expected_directory)
+            expected_dir.mkdir(parents=True, exist_ok=True)
+            expected.write_parquet(expected_dir / f"q_{q_id:02d}.parquet")
+
         for i in range(args.iterations):
             if _HAS_STRUCTLOG and run_config.collect_traces:
                 setup_logging(q_id, i)
@@ -1369,56 +1410,20 @@ def run_polars(
             else:
                 shuffle_stats = None
 
-            validation_result = None
-            if args.validate and run_config.executor != "cpu":
-                # We support two modes here, depending on the baseline.
-                # The easy case is comparing against cpu polars:
-                if args.baseline == "cpu":
-                    try:
-                        assert_gpu_result_equal(
-                            q,
-                            engine=engine,
-                            executor=run_config.executor,
-                            check_exact=False,
-                            validate_with=functools.partial(
-                                assert_tpch_result_equal,
-                                sort_by=query_result.sort_by,
-                                limit=query_result.limit,
-                            ),
-                        )
-                        print(f"✅ Query {q_id} passed validation!")
-                    except Exception as e:
-                        validation_result = ValidationResult.from_error(e)
-                    else:
-                        validation_result = ValidationResult(
-                            status="Passed", message=None
-                        )
-                elif args.baseline == "duckdb":
-                    assert args.baseline == "duckdb"
-                    duckdb_queries_cls = benchmark().duckdb_queries
-
-                    get_ddb = getattr(duckdb_queries_cls, f"q{q_id}")
-
-                    base_sql = get_ddb(run_config)
-                    base_result = execute_duckdb_query(
-                        base_sql,
-                        run_config.dataset_path,
-                        query_set=duckdb_queries_cls.name,
-                        suffix=run_config.suffix,
-                    ).with_columns(*casts)
-
-                    validation_result = validate_result(
-                        result,
-                        base_result,
-                        query_result.sort_by,
-                        limit=query_result.limit,
-                        **get_validation_options(args),
-                    )
-                else:
-                    # unreachable
-                    raise ValueError(f"Invalid baseline: {args.baseline}")
-
             t1 = time.monotonic()
+            # Post-execution things to take care of:
+            # 1. Validation, if `--validate` or `--validate-directory` is set
+            if expected is not None:
+                validation_result = validate_result(
+                    result,
+                    expected,
+                    query_result.sort_by,
+                    limit=query_result.limit,
+                    **get_validation_options(args),
+                )
+            else:
+                validation_result = None
+
             record = Record(
                 query=q_id,
                 iteration=i,
@@ -1429,21 +1434,13 @@ def run_polars(
             if args.print_results:
                 print(result)
 
+            # 2. Persist the results, if `--results-directory` is set
             if args.results_directory is not None and i == 0:
                 results_dir = Path(args.results_directory)
                 results_dir.mkdir(parents=True, exist_ok=True)
                 output_path = results_dir / f"q_{q_id:02d}.parquet"
                 result.write_parquet(output_path)
 
-            if args.validate_directory is not None:
-                expected = pl.read_parquet(validation_files[q_id]).with_columns(*casts)
-                validation_result = validate_result(
-                    result,
-                    expected,
-                    query_result.sort_by,
-                    limit=query_result.limit,
-                    **get_validation_options(args),
-                )
             record = dataclasses.replace(
                 record,
                 validation_result=validation_result,
