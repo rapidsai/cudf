@@ -764,6 +764,13 @@ async def sink_node(
     child_ir = ir.children[0]
     count = partition_info.count
 
+    suffix = ir.sink.kind.lower()
+    width = math.ceil(math.log10(count)) if count > 1 else 1
+    # safety-net, if count is too low, we might get conflicts
+    # with other files.
+    width = max(width, 6)
+    print(f"{count=} {width=}")
+
     async with shutdown_on_error(context, ch_in, ch_out):
         # Drain the metadata channel (we don't need it for sinking)
         await recv_metadata(ch_in, context)
@@ -776,8 +783,6 @@ async def sink_node(
                     context.br(), allow_overbooking=True
                 )
                 i += 1
-                suffix = ir.sink.kind.lower()
-                width = math.ceil(math.log10(count)) if count > 1 else 1
                 df = chunk_to_frame(chunk, child_ir)
                 part_path = f"{ir.sink.path}/part.{str(i).zfill(width)}.{suffix}"
                 await asyncio.to_thread(
