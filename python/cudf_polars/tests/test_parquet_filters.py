@@ -60,6 +60,13 @@ def test_scan_by_hand(expr, selection, pq_file, chunked):
     )
 
 
+def test_parquet_filter_boolean_column(tmp_path):
+    df = pl.DataFrame({"x": [1, 2, 3], "y": [True, False, True]})
+    df.write_parquet(tmp_path / "df.parquet")
+    q = pl.scan_parquet(tmp_path / "df.parquet").filter(pl.col("y"))
+    assert_gpu_result_equal(q)
+
+
 def test_jit_filter(pq_file):
     q = pq_file.filter((pl.col("a") >= 2) & (pl.col("a") <= 4)).select("a", "c")
     assert_gpu_result_equal(

@@ -35,7 +35,7 @@ from cudf_polars.experimental.base import (
 from cudf_polars.experimental.io import SplitScan, scan_partition_plan
 from cudf_polars.experimental.rapidsmpf.dispatch import generate_ir_sub_network
 from cudf_polars.experimental.rapidsmpf.nodes import (
-    define_py_node,
+    define_actor,
     metadata_feeder_node,
     shutdown_on_error,
 )
@@ -136,7 +136,7 @@ def lower_dataframescan_rapidsmpf(
     return ir, {ir: PartitionInfo(count=count)}
 
 
-@define_py_node()
+@define_actor()
 async def dataframescan_node(
     context: Context,
     ir: DataFrameScan,
@@ -374,7 +374,7 @@ async def read_chunk(
     )
 
 
-@define_py_node()
+@define_actor()
 async def scan_node(
     context: Context,
     ir: Scan,
