@@ -51,7 +51,7 @@ struct parquet_column_schema {
    */
   parquet_column_schema(std::string_view name,
                         Type type,
-                        std::vector<parquet_column_schema> children,
+                        std::vector<parquet_column_schema>&& children,
                         data_type cudf_type)
     : _name{name}, _type{type}, _children{std::move(children)}, _cudf_type{cudf_type}
   {
