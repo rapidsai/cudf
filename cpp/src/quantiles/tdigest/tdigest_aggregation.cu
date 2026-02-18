@@ -28,13 +28,12 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
-#include <cuda/std/iterator>
+#include <cuda/iterator>
 #include <cuda/std/span>
 #include <cuda/std/tuple>
 #include <thrust/binary_search.h>
 #include <thrust/execution_policy.h>
 #include <thrust/functional.h>
-#include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/discard_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
@@ -219,7 +218,8 @@ struct nearest_value_centroid_weights {
  * the cumulative weight for a given value index I is simply I+1.
  */
 struct cumulative_scalar_weight_grouped {
-  cudf::device_span<size_type const> group_offsets;
+  // Host-device span, as the offsets may reside in either device memory or pinned host memory
+  cuda::std::span<size_type const> group_offsets;
   cuda::std::tuple<size_type, size_type, double> operator()
     CUDF_HOST_DEVICE(size_type value_index) const
   {
@@ -1137,7 +1137,8 @@ struct typed_group_tdigest {
           num_groups,
           nearest_value_scalar_weights_grouped{p_group_offsets.begin()},
           scalar_group_info_grouped{p_group_valid_counts.begin(), p_group_offsets.begin()},
-          cumulative_scalar_weight_grouped{p_group_offsets},
+          cumulative_scalar_weight_grouped{
+            cuda::std::span<size_type const>{p_group_offsets.begin(), p_group_offsets.size()}},
           col.null_count() > 0,
           stream,
           mr);
@@ -1147,9 +1148,10 @@ struct typed_group_tdigest {
       return generate_group_cluster_info(
         delta,
         num_groups,
-        nearest_value_scalar_weights_grouped{group_offsets.begin()},
-        scalar_group_info_grouped{group_valid_counts.begin(), group_offsets.begin()},
-        cumulative_scalar_weight_grouped{group_offsets},
+        nearest_value_scalar_weights_grouped{group_offsets.data()},
+        scalar_group_info_grouped{group_valid_counts.data(), group_offsets.data()},
+        cumulative_scalar_weight_grouped{
+          cuda::std::span<size_type const>{group_offsets.data(), group_offsets.size()}},
         col.null_count() > 0,
         stream,
         mr);
@@ -1170,7 +1172,7 @@ struct typed_group_tdigest {
       thrust::make_counting_iterator(0) + num_groups,
       thrust::make_zip_iterator(cuda::std::make_tuple(min_col->mutable_view().begin<double>(),
                                                       max_col->mutable_view().begin<double>())),
-      get_scalar_minmax_grouped<T>{*d_col, group_offsets, group_valid_counts.begin()});
+      get_scalar_minmax_grouped<T>{*d_col, group_offsets, group_valid_counts.data()});
 
     // for simple input values, the "centroids" all have a weight of 1.
     auto scalar_to_centroid =
@@ -1180,7 +1182,8 @@ struct typed_group_tdigest {
     return compute_tdigests(delta,
                             scalar_to_centroid,
                             scalar_to_centroid + col.size(),
-                            cumulative_scalar_weight_grouped{group_offsets},
+                            cumulative_scalar_weight_grouped{cuda::std::span<size_type const>{
+                              group_offsets.begin(), group_offsets.size()}},
                             std::move(min_col),
                             std::move(max_col),
                             cinfo,
@@ -1643,7 +1646,7 @@ std::unique_ptr<scalar> reduce_merge_tdigest(column_view const& input,
 
   auto group_offsets_ = group_offsets_fn{input.size()};
   auto group_offsets  = cudf::detail::make_counting_transform_iterator(0, group_offsets_);
-  auto group_labels   = thrust::make_constant_iterator(0);
+  auto group_labels   = cuda::make_constant_iterator(0);
   return to_tdigest_scalar(
     merge_tdigests(tdv, group_offsets, group_labels, input.size(), 1, max_centroids, stream, mr),
     stream,

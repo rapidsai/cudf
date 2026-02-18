@@ -1,5 +1,5 @@
 #!/bin/bash
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 set -euo pipefail
@@ -10,10 +10,8 @@ rapids-logger "Download wheels"
 
 RAPIDS_PY_CUDA_SUFFIX="$(rapids-wheel-ctk-name-gen "${RAPIDS_CUDA_VERSION}")"
 CUDF_POLARS_WHEELHOUSE=$(RAPIDS_PY_WHEEL_NAME="cudf_polars_${RAPIDS_PY_CUDA_SUFFIX}" RAPIDS_PY_WHEEL_PURE="1" rapids-download-wheels-from-github python)
-
-# Download libcudf and pylibcudf built in the previous step
 LIBCUDF_WHEELHOUSE=$(RAPIDS_PY_WHEEL_NAME="libcudf_${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels-from-github cpp)
-PYLIBCUDF_WHEELHOUSE=$(RAPIDS_PY_WHEEL_NAME="pylibcudf_${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels-from-github python)
+PYLIBCUDF_WHEELHOUSE=$(rapids-download-from-github "$(rapids-package-name "wheel_python" pylibcudf --stable --cuda "$RAPIDS_CUDA_VERSION")")
 
 rapids-logger "Install libcudf, pylibcudf and cudf_polars"
 rapids-pip-retry install \
@@ -37,10 +35,22 @@ sed -i 's/^deltalake>=1.1.4/deltalake>=1.1.4,<1.2.0/' polars/py-polars/requireme
 # pyiceberg depends on a non-documented attribute of pydantic.
 # AttributeError: 'pydantic_core._pydantic_core.ValidationInfo' object has no attribute 'current_schema_id'
 sed -i 's/^pydantic>=2.0.0.*/pydantic>=2.0.0,<2.12.0/' polars/py-polars/requirements-dev.txt
+# Iceberg tests include a call to a deprecated in 0.10.0
+# See https://github.com/pola-rs/polars/pull/25854
+# Ignore the warning for now, but update the minimum
+# iceberg pinning after the 0.11.0 release.
+sed -i 's/warnings.simplefilter.*PydanticDeprecatedSince212/# &/' polars/py-polars/tests/unit/io/test_iceberg.py
+sed -i '/PydanticDeprecatedSince212/a \    warnings.simplefilter("ignore", DeprecationWarning)' polars/py-polars/tests/unit/io/test_iceberg.py
 
 # https://github.com/pola-rs/polars/issues/25772
 # Remove upper bound on aiosqlite once we support polars >1.36.1
 sed -i 's/^aiosqlite/aiosqlite>=0.21.0,<0.22.0/' polars/py-polars/requirements-dev.txt
+
+# Remove upper bound on pandas once we support 3.0.0+
+sed -i 's/^pandas$/pandas>=2.0,<2.4.0/' polars/py-polars/requirements-dev.txt
+
+# Remove upper bound on pandas-stubs once we support 3.0.0+
+sed -i 's/^pandas-stubs/pandas-stubs<3/' polars/py-polars/requirements-dev.txt
 
 # Pyparsing release 3.3.0 deprecates the enablePackrat method, which is used by the
 # version of pyiceberg that polars is currently pinned to. We can remove this skip

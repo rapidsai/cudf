@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -56,9 +56,9 @@ def factorize(
     >>> data = cudf.Series(['a', 'c', 'c'])
     >>> codes, uniques = cudf.factorize(data)
     >>> codes
-    array([0, 1, 1], dtype=int8)
+    array([0, 1, 1])
     >>> uniques
-    Index(['a' 'c'], dtype='object')
+    Index(['a', 'c'], dtype='object')
 
     When ``use_na_sentinel=True`` (the default), missing values are indicated
     in the `codes` with the sentinel value ``-1`` and missing values are not
@@ -66,9 +66,9 @@ def factorize(
 
     >>> codes, uniques = cudf.factorize(['b', None, 'a', 'c', 'b'])
     >>> codes
-    array([ 1, -1,  0,  2,  1], dtype=int8)
+    array([ 0, -1,  1,  2,  0])
     >>> uniques
-    Index(['a', 'b', 'c'], dtype='object')
+    Index(['b', 'a', 'c'], dtype='object')
 
     If NA is in the values, and we want to include NA in the uniques of the
     values, it can be achieved by setting ``use_na_sentinel=False``.
@@ -76,14 +76,14 @@ def factorize(
     >>> values = np.array([1, 2, 1, np.nan])
     >>> codes, uniques = cudf.factorize(values)
     >>> codes
-    array([ 0,  1,  0, -1], dtype=int8)
+    array([ 0,  1,  0, -1])
     >>> uniques
     Index([1.0, 2.0], dtype='float64')
     >>> codes, uniques = cudf.factorize(values, use_na_sentinel=False)
     >>> codes
-    array([1, 2, 1, 0], dtype=int8)
+    array([0, 1, 0, 2])
     >>> uniques
-    Index([<NA>, 1.0, 2.0], dtype='float64')
+    Index([1.0, 2.0, <NA>], dtype='float64')
     """
     return_cupy_array = isinstance(values, cp.ndarray)
 
@@ -110,9 +110,7 @@ def factorize(
 
     labels = values._label_encoding(
         cats=cats,
-        dtype=np.dtype("int64")
-        if get_option("mode.pandas_compatible")
-        else None,
+        dtype=np.dtype("int64"),
     ).values
 
     # TODO: Avoid accessing Index from the top level namespace
@@ -160,6 +158,7 @@ def unique(values):
     1    1
     dtype: int64
 
+    >>> import pandas as pd
     >>> cudf.unique(cudf.Series([pd.Timestamp("20160101"), pd.Timestamp("20160101")]))
     0   2016-01-01
     dtype: datetime64[ns]
@@ -186,7 +185,7 @@ def unique(values):
     ...         ]
     ...     )
     ... )
-    DatetimeIndex(['2016-01-01 00:00:00-05:00', '2016-01-03 00:00:00-05:00'],dtype='datetime64[ns, US/Eastern]')
+    DatetimeIndex(['2016-01-01 00:00:00-05:00', '2016-01-03 00:00:00-05:00'], dtype='datetime64[ns, US/Eastern]')
 
     An unordered Categorical will return categories in the
     order of appearance.
@@ -207,8 +206,8 @@ def unique(values):
 
     An ordered Categorical preserves the category ordering.
 
-    >>> pd.unique(
-    ...     pd.Series(
+    >>> cudf.unique(
+    ...     cudf.Series(
     ...         pd.Categorical(list("baabc"), categories=list("abc"), ordered=True)
     ...     )
     ... )
@@ -217,11 +216,6 @@ def unique(values):
     2    c
     dtype: category
     Categories (3, object): ['a' < 'b' < 'c']
-
-    An array of tuples
-
-    >>> pd.unique(pd.Series([("a", "b"), ("b", "a"), ("a", "c"), ("b", "a")]).values)
-    array([('a', 'b'), ('b', 'a'), ('a', 'c')], dtype=object)
     """
     # TODO: Avoid accessing Index and Series from the top level namespace
     if not isinstance(values, (cudf.Series, cudf.Index, cp.ndarray)):

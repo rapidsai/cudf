@@ -1,5 +1,5 @@
 /*
- *  SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION
+ *  SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION
  *  SPDX-License-Identifier: Apache-2.0
  */
 
@@ -18,6 +18,7 @@
 #include <cstddef>
 #include <limits>
 #include <new>  // for bad_alloc
+#include <span>
 
 namespace CUDF_EXPORT cudf {
 namespace detail {
@@ -223,6 +224,16 @@ class host_vector : public thrust::host_vector<T, rmm_host_allocator<T>> {
   [[nodiscard]] operator host_span<T>()
   {
     return host_span<T>{base::data(), base::size(), base::get_allocator().is_device_accessible()};
+  }
+
+  [[nodiscard]] operator std::span<T const>() const noexcept
+  {
+    return std::span<T const>(base::data(), base::size());
+  }
+
+  [[nodiscard]] operator std::span<T>() noexcept
+  {
+    return std::span<T>(base::data(), base::size());
   }
 };
 

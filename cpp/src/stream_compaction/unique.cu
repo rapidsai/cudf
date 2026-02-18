@@ -8,6 +8,7 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
+#include <cudf/detail/algorithms/copy_if.cuh>
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/iterator.cuh>
@@ -28,7 +29,6 @@
 
 #include <cuda/std/functional>
 #include <cuda/std/iterator>
-#include <thrust/copy.h>
 #include <thrust/execution_policy.h>
 #include <thrust/iterator/counting_iterator.h>
 
@@ -72,12 +72,12 @@ std::unique_ptr<table> unique(table_view const& input,
         itr + num_rows,
         d_results.begin(),
         unique_copy_fn<decltype(itr), decltype(row_equal)>{itr, keep, row_equal, num_rows - 1});
-      auto result_end = thrust::copy_if(rmm::exec_policy_nosync(stream),
-                                        itr,
-                                        itr + num_rows,
-                                        d_results.begin(),
-                                        mutable_view->begin<size_type>(),
-                                        cuda::std::identity{});
+      auto result_end = cudf::detail::copy_if(itr,
+                                              itr + num_rows,
+                                              d_results.begin(),
+                                              mutable_view->begin<size_type>(),
+                                              cuda::std::identity{},
+                                              stream);
       return static_cast<size_type>(
         cuda::std::distance(mutable_view->begin<size_type>(), result_end));
     } else {

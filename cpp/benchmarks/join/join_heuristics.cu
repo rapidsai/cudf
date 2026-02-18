@@ -13,7 +13,7 @@
 #include <cudf/groupby.hpp>
 #include <cudf/join/key_remapping.hpp>
 #include <cudf/reduction.hpp>
-#include <cudf/stream_compaction.hpp>
+#include <cudf/reduction/distinct_count.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
