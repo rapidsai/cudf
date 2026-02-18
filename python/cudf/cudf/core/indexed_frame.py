@@ -2965,7 +2965,7 @@ class IndexedFrame(Frame):
         try:
             # No need to gather if the gather map is already in the correct order
             can_gather_with_copy = (
-                and len(gather_map.column) == len(self)
+                len(gather_map.column) == len(self)
                 and len(self) > 0
                 and gather_map.column.equals(
                     as_column(cp.arange(start=0, stop=len(self)))
