@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from rapidsmpf.memory.buffer import MemoryType
 from rapidsmpf.memory.memory_reservation import opaque_memory_usage
+from rapidsmpf.streaming.core.actor import define_actor
 from rapidsmpf.streaming.core.memory_reserve_or_wait import (
     missing_net_memory_delta,
     reserve_memory,
@@ -25,7 +26,6 @@ from cudf_polars.experimental.rapidsmpf.dispatch import (
 )
 from cudf_polars.experimental.rapidsmpf.nodes import (
     default_node_multi,
-    define_actor,
     shutdown_on_error,
 )
 from cudf_polars.experimental.rapidsmpf.utils import (
@@ -49,7 +49,7 @@ if TYPE_CHECKING:
 
 
 @define_actor()
-async def broadcast_join_node(
+async def broadcast_join_actor(
     context: Context,
     ir: Join,
     ir_context: IRExecutionContext,
@@ -61,7 +61,7 @@ async def broadcast_join_node(
     target_partition_size: int,
 ) -> None:
     """
-    Join node for rapidsmpf.
+    Broadcast-join actor for rapidsmpf.
 
     Parameters
     ----------
@@ -297,7 +297,7 @@ def _(
     pwise_join = output_count == 1 or (left_partitioned and right_partitioned)
 
     # Process children
-    nodes, channels = process_children(ir, rec)
+    actors, channels = process_children(ir, rec)
 
     # Create output ChannelManager
     channels[ir] = ChannelManager(rec.state["context"])
@@ -305,7 +305,7 @@ def _(
     if pwise_join:
         # Partition-wise join (use default_node_multi)
         partitioning_index = 1 if ir.options[0] == "Right" else 0
-        nodes[ir] = [
+        actors[ir] = [
             default_node_multi(
                 rec.state["context"],
                 ir,
@@ -318,10 +318,10 @@ def _(
                 partitioning_index=partitioning_index,
             )
         ]
-        return nodes, channels
+        return actors, channels
 
     else:
-        # Broadcast join (use broadcast_join_node)
+        # Broadcast join (use broadcast_join_actor)
         broadcast_side: Literal["left", "right"]
         if left_count >= right_count:
             # Broadcast right, stream left
@@ -332,11 +332,11 @@ def _(
         # Get target partition size
         config_options = rec.state["config_options"]
         executor = config_options.executor
-        assert executor.name == "streaming", "Join node requires streaming executor"
+        assert executor.name == "streaming", "Join actor requires streaming executor"
         target_partition_size = executor.target_partition_size
 
-        nodes[ir] = [
-            broadcast_join_node(
+        actors[ir] = [
+            broadcast_join_actor(
                 rec.state["context"],
                 ir,
                 rec.state["ir_context"],
@@ -348,4 +348,4 @@ def _(
                 target_partition_size=target_partition_size,
             )
         ]
-        return nodes, channels
+        return actors, channels

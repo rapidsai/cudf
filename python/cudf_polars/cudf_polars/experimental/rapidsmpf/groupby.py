@@ -10,9 +10,9 @@ from typing import TYPE_CHECKING, Any
 from rapidsmpf.communicator.single import new_communicator as single_comm
 from rapidsmpf.config import Options, get_environment_variables
 from rapidsmpf.memory.buffer import MemoryType
+from rapidsmpf.streaming.core.actor import define_actor
 from rapidsmpf.streaming.core.context import Context
 from rapidsmpf.streaming.core.message import Message
-from rapidsmpf.streaming.core.node import define_py_node
 from rapidsmpf.streaming.cudf.channel_metadata import (
     ChannelMetadata,
     HashScheme,
@@ -421,8 +421,8 @@ def _require_tree(ir: GroupBy | Distinct) -> bool:
         )
 
 
-@define_py_node()
-async def keyed_reduction_node(
+@define_actor()
+async def keyed_reduction_actor(
     context: Context,
     ir: GroupBy | Distinct,
     ir_context: IRExecutionContext,
@@ -432,7 +432,7 @@ async def keyed_reduction_node(
     collective_ids: list[int],
 ) -> None:
     """
-    Dynamic GroupBy or Distinct node that selects the best strategy at runtime.
+    Dynamic GroupBy or Distinct actor that selects the best strategy at runtime.
 
     Strategy selection based on observed data:
     - Chunk-wise: Data already partitioned on the necessary keys
@@ -647,14 +647,14 @@ def _(
         # Fall back to the default IR handler (bypass GroupBy/Distinct dispatch)
         return generate_ir_sub_network.dispatch(IR)(ir, rec)
 
-    nodes, channels = process_children(ir, rec)
+    actors, channels = process_children(ir, rec)
     channels[ir] = ChannelManager(rec.state["context"])
     collective_ids = list(rec.state["collective_id_map"].get(ir, []))
     assert len(collective_ids) == 2, (
         f"{type(ir).__name__} requires 2 collective IDs, got {len(collective_ids)}"
     )
-    nodes[ir] = [
-        keyed_reduction_node(
+    actors[ir] = [
+        keyed_reduction_actor(
             rec.state["context"],
             ir,
             rec.state["ir_context"],
@@ -665,4 +665,4 @@ def _(
         )
     ]
 
-    return nodes, channels
+    return actors, channels
