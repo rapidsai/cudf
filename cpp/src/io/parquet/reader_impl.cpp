@@ -864,15 +864,16 @@ table_with_metadata reader_impl::finalize_output(read_mode mode,
     }
   }
 
-  // Apply decimal type casting if specified
+  // TODO: Instead of casting the columns after the read is done, we should
+  // be able to decode data directly into the target decimal type buffer,
   if (_options.decimal_type.id() != type_id::EMPTY) {
-    for (size_t i = 0; i < out_columns.size(); ++i) {
-      auto const& col_type = out_columns[i]->type();
+    for (auto& out_column : out_columns) {
+      auto const& col_type = out_column->type();
       if (col_type.id() == type_id::DECIMAL32 || col_type.id() == type_id::DECIMAL64 ||
           col_type.id() == type_id::DECIMAL128) {
         if (col_type.id() != _options.decimal_type.id()) {
           auto target_type = cudf::data_type{_options.decimal_type.id(), col_type.scale()};
-          out_columns[i]   = cudf::cast(out_columns[i]->view(), target_type, _stream, _mr);
+          out_column       = cudf::cast(out_column->view(), target_type, _stream, _mr);
         }
       }
     }
