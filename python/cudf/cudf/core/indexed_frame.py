@@ -2965,10 +2965,6 @@ class IndexedFrame(Frame):
         try:
             # No need to gather if the gather map is already in the correct order
             can_gather_with_copy = (
-                isinstance(
-                    gather_map.column,
-                    cudf.core.column.numerical.NumericalColumn,
-                )
                 and len(gather_map.column) == len(self)
                 and len(self) > 0
                 and gather_map.column.equals(
