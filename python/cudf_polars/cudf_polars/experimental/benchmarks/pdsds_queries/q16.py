@@ -108,11 +108,7 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         )
         .select(
             [
-                # Cast -> Int64 to match DuckDB
-                pl.col("cs_order_number")
-                .n_unique()
-                .cast(pl.Int64)
-                .alias("order count"),
+                pl.col("cs_order_number").n_unique().alias("order count"),
                 pl.col("cs_ext_ship_cost").sum().alias("total shipping cost"),
                 pl.col("cs_net_profit").sum().alias("total net profit"),
             ]
