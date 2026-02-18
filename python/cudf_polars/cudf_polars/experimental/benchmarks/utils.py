@@ -18,9 +18,10 @@ import sys
 import textwrap
 import time
 import traceback
+import uuid
 import warnings
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, assert_never
 
@@ -45,6 +46,7 @@ except ImportError:
 
 try:
     from cudf_polars.dsl.ir import IRExecutionContext
+    from cudf_polars.dsl.tracing import Scope
     from cudf_polars.dsl.translate import Translator
     from cudf_polars.experimental.explain import explain_query
     from cudf_polars.experimental.parallel import evaluate_streaming
@@ -57,6 +59,8 @@ except ImportError:
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
+
+    from cudf_polars.experimental.explain import SerializablePlan
 
 
 try:
@@ -131,7 +135,7 @@ class PackageVersions:
         for name in packages:
             try:
                 package = importlib.import_module(name)
-            except (AttributeError, ImportError):  # noqa: PERF203
+            except (AttributeError, ImportError):
                 versions[name] = None
             else:
                 if name in ("cudf_polars", "rapidsmpf"):
@@ -236,6 +240,7 @@ class RunConfig:
         default_factory=PackageVersions.collect
     )
     records: dict[int, list[Record]] = dataclasses.field(default_factory=dict)
+    plans: dict[int, SerializablePlan] = dataclasses.field(default_factory=dict)
     dataset_path: Path
     scale_factor: int | float
     shuffle: Literal["rapidsmpf", "tasks"] | None = None
@@ -246,9 +251,10 @@ class RunConfig:
     threads: int
     iterations: int
     timestamp: str = dataclasses.field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
+        default_factory=lambda: datetime.now(UTC).isoformat()
     )
     hardware: HardwareInfo = dataclasses.field(default_factory=HardwareInfo.collect)
+    run_id: uuid.UUID = dataclasses.field(default_factory=uuid.uuid4)
     rmm_async: bool
     rapidsmpf_oom_protection: bool
     rapidsmpf_spill: bool
@@ -256,8 +262,12 @@ class RunConfig:
     query_set: str
     collect_traces: bool = False
     stats_planning: bool
+    dynamic_planning: bool | None = None
     max_io_threads: int
     native_parquet: bool
+    spill_to_pinned_memory: bool
+    extra_info: dict[str, Any] = dataclasses.field(default_factory=dict)
+    fallback_mode: str | None = None
 
     def __post_init__(self) -> None:  # noqa: D105
         if self.gather_shuffle_stats and self.shuffle != "rapidsmpf":
@@ -373,13 +383,18 @@ class RunConfig:
             query_set=args.query_set,
             collect_traces=args.collect_traces,
             stats_planning=args.stats_planning,
+            dynamic_planning=args.dynamic_planning,
             max_io_threads=args.max_io_threads,
             native_parquet=args.native_parquet,
+            extra_info=args.extra_info,
+            spill_to_pinned_memory=args.spill_to_pinned_memory,
+            fallback_mode=args.fallback_mode,
         )
 
     def serialize(self, engine: pl.GPUEngine | None) -> dict:
         """Serialize the run config to a dictionary."""
         result = dataclasses.asdict(self)
+        result["run_id"] = str(self.run_id)
 
         if engine is not None:
             config_options = ConfigOptions.from_polars_engine(engine)
@@ -406,6 +421,7 @@ class RunConfig:
                 print(f"stats_planning: {self.stats_planning}")
                 if self.runtime == "rapidsmpf":
                     print(f"native_parquet: {self.native_parquet}")
+                    print(f"dynamic_planning: {self.dynamic_planning}")
                 if self.cluster == "distributed":
                     print(f"n_workers: {self.n_workers}")
                     print(f"threads: {self.threads}")
@@ -454,6 +470,8 @@ def get_executor_options(
             executor_options["broadcast_join_limit"] = run_config.broadcast_join_limit
         if run_config.rapidsmpf_spill:
             executor_options["rapidsmpf_spill"] = run_config.rapidsmpf_spill
+        if run_config.fallback_mode:
+            executor_options["fallback_mode"] = run_config.fallback_mode
         if run_config.cluster == "distributed":
             executor_options["cluster"] = "distributed"
         executor_options["stats_planning"] = {
@@ -466,6 +484,10 @@ def get_executor_options(
         executor_options["client_device_threshold"] = run_config.spill_device
         executor_options["runtime"] = run_config.runtime
         executor_options["max_io_threads"] = run_config.max_io_threads
+        executor_options["spill_to_pinned_memory"] = run_config.spill_to_pinned_memory
+        if run_config.dynamic_planning:
+            # Pass empty dict to enable with defaults; None means disabled
+            executor_options["dynamic_planning"] = {}
 
     if (
         benchmark
@@ -473,6 +495,7 @@ def get_executor_options(
         and run_config.executor == "streaming"
         # Only use the unique_fraction config if stats_planning is disabled
         and not run_config.stats_planning
+        and not run_config.dynamic_planning
     ):
         executor_options["unique_fraction"] = {
             "c_custkey": 0.05,
@@ -490,50 +513,100 @@ def print_query_plan(
     args: argparse.Namespace,
     run_config: RunConfig,
     engine: None | pl.GPUEngine = None,
-) -> None:
+    *,
+    print_plans: bool = True,
+) -> tuple[str | None, str | None]:
     """Print the query plan."""
+    logical_plan = plan = None
     if run_config.executor == "cpu":
         if args.explain_logical:
-            print(f"\nQuery {q_id} - Logical plan\n")
-            print(q.explain())
+            logical_plan = q.explain()
         if args.explain:
-            print(f"\nQuery {q_id} - Physical plan\n")
-            print(q.show_graph(engine="streaming", plan_stage="physical"))
+            plan = q.show_graph(engine="streaming", plan_stage="physical")
     elif CUDF_POLARS_AVAILABLE:
         assert isinstance(engine, pl.GPUEngine)
         if args.explain_logical:
-            print(f"\nQuery {q_id} - Logical plan\n")
-            print(explain_query(q, engine, physical=False))
+            logical_plan = explain_query(q, engine, physical=False)
         if args.explain and run_config.executor == "streaming":
-            print(f"\nQuery {q_id} - Physical plan\n")
-            print(explain_query(q, engine))
+            plan = explain_query(q, engine)
     else:
         raise RuntimeError(
             "Cannot provide the logical or physical plan because cudf_polars is not installed."
         )
 
+    if print_plans:
+        if logical_plan:
+            print(f"\nQuery {q_id} - Logical plan\n")
+            print(logical_plan)
+        if plan:
+            print(f"\nQuery {q_id} - Physical plan\n")
+            print(plan)
+
+    return logical_plan, plan
+
 
 def initialize_dask_cluster(run_config: RunConfig, args: argparse.Namespace):  # type: ignore[no-untyped-def]
-    """Initialize a Dask distributed cluster."""
+    """
+    Initialize a Dask distributed cluster.
+
+    This function either creates a new LocalCUDACluster or connects to an
+    existing Dask cluster depending on the provided arguments.
+
+    Parameters
+    ----------
+    run_config : RunConfig
+        The run configuration.
+    args : argparse.Namespace
+        Parsed command line arguments. If ``args.scheduler_address`` or
+        ``args.scheduler_file`` is provided, we connect to an existing
+        cluster instead of creating a LocalCUDACluster.
+
+    Returns
+    -------
+    Client or None
+        A Dask distributed Client, or None if not using distributed mode.
+    """
     if run_config.cluster != "distributed":
         return None
 
-    from dask_cuda import LocalCUDACluster
     from distributed import Client
 
-    kwargs = {
-        "n_workers": run_config.n_workers,
-        "dashboard_address": ":8585",
-        "protocol": args.protocol,
-        "rmm_pool_size": args.rmm_pool_size,
-        "rmm_async": args.rmm_async,
-        "rmm_release_threshold": args.rmm_release_threshold,
-        "threads_per_worker": run_config.threads,
-    }
+    # Check if we should connect to an existing cluster
+    scheduler_address = args.scheduler_address
+    scheduler_file = args.scheduler_file
 
-    # Avoid UVM in distributed cluster
-    client = Client(LocalCUDACluster(**kwargs))
-    client.wait_for_workers(run_config.n_workers)
+    if scheduler_address is not None:
+        # Connect to existing cluster via scheduler address
+        client = Client(address=scheduler_address)
+        n_workers = client.scheduler_info()["n_workers"]
+        print(
+            f"Connected to existing Dask cluster at {scheduler_address} "
+            f"with {n_workers} workers"
+        )
+    elif scheduler_file is not None:
+        # Connect to existing cluster via scheduler file
+        client = Client(scheduler_file=scheduler_file)
+        n_workers = client.scheduler_info()["n_workers"]
+        print(
+            f"Connected to existing Dask cluster via scheduler file: {scheduler_file} "
+            f"with {n_workers} workers"
+        )
+    else:
+        # Create a new LocalCUDACluster
+        from dask_cuda import LocalCUDACluster
+
+        kwargs = {
+            "n_workers": run_config.n_workers,
+            "dashboard_address": ":8585",
+            "protocol": args.protocol,
+            "rmm_pool_size": args.rmm_pool_size,
+            "rmm_async": args.rmm_async,
+            "rmm_release_threshold": args.rmm_release_threshold,
+            "threads_per_worker": run_config.threads,
+        }
+
+        client = Client(LocalCUDACluster(**kwargs))
+        client.wait_for_workers(run_config.n_workers)
 
     if run_config.shuffle != "tasks":
         try:
@@ -545,9 +618,12 @@ def initialize_dask_cluster(run_config: RunConfig, args: argparse.Namespace):  #
                 options=Options(
                     {
                         "dask_spill_device": str(run_config.spill_device),
+                        "dask_spill_to_pinned_memory": str(
+                            run_config.spill_to_pinned_memory
+                        ),
                         "dask_statistics": str(args.rapidsmpf_dask_statistics),
                         "dask_print_statistics": str(args.rapidsmpf_print_statistics),
-                        "oom_protection": str(args.rapidsmpf_oom_protection),
+                        "dask_oom_protection": str(args.rapidsmpf_oom_protection),
                     }
                 ),
             )
@@ -730,6 +806,27 @@ def parse_args(
         type=int,
         help="Number of Dask-CUDA workers (requires 'distributed' cluster).",
     )
+    external_cluster_group = parser.add_mutually_exclusive_group()
+    external_cluster_group.add_argument(
+        "--scheduler-address",
+        default=None,
+        type=str,
+        help=textwrap.dedent("""\
+            Scheduler address for connecting to an existing Dask cluster.
+            If provided, a cluster is not created and worker
+            configuration options (--n-workers, --rmm-pool-size, etc.)
+            are ignored since the workers are assumed to be started separately."""),
+    )
+    external_cluster_group.add_argument(
+        "--scheduler-file",
+        default=None,
+        type=str,
+        help=textwrap.dedent("""\
+            Path to a scheduler file for connecting to an existing Dask cluster.
+            If provided, a cluster is not created and worker
+            configuration options (--n-workers, --rmm-pool-size, etc.)
+            are ignored since the workers are assumed to be started separately."""),
+    )
     parser.add_argument(
         "--blocksize",
         default=None,
@@ -866,6 +963,12 @@ def parse_args(
         default=False,
     )
     parser.add_argument(
+        "--print-plans",
+        action=argparse.BooleanOptionalAction,
+        help="Print the query plans",
+        default=True,
+    )
+    parser.add_argument(
         "--validate",
         action=argparse.BooleanOptionalAction,
         default=False,
@@ -892,6 +995,12 @@ def parse_args(
         help="Enable statistics planning.",
     )
     parser.add_argument(
+        "--dynamic-planning",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Enable dynamic shuffle planning (not yet implemented). ",
+    )
+    parser.add_argument(
         "--max-io-threads",
         default=2,
         type=int,
@@ -908,6 +1017,31 @@ def parse_args(
         type=Path,
         default=None,
         help="Optional directory to write query results as parquet files.",
+    )
+    parser.add_argument(
+        "--spill-to-pinned-memory",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help=textwrap.dedent("""\
+            Whether RapidsMPF should spill to pinned host memory when available,
+            or use regular pageable host memory."""),
+    )
+    parser.add_argument(
+        "--extra-info",
+        type=json.loads,
+        default={},
+        help="Extra information to add to the output file (e.g. version information). Must be JSON-serializable.",
+    )
+    parser.add_argument(
+        "--fallback-mode",
+        type=str,
+        choices=["warn", "raise", "silent"],
+        default=None,
+        help=textwrap.dedent("""\
+            How to handle operations that don't support multiple partitions in streaming executor.
+            - warn   : Emit a warning and fall back to single partition (default)
+            - raise  : Raise an exception
+            - silent : Silently fall back to single partition"""),
     )
 
     parsed_args = parser.parse_args(args)
@@ -933,7 +1067,13 @@ def run_polars(
 
     client = initialize_dask_cluster(run_config, args)
 
+    # Update n_workers from the actual cluster when using scheduler file/address
+    if client is not None:
+        actual_n_workers = client.scheduler_info()["n_workers"]
+        run_config = dataclasses.replace(run_config, n_workers=actual_n_workers)
+
     records: defaultdict[int, list[Record]] = defaultdict(list)
+    plans: dict[int, SerializablePlan] = {}
     engine: pl.GPUEngine | None = None
 
     if run_config.executor != "cpu":
@@ -961,7 +1101,13 @@ def run_polars(
         except AttributeError as err:
             raise NotImplementedError(f"Query {q_id} not implemented.") from err
 
-        print_query_plan(q_id, q, args, run_config, engine)
+        print_query_plan(
+            q_id, q, args, run_config, engine, print_plans=args.print_plans
+        )
+        if (args.explain or args.explain_logical) and engine is not None:
+            from cudf_polars.experimental.explain import serialize_query
+
+            plans[q_id] = serialize_query(q, engine)
 
         records[q_id] = []
         for i in range(args.iterations):
@@ -1022,7 +1168,7 @@ def run_polars(
             )
             records[q_id].append(record)
 
-    run_config = dataclasses.replace(run_config, records=dict(records))
+    run_config = dataclasses.replace(run_config, records=dict(records), plans=plans)
 
     # consolidate logs
     if _HAS_STRUCTLOG and run_config.collect_traces:
@@ -1032,13 +1178,17 @@ def run_polars(
             return logger.handlers[0].stream.getvalue()  # type: ignore[attr-defined]
 
         if client is not None:
-            all_logs = "\n".join(client.run(gather_logs).values())
+            # Gather logs from both client (for Query Plan) and workers
+            worker_logs = "\n".join(client.run(gather_logs).values())
+            client_logs = gather_logs()
+            all_logs = client_logs + "\n" + worker_logs
         else:
             all_logs = gather_logs()
 
         parsed_logs = [json.loads(log) for log in all_logs.splitlines() if log]
         # Some other log records can end up in here. Filter those out.
-        parsed_logs = [log for log in parsed_logs if log["event"] == "Execute IR"]
+        scope_values = {s.value for s in Scope}
+        parsed_logs = [log for log in parsed_logs if log.get("scope") in scope_values]
         # Now we want to augment the existing Records with the trace data.
 
         def group_key(x: dict) -> int:
@@ -1317,6 +1467,9 @@ def run_duckdb(
     run_config = dataclasses.replace(run_config, records=dict(records))
     if args.summarize:
         run_config.summarize()
+
+    args.output.write(json.dumps(run_config.serialize(engine=None)))
+    args.output.write("\n")
 
 
 def run_validate(

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -25,7 +25,7 @@ from cudf.errors import MixedTypeError
 from cudf.utils.dtypes import is_mixed_with_object_dtype
 
 if TYPE_CHECKING:
-    from typing_extensions import Self
+    from typing import Self
 
     from cudf._typing import DtypeObj
     from cudf.core.column import ColumnBase
@@ -61,7 +61,7 @@ class _NestedGetItemDict(dict):
     def __getitem__(self, key):
         """Recursively apply dict.__getitem__ for nested elements."""
         # As described in the pandas docs
-        # https://pandas.pydata.org/pandas-docs/stable/user_guide/advanced.html#advanced-indexing-with-hierarchical-index
+        # https://pandas.pydata.org/pandas-docs/version/2.3.3/user_guide/advanced.html#advanced-indexing-with-hierarchical-index
         # accessing nested elements of a multiindex must be done using a tuple.
         # Lists and other sequences are treated as accessing multiple elements
         # at the top level of the index.

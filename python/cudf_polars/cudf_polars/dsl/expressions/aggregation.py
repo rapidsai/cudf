@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 # TODO: remove need for this
 # ruff: noqa: D101
@@ -249,16 +249,24 @@ class Agg(Expr):
         return self._reduce(column, request=plc.aggregation.max(), stream=stream)
 
     def _first(self, column: Column, stream: Stream) -> Column:
+        if column.size == 0:
+            plc_result = plc.Column.all_null_like(column.obj, 1, stream=stream)
+        else:
+            plc_result = plc.copying.slice(column.obj, [0, 1], stream=stream)[0]
         return Column(
-            plc.copying.slice(column.obj, [0, 1], stream=stream)[0],
+            plc_result,
             name=column.name,
             dtype=self.dtype,
         )
 
     def _last(self, column: Column, stream: Stream) -> Column:
         n = column.size
+        if n == 0:
+            plc_result = plc.Column.all_null_like(column.obj, 1, stream=stream)
+        else:
+            plc_result = plc.copying.slice(column.obj, [n - 1, n], stream=stream)[0]
         return Column(
-            plc.copying.slice(column.obj, [n - 1, n], stream=stream)[0],
+            plc_result,
             name=column.name,
             dtype=self.dtype,
         )

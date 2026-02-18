@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -21,8 +21,8 @@
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/traits.hpp>
 
+#include <cuda/iterator>
 #include <thrust/host_vector.h>
-#include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
 
 #include <src/rolling/detail/rolling.hpp>
@@ -815,7 +815,7 @@ TYPED_TEST_SUITE(RollingTest, cudf::test::FixedWidthTypesWithoutFixedPoint);
 // simple example from Pandas docs
 TYPED_TEST(RollingTest, SimpleStatic)
 {
-  // https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.DataFrame.rolling.html
+  // https://pandas.pydata.org/pandas-docs/version/2.3.3/reference/api/pandas.DataFrame.rolling.html
   auto const col_data              = cudf::test::make_type_param_vector<TypeParam>({0, 1, 2, 0, 4});
   const std::vector<bool> col_mask = {1, 1, 1, 0, 1};
 
@@ -962,7 +962,7 @@ TYPED_TEST(RollingTest, NegativeWindowSizes)
 // simple example from Pandas docs:
 TYPED_TEST(RollingTest, SimpleDynamic)
 {
-  // https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.DataFrame.rolling.html
+  // https://pandas.pydata.org/pandas-docs/version/2.3.3/reference/api/pandas.DataFrame.rolling.html
   auto const col_data              = cudf::test::make_type_param_vector<TypeParam>({0, 1, 2, 0, 4});
   const std::vector<bool> col_mask = {1, 1, 1, 0, 1};
 
@@ -1280,7 +1280,7 @@ TEST_F(RollingTestUdf, StaticWindow)
 
   cudf::test::fixed_width_column_wrapper<int32_t> input(thrust::make_counting_iterator(0),
                                                         thrust::make_counting_iterator(size),
-                                                        thrust::make_constant_iterator(true));
+                                                        cuda::make_constant_iterator(true));
 
   std::unique_ptr<cudf::column> output;
 
@@ -1318,7 +1318,7 @@ TEST_F(RollingTestUdf, DynamicWindow)
 
   cudf::test::fixed_width_column_wrapper<int32_t> input(thrust::make_counting_iterator(0),
                                                         thrust::make_counting_iterator(size),
-                                                        thrust::make_constant_iterator(true));
+                                                        cuda::make_constant_iterator(true));
 
   auto prec = cudf::detail::make_counting_transform_iterator(
     0, [] __device__(cudf::size_type row) { return row % 2 + 2; });

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -16,53 +16,40 @@
 
 namespace cudf {
 
-context::context(init_flags flags) : _program_cache{nullptr}
+context::context(context_config const& cfg, init_flags flags)
+  : _config{cfg}, _program_cache_init_flag{}, _program_cache{nullptr}
 {
-  auto dump_codegen_flag = getenv_or("LIBCUDF_JIT_DUMP_CODEGEN", std::string{"OFF"});
-  _dump_codegen          = (dump_codegen_flag == "ON" || dump_codegen_flag == "1");
-
-  auto use_jit_flag = getenv_or("LIBCUDF_JIT_ENABLED", std::string{"OFF"});
-  _use_jit          = (use_jit_flag == "ON" || use_jit_flag == "1");
-
   initialize_components(flags);
+}
+
+void context::ensure_nvcomp_loaded() { io::detail::nvcomp::load_nvcomp_library(); }
+
+void context::ensure_jit_cache_initialized()
+{
+  std::call_once(_program_cache_init_flag,
+                 [&]() { _program_cache = std::make_unique<jit::program_cache>(); });
 }
 
 jit::program_cache& context::program_cache()
 {
-  CUDF_EXPECTS(_program_cache != nullptr, "JIT cache not initialized", std::runtime_error);
+  ensure_jit_cache_initialized();
   return *_program_cache;
 }
 
-bool context::dump_codegen() const { return _dump_codegen; }
+bool context::dump_codegen() const { return _config.dump_codegen; }
+
+bool context::use_jit() const { return _config.use_jit; }
 
 void context::initialize_components(init_flags flags)
 {
-  // Only initialize components that haven't been initialized yet
-  auto const new_flags = flags & ~_initialized_flags;
+  if (has_flag(flags, init_flags::INIT_JIT_CACHE)) { ensure_jit_cache_initialized(); }
 
-  if (has_flag(new_flags, init_flags::INIT_JIT_CACHE)) {
-    _program_cache = std::make_unique<jit::program_cache>();
-  }
-
-  if (has_flag(new_flags, init_flags::LOAD_NVCOMP)) { io::detail::nvcomp::load_nvcomp_library(); }
-
-  _initialized_flags = _initialized_flags | new_flags;
+  if (has_flag(flags, init_flags::LOAD_NVCOMP)) { io::detail::nvcomp::load_nvcomp_library(); }
 }
 
-bool context::use_jit() const { return _use_jit; }
-
-std::unique_ptr<context>& get_context_ptr_ref()
-{
-  static std::unique_ptr<context> context;
-  return context;
-}
-
-context& get_context()
-{
-  auto& ctx = get_context_ptr_ref();
-  if (ctx == nullptr) { cudf::initialize(); }
-  return *ctx;
-}
+static std::optional<context> _context{std::nullopt};
+static std::optional<std::once_flag> _context_init_flag{std::in_place};
+static std::optional<std::once_flag> _context_deinit_flag{std::in_place};
 
 }  // namespace cudf
 
@@ -70,15 +57,38 @@ namespace CUDF_EXPORT cudf {
 
 void initialize(init_flags flags)
 {
-  auto& ctx = get_context_ptr_ref();
-  if (ctx == nullptr) {
-    // First initialization - create the context
-    ctx = std::make_unique<context>(flags);
-  } else {
-    // Context already exists - initialize additional components
-    ctx->initialize_components(flags);
-  }
+  std::call_once(*_context_init_flag, [&]() {
+    bool dump_codegen = get_bool_env_or("LIBCUDF_JIT_DUMP_CODEGEN", false);
+    bool use_jit      = get_bool_env_or("LIBCUDF_JIT_ENABLED", false);
+
+    flags = flags | (use_jit ? init_flags::INIT_JIT_CACHE : init_flags::NONE);
+
+    context_config cfg{
+      .dump_codegen = dump_codegen,
+      .use_jit      = use_jit,
+    };
+
+    _context.emplace(cfg, flags);
+  });
+
+  _context->initialize_components(flags);
 }
 
-void deinitialize() { get_context_ptr_ref().reset(); }
+void teardown()
+{
+  std::call_once(*_context_deinit_flag, [&]() {
+    // reset the context to destroy all global objects and release resources, allowing for clean
+    // re-initialization in the future if desired.
+    _context.reset();
+    _context_init_flag.emplace();
+    _context_deinit_flag.emplace();
+  });
+}
+
+context& get_context()
+{
+  cudf::initialize();
+  return *_context;
+}
+
 }  // namespace CUDF_EXPORT cudf

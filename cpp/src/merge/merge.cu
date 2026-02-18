@@ -35,7 +35,6 @@
 #include <cuda/std/iterator>
 #include <cuda/std/utility>
 #include <thrust/binary_search.h>
-#include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/merge.h>
 #include <thrust/sequence.h>

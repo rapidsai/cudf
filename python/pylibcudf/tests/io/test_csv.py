@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 import io
 import os
@@ -11,6 +11,7 @@ from utils import (
     assert_table_and_meta_eq,
     make_source,
     sink_to_str,
+    synchronize_stream,
     write_source_str,
 )
 
@@ -314,6 +315,8 @@ def test_read_csv_from_device_buffers(csv_table_data, stream):
         csv_string.encode("utf-8"), plc.utils._get_stream(stream)
     )
 
+    synchronize_stream(stream)
+
     options = plc.io.csv.CsvReaderOptions.builder(
         plc.io.SourceInfo([buf])
     ).build()
@@ -379,6 +382,8 @@ def test_write_csv(
         stream,
     )
 
+    synchronize_stream(stream)
+
     # Convert everything to string to make comparisons easier
     str_result = sink_to_str(sink)
 
@@ -422,6 +427,8 @@ def test_write_csv_na_rep(na_rep):
             .build()
         )
     )
+
+    synchronize_stream()
 
     # Convert everything to string to make comparisons easier
     str_result = sink_to_str(sink)

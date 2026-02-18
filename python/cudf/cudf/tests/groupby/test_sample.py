@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 import collections
@@ -46,7 +46,7 @@ def by(request):
 
 
 def expected(df, *, n=None, frac=None):
-    value_counts = collections.Counter(df.a.values_host)
+    value_counts = collections.Counter(df.a.to_numpy())
     if n is not None:
         values = list(
             itertools.chain.from_iterable(

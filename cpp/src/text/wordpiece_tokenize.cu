@@ -6,12 +6,12 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/algorithms/copy_if.cuh>
 #include <cudf/detail/cuco_helpers.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/offsets_iterator_factory.cuh>
 #include <cudf/detail/sizes_to_offsets_iterator.cuh>
-#include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/grid_1d.cuh>
 #include <cudf/hashing/detail/murmurhash3_x86_32.cuh>
@@ -35,7 +35,6 @@
 #include <cuda/std/functional>
 #include <cuda/std/iterator>
 #include <cuda/std/limits>
-#include <thrust/copy.h>
 #include <thrust/execution_policy.h>
 #include <thrust/find.h>
 #include <thrust/iterator/transform_iterator.h>
@@ -238,11 +237,11 @@ wordpiece_vocabulary::wordpiece_vocabulary(cudf::strings_column_view const& inpu
   // get the indices of all the ## prefixed entries
   auto sub_map_indices = rmm::device_uvector<cudf::size_type>(vocabulary->size(), stream);
   auto const end =
-    thrust::copy_if(rmm::exec_policy_nosync(stream),
-                    zero_itr,
-                    thrust::counting_iterator<cudf::size_type>(sub_map_indices.size()),
-                    sub_map_indices.begin(),
-                    copy_pieces_fn{*d_vocabulary});
+    cudf::detail::copy_if(zero_itr,
+                          thrust::counting_iterator<cudf::size_type>(sub_map_indices.size()),
+                          sub_map_indices.begin(),
+                          copy_pieces_fn{*d_vocabulary},
+                          stream);
   sub_map_indices.resize(cuda::std::distance(sub_map_indices.begin(), end), stream);
 
   // build a 2nd map with just the ## prefixed items

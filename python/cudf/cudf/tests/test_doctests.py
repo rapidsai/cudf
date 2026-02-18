@@ -1,10 +1,10 @@
-# SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 import contextlib
 import doctest
 import inspect
 import io
-import itertools
+import os
 
 import numpy as np
 import pytest
@@ -14,9 +14,23 @@ import cudf
 from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 
 pytestmark = pytest.mark.filterwarnings("ignore::FutureWarning")
+_SKIP_DOCTESTS = frozenset(
+    {
+        "register_dataframe_accessor",
+        "register_index_accessor",
+        "register_series_accessor",
+    }
+)
 
 # modules that will be searched for doctests
-tests = [cudf, cudf.core.groupby]
+tests = [
+    cudf,
+    cudf.core.groupby,
+    cudf.core.accessors.string.StringMethods,
+    cudf.core.accessors.lists.ListMethods,
+    cudf.core.accessors.struct.StructMethods,
+    cudf.core.accessors.categorical.CategoricalAccessor,
+]
 
 
 def _name_in_all(parent, name):
@@ -63,10 +77,34 @@ def _find_doctests_in_obj(obj, finder=None, criteria=None):
             )
         # Recurse over the public API of classes (attributes not prefixed with
         # an underscore)
-        if inspect.isclass(member):
+        elif inspect.isclass(member):
             yield from _find_doctests_in_obj(
                 member, finder, criteria=_is_public_name
             )
+        # Pick up doctests from re-exported functions (whose __module__
+        # differs from the parent module, so finder.find(obj) above
+        # skips them).
+        elif inspect.isfunction(member) or inspect.isbuiltin(member):
+            for docstring in finder.find(member):
+                if docstring.examples:
+                    yield docstring
+
+
+def _collect_doctests():
+    """Eagerly collect all unique doctests into a list.
+
+    This runs once at import time so the result is an immutable snapshot
+    that can be safely shared across pytest-xdist workers without any
+    mutable shared state.
+    """
+    results = []
+    for mod in tests:
+        for docstring in _find_doctests_in_obj(mod):
+            results.append(docstring)
+    return results
+
+
+_all_doctests = _collect_doctests()
 
 
 class TestDoctests:
@@ -82,9 +120,7 @@ class TestDoctests:
 
     @pytest.mark.parametrize(
         "docstring",
-        itertools.chain.from_iterable(
-            _find_doctests_in_obj(mod) for mod in tests
-        ),
+        _all_doctests,
         ids=lambda docstring: docstring.name,
     )
     @pytest.mark.skipif(
@@ -92,6 +128,15 @@ class TestDoctests:
         reason="Doctests not expected to pass on older versions of pandas",
     )
     def test_docstring(self, docstring, monkeypatch, tmp_path):
+        if (
+            docstring.name == "copy"
+            and os.environ.get("CUDF_TEST_COPY_ON_WRITE") == "1"
+        ):
+            pytest.skip(
+                "copy doctest not compatible with CUDF_TEST_COPY_ON_WRITE=1"
+            )
+        if docstring.name in _SKIP_DOCTESTS:
+            pytest.skip(f"{docstring.name} doctest is not runnable")
         # We ignore differences in whitespace in the doctest output, and enable
         # the use of an ellipsis "..." to match any string in the doctest
         # output. An ellipsis is useful for, e.g., memory addresses or

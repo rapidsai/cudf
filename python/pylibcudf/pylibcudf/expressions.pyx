@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 import ast
 import functools
@@ -331,7 +331,7 @@ _python_cudf_operator_map = {
 # corresponding libcudf C++ AST operators.
 _python_cudf_function_map = {
     # TODO: Operators listed on
-    # https://pandas.pydata.org/pandas-docs/stable/user_guide/enhancingperf.html#expression-evaluation-via-eval  # noqa: E501
+    # https://pandas.pydata.org/pandas-docs/version/2.3.3/user_guide/enhancingperf.html#expression-evaluation-via-eval  # noqa: E501
     # that we don't support yet:
     # expm1, log1p, arctan2 and log10.
     "isnull": ASTOperator.IS_NULL,
