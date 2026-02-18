@@ -744,7 +744,7 @@ dependencies:
           # 'nvidia-ml-py' provides the 'pynvml' module
           - &nvidia_ml_py nvidia-ml-py>=12
           - packaging
-          - polars>=1.30,<1.36
+          - polars>=1.30,<1.39
     specific:
       - output_types: [requirements, pyproject]
         matrices:
@@ -829,6 +829,9 @@ dependencies:
             packages:
       - output_types: requirements
         # Using --constraints for pip install, so we list cupy multiple times
+        # cuPy 14 has a regression for cudf / cupy interop
+        # See https://github.com/cupy/cupy/issues/9709
+        # TODO: remove pinning once cuPy cuts a patch release
         matrices:
           - matrix:
               cuda: "12.*"
@@ -840,6 +843,14 @@ dependencies:
               dependencies: "oldest"
             packages:
               - cupy-cuda13x==13.6.0
+          - matrix:
+              cuda: "12.*"
+            packages:
+              - cupy-cuda12x!=14.0.0
+          - matrix:
+              cuda: "13.*"
+            packages:
+              - cupy-cuda13x!=14.0.0
           - matrix:
             packages:
   test_python_dask_cudf:
@@ -927,6 +938,7 @@ dependencies:
         packages:
           - rich
           - pytest-httpserver
+          - zstandard
   test_python_narwhals:
     common:
       - output_types: [conda, requirements, pyproject]
@@ -1061,7 +1073,7 @@ dependencies:
     common:
       - output_types: conda
         packages:
-          - cupy>=13.6.0
+          - cupy>=13.6.0,!=14.0.0
     # NOTE: This is intentionally not broken into groups by a 'cuda_suffixed' selector like
     #       other packages with -cu{nn}x suffixes in this file.
     #       All RAPIDS wheel builds (including in devcontainers) expect cupy to be suffixed.
@@ -1071,11 +1083,11 @@ dependencies:
           - matrix:
               cuda: "12.*"
             packages:
-              - cupy-cuda12x>=13.6.0
+              - cupy-cuda12x>=13.6.0,!=14.0.0
           # fallback to CUDA 13 versions if 'cuda' is '13.*' or not provided
           - matrix:
             packages:
-              - cupy-cuda13x>=13.6.0
+              - cupy-cuda13x>=13.6.0,!=14.0.0
   depends_on_libkvikio:
     common:
       - output_types: conda
@@ -1253,7 +1265,7 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          - narwhals==2.0.1
+          - narwhals==2.16.0
   cudf_polars_trace:
     common:
       - output_types: [conda, requirements, pyproject]

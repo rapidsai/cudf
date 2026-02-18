@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 """Query 7."""
@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
 from cudf_polars.experimental.benchmarks.utils import get_data
 
 if TYPE_CHECKING:
@@ -17,7 +18,15 @@ if TYPE_CHECKING:
 
 def duckdb_impl(run_config: RunConfig) -> str:
     """Query 7."""
-    return """
+    params = load_parameters(int(run_config.scale_factor), query_id=7)
+
+    year = params["year"]
+    gender = params["gender"]
+    marital_status = params["marital_status"]
+    education_status = params["education_status"]
+    promo_channel = params["promo_channel"]
+
+    return f"""
     SELECT i_item_id,
                    Avg(ss_quantity)    agg1,
                    Avg(ss_list_price)  agg2,
@@ -32,12 +41,12 @@ def duckdb_impl(run_config: RunConfig) -> str:
            AND ss_item_sk = i_item_sk
            AND ss_cdemo_sk = cd_demo_sk
            AND ss_promo_sk = p_promo_sk
-           AND cd_gender = 'F'
-           AND cd_marital_status = 'W'
-           AND cd_education_status = '2 yr Degree'
-           AND ( p_channel_email = 'N'
-                  OR p_channel_event = 'N' )
-           AND d_year = 1998
+           AND cd_gender = '{gender}'
+           AND cd_marital_status = '{marital_status}'
+           AND cd_education_status = '{education_status}'
+           AND ( p_channel_email = '{promo_channel}'
+                  OR p_channel_event = '{promo_channel}' )
+           AND d_year = {year}
     GROUP  BY i_item_id
     ORDER  BY i_item_id
     LIMIT 100;
@@ -46,7 +55,14 @@ def duckdb_impl(run_config: RunConfig) -> str:
 
 def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     """Query 7."""
-    # Load required tables
+    params = load_parameters(int(run_config.scale_factor), query_id=7)
+
+    year = params["year"]
+    gender = params["gender"]
+    marital_status = params["marital_status"]
+    education_status = params["education_status"]
+    promo_channel = params["promo_channel"]
+
     store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
     customer_demographics = get_data(
         run_config.dataset_path, "customer_demographics", run_config.suffix
@@ -60,11 +76,14 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         .join(item, left_on="ss_item_sk", right_on="i_item_sk")
         .join(customer_demographics, left_on="ss_cdemo_sk", right_on="cd_demo_sk")
         .join(promotion, left_on="ss_promo_sk", right_on="p_promo_sk")
-        .filter(pl.col("cd_gender") == "F")
-        .filter(pl.col("cd_marital_status") == "W")
-        .filter(pl.col("cd_education_status") == "2 yr Degree")
-        .filter((pl.col("p_channel_email") == "N") | (pl.col("p_channel_event") == "N"))
-        .filter(pl.col("d_year") == 1998)
+        .filter(pl.col("cd_gender") == gender)
+        .filter(pl.col("cd_marital_status") == marital_status)
+        .filter(pl.col("cd_education_status") == education_status)
+        .filter(
+            (pl.col("p_channel_email") == promo_channel)
+            | (pl.col("p_channel_event") == promo_channel)
+        )
+        .filter(pl.col("d_year") == year)
         .group_by("i_item_id")
         .agg(
             [
