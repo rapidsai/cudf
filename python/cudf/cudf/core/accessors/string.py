@@ -632,9 +632,8 @@ class StringMethods(BaseAccessor):
         if len(group_names) == len(data):
             named_data = {}
             for key, value in data.items():
-                key = group_names[key]
-                named_data[key] = value
-            data = named_data
+                named_data[group_names[key]] = value
+            data = named_data  # type: ignore[assignment]
         if len(data) == 1 and expand is False:
             _, data = data.popitem()  # type: ignore[assignment]
         elif expand is False and len(data) > 1:
