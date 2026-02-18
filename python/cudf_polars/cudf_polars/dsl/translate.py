@@ -60,7 +60,7 @@ def _check_compression(data: bytes) -> str | None:
 
     # See https://en.wikipedia.org/wiki/List_of_file_signatures
     # for the specific hex signatures.
-    if data[0] == 0x1F and data[1] == 0x8B:
+    if data[:2] == b"\x1f\x8b":
         return "gzip"
 
     if data[0] == 0x78 and data[1] in (0x01, 0x5E, 0x9C, 0xDA):
