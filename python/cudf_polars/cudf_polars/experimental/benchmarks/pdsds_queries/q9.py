@@ -18,7 +18,9 @@ if TYPE_CHECKING:
 
 def duckdb_impl(run_config: RunConfig) -> str:
     """Query 9."""
-    params = load_parameters(int(run_config.scale_factor), query_id=9)
+    params = load_parameters(
+        int(run_config.scale_factor), query_id=9, qualification=run_config.qualification
+    )
 
     aggcthen = params["aggcthen"]
     aggcelse = params["aggcelse"]
@@ -92,7 +94,9 @@ def duckdb_impl(run_config: RunConfig) -> str:
 
 def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     """Query 9."""
-    params = load_parameters(int(run_config.scale_factor), query_id=9)
+    params = load_parameters(
+        int(run_config.scale_factor), query_id=9, qualification=run_config.qualification
+    )
 
     aggcthen = params["aggcthen"]
     aggcelse = params["aggcelse"]
@@ -113,7 +117,7 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
 
     # Calculate each bucket summary
     bucket_stats = []
-    for i, (min_qty, max_qty, _threshold) in enumerate(buckets, 1):
+    for i, (min_qty, max_qty, _) in enumerate(buckets, 1):
         # Compute count, avg(aggcthen), avg(aggcelse) for each quantity range
         stats = store_sales.filter(
             pl.col("ss_quantity").is_between(min_qty, max_qty, closed="both")
