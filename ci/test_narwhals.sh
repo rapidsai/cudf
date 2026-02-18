@@ -41,6 +41,7 @@ python -c "import narwhals; print(narwhals.show_versions())"
 # test_with_columns_dtypes_single_row[cudf]: Type handling issue with single row
 # test_first_last_different_orders[cudf]: Multiple order_by in groupby not supported by narwhals pandas-like backend
 # test_series_rfloordiv_by_zero[cudf-0], test_expr_rfloordiv_by_zero[cudf-0]: xpass(strict) - now passing but tests expect failure
+# test_first_last_expr_over_order_by[cudf] - now passing but tests expect failure
 TESTS_THAT_NEED_NARWHALS_FIX_FOR_CUDF=" \
 test_to_numpy[cudf] or \
 test_fill_null_strategies_with_limit_as_none[cudf] or \
@@ -62,6 +63,7 @@ test_schema_from_pandas_like[cudf] or \
 (test_to_datetime_series_infer_fmt and cudf) or \
 test_with_columns_dtypes_single_row[cudf] or \
 test_first_last_different_orders[cudf] or \
+test_first_last_expr_over_order_by[cudf] or \
 test_series_rfloordiv_by_zero[cudf-0] or \
 test_expr_rfloordiv_by_zero[cudf-0] \
 "
