@@ -471,6 +471,46 @@
       "11": {
         "year": 2000,
         "select_one": "t_s_secyear.customer_preferred_cust_flag"
+      },
+      "12": {
+        "year": 2001,
+        "sdate": "2001-01-08",
+        "category": [
+          "Books",
+          "Women",
+          "Electronics"
+        ]
+      },
+      "13": {
+        "ms": [
+          "S",
+          "U",
+          "W"
+        ],
+        "es": [
+          "Secondary",
+          "4 yr Degree",
+          "2 yr Degree"
+        ],
+        "state": [
+          "IA",
+          "MN",
+          "MT",
+          "AR",
+          "IN",
+          "TX",
+          "TN",
+          "NE",
+          "WV"
+        ]
+      },
+      "14": {
+        "year": 1999,
+        "day": 15
+      },
+      "15": {
+        "year": 2001,
+        "qoy": 1
       }
     },
     "10": {
@@ -943,6 +983,46 @@
       "11": {
         "year": 2000,
         "select_one": "t_s_secyear.customer_preferred_cust_flag"
+      },
+      "12": {
+        "year": 2001,
+        "sdate": "2001-01-08",
+        "category": [
+          "Books",
+          "Women",
+          "Electronics"
+        ]
+      },
+      "13": {
+        "ms": [
+          "S",
+          "U",
+          "W"
+        ],
+        "es": [
+          "Secondary",
+          "4 yr Degree",
+          "2 yr Degree"
+        ],
+        "state": [
+          "IA",
+          "MN",
+          "MT",
+          "AR",
+          "IN",
+          "TX",
+          "TN",
+          "NE",
+          "WV"
+        ]
+      },
+      "14": {
+        "year": 1999,
+        "day": 15
+      },
+      "15": {
+        "year": 2001,
+        "qoy": 1
       }
     },
     "50": {
@@ -1415,6 +1495,46 @@
       "11": {
         "year": 2000,
         "select_one": "t_s_secyear.customer_preferred_cust_flag"
+      },
+      "12": {
+        "year": 2001,
+        "sdate": "2001-01-08",
+        "category": [
+          "Books",
+          "Women",
+          "Electronics"
+        ]
+      },
+      "13": {
+        "ms": [
+          "S",
+          "U",
+          "W"
+        ],
+        "es": [
+          "Secondary",
+          "4 yr Degree",
+          "2 yr Degree"
+        ],
+        "state": [
+          "IA",
+          "MN",
+          "MT",
+          "AR",
+          "IN",
+          "TX",
+          "TN",
+          "NE",
+          "WV"
+        ]
+      },
+      "14": {
+        "year": 1999,
+        "day": 15
+      },
+      "15": {
+        "year": 2001,
+        "qoy": 1
       }
     },
     "100": {
@@ -1887,6 +2007,46 @@
       "11": {
         "year": 2000,
         "select_one": "t_s_secyear.customer_preferred_cust_flag"
+      },
+      "12": {
+        "year": 2001,
+        "sdate": "2001-01-08",
+        "category": [
+          "Books",
+          "Women",
+          "Electronics"
+        ]
+      },
+      "13": {
+        "ms": [
+          "S",
+          "U",
+          "W"
+        ],
+        "es": [
+          "Secondary",
+          "4 yr Degree",
+          "2 yr Degree"
+        ],
+        "state": [
+          "IA",
+          "MN",
+          "MT",
+          "AR",
+          "IN",
+          "TX",
+          "TN",
+          "NE",
+          "WV"
+        ]
+      },
+      "14": {
+        "year": 1999,
+        "day": 15
+      },
+      "15": {
+        "year": 2001,
+        "qoy": 1
       }
     },
     "200": {
@@ -2359,6 +2519,46 @@
       "11": {
         "year": 2000,
         "select_one": "t_s_secyear.customer_preferred_cust_flag"
+      },
+      "12": {
+        "year": 2001,
+        "sdate": "2001-01-08",
+        "category": [
+          "Books",
+          "Women",
+          "Electronics"
+        ]
+      },
+      "13": {
+        "ms": [
+          "S",
+          "U",
+          "W"
+        ],
+        "es": [
+          "Secondary",
+          "4 yr Degree",
+          "2 yr Degree"
+        ],
+        "state": [
+          "IA",
+          "MN",
+          "MT",
+          "AR",
+          "IN",
+          "TX",
+          "TN",
+          "NE",
+          "WV"
+        ]
+      },
+      "14": {
+        "year": 1999,
+        "day": 15
+      },
+      "15": {
+        "year": 2001,
+        "qoy": 1
       }
     },
     "400": {
@@ -2831,6 +3031,46 @@
       "11": {
         "year": 2000,
         "select_one": "t_s_secyear.customer_preferred_cust_flag"
+      },
+      "12": {
+        "year": 2001,
+        "sdate": "2001-01-08",
+        "category": [
+          "Books",
+          "Women",
+          "Electronics"
+        ]
+      },
+      "13": {
+        "ms": [
+          "S",
+          "U",
+          "W"
+        ],
+        "es": [
+          "Secondary",
+          "4 yr Degree",
+          "2 yr Degree"
+        ],
+        "state": [
+          "IA",
+          "MN",
+          "MT",
+          "AR",
+          "IN",
+          "TX",
+          "TN",
+          "NE",
+          "WV"
+        ]
+      },
+      "14": {
+        "year": 1999,
+        "day": 15
+      },
+      "15": {
+        "year": 2001,
+        "qoy": 1
       }
     },
     "1000": {
@@ -3303,6 +3543,46 @@
       "11": {
         "year": 2000,
         "select_one": "t_s_secyear.customer_preferred_cust_flag"
+      },
+      "12": {
+        "year": 2001,
+        "sdate": "2001-01-08",
+        "category": [
+          "Books",
+          "Women",
+          "Electronics"
+        ]
+      },
+      "13": {
+        "ms": [
+          "S",
+          "U",
+          "W"
+        ],
+        "es": [
+          "Secondary",
+          "4 yr Degree",
+          "2 yr Degree"
+        ],
+        "state": [
+          "IA",
+          "MN",
+          "MT",
+          "AR",
+          "IN",
+          "TX",
+          "TN",
+          "NE",
+          "WV"
+        ]
+      },
+      "14": {
+        "year": 1999,
+        "day": 15
+      },
+      "15": {
+        "year": 2001,
+        "qoy": 1
       }
     },
     "3000": {
@@ -3775,6 +4055,46 @@
       "11": {
         "year": 2000,
         "select_one": "t_s_secyear.customer_preferred_cust_flag"
+      },
+      "12": {
+        "year": 2001,
+        "sdate": "2001-01-08",
+        "category": [
+          "Books",
+          "Women",
+          "Electronics"
+        ]
+      },
+      "13": {
+        "ms": [
+          "S",
+          "U",
+          "W"
+        ],
+        "es": [
+          "Secondary",
+          "4 yr Degree",
+          "2 yr Degree"
+        ],
+        "state": [
+          "IA",
+          "MN",
+          "MT",
+          "AR",
+          "IN",
+          "TX",
+          "TN",
+          "NE",
+          "WV"
+        ]
+      },
+      "14": {
+        "year": 1999,
+        "day": 15
+      },
+      "15": {
+        "year": 2001,
+        "qoy": 1
       }
     },
     "10000": {
@@ -4247,6 +4567,46 @@
       "11": {
         "year": 2000,
         "select_one": "t_s_secyear.customer_preferred_cust_flag"
+      },
+      "12": {
+        "year": 2001,
+        "sdate": "2001-01-08",
+        "category": [
+          "Books",
+          "Women",
+          "Electronics"
+        ]
+      },
+      "13": {
+        "ms": [
+          "S",
+          "U",
+          "W"
+        ],
+        "es": [
+          "Secondary",
+          "4 yr Degree",
+          "2 yr Degree"
+        ],
+        "state": [
+          "IA",
+          "MN",
+          "MT",
+          "AR",
+          "IN",
+          "TX",
+          "TN",
+          "NE",
+          "WV"
+        ]
+      },
+      "14": {
+        "year": 1999,
+        "day": 15
+      },
+      "15": {
+        "year": 2001,
+        "qoy": 1
       }
     },
     "30000": {
@@ -4719,6 +5079,46 @@
       "11": {
         "year": 2000,
         "select_one": "t_s_secyear.customer_preferred_cust_flag"
+      },
+      "12": {
+        "year": 2001,
+        "sdate": "2001-01-08",
+        "category": [
+          "Books",
+          "Women",
+          "Electronics"
+        ]
+      },
+      "13": {
+        "ms": [
+          "S",
+          "U",
+          "W"
+        ],
+        "es": [
+          "Secondary",
+          "4 yr Degree",
+          "2 yr Degree"
+        ],
+        "state": [
+          "IA",
+          "MN",
+          "MT",
+          "AR",
+          "IN",
+          "TX",
+          "TN",
+          "NE",
+          "WV"
+        ]
+      },
+      "14": {
+        "year": 1999,
+        "day": 15
+      },
+      "15": {
+        "year": 2001,
+        "qoy": 1
       }
     },
     "100000": {
@@ -5191,6 +5591,46 @@
       "11": {
         "year": 2000,
         "select_one": "t_s_secyear.customer_preferred_cust_flag"
+      },
+      "12": {
+        "year": 2001,
+        "sdate": "2001-01-08",
+        "category": [
+          "Books",
+          "Women",
+          "Electronics"
+        ]
+      },
+      "13": {
+        "ms": [
+          "S",
+          "U",
+          "W"
+        ],
+        "es": [
+          "Secondary",
+          "4 yr Degree",
+          "2 yr Degree"
+        ],
+        "state": [
+          "IA",
+          "MN",
+          "MT",
+          "AR",
+          "IN",
+          "TX",
+          "TN",
+          "NE",
+          "WV"
+        ]
+      },
+      "14": {
+        "year": 1999,
+        "day": 15
+      },
+      "15": {
+        "year": 2001,
+        "qoy": 1
       }
     },
     "qualification": {
@@ -5657,6 +6097,46 @@
       "11": {
         "year": 2001,
         "select_one": "t_s_secyear.customer_preferred_cust_flag"
+      },
+      "12": {
+        "year": 1999,
+        "sdate": "1999-02-22",
+        "category": [
+          "Sports",
+          "Books",
+          "Home"
+        ]
+      },
+      "13": {
+        "ms": [
+          "M",
+          "S",
+          "W"
+        ],
+        "es": [
+          "Advanced Degree",
+          "College",
+          "2 yr Degree"
+        ],
+        "state": [
+          "TX",
+          "OH",
+          "TX",
+          "OR",
+          "NM",
+          "KY",
+          "VA",
+          "TX",
+          "MS"
+        ]
+      },
+      "14": {
+        "year": 1999,
+        "day": 11
+      },
+      "15": {
+        "year": 2001,
+        "qoy": 2
       }
     }
   }

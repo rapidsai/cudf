@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
 from cudf_polars.experimental.benchmarks.utils import get_data
 
 if TYPE_CHECKING:
@@ -17,7 +18,16 @@ if TYPE_CHECKING:
 
 def duckdb_impl(run_config: RunConfig) -> str:
     """Query 15."""
-    return """
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=15,
+        qualification=run_config.qualification,
+    )
+
+    year = params["year"]
+    qoy = params["qoy"]
+
+    return f"""
     SELECT ca_zip,
                    Sum(cs_sales_price)
     FROM   catalog_sales,
@@ -32,8 +42,8 @@ def duckdb_impl(run_config: RunConfig) -> str:
                   OR ca_state IN ( 'CA', 'WA', 'GA' )
                   OR cs_sales_price > 500 )
            AND cs_sold_date_sk = d_date_sk
-           AND d_qoy = 1
-           AND d_year = 1998
+           AND d_qoy = {qoy}
+           AND d_year = {year}
     GROUP  BY ca_zip
     ORDER  BY ca_zip
     LIMIT 100;
@@ -42,6 +52,15 @@ def duckdb_impl(run_config: RunConfig) -> str:
 
 def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     """Query 15."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=15,
+        qualification=run_config.qualification,
+    )
+
+    year = params["year"]
+    qoy = params["qoy"]
+
     # Load tables
     catalog_sales = get_data(
         run_config.dataset_path, "catalog_sales", run_config.suffix
@@ -58,10 +77,11 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         .join(customer_address, left_on="c_current_addr_sk", right_on="ca_address_sk")
         .join(date_dim, left_on="cs_sold_date_sk", right_on="d_date_sk")
         .filter(
-            (pl.col("d_qoy") == 1)
-            & (pl.col("d_year") == 1998)
+            (pl.col("d_qoy") == qoy)
+            & (pl.col("d_year") == year)
             & (
                 pl.col("ca_zip")
+                .cast(pl.Utf8)
                 .str.slice(0, 5)
                 .is_in(
                     [

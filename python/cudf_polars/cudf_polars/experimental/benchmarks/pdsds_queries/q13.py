@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
 from cudf_polars.experimental.benchmarks.utils import get_data
 
 if TYPE_CHECKING:
@@ -17,7 +18,17 @@ if TYPE_CHECKING:
 
 def duckdb_impl(run_config: RunConfig) -> str:
     """Query 13."""
-    return """
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=13,
+        qualification=run_config.qualification,
+    )
+
+    ms = params["ms"]  # 3 marital statuses
+    es = params["es"]  # 3 education statuses
+    state = params["state"]  # 9 states (3 groups of 3)
+
+    return f"""
     SELECT Avg(ss_quantity),
            Avg(ss_ext_sales_price),
            Avg(ss_ext_wholesale_cost),
@@ -33,39 +44,49 @@ def duckdb_impl(run_config: RunConfig) -> str:
            AND d_year = 2001
            AND ( ( ss_hdemo_sk = hd_demo_sk
                    AND cd_demo_sk = ss_cdemo_sk
-                   AND cd_marital_status = 'U'
-                   AND cd_education_status = 'Advanced Degree'
+                   AND cd_marital_status = '{ms[0]}'
+                   AND cd_education_status = '{es[0]}'
                    AND ss_sales_price BETWEEN 100.00 AND 150.00
                    AND hd_dep_count = 3 )
                   OR ( ss_hdemo_sk = hd_demo_sk
                        AND cd_demo_sk = ss_cdemo_sk
-                       AND cd_marital_status = 'M'
-                       AND cd_education_status = 'Primary'
+                       AND cd_marital_status = '{ms[1]}'
+                       AND cd_education_status = '{es[1]}'
                        AND ss_sales_price BETWEEN 50.00 AND 100.00
                        AND hd_dep_count = 1 )
                   OR ( ss_hdemo_sk = hd_demo_sk
                        AND cd_demo_sk = ss_cdemo_sk
-                       AND cd_marital_status = 'D'
-                       AND cd_education_status = 'Secondary'
+                       AND cd_marital_status = '{ms[2]}'
+                       AND cd_education_status = '{es[2]}'
                        AND ss_sales_price BETWEEN 150.00 AND 200.00
                        AND hd_dep_count = 1 ) )
            AND ( ( ss_addr_sk = ca_address_sk
                    AND ca_country = 'United States'
-                   AND ca_state IN ( 'AZ', 'NE', 'IA' )
+                   AND ca_state IN ( '{state[0]}', '{state[1]}', '{state[2]}' )
                    AND ss_net_profit BETWEEN 100 AND 200 )
                   OR ( ss_addr_sk = ca_address_sk
                        AND ca_country = 'United States'
-                       AND ca_state IN ( 'MS', 'CA', 'NV' )
+                       AND ca_state IN ( '{state[3]}', '{state[4]}', '{state[5]}' )
                        AND ss_net_profit BETWEEN 150 AND 300 )
                   OR ( ss_addr_sk = ca_address_sk
                        AND ca_country = 'United States'
-                       AND ca_state IN ( 'GA', 'TX', 'NJ' )
+                       AND ca_state IN ( '{state[6]}', '{state[7]}', '{state[8]}' )
                        AND ss_net_profit BETWEEN 50 AND 250 ) );
     """
 
 
 def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     """Query 13."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=13,
+        qualification=run_config.qualification,
+    )
+
+    ms = params["ms"]  # 3 marital statuses
+    es = params["es"]  # 3 education statuses
+    state = params["state"]  # 9 states (3 groups of 3)
+
     # Load tables
     store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
     store = get_data(run_config.dataset_path, "store", run_config.suffix)
@@ -92,20 +113,20 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
             # Demographic conditions (any one of these)
             (
                 (
-                    (pl.col("cd_marital_status") == "U")
-                    & (pl.col("cd_education_status") == "Advanced Degree")
+                    (pl.col("cd_marital_status") == ms[0])
+                    & (pl.col("cd_education_status") == es[0])
                     & pl.col("ss_sales_price").is_between(100.00, 150.00)
                     & (pl.col("hd_dep_count") == 3)
                 )
                 | (
-                    (pl.col("cd_marital_status") == "M")
-                    & (pl.col("cd_education_status") == "Primary")
+                    (pl.col("cd_marital_status") == ms[1])
+                    & (pl.col("cd_education_status") == es[1])
                     & pl.col("ss_sales_price").is_between(50.00, 100.00)
                     & (pl.col("hd_dep_count") == 1)
                 )
                 | (
-                    (pl.col("cd_marital_status") == "D")
-                    & (pl.col("cd_education_status") == "Secondary")
+                    (pl.col("cd_marital_status") == ms[2])
+                    & (pl.col("cd_education_status") == es[2])
                     & pl.col("ss_sales_price").is_between(150.00, 200.00)
                     & (pl.col("hd_dep_count") == 1)
                 )
@@ -114,15 +135,15 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
             # Address conditions (any one of these)
             (
                 (
-                    pl.col("ca_state").is_in(["AZ", "NE", "IA"])
+                    pl.col("ca_state").is_in(state[0:3])
                     & pl.col("ss_net_profit").is_between(100, 200)
                 )
                 | (
-                    pl.col("ca_state").is_in(["MS", "CA", "NV"])
+                    pl.col("ca_state").is_in(state[3:6])
                     & pl.col("ss_net_profit").is_between(150, 300)
                 )
                 | (
-                    pl.col("ca_state").is_in(["GA", "TX", "NJ"])
+                    pl.col("ca_state").is_in(state[6:9])
                     & pl.col("ss_net_profit").is_between(50, 250)
                 )
             )
