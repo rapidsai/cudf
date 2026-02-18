@@ -35,11 +35,11 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 
+#include <cuda/std/iterator>
 #include <cuda/std/tuple>
 #include <thrust/functional.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/discard_iterator.h>
-#include <thrust/iterator/reverse_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/scan.h>
 #include <thrust/transform.h>
@@ -285,8 +285,8 @@ std::unique_ptr<cudf::column> replace_nulls_policy_impl(cudf::column_view const&
     thrust::inclusive_scan(
       rmm::exec_policy_nosync(stream), in_begin, in_begin + input.size(), gm_begin, func);
   } else {
-    auto in_rbegin = thrust::make_reverse_iterator(in_begin + input.size());
-    auto gm_rbegin = thrust::make_reverse_iterator(gm_begin + gather_map.size());
+    auto in_rbegin = cuda::std::make_reverse_iterator(in_begin + input.size());
+    auto gm_rbegin = cuda::std::make_reverse_iterator(gm_begin + gather_map.size());
     thrust::inclusive_scan(
       rmm::exec_policy_nosync(stream), in_rbegin, in_rbegin + input.size(), gm_rbegin, func);
   }

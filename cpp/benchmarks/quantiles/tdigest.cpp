@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -8,6 +8,8 @@
 #include <cudf/detail/tdigest/tdigest.hpp>
 #include <cudf/filling.hpp>
 #include <cudf/utilities/default_stream.hpp>
+
+#include <cuda/iterator>
 
 #include <nvbench/nvbench.cuh>
 
@@ -31,7 +33,7 @@ void bm_tdigest_merge(nvbench::state& state)
     0, cuda::proclaim_return_type<double>([tdigest_size](cudf::size_type i) {
       return static_cast<double>(base_value + (i % tdigest_size));
     }));
-  auto one_iter = thrust::make_constant_iterator(1);
+  auto one_iter = cuda::make_constant_iterator(1);
   cudf::test::fixed_width_column_wrapper<double> means(val_iter, val_iter + total_centroids);
   cudf::test::fixed_width_column_wrapper<double> weights(one_iter, one_iter + total_centroids);
   std::vector<std::unique_ptr<cudf::column>> inner_struct_children;
@@ -49,8 +51,8 @@ void bm_tdigest_merge(nvbench::state& state)
     num_tdigests, offsets.release(), inner_struct.release(), 0, {}, stream, mr);
 
   // min and max columns
-  auto min_iter = thrust::make_constant_iterator(base_value);
-  auto max_iter = thrust::make_constant_iterator(base_value + (tdigest_size - 1));
+  auto min_iter = cuda::make_constant_iterator(base_value);
+  auto max_iter = cuda::make_constant_iterator(base_value + (tdigest_size - 1));
   cudf::test::fixed_width_column_wrapper<double> mins(min_iter, min_iter + num_tdigests);
   cudf::test::fixed_width_column_wrapper<double> maxes(max_iter, max_iter + num_tdigests);
 

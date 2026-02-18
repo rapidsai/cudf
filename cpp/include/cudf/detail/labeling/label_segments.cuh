@@ -5,16 +5,15 @@
 
 #pragma once
 
-#include <cudf/detail/utilities/algorithm.cuh>
+#include <cudf/detail/algorithms/reduce.cuh>
 #include <cudf/types.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <cuda/std/iterator>
+#include <cuda/iterator>
 #include <thrust/for_each.h>
-#include <thrust/iterator/constant_iterator.h>
 #include <thrust/scan.h>
 #include <thrust/scatter.h>
 #include <thrust/uninitialized_fill.h>
@@ -166,7 +165,7 @@ void labels_to_offsets(InputIterator labels_begin,
   // Count the numbers of labels in the each segment.
   auto const end = cudf::detail::reduce_by_key(labels_begin,  // keys
                                                labels_end,
-                                               thrust::make_constant_iterator<OutputType>(1),
+                                               cuda::make_constant_iterator<OutputType>(1),
                                                list_indices.begin(),  // output unique label values
                                                list_sizes.begin(),    // count for each label
                                                cuda::std::plus<OutputType>(),
