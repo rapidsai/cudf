@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -47,7 +47,8 @@ void filter_join_indices_benchmark(nvbench::state& state,
   auto const method = state.get_string("method");
 
   auto const join_input_size = estimate_size(build_keys) + estimate_size(probe_keys);
-  auto const filter_input_size = join_input_size + (left_indices->size() + right_indices->size()) * sizeof(cudf::size_type);
+  auto const filter_input_size =
+    join_input_size + (left_indices->size() + right_indices->size()) * sizeof(cudf::size_type);
   state.add_element_count(filter_input_size, "filter_input_size");  // number of bytes
   state.template add_global_memory_reads<nvbench::int8_t>(filter_input_size);
 
