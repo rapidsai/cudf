@@ -1090,8 +1090,8 @@ def parse_args(
         default=False,
         help=(
             "Validate the result against CPU execution. This will "
-            "run the query with both GPU and CPU polars engines, collect the "
-            "results in memory, and compare them using polars' assert_frame_equal function. "
+            "run the query with both GPU and baseline engine (CPU polars or DuckDB), collect the "
+            "results in memory, and compare them using polars'. "
             "At larger scale factors, computing the expected result can be slow so "
             "--validate-directory should be used instead."
         ),
@@ -1147,7 +1147,7 @@ def parse_args(
         help=(
             "Validate the results against a directory with a pre-computed set of 'golden' results. "
             "The directory should contain one parquet file per query, named 'qDD.parquet', where DD is the "
-            "zero-padded query number."
+            "zero-padded query number. The JSON output will include the validation results for each record."
         ),
     )
     parser.add_argument(
