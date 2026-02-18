@@ -54,14 +54,11 @@ def is_running_with_slurm() -> bool:
     Returns
     -------
     bool
-        True if Slurm environment variables are detected.
+        True if running under Slurm with PMIx.
     """
-    # Check for Slurm environment variables
-    return (
-        "SLURM_JOB_ID" in os.environ
-        or "SLURM_PROCID" in os.environ
-        or "PMIX_NAMESPACE" in os.environ
-    )
+    if not BOOTSTRAP_AVAILABLE:
+        return False
+    return bootstrap.is_running_with_slurm()
 
 
 def _detect_backend_type():
@@ -145,19 +142,20 @@ def get_bootstrap_context() -> Context:
     Raises
     ------
     RuntimeError
-        If rapidsmpf.bootstrap is not available or not running under rrun.
+        If rapidsmpf.bootstrap is not available or not running under a
+        bootstrap launcher (rrun).
     """
     global _global_context
     if _global_context is None:
         if not BOOTSTRAP_AVAILABLE:
             raise RuntimeError(
                 "rapidsmpf.bootstrap not available. "
-                "Please install rapidsmpf to use rrun execution."
+                "Please install rapidsmpf to use rrun or Slurm execution."
             )
-        if not is_running_with_rrun():
+        if not (is_running_with_rrun() or is_running_with_slurm()):
             raise RuntimeError(
-                "Not running under rrun (RAPIDSMPF_RANK environment variable not set). "
-                "Use 'rrun -n <nranks> python ...' to launch with rrun."
+                "Not running under a bootstrap launcher "
+                "(RAPIDSMPF_RANK / Slurm PMIx not detected)."
             )
 
         backend_type = _detect_backend_type()
@@ -208,30 +206,20 @@ def get_bootstrap_context() -> Context:
 
 def get_rank() -> int:
     """
-    Get current rank.
+    Get current bootstrap rank.
 
     Returns
     -------
     int
-        The rank of the current process (0 if not running under rrun).
+        The rank of the current process.
 
     Raises
     ------
     RuntimeError
-        If not running with rrun or rank could not be determined.
+        If not running with a bootstrap launcher (rrun) or rank
+        could not be determined.
     """
-    if not is_running_with_rrun():
-        raise RuntimeError("Not running with rrun.")
-    # Read directly from environment variable for efficiency
-    # Try RAPIDSMPF_RANK first, fall back to SLURM_PROCID for Slurm
-    rank = os.environ.get("RAPIDSMPF_RANK")
-    if rank is not None:
-        return int(rank)
-    # Fall back to Slurm env vars
-    rank = os.environ.get("SLURM_PROCID")
-    if rank is not None:
-        return int(rank)
-    raise RuntimeError("Could not determine rank.")
+    return bootstrap.get_rank()
 
 
 def get_nranks() -> int:
