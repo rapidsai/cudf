@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
 from cudf_polars.experimental.benchmarks.utils import get_data
 
 if TYPE_CHECKING:
@@ -18,7 +19,21 @@ if TYPE_CHECKING:
 
 def duckdb_impl(run_config: RunConfig) -> str:
     """Query 16."""
-    return """
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=16,
+        qualification=run_config.qualification,
+    )
+
+    year = params["year"]
+    month = params["month"]
+    state = params["state"]
+    county = params["county"]
+
+    # Construct start date string (YYYY-MM-01)
+    start_date = f"{year}-{month}-01"
+
+    return f"""
     SELECT
              Count(DISTINCT cs_order_number) AS 'order count' ,
              Sum(cs_ext_ship_cost)           AS 'total shipping cost' ,
@@ -27,17 +42,13 @@ def duckdb_impl(run_config: RunConfig) -> str:
              date_dim ,
              customer_address ,
              call_center
-    WHERE    d_date BETWEEN '2002-3-01' AND      (
-                      Cast('2002-3-01' AS DATE) + INTERVAL '60' day)
+    WHERE    d_date BETWEEN '{start_date}' AND      (
+                      Cast('{start_date}' AS DATE) + INTERVAL '60' day)
     AND      cs1.cs_ship_date_sk = d_date_sk
     AND      cs1.cs_ship_addr_sk = ca_address_sk
-    AND      ca_state = 'IA'
+    AND      ca_state = '{state}'
     AND      cs1.cs_call_center_sk = cc_call_center_sk
-    AND      cc_county IN ('Williamson County',
-                           'Williamson County',
-                           'Williamson County',
-                           'Williamson County',
-                           'Williamson County' )
+    AND      cc_county IN ({", ".join(f"'{c}'" for c in county)})
     AND      EXISTS
              (
                     SELECT *
@@ -56,6 +67,17 @@ def duckdb_impl(run_config: RunConfig) -> str:
 
 def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     """Query 16."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=16,
+        qualification=run_config.qualification,
+    )
+
+    year = params["year"]
+    month = params["month"]
+    state = params["state"]
+    county = params["county"]
+
     # Load tables
     catalog_sales = get_data(
         run_config.dataset_path, "catalog_sales", run_config.suffix
@@ -68,17 +90,23 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         run_config.dataset_path, "customer_address", run_config.suffix
     )
     call_center = get_data(run_config.dataset_path, "call_center", run_config.suffix)
-    start_date = date(2002, 3, 1)
-    end_date = start_date + timedelta(days=60)
+
+    # Construct start date (YYYY-MM-01)
+    start_date_obj = date(year, month, 1)
+    end_date_obj = start_date_obj + timedelta(days=60)
+
+    # Convert to string literals (d_date is String in parquet)
+    start_date_str = pl.lit(start_date_obj.isoformat())
+    end_date_str = pl.lit(end_date_obj.isoformat())
     # First apply basic filters to catalog_sales
     filtered_sales = (
         catalog_sales.join(date_dim, left_on="cs_ship_date_sk", right_on="d_date_sk")
         .join(customer_address, left_on="cs_ship_addr_sk", right_on="ca_address_sk")
         .join(call_center, left_on="cs_call_center_sk", right_on="cc_call_center_sk")
         .filter(
-            pl.col("d_date").is_between(start_date, end_date, closed="both")
-            & (pl.col("ca_state") == "IA")
-            & pl.col("cc_county").is_in(["Williamson County"])
+            pl.col("d_date").is_between(start_date_str, end_date_str, closed="both")
+            & (pl.col("ca_state") == state)
+            & pl.col("cc_county").is_in(county)
         )
     )
     # Handle EXISTS condition: for each row, check if there's another row with same order but different warehouse

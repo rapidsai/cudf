@@ -473,8 +473,8 @@
         "select_one": "t_s_secyear.customer_preferred_cust_flag"
       },
       "12": {
-        "year": 2001,
         "sdate": "2001-01-08",
+        "year": 2001,
         "category": [
           "Books",
           "Women",
@@ -511,6 +511,18 @@
       "15": {
         "year": 2001,
         "qoy": 1
+      },
+      "16": {
+        "year": 2002,
+        "month": 3,
+        "state": "NH",
+        "county": [
+          "Williamson County",
+          "Williamson County",
+          "Williamson County",
+          "Williamson County",
+          "Williamson County"
+        ]
       }
     },
     "10": {
@@ -985,8 +997,8 @@
         "select_one": "t_s_secyear.customer_preferred_cust_flag"
       },
       "12": {
-        "year": 2001,
         "sdate": "2001-01-08",
+        "year": 2001,
         "category": [
           "Books",
           "Women",
@@ -1023,6 +1035,18 @@
       "15": {
         "year": 2001,
         "qoy": 1
+      },
+      "16": {
+        "year": 2000,
+        "month": 4,
+        "state": "NM",
+        "county": [
+          "Ziebach County",
+          "Walker County",
+          "Williamson County",
+          "Walker County",
+          "Ziebach County"
+        ]
       }
     },
     "50": {
@@ -1497,8 +1521,8 @@
         "select_one": "t_s_secyear.customer_preferred_cust_flag"
       },
       "12": {
-        "year": 2001,
         "sdate": "2001-01-08",
+        "year": 2001,
         "category": [
           "Books",
           "Women",
@@ -1535,6 +1559,18 @@
       "15": {
         "year": 2001,
         "qoy": 1
+      },
+      "16": {
+        "year": 2000,
+        "month": 4,
+        "state": "NM",
+        "county": [
+          "Ziebach County",
+          "Walker County",
+          "Williamson County",
+          "Walker County",
+          "Ziebach County"
+        ]
       }
     },
     "100": {
@@ -2009,8 +2045,8 @@
         "select_one": "t_s_secyear.customer_preferred_cust_flag"
       },
       "12": {
-        "year": 2001,
         "sdate": "2001-01-08",
+        "year": 2001,
         "category": [
           "Books",
           "Women",
@@ -2047,6 +2083,18 @@
       "15": {
         "year": 2001,
         "qoy": 1
+      },
+      "16": {
+        "year": 2002,
+        "month": 2,
+        "state": "MN",
+        "county": [
+          "Barrow County",
+          "Walker County",
+          "Ziebach County",
+          "Daviess County",
+          "Richland County"
+        ]
       }
     },
     "200": {
@@ -2521,8 +2569,8 @@
         "select_one": "t_s_secyear.customer_preferred_cust_flag"
       },
       "12": {
-        "year": 2001,
         "sdate": "2001-01-08",
+        "year": 2001,
         "category": [
           "Books",
           "Women",
@@ -2559,6 +2607,18 @@
       "15": {
         "year": 2001,
         "qoy": 1
+      },
+      "16": {
+        "year": 2000,
+        "month": 3,
+        "state": "IN",
+        "county": [
+          "Fairfield County",
+          "Ziebach County",
+          "Williamson County",
+          "Walker County",
+          "Ziebach County"
+        ]
       }
     },
     "400": {
@@ -3033,8 +3093,8 @@
         "select_one": "t_s_secyear.customer_preferred_cust_flag"
       },
       "12": {
-        "year": 2001,
         "sdate": "2001-01-08",
+        "year": 2001,
         "category": [
           "Books",
           "Women",
@@ -3071,6 +3131,18 @@
       "15": {
         "year": 2001,
         "qoy": 1
+      },
+      "16": {
+        "year": 2001,
+        "month": 5,
+        "state": "MN",
+        "county": [
+          "Ziebach County",
+          "Williamson County",
+          "Ziebach County",
+          "Williamson County",
+          "Ziebach County"
+        ]
       }
     },
     "1000": {
@@ -3545,8 +3617,8 @@
         "select_one": "t_s_secyear.customer_preferred_cust_flag"
       },
       "12": {
-        "year": 2001,
         "sdate": "2001-01-08",
+        "year": 2001,
         "category": [
           "Books",
           "Women",
@@ -3583,6 +3655,18 @@
       "15": {
         "year": 2001,
         "qoy": 1
+      },
+      "16": {
+        "year": 2000,
+        "month": 4,
+        "state": "MI",
+        "county": [
+          "Marshall County",
+          "Wadena County",
+          "Richland County",
+          "San Miguel County",
+          "Oglethorpe County"
+        ]
       }
     },
     "3000": {
@@ -4057,8 +4141,8 @@
         "select_one": "t_s_secyear.customer_preferred_cust_flag"
       },
       "12": {
-        "year": 2001,
         "sdate": "2001-01-08",
+        "year": 2001,
         "category": [
           "Books",
           "Women",
@@ -4095,6 +4179,18 @@
       "15": {
         "year": 2001,
         "qoy": 1
+      },
+      "16": {
+        "year": 2000,
+        "month": 2,
+        "state": "SD",
+        "county": [
+          "Barrow County",
+          "Luce County",
+          "Mobile County",
+          "Williamson County",
+          "Marshall County"
+        ]
       }
     },
     "10000": {
@@ -4569,8 +4665,8 @@
         "select_one": "t_s_secyear.customer_preferred_cust_flag"
       },
       "12": {
-        "year": 2001,
         "sdate": "2001-01-08",
+        "year": 2001,
         "category": [
           "Books",
           "Women",
@@ -4607,6 +4703,18 @@
       "15": {
         "year": 2001,
         "qoy": 1
+      },
+      "16": {
+        "year": 2002,
+        "month": 3,
+        "state": "ND",
+        "county": [
+          "Barrow County",
+          "Bronx County",
+          "Kittitas County",
+          "Levy County",
+          "Richland County"
+        ]
       }
     },
     "30000": {
@@ -5081,8 +5189,8 @@
         "select_one": "t_s_secyear.customer_preferred_cust_flag"
       },
       "12": {
-        "year": 2001,
         "sdate": "2001-01-08",
+        "year": 2001,
         "category": [
           "Books",
           "Women",
@@ -5119,6 +5227,18 @@
       "15": {
         "year": 2001,
         "qoy": 1
+      },
+      "16": {
+        "year": 2002,
+        "month": 2,
+        "state": "KS",
+        "county": [
+          "Mesa County",
+          "Kittitas County",
+          "Ziebach County",
+          "Barrow County",
+          "Perry County"
+        ]
       }
     },
     "100000": {
@@ -5593,8 +5713,8 @@
         "select_one": "t_s_secyear.customer_preferred_cust_flag"
       },
       "12": {
-        "year": 2001,
         "sdate": "2001-01-08",
+        "year": 2001,
         "category": [
           "Books",
           "Women",
@@ -5631,6 +5751,18 @@
       "15": {
         "year": 2001,
         "qoy": 1
+      },
+      "16": {
+        "year": 2002,
+        "month": 2,
+        "state": "KS",
+        "county": [
+          "Mesa County",
+          "Kittitas County",
+          "Ziebach County",
+          "Barrow County",
+          "Perry County"
+        ]
       }
     },
     "qualification": {
@@ -6137,6 +6269,18 @@
       "15": {
         "year": 2001,
         "qoy": 2
+      },
+      "16": {
+        "year": 2002,
+        "month": 2,
+        "state": "GA",
+        "county": [
+          "Williamson County",
+          "Williamson County",
+          "Williamson County",
+          "Williamson County",
+          "Williamson County"
+        ]
       }
     }
   }

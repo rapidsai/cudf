@@ -29,6 +29,7 @@ Pre-generated parameters for PDS-DS queries across a set of scale factors.
 - **Query 13**: `ms` (list of 3 marital statuses), `es` (list of 3 education statuses), `state` (list of 9 states)
 - **Query 14**: `year`, `day` (day of month)
 - **Query 15**: `year`, `qoy` (quarter of year)
+- **Query 16**: `year`, `month`, `state`, `county` (list of 5 counties)
 
 ## Usage
 
