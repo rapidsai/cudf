@@ -13,7 +13,7 @@ namespace lto {
 /// @brief Type-erased parameters for LTO-JIT-compiled transform operations.
 struct [[nodiscard]] transform_params {
   /// @brief Pointer to scope data (e.g. column views, scalars, etc.).
-  void* __restrict__ const* __restrict__ scope = nullptr;
+  void* const* scope = nullptr;
 
   /// @brief Total number of rows to process.
   size_type num_rows = 0;

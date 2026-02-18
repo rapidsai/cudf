@@ -188,7 +188,7 @@ void create_and_install_cudf_jit(char const* target_dir)
 
 }  // namespace
 
-jit_bundle_t::jit_bundle_t(std::string install_dir, cache_t& cache)
+jit_bundle_t::jit_bundle_t(std::string install_dir, rtc::cache_t& cache)
   : install_dir_{std::move(install_dir)}, cache_{&cache}
 {
   ensure_installed();
@@ -331,14 +331,154 @@ int32_t get_current_device_physical_model()
   return props.major * 10 + props.minor;
 }
 
-}  // namespace
-
-fragment get_or_compile_fragment(char const* name, char const* source_code_cstr, char const* key)
+rtc::fragment compile_udf_uncached(char const* name,
+                                   char const* cuda_code,
+                                   bool use_pch,
+                                   bool log_pch)
 {
   CUDF_FUNC_RANGE();
 
   auto& bundle = cudf::get_context().jit_bundle();
+  auto begin   = std::chrono::steady_clock::now();
+  auto sm      = get_current_device_physical_model();
+
+  auto include_dirs    = bundle.get_include_directories();
+  auto compile_options = bundle.get_compile_options();
+  auto pch_dir         = cudf::get_context().get_jit_pch_dir();
+
+  std::vector<std::string> options;
+
+  for (auto const& include_dir : include_dirs) {
+    options.emplace_back(std::format("-I{}", include_dir));
+  }
+
+  for (auto const& compile_option : compile_options) {
+    options.emplace_back(compile_option);
+  }
+
+  // TODO: experiment with:
+  // --fdevice-time-trace=jit_comp_trace.json
+  // --time=compile_trace.json
+  // -time
+
+  options.emplace_back(std::format("--gpu-architecture=sm_{}", sm));
+  options.emplace_back("--dlink-time-opt");
+  options.emplace_back("--relocatable-device-code=true");
+  options.emplace_back("--device-as-default-execution-space");
+  options.emplace_back("--restrict");
+  options.emplace_back("--minimal");
+  options.emplace_back("--split-compile=0");
+
+  if (use_pch) {
+    options.emplace_back("--pch");
+    options.emplace_back(std::format("--pch-dir={}", pch_dir));
+
+    if (log_pch) {
+      options.emplace_back("--pch-verbose=true");
+      options.emplace_back("--pch-messages=true");
+    }
+  }
+
+  std::vector<char const*> options_cstr;
+  for (auto const& option : options) {
+    options_cstr.emplace_back(option.c_str());
+  }
+
+  auto params = rtc::fragment_t::compile_params{.name        = name,
+                                                .source      = cuda_code,
+                                                .headers     = {},
+                                                .options     = options_cstr,
+                                                .target_type = rtc::binary_type::LTO_IR};
+
+  auto frag = rtc::fragment_t::compile(params);
+
+  auto end = std::chrono::steady_clock::now();
+
+  auto duration = end - begin;
+
+  CUDF_LOG_WARN(
+    "Compiled fragment `%s` in %f ms",
+    name,
+    std::chrono::duration_cast<std::chrono::duration<double, std::milli>>(duration).count());
+
+  return frag;
+}
+
+std::tuple<rtc::library, rtc::blob> link_udf_uncached(char const* name,
+                                                      rtc::fragment const& fragment,
+                                                      char const* kernel_symbol)
+{
+  CUDF_FUNC_RANGE();
+
+  auto sm      = get_current_device_physical_model();
+  auto& bundle = cudf::get_context().jit_bundle();
+
+  auto begin   = std::chrono::steady_clock::now();
+  auto library = bundle.get_lto_library();
+
+  // TODO: sass dump
+  // TODO: time trace dump
+  // TODO: lineinfo and debug info options
+  // TODO: -nocache
+
+  std::vector<std::string> options;
+
+  options.emplace_back("-O3");
+  options.emplace_back("-lto");
+  options.emplace_back(std::format("-arch=sm_{}", sm));
+  options.emplace_back(std::format("-kernels-used={}", kernel_symbol));
+  options.emplace_back("-optimize-unused-variables");
+  options.emplace_back("-split-compile=0");
+
+  std::vector<char const*> options_cstr;
+  for (auto const& option : options) {
+    options_cstr.emplace_back(option.c_str());
+  }
+
+  rtc::blob_view link_fragments[] = {library->get(rtc::binary_type::FATBIN)->view(),
+                                     fragment->get(rtc::binary_type::LTO_IR)->view()};
+
+  rtc::binary_type fragment_binary_types[] = {rtc::binary_type::FATBIN, rtc::binary_type::LTO_IR};
+
+  char const* fragment_names[] = {"cudf_lto_library", name};
+
+  auto params = rtc::library_t::link_params{.name                  = name,
+                                            .output_type           = rtc::binary_type::CUBIN,
+                                            .fragments             = link_fragments,
+                                            .fragment_binary_types = fragment_binary_types,
+                                            .fragment_names        = fragment_names,
+                                            .link_options          = options_cstr};
+
+  auto blob = rtc::library_t::link_as_blob(params);
+
+  auto load_params =
+    rtc::library_t::load_params{.binary = blob->view(), .type = rtc::binary_type::CUBIN};
+
+  auto linked_library = rtc::library_t::load(load_params);
+
+  auto end = std::chrono::steady_clock::now();
+
+  auto duration = end - begin;
+
+  CUDF_LOG_WARN(
+    "Linked fragment `%s` in %f ms",
+    name,
+    std::chrono::duration_cast<std::chrono::duration<double, std::milli>>(duration).count());
+
+  return std::make_tuple(linked_library, blob);
+}
+
+rtc::fragment compile_udf(char const* name,
+                          char const* key,
+                          char const* cuda_udf,
+                          bool use_cache,
+                          bool use_pch,
+                          bool log_pch)
+{
+  CUDF_FUNC_RANGE();
+
   auto& cache  = cudf::get_context().rtc_cache();
+  auto& bundle = cudf::get_context().jit_bundle();
 
   auto runtime     = get_runtime_version();
   auto driver      = get_driver_version();
@@ -359,61 +499,9 @@ bundle={})***",
 
   auto cache_key_sha256 = hash_string(cache_key);
 
-  auto compile = [&] {
-    auto begin = std::chrono::steady_clock::now();
+  auto compile = [&] { return compile_udf_uncached(name, cuda_udf, use_pch, log_pch); };
 
-    auto include_dirs    = bundle.get_include_directories();
-    auto compile_options = bundle.get_compile_options();
-
-    std::vector<std::string> options;
-
-    for (auto const& include_dir : include_dirs) {
-      options.emplace_back(std::format("-I{}", include_dir));
-    }
-
-    for (auto const& compile_option : compile_options) {
-      options.emplace_back(compile_option);
-    }
-
-    options.emplace_back(std::format("--gpu-architecture=sm_{}", sm));
-    options.emplace_back("--dlink-time-opt");
-    options.emplace_back("--relocatable-device-code=true");
-    options.emplace_back("--device-as-default-execution-space");
-
-    // TODO: experiment with:
-    // --split-compile=0
-    // --fdevice-time-trace=jit_comp_trace.json
-    // --minimal
-    // --time=compile_trace.json
-    // -time
-    // --fast-compile
-    // --pch
-    // --pch-dir=/tmp/cudf-rtc-pch
-
-    std::vector<char const*> options_cstr;
-    for (auto const& option : options) {
-      options_cstr.emplace_back(option.c_str());
-    }
-
-    auto params = rtc::fragment_t::compile_params{.name        = name,
-                                                  .source      = source_code_cstr,
-                                                  .headers     = {},
-                                                  .options     = options_cstr,
-                                                  .target_type = rtc::binary_type::LTO_IR};
-
-    auto frag = rtc::fragment_t::compile(params);
-
-    auto end = std::chrono::steady_clock::now();
-
-    auto duration = end - begin;
-
-    CUDF_LOG_INFO(
-      "Compiled fragment `{}` in {} ms",
-      name,
-      std::chrono::duration_cast<std::chrono::duration<double, std::milli>>(duration).count());
-
-    return frag;
-  };
+  if (!use_cache) { return compile(); }
 
   auto fut =
     cache.query_or_insert_fragment(cache_key_sha256,
@@ -423,10 +511,11 @@ bundle={})***",
   return fut.get();
 }
 
-rtc::library compile_and_link_udf(char const* name,
-                                  char const* udf_code,
-                                  char const* udf_key,
-                                  char const* kernel_symbol)
+rtc::library link_udf(char const* name,
+                      char const* key,
+                      rtc::fragment const& fragment,
+                      char const* kernel_symbol,
+                      bool use_cache)
 {
   CUDF_FUNC_RANGE();
 
@@ -438,90 +527,78 @@ rtc::library compile_and_link_udf(char const* name,
   auto sm          = get_current_device_physical_model();
   auto bundle_hash = bundle.get_hash();
 
-  auto compile = [&] {
-    auto begin    = std::chrono::steady_clock::now();
-    auto library  = bundle.get_lto_library();
-    auto fragment = get_or_compile_fragment(name, udf_code, udf_key);
-
-    // TODO: sass dump
-    // TODO: time trace dump
-
-    // TODO: experiment with:
-    // optimization flags
-    // split-compile
-    // split-compile-extended
-    // lineinfo and debug info options
-    // -kernels-used=
-    // env variable to control options
-    // fma
-    // variables-used
-    // -optimize-unused-variables
-    // -nocache
-    // -device-stack-protector
-
-    std::vector<std::string> options;
-
-    options.emplace_back("-lto");
-    options.emplace_back(std::format("-arch=sm_{}", sm));
-    options.emplace_back(std::format("-kernels-used={}", kernel_symbol));
-
-    std::vector<char const*> options_cstr;
-    for (auto const& option : options) {
-      options_cstr.emplace_back(option.c_str());
-    }
-
-    rtc::blob_view link_fragments[] = {library->get(rtc::binary_type::FATBIN)->view(),
-                                       fragment->get(rtc::binary_type::LTO_IR)->view()};
-
-    rtc::binary_type fragment_binary_types[] = {rtc::binary_type::FATBIN, rtc::binary_type::LTO_IR};
-
-    char const* fragment_names[] = {"cudf_lto_library", name};
-
-    auto params = rtc::library_t::link_params{.name                  = name,
-                                              .output_type           = rtc::binary_type::CUBIN,
-                                              .fragments             = link_fragments,
-                                              .fragment_binary_types = fragment_binary_types,
-                                              .fragment_names        = fragment_names,
-                                              .link_options          = options_cstr};
-
-    auto blob = rtc::library_t::link_as_blob(params);
-
-    auto load_params =
-      rtc::library_t::load_params{.binary = blob->view(), .type = rtc::binary_type::CUBIN};
-
-    auto linked_library = rtc::library_t::load(load_params);
-
-    auto end = std::chrono::steady_clock::now();
-
-    auto duration = end - begin;
-
-    CUDF_LOG_INFO(
-      "Compiled fragment `{}` in {} ms",
-      name,
-      std::chrono::duration_cast<std::chrono::duration<double, std::milli>>(duration).count());
-
-    return std::make_tuple(linked_library, blob);
-  };
-
-  auto library_cache_key        = std::format(R"***(library_type=CUBIN
-kernels={}
-udf={}
+  auto cache_key = std::format(R"***(library_type=CUBIN
+key={}
+kernel={}
 cuda_runtime={}
 cuda_driver={}
-arch={})***",
-                                       kernel_symbol,
-                                       udf_key,
-                                       runtime,
-                                       driver,
-                                       sm);
-  auto library_cache_key_sha256 = hash_string(library_cache_key);
+arch={},
+bundle={})***",
+                               key,
+                               kernel_symbol,
+                               runtime,
+                               driver,
+                               sm,
+                               bundle_hash);
 
-  auto library =
-    cache.query_or_insert_library(library_cache_key_sha256,
-                                  rtc::binary_type::CUBIN,
-                                  rtc::library_compile_function_t::from_functor(compile));
+  auto cache_key_sha256 = hash_string(cache_key);
 
-  return library.get();
+  auto link = [&] { return link_udf_uncached(name, fragment, kernel_symbol); };
+
+  if (!use_cache) {
+    auto [lib, blob] = link();
+    return lib;
+  }
+
+  auto fut = cache.query_or_insert_library(
+    cache_key_sha256, rtc::binary_type::CUBIN, rtc::library_compile_function_t::from_functor(link));
+
+  return fut.get();
+}
+
+rtc::library compile_cuda_library(char const* name,
+                                  char const* key,
+                                  char const* cuda_udf,
+                                  char const* kernel_symbol,
+                                  bool use_cache,
+                                  bool use_pch,
+                                  bool log_pch)
+{
+  CUDF_FUNC_RANGE();
+  auto fragment = compile_udf(name, key, cuda_udf, use_cache, use_pch, log_pch);
+  auto library  = link_udf(name, key, fragment, kernel_symbol, use_cache);
+  return library;
+}
+
+}  // namespace
+
+rtc::library compile_kernel(std::string const& name,
+                            std::string const& key,
+                            std::string const& cuda_udf,
+                            std::string const& kernel_symbol,
+                            bool use_cache,
+                            bool use_pch,
+                            bool log_pch)
+{
+  return compile_cuda_library(name.c_str(),
+                              key.c_str(),
+                              cuda_udf.c_str(),
+                              kernel_symbol.c_str(),
+                              use_cache,
+                              use_pch,
+                              log_pch);
+}
+
+rtc::library compile_lto_ir_kernel(std::string const& name,
+                                   std::string const& key,
+                                   std::span<uint8_t const> lto_ir_binary,
+                                   std::string const& kernel_symbol,
+                                   bool use_cache)
+{
+  auto blob     = std::make_shared<rtc::blob_t>(rtc::blob_t::from_static_data(lto_ir_binary));
+  auto fragment = rtc::fragment_t::load(
+    rtc::fragment_t::load_params{.binary = blob, .type = rtc::binary_type::LTO_IR});
+  return link_udf(name.c_str(), key.c_str(), fragment, kernel_symbol.c_str(), use_cache);
 }
 
 }  // namespace CUDF_EXPORT cudf

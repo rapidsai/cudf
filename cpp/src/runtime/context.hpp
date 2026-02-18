@@ -28,6 +28,7 @@ struct [[nodiscard]] context_config {
   bool use_jit               = false;
   std::string rtc_cache_dir  = {};
   std::string jit_bundle_dir = {};
+  std::string jit_pch_dir    = {};
 };
 
 /// @brief The context object contains global state internal to CUDF.
@@ -69,6 +70,8 @@ class context {
   [[nodiscard]] bool dump_codegen() const;
 
   [[nodiscard]] bool use_jit() const;
+
+  [[nodiscard]] std::string const& get_jit_pch_dir() const;
 
   /// @brief Initialize additional components based on the provided flags
   /// @param flags The initialization flags to process

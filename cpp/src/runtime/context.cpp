@@ -49,6 +49,7 @@ void context::ensure_jit_bundle_initialized()
   std::call_once(_jit_bundle_init_flag, [&]() {
     // make sure the jit bundle directory exists
     std::filesystem::create_directories(_config.jit_bundle_dir);
+    std::filesystem::create_directories(_config.jit_pch_dir);
     _jit_bundle = std::make_unique<jit_bundle_t>(_config.jit_bundle_dir, *_rtc_cache);
   });
 }
@@ -74,6 +75,8 @@ jit_bundle_t& context::jit_bundle()
 bool context::dump_codegen() const { return _config.dump_codegen; }
 
 bool context::use_jit() const { return _config.use_jit; }
+
+std::string const& context::get_jit_pch_dir() const { return _config.jit_pch_dir; }
 
 void context::initialize_components(init_flags flags)
 {
@@ -113,6 +116,11 @@ std::filesystem::path get_rtc_cache_dir()
   return getenv_or("LIBCUDF_RTC_CACHE_DIR", get_cudf_dir() / "rtc_cache");
 }
 
+std::filesystem::path get_jit_pch_dir()
+{
+  return getenv_or("LIBCUDF_JIT_PCH_DIR", get_cudf_dir() / "jit_pch");
+}
+
 }  // namespace cudf
 
 namespace CUDF_EXPORT cudf {
@@ -127,12 +135,14 @@ void initialize(init_flags flags)
 
     auto jit_bundle_dir = get_jit_bundle_dir();
     auto rtc_cache_dir  = get_rtc_cache_dir();
+    auto jit_pch_dir    = get_jit_pch_dir();
 
     context_config cfg{
       .dump_codegen   = dump_codegen,
       .use_jit        = use_jit,
       .rtc_cache_dir  = rtc_cache_dir,
       .jit_bundle_dir = jit_bundle_dir,
+      .jit_pch_dir    = jit_pch_dir,
     };
 
     _context.emplace(cfg, flags);

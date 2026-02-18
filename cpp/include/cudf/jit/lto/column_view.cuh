@@ -12,15 +12,15 @@
 namespace CUDF_LTO_EXPORT cudf {
 namespace lto {
 
-struct alignas(16) CUDF_LTO_ALIAS column_view {
+struct alignas(16) CUDF_LTO_ALIAS column_device_view {
  private:
-  data_type _type                      = {};
-  size_type _size                      = 0;
-  void const* _data                    = nullptr;
-  bitmask_type const* _null_mask       = nullptr;
-  size_type _offset                    = 0;
-  column_view* _d_children = nullptr;
-  size_type _num_children              = 0;
+  data_type _type                 = {};
+  size_type _size                 = 0;
+  void const* _data               = nullptr;
+  bitmask_type const* _null_mask  = nullptr;
+  size_type _offset               = 0;
+  column_device_view* _d_children = nullptr;
+  size_type _num_children         = 0;
 
  public:
   template <typename T>
@@ -53,15 +53,15 @@ struct alignas(16) CUDF_LTO_ALIAS column_view {
   __device__ size_type num_child_columns() const;
 };
 
-struct alignas(16) CUDF_LTO_ALIAS mutable_column_view {
+struct alignas(16) CUDF_LTO_ALIAS mutable_column_device_view {
  private:
-  data_type _type                              = {};
-  size_type _size                              = 0;
-  void const* _data                            = nullptr;
-  bitmask_type const* _null_mask               = nullptr;
-  size_type _offset                            = 0;
-  mutable_column_view* _d_children = nullptr;
-  size_type _num_children                      = 0;
+  data_type _type                         = {};
+  size_type _size                         = 0;
+  void const* _data                       = nullptr;
+  bitmask_type const* _null_mask          = nullptr;
+  size_type _offset                       = 0;
+  mutable_column_device_view* _d_children = nullptr;
+  size_type _num_children                 = 0;
 
  public:
   template <typename T>
@@ -183,51 +183,50 @@ struct alignas(16) CUDF_LTO_ALIAS mutable_column_view {
   DO_IT(duration_us)                        \
   DO_IT(duration_ns)
 
-#define DO_IT(T) extern template __device__ T const* column_view::head<T>() const;
+#define DO_IT(T) extern template __device__ T const* column_device_view::head<T>() const;
+
+FOREACH_CUDF_LTO_COLUMN_HEAD_TYPE
+
+#undef DO_IT
+
+#define DO_IT(T) extern template __device__ T column_device_view::element<T>(size_type idx) const;
+
+FOREACH_CUDF_LTO_COLUMN_ELEMENT_TYPE
+
+#undef DO_IT
+
+#define DO_IT(T)                                                                                \
+  extern template __device__ optional<T> column_device_view::nullable_element<T>(size_type idx) \
+    const;
+
+FOREACH_CUDF_LTO_COLUMN_ELEMENT_TYPE
+
+#undef DO_IT
+
+#define DO_IT(T) extern template __device__ T* mutable_column_device_view::head<T>() const;
 
 FOREACH_CUDF_LTO_COLUMN_HEAD_TYPE
 
 #undef DO_IT
 
 #define DO_IT(T) \
-  extern template __device__ T column_view::element<T>(size_type idx) const;
+  extern template __device__ T mutable_column_device_view::element<T>(size_type idx) const;
 
 FOREACH_CUDF_LTO_COLUMN_ELEMENT_TYPE
 
 #undef DO_IT
 
-#define DO_IT(T)                                                                       \
-  extern template __device__ optional<T> column_view::nullable_element<T>( \
+#define DO_IT(T)                                                                          \
+  extern template __device__ optional<T> mutable_column_device_view::nullable_element<T>( \
     size_type idx) const;
 
 FOREACH_CUDF_LTO_COLUMN_ELEMENT_TYPE
 
 #undef DO_IT
 
-#define DO_IT(T) extern template __device__ T* mutable_column_view::head<T>() const;
-
-FOREACH_CUDF_LTO_COLUMN_HEAD_TYPE
-
-#undef DO_IT
-
-#define DO_IT(T) \
-  extern template __device__ T mutable_column_view::element<T>(size_type idx) const;
-
-FOREACH_CUDF_LTO_COLUMN_ELEMENT_TYPE
-
-#undef DO_IT
-
-#define DO_IT(T)                                                                               \
-  extern template __device__ optional<T> mutable_column_view::nullable_element<T>( \
-    size_type idx) const;
-
-FOREACH_CUDF_LTO_COLUMN_ELEMENT_TYPE
-
-#undef DO_IT
-
-#define DO_IT(T)                                                                            \
-  extern template __device__ void mutable_column_view::assign<T>(size_type idx, \
-                                                                             T value) const;
+#define DO_IT(T)                                                                                \
+  extern template __device__ void mutable_column_device_view::assign<T>(size_type idx, T value) \
+    const;
 
 FOREACH_CUDF_LTO_COLUMN_ASSIGN_TYPE
 

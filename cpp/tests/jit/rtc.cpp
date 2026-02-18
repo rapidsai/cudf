@@ -37,32 +37,134 @@ struct element_operation {
 };
 */
 
-// TODO: cache control policy: ignore cache
-// TODO: statistics callback, in cudf layer?
-// TODO: extra compile and link flags for LTO library and final kernel, use in CUDF layer, not
-// here?
-//
-// TODO: ??
-// TODO: add time function in cache
-// TODO: take optional pointer/callback to this for it to be written to
-// TODO: take optional list of extra compile flags for linking and compiling
-// TODO: cache hit statistics
-// global cache statistics before and after?
-// TODO: add configuration parameters necessary for testing
-// and profiling cache behaviour
-// TODO: declare getters and setters required for the specific LTO context of the operator
-// they should use the provided LTO functions; might need a planner
-// TODO: bincode dump arguments?
-// TODO: add a bypass cache argument that forces recompilation for testing purposes
-  // TODO: include all headers and disable them based on a macro when not needed for compilation
-struct jit_compile_stats {
-  std::chrono::nanoseconds cpp_compile_time{};
-  std::chrono::nanoseconds fragment_link_time{};
-  std::chrono::nanoseconds total_time{};
-};
+// TODO: write a planner
+// TODO: flags to clear JIT at program startup
+// TODO: nvrtc uses the program name to do PCH
 
-TEST_F(RTCTest, CreateFragmentBasic) {}
+TEST_F(RTCTest, CompileKernelBasic)
+{
+  auto fn = []() {
+    char const* udf = R"***(
+    #include "cudf/jit/lto/column_view.cuh"
+    #include "cudf/jit/lto/operators.cuh"
+    #include "cudf/jit/lto/optional_span.cuh"
+    #include "cudf/jit/lto/optional.cuh"
+    #include "cudf/jit/lto/scope.cuh"
+    #include "cudf/jit/lto/span.cuh"
+    #include "cudf/jit/lto/string_view.cuh"
+    #include "cudf/jit/lto/transform_params.cuh"
+    #include "cudf/jit/lto/types.cuh"
 
+    #pragma nv_hdrstop
+
+    extern "C" __device__ void transform_operator(cudf::lto::transform_params p){
+      using namespace cudf::lto;
+
+      // unpack inputs from scope using the appropriate getters based on the LTO context
+      using s0          = scope::column<0, column_device_view, int, false, false>;
+      using s1          = scope::column<1, column_device_view, int, false, false>;
+      using s2          = scope::column<2, mutable_column_device_view, int, false, false>;
+
+      auto a0 = s0::element(p.scope, p.row_index);
+      auto a1 = s1::element(p.scope, p.row_index);
+      int a2;
+
+      operators::add(&a2, &a0, &a1);
+
+      s2::assign(p.scope, p.row_index, a2);
+    }
+    )***";
+    static int i    = 0;
+
+    i++;
+    auto key = std::format("test_udf_key_{}", i);
+
+    auto lib = cudf::compile_kernel("test_fragment",
+                                    key,
+                                    udf,
+                                    "transform_kernel",
+                                    /*use_cache=*/true,
+                                    /*use_pch=*/true,
+                                    /*log_pch=*/true);
+
+    auto kernel = lib->get_kernel("transform_kernel");
+
+    EXPECT_EQ("transform_kernel", kernel.get_name());
+
+    auto in0 = cudf::test::fixed_width_column_wrapper<int>{1, 2, 3, 4, 5, 6, 7, 8, 9}.release();
+    auto in1 = cudf::test::fixed_width_column_wrapper<int>{9, 8, 7, 6, 5, 4, 3, 2, 1}.release();
+    auto out = cudf::test::fixed_width_column_wrapper<int>{0, 0, 0, 0, 0, 0, 0, 0, 0}.release();
+    int32_t num_rows = 9;
+
+    auto to_device_view = [](auto const& view) {
+      std::vector h_view{view};
+      rmm::device_uvector<cudf::column_device_view> device_view(1, rmm::cuda_stream_default);
+      cudf::detail::cuda_memcpy_async<cudf::column_device_view>(
+        device_view, h_view, rmm::cuda_stream_default);
+      return device_view;
+    };
+
+    auto to_device_mutable_view = [](auto& view) {
+      std::vector h_view{view};
+      rmm::device_uvector<cudf::mutable_column_device_view> device_view(1,
+                                                                        rmm::cuda_stream_default);
+      cudf::detail::cuda_memcpy_async<cudf::mutable_column_device_view>(
+        device_view, h_view, rmm::cuda_stream_default);
+      return device_view;
+    };
+
+    auto h_in0     = cudf::column_device_view::create(in0->view());
+    auto h_in1     = cudf::column_device_view::create(in1->view());
+    auto h_out     = cudf::mutable_column_device_view::create(out->mutable_view());
+    auto d_in0     = to_device_view(*h_in0);
+    auto d_in1     = to_device_view(*h_in1);
+    auto d_out     = to_device_mutable_view(*h_out);
+    auto d_in0_ptr = d_in0.data();
+    auto d_in1_ptr = d_in1.data();
+    auto d_out_ptr = d_out.data();
+
+    rmm::device_buffer d_scope{sizeof(cudf::column_device_view*) +
+                                 sizeof(cudf::column_device_view*) +
+                                 sizeof(cudf::mutable_column_device_view*),
+                               rmm::cuda_stream_default};
+
+    auto* p = static_cast<void**>(d_scope.data());
+
+    detail::cuda_memcpy_async_impl(p,
+                                   &d_in0_ptr,
+                                   sizeof(cudf::column_device_view*),
+                                   detail::host_memory_kind::PAGEABLE,
+                                   rmm::cuda_stream_default);
+    detail::cuda_memcpy_async_impl(p + 1,
+                                   &d_in1_ptr,
+                                   sizeof(cudf::column_device_view*),
+                                   detail::host_memory_kind::PAGEABLE,
+                                   rmm::cuda_stream_default);
+    detail::cuda_memcpy_async_impl(p + 2,
+                                   &d_out_ptr,
+                                   sizeof(cudf::mutable_column_device_view*),
+                                   detail::host_memory_kind::PAGEABLE,
+                                   rmm::cuda_stream_default);
+
+    auto* scope_arg = d_scope.data();
+
+    void* args[] = {&scope_arg, &num_rows};
+
+    kernel.launch(1, 1, 1, 256, 1, 1, 0, cudaStreamDefault, args);
+
+    auto expected =
+      cudf::test::fixed_width_column_wrapper<int>{10, 10, 10, 10, 10, 10, 10, 10, 10}.release();
+
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(out->view(), expected->view());
+  };
+
+  fn();  // warm up cache
+  fn();
+  fn();
+  fn();
+}
+
+/*
 TEST_F(RTCTest, CreateFragment)
 {
   auto fn = []() {
@@ -70,7 +172,7 @@ TEST_F(RTCTest, CreateFragment)
     #include "cudf/jit/lto/transform_params.cuh"
     #include "cudf/jit/lto/operators.cuh"
     #include "cudf/jit/lto/scope.cuh"
-    #include "cudf/jit/lto/column_view.cuh" // for column_view_core, mutable_column_view_core
+    #include "cudf/jit/lto/column_view.cuh" // for column_device_view, mutable_column_device_view
 
     // if we detect that all types are simple types
     // we can exclude some of the getters, setters, and operators
@@ -84,17 +186,17 @@ TEST_F(RTCTest, CreateFragment)
 
       // unpack inputs from scope using the appropriate getters based on the LTO context
       using s0          = scope::user_data<0>;
-      using s1          = scope::column<1, column_view, int, false, false>;
-      using s2          = scope::column<2, column_view, int, false, false>;
-      using s3          = scope::column<3, column_view, double, false, false>;
-      using s4          = scope::column<4, column_view, float, false, false>;
-      using s4          = scope::column<4, string_view, float, false, false>;
-      using s4          = scope::column<4, decimal32, float, false, false>;
-      using s4          = scope::column<5, column_view, float, false, true>;
-      using s4          = scope::column<6, column_view, float, true, false>;
+      using s1          = scope::column<1, column_device_view, int, false, false>;
+      using s2          = scope::column<2, column_device_view, int, false, false>;
+      using s3          = scope::column<3, column_device_view, double, false, false>;
+      using s4          = scope::column<4, column_device_view, float, false, false>;
+      using s4          = scope::column<4, column_device_view, string_view, false, false>;
+      using s4          = scope::column<4, column_device_view, decimal32, false, false>;
+      using s4          = scope::column<5, column_device_view, float, false, true>;
+      using s4          = scope::column<6, column_device_view, float, true, false>;
       using s5          = scope::column<7, span<float>, float, false, false>;
       using s6          = scope::column<8, optional_span<float>, float, false, true>;
-      using s7          = scope::column<9, mutable_column_view, double, false, false>;
+      using s7          = scope::column<9, mutable_column_device_view, double, false, false>;
 
       auto a0 = s0::element(p.scope, p.row_index);
       auto a1 = s1::element(p.scope, p.row_index);
@@ -114,7 +216,8 @@ TEST_F(RTCTest, CreateFragment)
 
       /// <-- BEGIN OF OPERATOR: Derived from user
 
-      // run operation using the LTO-compiled operators; these should be inlined into the final kernel and optimized together by NVJITLink
+      // run operation using the LTO-compiled operators; these should be inlined into the final
+kernel and optimized together by NVJITLink
 
       ops::add(&c, &a, &b);
       ops::sub(&c, &a, &b);
@@ -162,5 +265,6 @@ TEST_F(RTCTest, CreateFragment)
   fn();
   fn();
 }
+*/
 
 CUDF_TEST_PROGRAM_MAIN()

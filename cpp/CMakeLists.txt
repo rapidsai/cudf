@@ -360,7 +360,7 @@ list(APPEND CUDF_JIT_COMPILE_FLAGS -std=c++${CUDF_CUDA_STANDARD} --device-int128
 
 set(CUDF_LTO_JIT_ARCHITECTURES "80-real;90-real;100-real;120-real")
 add_library(cudf_lto_library OBJECT src/jit/lto/library.cu)
-target_compile_options(cudf_lto_library PRIVATE -Xfatbin=--compress-all --compress-mode=size)
+target_compile_options(cudf_lto_library PRIVATE --compress-mode=none)
 set_target_properties(
   cudf_lto_library
   PROPERTIES CUDA_ARCHITECTURES "${CUDF_LTO_JIT_ARCHITECTURES}"

@@ -386,7 +386,6 @@ void kernel_ref::launch(uint32_t grid_dim_x,
   CUDF_EXPECTS(block_dim_x > 0 && block_dim_y > 0 && block_dim_z > 0,
                "Block dimensions must be greater than zero",
                std::logic_error);
-  CUDF_EXPECTS(stream != nullptr, "CUDA stream must not be null", std::logic_error);
   CUDF_EXPECTS(
     kernel_params != nullptr, "Kernel parameters pointer must not be null", std::logic_error);
 

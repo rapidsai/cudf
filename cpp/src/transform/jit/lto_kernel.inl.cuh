@@ -12,7 +12,7 @@ extern "C" {
 
 __device__ void transform_operator(cudf::lto::transform_params params);
 
-__global__ void transform_kernel(void* __restrict__ const* __restrict__ scope, int32_t num_rows)
+__global__ void transform_kernel(void* const* scope, int32_t num_rows)
 {
   auto start  = cudf::detail::grid_1d::global_thread_id();
   auto stride = cudf::detail::grid_1d::grid_stride();

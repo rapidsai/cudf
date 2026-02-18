@@ -36,36 +36,18 @@ struct [[nodiscard]] jit_bundle_t {
   [[nodiscard]] std::vector<std::string> get_compile_options() const;
 };
 
-struct [[nodiscard]] udf_compile_params {
-  std::string_view name = {};
+[[nodiscard]] rtc::library compile_kernel(std::string const& name,
+                                          std::string const& key,
+                                          std::string const& cuda_udf,
+                                          std::string const& kernel_symbol,
+                                          bool use_cache = true,
+                                          bool use_pch   = true,
+                                          bool log_pch   = false);
 
-  std::span<char const> udf = {};
-
-  std::string_view key = {};
-
-  std::string_view kernel_symbol = {};
-
-  std::span<std::string_view const> extra_compile_flags = {};
-
-  std::span<std::string_view const> extra_link_flags = {};
-};
-
-[[nodiscard]] rtc::library compile_and_link_cuda_udf(udf_compile_params const& params);
-
-struct [[nodiscard]] udf_link_params {
-  std::string_view name = {};
-
-  std::span<uint8_t const> udf_blob = {};
-
-  rtc::binary_type type = rtc::binary_type::LTO_IR;
-
-  std::string_view key = {};
-
-  std::string_view kernel_symbol = {};
-
-  std::span<std::string_view const> extra_link_flags = {};
-};
-
-[[nodiscard]] rtc::library link_udf(udf_link_params const& params);
+[[nodiscard]] rtc::library compile_lto_ir_kernel(std::string const& name,
+                                                 std::string const& key,
+                                                 std::span<uint8_t const> lto_ir_binary,
+                                                 std::string const& kernel_symbol,
+                                                 bool use_cache = true);
 
 }  // namespace CUDF_EXPORT cudf

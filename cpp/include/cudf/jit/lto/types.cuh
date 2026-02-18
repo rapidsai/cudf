@@ -34,6 +34,8 @@ namespace lto {
  *
  */
 
+// TODO: rename directory to abi
+
 using int8_t   = signed char;
 using int16_t  = signed short;
 using int32_t  = signed int;
@@ -162,9 +164,9 @@ struct CUDF_LTO_ALIAS optional;
 
 struct CUDF_LTO_ALIAS string_view;
 
-struct CUDF_LTO_ALIAS column_view;
+struct CUDF_LTO_ALIAS column_device_view;
 
-struct CUDF_LTO_ALIAS mutable_column_view;
+struct CUDF_LTO_ALIAS mutable_column_device_view;
 
 }  // namespace lto
 }  // namespace CUDF_LTO_EXPORT cudf

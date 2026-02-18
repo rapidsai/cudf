@@ -12,10 +12,10 @@ namespace CUDF_LTO_EXPORT cudf {
 namespace lto {
 namespace scope {
 
-using args = void* const __restrict__* __restrict__;
+using args = void* const*;
 
 template <int ScopeIndex,
-          typename ColumnType /* = column_device_view_core, mutable_column_device_view_core, span,
+          typename ColumnType /* = column_device_view, mutable_column_device_view, span,
                                  optional_span ... */
           ,
           typename T /* = int, float, fixed_point, string_view ... */,
@@ -26,7 +26,7 @@ struct [[nodiscard]] column {
   static constexpr bool IS_NULLABLE = IsNullable;
 
   using Type = T;
-  using Arg  = ColumnType const* __restrict__;
+  using Arg  = ColumnType const*;
 
   static __device__ decltype(auto) element(args scope, size_type i)
   {
@@ -69,7 +69,7 @@ struct [[nodiscard]] column {
 
 template <int ScopeIndex>
 struct [[nodiscard]] user_data {
-  using Arg = void* __restrict__;
+  using Arg = void*;
 
   static __device__ decltype(auto) element(args scope, [[maybe_unused]] size_type i)
   {
