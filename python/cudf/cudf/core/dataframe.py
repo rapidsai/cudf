@@ -8383,7 +8383,10 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
 
         plc_columns = tbl.columns()
         cudf_cols = (
-            ColumnBase.from_pylibcudf(plc_col) for plc_col in plc_columns
+            ColumnBase.create(
+                plc_col, dtype=dtype_from_pylibcudf_column(plc_col)
+            )
+            for plc_col in plc_columns
         )
         # We only have child names if the source is a pylibcudf.io.TableWithMetadata.
         if child_names is not None:

@@ -90,7 +90,7 @@ requirements:
     - python
     - typing_extensions >=4.0.0
     - pandas >=3.0.0,<3.1.0
-    - cupy >=13.6.0
+    - cupy >=13.6.0,!=14.0.0
     - numba-cuda >=0.22.2
     - numba >=0.60.0,<0.62.0
     - numpy >=1.23,<3.0
