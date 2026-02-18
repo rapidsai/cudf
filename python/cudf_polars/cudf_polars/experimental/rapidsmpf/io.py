@@ -50,6 +50,7 @@ from cudf_polars.experimental.rapidsmpf.nodes import (
 )
 from cudf_polars.experimental.rapidsmpf.utils import (
     ChannelManager,
+    allgather_reduce,
     chunk_to_frame,
     empty_table_chunk,
     process_children,
@@ -742,6 +743,7 @@ async def sink_node(
     ch_in: Channel[TableChunk],
     ch_out: Channel[TableChunk],
     partition_info: PartitionInfo,
+    collective_id: int,
 ) -> None:
     """
     Sink node for rapidsmpf - writes data chunks to a file.
@@ -760,20 +762,29 @@ async def sink_node(
         The output ChannelPair for returning an empty result DataFrame.
     partition_info
         The partition information.
+    collective_id
+        The collective ID for this operation, used for AllGather
+        reduction of the chunk count.
     """
     child_ir = ir.children[0]
-    count = partition_info.count
 
     suffix = ir.sink.kind.lower()
-    width = math.ceil(math.log10(count)) if count > 1 else 1
     # safety-net, if count is too low, we might get conflicts
     # with other files.
-    width = max(width, 6)
-    print(f"{count=} {width=}")
 
     async with shutdown_on_error(context, ch_in, ch_out):
         # Drain the metadata channel (we don't need it for sinking)
-        await recv_metadata(ch_in, context)
+        metadata = await recv_metadata(ch_in, context)
+
+        if context.comm().nranks > 1:
+            count = sum(
+                await allgather_reduce(context, collective_id, metadata.local_count)
+            )
+        else:
+            count = metadata.local_count
+
+        width = math.ceil(math.log10(count)) if count > 1 else 1
+        width = max(width, 6)
 
         if ir.executor_options.sink_to_directory:
             _prepare_sink_directory(ir.sink.path)
@@ -844,6 +855,7 @@ def _(
             channels[ir.children[0]].reserve_output_slot(),
             channels[ir].reserve_input_slot(),
             rec.state["partition_info"][ir],
+            rec.state["collective_id_map"][ir][0],
         )
     ]
 
