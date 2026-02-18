@@ -32,6 +32,45 @@ using cudf::detail::row::lhs_index_type;
 using cudf::detail::row::rhs_index_type;
 
 /**
+ * @brief Utilities for the mark-based join algorithm.
+ *
+ * The mark-based algorithm reserves the MSB (most significant bit) of the hash value
+ * as a "mark bit". During probe, matching build-side entries are atomically marked
+ * via CAS. A subsequent scan of the hash table collects marked (semi) or unmarked (anti)
+ * entries. This eliminates the need for sort + dedup post-processing.
+ */
+namespace mark_utils {
+
+static constexpr hash_value_type mark_bit_mask = hash_value_type{1}
+                                                 << (sizeof(hash_value_type) * 8 - 1);
+
+/**
+ * @brief Sets the mark bit (MSB) on a hash value.
+ */
+CUDF_HOST_DEVICE constexpr hash_value_type set_mark(hash_value_type value) noexcept
+{
+  return value | mark_bit_mask;
+}
+
+/**
+ * @brief Clears the mark bit (MSB) from a hash value.
+ */
+CUDF_HOST_DEVICE constexpr hash_value_type unset_mark(hash_value_type value) noexcept
+{
+  return value & ~mark_bit_mask;
+}
+
+/**
+ * @brief Checks if the mark bit (MSB) is set on a hash value.
+ */
+CUDF_HOST_DEVICE constexpr bool is_marked(hash_value_type value) noexcept
+{
+  return (value & mark_bit_mask) != 0;
+}
+
+}  // namespace mark_utils
+
+/**
  * @brief Base class providing common functionality for filtered join operations.
  *
  * This abstract class implements the core components needed for hash-based semi
@@ -82,6 +121,21 @@ class filtered_join {
   };
 
   /**
+   * @brief Mark-aware hash extractor that strips the mark bit before returning
+   *
+   * Used as the probing scheme hash function for mark-based join so that
+   * the probing sequence is computed from the 31-bit hash, ignoring the mark bit.
+   */
+  struct mark_aware_hash_extract_fn {
+    template <typename T>
+    __device__ constexpr hash_value_type operator()(
+      cuco::pair<hash_value_type, T> const& key) const noexcept
+    {
+      return mark_utils::unset_mark(key.first);
+    }
+  };
+
+  /**
    * @brief Adapter for generating key-value pairs from indices
    *
    * @tparam T Index type
@@ -94,6 +148,28 @@ class filtered_join {
     __device__ __forceinline__ auto operator()(size_type i) const noexcept
     {
       return cuco::pair{_hasher(i), T{i}};
+    }
+
+   private:
+    Hasher _hasher;
+  };
+
+  /**
+   * @brief Generates key-value pairs with the mark bit cleared from the hash
+   *
+   * Used during probe to ensure probe-side hashes use only 31 bits, matching
+   * the storage format used by the mark-based build.
+   *
+   * @tparam T Index type
+   * @tparam Hasher Hash function type
+   */
+  template <typename T, typename Hasher>
+  struct masked_key_pair_fn {
+    CUDF_HOST_DEVICE constexpr masked_key_pair_fn(Hasher const& hasher) : _hasher{hasher} {}
+
+    __device__ __forceinline__ auto operator()(size_type i) const noexcept
+    {
+      return cuco::pair{mark_utils::unset_mark(_hasher(i)), T{i}};
     }
 
    private:
@@ -125,6 +201,40 @@ class filtered_join {
     {
       if (lhs.first != rhs.first) { return false; }
       return _d_equal(lhs.second, rhs.second);
+    }
+
+   private:
+    Equal _d_equal;
+  };
+
+  /**
+   * @brief Mark-aware comparator adapter that strips the mark bit before comparing
+   *
+   * Used for the mark-based multiset join. Hash values stored in the table may
+   * have their MSB set (marked), so comparisons must mask it off.
+   *
+   * @tparam Equal Equality comparator type
+   */
+  template <typename Equal>
+  struct mark_aware_comparator_adapter {
+    mark_aware_comparator_adapter(Equal const& d_equal) : _d_equal{d_equal} {}
+
+    __device__ constexpr auto operator()(
+      cuco::pair<hash_value_type, lhs_index_type> const& lhs,
+      cuco::pair<hash_value_type, lhs_index_type> const& rhs) const noexcept
+    {
+      if (mark_utils::unset_mark(lhs.first) != mark_utils::unset_mark(rhs.first)) { return false; }
+      return _d_equal(lhs.second, rhs.second);
+    }
+
+    __device__ constexpr auto operator()(
+      cuco::pair<hash_value_type, rhs_index_type> const& probe,
+      cuco::pair<hash_value_type, lhs_index_type> const& build) const noexcept
+    {
+      if (mark_utils::unset_mark(probe.first) != mark_utils::unset_mark(build.first)) {
+        return false;
+      }
+      return _d_equal(build.second, probe.second);
     }
 
    private:
@@ -167,10 +277,11 @@ class filtered_join {
    */
   virtual ~filtered_join() = default;
 
- protected:
+ public:
   // Key type used in the hash table
   using key = cuco::pair<hash_value_type, lhs_index_type>;
 
+ protected:
   // Storage type for the hash table buckets
   using storage_type =
     cuco::bucket_storage<key,
@@ -193,6 +304,8 @@ class filtered_join {
   using nested_probing_scheme = cuco::linear_probing<4, hash_extract_fn>;
   // Linear probing scheme with bucket size 1 for simple data
   using simple_probing_scheme = cuco::linear_probing<1, hash_extract_fn>;
+  // Mark-aware probing scheme with cg_size=1 for the mark-based multiset join
+  using mark_aware_simple_probing_scheme = cuco::linear_probing<1, mark_aware_hash_extract_fn>;
   // Equality comparator for complex rows with null handling and NaN comparison
   using row_comparator = cudf::detail::row::equality::device_row_comparator<
     true,
@@ -204,6 +317,10 @@ class filtered_join {
   // Empty sentinel key used to mark empty slots in the hash table
   static constexpr auto empty_sentinel_key = cuco::empty_key{
     cuco::pair{std::numeric_limits<hash_value_type>::max(), lhs_index_type{cudf::JoinNoMatch}}};
+  // Empty sentinel key with MSB cleared for the mark-based multiset join
+  static constexpr auto mark_empty_sentinel_key =
+    cuco::empty_key{cuco::pair{mark_utils::unset_mark(std::numeric_limits<hash_value_type>::max()),
+                               lhs_index_type{cudf::JoinNoMatch}}};
   build_properties _build_props;           ///< Properties of the build table
   cudf::table_view _build;                 ///< input table to build the hash map
   cudf::null_equality const _nulls_equal;  ///< whether to consider nulls as equal

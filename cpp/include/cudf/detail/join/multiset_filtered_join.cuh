@@ -12,6 +12,8 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/resource_ref.hpp>
 
+#include <atomic>
+
 namespace cudf {
 
 // Forward declaration
@@ -19,20 +21,24 @@ enum class join_kind : int32_t;
 
 namespace detail {
 
+/**
+ * @brief Implementation of filtered join using a mark-based multiset hash table.
+ *
+ * This class extends the base filtered_join to implement join operations using
+ * multiset semantics, where duplicate keys are allowed in the hash table.
+ * This is used when the build table is the **left** table (`set_as_build_table::LEFT`),
+ * which may contain duplicate keys.
+ *
+ * Instead of the traditional two-pass retrieve + sort/dedup approach, this uses
+ * a mark-based algorithm: the probe kernel atomically sets the MSB (mark bit) on
+ * matching hash table entries via CAS, then a scan kernel collects marked (semi)
+ * or unmarked (anti) entries. This provides implicit deduplication and eliminates
+ * O(N log N) sort overhead.
+ */
 class multiset_filtered_join : public filtered_join {
- public:
-  /**
-   * @brief Adapter for extracting indices from key-value pairs
-   */
-  struct output_adapter {
-    __device__ constexpr cudf::size_type operator()(
-      cuco::pair<hash_value_type, lhs_index_type> const& x) const
-    {
-      return static_cast<cudf::size_type>(x.second);
-    }
-  };
-
  private:
+  mutable std::atomic<cudf::size_type> _num_marks{0};  ///< Number of marked entries after probe
+
   /**
    * @brief Performs either a semi or anti join based on the specified kind
    *
@@ -49,33 +55,49 @@ class multiset_filtered_join : public filtered_join {
     rmm::device_async_resource_ref mr);
 
   /**
-   * @brief Core implementation for querying the hash table
+   * @brief Core implementation: mark probe + mark scan
    *
-   * Performs the actual hash table query operation for both semi and anti joins
-   * using set semantics.
+   * Performs the mark-based probe of the hash table followed by a scan to
+   * collect result indices. The probe kernel walks the hash table for each
+   * probe row and atomically marks matching build entries. The scan kernel
+   * then iterates the hash table and collects marked (or unmarked for anti)
+   * entries into the output buffer using coalesced shared-memory buffered writes.
    *
    * @tparam CGSize CUDA cooperative group size
-   * @tparam Ref Reference type for the hash table
+   * @tparam ProbingScheme Type of probing scheme (mark-aware)
+   * @tparam Comparator Type of equality comparator (mark-aware)
    * @param probe The table to probe the hash table with
    * @param preprocessed_probe Preprocessed probe table for row operators
    * @param kind The kind of join to perform
-   * @param query_ref Reference to the hash table for querying
+   * @param probing_scheme The probing scheme instance
+   * @param comparator The equality comparator instance
    * @param stream CUDA stream on which to perform operations
    * @param mr Memory resource for allocations
    * @return Device vector of indices representing the join result
    */
-  template <int32_t CGSize, typename Ref>
-  std::unique_ptr<rmm::device_uvector<cudf::size_type>> query_build_table(
+  template <int32_t CGSize, typename ProbingScheme, typename Comparator>
+  std::unique_ptr<rmm::device_uvector<cudf::size_type>> mark_probe_and_scan(
     cudf::table_view const& probe,
     std::shared_ptr<cudf::detail::row::equality::preprocessed_table> preprocessed_probe,
     join_kind kind,
-    Ref query_ref,
+    ProbingScheme probing_scheme,
+    Comparator comparator,
     rmm::cuda_stream_view stream,
     rmm::device_async_resource_ref mr);
 
+  /**
+   * @brief Clears all mark bits from the hash table entries
+   *
+   * Must be called before each probe to ensure independent results when the
+   * hash table is reused across multiple semi_join/anti_join calls.
+   *
+   * @param stream CUDA stream on which to perform operations
+   */
+  void clear_marks(rmm::cuda_stream_view stream);
+
  public:
   /**
-   * @brief Constructor for filtered join with set
+   * @brief Constructor for filtered join with multiset
    *
    * @param build The table to build the hash table from
    * @param compare_nulls How null values should be compared
@@ -88,9 +110,9 @@ class multiset_filtered_join : public filtered_join {
                          rmm::cuda_stream_view stream);
 
   /**
-   * @brief Implementation of semi join for set
+   * @brief Implementation of semi join for multiset
    *
-   * Returns indices of probe table rows that have matching keys in the build table.
+   * Returns indices of build table rows that have matching keys in the probe table.
    *
    * @param probe The table to probe the hash table with
    * @param stream CUDA stream on which to perform operations
@@ -103,9 +125,9 @@ class multiset_filtered_join : public filtered_join {
     rmm::device_async_resource_ref mr) override;
 
   /**
-   * @brief Implementation of anti join for set
+   * @brief Implementation of anti join for multiset
    *
-   * Returns indices of probe table rows that do not have matching keys in the build table.
+   * Returns indices of build table rows that do not have matching keys in the probe table.
    *
    * @param probe The table to probe the hash table with
    * @param stream CUDA stream on which to perform operations
