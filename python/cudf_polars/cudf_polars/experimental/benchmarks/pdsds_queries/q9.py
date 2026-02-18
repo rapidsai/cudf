@@ -135,7 +135,7 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
 
     # Select appropriate value per bucket based on count threshold
     bucket_values = []
-    for i, (_, _, threshold) in enumerate(buckets, 1):
+    for i, (_min_qty, _max_qty, threshold) in enumerate(buckets, 1):
         bucket = (
             pl.when(pl.col(f"count_{i}") > threshold)
             .then(pl.col(f"avg_then_{i}"))
