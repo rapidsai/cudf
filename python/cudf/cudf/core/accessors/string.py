@@ -624,7 +624,17 @@ class StringMethods(BaseAccessor):
                 "unsupported value for `flags` parameter"
             )
 
+        compiled = re.compile(pat)
+        group_names = list(compiled.groupindex.keys())
+        if len(group_names) > 0:
+            pat = re.sub(r"\(\?P<([A-Za-z_][A-Za-z0-9_]*)>", "(", pat)
         data = self._column.extract(pat, flags)
+        if len(group_names) == len(data):
+            named_data = {}
+            for key, value in data.items():
+                key = group_names[key]
+                named_data[key] = value
+            data = named_data
         if len(data) == 1 and expand is False:
             _, data = data.popitem()  # type: ignore[assignment]
         elif expand is False and len(data) > 1:

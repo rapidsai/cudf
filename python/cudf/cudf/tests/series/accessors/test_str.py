@@ -2507,6 +2507,18 @@ def test_string_extract(ps_gs, pat, expand, flags, flags_raise):
         assert_eq(expect, got)
 
 
+def test_string_extract_named_groups():
+    pat = r"(?P<word>\w+)-(?P<number>\d+)"
+    s = ["hello-123", "world-456", "goodbye-789"]
+    gs = cudf.Series(s)
+    ps = pd.Series(s)
+
+    expect = ps.str.extract(pat)
+    got = gs.str.extract(pat)
+
+    assert_eq(expect, got)
+
+
 def test_string_invalid_regex():
     gs = cudf.Series(["a"])
     with pytest.raises(RuntimeError):
