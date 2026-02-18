@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
 from cudf_polars.experimental.benchmarks.utils import get_data
 
 if TYPE_CHECKING:
@@ -17,7 +18,17 @@ if TYPE_CHECKING:
 
 def duckdb_impl(run_config: RunConfig) -> str:
     """Query 19."""
-    return """
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=19,
+        qualification=run_config.qualification,
+    )
+
+    year = params["year"]
+    month = params["month"]
+    manager = params["manager"]
+
+    return f"""
     SELECT i_brand_id              brand_id,
                    i_brand                 brand,
                    i_manufact_id,
@@ -31,9 +42,9 @@ def duckdb_impl(run_config: RunConfig) -> str:
            store
     WHERE  d_date_sk = ss_sold_date_sk
            AND ss_item_sk = i_item_sk
-           AND i_manager_id = 38
-           AND d_moy = 12
-           AND d_year = 1998
+           AND i_manager_id = {manager}
+           AND d_moy = {month}
+           AND d_year = {year}
            AND ss_customer_sk = c_customer_sk
            AND c_current_addr_sk = ca_address_sk
            AND Substr(ca_zip, 1, 5) <> Substr(s_zip, 1, 5)
@@ -53,6 +64,16 @@ def duckdb_impl(run_config: RunConfig) -> str:
 
 def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     """Query 19."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=19,
+        qualification=run_config.qualification,
+    )
+
+    year = params["year"]
+    month = params["month"]
+    manager = params["manager"]
+
     # Load tables
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
     store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
@@ -69,10 +90,13 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         .join(customer_address, left_on="c_current_addr_sk", right_on="ca_address_sk")
         .join(store, left_on="ss_store_sk", right_on="s_store_sk")
         .filter(
-            (pl.col("i_manager_id") == 38)
-            & (pl.col("d_moy") == 12)
-            & (pl.col("d_year") == 1998)
-            & (pl.col("ca_zip").str.slice(0, 5) != pl.col("s_zip").str.slice(0, 5))
+            (pl.col("i_manager_id") == manager)
+            & (pl.col("d_moy") == month)
+            & (pl.col("d_year") == year)
+            & (
+                pl.col("ca_zip").cast(pl.Utf8).str.slice(0, 5)
+                != pl.col("s_zip").cast(pl.Utf8).str.slice(0, 5)
+            )
         )
         .group_by(["i_brand", "i_brand_id", "i_manufact_id", "i_manufact"])
         .agg([pl.col("ss_ext_sales_price").sum().alias("ext_price")])

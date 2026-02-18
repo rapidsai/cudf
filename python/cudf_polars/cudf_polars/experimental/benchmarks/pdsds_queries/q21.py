@@ -5,10 +5,12 @@
 
 from __future__ import annotations
 
+from datetime import date, timedelta
 from typing import TYPE_CHECKING
 
 import polars as pl
 
+from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
 from cudf_polars.experimental.benchmarks.utils import get_data
 
 if TYPE_CHECKING:
@@ -17,7 +19,15 @@ if TYPE_CHECKING:
 
 def duckdb_impl(run_config: RunConfig) -> str:
     """Query 21."""
-    return """
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=21,
+        qualification=run_config.qualification,
+    )
+
+    sales_date = params["sales_date"]
+
+    return f"""
     SELECT
              *
     FROM    (
@@ -26,13 +36,13 @@ def duckdb_impl(run_config: RunConfig) -> str:
                                Sum(
                                CASE
                                         WHEN (
-                                                          Cast(d_date AS DATE) < Cast ('2000-05-13' AS DATE)) THEN inv_quantity_on_hand
+                                                          Cast(d_date AS DATE) < Cast ('{sales_date}' AS DATE)) THEN inv_quantity_on_hand
                                         ELSE 0
                                END) AS inv_before ,
                                Sum(
                                CASE
                                         WHEN (
-                                                          Cast(d_date AS DATE) >= Cast ('2000-05-13' AS DATE)) THEN inv_quantity_on_hand
+                                                          Cast(d_date AS DATE) >= Cast ('{sales_date}' AS DATE)) THEN inv_quantity_on_hand
                                         ELSE 0
                                END) AS inv_after
                       FROM     inventory ,
@@ -43,8 +53,8 @@ def duckdb_impl(run_config: RunConfig) -> str:
                       AND      i_item_sk = inv_item_sk
                       AND      inv_warehouse_sk = w_warehouse_sk
                       AND      inv_date_sk = d_date_sk
-                      AND      d_date BETWEEN (Cast ('2000-05-13' AS DATE) - INTERVAL '30' day) AND      (
-                                        cast ('2000-05-13' AS        date) + INTERVAL '30' day)
+                      AND      d_date BETWEEN (Cast ('{sales_date}' AS DATE) - INTERVAL '30' day) AND      (
+                                        cast ('{sales_date}' AS        date) + INTERVAL '30' day)
                       GROUP BY w_warehouse_name,
                                i_item_id) x
     WHERE    (
@@ -60,33 +70,45 @@ def duckdb_impl(run_config: RunConfig) -> str:
 
 def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     """Query 21."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=21,
+        qualification=run_config.qualification,
+    )
+
+    sales_date_str = params["sales_date"]
+
     # Load tables
     inventory = get_data(run_config.dataset_path, "inventory", run_config.suffix)
     warehouse = get_data(run_config.dataset_path, "warehouse", run_config.suffix)
     item = get_data(run_config.dataset_path, "item", run_config.suffix)
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
+
+    # Parse sales_date and compute date range
+    sales_date_obj = date.fromisoformat(sales_date_str)
+    start_date = sales_date_obj - timedelta(days=30)
+    end_date = sales_date_obj + timedelta(days=30)
+
+    # Convert to string literals (d_date is String in parquet)
+    sales_date_lit = pl.lit(sales_date_str)
+    start_date_str = pl.lit(start_date.isoformat())
+    end_date_str = pl.lit(end_date.isoformat())
+
     return (
         inventory.join(item, left_on="inv_item_sk", right_on="i_item_sk")
         .join(warehouse, left_on="inv_warehouse_sk", right_on="w_warehouse_sk")
         .join(date_dim, left_on="inv_date_sk", right_on="d_date_sk")
         .filter(
             (pl.col("i_current_price").is_between(0.99, 1.49))
-            & (
-                pl.col("d_date").is_between(
-                    pl.date(2000, 5, 13).cast(pl.Datetime("us"))
-                    - pl.duration(days=30).cast(pl.Duration("us")),
-                    pl.date(2000, 5, 13).cast(pl.Datetime("us"))
-                    + pl.duration(days=30).cast(pl.Duration("us")),
-                )
-            )
+            & pl.col("d_date").is_between(start_date_str, end_date_str, closed="both")
         )
         .with_columns(
             [
-                pl.when(pl.col("d_date") < pl.date(2000, 5, 13))
+                pl.when(pl.col("d_date") < sales_date_lit)
                 .then(pl.col("inv_quantity_on_hand"))
                 .otherwise(0)
                 .alias("inv_before_amount"),
-                pl.when(pl.col("d_date") >= pl.date(2000, 5, 13))
+                pl.when(pl.col("d_date") >= sales_date_lit)
                 .then(pl.col("inv_quantity_on_hand"))
                 .otherwise(0)
                 .alias("inv_after_amount"),

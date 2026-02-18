@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
 from cudf_polars.experimental.benchmarks.utils import get_data
 
 if TYPE_CHECKING:
@@ -17,7 +18,19 @@ if TYPE_CHECKING:
 
 def duckdb_impl(run_config: RunConfig) -> str:
     """Query 18."""
-    return """
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=18,
+        qualification=run_config.qualification,
+    )
+
+    year = params["year"]
+    month = params["month"]
+    state = params["state"]
+    es = params["es"]
+    gen = params["gen"]
+
+    return f"""
     SELECT i_item_id,
                    ca_country,
                    ca_state,
@@ -40,15 +53,13 @@ def duckdb_impl(run_config: RunConfig) -> str:
            AND cs_item_sk = i_item_sk
            AND cs_bill_cdemo_sk = cd1.cd_demo_sk
            AND cs_bill_customer_sk = c_customer_sk
-           AND cd1.cd_gender = 'F'
-           AND cd1.cd_education_status = 'Secondary'
+           AND cd1.cd_gender = '{gen}'
+           AND cd1.cd_education_status = '{es}'
            AND c_current_cdemo_sk = cd2.cd_demo_sk
            AND c_current_addr_sk = ca_address_sk
-           AND c_birth_month IN ( 8, 4, 2, 5,
-                                  11, 9 )
-           AND d_year = 2001
-           AND ca_state IN ( 'KS', 'IA', 'AL', 'UT',
-                             'VA', 'NC', 'TX' )
+           AND c_birth_month IN ( {", ".join(map(str, month))} )
+           AND d_year = {year}
+           AND ca_state IN ( {", ".join(f"'{s}'" for s in state)} )
     GROUP  BY rollup ( i_item_id, ca_country, ca_state, ca_county )
     ORDER  BY ca_country,
               ca_state,
@@ -94,6 +105,18 @@ def level(  # noqa: D103
 
 def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     """Query 18."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=18,
+        qualification=run_config.qualification,
+    )
+
+    year = params["year"]
+    month = params["month"]
+    state = params["state"]
+    es = params["es"]
+    gen = params["gen"]
+
     null_sentinel = "NULL"
     catalog_sales = get_data(
         run_config.dataset_path, "catalog_sales", run_config.suffix
@@ -129,11 +152,11 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         )
         .join(customer_address, left_on="c_current_addr_sk", right_on="ca_address_sk")
         .filter(
-            (pl.col("cd_gender") == "F")
-            & (pl.col("cd_education_status") == "Secondary")
-            & pl.col("c_birth_month").is_in([8, 4, 2, 5, 11, 9])
-            & (pl.col("d_year") == 2001)
-            & pl.col("ca_state").is_in(["KS", "IA", "AL", "UT", "VA", "NC", "TX"])
+            (pl.col("cd_gender") == gen)
+            & (pl.col("cd_education_status") == es)
+            & pl.col("c_birth_month").is_in(month)
+            & (pl.col("d_year") == year)
+            & pl.col("ca_state").is_in(state)
         )
     )
 

@@ -471,6 +471,56 @@
       "11": {
         "year": 2000,
         "select_one": "t_s_secyear.customer_preferred_cust_flag"
+      },
+      "17": {
+        "year": 2002
+      },
+      "18": {
+        "year": 1999,
+        "month": [
+          8,
+          9,
+          3,
+          5,
+          7,
+          2
+        ],
+        "state": [
+          "MT",
+          "NM",
+          "NY",
+          "GA",
+          "CO",
+          "LA",
+          "SD"
+        ],
+        "es": "Unknown",
+        "gen": "M"
+      },
+      "19": {
+        "year": 2001,
+        "month": 12,
+        "manager": 94
+      },
+      "20": {
+        "sdate": "2001-01-08",
+        "year": 2001,
+        "category": [
+          "Books",
+          "Women",
+          "Electronics"
+        ]
+      },
+      "21": {
+        "sales_date": "2002-03-20",
+        "year": 2002
+      },
+      "22": {
+        "dms": 1176
+      },
+      "23": {
+        "year": 2000,
+        "month": 3
       }
     },
     "10": {
@@ -943,6 +993,56 @@
       "11": {
         "year": 2000,
         "select_one": "t_s_secyear.customer_preferred_cust_flag"
+      },
+      "17": {
+        "year": 2002
+      },
+      "18": {
+        "year": 1999,
+        "month": [
+          8,
+          9,
+          3,
+          5,
+          7,
+          2
+        ],
+        "state": [
+          "MT",
+          "NM",
+          "NY",
+          "GA",
+          "CO",
+          "LA",
+          "SD"
+        ],
+        "es": "Unknown",
+        "gen": "M"
+      },
+      "19": {
+        "year": 2001,
+        "month": 12,
+        "manager": 94
+      },
+      "20": {
+        "sdate": "2001-01-08",
+        "year": 2001,
+        "category": [
+          "Books",
+          "Women",
+          "Electronics"
+        ]
+      },
+      "21": {
+        "sales_date": "2002-03-20",
+        "year": 2002
+      },
+      "22": {
+        "dms": 1176
+      },
+      "23": {
+        "year": 2000,
+        "month": 3
       }
     },
     "50": {
@@ -1415,6 +1515,56 @@
       "11": {
         "year": 2000,
         "select_one": "t_s_secyear.customer_preferred_cust_flag"
+      },
+      "17": {
+        "year": 2002
+      },
+      "18": {
+        "year": 1999,
+        "month": [
+          8,
+          9,
+          3,
+          5,
+          7,
+          2
+        ],
+        "state": [
+          "MT",
+          "NM",
+          "NY",
+          "GA",
+          "CO",
+          "LA",
+          "SD"
+        ],
+        "es": "Unknown",
+        "gen": "M"
+      },
+      "19": {
+        "year": 2001,
+        "month": 12,
+        "manager": 94
+      },
+      "20": {
+        "sdate": "2001-01-08",
+        "year": 2001,
+        "category": [
+          "Books",
+          "Women",
+          "Electronics"
+        ]
+      },
+      "21": {
+        "sales_date": "2002-03-20",
+        "year": 2002
+      },
+      "22": {
+        "dms": 1176
+      },
+      "23": {
+        "year": 2000,
+        "month": 3
       }
     },
     "100": {
@@ -1887,6 +2037,56 @@
       "11": {
         "year": 2000,
         "select_one": "t_s_secyear.customer_preferred_cust_flag"
+      },
+      "17": {
+        "year": 2002
+      },
+      "18": {
+        "year": 1999,
+        "month": [
+          8,
+          9,
+          3,
+          5,
+          7,
+          2
+        ],
+        "state": [
+          "MT",
+          "NM",
+          "NY",
+          "GA",
+          "CO",
+          "LA",
+          "SD"
+        ],
+        "es": "Unknown",
+        "gen": "M"
+      },
+      "19": {
+        "year": 2001,
+        "month": 12,
+        "manager": 94
+      },
+      "20": {
+        "sdate": "2001-01-08",
+        "year": 2001,
+        "category": [
+          "Books",
+          "Women",
+          "Electronics"
+        ]
+      },
+      "21": {
+        "sales_date": "2002-03-20",
+        "year": 2002
+      },
+      "22": {
+        "dms": 1176
+      },
+      "23": {
+        "year": 2000,
+        "month": 3
       }
     },
     "200": {
@@ -2359,6 +2559,56 @@
       "11": {
         "year": 2000,
         "select_one": "t_s_secyear.customer_preferred_cust_flag"
+      },
+      "17": {
+        "year": 2002
+      },
+      "18": {
+        "year": 1999,
+        "month": [
+          8,
+          9,
+          3,
+          5,
+          7,
+          2
+        ],
+        "state": [
+          "MT",
+          "NM",
+          "NY",
+          "GA",
+          "CO",
+          "LA",
+          "SD"
+        ],
+        "es": "Unknown",
+        "gen": "M"
+      },
+      "19": {
+        "year": 2001,
+        "month": 12,
+        "manager": 94
+      },
+      "20": {
+        "sdate": "2001-01-08",
+        "year": 2001,
+        "category": [
+          "Books",
+          "Women",
+          "Electronics"
+        ]
+      },
+      "21": {
+        "sales_date": "2002-03-20",
+        "year": 2002
+      },
+      "22": {
+        "dms": 1176
+      },
+      "23": {
+        "year": 2000,
+        "month": 3
       }
     },
     "400": {
@@ -2831,6 +3081,56 @@
       "11": {
         "year": 2000,
         "select_one": "t_s_secyear.customer_preferred_cust_flag"
+      },
+      "17": {
+        "year": 2002
+      },
+      "18": {
+        "year": 1999,
+        "month": [
+          8,
+          9,
+          3,
+          5,
+          7,
+          2
+        ],
+        "state": [
+          "MT",
+          "NM",
+          "NY",
+          "GA",
+          "CO",
+          "LA",
+          "SD"
+        ],
+        "es": "Unknown",
+        "gen": "M"
+      },
+      "19": {
+        "year": 2001,
+        "month": 12,
+        "manager": 94
+      },
+      "20": {
+        "sdate": "2001-01-08",
+        "year": 2001,
+        "category": [
+          "Books",
+          "Women",
+          "Electronics"
+        ]
+      },
+      "21": {
+        "sales_date": "2002-03-20",
+        "year": 2002
+      },
+      "22": {
+        "dms": 1176
+      },
+      "23": {
+        "year": 2000,
+        "month": 3
       }
     },
     "1000": {
@@ -3303,6 +3603,56 @@
       "11": {
         "year": 2000,
         "select_one": "t_s_secyear.customer_preferred_cust_flag"
+      },
+      "17": {
+        "year": 2002
+      },
+      "18": {
+        "year": 1999,
+        "month": [
+          8,
+          9,
+          3,
+          5,
+          7,
+          2
+        ],
+        "state": [
+          "MT",
+          "NM",
+          "NY",
+          "GA",
+          "CO",
+          "LA",
+          "SD"
+        ],
+        "es": "Unknown",
+        "gen": "M"
+      },
+      "19": {
+        "year": 2001,
+        "month": 12,
+        "manager": 94
+      },
+      "20": {
+        "sdate": "2001-01-08",
+        "year": 2001,
+        "category": [
+          "Books",
+          "Women",
+          "Electronics"
+        ]
+      },
+      "21": {
+        "sales_date": "2002-03-20",
+        "year": 2002
+      },
+      "22": {
+        "dms": 1176
+      },
+      "23": {
+        "year": 2000,
+        "month": 3
       }
     },
     "3000": {
@@ -3775,6 +4125,56 @@
       "11": {
         "year": 2000,
         "select_one": "t_s_secyear.customer_preferred_cust_flag"
+      },
+      "17": {
+        "year": 2002
+      },
+      "18": {
+        "year": 1999,
+        "month": [
+          8,
+          9,
+          3,
+          5,
+          7,
+          2
+        ],
+        "state": [
+          "MT",
+          "NM",
+          "NY",
+          "GA",
+          "CO",
+          "LA",
+          "SD"
+        ],
+        "es": "Unknown",
+        "gen": "M"
+      },
+      "19": {
+        "year": 2001,
+        "month": 12,
+        "manager": 94
+      },
+      "20": {
+        "sdate": "2001-01-08",
+        "year": 2001,
+        "category": [
+          "Books",
+          "Women",
+          "Electronics"
+        ]
+      },
+      "21": {
+        "sales_date": "2002-03-20",
+        "year": 2002
+      },
+      "22": {
+        "dms": 1176
+      },
+      "23": {
+        "year": 2000,
+        "month": 3
       }
     },
     "10000": {
@@ -4247,6 +4647,56 @@
       "11": {
         "year": 2000,
         "select_one": "t_s_secyear.customer_preferred_cust_flag"
+      },
+      "17": {
+        "year": 2002
+      },
+      "18": {
+        "year": 1999,
+        "month": [
+          8,
+          9,
+          3,
+          5,
+          7,
+          2
+        ],
+        "state": [
+          "MT",
+          "NM",
+          "NY",
+          "GA",
+          "CO",
+          "LA",
+          "SD"
+        ],
+        "es": "Unknown",
+        "gen": "M"
+      },
+      "19": {
+        "year": 2001,
+        "month": 12,
+        "manager": 94
+      },
+      "20": {
+        "sdate": "2001-01-08",
+        "year": 2001,
+        "category": [
+          "Books",
+          "Women",
+          "Electronics"
+        ]
+      },
+      "21": {
+        "sales_date": "2002-03-20",
+        "year": 2002
+      },
+      "22": {
+        "dms": 1176
+      },
+      "23": {
+        "year": 2000,
+        "month": 3
       }
     },
     "30000": {
@@ -4719,6 +5169,56 @@
       "11": {
         "year": 2000,
         "select_one": "t_s_secyear.customer_preferred_cust_flag"
+      },
+      "17": {
+        "year": 2002
+      },
+      "18": {
+        "year": 1999,
+        "month": [
+          8,
+          9,
+          3,
+          5,
+          7,
+          2
+        ],
+        "state": [
+          "MT",
+          "NM",
+          "NY",
+          "GA",
+          "CO",
+          "LA",
+          "SD"
+        ],
+        "es": "Unknown",
+        "gen": "M"
+      },
+      "19": {
+        "year": 2001,
+        "month": 12,
+        "manager": 94
+      },
+      "20": {
+        "sdate": "2001-01-08",
+        "year": 2001,
+        "category": [
+          "Books",
+          "Women",
+          "Electronics"
+        ]
+      },
+      "21": {
+        "sales_date": "2002-03-20",
+        "year": 2002
+      },
+      "22": {
+        "dms": 1176
+      },
+      "23": {
+        "year": 2000,
+        "month": 3
       }
     },
     "100000": {
@@ -5191,6 +5691,56 @@
       "11": {
         "year": 2000,
         "select_one": "t_s_secyear.customer_preferred_cust_flag"
+      },
+      "17": {
+        "year": 2002
+      },
+      "18": {
+        "year": 1999,
+        "month": [
+          8,
+          9,
+          3,
+          5,
+          7,
+          2
+        ],
+        "state": [
+          "MT",
+          "NM",
+          "NY",
+          "GA",
+          "CO",
+          "LA",
+          "SD"
+        ],
+        "es": "Unknown",
+        "gen": "M"
+      },
+      "19": {
+        "year": 2001,
+        "month": 12,
+        "manager": 94
+      },
+      "20": {
+        "sdate": "2001-01-08",
+        "year": 2001,
+        "category": [
+          "Books",
+          "Women",
+          "Electronics"
+        ]
+      },
+      "21": {
+        "sales_date": "2002-03-20",
+        "year": 2002
+      },
+      "22": {
+        "dms": 1176
+      },
+      "23": {
+        "year": 2000,
+        "month": 3
       }
     },
     "qualification": {
@@ -5657,6 +6207,56 @@
       "11": {
         "year": 2001,
         "select_one": "t_s_secyear.customer_preferred_cust_flag"
+      },
+      "17": {
+        "year": 2001
+      },
+      "18": {
+        "year": 1998,
+        "month": [
+          1,
+          6,
+          8,
+          9,
+          12,
+          2
+        ],
+        "state": [
+          "MS",
+          "IN",
+          "ND",
+          "OK",
+          "NM",
+          "VA",
+          "MS"
+        ],
+        "es": "Unknown",
+        "gen": "F"
+      },
+      "19": {
+        "year": 1998,
+        "month": 11,
+        "manager": 8
+      },
+      "20": {
+        "year": 1999,
+        "sdate": "1999-02-22",
+        "category": [
+          "Sports",
+          "Books",
+          "Home"
+        ]
+      },
+      "21": {
+        "year": 2000,
+        "sales_date": "2000-03-11"
+      },
+      "22": {
+        "dms": 1200
+      },
+      "23": {
+        "year": 1998,
+        "month": 2
       }
     }
   }

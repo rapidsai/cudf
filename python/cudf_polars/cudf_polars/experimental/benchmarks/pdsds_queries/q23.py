@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
 from cudf_polars.experimental.benchmarks.utils import get_data
 
 if TYPE_CHECKING:
@@ -17,7 +18,16 @@ if TYPE_CHECKING:
 
 def duckdb_impl(run_config: RunConfig) -> str:
     """Query 23."""
-    return """
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=23,
+        qualification=run_config.qualification,
+    )
+
+    year = params["year"]
+    month = params["month"]
+
+    return f"""
     WITH frequent_ss_items
          AS (SELECT Substr(i_item_desc, 1, 30) itemdesc,
                     i_item_sk                  item_sk,
@@ -28,7 +38,7 @@ def duckdb_impl(run_config: RunConfig) -> str:
                     item
              WHERE  ss_sold_date_sk = d_date_sk
                     AND ss_item_sk = i_item_sk
-                    AND d_year IN ( 1998, 1998 + 1, 1998 + 2, 1998 + 3 )
+                    AND d_year IN ( {year}, {year} + 1, {year} + 2, {year} + 3 )
              GROUP  BY Substr(i_item_desc, 1, 30),
                        i_item_sk,
                        d_date
@@ -42,7 +52,7 @@ def duckdb_impl(run_config: RunConfig) -> str:
                             date_dim
                      WHERE  ss_customer_sk = c_customer_sk
                             AND ss_sold_date_sk = d_date_sk
-                            AND d_year IN ( 1998, 1998 + 1, 1998 + 2, 1998 + 3 )
+                            AND d_year IN ( {year}, {year} + 1, {year} + 2, {year} + 3 )
                      GROUP  BY c_customer_sk)),
          best_ss_customer
          AS (SELECT c_customer_sk,
@@ -58,8 +68,8 @@ def duckdb_impl(run_config: RunConfig) -> str:
     FROM   (SELECT cs_quantity * cs_list_price sales
             FROM   catalog_sales,
                    date_dim
-            WHERE  d_year = 1998
-                   AND d_moy = 6
+            WHERE  d_year = {year}
+                   AND d_moy = {month}
                    AND cs_sold_date_sk = d_date_sk
                    AND cs_item_sk IN (SELECT item_sk
                                       FROM   frequent_ss_items)
@@ -69,8 +79,8 @@ def duckdb_impl(run_config: RunConfig) -> str:
             SELECT ws_quantity * ws_list_price sales
             FROM   web_sales,
                    date_dim
-            WHERE  d_year = 1998
-                   AND d_moy = 6
+            WHERE  d_year = {year}
+                   AND d_moy = {month}
                    AND ws_sold_date_sk = d_date_sk
                    AND ws_item_sk IN (SELECT item_sk
                                       FROM   frequent_ss_items)
@@ -87,7 +97,7 @@ def duckdb_impl(run_config: RunConfig) -> str:
                     item
              WHERE  ss_sold_date_sk = d_date_sk
                     AND ss_item_sk = i_item_sk
-                    AND d_year IN ( 1998, 1998 + 1, 1998 + 2, 1998 + 3 )
+                    AND d_year IN ( {year}, {year} + 1, {year} + 2, {year} + 3 )
              GROUP  BY Substr(i_item_desc, 1, 30),
                        i_item_sk,
                        d_date
@@ -101,7 +111,7 @@ def duckdb_impl(run_config: RunConfig) -> str:
                             date_dim
                      WHERE  ss_customer_sk = c_customer_sk
                             AND ss_sold_date_sk = d_date_sk
-                            AND d_year IN ( 1998, 1998 + 1, 1998 + 2, 1998 + 3 )
+                            AND d_year IN ( {year}, {year} + 1, {year} + 2, {year} + 3 )
                      GROUP  BY c_customer_sk)),
          best_ss_customer
          AS (SELECT c_customer_sk,
@@ -122,8 +132,8 @@ def duckdb_impl(run_config: RunConfig) -> str:
             FROM   catalog_sales,
                    customer,
                    date_dim
-            WHERE  d_year = 1998
-                   AND d_moy = 6
+            WHERE  d_year = {year}
+                   AND d_moy = {month}
                    AND cs_sold_date_sk = d_date_sk
                    AND cs_item_sk IN (SELECT item_sk
                                       FROM   frequent_ss_items)
@@ -139,8 +149,8 @@ def duckdb_impl(run_config: RunConfig) -> str:
             FROM   web_sales,
                    customer,
                    date_dim
-            WHERE  d_year = 1998
-                   AND d_moy = 6
+            WHERE  d_year = {year}
+                   AND d_moy = {month}
                    AND ws_sold_date_sk = d_date_sk
                    AND ws_item_sk IN (SELECT item_sk
                                       FROM   frequent_ss_items)
@@ -158,6 +168,15 @@ def duckdb_impl(run_config: RunConfig) -> str:
 
 def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     """Query 23."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=23,
+        qualification=run_config.qualification,
+    )
+
+    year = params["year"]
+    month = params["month"]
+
     # Load tables
     store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
@@ -172,7 +191,7 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     frequent_ss_items = (
         store_sales.join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
         .join(item, left_on="ss_item_sk", right_on="i_item_sk")
-        .filter(pl.col("d_year").is_in([1998, 1999, 2000, 2001]))
+        .filter(pl.col("d_year").is_in([year, year + 1, year + 2, year + 3]))
         .with_columns([pl.col("i_item_desc").str.slice(0, 30).alias("itemdesc")])
         .group_by(["itemdesc", "ss_item_sk", "d_date"])
         .agg([pl.len().alias("cnt")])
@@ -186,7 +205,7 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     customer_sales = (
         store_sales.join(customer, left_on="ss_customer_sk", right_on="c_customer_sk")
         .join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
-        .filter(pl.col("d_year").is_in([1998, 1999, 2000, 2001]))
+        .filter(pl.col("d_year").is_in([year, year + 1, year + 2, year + 3]))
         .group_by("ss_customer_sk")
         .agg([(pl.col("ss_quantity") * pl.col("ss_sales_price")).sum().alias("csales")])
     )
@@ -223,7 +242,7 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
             right_on="ss_customer_sk",
             how="semi",
         )
-        .filter((pl.col("d_year") == 1998) & (pl.col("d_moy") == 6))
+        .filter((pl.col("d_year") == year) & (pl.col("d_moy") == month))
         .group_by(["c_last_name", "c_first_name"])
         .agg([(pl.col("cs_quantity") * pl.col("cs_list_price")).sum().alias("sales")])
     )
@@ -243,7 +262,7 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
             right_on="ss_customer_sk",
             how="semi",
         )
-        .filter((pl.col("d_year") == 1998) & (pl.col("d_moy") == 6))
+        .filter((pl.col("d_year") == year) & (pl.col("d_moy") == month))
         .group_by(["c_last_name", "c_first_name"])
         .agg([(pl.col("ws_quantity") * pl.col("ws_list_price")).sum().alias("sales")])
     )

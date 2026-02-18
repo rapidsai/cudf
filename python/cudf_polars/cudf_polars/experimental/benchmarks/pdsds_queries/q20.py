@@ -5,10 +5,12 @@
 
 from __future__ import annotations
 
+from datetime import date, timedelta
 from typing import TYPE_CHECKING
 
 import polars as pl
 
+from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
 from cudf_polars.experimental.benchmarks.utils import get_data
 
 if TYPE_CHECKING:
@@ -17,7 +19,16 @@ if TYPE_CHECKING:
 
 def duckdb_impl(run_config: RunConfig) -> str:
     """Query 20."""
-    return """
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=20,
+        qualification=run_config.qualification,
+    )
+
+    sdate = params["sdate"]
+    categories = params["category"]
+
+    return f"""
     SELECT
              i_item_id ,
              i_item_desc ,
@@ -30,12 +41,10 @@ def duckdb_impl(run_config: RunConfig) -> str:
              item ,
              date_dim
     WHERE    cs_item_sk = i_item_sk
-    AND      i_category IN ('Children',
-                            'Women',
-                            'Electronics')
+    AND      i_category IN ({", ".join(f"'{cat}'" for cat in categories)})
     AND      cs_sold_date_sk = d_date_sk
-    AND      d_date BETWEEN Cast('2001-02-03' AS DATE) AND      (
-                      Cast('2001-02-03' AS DATE) + INTERVAL '30' day)
+    AND      d_date BETWEEN Cast('{sdate}' AS DATE) AND      (
+                      Cast('{sdate}' AS DATE) + INTERVAL '30' day)
     GROUP BY i_item_id ,
              i_item_desc ,
              i_category ,
@@ -52,22 +61,35 @@ def duckdb_impl(run_config: RunConfig) -> str:
 
 def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     """Query 20."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=20,
+        qualification=run_config.qualification,
+    )
+
+    sdate = params["sdate"]
+    categories = params["category"]
+
     # Load tables
     catalog_sales = get_data(
         run_config.dataset_path, "catalog_sales", run_config.suffix
     )
     item = get_data(run_config.dataset_path, "item", run_config.suffix)
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
-    from datetime import date, timedelta
 
-    start_date = date(2001, 2, 3)
+    # Parse sdate and compute end date
+    start_date = date.fromisoformat(sdate)
     end_date = start_date + timedelta(days=30)
+
+    # Convert to string literals for comparison (d_date is String in parquet)
+    start_date_str = pl.lit(start_date.isoformat())
+    end_date_str = pl.lit(end_date.isoformat())
     return (
         catalog_sales.join(item, left_on="cs_item_sk", right_on="i_item_sk")
         .join(date_dim, left_on="cs_sold_date_sk", right_on="d_date_sk")
         .filter(
-            pl.col("i_category").is_in(["Children", "Women", "Electronics"])
-            & pl.col("d_date").is_between(start_date, end_date, closed="both")
+            pl.col("i_category").is_in(categories)
+            & pl.col("d_date").is_between(start_date_str, end_date_str, closed="both")
         )
         .group_by(
             ["i_item_id", "i_item_desc", "i_category", "i_class", "i_current_price"]

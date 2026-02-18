@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
 from cudf_polars.experimental.benchmarks.utils import get_data
 
 if TYPE_CHECKING:
@@ -17,7 +18,15 @@ if TYPE_CHECKING:
 
 def duckdb_impl(run_config: RunConfig) -> str:
     """Query 17."""
-    return """
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=17,
+        qualification=run_config.qualification,
+    )
+
+    year = params["year"]
+
+    return f"""
     SELECT i_item_id,
                    i_item_desc,
                    s_state,
@@ -53,7 +62,7 @@ def duckdb_impl(run_config: RunConfig) -> str:
            date_dim d3,
            store,
            item
-    WHERE  d1.d_quarter_name = '1999Q1'
+    WHERE  d1.d_quarter_name = '{year}Q1'
            AND d1.d_date_sk = ss_sold_date_sk
            AND i_item_sk = ss_item_sk
            AND s_store_sk = ss_store_sk
@@ -61,11 +70,11 @@ def duckdb_impl(run_config: RunConfig) -> str:
            AND ss_item_sk = sr_item_sk
            AND ss_ticket_number = sr_ticket_number
            AND sr_returned_date_sk = d2.d_date_sk
-           AND d2.d_quarter_name IN ( '1999Q1', '1999Q2', '1999Q3' )
+           AND d2.d_quarter_name IN ( '{year}Q1', '{year}Q2', '{year}Q3' )
            AND sr_customer_sk = cs_bill_customer_sk
            AND sr_item_sk = cs_item_sk
            AND cs_sold_date_sk = d3.d_date_sk
-           AND d3.d_quarter_name IN ( '1999Q1', '1999Q2', '1999Q3' )
+           AND d3.d_quarter_name IN ( '{year}Q1', '{year}Q2', '{year}Q3' )
     GROUP  BY i_item_id,
               i_item_desc,
               s_state
@@ -78,6 +87,14 @@ def duckdb_impl(run_config: RunConfig) -> str:
 
 def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     """Query 17."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=17,
+        qualification=run_config.qualification,
+    )
+
+    year = params["year"]
+
     # Load tables
     store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
     store_returns = get_data(
@@ -100,16 +117,16 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         )
         .join(item, left_on="ss_item_sk", right_on="i_item_sk")
         .join(store, left_on="ss_store_sk", right_on="s_store_sk")
-        .filter(pl.col("d_quarter_name") == "1999Q1")
+        .filter(pl.col("d_quarter_name") == f"{year}Q1")
     )
 
     store_returns_base = store_returns.join(
         date_dim, left_on="sr_returned_date_sk", right_on="d_date_sk", suffix="_d2"
-    ).filter(pl.col("d_quarter_name").is_in(["1999Q1", "1999Q2", "1999Q3"]))
+    ).filter(pl.col("d_quarter_name").is_in([f"{year}Q1", f"{year}Q2", f"{year}Q3"]))
 
     catalog_sales_base = catalog_sales.join(
         date_dim, left_on="cs_sold_date_sk", right_on="d_date_sk", suffix="_d3"
-    ).filter(pl.col("d_quarter_name").is_in(["1999Q1", "1999Q2", "1999Q3"]))
+    ).filter(pl.col("d_quarter_name").is_in([f"{year}Q1", f"{year}Q2", f"{year}Q3"]))
 
     # Now create the full combination following the SQL logic
     return (
