@@ -1260,9 +1260,10 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                     )
                 )
             categories_dtype = cudf_dtype_from_pa_type(dictionary.type)
-            categories = cls.create(
-                plc.Column.from_arrow(dictionary), categories_dtype
+            categories_plc = _normalize_types_column(
+                plc.Column.from_arrow(dictionary)
             )
+            categories = cls.create(categories_plc, categories_dtype)
 
             categorical_dtype = CategoricalDtype(
                 categories=categories, ordered=array.type.ordered
@@ -1270,7 +1271,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             expected_codes_dtype = dtype_to_pylibcudf_type(
                 categorical_dtype._codes_dtype
             )
-            codes_plc = plc.Column.from_arrow(codes)
+            codes_plc = _normalize_types_column(plc.Column.from_arrow(codes))
             if codes_plc.type() != expected_codes_dtype:
                 codes_plc = plc.unary.cast(codes_plc, expected_codes_dtype)
             return ColumnBase.create(codes_plc, categorical_dtype)
