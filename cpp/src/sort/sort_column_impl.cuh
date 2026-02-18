@@ -21,7 +21,7 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cub/device/device_merge_sort.cuh>
-#include <thrust/transform.h>
+#include <thrust/gather.h>
 
 namespace cudf {
 namespace detail {
@@ -134,13 +134,8 @@ struct column_sorted_order_fn {
     auto itr = cudf::detail::indexalator_factory::make_input_iterator(
       dictionary_column_view(input).indices());
     auto mapped_indices = rmm::device_uvector<size_type>(input.size(), stream);
-    auto const iota     = thrust::make_counting_iterator<cudf::size_type>(0);
-    thrust::transform(rmm::exec_policy_nosync(stream),
-                      iota,
-                      iota + input.size(),
-                      mapped_indices.begin(),
-                      cuda::proclaim_return_type<size_type>(
-                        [map, itr] __device__(auto idx) { return map[itr[idx]]; }));
+    thrust::gather(
+      rmm::exec_policy_nosync(stream), itr, itr + input.size(), map, mapped_indices.begin());
 
     // finally, sort-order the dictionary indices using mapped values
     auto mapped_view = column_view(data_type{type_to_id<size_type>()},
