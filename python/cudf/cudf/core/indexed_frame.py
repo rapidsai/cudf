@@ -2960,6 +2960,8 @@ class IndexedFrame(Frame):
 
         if not gather_map.nullify and len(self) != gather_map.nrows:
             raise IndexError("Gather map is out of bounds")
+        index_names = self.index.names if keep_index else None
+
         try:
             # No need to gather if the gather map is already in the correct order
             short_circuit = (
@@ -2969,14 +2971,18 @@ class IndexedFrame(Frame):
                 )
                 and len(gather_map.column) == len(self)
                 and len(self) > 0
-                and len(self.index._columns) == 1
-                and gather_map.column.is_monotonic_increasing
-                and gather_map.column.equals(self.index._columns[0])
+                and gather_map.column.equals(as_column(range(len(self))))
             )
-        except Exception:
+        except (AttributeError, TypeError):
             short_circuit = False
         if short_circuit:
-            return self.copy(deep=True)
+            if keep_index:
+                return self.copy(deep=True)
+            return self._from_columns_like_self(
+                [col.copy(deep=True) for col in self._columns],
+                self._column_names,
+                index_names,
+            )
         columns_to_gather = (
             list(itertools.chain(self.index._columns, self._columns))
             if keep_index
@@ -2996,7 +3002,7 @@ class IndexedFrame(Frame):
                 )
             ],
             self._column_names,
-            self.index.names if keep_index else None,
+            index_names,
         )
 
     def _slice(self, arg: slice, keep_index: bool = True) -> Self:
