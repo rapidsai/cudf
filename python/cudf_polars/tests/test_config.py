@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import os
 import sys
 from typing import Any, cast
 
@@ -378,8 +379,12 @@ def test_scheduler_deprecated() -> None:
 
 def test_validate_shuffle_method_defaults(
     *,
+    monkeypatch: pytest.MonkeyPatch,
     rapidsmpf_distributed_available: bool,
 ) -> None:
+    # TODO: Can remove once removed from ci/run_cudf_polars_pytests.sh
+    # and the default shuffle method changes to "rapidsmpf"
+    monkeypatch.delenv("CUDF_POLARS__EXECUTOR__SHUFFLE_METHOD", raising=False)
     config = ConfigOptions.from_polars_engine(
         pl.GPUEngine(
             executor="streaming",
@@ -821,7 +826,12 @@ def test_cuda_stream_policy_from_env(
     elif runtime == "rapidsmpf":
         with pytest.raises(ValueError, match="The rapidsmpf streaming engine"):
             ConfigOptions.from_polars_engine(engine)
-    else:
+    elif (
+        os.environ.get("CUDF_POLARS__EXECUTOR__SHUFFLE_METHOD", "") != "rapidsmpf"
+        and not rapidsmpf_single_available
+    ):
+        # CUDF_POLARS__EXECUTOR__SHUFFLE_METHOD set in ci/run_cudf_polars_pytests.sh
+        # Would raise since rapidsmpf shuffle requires rapidsmpf to be installed
         config = ConfigOptions.from_polars_engine(engine)
         assert config.cuda_stream_policy == env
 
