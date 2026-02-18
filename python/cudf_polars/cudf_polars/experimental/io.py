@@ -12,7 +12,7 @@ import statistics
 from collections import defaultdict
 from functools import partial
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal, overload
 
 import polars as pl
 
@@ -415,16 +415,6 @@ def _(
             "please remove the target directory before calling 'collect'. "
         )
 
-    # RapidsMPF runtime: StreamingSink not supported, fall back to single partition
-    if (
-        executor_options.runtime == "rapidsmpf"
-    ):  # pragma: no cover; Requires rapidsmpf runtime
-        from cudf_polars.experimental.utils import _lower_ir_fallback
-
-        return _lower_ir_fallback(
-            ir, rec, msg=f"Class {type(ir)} does not support multiple partitions."
-        )
-
     new_node = StreamingSink(
         ir.schema,
         ir.reconstruct([child]),
@@ -460,10 +450,9 @@ def _sink_to_directory(
 def _sink_to_parquet_file(
     path: str,
     options: dict[str, Any],
-    finalize: bool,  # noqa: FBT001
     writer: plc.io.parquet.ChunkedParquetWriter | None,
     df: DataFrame,
-) -> plc.io.parquet.ChunkedParquetWriter | DataFrame:
+) -> plc.io.parquet.ChunkedParquetWriter:
     """Sink a partition to an open Parquet file."""
     # Set up a new chunked Parquet writer if necessary.
     if writer is None:
@@ -483,22 +472,36 @@ def _sink_to_parquet_file(
     )
     writer.write(df.table)
 
-    # Finalize or return active writer.
-    if finalize:
-        writer.close([])
-        return df
-    else:
-        return writer
+    return writer
+
+
+@overload
+def _sink_to_file(
+    kind: Literal["Parquet"],
+    path: str,
+    options: dict[str, Any],
+    writer_state: plc.io.parquet.ChunkedParquetWriter,
+    df: DataFrame,
+) -> plc.io.parquet.ChunkedParquetWriter: ...
+
+
+@overload
+def _sink_to_file(
+    kind: str,
+    path: str,
+    options: dict[str, Any],
+    writer_state: None,
+    df: DataFrame,
+) -> Literal[True]: ...
 
 
 def _sink_to_file(
     kind: str,
     path: str,
     options: dict[str, Any],
-    finalize: bool,  # noqa: FBT001
     writer_state: Any,
     df: DataFrame,
-) -> Any:
+) -> Literal[True] | plc.io.parquet.ChunkedParquetWriter:
     """Sink a partition to an open file."""
     if kind == "Parquet":
         # Parquet writer will pass along a
@@ -506,7 +509,6 @@ def _sink_to_file(
         return _sink_to_parquet_file(
             path,
             options,
-            finalize,
             writer_state,
             df,
         )
@@ -530,10 +532,7 @@ def _sink_to_file(
     else:  # pragma: no cover; Shouldn't get here.
         raise NotImplementedError(f"{kind} not yet supported in _sink_to_file")
 
-    # Default return type is bool | DataFrame.
-    # We only return a DataFrame for the final sink task.
-    # The other tasks return a "ready" signal of True.
-    return df if finalize else True
+    return True
 
 
 def _finalize_file_sink(

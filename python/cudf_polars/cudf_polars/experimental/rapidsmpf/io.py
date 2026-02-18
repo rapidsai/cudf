@@ -797,31 +797,22 @@ async def sink_node(
                 chunk = TableChunk.from_message(msg).make_available_and_spill(
                     context.br(), allow_overbooking=True
                 )
-
-                if count == 1:
-                    df = chunk_to_frame(chunk, child_ir)
-                    await asyncio.to_thread(
-                        Sink.do_evaluate,
-                        *ir.sink._non_child_args,
-                        df,
-                        context=ir_context,
-                    )
-                else:
-                    # Multiple chunks - use chunked writer
-                    df = chunk_to_frame(chunk, child_ir)
-                    writer_state = await asyncio.to_thread(
-                        _sink_to_file,
-                        ir.sink.kind,
-                        ir.sink.path,
-                        ir.sink.options,
-                        finalize=False,  # Never finalize in the loop
-                        writer_state=writer_state,
-                        df=df,
-                    )
+                # Multiple chunks - use chunked writer
+                df = chunk_to_frame(chunk, child_ir)
+                writer_state = await asyncio.to_thread(
+                    _sink_to_file,
+                    ir.sink.kind,
+                    ir.sink.path,
+                    ir.sink.options,
+                    writer_state=writer_state,
+                    df=df,
+                )
 
             # Finalize the writer after all chunks are processed
-            if writer_state is not None and ir.sink.kind == "Parquet":
-                await asyncio.to_thread(writer_state.close, [])
+            if writer_state and ir.sink.kind == "Parquet":
+                # We know that with ir.sink.kind == "Parquet", writer_state being truthy
+                # means that it's a ChunkedParquetWriter.
+                await asyncio.to_thread(writer_state.close, [])  # type: ignore[attr-defined]
 
         # Signal completion on the metadata and data channels with empty results
         stream = ir_context.get_cuda_stream()
