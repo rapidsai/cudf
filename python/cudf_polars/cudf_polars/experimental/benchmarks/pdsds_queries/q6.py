@@ -18,7 +18,9 @@ if TYPE_CHECKING:
 
 def duckdb_impl(run_config: RunConfig) -> str:
     """Query 6."""
-    params = load_parameters(int(run_config.scale_factor), query_id=6)
+    params = load_parameters(
+        int(run_config.scale_factor), query_id=6, qualification=run_config.qualification
+    )
 
     year = params["year"]
     month = params["month"]
@@ -52,7 +54,9 @@ def duckdb_impl(run_config: RunConfig) -> str:
 
 def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     """Query 6."""
-    params = load_parameters(int(run_config.scale_factor), query_id=6)
+    params = load_parameters(
+        int(run_config.scale_factor), query_id=6, qualification=run_config.qualification
+    )
 
     year = params["year"]
     month = params["month"]
