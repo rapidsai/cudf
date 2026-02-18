@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES.  All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION & AFFILIATES.  All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -24,6 +24,11 @@ from ..options import _env_get_bool
 from ..testing import assert_eq
 from .annotation import nvtx
 from .proxy_base import ProxyNDarrayBase
+
+
+def call_operator(fn, args, kwargs):
+    return fn(*args, **kwargs)
+
 
 _CUDF_PANDAS_NVTX_COLORS = {
     "COPY_SLOW_TO_FAST": 0xCA0020,
@@ -809,7 +814,9 @@ class _CallableProxyMixin:
             # We cannot directly call self here because we need it to be
             # converted into either the fast or slow object (by
             # _fast_slow_function_call) to avoid infinite recursion.
-            operator.call,
+            # TODO: When Python 3.11 is the minimum supported Python version
+            # this can use operator.call
+            call_operator,
             self.get_transfer_blocking(),  # type: ignore[attr-defined]
             self,
             args,
