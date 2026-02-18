@@ -8,7 +8,7 @@
 #include <cudf/detail/cuco_helpers.hpp>
 #include <cudf/detail/join/distinct_filtered_join.cuh>
 #include <cudf/detail/join/filtered_join.cuh>
-#include <cudf/detail/join/multiset_filtered_join.cuh>
+#include <cudf/detail/join/mark_join.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/row_operator/equality.cuh>
@@ -393,7 +393,7 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> distinct_filtered_join::qu
   return std::make_unique<rmm::device_uvector<size_type>>(std::move(gather_map));
 }
 
-void multiset_filtered_join::clear_marks(rmm::cuda_stream_view stream)
+void mark_join::clear_marks(rmm::cuda_stream_view stream)
 {
   auto const storage_ref = _bucket_storage.ref();
   auto const num_buckets = static_cast<cudf::size_type>(storage_ref.num_buckets());
@@ -406,7 +406,7 @@ void multiset_filtered_join::clear_marks(rmm::cuda_stream_view stream)
 }
 
 template <int32_t CGSize, typename ProbingScheme, typename Comparator>
-std::unique_ptr<rmm::device_uvector<cudf::size_type>> multiset_filtered_join::mark_probe_and_scan(
+std::unique_ptr<rmm::device_uvector<cudf::size_type>> mark_join::mark_probe_and_scan(
   cudf::table_view const& probe,
   std::shared_ptr<cudf::detail::row::equality::preprocessed_table> preprocessed_probe,
   join_kind kind,
@@ -415,7 +415,7 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> multiset_filtered_join::ma
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
-  cudf::scoped_range range{"multiset_filtered_join::mark_probe_and_scan"};
+  cudf::scoped_range range{"mark_join::mark_probe_and_scan"};
 
   using probe_key_type = cuco::pair<hash_value_type, rhs_index_type>;
 
@@ -593,13 +593,13 @@ distinct_filtered_join::distinct_filtered_join(cudf::table_view const& build,
   }
 }
 
-multiset_filtered_join::multiset_filtered_join(cudf::table_view const& build,
-                                               cudf::null_equality compare_nulls,
-                                               double load_factor,
-                                               rmm::cuda_stream_view stream)
+mark_join::mark_join(cudf::table_view const& build,
+                     cudf::null_equality compare_nulls,
+                     double load_factor,
+                     rmm::cuda_stream_view stream)
   : filtered_join(build, compare_nulls, load_factor, stream)
 {
-  cudf::scoped_range range{"multiset_filtered_join::multiset_filtered_join"};
+  cudf::scoped_range range{"mark_join::mark_join"};
   if (_build.num_rows() == 0) return;
   _bucket_storage.initialize(mark_empty_sentinel_key, stream);
   // Any mismatch in nullate between probe and build row operators results in UB. Ideally, nullate
@@ -737,18 +737,18 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> distinct_filtered_join::se
   }
 }
 
-std::unique_ptr<rmm::device_uvector<cudf::size_type>> multiset_filtered_join::semi_anti_join(
+std::unique_ptr<rmm::device_uvector<cudf::size_type>> mark_join::semi_anti_join(
   cudf::table_view const& probe,
   join_kind kind,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
-  cudf::scoped_range range{"multiset_filtered_join::semi_anti_join"};
+  cudf::scoped_range range{"mark_join::semi_anti_join"};
 
   clear_marks(stream);
 
   auto const preprocessed_probe = [&probe, stream] {
-    cudf::scoped_range range{"multiset_filtered_join::semi_anti_join::preprocessed_probe"};
+    cudf::scoped_range range{"mark_join::semi_anti_join::preprocessed_probe"};
     return cudf::detail::row::equality::preprocessed_table::create(probe, stream);
   }();
 
@@ -809,7 +809,7 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> distinct_filtered_join::se
   return semi_anti_join(probe, join_kind::LEFT_SEMI_JOIN, stream, mr);
 }
 
-std::unique_ptr<rmm::device_uvector<cudf::size_type>> multiset_filtered_join::semi_join(
+std::unique_ptr<rmm::device_uvector<cudf::size_type>> mark_join::semi_join(
   cudf::table_view const& probe, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
 {
   // Early return for empty build or probe table
@@ -837,7 +837,7 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> distinct_filtered_join::an
   return semi_anti_join(probe, join_kind::LEFT_ANTI_JOIN, stream, mr);
 }
 
-std::unique_ptr<rmm::device_uvector<cudf::size_type>> multiset_filtered_join::anti_join(
+std::unique_ptr<rmm::device_uvector<cudf::size_type>> mark_join::anti_join(
   cudf::table_view const& probe, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
 {
   // Early return for empty build table
@@ -870,8 +870,7 @@ filtered_join::filtered_join(cudf::table_view const& build,
     _impl = std::make_unique<cudf::detail::distinct_filtered_join>(
       build, compare_nulls, load_factor, stream);
   } else {
-    _impl = std::make_unique<cudf::detail::multiset_filtered_join>(
-      build, compare_nulls, load_factor, stream);
+    _impl = std::make_unique<cudf::detail::mark_join>(build, compare_nulls, load_factor, stream);
   }
 }
 

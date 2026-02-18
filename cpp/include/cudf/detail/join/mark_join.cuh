@@ -35,7 +35,7 @@ namespace detail {
  * or unmarked (anti) entries. This provides implicit deduplication and eliminates
  * O(N log N) sort overhead.
  */
-class multiset_filtered_join : public filtered_join {
+class mark_join : public filtered_join {
  private:
   mutable std::atomic<cudf::size_type> _num_marks{0};  ///< Number of marked entries after probe
 
@@ -97,20 +97,20 @@ class multiset_filtered_join : public filtered_join {
 
  public:
   /**
-   * @brief Constructor for filtered join with multiset
+   * @brief Constructor for mark-based filtered join
    *
    * @param build The table to build the hash table from
    * @param compare_nulls How null values should be compared
    * @param load_factor Target load factor for the hash table
    * @param stream CUDA stream on which to perform operations
    */
-  multiset_filtered_join(cudf::table_view const& build,
-                         cudf::null_equality compare_nulls,
-                         double load_factor,
-                         rmm::cuda_stream_view stream);
+  mark_join(cudf::table_view const& build,
+            cudf::null_equality compare_nulls,
+            double load_factor,
+            rmm::cuda_stream_view stream);
 
   /**
-   * @brief Implementation of semi join for multiset
+   * @brief Implementation of semi join
    *
    * Returns indices of build table rows that have matching keys in the probe table.
    *
@@ -125,7 +125,7 @@ class multiset_filtered_join : public filtered_join {
     rmm::device_async_resource_ref mr) override;
 
   /**
-   * @brief Implementation of anti join for multiset
+   * @brief Implementation of anti join
    *
    * Returns indices of build table rows that do not have matching keys in the probe table.
    *
