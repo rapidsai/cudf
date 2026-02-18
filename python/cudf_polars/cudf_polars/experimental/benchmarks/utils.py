@@ -1140,7 +1140,10 @@ def run_polars(
     except ImportError:
         pass  # rapidsmpf not available
 
-    client = initialize_dask_cluster(run_config, args)
+    if is_rrun:
+        client = None
+    else:
+        client = initialize_dask_cluster(run_config, args)
 
     # Update n_workers from the actual cluster when using scheduler file/address
     if client is not None:
