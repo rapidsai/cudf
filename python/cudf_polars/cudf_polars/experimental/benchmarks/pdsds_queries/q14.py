@@ -344,9 +344,9 @@ def rollup_level(y: pl.LazyFrame, group_cols: list[str]) -> pl.LazyFrame:  # noq
 
     cols = {
         "channel": pl.Utf8,
-        "i_brand_id": pl.Int32,
-        "i_class_id": pl.Int32,
-        "i_category_id": pl.Int32,
+        "i_brand_id": pl.Int64,
+        "i_class_id": pl.Int64,
+        "i_category_id": pl.Int64,
     }
     missing = [c for c in cols if c not in group_cols]
     if missing:
