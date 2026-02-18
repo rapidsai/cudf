@@ -13,10 +13,7 @@ import pandas as pd
 import pylibcudf as plc
 
 from cudf.core.column import access_columns
-from cudf.core.column.column import (
-    _normalize_types_table,
-    _normalize_types_tbl_w_meta,
-)
+from cudf.core.column.column import _normalize_types_table
 from cudf.core.dataframe import DataFrame
 from cudf.core.dtypes import (
     CategoricalDtype,
@@ -240,8 +237,14 @@ def read_json(
                     extra_parameters=kwargs,
                 )
             )
-            normalized, metadata = _normalize_types_tbl_w_meta(table_w_meta)
-            df = DataFrame.from_pylibcudf(normalized, metadata=metadata)
+            if (
+                normalized := _normalize_types_table(table_w_meta.tbl)
+            ) is not table_w_meta.tbl:
+                table_w_meta = plc.io.TableWithMetadata(
+                    normalized,
+                    table_w_meta.column_names(include_children=True),
+                )
+            df = DataFrame.from_pylibcudf(table_w_meta)
     else:
         warnings.warn(
             "Using CPU via Pandas to read JSON dataset, this may "
