@@ -11,8 +11,8 @@ from rapidsmpf.integrations.cudf.partition import (
     unpack_and_concat as py_unpack_and_concat,
 )
 from rapidsmpf.streaming.coll.shuffler import ShufflerAsync
+from rapidsmpf.streaming.core.actor import define_actor
 from rapidsmpf.streaming.core.message import Message
-from rapidsmpf.streaming.core.node import define_py_node
 from rapidsmpf.streaming.cudf.channel_metadata import (
     ChannelMetadata,
     HashScheme,
@@ -150,7 +150,7 @@ def _is_already_partitioned(
     )
 
 
-@define_py_node()
+@define_actor()
 async def shuffle_node(
     context: Context,
     ir: Shuffle,
