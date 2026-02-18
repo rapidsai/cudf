@@ -361,32 +361,6 @@ def _(node: plrs._ir_nodes.GroupBy, translator: Translator, schema: Schema) -> i
         return rewrite_groupby(node, schema, keys, original_aggs, inp)
 
 
-_DECIMAL_TYPES = {plc.TypeId.DECIMAL32, plc.TypeId.DECIMAL64, plc.TypeId.DECIMAL128}
-
-
-def _align_decimal_scales(
-    left: expr.Expr, right: expr.Expr
-) -> tuple[expr.Expr, expr.Expr]:
-    left_type, right_type = left.dtype, right.dtype
-
-    if plc.traits.is_fixed_point(left_type.plc_type) and plc.traits.is_fixed_point(
-        right_type.plc_type
-    ):
-        target = DataType.common_decimal_dtype(left_type, right_type)
-
-        if (
-            left_type.id() != target.id() or left_type.scale() != target.scale()
-        ):  # pragma: no cover; no test yet
-            left = expr.Cast(target, True, left)  # noqa: FBT003
-
-        if (
-            right_type.id() != target.id() or right_type.scale() != target.scale()
-        ):  # pragma: no cover; no test yet
-            right = expr.Cast(target, True, right)  # noqa: FBT003
-
-    return left, right
-
-
 @_translate_ir.register
 def _(node: plrs._ir_nodes.Join, translator: Translator, schema: Schema) -> ir.IR:
     # Join key dtypes are dependent on the schema of the left and
@@ -442,21 +416,19 @@ def _(node: plrs._ir_nodes.Join, translator: Translator, schema: Schema) -> ir.I
                 expr.BinOp(
                     dtype,
                     expr.BinOp._MAPPING[op],
-                    *_align_decimal_scales(
-                        insert_colrefs(
-                            left_ne.value,
-                            table_ref=plc.expressions.TableReference.LEFT,
-                            name_to_index={
-                                name: i for i, name in enumerate(inp_left.schema)
-                            },
-                        ),
-                        insert_colrefs(
-                            right_ne.value,
-                            table_ref=plc.expressions.TableReference.RIGHT,
-                            name_to_index={
-                                name: i for i, name in enumerate(inp_right.schema)
-                            },
-                        ),
+                    insert_colrefs(
+                        left_ne.value,
+                        table_ref=plc.expressions.TableReference.LEFT,
+                        name_to_index={
+                            name: i for i, name in enumerate(inp_left.schema)
+                        },
+                    ),
+                    insert_colrefs(
+                        right_ne.value,
+                        table_ref=plc.expressions.TableReference.RIGHT,
+                        name_to_index={
+                            name: i for i, name in enumerate(inp_right.schema)
+                        },
                     ),
                 )
                 for op, left_ne, right_ne in zip(ops, left_on, right_on, strict=True)
@@ -1044,15 +1016,6 @@ def _(
 ) -> expr.Expr:
     agg_name = node.name
     args = [translator.translate_expr(n=arg, schema=schema) for arg in node.arguments]
-
-    if agg_name not in ("count", "n_unique", "mean", "median", "quantile"):
-        args = [
-            expr.Cast(dtype, True, arg)  # noqa: FBT003
-            if plc.traits.is_fixed_point(arg.dtype.plc_type)
-            and arg.dtype.plc_type != dtype.plc_type
-            else arg
-            for arg in args
-        ]
 
     value = expr.Agg(dtype, agg_name, node.options, translator._expr_context, *args)
 
