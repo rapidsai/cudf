@@ -220,7 +220,7 @@ def get_partitioning_moduli(
     metadata: ChannelMetadata,
     key_indices: tuple[int, ...],
     nranks: int,
-) -> tuple[int, int]:
+) -> tuple[int, int | None]:
     """
     Get the moduli if data is hash partitioned on the given keys.
 
@@ -241,6 +241,8 @@ def get_partitioning_moduli(
     local_modulus
         Local modulus.
         Return value of 0 means the data is not partitioned within a rank.
+        Return value of None means that the local partitioning inherits the
+        inter-rank partitioning.
     """
     # NOTE: This function will need to be updated when we support
     # order-based partitioning. For ordered data, we can return a
@@ -272,7 +274,8 @@ def get_partitioning_moduli(
     )
     if local_modulus != metadata.local_count:
         local_modulus = 0  # Local count is out of sync - Better to be safe
-    local_modulus = local_modulus or (inter_rank_modulus if local == "inherit" else 0)
+    local_modulus = local_modulus or (None if local == "inherit" else 0)
+
     return inter_rank_modulus, local_modulus
 
 

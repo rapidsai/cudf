@@ -106,7 +106,7 @@ def test_rapidsmpf_join_metadata(
             Partitioning(inter_rank=HashScheme((0, 1), 8), local="inherit"),
             (0, 1),
             4,
-            (8, 8),
+            (8, None),
         ),
         (
             4,
