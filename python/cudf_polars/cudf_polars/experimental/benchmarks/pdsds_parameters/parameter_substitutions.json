@@ -525,6 +525,8 @@
         ]
       },
       "64": {
+        "year": 1999,
+        "price": 15,
         "colors": [
           "chartreuse",
           "orange",
@@ -536,6 +538,7 @@
       },
       "66": {
         "year": 2000,
+        "time_one": 44564,
         "smc": [
           "DHL",
           "PRIVATECARRIER"
@@ -546,6 +549,8 @@
         "net_two": "cs_net_profit"
       },
       "69": {
+        "year": 2004,
+        "month": 4,
         "states": [
           "IA",
           "MN",
@@ -569,6 +574,7 @@
       "68": {
         "year": 2000,
         "dep_cnt": 6,
+        "veh_cnt": 4,
         "city_a": "Fairview",
         "city_b": "Midway"
       },
@@ -1105,6 +1111,8 @@
         ]
       },
       "64": {
+        "year": 1999,
+        "price": 15,
         "colors": [
           "chartreuse",
           "orange",
@@ -1116,6 +1124,7 @@
       },
       "66": {
         "year": 2000,
+        "time_one": 44564,
         "smc": [
           "DHL",
           "PRIVATECARRIER"
@@ -1126,6 +1135,8 @@
         "net_two": "cs_net_profit"
       },
       "69": {
+        "year": 2004,
+        "month": 4,
         "states": [
           "IA",
           "MN",
@@ -1149,6 +1160,7 @@
       "68": {
         "year": 2000,
         "dep_cnt": 0,
+        "veh_cnt": 4,
         "city_a": "Fairview",
         "city_b": "Oak Grove"
       },
@@ -1685,6 +1697,8 @@
         ]
       },
       "64": {
+        "year": 1999,
+        "price": 15,
         "colors": [
           "chartreuse",
           "orange",
@@ -1696,6 +1710,7 @@
       },
       "66": {
         "year": 2000,
+        "time_one": 44564,
         "smc": [
           "DHL",
           "PRIVATECARRIER"
@@ -1706,6 +1721,8 @@
         "net_two": "cs_net_profit"
       },
       "69": {
+        "year": 2004,
+        "month": 4,
         "states": [
           "IA",
           "MN",
@@ -1729,6 +1746,7 @@
       "68": {
         "year": 2000,
         "dep_cnt": 5,
+        "veh_cnt": 1,
         "city_a": "Fairview",
         "city_b": "Five Points"
       },
@@ -2265,6 +2283,8 @@
         ]
       },
       "64": {
+        "year": 1999,
+        "price": 15,
         "colors": [
           "chartreuse",
           "orange",
@@ -2276,6 +2296,7 @@
       },
       "66": {
         "year": 2000,
+        "time_one": 44564,
         "smc": [
           "DHL",
           "PRIVATECARRIER"
@@ -2286,6 +2307,8 @@
         "net_two": "cs_net_profit"
       },
       "69": {
+        "year": 2004,
+        "month": 4,
         "states": [
           "IA",
           "MN",
@@ -2309,6 +2332,7 @@
       "68": {
         "year": 1999,
         "dep_cnt": 7,
+        "veh_cnt": 1,
         "city_a": "Centerville",
         "city_b": "Oak Grove"
       },
@@ -2845,6 +2869,8 @@
         ]
       },
       "64": {
+        "year": 1999,
+        "price": 15,
         "colors": [
           "chartreuse",
           "orange",
@@ -2856,6 +2882,7 @@
       },
       "66": {
         "year": 2000,
+        "time_one": 44564,
         "smc": [
           "DHL",
           "PRIVATECARRIER"
@@ -2866,6 +2893,8 @@
         "net_two": "cs_net_profit"
       },
       "69": {
+        "year": 2004,
+        "month": 4,
         "states": [
           "IA",
           "MN",
@@ -2889,6 +2918,7 @@
       "68": {
         "year": 1998,
         "dep_cnt": 8,
+        "veh_cnt": 1,
         "city_a": "Pleasant Hill",
         "city_b": "Fairview"
       },
@@ -3425,6 +3455,8 @@
         ]
       },
       "64": {
+        "year": 1999,
+        "price": 15,
         "colors": [
           "chartreuse",
           "orange",
@@ -3436,6 +3468,7 @@
       },
       "66": {
         "year": 2000,
+        "time_one": 44564,
         "smc": [
           "DHL",
           "PRIVATECARRIER"
@@ -3446,6 +3479,8 @@
         "net_two": "cs_net_profit"
       },
       "69": {
+        "year": 2004,
+        "month": 4,
         "states": [
           "IA",
           "MN",
@@ -3469,6 +3504,7 @@
       "68": {
         "year": 2000,
         "dep_cnt": 0,
+        "veh_cnt": 2,
         "city_a": "Midway",
         "city_b": "Five Points"
       },
@@ -4005,6 +4041,8 @@
         ]
       },
       "64": {
+        "year": 1999,
+        "price": 15,
         "colors": [
           "chartreuse",
           "orange",
@@ -4016,6 +4054,7 @@
       },
       "66": {
         "year": 2000,
+        "time_one": 44564,
         "smc": [
           "DHL",
           "PRIVATECARRIER"
@@ -4026,6 +4065,8 @@
         "net_two": "cs_net_profit"
       },
       "69": {
+        "year": 2004,
+        "month": 4,
         "states": [
           "IA",
           "MN",
@@ -4049,6 +4090,7 @@
       "68": {
         "year": 1998,
         "dep_cnt": 8,
+        "veh_cnt": 2,
         "city_a": "Centerville",
         "city_b": "Oakland"
       },
@@ -4585,6 +4627,8 @@
         ]
       },
       "64": {
+        "year": 1999,
+        "price": 15,
         "colors": [
           "chartreuse",
           "orange",
@@ -4596,6 +4640,7 @@
       },
       "66": {
         "year": 2000,
+        "time_one": 44564,
         "smc": [
           "DHL",
           "PRIVATECARRIER"
@@ -4606,6 +4651,8 @@
         "net_two": "cs_net_profit"
       },
       "69": {
+        "year": 2004,
+        "month": 4,
         "states": [
           "IA",
           "MN",
@@ -4629,6 +4676,7 @@
       "68": {
         "year": 1998,
         "dep_cnt": 2,
+        "veh_cnt": 2,
         "city_a": "Riverview",
         "city_b": "Summit"
       },
@@ -5165,6 +5213,8 @@
         ]
       },
       "64": {
+        "year": 1999,
+        "price": 15,
         "colors": [
           "chartreuse",
           "orange",
@@ -5176,6 +5226,7 @@
       },
       "66": {
         "year": 2000,
+        "time_one": 44564,
         "smc": [
           "DHL",
           "PRIVATECARRIER"
@@ -5186,6 +5237,8 @@
         "net_two": "cs_net_profit"
       },
       "69": {
+        "year": 2004,
+        "month": 4,
         "states": [
           "IA",
           "MN",
@@ -5209,6 +5262,7 @@
       "68": {
         "year": 1999,
         "dep_cnt": 3,
+        "veh_cnt": 4,
         "city_a": "Antioch",
         "city_b": "Jefferson"
       },
@@ -5745,6 +5799,8 @@
         ]
       },
       "64": {
+        "year": 1999,
+        "price": 15,
         "colors": [
           "chartreuse",
           "orange",
@@ -5756,6 +5812,7 @@
       },
       "66": {
         "year": 2000,
+        "time_one": 44564,
         "smc": [
           "DHL",
           "PRIVATECARRIER"
@@ -5766,6 +5823,8 @@
         "net_two": "cs_net_profit"
       },
       "69": {
+        "year": 2004,
+        "month": 4,
         "states": [
           "IA",
           "MN",
@@ -5789,6 +5848,7 @@
       "68": {
         "year": 1998,
         "dep_cnt": 8,
+        "veh_cnt": 2,
         "city_a": "Five Corners",
         "city_b": "Macedonia"
       },
@@ -6325,6 +6385,8 @@
         ]
       },
       "64": {
+        "year": 1999,
+        "price": 15,
         "colors": [
           "chartreuse",
           "orange",
@@ -6336,6 +6398,7 @@
       },
       "66": {
         "year": 2000,
+        "time_one": 44564,
         "smc": [
           "DHL",
           "PRIVATECARRIER"
@@ -6346,6 +6409,8 @@
         "net_two": "cs_net_profit"
       },
       "69": {
+        "year": 2004,
+        "month": 4,
         "states": [
           "IA",
           "MN",
@@ -6369,6 +6434,7 @@
       "68": {
         "year": 1998,
         "dep_cnt": 5,
+        "veh_cnt": 4,
         "city_a": "Antioch",
         "city_b": "Poplar Springs"
       },
