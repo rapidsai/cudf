@@ -32,3 +32,5 @@ cdef class FileMetaData:
 
 cdef class HybridScanReader:
     cdef unique_ptr[cpp_hybrid_scan_reader] c_obj
+    cdef Stream stream
+    cdef DeviceMemoryResource mr

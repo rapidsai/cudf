@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 import datetime
 import re
@@ -107,7 +107,7 @@ def test_index_iter_error(data, all_supported_types_as_str):
         TypeError,
         match=re.escape(
             f"{gdi.__class__.__name__} object is not iterable. "
-            f"Consider using `.to_arrow()`, `.to_pandas()` or `.values_host` "
+            f"Consider using `.to_arrow()`, `.to_pandas()` or `.to_numpy()` "
             f"if you wish to iterate over the values."
         ),
     ):
@@ -127,7 +127,7 @@ def test_index_values_host(data, all_supported_types_as_str, request):
     gdi = cudf.Index(data, dtype=all_supported_types_as_str)
     pdi = pd.Index(data, dtype=all_supported_types_as_str)
 
-    np.testing.assert_array_equal(gdi.values_host, pdi.values)
+    np.testing.assert_array_equal(gdi.to_numpy(), pdi.values)
 
 
 @pytest.mark.parametrize(

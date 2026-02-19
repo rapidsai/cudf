@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 schema_version: 1
 
@@ -8,9 +8,10 @@ context:
   cuda_version: ${{ (env.get("RAPIDS_CUDA_VERSION") | split("."))[:2] | join(".") }}
   cuda_major: '${{ (env.get("RAPIDS_CUDA_VERSION") | split("."))[0] }}'
   date_string: '${{ env.get("RAPIDS_DATE_STRING") }}'
-  py_version: ${{ env.get("RAPIDS_PY_VERSION") }}
-  py_buildstring: ${{ py_version | version_to_buildstring }}
   head_rev: '${{ git.head_rev(".")[:8] }}'
+  py_abi_min: ${{ env.get("RAPIDS_PY_VERSION") }}
+  py_buildstring : ${{ py_abi_min | version_to_buildstring }}
+  py_runtime_latest: "3.13"
 
 package:
   name: cudf_kafka
@@ -20,7 +21,9 @@ source:
   path: ../../..
 
 build:
-  string: cuda${{ cuda_major }}_py${{ py_buildstring }}_${{ date_string }}_${{ head_rev }}
+  python:
+    version_independent: true
+  string: cuda${{ cuda_major }}_cp${{ py_buildstring }}_abi3_${{ date_string }}_${{ head_rev }}
   script:
     content: |
       ./build.sh cudf_kafka
@@ -37,6 +40,7 @@ build:
       NVCC_APPEND_FLAGS: ${{ env.get("NVCC_APPEND_FLAGS", default="") }}
       PARALLEL_LEVEL: ${{ env.get("PARALLEL_LEVEL", default="8") }}
       RAPIDS_ARTIFACTS_DIR: ${{ env.get("RAPIDS_ARTIFACTS_DIR", default="") }}
+      RAPIDS_PY_VERSION: ${{ env.get("RAPIDS_PY_VERSION", default="") }}
       SCCACHE_BUCKET: ${{ env.get("SCCACHE_BUCKET", default="") }}
       SCCACHE_DIST_AUTH_TYPE: ${{ env.get("SCCACHE_DIST_AUTH_TYPE", default="token") }}
       SCCACHE_DIST_FALLBACK_TO_LOCAL_COMPILE: ${{ env.get("SCCACHE_DIST_FALLBACK_TO_LOCAL_COMPILE", default="false") }}
@@ -65,9 +69,10 @@ requirements:
     - cuda-version =${{ cuda_version }}
     - ${{ stdlib("c") }}
   host:
-    - python =${{ py_version }}
-    - pip
     - cython >=3.0.3,<3.2.0
+    - pip
+    - python =${{ py_abi_min }}
+    - python-abi3 ${{ py_abi_min }}.*
     - cuda-version =${{ cuda_version }}
     - pylibcudf =${{ version }}
     - libcudf_kafka =${{ version }}
@@ -90,6 +95,7 @@ tests:
   - python:
       imports:
         - cudf_kafka
+      python_version: ${{ py_runtime_latest }}.*
       pip_check: false
 
 about:

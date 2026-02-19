@@ -7,9 +7,9 @@
 #include "reader_impl_chunking.hpp"
 #include "reader_impl_chunking_utils.cuh"
 
+#include <cudf/detail/algorithms/reduce.cuh>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/exec_policy.hpp>
@@ -271,10 +271,14 @@ void reader_impl::setup_next_subpass(read_mode mode)
     if (is_first_subpass) {
       pass.decomp_scratch_sizes =
         compute_decompression_scratch_sizes(pass.chunks, pass.pages, _stream);
-      pass.string_offset_sizes = compute_string_offset_sizes(pass.chunks, pass.pages, _stream);
+      pass.string_offset_sizes = compute_string_offset_sizes(
+        pass.chunks, pass.pages, pass.skip_rows, pass.num_rows, _stream, _mr);
+      pass.level_decode_sizes = compute_level_decode_sizes(
+        pass.chunks, pass.pages, pass.level_type_size, pass.skip_rows, pass.num_rows, _stream, _mr);
     }
     include_scratch_size(pass.decomp_scratch_sizes, c_info, _stream);
     include_scratch_size(pass.string_offset_sizes, c_info, _stream);
+    include_scratch_size(pass.level_decode_sizes, c_info, _stream);
 
     auto iter               = thrust::make_counting_iterator(0);
     auto const pass_max_row = pass.skip_rows + pass.num_rows;

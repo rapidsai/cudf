@@ -1328,6 +1328,13 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   /**
    * Computes the sum of all values in the column, returning a scalar
    * of the same type as this column.
+   *
+   * Example:
+   * <pre>{@code
+   * // col    = [1, 2, 3, 4, 5], DType = INT32
+   * Scalar result = col.sum();
+   * // result = 15,              DType = INT32
+   * }</pre>
    */
   public Scalar sum() {
     return sum(type);
@@ -1336,6 +1343,15 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   /**
    * Computes the sum of all values in the column, returning a scalar
    * of the specified type.
+   *
+   * Example:
+   * <pre>{@code
+   * // col    = [1, 2, 3, 4, 5], DType = INT32
+   * Scalar result = col.sum(DType.INT64);
+   * // result = 15,              DType = INT64
+   * }</pre>
+   *
+   * @param outType the output DType
    */
   public Scalar sum(DType outType) {
     return reduce(ReductionAggregation.sum(), outType);
@@ -1347,6 +1363,13 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * If the input column is empty or all nulls, an empty scalar is returned.
    *
    * If the input is floating point type and contains NaNs, the result is undefined.
+   *
+   * Example:
+   * <pre>{@code
+   * // col    = [5, 2, 8, 1, 9], DType = INT32
+   * Scalar result = col.argMin();
+   * // result = 3,               DType = INT32
+   * }</pre>
    */
   public Scalar argMin() {
     return reduce(ReductionAggregation.argMin(), DType.INT32);
@@ -1358,6 +1381,13 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * If the input column is empty or all nulls, an empty scalar is returned.
    *
    * If the input is floating point type and contains NaNs, the result is undefined.
+   *
+   * Example:
+   * <pre>{@code
+   * // col    = [5, 2, 8, 1, 9], DType = INT32
+   * Scalar result = col.argMax();
+   * // result = 4,               DType = INT32
+   * }</pre>
    */
   public Scalar argMax() {
     return reduce(ReductionAggregation.argMax(), DType.INT32);
@@ -1366,6 +1396,13 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   /**
    * Returns the minimum of all values in the column, returning a scalar
    * of the same type as this column.
+   *
+   * Example:
+   * <pre>{@code
+   * // col    = [5, 2, 8, 1, 9], DType = INT32
+   * Scalar result = col.min();
+   * // result = 1,               DType = INT32
+   * }</pre>
    */
   public Scalar min() {
     return reduce(ReductionAggregation.min(), type);
@@ -1374,6 +1411,15 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   /**
    * Returns the minimum of all values in the column, returning a scalar
    * of the specified type.
+   *
+   * Example:
+   * <pre>{@code
+   * // col    = [5, 2, 8, 1, 9], DType = INT32
+   * Scalar result = col.min(DType.INT64);
+   * // result = 1,               DType = INT64
+   * }</pre>
+   *
+   * @param outType the output DType
    * @deprecated the min reduction no longer internally allows for setting the output type, as a
    * work around this API will cast the input type to the output type for you, but this may not
    * work in all cases.
@@ -1391,6 +1437,13 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   /**
    * Returns the maximum of all values in the column, returning a scalar
    * of the same type as this column.
+   *
+   * Example:
+   * <pre>{@code
+   * // col    = [5, 2, 8, 1, 9], DType = INT32
+   * Scalar result = col.max();
+   * // result = 9,               DType = INT32
+   * }</pre>
    */
   public Scalar max() {
     return reduce(ReductionAggregation.max(), type);
@@ -1399,6 +1452,15 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   /**
    * Returns the maximum of all values in the column, returning a scalar
    * of the specified type.
+   *
+   * Example:
+   * <pre>{@code
+   * // col    = [5, 2, 8, 1, 9], DType = INT32
+   * Scalar result = col.max(DType.INT64);
+   * // result = 9,               DType = INT64
+   * }</pre>
+   *
+   * @param outType the output DType
    * @deprecated the max reduction no longer internally allows for setting the output type, as a
    * work around this API will cast the input type to the output type for you, but this may not
    * work in all cases.
@@ -1416,6 +1478,13 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   /**
    * Returns the product of all values in the column, returning a scalar
    * of the same type as this column.
+   *
+   * Example:
+   * <pre>{@code
+   * // col    = [2, 3, 4],  DType = INT32
+   * Scalar result = col.product();
+   * // result = 24,         DType = INT32
+   * }</pre>
    */
   public Scalar product() {
     return product(type);
@@ -1424,6 +1493,15 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   /**
    * Returns the product of all values in the column, returning a scalar
    * of the specified type.
+   *
+   * Example:
+   * <pre>{@code
+   * // col    = [2, 3, 4],  DType = INT32
+   * Scalar result = col.product(DType.INT64);
+   * // result = 24,         DType = INT64
+   * }</pre>
+   *
+   * @param outType the output DType
    */
   public Scalar product(DType outType) {
     return reduce(ReductionAggregation.product(), outType);
@@ -1432,6 +1510,13 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   /**
    * Returns the sum of squares of all values in the column, returning a
    * scalar of the same type as this column.
+   *
+   * Example:
+   * <pre>{@code
+   * // col    = [1, 2, 3],  DType = INT32
+   * Scalar result = col.sumOfSquares();
+   * // result = 14,         DType = INT32
+   * }</pre>
    */
   public Scalar sumOfSquares() {
     return sumOfSquares(type);
@@ -1440,6 +1525,15 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   /**
    * Returns the sum of squares of all values in the column, returning a
    * scalar of the specified type.
+   *
+   * Example:
+   * <pre>{@code
+   * // col    = [1, 2, 3],  DType = INT32
+   * Scalar result = col.sumOfSquares(DType.INT64);
+   * // result = 14,         DType = INT64
+   * }</pre>
+   *
+   * @param outType the output DType
    */
   public Scalar sumOfSquares(DType outType) {
     return reduce(ReductionAggregation.sumOfSquares(), outType);
@@ -1449,6 +1543,13 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Returns the arithmetic mean of all values in the column, returning a
    * FLOAT64 scalar unless the column type is FLOAT32 then a FLOAT32 scalar is returned.
    * Null values are skipped.
+   *
+   * Example:
+   * <pre>{@code
+   * // col    = [1, 2, 3, 4, 5], DType = INT32
+   * Scalar result = col.mean();
+   * // result = 3.0,             DType = FLOAT64
+   * }</pre>
    */
   public Scalar mean() {
     DType outType = DType.FLOAT64;
@@ -1462,6 +1563,14 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Returns the arithmetic mean of all values in the column, returning a
    * scalar of the specified type.
    * Null values are skipped.
+   *
+   * Example:
+   * <pre>{@code
+   * // col    = [1, 2, 3, 4, 5], DType = INT32
+   * Scalar result = col.mean(DType.FLOAT32);
+   * // result = 3.0,             DType = FLOAT32
+   * }</pre>
+   *
    * @param outType the output type to return.  Note that only floating point
    *                types are currently supported.
    */
@@ -1470,9 +1579,16 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   }
 
   /**
-   * Returns the variance of all values in the column, returning a
+   * Returns the sample variance of all values in the column, returning a
    * FLOAT64 scalar unless the column type is FLOAT32 then a FLOAT32 scalar is returned.
    * Null values are skipped.
+   *
+   * Example:
+   * <pre>{@code
+   * // col    = [1, 2, 3, 4, 5], DType = INT32
+   * Scalar result = col.variance();
+   * // result = 2.5,             DType = FLOAT64
+   * }</pre>
    */
   public Scalar variance() {
     DType outType = DType.FLOAT64;
@@ -1483,9 +1599,17 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   }
 
   /**
-   * Returns the variance of all values in the column, returning a
+   * Returns the sample variance of all values in the column, returning a
    * scalar of the specified type.
    * Null values are skipped.
+   *
+   * Example:
+   * <pre>{@code
+   * // col    = [1, 2, 3, 4, 5], DType = INT32
+   * Scalar result = col.variance(DType.FLOAT32);
+   * // result = 2.5,             DType = FLOAT32
+   * }</pre>
+   *
    * @param outType the output type to return.  Note that only floating point
    *                types are currently supported.
    */
@@ -1498,6 +1622,13 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * returning a FLOAT64 scalar unless the column type is FLOAT32 then
    * a FLOAT32 scalar is returned. Nulls are not counted as an element
    * of the column when calculating the standard deviation.
+   *
+   * Example:
+   * <pre>{@code
+   * // col    = [1, 2, 3, 4, 5],    DType = INT32
+   * Scalar result = col.standardDeviation();
+   * // result = 1.5811388300841898, DType = FLOAT64
+   * }</pre>
    */
   public Scalar standardDeviation() {
     DType outType = DType.FLOAT64;
@@ -1511,6 +1642,14 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Returns the sample standard deviation of all values in the column,
    * returning a scalar of the specified type. Null's are not counted as
    * an element of the column when calculating the standard deviation.
+   *
+   * Example:
+   * <pre>{@code
+   * // col    = [1, 2, 3, 4, 5],    DType = INT32
+   * Scalar result = col.standardDeviation(DType.FLOAT32);
+   * // result = 1.5811388,          DType = FLOAT32
+   * }</pre>
+   *
    * @param outType the output type to return.  Note that only floating point
    *                types are currently supported.
    */
@@ -1522,6 +1661,13 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Returns a boolean scalar that is true if any of the elements in
    * the column are true or non-zero otherwise false.
    * Null values are skipped.
+   *
+   * Example:
+   * <pre>{@code
+   * // col    = [0, 0, 1, 0], DType = INT32
+   * Scalar result = col.any();
+   * // result = true,         DType = BOOL8
+   * }</pre>
    */
   public Scalar any() {
     return any(DType.BOOL8);
@@ -1532,6 +1678,15 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * if any of the elements in the column are true or non-zero
    * otherwise false or 0.
    * Null values are skipped.
+   *
+   * Example:
+   * <pre>{@code
+   * // col    = [0, 0, 1, 0], DType = INT32
+   * Scalar result = col.any(DType.INT32);
+   * // result = 1,            DType = INT32
+   * }</pre>
+   *
+   * @param outType the output DType
    */
   public Scalar any(DType outType) {
     return reduce(ReductionAggregation.any(), outType);
@@ -1541,6 +1696,13 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Returns a boolean scalar that is true if all of the elements in
    * the column are true or non-zero otherwise false.
    * Null values are skipped.
+   *
+   * Example:
+   * <pre>{@code
+   * // col    = [1, 2, 3, 4], DType = INT32
+   * Scalar result = col.all();
+   * // result = true,         DType = BOOL8
+   * }</pre>
    */
   public Scalar all() {
     return all(DType.BOOL8);
@@ -1551,6 +1713,15 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * if all of the elements in the column are true or non-zero
    * otherwise false or 0.
    * Null values are skipped.
+   *
+   * Example:
+   * <pre>{@code
+   * // col    = [1, 2, 3, 4], DType = INT32
+   * Scalar result = col.all(DType.BOOL8);
+   * // result = true,         DType = BOOL8
+   * }</pre>
+   *
+   * @param outType the output DType
    * @deprecated the only output type supported is BOOL8.
    */
   @Deprecated
@@ -1562,7 +1733,16 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Computes the reduction of the values in all rows of a column.
    * Overflows in reductions are not detected. Specifying a higher precision
    * output type may prevent overflow. Only the MIN and MAX ops are
+   * supported for reduction of non-arithmetic types (TIMESTAMP...)
    * The null values are skipped for the operation.
+   *
+   * Example:
+   * <pre>{@code
+   * // col    = [1, 2, 3, 4, 5], DType = INT32
+   * Scalar result = col.reduce(ReductionAggregation.sum());
+   * // result = 15,              DType = INT32
+   * }</pre>
+   *
    * @param aggregation The reduction aggregation to perform
    * @return The scalar result of the reduction operation. If the column is
    * empty or the reduction operation fails then the
@@ -1578,6 +1758,14 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * output type may prevent overflow. Only the MIN and MAX ops are
    * supported for reduction of non-arithmetic types (TIMESTAMP...)
    * The null values are skipped for the operation.
+   *
+   * Example:
+   * <pre>{@code
+   * // col    = [1, 2, 3, 4, 5], DType = INT32
+   * Scalar result = col.reduce(ReductionAggregation.sum(), DType.INT64);
+   * // result = 15,              DType = INT64
+   * }</pre>
+   *
    * @param aggregation The reduction aggregation to perform
    * @param outType The type of scalar value to return. Not all output types are supported
    *                by all aggregation operations.
@@ -1597,6 +1785,15 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   /**
    * Do a segmented reduce where the offsets column indicates which groups in this to combine. The
    * output type is the same as the input type.
+   *
+   * Example:
+   * <pre>{@code
+   * // col     = [1, 2, 3, 4, 5], DType = INT32
+   * // offsets = [0, 2, 5],       DType = INT32
+   * ColumnVector result = col.segmentedReduce(offsets, SegmentedReductionAggregation.sum());
+   * // result  = [3, 12],         DType = INT32
+   * }</pre>
+   *
    * @param offsets an INT32 column with no nulls.
    * @param aggregation the aggregation to do
    * @return the result.
@@ -1607,6 +1804,15 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   /**
    * Do a segmented reduce where the offsets column indicates which groups in this to combine.
+   *
+   * Example:
+   * <pre>{@code
+   * // col     = [1, 2, 3, 4, 5], DType = INT32
+   * // offsets = [0, 2, 5],       DType = INT32
+   * ColumnVector result = col.segmentedReduce(offsets, SegmentedReductionAggregation.sum(), DType.INT64);
+   * // result  = [3, 12],         DType = INT64
+   * }</pre>
+   *
    * @param offsets an INT32 column with no nulls.
    * @param aggregation the aggregation to do
    * @param outType the output data type.
@@ -1619,6 +1825,16 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   /**
    * Do a segmented reduce where the offsets column indicates which groups in this to combine.
+   *
+   * Example:
+   * <pre>{@code
+   * // col     = [1, null, 3, 4, 5], DType = INT32
+   * // offsets = [0, 2, 5],          DType = INT32
+   * ColumnVector result = col.segmentedReduce(offsets, SegmentedReductionAggregation.sum(),
+   *     NullPolicy.INCLUDE, DType.INT64);
+   * // result  = [null, 12],         DType = INT64
+   * }</pre>
+   *
    * @param offsets an INT32 column with no nulls.
    * @param aggregation the aggregation to do
    * @param nullPolicy the null policy.
@@ -1640,6 +1856,15 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Segmented gather of the elements within a list element in each row of a list column.
    * For each list, assuming the size is N, valid indices of gather map ranges in [-N, N).
    * Out of bound indices refer to null.
+   *
+   * Example:
+   * <pre>{@code
+   * // col       = [[1, 2, 3], [4, 5], [6, 7, 8, 9]], DType = LIST of INT32
+   * // gatherMap = [[0, 2],    [1],    [3, 0]],       DType = LIST of INT32
+   * ColumnVector result = col.segmentedGather(gatherMap);
+   * // result    = [[1, 3],    [5],    [9, 6]],       DType = LIST of INT32
+   * }</pre>
+   *
    * @param gatherMap ListColumnView carrying lists of integral indices which maps the
    * element in list of each row in the source columns to rows of lists in the result columns.
    * @return the result.
@@ -1650,6 +1875,15 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   /**
    * Segmented gather of the elements within a list element in each row of a list column.
+   *
+   * Example:
+   * <pre>{@code
+   * // col       = [[1, 2, 3], [4, 5], [6, 7, 8, 9]], DType = LIST of INT32
+   * // gatherMap = [[0, 10],   [1],    [3, 0]],       DType = LIST of INT32
+   * ColumnVector result = col.segmentedGather(gatherMap, OutOfBoundsPolicy.NULLIFY);
+   * // result    = [[1, null], [5],    [9, 6]],       DType = LIST of INT32
+   * }</pre>
+   *
    * @param gatherMap ListColumnView carrying lists of integral indices which maps the
    * element in list of each row in the source columns to rows of lists in the result columns.
    * @param policy OutOfBoundsPolicy, `DONT_CHECK` leads to undefined behaviour; `NULLIFY`
@@ -1664,6 +1898,14 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   /**
    * Do a reduction on the values in a list. The output type will be the type of the data column
    * of this list.
+   *
+   * Example:
+   * <pre>{@code
+   * // col    = [[1, 2, 3], [4, 5], [6]], DType = LIST of INT32
+   * ColumnVector result = col.listReduce(SegmentedReductionAggregation.sum());
+   * // result = [6, 9, 6],                DType = INT32
+   * }</pre>
+   *
    * @param aggregation the aggregation to perform
    */
   public ColumnVector listReduce(SegmentedReductionAggregation aggregation) {
@@ -1678,6 +1920,14 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   /**
    * Do a reduction on the values in a list.
+   *
+   * Example:
+   * <pre>{@code
+   * // col    = [[1, 2, 3], [4, 5], [6]], DType = LIST of INT32
+   * ColumnVector result = col.listReduce(SegmentedReductionAggregation.sum(), DType.INT64);
+   * // result = [6, 9, 6],                DType = INT64
+   * }</pre>
+   *
    * @param aggregation the aggregation to perform
    * @param outType the type of the output. Typically, this should match with the child type
    *                of the list.
@@ -1688,6 +1938,15 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   /**
    * Do a reduction on the values in a list.
+   *
+   * Example:
+   * <pre>{@code
+   * // col    = [[1, null, 3], [4, 5], [6]], DType = LIST of INT32
+   * ColumnVector result = col.listReduce(SegmentedReductionAggregation.sum(),
+   *     NullPolicy.INCLUDE, DType.INT64);
+   * // result = [null, 9, 6],                DType = INT64
+   * }</pre>
+   *
    * @param aggregation the aggregation to perform
    * @param nullPolicy should nulls be included or excluded from the aggregation.
    * @param outType the type of the output. Typically, this should match with the child type
@@ -1708,6 +1967,18 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Calculate various percentiles of this ColumnVector, which must contain centroids produced by
    * a t-digest aggregation.
    *
+   * Example:
+   * <pre>{@code
+   * // Create t-digest centroids via groupBy aggregation:
+   * // Table tdigestTable = inputTable.groupBy(0)
+   * //     .aggregate(GroupByAggregation.createTDigest(100).onColumn(1));
+   * // ColumnVector tdigestCol = tdigestTable.getColumn(1);
+   *
+   * // Compute approximate percentiles:
+   * ColumnVector result = tdigestCol.approxPercentile(new double[]{0.25, 0.5, 0.75});
+   * // result = LIST of FLOAT64, one list of percentile values per element in the `percentiles` array
+   * }</pre>
+   *
    * @param percentiles Required percentiles [0,1]
    * @return Column containing the approximate percentile values as a list of doubles, in
    *         the same order as the input percentiles
@@ -1722,6 +1993,18 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Calculate various percentiles of this ColumnVector, which must contain centroids produced by
    * a t-digest aggregation.
    *
+   * Example:
+   * <pre>{@code
+   * // Create t-digest centroids via groupBy aggregation:
+   * // Table tdigestTable = inputTable.groupBy(0)
+   * //     .aggregate(GroupByAggregation.createTDigest(100).onColumn(1));
+   * // ColumnVector tdigestCol = tdigestTable.getColumn(1);
+   *
+   * // percentiles = [0.25, 0.5, 0.75], DType = FLOAT64
+   * ColumnVector result = tdigestCol.approxPercentile(percentiles);
+   * // result = LIST of FLOAT64, one list of percentile values per element in the `percentiles` array
+   * }</pre>
+   *
    * @param percentiles Column containing percentiles [0,1]
    * @return Column containing the approximate percentile values as a list of doubles, in
    *         the same order as the input percentiles
@@ -1733,6 +2016,14 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   /**
    * Calculate various quantiles of this ColumnVector.  It is assumed that this is already sorted
    * in the desired order.
+   *
+   * Example:
+   * <pre>{@code
+   * // col    = [-1, 0, 1, 1, 2, 3, 4, 6, 7, 9], DType = INT32
+   * ColumnVector result = col.quantile(QuantileMethod.LINEAR, new double[]{0.0, 0.25, 0.33, 0.5, 1.0});
+   * // result = [-1.0, 1.0, 1.0, 2.5, 9.0],      DType = FLOAT64
+   * }</pre>
+   *
    * @param method   the method used to calculate the quantiles
    * @param quantiles the quantile values [0,1]
    * @return Column containing the approximate percentile values as a list of doubles, in
@@ -1746,6 +2037,17 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * This function aggregates values in a window around each element i of the input
    * column. Please refer to WindowsOptions for various options that can be passed.
    * Note: Only rows-based windows are supported.
+   *
+   * Example:
+   * <pre>{@code
+   * // col    = [5, 4, 7, 6, 8],     DType = INT32
+   * Scalar one = Scalar.fromInt(1);
+   * Scalar two = Scalar.fromInt(2);
+   * WindowOptions options = WindowOptions.builder().minPeriods(2).window(two, one).build();
+   * ColumnVector result = col.rollingWindow(RollingAggregation.sum(), options);
+   * // result = [9, 16, 17, 21, 14], DType = INT64
+   * }</pre>
+   *
    * @param op the operation to perform.
    * @param options various window function arguments.
    * @return Column containing aggregate function result.
@@ -1779,6 +2081,13 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   /**
    * Compute the prefix sum (aka cumulative sum) of the values in this column.
    * This is just a convenience method for an inclusive scan with a SUM aggregation.
+   *
+   * Example:
+   * <pre>{@code
+   * // col    = [1, 2, 3, 5, 8, 10],   DType = INT64
+   * ColumnVector result = col.prefixSum();
+   * // result = [1, 3, 6, 11, 19, 29], DType = INT64
+   * }</pre>
    */
   public final ColumnVector prefixSum() {
     return scan(ScanAggregation.sum());
@@ -1786,6 +2095,14 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   /**
    * Computes a scan for a column. This is very similar to a running window on the column.
+   *
+   * Example:
+   * <pre>{@code
+   * // col    = [1, 2, null, 3, 5, 8, 10],   DType = INT32
+   * ColumnVector result = col.scan(ScanAggregation.sum(), ScanType.INCLUSIVE, NullPolicy.EXCLUDE);
+   * // result = [1, 3, null, 6, 11, 19, 29], DType = INT32
+   * }</pre>
+   *
    * @param aggregation the aggregation to perform
    * @param scanType should the scan be inclusive, include the current row, or exclusive.
    * @param nullPolicy how should nulls be treated. Note that some aggregations also include a
@@ -1804,6 +2121,14 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   /**
    * Computes a scan for a column that excludes nulls.
+   *
+   * Example:
+   * <pre>{@code
+   * // col    = [1, 2, null, 3, 5, 8, 10],  DType = INT32
+   * ColumnVector result = col.scan(ScanAggregation.sum(), ScanType.EXCLUSIVE);
+   * // result = [0, 1, null, 3, 6, 11, 19], DType = INT32
+   * }</pre>
+   *
    * @param aggregation the aggregation to perform
    * @param scanType should the scan be inclusive, include the current row, or exclusive.
    */
@@ -1813,6 +2138,14 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   /**
    * Computes an inclusive scan for a column that excludes nulls.
+   *
+   * Example:
+   * <pre>{@code
+   * // col    = [1, 2, null, 3, 5, 8, 10],   DType = INT32
+   * ColumnVector result = col.scan(ScanAggregation.sum());
+   * // result = [1, 3, null, 6, 11, 19, 29], DType = INT32
+   * }</pre>
+   *
    * @param aggregation the aggregation to perform
    */
   public final ColumnVector scan(ScanAggregation aggregation) {
@@ -2356,8 +2689,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param timestampType timestamp DType that includes the time unit to parse the timestamp into.
    * @param format strptime format specifier string of the timestamp. Used to parse and convert
    *               the timestamp with. Supports %Y,%y,%m,%d,%H,%I,%p,%M,%S,%f,%z format specifiers.
-   *               See https://github.com/rapidsai/custrings/blob/branch-0.10/docs/source/datetime.md
-   *               for full parsing format specification and documentation.
+   *               See https://docs.python.org/3/library/datetime.html#strftime-and-strptime-behavior
+   *               for parsing format specification and documentation.
    * @return A new ColumnVector containing the long representations of the timestamps in the
    *         original column vector.
    */
@@ -2373,8 +2706,6 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   /**
    * Cast to Strings.
-   * Negative timestamp values are not currently supported and will yield undesired results. See
-   * github issue https://github.com/rapidsai/cudf/issues/3116 for details
    * In case of timestamps it follows the following formats
    *    {@link DType#TIMESTAMP_DAYS} - "%Y-%m-%d"
    *    {@link DType#TIMESTAMP_SECONDS} - "%Y-%m-%d %H:%M:%S"
@@ -2405,27 +2736,21 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * positive or negative direction.
 
    * No checking is done for invalid formats or invalid timestamp units.
-   * Negative timestamp values are not currently supported and will yield undesired results. See
-   * github issue https://github.com/rapidsai/cudf/issues/3116 for details
    *
    * @param format - strftime format specifier string of the timestamp. Its used to parse and convert
-   *               the timestamp with. Supports %m,%j,%d,%H,%M,%S,%y,%Y,%f format specifiers.
+   *               the timestamp with. Supports the following format specifiers:
    *               %d 	Day of the month: 01-31
    *               %m 	Month of the year: 01-12
-   *               %y 	Year without century: 00-99c
+   *               %y 	Year without century: 00-99
    *               %Y 	Year with century: 0001-9999
    *               %H 	24-hour of the day: 00-23
+   *               %I 	12-hour of the day: 01-12
    *               %M 	Minute of the hour: 00-59
    *               %S 	Second of the minute: 00-59
    *               %f 	6-digit microsecond: 000000-999999
-   *               See https://github.com/rapidsai/custrings/blob/branch-0.10/docs/source/datetime.md
-   *
-   * Reported bugs
-   * https://github.com/rapidsai/cudf/issues/4160 after the bug is fixed this method should
-   * also support
-   *               %I 	12-hour of the day: 01-12
-   *               %p 	Only 'AM', 'PM'
-   *               %j   day of the year
+   *               %p 	One of: 'AM', 'PM', 'am', 'pm'
+   *               %j 	Day of the year: 001-366
+   *               See https://docs.python.org/3/library/datetime.html#strftime-and-strptime-behavior
    *
    * @return A new vector allocated on the GPU
    */
@@ -4440,14 +4765,12 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Strings that fail to parse will default to 0. Supported time units are second, millisecond,
    * microsecond, and nanosecond. Larger time units for column vectors are not supported yet in cudf.
    * No checking is done for invalid formats or invalid timestamp units.
-   * Negative timestamp values are not currently supported and will yield undesired results. See
-   * github issue https://github.com/rapidsai/cudf/issues/3116 for details
    *
    * @param unit integer native ID of the time unit to parse the timestamp into.
    * @param format strptime format specifier string of the timestamp. Used to parse and convert
    *               the timestamp with. Supports %Y,%y,%m,%d,%H,%I,%p,%M,%S,%f,%z format specifiers.
-   *               See https://github.com/rapidsai/custrings/blob/branch-0.10/docs/source/datetime.md
-   *               for full parsing format specification and documentation.
+   *               See https://docs.python.org/3/library/datetime.html#strftime-and-strptime-behavior
+   *               for parsing format specification and documentation.
    * @return native handle of the resulting cudf column, used to construct the Java column vector
    *         by the timestampToLong method.
    */
@@ -4558,27 +4881,21 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * timestamp is a long value representing how many units since 1970-01-01 00:00:00:000 in either
    * positive or negative direction. This mirrors the functionality spark sql's from_unixtime.
    * No checking is done for invalid formats or invalid timestamp units.
-   * Negative timestamp values are not currently supported and will yield undesired results. See
-   * github issue https://github.com/rapidsai/cudf/issues/3116 for details
    *
    * @param format - strftime format specifier string of the timestamp. Its used to parse and convert
-   *               the timestamp with. Supports %Y,%y,%m,%d,%H,%M,%S,%f format specifiers.
+   *               the timestamp with. Supports the following format specifiers:
    *               %d 	Day of the month: 01-31
    *               %m 	Month of the year: 01-12
-   *               %y 	Year without century: 00-99c
+   *               %y 	Year without century: 00-99
    *               %Y 	Year with century: 0001-9999
    *               %H 	24-hour of the day: 00-23
+   *               %I 	12-hour of the day: 01-12
    *               %M 	Minute of the hour: 00-59
    *               %S 	Second of the minute: 00-59
    *               %f 	6-digit microsecond: 000000-999999
-   *               See http://man7.org/linux/man-pages/man3/strftime.3.html for details
-   *
-   * Reported bugs
-   * https://github.com/rapidsai/cudf/issues/4160 after the bug is fixed this method should
-   * also support
-   *               %I 	12-hour of the day: 01-12
-   *               %p 	Only 'AM', 'PM'
-   *               %j   day of the year
+   *               %p 	One of: 'AM', 'PM', 'am', 'pm'
+   *               %j 	Day of the year: 001-366
+   *               See https://docs.python.org/3/library/datetime.html#strftime-and-strptime-behavior
    *
    * @return - native handle of the resulting cudf column used to construct the Java column vector
    */
