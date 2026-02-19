@@ -144,12 +144,20 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         .unique()
     )
 
-    # Get the d_month_seq for the given year/month
-    target_month_seq = (
+    # Work around GPU cross-join limitation: collect target month_seq as scalar
+    target_seq = (
         date_dim.filter((pl.col("d_year") == year) & (pl.col("d_moy") == month))
-        .select("d_month_seq")
-        .unique()
+        .select(pl.col("d_month_seq").first())
+        .collect()
+        .item()
     )
+    seq_start = target_seq + 1
+    seq_end = target_seq + 3
+
+    # Filter date_dim to only dates in the valid range
+    valid_dates = date_dim.filter(
+        pl.col("d_month_seq").is_between(seq_start, seq_end)
+    ).select("d_date_sk")
 
     my_revenue = (
         my_customers.join(
@@ -159,19 +167,7 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
             store, left_on=["ca_county", "ca_state"], right_on=["s_county", "s_state"]
         )
         .join(store_sales, left_on="c_customer_sk", right_on="ss_customer_sk")
-        .join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
-        .join(
-            target_month_seq.select(
-                [
-                    (pl.col("d_month_seq") + 1).alias("seq_start"),
-                    (pl.col("d_month_seq") + 3).alias("seq_end"),
-                ]
-            ),
-            how="cross",
-        )
-        .filter(
-            pl.col("d_month_seq").is_between(pl.col("seq_start"), pl.col("seq_end"))
-        )
+        .join(valid_dates, left_on="ss_sold_date_sk", right_on="d_date_sk")
         .group_by("c_customer_sk")
         .agg([pl.col("ss_ext_sales_price").sum().alias("revenue")])
     )

@@ -167,18 +167,7 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
                 & (pl.col("ca_gmt_offset") == gmt_offset)
             )
             .group_by("i_item_id")
-            .agg(
-                [
-                    pl.col(ch["ext_col"]).count().alias("count_sales"),
-                    pl.col(ch["ext_col"]).sum().alias("sum_sales"),
-                ]
-            )
-            .with_columns(
-                pl.when(pl.col("count_sales") == 0)
-                .then(None)
-                .otherwise(pl.col("sum_sales"))
-                .alias("total_sales")
-            )
+            .agg(pl.col(ch["ext_col"]).sum().alias("total_sales"))
             .select(["i_item_id", "total_sales"])
         )
         for ch in channels
@@ -187,18 +176,7 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     return (
         pl.concat(per_channel)
         .group_by("i_item_id")
-        .agg(
-            [
-                pl.col("total_sales").count().alias("count_total"),
-                pl.col("total_sales").sum().alias("sum_total"),
-            ]
-        )
-        .with_columns(
-            pl.when(pl.col("count_total") == 0)
-            .then(None)
-            .otherwise(pl.col("sum_total"))
-            .alias("total_sales")
-        )
+        .agg(pl.col("total_sales").sum().alias("total_sales"))
         .select(["i_item_id", "total_sales"])
         .sort(["total_sales"], nulls_last=True, descending=[False])
         .limit(100)
