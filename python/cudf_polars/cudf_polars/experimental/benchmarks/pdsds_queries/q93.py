@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
 from cudf_polars.experimental.benchmarks.utils import get_data
 
 if TYPE_CHECKING:
@@ -17,7 +18,15 @@ if TYPE_CHECKING:
 
 def duckdb_impl(run_config: RunConfig) -> str:
     """Query 93."""
-    return """
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=93,
+        qualification=run_config.qualification,
+    )
+
+    reason_desc = params["reason_desc"]
+
+    return f"""
     SELECT ss_customer_sk,
                    Sum(act_sales) sumsales
     FROM   (SELECT ss_item_sk,
@@ -34,7 +43,7 @@ def duckdb_impl(run_config: RunConfig) -> str:
                                      AND sr_ticket_number = ss_ticket_number ),
                    reason
             WHERE  sr_reason_sk = r_reason_sk
-                   AND r_reason_desc = 'reason 38') t
+                   AND r_reason_desc = '{reason_desc}') t
     GROUP  BY ss_customer_sk
     ORDER  BY sumsales,
               ss_customer_sk
@@ -44,6 +53,14 @@ def duckdb_impl(run_config: RunConfig) -> str:
 
 def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     """Query 93."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=93,
+        qualification=run_config.qualification,
+    )
+
+    reason_desc = params["reason_desc"]
+
     store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
     store_returns = get_data(
         run_config.dataset_path, "store_returns", run_config.suffix
@@ -59,7 +76,7 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         .join(reason, how="cross")
         .filter(
             (pl.col("sr_reason_sk") == pl.col("r_reason_sk"))
-            & (pl.col("r_reason_desc") == "reason 38")
+            & (pl.col("r_reason_desc") == reason_desc)
         )
         .with_columns(
             [

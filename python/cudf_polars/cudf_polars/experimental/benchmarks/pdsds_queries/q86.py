@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
 from cudf_polars.experimental.benchmarks.utils import get_data
 
 if TYPE_CHECKING:
@@ -17,7 +18,15 @@ if TYPE_CHECKING:
 
 def duckdb_impl(run_config: RunConfig) -> str:
     """Query 86."""
-    return """
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=86,
+        qualification=run_config.qualification,
+    )
+
+    d_month_seq = params["d_month_seq"]
+
+    return f"""
     SELECT Sum(ws_net_paid)                         AS total_sum,
                    i_category,
                    i_class,
@@ -31,7 +40,7 @@ def duckdb_impl(run_config: RunConfig) -> str:
     FROM   web_sales,
            date_dim d1,
            item
-    WHERE  d1.d_month_seq BETWEEN 1183 AND 1183 + 11
+    WHERE  d1.d_month_seq BETWEEN {d_month_seq} AND {d_month_seq} + 11
            AND d1.d_date_sk = ws_sold_date_sk
            AND i_item_sk = ws_item_sk
     GROUP  BY rollup( i_category, i_class )
@@ -91,15 +100,23 @@ def _rollup_level(
 
 def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     """Query 86."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=86,
+        qualification=run_config.qualification,
+    )
+
+    d_month_seq = params["d_month_seq"]
+
     web_sales = get_data(run_config.dataset_path, "web_sales", run_config.suffix)
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
     item = get_data(run_config.dataset_path, "item", run_config.suffix)
 
     base = (
         web_sales.join(
-            date_dim.filter(pl.col("d_month_seq").is_between(1183, 1183 + 11)).select(
-                ["d_date_sk"]
-            ),
+            date_dim.filter(
+                pl.col("d_month_seq").is_between(d_month_seq, d_month_seq + 11)
+            ).select(["d_date_sk"]),
             left_on="ws_sold_date_sk",
             right_on="d_date_sk",
         )

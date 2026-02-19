@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
 from cudf_polars.experimental.benchmarks.utils import get_data
 
 if TYPE_CHECKING:
@@ -17,31 +18,47 @@ if TYPE_CHECKING:
 
 def duckdb_impl(run_config: RunConfig) -> str:
     """Query 87."""
-    return """
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=87,
+        qualification=run_config.qualification,
+    )
+
+    d_month_seq = params["d_month_seq"]
+
+    return f"""
     select count(*)
     from ((select distinct c_last_name, c_first_name, d_date
            from store_sales, date_dim, customer
            where store_sales.ss_sold_date_sk = date_dim.d_date_sk
              and store_sales.ss_customer_sk = customer.c_customer_sk
-             and d_month_seq between 1188 and 1188+11)
+             and d_month_seq between {d_month_seq} and {d_month_seq}+11)
            except
           (select distinct c_last_name, c_first_name, d_date
            from catalog_sales, date_dim, customer
            where catalog_sales.cs_sold_date_sk = date_dim.d_date_sk
              and catalog_sales.cs_bill_customer_sk = customer.c_customer_sk
-             and d_month_seq between 1188 and 1188+11)
+             and d_month_seq between {d_month_seq} and {d_month_seq}+11)
            except
           (select distinct c_last_name, c_first_name, d_date
            from web_sales, date_dim, customer
            where web_sales.ws_sold_date_sk = date_dim.d_date_sk
              and web_sales.ws_bill_customer_sk = customer.c_customer_sk
-             and d_month_seq between 1188 and 1188+11)
+             and d_month_seq between {d_month_seq} and {d_month_seq}+11)
     ) cool_cust;
     """
 
 
 def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     """Query 87."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=87,
+        qualification=run_config.qualification,
+    )
+
+    d_month_seq = params["d_month_seq"]
+
     store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
     catalog_sales = get_data(
         run_config.dataset_path, "catalog_sales", run_config.suffix
@@ -56,7 +73,8 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         )
         .join(
             date_dim.filter(
-                (pl.col("d_month_seq") >= 1188) & (pl.col("d_month_seq") <= 1188 + 11)
+                (pl.col("d_month_seq") >= d_month_seq)
+                & (pl.col("d_month_seq") <= d_month_seq + 11)
             ),
             left_on="ss_sold_date_sk",
             right_on="d_date_sk",
@@ -73,7 +91,8 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         )
         .join(
             date_dim.filter(
-                (pl.col("d_month_seq") >= 1188) & (pl.col("d_month_seq") <= 1188 + 11)
+                (pl.col("d_month_seq") >= d_month_seq)
+                & (pl.col("d_month_seq") <= d_month_seq + 11)
             ),
             left_on="cs_sold_date_sk",
             right_on="d_date_sk",
@@ -95,7 +114,8 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         )
         .join(
             date_dim.filter(
-                (pl.col("d_month_seq") >= 1188) & (pl.col("d_month_seq") <= 1188 + 11)
+                (pl.col("d_month_seq") >= d_month_seq)
+                & (pl.col("d_month_seq") <= d_month_seq + 11)
             ),
             left_on="ws_sold_date_sk",
             right_on="d_date_sk",

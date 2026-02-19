@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
 from cudf_polars.experimental.benchmarks.utils import get_data
 
 if TYPE_CHECKING:
@@ -17,16 +18,25 @@ if TYPE_CHECKING:
 
 def duckdb_impl(run_config: RunConfig) -> str:
     """Query 92."""
-    return """
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=92,
+        qualification=run_config.qualification,
+    )
+
+    manufact_id = params["manufact_id"]
+    date = params["date"]
+
+    return f"""
     SELECT
              Sum(ws_ext_discount_amt) AS 'Excess Discount Amount'
     FROM     web_sales ,
              item ,
              date_dim
-    WHERE    i_manufact_id = 718
+    WHERE    i_manufact_id = {manufact_id}
     AND      i_item_sk = ws_item_sk
-    AND      d_date BETWEEN '2002-03-29' AND      (
-                      Cast('2002-03-29' AS DATE) +  INTERVAL '90' day)
+    AND      d_date BETWEEN '{date}' AND      (
+                      Cast('{date}' AS DATE) +  INTERVAL '90' day)
     AND      d_date_sk = ws_sold_date_sk
     AND      ws_ext_discount_amt >
              (
@@ -34,8 +44,8 @@ def duckdb_impl(run_config: RunConfig) -> str:
                     FROM   web_sales ,
                            date_dim
                     WHERE  ws_item_sk = i_item_sk
-                    AND    d_date BETWEEN '2002-03-29' AND    (
-                                  cast('2002-03-29' AS date) + INTERVAL '90' day)
+                    AND    d_date BETWEEN '{date}' AND    (
+                                  cast('{date}' AS date) + INTERVAL '90' day)
                     AND    d_date_sk = ws_sold_date_sk )
     ORDER BY sum(ws_ext_discount_amt)
     LIMIT 100;
@@ -44,10 +54,19 @@ def duckdb_impl(run_config: RunConfig) -> str:
 
 def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     """Query 92."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=92,
+        qualification=run_config.qualification,
+    )
+
+    manufact_id = params["manufact_id"]
+    date = params["date"]
+
     web_sales = get_data(run_config.dataset_path, "web_sales", run_config.suffix)
     item = get_data(run_config.dataset_path, "item", run_config.suffix)
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
-    start_date = (pl.date(2002, 3, 29)).cast(pl.Datetime("us"))
+    start_date = pl.lit(date).str.to_date().cast(pl.Datetime("us"))
     end_date = (start_date + pl.duration(days=90)).cast(pl.Datetime("us"))
     avg_discounts = (
         web_sales.join(
@@ -63,7 +82,7 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         .join(date_dim, left_on="ws_sold_date_sk", right_on="d_date_sk", how="inner")
         .join(avg_discounts, left_on="ws_item_sk", right_on="ws_item_sk", how="inner")
         .filter(
-            (pl.col("i_manufact_id") == 718)
+            (pl.col("i_manufact_id") == manufact_id)
             & (pl.col("d_date") >= start_date)
             & (pl.col("d_date") <= end_date)
             & (pl.col("ws_ext_discount_amt") > pl.col("threshold_discount"))

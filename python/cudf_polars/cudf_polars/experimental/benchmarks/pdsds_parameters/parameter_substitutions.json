@@ -523,6 +523,95 @@
           "Williamson County",
           "Williamson County"
         ]
+      },
+      "86": {
+        "d_month_seq": 1176
+      },
+      "87": {
+        "d_month_seq": 1176
+      },
+      "88": {
+        "s_store_name": "ese",
+        "hd_dep_count1": 1,
+        "hd_dep_count2": -1,
+        "hd_dep_count3": 3
+      },
+      "89": {
+        "year": 2001,
+        "category1": [
+          "Electronics",
+          "Men",
+          "Women"
+        ],
+        "class1": [
+          "stereo",
+          "accessories",
+          "fragrances"
+        ],
+        "category2": [
+          "Children",
+          "Sports",
+          "Shoes"
+        ],
+        "class2": [
+          "toddlers",
+          "outdoor",
+          "womens"
+        ]
+      },
+      "90": {
+        "am_hour": 8,
+        "pm_hour": 19,
+        "hd_dep_count": 9,
+        "wp_char_count_min": 5000,
+        "wp_char_count_max": 5200
+      },
+      "91": {
+        "year": 2001,
+        "month": 12,
+        "marital_status1": "M",
+        "education_status1": "Unknown",
+        "marital_status2": "W",
+        "education_status2": "Advanced Degree",
+        "hd_buy_potential": ">10000%",
+        "ca_gmt_offset": -6
+      },
+      "92": {
+        "manufact_id": 10,
+        "date": "2002-01-05"
+      },
+      "93": {
+        "reason_desc": "reason 70"
+      },
+      "94": {
+        "date": "2000-5-01",
+        "state": "IA",
+        "web_company_name": "pri"
+      },
+      "95": {
+        "date": "2000-5-01",
+        "state": "IA",
+        "web_company_name": "pri"
+      },
+      "96": {
+        "t_hour": 8,
+        "t_minute": 30,
+        "hd_dep_count": 4,
+        "s_store_name": "ese"
+      },
+      "97": {
+        "d_month_seq": 1176
+      },
+      "98": {
+        "categories": [
+          "Books",
+          "Women",
+          "Electronics"
+        ],
+        "date": "2001-01-08"
+      },
+      "99": {
+        "d_month_seq": 1176
       }
     },
     "10": {
@@ -1047,6 +1136,95 @@
           "Walker County",
           "Ziebach County"
         ]
+      },
+      "86": {
+        "d_month_seq": 1176
+      },
+      "87": {
+        "d_month_seq": 1176
+      },
+      "88": {
+        "s_store_name": "ese",
+        "hd_dep_count1": 1,
+        "hd_dep_count2": -1,
+        "hd_dep_count3": 3
+      },
+      "89": {
+        "year": 2001,
+        "category1": [
+          "Electronics",
+          "Men",
+          "Women"
+        ],
+        "class1": [
+          "stereo",
+          "accessories",
+          "fragrances"
+        ],
+        "category2": [
+          "Children",
+          "Sports",
+          "Shoes"
+        ],
+        "class2": [
+          "toddlers",
+          "outdoor",
+          "womens"
+        ]
+      },
+      "90": {
+        "am_hour": 8,
+        "pm_hour": 19,
+        "hd_dep_count": 9,
+        "wp_char_count_min": 5000,
+        "wp_char_count_max": 5200
+      },
+      "91": {
+        "year": 2001,
+        "month": 12,
+        "marital_status1": "M",
+        "education_status1": "Unknown",
+        "marital_status2": "W",
+        "education_status2": "Advanced Degree",
+        "hd_buy_potential": ">10000%",
+        "ca_gmt_offset": -6
+      },
+      "92": {
+        "manufact_id": 10,
+        "date": "2002-01-05"
+      },
+      "93": {
+        "reason_desc": "reason 70"
+      },
+      "94": {
+        "date": "2000-5-01",
+        "state": "IA",
+        "web_company_name": "pri"
+      },
+      "95": {
+        "date": "2000-5-01",
+        "state": "IA",
+        "web_company_name": "pri"
+      },
+      "96": {
+        "t_hour": 8,
+        "t_minute": 30,
+        "hd_dep_count": 4,
+        "s_store_name": "ese"
+      },
+      "97": {
+        "d_month_seq": 1176
+      },
+      "98": {
+        "categories": [
+          "Books",
+          "Women",
+          "Electronics"
+        ],
+        "date": "2001-01-08"
+      },
+      "99": {
+        "d_month_seq": 1176
       }
     },
     "50": {
@@ -1571,6 +1749,95 @@
           "Walker County",
           "Ziebach County"
         ]
+      },
+      "86": {
+        "d_month_seq": 1176
+      },
+      "87": {
+        "d_month_seq": 1176
+      },
+      "88": {
+        "s_store_name": "ese",
+        "hd_dep_count1": 1,
+        "hd_dep_count2": -1,
+        "hd_dep_count3": 3
+      },
+      "89": {
+        "year": 2001,
+        "category1": [
+          "Electronics",
+          "Men",
+          "Women"
+        ],
+        "class1": [
+          "stereo",
+          "accessories",
+          "fragrances"
+        ],
+        "category2": [
+          "Children",
+          "Sports",
+          "Shoes"
+        ],
+        "class2": [
+          "toddlers",
+          "outdoor",
+          "womens"
+        ]
+      },
+      "90": {
+        "am_hour": 8,
+        "pm_hour": 19,
+        "hd_dep_count": 9,
+        "wp_char_count_min": 5000,
+        "wp_char_count_max": 5200
+      },
+      "91": {
+        "year": 2001,
+        "month": 12,
+        "marital_status1": "M",
+        "education_status1": "Unknown",
+        "marital_status2": "W",
+        "education_status2": "Advanced Degree",
+        "hd_buy_potential": ">10000%",
+        "ca_gmt_offset": -6
+      },
+      "92": {
+        "manufact_id": 10,
+        "date": "2002-01-05"
+      },
+      "93": {
+        "reason_desc": "reason 70"
+      },
+      "94": {
+        "date": "2000-5-01",
+        "state": "IA",
+        "web_company_name": "pri"
+      },
+      "95": {
+        "date": "2000-5-01",
+        "state": "IA",
+        "web_company_name": "pri"
+      },
+      "96": {
+        "t_hour": 8,
+        "t_minute": 30,
+        "hd_dep_count": 4,
+        "s_store_name": "ese"
+      },
+      "97": {
+        "d_month_seq": 1176
+      },
+      "98": {
+        "categories": [
+          "Books",
+          "Women",
+          "Electronics"
+        ],
+        "date": "2001-01-08"
+      },
+      "99": {
+        "d_month_seq": 1176
       }
     },
     "100": {
@@ -2095,6 +2362,95 @@
           "Daviess County",
           "Richland County"
         ]
+      },
+      "86": {
+        "d_month_seq": 1176
+      },
+      "87": {
+        "d_month_seq": 1176
+      },
+      "88": {
+        "s_store_name": "ese",
+        "hd_dep_count1": 1,
+        "hd_dep_count2": -1,
+        "hd_dep_count3": 3
+      },
+      "89": {
+        "year": 2001,
+        "category1": [
+          "Electronics",
+          "Men",
+          "Women"
+        ],
+        "class1": [
+          "stereo",
+          "accessories",
+          "fragrances"
+        ],
+        "category2": [
+          "Children",
+          "Sports",
+          "Shoes"
+        ],
+        "class2": [
+          "toddlers",
+          "outdoor",
+          "womens"
+        ]
+      },
+      "90": {
+        "am_hour": 8,
+        "pm_hour": 19,
+        "hd_dep_count": 9,
+        "wp_char_count_min": 5000,
+        "wp_char_count_max": 5200
+      },
+      "91": {
+        "year": 2001,
+        "month": 12,
+        "marital_status1": "M",
+        "education_status1": "Unknown",
+        "marital_status2": "W",
+        "education_status2": "Advanced Degree",
+        "hd_buy_potential": ">10000%",
+        "ca_gmt_offset": -6
+      },
+      "92": {
+        "manufact_id": 10,
+        "date": "2002-01-05"
+      },
+      "93": {
+        "reason_desc": "reason 70"
+      },
+      "94": {
+        "date": "2000-5-01",
+        "state": "IA",
+        "web_company_name": "pri"
+      },
+      "95": {
+        "date": "2000-5-01",
+        "state": "IA",
+        "web_company_name": "pri"
+      },
+      "96": {
+        "t_hour": 8,
+        "t_minute": 30,
+        "hd_dep_count": 4,
+        "s_store_name": "ese"
+      },
+      "97": {
+        "d_month_seq": 1176
+      },
+      "98": {
+        "categories": [
+          "Books",
+          "Women",
+          "Electronics"
+        ],
+        "date": "2001-01-08"
+      },
+      "99": {
+        "d_month_seq": 1176
       }
     },
     "200": {
@@ -2619,6 +2975,95 @@
           "Walker County",
           "Ziebach County"
         ]
+      },
+      "86": {
+        "d_month_seq": 1176
+      },
+      "87": {
+        "d_month_seq": 1176
+      },
+      "88": {
+        "s_store_name": "ese",
+        "hd_dep_count1": 1,
+        "hd_dep_count2": -1,
+        "hd_dep_count3": 3
+      },
+      "89": {
+        "year": 2001,
+        "category1": [
+          "Electronics",
+          "Men",
+          "Women"
+        ],
+        "class1": [
+          "stereo",
+          "accessories",
+          "fragrances"
+        ],
+        "category2": [
+          "Children",
+          "Sports",
+          "Shoes"
+        ],
+        "class2": [
+          "toddlers",
+          "outdoor",
+          "womens"
+        ]
+      },
+      "90": {
+        "am_hour": 8,
+        "pm_hour": 19,
+        "hd_dep_count": 9,
+        "wp_char_count_min": 5000,
+        "wp_char_count_max": 5200
+      },
+      "91": {
+        "year": 2001,
+        "month": 12,
+        "marital_status1": "M",
+        "education_status1": "Unknown",
+        "marital_status2": "W",
+        "education_status2": "Advanced Degree",
+        "hd_buy_potential": ">10000%",
+        "ca_gmt_offset": -6
+      },
+      "92": {
+        "manufact_id": 10,
+        "date": "2002-01-05"
+      },
+      "93": {
+        "reason_desc": "reason 70"
+      },
+      "94": {
+        "date": "2000-5-01",
+        "state": "IA",
+        "web_company_name": "pri"
+      },
+      "95": {
+        "date": "2000-5-01",
+        "state": "IA",
+        "web_company_name": "pri"
+      },
+      "96": {
+        "t_hour": 8,
+        "t_minute": 30,
+        "hd_dep_count": 4,
+        "s_store_name": "ese"
+      },
+      "97": {
+        "d_month_seq": 1176
+      },
+      "98": {
+        "categories": [
+          "Books",
+          "Women",
+          "Electronics"
+        ],
+        "date": "2001-01-08"
+      },
+      "99": {
+        "d_month_seq": 1176
       }
     },
     "400": {
@@ -3143,6 +3588,95 @@
           "Williamson County",
           "Ziebach County"
         ]
+      },
+      "86": {
+        "d_month_seq": 1176
+      },
+      "87": {
+        "d_month_seq": 1176
+      },
+      "88": {
+        "s_store_name": "ese",
+        "hd_dep_count1": 1,
+        "hd_dep_count2": -1,
+        "hd_dep_count3": 3
+      },
+      "89": {
+        "year": 2001,
+        "category1": [
+          "Electronics",
+          "Men",
+          "Women"
+        ],
+        "class1": [
+          "stereo",
+          "accessories",
+          "fragrances"
+        ],
+        "category2": [
+          "Children",
+          "Sports",
+          "Shoes"
+        ],
+        "class2": [
+          "toddlers",
+          "outdoor",
+          "womens"
+        ]
+      },
+      "90": {
+        "am_hour": 8,
+        "pm_hour": 19,
+        "hd_dep_count": 9,
+        "wp_char_count_min": 5000,
+        "wp_char_count_max": 5200
+      },
+      "91": {
+        "year": 2001,
+        "month": 12,
+        "marital_status1": "M",
+        "education_status1": "Unknown",
+        "marital_status2": "W",
+        "education_status2": "Advanced Degree",
+        "hd_buy_potential": ">10000%",
+        "ca_gmt_offset": -6
+      },
+      "92": {
+        "manufact_id": 10,
+        "date": "2002-01-05"
+      },
+      "93": {
+        "reason_desc": "reason 70"
+      },
+      "94": {
+        "date": "2000-5-01",
+        "state": "IA",
+        "web_company_name": "pri"
+      },
+      "95": {
+        "date": "2000-5-01",
+        "state": "IA",
+        "web_company_name": "pri"
+      },
+      "96": {
+        "t_hour": 8,
+        "t_minute": 30,
+        "hd_dep_count": 4,
+        "s_store_name": "ese"
+      },
+      "97": {
+        "d_month_seq": 1176
+      },
+      "98": {
+        "categories": [
+          "Books",
+          "Women",
+          "Electronics"
+        ],
+        "date": "2001-01-08"
+      },
+      "99": {
+        "d_month_seq": 1176
       }
     },
     "1000": {
@@ -3667,6 +4201,95 @@
           "San Miguel County",
           "Oglethorpe County"
         ]
+      },
+      "86": {
+        "d_month_seq": 1176
+      },
+      "87": {
+        "d_month_seq": 1176
+      },
+      "88": {
+        "s_store_name": "ese",
+        "hd_dep_count1": 1,
+        "hd_dep_count2": -1,
+        "hd_dep_count3": 3
+      },
+      "89": {
+        "year": 2001,
+        "category1": [
+          "Electronics",
+          "Men",
+          "Women"
+        ],
+        "class1": [
+          "stereo",
+          "accessories",
+          "fragrances"
+        ],
+        "category2": [
+          "Children",
+          "Sports",
+          "Shoes"
+        ],
+        "class2": [
+          "toddlers",
+          "outdoor",
+          "womens"
+        ]
+      },
+      "90": {
+        "am_hour": 8,
+        "pm_hour": 19,
+        "hd_dep_count": 9,
+        "wp_char_count_min": 5000,
+        "wp_char_count_max": 5200
+      },
+      "91": {
+        "year": 2001,
+        "month": 12,
+        "marital_status1": "M",
+        "education_status1": "Unknown",
+        "marital_status2": "W",
+        "education_status2": "Advanced Degree",
+        "hd_buy_potential": ">10000%",
+        "ca_gmt_offset": -6
+      },
+      "92": {
+        "manufact_id": 10,
+        "date": "2002-01-05"
+      },
+      "93": {
+        "reason_desc": "reason 70"
+      },
+      "94": {
+        "date": "2000-5-01",
+        "state": "IA",
+        "web_company_name": "pri"
+      },
+      "95": {
+        "date": "2000-5-01",
+        "state": "IA",
+        "web_company_name": "pri"
+      },
+      "96": {
+        "t_hour": 8,
+        "t_minute": 30,
+        "hd_dep_count": 4,
+        "s_store_name": "ese"
+      },
+      "97": {
+        "d_month_seq": 1176
+      },
+      "98": {
+        "categories": [
+          "Books",
+          "Women",
+          "Electronics"
+        ],
+        "date": "2001-01-08"
+      },
+      "99": {
+        "d_month_seq": 1176
       }
     },
     "3000": {
@@ -4191,6 +4814,95 @@
           "Williamson County",
           "Marshall County"
         ]
+      },
+      "86": {
+        "d_month_seq": 1176
+      },
+      "87": {
+        "d_month_seq": 1176
+      },
+      "88": {
+        "s_store_name": "ese",
+        "hd_dep_count1": 1,
+        "hd_dep_count2": -1,
+        "hd_dep_count3": 3
+      },
+      "89": {
+        "year": 2001,
+        "category1": [
+          "Electronics",
+          "Men",
+          "Women"
+        ],
+        "class1": [
+          "stereo",
+          "accessories",
+          "fragrances"
+        ],
+        "category2": [
+          "Children",
+          "Sports",
+          "Shoes"
+        ],
+        "class2": [
+          "toddlers",
+          "outdoor",
+          "womens"
+        ]
+      },
+      "90": {
+        "am_hour": 8,
+        "pm_hour": 19,
+        "hd_dep_count": 9,
+        "wp_char_count_min": 5000,
+        "wp_char_count_max": 5200
+      },
+      "91": {
+        "year": 2001,
+        "month": 12,
+        "marital_status1": "M",
+        "education_status1": "Unknown",
+        "marital_status2": "W",
+        "education_status2": "Advanced Degree",
+        "hd_buy_potential": ">10000%",
+        "ca_gmt_offset": -6
+      },
+      "92": {
+        "manufact_id": 10,
+        "date": "2002-01-05"
+      },
+      "93": {
+        "reason_desc": "reason 70"
+      },
+      "94": {
+        "date": "2000-5-01",
+        "state": "IA",
+        "web_company_name": "pri"
+      },
+      "95": {
+        "date": "2000-5-01",
+        "state": "IA",
+        "web_company_name": "pri"
+      },
+      "96": {
+        "t_hour": 8,
+        "t_minute": 30,
+        "hd_dep_count": 4,
+        "s_store_name": "ese"
+      },
+      "97": {
+        "d_month_seq": 1176
+      },
+      "98": {
+        "categories": [
+          "Books",
+          "Women",
+          "Electronics"
+        ],
+        "date": "2001-01-08"
+      },
+      "99": {
+        "d_month_seq": 1176
       }
     },
     "10000": {
@@ -4715,6 +5427,95 @@
           "Levy County",
           "Richland County"
         ]
+      },
+      "86": {
+        "d_month_seq": 1176
+      },
+      "87": {
+        "d_month_seq": 1176
+      },
+      "88": {
+        "s_store_name": "ese",
+        "hd_dep_count1": 1,
+        "hd_dep_count2": -1,
+        "hd_dep_count3": 3
+      },
+      "89": {
+        "year": 2001,
+        "category1": [
+          "Electronics",
+          "Men",
+          "Women"
+        ],
+        "class1": [
+          "stereo",
+          "accessories",
+          "fragrances"
+        ],
+        "category2": [
+          "Children",
+          "Sports",
+          "Shoes"
+        ],
+        "class2": [
+          "toddlers",
+          "outdoor",
+          "womens"
+        ]
+      },
+      "90": {
+        "am_hour": 8,
+        "pm_hour": 19,
+        "hd_dep_count": 9,
+        "wp_char_count_min": 5000,
+        "wp_char_count_max": 5200
+      },
+      "91": {
+        "year": 2001,
+        "month": 12,
+        "marital_status1": "M",
+        "education_status1": "Unknown",
+        "marital_status2": "W",
+        "education_status2": "Advanced Degree",
+        "hd_buy_potential": ">10000%",
+        "ca_gmt_offset": -6
+      },
+      "92": {
+        "manufact_id": 10,
+        "date": "2002-01-05"
+      },
+      "93": {
+        "reason_desc": "reason 70"
+      },
+      "94": {
+        "date": "2000-5-01",
+        "state": "IA",
+        "web_company_name": "pri"
+      },
+      "95": {
+        "date": "2000-5-01",
+        "state": "IA",
+        "web_company_name": "pri"
+      },
+      "96": {
+        "t_hour": 8,
+        "t_minute": 30,
+        "hd_dep_count": 4,
+        "s_store_name": "ese"
+      },
+      "97": {
+        "d_month_seq": 1176
+      },
+      "98": {
+        "categories": [
+          "Books",
+          "Women",
+          "Electronics"
+        ],
+        "date": "2001-01-08"
+      },
+      "99": {
+        "d_month_seq": 1176
       }
     },
     "30000": {
@@ -5239,6 +6040,95 @@
           "Barrow County",
           "Perry County"
         ]
+      },
+      "86": {
+        "d_month_seq": 1176
+      },
+      "87": {
+        "d_month_seq": 1176
+      },
+      "88": {
+        "s_store_name": "ese",
+        "hd_dep_count1": 1,
+        "hd_dep_count2": -1,
+        "hd_dep_count3": 3
+      },
+      "89": {
+        "year": 2001,
+        "category1": [
+          "Electronics",
+          "Men",
+          "Women"
+        ],
+        "class1": [
+          "stereo",
+          "accessories",
+          "fragrances"
+        ],
+        "category2": [
+          "Children",
+          "Sports",
+          "Shoes"
+        ],
+        "class2": [
+          "toddlers",
+          "outdoor",
+          "womens"
+        ]
+      },
+      "90": {
+        "am_hour": 8,
+        "pm_hour": 19,
+        "hd_dep_count": 9,
+        "wp_char_count_min": 5000,
+        "wp_char_count_max": 5200
+      },
+      "91": {
+        "year": 2001,
+        "month": 12,
+        "marital_status1": "M",
+        "education_status1": "Unknown",
+        "marital_status2": "W",
+        "education_status2": "Advanced Degree",
+        "hd_buy_potential": ">10000%",
+        "ca_gmt_offset": -6
+      },
+      "92": {
+        "manufact_id": 10,
+        "date": "2002-01-05"
+      },
+      "93": {
+        "reason_desc": "reason 70"
+      },
+      "94": {
+        "date": "2000-5-01",
+        "state": "IA",
+        "web_company_name": "pri"
+      },
+      "95": {
+        "date": "2000-5-01",
+        "state": "IA",
+        "web_company_name": "pri"
+      },
+      "96": {
+        "t_hour": 8,
+        "t_minute": 30,
+        "hd_dep_count": 4,
+        "s_store_name": "ese"
+      },
+      "97": {
+        "d_month_seq": 1176
+      },
+      "98": {
+        "categories": [
+          "Books",
+          "Women",
+          "Electronics"
+        ],
+        "date": "2001-01-08"
+      },
+      "99": {
+        "d_month_seq": 1176
       }
     },
     "100000": {
@@ -5763,6 +6653,95 @@
           "Barrow County",
           "Perry County"
         ]
+      },
+      "86": {
+        "d_month_seq": 1176
+      },
+      "87": {
+        "d_month_seq": 1176
+      },
+      "88": {
+        "s_store_name": "ese",
+        "hd_dep_count1": 1,
+        "hd_dep_count2": -1,
+        "hd_dep_count3": 3
+      },
+      "89": {
+        "year": 2001,
+        "category1": [
+          "Electronics",
+          "Men",
+          "Women"
+        ],
+        "class1": [
+          "stereo",
+          "accessories",
+          "fragrances"
+        ],
+        "category2": [
+          "Children",
+          "Sports",
+          "Shoes"
+        ],
+        "class2": [
+          "toddlers",
+          "outdoor",
+          "womens"
+        ]
+      },
+      "90": {
+        "am_hour": 8,
+        "pm_hour": 19,
+        "hd_dep_count": 9,
+        "wp_char_count_min": 5000,
+        "wp_char_count_max": 5200
+      },
+      "91": {
+        "year": 2001,
+        "month": 12,
+        "marital_status1": "M",
+        "education_status1": "Unknown",
+        "marital_status2": "W",
+        "education_status2": "Advanced Degree",
+        "hd_buy_potential": ">10000%",
+        "ca_gmt_offset": -6
+      },
+      "92": {
+        "manufact_id": 10,
+        "date": "2002-01-05"
+      },
+      "93": {
+        "reason_desc": "reason 70"
+      },
+      "94": {
+        "date": "2000-5-01",
+        "state": "IA",
+        "web_company_name": "pri"
+      },
+      "95": {
+        "date": "2000-5-01",
+        "state": "IA",
+        "web_company_name": "pri"
+      },
+      "96": {
+        "t_hour": 8,
+        "t_minute": 30,
+        "hd_dep_count": 4,
+        "s_store_name": "ese"
+      },
+      "97": {
+        "d_month_seq": 1176
+      },
+      "98": {
+        "categories": [
+          "Books",
+          "Women",
+          "Electronics"
+        ],
+        "date": "2001-01-08"
+      },
+      "99": {
+        "d_month_seq": 1176
       }
     },
     "qualification": {
@@ -6282,6 +7261,611 @@
           "Williamson County"
         ]
       }
+    }
+  },
+  "86": {
+    "1": {
+      "d_month_seq": 1176
+    },
+    "10": {
+      "d_month_seq": 1176
+    },
+    "50": {
+      "d_month_seq": 1176
+    },
+    "100": {
+      "d_month_seq": 1176
+    },
+    "200": {
+      "d_month_seq": 1176
+    },
+    "400": {
+      "d_month_seq": 1176
+    },
+    "1000": {
+      "d_month_seq": 1176
+    },
+    "3000": {
+      "d_month_seq": 1176
+    },
+    "10000": {
+      "d_month_seq": 1176
+    },
+    "30000": {
+      "d_month_seq": 1176
+    },
+    "100000": {
+      "d_month_seq": 1176
+    },
+    "qualification": {
+      "d_month_seq": 1200
+    }
+  },
+  "87": {
+    "1": {
+      "d_month_seq": 1176
+    },
+    "10": {
+      "d_month_seq": 1176
+    },
+    "50": {
+      "d_month_seq": 1176
+    },
+    "100": {
+      "d_month_seq": 1176
+    },
+    "200": {
+      "d_month_seq": 1176
+    },
+    "400": {
+      "d_month_seq": 1176
+    },
+    "1000": {
+      "d_month_seq": 1176
+    },
+    "3000": {
+      "d_month_seq": 1176
+    },
+    "10000": {
+      "d_month_seq": 1176
+    },
+    "30000": {
+      "d_month_seq": 1176
+    },
+    "100000": {
+      "d_month_seq": 1176
+    },
+    "qualification": {
+      "d_month_seq": 1200
+    }
+  },
+  "88": {
+    "1": {
+      "s_store_name": "ese",
+      "hd_dep_count1": 1,
+      "hd_dep_count2": -1,
+      "hd_dep_count3": 3
+    },
+    "10": {
+      "s_store_name": "ese",
+      "hd_dep_count1": 1,
+      "hd_dep_count2": -1,
+      "hd_dep_count3": 3
+    },
+    "50": {
+      "s_store_name": "ese",
+      "hd_dep_count1": 1,
+      "hd_dep_count2": -1,
+      "hd_dep_count3": 3
+    },
+    "100": {
+      "s_store_name": "ese",
+      "hd_dep_count1": 1,
+      "hd_dep_count2": -1,
+      "hd_dep_count3": 3
+    },
+    "200": {
+      "s_store_name": "ese",
+      "hd_dep_count1": 1,
+      "hd_dep_count2": -1,
+      "hd_dep_count3": 3
+    },
+    "400": {
+      "s_store_name": "ese",
+      "hd_dep_count1": 1,
+      "hd_dep_count2": -1,
+      "hd_dep_count3": 3
+    },
+    "1000": {
+      "s_store_name": "ese",
+      "hd_dep_count1": 1,
+      "hd_dep_count2": -1,
+      "hd_dep_count3": 3
+    },
+    "3000": {
+      "s_store_name": "ese",
+      "hd_dep_count1": 1,
+      "hd_dep_count2": -1,
+      "hd_dep_count3": 3
+    },
+    "10000": {
+      "s_store_name": "ese",
+      "hd_dep_count1": 1,
+      "hd_dep_count2": -1,
+      "hd_dep_count3": 3
+    },
+    "30000": {
+      "s_store_name": "ese",
+      "hd_dep_count1": 1,
+      "hd_dep_count2": -1,
+      "hd_dep_count3": 3
+    },
+    "100000": {
+      "s_store_name": "ese",
+      "hd_dep_count1": 1,
+      "hd_dep_count2": -1,
+      "hd_dep_count3": 3
+    },
+    "qualification": {
+      "s_store_name": "ese",
+      "hd_dep_count1": 3,
+      "hd_dep_count2": 1,
+      "hd_dep_count3": 1
+    }
+  },
+  "89": {
+    "1": {
+      "year": 2001,
+      "category1": [
+        "Electronics",
+        "Men",
+        "Women"
+      ],
+      "class1": [
+        "stereo",
+        "accessories",
+        "fragrances"
+      ],
+      "category2": [
+        "Children",
+        "Sports",
+        "Shoes"
+      ],
+      "class2": [
+        "toddlers",
+        "outdoor",
+        "womens"
+      ]
+    },
+    "10": {
+      "year": 2001,
+      "category1": [
+        "Electronics",
+        "Men",
+        "Women"
+      ],
+      "class1": [
+        "stereo",
+        "accessories",
+        "fragrances"
+      ],
+      "category2": [
+        "Children",
+        "Sports",
+        "Shoes"
+      ],
+      "class2": [
+        "toddlers",
+        "outdoor",
+        "womens"
+      ]
+    },
+    "50": {
+      "year": 2001,
+      "category1": [
+        "Electronics",
+        "Men",
+        "Women"
+      ],
+      "class1": [
+        "stereo",
+        "accessories",
+        "fragrances"
+      ],
+      "category2": [
+        "Children",
+        "Sports",
+        "Shoes"
+      ],
+      "class2": [
+        "toddlers",
+        "outdoor",
+        "womens"
+      ]
+    },
+    "100": {
+      "year": 2001,
+      "category1": [
+        "Electronics",
+        "Men",
+        "Women"
+      ],
+      "class1": [
+        "stereo",
+        "accessories",
+        "fragrances"
+      ],
+      "category2": [
+        "Children",
+        "Sports",
+        "Shoes"
+      ],
+      "class2": [
+        "toddlers",
+        "outdoor",
+        "womens"
+      ]
+    },
+    "200": {
+      "year": 2001,
+      "category1": [
+        "Electronics",
+        "Men",
+        "Women"
+      ],
+      "class1": [
+        "stereo",
+        "accessories",
+        "fragrances"
+      ],
+      "category2": [
+        "Children",
+        "Sports",
+        "Shoes"
+      ],
+      "class2": [
+        "toddlers",
+        "outdoor",
+        "womens"
+      ]
+    },
+    "400": {
+      "year": 2001,
+      "category1": [
+        "Electronics",
+        "Men",
+        "Women"
+      ],
+      "class1": [
+        "stereo",
+        "accessories",
+        "fragrances"
+      ],
+      "category2": [
+        "Children",
+        "Sports",
+        "Shoes"
+      ],
+      "class2": [
+        "toddlers",
+        "outdoor",
+        "womens"
+      ]
+    },
+    "1000": {
+      "year": 2001,
+      "category1": [
+        "Electronics",
+        "Men",
+        "Women"
+      ],
+      "class1": [
+        "stereo",
+        "accessories",
+        "fragrances"
+      ],
+      "category2": [
+        "Children",
+        "Sports",
+        "Shoes"
+      ],
+      "class2": [
+        "toddlers",
+        "outdoor",
+        "womens"
+      ]
+    },
+    "3000": {
+      "year": 2001,
+      "category1": [
+        "Electronics",
+        "Men",
+        "Women"
+      ],
+      "class1": [
+        "stereo",
+        "accessories",
+        "fragrances"
+      ],
+      "category2": [
+        "Children",
+        "Sports",
+        "Shoes"
+      ],
+      "class2": [
+        "toddlers",
+        "outdoor",
+        "womens"
+      ]
+    },
+    "10000": {
+      "year": 2001,
+      "category1": [
+        "Electronics",
+        "Men",
+        "Women"
+      ],
+      "class1": [
+        "stereo",
+        "accessories",
+        "fragrances"
+      ],
+      "category2": [
+        "Children",
+        "Sports",
+        "Shoes"
+      ],
+      "class2": [
+        "toddlers",
+        "outdoor",
+        "womens"
+      ]
+    },
+    "30000": {
+      "year": 2001,
+      "category1": [
+        "Electronics",
+        "Men",
+        "Women"
+      ],
+      "class1": [
+        "stereo",
+        "accessories",
+        "fragrances"
+      ],
+      "category2": [
+        "Children",
+        "Sports",
+        "Shoes"
+      ],
+      "class2": [
+        "toddlers",
+        "outdoor",
+        "womens"
+      ]
+    },
+    "100000": {
+      "year": 2001,
+      "category1": [
+        "Electronics",
+        "Men",
+        "Women"
+      ],
+      "class1": [
+        "stereo",
+        "accessories",
+        "fragrances"
+      ],
+      "category2": [
+        "Children",
+        "Sports",
+        "Shoes"
+      ],
+      "class2": [
+        "toddlers",
+        "outdoor",
+        "womens"
+      ]
+    },
+    "qualification": {
+      "year": 1999,
+      "category1": [
+        "Home",
+        "Books",
+        "Electronics"
+      ],
+      "class1": [
+        "glassware",
+        "parenting",
+        "audio"
+      ],
+      "category2": [
+        "Jewelry",
+        "Sports",
+        "Women"
+      ],
+      "class2": [
+        "birdal",
+        "football",
+        "dresses"
+      ]
+    }
+  },
+  "90": {
+    "1": {
+      "am_hour": 8,
+      "pm_hour": 19,
+      "hd_dep_count": 9,
+      "wp_char_count_min": 5000,
+      "wp_char_count_max": 5200
+    },
+    "10": {
+      "am_hour": 8,
+      "pm_hour": 19,
+      "hd_dep_count": 9,
+      "wp_char_count_min": 5000,
+      "wp_char_count_max": 5200
+    },
+    "50": {
+      "am_hour": 8,
+      "pm_hour": 19,
+      "hd_dep_count": 9,
+      "wp_char_count_min": 5000,
+      "wp_char_count_max": 5200
+    },
+    "100": {
+      "am_hour": 8,
+      "pm_hour": 19,
+      "hd_dep_count": 9,
+      "wp_char_count_min": 5000,
+      "wp_char_count_max": 5200
+    },
+    "200": {
+      "am_hour": 8,
+      "pm_hour": 19,
+      "hd_dep_count": 9,
+      "wp_char_count_min": 5000,
+      "wp_char_count_max": 5200
+    },
+    "400": {
+      "am_hour": 8,
+      "pm_hour": 19,
+      "hd_dep_count": 9,
+      "wp_char_count_min": 5000,
+      "wp_char_count_max": 5200
+    },
+    "1000": {
+      "am_hour": 8,
+      "pm_hour": 19,
+      "hd_dep_count": 9,
+      "wp_char_count_min": 5000,
+      "wp_char_count_max": 5200
+    },
+    "3000": {
+      "am_hour": 8,
+      "pm_hour": 19,
+      "hd_dep_count": 9,
+      "wp_char_count_min": 5000,
+      "wp_char_count_max": 5200
+    },
+    "10000": {
+      "am_hour": 8,
+      "pm_hour": 19,
+      "hd_dep_count": 9,
+      "wp_char_count_min": 5000,
+      "wp_char_count_max": 5200
+    },
+    "30000": {
+      "am_hour": 8,
+      "pm_hour": 19,
+      "hd_dep_count": 9,
+      "wp_char_count_min": 5000,
+      "wp_char_count_max": 5200
+    },
+    "100000": {
+      "am_hour": 8,
+      "pm_hour": 19,
+      "hd_dep_count": 9,
+      "wp_char_count_min": 5000,
+      "wp_char_count_max": 5200
+    },
+    "qualification": {
+      "am_hour": 9,
+      "pm_hour": 20,
+      "hd_dep_count": 6,
+      "wp_char_count_min": 5000,
+      "wp_char_count_max": 5200
+    }
+  },
+  "qualification": {
+    "86": {
+      "d_month_seq": 1200
+    },
+    "87": {
+      "d_month_seq": 1200
+    },
+    "88": {
+      "s_store_name": "ese",
+      "hd_dep_count1": 3,
+      "hd_dep_count2": 1,
+      "hd_dep_count3": 1
+    },
+    "89": {
+      "year": 1999,
+      "category1": [
+        "Home",
+        "Books",
+        "Electronics"
+      ],
+      "class1": [
+        "glassware",
+        "parenting",
+        "audio"
+      ],
+      "category2": [
+        "Jewelry",
+        "Sports",
+        "Women"
+      ],
+      "class2": [
+        "birdal",
+        "football",
+        "dresses"
+      ]
+    },
+    "90": {
+      "am_hour": 9,
+      "pm_hour": 20,
+      "hd_dep_count": 6,
+      "wp_char_count_min": 5000,
+      "wp_char_count_max": 5200
+    },
+    "91": {
+      "year": 1998,
+      "month": 11,
+      "marital_status1": "M",
+      "education_status1": "Unknown",
+      "marital_status2": "W",
+      "education_status2": "Advanced Degree",
+      "hd_buy_potential": "Unknown",
+      "ca_gmt_offset": -7
+    },
+    "92": {
+      "manufact_id": 977,
+      "date": "1998-03-09"
+    },
+    "93": {
+      "reason_desc": "reason 28"
+    },
+    "94": {
+      "date": "1999-2-01",
+      "state": "GA",
+      "web_company_name": "pri"
+    },
+    "95": {
+      "date": "1999-2-01",
+      "state": "GA",
+      "web_company_name": "pri"
+    },
+    "96": {
+      "t_hour": 20,
+      "t_minute": 30,
+      "hd_dep_count": 6,
+      "s_store_name": "ese"
+    },
+    "97": {
+      "d_month_seq": 1200
+    },
+    "98": {
+      "categories": [
+        "Jewelry",
+        "Sporting Goods",
+        "Women"
+      ],
+      "date": "2001-01-06"
+    },
+    "99": {
+      "d_month_seq": 1200
     }
   }
 }

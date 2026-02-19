@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
 from cudf_polars.experimental.benchmarks.utils import get_data
 
 if TYPE_CHECKING:
@@ -17,7 +18,15 @@ if TYPE_CHECKING:
 
 def duckdb_impl(run_config: RunConfig) -> str:
     """Query 99."""
-    return """
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=99,
+        qualification=run_config.qualification,
+    )
+
+    d_month_seq = params["d_month_seq"]
+
+    return f"""
     -- start query 99 in stream 0 using template query99.tpl
     SELECT Substr(w_warehouse_name, 1, 20),
                    sm_type,
@@ -51,7 +60,7 @@ def duckdb_impl(run_config: RunConfig) -> str:
            ship_mode,
            call_center,
            date_dim
-    WHERE  d_month_seq BETWEEN 1200 AND 1200 + 11
+    WHERE  d_month_seq BETWEEN {d_month_seq} AND {d_month_seq} + 11
            AND cs_ship_date_sk = d_date_sk
            AND cs_warehouse_sk = w_warehouse_sk
            AND cs_ship_mode_sk = sm_ship_mode_sk
@@ -68,6 +77,13 @@ def duckdb_impl(run_config: RunConfig) -> str:
 
 def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     """Query 99."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=99,
+        qualification=run_config.qualification,
+    )
+
+    d_month_seq = params["d_month_seq"]
     catalog_sales = get_data(
         run_config.dataset_path, "catalog_sales", run_config.suffix
     )
@@ -95,7 +111,11 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
             right_on="cc_call_center_sk",
             how="inner",
         )
-        .filter(pl.col("d_month_seq").is_between(1200, 1200 + 11, closed="both"))
+        .filter(
+            pl.col("d_month_seq").is_between(
+                d_month_seq, d_month_seq + 11, closed="both"
+            )
+        )
         .with_columns(
             [
                 (pl.col("cs_ship_date_sk") - pl.col("cs_sold_date_sk")).alias(

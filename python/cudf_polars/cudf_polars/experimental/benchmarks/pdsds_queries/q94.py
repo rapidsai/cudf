@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
 from cudf_polars.experimental.benchmarks.utils import get_data
 
 if TYPE_CHECKING:
@@ -17,7 +18,17 @@ if TYPE_CHECKING:
 
 def duckdb_impl(run_config: RunConfig) -> str:
     """Query 94."""
-    return """
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=94,
+        qualification=run_config.qualification,
+    )
+
+    date = params["date"]
+    state = params["state"]
+    web_company_name = params["web_company_name"]
+
+    return f"""
     SELECT
              Count(DISTINCT ws_order_number) AS 'order count' ,
              Sum(ws_ext_ship_cost)           AS 'total shipping cost' ,
@@ -26,13 +37,13 @@ def duckdb_impl(run_config: RunConfig) -> str:
              date_dim ,
              customer_address ,
              web_site
-    WHERE    d_date BETWEEN '2000-3-01' AND      (
-                      Cast('2000-3-01' AS DATE) + INTERVAL '60' day)
+    WHERE    d_date BETWEEN '{date}' AND      (
+                      Cast('{date}' AS DATE) + INTERVAL '60' day)
     AND      ws1.ws_ship_date_sk = d_date_sk
     AND      ws1.ws_ship_addr_sk = ca_address_sk
-    AND      ca_state = 'MT'
+    AND      ca_state = '{state}'
     AND      ws1.ws_web_site_sk = web_site_sk
-    AND      web_company_name = 'pri'
+    AND      web_company_name = '{web_company_name}'
     AND      EXISTS
              (
                     SELECT *
@@ -51,6 +62,16 @@ def duckdb_impl(run_config: RunConfig) -> str:
 
 def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     """Query 94."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=94,
+        qualification=run_config.qualification,
+    )
+
+    date = params["date"]
+    state = params["state"]
+    web_company_name = params["web_company_name"]
+
     web_sales = get_data(run_config.dataset_path, "web_sales", run_config.suffix)
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
     customer_address = get_data(
@@ -58,7 +79,7 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     )
     web_site = get_data(run_config.dataset_path, "web_site", run_config.suffix)
     web_returns = get_data(run_config.dataset_path, "web_returns", run_config.suffix)
-    start_date = (pl.date(2000, 3, 1)).cast(pl.Datetime("us"))
+    start_date = pl.lit(date).str.to_date().cast(pl.Datetime("us"))
     end_date = (start_date + pl.duration(days=60)).cast(pl.Datetime("us"))
     multi_warehouse_orders = (
         web_sales.group_by("ws_order_number")
@@ -81,8 +102,8 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         .filter(
             (pl.col("d_date") >= start_date)
             & (pl.col("d_date") <= end_date)
-            & (pl.col("ca_state") == "MT")
-            & (pl.col("web_company_name") == "pri")
+            & (pl.col("ca_state") == state)
+            & (pl.col("web_company_name") == web_company_name)
         )
         .join(
             multi_warehouse_orders,

@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
 from cudf_polars.experimental.benchmarks.utils import get_data
 
 if TYPE_CHECKING:
@@ -17,7 +18,19 @@ if TYPE_CHECKING:
 
 def duckdb_impl(run_config: RunConfig) -> str:
     """Query 89."""
-    return """
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=89,
+        qualification=run_config.qualification,
+    )
+
+    year = params["year"]
+    cat1 = ", ".join([f"'{c}'" for c in params["category1"]])
+    class1 = ", ".join([f"'{c}'" for c in params["class1"]])
+    cat2 = ", ".join([f"'{c}'" for c in params["category2"]])
+    class2 = ", ".join([f"'{c}'" for c in params["class2"]])
+
+    return f"""
     SELECT  *
     FROM  (SELECT i_category,
                   i_class,
@@ -38,11 +51,11 @@ def duckdb_impl(run_config: RunConfig) -> str:
            WHERE  ss_item_sk = i_item_sk
                   AND ss_sold_date_sk = d_date_sk
                   AND ss_store_sk = s_store_sk
-                  AND d_year IN ( 2002 )
-                  AND ( ( i_category IN ( 'Home', 'Men', 'Sports' )
-                          AND i_class IN ( 'paint', 'accessories', 'fitness' ) )
-                         OR ( i_category IN ( 'Shoes', 'Jewelry', 'Women' )
-                              AND i_class IN ( 'mens', 'pendants', 'swimwear' ) ) )
+                  AND d_year IN ( {year} )
+                  AND ( ( i_category IN ( {cat1} )
+                          AND i_class IN ( {class1} ) )
+                         OR ( i_category IN ( {cat2} )
+                              AND i_class IN ( {class2} ) ) )
            GROUP  BY i_category,
                      i_class,
                      i_brand,
@@ -62,23 +75,35 @@ def duckdb_impl(run_config: RunConfig) -> str:
 
 def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     """Query 89."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=89,
+        qualification=run_config.qualification,
+    )
+
+    year = params["year"]
+    category1 = params["category1"]
+    class1 = params["class1"]
+    category2 = params["category2"]
+    class2 = params["class2"]
+
     item = get_data(run_config.dataset_path, "item", run_config.suffix)
     store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
     store = get_data(run_config.dataset_path, "store", run_config.suffix)
 
-    filter1 = (pl.col("i_category").is_in(["Home", "Men", "Sports"])) & (
-        pl.col("i_class").is_in(["paint", "accessories", "fitness"])
+    filter1 = (pl.col("i_category").is_in(category1)) & (
+        pl.col("i_class").is_in(class1)
     )
-    filter2 = (pl.col("i_category").is_in(["Shoes", "Jewelry", "Women"])) & (
-        pl.col("i_class").is_in(["mens", "pendants", "swimwear"])
+    filter2 = (pl.col("i_category").is_in(category2)) & (
+        pl.col("i_class").is_in(class2)
     )
 
     tmp1 = (
         store_sales.join(item, left_on="ss_item_sk", right_on="i_item_sk", how="inner")
         .join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk", how="inner")
         .join(store, left_on="ss_store_sk", right_on="s_store_sk", how="inner")
-        .filter((pl.col("d_year") == 2002) & (filter1 | filter2))
+        .filter((pl.col("d_year") == year) & (filter1 | filter2))
         .group_by(
             [
                 "i_category",

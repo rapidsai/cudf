@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
 from cudf_polars.experimental.benchmarks.utils import get_data
 
 if TYPE_CHECKING:
@@ -17,7 +18,22 @@ if TYPE_CHECKING:
 
 def duckdb_impl(run_config: RunConfig) -> str:
     """Query 91."""
-    return """
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=91,
+        qualification=run_config.qualification,
+    )
+
+    year = params["year"]
+    month = params["month"]
+    marital_status1 = params["marital_status1"]
+    education_status1 = params["education_status1"]
+    marital_status2 = params["marital_status2"]
+    education_status2 = params["education_status2"]
+    hd_buy_potential = params["hd_buy_potential"]
+    ca_gmt_offset = params["ca_gmt_offset"]
+
+    return f"""
     SELECT cc_call_center_id Call_Center,
            cc_name           Call_Center_Name,
            cc_manager        Manager,
@@ -35,14 +51,14 @@ def duckdb_impl(run_config: RunConfig) -> str:
            AND cd_demo_sk = c_current_cdemo_sk
            AND hd_demo_sk = c_current_hdemo_sk
            AND ca_address_sk = c_current_addr_sk
-           AND d_year = 1999
-           AND d_moy = 12
-           AND ( ( cd_marital_status = 'M'
-                   AND cd_education_status = 'Unknown' )
-                  OR ( cd_marital_status = 'W'
-                       AND cd_education_status = 'Advanced Degree' ) )
-           AND hd_buy_potential LIKE 'Unknown%'
-           AND ca_gmt_offset = -7
+           AND d_year = {year}
+           AND d_moy = {month}
+           AND ( ( cd_marital_status = '{marital_status1}'
+                   AND cd_education_status = '{education_status1}' )
+                  OR ( cd_marital_status = '{marital_status2}'
+                       AND cd_education_status = '{education_status2}' ) )
+           AND hd_buy_potential LIKE '{hd_buy_potential}%'
+           AND ca_gmt_offset = {ca_gmt_offset}
     GROUP  BY cc_call_center_id,
               cc_name,
               cc_manager,
@@ -54,6 +70,21 @@ def duckdb_impl(run_config: RunConfig) -> str:
 
 def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     """Query 91."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=91,
+        qualification=run_config.qualification,
+    )
+
+    year = params["year"]
+    month = params["month"]
+    marital_status1 = params["marital_status1"]
+    education_status1 = params["education_status1"]
+    marital_status2 = params["marital_status2"]
+    education_status2 = params["education_status2"]
+    hd_buy_potential = params["hd_buy_potential"]
+    ca_gmt_offset = params["ca_gmt_offset"]
+
     call_center = get_data(run_config.dataset_path, "call_center", run_config.suffix)
     catalog_returns = get_data(
         run_config.dataset_path, "catalog_returns", run_config.suffix
@@ -70,11 +101,11 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         run_config.dataset_path, "household_demographics", run_config.suffix
     )
     demo_filter = (
-        (pl.col("cd_marital_status") == "M")
-        & (pl.col("cd_education_status") == "Unknown")
+        (pl.col("cd_marital_status") == marital_status1)
+        & (pl.col("cd_education_status") == education_status1)
     ) | (
-        (pl.col("cd_marital_status") == "W")
-        & (pl.col("cd_education_status") == "Advanced Degree")
+        (pl.col("cd_marital_status") == marital_status2)
+        & (pl.col("cd_education_status") == education_status2)
     )
     return (
         catalog_returns.join(
@@ -111,11 +142,11 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
             how="inner",
         )
         .filter(
-            (pl.col("d_year") == 1999)
-            & (pl.col("d_moy") == 12)
+            (pl.col("d_year") == year)
+            & (pl.col("d_moy") == month)
             & demo_filter
-            & (pl.col("hd_buy_potential").str.starts_with("Unknown"))
-            & (pl.col("ca_gmt_offset") == -7)
+            & (pl.col("hd_buy_potential").str.starts_with(hd_buy_potential))
+            & (pl.col("ca_gmt_offset") == ca_gmt_offset)
         )
         .group_by(
             [

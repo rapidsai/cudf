@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
 from cudf_polars.experimental.benchmarks.utils import get_data
 
 if TYPE_CHECKING:
@@ -17,7 +18,16 @@ if TYPE_CHECKING:
 
 def duckdb_impl(run_config: RunConfig) -> str:
     """Query 98."""
-    return """
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=98,
+        qualification=run_config.qualification,
+    )
+
+    date = params["date"]
+    categories_str = ", ".join([f"'{c}'" for c in params["categories"]])
+
+    return f"""
     -- start query 98 in stream 0 using template query98.tpl
     SELECT i_item_id,
            i_item_desc,
@@ -32,10 +42,10 @@ def duckdb_impl(run_config: RunConfig) -> str:
            item,
            date_dim
     WHERE  ss_item_sk = i_item_sk
-           AND i_category IN ( 'Men', 'Home', 'Electronics' )
+           AND i_category IN ( {categories_str} )
            AND ss_sold_date_sk = d_date_sk
-           AND d_date BETWEEN CAST('2000-05-18' AS DATE) AND (
-                              CAST('2000-05-18' AS DATE) + INTERVAL '30' DAY )
+           AND d_date BETWEEN CAST('{date}' AS DATE) AND (
+                              CAST('{date}' AS DATE) + INTERVAL '30' DAY )
     GROUP  BY i_item_id,
               i_item_desc,
               i_category,
@@ -51,16 +61,23 @@ def duckdb_impl(run_config: RunConfig) -> str:
 
 def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     """Query 98."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=98,
+        qualification=run_config.qualification,
+    )
+
+    date = params["date"]
     store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
     item = get_data(run_config.dataset_path, "item", run_config.suffix)
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
-    start_date = pl.date(2000, 5, 18)
-    end_date = pl.date(2000, 6, 17)
+    start_date = pl.lit(date).str.to_date()
+    end_date = start_date + pl.duration(days=30)
     return (
         store_sales.join(item, left_on="ss_item_sk", right_on="i_item_sk", how="inner")
         .join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk", how="inner")
         .filter(
-            pl.col("i_category").is_in(["Men", "Home", "Electronics"])
+            pl.col("i_category").is_in(params["categories"])
             & pl.col("d_date").is_between(start_date, end_date, closed="both")
         )
         .group_by(

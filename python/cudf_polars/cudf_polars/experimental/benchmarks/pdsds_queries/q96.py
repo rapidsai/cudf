@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
 from cudf_polars.experimental.benchmarks.utils import get_data
 
 if TYPE_CHECKING:
@@ -17,7 +18,18 @@ if TYPE_CHECKING:
 
 def duckdb_impl(run_config: RunConfig) -> str:
     """Query 96."""
-    return """
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=96,
+        qualification=run_config.qualification,
+    )
+
+    t_hour = params["t_hour"]
+    t_minute = params["t_minute"]
+    hd_dep_count = params["hd_dep_count"]
+    s_store_name = params["s_store_name"]
+
+    return f"""
     SELECT Count(*)
     FROM   store_sales,
            household_demographics,
@@ -26,10 +38,10 @@ def duckdb_impl(run_config: RunConfig) -> str:
     WHERE  ss_sold_time_sk = time_dim.t_time_sk
            AND ss_hdemo_sk = household_demographics.hd_demo_sk
            AND ss_store_sk = s_store_sk
-           AND time_dim.t_hour = 15
-           AND time_dim.t_minute >= 30
-           AND household_demographics.hd_dep_count = 7
-           AND store.s_store_name = 'ese'
+           AND time_dim.t_hour = {t_hour}
+           AND time_dim.t_minute >= {t_minute}
+           AND household_demographics.hd_dep_count = {hd_dep_count}
+           AND store.s_store_name = '{s_store_name}'
     ORDER  BY Count(*)
     LIMIT 100;
     """
@@ -37,6 +49,16 @@ def duckdb_impl(run_config: RunConfig) -> str:
 
 def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     """Query 96."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=96,
+        qualification=run_config.qualification,
+    )
+
+    t_hour = params["t_hour"]
+    t_minute = params["t_minute"]
+    hd_dep_count = params["hd_dep_count"]
+    s_store_name = params["s_store_name"]
     store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
     household_demographics = get_data(
         run_config.dataset_path, "household_demographics", run_config.suffix
@@ -55,10 +77,10 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         )
         .join(store, left_on="ss_store_sk", right_on="s_store_sk", how="inner")
         .filter(
-            (pl.col("t_hour") == 15)
-            & (pl.col("t_minute") >= 30)
-            & (pl.col("hd_dep_count") == 7)
-            & (pl.col("s_store_name") == "ese")
+            (pl.col("t_hour") == t_hour)
+            & (pl.col("t_minute") >= t_minute)
+            & (pl.col("hd_dep_count") == hd_dep_count)
+            & (pl.col("s_store_name") == s_store_name)
         )
         .select([pl.len().cast(pl.Int64).alias("count_star()")])
         .sort("count_star()", nulls_last=True)
