@@ -148,7 +148,7 @@ class filtered_join {
    */
   virtual ~filtered_join() = default;
 
- public:
+ protected:
   // Key type used in the hash table
   using key = cuco::pair<hash_value_type, lhs_index_type>;
   // Storage type for the hash table buckets
@@ -158,15 +158,9 @@ class filtered_join {
                          cuco::extent<std::size_t>,
                          rmm::mr::polymorphic_allocator<char>>;
 
- protected:
   filtered_join(cudf::table_view const& build,
                 cudf::null_equality compare_nulls,
                 double load_factor,
-                rmm::cuda_stream_view stream);
-
-  filtered_join(cudf::table_view const& build,
-                cudf::null_equality compare_nulls,
-                std::size_t bucket_count,
                 rmm::cuda_stream_view stream);
 
   // Hasher for primitive row types

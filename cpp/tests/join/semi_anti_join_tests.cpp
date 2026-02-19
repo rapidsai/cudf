@@ -13,6 +13,7 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/filling.hpp>
 #include <cudf/join/filtered_join.hpp>
+#include <cudf/join/mark_join.hpp>
 #include <cudf/sorting.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
@@ -62,8 +63,8 @@ std::unique_ptr<cudf::table> left_semi_join(
     auto indices_col  = cudf::column_view{indices_span};
     return cudf::gather(left_input, indices_col);
   } else {
-    // Build from left, probe with right
-    cudf::filtered_join obj(left_selected, compare_nulls, build_side, cudf::get_default_stream());
+    // Build from left, probe with right using mark_join
+    cudf::mark_join obj(left_selected, compare_nulls, cudf::get_default_stream());
     auto const join_indices = obj.semi_join(
       right_selected, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
     auto indices_span = cudf::device_span<cudf::size_type const>{*join_indices};
@@ -92,8 +93,8 @@ std::unique_ptr<cudf::table> left_anti_join(
     auto indices_col  = cudf::column_view{indices_span};
     return cudf::gather(left_input, indices_col);
   } else {
-    // Build from left, probe with right
-    cudf::filtered_join obj(left_selected, compare_nulls, build_side, cudf::get_default_stream());
+    // Build from left, probe with right using mark_join
+    cudf::mark_join obj(left_selected, compare_nulls, cudf::get_default_stream());
     auto const join_indices = obj.anti_join(
       right_selected, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
     auto indices_span = cudf::device_span<cudf::size_type const>{*join_indices};

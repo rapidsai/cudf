@@ -7,7 +7,6 @@
 
 #include <cudf/detail/cuco_helpers.hpp>
 #include <cudf/detail/join/distinct_filtered_join.cuh>
-#include <cudf/detail/join/mark_join.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/row_operator/equality.cuh>
@@ -204,20 +203,6 @@ filtered_join::filtered_join(cudf::table_view const& build,
   _bucket_storage.initialize(empty_sentinel_key, stream);
 }
 
-filtered_join::filtered_join(cudf::table_view const& build,
-                             cudf::null_equality compare_nulls,
-                             std::size_t bucket_count,
-                             rmm::cuda_stream_view stream)
-  : _build_props{build_properties{cudf::has_nested_columns(build)}},
-    _nulls_equal{compare_nulls},
-    _build{build},
-    _preprocessed_build{cudf::detail::row::equality::preprocessed_table::create(_build, stream)},
-    _bucket_storage{cuco::extent<std::size_t>{bucket_count},
-                    rmm::mr::polymorphic_allocator<char>{},
-                    stream.value()}
-{
-}
-
 distinct_filtered_join::distinct_filtered_join(cudf::table_view const& build,
                                                cudf::null_equality compare_nulls,
                                                double load_factor,
@@ -367,13 +352,11 @@ filtered_join::filtered_join(cudf::table_view const& build,
                              double load_factor,
                              rmm::cuda_stream_view stream)
 {
+  CUDF_EXPECTS(reuse_tbl == set_as_build_table::RIGHT,
+               "Left table reuse is not supported by filtered_join. Use cudf::mark_join instead.");
   _reuse_tbl = reuse_tbl;
-  if (reuse_tbl == set_as_build_table::RIGHT) {
-    _impl = std::make_unique<cudf::detail::distinct_filtered_join>(
-      build, compare_nulls, load_factor, stream);
-  } else {
-    _impl = std::make_unique<cudf::detail::mark_join>(build, compare_nulls, load_factor, stream);
-  }
+  _impl      = std::make_unique<cudf::detail::distinct_filtered_join>(
+    build, compare_nulls, load_factor, stream);
 }
 
 filtered_join::filtered_join(cudf::table_view const& build,

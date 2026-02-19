@@ -6,6 +6,7 @@
 #include "join_common.hpp"
 
 #include <cudf/join/filtered_join.hpp>
+#include <cudf/join/mark_join.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
 auto const num_keys = 1;
@@ -25,15 +26,19 @@ void nvbench_left_anti_join(nvbench::state& state,
   auto join = [num_operations, reuse_left_table](cudf::table_view const& left,
                                                  cudf::table_view const& right,
                                                  cudf::null_equality compare_nulls) {
-    auto const& build_table = (reuse_left_table == cudf::set_as_build_table::LEFT) ? left : right;
-    auto const& probe_table = (reuse_left_table == cudf::set_as_build_table::LEFT) ? right : left;
-
-    cudf::filtered_join obj(
-      build_table, compare_nulls, reuse_left_table, cudf::get_default_stream());
-    for (auto i = 0; i < num_operations - 1; i++) {
-      [[maybe_unused]] auto result = obj.anti_join(probe_table);
+    if (reuse_left_table == cudf::set_as_build_table::LEFT) {
+      cudf::mark_join obj(left, compare_nulls, cudf::get_default_stream());
+      for (auto i = 0; i < num_operations - 1; i++) {
+        [[maybe_unused]] auto result = obj.anti_join(right);
+      }
+      return obj.anti_join(right);
+    } else {
+      cudf::filtered_join obj(right, compare_nulls, reuse_left_table, cudf::get_default_stream());
+      for (auto i = 0; i < num_operations - 1; i++) {
+        [[maybe_unused]] auto result = obj.anti_join(left);
+      }
+      return obj.anti_join(left);
     }
-    return obj.anti_join(probe_table);
   };
 
   BM_join<Nullable, join_t::HASH, NullEquality>(state, dtypes, join);
@@ -54,15 +59,19 @@ void nvbench_left_semi_join(nvbench::state& state,
   auto join = [num_operations, reuse_left_table](cudf::table_view const& left,
                                                  cudf::table_view const& right,
                                                  cudf::null_equality compare_nulls) {
-    auto const& build_table = (reuse_left_table == cudf::set_as_build_table::LEFT) ? left : right;
-    auto const& probe_table = (reuse_left_table == cudf::set_as_build_table::LEFT) ? right : left;
-
-    cudf::filtered_join obj(
-      build_table, compare_nulls, reuse_left_table, cudf::get_default_stream());
-    for (auto i = 0; i < num_operations - 1; i++) {
-      [[maybe_unused]] auto result = obj.semi_join(probe_table);
+    if (reuse_left_table == cudf::set_as_build_table::LEFT) {
+      cudf::mark_join obj(left, compare_nulls, cudf::get_default_stream());
+      for (auto i = 0; i < num_operations - 1; i++) {
+        [[maybe_unused]] auto result = obj.semi_join(right);
+      }
+      return obj.semi_join(right);
+    } else {
+      cudf::filtered_join obj(right, compare_nulls, reuse_left_table, cudf::get_default_stream());
+      for (auto i = 0; i < num_operations - 1; i++) {
+        [[maybe_unused]] auto result = obj.semi_join(left);
+      }
+      return obj.semi_join(left);
     }
-    return obj.semi_join(probe_table);
   };
   BM_join<Nullable, join_t::HASH, NullEquality>(state, dtypes, join);
 }
