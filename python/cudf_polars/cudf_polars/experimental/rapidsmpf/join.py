@@ -361,6 +361,8 @@ async def _broadcast_join(
     into a single DataFrame, then joined with each chunk from the large side.
     """
     left, right = ir.children
+    if tracer is not None:
+        tracer.decision = f"broadcast_{broadcast_side}"
 
     if broadcast_side == "right":
         small_ch, large_ch = ch_right, ch_left
@@ -567,7 +569,7 @@ async def _shuffle_join(
     ch_right: Channel[TableChunk],
     left_state: PartitioningState,
     right_state: PartitioningState,
-    modulus: int,
+    min_shuffle_modulus: int,
     collective_ids: list[int],
     *,
     n_partitioned_keys: int | None = None,
@@ -582,9 +584,15 @@ async def _shuffle_join(
     provided). Shuffles a side iff its current state does not match. Output
     metadata reflects the desired partitioning (may be a subset of join keys).
     """
-    left, right = ir.children
     nranks = context.comm().nranks
+    modulus = _choose_shuffle_modulus(
+        left_state,
+        right_state,
+        min_shuffle_modulus,
+        nranks,
+    )
 
+    left, right = ir.children
     left_schema_keys = list(left.schema.keys())
     right_schema_keys = list(right.schema.keys())
     left_key_indices = tuple(left_schema_keys.index(expr.name) for expr in ir.left_on)
@@ -597,14 +605,14 @@ async def _shuffle_join(
     )
     left_desired_state = PartitioningState(
         inter_rank_modulus=modulus,
-        local_modulus=None,
         inter_rank_indices=left_key_indices[:n_keys],
+        local_modulus=None,
         local_indices=None,
     )
     right_desired_state = PartitioningState(
         inter_rank_modulus=modulus,
-        local_modulus=None,
         inter_rank_indices=right_key_indices[:n_keys],
+        local_modulus=None,
         local_indices=None,
     )
 
@@ -900,6 +908,189 @@ def _extract_partitioning_state(
     return PartitioningState.from_metadata(metadata, key_indices, nranks)
 
 
+async def _choose_algorithm(
+    context: Context,
+    ir: Join,
+    left_metadata: ChannelMetadata,
+    right_metadata: ChannelMetadata,
+    left_sample_chunks: list[TableChunk],
+    right_sample_chunks: list[TableChunk],
+    left_sample_size: int,
+    right_sample_size: int,
+    left_sample_rows: int,
+    right_sample_rows: int,
+    collective_ids: list[int],
+    broadcast_threshold: int,
+    target_partition_size: int,
+) -> tuple[Literal["left", "right"] | None, int]:
+    # Estimate total sizes and row counts
+    left_local_count = left_metadata.local_count
+    right_local_count = right_metadata.local_count
+
+    if left_sample_chunks:
+        left_avg_size = left_sample_size / len(left_sample_chunks)
+        left_avg_rows = left_sample_rows / len(left_sample_chunks)
+        left_estimate = int(left_avg_size * left_local_count)
+        left_row_estimate = int(left_avg_rows * left_local_count)
+    else:
+        left_estimate = 0
+        left_row_estimate = 0
+
+    if right_sample_chunks:
+        right_avg_size = right_sample_size / len(right_sample_chunks)
+        right_avg_rows = right_sample_rows / len(right_sample_chunks)
+        right_estimate = int(right_avg_size * right_local_count)
+        right_row_estimate = int(right_avg_rows * right_local_count)
+    else:
+        right_estimate = 0
+        right_row_estimate = 0
+
+    # AllGather size, row, and chunk count estimates across ranks
+    nranks = context.comm().nranks
+    if nranks > 1:
+        (
+            left_total,
+            right_total,
+            left_total_rows,
+            right_total_rows,
+            left_total_chunks,
+            right_total_chunks,
+        ) = await allgather_reduce(
+            context,
+            collective_ids.pop(),
+            left_estimate,
+            right_estimate,
+            left_row_estimate,
+            right_row_estimate,
+            left_local_count,
+            right_local_count,
+        )
+    else:
+        left_total, right_total = left_estimate, right_estimate
+        left_total_rows, right_total_rows = left_row_estimate, right_row_estimate
+        left_total_chunks, right_total_chunks = left_local_count, right_local_count
+
+    # =====================================================================
+    # Strategy Selection
+    # =====================================================================
+    # - Inner: can broadcast either side
+    # - Left/Semi/Anti: must broadcast right (stream left to preserve all left rows)
+    # - Right: must broadcast left (stream right to preserve all right rows)
+    # - Full: cannot broadcast (must shuffle both to preserve both sides)
+
+    join_type = ir.options[0]
+    can_broadcast_left = join_type in ("Inner", "Right")
+    can_broadcast_right = join_type in ("Inner", "Left", "Semi", "Anti")
+
+    # Check if one side is already duplicated
+    left_duplicated = left_metadata.duplicated
+    right_duplicated = right_metadata.duplicated
+
+    # Check row counts - can't broadcast if concatenated rows exceed cuDF limit
+    left_rows_ok = left_total_rows < MAX_BROADCAST_ROWS
+    right_rows_ok = right_total_rows < MAX_BROADCAST_ROWS
+
+    # Determine strategy
+    broadcast_side: Literal["left", "right"] | None = None
+
+    if nranks == 1:
+        # Single rank - no network cost, but still prefer smaller side for
+        # hash table efficiency. Also check broadcast threshold.
+        left_ok = (
+            left_total < broadcast_threshold and left_rows_ok and can_broadcast_left
+        )
+        right_ok = right_total < broadcast_threshold and right_rows_ok
+
+        if left_ok and right_ok:
+            # Both sides OK - broadcast the side with fewer rows
+            # Row count is a better indicator of hash table size than byte size
+            broadcast_side = (
+                "left"
+                if (not can_broadcast_right or left_total_rows <= right_total_rows)
+                else "right"
+            )
+        elif right_ok and can_broadcast_right:
+            broadcast_side = "right"
+        elif left_ok:
+            broadcast_side = "left"
+        # else: fall through to shuffle
+    elif right_duplicated and right_rows_ok and can_broadcast_right:
+        # Right already duplicated - broadcast right (no allgather needed)
+        broadcast_side = "right"
+    elif left_duplicated and can_broadcast_left and left_rows_ok:
+        # Left already duplicated - broadcast left (only for Inner)
+        broadcast_side = "left"
+    else:
+        # Decide based on size estimates - broadcast the smaller side if possible
+        # Must also check row counts to avoid exceeding cuDF column size limit
+        left_small_enough = (
+            left_total < broadcast_threshold and can_broadcast_left and left_rows_ok
+        )
+        right_small_enough = right_total < broadcast_threshold and right_rows_ok
+
+        if left_small_enough and right_small_enough:
+            # Both are small enough - broadcast the smaller one (if both allowed)
+            broadcast_side = (
+                "left"
+                if (not can_broadcast_right or left_total <= right_total)
+                else "right"
+            )
+        elif right_small_enough and can_broadcast_right:
+            # Only right is small enough
+            broadcast_side = "right"
+        elif left_small_enough:
+            # Only left is small enough (Inner or Right join)
+            broadcast_side = "left"
+        # else: shuffle both sides
+
+    estimated_output_size = max(left_total, right_total)
+    ideal_output_count = max(1, estimated_output_size // target_partition_size)
+    ideal_modulus = nranks * ideal_output_count
+    # Limit the output count to 10x the larger input side
+    max_output_chunks = 10 * max(left_total_chunks, right_total_chunks)
+    min_shuffle_modulus = min(ideal_modulus, max_output_chunks)
+
+    return broadcast_side, min_shuffle_modulus
+
+
+def _choose_shuffle_modulus(
+    left_state: PartitioningState,
+    right_state: PartitioningState,
+    min_shuffle_modulus: int,
+    nranks: int,
+) -> int:
+    left_existing_modulus = left_state.inter_rank_modulus if left_state else None
+    right_existing_modulus = right_state.inter_rank_modulus if right_state else None
+
+    # Determine which modulus to use, preferring existing partitioning
+    # if it provides at least the minimum needed partitions
+    if left_existing_modulus and right_existing_modulus:
+        # Both sides partitioned - use the larger modulus if compatible
+        # (one must be a multiple of the other for compatibility)
+        if left_existing_modulus >= right_existing_modulus:
+            if left_existing_modulus % right_existing_modulus == 0:
+                modulus = left_existing_modulus
+            else:
+                # Incompatible - use whichever is larger
+                modulus = max(left_existing_modulus, right_existing_modulus)
+        else:
+            if right_existing_modulus % left_existing_modulus == 0:
+                modulus = right_existing_modulus
+            else:
+                modulus = max(left_existing_modulus, right_existing_modulus)
+    elif left_existing_modulus is not None:
+        # Only left is partitioned - use its modulus if sufficient
+        modulus = max(left_existing_modulus, min_shuffle_modulus)
+    elif right_existing_modulus is not None:
+        # Only right is partitioned - use its modulus if sufficient
+        modulus = max(right_existing_modulus, min_shuffle_modulus)
+    else:
+        # Neither side partitioned - can choose freely
+        # Use at least nranks for distributed efficiency
+        modulus = max(nranks, min_shuffle_modulus)
+    return modulus
+
+
 async def _sample_chunks(
     context: Context,
     ch: Channel[TableChunk],
@@ -959,7 +1150,7 @@ async def join_actor(
             right_metadata, ir.children[1], ir.right_on, nranks
         )
 
-        # Skip sampling when both sides have matching partitioning
+        # Skip sampling when both sides have aligned partitioning
         if left_state and left_state == right_state:
             await _shuffle_join(
                 context,
@@ -986,132 +1177,23 @@ async def join_actor(
             _sample_chunks(context, ch_right, sample_chunk_count),
         )
 
-        # Estimate total sizes and row counts
-        left_local_count = left_metadata.local_count
-        right_local_count = right_metadata.local_count
+        broadcast_side, min_shuffle_modulus = await _choose_algorithm(
+            context,
+            ir,
+            left_metadata,
+            right_metadata,
+            left_sample_chunks,
+            right_sample_chunks,
+            left_sample_size,
+            right_sample_size,
+            left_sample_rows,
+            right_sample_rows,
+            collective_ids,
+            broadcast_threshold,
+            target_partition_size,
+        )
 
-        if left_sample_chunks:
-            left_avg_size = left_sample_size / len(left_sample_chunks)
-            left_avg_rows = left_sample_rows / len(left_sample_chunks)
-            left_estimate = int(left_avg_size * left_local_count)
-            left_row_estimate = int(left_avg_rows * left_local_count)
-        else:
-            left_estimate = 0
-            left_row_estimate = 0
-
-        if right_sample_chunks:
-            right_avg_size = right_sample_size / len(right_sample_chunks)
-            right_avg_rows = right_sample_rows / len(right_sample_chunks)
-            right_estimate = int(right_avg_size * right_local_count)
-            right_row_estimate = int(right_avg_rows * right_local_count)
-        else:
-            right_estimate = 0
-            right_row_estimate = 0
-
-        # AllGather size, row, and chunk count estimates across ranks
-        if nranks > 1:
-            (
-                left_total,
-                right_total,
-                left_total_rows,
-                right_total_rows,
-                left_total_chunks,
-                right_total_chunks,
-            ) = await allgather_reduce(
-                context,
-                collective_ids.pop(),
-                left_estimate,
-                right_estimate,
-                left_row_estimate,
-                right_row_estimate,
-                left_local_count,
-                right_local_count,
-            )
-        else:
-            left_total, right_total = left_estimate, right_estimate
-            left_total_rows, right_total_rows = left_row_estimate, right_row_estimate
-            left_total_chunks, right_total_chunks = left_local_count, right_local_count
-
-        # Limit the output count to 10x the larger input side
-        max_output_chunks = 10 * max(left_total_chunks, right_total_chunks)
-
-        # =====================================================================
-        # Strategy Selection
-        # =====================================================================
-        # - Inner: can broadcast either side
-        # - Left/Semi/Anti: must broadcast right (stream left to preserve all left rows)
-        # - Right: must broadcast left (stream right to preserve all right rows)
-        # - Full: cannot broadcast (must shuffle both to preserve both sides)
-
-        join_type = ir.options[0]
-        can_broadcast_left = join_type in ("Inner", "Right")
-        can_broadcast_right = join_type in ("Inner", "Left", "Semi", "Anti")
-
-        # Check if one side is already duplicated
-        left_duplicated = left_metadata.duplicated
-        right_duplicated = right_metadata.duplicated
-
-        # Check row counts - can't broadcast if concatenated rows exceed cuDF limit
-        left_rows_ok = left_total_rows < MAX_BROADCAST_ROWS
-        right_rows_ok = right_total_rows < MAX_BROADCAST_ROWS
-
-        # Determine strategy
-        broadcast_side: Literal["left", "right"] | None = None
-
-        if nranks == 1:
-            # Single rank - no network cost, but still prefer smaller side for
-            # hash table efficiency. Also check broadcast threshold.
-            left_ok = (
-                left_total < broadcast_threshold and left_rows_ok and can_broadcast_left
-            )
-            right_ok = right_total < broadcast_threshold and right_rows_ok
-
-            if left_ok and right_ok:
-                # Both sides OK - broadcast the side with fewer rows
-                # Row count is a better indicator of hash table size than byte size
-                broadcast_side = (
-                    "left"
-                    if (not can_broadcast_right or left_total_rows <= right_total_rows)
-                    else "right"
-                )
-            elif right_ok and can_broadcast_right:
-                broadcast_side = "right"
-            elif left_ok:
-                broadcast_side = "left"
-            # else: fall through to shuffle
-        elif right_duplicated and right_rows_ok and can_broadcast_right:
-            # Right already duplicated - broadcast right (no allgather needed)
-            broadcast_side = "right"
-        elif left_duplicated and can_broadcast_left and left_rows_ok:
-            # Left already duplicated - broadcast left (only for Inner)
-            broadcast_side = "left"
-        else:
-            # Decide based on size estimates - broadcast the smaller side if possible
-            # Must also check row counts to avoid exceeding cuDF column size limit
-            left_small_enough = (
-                left_total < broadcast_threshold and can_broadcast_left and left_rows_ok
-            )
-            right_small_enough = right_total < broadcast_threshold and right_rows_ok
-
-            if left_small_enough and right_small_enough:
-                # Both are small enough - broadcast the smaller one (if both allowed)
-                broadcast_side = (
-                    "left"
-                    if (not can_broadcast_right or left_total <= right_total)
-                    else "right"
-                )
-            elif right_small_enough and can_broadcast_right:
-                # Only right is small enough
-                broadcast_side = "right"
-            elif left_small_enough:
-                # Only left is small enough (Inner or Right join)
-                broadcast_side = "left"
-            # else: shuffle both sides
-
-        if broadcast_side is not None:
-            # Broadcast join
-            if tracer is not None:
-                tracer.decision = f"broadcast_{broadcast_side}"
+        if broadcast_side:
             await _broadcast_join(
                 context,
                 ir,
@@ -1129,48 +1211,6 @@ async def join_actor(
                 tracer,
             )
         else:
-            # Shuffle join path
-
-            # Estimate output size - use max of inputs as rough heuristic
-            estimated_output_size = max(left_total, right_total)
-            ideal_output_count = max(1, estimated_output_size // target_partition_size)
-            ideal_modulus = nranks * ideal_output_count
-            min_modulus = min(ideal_modulus, max_output_chunks)
-
-            left_existing_modulus = (
-                left_state.inter_rank_modulus if left_state else None
-            )
-            right_existing_modulus = (
-                right_state.inter_rank_modulus if right_state else None
-            )
-
-            # Determine which modulus to use, preferring existing partitioning
-            # if it provides at least the minimum needed partitions
-            if left_existing_modulus is not None and right_existing_modulus is not None:
-                # Both sides partitioned - use the larger modulus if compatible
-                # (one must be a multiple of the other for compatibility)
-                if left_existing_modulus >= right_existing_modulus:
-                    if left_existing_modulus % right_existing_modulus == 0:
-                        modulus = left_existing_modulus
-                    else:
-                        # Incompatible - use whichever is larger
-                        modulus = max(left_existing_modulus, right_existing_modulus)
-                else:
-                    if right_existing_modulus % left_existing_modulus == 0:
-                        modulus = right_existing_modulus
-                    else:
-                        modulus = max(left_existing_modulus, right_existing_modulus)
-            elif left_existing_modulus is not None:
-                # Only left is partitioned - use its modulus if sufficient
-                modulus = max(left_existing_modulus, min_modulus)
-            elif right_existing_modulus is not None:
-                # Only right is partitioned - use its modulus if sufficient
-                modulus = max(right_existing_modulus, min_modulus)
-            else:
-                # Neither side partitioned - can choose freely
-                # Use at least nranks for distributed efficiency
-                modulus = max(nranks, min_modulus)
-
             await _shuffle_join(
                 context,
                 ir,
@@ -1180,7 +1220,7 @@ async def join_actor(
                 ch_right,
                 left_state,
                 right_state,
-                modulus,
+                min_shuffle_modulus,
                 collective_ids,
                 left_sample_chunks=left_sample_chunks,
                 right_sample_chunks=right_sample_chunks,
