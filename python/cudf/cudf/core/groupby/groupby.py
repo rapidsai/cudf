@@ -2697,10 +2697,73 @@ class GroupBy(Serializable, Reducible, Scannable):
                 "numeric_only is not currently supported."
             )
 
+        if is_list_like(q):
+            return self._quantile_array(list(q), interpolation=interpolation)
+
         def func(x):
             return getattr(x, "quantile")(q=q, interpolation=interpolation)
 
         return self.agg(func)
+
+    def _quantile_array(self, qs, interpolation="linear"):
+        """Compute multiple quantiles and return result with proper
+        MultiIndex including quantile values as the innermost level.
+        """
+        from cudf.core.dataframe import DataFrame
+
+        # Compute each quantile separately and collect results
+        results = []
+        for qi in qs:
+
+            def func(x, _q=qi):
+                return getattr(x, "quantile")(
+                    q=_q, interpolation=interpolation
+                )
+
+            results.append(self.agg(func))
+
+        nqs = len(qs)
+        first = results[0]
+        idx = first.index
+        ngroups = len(idx)
+
+        # Concatenate results (order: all groups for q0, then q1, ...)
+        combined = DataFrame._concat(results)
+
+        # Reorder to interleave: group0-q0, group0-q1, group1-q0, group1-q1
+        order = np.empty(ngroups * nqs, dtype=np.intp)
+        for i in range(nqs):
+            order[i::nqs] = np.arange(ngroups) + i * ngroups
+
+        combined = combined.iloc[order].reset_index(drop=True)
+
+        # Build new MultiIndex with quantile as innermost level
+        q_level = Index(qs, dtype=np.float64)
+
+        if isinstance(idx, MultiIndex):
+            levels = [*list(idx.levels), q_level]
+            new_codes = [
+                np.repeat(code.to_numpy(), nqs) for code in idx._codes
+            ]
+            new_codes.append(np.tile(np.arange(nqs), ngroups))
+
+            new_index = MultiIndex(
+                levels=levels,
+                codes=new_codes,
+                names=[*list(idx.names), None],
+            )
+        else:
+            new_index = MultiIndex(
+                levels=[idx, q_level],
+                codes=[
+                    np.repeat(np.arange(ngroups, dtype=np.int64), nqs),
+                    np.tile(np.arange(nqs, dtype=np.int64), ngroups),
+                ],
+                names=[idx.name, None],
+            )
+
+        combined.index = new_index
+        return combined
 
     @_performance_tracking
     def unique(self):
