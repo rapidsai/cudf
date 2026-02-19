@@ -216,6 +216,64 @@ async def recv_metadata(ch: Channel[TableChunk], ctx: Context) -> ChannelMetadat
     return ChannelMetadata.from_message(msg)
 
 
+def get_partitioning_moduli(
+    metadata: ChannelMetadata,
+    key_indices: tuple[int, ...],
+    nranks: int,
+) -> tuple[int, int]:
+    """
+    Get the moduli if data is hash partitioned on the given keys.
+
+    Parameters
+    ----------
+    metadata
+        The channel metadata.
+    key_indices
+        The column indices of the keys.
+    nranks
+        The number of ranks.
+
+    Returns
+    -------
+    inter_rank_modulus
+        Inter-rank modulus.
+        Return value of 0 means the data is not partitioned between ranks.
+    local_modulus
+        Local modulus.
+        Return value of 0 means the data is not partitioned within a rank.
+    """
+    # NOTE: This function will need to be updated when we support
+    # order-based partitioning. For ordered data, we can return a
+    # "boundaries" TableChunk instead of a single integer (modulus).
+
+    trivial_inter_rank_modulus = 1 if nranks == 1 else 0
+    if metadata.partitioning is None:
+        return trivial_inter_rank_modulus, 0
+
+    inter_rank = metadata.partitioning.inter_rank
+    strict_inter_rank_modulus = (
+        inter_rank.modulus
+        if (
+            isinstance(inter_rank, HashScheme)
+            and inter_rank.column_indices == key_indices
+        )
+        else 0
+    )
+    inter_rank_modulus = strict_inter_rank_modulus or trivial_inter_rank_modulus
+    if not inter_rank_modulus:
+        # Local partitioning is meaningless without inter-rank partitioning
+        return 0, 0
+
+    local = metadata.partitioning.local
+    local_modulus = (
+        local.modulus
+        if (isinstance(local, HashScheme) and local.column_indices == key_indices)
+        else 0
+    )
+    local_modulus = local_modulus or (inter_rank_modulus if local == "inherit" else 0)
+    return inter_rank_modulus, local_modulus
+
+
 class ChannelManager:
     """A utility class for managing Channel objects."""
 
