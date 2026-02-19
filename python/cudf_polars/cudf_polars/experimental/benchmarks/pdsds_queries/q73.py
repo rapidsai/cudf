@@ -113,12 +113,7 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         .join(filtered_stores, left_on="ss_store_sk", right_on="s_store_sk")
         .join(filtered_hd, left_on="ss_hdemo_sk", right_on="hd_demo_sk")
         .group_by(["ss_ticket_number", "ss_customer_sk"])
-        .agg(
-            [
-                # Cast -> Int64 to match DuckDB
-                pl.len().cast(pl.Int64).alias("cnt")
-            ]
-        )
+        .agg([pl.len().alias("cnt")])
         .filter(pl.col("cnt").is_between(1, 5))
     )
     return (
