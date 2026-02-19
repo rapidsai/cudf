@@ -25,6 +25,11 @@ Pre-generated parameters for PDS-DS queries across a set of scale factors.
 - **Query 9**: `aggcthen`, `aggcelse`, `rc` (list of 5 count thresholds)
 - **Query 10**: `county` (list of 10 counties), `month`, `year`
 - **Query 11**: `year`, `select_one`
+- **Query 12**: `year`, `sdate` (start date), `category` (list of 3 categories)
+- **Query 13**: `ms` (list of 3 marital statuses), `es` (list of 3 education statuses), `state` (list of 9 states)
+- **Query 14**: `year`, `day` (day of month)
+- **Query 15**: `year`, `qoy` (quarter of year)
+- **Query 16**: `year`, `month`, `state`, `county` (list of 5 counties)
 - **Query 17**: `year`
 - **Query 18**: `year`, `month` (list of 6 months), `state` (list of 7 states), `es` (education status), `gen` (gender)
 - **Query 19**: `year`, `month`, `manager` (manager ID)
