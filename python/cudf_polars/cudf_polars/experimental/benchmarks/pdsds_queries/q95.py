@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import TYPE_CHECKING
 
 import polars as pl
@@ -87,8 +88,9 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     )
     web_site = get_data(run_config.dataset_path, "web_site", run_config.suffix)
     web_returns = get_data(run_config.dataset_path, "web_returns", run_config.suffix)
-    start_date = pl.lit(date).str.to_date().cast(pl.Datetime("us"))
-    end_date = (start_date + pl.duration(days=60)).cast(pl.Datetime("us"))
+    start_date_py = datetime.strptime(date, "%Y-%m-%d")
+    start_date = pl.lit(start_date_py, dtype=pl.Datetime("us"))
+    end_date = start_date + pl.duration(days=60)
     multi_warehouse_orders = (
         web_sales.group_by("ws_order_number")
         .agg([pl.col("ws_warehouse_sk").n_unique().alias("warehouse_count")])

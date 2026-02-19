@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import TYPE_CHECKING
 
 import polars as pl
@@ -66,8 +67,9 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     web_sales = get_data(run_config.dataset_path, "web_sales", run_config.suffix)
     item = get_data(run_config.dataset_path, "item", run_config.suffix)
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
-    start_date = pl.lit(date).str.to_date().cast(pl.Datetime("us"))
-    end_date = (start_date + pl.duration(days=90)).cast(pl.Datetime("us"))
+    start_date_py = datetime.strptime(date, "%Y-%m-%d")
+    start_date = pl.lit(start_date_py, dtype=pl.Datetime("us"))
+    end_date = start_date + pl.duration(days=90)
     avg_discounts = (
         web_sales.join(
             date_dim, left_on="ws_sold_date_sk", right_on="d_date_sk", how="inner"
