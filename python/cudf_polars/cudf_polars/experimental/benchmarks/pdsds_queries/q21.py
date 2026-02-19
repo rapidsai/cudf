@@ -117,7 +117,6 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         .group_by(["w_warehouse_name", "i_item_id"])
         .agg(
             [
-                # Cast -> Decimal to match DuckDB
                 pl.col("inv_before_amount").sum().alias("inv_before"),
                 pl.col("inv_after_amount").sum().alias("inv_after"),
             ]
