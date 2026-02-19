@@ -273,7 +273,7 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> mark_join::mark_probe_and_
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
-  cudf::scoped_range range{"mark_join::mark_probe_and_retrieve"};
+  CUDF_FUNC_RANGE();
 
   auto materialize_probe_rows = [&](auto const& probe_iter) {
     rmm::device_uvector<probe_key_type> probe_rows(probe.num_rows(), stream);
@@ -505,8 +505,6 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> mark_join::semi_anti_join(
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
-  cudf::scoped_range range{"mark_join::semi_anti_join"};
-
   clear_marks(stream);
 
   auto const preprocessed_probe = [&probe, stream] {
@@ -601,6 +599,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> mark_join::semi_join(
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr) const
 {
+  cudf::scoped_range range{"mark_join::semi_join"};
   return _impl->semi_join(probe, stream, mr);
 }
 
@@ -609,6 +608,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> mark_join::anti_join(
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr) const
 {
+  cudf::scoped_range range{"mark_join::anti_join"};
   return _impl->anti_join(probe, stream, mr);
 }
 
