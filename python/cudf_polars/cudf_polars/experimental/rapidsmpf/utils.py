@@ -296,6 +296,38 @@ def process_children(
     return nodes, channels
 
 
+def _make_empty_column(dtype: DataType, stream: Stream) -> plc.Column:
+    """
+    Create an empty (0-row) column, including for nested types.
+
+    ``plc.column_factories.make_empty_column`` rejects LIST and STRUCT,
+    so we build those by hand with the correct child structure.
+
+    Parameters
+    ----------
+    dtype
+        The cudf-polars DataType (carries child-type metadata for nested types).
+    stream
+        CUDA stream for any device allocations.
+    """
+    if dtype.id() == plc.TypeId.LIST:
+        offsets = plc.Column.from_scalar(
+            plc.Scalar.from_py(0, plc.DataType(plc.TypeId.INT32), stream=stream),
+            1,
+            stream=stream,
+        )
+        child = _make_empty_column(dtype.children[0], stream)
+        return plc.Column(dtype.plc_type, 0, None, None, 0, 0, [offsets, child])
+
+    if dtype.id() == plc.TypeId.STRUCT:
+        children = [
+            _make_empty_column(child_dtype, stream) for child_dtype in dtype.children
+        ]
+        return plc.Column(dtype.plc_type, 0, None, None, 0, 0, children)
+
+    return plc.column_factories.make_empty_column(dtype.plc_type, stream=stream)
+
+
 def empty_table_chunk(ir: IR, context: Context, stream: Stream) -> TableChunk:
     """
     Make an empty table chunk.
@@ -313,12 +345,7 @@ def empty_table_chunk(ir: IR, context: Context, stream: Stream) -> TableChunk:
     -------
     The empty table chunk.
     """
-    # Create an empty table with the correct schema
-    # Use dtype.plc_type to get the full DataType (preserves precision/scale for Decimals)
-    empty_columns = [
-        plc.column_factories.make_empty_column(dtype.plc_type, stream=stream)
-        for dtype in ir.schema.values()
-    ]
+    empty_columns = [_make_empty_column(dtype, stream) for dtype in ir.schema.values()]
     empty_table = plc.Table(empty_columns)
 
     return TableChunk.from_pylibcudf_table(
