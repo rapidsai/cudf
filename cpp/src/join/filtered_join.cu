@@ -7,26 +7,49 @@
 
 #include <cudf/detail/cuco_helpers.hpp>
 #include <cudf/detail/join/distinct_filtered_join.cuh>
+#include <cudf/detail/join/filtered_join.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/row_operator/equality.cuh>
+#include <cudf/detail/row_operator/primitive_row_operators.cuh>
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/join/filtered_join.hpp>
 #include <cudf/join/join.hpp>
+#include <cudf/table/table_view.hpp>
+#include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
+#include <rmm/mr/polymorphic_allocator.hpp>
+#include <rmm/resource_ref.hpp>
 
+#include <cuco/bucket_storage.cuh>
 #include <cuco/detail/open_addressing/kernels.cuh>
+#include <cuco/extent.cuh>
 #include <cuco/operator.hpp>
 #include <cuco/static_set_ref.cuh>
 #include <cuda/iterator>
+#include <thrust/iterator/counting_iterator.h>
 #include <thrust/sequence.h>
+
+#include <memory>
 
 namespace cudf {
 namespace detail {
 namespace {
 
+/**
+ * @brief Build a row bitmask for the input table.
+ *
+ * The output bitmask will have invalid bits corresponding to the input rows having nulls (at
+ * any nested level) and vice versa.
+ *
+ * @param input The input table
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @return A pair of pointer to the output bitmask and the buffer containing the bitmask
+ */
 std::pair<rmm::device_buffer, bitmask_type const*> build_row_bitmask(table_view const& input,
                                                                      rmm::cuda_stream_view stream)
 {
@@ -34,6 +57,8 @@ std::pair<rmm::device_buffer, bitmask_type const*> build_row_bitmask(table_view 
   CUDF_EXPECTS(nullable_columns.size() > 0,
                "The input table has nulls thus it should have nullable columns.");
 
+  // If there are more than one nullable column, we compute `bitmask_and` of their null masks.
+  // Otherwise, we have only one nullable column and can use its null mask directly.
   if (nullable_columns.size() > 1) {
     auto row_bitmask =
       cudf::detail::bitmask_and(
@@ -74,8 +99,9 @@ auto filtered_join::compute_bucket_storage_size(cudf::table_view tbl, double loa
 template <int32_t CGSize, typename Ref>
 void filtered_join::insert_build_table(Ref const& insert_ref, rmm::cuda_stream_view stream)
 {
-  cudf::scoped_range range{"filtered_join::insert_build_table"};
+  cudf::scoped_range range{"distinct_filtered_join::insert_build_table"};
   auto insert = [&]<typename Iterator>(Iterator build_iter) {
+    // Build hash table by inserting all rows from build table
     auto const grid_size = cuco::detail::grid_size(_build.num_rows(), CGSize);
 
     if (cudf::has_nested_nulls(_build) && _nulls_equal == null_equality::UNEQUAL) {
@@ -352,8 +378,10 @@ filtered_join::filtered_join(cudf::table_view const& build,
                              double load_factor,
                              rmm::cuda_stream_view stream)
 {
-  CUDF_EXPECTS(reuse_tbl == set_as_build_table::RIGHT,
-               "Left table reuse is not supported by filtered_join. Use cudf::mark_join instead.");
+  CUDF_EXPECTS(
+    reuse_tbl == set_as_build_table::RIGHT,
+    "Left table reuse is yet to be implemented. Filtered join requires the right table to be the "
+    "build table");
   _reuse_tbl = reuse_tbl;
   _impl      = std::make_unique<cudf::detail::distinct_filtered_join>(
     build, compare_nulls, load_factor, stream);
