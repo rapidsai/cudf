@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
 from cudf_polars.experimental.benchmarks.utils import get_data
 
 if TYPE_CHECKING:
@@ -17,7 +18,20 @@ if TYPE_CHECKING:
 
 def duckdb_impl(run_config: RunConfig) -> str:
     """Query 56."""
-    return """
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=56,
+        qualification=run_config.qualification,
+    )
+
+    year = params["year"]
+    month = params["month"]
+    colors = params["colors"]
+    gmt_offset = params["gmt_offset"]
+
+    colors_str = ", ".join(f"'{c}'" for c in colors)
+
+    return f"""
         WITH ss
             AS (SELECT i_item_id,
                         Sum(ss_ext_sales_price) total_sales
@@ -27,14 +41,14 @@ def duckdb_impl(run_config: RunConfig) -> str:
                         item
                 WHERE  i_item_id IN (SELECT i_item_id
                                     FROM   item
-                                    WHERE  i_color IN ( 'firebrick', 'rosy', 'white' )
+                                    WHERE  i_color IN ( {colors_str} )
                                     )
                         AND ss_item_sk = i_item_sk
                         AND ss_sold_date_sk = d_date_sk
-                        AND d_year = 1998
-                        AND d_moy = 3
+                        AND d_year = {year}
+                        AND d_moy = {month}
                         AND ss_addr_sk = ca_address_sk
-                        AND ca_gmt_offset = -6
+                        AND ca_gmt_offset = {gmt_offset}
                 GROUP  BY i_item_id),
             cs
             AS (SELECT i_item_id,
@@ -45,14 +59,14 @@ def duckdb_impl(run_config: RunConfig) -> str:
                         item
                 WHERE  i_item_id IN (SELECT i_item_id
                                     FROM   item
-                                    WHERE  i_color IN ( 'firebrick', 'rosy', 'white' )
+                                    WHERE  i_color IN ( {colors_str} )
                                     )
                         AND cs_item_sk = i_item_sk
                         AND cs_sold_date_sk = d_date_sk
-                        AND d_year = 1998
-                        AND d_moy = 3
+                        AND d_year = {year}
+                        AND d_moy = {month}
                         AND cs_bill_addr_sk = ca_address_sk
-                        AND ca_gmt_offset = -6
+                        AND ca_gmt_offset = {gmt_offset}
                 GROUP  BY i_item_id),
             ws
             AS (SELECT i_item_id,
@@ -63,14 +77,14 @@ def duckdb_impl(run_config: RunConfig) -> str:
                         item
                 WHERE  i_item_id IN (SELECT i_item_id
                                     FROM   item
-                                    WHERE  i_color IN ( 'firebrick', 'rosy', 'white' )
+                                    WHERE  i_color IN ( {colors_str} )
                                     )
                         AND ws_item_sk = i_item_sk
                         AND ws_sold_date_sk = d_date_sk
-                        AND d_year = 1998
-                        AND d_moy = 3
+                        AND d_year = {year}
+                        AND d_moy = {month}
                         AND ws_bill_addr_sk = ca_address_sk
-                        AND ca_gmt_offset = -6
+                        AND ca_gmt_offset = {gmt_offset}
                 GROUP  BY i_item_id)
         SELECT i_item_id,
                     Sum(total_sales) total_sales
@@ -90,6 +104,17 @@ def duckdb_impl(run_config: RunConfig) -> str:
 
 def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     """Query 56."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=56,
+        qualification=run_config.qualification,
+    )
+
+    year = params["year"]
+    month = params["month"]
+    colors = params["colors"]
+    gmt_offset = params["gmt_offset"]
+
     store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
     catalog_sales = get_data(
         run_config.dataset_path, "catalog_sales", run_config.suffix
@@ -102,9 +127,7 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     item = get_data(run_config.dataset_path, "item", run_config.suffix)
 
     color_item_ids_lf = (
-        item.filter(pl.col("i_color").is_in(["firebrick", "rosy", "white"]))
-        .select(["i_item_id"])
-        .unique()
+        item.filter(pl.col("i_color").is_in(colors)).select(["i_item_id"]).unique()
     )
 
     channels = [
@@ -139,9 +162,9 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
             .join(date_dim, left_on=ch["sold_date_col"], right_on="d_date_sk")
             .join(customer_address, left_on=ch["addr_sk_col"], right_on="ca_address_sk")
             .filter(
-                (pl.col("d_year") == 1998)
-                & (pl.col("d_moy") == 3)
-                & (pl.col("ca_gmt_offset") == -6)
+                (pl.col("d_year") == year)
+                & (pl.col("d_moy") == month)
+                & (pl.col("ca_gmt_offset") == gmt_offset)
             )
             .group_by("i_item_id")
             .agg(

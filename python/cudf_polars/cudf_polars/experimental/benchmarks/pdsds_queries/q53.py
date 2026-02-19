@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
 from cudf_polars.experimental.benchmarks.utils import get_data
 
 if TYPE_CHECKING:
@@ -17,7 +18,29 @@ if TYPE_CHECKING:
 
 def duckdb_impl(run_config: RunConfig) -> str:
     """Query 53."""
-    return """
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=53,
+        qualification=run_config.qualification,
+    )
+
+    dms = params["dms"]
+    categories1 = params["categories1"]
+    classes1 = params["classes1"]
+    brands1 = params["brands1"]
+    categories2 = params["categories2"]
+    classes2 = params["classes2"]
+    brands2 = params["brands2"]
+
+    # Build lists for SQL
+    cat1_str = ", ".join(f"'{c}'" for c in categories1)
+    class1_str = ", ".join(f"'{c}'" for c in classes1)
+    brand1_str = ", ".join(f"'{b}'" for b in brands1)
+    cat2_str = ", ".join(f"'{c}'" for c in categories2)
+    class2_str = ", ".join(f"'{c}'" for c in classes2)
+    brand2_str = ", ".join(f"'{b}'" for b in brands2)
+
+    return f"""
     SELECT *
     FROM   (SELECT i_manufact_id,
                    Sum(ss_sales_price)             sum_sales,
@@ -31,26 +54,16 @@ def duckdb_impl(run_config: RunConfig) -> str:
             WHERE  ss_item_sk = i_item_sk
                    AND ss_sold_date_sk = d_date_sk
                    AND ss_store_sk = s_store_sk
-                   AND d_month_seq IN ( 1199, 1199 + 1, 1199 + 2, 1199 + 3,
-                                        1199 + 4, 1199 + 5, 1199 + 6, 1199 + 7,
-                                        1199 + 8, 1199 + 9, 1199 + 10, 1199 + 11 )
-                   AND ( ( i_category IN ( 'Books', 'Children', 'Electronics' )
-                           AND i_class IN ( 'personal', 'portable', 'reference',
-                                            'self-help' )
-                           AND i_brand IN ( 'scholaramalgamalg #14',
-                                            'scholaramalgamalg #7'
-                                            ,
-                                            'exportiunivamalg #9',
-                                                           'scholaramalgamalg #9' )
+                   AND d_month_seq IN ( {dms}, {dms} + 1, {dms} + 2, {dms} + 3,
+                                        {dms} + 4, {dms} + 5, {dms} + 6, {dms} + 7,
+                                        {dms} + 8, {dms} + 9, {dms} + 10, {dms} + 11 )
+                   AND ( ( i_category IN ( {cat1_str} )
+                           AND i_class IN ( {class1_str} )
+                           AND i_brand IN ( {brand1_str} )
                          )
-                          OR ( i_category IN ( 'Women', 'Music', 'Men' )
-                               AND i_class IN ( 'accessories', 'classical',
-                                                'fragrances',
-                                                'pants' )
-                               AND i_brand IN ( 'amalgimporto #1',
-                                                'edu packscholar #1',
-                                                'exportiimporto #1',
-                                                    'importoamalg #1' ) ) )
+                          OR ( i_category IN ( {cat2_str} )
+                               AND i_class IN ( {class2_str} )
+                               AND i_brand IN ( {brand2_str} ) ) )
             GROUP  BY i_manufact_id,
                       d_qoy) tmp1
     WHERE  CASE
@@ -68,56 +81,44 @@ def duckdb_impl(run_config: RunConfig) -> str:
 
 def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     """Query 53."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=53,
+        qualification=run_config.qualification,
+    )
+
+    dms = params["dms"]
+    categories1 = params["categories1"]
+    classes1 = params["classes1"]
+    brands1 = params["brands1"]
+    categories2 = params["categories2"]
+    classes2 = params["classes2"]
+    brands2 = params["brands2"]
+
     # Load tables
     item = get_data(run_config.dataset_path, "item", run_config.suffix)
     store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
     store = get_data(run_config.dataset_path, "store", run_config.suffix)
-    month_seq_list = list(range(1199, 1199 + 12))
+    month_seq_list = list(range(dms, dms + 12))
     grouped_data = (
         store_sales.join(item, left_on="ss_item_sk", right_on="i_item_sk")
         .join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
         .join(store, left_on="ss_store_sk", right_on="s_store_sk")
         .filter(pl.col("d_month_seq").is_in(month_seq_list))
         .filter(
-            # Books/Children/Electronics categories
+            # First rule group
             (
-                (pl.col("i_category").is_in(["Books", "Children", "Electronics"]))
-                & (
-                    pl.col("i_class").is_in(
-                        ["personal", "portable", "reference", "self-help"]
-                    )
-                )
-                & (
-                    pl.col("i_brand").is_in(
-                        [
-                            "scholaramalgamalg #14",
-                            "scholaramalgamalg #7",
-                            "exportiunivamalg #9",
-                            "scholaramalgamalg #9",
-                        ]
-                    )
-                )
+                (pl.col("i_category").is_in(categories1))
+                & (pl.col("i_class").is_in(classes1))
+                & (pl.col("i_brand").is_in(brands1))
             )
             |
-            # Women/Music/Men categories
+            # Second rule group
             (
-                (pl.col("i_category").is_in(["Women", "Music", "Men"]))
-                & (
-                    pl.col("i_class").is_in(
-                        ["accessories", "classical", "fragrances", "pants"]
-                    )
-                )
-                & (
-                    pl.col("i_brand").is_in(
-                        [
-                            "amalgimporto #1",
-                            "edu packscholar #1",
-                            "exportiimporto #1",
-                            "importoamalg #1",
-                        ]
-                    )
-                )
+                (pl.col("i_category").is_in(categories2))
+                & (pl.col("i_class").is_in(classes2))
+                & (pl.col("i_brand").is_in(brands2))
             )
         )
         .group_by(["i_manufact_id", "d_qoy"])

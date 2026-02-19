@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
 from cudf_polars.experimental.benchmarks.utils import get_data
 
 if TYPE_CHECKING:
@@ -17,7 +18,18 @@ if TYPE_CHECKING:
 
 def duckdb_impl(run_config: RunConfig) -> str:
     """Query 60."""
-    return """
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=60,
+        qualification=run_config.qualification,
+    )
+
+    year = params["year"]
+    month = params["month"]
+    category = params["category"]
+    gmt_offset = params["gmt_offset"]
+
+    return f"""
     WITH ss
          AS (SELECT i_item_id,
                     Sum(ss_ext_sales_price) total_sales
@@ -27,13 +39,13 @@ def duckdb_impl(run_config: RunConfig) -> str:
                     item
              WHERE  i_item_id IN (SELECT i_item_id
                                   FROM   item
-                                  WHERE  i_category IN ( 'Jewelry' ))
+                                  WHERE  i_category IN ( '{category}' ))
                     AND ss_item_sk = i_item_sk
                     AND ss_sold_date_sk = d_date_sk
-                    AND d_year = 1999
-                    AND d_moy = 8
+                    AND d_year = {year}
+                    AND d_moy = {month}
                     AND ss_addr_sk = ca_address_sk
-                    AND ca_gmt_offset = -6
+                    AND ca_gmt_offset = {gmt_offset}
              GROUP  BY i_item_id),
          cs
          AS (SELECT i_item_id,
@@ -44,13 +56,13 @@ def duckdb_impl(run_config: RunConfig) -> str:
                     item
              WHERE  i_item_id IN (SELECT i_item_id
                                   FROM   item
-                                  WHERE  i_category IN ( 'Jewelry' ))
+                                  WHERE  i_category IN ( '{category}' ))
                     AND cs_item_sk = i_item_sk
                     AND cs_sold_date_sk = d_date_sk
-                    AND d_year = 1999
-                    AND d_moy = 8
+                    AND d_year = {year}
+                    AND d_moy = {month}
                     AND cs_bill_addr_sk = ca_address_sk
-                    AND ca_gmt_offset = -6
+                    AND ca_gmt_offset = {gmt_offset}
              GROUP  BY i_item_id),
          ws
          AS (SELECT i_item_id,
@@ -61,13 +73,13 @@ def duckdb_impl(run_config: RunConfig) -> str:
                     item
              WHERE  i_item_id IN (SELECT i_item_id
                                   FROM   item
-                                  WHERE  i_category IN ( 'Jewelry' ))
+                                  WHERE  i_category IN ( '{category}' ))
                     AND ws_item_sk = i_item_sk
                     AND ws_sold_date_sk = d_date_sk
-                    AND d_year = 1999
-                    AND d_moy = 8
+                    AND d_year = {year}
+                    AND d_moy = {month}
                     AND ws_bill_addr_sk = ca_address_sk
-                    AND ca_gmt_offset = -6
+                    AND ca_gmt_offset = {gmt_offset}
              GROUP  BY i_item_id)
     SELECT i_item_id,
                    Sum(total_sales) total_sales
@@ -88,6 +100,17 @@ def duckdb_impl(run_config: RunConfig) -> str:
 
 def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     """Query 60."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=60,
+        qualification=run_config.qualification,
+    )
+
+    year = params["year"]
+    month = params["month"]
+    category = params["category"]
+    gmt_offset = params["gmt_offset"]
+
     store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
     catalog_sales = get_data(
         run_config.dataset_path, "catalog_sales", run_config.suffix
@@ -99,8 +122,8 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     )
     item = get_data(run_config.dataset_path, "item", run_config.suffix)
 
-    jewelry_item_ids_lf = (
-        item.filter(pl.col("i_category") == "Jewelry").select(["i_item_id"]).unique()
+    category_item_ids_lf = (
+        item.filter(pl.col("i_category") == category).select(["i_item_id"]).unique()
     )
 
     channels = [
@@ -134,13 +157,13 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     for _, sales_lf, item_fk, date_fk, addr_fk, price_col in channels:
         parts.append(
             sales_lf.join(item, left_on=item_fk, right_on="i_item_sk")
-            .join(jewelry_item_ids_lf, on="i_item_id")
+            .join(category_item_ids_lf, on="i_item_id")
             .join(date_dim, left_on=date_fk, right_on="d_date_sk")
             .join(customer_address, left_on=addr_fk, right_on="ca_address_sk")
             .filter(
-                (pl.col("d_year") == 1999)
-                & (pl.col("d_moy") == 8)
-                & (pl.col("ca_gmt_offset") == -6)
+                (pl.col("d_year") == year)
+                & (pl.col("d_moy") == month)
+                & (pl.col("ca_gmt_offset") == gmt_offset)
             )
             .group_by("i_item_id")
             .agg([pl.col(price_col).sum().alias("total_sales")])

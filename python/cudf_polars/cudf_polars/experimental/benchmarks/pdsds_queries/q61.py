@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
 from cudf_polars.experimental.benchmarks.utils import get_data
 
 if TYPE_CHECKING:
@@ -17,7 +18,18 @@ if TYPE_CHECKING:
 
 def duckdb_impl(run_config: RunConfig) -> str:
     """Query 61."""
-    return """
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=61,
+        qualification=run_config.qualification,
+    )
+
+    year = params["year"]
+    month = params["month"]
+    gmt_offset = params["gmt_offset"]
+    category = params["category"]
+
+    return f"""
     SELECT promotions,
                    total,
                    Cast(promotions AS DECIMAL(15, 4)) /
@@ -36,14 +48,14 @@ def duckdb_impl(run_config: RunConfig) -> str:
                    AND ss_customer_sk = c_customer_sk
                    AND ca_address_sk = c_current_addr_sk
                    AND ss_item_sk = i_item_sk
-                   AND ca_gmt_offset = -7
-                   AND i_category = 'Books'
+                   AND ca_gmt_offset = {gmt_offset}
+                   AND i_category = '{category}'
                    AND ( p_channel_dmail = 'Y'
                           OR p_channel_email = 'Y'
                           OR p_channel_tv = 'Y' )
-                   AND s_gmt_offset = -7
-                   AND d_year = 2001
-                   AND d_moy = 12) promotional_sales,
+                   AND s_gmt_offset = {gmt_offset}
+                   AND d_year = {year}
+                   AND d_moy = {month}) promotional_sales,
            (SELECT Sum(ss_ext_sales_price) total
             FROM   store_sales,
                    store,
@@ -56,11 +68,11 @@ def duckdb_impl(run_config: RunConfig) -> str:
                    AND ss_customer_sk = c_customer_sk
                    AND ca_address_sk = c_current_addr_sk
                    AND ss_item_sk = i_item_sk
-                   AND ca_gmt_offset = -7
-                   AND i_category = 'Books'
-                   AND s_gmt_offset = -7
-                   AND d_year = 2001
-                   AND d_moy = 12) all_sales
+                   AND ca_gmt_offset = {gmt_offset}
+                   AND i_category = '{category}'
+                   AND s_gmt_offset = {gmt_offset}
+                   AND d_year = {year}
+                   AND d_moy = {month}) all_sales
     ORDER  BY promotions,
               total
     LIMIT 100;
@@ -69,6 +81,17 @@ def duckdb_impl(run_config: RunConfig) -> str:
 
 def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     """Query 61."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=61,
+        qualification=run_config.qualification,
+    )
+
+    year = params["year"]
+    month = params["month"]
+    gmt_offset = params["gmt_offset"]
+    category = params["category"]
+
     # Load tables
     store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
     store = get_data(run_config.dataset_path, "store", run_config.suffix)
@@ -89,16 +112,16 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         .join(customer_address, left_on="c_current_addr_sk", right_on="ca_address_sk")
         .join(item, left_on="ss_item_sk", right_on="i_item_sk")
         .filter(
-            (pl.col("ca_gmt_offset") == -7)
-            & (pl.col("i_category") == "Books")
+            (pl.col("ca_gmt_offset") == gmt_offset)
+            & (pl.col("i_category") == category)
             & (
                 (pl.col("p_channel_dmail") == "Y")
                 | (pl.col("p_channel_email") == "Y")
                 | (pl.col("p_channel_tv") == "Y")
             )
-            & (pl.col("s_gmt_offset") == -7)
-            & (pl.col("d_year") == 2001)
-            & (pl.col("d_moy") == 12)
+            & (pl.col("s_gmt_offset") == gmt_offset)
+            & (pl.col("d_year") == year)
+            & (pl.col("d_moy") == month)
         )
         .select(
             [
@@ -118,11 +141,11 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         .join(customer_address, left_on="c_current_addr_sk", right_on="ca_address_sk")
         .join(item, left_on="ss_item_sk", right_on="i_item_sk")
         .filter(
-            (pl.col("ca_gmt_offset") == -7)
-            & (pl.col("i_category") == "Books")
-            & (pl.col("s_gmt_offset") == -7)
-            & (pl.col("d_year") == 2001)
-            & (pl.col("d_moy") == 12)
+            (pl.col("ca_gmt_offset") == gmt_offset)
+            & (pl.col("i_category") == category)
+            & (pl.col("s_gmt_offset") == gmt_offset)
+            & (pl.col("d_year") == year)
+            & (pl.col("d_moy") == month)
         )
         .select(
             [

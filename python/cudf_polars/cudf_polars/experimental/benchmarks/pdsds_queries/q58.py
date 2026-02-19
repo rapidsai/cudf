@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
 from cudf_polars.experimental.benchmarks.utils import get_data
 
 if TYPE_CHECKING:
@@ -17,7 +18,15 @@ if TYPE_CHECKING:
 
 def duckdb_impl(run_config: RunConfig) -> str:
     """Query 58."""
-    return """
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=58,
+        qualification=run_config.qualification,
+    )
+
+    sales_date = params["sales_date"]
+
+    return f"""
         WITH ss_items
             AS (SELECT i_item_id               item_id,
                         Sum(ss_ext_sales_price) ss_item_rev
@@ -29,7 +38,7 @@ def duckdb_impl(run_config: RunConfig) -> str:
                                     FROM   date_dim
                                     WHERE  d_week_seq = (SELECT d_week_seq
                                                             FROM   date_dim
-                                                            WHERE  d_date = '2002-02-25'
+                                                            WHERE  d_date = '{sales_date}'
                                                         ))
                         AND ss_sold_date_sk = d_date_sk
                 GROUP  BY i_item_id),
@@ -44,7 +53,7 @@ def duckdb_impl(run_config: RunConfig) -> str:
                                     FROM   date_dim
                                     WHERE  d_week_seq = (SELECT d_week_seq
                                                             FROM   date_dim
-                                                            WHERE  d_date = '2002-02-25'
+                                                            WHERE  d_date = '{sales_date}'
                                                         ))
                         AND cs_sold_date_sk = d_date_sk
                 GROUP  BY i_item_id),
@@ -59,7 +68,7 @@ def duckdb_impl(run_config: RunConfig) -> str:
                                     FROM   date_dim
                                     WHERE  d_week_seq = (SELECT d_week_seq
                                                             FROM   date_dim
-                                                            WHERE  d_date = '2002-02-25'
+                                                            WHERE  d_date = '{sales_date}'
                                                         ))
                         AND ws_sold_date_sk = d_date_sk
                 GROUP  BY i_item_id)
@@ -112,6 +121,14 @@ def _build_sales_agg(
 
 def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     """Query 58."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=58,
+        qualification=run_config.qualification,
+    )
+
+    sales_date = params["sales_date"]
+
     store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
     catalog_sales = get_data(
         run_config.dataset_path, "catalog_sales", run_config.suffix
@@ -120,7 +137,9 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     item = get_data(run_config.dataset_path, "item", run_config.suffix)
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
 
-    target_week = date_dim.filter(pl.col("d_date") == pl.date(2002, 2, 25)).select(
+    # Parse sales_date (format: "YYYY-MM-DD")
+    year, month, day = map(int, sales_date.split("-"))
+    target_week = date_dim.filter(pl.col("d_date") == pl.date(year, month, day)).select(
         "d_week_seq"
     )
     week_dates = date_dim.join(target_week, on="d_week_seq", how="inner").select(

@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
 from cudf_polars.experimental.benchmarks.utils import get_data
 
 if TYPE_CHECKING:
@@ -17,7 +18,18 @@ if TYPE_CHECKING:
 
 def duckdb_impl(run_config: RunConfig) -> str:
     """Query 54."""
-    return """
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=54,
+        qualification=run_config.qualification,
+    )
+
+    category = params["category"]
+    class_name = params["class"]
+    month = params["month"]
+    year = params["year"]
+
+    return f"""
     WITH my_customers
          AS (SELECT DISTINCT c_customer_sk,
                              c_current_addr_sk
@@ -35,11 +47,11 @@ def duckdb_impl(run_config: RunConfig) -> str:
                     customer
              WHERE  sold_date_sk = d_date_sk
                     AND item_sk = i_item_sk
-                    AND i_category = 'Sports'
-                    AND i_class = 'fitness'
+                    AND i_category = '{category}'
+                    AND i_class = '{class_name}'
                     AND c_customer_sk = cs_or_ws_sales.customer_sk
-                    AND d_moy = 5
-                    AND d_year = 2000),
+                    AND d_moy = {month}
+                    AND d_year = {year}),
          my_revenue
          AS (SELECT c_customer_sk,
                     Sum(ss_ext_sales_price) AS revenue
@@ -55,13 +67,13 @@ def duckdb_impl(run_config: RunConfig) -> str:
                     AND c_customer_sk = ss_customer_sk
                     AND d_month_seq BETWEEN (SELECT DISTINCT d_month_seq + 1
                                              FROM   date_dim
-                                             WHERE  d_year = 2000
-                                                    AND d_moy = 5) AND
+                                             WHERE  d_year = {year}
+                                                    AND d_moy = {month}) AND
                                             (SELECT DISTINCT
                                             d_month_seq + 3
                                              FROM   date_dim
-                                             WHERE  d_year = 2000
-                                                    AND d_moy = 5)
+                                             WHERE  d_year = {year}
+                                                    AND d_moy = {month})
              GROUP  BY c_customer_sk),
          segments
          AS (SELECT Cast(( revenue / 50 ) AS INT) AS segment
@@ -79,6 +91,17 @@ def duckdb_impl(run_config: RunConfig) -> str:
 
 def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     """Query 54."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=54,
+        qualification=run_config.qualification,
+    )
+
+    category = params["category"]
+    class_name = params["class"]
+    month = params["month"]
+    year = params["year"]
+
     catalog_sales = get_data(
         run_config.dataset_path, "catalog_sales", run_config.suffix
     )
@@ -112,10 +135,10 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         .join(item, left_on="item_sk", right_on="i_item_sk")
         .join(customer, left_on="customer_sk", right_on="c_customer_sk")
         .filter(
-            (pl.col("i_category") == "Sports")
-            & (pl.col("i_class") == "fitness")
-            & (pl.col("d_moy") == 5)
-            & (pl.col("d_year") == 2000)
+            (pl.col("i_category") == category)
+            & (pl.col("i_class") == class_name)
+            & (pl.col("d_moy") == month)
+            & (pl.col("d_year") == year)
         )
         .select([pl.col("customer_sk").alias("c_customer_sk"), "c_current_addr_sk"])
         .unique()

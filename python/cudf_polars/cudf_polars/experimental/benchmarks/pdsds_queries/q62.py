@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
 from cudf_polars.experimental.benchmarks.utils import get_data
 
 if TYPE_CHECKING:
@@ -17,7 +18,15 @@ if TYPE_CHECKING:
 
 def duckdb_impl(run_config: RunConfig) -> str:
     """Query 62."""
-    return """
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=62,
+        qualification=run_config.qualification,
+    )
+
+    dms = params["dms"]
+
+    return f"""
     SELECT Substr(w_warehouse_name, 1, 20),
                    sm_type,
                    web_name,
@@ -50,7 +59,7 @@ def duckdb_impl(run_config: RunConfig) -> str:
            ship_mode,
            web_site,
            date_dim
-    WHERE  d_month_seq BETWEEN 1222 AND 1222 + 11
+    WHERE  d_month_seq BETWEEN {dms} AND {dms} + 11
            AND ws_ship_date_sk = d_date_sk
            AND ws_warehouse_sk = w_warehouse_sk
            AND ws_ship_mode_sk = sm_ship_mode_sk
@@ -67,6 +76,14 @@ def duckdb_impl(run_config: RunConfig) -> str:
 
 def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     """Query 62."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=62,
+        qualification=run_config.qualification,
+    )
+
+    dms = params["dms"]
+
     web_sales = get_data(run_config.dataset_path, "web_sales", run_config.suffix)
     warehouse = get_data(run_config.dataset_path, "warehouse", run_config.suffix)
     ship_mode = get_data(run_config.dataset_path, "ship_mode", run_config.suffix)
@@ -78,7 +95,7 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         .join(warehouse, left_on="ws_warehouse_sk", right_on="w_warehouse_sk")
         .join(ship_mode, left_on="ws_ship_mode_sk", right_on="sm_ship_mode_sk")
         .join(web_site, left_on="ws_web_site_sk", right_on="web_site_sk")
-        .filter(pl.col("d_month_seq").is_between(1222, 1222 + 11))
+        .filter(pl.col("d_month_seq").is_between(dms, dms + 11))
         .with_columns(
             [
                 (pl.col("ws_ship_date_sk") - pl.col("ws_sold_date_sk")).alias(

@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
 from cudf_polars.experimental.benchmarks.utils import get_data
 
 if TYPE_CHECKING:
@@ -17,7 +18,15 @@ if TYPE_CHECKING:
 
 def duckdb_impl(run_config: RunConfig) -> str:
     """Query 59."""
-    return """
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=59,
+        qualification=run_config.qualification,
+    )
+
+    dms = params["dms"]
+
+    return f"""
     WITH wss
          AS (SELECT d_week_seq,
                     ss_store_sk,
@@ -79,7 +88,7 @@ def duckdb_impl(run_config: RunConfig) -> str:
                    date_dim d
             WHERE  d.d_week_seq = wss.d_week_seq
                    AND ss_store_sk = s_store_sk
-                   AND d_month_seq BETWEEN 1196 AND 1196 + 11) y,
+                   AND d_month_seq BETWEEN {dms} AND {dms} + 11) y,
            (SELECT s_store_name   s_store_name2,
                    wss.d_week_seq d_week_seq2,
                    s_store_id     s_store_id2,
@@ -95,7 +104,7 @@ def duckdb_impl(run_config: RunConfig) -> str:
                    date_dim d
             WHERE  d.d_week_seq = wss.d_week_seq
                    AND ss_store_sk = s_store_sk
-                   AND d_month_seq BETWEEN 1196 + 12 AND 1196 + 23) x
+                   AND d_month_seq BETWEEN {dms} + 12 AND {dms} + 23) x
     WHERE  s_store_id1 = s_store_id2
            AND d_week_seq1 = d_week_seq2 - 52
     ORDER  BY s_store_name1,
@@ -107,6 +116,14 @@ def duckdb_impl(run_config: RunConfig) -> str:
 
 def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     """Query 59."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=59,
+        qualification=run_config.qualification,
+    )
+
+    dms = params["dms"]
+
     store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
     store = get_data(run_config.dataset_path, "store", run_config.suffix)
@@ -160,7 +177,7 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         left_on="ss_store_sk",
         right_on="s_store_sk",
     ).join(date_dim.select(["d_week_seq", "d_month_seq"]), on="d_week_seq")
-    y = wss_enriched.filter(pl.col("d_month_seq").is_between(1196, 1196 + 11)).select(
+    y = wss_enriched.filter(pl.col("d_month_seq").is_between(dms, dms + 11)).select(
         [
             pl.col("s_store_name").alias("s_store_name1"),
             pl.col("s_store_id").alias("s_store_id1"),
@@ -175,7 +192,7 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         ]
     )
     x = wss_enriched.filter(
-        pl.col("d_month_seq").is_between(1196 + 12, 1196 + 23)
+        pl.col("d_month_seq").is_between(dms + 12, dms + 23)
     ).select(
         [
             pl.col("s_store_id").alias("s_store_id2"),
