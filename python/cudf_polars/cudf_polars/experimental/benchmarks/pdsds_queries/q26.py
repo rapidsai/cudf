@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
 from cudf_polars.experimental.benchmarks.utils import get_data
 
 if TYPE_CHECKING:
@@ -17,7 +18,18 @@ if TYPE_CHECKING:
 
 def duckdb_impl(run_config: RunConfig) -> str:
     """Query 26."""
-    return """
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=26,
+        qualification=run_config.qualification,
+    )
+
+    year = params["year"]
+    gen = params["gen"]
+    ms = params["ms"]
+    es = params["es"]
+
+    return f"""
     SELECT i_item_id,
                    Avg(cs_quantity)    agg1,
                    Avg(cs_list_price)  agg2,
@@ -32,12 +44,12 @@ def duckdb_impl(run_config: RunConfig) -> str:
            AND cs_item_sk = i_item_sk
            AND cs_bill_cdemo_sk = cd_demo_sk
            AND cs_promo_sk = p_promo_sk
-           AND cd_gender = 'F'
-           AND cd_marital_status = 'W'
-           AND cd_education_status = 'Secondary'
+           AND cd_gender = '{gen}'
+           AND cd_marital_status = '{ms}'
+           AND cd_education_status = '{es}'
            AND ( p_channel_email = 'N'
                   OR p_channel_event = 'N' )
-           AND d_year = 2000
+           AND d_year = {year}
     GROUP  BY i_item_id
     ORDER  BY i_item_id
     LIMIT 100;
@@ -46,6 +58,17 @@ def duckdb_impl(run_config: RunConfig) -> str:
 
 def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     """Query 26."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=26,
+        qualification=run_config.qualification,
+    )
+
+    year = params["year"]
+    gen = params["gen"]
+    ms = params["ms"]
+    es = params["es"]
+
     # Load tables
     catalog_sales = get_data(
         run_config.dataset_path, "catalog_sales", run_config.suffix
@@ -62,11 +85,11 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         .join(customer_demographics, left_on="cs_bill_cdemo_sk", right_on="cd_demo_sk")
         .join(promotion, left_on="cs_promo_sk", right_on="p_promo_sk")
         .filter(
-            (pl.col("cd_gender") == "F")
-            & (pl.col("cd_marital_status") == "W")
-            & (pl.col("cd_education_status") == "Secondary")
+            (pl.col("cd_gender") == gen)
+            & (pl.col("cd_marital_status") == ms)
+            & (pl.col("cd_education_status") == es)
             & ((pl.col("p_channel_email") == "N") | (pl.col("p_channel_event") == "N"))
-            & (pl.col("d_year") == 2000)
+            & (pl.col("d_year") == year)
         )
         .group_by("i_item_id")
         .agg(

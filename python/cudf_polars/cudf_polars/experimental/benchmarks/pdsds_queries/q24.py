@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
 from cudf_polars.experimental.benchmarks.utils import get_data
 
 if TYPE_CHECKING:
@@ -18,7 +19,17 @@ if TYPE_CHECKING:
 
 def duckdb_impl(run_config: RunConfig) -> str:
     """Query 24."""
-    return """
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=24,
+        qualification=run_config.qualification,
+    )
+
+    market = params["market"]
+    color = params["color"][0]  # Use first color
+    amountone = params["amountone"]
+
+    return f"""
         WITH ssales AS
         (SELECT c_last_name,
                 c_first_name,
@@ -30,7 +41,7 @@ def duckdb_impl(run_config: RunConfig) -> str:
                 i_manager_id,
                 i_units,
                 i_size,
-                sum(ss_net_paid) netpaid
+                sum({amountone}) netpaid
         FROM store_sales,
                 store_returns,
                 store,
@@ -45,7 +56,7 @@ def duckdb_impl(run_config: RunConfig) -> str:
             AND c_current_addr_sk = ca_address_sk
             AND c_birth_country <> upper(ca_country)
             AND s_zip = ca_zip
-            AND s_market_id=8
+            AND s_market_id={market}
         GROUP BY c_last_name,
                     c_first_name,
                     s_store_name,
@@ -61,7 +72,7 @@ def duckdb_impl(run_config: RunConfig) -> str:
             s_store_name,
             sum(netpaid) paid
         FROM ssales
-        WHERE i_color = 'peach'
+        WHERE i_color = '{color}'
         GROUP BY c_last_name,
                 c_first_name,
                 s_store_name
@@ -76,6 +87,16 @@ def duckdb_impl(run_config: RunConfig) -> str:
 
 def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     """Query 24."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=24,
+        qualification=run_config.qualification,
+    )
+
+    market = params["market"]
+    color = params["color"][0]  # Use first color
+    amountone = params["amountone"]
+
     store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
     store_returns = get_data(
         run_config.dataset_path, "store_returns", run_config.suffix
@@ -100,7 +121,7 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         .filter(
             (pl.col("c_birth_country") != pl.col("ca_country").str.to_uppercase())
             & (pl.col("s_zip") == pl.col("ca_zip"))
-            & (pl.col("s_market_id") == 8)
+            & (pl.col("s_market_id") == market)
         )
         .group_by(
             [
@@ -116,7 +137,7 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
                 "i_size",
             ]
         )
-        .agg(pl.col("ss_net_paid").sum().alias("netpaid"))
+        .agg(pl.col(amountone).sum().alias("netpaid"))
     )
 
     threshold_table = ssales.select(
@@ -124,7 +145,7 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     )
 
     return (
-        ssales.filter(pl.col("i_color") == "peach")
+        ssales.filter(pl.col("i_color") == color)
         .group_by(["c_last_name", "c_first_name", "s_store_name"])
         .agg(pl.col("netpaid").sum().alias("paid"))
         .join(threshold_table, how="cross")

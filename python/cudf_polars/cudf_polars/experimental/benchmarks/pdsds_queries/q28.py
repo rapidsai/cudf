@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
 from cudf_polars.experimental.benchmarks.utils import get_data
 
 if TYPE_CHECKING:
@@ -17,56 +18,66 @@ if TYPE_CHECKING:
 
 def duckdb_impl(run_config: RunConfig) -> str:
     """Query 28."""
-    return """
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=28,
+        qualification=run_config.qualification,
+    )
+
+    lp = params["listprice"]
+    ca = params["couponamt"]
+    wc = params["wholesalecost"]
+
+    return f"""
     SELECT *
     FROM   (SELECT Avg(ss_list_price)            B1_LP,
                    Count(ss_list_price)          B1_CNT,
                    Count(DISTINCT ss_list_price) B1_CNTD
             FROM   store_sales
             WHERE  ss_quantity BETWEEN 0 AND 5
-                   AND ( ss_list_price BETWEEN 18 AND 18 + 10
-                          OR ss_coupon_amt BETWEEN 1939 AND 1939 + 1000
-                          OR ss_wholesale_cost BETWEEN 34 AND 34 + 20 )) B1,
+                   AND ( ss_list_price BETWEEN {lp[0]} AND {lp[0]} + 10
+                          OR ss_coupon_amt BETWEEN {ca[0]} AND {ca[0]} + 1000
+                          OR ss_wholesale_cost BETWEEN {wc[0]} AND {wc[0]} + 20 )) B1,
            (SELECT Avg(ss_list_price)            B2_LP,
                    Count(ss_list_price)          B2_CNT,
                    Count(DISTINCT ss_list_price) B2_CNTD
             FROM   store_sales
             WHERE  ss_quantity BETWEEN 6 AND 10
-                   AND ( ss_list_price BETWEEN 1 AND 1 + 10
-                          OR ss_coupon_amt BETWEEN 35 AND 35 + 1000
-                          OR ss_wholesale_cost BETWEEN 50 AND 50 + 20 )) B2,
+                   AND ( ss_list_price BETWEEN {lp[1]} AND {lp[1]} + 10
+                          OR ss_coupon_amt BETWEEN {ca[1]} AND {ca[1]} + 1000
+                          OR ss_wholesale_cost BETWEEN {wc[1]} AND {wc[1]} + 20 )) B2,
            (SELECT Avg(ss_list_price)            B3_LP,
                    Count(ss_list_price)          B3_CNT,
                    Count(DISTINCT ss_list_price) B3_CNTD
             FROM   store_sales
             WHERE  ss_quantity BETWEEN 11 AND 15
-                   AND ( ss_list_price BETWEEN 91 AND 91 + 10
-                          OR ss_coupon_amt BETWEEN 1412 AND 1412 + 1000
-                          OR ss_wholesale_cost BETWEEN 17 AND 17 + 20 )) B3,
+                   AND ( ss_list_price BETWEEN {lp[2]} AND {lp[2]} + 10
+                          OR ss_coupon_amt BETWEEN {ca[2]} AND {ca[2]} + 1000
+                          OR ss_wholesale_cost BETWEEN {wc[2]} AND {wc[2]} + 20 )) B3,
            (SELECT Avg(ss_list_price)            B4_LP,
                    Count(ss_list_price)          B4_CNT,
                    Count(DISTINCT ss_list_price) B4_CNTD
             FROM   store_sales
             WHERE  ss_quantity BETWEEN 16 AND 20
-                   AND ( ss_list_price BETWEEN 9 AND 9 + 10
-                          OR ss_coupon_amt BETWEEN 5270 AND 5270 + 1000
-                          OR ss_wholesale_cost BETWEEN 29 AND 29 + 20 )) B4,
+                   AND ( ss_list_price BETWEEN {lp[3]} AND {lp[3]} + 10
+                          OR ss_coupon_amt BETWEEN {ca[3]} AND {ca[3]} + 1000
+                          OR ss_wholesale_cost BETWEEN {wc[3]} AND {wc[3]} + 20 )) B4,
            (SELECT Avg(ss_list_price)            B5_LP,
                    Count(ss_list_price)          B5_CNT,
                    Count(DISTINCT ss_list_price) B5_CNTD
             FROM   store_sales
             WHERE  ss_quantity BETWEEN 21 AND 25
-                   AND ( ss_list_price BETWEEN 45 AND 45 + 10
-                          OR ss_coupon_amt BETWEEN 826 AND 826 + 1000
-                          OR ss_wholesale_cost BETWEEN 5 AND 5 + 20 )) B5,
+                   AND ( ss_list_price BETWEEN {lp[4]} AND {lp[4]} + 10
+                          OR ss_coupon_amt BETWEEN {ca[4]} AND {ca[4]} + 1000
+                          OR ss_wholesale_cost BETWEEN {wc[4]} AND {wc[4]} + 20 )) B5,
            (SELECT Avg(ss_list_price)            B6_LP,
                    Count(ss_list_price)          B6_CNT,
                    Count(DISTINCT ss_list_price) B6_CNTD
             FROM   store_sales
             WHERE  ss_quantity BETWEEN 26 AND 30
-                   AND ( ss_list_price BETWEEN 174 AND 174 + 10
-                          OR ss_coupon_amt BETWEEN 5548 AND 5548 + 1000
-                          OR ss_wholesale_cost BETWEEN 42 AND 42 + 20 )) B6
+                   AND ( ss_list_price BETWEEN {lp[5]} AND {lp[5]} + 10
+                          OR ss_coupon_amt BETWEEN {ca[5]} AND {ca[5]} + 1000
+                          OR ss_wholesale_cost BETWEEN {wc[5]} AND {wc[5]} + 20 )) B6
     LIMIT 100;
     """
 
@@ -110,14 +121,90 @@ def make_block(
 
 def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     """Query 28."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=28,
+        qualification=run_config.qualification,
+    )
+
+    lp = params["listprice"]
+    ca = params["couponamt"]
+    wc = params["wholesalecost"]
+
     store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
 
-    b1 = make_block(store_sales, 18, 28, 1939, 2939, 34, 54, 0, 5, "B1")
-    b2 = make_block(store_sales, 1, 11, 35, 1035, 50, 70, 6, 10, "B2")
-    b3 = make_block(store_sales, 91, 101, 1412, 2412, 17, 37, 11, 15, "B3")
-    b4 = make_block(store_sales, 9, 19, 5270, 6270, 29, 49, 16, 20, "B4")
-    b5 = make_block(store_sales, 45, 55, 826, 1826, 5, 25, 21, 25, "B5")
-    b6 = make_block(store_sales, 174, 184, 5548, 6548, 42, 62, 26, 30, "B6")
+    b1 = make_block(
+        store_sales,
+        lp[0],
+        lp[0] + 10,
+        ca[0],
+        ca[0] + 1000,
+        wc[0],
+        wc[0] + 20,
+        0,
+        5,
+        "B1",
+    )
+    b2 = make_block(
+        store_sales,
+        lp[1],
+        lp[1] + 10,
+        ca[1],
+        ca[1] + 1000,
+        wc[1],
+        wc[1] + 20,
+        6,
+        10,
+        "B2",
+    )
+    b3 = make_block(
+        store_sales,
+        lp[2],
+        lp[2] + 10,
+        ca[2],
+        ca[2] + 1000,
+        wc[2],
+        wc[2] + 20,
+        11,
+        15,
+        "B3",
+    )
+    b4 = make_block(
+        store_sales,
+        lp[3],
+        lp[3] + 10,
+        ca[3],
+        ca[3] + 1000,
+        wc[3],
+        wc[3] + 20,
+        16,
+        20,
+        "B4",
+    )
+    b5 = make_block(
+        store_sales,
+        lp[4],
+        lp[4] + 10,
+        ca[4],
+        ca[4] + 1000,
+        wc[4],
+        wc[4] + 20,
+        21,
+        25,
+        "B5",
+    )
+    b6 = make_block(
+        store_sales,
+        lp[5],
+        lp[5] + 10,
+        ca[5],
+        ca[5] + 1000,
+        wc[5],
+        wc[5] + 20,
+        26,
+        30,
+        "B6",
+    )
 
     return (
         b1.join(b2, how="cross")

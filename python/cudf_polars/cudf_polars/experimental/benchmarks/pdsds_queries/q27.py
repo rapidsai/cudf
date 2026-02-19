@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
 from cudf_polars.experimental.benchmarks.utils import get_data
 
 if TYPE_CHECKING:
@@ -17,7 +18,21 @@ if TYPE_CHECKING:
 
 def duckdb_impl(run_config: RunConfig) -> str:
     """Query 27."""
-    return """
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=27,
+        qualification=run_config.qualification,
+    )
+
+    year = params["year"]
+    gen = params["gen"]
+    ms = params["ms"]
+    es = params["es"]
+    state = params["state"]
+
+    states_str = ", ".join(f"'{s}'" for s in state)
+
+    return f"""
     SELECT i_item_id,
                    s_state,
                    Grouping(s_state)   g_state,
@@ -34,12 +49,11 @@ def duckdb_impl(run_config: RunConfig) -> str:
            AND ss_item_sk = i_item_sk
            AND ss_store_sk = s_store_sk
            AND ss_cdemo_sk = cd_demo_sk
-           AND cd_gender = 'M'
-           AND cd_marital_status = 'D'
-           AND cd_education_status = 'College'
-           AND d_year = 2000
-           AND s_state IN ( 'TN', 'TN', 'TN', 'TN',
-                            'TN', 'TN' )
+           AND cd_gender = '{gen}'
+           AND cd_marital_status = '{ms}'
+           AND cd_education_status = '{es}'
+           AND d_year = {year}
+           AND s_state IN ( {states_str} )
     GROUP  BY rollup ( i_item_id, s_state )
     ORDER  BY i_item_id,
               s_state
@@ -82,6 +96,18 @@ def level(  # noqa: D103
 
 def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     """Query 27."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=27,
+        qualification=run_config.qualification,
+    )
+
+    year = params["year"]
+    gen = params["gen"]
+    ms = params["ms"]
+    es = params["es"]
+    state = params["state"]
+
     store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
     customer_demographics = get_data(
         run_config.dataset_path, "customer_demographics", run_config.suffix
@@ -96,11 +122,11 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         .join(store, left_on="ss_store_sk", right_on="s_store_sk")
         .join(customer_demographics, left_on="ss_cdemo_sk", right_on="cd_demo_sk")
         .filter(
-            (pl.col("cd_gender") == "M")
-            & (pl.col("cd_marital_status") == "D")
-            & (pl.col("cd_education_status") == "College")
-            & (pl.col("d_year") == 2000)
-            & (pl.col("s_state").is_in(["TN"]))
+            (pl.col("cd_gender") == gen)
+            & (pl.col("cd_marital_status") == ms)
+            & (pl.col("cd_education_status") == es)
+            & (pl.col("d_year") == year)
+            & (pl.col("s_state").is_in(state))
         )
     )
 

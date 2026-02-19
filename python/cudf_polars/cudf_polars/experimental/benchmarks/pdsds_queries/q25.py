@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
 from cudf_polars.experimental.benchmarks.utils import get_data
 
 if TYPE_CHECKING:
@@ -17,14 +18,23 @@ if TYPE_CHECKING:
 
 def duckdb_impl(run_config: RunConfig) -> str:
     """Query 25."""
-    return """
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=25,
+        qualification=run_config.qualification,
+    )
+
+    year = params["year"]
+    agg = params["agg"]
+
+    return f"""
     SELECT i_item_id,
                    i_item_desc,
                    s_store_id,
                    s_store_name,
-                   Max(ss_net_profit) AS store_sales_profit,
-                   Max(sr_net_loss)   AS store_returns_loss,
-                   Max(cs_net_profit) AS catalog_sales_profit
+                   {agg}(ss_net_profit) AS store_sales_profit,
+                   {agg}(sr_net_loss)   AS store_returns_loss,
+                   {agg}(cs_net_profit) AS catalog_sales_profit
     FROM   store_sales,
            store_returns,
            catalog_sales,
@@ -34,7 +44,7 @@ def duckdb_impl(run_config: RunConfig) -> str:
            store,
            item
     WHERE  d1.d_moy = 4
-           AND d1.d_year = 2001
+           AND d1.d_year = {year}
            AND d1.d_date_sk = ss_sold_date_sk
            AND i_item_sk = ss_item_sk
            AND s_store_sk = ss_store_sk
@@ -43,12 +53,12 @@ def duckdb_impl(run_config: RunConfig) -> str:
            AND ss_ticket_number = sr_ticket_number
            AND sr_returned_date_sk = d2.d_date_sk
            AND d2.d_moy BETWEEN 4 AND 10
-           AND d2.d_year = 2001
+           AND d2.d_year = {year}
            AND sr_customer_sk = cs_bill_customer_sk
            AND sr_item_sk = cs_item_sk
            AND cs_sold_date_sk = d3.d_date_sk
            AND d3.d_moy BETWEEN 4 AND 10
-           AND d3.d_year = 2001
+           AND d3.d_year = {year}
     GROUP  BY i_item_id,
               i_item_desc,
               s_store_id,
@@ -63,6 +73,18 @@ def duckdb_impl(run_config: RunConfig) -> str:
 
 def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     """Query 25."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=25,
+        qualification=run_config.qualification,
+    )
+
+    year = params["year"]
+    agg = params["agg"]
+
+    # Map SQL aggregation functions to Polars method names
+    polars_agg = "mean" if agg == "avg" else "std" if agg == "stddev_samp" else agg
+
     store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
     store_returns = get_data(
         run_config.dataset_path, "store_returns", run_config.suffix
@@ -103,18 +125,24 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         .join(d3, left_on="cs_sold_date_sk", right_on="d3_date_sk")
         .filter(
             (pl.col("d1_moy") == 4)
-            & (pl.col("d1_year") == 2001)
+            & (pl.col("d1_year") == year)
             & (pl.col("d2_moy").is_between(4, 10))
-            & (pl.col("d2_year") == 2001)
+            & (pl.col("d2_year") == year)
             & (pl.col("d3_moy").is_between(4, 10))
-            & (pl.col("d3_year") == 2001)
+            & (pl.col("d3_year") == year)
         )
         .group_by(["i_item_id", "i_item_desc", "s_store_id", "s_store_name"])
         .agg(
             [
-                pl.col("ss_net_profit").max().alias("store_sales_profit"),
-                pl.col("sr_net_loss").max().alias("store_returns_loss"),
-                pl.col("cs_net_profit").max().alias("catalog_sales_profit"),
+                getattr(pl.col("ss_net_profit"), polars_agg)().alias(
+                    "store_sales_profit"
+                ),
+                getattr(pl.col("sr_net_loss"), polars_agg)().alias(
+                    "store_returns_loss"
+                ),
+                getattr(pl.col("cs_net_profit"), polars_agg)().alias(
+                    "catalog_sales_profit"
+                ),
             ]
         )
         .sort(["i_item_id", "i_item_desc", "s_store_id", "s_store_name"])
