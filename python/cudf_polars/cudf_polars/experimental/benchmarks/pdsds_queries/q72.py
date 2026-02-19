@@ -195,7 +195,6 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
             [
                 pl.col("no_promo_flag").sum().alias("no_promo"),
                 pl.col("promo_flag").sum().alias("promo"),
-                # Cast -> Int64 to match DuckDB
                 pl.len().alias("total_cnt"),
             ]
         )

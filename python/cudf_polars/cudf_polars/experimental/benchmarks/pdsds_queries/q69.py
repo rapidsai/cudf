@@ -151,7 +151,6 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         )
         .agg(
             [
-                # Cast -> Int64 to match DuckDB
                 pl.len().alias("cnt1"),
                 pl.len().alias("cnt2"),
                 pl.len().alias("cnt3"),
