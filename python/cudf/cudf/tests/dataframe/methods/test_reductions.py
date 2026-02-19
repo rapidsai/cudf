@@ -1,11 +1,9 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
-import cupy as cp
 import numpy as np
 import pandas as pd
 import pytest
-from packaging import version
 
 import cudf
 from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
@@ -272,26 +270,8 @@ def test_dataframe_axis1_unsupported_ops(op):
             "y": [np.nan, np.nan, np.nan],
             "z": [np.nan, np.nan, np.nan],
         },
-        pytest.param(
-            {"x": [], "y": [], "z": []},
-            marks=pytest.mark.xfail(
-                condition=version.parse("11")
-                <= version.parse(cp.__version__)
-                < version.parse("11.1"),
-                reason="Zero-sized array passed to cupy reduction, "
-                "https://github.com/cupy/cupy/issues/6937",
-            ),
-        ),
-        pytest.param(
-            {"x": []},
-            marks=pytest.mark.xfail(
-                condition=version.parse("11")
-                <= version.parse(cp.__version__)
-                < version.parse("11.1"),
-                reason="Zero-sized array passed to cupy reduction, "
-                "https://github.com/cupy/cupy/issues/6937",
-            ),
-        ),
+        {"x": [], "y": [], "z": []},
+        {"x": []},
     ],
 )
 @pytest.mark.parametrize("axis", [0, 1])
