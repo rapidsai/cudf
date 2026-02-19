@@ -214,11 +214,11 @@ class equality_literals_collector : public ast::detail::expression_transformer {
  * @brief Extracts column reference, literal, operator, and operator arity from an operation
  * expression
  *
- * @param operands Operands to extract
- * @param input_operator Input operator
- * @param operator_arity Operator arity
+ * @param expr Input operation expression
+ *
  * @return Tuple of column reference pointer, literal pointer, operator, and operator arity
  */
 [[nodiscard]] std::tuple<ast::column_reference const*, ast::literal const*, ast::ast_operator, int>
 extract_operands_and_operator(ast::operation const& expr);
+
 }  // namespace cudf::io::parquet::detail

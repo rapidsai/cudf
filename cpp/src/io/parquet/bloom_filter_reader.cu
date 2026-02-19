@@ -204,6 +204,14 @@ class bloom_filter_expression_converter : public equality_literals_collector {
     auto const [col_ref, literal, op, operator_arity] = extract_operands_and_operator(expr);
 
     if (col_ref != nullptr) {
+      col_ref->accept(*this);
+
+      // Propagate the `_always_true` as expression to its unary operator parent
+      if (operator_arity == 1) {
+        _bloom_filter_expr.push(ast::operation{ast_operator::IDENTITY, *_always_true});
+        return *_always_true;
+      }
+
       if (op == ast_operator::EQUAL) {
         // Search the literal in this input column's equality literals list and add to the offset.
         auto const col_idx            = col_ref->get_column_index();

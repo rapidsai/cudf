@@ -1988,7 +1988,9 @@ std::vector<Type> aggregate_reader_metadata::get_parquet_types(
   auto const src_iter = std::find_if(row_group_indices.begin(),
                                      row_group_indices.end(),
                                      [](auto const& rg) { return rg.size() > 0; });
-  CUDF_EXPECTS(src_iter != row_group_indices.end(), "");
+  CUDF_EXPECTS(src_iter != row_group_indices.end(),
+               "Cannot determine Parquet types as no source has any selected row groups.",
+               std::invalid_argument);
 
   // Source index
   auto const src_index = std::distance(row_group_indices.begin(), src_iter);
