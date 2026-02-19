@@ -126,8 +126,8 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     )
     item = get_data(run_config.dataset_path, "item", run_config.suffix)
 
-    color_item_ids_lf = (
-        item.filter(pl.col("i_color").is_in(colors)).select(["i_item_id"]).unique()
+    color_item_ids_lf = item.filter(pl.col("i_color").is_in(colors)).select(
+        ["i_item_id"]
     )
 
     channels = [
