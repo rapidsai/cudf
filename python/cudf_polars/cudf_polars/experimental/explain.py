@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Self, TypeAlias
 
 import cudf_polars.dsl.expressions.binaryop
 import cudf_polars.dsl.expressions.literal
+from cudf_polars.dsl.expressions.base import NamedExpr
 from cudf_polars.dsl.ir import (
     Filter,
     GroupBy,
@@ -277,6 +278,7 @@ def _(ir: Scan) -> dict[str, Serializable]:
     return {
         "typ": ir.typ,
         "paths": [str(path) for path in ir.paths],
+        "predicate": _serialize_expr(ir.predicate) if ir.predicate else None,
     }
 
 
@@ -313,8 +315,10 @@ def _(ir: Sort) -> dict[str, Serializable]:
     }
 
 
-def _serialize_expr(expr: Expr) -> dict[str, Serializable]:
+def _serialize_expr(expr: Expr | NamedExpr) -> dict[str, Serializable]:
     match expr:
+        case NamedExpr(name=name, value=value):
+            return {"type": "NamedExpr", "name": name, "value": _serialize_expr(value)}
         case cudf_polars.dsl.expressions.base.Col(name=name):
             return {"type": "Col", "name": name}
         case cudf_polars.dsl.expressions.literal.Literal(value=value):
