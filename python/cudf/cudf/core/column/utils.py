@@ -5,9 +5,8 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Iterator
-from contextlib import AbstractContextManager, ExitStack
-from functools import wraps
-from typing import Any, Literal, cast
+from contextlib import ExitStack
+from typing import Any, Literal
 
 
 def _flatten_and_access(
@@ -25,9 +24,7 @@ def _flatten_and_access(
             access
         ):
             # Enter access context and yield the accessed object
-            accessed_obj = stack.enter_context(
-                cast(AbstractContextManager[Any], obj.access(**kwargs))
-            )
+            accessed_obj = stack.enter_context(obj.access(**kwargs))
             yield accessed_obj
         elif isinstance(obj, Iterable) and not isinstance(obj, (str, bytes)):
             # Recursively flatten sequences (but not strings)
@@ -99,68 +96,34 @@ class PylibcudfFunction:
     ) -> None:
         self._pylibcudf_function = pylibcudf_function
         self._dtype_policy = dtype_policy
-        self._mode = mode
+        self._mode: Literal["read", "write"] = mode
+
+    def _process(
+        self,
+        value: Any,
+        stack: ExitStack,
+        dtypes: list[Any],
+    ) -> Any:
+        from cudf.core.column.column import ColumnBase
+
+        if isinstance(value, ColumnBase):
+            accessed = stack.enter_context(
+                value.access(mode=self._mode, scope="internal")
+            )
+            dtypes.append(accessed.dtype)
+            return accessed.plc_column
+        return value
 
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
         from cudf.core.column.column import ColumnBase
 
-        columns = [arg for arg in args if isinstance(arg, ColumnBase)]
-        columns.extend(
-            value for value in kwargs.values() if isinstance(value, ColumnBase)
-        )
-        output_dtype = self._dtype_policy([column.dtype for column in columns])
-        if columns:
-            with access_columns(
-                *columns, mode=self._mode, scope="internal"
-            ) as accessed:
-                accessed_iter = iter(accessed)
-                args = tuple(
-                    next(accessed_iter) if isinstance(arg, ColumnBase) else arg
-                    for arg in args
-                )
-                kwargs = {
-                    key: (
-                        next(accessed_iter)
-                        if isinstance(value, ColumnBase)
-                        else value
-                    )
-                    for key, value in kwargs.items()
-                }
-                plc_args = tuple(
-                    arg.plc_column if isinstance(arg, ColumnBase) else arg
-                    for arg in args
-                )
-                plc_kwargs = {
-                    key: (
-                        value.plc_column
-                        if isinstance(value, ColumnBase)
-                        else value
-                    )
-                    for key, value in kwargs.items()
-                }
-                plc_result = self._pylibcudf_function(*plc_args, **plc_kwargs)
-        else:
-            plc_result = self._pylibcudf_function(*args, **kwargs)
+        dtypes: list[Any] = []
+        with ExitStack() as stack:
+            plc_args = tuple(self._process(arg, stack, dtypes) for arg in args)
+            plc_kwargs = {
+                key: self._process(value, stack, dtypes)
+                for key, value in kwargs.items()
+            }
+            plc_result = self._pylibcudf_function(*plc_args, **plc_kwargs)
+        output_dtype = self._dtype_policy(dtypes)
         return ColumnBase.create(plc_result, dtype=output_dtype)
-
-
-def pylibcudf_op(
-    pylibcudf_function: Callable[..., Any],
-    *,
-    dtype_policy: Callable[[list[Any]], Any],
-    mode: Literal["read", "write"] = "read",
-) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
-    def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
-        op = PylibcudfFunction(
-            pylibcudf_function,
-            dtype_policy=dtype_policy,
-            mode=mode,
-        )
-
-        @wraps(func)
-        def wrapper(*args: Any, **kwargs: Any) -> Any:
-            return op(*args, **kwargs)
-
-        return wrapper
-
-    return decorator

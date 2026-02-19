@@ -47,7 +47,7 @@ from cudf.core.buffer import (
     Buffer,
     as_buffer,
 )
-from cudf.core.column.utils import access_columns, pylibcudf_op
+from cudf.core.column.utils import access_columns
 from cudf.core.copy_types import GatherMap
 from cudf.core.dtype.validators import (
     is_dtype_obj_decimal,
@@ -1704,13 +1704,12 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             ColumnBase.create(plc_column, self.dtype),
         )
 
-    @pylibcudf_op(
-        plc.unary.is_valid,
-        dtype_policy=lambda _dtypes: np.dtype(np.bool_),
-    )
-    def is_valid(self) -> ColumnBase:  # type: ignore[empty-body]
+    def is_valid(self) -> ColumnBase:
         """Identify non-null values"""
-        pass
+        with self.access(mode="read", scope="internal"):
+            return ColumnBase.create(
+                plc.unary.is_valid(self.plc_column), np.dtype(np.bool_)
+            )
 
     def isnan(self) -> ColumnBase:
         """Identify NaN values in a Column."""
