@@ -572,7 +572,6 @@ def _file_sink_graph(
             sink.kind,
             sink.path,
             sink.options,
-            False,  # Never finalize in individual tasks
             None if i == 0 else (sink_name, i - 1),  # Writer state
             (child_name, i),
         )
