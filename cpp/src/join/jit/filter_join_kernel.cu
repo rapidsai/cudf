@@ -19,9 +19,7 @@
 #include <cudf/detail/operation-udf.hpp>
 // clang-format on
 
-namespace cudf {
-namespace join {
-namespace jit {
+namespace cudf::join::jit {
 
 // TODO: Create a JIT-compatible header for JoinNoMatch to avoid this duplication.
 // This must match the definition in cudf/join/join.hpp
@@ -68,6 +66,4 @@ CUDF_KERNEL void filter_join_kernel(cudf::jit::device_span<cudf::size_type const
   }
 }
 
-}  // namespace jit
-}  // namespace join
-}  // namespace cudf
+}  // namespace cudf::join::jit

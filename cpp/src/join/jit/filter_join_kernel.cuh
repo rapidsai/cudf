@@ -9,9 +9,7 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/span.hpp>
 
-namespace cudf {
-namespace join {
-namespace jit {
+namespace cudf::join::jit {
 
 /**
  * @brief JIT kernel for filtering join indices based on predicate
@@ -33,6 +31,4 @@ CUDF_KERNEL void filter_join_kernel(cudf::device_span<cudf::size_type const> lef
                                     bool* predicate_results,
                                     void* user_data);
 
-}  // namespace jit
-}  // namespace join
-}  // namespace cudf
+}  // namespace cudf::join::jit
