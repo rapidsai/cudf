@@ -121,7 +121,7 @@ def test_series_iter_error():
         TypeError,
         match=re.escape(
             f"{gs.__class__.__name__} object is not iterable. "
-            f"Consider using `.to_arrow()`, `.to_pandas()` or `.values_host` "
+            f"Consider using `.to_arrow()`, `.to_pandas()` or `.to_numpy()` "
             f"if you wish to iterate over the values."
         ),
     ):
@@ -131,7 +131,7 @@ def test_series_iter_error():
         TypeError,
         match=re.escape(
             f"{gs.__class__.__name__} object is not iterable. "
-            f"Consider using `.to_arrow()`, `.to_pandas()` or `.values_host` "
+            f"Consider using `.to_arrow()`, `.to_pandas()` or `.to_numpy()` "
             f"if you wish to iterate over the values."
         ),
     ):
@@ -141,7 +141,7 @@ def test_series_iter_error():
         TypeError,
         match=re.escape(
             f"{gs.__class__.__name__} object is not iterable. "
-            f"Consider using `.to_arrow()`, `.to_pandas()` or `.values_host` "
+            f"Consider using `.to_arrow()`, `.to_pandas()` or `.to_numpy()` "
             f"if you wish to iterate over the values."
         ),
     ):
@@ -405,7 +405,7 @@ def test_series_values_host_property(data):
     pds = pd.Series(data=data, dtype=None if data else float)
     gds = cudf.Series(data=data, dtype=None if data else float)
 
-    np.testing.assert_array_equal(pds.values, gds.values_host)
+    np.testing.assert_array_equal(pds.values, gds.to_numpy())
 
 
 @pytest.mark.parametrize(

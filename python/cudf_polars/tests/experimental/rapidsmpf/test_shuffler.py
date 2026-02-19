@@ -1,12 +1,20 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
 
 import pytest
+from rapidsmpf.streaming.cudf.channel_metadata import (
+    ChannelMetadata,
+    HashScheme,
+    Partitioning,
+)
 
 import polars as pl
 
+from cudf_polars.experimental.rapidsmpf.collectives.shuffle import (
+    _is_already_partitioned,
+)
 from cudf_polars.testing.asserts import (
     DEFAULT_CLUSTER,
     DEFAULT_RUNTIME,
@@ -192,3 +200,64 @@ def test_sort_stable_rapidsmpf_warns():
     q = df.sort(by=["y", "z"], maintain_order=True)
     with pytest.warns(UserWarning, match="Falling back to shuffle_method='tasks'."):
         assert_gpu_result_equal(q, engine=engine, check_row_order=True)
+
+
+def test_is_already_partitioned():
+    # Unit test for _is_already_partitioned helper
+    chunks = 4
+    columns = (0, 1)
+    modulus = 8
+
+    # Exact match: should return True
+    metadata_match = ChannelMetadata(
+        chunks,
+        partitioning=Partitioning(
+            inter_rank=HashScheme(columns, modulus),
+            local="inherit",
+        ),
+    )
+    assert _is_already_partitioned(metadata_match, columns, modulus) is True
+
+    # Different columns: should return False
+    metadata_diff_cols = ChannelMetadata(
+        chunks,
+        partitioning=Partitioning(
+            inter_rank=HashScheme((0,), modulus),
+            local="inherit",
+        ),
+    )
+    assert _is_already_partitioned(metadata_diff_cols, columns, modulus) is False
+
+    # Different local partitioning: should return False
+    metadata_diff_local = ChannelMetadata(
+        chunks,
+        partitioning=Partitioning(
+            inter_rank=HashScheme(columns, modulus),
+            local=None,
+        ),
+    )
+    assert _is_already_partitioned(metadata_diff_local, columns, modulus) is False
+
+    # Different modulus: should return False
+    metadata_diff_mod = ChannelMetadata(
+        chunks,
+        partitioning=Partitioning(
+            inter_rank=HashScheme(columns, 16),
+            local="inherit",
+        ),
+    )
+    assert _is_already_partitioned(metadata_diff_mod, columns, modulus) is False
+
+    # No partitioning: should return False
+    metadata_none = ChannelMetadata(chunks)
+    assert _is_already_partitioned(metadata_none, columns, modulus) is False
+
+    # Local not "inherit": should return False
+    metadata_local = ChannelMetadata(
+        chunks,
+        partitioning=Partitioning(
+            inter_rank=HashScheme(columns, modulus),
+            local=HashScheme((0,), 4),
+        ),
+    )
+    assert _is_already_partitioned(metadata_local, columns, modulus) is False

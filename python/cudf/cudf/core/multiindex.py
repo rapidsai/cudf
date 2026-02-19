@@ -25,6 +25,7 @@ from cudf.core.algorithms import factorize
 from cudf.core.column import access_columns
 from cudf.core.column.column import ColumnBase
 from cudf.core.column_accessor import ColumnAccessor
+from cudf.core.dtype.validators import is_dtype_obj_numeric
 from cudf.core.frame import Frame
 from cudf.core.index import (
     Index,
@@ -38,8 +39,8 @@ from cudf.errors import MixedTypeError
 from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
     SIZE_TYPE_DTYPE,
+    dtype_from_pylibcudf_column,
     is_column_like,
-    is_dtype_obj_numeric,
     is_pandas_nullable_extension_dtype,
 )
 from cudf.utils.performance_tracking import _performance_tracking
@@ -50,7 +51,7 @@ from cudf.utils.utils import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Generator, Hashable, MutableMapping
+    from collections.abc import Generator, Hashable, Iterable, MutableMapping
     from typing import Self
 
     import pyarrow as pa
@@ -232,7 +233,9 @@ class MultiIndex(Index):
                 and not is_pandas_nullable_extension_dtype(level.dtype)
             ):
                 result_col = result_col.fillna(np.nan)
-            source_data[i] = result_col._with_type_metadata(level.dtype)
+            source_data[i] = ColumnBase.create(
+                result_col.plc_column, level.dtype
+            )
 
         Frame.__init__(self, ColumnAccessor(source_data))
         self._levels = new_levels
@@ -1312,7 +1315,7 @@ class MultiIndex(Index):
 
     @_performance_tracking
     def to_numpy(self) -> np.ndarray:
-        return self.values_host
+        return self.to_pandas().values
 
     def to_flat_index(self):
         """
@@ -1331,6 +1334,10 @@ class MultiIndex(Index):
 
         Only the values in the MultiIndex will be returned.
 
+        .. deprecated:: 26.04
+            `values_host` is deprecated and will be removed in a future version.
+            Use `to_numpy()` instead.
+
         Returns
         -------
         out : numpy.ndarray
@@ -1344,11 +1351,17 @@ class MultiIndex(Index):
         ...         codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
         ...         names=["x", "y"],
         ...     )
-        >>> midx.values_host
+        >>> midx.values_host  # doctest: +SKIP
         array([(1, 1), (1, 5), (3, 2), (4, 2), (5, 1)], dtype=object)
-        >>> type(midx.values_host)
+        >>> type(midx.values_host)  # doctest: +SKIP
         <class 'numpy.ndarray'>
         """
+        warnings.warn(
+            "values_host is deprecated and will be removed in a future version. "
+            "Use to_numpy() instead.",
+            FutureWarning,
+            stacklevel=2,
+        )
         return self.to_pandas().values
 
     @property
@@ -1728,7 +1741,7 @@ class MultiIndex(Index):
                 level.to_pandas(nullable=nullable, arrow_type=arrow_type)
                 for level in self.levels
             ],
-            codes=[col.values_host for col in pd_codes],
+            codes=[col.to_numpy() for col in pd_codes],
             names=self.names,
         )
 
@@ -1993,8 +2006,12 @@ class MultiIndex(Index):
                 plc_tables[1],
                 plc.types.NullEquality.EQUAL,
             )
-            scatter_map = ColumnBase.from_pylibcudf(left_plc)
-            indices = ColumnBase.from_pylibcudf(right_plc)
+            scatter_map = ColumnBase.create(
+                left_plc, dtype=dtype_from_pylibcudf_column(left_plc)
+            )
+            indices = ColumnBase.create(
+                right_plc, dtype=dtype_from_pylibcudf_column(right_plc)
+            )
         result_series = cudf.Series._from_column(
             result._scatter_by_column(scatter_map, indices)
         )
@@ -2169,11 +2186,14 @@ class MultiIndex(Index):
         return midx
 
     @_performance_tracking
-    def _copy_type_metadata(self: Self, other: Self) -> Self:
-        res = super()._copy_type_metadata(other)
-        if isinstance(other, MultiIndex):
-            res._names = other._names
-        return res
+    def _from_columns_like_self(
+        self,
+        columns: list[column.ColumnBase],
+        column_names: Iterable[str] | None = None,
+    ):
+        result = super()._from_columns_like_self(columns, column_names)
+        result._names = self._names
+        return result
 
     @_performance_tracking
     def _split_columns_by_levels(

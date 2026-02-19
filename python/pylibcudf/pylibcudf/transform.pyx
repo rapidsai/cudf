@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from cython.operator cimport dereference
@@ -29,7 +29,9 @@ from .utils cimport _get_stream, _get_memory_resource
 
 __all__ = [
     "bools_to_mask",
+    "column_nans_to_nulls",
     "compute_column",
+    "compute_column_jit",
     "encode",
     "mask_to_bools",
     "nans_to_nulls",
@@ -71,6 +73,42 @@ cpdef tuple[gpumemoryview, int] nans_to_nulls(
         gpumemoryview(DeviceBuffer.c_from_unique_ptr(move(c_result.first), stream, mr)),
         c_result.second
     )
+
+
+cpdef Column column_nans_to_nulls(
+    Column input,
+    Stream stream=None,
+    DeviceMemoryResource mr=None,
+):
+    """Create a column with nans converted to nulls.
+
+    For details, see :cpp:func:`column_nans_to_nulls`.
+
+    Parameters
+    ----------
+    input : Column
+        Column to convert nans to nulls.
+    stream : Stream | None
+        CUDA stream on which to perform the operation.
+    mr : DeviceMemoryResource | None
+        Device memory resource used to allocate the returned column's device memory.
+
+    Returns
+    -------
+    Column
+        New column with nans converted to nulls.
+    """
+    cdef unique_ptr[column] c_result
+
+    stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
+
+    with nogil:
+        c_result = cpp_transform.column_nans_to_nulls(
+            input.view(), stream.view(), mr.get_mr()
+        )
+
+    return Column.from_libcudf(move(c_result), stream, mr)
 
 
 cpdef Column compute_column(

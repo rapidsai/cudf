@@ -46,6 +46,8 @@ cdef class ParquetReaderOptions:
     cpdef void set_num_rows(self, int64_t nrows)
     cpdef void set_skip_rows(self, int64_t skip_rows)
     cpdef void set_columns(self, list col_names)
+    cpdef void set_column_names(self, list col_names)
+    cpdef void set_column_indices(self, list col_indices)
     cpdef void set_filter(self, Expression filter)
     cpdef void set_source(self, SourceInfo src)
     cpdef bool is_enabled_use_jit_filter(self)
@@ -61,6 +63,8 @@ cdef class ParquetReaderOptionsBuilder:
     cpdef ParquetReaderOptionsBuilder use_arrow_schema(self, bool val)
     cpdef ParquetReaderOptionsBuilder filter(self, Expression filter)
     cpdef ParquetReaderOptionsBuilder columns(self, list col_names)
+    cpdef ParquetReaderOptionsBuilder column_names(self, list col_names)
+    cpdef ParquetReaderOptionsBuilder column_indices(self, list col_indices)
     cpdef ParquetReaderOptionsBuilder use_jit_filter(self, bool use_jit_filter)
     cpdef build(self)
 

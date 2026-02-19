@@ -3,11 +3,13 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include "cudf/detail/utilities/vector_factories.hpp"
+#include "sort_merge_join.hpp"
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/copying.hpp>
+#include <cudf/detail/algorithms/copy_if.cuh>
+#include <cudf/detail/algorithms/reduce.cuh>
 #include <cudf/detail/device_scalar.hpp>
 #include <cudf/detail/null_mask.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
@@ -35,6 +37,7 @@
 #include <cub/device/device_select.cuh>
 #include <cub/device/device_transform.cuh>
 #include <cuda/functional>
+#include <cuda/std/iterator>
 #include <cuda/std/tuple>
 #include <thrust/binary_search.h>
 #include <thrust/for_each.h>
@@ -129,43 +132,6 @@ cudf::detail::device_scalar<ScalarType> reduce(InputIt input,
   cub::DeviceReduce::Sum(
     temp_storage.data(), temp_storage_bytes, input, output.data(), num_items, stream.value());
   return output;
-}
-
-template <typename InputIt,
-          typename StencilIt,
-          typename OutputIt,
-          typename SelectOp,
-          typename ScalarType>
-cudf::detail::device_scalar<ScalarType> flagged_if(
-  InputIt input,
-  StencilIt stencil,
-  OutputIt output,
-  cudf::detail::device_scalar<ScalarType>&& num_selected_out,
-  size_type num_items,
-  SelectOp lambda,
-  rmm::cuda_stream_view stream)
-{
-  size_t temp_storage_bytes = 0;
-  cub::DeviceSelect::FlaggedIf(nullptr,
-                               temp_storage_bytes,
-                               input,
-                               stencil,
-                               output,
-                               num_selected_out.data(),
-                               num_items,
-                               lambda,
-                               stream.value());
-  rmm::device_buffer temp_storage(temp_storage_bytes, stream);
-  cub::DeviceSelect::FlaggedIf(temp_storage.data(),
-                               temp_storage_bytes,
-                               input,
-                               stencil,
-                               output,
-                               num_selected_out.data(),
-                               num_items,
-                               lambda,
-                               stream.value());
-  return num_selected_out;
 }
 
 template <typename InputIts, typename OutputIts, typename SizeIt>
@@ -299,12 +265,12 @@ merge<LargerIterator, SmallerIterator>::inner(rmm::cuda_stream_view stream,
   auto const count_matches = thrust::reduce(
     rmm::exec_policy_nosync(stream), count_matches_it, count_matches_it + larger_numrows);
   rmm::device_uvector<size_type> nonzero_matches(count_matches, stream, temp_mr);
-  thrust::copy_if(rmm::exec_policy_nosync(stream),
-                  thrust::make_counting_iterator(0),
-                  thrust::make_counting_iterator(larger_numrows),
-                  match_counts->begin(),
-                  nonzero_matches.begin(),
-                  cuda::std::identity{});
+  cudf::detail::copy_if(thrust::counting_iterator<size_type>(0),
+                        thrust::counting_iterator<size_type>(larger_numrows),
+                        match_counts->begin(),
+                        nonzero_matches.begin(),
+                        cuda::std::identity{},
+                        stream);
 
   // Use 64-bit prefix sums to handle large output sizes (> INT32_MAX rows)
   // The prefix sums can exceed INT32_MAX even though individual match counts are small
@@ -440,13 +406,12 @@ merge<LargerIterator, SmallerIterator>::left(rmm::cuda_stream_view stream,
   count_matches = reduce(count_matches_it, std::move(count_matches), larger_numrows, stream);
   auto const h_count_matches = count_matches.value(stream);
   rmm::device_uvector<size_type> nonzero_matches(h_count_matches, stream, temp_mr);
-  count_matches = flagged_if(cuda::counting_iterator(0),
-                             match_counts->begin(),
-                             nonzero_matches.begin(),
-                             std::move(count_matches),
-                             larger_numrows,
-                             cuda::std::identity{},
-                             stream);
+  cudf::detail::copy_if(cuda::counting_iterator<size_type>(0),
+                        cuda::counting_iterator<size_type>(larger_numrows),
+                        match_counts->begin(),
+                        nonzero_matches.begin(),
+                        cuda::std::identity{},
+                        stream);
 
   cudf::detail::device_scalar<int64_t> total_matches(stream, temp_mr);
   auto match_offsets =
@@ -467,13 +432,11 @@ merge<LargerIterator, SmallerIterator>::left(rmm::cuda_stream_view stream,
 
   // Fill in unmatched entries (left-join-only rows)
   // These rows exist in the larger table but have no matches in the smaller table
-  count_matches.set_value_async(left_join_only_matches, stream);
-  count_matches = flagged_if(
-    cuda::counting_iterator(0),
+  cudf::detail::copy_if(
+    cuda::counting_iterator<size_type>(0),
+    cuda::counting_iterator<size_type>(larger_numrows),
     match_counts->begin(),
     larger_indices.begin(),
-    std::move(count_matches),
-    larger_numrows,
     [] __device__(auto c) -> bool { return c == 0; },
     stream);
   cub::DeviceTransform::Fill(
@@ -563,6 +526,8 @@ merge<LargerIterator, SmallerIterator>::left(rmm::cuda_stream_view stream,
 
 }  // anonymous namespace
 
+namespace detail {
+
 void sort_merge_join::preprocessed_table::populate_nonnull_filter(rmm::cuda_stream_view stream)
 {
   auto table   = this->_table_view;
@@ -575,7 +540,8 @@ void sort_merge_join::preprocessed_table::populate_nonnull_filter(rmm::cuda_stre
   // an all-valid bitmask that is passed to subsequent operations. This bitmask
   // is updated if any of the nested struct/list children columns have nulls.
   if (validity_mask.is_empty())
-    validity_mask = create_null_mask(table.num_rows(), mask_state::ALL_VALID, stream, temp_mr);
+    validity_mask =
+      cudf::create_null_mask(table.num_rows(), mask_state::ALL_VALID, stream, temp_mr);
 
   // step 2: identify nulls at non-root levels
   for (size_type col_idx = 0; col_idx < table.num_columns(); col_idx++) {
@@ -589,12 +555,12 @@ void sort_merge_join::preprocessed_table::populate_nonnull_filter(rmm::cuda_stre
       rmm::device_uvector<int32_t> child_positions(offsets.size(), stream, temp_mr);
       auto unique_end = thrust::unique_by_key_copy(
         rmm::exec_policy_nosync(stream),
-        thrust::reverse_iterator(lcv.offsets_end()),
-        thrust::reverse_iterator(lcv.offsets_end()) + offsets.size(),
-        thrust::reverse_iterator(thrust::counting_iterator(offsets.size())),
-        thrust::reverse_iterator(offsets_subset.end()),
-        thrust::reverse_iterator(child_positions.end()));
-      auto subset_size   = cuda::std::distance(thrust::reverse_iterator(offsets_subset.end()),
+        cuda::std::reverse_iterator(lcv.offsets_end()),
+        cuda::std::reverse_iterator(lcv.offsets_end()) + offsets.size(),
+        cuda::std::reverse_iterator(thrust::counting_iterator(offsets.size())),
+        cuda::std::reverse_iterator(offsets_subset.end()),
+        cuda::std::reverse_iterator(child_positions.end()));
+      auto subset_size   = cuda::std::distance(cuda::std::reverse_iterator(offsets_subset.end()),
                                              cuda::std::get<0>(unique_end));
       auto subset_offset = offsets.size() - subset_size;
 
@@ -697,56 +663,66 @@ void sort_merge_join::preprocessed_table::compute_sorted_order(rmm::cuda_stream_
     cudf::sorted_order(_null_processed_table_view, column_order, null_precedence, stream, temp_mr);
 }
 
+sort_merge_join::preprocessed_table sort_merge_join::preprocessed_table::create(
+  table_view const& table,
+  null_equality compare_nulls,
+  sorted is_sorted,
+  rmm::cuda_stream_view stream)
+{
+  preprocessed_table result;
+  result._table_view = table;
+
+  if (compare_nulls == null_equality::EQUAL) {
+    result._null_processed_table_view = table;
+  } else {
+    // if a table has no nullable column, then there's no preprocessing to be done
+    if (has_nested_nulls(table)) {
+      result.preprocess_unprocessed_table(stream);
+    } else {
+      result._null_processed_table_view = table;
+    }
+  }
+
+  if (is_sorted == cudf::sorted::NO) { result.compute_sorted_order(stream); }
+
+  return result;
+}
+
 sort_merge_join::sort_merge_join(table_view const& right,
                                  sorted is_right_sorted,
                                  null_equality compare_nulls,
                                  rmm::cuda_stream_view stream)
+  : preprocessed_right{preprocessed_table::create(right, compare_nulls, is_right_sorted, stream)},
+    compare_nulls{compare_nulls}
 {
   cudf::scoped_range range{"sort_merge_join::sort_merge_join"};
   // Sanity checks
   CUDF_EXPECTS(right.num_columns() != 0,
                "Number of columns the keys table must be non-zero for a join",
                std::invalid_argument);
-
-  this->compare_nulls = compare_nulls;
-
-  // Preprocessing the right table
-  preprocessed_right._table_view = right;
-  if (compare_nulls == null_equality::EQUAL) {
-    preprocessed_right._null_processed_table_view = right;
-  } else {
-    // if a table has no nullable column, then there's no preprocessing to be done
-    auto is_right_nullable = has_nested_nulls(right);
-    if (is_right_nullable) {
-      preprocessed_right.preprocess_unprocessed_table(stream);
-    } else {
-      preprocessed_right._null_processed_table_view = right;
-    }
-  }
-  if (is_right_sorted == cudf::sorted::NO) { preprocessed_right.compute_sorted_order(stream); }
 }
 
 rmm::device_uvector<size_type> sort_merge_join::preprocessed_table::map_table_to_unprocessed(
-  rmm::cuda_stream_view stream)
+  rmm::cuda_stream_view stream) const
 {
   CUDF_EXPECTS(_validity_mask.has_value() && _num_nulls.has_value(), "Mapping is not possible");
   auto temp_mr                  = cudf::get_current_device_resource_ref();
   auto const table_mapping_size = _table_view.num_rows() - _num_nulls.value();
   rmm::device_uvector<size_type> table_mapping(table_mapping_size, stream, temp_mr);
-  cudf::detail::device_scalar<int64_t> d_table_mapping_size(table_mapping_size, stream, temp_mr);
-  flagged_if(cuda::counting_iterator(0),
-             cuda::counting_iterator(0),
-             table_mapping.begin(),
-             std::move(d_table_mapping_size),
-             _table_view.num_rows(),
-             is_row_valid{static_cast<bitmask_type const*>(_validity_mask.value().data())},
-             stream);
+  cudf::detail::copy_if(
+    cuda::counting_iterator<size_type>(0),
+    cuda::counting_iterator<size_type>(_table_view.num_rows()),
+    cuda::counting_iterator<size_type>(0),
+    table_mapping.begin(),
+    is_row_valid{static_cast<bitmask_type const*>(_validity_mask.value().data())},
+    stream);
   return table_mapping;
 }
 
-void sort_merge_join::postprocess_indices(device_span<size_type> smaller_indices,
+void sort_merge_join::postprocess_indices(preprocessed_table const& preprocessed_left,
+                                          device_span<size_type> smaller_indices,
                                           device_span<size_type> larger_indices,
-                                          rmm::cuda_stream_view stream)
+                                          rmm::cuda_stream_view stream) const
 {
   if (compare_nulls == null_equality::UNEQUAL) {
     // if a table has no nullable column, then there's no postprocessing to be done
@@ -772,10 +748,11 @@ void sort_merge_join::postprocess_indices(device_span<size_type> smaller_indices
 }
 
 template <typename MergeOperation>
-auto sort_merge_join::invoke_merge(table_view right_view,
+auto sort_merge_join::invoke_merge(preprocessed_table const& preprocessed_left,
+                                   table_view right_view,
                                    table_view left_view,
                                    MergeOperation&& op,
-                                   rmm::cuda_stream_view stream)
+                                   rmm::cuda_stream_view stream) const
 {
   auto has_right_sorting_order = preprocessed_right._null_processed_table_sorted_order.has_value();
   auto has_left_sorting_order  = preprocessed_left._null_processed_table_sorted_order.has_value();
@@ -803,7 +780,7 @@ auto sort_merge_join::invoke_merge(table_view right_view,
               stream);
     return op(obj);
   } else if (!has_right_sorting_order && has_left_sorting_order) {
-    // preprocessed_right sorted, preprocessed_left unsorted
+    // preprocessed_right unsorted, preprocessed_left sorted
     auto l_view = preprocessed_left._null_processed_table_sorted_order.value()->view();
     merge obj(right_view,
               thrust::counting_iterator(0),
@@ -830,7 +807,7 @@ std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
 sort_merge_join::inner_join(table_view const& left,
                             sorted is_left_sorted,
                             rmm::cuda_stream_view stream,
-                            rmm::device_async_resource_ref mr)
+                            rmm::device_async_resource_ref mr) const
 {
   cudf::scoped_range range{"sort_merge_join::inner_join"};
   // Sanity checks
@@ -841,27 +818,17 @@ sort_merge_join::inner_join(table_view const& left,
                "Number of columns must match for a join",
                std::invalid_argument);
 
-  // Preprocessing the left table
-  preprocessed_left._table_view = left;
-  if (compare_nulls == null_equality::EQUAL) {
-    preprocessed_left._null_processed_table_view = left;
-  } else {
-    // if a table has no nullable column, then there's no preprocessing to be done
-    auto is_left_nullable = has_nested_nulls(left);
-    if (is_left_nullable) {
-      preprocessed_left.preprocess_unprocessed_table(stream);
-    } else {
-      preprocessed_left._null_processed_table_view = left;
-    }
-  }
-  if (is_left_sorted == cudf::sorted::NO) { preprocessed_left.compute_sorted_order(stream); }
+  // Create preprocessed left table locally for thread safety
+  auto preprocessed_left = preprocessed_table::create(left, compare_nulls, is_left_sorted, stream);
 
   return invoke_merge(
+    preprocessed_left,
     preprocessed_right._null_processed_table_view,
     preprocessed_left._null_processed_table_view,
-    [this, stream, mr](auto& obj) {
+    [this, &preprocessed_left, stream, mr](auto& obj) {
       auto [preprocessed_right_indices, preprocessed_left_indices] = obj.inner(stream, mr);
-      postprocess_indices(*preprocessed_right_indices, *preprocessed_left_indices, stream);
+      postprocess_indices(
+        preprocessed_left, *preprocessed_right_indices, *preprocessed_left_indices, stream);
       return std::pair{std::move(preprocessed_left_indices), std::move(preprocessed_right_indices)};
     },
     stream);
@@ -872,7 +839,7 @@ std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
 sort_merge_join::left_join(table_view const& left,
                            sorted is_left_sorted,
                            rmm::cuda_stream_view stream,
-                           rmm::device_async_resource_ref mr)
+                           rmm::device_async_resource_ref mr) const
 {
   cudf::scoped_range range{"sort_merge_join::left_join"};
   // Sanity checks
@@ -883,31 +850,20 @@ sort_merge_join::left_join(table_view const& left,
                "Number of columns must match for a join",
                std::invalid_argument);
 
-  // Preprocessing the left table
-  preprocessed_left._table_view = left;
-  if (compare_nulls == null_equality::EQUAL) {
-    preprocessed_left._null_processed_table_view = left;
-  } else {
-    // if a table has no nullable column, then there's no preprocessing to be done
-    auto is_left_nullable = has_nested_nulls(left);
-    if (is_left_nullable) {
-      preprocessed_left.preprocess_unprocessed_table(stream);
-    } else {
-      preprocessed_left._null_processed_table_view = left;
-    }
-  }
-  if (is_left_sorted == cudf::sorted::NO) { preprocessed_left.compute_sorted_order(stream); }
+  // Create preprocessed left table locally for thread safety
+  auto preprocessed_left = preprocessed_table::create(left, compare_nulls, is_left_sorted, stream);
 
   return invoke_merge(
+    preprocessed_left,
     preprocessed_right._null_processed_table_view,
     preprocessed_left._null_processed_table_view,
-    [this, left, stream, mr](auto& obj) {
+    [this, &preprocessed_left, left, stream, mr](auto& obj) {
       auto [preprocessed_right_indices, preprocessed_left_indices] = obj.left(stream, mr);
-      postprocess_indices(*preprocessed_right_indices, *preprocessed_left_indices, stream);
+      postprocess_indices(
+        preprocessed_left, *preprocessed_right_indices, *preprocessed_left_indices, stream);
 
-      auto temp_mr = cudf::get_current_device_resource_ref();
-      // For left join with UNEQUAL nulls, we need to add back rows that were filtered out.
-      // Remaining configs can return directly
+      //  For left join with UNEQUAL nulls, we need to add back rows that were filtered out.
+      //  Remaining configs can return directly
       if (compare_nulls == null_equality::EQUAL ||
           !has_nested_nulls(preprocessed_left._table_view)) {
         return std::pair{std::move(preprocessed_left_indices),
@@ -948,15 +904,12 @@ sort_merge_join::left_join(table_view const& left,
       // Append filtered null rows with JoinNoMatch for right side
       auto const validity_mask =
         static_cast<bitmask_type const*>(preprocessed_left._validity_mask.value().data());
-      cudf::detail::device_scalar<size_type> d_num_filtered_nulls(
-        num_filtered_nulls, stream, temp_mr);
-      flagged_if(cuda::counting_iterator(0),
-                 cuda::counting_iterator(0),
-                 left_result_indices.begin() + preprocessed_left_indices->size(),
-                 std::move(d_num_filtered_nulls),
-                 left.num_rows(),
-                 is_row_null{validity_mask},
-                 stream);
+      cudf::detail::copy_if(cuda::counting_iterator<size_type>(0),
+                            cuda::counting_iterator<size_type>(left.num_rows()),
+                            cuda::counting_iterator<size_type>(0),
+                            left_result_indices.begin() + preprocessed_left_indices->size(),
+                            is_row_null{validity_mask},
+                            stream);
       cub::DeviceTransform::Fill(right_result_indices.begin() + preprocessed_right_indices->size(),
                                  num_filtered_nulls,
                                  JoinNoMatch,
@@ -969,11 +922,11 @@ sort_merge_join::left_join(table_view const& left,
     stream);
 }
 
-cudf::join_match_context sort_merge_join::inner_join_match_context(
+std::unique_ptr<cudf::join_match_context> sort_merge_join::inner_join_match_context(
   table_view const& left,
   sorted is_left_sorted,
   rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
+  rmm::device_async_resource_ref mr) const
 {
   cudf::scoped_range range{"sort_merge_join::inner_join_match_context"};
   // Sanity checks
@@ -984,25 +937,14 @@ cudf::join_match_context sort_merge_join::inner_join_match_context(
                "Number of columns must match for a join",
                std::invalid_argument);
 
-  // Preprocessing the left table
-  preprocessed_left._table_view = left;
-  if (compare_nulls == null_equality::EQUAL) {
-    preprocessed_left._null_processed_table_view = left;
-  } else {
-    // if a table has no nullable column, then there's no preprocessing to be done
-    auto is_left_nullable = has_nested_nulls(left);
-    if (is_left_nullable) {
-      preprocessed_left.preprocess_unprocessed_table(stream);
-    } else {
-      preprocessed_left._null_processed_table_view = left;
-    }
-  }
-  if (is_left_sorted == cudf::sorted::NO) { preprocessed_left.compute_sorted_order(stream); }
+  // Create preprocessed left table locally for thread safety
+  auto preprocessed_left = preprocessed_table::create(left, compare_nulls, is_left_sorted, stream);
 
   return invoke_merge(
+    preprocessed_left,
     preprocessed_right._null_processed_table_view,
     preprocessed_left._null_processed_table_view,
-    [this, left, stream, mr](auto& obj) {
+    [this, left, &preprocessed_left, stream, mr](auto& obj) mutable {
       auto matches_per_row = obj.matches_per_row(stream, cudf::get_current_device_resource_ref());
       matches_per_row->resize(matches_per_row->size() - 1, stream);
       if (compare_nulls == null_equality::UNEQUAL &&
@@ -1018,11 +960,13 @@ cudf::join_match_context sort_merge_join::inner_join_match_context(
                         matches_per_row->end(),
                         mapping.begin(),
                         unprocessed_matches_per_row.begin());
-        return join_match_context{
+        return std::make_unique<sort_merge_join_match_context>(
           left,
-          std::make_unique<rmm::device_uvector<size_type>>(std::move(unprocessed_matches_per_row))};
+          std::make_unique<rmm::device_uvector<size_type>>(std::move(unprocessed_matches_per_row)),
+          std::move(preprocessed_left));
       }
-      return join_match_context{left, std::move(matches_per_row)};
+      return std::make_unique<sort_merge_join_match_context>(
+        left, std::move(matches_per_row), std::move(preprocessed_left));
     },
     stream);
 }
@@ -1032,9 +976,15 @@ std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
 sort_merge_join::partitioned_inner_join(cudf::join_partition_context const& context,
                                         rmm::cuda_stream_view stream,
-                                        rmm::device_async_resource_ref mr)
+                                        rmm::device_async_resource_ref mr) const
 {
   cudf::scoped_range range{"sort_merge_join::partitioned_inner_join"};
+
+  // Extract preprocessed_left from the context
+  auto const& preprocessed_left =
+    static_cast<sort_merge_join_match_context const*>(context.left_table_context.get())
+      ->preprocessed_left;
+
   auto const left_partition_start_idx = context.left_start_idx;
   auto const left_partition_end_idx   = context.left_end_idx;
   auto null_processed_table_start_idx = left_partition_start_idx;
@@ -1060,6 +1010,7 @@ sort_merge_join::partitioned_inner_join(cudf::join_partition_context const& cont
                 stream)[0];
 
   auto [preprocessed_right_indices, preprocessed_left_indices] = invoke_merge(
+    preprocessed_left,
     preprocessed_right._null_processed_table_view,
     null_processed_left_partition,
     [this, left_partition_start_idx, stream, mr](auto& obj) { return obj.inner(stream, mr); },
@@ -1073,34 +1024,59 @@ sort_merge_join::partitioned_inner_join(cudf::join_partition_context const& cont
     [left_partition_start_idx] __device__(auto idx) { return left_partition_start_idx + idx; },
     stream.value());
   // Map from total null processed table to unprocessed table
-  postprocess_indices(*preprocessed_right_indices, *preprocessed_left_indices, stream);
+  postprocess_indices(
+    preprocessed_left, *preprocessed_right_indices, *preprocessed_left_indices, stream);
   return std::pair{std::move(preprocessed_left_indices), std::move(preprocessed_right_indices)};
 }
 
-std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
-          std::unique_ptr<rmm::device_uvector<size_type>>>
-sort_merge_inner_join(cudf::table_view const& left_keys,
-                      cudf::table_view const& right_keys,
-                      null_equality compare_nulls,
-                      rmm::cuda_stream_view stream,
-                      rmm::device_async_resource_ref mr)
+}  // namespace detail
+
+sort_merge_join::~sort_merge_join() = default;
+
+sort_merge_join::sort_merge_join(table_view const& right,
+                                 sorted is_right_sorted,
+                                 null_equality compare_nulls,
+                                 rmm::cuda_stream_view stream)
+  : _impl{std::make_unique<impl_type>(right, is_right_sorted, compare_nulls, stream)}
 {
-  cudf::scoped_range range{"sort_merge_inner_join"};
-  cudf::sort_merge_join obj(right_keys, sorted::NO, compare_nulls, stream);
-  return obj.inner_join(left_keys, sorted::NO, stream, mr);
 }
 
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
-merge_inner_join(cudf::table_view const& left_keys,
-                 cudf::table_view const& right_keys,
-                 null_equality compare_nulls,
-                 rmm::cuda_stream_view stream,
-                 rmm::device_async_resource_ref mr)
+sort_merge_join::inner_join(table_view const& left,
+                            sorted is_left_sorted,
+                            rmm::cuda_stream_view stream,
+                            rmm::device_async_resource_ref mr) const
 {
-  cudf::scoped_range range{"merge_inner_join"};
-  cudf::sort_merge_join obj(right_keys, sorted::YES, compare_nulls, stream);
-  return obj.inner_join(left_keys, sorted::YES, stream, mr);
+  return _impl->inner_join(left, is_left_sorted, stream, mr);
+}
+
+std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+          std::unique_ptr<rmm::device_uvector<size_type>>>
+sort_merge_join::left_join(table_view const& left,
+                           sorted is_left_sorted,
+                           rmm::cuda_stream_view stream,
+                           rmm::device_async_resource_ref mr) const
+{
+  return _impl->left_join(left, is_left_sorted, stream, mr);
+}
+
+std::unique_ptr<join_match_context> sort_merge_join::inner_join_match_context(
+  table_view const& left,
+  sorted is_left_sorted,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr) const
+{
+  return _impl->inner_join_match_context(left, is_left_sorted, stream, mr);
+}
+
+std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+          std::unique_ptr<rmm::device_uvector<size_type>>>
+sort_merge_join::partitioned_inner_join(cudf::join_partition_context const& context,
+                                        rmm::cuda_stream_view stream,
+                                        rmm::device_async_resource_ref mr) const
+{
+  return _impl->partitioned_inner_join(context, stream, mr);
 }
 
 }  // namespace cudf

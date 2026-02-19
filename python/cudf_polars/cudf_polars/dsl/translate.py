@@ -9,6 +9,7 @@ import functools
 import json
 from contextlib import AbstractContextManager, nullcontext
 from functools import singledispatch
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, assert_never
 
 import polars as pl
@@ -36,6 +37,8 @@ from cudf_polars.utils.versions import (
     POLARS_VERSION_LT_132,
     POLARS_VERSION_LT_133,
     POLARS_VERSION_LT_134,
+    POLARS_VERSION_LT_136,
+    POLARS_VERSION_LT_138,
     POLARS_VERSION_LT_1323,
 )
 
@@ -45,6 +48,33 @@ if TYPE_CHECKING:
     from cudf_polars.typing import NodeTraverser
 
 __all__ = ["Translator", "translate_named_expr"]
+
+
+def _check_compression(data: bytes) -> str | None:
+    # Vendored from Polars' SupportedCompression::check in
+    # polars-io/src/utils/compression.rs
+
+    # TODO: Make polars hand us the compression info in the plan
+    if len(data) < 4:
+        return None
+
+    # See https://en.wikipedia.org/wiki/List_of_file_signatures
+    # for the specific hex signatures.
+    if data[:2] == b"\x1f\x8b":
+        return "gzip"
+
+    if data[0] == 0x78 and data[1] in (0x01, 0x5E, 0x9C, 0xDA):
+        return "zlib"
+
+    if data[:4] == b"\x28\xb5\x2f\xfd":
+        return "zstd"
+
+    return None
+
+
+def _read_file_bytes(path: Path, num_bytes: int = 4) -> bytes:
+    with path.open("rb") as f:
+        return f.read(num_bytes)
 
 
 class Translator:
@@ -100,7 +130,7 @@ class Translator:
         # IR is versioned with major.minor, minor is bumped for backwards
         # compatible changes (e.g. adding new nodes), major is bumped for
         # incompatible changes (e.g. renaming nodes).
-        if (version := self.visitor.version()) >= (11, 1):
+        if (version := self.visitor.version()) >= (12, 1):
             e = NotImplementedError(
                 f"No support for polars IR {version=}"
             )  # pragma: no cover; no such version for now.
@@ -279,6 +309,18 @@ def _(node: plrs._ir_nodes.Scan, translator: Translator, schema: Schema) -> ir.I
             # Polars translates slice(10, None) -> (10, u32/64max)
             n_rows = -1
 
+    # TODO: Get compression info from Polars plan
+    if typ in ("csv", "ndjson"):
+        for p in paths:
+            if plc.io.SourceInfo._is_remote_uri(p):
+                continue
+            data = _read_file_bytes(Path(p))
+            compression = _check_compression(data)
+            if compression is not None:
+                raise NotImplementedError(
+                    f"Reading compressed {typ.upper()} files is not supported."
+                )
+
     return ir.Scan(
         schema,
         typ,
@@ -358,6 +400,11 @@ def _(node: plrs._ir_nodes.GroupBy, translator: Translator, schema: Schema) -> i
             node.options, schema, keys, original_aggs, translator.config_options, inp
         )
     else:
+        # TODO: Investigate whether polars can raise ahead of time
+        if not keys:
+            raise NotImplementedError(
+                "at least one key is required in a group_by operation"
+            )
         return rewrite_groupby(node, schema, keys, original_aggs, inp)
 
 
@@ -589,27 +636,52 @@ def _(node: plrs._ir_nodes.Sink, translator: Translator, schema: Schema) -> ir.I
     payload = json.loads(node.payload)
     try:
         file = payload["File"]
-        sink_kind_options = file["file_type"]
+        sink_kind_options = file[
+            "file_type" if POLARS_VERSION_LT_136 else "file_format"
+        ]
     except KeyError as err:  # pragma: no cover
         raise NotImplementedError("Unsupported payload structure") from err
     if isinstance(sink_kind_options, dict):
         if len(sink_kind_options) != 1:  # pragma: no cover; not sure if this can happen
             raise NotImplementedError("Sink options dict with more than one entry.")
-        sink_kind, options = next(iter(sink_kind_options.items()))
+        sink_kind, format_options = next(iter(sink_kind_options.items()))
     else:
         raise NotImplementedError(
             "Unsupported sink options structure"
         )  # pragma: no cover
 
-    sink_options = file.get("sink_options", {})
-    cloud_options = file.get("cloud_options")
+    if POLARS_VERSION_LT_138:  # pragma: no cover
+        sink_options = file.get("sink_options", {})
+        cloud_options = file.get("cloud_options")
+        options = format_options.copy()
+        options.update(sink_options)
+    else:
+        unified_args = file.get("unified_sink_args", {})
+        cloud_options = unified_args.get("cloud_options")
+        options = {} if sink_kind == "NDJson" else format_options.copy()
 
-    options.update(sink_options)
+        for k, v in unified_args.items():
+            if k in {"mkdir", "maintain_order", "sync_on_close"}:
+                options[k] = v
+
+    if sink_kind in ("Csv", "NDJson"):
+        compression = format_options.get("compression")
+        if compression and compression != "Uncompressed":
+            raise NotImplementedError(
+                f"{sink_kind} compression ('{compression}') is not supported."
+            )
+
+    if POLARS_VERSION_LT_132:  # pragma: no cover
+        path = file["target"]
+    elif POLARS_VERSION_LT_138:  # pragma: no cover
+        path = file["target"]["Local"]
+    else:
+        path = file["target"]["inner"]
 
     return ir.Sink(
         schema=schema,
         kind=sink_kind,
-        path=file["target"] if POLARS_VERSION_LT_132 else file["target"]["Local"],
+        path=path,
         parquet_options=translator.config_options.parquet_options,
         options=options,
         cloud_options=cloud_options,
@@ -651,6 +723,12 @@ def translate_named_expr(
     return expr.NamedExpr(
         n.output_name, translator.translate_expr(n=n.node, schema=schema)
     )
+
+
+def _contains_nested_lists(val: Any) -> bool:
+    if not val:
+        return False
+    return any(isinstance(_, list) for _ in val)
 
 
 @singledispatch
@@ -804,7 +882,13 @@ def _(
     dtype: DataType,
     schema: Schema,
 ) -> expr.Expr:
-    if isinstance(node.options, plrs._expr_nodes.RollingGroupOptions):
+    if isinstance(
+        node.options, plrs._expr_nodes.RollingGroupOptions
+    ):  # pragma: no cover; polars gives Aexpr::Rolling node now
+        # TODO: As of polars 1.36.0, rolling is represented as a Rolling expression node
+        # but is currently not implemented in the python node visitor. Once we support it,
+        # we should move this branch to separate translator dispatch function for the new node.
+
         # pl.col("a").rolling(...)
         with set_expr_context(translator, ExecutionContext.ROLLING):
             agg = translator.translate_expr(n=node.function, schema=schema)
@@ -914,7 +998,13 @@ def _(
         return expr.LiteralColumn(dtype, pl.Series._from_pyseries(node.value))
     if dtype.id() == plc.TypeId.LIST:  # pragma: no cover
         # TODO: Remove once pylibcudf.Scalar supports lists
+        if _contains_nested_lists(node.value):
+            return expr.LiteralColumn(
+                dtype, pl.Series([node.value], dtype=dtype.polars_type)
+            )
         return expr.LiteralColumn(dtype, pl.Series(node.value))
+    if dtype.id() == plc.TypeId.STRUCT:
+        raise NotImplementedError("Struct literals are not supported")
     return expr.Literal(dtype, node.value)
 
 

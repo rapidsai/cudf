@@ -20,29 +20,7 @@ if TYPE_CHECKING:
         StatsCollector,
     )
     from cudf_polars.experimental.rapidsmpf.utils import ChannelManager
-    from cudf_polars.utils.config import ConfigOptions
-
-
-class LowerState(TypedDict):
-    """
-    State used for lowering an IR node.
-
-    Parameters
-    ----------
-    config_options
-        GPUEngine configuration options.
-    stats
-        Statistics collector.
-    """
-
-    config_options: ConfigOptions
-    stats: StatsCollector
-
-
-LowerIRTransformer: TypeAlias = GenericTransformer[
-    "IR", "tuple[IR, MutableMapping[IR, PartitionInfo]]", LowerState
-]
-"""Protocol for Lowering IR nodes."""
+    from cudf_polars.utils.config import ConfigOptions, StreamingExecutor
 
 
 class FanoutInfo(NamedTuple):
@@ -80,7 +58,7 @@ class GenState(TypedDict):
     """
 
     context: Context
-    config_options: ConfigOptions
+    config_options: ConfigOptions[StreamingExecutor]
     partition_info: MutableMapping[IR, PartitionInfo]
     fanout_nodes: dict[IR, FanoutInfo]
     ir_context: IRExecutionContext
@@ -93,39 +71,6 @@ SubNetGenerator: TypeAlias = GenericTransformer[
     "IR", "tuple[dict[IR, list[Any]], dict[IR, ChannelManager]]", GenState
 ]
 """Protocol for Generating a streaming sub-network."""
-
-
-@singledispatch
-def lower_ir_node(
-    ir: IR, rec: LowerIRTransformer
-) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
-    """
-    Rewrite an IR node and extract partitioning information.
-
-    Parameters
-    ----------
-    ir
-        IR node to rewrite.
-    rec
-        Recursive LowerIRTransformer callable.
-
-    Returns
-    -------
-    new_ir, partition_info
-        The rewritten node, and a mapping from unique nodes in
-        the full IR graph to associated partitioning information.
-
-    Notes
-    -----
-    This function is distinct from the `lower_ir_node` function
-    in the `parallel` module, because the lowering logic for the
-    streaming runtime is different for some IR sub-classes.
-
-    See Also
-    --------
-    lower_ir_graph
-    """
-    raise AssertionError(f"Unhandled type {type(ir)}")  # pragma: no cover
 
 
 @singledispatch

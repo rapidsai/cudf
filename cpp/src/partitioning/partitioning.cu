@@ -26,9 +26,12 @@
 
 #include <cub/block/block_scan.cuh>
 #include <cub/device/device_histogram.cuh>
+#include <cuda/devices>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/scan.h>
 #include <thrust/transform.h>
+
+#include <stdexcept>
 
 namespace cudf {
 namespace {
@@ -466,6 +469,15 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition_table(
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
+  int dev;
+  CUDF_CUDA_TRY(cudaGetDevice(&dev));
+  // Algorithmic restriction in the kernel implementation, there's a histogram that holds one
+  // size_type value per partition in shared memory.
+  CUDF_EXPECTS(static_cast<std::size_t>(num_partitions) <
+                 cuda::device_attributes::max_shared_memory_per_block(cuda::device_ref{dev}) /
+                   sizeof(size_type),
+               "Requested number of partitions does not fit in shared memory.",
+               std::invalid_argument);
   auto const num_rows = table_to_hash.num_rows();
 
   bool const use_optimization{num_partitions <= THRESHOLD_FOR_OPTIMIZED_PARTITION_KERNEL};
@@ -474,8 +486,7 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition_table(
     use_optimization ? OPTIMIZED_ROWS_PER_THREAD : FALLBACK_ROWS_PER_THREAD;
   auto const rows_per_block = block_size * rows_per_thread;
 
-  // NOTE grid_size is non-const to workaround lambda capture bug in gcc 5.4
-  auto grid_size = util::div_rounding_up_safe(num_rows, rows_per_block);
+  std::size_t const grid_size = util::div_rounding_up_safe(num_rows, rows_per_block);
 
   // Allocate array to hold which partition each row belongs to
   auto row_partition_numbers = rmm::device_uvector<size_type>(num_rows, stream);

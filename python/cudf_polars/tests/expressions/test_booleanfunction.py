@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -239,6 +239,19 @@ def test_expr_is_in_empty_list():
     ldf = pl.LazyFrame({"a": [1, 2, 3, 4]})
     q = ldf.select(pl.col("a").is_in([]))
     assert_gpu_result_equal(q)
+
+
+@pytest.mark.parametrize(
+    "needles,haystack",
+    [
+        (pl.Series([0, 1, 2, 3, 4]), pl.Series([[3], [1]])),
+        (pl.Series([1, 2, 3]), pl.Series([[1, 2], [3, 4]])),
+        (pl.Series(["a", "b", "c", "d"]), pl.Series([["a"], ["b"]])),
+    ],
+)
+def test_is_in_shape_mismatch_raises(needles, haystack):
+    q = pl.LazyFrame().select(pl.lit(needles).is_in(haystack))
+    assert_ir_translation_raises(q, NotImplementedError)
 
 
 def test_boolean_is_close(request):
