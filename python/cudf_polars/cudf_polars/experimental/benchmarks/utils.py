@@ -18,6 +18,7 @@ import sys
 import textwrap
 import time
 import traceback
+import uuid
 import warnings
 from collections import defaultdict
 from datetime import UTC, datetime
@@ -58,6 +59,8 @@ except ImportError:
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
+
+    from cudf_polars.experimental.explain import SerializablePlan
 
 
 try:
@@ -237,8 +240,10 @@ class RunConfig:
         default_factory=PackageVersions.collect
     )
     records: dict[int, list[Record]] = dataclasses.field(default_factory=dict)
+    plans: dict[int, SerializablePlan] = dataclasses.field(default_factory=dict)
     dataset_path: Path
     scale_factor: int | float
+    qualification: bool = False
     shuffle: Literal["rapidsmpf", "tasks"] | None = None
     gather_shuffle_stats: bool = False
     broadcast_join_limit: int | None = None
@@ -250,6 +255,7 @@ class RunConfig:
         default_factory=lambda: datetime.now(UTC).isoformat()
     )
     hardware: HardwareInfo = dataclasses.field(default_factory=HardwareInfo.collect)
+    run_id: uuid.UUID = dataclasses.field(default_factory=uuid.uuid4)
     rmm_async: bool
     rapidsmpf_oom_protection: bool
     rapidsmpf_spill: bool
@@ -311,6 +317,9 @@ class RunConfig:
         name = args.query_set
         scale_factor = args.scale
 
+        if args.qualification and "pdsds" not in name:
+            raise ValueError("--qualification can only be used with PDS-DS benchmarks.")
+
         if scale_factor is None:
             if "pdsds" in name:
                 raise ValueError(
@@ -366,6 +375,7 @@ class RunConfig:
             broadcast_join_limit=args.broadcast_join_limit,
             dataset_path=path,
             scale_factor=scale_factor,
+            qualification=args.qualification,
             blocksize=args.blocksize,
             threads=args.threads,
             iterations=args.iterations,
@@ -389,6 +399,7 @@ class RunConfig:
     def serialize(self, engine: pl.GPUEngine | None) -> dict:
         """Serialize the run config to a dictionary."""
         result = dataclasses.asdict(self)
+        result["run_id"] = str(self.run_id)
 
         if engine is not None:
             config_options = ConfigOptions.from_polars_engine(engine)
@@ -507,27 +518,36 @@ def print_query_plan(
     args: argparse.Namespace,
     run_config: RunConfig,
     engine: None | pl.GPUEngine = None,
-) -> None:
+    *,
+    print_plans: bool = True,
+) -> tuple[str | None, str | None]:
     """Print the query plan."""
+    logical_plan = plan = None
     if run_config.executor == "cpu":
         if args.explain_logical:
-            print(f"\nQuery {q_id} - Logical plan\n")
-            print(q.explain())
+            logical_plan = q.explain()
         if args.explain:
-            print(f"\nQuery {q_id} - Physical plan\n")
-            print(q.show_graph(engine="streaming", plan_stage="physical"))
+            plan = q.show_graph(engine="streaming", plan_stage="physical")
     elif CUDF_POLARS_AVAILABLE:
         assert isinstance(engine, pl.GPUEngine)
         if args.explain_logical:
-            print(f"\nQuery {q_id} - Logical plan\n")
-            print(explain_query(q, engine, physical=False))
+            logical_plan = explain_query(q, engine, physical=False)
         if args.explain and run_config.executor == "streaming":
-            print(f"\nQuery {q_id} - Physical plan\n")
-            print(explain_query(q, engine))
+            plan = explain_query(q, engine)
     else:
         raise RuntimeError(
             "Cannot provide the logical or physical plan because cudf_polars is not installed."
         )
+
+    if print_plans:
+        if logical_plan:
+            print(f"\nQuery {q_id} - Logical plan\n")
+            print(logical_plan)
+        if plan:
+            print(f"\nQuery {q_id} - Physical plan\n")
+            print(plan)
+
+    return logical_plan, plan
 
 
 def initialize_dask_cluster(run_config: RunConfig, args: argparse.Namespace):  # type: ignore[no-untyped-def]
@@ -724,6 +744,11 @@ def parse_args(
         type=str,
         default=None,
         help="Dataset scale factor.",
+    )
+    parser.add_argument(
+        "--qualification",
+        action="store_true",
+        help="Use TPC-DS qualification parameters from specification Appendix B (PDS-DS only).",
     )
     parser.add_argument(
         "--suffix",
@@ -948,6 +973,12 @@ def parse_args(
         default=False,
     )
     parser.add_argument(
+        "--print-plans",
+        action=argparse.BooleanOptionalAction,
+        help="Print the query plans",
+        default=True,
+    )
+    parser.add_argument(
         "--validate",
         action=argparse.BooleanOptionalAction,
         default=False,
@@ -1052,6 +1083,7 @@ def run_polars(
         run_config = dataclasses.replace(run_config, n_workers=actual_n_workers)
 
     records: defaultdict[int, list[Record]] = defaultdict(list)
+    plans: dict[int, SerializablePlan] = {}
     engine: pl.GPUEngine | None = None
 
     if run_config.executor != "cpu":
@@ -1079,7 +1111,13 @@ def run_polars(
         except AttributeError as err:
             raise NotImplementedError(f"Query {q_id} not implemented.") from err
 
-        print_query_plan(q_id, q, args, run_config, engine)
+        print_query_plan(
+            q_id, q, args, run_config, engine, print_plans=args.print_plans
+        )
+        if (args.explain or args.explain_logical) and engine is not None:
+            from cudf_polars.experimental.explain import serialize_query
+
+            plans[q_id] = serialize_query(q, engine)
 
         records[q_id] = []
         for i in range(args.iterations):
@@ -1140,7 +1178,7 @@ def run_polars(
             )
             records[q_id].append(record)
 
-    run_config = dataclasses.replace(run_config, records=dict(records))
+    run_config = dataclasses.replace(run_config, records=dict(records), plans=plans)
 
     # consolidate logs
     if _HAS_STRUCTLOG and run_config.collect_traces:
@@ -1439,6 +1477,9 @@ def run_duckdb(
     run_config = dataclasses.replace(run_config, records=dict(records))
     if args.summarize:
         run_config.summarize()
+
+    args.output.write(json.dumps(run_config.serialize(engine=None)))
+    args.output.write("\n")
 
 
 def run_validate(
