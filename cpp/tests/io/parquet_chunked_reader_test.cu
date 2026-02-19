@@ -35,9 +35,8 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/iterator>
 #include <thrust/iterator/counting_iterator.h>
-
-#include <src/io/parquet/compact_protocol_reader.hpp>
 
 #include <fstream>
 #include <type_traits>
@@ -1199,7 +1198,7 @@ TEST_F(ParquetChunkedReaderInputLimitConstrainedTest, SingleFixedWidthColumn)
   auto test_filenames = input_limit_get_test_names(base_path);
 
   constexpr auto num_rows = 1'000'000;
-  auto iter1              = thrust::make_constant_iterator(15);
+  auto iter1              = cuda::make_constant_iterator(15);
   cudf::test::fixed_width_column_wrapper<double> col1(iter1, iter1 + num_rows);
   auto tbl = cudf::table_view{{col1}};
 

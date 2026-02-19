@@ -13,3 +13,4 @@ Io APIs
    io_writers
    io_datasources
    io_datasinks
+   io_utils
