@@ -35,7 +35,7 @@ repos:
     hooks:
       - id: mypy
         additional_dependencies: [
-          polars,
+          polars>=1.30.0,
           "numpy",
           pyarrow-stubs,
           pytest,

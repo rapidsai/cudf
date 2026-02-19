@@ -25,6 +25,7 @@ from cudf_polars.dsl.translate import Translator
 from cudf_polars.dsl.traversal import traversal
 from cudf_polars.experimental.base import ColumnStat
 from cudf_polars.experimental.parallel import lower_ir_graph
+from cudf_polars.experimental.shuffle import Shuffle
 from cudf_polars.experimental.statistics import (
     collect_statistics,
 )
@@ -292,6 +293,15 @@ def _(ir: Join) -> dict[str, Serializable]:
 def _(ir: GroupBy) -> dict[str, Serializable]:
     return {
         "keys": [ne.name for ne in ir.keys],
+    }
+
+
+@_serialize_properties.register
+def _(ir: Shuffle) -> dict[str, Serializable]:
+    return {
+        "keys": [ne.name for ne in ir.keys],
+        "shuffle_method": ir.shuffle_method,
+        "shuffler_insertion_method": ir.shuffler_insertion_method,
     }
 
 

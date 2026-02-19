@@ -654,6 +654,36 @@ def test_hstack_properties():
     assert node.properties == {"columns": ["a", "b"]}
 
 
+def test_shuffle_properties():
+    # Join with broadcast_join_limit=1 forces shuffle-based join, producing
+    # Shuffle nodes in the lowered plan.
+    left = pl.LazyFrame({"a": ["x", "y", "x"], "b": [1, 2, 3]})
+    right = pl.LazyFrame({"a": ["x", "y", "z"], "c": [4, 5, 6]})
+    q = left.join(right, on="a", how="inner")
+    engine = pl.GPUEngine(
+        executor="streaming",
+        raise_on_fail=True,
+        executor_options={
+            "max_rows_per_partition": 1,
+            "cluster": DEFAULT_CLUSTER,
+            "runtime": DEFAULT_RUNTIME,
+            "broadcast_join_limit": 1,
+            "shuffle_method": "tasks",
+            "shuffler_insertion_method": "insert_chunks",
+        },
+    )
+    dag = serialize_query(q, engine)
+
+    shuffle_nodes = [n for n in dag.nodes.values() if n.type == "Shuffle"]
+    assert len(shuffle_nodes) >= 1, "Expected at least one Shuffle node in lowered plan"
+    node = shuffle_nodes[0]
+    assert node.properties == {
+        "keys": ["a"],
+        "shuffle_method": "tasks",
+        "shuffler_insertion_method": "insert_chunks",
+    }
+
+
 @pytest.mark.skipif(
     DEFAULT_RUNTIME != "rapidsmpf",
     reason="Requires the rapidsmpf runtime",
