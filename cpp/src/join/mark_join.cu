@@ -11,6 +11,7 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/row_operator/equality.cuh>
 #include <cudf/detail/utilities/grid_1d.cuh>
+#include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/join/mark_join.hpp>
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/error.hpp>
@@ -168,7 +169,7 @@ __global__ __launch_bounds__(block_size) void mark_retrieve_kernel(
   auto const tid    = cudf::detail::grid_1d::global_thread_id<block_size>();
   auto const stride = cudf::detail::grid_1d::grid_stride<block_size>();
   auto const loop_bound =
-    ((static_cast<thread_index_type>(num_buckets) + stride - 1) / stride) * stride;
+    cudf::util::round_up_unsafe(static_cast<thread_index_type>(num_buckets), stride);
 
   for (thread_index_type i = tid; i < loop_bound; i += stride) {
     bool has_match = false;
@@ -258,7 +259,7 @@ void mark_join::clear_marks(rmm::cuda_stream_view stream)
   auto const num_buckets = static_cast<cudf::size_type>(storage_ref.num_buckets());
   if (num_buckets == 0) return;
 
-  auto const grid_size = (num_buckets + mark_block_size - 1) / mark_block_size;
+  auto const grid_size = cudf::util::div_rounding_up_unsafe(num_buckets, mark_block_size);
   clear_marks_kernel<mark_block_size><<<grid_size, mark_block_size, 0, stream.value()>>>(
     storage_ref, static_cast<slot_type>(masked_empty_sentinel), num_buckets);
 }
