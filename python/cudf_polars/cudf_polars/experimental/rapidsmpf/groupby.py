@@ -39,7 +39,7 @@ from cudf_polars.experimental.rapidsmpf.utils import (
     empty_table_chunk,
     evaluate_batch,
     evaluate_chunk,
-    is_partitioned_on_keys,
+    get_partitioning_moduli,
     process_children,
     recv_metadata,
     send_metadata,
@@ -654,11 +654,11 @@ async def keyed_reduction_actor(
         nranks = context.comm().nranks
         key_indices = _key_indices(ir, ir.children[0].schema)
         require_tree = _require_tree(ir)
-        partitioned_inter_rank, partitioned_local = is_partitioned_on_keys(
-            metadata_in,
-            key_indices,
-            nranks,
+        inter_rank_modulus, local_modulus = get_partitioning_moduli(
+            metadata_in, key_indices, nranks
         )
+        partitioned_inter_rank = bool(inter_rank_modulus)
+        partitioned_local = bool(local_modulus)
         fully_partitioned = partitioned_inter_rank and partitioned_local
         fallback_case = (
             # NOTE: This criteria means that we fell back

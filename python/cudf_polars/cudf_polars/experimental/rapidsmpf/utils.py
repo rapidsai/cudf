@@ -442,13 +442,13 @@ async def chunkwise_evaluate(
     await ch_out.drain(context)
 
 
-def is_partitioned_on_keys(
+def get_partitioning_moduli(
     metadata: ChannelMetadata,
     key_indices: tuple[int, ...],
     nranks: int,
-) -> tuple[bool, bool]:
+) -> tuple[int, int]:
     """
-    Check if data is already partitioned on the given keys.
+    Get the moduli if data is hash partitioned on the given keys.
 
     Parameters
     ----------
@@ -461,33 +461,45 @@ def is_partitioned_on_keys(
 
     Returns
     -------
-    already_partitioned_inter_rank
-        Whether the data is already partitioned between ranks.
-    already_partitioned_local
-        Whether the data is already partitioned within a rank.
+    inter_rank_modulus
+        Inter-rank modulus.
+        Return value of 0 means the data is not partitioned between ranks.
+    local_modulus
+        Local modulus.
+        Return value of 0 means the data is not partitioned within a rank.
     """
+    # NOTE: This function will need to be updated when we support
+    # order-based partitioning. For ordered data, we can return a
+    # "boundaries" TableChunk instead of a single integer (modulus).
+
+    trivial_inter_rank_modulus = 1 if nranks == 1 else 0
     if metadata.partitioning is None:
-        return nranks == 1, False
+        return trivial_inter_rank_modulus, 0
 
     inter_rank = metadata.partitioning.inter_rank
-    local = metadata.partitioning.local
-    if nranks > 1 and (
-        inter_rank is None
-        or inter_rank == "inherit"
-        or inter_rank.column_indices != key_indices
-    ):
-        return False, False
+    strict_inter_rank_modulus = (
+        inter_rank.modulus
+        if (
+            isinstance(inter_rank, HashScheme)
+            and inter_rank.column_indices == key_indices
+        )
+        else 0
+    )
+    inter_rank_modulus = strict_inter_rank_modulus or trivial_inter_rank_modulus
+    if not inter_rank_modulus:
+        # Local partitioning is meaningless without inter-rank partitioning
+        return 0, 0
 
-    # Inter-rank is partitioned on keys. Check local.
-    if local == "inherit":
-        # Local inherits from inter_rank, which is partitioned on keys
-        return True, True
-    elif local is not None and local.column_indices == key_indices:
-        # Local is explicitly partitioned on the same keys
-        return True, True
-    else:
-        # Inter-rank matches but local doesn't
-        return True, False
+    local = metadata.partitioning.local
+    local_modulus = (
+        local.modulus
+        if (isinstance(local, HashScheme) and local.column_indices == key_indices)
+        else 0
+    )
+    if local_modulus != metadata.local_count:
+        local_modulus = 0  # Local count is out of sync - Better to be safe
+    local_modulus = local_modulus or (inter_rank_modulus if local == "inherit" else 0)
+    return inter_rank_modulus, local_modulus
 
 
 class ChannelManager:
