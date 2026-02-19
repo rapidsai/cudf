@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
 from cudf_polars.experimental.benchmarks.utils import get_data
 
 if TYPE_CHECKING:
@@ -17,7 +18,19 @@ if TYPE_CHECKING:
 
 def duckdb_impl(run_config: RunConfig) -> str:
     """Query 68."""
-    return """
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=68,
+        qualification=run_config.qualification,
+    )
+
+    year = params["year"]
+    dep_cnt = params["dep_cnt"]
+    veh_cnt = params["veh_cnt"]
+    city_a = params["city_a"]
+    city_b = params["city_b"]
+
+    return f"""
     SELECT c_last_name,
                    c_first_name,
                    ca_city,
@@ -42,10 +55,10 @@ def duckdb_impl(run_config: RunConfig) -> str:
                    AND store_sales.ss_hdemo_sk = household_demographics.hd_demo_sk
                    AND store_sales.ss_addr_sk = customer_address.ca_address_sk
                    AND date_dim.d_dom BETWEEN 1 AND 2
-                   AND ( household_demographics.hd_dep_count = 8
-                          OR household_demographics.hd_vehicle_count = 3 )
-                   AND date_dim.d_year IN ( 1998, 1998 + 1, 1998 + 2 )
-                   AND store.s_city IN ( 'Fairview', 'Midway' )
+                   AND ( household_demographics.hd_dep_count = {dep_cnt}
+                          OR household_demographics.hd_vehicle_count = {veh_cnt} )
+                   AND date_dim.d_year IN ( {year}, {year} + 1, {year} + 2 )
+                   AND store.s_city IN ( '{city_a}', '{city_b}' )
             GROUP  BY ss_ticket_number,
                       ss_customer_sk,
                       ss_addr_sk,
@@ -63,6 +76,18 @@ def duckdb_impl(run_config: RunConfig) -> str:
 
 def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     """Query 68."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=68,
+        qualification=run_config.qualification,
+    )
+
+    year = params["year"]
+    dep_cnt = params["dep_cnt"]
+    veh_cnt = params["veh_cnt"]
+    city_a = params["city_a"]
+    city_b = params["city_b"]
+
     store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
     store = get_data(run_config.dataset_path, "store", run_config.suffix)
@@ -80,9 +105,12 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         .join(customer_address, left_on="ss_addr_sk", right_on="ca_address_sk")
         .filter(
             pl.col("d_dom").is_between(1, 2)
-            & ((pl.col("hd_dep_count") == 8) | (pl.col("hd_vehicle_count") == 3))
-            & pl.col("d_year").is_in([1998, 1999, 2000])
-            & pl.col("s_city").is_in(["Fairview", "Midway"])
+            & (
+                (pl.col("hd_dep_count") == dep_cnt)
+                | (pl.col("hd_vehicle_count") == veh_cnt)
+            )
+            & pl.col("d_year").is_in([year, year + 1, year + 2])
+            & pl.col("s_city").is_in([city_a, city_b])
         )
         .group_by(["ss_ticket_number", "ss_customer_sk", "ss_addr_sk", "ca_city"])
         .agg(

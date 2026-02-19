@@ -523,6 +523,62 @@
           "Williamson County",
           "Williamson County"
         ]
+      },
+      "64": {
+        "colors": [
+          "chartreuse",
+          "orange",
+          "firebrick",
+          "floral",
+          "medium",
+          "pink"
+        ]
+      },
+      "66": {
+        "year": 2000,
+        "smc": [
+          "DHL",
+          "PRIVATECARRIER"
+        ],
+        "sales_one": "ws_ext_sales_price",
+        "net_one": "ws_net_paid_inc_ship_tax",
+        "sales_two": "cs_sales_price",
+        "net_two": "cs_net_profit"
+      },
+      "69": {
+        "states": [
+          "IA",
+          "MN",
+          "MT"
+        ]
+      },
+      "72": {
+        "year": 2002,
+        "bp": "--",
+        "ms": "U"
+      },
+      "63": {
+        "dms": 1176
+      },
+      "65": {
+        "dms": 1176
+      },
+      "67": {
+        "dms": 1176
+      },
+      "68": {
+        "year": 2000,
+        "dep_cnt": 6,
+        "city_a": "Fairview",
+        "city_b": "Midway"
+      },
+      "70": {
+        "dms": 1176
+      },
+      "71": {
+        "year": 2001,
+        "month": 11,
+        "manager": 1
       }
     },
     "10": {
@@ -1047,6 +1103,62 @@
           "Walker County",
           "Ziebach County"
         ]
+      },
+      "64": {
+        "colors": [
+          "chartreuse",
+          "orange",
+          "firebrick",
+          "floral",
+          "medium",
+          "pink"
+        ]
+      },
+      "66": {
+        "year": 2000,
+        "smc": [
+          "DHL",
+          "PRIVATECARRIER"
+        ],
+        "sales_one": "ws_ext_sales_price",
+        "net_one": "ws_net_paid_inc_ship_tax",
+        "sales_two": "cs_sales_price",
+        "net_two": "cs_net_profit"
+      },
+      "69": {
+        "states": [
+          "IA",
+          "MN",
+          "MT"
+        ]
+      },
+      "72": {
+        "year": 2002,
+        "bp": "--",
+        "ms": "U"
+      },
+      "63": {
+        "dms": 1176
+      },
+      "65": {
+        "dms": 1176
+      },
+      "67": {
+        "dms": 1176
+      },
+      "68": {
+        "year": 2000,
+        "dep_cnt": 0,
+        "city_a": "Fairview",
+        "city_b": "Oak Grove"
+      },
+      "70": {
+        "dms": 1176
+      },
+      "71": {
+        "year": 2001,
+        "month": 11,
+        "manager": 1
       }
     },
     "50": {
@@ -1571,6 +1683,62 @@
           "Walker County",
           "Ziebach County"
         ]
+      },
+      "64": {
+        "colors": [
+          "chartreuse",
+          "orange",
+          "firebrick",
+          "floral",
+          "medium",
+          "pink"
+        ]
+      },
+      "66": {
+        "year": 2000,
+        "smc": [
+          "DHL",
+          "PRIVATECARRIER"
+        ],
+        "sales_one": "ws_ext_sales_price",
+        "net_one": "ws_net_paid_inc_ship_tax",
+        "sales_two": "cs_sales_price",
+        "net_two": "cs_net_profit"
+      },
+      "69": {
+        "states": [
+          "IA",
+          "MN",
+          "MT"
+        ]
+      },
+      "72": {
+        "year": 2002,
+        "bp": "--",
+        "ms": "U"
+      },
+      "63": {
+        "dms": 1176
+      },
+      "65": {
+        "dms": 1176
+      },
+      "67": {
+        "dms": 1176
+      },
+      "68": {
+        "year": 2000,
+        "dep_cnt": 5,
+        "city_a": "Fairview",
+        "city_b": "Five Points"
+      },
+      "70": {
+        "dms": 1176
+      },
+      "71": {
+        "year": 2001,
+        "month": 11,
+        "manager": 1
       }
     },
     "100": {
@@ -2095,6 +2263,62 @@
           "Daviess County",
           "Richland County"
         ]
+      },
+      "64": {
+        "colors": [
+          "chartreuse",
+          "orange",
+          "firebrick",
+          "floral",
+          "medium",
+          "pink"
+        ]
+      },
+      "66": {
+        "year": 2000,
+        "smc": [
+          "DHL",
+          "PRIVATECARRIER"
+        ],
+        "sales_one": "ws_ext_sales_price",
+        "net_one": "ws_net_paid_inc_ship_tax",
+        "sales_two": "cs_sales_price",
+        "net_two": "cs_net_profit"
+      },
+      "69": {
+        "states": [
+          "IA",
+          "MN",
+          "MT"
+        ]
+      },
+      "72": {
+        "year": 2002,
+        "bp": "--",
+        "ms": "U"
+      },
+      "63": {
+        "dms": 1176
+      },
+      "65": {
+        "dms": 1176
+      },
+      "67": {
+        "dms": 1176
+      },
+      "68": {
+        "year": 1999,
+        "dep_cnt": 7,
+        "city_a": "Centerville",
+        "city_b": "Oak Grove"
+      },
+      "70": {
+        "dms": 1176
+      },
+      "71": {
+        "year": 2001,
+        "month": 11,
+        "manager": 1
       }
     },
     "200": {
@@ -2619,6 +2843,62 @@
           "Walker County",
           "Ziebach County"
         ]
+      },
+      "64": {
+        "colors": [
+          "chartreuse",
+          "orange",
+          "firebrick",
+          "floral",
+          "medium",
+          "pink"
+        ]
+      },
+      "66": {
+        "year": 2000,
+        "smc": [
+          "DHL",
+          "PRIVATECARRIER"
+        ],
+        "sales_one": "ws_ext_sales_price",
+        "net_one": "ws_net_paid_inc_ship_tax",
+        "sales_two": "cs_sales_price",
+        "net_two": "cs_net_profit"
+      },
+      "69": {
+        "states": [
+          "IA",
+          "MN",
+          "MT"
+        ]
+      },
+      "72": {
+        "year": 2002,
+        "bp": "--",
+        "ms": "U"
+      },
+      "63": {
+        "dms": 1176
+      },
+      "65": {
+        "dms": 1176
+      },
+      "67": {
+        "dms": 1176
+      },
+      "68": {
+        "year": 1998,
+        "dep_cnt": 8,
+        "city_a": "Pleasant Hill",
+        "city_b": "Fairview"
+      },
+      "70": {
+        "dms": 1176
+      },
+      "71": {
+        "year": 2001,
+        "month": 11,
+        "manager": 1
       }
     },
     "400": {
@@ -3143,6 +3423,62 @@
           "Williamson County",
           "Ziebach County"
         ]
+      },
+      "64": {
+        "colors": [
+          "chartreuse",
+          "orange",
+          "firebrick",
+          "floral",
+          "medium",
+          "pink"
+        ]
+      },
+      "66": {
+        "year": 2000,
+        "smc": [
+          "DHL",
+          "PRIVATECARRIER"
+        ],
+        "sales_one": "ws_ext_sales_price",
+        "net_one": "ws_net_paid_inc_ship_tax",
+        "sales_two": "cs_sales_price",
+        "net_two": "cs_net_profit"
+      },
+      "69": {
+        "states": [
+          "IA",
+          "MN",
+          "MT"
+        ]
+      },
+      "72": {
+        "year": 2002,
+        "bp": "--",
+        "ms": "U"
+      },
+      "63": {
+        "dms": 1176
+      },
+      "65": {
+        "dms": 1176
+      },
+      "67": {
+        "dms": 1176
+      },
+      "68": {
+        "year": 2000,
+        "dep_cnt": 0,
+        "city_a": "Midway",
+        "city_b": "Five Points"
+      },
+      "70": {
+        "dms": 1176
+      },
+      "71": {
+        "year": 2001,
+        "month": 11,
+        "manager": 1
       }
     },
     "1000": {
@@ -3667,6 +4003,62 @@
           "San Miguel County",
           "Oglethorpe County"
         ]
+      },
+      "64": {
+        "colors": [
+          "chartreuse",
+          "orange",
+          "firebrick",
+          "floral",
+          "medium",
+          "pink"
+        ]
+      },
+      "66": {
+        "year": 2000,
+        "smc": [
+          "DHL",
+          "PRIVATECARRIER"
+        ],
+        "sales_one": "ws_ext_sales_price",
+        "net_one": "ws_net_paid_inc_ship_tax",
+        "sales_two": "cs_sales_price",
+        "net_two": "cs_net_profit"
+      },
+      "69": {
+        "states": [
+          "IA",
+          "MN",
+          "MT"
+        ]
+      },
+      "72": {
+        "year": 2002,
+        "bp": "--",
+        "ms": "U"
+      },
+      "63": {
+        "dms": 1176
+      },
+      "65": {
+        "dms": 1176
+      },
+      "67": {
+        "dms": 1176
+      },
+      "68": {
+        "year": 1998,
+        "dep_cnt": 8,
+        "city_a": "Centerville",
+        "city_b": "Oakland"
+      },
+      "70": {
+        "dms": 1176
+      },
+      "71": {
+        "year": 2001,
+        "month": 11,
+        "manager": 1
       }
     },
     "3000": {
@@ -4191,6 +4583,62 @@
           "Williamson County",
           "Marshall County"
         ]
+      },
+      "64": {
+        "colors": [
+          "chartreuse",
+          "orange",
+          "firebrick",
+          "floral",
+          "medium",
+          "pink"
+        ]
+      },
+      "66": {
+        "year": 2000,
+        "smc": [
+          "DHL",
+          "PRIVATECARRIER"
+        ],
+        "sales_one": "ws_ext_sales_price",
+        "net_one": "ws_net_paid_inc_ship_tax",
+        "sales_two": "cs_sales_price",
+        "net_two": "cs_net_profit"
+      },
+      "69": {
+        "states": [
+          "IA",
+          "MN",
+          "MT"
+        ]
+      },
+      "72": {
+        "year": 2002,
+        "bp": "--",
+        "ms": "U"
+      },
+      "63": {
+        "dms": 1176
+      },
+      "65": {
+        "dms": 1176
+      },
+      "67": {
+        "dms": 1176
+      },
+      "68": {
+        "year": 1998,
+        "dep_cnt": 2,
+        "city_a": "Riverview",
+        "city_b": "Summit"
+      },
+      "70": {
+        "dms": 1176
+      },
+      "71": {
+        "year": 2001,
+        "month": 11,
+        "manager": 1
       }
     },
     "10000": {
@@ -4715,6 +5163,62 @@
           "Levy County",
           "Richland County"
         ]
+      },
+      "64": {
+        "colors": [
+          "chartreuse",
+          "orange",
+          "firebrick",
+          "floral",
+          "medium",
+          "pink"
+        ]
+      },
+      "66": {
+        "year": 2000,
+        "smc": [
+          "DHL",
+          "PRIVATECARRIER"
+        ],
+        "sales_one": "ws_ext_sales_price",
+        "net_one": "ws_net_paid_inc_ship_tax",
+        "sales_two": "cs_sales_price",
+        "net_two": "cs_net_profit"
+      },
+      "69": {
+        "states": [
+          "IA",
+          "MN",
+          "MT"
+        ]
+      },
+      "72": {
+        "year": 2002,
+        "bp": "--",
+        "ms": "U"
+      },
+      "63": {
+        "dms": 1176
+      },
+      "65": {
+        "dms": 1176
+      },
+      "67": {
+        "dms": 1176
+      },
+      "68": {
+        "year": 1999,
+        "dep_cnt": 3,
+        "city_a": "Antioch",
+        "city_b": "Jefferson"
+      },
+      "70": {
+        "dms": 1176
+      },
+      "71": {
+        "year": 2001,
+        "month": 11,
+        "manager": 1
       }
     },
     "30000": {
@@ -5239,6 +5743,62 @@
           "Barrow County",
           "Perry County"
         ]
+      },
+      "64": {
+        "colors": [
+          "chartreuse",
+          "orange",
+          "firebrick",
+          "floral",
+          "medium",
+          "pink"
+        ]
+      },
+      "66": {
+        "year": 2000,
+        "smc": [
+          "DHL",
+          "PRIVATECARRIER"
+        ],
+        "sales_one": "ws_ext_sales_price",
+        "net_one": "ws_net_paid_inc_ship_tax",
+        "sales_two": "cs_sales_price",
+        "net_two": "cs_net_profit"
+      },
+      "69": {
+        "states": [
+          "IA",
+          "MN",
+          "MT"
+        ]
+      },
+      "72": {
+        "year": 2002,
+        "bp": "--",
+        "ms": "U"
+      },
+      "63": {
+        "dms": 1176
+      },
+      "65": {
+        "dms": 1176
+      },
+      "67": {
+        "dms": 1176
+      },
+      "68": {
+        "year": 1998,
+        "dep_cnt": 8,
+        "city_a": "Five Corners",
+        "city_b": "Macedonia"
+      },
+      "70": {
+        "dms": 1176
+      },
+      "71": {
+        "year": 2001,
+        "month": 11,
+        "manager": 1
       }
     },
     "100000": {
@@ -5763,6 +6323,62 @@
           "Barrow County",
           "Perry County"
         ]
+      },
+      "64": {
+        "colors": [
+          "chartreuse",
+          "orange",
+          "firebrick",
+          "floral",
+          "medium",
+          "pink"
+        ]
+      },
+      "66": {
+        "year": 2000,
+        "smc": [
+          "DHL",
+          "PRIVATECARRIER"
+        ],
+        "sales_one": "ws_ext_sales_price",
+        "net_one": "ws_net_paid_inc_ship_tax",
+        "sales_two": "cs_sales_price",
+        "net_two": "cs_net_profit"
+      },
+      "69": {
+        "states": [
+          "IA",
+          "MN",
+          "MT"
+        ]
+      },
+      "72": {
+        "year": 2002,
+        "bp": "--",
+        "ms": "U"
+      },
+      "63": {
+        "dms": 1176
+      },
+      "65": {
+        "dms": 1176
+      },
+      "67": {
+        "dms": 1176
+      },
+      "68": {
+        "year": 1998,
+        "dep_cnt": 5,
+        "city_a": "Antioch",
+        "city_b": "Poplar Springs"
+      },
+      "70": {
+        "dms": 1176
+      },
+      "71": {
+        "year": 2001,
+        "month": 11,
+        "manager": 1
       }
     },
     "qualification": {
@@ -6282,6 +6898,70 @@
           "Williamson County"
         ]
       }
+    }
+  },
+  "qualification": {
+    "63": {
+      "dms": 1200
+    },
+    "64": {
+      "year": 1999,
+      "price": 64,
+      "colors": [
+        "purple",
+        "burlywood",
+        "indian",
+        "spring",
+        "floral",
+        "medium"
+      ]
+    },
+    "65": {
+      "dms": 1176
+    },
+    "66": {
+      "sales_two": "cs_sales_price",
+      "sales_one": "ws_ext_sales_price",
+      "net_two": "cs_net_paid_inc_tax",
+      "net_one": "ws_net_paid",
+      "smc": [
+        "DHL",
+        "BARIAN"
+      ],
+      "time_one": 30838,
+      "year": 2001
+    },
+    "67": {
+      "dms": 1200
+    },
+    "68": {
+      "city_b": "Midway",
+      "city_a": "Fairview",
+      "veh_cnt": 3,
+      "year": 1999,
+      "dep_cnt": 4
+    },
+    "69": {
+      "states": [
+        "KY",
+        "GA",
+        "NM"
+      ],
+      "year": 2001,
+      "month": 4
+    },
+    "70": {
+      "dms": 1200
+    },
+    "71": {
+      "manager": 1,
+      "month": 11,
+      "year": 1999
+    },
+    "72": {
+      "bp": ">10000",
+      "ms": "D",
+      "year": 1999
     }
   }
 }

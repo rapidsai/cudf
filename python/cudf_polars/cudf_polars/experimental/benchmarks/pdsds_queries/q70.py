@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
 from cudf_polars.experimental.benchmarks.utils import get_data
 
 if TYPE_CHECKING:
@@ -19,7 +20,15 @@ if TYPE_CHECKING:
 
 def duckdb_impl(run_config: RunConfig) -> str:
     """Query 70."""
-    return """
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=70,
+        qualification=run_config.qualification,
+    )
+
+    dms = params["dms"]
+
+    return f"""
     SELECT Sum(ss_net_profit)                     AS total_sum,
                    s_state,
                    s_county,
@@ -33,7 +42,7 @@ def duckdb_impl(run_config: RunConfig) -> str:
     FROM   store_sales,
            date_dim d1,
            store
-    WHERE  d1.d_month_seq BETWEEN 1200 AND 1200 + 11
+    WHERE  d1.d_month_seq BETWEEN {dms} AND {dms} + 11
            AND d1.d_date_sk = ss_sold_date_sk
            AND s_store_sk = ss_store_sk
            AND s_state IN (SELECT s_state
@@ -47,7 +56,7 @@ def duckdb_impl(run_config: RunConfig) -> str:
                                    FROM   store_sales,
                                           store,
                                           date_dim
-                                   WHERE  d_month_seq BETWEEN 1200 AND 1200 + 11
+                                   WHERE  d_month_seq BETWEEN {dms} AND {dms} + 11
                                           AND d_date_sk = ss_sold_date_sk
                                           AND s_store_sk = ss_store_sk
                                    GROUP  BY s_state) tmp1
@@ -101,6 +110,14 @@ def _rollup_level(
 
 def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     """Query 70."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=70,
+        qualification=run_config.qualification,
+    )
+
+    dms = params["dms"]
+
     store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
     store = get_data(run_config.dataset_path, "store", run_config.suffix)
@@ -111,7 +128,7 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
             left_on="ss_sold_date_sk",
             right_on="d_date_sk",
         )
-        .filter(pl.col("d_month_seq").is_between(1200, 1200 + 11))
+        .filter(pl.col("d_month_seq").is_between(dms, dms + 11))
         .join(
             store.select("s_store_sk", "s_state", "s_county"),
             left_on="ss_store_sk",
@@ -137,7 +154,6 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         pl.col("total_sum")
         .rank(method="dense", descending=True)
         .over(partition_key)
-        .cast(pl.Int64)
         .alias("rank_within_parent")
     )
 

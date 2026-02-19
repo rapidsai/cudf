@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
 from cudf_polars.experimental.benchmarks.utils import get_data
 
 if TYPE_CHECKING:
@@ -17,7 +18,24 @@ if TYPE_CHECKING:
 
 def duckdb_impl(run_config: RunConfig) -> str:
     """Query 66."""
-    return """
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=66,
+        qualification=run_config.qualification,
+    )
+
+    year = params["year"]
+    time_one = params["time_one"]
+    smc = params["smc"]
+    # Column names vary by scale factor (extracted from dsqgen)
+    # Used in f-string below - ruff doesn't detect f-string variable usage
+    sales_one = params["sales_one"]  # ruff: noqa: F841
+    sales_two = params["sales_two"]  # ruff: noqa: F841
+    net_one = params["net_one"]  # ruff: noqa: F841
+    net_two = params["net_two"]  # ruff: noqa: F841
+    smc_str = "(" + ", ".join(f"'{c}'" for c in smc) + ")"
+
+    return f"""
     SELECT w_warehouse_name,
                    w_warehouse_sq_ft,
                    w_city,
@@ -68,104 +86,104 @@ def duckdb_impl(run_config: RunConfig) -> str:
                    w_county,
                    w_state,
                    w_country,
-                   'ZOUROS'
+                   '{smc[0]}'
                    || ','
-                   || 'ZHOU' AS ship_carriers,
+                   || '{smc[1]}' AS ship_carriers,
                    d_year    AS year1,
                    Sum(CASE
-                         WHEN d_moy = 1 THEN ws_ext_sales_price * ws_quantity
+                         WHEN d_moy = 1 THEN {sales_one} * ws_quantity
                          ELSE 0
                        END)  AS jan_sales,
                    Sum(CASE
-                         WHEN d_moy = 2 THEN ws_ext_sales_price * ws_quantity
+                         WHEN d_moy = 2 THEN {sales_one} * ws_quantity
                          ELSE 0
                        END)  AS feb_sales,
                    Sum(CASE
-                         WHEN d_moy = 3 THEN ws_ext_sales_price * ws_quantity
+                         WHEN d_moy = 3 THEN {sales_one} * ws_quantity
                          ELSE 0
                        END)  AS mar_sales,
                    Sum(CASE
-                         WHEN d_moy = 4 THEN ws_ext_sales_price * ws_quantity
+                         WHEN d_moy = 4 THEN {sales_one} * ws_quantity
                          ELSE 0
                        END)  AS apr_sales,
                    Sum(CASE
-                         WHEN d_moy = 5 THEN ws_ext_sales_price * ws_quantity
+                         WHEN d_moy = 5 THEN {sales_one} * ws_quantity
                          ELSE 0
                        END)  AS may_sales,
                    Sum(CASE
-                         WHEN d_moy = 6 THEN ws_ext_sales_price * ws_quantity
+                         WHEN d_moy = 6 THEN {sales_one} * ws_quantity
                          ELSE 0
                        END)  AS jun_sales,
                    Sum(CASE
-                         WHEN d_moy = 7 THEN ws_ext_sales_price * ws_quantity
+                         WHEN d_moy = 7 THEN {sales_one} * ws_quantity
                          ELSE 0
                        END)  AS jul_sales,
                    Sum(CASE
-                         WHEN d_moy = 8 THEN ws_ext_sales_price * ws_quantity
+                         WHEN d_moy = 8 THEN {sales_one} * ws_quantity
                          ELSE 0
                        END)  AS aug_sales,
                    Sum(CASE
-                         WHEN d_moy = 9 THEN ws_ext_sales_price * ws_quantity
+                         WHEN d_moy = 9 THEN {sales_one} * ws_quantity
                          ELSE 0
                        END)  AS sep_sales,
                    Sum(CASE
-                         WHEN d_moy = 10 THEN ws_ext_sales_price * ws_quantity
+                         WHEN d_moy = 10 THEN {sales_one} * ws_quantity
                          ELSE 0
                        END)  AS oct_sales,
                    Sum(CASE
-                         WHEN d_moy = 11 THEN ws_ext_sales_price * ws_quantity
+                         WHEN d_moy = 11 THEN {sales_one} * ws_quantity
                          ELSE 0
                        END)  AS nov_sales,
                    Sum(CASE
-                         WHEN d_moy = 12 THEN ws_ext_sales_price * ws_quantity
+                         WHEN d_moy = 12 THEN {sales_one} * ws_quantity
                          ELSE 0
                        END)  AS dec_sales,
                    Sum(CASE
-                         WHEN d_moy = 1 THEN ws_net_paid_inc_ship * ws_quantity
+                         WHEN d_moy = 1 THEN {net_one} * ws_quantity
                          ELSE 0
                        END)  AS jan_net,
                    Sum(CASE
-                         WHEN d_moy = 2 THEN ws_net_paid_inc_ship * ws_quantity
+                         WHEN d_moy = 2 THEN {net_one} * ws_quantity
                          ELSE 0
                        END)  AS feb_net,
                    Sum(CASE
-                         WHEN d_moy = 3 THEN ws_net_paid_inc_ship * ws_quantity
+                         WHEN d_moy = 3 THEN {net_one} * ws_quantity
                          ELSE 0
                        END)  AS mar_net,
                    Sum(CASE
-                         WHEN d_moy = 4 THEN ws_net_paid_inc_ship * ws_quantity
+                         WHEN d_moy = 4 THEN {net_one} * ws_quantity
                          ELSE 0
                        END)  AS apr_net,
                    Sum(CASE
-                         WHEN d_moy = 5 THEN ws_net_paid_inc_ship * ws_quantity
+                         WHEN d_moy = 5 THEN {net_one} * ws_quantity
                          ELSE 0
                        END)  AS may_net,
                    Sum(CASE
-                         WHEN d_moy = 6 THEN ws_net_paid_inc_ship * ws_quantity
+                         WHEN d_moy = 6 THEN {net_one} * ws_quantity
                          ELSE 0
                        END)  AS jun_net,
                    Sum(CASE
-                         WHEN d_moy = 7 THEN ws_net_paid_inc_ship * ws_quantity
+                         WHEN d_moy = 7 THEN {net_one} * ws_quantity
                          ELSE 0
                        END)  AS jul_net,
                    Sum(CASE
-                         WHEN d_moy = 8 THEN ws_net_paid_inc_ship * ws_quantity
+                         WHEN d_moy = 8 THEN {net_one} * ws_quantity
                          ELSE 0
                        END)  AS aug_net,
                    Sum(CASE
-                         WHEN d_moy = 9 THEN ws_net_paid_inc_ship * ws_quantity
+                         WHEN d_moy = 9 THEN {net_one} * ws_quantity
                          ELSE 0
                        END)  AS sep_net,
                    Sum(CASE
-                         WHEN d_moy = 10 THEN ws_net_paid_inc_ship * ws_quantity
+                         WHEN d_moy = 10 THEN {net_one} * ws_quantity
                          ELSE 0
                        END)  AS oct_net,
                    Sum(CASE
-                         WHEN d_moy = 11 THEN ws_net_paid_inc_ship * ws_quantity
+                         WHEN d_moy = 11 THEN {net_one} * ws_quantity
                          ELSE 0
                        END)  AS nov_net,
                    Sum(CASE
-                         WHEN d_moy = 12 THEN ws_net_paid_inc_ship * ws_quantity
+                         WHEN d_moy = 12 THEN {net_one} * ws_quantity
                          ELSE 0
                        END)  AS dec_net
             FROM   web_sales,
@@ -177,9 +195,9 @@ def duckdb_impl(run_config: RunConfig) -> str:
                    AND ws_sold_date_sk = d_date_sk
                    AND ws_sold_time_sk = t_time_sk
                    AND ws_ship_mode_sk = sm_ship_mode_sk
-                   AND d_year = 1998
-                   AND t_time BETWEEN 7249 AND 7249 + 28800
-                   AND sm_carrier IN ( 'ZOUROS', 'ZHOU' )
+                   AND d_year = {year}
+                   AND t_time BETWEEN {time_one} AND {time_one} + 28800
+                   AND sm_carrier IN {smc_str}
             GROUP  BY w_warehouse_name,
                       w_warehouse_sq_ft,
                       w_city,
@@ -194,104 +212,104 @@ def duckdb_impl(run_config: RunConfig) -> str:
                    w_county,
                    w_state,
                    w_country,
-                   'ZOUROS'
+                   '{smc[0]}'
                    || ','
-                   || 'ZHOU' AS ship_carriers,
+                   || '{smc[1]}' AS ship_carriers,
                    d_year    AS year1,
                    Sum(CASE
-                         WHEN d_moy = 1 THEN cs_ext_sales_price * cs_quantity
+                         WHEN d_moy = 1 THEN {sales_two} * cs_quantity
                          ELSE 0
                        END)  AS jan_sales,
                    Sum(CASE
-                         WHEN d_moy = 2 THEN cs_ext_sales_price * cs_quantity
+                         WHEN d_moy = 2 THEN {sales_two} * cs_quantity
                          ELSE 0
                        END)  AS feb_sales,
                    Sum(CASE
-                         WHEN d_moy = 3 THEN cs_ext_sales_price * cs_quantity
+                         WHEN d_moy = 3 THEN {sales_two} * cs_quantity
                          ELSE 0
                        END)  AS mar_sales,
                    Sum(CASE
-                         WHEN d_moy = 4 THEN cs_ext_sales_price * cs_quantity
+                         WHEN d_moy = 4 THEN {sales_two} * cs_quantity
                          ELSE 0
                        END)  AS apr_sales,
                    Sum(CASE
-                         WHEN d_moy = 5 THEN cs_ext_sales_price * cs_quantity
+                         WHEN d_moy = 5 THEN {sales_two} * cs_quantity
                          ELSE 0
                        END)  AS may_sales,
                    Sum(CASE
-                         WHEN d_moy = 6 THEN cs_ext_sales_price * cs_quantity
+                         WHEN d_moy = 6 THEN {sales_two} * cs_quantity
                          ELSE 0
                        END)  AS jun_sales,
                    Sum(CASE
-                         WHEN d_moy = 7 THEN cs_ext_sales_price * cs_quantity
+                         WHEN d_moy = 7 THEN {sales_two} * cs_quantity
                          ELSE 0
                        END)  AS jul_sales,
                    Sum(CASE
-                         WHEN d_moy = 8 THEN cs_ext_sales_price * cs_quantity
+                         WHEN d_moy = 8 THEN {sales_two} * cs_quantity
                          ELSE 0
                        END)  AS aug_sales,
                    Sum(CASE
-                         WHEN d_moy = 9 THEN cs_ext_sales_price * cs_quantity
+                         WHEN d_moy = 9 THEN {sales_two} * cs_quantity
                          ELSE 0
                        END)  AS sep_sales,
                    Sum(CASE
-                         WHEN d_moy = 10 THEN cs_ext_sales_price * cs_quantity
+                         WHEN d_moy = 10 THEN {sales_two} * cs_quantity
                          ELSE 0
                        END)  AS oct_sales,
                    Sum(CASE
-                         WHEN d_moy = 11 THEN cs_ext_sales_price * cs_quantity
+                         WHEN d_moy = 11 THEN {sales_two} * cs_quantity
                          ELSE 0
                        END)  AS nov_sales,
                    Sum(CASE
-                         WHEN d_moy = 12 THEN cs_ext_sales_price * cs_quantity
+                         WHEN d_moy = 12 THEN {sales_two} * cs_quantity
                          ELSE 0
                        END)  AS dec_sales,
                    Sum(CASE
-                         WHEN d_moy = 1 THEN cs_net_paid * cs_quantity
+                         WHEN d_moy = 1 THEN {net_two} * cs_quantity
                          ELSE 0
                        END)  AS jan_net,
                    Sum(CASE
-                         WHEN d_moy = 2 THEN cs_net_paid * cs_quantity
+                         WHEN d_moy = 2 THEN {net_two} * cs_quantity
                          ELSE 0
                        END)  AS feb_net,
                    Sum(CASE
-                         WHEN d_moy = 3 THEN cs_net_paid * cs_quantity
+                         WHEN d_moy = 3 THEN {net_two} * cs_quantity
                          ELSE 0
                        END)  AS mar_net,
                    Sum(CASE
-                         WHEN d_moy = 4 THEN cs_net_paid * cs_quantity
+                         WHEN d_moy = 4 THEN {net_two} * cs_quantity
                          ELSE 0
                        END)  AS apr_net,
                    Sum(CASE
-                         WHEN d_moy = 5 THEN cs_net_paid * cs_quantity
+                         WHEN d_moy = 5 THEN {net_two} * cs_quantity
                          ELSE 0
                        END)  AS may_net,
                    Sum(CASE
-                         WHEN d_moy = 6 THEN cs_net_paid * cs_quantity
+                         WHEN d_moy = 6 THEN {net_two} * cs_quantity
                          ELSE 0
                        END)  AS jun_net,
                    Sum(CASE
-                         WHEN d_moy = 7 THEN cs_net_paid * cs_quantity
+                         WHEN d_moy = 7 THEN {net_two} * cs_quantity
                          ELSE 0
                        END)  AS jul_net,
                    Sum(CASE
-                         WHEN d_moy = 8 THEN cs_net_paid * cs_quantity
+                         WHEN d_moy = 8 THEN {net_two} * cs_quantity
                          ELSE 0
                        END)  AS aug_net,
                    Sum(CASE
-                         WHEN d_moy = 9 THEN cs_net_paid * cs_quantity
+                         WHEN d_moy = 9 THEN {net_two} * cs_quantity
                          ELSE 0
                        END)  AS sep_net,
                    Sum(CASE
-                         WHEN d_moy = 10 THEN cs_net_paid * cs_quantity
+                         WHEN d_moy = 10 THEN {net_two} * cs_quantity
                          ELSE 0
                        END)  AS oct_net,
                    Sum(CASE
-                         WHEN d_moy = 11 THEN cs_net_paid * cs_quantity
+                         WHEN d_moy = 11 THEN {net_two} * cs_quantity
                          ELSE 0
                        END)  AS nov_net,
                    Sum(CASE
-                         WHEN d_moy = 12 THEN cs_net_paid * cs_quantity
+                         WHEN d_moy = 12 THEN {net_two} * cs_quantity
                          ELSE 0
                        END)  AS dec_net
             FROM   catalog_sales,
@@ -303,9 +321,9 @@ def duckdb_impl(run_config: RunConfig) -> str:
                    AND cs_sold_date_sk = d_date_sk
                    AND cs_sold_time_sk = t_time_sk
                    AND cs_ship_mode_sk = sm_ship_mode_sk
-                   AND d_year = 1998
-                   AND t_time BETWEEN 7249 AND 7249 + 28800
-                   AND sm_carrier IN ( 'ZOUROS', 'ZHOU' )
+                   AND d_year = {year}
+                   AND t_time BETWEEN {time_one} AND {time_one} + 28800
+                   AND sm_carrier IN {smc_str}
             GROUP  BY w_warehouse_name,
                       w_warehouse_sq_ft,
                       w_city,
@@ -328,6 +346,20 @@ def duckdb_impl(run_config: RunConfig) -> str:
 
 def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     """Query 66."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=66,
+        qualification=run_config.qualification,
+    )
+
+    year = params["year"]
+    time_one = params["time_one"]
+    smc = params["smc"]
+    sales_one = params["sales_one"]
+    sales_two = params["sales_two"]
+    net_one = params["net_one"]
+    net_two = params["net_two"]
+
     web_sales = get_data(run_config.dataset_path, "web_sales", run_config.suffix)
     catalog_sales = get_data(
         run_config.dataset_path, "catalog_sales", run_config.suffix
@@ -358,15 +390,15 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         .join(time_dim, left_on="ws_sold_time_sk", right_on="t_time_sk")
         .join(ship_mode, left_on="ws_ship_mode_sk", right_on="sm_ship_mode_sk")
         .filter(
-            (pl.col("d_year") == 1998)
-            & pl.col("t_time").is_between(7249, 7249 + 28800)
-            & pl.col("sm_carrier").is_in(["ZOUROS", "ZHOU"])
+            (pl.col("d_year") == year)
+            & pl.col("t_time").is_between(time_one, time_one + 28800)
+            & pl.col("sm_carrier").is_in(smc)
         )
     )
 
     web_sales_aggs = [
         pl.when(pl.col("d_moy") == (i + 1))
-        .then(pl.col("ws_ext_sales_price") * pl.col("ws_quantity"))
+        .then(pl.col(sales_one) * pl.col("ws_quantity"))
         .otherwise(0)
         .sum()
         .alias(f"{month_names[i]}_sales")
@@ -374,7 +406,7 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     ]
     web_net_aggs = [
         pl.when(pl.col("d_moy") == (i + 1))
-        .then(pl.col("ws_net_paid_inc_ship") * pl.col("ws_quantity"))
+        .then(pl.col(net_one) * pl.col("ws_quantity"))
         .otherwise(0)
         .sum()
         .alias(f"{month_names[i]}_net")
@@ -395,7 +427,7 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         .agg(web_sales_aggs + web_net_aggs)
         .with_columns(
             [
-                pl.lit("ZOUROS,ZHOU").alias("ship_carriers"),
+                pl.lit(",".join(smc)).alias("ship_carriers"),
                 pl.col("d_year").alias("year1"),
             ]
         )
@@ -409,15 +441,15 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         .join(time_dim, left_on="cs_sold_time_sk", right_on="t_time_sk")
         .join(ship_mode, left_on="cs_ship_mode_sk", right_on="sm_ship_mode_sk")
         .filter(
-            (pl.col("d_year") == 1998)
-            & pl.col("t_time").is_between(7249, 7249 + 28800)
-            & pl.col("sm_carrier").is_in(["ZOUROS", "ZHOU"])
+            (pl.col("d_year") == year)
+            & pl.col("t_time").is_between(time_one, time_one + 28800)
+            & pl.col("sm_carrier").is_in(smc)
         )
     )
 
     cat_sales_aggs = [
         pl.when(pl.col("d_moy") == (i + 1))
-        .then(pl.col("cs_ext_sales_price") * pl.col("cs_quantity"))
+        .then(pl.col(sales_two) * pl.col("cs_quantity"))
         .otherwise(0)
         .sum()
         .alias(f"{month_names[i]}_sales")
@@ -425,7 +457,7 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     ]
     cat_net_aggs = [
         pl.when(pl.col("d_moy") == (i + 1))
-        .then(pl.col("cs_net_paid") * pl.col("cs_quantity"))
+        .then(pl.col(net_two) * pl.col("cs_quantity"))
         .otherwise(0)
         .sum()
         .alias(f"{month_names[i]}_net")
@@ -446,7 +478,7 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         .agg(cat_sales_aggs + cat_net_aggs)
         .with_columns(
             [
-                pl.lit("ZOUROS,ZHOU").alias("ship_carriers"),
+                pl.lit(",".join(smc)).alias("ship_carriers"),
                 pl.col("d_year").alias("year1"),
             ]
         )

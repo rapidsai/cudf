@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
 from cudf_polars.experimental.benchmarks.utils import get_data
 
 if TYPE_CHECKING:
@@ -17,7 +18,17 @@ if TYPE_CHECKING:
 
 def duckdb_impl(run_config: RunConfig) -> str:
     """Query 72."""
-    return """
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=72,
+        qualification=run_config.qualification,
+    )
+
+    year = params["year"]
+    bp = params["bp"]
+    ms = params["ms"]
+
+    return f"""
     SELECT i_item_desc,
                    w_warehouse_name,
                    d1.d_week_seq,
@@ -55,9 +66,9 @@ def duckdb_impl(run_config: RunConfig) -> str:
     WHERE  d1.d_week_seq = d2.d_week_seq
            AND inv_quantity_on_hand < cs_quantity
            AND d3.d_date > d1.d_date + INTERVAL '5' day
-           AND hd_buy_potential = '501-1000'
-           AND d1.d_year = 2002
-           AND cd_marital_status = 'M'
+           AND hd_buy_potential = '{bp}'
+           AND d1.d_year = {year}
+           AND cd_marital_status = '{ms}'
     GROUP  BY i_item_desc,
               w_warehouse_name,
               d1.d_week_seq
@@ -71,6 +82,16 @@ def duckdb_impl(run_config: RunConfig) -> str:
 
 def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     """Query 72."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=72,
+        qualification=run_config.qualification,
+    )
+
+    year = params["year"]
+    bp = params["bp"]
+    ms = params["ms"]
+
     catalog_sales = get_data(
         run_config.dataset_path, "catalog_sales", run_config.suffix
     )
@@ -89,7 +110,7 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         run_config.dataset_path, "catalog_returns", run_config.suffix
     )
     d1_dates = (
-        date_dim.filter(pl.col("d_year").is_not_null() & (pl.col("d_year") == 2002))
+        date_dim.filter(pl.col("d_year").is_not_null() & (pl.col("d_year") == year))
         .select(["d_date_sk", "d_week_seq", "d_date"])
         .rename(
             {
@@ -114,11 +135,10 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         .rename({"d_date_sk": "d3_date_sk", "d_date": "d3_date"})
     )
     filtered_cd = customer_demographics.filter(
-        pl.col("cd_marital_status").is_not_null() & (pl.col("cd_marital_status") == "M")
+        pl.col("cd_marital_status").is_not_null() & (pl.col("cd_marital_status") == ms)
     ).select(["cd_demo_sk"])
     filtered_hd = household_demographics.filter(
-        pl.col("hd_buy_potential").is_not_null()
-        & (pl.col("hd_buy_potential") == "501-1000")
+        pl.col("hd_buy_potential").is_not_null() & (pl.col("hd_buy_potential") == bp)
     ).select(["hd_demo_sk"])
     filtered_catalog_sales = (
         catalog_sales.join(d1_dates, left_on="cs_sold_date_sk", right_on="d1_date_sk")
@@ -176,7 +196,7 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
                 pl.col("no_promo_flag").sum().alias("no_promo"),
                 pl.col("promo_flag").sum().alias("promo"),
                 # Cast -> Int64 to match DuckDB
-                pl.len().cast(pl.Int64).alias("total_cnt"),
+                pl.len().alias("total_cnt"),
             ]
         )
         .select(

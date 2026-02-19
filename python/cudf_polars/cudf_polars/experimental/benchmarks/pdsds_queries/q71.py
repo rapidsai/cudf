@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
 from cudf_polars.experimental.benchmarks.utils import get_data
 
 if TYPE_CHECKING:
@@ -17,7 +18,17 @@ if TYPE_CHECKING:
 
 def duckdb_impl(run_config: RunConfig) -> str:
     """Query 71."""
-    return """
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=71,
+        qualification=run_config.qualification,
+    )
+
+    year = params["year"]
+    month = params["month"]
+    manager = params["manager"]
+
+    return f"""
     SELECT i_brand_id brand_id,
            i_brand brand,
            t_hour,
@@ -31,8 +42,8 @@ def duckdb_impl(run_config: RunConfig) -> str:
        FROM web_sales,
             date_dim
        WHERE d_date_sk = ws_sold_date_sk
-         AND d_moy=11
-         AND d_year=1999
+         AND d_moy={month}
+         AND d_year={year}
        UNION ALL SELECT cs_ext_sales_price AS ext_price,
                         cs_sold_date_sk AS sold_date_sk,
                         cs_item_sk AS sold_item_sk,
@@ -40,8 +51,8 @@ def duckdb_impl(run_config: RunConfig) -> str:
        FROM catalog_sales,
             date_dim
        WHERE d_date_sk = cs_sold_date_sk
-         AND d_moy=11
-         AND d_year=1999
+         AND d_moy={month}
+         AND d_year={year}
        UNION ALL SELECT ss_ext_sales_price AS ext_price,
                         ss_sold_date_sk AS sold_date_sk,
                         ss_item_sk AS sold_item_sk,
@@ -49,11 +60,11 @@ def duckdb_impl(run_config: RunConfig) -> str:
        FROM store_sales,
             date_dim
        WHERE d_date_sk = ss_sold_date_sk
-         AND d_moy=11
-         AND d_year=1999 ) tmp,
+         AND d_moy={month}
+         AND d_year={year} ) tmp,
          time_dim
     WHERE sold_item_sk = i_item_sk
-      AND i_manager_id=1
+      AND i_manager_id={manager}
       AND time_sk = t_time_sk
       AND (t_meal_time = 'breakfast'
            OR t_meal_time = 'dinner')
@@ -69,6 +80,16 @@ def duckdb_impl(run_config: RunConfig) -> str:
 
 def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     """Query 71."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=71,
+        qualification=run_config.qualification,
+    )
+
+    year = params["year"]
+    month = params["month"]
+    manager = params["manager"]
+
     web_sales = get_data(run_config.dataset_path, "web_sales", run_config.suffix)
     catalog_sales = get_data(
         run_config.dataset_path, "catalog_sales", run_config.suffix
@@ -79,7 +100,7 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     time_dim = get_data(run_config.dataset_path, "time_dim", run_config.suffix)
 
     target_dates = date_dim.filter(
-        (pl.col("d_moy") == 11) & (pl.col("d_year") == 1999)
+        (pl.col("d_moy") == month) & (pl.col("d_year") == year)
     ).select("d_date_sk")
 
     web_component = web_sales.join(
@@ -108,7 +129,7 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
 
     combined_sales = pl.concat([web_component, catalog_component, store_component])
 
-    filtered_items = item.filter(pl.col("i_manager_id") == 1).select(
+    filtered_items = item.filter(pl.col("i_manager_id") == manager).select(
         ["i_item_sk", "i_brand_id", "i_brand"]
     )
 

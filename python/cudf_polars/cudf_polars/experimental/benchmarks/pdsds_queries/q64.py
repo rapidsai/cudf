@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
 from cudf_polars.experimental.benchmarks.utils import get_data
 
 if TYPE_CHECKING:
@@ -17,7 +18,18 @@ if TYPE_CHECKING:
 
 def duckdb_impl(run_config: RunConfig) -> str:
     """Query 64."""
-    return """
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=64,
+        qualification=run_config.qualification,
+    )
+
+    year = params["year"]
+    price = params["price"]
+    colors = params["colors"]
+    colors_str = ", ".join(f"'{c}'" for c in colors)
+
+    return f"""
     WITH cs_ui
          AS (SELECT cs_item_sk,
                     Sum(cs_ext_list_price) AS sale,
@@ -88,10 +100,9 @@ def duckdb_impl(run_config: RunConfig) -> str:
                     AND hd1.hd_income_band_sk = ib1.ib_income_band_sk
                     AND hd2.hd_income_band_sk = ib2.ib_income_band_sk
                     AND cd1.cd_marital_status <> cd2.cd_marital_status
-                    AND i_color IN ( 'cyan', 'peach', 'blush', 'frosted',
-                                     'powder', 'orange' )
-                    AND i_current_price BETWEEN 58 AND 58 + 10
-                    AND i_current_price BETWEEN 58 + 1 AND 58 + 15
+                    AND i_color IN ( {colors_str} )
+                    AND i_current_price BETWEEN {price} AND {price} + 10
+                    AND i_current_price BETWEEN {price} + 1 AND {price} + 15
              GROUP  BY i_product_name,
                        i_item_sk,
                        s_store_name,
@@ -131,8 +142,8 @@ def duckdb_impl(run_config: RunConfig) -> str:
     FROM   cross_sales cs1,
            cross_sales cs2
     WHERE  cs1.item_sk = cs2.item_sk
-           AND cs1.syear = 2001
-           AND cs2.syear = 2001 + 1
+           AND cs1.syear = {year}
+           AND cs2.syear = {year} + 1
            AND cs2.cnt <= cs1.cnt
            AND cs1.store_name = cs2.store_name
            AND cs1.store_zip = cs2.store_zip
@@ -146,6 +157,16 @@ def duckdb_impl(run_config: RunConfig) -> str:
 
 def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     """Query 64."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=64,
+        qualification=run_config.qualification,
+    )
+
+    year = params["year"]
+    price = params["price"]
+    colors = params["colors"]
+
     catalog_sales = get_data(
         run_config.dataset_path, "catalog_sales", run_config.suffix
     )
@@ -201,11 +222,9 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     )
 
     filtered_items = item.filter(
-        pl.col("i_color").is_in(
-            ["cyan", "peach", "blush", "frosted", "powder", "orange"]
-        )
-        & pl.col("i_current_price").is_between(58, 68)
-        & pl.col("i_current_price").is_between(59, 73)
+        pl.col("i_color").is_in(colors)
+        & pl.col("i_current_price").is_between(price, price + 10)
+        & pl.col("i_current_price").is_between(price + 1, price + 15)
     ).select(["i_item_sk", "i_product_name"])
 
     base = (
@@ -363,7 +382,7 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         )
         .agg(
             [
-                pl.len().cast(pl.Int64).alias("cnt"),
+                pl.len().alias("cnt"),
                 pl.col("ss_wholesale_cost").sum().alias("s1"),
                 pl.col("ss_list_price").sum().alias("s2"),
                 pl.col("ss_coupon_amt").sum().alias("s3"),
@@ -387,8 +406,8 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
             suffix="_cs2",
         )
         .filter(
-            (pl.col("syear") == 2001)
-            & (pl.col("syear_cs2") == 2002)
+            (pl.col("syear") == year)
+            & (pl.col("syear_cs2") == year + 1)
             & (pl.col("cnt_cs2") <= pl.col("cnt"))
         )
         .select(
@@ -413,7 +432,7 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
                 pl.col("s2_cs2").alias("s2_1"),
                 pl.col("s3_cs2").alias("s3_1"),
                 pl.col("syear_cs2").alias("syear_1"),
-                pl.col("cnt_cs2").cast(pl.Int64).alias("cnt_1"),
+                pl.col("cnt_cs2").alias("cnt_1"),
             ]
         )
         .sort(

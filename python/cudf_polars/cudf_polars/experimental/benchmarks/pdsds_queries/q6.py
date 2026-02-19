@@ -100,7 +100,7 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
             [
                 pl.col("ca_state").alias("state"),
                 # Cast -> Int64 to match DuckDB
-                pl.col("cnt").cast(pl.Int64),
+                pl.col("cnt"),
             ]
         )
     )
