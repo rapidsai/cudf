@@ -4,9 +4,9 @@
  */
 
 #include "join_common_utils.cuh"
+#include "mark_join.cuh"
 
 #include <cudf/detail/cuco_helpers.hpp>
-#include <cudf/detail/join/mark_join.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/row_operator/equality.cuh>
