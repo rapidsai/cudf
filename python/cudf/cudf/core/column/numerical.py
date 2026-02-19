@@ -145,11 +145,10 @@ class NumericalColumn(NumericalBaseColumn):
         """
         if self.dtype.kind != "f":
             return as_column(False, length=len(self))
-        op = PylibcudfFunction(
+        return PylibcudfFunction(
             plc.unary.is_nan,
             dtype_policy=lambda _dtypes: np.dtype(np.bool_),
-        )
-        return op(self)
+        )(self)
 
     def notnan(self) -> ColumnBase:
         """Identify non-NaN values in a Column.
@@ -1008,15 +1007,14 @@ class NumericalColumn(NumericalBaseColumn):
         if bin_col.nullable:
             raise ValueError("`bins` cannot contain null entries.")
         func = plc.search.lower_bound if right else plc.search.upper_bound
-        op = PylibcudfFunction(
-            func,
-            dtype_policy=lambda _dtypes: get_dtype_of_same_kind(
-                self.dtype, np.dtype(np.int32)
-            ),
-        )
         return cast(
-            Self,
-            op(
+            "Self",
+            PylibcudfFunction(
+                func,
+                dtype_policy=lambda _dtypes: get_dtype_of_same_kind(
+                    self.dtype, np.dtype(np.int32)
+                ),
+            )(
                 plc.Table([bin_col.plc_column]),
                 plc.Table([self.plc_column]),
                 [plc.types.Order.ASCENDING],

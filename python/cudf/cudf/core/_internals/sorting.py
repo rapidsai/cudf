@@ -123,11 +123,14 @@ def order_by(
     func = (
         plc.sorting.stable_sorted_order if stable else plc.sorting.sorted_order
     )
+
     with access_columns(
         *columns_from_table, mode="read", scope="internal"
     ) as columns_from_table:
         return func(
-            plc.Table([col.plc_column for col in columns_from_table]),
+            plc.Table(
+                [col.plc_column for col in columns_from_table],
+            ),
             column_order,
             null_precedence,
         )
