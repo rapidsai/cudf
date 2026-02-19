@@ -8,7 +8,7 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
-#include <cudf/detail/utilities/algorithm.cuh>
+#include <cudf/detail/algorithms/reduce.cuh>
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/utilities/memory_resource.hpp>
@@ -141,7 +141,7 @@ std::unique_ptr<column> group_covariance(column_view const& values_0,
                                                             mean0_ptr,
                                                             mean1_ptr,
                                                             count.data<size_type>(),
-                                                            group_labels.begin(),
+                                                            group_labels.data(),
                                                             ddof};
 
   auto result = make_numeric_column(
