@@ -521,6 +521,7 @@ class StringMethods(BaseAccessor):
             # If self._column is not a ListColumn, we will have to
             # split each row by character and create a ListColumn out of it.
             list_column = self._column.fillna("").character_tokenize()
+            # TODO: pd.Handle ArrowDtype
             result_dtype = cast("ListDtype", list_column.dtype).element_type
             if len(list_column) == 0:
                 list_column = column_empty(  # type: ignore[assignment]

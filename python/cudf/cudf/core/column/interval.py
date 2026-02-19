@@ -16,7 +16,6 @@ from cudf.core.column.column import (
     as_column,
     dtype_from_pylibcudf_column,
 )
-from cudf.core.dtype.validators import is_dtype_obj_interval
 from cudf.core.dtypes import IntervalDtype, _dtype_to_metadata
 from cudf.utils.scalar import maybe_nested_pa_scalar_to_py
 
@@ -26,40 +25,6 @@ if TYPE_CHECKING:
 
 
 class IntervalColumn(ColumnBase):
-    _VALID_PLC_TYPES = {plc.TypeId.STRUCT}
-
-    @classmethod
-    def _validate_args(
-        cls, plc_column: plc.Column, dtype: DtypeObj
-    ) -> tuple[plc.Column, DtypeObj]:
-        # Validate plc_column TypeId - IntervalColumn uses STRUCT type
-        if not (
-            isinstance(plc_column, plc.Column)
-            and plc_column.type().id() == plc.TypeId.STRUCT
-        ):
-            raise ValueError(
-                "plc_column must be a pylibcudf.Column with TypeId STRUCT"
-            )
-        if plc_column.num_children() != 2:
-            raise ValueError(
-                "plc_column must have two children (left edges, right edges)."
-            )
-        if not is_dtype_obj_interval(dtype):
-            raise ValueError(f"dtype must be an interval type: Got {dtype}.")
-
-        # Validate that children dtypes are compatible with target subtype
-        for i, child in enumerate(plc_column.children()):
-            try:
-                ColumnBase._validate_dtype_recursively(
-                    child, IntervalDtype.from_interval_dtype(dtype).subtype
-                )
-            except ValueError as e:
-                raise ValueError(
-                    f"{'Right' if i else 'Left'} interval bound validation failed: {e}"
-                ) from e
-
-        return plc_column, dtype
-
     @classmethod
     def from_arrow(cls, array: pa.Array | pa.ChunkedArray) -> Self:
         if not isinstance(array, pa.ExtensionArray):
