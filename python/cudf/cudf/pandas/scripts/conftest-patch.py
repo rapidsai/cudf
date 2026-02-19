@@ -3178,8 +3178,6 @@ NODEIDS_THAT_FAIL_WITH_CUDF_PANDAS = {
     "tests/groupby/methods/test_quantile.py::test_quantile[1-a_vals2-b_vals2-higher]",
     "tests/groupby/methods/test_quantile.py::test_quantile[1-a_vals2-b_vals2-lower]",
     "tests/groupby/methods/test_quantile.py::test_quantile[1-a_vals2-b_vals2-nearest]",
-    "tests/groupby/methods/test_quantile.py::test_quantile_array",
-    "tests/groupby/methods/test_quantile.py::test_quantile_array2",
     "tests/groupby/methods/test_quantile.py::test_quantile_missing_group_values_correct_results[key4-val4-expected_key4-expected_val4]",
     "tests/groupby/methods/test_rank.py::test_groupby_axis0_cummax_axis1",
     "tests/groupby/methods/test_rank.py::test_rank_avg_even_vals[True-int32]",
