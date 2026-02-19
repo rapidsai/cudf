@@ -30,7 +30,23 @@ class mark_join;
  * CAS on the hash MSB, then a retrieve kernel collects marked (semi) or unmarked
  * (anti) entries.
  *
- * This class enables building the hash table once and probing multiple times.
+ * This class enables building the hash table once and probing multiple times
+ * with different right (probe) tables, amortizing the build cost.
+ *
+ * @note This class is designed for the case where the **left table is reused**
+ * across multiple semi/anti join operations. It should only be used when:
+ * - The left (build) table is **smaller** than the right (probe) table.
+ *   Building a hash table from the larger table is memory-inefficient and
+ *   leads to poor probe performance due to longer collision chains.
+ * - The left table is **reasonably small** (e.g. ≤1M rows). The mark-based
+ *   probe walks the hash table linearly per probe row, so performance degrades
+ *   with large hash tables. For large build tables, consider alternative join
+ *   strategies.
+ * - The left table is probed **multiple times**. If only a single join is needed,
+ *   there is no benefit to reuse and standard join APIs may be more efficient.
+ *
+ * For the common case where the **right (filter) table** is reused, use
+ * `cudf::filtered_join` instead, which builds a distinct set from the right table.
  *
  * @note All NaNs are considered as equal
  */
