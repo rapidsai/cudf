@@ -47,15 +47,6 @@ namespace detail {
 
 namespace {
 
-// Get the JIT kernel program for join filtering
-jitify2::Kernel get_join_filter_kernel(std::string const& kernel_name,
-                                       std::string const& cuda_source)
-{
-  CUDF_FUNC_RANGE();
-  return cudf::jit::get_program_cache(*join_jit_filter_join_kernel_cu_jit)
-    .get_kernel(kernel_name, {}, {{"cudf/detail/operation-udf.hpp", cuda_source}}, {"-arch=sm_."});
-}
-
 // Build template parameters for JIT kernel
 jitify2::StringVec build_join_filter_template_params(std::vector<column_view> const& left_columns,
                                                      std::vector<column_view> const& right_columns,
@@ -115,7 +106,8 @@ jitify2::ConfiguredKernel build_join_filter_kernel(std::string const& predicate_
     jitify2::reflection::Template("cudf::join::jit::filter_join_kernel").instantiate(template_args);
 
   // Get compiled kernel
-  auto kernel = get_join_filter_kernel(kernel_name, cuda_source);
+  auto kernel =
+    cudf::jit::get_udf_kernel(*join_jit_filter_join_kernel_cu_jit, kernel_name, cuda_source);
 
   return kernel->configure_1d_max_occupancy(0, 0, nullptr, stream.value());
 }

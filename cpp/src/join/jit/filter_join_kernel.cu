@@ -13,6 +13,10 @@
 #include <jit/accessors.cuh>
 #include <jit/span.cuh>
 
+#pragma nv_hdrstop  // The above headers are used by the kernel below and need to be included before
+                    // it. Each UDF will have a different operation-udf.hpp generated for it, so we
+                    // need to put this pragma before including it to avoid PCH mismatch.
+
 // clang-format off
 // This header is an inlined header that defines the GENERIC_JOIN_FILTER_OP function. It is placed here
 // so the symbols in the headers above can be used by it.
