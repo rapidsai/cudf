@@ -33,6 +33,7 @@ from cudf_polars.experimental.rapidsmpf.utils import (
     allgather_reduce,
     chunk_to_frame,
     empty_table_chunk,
+    get_partitioning_moduli,
     process_children,
     recv_metadata,
     remap_partitioning,
@@ -80,38 +81,28 @@ def _is_partitioned_on_keys(
     return inter_rank.modulus % target_modulus == 0
 
 
-def _get_partitioning_modulus(metadata: ChannelMetadata) -> int | None:
-    """Get the modulus from the metadata's partitioning, if any."""
-    if metadata.partitioning is None:
-        return None
-    inter_rank = metadata.partitioning.inter_rank
-    if inter_rank is None or inter_rank == "inherit":
-        return None
-    return inter_rank.modulus
+# def _get_key_partitioning_modulus(
+#     metadata: ChannelMetadata,
+#     key_indices: tuple[int, ...],
+#     nranks: int,
+# ) -> int | None:
+#     """
+#     Get the modulus if data is partitioned on the specified keys.
 
-
-def _get_key_partitioning_modulus(
-    metadata: ChannelMetadata,
-    key_indices: tuple[int, ...],
-    nranks: int,
-) -> int | None:
-    """
-    Get the modulus if data is partitioned on the specified keys.
-
-    Returns the modulus if partitioned on exactly the given keys, else None.
-    """
-    if metadata.partitioning is None:
-        return None
-    inter_rank = metadata.partitioning.inter_rank
-    local = metadata.partitioning.local
-    partitioning = local if (nranks == 0 and inter_rank is None) else inter_rank
-    if (
-        not isinstance(partitioning, HashScheme)
-        or local is None
-        or set(partitioning.column_indices) != set(key_indices)
-    ):
-        return None
-    return partitioning.modulus
+#     Returns the modulus if partitioned on exactly the given keys, else None.
+#     """
+#     if metadata.partitioning is None:
+#         return None
+#     inter_rank = metadata.partitioning.inter_rank
+#     local = metadata.partitioning.local
+#     partitioning = local if (nranks == 0 and inter_rank is None) else inter_rank
+#     if (
+#         not isinstance(partitioning, HashScheme)
+#         or local is None
+#         or set(partitioning.column_indices) != set(key_indices)
+#     ):
+#         return None
+#     return partitioning.modulus
 
 
 @define_actor()
@@ -834,16 +825,22 @@ async def join_actor(
 
         # Check if either side is already partitioned on join keys
         nranks = context.comm().nranks
-        left_existing_modulus = _get_key_partitioning_modulus(
+        # left_existing_modulus = _get_key_partitioning_modulus(
+        #     left_metadata, left_key_indices, nranks
+        # )
+        left_partitioning_moduli = get_partitioning_moduli(
             left_metadata, left_key_indices, nranks
         )
-        right_existing_modulus = _get_key_partitioning_modulus(
+        # right_existing_modulus = _get_key_partitioning_modulus(
+        #     right_metadata, right_key_indices, nranks
+        # )
+        right_partitioning_moduli = get_partitioning_moduli(
             right_metadata, right_key_indices, nranks
         )
 
         # Skip sampling if both sides are already partitioned on join keys
-        if left_existing_modulus is not None and (
-            right_existing_modulus == left_existing_modulus
+        if sum(left_partitioning_moduli) > 0 and (
+            left_partitioning_moduli == right_partitioning_moduli
         ):
             if tracer is not None:
                 tracer.decision = "chunkwise"
@@ -854,7 +851,7 @@ async def join_actor(
                 ch_out,
                 ch_left,
                 ch_right,
-                left_existing_modulus,
+                left_partitioning_moduli,
                 tracer=tracer,
             )
 
