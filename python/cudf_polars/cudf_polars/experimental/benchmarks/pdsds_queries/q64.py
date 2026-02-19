@@ -440,5 +440,4 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
             nulls_last=True,
             descending=[False, False, False, False, False],
         )
-        .limit(100)
     )
