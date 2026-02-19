@@ -773,7 +773,6 @@ async def sink_node(
     # with other files.
 
     async with shutdown_on_error(context, ch_in, ch_out):
-        # Drain the metadata channel (we don't need it for sinking)
         metadata = await recv_metadata(ch_in, context)
 
         if context.comm().nranks > 1:
