@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
 from cudf_polars.experimental.benchmarks.utils import get_data
 
 if TYPE_CHECKING:
@@ -17,7 +18,19 @@ if TYPE_CHECKING:
 
 def duckdb_impl(run_config: RunConfig) -> str:
     """Query 73."""
-    return """
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=73,
+        qualification=run_config.qualification,
+    )
+    dom = params["dom"]
+    bp = params["bp"]
+    year = params["year"]
+    counties = params["counties"]
+
+    counties_str = ", ".join(f"'{c}'" for c in counties)
+
+    return f"""
     SELECT c_last_name,
            c_first_name,
            c_salutation,
@@ -34,9 +47,9 @@ def duckdb_impl(run_config: RunConfig) -> str:
             WHERE  store_sales.ss_sold_date_sk = date_dim.d_date_sk
                    AND store_sales.ss_store_sk = store.s_store_sk
                    AND store_sales.ss_hdemo_sk = household_demographics.hd_demo_sk
-                   AND date_dim.d_dom BETWEEN 1 AND 2
-                   AND ( household_demographics.hd_buy_potential = '>10000'
-                          OR household_demographics.hd_buy_potential = '0-500' )
+                   AND date_dim.d_dom BETWEEN {dom[0]} AND {dom[1]}
+                   AND ( household_demographics.hd_buy_potential = '{bp[0]}'
+                          OR household_demographics.hd_buy_potential = '{bp[1]}' )
                    AND household_demographics.hd_vehicle_count > 0
                    AND CASE
                          WHEN household_demographics.hd_vehicle_count > 0 THEN
@@ -44,11 +57,8 @@ def duckdb_impl(run_config: RunConfig) -> str:
                          household_demographics.hd_vehicle_count
                          ELSE NULL
                        END > 1
-                   AND date_dim.d_year IN ( 2000, 2000 + 1, 2000 + 2 )
-                   AND store.s_county IN ( 'Williamson County', 'Williamson County',
-                                           'Williamson County',
-                                                                 'Williamson County'
-                                         )
+                   AND date_dim.d_year IN ( {year}, {year} + 1, {year} + 2 )
+                   AND store.s_county IN ( {counties_str} )
             GROUP  BY ss_ticket_number,
                       ss_customer_sk) dj,
            customer
@@ -61,6 +71,17 @@ def duckdb_impl(run_config: RunConfig) -> str:
 
 def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     """Query 73."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=73,
+        qualification=run_config.qualification,
+    )
+
+    dom = params["dom"]
+    bp = params["bp"]
+    year = params["year"]
+    counties = params["counties"]
+
     store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
     store = get_data(run_config.dataset_path, "store", run_config.suffix)
@@ -69,14 +90,14 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     )
     customer = get_data(run_config.dataset_path, "customer", run_config.suffix)
     filtered_dates = date_dim.filter(
-        (pl.col("d_dom").is_between(1, 2))
-        & (pl.col("d_year").is_in([2000, 2001, 2002]))
+        (pl.col("d_dom").is_between(dom[0], dom[1]))
+        & (pl.col("d_year").is_in([year, year + 1, year + 2]))
     ).select("d_date_sk")
-    filtered_stores = store.filter(pl.col("s_county") == "Williamson County").select(
+    filtered_stores = store.filter(pl.col("s_county").is_in(counties)).select(
         "s_store_sk"
     )
     filtered_hd = household_demographics.filter(
-        (pl.col("hd_buy_potential").is_in([">10000", "0-500"]))
+        (pl.col("hd_buy_potential").is_in(bp))
         & (pl.col("hd_vehicle_count") > 0)
         & (
             pl.when(pl.col("hd_vehicle_count") > 0)

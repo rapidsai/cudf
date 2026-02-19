@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
 from cudf_polars.experimental.benchmarks.utils import get_data
 
 if TYPE_CHECKING:
@@ -17,20 +18,27 @@ if TYPE_CHECKING:
 
 def duckdb_impl(run_config: RunConfig) -> str:
     """Query 74."""
-    return """
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=74,
+        qualification=run_config.qualification,
+    )
+    year = params["year"]
+
+    return f"""
     WITH year_total
          AS (SELECT c_customer_id    customer_id,
                     c_first_name     customer_first_name,
                     c_last_name      customer_last_name,
                     d_year           AS year1,
-                    Sum(ss_net_paid) year_total,
+                    STDDEV_SAMP(ss_net_paid) year_total,
                     's'              sale_type
              FROM   customer,
                     store_sales,
                     date_dim
              WHERE  c_customer_sk = ss_customer_sk
                     AND ss_sold_date_sk = d_date_sk
-                    AND d_year IN ( 1999, 1999 + 1 )
+                    AND d_year IN ( {year}, {year} + 1 )
              GROUP  BY c_customer_id,
                        c_first_name,
                        c_last_name,
@@ -40,14 +48,14 @@ def duckdb_impl(run_config: RunConfig) -> str:
                     c_first_name     customer_first_name,
                     c_last_name      customer_last_name,
                     d_year           AS year1,
-                    Sum(ws_net_paid) year_total,
+                    STDDEV_SAMP(ws_net_paid) year_total,
                     'w'              sale_type
              FROM   customer,
                     web_sales,
                     date_dim
              WHERE  c_customer_sk = ws_bill_customer_sk
                     AND ws_sold_date_sk = d_date_sk
-                    AND d_year IN ( 1999, 1999 + 1 )
+                    AND d_year IN ( {year}, {year} + 1 )
              GROUP  BY c_customer_id,
                        c_first_name,
                        c_last_name,
@@ -66,10 +74,10 @@ def duckdb_impl(run_config: RunConfig) -> str:
            AND t_w_firstyear.sale_type = 'w'
            AND t_s_secyear.sale_type = 's'
            AND t_w_secyear.sale_type = 'w'
-           AND t_s_firstyear.year1 = 1999
-           AND t_s_secyear.year1 = 1999 + 1
-           AND t_w_firstyear.year1 = 1999
-           AND t_w_secyear.year1 = 1999 + 1
+           AND t_s_firstyear.year1 = {year}
+           AND t_s_secyear.year1 = {year} + 1
+           AND t_w_firstyear.year1 = {year}
+           AND t_w_secyear.year1 = {year} + 1
            AND t_s_firstyear.year_total > 0
            AND t_w_firstyear.year_total > 0
            AND CASE
@@ -97,8 +105,9 @@ def _year_totals_component(
     customer_fk: str,
     amount_col: str,
     sale_type: str,
+    year: int,
 ) -> pl.LazyFrame:
-    dates = date_dim.filter(pl.col("d_year").is_in([1999, 2000])).select(
+    dates = date_dim.filter(pl.col("d_year").is_in([year, year + 1])).select(
         ["d_date_sk", "d_year"]
     )
     cust = customer.select(
@@ -108,7 +117,7 @@ def _year_totals_component(
         sales.join(dates, left_on=date_fk, right_on="d_date_sk")
         .join(cust, left_on=customer_fk, right_on="c_customer_sk")
         .group_by(["c_customer_id", "c_first_name", "c_last_name", "d_year"])
-        .agg(pl.col(amount_col).sum().alias("year_total"))
+        .agg(pl.col(amount_col).std().alias("year_total"))
         .select(
             pl.col("c_customer_id").alias("customer_id"),
             pl.col("c_first_name").alias("customer_first_name"),
@@ -122,6 +131,14 @@ def _year_totals_component(
 
 def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     """Query 74."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=74,
+        qualification=run_config.qualification,
+    )
+
+    year = params["year"]
+
     customer = get_data(run_config.dataset_path, "customer", run_config.suffix)
     store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
     web_sales = get_data(run_config.dataset_path, "web_sales", run_config.suffix)
@@ -137,6 +154,7 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
                 customer_fk="ss_customer_sk",
                 amount_col="ss_net_paid",
                 sale_type="s",
+                year=year,
             ),
             _year_totals_component(
                 sales=web_sales,
@@ -146,6 +164,7 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
                 customer_fk="ws_bill_customer_sk",
                 amount_col="ws_net_paid",
                 sale_type="w",
+                year=year,
             ),
         ]
     )
@@ -155,41 +174,41 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     ).agg(
         [
             (
-                pl.when((pl.col("sale_type") == "s") & (pl.col("year1") == 1999))
+                pl.when((pl.col("sale_type") == "s") & (pl.col("year1") == year))
                 .then(pl.col("year_total"))
                 .otherwise(None)
             )
             .sum()
-            .alias("s_1999"),
+            .alias("s_first"),
             (
-                pl.when((pl.col("sale_type") == "s") & (pl.col("year1") == 2000))
+                pl.when((pl.col("sale_type") == "s") & (pl.col("year1") == year + 1))
                 .then(pl.col("year_total"))
                 .otherwise(None)
             )
             .sum()
-            .alias("s_2000"),
+            .alias("s_second"),
             (
-                pl.when((pl.col("sale_type") == "w") & (pl.col("year1") == 1999))
+                pl.when((pl.col("sale_type") == "w") & (pl.col("year1") == year))
                 .then(pl.col("year_total"))
                 .otherwise(None)
             )
             .sum()
-            .alias("w_1999"),
+            .alias("w_first"),
             (
-                pl.when((pl.col("sale_type") == "w") & (pl.col("year1") == 2000))
+                pl.when((pl.col("sale_type") == "w") & (pl.col("year1") == year + 1))
                 .then(pl.col("year_total"))
                 .otherwise(None)
             )
             .sum()
-            .alias("w_2000"),
+            .alias("w_second"),
         ]
     )
 
     return (
-        grouped.filter((pl.col("s_1999") > 0) & (pl.col("w_1999") > 0))
+        grouped.filter((pl.col("s_first") > 0) & (pl.col("w_first") > 0))
         .with_columns(
-            (pl.col("w_2000") / pl.col("w_1999")).alias("w_ratio"),
-            (pl.col("s_2000") / pl.col("s_1999")).alias("s_ratio"),
+            (pl.col("w_second") / pl.col("w_first")).alias("w_ratio"),
+            (pl.col("s_second") / pl.col("s_first")).alias("s_ratio"),
         )
         .filter(pl.col("w_ratio") > pl.col("s_ratio"))
         .select(["customer_id", "customer_first_name", "customer_last_name"])

@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
 from cudf_polars.experimental.benchmarks.utils import get_data
 
 if TYPE_CHECKING:
@@ -17,7 +18,15 @@ if TYPE_CHECKING:
 
 def duckdb_impl(run_config: RunConfig) -> str:
     """Query 75."""
-    return """
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=75,
+        qualification=run_config.qualification,
+    )
+    category = params["category"]
+    year = params["year"]
+
+    return f"""
         WITH all_sales AS
         ( SELECT d_year ,
                 i_brand_id ,
@@ -39,7 +48,7 @@ def duckdb_impl(run_config: RunConfig) -> str:
             JOIN date_dim ON d_date_sk=cs_sold_date_sk
             LEFT JOIN catalog_returns ON (cs_order_number=cr_order_number
                                             AND cs_item_sk=cr_item_sk)
-            WHERE i_category='Books'
+            WHERE i_category='{category}'
             UNION SELECT d_year ,
                         i_brand_id ,
                         i_class_id ,
@@ -52,7 +61,7 @@ def duckdb_impl(run_config: RunConfig) -> str:
             JOIN date_dim ON d_date_sk=ss_sold_date_sk
             LEFT JOIN store_returns ON (ss_ticket_number=sr_ticket_number
                                         AND ss_item_sk=sr_item_sk)
-            WHERE i_category='Books'
+            WHERE i_category='{category}'
             UNION SELECT d_year ,
                         i_brand_id ,
                         i_class_id ,
@@ -65,7 +74,7 @@ def duckdb_impl(run_config: RunConfig) -> str:
             JOIN date_dim ON d_date_sk=ws_sold_date_sk
             LEFT JOIN web_returns ON (ws_order_number=wr_order_number
                                         AND ws_item_sk=wr_item_sk)
-            WHERE i_category='Books') sales_detail
+            WHERE i_category='{category}') sales_detail
         GROUP BY d_year,
                     i_brand_id,
                     i_class_id,
@@ -87,8 +96,8 @@ def duckdb_impl(run_config: RunConfig) -> str:
         AND curr_yr.i_class_id=prev_yr.i_class_id
         AND curr_yr.i_category_id=prev_yr.i_category_id
         AND curr_yr.i_manufact_id=prev_yr.i_manufact_id
-        AND curr_yr.d_year=2002
-        AND prev_yr.d_year=2002-1
+        AND curr_yr.d_year={year}
+        AND prev_yr.d_year={year}-1
         AND CAST(curr_yr.sales_cnt AS DECIMAL(17,2))/CAST(prev_yr.sales_cnt AS DECIMAL(17,2))<0.9
         ORDER BY sales_cnt_diff,
                 sales_amt_diff
@@ -98,6 +107,15 @@ def duckdb_impl(run_config: RunConfig) -> str:
 
 def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     """Query 75."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=75,
+        qualification=run_config.qualification,
+    )
+
+    category = params["category"]
+    year = params["year"]
+
     catalog_sales = get_data(
         run_config.dataset_path, "catalog_sales", run_config.suffix
     )
@@ -113,12 +131,12 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     item = get_data(run_config.dataset_path, "item", run_config.suffix)
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
 
-    books_items = item.filter(pl.col("i_category") == "Books").select(
+    filtered_items = item.filter(pl.col("i_category") == category).select(
         ["i_item_sk", "i_brand_id", "i_class_id", "i_category_id", "i_manufact_id"]
     )
 
     catalog_component = (
-        catalog_sales.join(books_items, left_on="cs_item_sk", right_on="i_item_sk")
+        catalog_sales.join(filtered_items, left_on="cs_item_sk", right_on="i_item_sk")
         .join(date_dim, left_on="cs_sold_date_sk", right_on="d_date_sk")
         .join(
             catalog_returns,
@@ -151,7 +169,7 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     )
 
     store_component = (
-        store_sales.join(books_items, left_on="ss_item_sk", right_on="i_item_sk")
+        store_sales.join(filtered_items, left_on="ss_item_sk", right_on="i_item_sk")
         .join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
         .join(
             store_returns,
@@ -184,7 +202,7 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     )
 
     web_component = (
-        web_sales.join(books_items, left_on="ws_item_sk", right_on="i_item_sk")
+        web_sales.join(filtered_items, left_on="ws_item_sk", right_on="i_item_sk")
         .join(date_dim, left_on="ws_sold_date_sk", right_on="d_date_sk")
         .join(
             web_returns,
@@ -229,7 +247,7 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         )
     )
 
-    curr_yr = all_sales.filter(pl.col("d_year") == 2002).select(
+    curr_yr = all_sales.filter(pl.col("d_year") == year).select(
         [
             pl.col("d_year").alias("curr_d_year"),
             pl.col("i_brand_id").alias("curr_brand_id"),
@@ -241,7 +259,7 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         ]
     )
 
-    prev_yr = all_sales.filter(pl.col("d_year") == 2001).select(
+    prev_yr = all_sales.filter(pl.col("d_year") == year - 1).select(
         [
             pl.col("d_year").alias("prev_d_year"),
             pl.col("i_brand_id").alias("prev_brand_id"),

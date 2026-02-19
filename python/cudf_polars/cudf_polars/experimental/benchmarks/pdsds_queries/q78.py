@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
 from cudf_polars.experimental.benchmarks.utils import get_data
 
 if TYPE_CHECKING:
@@ -16,8 +17,15 @@ if TYPE_CHECKING:
 
 
 def duckdb_impl(run_config: RunConfig) -> str:
-    """Query 77."""
-    return """
+    """Query 78."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=78,
+        qualification=run_config.qualification,
+    )
+    year = params["year"]
+
+    return f"""
         WITH ws AS
         (SELECT d_year AS ws_sold_year,
                 ws_item_sk,
@@ -82,7 +90,7 @@ def duckdb_impl(run_config: RunConfig) -> str:
                         AND cs_customer_sk=ss_customer_sk)
         WHERE (coalesce(ws_qty,0)>0
             OR coalesce(cs_qty, 0)>0)
-        AND ss_sold_year=2000
+        AND ss_sold_year={year}
         ORDER BY ss_sold_year,
                 ss_item_sk,
                 ss_customer_sk,
@@ -99,6 +107,14 @@ def duckdb_impl(run_config: RunConfig) -> str:
 
 def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     """Query 78."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=78,
+        qualification=run_config.qualification,
+    )
+
+    year = params["year"]
+
     web_sales = get_data(run_config.dataset_path, "web_sales", run_config.suffix)
     web_returns = get_data(run_config.dataset_path, "web_returns", run_config.suffix)
     catalog_sales = get_data(
@@ -231,7 +247,7 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         .filter(
             (pl.col("ws_qty").fill_null(0) > 0)
             & (pl.col("cs_qty").fill_null(0) > 0)
-            & (pl.col("ss_sold_year") == 1999)
+            & (pl.col("ss_sold_year") == year)
         )
         .select(
             [

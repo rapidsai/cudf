@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
 from cudf_polars.experimental.benchmarks.utils import get_data
 
 if TYPE_CHECKING:
@@ -17,7 +18,20 @@ if TYPE_CHECKING:
 
 def duckdb_impl(run_config: RunConfig) -> str:
     """Query 82."""
-    return """
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=82,
+        qualification=run_config.qualification,
+    )
+    price = params["price"]
+    sdate = params["sdate"]
+    manufact = params["manufact"]
+    inv_min = params["inv_min"]
+    inv_max = params["inv_max"]
+
+    manufact_str = ", ".join(str(m) for m in manufact)
+
+    return f"""
     -- start query 82 in stream 0 using template query82.tpl
     SELECT
              i_item_id ,
@@ -27,13 +41,13 @@ def duckdb_impl(run_config: RunConfig) -> str:
              inventory,
              date_dim,
              store_sales
-    WHERE    i_current_price BETWEEN 63 AND      63+30
+    WHERE    i_current_price BETWEEN {price} AND      {price}+30
     AND      inv_item_sk = i_item_sk
     AND      d_date_sk=inv_date_sk
-    AND      d_date BETWEEN Cast('1998-04-27' AS DATE) AND      (
-                      Cast('1998-04-27' AS DATE) + INTERVAL '60' day)
-    AND      i_manufact_id IN (57,293,427,320)
-    AND      inv_quantity_on_hand BETWEEN 100 AND      500
+    AND      d_date BETWEEN Cast('{sdate}' AS DATE) AND      (
+                      Cast('{sdate}' AS DATE) + INTERVAL '60' day)
+    AND      i_manufact_id IN ({manufact_str})
+    AND      inv_quantity_on_hand BETWEEN {inv_min} AND      {inv_max}
     AND      ss_item_sk = i_item_sk
     GROUP BY i_item_id,
              i_item_desc,
@@ -45,24 +59,42 @@ def duckdb_impl(run_config: RunConfig) -> str:
 
 def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     """Query 82."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=82,
+        qualification=run_config.qualification,
+    )
+
+    price = params["price"]
+    sdate = params["sdate"]
+    manufact = params["manufact"]
+    inv_min = params["inv_min"]
+    inv_max = params["inv_max"]
+
+    year, month, day = map(int, sdate.split("-"))
+    start_date = pl.date(year, month, day)
+    # Add 60 days to start_date
+    from datetime import date, timedelta
+
+    end_date_obj = date(year, month, day) + timedelta(days=60)
+    end_date = pl.date(end_date_obj.year, end_date_obj.month, end_date_obj.day)
+
     item = get_data(run_config.dataset_path, "item", run_config.suffix)
     inventory = get_data(run_config.dataset_path, "inventory", run_config.suffix)
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
     store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
-    start_date = pl.date(1998, 4, 27)
-    end_date = pl.date(1998, 6, 26)
     return (
         item.join(inventory, left_on="i_item_sk", right_on="inv_item_sk")
         .join(date_dim, left_on="inv_date_sk", right_on="d_date_sk")
         .join(store_sales, left_on="i_item_sk", right_on="ss_item_sk")
         .filter(
-            (pl.col("i_current_price") >= 63)
-            & (pl.col("i_current_price") <= 93)
+            (pl.col("i_current_price") >= price)
+            & (pl.col("i_current_price") <= price + 30)
             & (pl.col("d_date") >= start_date)
             & (pl.col("d_date") <= end_date)
-            & pl.col("i_manufact_id").is_in([57, 293, 427, 320])
-            & (pl.col("inv_quantity_on_hand") >= 100)
-            & (pl.col("inv_quantity_on_hand") <= 500)
+            & pl.col("i_manufact_id").is_in(manufact)
+            & (pl.col("inv_quantity_on_hand") >= inv_min)
+            & (pl.col("inv_quantity_on_hand") <= inv_max)
         )
         .group_by(["i_item_id", "i_item_desc", "i_current_price"])
         .agg([])

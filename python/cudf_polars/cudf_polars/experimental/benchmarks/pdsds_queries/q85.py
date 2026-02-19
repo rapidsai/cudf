@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
 from cudf_polars.experimental.benchmarks.utils import get_data
 
 if TYPE_CHECKING:
@@ -17,7 +18,23 @@ if TYPE_CHECKING:
 
 def duckdb_impl(run_config: RunConfig) -> str:
     """Query 85."""
-    return """
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=85,
+        qualification=run_config.qualification,
+    )
+    year = params["year"]
+    ms = params["ms"]
+    es = params["es"]
+    price_ranges = params["price_ranges"]
+    states = params["states"]
+    np_min = params["np_min"]
+    np_max = params["np_max"]
+
+    states1_str = ", ".join(f"'{s}'" for s in states[0:3])
+    states2_str = ", ".join(f"'{s}'" for s in states[3:6])
+
+    return f"""
     SELECT Substr(r_reason_desc, 1, 20),
                    Avg(ws_quantity),
                    Avg(wr_refunded_cash),
@@ -34,35 +51,32 @@ def duckdb_impl(run_config: RunConfig) -> str:
            AND ws_item_sk = wr_item_sk
            AND ws_order_number = wr_order_number
            AND ws_sold_date_sk = d_date_sk
-           AND d_year = 2001
+           AND d_year = {year}
            AND cd1.cd_demo_sk = wr_refunded_cdemo_sk
            AND cd2.cd_demo_sk = wr_returning_cdemo_sk
            AND ca_address_sk = wr_refunded_addr_sk
            AND r_reason_sk = wr_reason_sk
-           AND ( ( cd1.cd_marital_status = 'W'
+           AND ( ( cd1.cd_marital_status = '{ms[0]}'
                    AND cd1.cd_marital_status = cd2.cd_marital_status
-                   AND cd1.cd_education_status = 'Primary'
+                   AND cd1.cd_education_status = '{es[0]}'
                    AND cd1.cd_education_status = cd2.cd_education_status
-                   AND ws_sales_price BETWEEN 100.00 AND 150.00 )
-                  OR ( cd1.cd_marital_status = 'D'
+                   AND ws_sales_price BETWEEN {price_ranges[0][0]} AND {price_ranges[0][1]} )
+                  OR ( cd1.cd_marital_status = '{ms[1]}'
                        AND cd1.cd_marital_status = cd2.cd_marital_status
-                       AND cd1.cd_education_status = 'Secondary'
+                       AND cd1.cd_education_status = '{es[1]}'
                        AND cd1.cd_education_status = cd2.cd_education_status
-                       AND ws_sales_price BETWEEN 50.00 AND 100.00 )
-                  OR ( cd1.cd_marital_status = 'M'
+                       AND ws_sales_price BETWEEN {price_ranges[1][0]} AND {price_ranges[1][1]} )
+                  OR ( cd1.cd_marital_status = '{ms[2]}'
                        AND cd1.cd_marital_status = cd2.cd_marital_status
-                       AND cd1.cd_education_status = 'Advanced Degree'
+                       AND cd1.cd_education_status = '{es[2]}'
                        AND cd1.cd_education_status = cd2.cd_education_status
-                       AND ws_sales_price BETWEEN 150.00 AND 200.00 ) )
+                       AND ws_sales_price BETWEEN {price_ranges[2][0]} AND {price_ranges[2][1]} ) )
            AND ( ( ca_country = 'United States'
-                   AND ca_state IN ( 'KY', 'ME', 'IL' )
-                   AND ws_net_profit BETWEEN 100 AND 200 )
+                   AND ca_state IN ( {states1_str} )
+                   AND ws_net_profit BETWEEN {np_min} AND {np_max} )
                   OR ( ca_country = 'United States'
-                       AND ca_state IN ( 'OK', 'NE', 'MN' )
-                       AND ws_net_profit BETWEEN 150 AND 300 )
-                  OR ( ca_country = 'United States'
-                       AND ca_state IN ( 'FL', 'WI', 'KS' )
-                       AND ws_net_profit BETWEEN 50 AND 250 ) )
+                       AND ca_state IN ( {states2_str} )
+                       AND ws_net_profit BETWEEN {np_min} AND {np_max} ) )
     GROUP  BY r_reason_desc
     ORDER  BY Substr(r_reason_desc, 1, 20),
               Avg(ws_quantity),
@@ -74,6 +88,20 @@ def duckdb_impl(run_config: RunConfig) -> str:
 
 def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     """Query 85."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=85,
+        qualification=run_config.qualification,
+    )
+
+    year = params["year"]
+    ms = params["ms"]
+    es = params["es"]
+    price_ranges = params["price_ranges"]
+    states = params["states"]
+    np_min = params["np_min"]
+    np_max = params["np_max"]
+
     web_sales = get_data(run_config.dataset_path, "web_sales", run_config.suffix)
     web_returns = get_data(run_config.dataset_path, "web_returns", run_config.suffix)
     web_page = get_data(run_config.dataset_path, "web_page", run_config.suffix)
@@ -96,7 +124,7 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
             web_page, left_on="ws_web_page_sk", right_on="wp_web_page_sk", how="inner"
         )
         .join(
-            date_dim.filter(pl.col("d_year") == 2001),
+            date_dim.filter(pl.col("d_year") == year),
             left_on="ws_sold_date_sk",
             right_on="d_date_sk",
             how="inner",
@@ -134,42 +162,49 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         .join(reason, left_on="wr_reason_sk", right_on="r_reason_sk", how="inner")
         .filter(
             (
-                (pl.col("cd1_marital_status") == "W")
+                (pl.col("cd1_marital_status") == ms[0])
                 & (pl.col("cd1_marital_status") == pl.col("cd2_marital_status"))
-                & (pl.col("cd1_education_status") == "Primary")
+                & (pl.col("cd1_education_status") == es[0])
                 & (pl.col("cd1_education_status") == pl.col("cd2_education_status"))
-                & (pl.col("ws_sales_price").is_between(100.00, 150.00))
+                & (
+                    pl.col("ws_sales_price").is_between(
+                        price_ranges[0][0], price_ranges[0][1]
+                    )
+                )
             )
             | (
-                (pl.col("cd1_marital_status") == "D")
+                (pl.col("cd1_marital_status") == ms[1])
                 & (pl.col("cd1_marital_status") == pl.col("cd2_marital_status"))
-                & (pl.col("cd1_education_status") == "Secondary")
+                & (pl.col("cd1_education_status") == es[1])
                 & (pl.col("cd1_education_status") == pl.col("cd2_education_status"))
-                & (pl.col("ws_sales_price").is_between(50.00, 100.00))
+                & (
+                    pl.col("ws_sales_price").is_between(
+                        price_ranges[1][0], price_ranges[1][1]
+                    )
+                )
             )
             | (
-                (pl.col("cd1_marital_status") == "M")
+                (pl.col("cd1_marital_status") == ms[2])
                 & (pl.col("cd1_marital_status") == pl.col("cd2_marital_status"))
-                & (pl.col("cd1_education_status") == "Advanced Degree")
+                & (pl.col("cd1_education_status") == es[2])
                 & (pl.col("cd1_education_status") == pl.col("cd2_education_status"))
-                & (pl.col("ws_sales_price").is_between(150.00, 200.00))
+                & (
+                    pl.col("ws_sales_price").is_between(
+                        price_ranges[2][0], price_ranges[2][1]
+                    )
+                )
             )
         )
         .filter(
             (
                 (pl.col("ca_country") == "United States")
-                & (pl.col("ca_state").is_in(["KY", "ME", "IL"]))
-                & (pl.col("ws_net_profit").is_between(100, 200))
+                & (pl.col("ca_state").is_in(states[0:3]))
+                & (pl.col("ws_net_profit").is_between(np_min, np_max))
             )
             | (
                 (pl.col("ca_country") == "United States")
-                & (pl.col("ca_state").is_in(["OK", "NE", "MN"]))
-                & (pl.col("ws_net_profit").is_between(150, 300))
-            )
-            | (
-                (pl.col("ca_country") == "United States")
-                & (pl.col("ca_state").is_in(["FL", "WI", "KS"]))
-                & (pl.col("ws_net_profit").is_between(50, 250))
+                & (pl.col("ca_state").is_in(states[3:6]))
+                & (pl.col("ws_net_profit").is_between(np_min, np_max))
             )
         )
         .group_by("r_reason_desc")

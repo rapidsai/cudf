@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
 from cudf_polars.experimental.benchmarks.utils import get_data
 
 if TYPE_CHECKING:
@@ -17,7 +18,16 @@ if TYPE_CHECKING:
 
 def duckdb_impl(run_config: RunConfig) -> str:
     """Query 76."""
-    return """
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=76,
+        qualification=run_config.qualification,
+    )
+    nullcol_ss = params["nullcol_ss"]
+    nullcol_ws = params["nullcol_ws"]
+    nullcol_cs = params["nullcol_cs"]
+
+    return f"""
     SELECT channel,
                    col_name,
                    d_year,
@@ -26,7 +36,7 @@ def duckdb_impl(run_config: RunConfig) -> str:
                    Count(*)             sales_cnt,
                    Sum(ext_sales_price) sales_amt
     FROM   (SELECT 'store'            AS channel,
-                   'ss_hdemo_sk'      col_name,
+                   '{nullcol_ss}'      col_name,
                    d_year,
                    d_qoy,
                    i_category,
@@ -34,12 +44,12 @@ def duckdb_impl(run_config: RunConfig) -> str:
             FROM   store_sales,
                    item,
                    date_dim
-            WHERE  ss_hdemo_sk IS NULL
+            WHERE  {nullcol_ss} IS NULL
                    AND ss_sold_date_sk = d_date_sk
                    AND ss_item_sk = i_item_sk
             UNION ALL
             SELECT 'web'              AS channel,
-                   'ws_ship_hdemo_sk' col_name,
+                   '{nullcol_ws}' col_name,
                    d_year,
                    d_qoy,
                    i_category,
@@ -47,12 +57,12 @@ def duckdb_impl(run_config: RunConfig) -> str:
             FROM   web_sales,
                    item,
                    date_dim
-            WHERE  ws_ship_hdemo_sk IS NULL
+            WHERE  {nullcol_ws} IS NULL
                    AND ws_sold_date_sk = d_date_sk
                    AND ws_item_sk = i_item_sk
             UNION ALL
             SELECT 'catalog'          AS channel,
-                   'cs_warehouse_sk'  col_name,
+                   '{nullcol_cs}'  col_name,
                    d_year,
                    d_qoy,
                    i_category,
@@ -60,7 +70,7 @@ def duckdb_impl(run_config: RunConfig) -> str:
             FROM   catalog_sales,
                    item,
                    date_dim
-            WHERE  cs_warehouse_sk IS NULL
+            WHERE  {nullcol_cs} IS NULL
                    AND cs_sold_date_sk = d_date_sk
                    AND cs_item_sk = i_item_sk) foo
     GROUP  BY channel,
@@ -79,6 +89,16 @@ def duckdb_impl(run_config: RunConfig) -> str:
 
 def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     """Query 76."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=76,
+        qualification=run_config.qualification,
+    )
+
+    nullcol_ss = params["nullcol_ss"]
+    nullcol_ws = params["nullcol_ws"]
+    nullcol_cs = params["nullcol_cs"]
+
     store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
     web_sales = get_data(run_config.dataset_path, "web_sales", run_config.suffix)
     catalog_sales = get_data(
@@ -87,13 +107,13 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     item = get_data(run_config.dataset_path, "item", run_config.suffix)
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
     store_component = (
-        store_sales.filter(pl.col("ss_hdemo_sk").is_null())
+        store_sales.filter(pl.col(nullcol_ss).is_null())
         .join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
         .join(item, left_on="ss_item_sk", right_on="i_item_sk")
         .select(
             [
                 pl.lit("store").alias("channel"),
-                pl.lit("ss_hdemo_sk").alias("col_name"),
+                pl.lit(nullcol_ss).alias("col_name"),
                 "d_year",
                 "d_qoy",
                 "i_category",
@@ -102,13 +122,13 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         )
     )
     web_component = (
-        web_sales.filter(pl.col("ws_ship_hdemo_sk").is_null())
+        web_sales.filter(pl.col(nullcol_ws).is_null())
         .join(date_dim, left_on="ws_sold_date_sk", right_on="d_date_sk")
         .join(item, left_on="ws_item_sk", right_on="i_item_sk")
         .select(
             [
                 pl.lit("web").alias("channel"),
-                pl.lit("ws_ship_hdemo_sk").alias("col_name"),
+                pl.lit(nullcol_ws).alias("col_name"),
                 "d_year",
                 "d_qoy",
                 "i_category",
@@ -117,13 +137,13 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         )
     )
     catalog_component = (
-        catalog_sales.filter(pl.col("cs_warehouse_sk").is_null())
+        catalog_sales.filter(pl.col(nullcol_cs).is_null())
         .join(date_dim, left_on="cs_sold_date_sk", right_on="d_date_sk")
         .join(item, left_on="cs_item_sk", right_on="i_item_sk")
         .select(
             [
                 pl.lit("catalog").alias("channel"),
-                pl.lit("cs_warehouse_sk").alias("col_name"),
+                pl.lit(nullcol_cs).alias("col_name"),
                 "d_year",
                 "d_qoy",
                 "i_category",

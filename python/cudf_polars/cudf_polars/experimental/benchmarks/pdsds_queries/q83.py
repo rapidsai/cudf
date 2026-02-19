@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
 from cudf_polars.experimental.benchmarks.utils import get_data
 
 if TYPE_CHECKING:
@@ -18,7 +19,16 @@ if TYPE_CHECKING:
 
 def duckdb_impl(run_config: RunConfig) -> str:
     """Query 83."""
-    return """
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=83,
+        qualification=run_config.qualification,
+    )
+    dates = params["dates"]
+
+    dates_str = ", ".join(f"'{d}'" for d in dates)
+
+    return f"""
     WITH sr_items
          AS (SELECT i_item_id               item_id,
                     Sum(sr_return_quantity) sr_item_qty
@@ -31,10 +41,7 @@ def duckdb_impl(run_config: RunConfig) -> str:
                                    WHERE  d_week_seq IN (SELECT d_week_seq
                                                          FROM   date_dim
                                                          WHERE
-                                          d_date IN ( '1999-06-30',
-                                                      '1999-08-28',
-                                                      '1999-11-18'
-                                                    )))
+                                          d_date IN ( {dates_str} )))
                     AND sr_returned_date_sk = d_date_sk
              GROUP  BY i_item_id),
          cr_items
@@ -49,10 +56,7 @@ def duckdb_impl(run_config: RunConfig) -> str:
                                    WHERE  d_week_seq IN (SELECT d_week_seq
                                                          FROM   date_dim
                                                          WHERE
-                                          d_date IN ( '1999-06-30',
-                                                      '1999-08-28',
-                                                      '1999-11-18'
-                                                    )))
+                                          d_date IN ( {dates_str} )))
                     AND cr_returned_date_sk = d_date_sk
              GROUP  BY i_item_id),
          wr_items
@@ -67,10 +71,7 @@ def duckdb_impl(run_config: RunConfig) -> str:
                                    WHERE  d_week_seq IN (SELECT d_week_seq
                                                          FROM   date_dim
                                                          WHERE
-                                          d_date IN ( '1999-06-30',
-                                                      '1999-08-28',
-                                                      '1999-11-18'
-                                                    )))
+                                          d_date IN ( {dates_str} )))
                     AND wr_returned_date_sk = d_date_sk
              GROUP  BY i_item_id)
     SELECT sr_items.item_id,
@@ -122,6 +123,19 @@ def q83_segment(
 
 def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     """Query 83."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=83,
+        qualification=run_config.qualification,
+    )
+
+    dates_list = params["dates"]
+    # Parse dates like '2000-06-30' to date objects
+    anchor_dates = []
+    for date_str in dates_list:
+        year, month, day = map(int, date_str.split("-"))
+        anchor_dates.append(_date(year, month, day))
+
     store_returns = get_data(
         run_config.dataset_path, "store_returns", run_config.suffix
     )
@@ -131,8 +145,6 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     web_returns = get_data(run_config.dataset_path, "web_returns", run_config.suffix)
     item = get_data(run_config.dataset_path, "item", run_config.suffix)
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
-
-    anchor_dates = [_date(1999, 6, 30), _date(1999, 8, 28), _date(1999, 11, 18)]
     weeks = (
         date_dim.filter(pl.col("d_date").is_in(anchor_dates))
         .select("d_week_seq")

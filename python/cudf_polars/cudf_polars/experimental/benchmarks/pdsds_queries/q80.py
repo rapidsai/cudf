@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
 from cudf_polars.experimental.benchmarks.utils import get_data
 
 if TYPE_CHECKING:
@@ -17,7 +18,14 @@ if TYPE_CHECKING:
 
 def duckdb_impl(run_config: RunConfig) -> str:
     """Query 80."""
-    return """
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=80,
+        qualification=run_config.qualification,
+    )
+    sdate = params["sdate"]
+
+    return f"""
     WITH ssr AS
     (
                     SELECT          s_store_id                                    AS store_id,
@@ -34,8 +42,8 @@ def duckdb_impl(run_config: RunConfig) -> str:
                                     item,
                                     promotion
                     WHERE           ss_sold_date_sk = d_date_sk
-                    AND             d_date BETWEEN Cast('2000-08-26' AS DATE) AND             (
-                                                    Cast('2000-08-26' AS DATE) + INTERVAL '30' day)
+                    AND             d_date BETWEEN Cast('{sdate}' AS DATE) AND             (
+                                                    Cast('{sdate}' AS DATE) + INTERVAL '30' day)
                     AND             ss_store_sk = s_store_sk
                     AND             ss_item_sk = i_item_sk
                     AND             i_current_price > 50
@@ -57,8 +65,8 @@ def duckdb_impl(run_config: RunConfig) -> str:
                                     item,
                                     promotion
                     WHERE           cs_sold_date_sk = d_date_sk
-                    AND             d_date BETWEEN cast('2000-08-26' AS date) AND             (
-                                                    cast('2000-08-26' AS date) + INTERVAL '30' day)
+                    AND             d_date BETWEEN cast('{sdate}' AS date) AND             (
+                                                    cast('{sdate}' AS date) + INTERVAL '30' day)
                     AND             cs_catalog_page_sk = cp_catalog_page_sk
                     AND             cs_item_sk = i_item_sk
                     AND             i_current_price > 50
@@ -80,8 +88,8 @@ def duckdb_impl(run_config: RunConfig) -> str:
                                     item,
                                     promotion
                     WHERE           ws_sold_date_sk = d_date_sk
-                    AND             d_date BETWEEN cast('2000-08-26' AS date) AND             (
-                                                    cast('2000-08-26' AS date) + INTERVAL '30' day)
+                    AND             d_date BETWEEN cast('{sdate}' AS date) AND             (
+                                                    cast('{sdate}' AS date) + INTERVAL '30' day)
                     AND             ws_web_site_sk = web_site_sk
                     AND             ws_item_sk = i_item_sk
                     AND             i_current_price > 50
@@ -186,6 +194,15 @@ def q80_channel_frame(
 
 def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     """Query 80."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=80,
+        qualification=run_config.qualification,
+    )
+
+    sdate = params["sdate"]
+    year, month, day = map(int, sdate.split("-"))
+
     store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
     store_returns = get_data(
         run_config.dataset_path, "store_returns", run_config.suffix
@@ -205,7 +222,7 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     item = get_data(run_config.dataset_path, "item", run_config.suffix)
     promotion = get_data(run_config.dataset_path, "promotion", run_config.suffix)
 
-    start_date = (pl.date(2000, 8, 26)).cast(pl.Datetime("us"))
+    start_date = (pl.date(year, month, day)).cast(pl.Datetime("us"))
     end_date = (start_date + pl.duration(days=30)).cast(pl.Datetime("us"))
     dates = date_dim.filter(
         (pl.col("d_date") >= start_date) & (pl.col("d_date") <= end_date)

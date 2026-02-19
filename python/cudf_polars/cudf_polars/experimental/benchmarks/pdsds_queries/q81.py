@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
 from cudf_polars.experimental.benchmarks.utils import get_data
 
 if TYPE_CHECKING:
@@ -17,7 +18,14 @@ if TYPE_CHECKING:
 
 def duckdb_impl(run_config: RunConfig) -> str:
     """Query 81."""
-    return """
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=81,
+        qualification=run_config.qualification,
+    )
+    state = params["state"]
+
+    return f"""
     -- start query 81 in stream 0 using template query81.tpl
     WITH customer_total_return
          AS (SELECT cr_returning_customer_sk   AS ctr_customer_sk,
@@ -54,7 +62,7 @@ def duckdb_impl(run_config: RunConfig) -> str:
                                     FROM   customer_total_return ctr2
                                     WHERE  ctr1.ctr_state = ctr2.ctr_state)
            AND ca_address_sk = c_current_addr_sk
-           AND ca_state = 'TX'
+           AND ca_state = '{state}'
            AND ctr1.ctr_customer_sk = c_customer_sk
     ORDER  BY c_customer_id,
               c_salutation,
@@ -78,6 +86,14 @@ def duckdb_impl(run_config: RunConfig) -> str:
 
 def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     """Query 81."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=81,
+        qualification=run_config.qualification,
+    )
+
+    state = params["state"]
+
     catalog_returns = get_data(
         run_config.dataset_path, "catalog_returns", run_config.suffix
     )
@@ -121,12 +137,12 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     ctr1_with_threshold = customer_total_return.join(
         state_averages, left_on="ctr_state", right_on="ctr_state"
     ).filter(pl.col("ctr_total_return") > pl.col("threshold"))
-    tx_addresses = customer_address.filter(pl.col("ca_state") == "TX")
+    state_addresses = customer_address.filter(pl.col("ca_state") == state)
     return (
         ctr1_with_threshold.join(
             customer, left_on="ctr_customer_sk", right_on="c_customer_sk"
         )
-        .join(tx_addresses, left_on="c_current_addr_sk", right_on="ca_address_sk")
+        .join(state_addresses, left_on="c_current_addr_sk", right_on="ca_address_sk")
         .select(
             [
                 "c_customer_id",

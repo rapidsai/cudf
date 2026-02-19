@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
 from cudf_polars.experimental.benchmarks.utils import get_data
 
 if TYPE_CHECKING:
@@ -17,7 +18,14 @@ if TYPE_CHECKING:
 
 def duckdb_impl(run_config: RunConfig) -> str:
     """Query 77."""
-    return """
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=77,
+        qualification=run_config.qualification,
+    )
+    sdate = params["sdate"]
+
+    return f"""
     -- start query 77 in stream 0 using template query77.tpl
     WITH ss AS
     (
@@ -28,8 +36,8 @@ def duckdb_impl(run_config: RunConfig) -> str:
                       date_dim,
                       store
              WHERE    ss_sold_date_sk = d_date_sk
-             AND      d_date BETWEEN Cast('2001-08-16' AS DATE) AND      (
-                               Cast('2001-08-16' AS DATE) + INTERVAL '30' day)
+             AND      d_date BETWEEN Cast('{sdate}' AS DATE) AND      (
+                               Cast('{sdate}' AS DATE) + INTERVAL '30' day)
              AND      ss_store_sk = s_store_sk
              GROUP BY s_store_sk) , sr AS
     (
@@ -40,8 +48,8 @@ def duckdb_impl(run_config: RunConfig) -> str:
                       date_dim,
                       store
              WHERE    sr_returned_date_sk = d_date_sk
-             AND      d_date BETWEEN cast('2001-08-16' AS date) AND      (
-                               cast('2001-08-16' AS date) + INTERVAL '30' day)
+             AND      d_date BETWEEN cast('{sdate}' AS date) AND      (
+                               cast('{sdate}' AS date) + INTERVAL '30' day)
              AND      sr_store_sk = s_store_sk
              GROUP BY s_store_sk), cs AS
     (
@@ -51,8 +59,8 @@ def duckdb_impl(run_config: RunConfig) -> str:
              FROM     catalog_sales,
                       date_dim
              WHERE    cs_sold_date_sk = d_date_sk
-             AND      d_date BETWEEN cast('2001-08-16' AS date) AND      (
-                               cast('2001-08-16' AS date) + INTERVAL '30' day)
+             AND      d_date BETWEEN cast('{sdate}' AS date) AND      (
+                               cast('{sdate}' AS date) + INTERVAL '30' day)
              GROUP BY cs_call_center_sk ), cr AS
     (
              SELECT   cr_call_center_sk,
@@ -61,8 +69,8 @@ def duckdb_impl(run_config: RunConfig) -> str:
              FROM     catalog_returns,
                       date_dim
              WHERE    cr_returned_date_sk = d_date_sk
-             AND      d_date BETWEEN cast('2001-08-16' AS date) AND      (
-                               cast('2001-08-16' AS date) + INTERVAL '30' day)
+             AND      d_date BETWEEN cast('{sdate}' AS date) AND      (
+                               cast('{sdate}' AS date) + INTERVAL '30' day)
              GROUP BY cr_call_center_sk ), ws AS
     (
              SELECT   wp_web_page_sk,
@@ -72,8 +80,8 @@ def duckdb_impl(run_config: RunConfig) -> str:
                       date_dim,
                       web_page
              WHERE    ws_sold_date_sk = d_date_sk
-             AND      d_date BETWEEN cast('2001-08-16' AS date) AND      (
-                               cast('2001-08-16' AS date) + INTERVAL '30' day)
+             AND      d_date BETWEEN cast('{sdate}' AS date) AND      (
+                               cast('{sdate}' AS date) + INTERVAL '30' day)
              AND      ws_web_page_sk = wp_web_page_sk
              GROUP BY wp_web_page_sk), wr AS
     (
@@ -84,8 +92,8 @@ def duckdb_impl(run_config: RunConfig) -> str:
                       date_dim,
                       web_page
              WHERE    wr_returned_date_sk = d_date_sk
-             AND      d_date BETWEEN cast('2001-08-16' AS date) AND      (
-                               cast('2001-08-16' AS date) + INTERVAL '30' day)
+             AND      d_date BETWEEN cast('{sdate}' AS date) AND      (
+                               cast('{sdate}' AS date) + INTERVAL '30' day)
              AND      wr_web_page_sk = wp_web_page_sk
              GROUP BY wp_web_page_sk)
     SELECT
@@ -197,6 +205,15 @@ def _sum_returns_loss(
 
 def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     """Query 77."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=77,
+        qualification=run_config.qualification,
+    )
+
+    sdate = params["sdate"]
+    year, month, day = map(int, sdate.split("-"))
+
     store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
     store_returns = get_data(
         run_config.dataset_path, "store_returns", run_config.suffix
@@ -213,7 +230,7 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     store = get_data(run_config.dataset_path, "store", run_config.suffix)
     web_page = get_data(run_config.dataset_path, "web_page", run_config.suffix)
 
-    start_date = (pl.date(2001, 8, 16)).cast(pl.Datetime("us"))
+    start_date = (pl.date(year, month, day)).cast(pl.Datetime("us"))
     end_date = (start_date + pl.duration(days=30)).cast(pl.Datetime("us"))
     filtered_dates = date_dim.filter(
         (pl.col("d_date") >= start_date) & (pl.col("d_date") <= end_date)

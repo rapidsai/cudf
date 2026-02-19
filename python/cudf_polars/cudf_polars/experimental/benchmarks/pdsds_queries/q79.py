@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
 from cudf_polars.experimental.benchmarks.utils import get_data
 
 if TYPE_CHECKING:
@@ -17,7 +18,18 @@ if TYPE_CHECKING:
 
 def duckdb_impl(run_config: RunConfig) -> str:
     """Query 79."""
-    return """
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=79,
+        qualification=run_config.qualification,
+    )
+    dep_cnt = params["dep_cnt"]
+    dow = params["dow"]
+    year = params["year"]
+    emp_min = params["emp_min"]
+    emp_max = params["emp_max"]
+
+    return f"""
     SELECT c_last_name,
                    c_first_name,
                    Substr(s_city, 1, 30),
@@ -36,11 +48,11 @@ def duckdb_impl(run_config: RunConfig) -> str:
             WHERE  store_sales.ss_sold_date_sk = date_dim.d_date_sk
                    AND store_sales.ss_store_sk = store.s_store_sk
                    AND store_sales.ss_hdemo_sk = household_demographics.hd_demo_sk
-                   AND ( household_demographics.hd_dep_count = 8
+                   AND ( household_demographics.hd_dep_count = {dep_cnt}
                           OR household_demographics.hd_vehicle_count > 4 )
-                   AND date_dim.d_dow = 1
-                   AND date_dim.d_year IN ( 2000, 2000 + 1, 2000 + 2 )
-                   AND store.s_number_employees BETWEEN 200 AND 295
+                   AND date_dim.d_dow = {dow}
+                   AND date_dim.d_year IN ( {year}, {year} + 1, {year} + 2 )
+                   AND store.s_number_employees BETWEEN {emp_min} AND {emp_max}
             GROUP  BY ss_ticket_number,
                       ss_customer_sk,
                       ss_addr_sk,
@@ -57,6 +69,18 @@ def duckdb_impl(run_config: RunConfig) -> str:
 
 def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     """Query 79."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=79,
+        qualification=run_config.qualification,
+    )
+
+    dep_cnt = params["dep_cnt"]
+    dow = params["dow"]
+    year = params["year"]
+    emp_min = params["emp_min"]
+    emp_max = params["emp_max"]
+
     store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
     store = get_data(run_config.dataset_path, "store", run_config.suffix)
@@ -69,10 +93,10 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         .join(store, left_on="ss_store_sk", right_on="s_store_sk")
         .join(household_demographics, left_on="ss_hdemo_sk", right_on="hd_demo_sk")
         .filter(
-            ((pl.col("hd_dep_count") == 8) | (pl.col("hd_vehicle_count") > 4))
-            & (pl.col("d_dow") == 1)
-            & (pl.col("d_year").is_in([2000, 2001, 2002]))
-            & (pl.col("s_number_employees").is_between(200, 295))
+            ((pl.col("hd_dep_count") == dep_cnt) | (pl.col("hd_vehicle_count") > 4))
+            & (pl.col("d_dow") == dow)
+            & (pl.col("d_year").is_in([year, year + 1, year + 2]))
+            & (pl.col("s_number_employees").is_between(emp_min, emp_max))
         )
         .group_by(["ss_ticket_number", "ss_customer_sk", "ss_addr_sk", "s_city"])
         .agg(
