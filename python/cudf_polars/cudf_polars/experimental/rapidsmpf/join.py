@@ -53,6 +53,7 @@ if TYPE_CHECKING:
     from rapidsmpf.streaming.core.channel import Channel
     from rapidsmpf.streaming.core.context import Context
 
+    from cudf_polars.dsl.expr import NamedExpr
     from cudf_polars.dsl.ir import IR, IRExecutionContext
     from cudf_polars.experimental.rapidsmpf.dispatch import SubNetGenerator
     from cudf_polars.experimental.rapidsmpf.tracing import ActorTracer
@@ -888,6 +889,39 @@ class PartitioningState:
         )
 
 
+def _extract_partitioning_state(
+    metadata: ChannelMetadata,
+    ir: IR,
+    on: tuple[NamedExpr, ...],
+    nranks: int,
+) -> PartitioningState:
+    schema_keys = list(ir.schema.keys())
+    key_indices = tuple(schema_keys.index(expr.name) for expr in on)
+    return PartitioningState.from_metadata(metadata, key_indices, nranks)
+
+
+async def _sample_chunks(
+    context: Context,
+    ch: Channel[TableChunk],
+    sample_chunk_count: int,
+) -> tuple[list[TableChunk], int, int]:
+    sample_chunks: list[TableChunk] = []
+    sample_size = 0
+    sample_rows = 0
+    for _ in range(sample_chunk_count):
+        msg = await ch.recv(context)
+        if msg is None:
+            break
+        chunk = TableChunk.from_message(msg).make_available_and_spill(
+            context.br(), allow_overbooking=True
+        )
+        sample_chunks.append(chunk)
+        sample_size += chunk.data_alloc_size(MemoryType.DEVICE)
+        sample_rows += chunk.table_view().num_rows()
+        del msg
+    return sample_chunks, sample_size, sample_rows
+
+
 @define_actor()
 async def join_actor(
     context: Context,
@@ -912,32 +946,20 @@ async def join_actor(
     async with shutdown_on_error(
         context, ch_left, ch_right, ch_out, trace_ir=ir
     ) as tracer:
-        # Receive metadata from both sides
         left_metadata, right_metadata = await asyncio.gather(
             recv_metadata(ch_left, context),
             recv_metadata(ch_right, context),
         )
 
-        # Get key column indices for checking partitioning
-        left_schema_keys = list(ir.children[0].schema.keys())
-        right_schema_keys = list(ir.children[1].schema.keys())
-        left_key_indices = tuple(
-            left_schema_keys.index(expr.name) for expr in ir.left_on
-        )
-        right_key_indices = tuple(
-            right_schema_keys.index(expr.name) for expr in ir.right_on
-        )
-
-        # Check if either side is already partitioned on join keys
         nranks = context.comm().nranks
-        left_state = PartitioningState.from_metadata(
-            left_metadata, left_key_indices, nranks
+        left_state = _extract_partitioning_state(
+            left_metadata, ir.children[0], ir.left_on, nranks
         )
-        right_state = PartitioningState.from_metadata(
-            right_metadata, right_key_indices, nranks
+        right_state = _extract_partitioning_state(
+            right_metadata, ir.children[1], ir.right_on, nranks
         )
 
-        # Skip sampling when both sides have matching partitioning (incl. subset of keys)
+        # Skip sampling when both sides have matching partitioning
         if left_state and left_state == right_state:
             await _shuffle_join(
                 context,
@@ -956,42 +978,13 @@ async def join_actor(
             return
 
         # Sample chunks from both sides concurrently
-        left_sample_chunks: list[TableChunk] = []
-        right_sample_chunks: list[TableChunk] = []
-        left_sample_size = 0
-        right_sample_size = 0
-        left_sample_rows = 0
-        right_sample_rows = 0
-
-        async def sample_left() -> None:
-            nonlocal left_sample_size, left_sample_rows
-            for _ in range(sample_chunk_count):
-                msg = await ch_left.recv(context)
-                if msg is None:
-                    break
-                chunk = TableChunk.from_message(msg).make_available_and_spill(
-                    context.br(), allow_overbooking=True
-                )
-                left_sample_chunks.append(chunk)
-                left_sample_size += chunk.data_alloc_size(MemoryType.DEVICE)
-                left_sample_rows += chunk.table_view().num_rows()
-                del msg
-
-        async def sample_right() -> None:
-            nonlocal right_sample_size, right_sample_rows
-            for _ in range(sample_chunk_count):
-                msg = await ch_right.recv(context)
-                if msg is None:
-                    break
-                chunk = TableChunk.from_message(msg).make_available_and_spill(
-                    context.br(), allow_overbooking=True
-                )
-                right_sample_chunks.append(chunk)
-                right_sample_size += chunk.data_alloc_size(MemoryType.DEVICE)
-                right_sample_rows += chunk.table_view().num_rows()
-                del msg
-
-        await asyncio.gather(sample_left(), sample_right())
+        (
+            (left_sample_chunks, left_sample_size, left_sample_rows),
+            (right_sample_chunks, right_sample_size, right_sample_rows),
+        ) = await asyncio.gather(
+            _sample_chunks(context, ch_left, sample_chunk_count),
+            _sample_chunks(context, ch_right, sample_chunk_count),
+        )
 
         # Estimate total sizes and row counts
         left_local_count = left_metadata.local_count
