@@ -23,12 +23,12 @@ from cudf.core.column.column import (
 )
 from cudf.core.column.numerical_base import NumericalBaseColumn
 from cudf.core.column.utils import access_columns
-from cudf.core.dtype.validators import is_dtype_obj_numeric
 from cudf.core.mixins import BinaryOperand
 from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
     cudf_dtype_from_pa_type,
     cudf_dtype_to_pa_type,
+    dtype_from_pylibcudf_column,
     dtype_to_pylibcudf_type,
     find_common_type,
     get_dtype_of_same_kind,
@@ -59,19 +59,6 @@ class NumericalColumn(NumericalBaseColumn):
     """A Column object for Numeric types."""
 
     _VALID_BINARY_OPERATIONS = BinaryOperand._SUPPORTED_BINARY_OPERATIONS
-    _VALID_PLC_TYPES = {
-        plc.TypeId.INT8,
-        plc.TypeId.INT16,
-        plc.TypeId.INT32,
-        plc.TypeId.INT64,
-        plc.TypeId.UINT8,
-        plc.TypeId.UINT16,
-        plc.TypeId.UINT32,
-        plc.TypeId.UINT64,
-        plc.TypeId.FLOAT32,
-        plc.TypeId.FLOAT64,
-        plc.TypeId.BOOL8,
-    }
 
     @property
     def _PANDAS_NA_VALUE(self) -> ScalarLike:
@@ -83,15 +70,6 @@ class NumericalColumn(NumericalBaseColumn):
         ):
             return np.nan
         return super()._PANDAS_NA_VALUE
-
-    @classmethod
-    def _validate_args(
-        cls, plc_column: plc.Column, dtype: DtypeObj
-    ) -> tuple[plc.Column, DtypeObj]:
-        plc_column, dtype = super()._validate_args(plc_column, dtype)
-        if not is_dtype_obj_numeric(dtype, include_decimal=False):
-            raise ValueError(f"dtype must be a numeric type. Got: {dtype}")
-        return plc_column, dtype
 
     def __contains__(self, item: ScalarLike) -> bool:
         """
@@ -849,10 +827,12 @@ class NumericalColumn(NumericalBaseColumn):
     ) -> plc.Scalar | ColumnBase:
         """Align fill_value for .fillna based on column type."""
         if is_scalar(fill_value):
-            cudf_obj = ColumnBase.from_pylibcudf(
-                plc.Column.from_scalar(
-                    pa_scalar_to_plc_scalar(pa.scalar(fill_value)), 1
-                )
+            plc_col = plc.Column.from_scalar(
+                pa_scalar_to_plc_scalar(pa.scalar(fill_value)), 1
+            )
+            cudf_obj = ColumnBase.create(
+                plc_col,
+                dtype=dtype_from_pylibcudf_column(plc_col),
             )
             if not cudf_obj.can_cast_safely(self.dtype):
                 raise TypeError(
