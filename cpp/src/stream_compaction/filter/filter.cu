@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -87,14 +87,6 @@ void perform_checks(column_view base_column,
   check_columns(filter_columns);
 }
 
-jitify2::Kernel get_kernel(std::string const& kernel_name, std::string const& cuda_source)
-{
-  CUDF_FUNC_RANGE();
-
-  return cudf::jit::get_program_cache(*stream_compaction_filter_jit_kernel_cu_jit)
-    .get_kernel(kernel_name, {}, {{"cudf/detail/operation-udf.hpp", cuda_source}}, {"-arch=sm_."});
-}
-
 jitify2::StringVec build_jit_template_params(
   null_aware is_null_aware,
   bool has_user_data,
@@ -146,13 +138,15 @@ jitify2::ConfiguredKernel build_kernel(std::string const& kernel_name,
                  span_outputs, cudf::jit::column_type_names(input_columns), has_user_data))
            : cudf::jit::parse_single_function_cuda(udf, "GENERIC_FILTER_OP");
 
-  return get_kernel(jitify2::reflection::Template(kernel_name)
-                      .instantiate(build_jit_template_params(
-                        is_null_aware,
-                        has_user_data,
-                        span_outputs,
-                        cudf::jit::reflect_input_columns(base_column_size, input_columns))),
-                    cuda_source)
+  auto kernel_reflection = jitify2::reflection::Template(kernel_name)
+                             .instantiate(build_jit_template_params(
+                               is_null_aware,
+                               has_user_data,
+                               span_outputs,
+                               cudf::jit::reflect_input_columns(base_column_size, input_columns)));
+
+  return cudf::jit::get_udf_kernel(
+           *stream_compaction_filter_jit_kernel_cu_jit, kernel_reflection, cuda_source)
     ->configure_1d_max_occupancy(0, 0, nullptr, stream.value());
 }
 
