@@ -19,20 +19,12 @@ from cudf.core.dtype.validators import (
 )
 from cudf.core.missing import NA, NaT
 
-pa_types = pa.types
-
-
-def _is_string_view(dtype: pa.DataType) -> bool:
-    return hasattr(pa_types, "is_string_view") and pa_types.is_string_view(
-        dtype
-    )
-
 
 def _map_string_view_to_string(dtype: pa.DataType) -> pa.DataType:
     """Convert string_view -> string"""
-    if _is_string_view(dtype):
+    if pa.types.is_string_view(dtype):
         return pa.string()
-    if pa_types.is_list(dtype):
+    if pa.types.is_list(dtype):
         return pa.list_(_map_string_view_to_string(dtype.value_type))
     return dtype
 
