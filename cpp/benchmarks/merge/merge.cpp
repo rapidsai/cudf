@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -11,7 +11,7 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
-#include <thrust/iterator/constant_iterator.h>
+#include <cuda/iterator>
 
 #include <nvbench/nvbench.cuh>
 
@@ -25,7 +25,7 @@ void bench_merge(nvbench::state& state)
   int const num_tables           = static_cast<int>(state.get_int64("num_tables"));
 
   // Content is irrelevant for the benchmark
-  auto data_sequence = thrust::make_constant_iterator(0);
+  auto data_sequence = cuda::make_constant_iterator(0);
 
   // Using 0 seed to ensure consistent pseudo-numbers on each run
   std::mt19937 rand_gen(0);

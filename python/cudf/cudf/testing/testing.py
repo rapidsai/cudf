@@ -17,20 +17,12 @@ from cudf.core.dtype.validators import is_dtype_obj_numeric
 from cudf.core.missing import NA, NaT
 from cudf.utils.dtypes import CUDF_STRING_DTYPE
 
-pa_types = pa.types
-
-
-def _is_string_view(dtype: pa.DataType) -> bool:
-    return hasattr(pa_types, "is_string_view") and pa_types.is_string_view(
-        dtype
-    )
-
 
 def _map_string_view_to_string(dtype: pa.DataType) -> pa.DataType:
     """Convert string_view -> string"""
-    if _is_string_view(dtype):
+    if pa.types.is_string_view(dtype):
         return pa.string()
-    if pa_types.is_list(dtype):
+    if pa.types.is_list(dtype):
         return pa.list_(_map_string_view_to_string(dtype.value_type))
     return dtype
 
@@ -236,7 +228,7 @@ def assert_column_equal(
                 msg2 = f"{right.dtype}"
                 raise_assert_detail(obj, "Dtypes are different", msg1, msg2)
     else:
-        if left.null_count == len(left) and right.null_count == len(right):
+        if left.is_all_null and right.is_all_null:
             return True
 
     if check_datetimelike_compat:

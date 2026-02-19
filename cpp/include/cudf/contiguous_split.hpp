@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -241,6 +241,23 @@ class chunked_pack {
 packed_columns pack(cudf::table_view const& input,
                     rmm::cuda_stream_view stream      = cudf::get_default_stream(),
                     rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
+/**
+ * @brief Compute the size in bytes of the contiguous memory buffer needed to pack the input table.
+ *
+ * This function computes the total contiguous size that would be required to pack the input
+ * table using `pack()` or `chunked_pack`, without actually performing the packing operation.
+ * This is useful for pre-allocating memory or determining if a table will fit in available memory.
+ *
+ * @param input View of the table to compute the packed size for
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param temp_mr An optional memory resource to use for temporary allocations
+ * @return The size in bytes required to store the packed table data (not including metadata)
+ */
+std::size_t packed_size(
+  cudf::table_view const& input,
+  rmm::cuda_stream_view stream           = cudf::get_default_stream(),
+  rmm::device_async_resource_ref temp_mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Produce the metadata used for packing a table stored in a contiguous buffer.

@@ -2,10 +2,13 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
+import gzip
+import zlib
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
 import pytest
+import zstandard as zstd
 from werkzeug import Response
 
 import polars as pl
@@ -15,7 +18,11 @@ from cudf_polars.testing.asserts import (
     assert_ir_translation_raises,
 )
 from cudf_polars.testing.io import make_partitioned_source
-from cudf_polars.utils.versions import POLARS_VERSION_LT_131, POLARS_VERSION_LT_135
+from cudf_polars.utils.versions import (
+    POLARS_VERSION_LT_131,
+    POLARS_VERSION_LT_135,
+    POLARS_VERSION_LT_138,
+)
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -634,7 +641,13 @@ polars"""
     assert_gpu_result_equal(q)
 
 
-def test_hits_scan_row_index_duplicate(tmp_path):
+def test_hits_scan_row_index_duplicate(request, tmp_path):
+    request.applymarker(
+        pytest.mark.xfail(
+            condition=not POLARS_VERSION_LT_138,
+            reason="polars fails ahead of time",
+        )
+    )
     pl.DataFrame({"col": [1, 2, 3]}).write_parquet(tmp_path / "a.parquet")
 
     q = pl.scan_parquet(tmp_path / "*.parquet", row_index_name="index").with_row_index(
@@ -646,3 +659,51 @@ def test_hits_scan_row_index_duplicate(tmp_path):
         assert_gpu_result_equal(q)
     else:
         assert_ir_translation_raises(q, NotImplementedError)
+
+
+@pytest.mark.parametrize("compression", ["gzip", "zlib", "zstd"])
+@pytest.mark.parametrize("file_type", ["csv", "ndjson"])
+def test_scan_compressed_file_raises(tmp_path, compression, file_type):
+    if file_type == "csv":
+        data = b"a,b\n1,2\n3,4\n"
+        scan_fn = pl.scan_csv
+    else:
+        data = b'{"a":1,"b":2}\n{"a":3,"b":4}\n'
+        scan_fn = pl.scan_ndjson
+
+    path = tmp_path / f"data.{file_type}"
+    if compression == "gzip":
+        with gzip.open(path, "wb") as f:
+            f.write(data)
+    elif compression == "zlib":
+        with path.open("wb") as f:
+            f.write(zlib.compress(data))
+    else:
+        cctx = zstd.ZstdCompressor()
+        with path.open("wb") as f:
+            f.write(cctx.compress(data))
+
+    q = scan_fn(path)
+    assert_ir_translation_raises(q, NotImplementedError)
+
+
+def test_scan_tiny_file_not_compressed(tmp_path):
+    # code coverage for the case where we try to
+    # detect compression but the file is too small
+    # to have a valid signature.
+    path = tmp_path / "tiny.csv"
+    path.write_bytes(b"a\n")
+    q = pl.scan_csv(path, has_header=False, new_columns=["a"])
+    assert_gpu_result_equal(q)
+
+
+@pytest.mark.skipif(
+    POLARS_VERSION_LT_138,
+    reason="height parameter added in Polars 1.38",
+)
+@pytest.mark.parametrize("engine", [None, NO_CHUNK_ENGINE])
+def test_scan_parquet_zero_width_with_limit(tmp_path, engine):
+    path = tmp_path / "zero_width.parquet"
+    pl.LazyFrame(height=20).sink_parquet(path)
+    q = pl.scan_parquet(path).head(5)
+    assert_gpu_result_equal(q, engine=engine)

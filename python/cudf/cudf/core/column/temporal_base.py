@@ -84,10 +84,8 @@ class TemporalBaseColumn(ColumnBase, Scannable):
             # call-overload must be ignored because numpy stubs only accept literal
             # time unit strings, but we're passing self.time_unit which is valid at runtime
             fill_value = self._NP_SCALAR(fill_value, self.time_unit)  # type: ignore[call-overload]
-        elif (
-            cudf.get_option("mode.pandas_compatible")
-            and is_scalar(fill_value)
-            and not isinstance(fill_value, (self._NP_SCALAR, self._PD_SCALAR))
+        elif is_scalar(fill_value) and not isinstance(
+            fill_value, (self._NP_SCALAR, self._PD_SCALAR)
         ):
             raise MixedTypeError(
                 f"Cannot use fill_value of type {type(fill_value)} with "
@@ -134,7 +132,18 @@ class TemporalBaseColumn(ColumnBase, Scannable):
 
         if is_scalar(other):
             if is_na_like(other):
-                return pa.scalar(None, type=cudf_dtype_to_pa_type(self.dtype))
+                if isinstance(
+                    other, (np.datetime64, np.timedelta64)
+                ) and np.isnat(other):
+                    try:
+                        arrow_type = cudf_dtype_to_pa_type(other.dtype)
+                    except pa.ArrowNotImplementedError:
+                        arrow_type = cudf_dtype_to_pa_type(
+                            np.dtype(f"{other.dtype.type.__name__}[ns]")
+                        )
+                else:
+                    arrow_type = cudf_dtype_to_pa_type(self.dtype)
+                return pa.scalar(None, type=arrow_type)
             elif self.dtype.kind == "M" and isinstance(other, pd.Timestamp):
                 if other.tz is not None:
                     raise NotImplementedError(
@@ -218,11 +227,7 @@ class TemporalBaseColumn(ColumnBase, Scannable):
         if result is self._PANDAS_NA_VALUE:
             return result
         result = result.as_py()
-        if cudf.get_option("mode.pandas_compatible"):
-            return self._PD_SCALAR(result)
-        elif isinstance(result, self._PD_SCALAR):
-            return result.to_numpy()
-        return self.dtype.type(result).astype(self.dtype, copy=False)
+        return self._PD_SCALAR(result)
 
     def to_pandas(
         self,
@@ -249,7 +254,9 @@ class TemporalBaseColumn(ColumnBase, Scannable):
         )
         return cast(
             cudf.core.column.numerical.NumericalColumn,
-            type(self).from_pylibcudf(new_plc_column).astype(dtype),
+            ColumnBase.create(new_plc_column, self._UNDERLYING_DTYPE).astype(
+                dtype
+            ),
         )
 
     def ceil(self, freq: str) -> ColumnBase:
@@ -299,11 +306,11 @@ class TemporalBaseColumn(ColumnBase, Scannable):
             to_res, _ = np.datetime_data(to_dtype)
             max_val = self.max()
             if isinstance(max_val, (pd.Timedelta, pd.Timestamp)):
-                max_val = max_val.to_numpy()
+                max_val = max_val.to_numpy().astype(self.dtype)
             max_val = max_val.astype(self._UNDERLYING_DTYPE, copy=False)
             min_val = self.min()
             if isinstance(min_val, (pd.Timedelta, pd.Timestamp)):
-                min_val = min_val.to_numpy()
+                min_val = min_val.to_numpy().astype(self.dtype)
             min_val = min_val.astype(self._UNDERLYING_DTYPE, copy=False)
             # call-overload must be ignored because numpy stubs only accept literal strings
             # for time units (e.g., "ns", "us") to allow compile-time validation,

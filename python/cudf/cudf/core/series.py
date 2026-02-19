@@ -64,6 +64,7 @@ from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
     _get_nan_for_dtype,
+    dtype_from_pylibcudf_column,
     find_common_type,
     get_dtype_of_same_kind,
     is_mixed_with_object_dtype,
@@ -529,7 +530,7 @@ class Series(SingleColumnFrame, IndexedFrame):
         >>> cudf.Series.from_arrow(pa.array(["a", "b", None]))
         0       a
         1       b
-        2    <NA>
+        2    None
         dtype: object
         """
         return cls._from_column(ColumnBase.from_arrow(array))
@@ -1036,7 +1037,7 @@ class Series(SingleColumnFrame, IndexedFrame):
         10       a
         11       b
         12       c
-        13    <NA>
+        13    None
         15       d
         Name: sample, dtype: object
         >>> series.to_frame()
@@ -1044,7 +1045,7 @@ class Series(SingleColumnFrame, IndexedFrame):
         10      a
         11      b
         12      c
-        13   <NA>
+        13   None
         15      d
         """
         res = self._to_frame(name=name, index=self.index)
@@ -1175,7 +1176,7 @@ class Series(SingleColumnFrame, IndexedFrame):
         >>> s
         0      cat
         1      dog
-        2     <NA>
+        2     None
         3   rabbit
         dtype: object
 
@@ -1186,8 +1187,8 @@ class Series(SingleColumnFrame, IndexedFrame):
         >>> s.map({'cat': 'kitten', 'dog': 'puppy'})
         0   kitten
         1    puppy
-        2     <NA>
-        3     <NA>
+        2     None
+        3     None
         dtype: object
 
         It also accepts numeric functions:
@@ -1519,7 +1520,7 @@ class Series(SingleColumnFrame, IndexedFrame):
             dtype_mismatch = False
             for obj in objs[1:]:
                 if (
-                    obj.null_count == len(obj)
+                    obj._is_all_null
                     or len(obj) == 0
                     or isinstance(obj._column.dtype, CategoricalDtype)
                     or isinstance(objs[0]._column.dtype, CategoricalDtype)
@@ -1563,7 +1564,13 @@ class Series(SingleColumnFrame, IndexedFrame):
     @_performance_tracking
     def valid_count(self) -> int:
         """Number of non-null values"""
-        return len(self) - self._column.null_count
+        return self._column.valid_count
+
+    @property
+    @_performance_tracking
+    def _is_all_null(self) -> bool:
+        """Check if all values in the Series are null."""
+        return self._column.is_all_null
 
     @property
     @_performance_tracking
@@ -1672,7 +1679,7 @@ class Series(SingleColumnFrame, IndexedFrame):
         >>> ser = cudf.Series(['', None, 'abc'])
         >>> ser
         0
-        1    <NA>
+        1    None
         2     abc
         dtype: object
         >>> ser.dropna()
@@ -1918,10 +1925,8 @@ class Series(SingleColumnFrame, IndexedFrame):
                 "The bool_only parameter is not supported for Series."
             )
         result = super().any(axis, skipna, **kwargs)
-        if (
-            cudf.get_option("mode.pandas_compatible")
-            and isinstance(result, bool)
-            and not isinstance(self.dtype, pd.ArrowDtype)
+        if isinstance(result, bool) and not isinstance(
+            self.dtype, pd.ArrowDtype
         ):
             return np.bool_(result)
         return result
@@ -3032,15 +3037,15 @@ class Series(SingleColumnFrame, IndexedFrame):
         0       a
         1       a
         2       b
-        3    <NA>
+        3    None
         4       b
-        5    <NA>
+        5    None
         6       c
         dtype: object
         >>> series.unique()
         0       a
         1       b
-        2    <NA>
+        2    None
         3       c
         dtype: object
         """
@@ -3169,7 +3174,7 @@ class Series(SingleColumnFrame, IndexedFrame):
         if bins is not None:
             series_bins = cudf.cut(self, bins, include_lowest=True)
         result_name = "proportion" if normalize else "count"
-        if dropna and self.null_count == len(self):
+        if dropna and self._is_all_null:
             return Series(
                 [],
                 dtype=np.int64,
@@ -3859,7 +3864,7 @@ class Series(SingleColumnFrame, IndexedFrame):
             name = metadata.get("name")
             index = metadata.get("index")
         return cls._from_column(
-            ColumnBase.from_pylibcudf(col),
+            ColumnBase.create(col, dtype=dtype_from_pylibcudf_column(col)),
             name=name,
             index=index,
         )

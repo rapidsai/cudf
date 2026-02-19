@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -70,10 +70,13 @@ TYPED_TEST(DictionaryEncodeIndicesTest, IndexType)
   EXPECT_EQ(view.indices().type(), data_type);
 }
 
-TEST_F(DictionaryEncodeTest, InvalidEncode)
+TEST_F(DictionaryEncodeTest, Errors)
 {
   cudf::test::fixed_width_column_wrapper<int16_t> input{0, 1, 2, 3, -1, -2, -3};
 
   EXPECT_THROW(cudf::dictionary::encode(input, cudf::data_type{cudf::type_id::UINT16}),
-               std::invalid_argument);
+               cudf::data_type_error);
+
+  auto encoded = cudf::dictionary::encode(input);
+  EXPECT_THROW(cudf::dictionary::encode(encoded->view()), std::invalid_argument);
 }

@@ -6,10 +6,21 @@ from __future__ import annotations
 
 import asyncio
 import operator
-from contextlib import asynccontextmanager, contextmanager
+import struct
+from contextlib import asynccontextmanager
 from functools import reduce
 from typing import TYPE_CHECKING, Any
 
+from cudf_polars.dsl.tracing import LOG_TRACES, Scope
+
+try:
+    import structlog
+    import structlog.contextvars
+except ImportError:
+    pass
+
+from rapidsmpf.memory.packed_data import PackedData
+from rapidsmpf.streaming.coll.allgather import AllGather
 from rapidsmpf.streaming.core.message import Message
 from rapidsmpf.streaming.cudf.channel_metadata import (
     ChannelMetadata,
@@ -23,9 +34,8 @@ import pylibcudf as plc
 from cudf_polars.containers import DataFrame
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator, Callable, Iterator, Mapping
+    from collections.abc import AsyncIterator, Callable, Mapping
 
-    from rapidsmpf.memory.memory_reservation import MemoryReservation
     from rapidsmpf.streaming.core.channel import Channel
     from rapidsmpf.streaming.core.context import Context
     from rapidsmpf.streaming.core.spillable_messages import SpillableMessages
@@ -34,29 +44,72 @@ if TYPE_CHECKING:
 
     from cudf_polars.dsl.ir import IR
     from cudf_polars.experimental.rapidsmpf.dispatch import SubNetGenerator
+    from cudf_polars.experimental.rapidsmpf.tracing import ActorTracer
     from cudf_polars.typing import DataType
 
 
 @asynccontextmanager
 async def shutdown_on_error(
-    context: Context, *channels: Channel[Any]
-) -> AsyncIterator[None]:
+    context: Context,
+    *channels: Channel[Any],
+    trace_ir: IR | None = None,
+) -> AsyncIterator[ActorTracer | None]:
     """
     Shutdown on error for rapidsmpf.
+
+    This context manager handles channel cleanup on errors and optionally
+    emits structlog tracing events when LOG_TRACES is enabled.
 
     Parameters
     ----------
     context
         The rapidsmpf context.
     channels
-        The channels to shutdown.
+        The channels to shutdown on error.
+    trace_ir
+        Optional IR node to enable tracing for this streaming actor.
+        When provided and LOG_TRACES is enabled, an ActorTracer
+        is yielded for collecting stats, and a structlog event is
+        emitted on exit.
+
+    Yields
+    ------
+    ActorTracer | None
+        An actor tracer for collecting stats (if tracing enabled), else None.
     """
-    # TODO: This probably belongs in rapidsmpf.
+    # Create tracer only if LOG_TRACES is enabled and IR is provided
+    tracer: ActorTracer | None = None
+    if LOG_TRACES and trace_ir is not None:
+        from cudf_polars.experimental.rapidsmpf.tracing import (
+            ActorTracer,
+        )
+
+        ir_id = trace_ir.get_stable_id()
+        ir_type = type(trace_ir).__name__
+        tracer = ActorTracer(ir_id, ir_type)
+        structlog.contextvars.bind_contextvars(actor_ir_id=ir_id, actor_ir_type=ir_type)
+
     try:
-        yield
+        yield tracer
     except BaseException:
         await asyncio.gather(*(ch.shutdown(context) for ch in channels))
         raise
+    finally:
+        if tracer is not None:
+            log = structlog.get_logger()
+            record: dict[str, Any] = {
+                "scope": Scope.ACTOR.value,
+                "actor_ir_id": tracer.ir_id,
+                "actor_ir_type": tracer.ir_type,
+                "chunk_count": tracer.chunk_count,
+                "duplicated": tracer.duplicated,
+            }
+            if tracer.row_count is not None:
+                record["rows"] = tracer.row_count
+            if tracer.decision is not None:
+                record["decision"] = tracer.decision
+            log.info("Streaming Actor", **record)
+            structlog.contextvars.unbind_contextvars("actor_ir_id", "actor_ir_type")
 
 
 def remap_partitioning(
@@ -92,27 +145,19 @@ def remap_partitioning(
     new_name_to_idx = {name: i for i, name in enumerate(new_schema.keys())}
 
     def remap_hash_scheme(hs: HashScheme | None | str) -> HashScheme | None | str:
-        if hs is None or isinstance(hs, str):
+        if isinstance(hs, HashScheme):
+            try:
+                new_indices = tuple(
+                    new_name_to_idx[old_names[i]] for i in hs.column_indices
+                )
+            except (IndexError, KeyError):
+                return None  # Column missing in old or new schema
+            return HashScheme(new_indices, hs.modulus)
+        else:
             return hs  # None or "inherit" passes through unchanged
-        try:
-            new_indices = tuple(
-                new_name_to_idx[old_names[i]] for i in hs.column_indices
-            )
-        except (IndexError, KeyError):
-            return None  # Column missing in old or new schema
-        return HashScheme(new_indices, hs.modulus)
 
     new_inter_rank = remap_hash_scheme(partitioning.inter_rank)
     new_local = remap_hash_scheme(partitioning.local)
-
-    # If inter_rank partitioning was invalidated, the whole partitioning is invalid
-    if isinstance(partitioning.inter_rank, HashScheme) and new_inter_rank is None:
-        return None
-
-    # If only local partitioning was invalidated, we can still use inter_rank
-    if isinstance(partitioning.local, HashScheme) and new_local is None:
-        new_local = None
-
     return Partitioning(inter_rank=new_inter_rank, local=new_local)
 
 
@@ -376,25 +421,44 @@ def make_spill_function(
     return spill_func
 
 
-@contextmanager
-def opaque_reservation(
+async def allgather_reduce(
     context: Context,
-    estimated_bytes: int,
-) -> Iterator[MemoryReservation]:
+    op_id: int,
+    *local_values: int,
+) -> tuple[int, ...]:
     """
-    Reserve memory for opaque allocations.
+    Allgather local scalar values and sum each across all ranks.
 
     Parameters
     ----------
     context
-        The RapidsMPF context.
-    estimated_bytes
-        The estimated number of bytes to reserve.
+        The rapidsmpf context.
+    op_id
+        The collective operation ID for this allgather.
+    *local_values
+        One or more local scalar values to contribute.
 
-    Yields
-    ------
-    The memory reservation.
+    Returns
+    -------
+    tuple[int, ...]
+        The sum of each local_value across all ranks.
     """
-    yield context.br().reserve_device_memory_and_spill(
-        estimated_bytes, allow_overbooking=True
-    )
+    n = len(local_values)
+    fmt = f"<{'q' * n}"
+    data = struct.pack(fmt, *local_values)
+    packed = PackedData.from_host_bytes(data, context.br())
+
+    allgather = AllGather(context, op_id)
+    allgather.insert(0, packed)
+    allgather.insert_finished()
+
+    results = await allgather.extract_all(context, ordered=False)
+
+    totals = [0] * n
+    for packed_result in results:
+        result_bytes = packed_result.to_host_bytes()
+        values = struct.unpack(fmt, result_bytes)
+        for i, v in enumerate(values):
+            totals[i] += v
+
+    return tuple(totals)
