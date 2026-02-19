@@ -590,7 +590,7 @@ class udf_aggregation final : public clonable<udf_aggregation>::derived_from<rol
     : aggregation{type},
       _source{std::move(user_defined_aggregator)},
       _operator_name{(type == aggregation::PTX) ? "rolling_udf_ptx" : "rolling_udf_cuda"},
-      _function_name{"rolling_udf"},
+      _function_name{"GENERIC_ROLLING_OP"},
       _output_type{output_type}
   {
     CUDF_EXPECTS(type == aggregation::PTX or type == aggregation::CUDA,
