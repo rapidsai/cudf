@@ -20,7 +20,7 @@ from cudf.core.column.column import ColumnBase, as_column
 from cudf.core.dataframe import DataFrame
 from cudf.core.index import DatetimeIndex, Index, ensure_index
 from cudf.core.series import Series
-from cudf.utils.dtypes import CUDF_STRING_DTYPE
+from cudf.utils.dtypes import CUDF_STRING_DTYPE, dtype_from_pylibcudf_column
 from cudf.utils.scalar import pa_scalar_to_plc_scalar
 from cudf.utils.temporal import infer_format, unit_to_nanoseconds_conversion
 
@@ -139,11 +139,11 @@ def to_datetime(
     >>> cudf.to_datetime(df)
     0   2015-02-04
     1   2016-03-05
-    dtype: datetime64[ns]
+    dtype: datetime64[s]
     >>> cudf.to_datetime(1490195805, unit='s')
-    numpy.datetime64('2017-03-22T15:16:45.000000000')
+    Timestamp('2017-03-22 15:16:45')
     >>> cudf.to_datetime(1490195805433502912, unit='ns')
-    numpy.datetime64('1780-11-20T01:02:30.494253056')
+    Timestamp('2017-03-22 15:16:45.433502912')
     """
     if errors not in {"ignore", "raise", "coerce", "warn"}:
         raise ValueError(
@@ -687,11 +687,13 @@ class DateOffset:
                 value = -value if op == "__sub__" else value
                 if unit == "months":
                     with datetime_col.access(mode="read", scope="internal"):
-                        datetime_col = type(datetime_col).from_pylibcudf(
-                            plc.datetime.add_calendrical_months(
-                                datetime_col.plc_column,
-                                pa_scalar_to_plc_scalar(pa.scalar(value)),
-                            )
+                        plc_column = plc.datetime.add_calendrical_months(
+                            datetime_col.plc_column,
+                            pa_scalar_to_plc_scalar(pa.scalar(value)),
+                        )
+                        datetime_col = ColumnBase.create(
+                            plc_column,
+                            dtype=dtype_from_pylibcudf_column(plc_column),
                         )
                 else:
                     datetime_col += as_column(value, length=len(datetime_col))
@@ -846,6 +848,8 @@ def date_range(
     ...     freq=cudf.DateOffset(months=2, days=5),
     ...     periods=5)
     ...
+    Traceback (most recent call last):
+    ...
     NotImplementedError: Mixing fixed and non-fixed frequency offset is
     unsupported.
 
@@ -856,9 +860,9 @@ def date_range(
     ...     freq=cudf.DateOffset(years=1, months=2),
     ...     periods=5)
     DatetimeIndex(['2021-08-23 08:00:00', '2022-10-23 08:00:00',
-                '2023-12-23 08:00:00', '2025-02-23 08:00:00',
-                '2026-04-23 08:00:00'],
-                dtype='datetime64[ns]')
+                   '2023-12-23 08:00:00', '2025-02-23 08:00:00',
+                   '2026-04-23 08:00:00'],
+                  dtype='datetime64[ns]', freq='<DateOffset: months=2, years=1>')
     """
     if inclusive != "both":
         raise NotImplementedError(f"{inclusive=} is currently unsupported.")
@@ -978,12 +982,13 @@ def date_range(
             "months", 0
         )
         # No columns to access here - calendrical_month_sequence creates new data
-        res = ColumnBase.from_pylibcudf(
-            plc.filling.calendrical_month_sequence(
-                periods,
-                pa_scalar_to_plc_scalar(pa.scalar(start)),
-                months,
-            )
+        plc_column = plc.filling.calendrical_month_sequence(
+            periods,
+            pa_scalar_to_plc_scalar(pa.scalar(start)),
+            months,
+        )
+        res = ColumnBase.create(
+            plc_column, dtype=dtype_from_pylibcudf_column(plc_column)
         )
         if _periods_not_specified:
             # As mentioned in [1], this is a post processing step to trim extra

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 """Conversion of expression nodes to libcudf AST nodes."""
@@ -289,6 +289,17 @@ def to_parquet_filter(node: expr.Expr, stream: Stream) -> plc_expr.Expression | 
     -------
     pylibcudf Expression if conversion is possible, otherwise None.
     """
+    # Converts a boolean column reference (e.g., filter(pl.col("foo")))
+    # to an explicit comparison for parquet filters (e.g., filter(pl.col("foo") == True)).
+    # TODO: Have polars pass us the comparison instead
+    if isinstance(node, expr.Col) and node.dtype.id() == plc.TypeId.BOOL8:
+        node = expr.BinOp(
+            node.dtype,
+            plc.binaryop.BinaryOperator.EQUAL,
+            node,
+            expr.Literal(node.dtype, value=True),
+        )
+
     mapper: Transformer = CachingVisitor(
         _to_ast, state={"for_parquet": True, "stream": stream}
     )
