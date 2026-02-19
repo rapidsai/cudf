@@ -8,115 +8,16 @@
 #include <benchmarks/io/cuio_common.hpp>
 #include <benchmarks/io/nvbench_helpers.hpp>
 
+#include <cudf/io/datasource.hpp>
 #include <cudf/io/experimental/hybrid_scan.hpp>
 #include <cudf/io/parquet.hpp>
+#include <cudf/io/parquet_io_utils.hpp>
 #include <cudf/io/text/byte_range_info.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
 #include <nvbench/nvbench.cuh>
 
 constexpr cudf::size_type num_cols = 8;
-
-namespace {
-
-/**
- * @brief Fetches a host span of Parquet footer bytes from the input buffer span
- *
- * @param buffer Input buffer span
- * @return A host span of the footer bytes
- */
-cudf::host_span<uint8_t const> fetch_footer_bytes(cudf::host_span<uint8_t const> buffer)
-{
-  using namespace cudf::io::parquet;
-
-  constexpr auto header_len = sizeof(file_header_s);
-  constexpr auto ender_len  = sizeof(file_ender_s);
-  size_t const len          = buffer.size();
-
-  auto const header_buffer = cudf::host_span<uint8_t const>(buffer.data(), header_len);
-  auto const header        = reinterpret_cast<file_header_s const*>(header_buffer.data());
-  auto const ender_buffer =
-    cudf::host_span<uint8_t const>(buffer.data() + len - ender_len, ender_len);
-  auto const ender = reinterpret_cast<file_ender_s const*>(ender_buffer.data());
-  CUDF_EXPECTS(len > header_len + ender_len, "Incorrect data source");
-  constexpr uint32_t parquet_magic = (('P' << 0) | ('A' << 8) | ('R' << 16) | ('1' << 24));
-  CUDF_EXPECTS(header->magic == parquet_magic && ender->magic == parquet_magic,
-               "Corrupted header or footer");
-  CUDF_EXPECTS(ender->footer_len != 0 && ender->footer_len <= (len - header_len - ender_len),
-               "Incorrect footer length");
-
-  return cudf::host_span<uint8_t const>(buffer.data() + len - ender->footer_len - ender_len,
-                                        ender->footer_len);
-}
-
-/**
- * @brief Fetches a host span of Parquet page index bytes from the input buffer span
- *
- * @param buffer Input buffer span
- * @param page_index_bytes Byte range of page index to fetch
- * @return A host span of the page index bytes
- */
-cudf::host_span<uint8_t const> fetch_page_index_bytes(
-  cudf::host_span<uint8_t const> buffer, cudf::io::text::byte_range_info const page_index_bytes)
-{
-  return cudf::host_span<uint8_t const>(
-    reinterpret_cast<uint8_t const*>(buffer.data()) + page_index_bytes.offset(),
-    page_index_bytes.size());
-}
-
-/**
- * @brief Converts a span of device buffers into a vector of corresponding device spans
- *
- * @tparam T Type of output device spans
- * @param buffers Host span of device buffers
- * @return Device spans corresponding to the input device buffers
- */
-template <typename T>
-std::vector<cudf::device_span<T const>> make_device_spans(
-  cudf::host_span<rmm::device_buffer const> buffers)
-  requires(sizeof(T) == 1)
-{
-  std::vector<cudf::device_span<T const>> device_spans(buffers.size());
-  std::transform(buffers.begin(), buffers.end(), device_spans.begin(), [](auto const& buffer) {
-    return cudf::device_span<T const>{static_cast<T const*>((buffer.data())), buffer.size()};
-  });
-  return device_spans;
-}
-
-/**
- * @brief Fetches a list of byte ranges from a host buffer into device buffers
- *
- * @param host_buffer Host buffer span
- * @param byte_ranges Byte ranges to fetch
- * @param stream CUDA stream
- * @param mr Device memory resource
- *
- * @return Device buffers
- */
-std::vector<rmm::device_buffer> fetch_byte_ranges(
-  cudf::host_span<uint8_t const> host_buffer,
-  cudf::host_span<cudf::io::text::byte_range_info const> byte_ranges,
-  rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
-{
-  std::vector<rmm::device_buffer> buffers(byte_ranges.size());
-
-  std::transform(
-    byte_ranges.begin(), byte_ranges.end(), buffers.begin(), [&](auto const& byte_range) {
-      auto const chunk_offset = host_buffer.data() + byte_range.offset();
-      auto const chunk_size   = static_cast<size_t>(byte_range.size());
-      auto buffer             = rmm::device_buffer(chunk_size, stream, mr);
-      cudf::detail::cuda_memcpy_async(
-        cudf::device_span<uint8_t>{static_cast<uint8_t*>(buffer.data()), chunk_size},
-        cudf::host_span<uint8_t const>{chunk_offset, chunk_size},
-        stream);
-      return buffer;
-    });
-
-  return buffers;
-}
-
-}  // namespace
 
 void BM_parquet_filter_string_row_groups_with_dicts_common(nvbench::state& state,
                                                            data_profile const& table_profile,
@@ -144,27 +45,29 @@ void BM_parquet_filter_string_row_groups_with_dicts_common(nvbench::state& state
     cudf::io::write_parquet(write_opts);
   }
 
-  // Read table from parquet
-  auto const file_buffer_span = cudf::host_span<uint8_t const>(
-    reinterpret_cast<uint8_t const*>(parquet_buffer.data()), parquet_buffer.size());
+  // Create datasource from parquet buffer
+  auto const datasource = cudf::io::datasource::create(cudf::host_span<std::byte const>(
+    reinterpret_cast<std::byte const*>(parquet_buffer.data()), parquet_buffer.size()));
+  auto datasource_ref   = std::ref(*datasource);
 
   auto const stream = cudf::get_default_stream();
 
   // Fetch footer and page index bytes from the buffer.
-  auto const footer_buffer = fetch_footer_bytes(file_buffer_span);
+  auto const footer_buffer = cudf::io::parquet::fetch_footer_to_host(datasource_ref);
 
   auto const read_opts = cudf::io::parquet_reader_options::builder().filter(filter_expr).build();
-  auto const reader =
-    std::make_unique<cudf::io::parquet::experimental::hybrid_scan_reader>(footer_buffer, read_opts);
+  auto const reader    = std::make_unique<cudf::io::parquet::experimental::hybrid_scan_reader>(
+    *footer_buffer, read_opts);
 
   // Get page index byte range from the reader
   auto const page_index_byte_range = reader->page_index_byte_range();
 
   // Fetch page index bytes from the input buffer
-  auto const page_index_buffer = fetch_page_index_bytes(file_buffer_span, page_index_byte_range);
+  auto const page_index_buffer =
+    cudf::io::parquet::fetch_page_index_to_host(datasource_ref, page_index_byte_range);
 
   // Setup page index
-  reader->setup_page_index(page_index_buffer);
+  reader->setup_page_index(*page_index_buffer);
 
   // Get all row groups from the reader
   auto input_row_group_indices = reader->all_row_groups(read_opts);
@@ -177,9 +80,10 @@ void BM_parquet_filter_string_row_groups_with_dicts_common(nvbench::state& state
   CUDF_EXPECTS(dict_page_byte_ranges.size() > 0, "No dictionary page byte ranges found");
 
   // Fetch dictionary page buffers and corresponding device spans from the input file buffer
-  auto dictionary_page_buffers = fetch_byte_ranges(
-    file_buffer_span, dict_page_byte_ranges, stream, cudf::get_current_device_resource_ref());
-  auto dictionary_page_data = make_device_spans<uint8_t>(dictionary_page_buffers);
+  auto [dict_page_buffers, dict_page_data, dict_page_tasks] =
+    cudf::io::parquet::fetch_byte_ranges_to_device_async(
+      datasource_ref, dict_page_byte_ranges, stream, cudf::get_current_device_resource_ref());
+  dict_page_tasks.get();
 
   auto mem_stats_logger = cudf::memory_stats_logger();
   state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
@@ -188,7 +92,7 @@ void BM_parquet_filter_string_row_groups_with_dicts_common(nvbench::state& state
                try_drop_l3_cache();
                timer.start();
                std::ignore = reader->filter_row_groups_with_dictionary_pages(
-                 dictionary_page_data, input_row_group_indices, read_opts, stream);
+                 dict_page_data, input_row_group_indices, read_opts, stream);
                timer.stop();
              });
 

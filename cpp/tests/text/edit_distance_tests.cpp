@@ -12,7 +12,7 @@
 
 #include <nvtext/edit_distance.hpp>
 
-#include <thrust/iterator/constant_iterator.h>
+#include <cuda/iterator>
 
 #include <vector>
 
@@ -47,7 +47,7 @@ TEST_F(TextEditDistanceTest, EditDistance)
     auto input    = cudf::test::strings_column_wrapper(h_input.begin(), h_input.end());
     auto sv       = cudf::strings_column_view(input);
     auto results  = nvtext::edit_distance(sv, tv);
-    auto begin    = thrust::constant_iterator<int32_t>(1);
+    auto begin    = cuda::constant_iterator<int32_t>(1);
     auto expected = cudf::test::fixed_width_column_wrapper<int32_t>(begin, begin + h_input.size());
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }

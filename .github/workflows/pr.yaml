@@ -286,6 +286,8 @@ jobs:
           - '!img/**'
           - '!java/**'
           - '!notebooks/**'
+        cpp_only:
+          - 'cpp/**'
   checks:
     secrets: inherit
     needs: telemetry-setup
@@ -301,7 +303,6 @@ jobs:
       build_type: pull-request
       node_type: cpu16
       script: ci/build_cpp.sh
-      sccache-dist-token-secret-name: GIST_REPO_READ_ORG_GITHUB_TOKEN
   cpp-linters:
     secrets: inherit
     needs: checks
@@ -309,7 +310,6 @@ jobs:
     with:
       build_type: pull-request
       script: "ci/cpp_linters.sh"
-      sccache-dist-token-secret-name: GIST_REPO_READ_ORG_GITHUB_TOKEN
   conda-cpp-checks:
     needs: conda-cpp-build
     secrets: inherit
@@ -324,7 +324,6 @@ jobs:
     with:
       build_type: pull-request
       script: ci/test_cpp.sh
-      sccache-dist-token-secret-name: GIST_REPO_READ_ORG_GITHUB_TOKEN
   conda-python-build:
     needs: conda-cpp-build
     secrets: inherit
@@ -350,7 +349,6 @@ jobs:
     with:
       build_type: pull-request
       script: "ci/test_python_cudf.sh"
-      sccache-dist-token-secret-name: GIST_REPO_READ_ORG_GITHUB_TOKEN
       # Skip failing tests on RTX PRO 6000 (Blackwell). xref: https://github.com/rapidsai/cudf/issues/21357
       matrix_filter: map(select(.GPU != "rtxpro6000"))
   conda-python-other-tests:
@@ -362,7 +360,6 @@ jobs:
     with:
       build_type: pull-request
       script: "ci/test_python_other.sh"
-      sccache-dist-token-secret-name: GIST_REPO_READ_ORG_GITHUB_TOKEN
   conda-java-tests:
     needs: [conda-cpp-build, changed-files]
     secrets: inherit
@@ -408,7 +405,6 @@ jobs:
       script: "ci/build_wheel_libcudf.sh"
       package-name: libcudf
       package-type: cpp
-      sccache-dist-token-secret-name: GIST_REPO_READ_ORG_GITHUB_TOKEN
   wheel-build-pylibcudf:
     needs: [checks, wheel-build-libcudf]
     secrets: inherit
@@ -419,7 +415,6 @@ jobs:
       script: "ci/build_wheel_pylibcudf.sh"
       package-name: pylibcudf
       package-type: python
-      sccache-dist-token-secret-name: GIST_REPO_READ_ORG_GITHUB_TOKEN
       # Build a wheel for each CUDA x ARCH x minimum supported Python version
       matrix_filter: group_by({CUDA_VER, ARCH}) | map(min_by(.PY_VER | split(".") | map(tonumber)))
   wheel-build-cudf:
@@ -432,7 +427,6 @@ jobs:
       script: "ci/build_wheel_cudf.sh"
       package-name: cudf
       package-type: python
-      sccache-dist-token-secret-name: GIST_REPO_READ_ORG_GITHUB_TOKEN
       # Build a wheel for each CUDA x ARCH x minimum supported Python version
       matrix_filter: group_by({CUDA_VER, ARCH}) | map(min_by(.PY_VER | split(".") | map(tonumber)))
   wheel-tests-cudf:
@@ -443,7 +437,6 @@ jobs:
     with:
       build_type: pull-request
       script: ci/test_wheel_cudf.sh
-      sccache-dist-token-secret-name: GIST_REPO_READ_ORG_GITHUB_TOKEN
       # Skip failing tests on RTX PRO 6000 (Blackwell). xref: https://github.com/rapidsai/cudf/issues/21357
       matrix_filter: map(select(.GPU != "rtxpro6000"))
   wheel-build-cudf-polars:
@@ -459,7 +452,6 @@ jobs:
       package-name: cudf_polars
       package-type: python
       pure-wheel: true
-      sccache-dist-token-secret-name: GIST_REPO_READ_ORG_GITHUB_TOKEN
   wheel-tests-cudf-polars:
     needs: [wheel-build-cudf-polars, changed-files]
     secrets: inherit
@@ -470,7 +462,6 @@ jobs:
       matrix_filter: map(select(.ARCH == "amd64")) | group_by(.CUDA_VER|split(".")|map(tonumber)|.[0]) | map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))]))
       build_type: pull-request
       script: "ci/test_wheel_cudf_polars.sh"
-      sccache-dist-token-secret-name: GIST_REPO_READ_ORG_GITHUB_TOKEN
   wheel-tests-cudf-polars-with-rapidsmpf:
     needs: [wheel-build-cudf-polars, changed-files]
     secrets: inherit
@@ -482,7 +473,6 @@ jobs:
       matrix_filter: map(select(.ARCH == "amd64")) | group_by(.CUDA_VER|split(".")|map(tonumber)|.[0]) | map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))]))
       build_type: pull-request
       script: "ci/test_cudf_polars_with_rapidsmpf.sh"
-      sccache-dist-token-secret-name: GIST_REPO_READ_ORG_GITHUB_TOKEN
   cudf-polars-polars-tests:
     needs: [wheel-build-cudf-polars, changed-files]
     secrets: inherit
@@ -493,7 +483,6 @@ jobs:
       matrix_filter: map(select(.ARCH == "amd64")) | group_by(.CUDA_VER|split(".")|map(tonumber)|.[0]) | map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))]))
       build_type: pull-request
       script: "ci/test_cudf_polars_polars_tests.sh"
-      sccache-dist-token-secret-name: GIST_REPO_READ_ORG_GITHUB_TOKEN
   wheel-build-dask-cudf:
     needs: wheel-build-cudf
     secrets: inherit
@@ -507,7 +496,6 @@ jobs:
       package-name: dask_cudf
       package-type: python
       pure-wheel: true
-      sccache-dist-token-secret-name: GIST_REPO_READ_ORG_GITHUB_TOKEN
   wheel-tests-dask-cudf:
     needs: [wheel-build-dask-cudf, changed-files]
     secrets: inherit
@@ -518,7 +506,6 @@ jobs:
       matrix_filter: map(select(.ARCH == "amd64")) | group_by(.CUDA_VER|split(".")|map(tonumber)|.[0]) | map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))]))
       build_type: pull-request
       script: ci/test_wheel_dask_cudf.sh
-      sccache-dist-token-secret-name: GIST_REPO_READ_ORG_GITHUB_TOKEN
   devcontainer:
     secrets: inherit
     needs: telemetry-setup
@@ -527,12 +514,10 @@ jobs:
       arch: '["amd64", "arm64"]'
       cuda: '["13.1"]'
       node_type: "cpu8"
-      rapids-aux-secret-1: GIST_REPO_READ_ORG_GITHUB_TOKEN
       env: |
         SCCACHE_DIST_MAX_RETRIES=inf
         SCCACHE_SERVER_LOG=sccache=debug
         SCCACHE_DIST_FALLBACK_TO_LOCAL_COMPILE=false
-        SCCACHE_DIST_AUTH_TOKEN_VAR=RAPIDS_AUX_SECRET_1
       build_command: |
         sccache --zero-stats;
         build-all -j0 -DBUILD_BENCHMARKS=ON --verbose 2>&1 | tee telemetry-artifacts/build.log;
@@ -547,12 +532,11 @@ jobs:
       matrix_filter: group_by([(.ARCH), (.CUDA_VER|split(".")|map(tonumber)|.[0])]) | map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))]))
       build_type: pull-request
       script: ci/cudf_pandas_scripts/run_tests.sh
-      sccache-dist-token-secret-name: GIST_REPO_READ_ORG_GITHUB_TOKEN
   third-party-integration-tests-cudf-pandas:
     needs: [conda-python-build, conda-python-build-noarch, changed-files]
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@main
-    if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_conda || fromJSON(needs.changed-files.outputs.changed_file_groups).test_cudf_pandas
+    if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_conda && !fromJSON(needs.changed-files.outputs.changed_file_groups).cpp_only
     with:
       build_type: pull-request
       branch: ${{ inputs.branch }}
@@ -568,7 +552,7 @@ jobs:
     needs: [wheel-build-cudf, changed-files]
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@main
-    if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_wheels || fromJSON(needs.changed-files.outputs.changed_file_groups).test_cudf_pandas
+    if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_wheels && !fromJSON(needs.changed-files.outputs.changed_file_groups).cpp_only
     with:
       build_type: pull-request
       branch: ${{ inputs.branch }}
@@ -581,7 +565,7 @@ jobs:
     needs: [conda-python-build, conda-python-build-noarch, changed-files]
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@main
-    if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_conda
+    if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_conda && !fromJSON(needs.changed-files.outputs.changed_file_groups).cpp_only
     with:
       build_type: pull-request
       branch: ${{ inputs.branch }}

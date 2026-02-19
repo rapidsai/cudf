@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -29,7 +29,7 @@
 
 #include <rmm/mr/pinned_host_memory_resource.hpp>
 
-#include <thrust/iterator/constant_iterator.h>
+#include <cuda/iterator>
 
 #include <fstream>
 #include <limits>
@@ -2611,9 +2611,9 @@ TEST_P(JsonDelimiterParamTest, JsonLinesDelimiter)
   EXPECT_EQ(result.metadata.schema_info[1].name, "col2");
   EXPECT_EQ(result.metadata.schema_info[2].name, "col3");
 
-  auto col1_iterator = thrust::constant_iterator<int64_t>(100);
-  auto col2_iterator = thrust::constant_iterator<double>(1.1);
-  auto col3_iterator = thrust::constant_iterator<std::string>("aaa");
+  auto col1_iterator = cuda::constant_iterator<int64_t>(100);
+  auto col2_iterator = cuda::constant_iterator<double>(1.1);
+  auto col3_iterator = cuda::constant_iterator<std::string>("aaa");
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0),
                                  int64_wrapper(col1_iterator, col1_iterator + repetitions));
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(1),
@@ -2661,7 +2661,7 @@ TEST_F(JsonReaderTest, ViableDelimiterNewlineWS)
 
   EXPECT_EQ(result.metadata.schema_info[0].name, "a");
 
-  auto col1_iterator = thrust::constant_iterator<int64_t>(100);
+  auto col1_iterator = cuda::constant_iterator<int64_t>(100);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0),
                                  int64_wrapper(col1_iterator, col1_iterator + 1));
 }
