@@ -163,3 +163,73 @@ def test_get_partitioning_moduli(
         partitioning=partitioning,
     )
     assert get_partitioning_moduli(metadata, key_indices, nranks) == expected
+
+
+@pytest.mark.parametrize(
+    "local_count,partitioning,key_indices,nranks,expected",
+    [
+        # Partitioned on (0,); keys (0, 1) → prefix (0,) matches
+        (
+            8,
+            Partitioning(inter_rank=HashScheme((0,), 8), local="inherit"),
+            (0, 1),
+            4,
+            (8, None),
+        ),
+        # Partitioned on (0, 1); keys (0, 1, 2) → prefix (0, 1) matches
+        (
+            8,
+            Partitioning(inter_rank=HashScheme((0, 1), 8), local="inherit"),
+            (0, 1, 2),
+            4,
+            (8, None),
+        ),
+        # Partitioned on (0,) with explicit local; keys (0, 1) → prefix matches
+        (
+            4,
+            Partitioning(
+                inter_rank=HashScheme((0,), 8),
+                local=HashScheme((0,), 4),
+            ),
+            (0, 1),
+            4,
+            (8, 4),
+        ),
+        # Full key match with allow_subset: same as exact match
+        (
+            8,
+            Partitioning(inter_rank=HashScheme((0, 1), 8), local="inherit"),
+            (0, 1),
+            4,
+            (8, None),
+        ),
+        # Keys (0,) are shorter than partition (0, 1) → no prefix match
+        (
+            8,
+            Partitioning(inter_rank=HashScheme((0, 1), 8), local="inherit"),
+            (0,),
+            4,
+            (0, 0),
+        ),
+        # Partitioned on (1,); keys (0, 1) → prefix of keys is (0,), not (1,) → no match
+        (
+            8,
+            Partitioning(inter_rank=HashScheme((1,), 8), local="inherit"),
+            (0, 1),
+            4,
+            (0, 0),
+        ),
+    ],
+)
+def test_get_partitioning_moduli_allow_subset(
+    local_count, partitioning, key_indices, nranks, expected
+) -> None:
+    """get_partitioning_moduli with allow_subset=True matches on prefix of key_indices."""
+    metadata = ChannelMetadata(
+        local_count=local_count,
+        partitioning=partitioning,
+    )
+    assert (
+        get_partitioning_moduli(metadata, key_indices, nranks, allow_subset=True)
+        == expected
+    )
