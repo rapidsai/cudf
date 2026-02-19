@@ -10,6 +10,7 @@
 
 #pragma once
 
+#include "expression_transform_helpers.hpp"
 #include "parquet_gpu.hpp"
 #include "reader_impl_chunking.hpp"
 #include "reader_impl_helpers.hpp"

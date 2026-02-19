@@ -5,10 +5,10 @@
 
 #include "hybrid_scan_helpers.hpp"
 #include "hybrid_scan_impl.hpp"
+#include "io/parquet/expression_transform_helpers.hpp"
 #include "io/parquet/parquet_gpu.hpp"
 #include "io/utilities/block_utils.cuh"
 
-#include <cudf/ast/detail/expression_transformer.hpp>
 #include <cudf/ast/detail/operators.hpp>
 #include <cudf/ast/expressions.hpp>
 #include <cudf/detail/cuco_helpers.hpp>
@@ -1393,18 +1393,15 @@ class dictionary_expression_converter : public equality_literals_collector {
   std::reference_wrapper<ast::expression const> visit(ast::operation const& expr) override
   {
     using cudf::ast::ast_operator;
-    auto const operands       = expr.get_operands();
-    auto const op             = expr.get_operator();
-    auto const operator_arity = cudf::ast::detail::ast_operator_arity(op);
 
-    if (auto* v = dynamic_cast<ast::column_reference const*>(&operands[0].get())) {
-      // First operand should be column reference, second (if binary operation) should be literal.
-      CUDF_EXPECTS(operator_arity == 1 or operator_arity == 2,
-                   "Only unary and binary operations are supported on column reference");
-      CUDF_EXPECTS(
-        operator_arity == 1 or dynamic_cast<ast::literal const*>(&operands[1].get()) != nullptr,
-        "Second operand of binary operation with column reference must be a literal");
-      v->accept(*this);
+    // Extract the column reference, literal, operator, and operator arity from the operands
+    auto const [col_ref, literal, op, operator_arity] =
+      parquet::detail::extract_operands_and_operator(expr);
+
+    if (col_ref != nullptr) {
+      CUDF_EXPECTS(operator_arity == 1 or literal != nullptr,
+                   "Binary operation must have a column reference and a literal as operands");
+      col_ref->accept(*this);
 
       // Propagate the `_always_true` as expression to its unary operator parent
       if (operator_arity == 1) {
@@ -1415,12 +1412,11 @@ class dictionary_expression_converter : public equality_literals_collector {
       if (op == ast_operator::EQUAL or op == ast::ast_operator::NOT_EQUAL) {
         // Search the literal in this input column's equality literals list and add to
         // the offset.
-        auto const col_idx            = v->get_column_index();
+        auto const col_idx            = col_ref->get_column_index();
         auto const& equality_literals = _literals[col_idx];
         auto col_literal_offset       = _col_literals_offsets[col_idx];
-        auto const literal_iter       = std::find(equality_literals.cbegin(),
-                                            equality_literals.cend(),
-                                            dynamic_cast<ast::literal const*>(&operands[1].get()));
+        auto const literal_iter =
+          std::find(equality_literals.cbegin(), equality_literals.cend(), literal);
         CUDF_EXPECTS(literal_iter != equality_literals.end(), "Could not find the literal ptr");
         col_literal_offset += std::distance(equality_literals.cbegin(), literal_iter);
 
@@ -1443,7 +1439,7 @@ class dictionary_expression_converter : public equality_literals_collector {
         _dictionary_expr.push(ast::operation{ast_operator::IDENTITY, *_always_true});
       }
     } else {
-      auto new_operands = visit_operands(operands);
+      auto new_operands = visit_operands(expr.get_operands());
       if (operator_arity == 2) {
         _dictionary_expr.push(ast::operation{op, new_operands.front(), new_operands.back()});
       } else if (operator_arity == 1) {
@@ -1580,18 +1576,15 @@ std::reference_wrapper<ast::expression const> dictionary_literals_collector::vis
   ast::operation const& expr)
 {
   using cudf::ast::ast_operator;
-  auto const operands = expr.get_operands();
-  auto const op       = expr.get_operator();
 
-  if (auto* v = dynamic_cast<ast::column_reference const*>(&operands[0].get())) {
-    // First operand should be column reference, second (if binary operation) should be literal.
-    auto const operator_arity = cudf::ast::detail::ast_operator_arity(op);
-    CUDF_EXPECTS(operator_arity == 1 or operator_arity == 2,
-                 "Only unary and binary operations are supported on column reference");
-    CUDF_EXPECTS(
-      operator_arity == 1 or dynamic_cast<ast::literal const*>(&operands[1].get()) != nullptr,
-      "Second operand of binary operation with column reference must be a literal");
-    v->accept(*this);
+  // Extract the column reference, literal, operator, and operator arity from the operands
+  auto const [col_ref, literal, op, operator_arity] =
+    parquet::detail::extract_operands_and_operator(expr);
+
+  if (col_ref != nullptr) {
+    CUDF_EXPECTS(operator_arity == 1 or literal != nullptr,
+                 "Binary operation must have a column reference and a literal as operands");
+    col_ref->accept(*this);
 
     // Return early if this is a unary operation
     if (operator_arity == 1) { return expr; }
@@ -1599,14 +1592,13 @@ std::reference_wrapper<ast::expression const> dictionary_literals_collector::vis
     // Push to the corresponding column's literals and operators list iff EQUAL or NOT_EQUAL
     // operator is seen
     if (op == ast_operator::EQUAL or op == ast::ast_operator::NOT_EQUAL) {
-      auto const literal_ptr = dynamic_cast<ast::literal const*>(&operands[1].get());
-      auto const col_idx     = v->get_column_index();
-      _literals[col_idx].emplace_back(const_cast<ast::literal*>(literal_ptr));
+      auto const col_idx = col_ref->get_column_index();
+      _literals[col_idx].emplace_back(const_cast<ast::literal*>(literal));
       _operators[col_idx].emplace_back(op);
     }
   } else {
     // Visit the operands and ignore any output as we only want to collect literals and operators
-    std::ignore = visit_operands(operands);
+    std::ignore = visit_operands(expr.get_operands());
   }
 
   return expr;

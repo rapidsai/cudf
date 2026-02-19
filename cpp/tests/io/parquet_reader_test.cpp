@@ -1402,10 +1402,11 @@ TEST_F(ParquetReaderTest, FilterSimple)
   cudf::io::write_parquet(args);
 
   // Filtering AST - table[0] < RAND_MAX/2
-  auto literal_value     = cudf::numeric_scalar<decltype(RAND_MAX)>(RAND_MAX / 2);
-  auto literal           = cudf::ast::literal(literal_value);
-  auto col_ref_0         = cudf::ast::column_reference(0);
-  auto filter_expression = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref_0, literal);
+  auto literal_value = cudf::numeric_scalar<decltype(RAND_MAX)>(RAND_MAX / 2);
+  auto literal       = cudf::ast::literal(literal_value);
+  auto col_ref_0     = cudf::ast::column_reference(0);
+  auto filter_expression =
+    cudf::ast::operation(cudf::ast::ast_operator::GREATER, literal, col_ref_0);
 
   auto predicate = cudf::compute_column(*written_table, filter_expression);
   EXPECT_EQ(predicate->view().type().id(), cudf::type_id::BOOL8)
@@ -1480,12 +1481,12 @@ TEST_F(ParquetReaderTest, FilterWithColumnProjection)
   auto lit             = cudf::ast::literal{val};
   auto col_ref         = cudf::ast::column_name_reference{"col_uint32"};
   auto col_index       = cudf::ast::column_reference{0};
-  auto filter_expr     = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_index, lit);
+  auto filter_expr     = cudf::ast::operation(cudf::ast::ast_operator::GREATER, lit, col_index);
 
   auto predicate = cudf::compute_column(src, filter_expr);
 
   {  // column_name_reference in parquet filter (not present in column projection)
-    auto read_expr       = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref, lit);
+    auto read_expr       = cudf::ast::operation(cudf::ast::ast_operator::GREATER, lit, col_ref);
     auto projected_table = cudf::table_view{{src.get_column(2)}};
     auto expected        = cudf::apply_boolean_mask(projected_table, *predicate);
 
@@ -1544,11 +1545,12 @@ TEST_F(ParquetReaderTest, FilterWithColumnProjection)
 TEST_F(ParquetReaderTest, FilterReferenceExpression)
 {
   auto [src, filepath] = create_parquet_with_stats("FilterReferenceExpression.parquet");
-  // Filtering AST - table[0] < 150
-  auto literal_value     = cudf::numeric_scalar<uint32_t>(150);
-  auto literal           = cudf::ast::literal(literal_value);
-  auto col_ref_0         = cudf::ast::column_reference(0);
-  auto filter_expression = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref_0, literal);
+  // Filtering AST - 150 > table[0]
+  auto literal_value = cudf::numeric_scalar<uint32_t>(150);
+  auto literal       = cudf::ast::literal(literal_value);
+  auto col_ref_0     = cudf::ast::column_reference(0);
+  auto filter_expression =
+    cudf::ast::operation(cudf::ast::ast_operator::GREATER, literal, col_ref_0);
 
   // Expected result
   auto predicate = cudf::compute_column(src, filter_expression);
@@ -1601,7 +1603,7 @@ TEST_F(ParquetReaderTest, FilterMultiple1)
   auto lo_lit            = cudf::ast::literal(lov);
   auto hi_lit            = cudf::ast::literal(hiv);
   auto expr_1 = cudf::ast::operation(cudf::ast::ast_operator::GREATER_EQUAL, filter_col, lo_lit);
-  auto expr_2 = cudf::ast::operation(cudf::ast::ast_operator::LESS, filter_col, hi_lit);
+  auto expr_2 = cudf::ast::operation(cudf::ast::ast_operator::GREATER, hi_lit, filter_col);
   auto expr_3 = cudf::ast::operation(cudf::ast::ast_operator::LOGICAL_AND, expr_1, expr_2);
 
   // Expected result
@@ -1637,7 +1639,7 @@ TEST_F(ParquetReaderTest, FilterMultiple2)
   auto lo_lit             = cudf::ast::literal(lov);
   auto hi_lit             = cudf::ast::literal(hiv);
   auto expr_1 = cudf::ast::operation(cudf::ast::ast_operator::GREATER_EQUAL, filter_col, lo_lit);
-  auto expr_2 = cudf::ast::operation(cudf::ast::ast_operator::LESS, filter_col, hi_lit);
+  auto expr_2 = cudf::ast::operation(cudf::ast::ast_operator::GREATER, hi_lit, filter_col);
   auto expr_3 = cudf::ast::operation(cudf::ast::ast_operator::LOGICAL_AND, expr_1, expr_2);
   std::string const low2  = "000017000";
   std::string const high2 = "000019000";
@@ -1817,10 +1819,10 @@ TEST_F(ParquetReaderTest, FilterSupported2)
 
   // Filtering AST -   table[i] == 1
   {
-    auto expr0 = cudf::ast::operation(cudf::ast::ast_operator::EQUAL, filter_col0, lit_value);
+    auto expr0 = cudf::ast::operation(cudf::ast::ast_operator::EQUAL, lit_value, filter_col0);
     test_expr(expr0);
 
-    auto expr1 = cudf::ast::operation(cudf::ast::ast_operator::EQUAL, filter_col1, lit_value);
+    auto expr1 = cudf::ast::operation(cudf::ast::ast_operator::EQUAL, lit_value, filter_col1);
     test_expr(expr1);
 
     auto expr2 = cudf::ast::operation(cudf::ast::ast_operator::EQUAL, filter_col2, lit_value);
@@ -3301,7 +3303,7 @@ void row_bounds_and_filter_test()
     auto literal       = cudf::ast::literal(literal_value);
     auto col_ref_0     = cudf::ast::column_reference(0);
     auto filter_expression =
-      cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref_0, literal);
+      cudf::ast::operation(cudf::ast::ast_operator::GREATER, literal, col_ref_0);
 
     auto const [table_with_metadata, expected] =
       read_parquet_table(filter_expression, rows_to_skip, rows_to_read);

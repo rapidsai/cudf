@@ -5,7 +5,7 @@
 
 #include "stats_filter_helpers.hpp"
 
-#include "io/parquet/parquet_common.hpp"
+#include "expression_transform_helpers.hpp"
 
 #include <cudf/ast/detail/operators.hpp>
 #include <cudf/ast/expressions.hpp>
@@ -48,18 +48,14 @@ std::reference_wrapper<ast::expression const> stats_columns_collector::visit(
   ast::operation const& expr)
 {
   using cudf::ast::ast_operator;
-  auto const operands = expr.get_operands();
-  auto const op       = expr.get_operator();
 
-  if (auto* v = dynamic_cast<ast::column_reference const*>(&operands[0].get())) {
-    // First operand should be column reference, second (if binary operation)should be literal.
-    auto const operator_arity = cudf::ast::detail::ast_operator_arity(op);
-    CUDF_EXPECTS(operator_arity == 1 or operator_arity == 2,
-                 "Only unary and binary operations are supported on column reference");
-    CUDF_EXPECTS(
-      operator_arity == 1 or dynamic_cast<ast::literal const*>(&operands[1].get()) != nullptr,
-      "Second operand of binary operation with column reference must be a literal");
-    v->accept(*this);
+  // Extract the column reference, literal, operator, and operator arity from the operands
+  auto [col_ref, literal, op, operator_arity] = extract_operands_and_operator(expr);
+
+  if (col_ref != nullptr) {
+    CUDF_EXPECTS(operator_arity == 1 or literal != nullptr,
+                 "Binary operation must have a column reference and a literal as operands");
+    col_ref->accept(*this);
 
     // Return early if this is a unary operation
     if (operator_arity == 1 and op != ast_operator::IS_NULL) { return expr; }
@@ -68,14 +64,14 @@ std::reference_wrapper<ast::expression const> stats_columns_collector::visit(
     if (op == ast_operator::EQUAL or op == ast_operator::NOT_EQUAL or op == ast_operator::LESS or
         op == ast_operator::LESS_EQUAL or op == ast_operator::GREATER or
         op == ast_operator::GREATER_EQUAL or op == ast_operator::IS_NULL) {
-      _columns_mask[v->get_column_index()] = true;
+      _columns_mask[col_ref->get_column_index()] = true;
       if (op == ast_operator::IS_NULL) { _has_is_null_operator = true; }
     } else {
       CUDF_FAIL("Unsupported binary operation in Statistics AST");
     }
   } else {
     // Visit the operands and ignore any output as we only want to build the column mask
-    std::ignore = visit_operands(operands);
+    std::ignore = visit_operands(expr.get_operands());
   }
 
   return expr;
@@ -114,20 +110,16 @@ std::reference_wrapper<ast::expression const> stats_expression_converter::visit(
   ast::operation const& expr)
 {
   using cudf::ast::ast_operator;
-  auto const operands       = expr.get_operands();
-  auto const op             = expr.get_operator();
-  auto const operator_arity = cudf::ast::detail::ast_operator_arity(op);
 
-  if (auto* v = dynamic_cast<ast::column_reference const*>(&operands[0].get())) {
-    // First operand should be column reference, second (if binary operation) should be literal.
-    CUDF_EXPECTS(operator_arity == 1 or operator_arity == 2,
-                 "Only unary and binary operations are supported on column reference");
-    CUDF_EXPECTS(
-      operator_arity == 1 or dynamic_cast<ast::literal const*>(&operands[1].get()) != nullptr,
-      "Second operand of binary operation with column reference must be a literal");
-    v->accept(*this);
+  // Extract the column reference, literal, operator, and operator arity from the operands
+  auto [col_ref, literal_ptr, op, operator_arity] = extract_operands_and_operator(expr);
 
-    auto const col_index = v->get_column_index();
+  if (col_ref != nullptr) {
+    CUDF_EXPECTS(operator_arity == 1 or literal_ptr != nullptr,
+                 "Binary operation must have a column reference and a literal as operands");
+    col_ref->accept(*this);
+
+    auto const col_index = col_ref->get_column_index();
 
     if (operator_arity == 1) {
       // Evaluate IS_NULL unary operator
@@ -147,7 +139,7 @@ std::reference_wrapper<ast::expression const> stats_expression_converter::visit(
     }
 
     // Push literal into the ast::tree
-    auto const& literal = _stats_expr.push(*dynamic_cast<ast::literal const*>(&operands[1].get()));
+    auto const& literal = _stats_expr.push(*literal_ptr);
     switch (op) {
       /* transform to stats conditions. op(col, literal)
       col1 == val --> vmin <= val && vmax >= val
@@ -197,7 +189,7 @@ std::reference_wrapper<ast::expression const> stats_expression_converter::visit(
     };
 
   } else {
-    auto new_operands = visit_operands(operands);
+    auto new_operands = visit_operands(expr.get_operands());
     if (operator_arity == 2) {
       _stats_expr.push(ast::operation{op, new_operands.front(), new_operands.back()});
     } else if (operator_arity == 1) {
