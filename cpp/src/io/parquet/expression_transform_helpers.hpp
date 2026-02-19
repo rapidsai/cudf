@@ -8,6 +8,7 @@
 #include <cudf/ast/detail/expression_transformer.hpp>
 #include <cudf/ast/expressions.hpp>
 #include <cudf/io/parquet.hpp>
+#include <cudf/io/parquet_schema.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/span.hpp>
 
