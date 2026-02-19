@@ -12,9 +12,6 @@
 #include <cudf/filling.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/types.hpp>
-#include <cudf/utilities/default_stream.hpp>
-
-#include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
 #include <thrust/shuffle.h>
@@ -48,7 +45,7 @@ std::pair<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::table>> generate_i
 
   auto build_table_gather_map = cudf::make_numeric_column(
     cudf::data_type{cudf::type_id::INT32}, build_table_numrows, cudf::mask_state::ALL_VALID);
-  thrust::tabulate(rmm::exec_policy_nosync(cudf::get_default_stream()),
+  thrust::tabulate(thrust::device,
                    build_table_gather_map->mutable_view().begin<cudf::size_type>(),
                    build_table_gather_map->mutable_view().end<cudf::size_type>(),
                    cuda::proclaim_return_type<cudf::size_type>(
@@ -60,7 +57,7 @@ std::pair<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::table>> generate_i
   auto probe_table_gather_map = cudf::make_numeric_column(
     cudf::data_type{cudf::type_id::INT32}, probe_table_numrows, cudf::mask_state::ALL_VALID);
   thrust::tabulate(
-    rmm::exec_policy_nosync(cudf::get_default_stream()),
+    thrust::device,
     probe_table_gather_map->mutable_view().begin<cudf::size_type>(),
     probe_table_gather_map->mutable_view().end<cudf::size_type>(),
     cuda::proclaim_return_type<cudf::size_type>(
@@ -75,11 +72,11 @@ std::pair<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::table>> generate_i
       }));
 
   // Shuffle gather maps to avoid cache effects
-  thrust::shuffle(rmm::exec_policy_nosync(cudf::get_default_stream()),
+  thrust::shuffle(thrust::device,
                   build_table_gather_map->mutable_view().begin<cudf::size_type>(),
                   build_table_gather_map->mutable_view().end<cudf::size_type>(),
                   thrust::default_random_engine{12345});
-  thrust::shuffle(rmm::exec_policy_nosync(cudf::get_default_stream()),
+  thrust::shuffle(thrust::device,
                   probe_table_gather_map->mutable_view().begin<cudf::size_type>(),
                   probe_table_gather_map->mutable_view().end<cudf::size_type>(),
                   thrust::default_random_engine{67890});
