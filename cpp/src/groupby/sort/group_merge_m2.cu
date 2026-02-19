@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -84,7 +84,7 @@ std::unique_ptr<column> merge_m2(column_view const& values,
   auto const M2_values   = values.child(2);
   auto const iter        = thrust::make_counting_iterator<size_type>(0);
 
-  auto const fn = merge_fn<count_type>{group_offsets.begin(),
+  auto const fn = merge_fn<count_type>{group_offsets.data(),
                                        count_valid.template begin<count_type>(),
                                        mean_values.template begin<result_type>(),
                                        M2_values.template begin<result_type>()};

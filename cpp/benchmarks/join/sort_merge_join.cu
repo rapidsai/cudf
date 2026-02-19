@@ -106,9 +106,11 @@ void nvbench_sort_merge_inner_join(nvbench::state& state,
 }
 
 // Sort-merge inner join with multiple data types and optional key remapping
-NVBENCH_BENCH_TYPES(
-  nvbench_sort_merge_inner_join,
-  NVBENCH_TYPE_AXES(JOIN_NULLABLE_RANGE, JOIN_NULL_EQUALITY, JOIN_DATATYPES, JOIN_ALGORITHM))
+NVBENCH_BENCH_TYPES(nvbench_sort_merge_inner_join,
+                    NVBENCH_TYPE_AXES(JOIN_NULLABLE_RANGE,
+                                      JOIN_NULL_EQUALITY,
+                                      DEFAULT_JOIN_DATATYPES,
+                                      JOIN_ALGORITHM))
   .set_name("sort_merge_inner_join")
   .set_type_axes_names({"Nullable", "NullEquality", "DataType", "Algorithm"})
   .add_int64_axis("num_keys", nvbench::range(1, 3, 1))

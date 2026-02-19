@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -28,10 +28,10 @@
 
 #include <rmm/device_buffer.hpp>
 
+#include <cuda/iterator>
 #include <cuda/std/functional>
 #include <thrust/copy.h>
 #include <thrust/host_vector.h>
-#include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 
@@ -757,7 +757,7 @@ class strings_column_wrapper : public detail::column_wrapper {
       wrapped = cudf::make_empty_column(cudf::type_id::STRING);
       return;
     }
-    auto all_valid        = thrust::make_constant_iterator(true);
+    auto all_valid        = cuda::make_constant_iterator(true);
     auto [chars, offsets] = detail::make_chars_and_offsets(begin, end, all_valid);
     auto d_chars          = cudf::detail::make_device_uvector_async(
       chars, cudf::test::get_default_stream(), cudf::get_current_device_resource_ref());

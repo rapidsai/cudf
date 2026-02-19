@@ -86,33 +86,6 @@ class CategoricalColumn(ColumnBase):
         "__gt__",
         "__ge__",
     }
-    # TODO: See if we can narrow these integer types
-    _VALID_PLC_TYPES = {
-        plc.TypeId.INT8,
-        plc.TypeId.INT16,
-        plc.TypeId.INT32,
-        plc.TypeId.INT64,
-        plc.TypeId.UINT8,
-        plc.TypeId.UINT16,
-        plc.TypeId.UINT32,
-        plc.TypeId.UINT64,
-    }
-
-    @staticmethod
-    def _validate_dtype_to_plc_column(
-        plc_column: plc.Column, dtype: DtypeObj
-    ) -> None:
-        """Validate that the dtype matches the equivalent type of the plc_column"""
-        return None
-
-    @classmethod
-    def _validate_args(  # type: ignore[override]
-        cls, plc_column: plc.Column, dtype: CategoricalDtype
-    ) -> tuple[plc.Column, CategoricalDtype]:
-        plc_column, dtype = super()._validate_args(plc_column, dtype)  # type: ignore[assignment]
-        if not isinstance(dtype, CategoricalDtype):
-            raise ValueError(f"{dtype=} must be a CategoricalDtype instance")
-        return plc_column, dtype
 
     def __contains__(self, item: ScalarLike) -> bool:
         try:
@@ -138,8 +111,11 @@ class CategoricalColumn(ColumnBase):
         This is a NumericalColumn wrapping self.plc_column, which is necessary because
         many operations on categoricals need to delegate to the codes column.
         """
-        return cudf.core.column.NumericalColumn._from_preprocessed(
-            self.plc_column, self.dtype._codes_dtype
+        return cast(
+            "NumericalColumn",
+            cudf.core.column.NumericalColumn.create(
+                self.plc_column, self.dtype._codes_dtype, validate=False
+            ),
         )
 
     @property
@@ -435,6 +411,9 @@ class CategoricalColumn(ColumnBase):
                 f"got to_replace dtype: {to_replace_col.dtype} and "
                 f"value dtype: {replacement_col.dtype}"
             )
+        # Deduplicate by old values, keeping last occurrence.
+        # This replicates pandas' behavior when to_replace has duplicates:
+        # pandas processes replacements sequentially, so the last occurrence wins.
         with to_replace_col.access(mode="read", scope="internal"):
             with replacement_col.access(mode="read", scope="internal"):
                 old_plc, new_plc = plc.stream_compaction.stable_distinct(
@@ -750,15 +729,13 @@ class CategoricalColumn(ColumnBase):
         # preprocessing in that function has already been done. That should be
         # improved as the concatenation API is solidified.
 
-        # Find the first non-null column:
-        head = next(
-            (obj for obj in objs if obj.null_count != len(obj)), objs[0]
-        )
-
         # Combine and de-dupe the categories
         cats = concat_columns([o.categories for o in objs]).unique()
         objs = [o._set_categories(cats, is_unique=True) for o in objs]
+        result_dtype = CategoricalDtype(categories=cats)
+        codes_dtype = result_dtype._codes_dtype
         codes = [o.codes for o in objs]
+        expected_plc_dtype = dtype_to_pylibcudf_type(codes_dtype)
 
         newsize = sum(map(len, codes))
         if newsize > np.iinfo(SIZE_TYPE_DTYPE).max:
@@ -766,26 +743,34 @@ class CategoricalColumn(ColumnBase):
                 f"Result of concat cannot have size > {SIZE_TYPE_DTYPE}_MAX"
             )
         elif newsize == 0:
-            codes_col = column_empty(0, head.codes.dtype)
+            codes_col = column_empty(0, codes_dtype)
         else:
+            normalized_codes = []
+            for code in codes:
+                if code.plc_column.type() != expected_plc_dtype:
+                    normalized_codes.append(
+                        cast(
+                            "NumericalColumn",
+                            ColumnBase.create(
+                                plc.unary.cast(
+                                    code.plc_column, expected_plc_dtype
+                                ),
+                                codes_dtype,
+                            ),
+                        )
+                    )
+                else:
+                    normalized_codes.append(code)
+            codes = normalized_codes
             codes_col = concat_columns(codes)
 
         return cast(
             "Self",
             ColumnBase.create(
                 codes_col.plc_column,
-                CategoricalDtype(categories=cats),
+                result_dtype,
             ),
         )
-
-    def _with_type_metadata(self: Self, dtype: DtypeObj) -> Self:
-        if isinstance(dtype, CategoricalDtype):
-            return type(self)._from_preprocessed(
-                plc_column=self.plc_column,
-                dtype=dtype,
-            )
-
-        return self
 
     def set_categories(
         self,

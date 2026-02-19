@@ -105,6 +105,7 @@ from cudf.utils.dtypes import (
     SIZE_TYPE_DTYPE,
     SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES,
     can_convert_to_column,
+    dtype_from_pylibcudf_column,
     find_common_type,
     get_dtype_of_same_kind,
     is_column_like,
@@ -940,8 +941,8 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
     ... ])
     >>> df
        0     1     2     3             4
-    0  5  cats  jump  <NA>          <NA>
-    1  2  dogs   dig   7.5          <NA>
+    0  5  cats  jump  <NA>          None
+    1  2  dogs   dig   7.5          None
     2  3  cows   moo  -2.1  occasionally
 
     Convert from a Pandas DataFrame:
@@ -6251,7 +6252,9 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                     [],
                 )
                 columns = [
-                    ColumnBase.from_pylibcudf(col)
+                    ColumnBase.create(
+                        col, dtype=dtype_from_pylibcudf_column(col)
+                    )
                     for col in plc_table.columns()
                 ]
             result = self._from_columns_like_self(
@@ -6803,7 +6806,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         >>> df.mode()
           species  legs  wings
         0    bird     2    0.0
-        1    <NA>  <NA>    2.0
+        1    None  <NA>    2.0
 
         Setting ``dropna=False``, ``NA`` values are considered and they can be
         the mode (like for wings).
@@ -7544,7 +7547,8 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 self.shape[0],
             )
             tiled_index = [
-                ColumnBase.from_pylibcudf(plc) for plc in plc_table.columns()
+                ColumnBase.create(plc, dtype=dtype_from_pylibcudf_column(plc))
+                for plc in plc_table.columns()
             ]
 
         # Assemble the final index
@@ -8167,10 +8171,12 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 "interleave_columns does not support 'category' dtype."
             )
         with access_columns(*self._columns, mode="read", scope="internal"):
-            result_col = ColumnBase.from_pylibcudf(
+            _, result_dtype = next(iter(self._dtypes))
+            result_col = ColumnBase.create(
                 plc.reshape.interleave_columns(
                     plc.Table([col.plc_column for col in self._columns])
-                )
+                ),
+                result_dtype,
             )
         return self._constructor_sliced._from_column(result_col)
 
@@ -8181,7 +8187,9 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 plc.Table([col.plc_column for col in self._columns]),
                 plc.expressions.to_expression(expr, self._column_names),
             )
-            return ColumnBase.from_pylibcudf(plc_column)
+            return ColumnBase.create(
+                plc_column, dtype=dtype_from_pylibcudf_column(plc_column)
+            )
 
     @_performance_tracking
     def eval(self, expr: str, inplace: bool = False, **kwargs):
@@ -8494,7 +8502,10 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
 
         plc_columns = tbl.columns()
         cudf_cols = (
-            ColumnBase.from_pylibcudf(plc_col) for plc_col in plc_columns
+            ColumnBase.create(
+                plc_col, dtype=dtype_from_pylibcudf_column(plc_col)
+            )
+            for plc_col in plc_columns
         )
         # We only have child names if the source is a pylibcudf.io.TableWithMetadata.
         if child_names is not None:
@@ -8980,8 +8991,9 @@ def _cast_cols_to_common_dtypes(col_idxs, list_of_columns, dtypes, categories):
 def _reassign_categories(categories, cols, col_idxs):
     for name, idx in zip(cols, col_idxs, strict=True):
         if idx in categories:
-            cols[name] = cols[name]._with_type_metadata(
-                CategoricalDtype(categories=categories[idx], ordered=False)
+            cols[name] = ColumnBase.create(
+                cols[name].plc_column,
+                CategoricalDtype(categories=categories[idx], ordered=False),
             )
 
 
