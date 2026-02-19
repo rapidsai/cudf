@@ -117,9 +117,9 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         .join(date_dim, left_on="cs_sold_date_sk", right_on="d_date_sk")
         .join(call_center, left_on="cs_call_center_sk", right_on="cc_call_center_sk")
         .filter(
-            (pl.col("d_year") == year - 1)
-            | ((pl.col("d_year") == 1999) & (pl.col("d_moy") == 12))
-            | ((pl.col("d_year") == year) & (pl.col("d_moy") == 1))
+            (pl.col("d_year") == year)
+            | ((pl.col("d_year") == year - 1) & (pl.col("d_moy") == 12))
+            | ((pl.col("d_year") == year + 1) & (pl.col("d_moy") == 1))
         )
         .group_by(["i_category", "i_brand", "cc_name", "d_year", "d_moy"])
         .agg(
@@ -187,7 +187,7 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
 
     return (
         v2.filter(
-            (pl.col("d_year") == year - 1)
+            (pl.col("d_year") == year)
             & (pl.col("avg_monthly_sales") > 0)
             & (
                 pl.when(pl.col("avg_monthly_sales") > 0)

@@ -144,6 +144,13 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         .unique()
     )
 
+    # Get the d_month_seq for the given year/month
+    target_month_seq = (
+        date_dim.filter((pl.col("d_year") == year) & (pl.col("d_moy") == month))
+        .select("d_month_seq")
+        .unique()
+    )
+
     my_revenue = (
         my_customers.join(
             customer_address, left_on="c_current_addr_sk", right_on="ca_address_sk"
@@ -153,13 +160,24 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         )
         .join(store_sales, left_on="c_customer_sk", right_on="ss_customer_sk")
         .join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
-        .filter(pl.col("d_month_seq").is_between(1206, 1208))
+        .join(
+            target_month_seq.select(
+                [
+                    (pl.col("d_month_seq") + 1).alias("seq_start"),
+                    (pl.col("d_month_seq") + 3).alias("seq_end"),
+                ]
+            ),
+            how="cross",
+        )
+        .filter(
+            pl.col("d_month_seq").is_between(pl.col("seq_start"), pl.col("seq_end"))
+        )
         .group_by("c_customer_sk")
         .agg([pl.col("ss_ext_sales_price").sum().alias("revenue")])
     )
 
     segments = my_revenue.with_columns(
-        (pl.col("revenue") / 50.0).round(0).cast(pl.Int32).alias("segment")
+        (pl.col("revenue") / 50.0).cast(pl.Int32).alias("segment")
     ).select("segment")
 
     return (
