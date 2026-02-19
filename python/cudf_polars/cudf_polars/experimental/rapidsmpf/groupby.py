@@ -658,7 +658,7 @@ async def keyed_reduction_actor(
             metadata_in, key_indices, nranks
         )
         partitioned_inter_rank = bool(inter_rank_modulus)
-        partitioned_local = bool(local_modulus)
+        partitioned_local = local_modulus is None or bool(local_modulus)
         fully_partitioned = partitioned_inter_rank and partitioned_local
         fallback_case = (
             # NOTE: This criteria means that we fell back
