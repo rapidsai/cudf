@@ -10,6 +10,9 @@
 #include <cudf/ast/expressions.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/transform.hpp>
+#include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/null_mask.hpp>
+#include <cudf/utilities/bit.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
 
