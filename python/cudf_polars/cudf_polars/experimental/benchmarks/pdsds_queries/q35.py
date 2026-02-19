@@ -90,6 +90,23 @@ def duckdb_impl(run_config: RunConfig) -> str:
     """
 
 
+def _get_agg_expr(col_name: str, agg_func: str, alias: str) -> pl.Expr:
+    col = pl.col(col_name)
+    if agg_func == "sum":
+        return col.sum().alias(alias)
+    elif agg_func == "min":
+        return col.min().alias(alias)
+    elif agg_func == "max":
+        return col.max().alias(alias)
+    elif agg_func == "avg":
+        return col.mean().alias(alias)
+    elif agg_func == "stddev_samp":
+        return col.std().alias(alias)
+    else:
+        msg = f"Unknown aggregation function: {agg_func}"
+        raise ValueError(msg)
+
+
 def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     """Query 35."""
     params = load_parameters(
@@ -102,23 +119,6 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     aggone = params["aggone"]
     aggtwo = params["aggtwo"]
     aggthree = params["aggthree"]
-
-    # Helper to get Polars aggregation expression
-    def get_agg_expr(col_name: str, agg_func: str, alias: str) -> pl.Expr:
-        col = pl.col(col_name)
-        if agg_func == "sum":
-            return col.sum().alias(alias)
-        elif agg_func == "min":
-            return col.min().alias(alias)
-        elif agg_func == "max":
-            return col.max().alias(alias)
-        elif agg_func == "avg":
-            return col.mean().alias(alias)
-        elif agg_func == "stddev_samp":
-            return col.std().alias(alias)
-        else:
-            msg = f"Unknown aggregation function: {agg_func}"
-            raise ValueError(msg)
 
     # Load tables
     customer = get_data(run_config.dataset_path, "customer", run_config.suffix)
@@ -186,33 +186,30 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         )
         .agg(
             [
-                # Cast -> Int64 to match DuckDB
-                pl.len().cast(pl.Int64).alias("cnt1"),
-                get_agg_expr("cd_dep_count", aggone, f"{aggone}(cd_dep_count)"),
-                get_agg_expr("cd_dep_count", aggtwo, f"{aggtwo}(cd_dep_count)"),
-                get_agg_expr("cd_dep_count", aggthree, f"{aggthree}(cd_dep_count)"),
-                # Cast -> Int64 to match DuckDB
-                pl.len().cast(pl.Int64).alias("cnt2"),
-                get_agg_expr(
+                pl.len().alias("cnt1"),
+                _get_agg_expr("cd_dep_count", aggone, f"{aggone}(cd_dep_count)"),
+                _get_agg_expr("cd_dep_count", aggtwo, f"{aggtwo}(cd_dep_count)"),
+                _get_agg_expr("cd_dep_count", aggthree, f"{aggthree}(cd_dep_count)"),
+                pl.len().alias("cnt2"),
+                _get_agg_expr(
                     "cd_dep_employed_count", aggone, f"{aggone}(cd_dep_employed_count)"
                 ),
-                get_agg_expr(
+                _get_agg_expr(
                     "cd_dep_employed_count", aggtwo, f"{aggtwo}(cd_dep_employed_count)"
                 ),
-                get_agg_expr(
+                _get_agg_expr(
                     "cd_dep_employed_count",
                     aggthree,
                     f"{aggthree}(cd_dep_employed_count)",
                 ),
-                # Cast -> Int64 to match DuckDB
-                pl.len().cast(pl.Int64).alias("cnt3"),
-                get_agg_expr(
+                pl.len().alias("cnt3"),
+                _get_agg_expr(
                     "cd_dep_college_count", aggone, f"{aggone}(cd_dep_college_count)"
                 ),
-                get_agg_expr(
+                _get_agg_expr(
                     "cd_dep_college_count", aggtwo, f"{aggtwo}(cd_dep_college_count)"
                 ),
-                get_agg_expr(
+                _get_agg_expr(
                     "cd_dep_college_count",
                     aggthree,
                     f"{aggthree}(cd_dep_college_count)",

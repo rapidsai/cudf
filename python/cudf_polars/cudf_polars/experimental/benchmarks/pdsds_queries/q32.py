@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
 
 import polars as pl
@@ -68,9 +69,6 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     )
     item = get_data(run_config.dataset_path, "item", run_config.suffix)
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
-
-    # Parse csdate and calculate end date (csdate + 90 days)
-    from datetime import datetime, timedelta
 
     start_date_obj = datetime.strptime(csdate, "%Y-%m-%d")
     end_date_obj = start_date_obj + timedelta(days=90)
