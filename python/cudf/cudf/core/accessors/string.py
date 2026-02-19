@@ -24,7 +24,6 @@ from cudf.core.accessors.base_accessor import BaseAccessor
 from cudf.core.accessors.lists import ListMethods
 from cudf.core.column.column import ColumnBase, as_column, column_empty
 from cudf.core.dtypes import ListDtype
-from cudf.options import get_option
 from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
     can_convert_to_column,
@@ -290,7 +289,7 @@ class StringMethods(BaseAccessor):
         >>> s.str.cat(['A', 'B', 'C', 'D'], sep=',')
         0     a,A
         1     b,B
-        2    <NA>
+        2    None
         3     d,D
         dtype: object
 
@@ -480,8 +479,8 @@ class StringMethods(BaseAccessor):
         dtype: list
         >>> ser.str.join(sep='_', string_na_rep='k')
         0    a_b_k
-        1     <NA>
-        2     <NA>
+        1     None
+        2     None
         3      c_d
         dtype: object
 
@@ -490,8 +489,8 @@ class StringMethods(BaseAccessor):
 
         >>> ser.str.join(sep=[None, '^', '.', '-'], sep_na_rep='+')
         0    a+b+
-        1    <NA>
-        2    <NA>
+        1    None
+        2    None
         3     c-d
         dtype: object
         """
@@ -522,6 +521,7 @@ class StringMethods(BaseAccessor):
             # If self._column is not a ListColumn, we will have to
             # split each row by character and create a ListColumn out of it.
             list_column = self._column.fillna("").character_tokenize()
+            # TODO: pd.Handle ArrowDtype
             result_dtype = cast("ListDtype", list_column.dtype).element_type
             if len(list_column) == 0:
                 list_column = column_empty(  # type: ignore[assignment]
@@ -593,7 +593,7 @@ class StringMethods(BaseAccessor):
               0     1
         0     a     1
         1     b     2
-        2  <NA>  <NA>
+        2  None  None
 
         A pattern with one group will return a DataFrame with one
         column if expand=True.
@@ -602,14 +602,14 @@ class StringMethods(BaseAccessor):
               0
         0     1
         1     2
-        2  <NA>
+        2  None
 
         A pattern with one group will return a Series if expand=False.
 
         >>> s.str.extract(r'[ab](\d)', expand=False)
         0       1
         1       2
-        2    <NA>
+        2    None
         dtype: object
 
         .. pandas-compat::
@@ -680,7 +680,7 @@ class StringMethods(BaseAccessor):
         1                 dog
         2    house and parrot
         3                  23
-        4                <NA>
+        4                None
         dtype: object
         >>> s1.str.contains('og', regex=False)
         0    False
@@ -695,7 +695,7 @@ class StringMethods(BaseAccessor):
         >>> data = ['Mouse', 'dog', 'house and parrot', '23.0', np.nan]
         >>> idx = cudf.Index(data)
         >>> idx
-        Index(['Mouse', 'dog', 'house and parrot', '23.0', None], dtype='object')
+        Index(['Mouse', 'dog', 'house and parrot', '23.0', <NA>], dtype='object')
         >>> idx.str.contains('23', regex=False)
         Index([False, False, False, True, <NA>], dtype='bool')
 
@@ -711,7 +711,7 @@ class StringMethods(BaseAccessor):
 
         Returning any digit using regular expression.
 
-        >>> s1.str.contains('\d', regex=True)
+        >>> s1.str.contains('\\d', regex=True)
         0    False
         1    False
         2    False
@@ -829,22 +829,22 @@ class StringMethods(BaseAccessor):
         >>> import cudf
         >>> s = cudf.Series(['abc', 'a', 'b' ,'ddbc', '%bb'])
         >>> s.str.like('%b_')
-        0   False
+        0   True
         1   False
         2   False
         3   True
         4   True
-        dtype: boolean
+        dtype: bool
 
         Parameter `esc` can be used to match a wildcard literal.
 
-        >>> s.str.like('/%b_', esc='/' )
-        0   False
+        >>> s.str.like('%b_', esc='/' )
+        0   True
         1   False
         2   False
-        3   False
+        3   True
         4   True
-        dtype: boolean
+        dtype: bool
         """
         if not isinstance(pat, str):
             raise TypeError(
@@ -957,7 +957,7 @@ class StringMethods(BaseAccessor):
         >>> s
         0     foo
         1     fuz
-        2    <NA>
+        2    None
         dtype: object
 
         When pat is a string and regex is True (the default), the given pat
@@ -968,7 +968,7 @@ class StringMethods(BaseAccessor):
         >>> s.str.replace('f.', 'ba', regex=True)
         0     bao
         1     baz
-        2    <NA>
+        2    None
         dtype: object
 
         When pat is a string and `regex` is False, every pat is replaced
@@ -977,7 +977,7 @@ class StringMethods(BaseAccessor):
         >>> s.str.replace('f.', 'ba', regex=False)
         0     foo
         1     fuz
-        2    <NA>
+        2    None
         dtype: object
 
         .. pandas-compat::
@@ -1232,7 +1232,7 @@ class StringMethods(BaseAccessor):
         Examples
         --------
         >>> import cudf
-        >>> s = cudf.Series(["", "123DEF", "0x2D3", "-15", "abc"])
+        >>> s = cudf.Series(["", "123DEF", "2D3", "-15", "abc"])
         >>> s.str.ishex()
         0    False
         1     True
@@ -1664,7 +1664,7 @@ class StringMethods(BaseAccessor):
         also includes other characters that can represent
         quantities such as unicode fractions.
 
-        >>> s2 = pd.Series(['23', '³', '⅕', ''], dtype='str')
+        >>> s2 = cudf.Series(['23', '³', '⅕', ''], dtype='str')
         >>> s2.str.isnumeric()
         0     True
         1     True
@@ -2029,8 +2029,7 @@ class StringMethods(BaseAccessor):
         Examples
         --------
         >>> import cudf
-        >>> data = ['lower', 'CAPITALS', 'this is a sentence', 'SwApCaSe'])
-        >>> s = cudf.Series(data)
+        >>> s = cudf.Series(["lower", "CAPITALS", "this is a sentence", "SwApCaSe"])
         >>> s
         0                 lower
         1              CAPITALS
@@ -2061,9 +2060,8 @@ class StringMethods(BaseAccessor):
         Examples
         --------
         >>> import cudf
-        >>> data = ['leopard', 'Golden Eagle', 'SNAKE', ''])
-        >>> s = cudf.Series(data)
-        >>> s.str.istitle()
+        >>> series = cudf.Series(["leopard", "Golden Eagle", "SNAKE", ""])
+        >>> series.str.istitle()
         0    False
         1     True
         2    False
@@ -2327,9 +2325,9 @@ class StringMethods(BaseAccessor):
         2           cudf
         dtype: object
         >>> s.str.get(10)
-        0    d
-        1
-        2
+        0       d
+        1    None
+        2    None
         dtype: object
         >>> s.str.get(1)
         0    e
@@ -2401,35 +2399,18 @@ class StringMethods(BaseAccessor):
         Examples
         --------
         >>> import cudf
-        >>> s = cudf.Series(
-            [
-                \"\"\"
-                {
-                    "store":{
-                        "book":[
-                            {
-                                "category":"reference",
-                                "author":"Nigel Rees",
-                                "title":"Sayings of the Century",
-                                "price":8.95
-                            },
-                            {
-                                "category":"fiction",
-                                "author":"Evelyn Waugh",
-                                "title":"Sword of Honour",
-                                "price":12.99
-                            }
-                        ]
-                    }
-                }
-                \"\"\"
-            ])
-        >>> s
-            0    {"store": {\n        "book": [\n        { "cat...
-            dtype: object
-        >>> s.str.get_json_object("$.store.book")
-            0    [\n        { "category": "reference",\n       ...
-            dtype: object
+        >>> series = cudf.Series(
+        ...     [
+        ...         '{"store":{"book":[{"category":"reference",'
+        ...         '"author":"Nigel Rees","title":"Sayings of the Century",'
+        ...         '"price":8.95},{"category":"fiction",'
+        ...         '"author":"Evelyn Waugh","title":"Sword of Honour",'
+        ...         '"price":12.99}]}}'
+        ...     ]
+        ... )
+        >>> series.str.get_json_object("$.store.book")
+        0    [{"category":"reference","author":"Nigel Rees"...
+        dtype: object
         """
         return self._return_or_inplace(
             self._column.get_json_object(
@@ -2517,7 +2498,7 @@ class StringMethods(BaseAccessor):
         >>> s
         0            this is a regular sentence
         1    https://docs.python.org/index.html
-        2                                  <NA>
+        2                                  None
         dtype: object
 
         In the default setting, the string is split by whitespace.
@@ -2561,8 +2542,8 @@ class StringMethods(BaseAccessor):
         >>> s.str.split(expand=True)
                                             0     1     2        3         4
         0                                this    is     a  regular  sentence
-        1  https://docs.python.org/index.html  <NA>  <NA>     <NA>      <NA>
-        2                                <NA>  <NA>  <NA>     <NA>      <NA>
+        1  https://docs.python.org/index.html  None  None     None      None
+        2                                None  None  None     None      None
         """
 
         if expand not in (True, False):
@@ -2694,7 +2675,7 @@ class StringMethods(BaseAccessor):
         >>> s
         0                       this is a regular sentence
         1    https://docs.python.org/3/tutorial/index.html
-        2                                             <NA>
+        2                                             None
         dtype: object
 
         In the default setting, the string is split by whitespace.
@@ -2729,14 +2710,14 @@ class StringMethods(BaseAccessor):
         dtype: list
 
         When using ``expand=True``, the split elements will expand
-        out into separate columns. If ``<NA>`` value is present,
+        out into separate columns. If a null value is present,
         it is propagated throughout the columns during the split.
 
         >>> s.str.rsplit(n=2, expand=True)
                                                        0        1         2
         0                                      this is a  regular  sentence
-        1  https://docs.python.org/3/tutorial/index.html     <NA>      <NA>
-        2                                           <NA>     <NA>      <NA>
+        1  https://docs.python.org/3/tutorial/index.html     None      None
+        2                                           None     None      None
 
         For slightly more complex use cases like splitting the
         html document name from a url, a combination of parameter
@@ -2744,9 +2725,9 @@ class StringMethods(BaseAccessor):
 
         >>> s.str.rsplit("/", n=1, expand=True)
                                             0           1
-        0          this is a regular sentence        <NA>
+        0          this is a regular sentence        None
         1  https://docs.python.org/3/tutorial  index.html
-        2                                <NA>        <NA>
+        2                                None        None
         """
 
         if expand not in (True, False):
@@ -3118,7 +3099,7 @@ class StringMethods(BaseAccessor):
         0      -1
         1       1
         2    1000
-        3    <NA>
+        3    None
         dtype: object
 
         Note that ``None`` is not string, therefore it is converted
@@ -3129,7 +3110,7 @@ class StringMethods(BaseAccessor):
         0     -01
         1     001
         2    1000
-        3    <NA>
+        3    None
         dtype: object
         """
         if not is_integer(width):
@@ -3165,31 +3146,31 @@ class StringMethods(BaseAccessor):
         >>> s.str.center(1)
         0       a
         1       b
-        2    <NA>
+        2    None
         3       d
         dtype: object
         >>> s.str.center(1, fillchar='-')
         0       a
         1       b
-        2    <NA>
+        2    None
         3       d
         dtype: object
         >>> s.str.center(2, fillchar='-')
         0      a-
         1      b-
-        2    <NA>
+        2    None
         3      d-
         dtype: object
         >>> s.str.center(5, fillchar='-')
         0    --a--
         1    --b--
-        2     <NA>
+        2     None
         3    --d--
         dtype: object
         >>> s.str.center(6, fillchar='-')
         0    --a---
         1    --b---
-        2      <NA>
+        2      None
         3    --d---
         dtype: object
         """
@@ -3310,19 +3291,19 @@ class StringMethods(BaseAccessor):
         0    1. Ant.
         1    2. Bee!\n
         2    3. Cat?\t
-        3         <NA>
+        3         None
         dtype: object
         >>> s.str.strip()
         0    1. Ant.
         1    2. Bee!
         2    3. Cat?
-        3       <NA>
+        3       None
         dtype: object
         >>> s.str.strip('123.!? \n\t')
         0     Ant
         1     Bee
         2     Cat
-        3    <NA>
+        3    None
         dtype: object
         """
         return self._return_or_inplace(
@@ -3366,7 +3347,7 @@ class StringMethods(BaseAccessor):
         0     Ant.
         1     Bee!\n
         2     Cat?\t
-        3       <NA>
+        3       None
         dtype: object
         """
         return self._return_or_inplace(
@@ -3412,13 +3393,13 @@ class StringMethods(BaseAccessor):
         0    1. Ant.
         1    2. Bee!\n
         2    3. Cat?\t
-        3         <NA>
+        3         None
         dtype: object
         >>> s.str.rstrip('.!? \n\t')
         0    1. Ant
         1    2. Bee
         2    3. Cat
-        3      <NA>
+        3      None
         dtype: object
         """
         return self._return_or_inplace(
@@ -3464,9 +3445,8 @@ class StringMethods(BaseAccessor):
         Examples
         --------
         >>> import cudf
-        >>> data = ['line to be wrapped', 'another line to be wrapped']
-        >>> s = cudf.Series(data)
-        >>> s.str.wrap(12)
+        >>> s = cudf.Series(["line to be wrapped", "another line to be wrapped"])
+        >>> s.str.wrap(12, expand_tabs=False, break_long_words=False, break_on_hyphens=False)
         0             line to be\nwrapped
         1    another line\nto be\nwrapped
         dtype: object
@@ -3555,7 +3535,7 @@ class StringMethods(BaseAccessor):
         Escape ``'$'`` to find the literal dollar sign.
 
         >>> s = cudf.Series(['$', 'B', 'Aab$', '$$ca', 'C$B$', 'cat'])
-        >>> s.str.count('\$')
+        >>> s.str.count('\\$')
         0    1
         1    0
         2    1
@@ -3568,7 +3548,7 @@ class StringMethods(BaseAccessor):
 
         >>> index = cudf.Index(['A', 'A', 'Aaba', 'cat'])
         >>> index.str.count('a')
-        Index([0, 0, 2, 1], dtype='int64')
+        Index([0, 0, 2, 1], dtype='int32')
 
         .. pandas-compat::
             :meth:`pandas.Series.str.count`
@@ -3894,7 +3874,7 @@ class StringMethods(BaseAccessor):
         0     bat
         1    bear
         2     caT
-        3    <NA>
+        3    None
         dtype: object
         >>> s.str.endswith('t')
         0     True
@@ -3945,7 +3925,7 @@ class StringMethods(BaseAccessor):
         0     bat
         1    Bear
         2     cat
-        3    <NA>
+        3    None
         dtype: object
         >>> s.str.startswith('b')
         0     True
@@ -4084,7 +4064,7 @@ class StringMethods(BaseAccessor):
         1   -1
         2    0
         3    2
-        dtype: int32
+        dtype: int64
 
         Parameters such as `start` and `end` can also be used.
 
@@ -4093,7 +4073,7 @@ class StringMethods(BaseAccessor):
         1   -1
         2   -1
         3    2
-        dtype: int32
+        dtype: int64
         """
         return self._find(plc.strings.find.find, sub, start, end)
 
@@ -4134,7 +4114,7 @@ class StringMethods(BaseAccessor):
         0    0
         1   -1
         2    7
-        dtype: int32
+        dtype: int64
 
         Using `start` and `end` parameters.
 
@@ -4142,7 +4122,7 @@ class StringMethods(BaseAccessor):
         0   -1
         1   -1
         2   -1
-        dtype: int32
+        dtype: int64
         """
         return self._find(plc.strings.find.rfind, sub, start, end)
 
@@ -4176,7 +4156,7 @@ class StringMethods(BaseAccessor):
         >>> s = cudf.Series(['abc', 'a','b' ,'ddb'])
         >>> s.str.index('b')
         Traceback (most recent call last):
-        File "<stdin>", line 1, in <module>
+        ...
         ValueError: substring not found
 
         Parameters such as `start` and `end` can also be used.
@@ -4187,7 +4167,7 @@ class StringMethods(BaseAccessor):
         1    1
         2    1
         3    2
-        dtype: int32
+        dtype: int64
         """
         if not isinstance(sub, str):
             raise TypeError(
@@ -4203,10 +4183,8 @@ class StringMethods(BaseAccessor):
 
         if (result == -1).any():
             raise ValueError("substring not found")
-        elif get_option("mode.pandas_compatible"):
-            return result.astype(np.dtype(np.int64))
         else:
-            return result
+            return result.astype(np.dtype(np.int64))
 
     def rindex(
         self, sub: str, start: int = 0, end: int | None = None
@@ -4238,7 +4216,7 @@ class StringMethods(BaseAccessor):
         >>> s = cudf.Series(['abc', 'a','b' ,'ddb'])
         >>> s.str.rindex('b')
         Traceback (most recent call last):
-        File "<stdin>", line 1, in <module>
+        ...
         ValueError: substring not found
 
         Parameters such as `start` and `end` can also be used.
@@ -4249,7 +4227,7 @@ class StringMethods(BaseAccessor):
         1    2
         2    1
         3    2
-        dtype: int32
+        dtype: int64
         """
         if not isinstance(sub, str):
             raise TypeError(
@@ -4265,10 +4243,8 @@ class StringMethods(BaseAccessor):
 
         if (result == -1).any():
             raise ValueError("substring not found")
-        elif get_option("mode.pandas_compatible"):
-            return result.astype(np.dtype(np.int64))
         else:
-            return result
+            return result.astype(np.dtype(np.int64))
 
     def match(
         self,
@@ -4541,7 +4517,7 @@ class StringMethods(BaseAccessor):
         Examples
         --------
         >>> import cudf
-        >>> ser = cudf.Series(["hello \\t world"," test string  "])
+        >>> ser = cudf.Series(["hello \t world"," test string  "])
         >>> ser.str.normalize_spaces()
         0    hello world
         1    test string
@@ -4650,7 +4626,7 @@ class StringMethods(BaseAccessor):
         Examples
         --------
         >>> import cudf
-        >>> data = ["hello world", None, "goodbye, thank you."]
+        >>> data = ["hello world", "goodbye, thank you."]
         >>> ser = cudf.Series(data)
         >>> ser.str.character_tokenize()
         0    h
@@ -4664,25 +4640,25 @@ class StringMethods(BaseAccessor):
         0    r
         0    l
         0    d
-        2    g
-        2    o
-        2    o
-        2    d
-        2    b
-        2    y
-        2    e
-        2    ,
-        2
-        2    t
-        2    h
-        2    a
-        2    n
-        2    k
-        2
-        2    y
-        2    o
-        2    u
-        2    .
+        1    g
+        1    o
+        1    o
+        1    d
+        1    b
+        1    y
+        1    e
+        1    ,
+        1
+        1    t
+        1    h
+        1    a
+        1    n
+        1    k
+        1
+        1    y
+        1    o
+        1    u
+        1    .
         dtype: object
         """
         result_col = ColumnBase.create(
@@ -4898,7 +4874,7 @@ class StringMethods(BaseAccessor):
         --------
         >>> import cudf
         >>> ser = cudf.Series(['this is the', 'best book'])
-        >>> ser.str.ngrams_tokenize(n=2, sep='_')
+        >>> ser.str.ngrams_tokenize(n=2, separator='_')
         0      this_is
         1       is_the
         2    best_book

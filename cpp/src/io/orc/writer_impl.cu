@@ -37,6 +37,7 @@
 #include <cooperative_groups.h>
 #include <cooperative_groups/memcpy_async.h>
 #include <cuda/std/climits>
+#include <cuda/std/iterator>
 #include <cuda/std/limits>
 #include <cuda/std/optional>
 #include <cuda/std/utility>
@@ -46,7 +47,6 @@
 #include <thrust/functional.h>
 #include <thrust/host_vector.h>
 #include <thrust/iterator/counting_iterator.h>
-#include <thrust/iterator/reverse_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/reduce.h>
 #include <thrust/scan.h>
@@ -1879,8 +1879,8 @@ orc_table_view make_orc_table_view(table_view const& table,
 
       thrust::for_each(
         thrust::seq,
-        thrust::make_reverse_iterator(d_table.end()),
-        thrust::make_reverse_iterator(d_table.begin()),
+        cuda::std::make_reverse_iterator(d_table.end()),
+        cuda::std::make_reverse_iterator(d_table.begin()),
         [&stack](column_device_view const& c) { stack.push({&c, cuda::std::nullopt}); });
 
       uint32_t idx = 0;
@@ -1897,8 +1897,8 @@ orc_table_view make_orc_table_view(table_view const& table,
           stack.push({&col->children()[lists_column_view::child_column_index], idx});
         } else if (col->type().id() == type_id::STRUCT) {
           thrust::for_each(thrust::seq,
-                           thrust::make_reverse_iterator(col->children().end()),
-                           thrust::make_reverse_iterator(col->children().begin()),
+                           cuda::std::make_reverse_iterator(col->children().end()),
+                           cuda::std::make_reverse_iterator(col->children().begin()),
                            [&stack, idx](column_device_view const& c) { stack.push({&c, idx}); });
         }
         ++idx;
