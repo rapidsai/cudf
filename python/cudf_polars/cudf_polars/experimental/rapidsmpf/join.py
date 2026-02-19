@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import asyncio
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal
 
 from rapidsmpf.memory.buffer import MemoryType
@@ -15,7 +16,11 @@ from rapidsmpf.streaming.core.memory_reserve_or_wait import (
     reserve_memory,
 )
 from rapidsmpf.streaming.core.message import Message
-from rapidsmpf.streaming.cudf.channel_metadata import ChannelMetadata, HashScheme
+from rapidsmpf.streaming.cudf.channel_metadata import (
+    ChannelMetadata,
+    HashScheme,
+    Partitioning,
+)
 from rapidsmpf.streaming.cudf.table_chunk import (
     TableChunk,
     make_table_chunks_available_or_wait,
@@ -24,6 +29,7 @@ from rapidsmpf.streaming.cudf.table_chunk import (
 from cudf_polars.containers import DataFrame
 from cudf_polars.dsl.ir import IR, Join
 from cudf_polars.experimental.rapidsmpf.collectives.allgather import AllGatherManager
+from cudf_polars.experimental.rapidsmpf.collectives.shuffle import ShuffleManager
 from cudf_polars.experimental.rapidsmpf.dispatch import (
     generate_ir_sub_network,
 )
@@ -46,7 +52,6 @@ from cudf_polars.utils.config import StreamingExecutor
 if TYPE_CHECKING:
     from rapidsmpf.streaming.core.channel import Channel
     from rapidsmpf.streaming.core.context import Context
-    from rapidsmpf.streaming.cudf.channel_metadata import Partitioning
 
     from cudf_polars.dsl.ir import IR, IRExecutionContext
     from cudf_polars.experimental.rapidsmpf.dispatch import SubNetGenerator
@@ -559,29 +564,22 @@ async def _shuffle_join(
     ch_out: Channel[TableChunk],
     ch_left: Channel[TableChunk],
     ch_right: Channel[TableChunk],
+    left_state: PartitioningState,
+    right_state: PartitioningState,
     modulus: int,
+    collective_ids: list[int],
     *,
-    left_collective_id: int | None = None,
-    right_collective_id: int | None = None,
     left_sample_chunks: list[TableChunk] | None = None,
     right_sample_chunks: list[TableChunk] | None = None,
     tracer: ActorTracer | None = None,
 ) -> None:
     """
-    Execute a shuffle (hash) join after initial sampling.
+    Execute a shuffle (hash) join.
 
-    When shuffle_left/shuffle_right is False, that side is assumed to be
-    already partitioned on the join keys with a compatible modulus.
+    Shuffles a side iff its current state does not match its desired state.
     """
-    from rapidsmpf.streaming.cudf.channel_metadata import HashScheme, Partitioning
-
-    from cudf_polars.experimental.rapidsmpf.collectives.shuffle import ShuffleManager
-
     left, right = ir.children
     nranks = context.comm().nranks
-    local_count = max(1, modulus // nranks)
-    shuffle_left = left_collective_id is not None
-    shuffle_right = right_collective_id is not None
 
     # Get key column indices for both sides
     left_schema_keys = list(left.schema.keys())
@@ -590,6 +588,39 @@ async def _shuffle_join(
     right_key_indices = tuple(
         right_schema_keys.index(expr.name) for expr in ir.right_on
     )
+
+    # Simple partitioning only: target state is full keys with given modulus
+    left_desired_state = PartitioningState(
+        inter_rank_modulus=modulus,
+        local_modulus=None,
+        inter_rank_indices=left_key_indices,
+        local_indices=None,
+    )
+    right_desired_state = PartitioningState(
+        inter_rank_modulus=modulus,
+        local_modulus=None,
+        inter_rank_indices=right_key_indices,
+        local_indices=None,
+    )
+
+    shuffle_left = (
+        left_state.inter_rank_modulus == 0 or left_state != left_desired_state
+    )
+    shuffle_right = (
+        right_state.inter_rank_modulus == 0 or right_state != right_desired_state
+    )
+
+    local_count = max(1, modulus // nranks)
+
+    if tracer is not None:
+        if shuffle_left and shuffle_right:
+            tracer.decision = "shuffle"
+        elif shuffle_left:
+            tracer.decision = "shuffle_left"
+        elif shuffle_right:
+            tracer.decision = "shuffle_right"
+        else:
+            tracer.decision = "chunkwise"
 
     # Send output metadata
     # Output partitioning depends on join type
@@ -623,9 +654,8 @@ async def _shuffle_join(
 
     left_shuffle: ShuffleManager | None = None
     if shuffle_left:
-        assert left_collective_id is not None
         left_shuffle = ShuffleManager(
-            context, modulus, left_key_indices, left_collective_id
+            context, modulus, left_key_indices, collective_ids.pop(0)
         )
         while left_sample_chunks:
             left_shuffle.insert_chunk(
@@ -636,9 +666,8 @@ async def _shuffle_join(
 
     right_shuffle: ShuffleManager | None = None
     if shuffle_right:
-        assert right_collective_id is not None
         right_shuffle = ShuffleManager(
-            context, modulus, right_key_indices, right_collective_id
+            context, modulus, right_key_indices, collective_ids.pop(0)
         )
         while right_sample_chunks:
             right_shuffle.insert_chunk(
@@ -783,6 +812,84 @@ async def _shuffle_join(
     await ch_out.drain(context)
 
 
+@dataclass(frozen=True)
+class PartitioningState:
+    """Partitioning state derived from channel metadata and key indices."""
+
+    inter_rank_modulus: int
+    """Inter-rank hash modulus (0 if not partitioned between ranks)."""
+    inter_rank_indices: tuple[int, ...]
+    """Table column indices that are inter-rank partitioned."""
+    local_modulus: int | None
+    """Local hash modulus (0 if not partitioned within rank, None if inherited)."""
+    local_indices: tuple[int, ...] | None
+    """Table column indices that are locally partitioned, or None if inherited."""
+
+    def __bool__(self) -> bool:
+        """True if there is effective inter-rank partitioning."""
+        return self.inter_rank_modulus > 0
+
+    def __eq__(self, other: object) -> bool:
+        """Equal when moduli and same number of partitioned keys (for left vs right)."""
+        if not isinstance(other, PartitioningState):
+            return NotImplemented
+        return (
+            self.inter_rank_modulus == other.inter_rank_modulus
+            and self.local_modulus == other.local_modulus
+            and len(self.inter_rank_indices) == len(other.inter_rank_indices)
+            and len(self.local_indices or ()) == len(other.local_indices or ())
+        )
+
+    @property
+    def is_simply_partitioned(self) -> bool:
+        """
+        Whether the data is simply partitioned.
+
+        Notes
+        -----
+        Return True if the data is partitioned and the
+        total number of chunks matches the inter-rank modulus.
+        """
+        return self.inter_rank_modulus != 0 and self.local_modulus is None
+
+    @classmethod
+    def from_metadata(
+        cls,
+        metadata: ChannelMetadata,
+        key_indices: tuple[int, ...],
+        nranks: int,
+    ) -> PartitioningState:
+        """Build state from channel metadata and key indices (allow_subset=True)."""
+        inter_rank_modulus, local_modulus = get_partitioning_moduli(
+            metadata, key_indices, nranks, allow_subset=True
+        )
+
+        local_indices: tuple[int, ...] | None = None
+        inter_rank_indices: tuple[int, ...] = key_indices
+        if inter_rank_modulus and metadata.partitioning is not None:
+            inter_rank_hashed = isinstance(metadata.partitioning.inter_rank, HashScheme)
+            local_hashed = isinstance(metadata.partitioning.local, HashScheme)
+            if local_hashed and inter_rank_hashed:
+                inter_rank_indices = metadata.partitioning.inter_rank.column_indices
+                local_indices = metadata.partitioning.local.column_indices
+            elif inter_rank_hashed:
+                inter_rank_indices = metadata.partitioning.inter_rank.column_indices
+            elif local_hashed:
+                if nranks == 1 and local_modulus:
+                    inter_rank_modulus = local_modulus
+                    inter_rank_indices = metadata.partitioning.local.column_indices
+                    local_modulus = None
+                else:
+                    local_indices = metadata.partitioning.local.column_indices
+
+        return cls(
+            inter_rank_modulus=inter_rank_modulus,
+            inter_rank_indices=inter_rank_indices,
+            local_modulus=local_modulus,
+            local_indices=local_indices or (),
+        )
+
+
 @define_actor()
 async def join_actor(
     context: Context,
@@ -825,25 +932,15 @@ async def join_actor(
 
         # Check if either side is already partitioned on join keys
         nranks = context.comm().nranks
-        # left_existing_modulus = _get_key_partitioning_modulus(
-        #     left_metadata, left_key_indices, nranks
-        # )
-        left_partitioning_moduli = get_partitioning_moduli(
+        left_state = PartitioningState.from_metadata(
             left_metadata, left_key_indices, nranks
         )
-        # right_existing_modulus = _get_key_partitioning_modulus(
-        #     right_metadata, right_key_indices, nranks
-        # )
-        right_partitioning_moduli = get_partitioning_moduli(
+        right_state = PartitioningState.from_metadata(
             right_metadata, right_key_indices, nranks
         )
 
         # Skip sampling if both sides are already partitioned on join keys
-        if sum(left_partitioning_moduli) > 0 and (
-            left_partitioning_moduli == right_partitioning_moduli
-        ):
-            if tracer is not None:
-                tracer.decision = "chunkwise"
+        if left_state.is_simply_partitioned and left_state == right_state:
             await _shuffle_join(
                 context,
                 ir,
@@ -851,7 +948,10 @@ async def join_actor(
                 ch_out,
                 ch_left,
                 ch_right,
-                left_partitioning_moduli,
+                left_state,
+                right_state,
+                left_state.inter_rank_modulus,
+                collective_ids,
                 tracer=tracer,
             )
 
@@ -1045,6 +1145,13 @@ async def join_actor(
             ideal_modulus = nranks * ideal_output_count
             min_modulus = min(ideal_modulus, max_output_chunks)
 
+            left_existing_modulus = (
+                left_state.inter_rank_modulus if left_state else None
+            )
+            right_existing_modulus = (
+                right_state.inter_rank_modulus if right_state else None
+            )
+
             # Determine which modulus to use, preferring existing partitioning
             # if it provides at least the minimum needed partitions
             if left_existing_modulus is not None and right_existing_modulus is not None:
@@ -1072,35 +1179,6 @@ async def join_actor(
                 # Use at least nranks for distributed efficiency
                 modulus = max(nranks, min_modulus)
 
-            # Now check which sides need shuffling with the chosen modulus
-            left_partitioned = _is_partitioned_on_keys(
-                left_metadata,
-                left_key_indices,
-                modulus,
-            )
-            right_partitioned = _is_partitioned_on_keys(
-                right_metadata,
-                right_key_indices,
-                modulus,
-            )
-
-            # Determine which sides need shuffling
-            shuffle_left = not left_partitioned
-            shuffle_right = not right_partitioned
-            left_collective_id = collective_ids.pop() if shuffle_left else None
-            right_collective_id = collective_ids.pop() if shuffle_right else None
-
-            # Set tracer decision based on shuffle configuration
-            if tracer is not None:
-                if shuffle_left and shuffle_right:
-                    tracer.decision = "shuffle"
-                elif shuffle_left:
-                    tracer.decision = "shuffle_left"
-                elif shuffle_right:
-                    tracer.decision = "shuffle_right"
-                else:
-                    tracer.decision = "chunkwise"
-
             await _shuffle_join(
                 context,
                 ir,
@@ -1108,11 +1186,12 @@ async def join_actor(
                 ch_out,
                 ch_left,
                 ch_right,
+                left_state,
+                right_state,
                 modulus,
+                collective_ids,
                 left_sample_chunks=left_sample_chunks,
                 right_sample_chunks=right_sample_chunks,
-                left_collective_id=left_collective_id,
-                right_collective_id=right_collective_id,
                 tracer=tracer,
             )
 
