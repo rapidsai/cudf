@@ -71,8 +71,8 @@ jitify2::StringVec build_join_filter_template_params(std::vector<column_view> co
     auto const& col       = left_columns[i];
     std::string type_name = cudf::type_to_name(col.type());
     template_params.emplace_back(
-      jitify2::reflection::Template("cudf::jit::join_left_column_accessor")
-        .instantiate(type_name, std::to_string(i)));
+      jitify2::reflection::Template("cudf::jit::join_column_accessor")
+        .instantiate(type_name, std::to_string(i), "cudf::jit::join_side::LEFT"));
   }
 
   // Add right column accessors
@@ -80,8 +80,8 @@ jitify2::StringVec build_join_filter_template_params(std::vector<column_view> co
     auto const& col       = right_columns[i];
     std::string type_name = cudf::type_to_name(col.type());
     template_params.emplace_back(
-      jitify2::reflection::Template("cudf::jit::join_right_column_accessor")
-        .instantiate(type_name, std::to_string(i)));
+      jitify2::reflection::Template("cudf::jit::join_column_accessor")
+        .instantiate(type_name, std::to_string(i), "cudf::jit::join_side::RIGHT"));
   }
 
   return template_params;

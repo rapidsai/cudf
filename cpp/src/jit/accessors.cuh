@@ -131,86 +131,53 @@ struct scalar_accessor {
   }
 };
 
-// Join-specific accessors for indexed table access
-// These accessors receive both left and right table pointers plus both row indices,
-// and internally select the appropriate table based on accessor type.
-template <typename T, int32_t Index>
-struct join_left_column_accessor {
+// Join-specific accessor for indexed table access.
+// Receives both left and right table pointers plus both row indices,
+// and selects the appropriate table based on the Side template parameter.
+enum class join_side : bool { LEFT, RIGHT };
+
+template <typename T, int32_t Index, join_side Side>
+struct join_column_accessor {
   using type                     = T;
   static constexpr int32_t index = Index;
 
   static __device__ T element(cudf::column_device_view_core const* left_tables,
-                              cudf::column_device_view_core const* /* right_tables */,
-                              cudf::size_type left_row_idx,
-                              cudf::size_type /* right_row_idx */,
-                              cudf::size_type /* thread_idx */)
-  {
-    return left_tables[index].template element<T>(left_row_idx);
-  }
-
-  static __device__ bool is_null(cudf::column_device_view_core const* left_tables,
-                                 cudf::column_device_view_core const* /* right_tables */,
-                                 cudf::size_type left_row_idx,
-                                 cudf::size_type /* right_row_idx */,
-                                 cudf::size_type /* thread_idx */)
-  {
-    return left_tables[index].is_null(left_row_idx);
-  }
-
-  static __device__ bool is_valid(cudf::column_device_view_core const* left_tables,
-                                  cudf::column_device_view_core const* /* right_tables */,
-                                  cudf::size_type left_row_idx,
-                                  cudf::size_type /* right_row_idx */,
-                                  cudf::size_type /* thread_idx */)
-  {
-    return left_tables[index].is_valid(left_row_idx);
-  }
-
-  static __device__ cuda::std::optional<T> nullable_element(
-    cudf::column_device_view_core const* left_tables,
-    cudf::column_device_view_core const* right_tables,
-    cudf::size_type left_row_idx,
-    cudf::size_type right_row_idx,
-    cudf::size_type thread_idx)
-  {
-    if (is_null(left_tables, right_tables, left_row_idx, right_row_idx, thread_idx)) {
-      return cuda::std::nullopt;
-    }
-    return element(left_tables, right_tables, left_row_idx, right_row_idx, thread_idx);
-  }
-};
-
-// Join-specific accessors for right table columns
-template <typename T, int32_t Index>
-struct join_right_column_accessor {
-  using type                     = T;
-  static constexpr int32_t index = Index;
-
-  static __device__ T element(cudf::column_device_view_core const* /* left_tables */,
                               cudf::column_device_view_core const* right_tables,
-                              cudf::size_type /* left_row_idx */,
+                              cudf::size_type left_row_idx,
                               cudf::size_type right_row_idx,
                               cudf::size_type /* thread_idx */)
   {
-    return right_tables[index].template element<T>(right_row_idx);
+    if constexpr (Side == join_side::LEFT) {
+      return left_tables[index].template element<T>(left_row_idx);
+    } else {
+      return right_tables[index].template element<T>(right_row_idx);
+    }
   }
 
-  static __device__ bool is_null(cudf::column_device_view_core const* /* left_tables */,
+  static __device__ bool is_null(cudf::column_device_view_core const* left_tables,
                                  cudf::column_device_view_core const* right_tables,
-                                 cudf::size_type /* left_row_idx */,
+                                 cudf::size_type left_row_idx,
                                  cudf::size_type right_row_idx,
                                  cudf::size_type /* thread_idx */)
   {
-    return right_tables[index].is_null(right_row_idx);
+    if constexpr (Side == join_side::LEFT) {
+      return left_tables[index].is_null(left_row_idx);
+    } else {
+      return right_tables[index].is_null(right_row_idx);
+    }
   }
 
-  static __device__ bool is_valid(cudf::column_device_view_core const* /* left_tables */,
+  static __device__ bool is_valid(cudf::column_device_view_core const* left_tables,
                                   cudf::column_device_view_core const* right_tables,
-                                  cudf::size_type /* left_row_idx */,
+                                  cudf::size_type left_row_idx,
                                   cudf::size_type right_row_idx,
                                   cudf::size_type /* thread_idx */)
   {
-    return right_tables[index].is_valid(right_row_idx);
+    if constexpr (Side == join_side::LEFT) {
+      return left_tables[index].is_valid(left_row_idx);
+    } else {
+      return right_tables[index].is_valid(right_row_idx);
+    }
   }
 
   static __device__ cuda::std::optional<T> nullable_element(
