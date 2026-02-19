@@ -270,6 +270,8 @@ def get_partitioning_moduli(
         if (isinstance(local, HashScheme) and local.column_indices == key_indices)
         else 0
     )
+    if local_modulus != metadata.local_count:
+        local_modulus = 0  # Local count is out of sync - Better to be safe
     local_modulus = local_modulus or (inter_rank_modulus if local == "inherit" else 0)
     return inter_rank_modulus, local_modulus
 

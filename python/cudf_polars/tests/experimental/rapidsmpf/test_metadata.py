@@ -6,12 +6,17 @@
 from __future__ import annotations
 
 import pytest
-from rapidsmpf.streaming.cudf.channel_metadata import HashScheme
+from rapidsmpf.streaming.cudf.channel_metadata import (
+    ChannelMetadata,
+    HashScheme,
+    Partitioning,
+)
 
 import polars as pl
 
 from cudf_polars import Translator
 from cudf_polars.experimental.rapidsmpf.core import evaluate_logical_plan
+from cudf_polars.experimental.rapidsmpf.utils import get_partitioning_moduli
 from cudf_polars.testing.asserts import (
     DEFAULT_CLUSTER,
     DEFAULT_RUNTIME,
@@ -89,3 +94,72 @@ def test_rapidsmpf_join_metadata(
         # No partitioning (broadcast join preserves no partitioning from IO)
         assert metadata.partitioning.inter_rank is None
         assert metadata.partitioning.local is None
+
+
+@pytest.mark.parametrize(
+    "local_count,partitioning,key_indices,nranks,expected",
+    [
+        (4, None, (0, 1), 1, (1, 0)),
+        (4, None, (0, 1), 4, (0, 0)),
+        (
+            8,
+            Partitioning(inter_rank=HashScheme((0, 1), 8), local="inherit"),
+            (0, 1),
+            4,
+            (8, 8),
+        ),
+        (
+            4,
+            Partitioning(
+                inter_rank=HashScheme((0, 1), 8),
+                local=HashScheme((0, 1), 4),
+            ),
+            (0, 1),
+            4,
+            (8, 4),
+        ),
+        (
+            8,
+            Partitioning(
+                inter_rank=HashScheme((0, 1), 8),
+                local=HashScheme((0,), 4),
+            ),
+            (0, 1),
+            4,
+            (8, 0),
+        ),
+        (
+            8,  # local_count != local modulus
+            Partitioning(
+                inter_rank=HashScheme((0, 1), 8),
+                local=HashScheme((0, 1), 4),
+            ),
+            (0, 1),
+            4,
+            (8, 0),
+        ),
+        (
+            8,
+            Partitioning(inter_rank=HashScheme((0,), 8), local="inherit"),
+            (0, 1),
+            4,
+            (0, 0),
+        ),
+        (
+            8,
+            Partitioning(inter_rank=HashScheme((1, 0), 8), local="inherit"),
+            (0, 1),
+            4,
+            (0, 0),
+        ),
+    ],
+)
+def test_get_partitioning_moduli(
+    local_count, partitioning, key_indices, nranks, expected
+) -> None:
+    """get_partitioning_moduli returns (inter_rank_modulus, local_modulus)."""
+    metadata = ChannelMetadata(
+        local_count=local_count,
+        partitioning=partitioning,
+    )
+    assert get_partitioning_moduli(metadata, key_indices, nranks) == expected
