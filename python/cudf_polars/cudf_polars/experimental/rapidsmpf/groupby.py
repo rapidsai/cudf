@@ -655,7 +655,7 @@ async def keyed_reduction_actor(
         key_indices = _key_indices(ir, ir.children[0].schema)
         require_tree = _require_tree(ir)
         inter_rank_modulus, local_modulus = get_partitioning_moduli(
-            metadata_in, key_indices, nranks
+            metadata_in, key_indices, nranks, allow_subset=True
         )
         partitioned_inter_rank = bool(inter_rank_modulus)
         partitioned_local = local_modulus is None or bool(local_modulus)
