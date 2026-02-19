@@ -569,6 +569,7 @@ async def _shuffle_join(
     modulus: int,
     collective_ids: list[int],
     *,
+    n_partitioned_keys: int | None = None,
     left_sample_chunks: list[TableChunk] | None = None,
     right_sample_chunks: list[TableChunk] | None = None,
     tracer: ActorTracer | None = None,
@@ -576,12 +577,13 @@ async def _shuffle_join(
     """
     Execute a shuffle (hash) join.
 
-    Shuffles a side iff its current state does not match its desired state.
+    Desired states are built inside from modulus (and n_partitioned_keys when
+    provided). Shuffles a side iff its current state does not match. Output
+    metadata reflects the desired partitioning (may be a subset of join keys).
     """
     left, right = ir.children
     nranks = context.comm().nranks
 
-    # Get key column indices for both sides
     left_schema_keys = list(left.schema.keys())
     right_schema_keys = list(right.schema.keys())
     left_key_indices = tuple(left_schema_keys.index(expr.name) for expr in ir.left_on)
@@ -589,26 +591,24 @@ async def _shuffle_join(
         right_schema_keys.index(expr.name) for expr in ir.right_on
     )
 
-    # Simple partitioning only: target state is full keys with given modulus
+    n_keys = (
+        n_partitioned_keys if n_partitioned_keys is not None else len(left_key_indices)
+    )
     left_desired_state = PartitioningState(
         inter_rank_modulus=modulus,
         local_modulus=None,
-        inter_rank_indices=left_key_indices,
+        inter_rank_indices=left_key_indices[:n_keys],
         local_indices=None,
     )
     right_desired_state = PartitioningState(
         inter_rank_modulus=modulus,
         local_modulus=None,
-        inter_rank_indices=right_key_indices,
+        inter_rank_indices=right_key_indices[:n_keys],
         local_indices=None,
     )
 
-    shuffle_left = (
-        left_state.inter_rank_modulus == 0 or left_state != left_desired_state
-    )
-    shuffle_right = (
-        right_state.inter_rank_modulus == 0 or right_state != right_desired_state
-    )
+    shuffle_left = not left_state or left_state != left_desired_state
+    shuffle_right = not right_state or right_state != right_desired_state
 
     local_count = max(1, modulus // nranks)
 
@@ -622,23 +622,16 @@ async def _shuffle_join(
         else:
             tracer.decision = "chunkwise"
 
-    # Send output metadata
-    # Output partitioning depends on join type
-    output_key_indices: tuple[int, ...] = ()
     output_schema_keys = list(ir.schema.keys())
     if ir.options[0] in ("Inner", "Left", "Full", "Semi", "Anti"):
-        # Use left keys for output partitioning
-        output_key_indices = tuple(
-            output_schema_keys.index(expr.name)
-            for expr in ir.left_on
-            if expr.name in output_schema_keys
-        )
-    elif ir.options[0] == "Right":
-        output_key_indices = tuple(
-            output_schema_keys.index(expr.name)
-            for expr in ir.right_on
-            if expr.name in output_schema_keys
-        )
+        join_keys_for_output = ir.left_on
+    else:
+        join_keys_for_output = ir.right_on
+    output_key_indices = tuple(
+        output_schema_keys.index(expr.name)
+        for expr in join_keys_for_output[:n_keys]
+        if expr.name in output_schema_keys
+    )
 
     metadata_out = ChannelMetadata(
         local_count=local_count,
@@ -655,7 +648,10 @@ async def _shuffle_join(
     left_shuffle: ShuffleManager | None = None
     if shuffle_left:
         left_shuffle = ShuffleManager(
-            context, modulus, left_key_indices, collective_ids.pop(0)
+            context,
+            modulus,
+            left_desired_state.inter_rank_indices,
+            collective_ids.pop(0),
         )
         while left_sample_chunks:
             left_shuffle.insert_chunk(
@@ -667,7 +663,10 @@ async def _shuffle_join(
     right_shuffle: ShuffleManager | None = None
     if shuffle_right:
         right_shuffle = ShuffleManager(
-            context, modulus, right_key_indices, collective_ids.pop(0)
+            context,
+            modulus,
+            right_desired_state.inter_rank_indices,
+            collective_ids.pop(0),
         )
         while right_sample_chunks:
             right_shuffle.insert_chunk(
@@ -752,7 +751,6 @@ async def _shuffle_join(
     else:
         partition_ids = list(range(local_count))
 
-    # Extract partitions and perform partition-wise joins
     stream = ir_context.get_cuda_stream()
     for seq_num, partition_id in enumerate(partition_ids):
         if left_shuffle is not None:
@@ -764,7 +762,7 @@ async def _shuffle_join(
             else:
                 left_table = empty_table_chunk(left, context, stream).table_view()
 
-        if right_shuffle:
+        if right_shuffle is not None:
             right_table = await right_shuffle.extract_chunk(partition_id, stream)
         else:
             chunk = await get_right_chunk(right_sample_chunks)
@@ -939,8 +937,8 @@ async def join_actor(
             right_metadata, right_key_indices, nranks
         )
 
-        # Skip sampling if both sides are already partitioned on join keys
-        if left_state.is_simply_partitioned and left_state == right_state:
+        # Skip sampling when both sides have matching partitioning (incl. subset of keys)
+        if left_state and left_state == right_state:
             await _shuffle_join(
                 context,
                 ir,
@@ -952,8 +950,10 @@ async def join_actor(
                 right_state,
                 left_state.inter_rank_modulus,
                 collective_ids,
+                n_partitioned_keys=len(left_state.inter_rank_indices),
                 tracer=tracer,
             )
+            return
 
         # Sample chunks from both sides concurrently
         left_sample_chunks: list[TableChunk] = []
@@ -1016,7 +1016,7 @@ async def join_actor(
             right_row_estimate = 0
 
         # AllGather size, row, and chunk count estimates across ranks
-        if collective_ids and nranks > 1:
+        if nranks > 1:
             (
                 left_total,
                 right_total,
@@ -1119,7 +1119,6 @@ async def join_actor(
             # Broadcast join
             if tracer is not None:
                 tracer.decision = f"broadcast_{broadcast_side}"
-            bcast_collective_id = collective_ids.pop() if collective_ids else 0
             await _broadcast_join(
                 context,
                 ir,
@@ -1132,7 +1131,7 @@ async def join_actor(
                 left_sample_chunks,
                 right_sample_chunks,
                 broadcast_side,
-                bcast_collective_id,
+                collective_ids.pop(0),
                 target_partition_size,
                 tracer,
             )
@@ -1255,6 +1254,14 @@ def _(
         # Dynamic join - decide strategy at runtime
         assert executor.dynamic_planning is not None  # Checked in use_dynamic
         collective_ids = list(rec.state["collective_id_map"].get(ir, []))
+        # Join uses up to 3 collective IDs: 1 allgather + up to 2 (left/right shuffle)
+        if len(collective_ids) < 3:
+            raise ValueError(
+                "Dynamic join requires 3 reserved collective IDs "
+                "(allgather + left shuffle + right shuffle); got "
+                f"{len(collective_ids)} for this Join. "
+                "Ensure ReserveOpIDs is run with dynamic_planning enabled."
+            )
         broadcast_threshold = (
             executor.target_partition_size * executor.broadcast_join_limit
         )
