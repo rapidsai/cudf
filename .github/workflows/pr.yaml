@@ -69,7 +69,7 @@ jobs:
         id: get-pr-info
         uses: nv-gha-runners/get-pr-info@main
       - name: Check if nightly CI is passing
-        uses: rapidsai/shared-actions/check_nightly_success/dispatch@check-nightly-success
+        uses: rapidsai/shared-actions/check_nightly_success/dispatch@main
         with:
           repo: ${{ github.repository }}
           target-branch: ${{ fromJSON(steps.get-pr-info.outputs.pr-info).base.ref }}
