@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import warnings
 from decimal import Decimal
-from typing import TYPE_CHECKING, Any, ClassVar, Self, cast
+from typing import TYPE_CHECKING, Any, ClassVar, cast
 
 import numpy as np
 import pandas as pd
@@ -34,7 +34,6 @@ from cudf.core.mixins import BinaryOperand
 from cudf.utils.dtypes import (
     cudf_dtype_to_pa_type,
     get_dtype_of_same_kind,
-    get_dtype_of_same_type,
 )
 from cudf.utils.scalar import pa_scalar_to_plc_scalar
 from cudf.utils.utils import is_na_like
@@ -62,21 +61,6 @@ class DecimalBaseColumn(NumericalBaseColumn):
 
     _VALID_BINARY_OPERATIONS = BinaryOperand._SUPPORTED_BINARY_OPERATIONS
     _decimal_type_check: ClassVar[Callable[[DtypeObj], bool]]
-
-    @classmethod
-    def _validate_args(
-        cls, plc_column: plc.Column, dtype: DtypeObj
-    ) -> tuple[plc.Column, DtypeObj]:
-        plc_column, dtype = super()._validate_args(plc_column, dtype)
-        if not cls._decimal_type_check(dtype):
-            raise ValueError(
-                f"{dtype=} must be a valid decimal dtype instance"
-            )
-        return plc_column, dtype
-
-    def _with_type_metadata(self: Self, dtype: DtypeObj) -> Self:
-        self._dtype = get_dtype_of_same_type(dtype, self.dtype)
-        return self
 
     def _adjust_reduce_result_dtype(
         self,
@@ -356,19 +340,16 @@ class DecimalBaseColumn(NumericalBaseColumn):
 
 
 class Decimal32Column(DecimalBaseColumn):
-    _VALID_PLC_TYPES = {plc.TypeId.DECIMAL32}
     _decimal_cls = Decimal32Dtype
     _decimal_type_check = is_dtype_obj_decimal32
 
 
 class Decimal64Column(DecimalBaseColumn):
-    _VALID_PLC_TYPES = {plc.TypeId.DECIMAL64}
     _decimal_cls = Decimal64Dtype
     _decimal_type_check = is_dtype_obj_decimal64
 
 
 class Decimal128Column(DecimalBaseColumn):
-    _VALID_PLC_TYPES = {plc.TypeId.DECIMAL128}
     _decimal_cls = Decimal128Dtype
     _decimal_type_check = is_dtype_obj_decimal128
 

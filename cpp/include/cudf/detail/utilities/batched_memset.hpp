@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -15,6 +15,7 @@
 
 #include <cub/device/device_copy.cuh>
 #include <cuda/functional>
+#include <cuda/iterator>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/transform.h>
@@ -49,7 +50,7 @@ void batched_memset(cudf::host_span<cudf::device_span<T> const> host_buffers,
       [buffers = buffers.data()] __device__(size_t i) { return buffers[i].size(); }));
 
   // Constant iterator to the value to memset
-  auto iter_in = thrust::make_constant_iterator(thrust::make_constant_iterator(value));
+  auto iter_in = cuda::make_constant_iterator(cuda::make_constant_iterator(value));
 
   // Iterator to each device span pointer
   auto iter_out = thrust::make_transform_iterator(

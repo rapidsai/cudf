@@ -36,13 +36,6 @@ namespace transformation {
 namespace jit {
 namespace {
 
-jitify2::Kernel get_kernel(std::string const& kernel_name, std::string const& cuda_source)
-{
-  CUDF_FUNC_RANGE();
-  return cudf::jit::get_program_cache(*transform_jit_kernel_cu_jit)
-    .get_kernel(kernel_name, {}, {{"cudf/detail/operation-udf.hpp", cuda_source}}, {"-arch=sm_."});
-}
-
 jitify2::StringVec build_jit_template_params(null_aware is_null_aware,
                                              bool may_evaluate_null,
                                              bool has_user_data,
@@ -103,14 +96,12 @@ jitify2::ConfiguredKernel build_transform_kernel(
                cudf::jit::build_ptx_params(output_typenames, input_typenames, has_user_data))
            : cudf::jit::parse_single_function_cuda(udf, "GENERIC_TRANSFORM_OP");
 
-  return get_kernel(jitify2::reflection::Template(kernel_name)
-                      .instantiate(build_jit_template_params(is_null_aware,
-                                                             may_evaluate_null,
-                                                             has_user_data,
-                                                             {},
-                                                             output_typenames,
-                                                             input_reflections)),
-                    cuda_source)
+  auto kernel_reflection =
+    jitify2::reflection::Template(kernel_name)
+      .instantiate(build_jit_template_params(
+        is_null_aware, may_evaluate_null, has_user_data, {}, output_typenames, input_typenames));
+
+  return cudf::jit::get_udf_kernel(*transform_jit_kernel_cu_jit, kernel_reflection, cuda_source)
     ->configure_1d_max_occupancy(0, 0, nullptr, stream.value());
 }
 
@@ -137,14 +128,12 @@ jitify2::ConfiguredKernel build_span_kernel(std::string_view kernel_name,
                cudf::jit::build_ptx_params(output_typenames, input_typenames, has_user_data))
            : cudf::jit::parse_single_function_cuda(udf, "GENERIC_TRANSFORM_OP");
 
-  return get_kernel(jitify2::reflection::Template(kernel_name)
-                      .instantiate(build_jit_template_params(is_null_aware,
-                                                             may_evaluate_null,
-                                                             has_user_data,
-                                                             output_typenames,
-                                                             {},
-                                                             input_reflections)),
-                    cuda_source)
+  auto kernel_reflection =
+    jitify2::reflection::Template(kernel_name)
+      .instantiate(build_jit_template_params(
+        is_null_aware, may_evaluate_null, has_user_data, span_outputs, {}, output_typenames));
+
+  return cudf::jit::get_udf_kernel(*transform_jit_kernel_cu_jit, kernel_reflection, cuda_source)
     ->configure_1d_max_occupancy(0, 0, nullptr, stream.value());
 }
 

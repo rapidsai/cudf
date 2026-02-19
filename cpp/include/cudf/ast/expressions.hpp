@@ -5,6 +5,7 @@
 #pragma once
 
 #include <cudf/ast/ast_operator.hpp>
+#include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/scalar/scalar_device_view.cuh>
 #include <cudf/table/table_view.hpp>
@@ -139,6 +140,12 @@ class generic_scalar_device_view : public cudf::detail::scalar_device_view_base 
   {
     if constexpr (std::is_same_v<T, cudf::string_view>) {
       return string_view(static_cast<char const*>(_data), _size);
+    }
+    if constexpr (cudf::is_fixed_point<T>()) {
+      using rep_type   = typename T::rep;
+      auto const rep   = *static_cast<rep_type const*>(_data);
+      auto const scale = numeric::scale_type{type().scale()};
+      return T{numeric::scaled_integer<rep_type>{rep, scale}};
     }
     return *static_cast<T const*>(_data);
   }

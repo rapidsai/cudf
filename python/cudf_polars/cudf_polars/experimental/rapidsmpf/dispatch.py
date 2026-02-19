@@ -20,7 +20,7 @@ if TYPE_CHECKING:
         StatsCollector,
     )
     from cudf_polars.experimental.rapidsmpf.utils import ChannelManager
-    from cudf_polars.utils.config import ConfigOptions
+    from cudf_polars.utils.config import ConfigOptions, StreamingExecutor
 
 
 class FanoutInfo(NamedTuple):
@@ -58,7 +58,7 @@ class GenState(TypedDict):
     """
 
     context: Context
-    config_options: ConfigOptions
+    config_options: ConfigOptions[StreamingExecutor]
     partition_info: MutableMapping[IR, PartitionInfo]
     fanout_nodes: dict[IR, FanoutInfo]
     ir_context: IRExecutionContext
