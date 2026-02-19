@@ -38,8 +38,8 @@ using Table          = cudf::table;
 struct JoinTest : public cudf::test::BaseFixture {};
 
 // Parameterized test fixture for testing both LEFT and RIGHT table reuse
-struct JoinTestReuse : public cudf::test::BaseFixture,
-                       public ::testing::WithParamInterface<cudf::set_as_build_table> {};
+struct SemiAntiJoinTest : public cudf::test::BaseFixture,
+                          public ::testing::WithParamInterface<cudf::set_as_build_table> {};
 
 namespace {
 // Helper to perform semi/anti join with configurable build side
@@ -104,7 +104,7 @@ std::unique_ptr<cudf::table> left_anti_join(
 }
 }  // namespace
 
-TEST_P(JoinTestReuse, TestSimple)
+TEST_P(SemiAntiJoinTest, TestSimple)
 {
   auto const build_side = GetParam();
 
@@ -168,7 +168,7 @@ std::pair<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::table>> get_saj_ta
   return {std::make_unique<Table>(std::move(cols0)), std::make_unique<Table>(std::move(cols1))};
 }
 
-TEST_P(JoinTestReuse, SemiJoinWithStructsAndNulls)
+TEST_P(SemiAntiJoinTest, SemiJoinWithStructsAndNulls)
 {
   auto const build_side = GetParam();
   auto tables = get_saj_tables({true, true, false, true, false}, {true, false, false, true, true});
@@ -201,7 +201,7 @@ TEST_P(JoinTestReuse, SemiJoinWithStructsAndNulls)
   CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*sorted_gold, *sorted_result);
 }
 
-TEST_P(JoinTestReuse, SemiJoinWithStructsAndNullsNotEqual)
+TEST_P(SemiAntiJoinTest, SemiJoinWithStructsAndNullsNotEqual)
 {
   auto const build_side = GetParam();
   auto tables = get_saj_tables({true, true, false, true, true}, {true, true, false, true, true});
@@ -235,7 +235,7 @@ TEST_P(JoinTestReuse, SemiJoinWithStructsAndNullsNotEqual)
   CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*sorted_gold, *sorted_result);
 }
 
-TEST_P(JoinTestReuse, AntiJoinWithStructsAndNulls)
+TEST_P(SemiAntiJoinTest, AntiJoinWithStructsAndNulls)
 {
   auto const build_side = GetParam();
   auto tables = get_saj_tables({true, true, false, true, false}, {true, false, false, true, true});
@@ -269,7 +269,7 @@ TEST_P(JoinTestReuse, AntiJoinWithStructsAndNulls)
   CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*sorted_gold, *sorted_result);
 }
 
-TEST_P(JoinTestReuse, AntiJoinWithStructsAndNullsNotEqual)
+TEST_P(SemiAntiJoinTest, AntiJoinWithStructsAndNullsNotEqual)
 {
   auto const build_side = GetParam();
   auto tables = get_saj_tables({true, true, false, true, true}, {true, true, false, true, true});
@@ -305,7 +305,7 @@ TEST_P(JoinTestReuse, AntiJoinWithStructsAndNullsNotEqual)
   CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*sorted_gold, *sorted_result);
 }
 
-TEST_P(JoinTestReuse, AntiJoinWithStructsAndNullsOnOneSide)
+TEST_P(SemiAntiJoinTest, AntiJoinWithStructsAndNullsOnOneSide)
 {
   auto const build_side = GetParam();
   auto constexpr null{0};
@@ -329,7 +329,7 @@ TEST_P(JoinTestReuse, AntiJoinWithStructsAndNullsOnOneSide)
   CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*expected, *result);
 }
 
-TEST_P(JoinTestReuse, AntiJoinEmptyTables)
+TEST_P(SemiAntiJoinTest, AntiJoinEmptyTables)
 {
   auto const build_side = GetParam();
   cudf::table empty_build_table{};
@@ -362,7 +362,7 @@ TEST_P(JoinTestReuse, AntiJoinEmptyTables)
   }
 }
 
-TEST_P(JoinTestReuse, SemiJoinEmptyTables)
+TEST_P(SemiAntiJoinTest, SemiJoinEmptyTables)
 {
   auto const build_side = GetParam();
   cudf::table empty_build_table{};
@@ -428,7 +428,7 @@ TEST_F(JoinTest, AntiSemiJoinLargeExtentOverflowPrevention)
   });
 }
 
-INSTANTIATE_TEST_SUITE_P(BuildSide,
-                         JoinTestReuse,
+INSTANTIATE_TEST_SUITE_P(JoinImpl,
+                         SemiAntiJoinTest,
                          ::testing::Values(cudf::set_as_build_table::LEFT,
                                            cudf::set_as_build_table::RIGHT));
