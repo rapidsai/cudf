@@ -2044,11 +2044,18 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             elif is_dtype_obj_interval(dtype):
                 result = self.as_interval_column(dtype)  # type: ignore[arg-type]
             elif is_dtype_obj_list(dtype) or is_dtype_obj_struct(dtype):
-                if self.dtype != dtype:
+                if isinstance(dtype, pd.ArrowDtype):
+                    equiv_dtype = pyarrow_dtype_to_cudf_dtype(dtype)
+                else:
+                    equiv_dtype = dtype
+                if self.dtype != equiv_dtype:
                     raise NotImplementedError(
                         f"Casting {self.dtype} columns not currently supported"
                     )
-                result = self
+                elif self.dtype != dtype:
+                    result = ColumnBase.create(self.plc_column, dtype)
+                else:
+                    result = self
             elif is_dtype_obj_decimal(dtype):
                 result = self.as_decimal_column(dtype)  # type: ignore[arg-type]
             elif dtype.kind == "M":
@@ -3173,7 +3180,7 @@ def as_column(
                 )
             elif inferred_dtype == "boolean":
                 if cudf.get_option("mode.pandas_compatible"):
-                    if dtype != np.dtype("bool") or pd.isna(arbitrary).any():
+                    if dtype.kind != "b" or pd.isna(arbitrary).any():
                         raise MixedTypeError(
                             f"Cannot have mixed values with {inferred_dtype}"
                         )

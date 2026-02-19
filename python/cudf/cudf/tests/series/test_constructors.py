@@ -1582,3 +1582,23 @@ def test_series_constructor_numpy_dtype_str(pandas_compatible):
     result = cudf.Series(data, dtype=dtype)
     assert result.dtype == np.dtype(object)
     assert_eq(result, expected)
+
+
+def test_series_constructor_dtype_is_pandas_nullable_extension_type(
+    all_supported_pandas_nullable_extension_dtypes,
+):
+    scalar, dtype = all_supported_pandas_nullable_extension_dtypes
+    result = cudf.Series([scalar], dtype=dtype)
+    expected = pd.Series([scalar], dtype=dtype)
+    assert result.dtype == expected.dtype
+    assert_eq(result, expected)
+
+
+def test_series_constructor_dtype_is_pandas_arrowdtype(
+    all_supported_pandas_arrowdtypes,
+):
+    scalar, dtype = all_supported_pandas_arrowdtypes
+    result = cudf.Series([scalar], dtype=dtype)
+    expected = pd.Series([scalar], dtype=dtype)
+    assert result.dtype == expected.dtype
+    assert_eq(result, expected)

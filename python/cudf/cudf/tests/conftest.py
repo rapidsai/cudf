@@ -1,6 +1,8 @@
 # SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
+import datetime
+import decimal
 import itertools
 import math
 import operator
@@ -11,6 +13,7 @@ import zoneinfo
 import cupy as cp
 import numpy as np
 import pandas as pd
+import pyarrow as pa
 import pytest
 
 import rmm  # noqa: F401
@@ -453,6 +456,82 @@ def all_supported_types_as_str(request):
     - "category"
     - "bool"
     """
+    return request.param
+
+
+@pytest.fixture(
+    params=[
+        (1, pd.Int8Dtype()),
+        (1, pd.Int16Dtype()),
+        (1, pd.Int32Dtype()),
+        (1, pd.Int64Dtype()),
+        (1, pd.UInt8Dtype()),
+        (1, pd.UInt16Dtype()),
+        (1, pd.UInt32Dtype()),
+        (1, pd.UInt64Dtype()),
+        (1.5, pd.Float32Dtype()),
+        (1.5, pd.Float64Dtype()),
+        (True, pd.BooleanDtype()),
+        ("a", pd.StringDtype(na_value=np.nan, storage="python")),
+        ("a", pd.StringDtype(na_value=pd.NA, storage="python")),
+        ("a", pd.StringDtype(na_value=np.nan, storage="pyarrow")),
+        ("a", pd.StringDtype(na_value=pd.NA, storage="pyarrow")),
+    ],
+    ids=lambda x: repr(x[1]),
+)
+def all_supported_pandas_nullable_extension_dtypes(request):
+    """All supported pandas nullable extension dtypes with a representative scalar."""
+    return request.param
+
+
+@pytest.fixture(
+    params=[
+        (1, pd.ArrowDtype(pa.int8())),
+        (1, pd.ArrowDtype(pa.int16())),
+        (1, pd.ArrowDtype(pa.int32())),
+        (1, pd.ArrowDtype(pa.int64())),
+        (1, pd.ArrowDtype(pa.uint8())),
+        (1, pd.ArrowDtype(pa.uint16())),
+        (1, pd.ArrowDtype(pa.uint32())),
+        (1, pd.ArrowDtype(pa.uint64())),
+        (1.5, pd.ArrowDtype(pa.float32())),
+        (1.5, pd.ArrowDtype(pa.float64())),
+        (True, pd.ArrowDtype(pa.bool_())),
+        ("a", pd.ArrowDtype(pa.string())),
+        (datetime.datetime(2020, 1, 1), pd.ArrowDtype(pa.timestamp("ns"))),
+        (datetime.datetime(2020, 1, 1), pd.ArrowDtype(pa.timestamp("us"))),
+        (datetime.datetime(2020, 1, 1), pd.ArrowDtype(pa.timestamp("ms"))),
+        (datetime.datetime(2020, 1, 1), pd.ArrowDtype(pa.timestamp("s"))),
+        (
+            datetime.datetime(2020, 1, 1, tzinfo=zoneinfo.ZoneInfo("UTC")),
+            pd.ArrowDtype(pa.timestamp("ns", tz="UTC")),
+        ),
+        (
+            datetime.datetime(2020, 1, 1, tzinfo=zoneinfo.ZoneInfo("UTC")),
+            pd.ArrowDtype(pa.timestamp("us", tz="UTC")),
+        ),
+        (
+            datetime.datetime(2020, 1, 1, tzinfo=zoneinfo.ZoneInfo("UTC")),
+            pd.ArrowDtype(pa.timestamp("ms", tz="UTC")),
+        ),
+        (
+            datetime.datetime(2020, 1, 1, tzinfo=zoneinfo.ZoneInfo("UTC")),
+            pd.ArrowDtype(pa.timestamp("s", tz="UTC")),
+        ),
+        (datetime.timedelta(1), pd.ArrowDtype(pa.duration("ns"))),
+        (datetime.timedelta(1), pd.ArrowDtype(pa.duration("us"))),
+        (datetime.timedelta(1), pd.ArrowDtype(pa.duration("ms"))),
+        (datetime.timedelta(1), pd.ArrowDtype(pa.duration("s"))),
+        (decimal.Decimal("1.5"), pd.ArrowDtype(pa.decimal128(8, 2))),
+        (decimal.Decimal("1.5"), pd.ArrowDtype(pa.decimal64(8, 2))),
+        (decimal.Decimal("1.5"), pd.ArrowDtype(pa.decimal32(8, 2))),
+        ([1], pd.ArrowDtype(pa.list_(pa.int64()))),
+        ({"a": 1}, pd.ArrowDtype(pa.struct([pa.field("a", pa.int64())]))),
+    ],
+    ids=lambda x: repr(x[1]),
+)
+def all_supported_pandas_arrowdtypes(request):
+    """All supported pandas arrow dtypes with a representative scalar."""
     return request.param
 
 
