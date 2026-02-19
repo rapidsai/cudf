@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
 from cudf_polars.experimental.benchmarks.utils import get_data
 
 if TYPE_CHECKING:
@@ -17,7 +18,39 @@ if TYPE_CHECKING:
 
 def duckdb_impl(run_config: RunConfig) -> str:
     """Query 48."""
-    return """
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=48,
+        qualification=run_config.qualification,
+    )
+
+    year = params["year"]
+    demographics = params["demographics"]
+    geography = params["geography"]
+
+    # Build demographics conditions
+    demo_conditions = [
+        f"( cd_demo_sk = ss_cdemo_sk\n"
+        f"                   AND cd_marital_status = '{d['marital_status']}'\n"
+        f"                   AND cd_education_status = '{d['education_status']}'\n"
+        f"                   AND ss_sales_price BETWEEN {d['price_min']} AND {d['price_max']} )"
+        for d in demographics
+    ]
+    demo_sql = "\n                  OR ".join(demo_conditions)
+
+    # Build geography conditions
+    geo_conditions = []
+    for g in geography:
+        states_str = ", ".join(f"'{s}'" for s in g["states"])
+        geo_conditions.append(
+            f"( ss_addr_sk = ca_address_sk\n"
+            f"                   AND ca_country = 'United States'\n"
+            f"                   AND ca_state IN ( {states_str} )\n"
+            f"                   AND ss_net_profit BETWEEN {g['profit_min']} AND {g['profit_max']} )"
+        )
+    geo_sql = "\n                  OR ".join(geo_conditions)
+
+    return f"""
     SELECT Sum (ss_quantity)
     FROM   store_sales,
            store,
@@ -26,36 +59,24 @@ def duckdb_impl(run_config: RunConfig) -> str:
            date_dim
     WHERE  s_store_sk = ss_store_sk
            AND ss_sold_date_sk = d_date_sk
-           AND d_year = 1999
-           AND ( ( cd_demo_sk = ss_cdemo_sk
-                   AND cd_marital_status = 'W'
-                   AND cd_education_status = 'Secondary'
-                   AND ss_sales_price BETWEEN 100.00 AND 150.00 )
-                  OR ( cd_demo_sk = ss_cdemo_sk
-                       AND cd_marital_status = 'M'
-                       AND cd_education_status = 'Advanced Degree'
-                       AND ss_sales_price BETWEEN 50.00 AND 100.00 )
-                  OR ( cd_demo_sk = ss_cdemo_sk
-                       AND cd_marital_status = 'D'
-                       AND cd_education_status = '2 yr Degree'
-                       AND ss_sales_price BETWEEN 150.00 AND 200.00 ) )
-           AND ( ( ss_addr_sk = ca_address_sk
-                   AND ca_country = 'United States'
-                   AND ca_state IN ( 'TX', 'NE', 'MO' )
-                   AND ss_net_profit BETWEEN 0 AND 2000 )
-                  OR ( ss_addr_sk = ca_address_sk
-                       AND ca_country = 'United States'
-                       AND ca_state IN ( 'CO', 'TN', 'ND' )
-                       AND ss_net_profit BETWEEN 150 AND 3000 )
-                  OR ( ss_addr_sk = ca_address_sk
-                       AND ca_country = 'United States'
-                       AND ca_state IN ( 'OK', 'PA', 'CA' )
-                       AND ss_net_profit BETWEEN 50 AND 25000 ) );
+           AND d_year = {year}
+           AND ( {demo_sql} )
+           AND ( {geo_sql} );
     """
 
 
 def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     """Query 48."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=48,
+        qualification=run_config.qualification,
+    )
+
+    year = params["year"]
+    demographics = params["demographics"]
+    geography = params["geography"]
+
     # Load tables
     store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
     store = get_data(run_config.dataset_path, "store", run_config.suffix)
@@ -66,6 +87,33 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         run_config.dataset_path, "customer_address", run_config.suffix
     )
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
+
+    # Build demographics conditions
+    demo_conditions = [
+        (
+            (pl.col("cd_marital_status") == d["marital_status"])
+            & (pl.col("cd_education_status") == d["education_status"])
+            & (pl.col("ss_sales_price").is_between(d["price_min"], d["price_max"]))
+        )
+        for d in demographics
+    ]
+    demo_filter = demo_conditions[0]
+    for cond in demo_conditions[1:]:
+        demo_filter = demo_filter | cond
+
+    # Build geography conditions
+    geo_conditions = [
+        (
+            (pl.col("ca_country") == "United States")
+            & (pl.col("ca_state").is_in(g["states"]))
+            & (pl.col("ss_net_profit").is_between(g["profit_min"], g["profit_max"]))
+        )
+        for g in geography
+    ]
+    geo_filter = geo_conditions[0]
+    for cond in geo_conditions[1:]:
+        geo_filter = geo_filter | cond
+
     return (
         store_sales
         # Join with all required tables
@@ -76,55 +124,13 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         # Apply filters
         .filter(
             # Year filter
-            (pl.col("d_year") == 1999)
+            (pl.col("d_year") == year)
             &
             # Complex demographics OR conditions
-            (
-                # Condition 1: Widowed + Secondary + Price 100-150
-                (
-                    (pl.col("cd_marital_status") == "W")
-                    & (pl.col("cd_education_status") == "Secondary")
-                    & (pl.col("ss_sales_price").is_between(100.00, 150.00))
-                )
-                |
-                # Condition 2: Married + Advanced Degree + Price 50-100
-                (
-                    (pl.col("cd_marital_status") == "M")
-                    & (pl.col("cd_education_status") == "Advanced Degree")
-                    & (pl.col("ss_sales_price").is_between(50.00, 100.00))
-                )
-                |
-                # Condition 3: Divorced + 2 yr Degree + Price 150-200
-                (
-                    (pl.col("cd_marital_status") == "D")
-                    & (pl.col("cd_education_status") == "2 yr Degree")
-                    & (pl.col("ss_sales_price").is_between(150.00, 200.00))
-                )
-            )
+            demo_filter
             &
             # Complex geography OR conditions
-            (
-                # Condition 1: US + TX/NE/MO + Profit 0-2000
-                (
-                    (pl.col("ca_country") == "United States")
-                    & (pl.col("ca_state").is_in(["TX", "NE", "MO"]))
-                    & (pl.col("ss_net_profit").is_between(0, 2000))
-                )
-                |
-                # Condition 2: US + CO/TN/ND + Profit 150-3000
-                (
-                    (pl.col("ca_country") == "United States")
-                    & (pl.col("ca_state").is_in(["CO", "TN", "ND"]))
-                    & (pl.col("ss_net_profit").is_between(150, 3000))
-                )
-                |
-                # Condition 3: US + OK/PA/CA + Profit 50-25000
-                (
-                    (pl.col("ca_country") == "United States")
-                    & (pl.col("ca_state").is_in(["OK", "PA", "CA"]))
-                    & (pl.col("ss_net_profit").is_between(50, 25000))
-                )
-            )
+            geo_filter
         )
         # Aggregate - sum of quantity with null-safe handling
         .select(

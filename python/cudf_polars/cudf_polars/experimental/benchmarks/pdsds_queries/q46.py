@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
 from cudf_polars.experimental.benchmarks.utils import get_data
 
 if TYPE_CHECKING:
@@ -17,7 +18,20 @@ if TYPE_CHECKING:
 
 def duckdb_impl(run_config: RunConfig) -> str:
     """Query 46."""
-    return """
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=46,
+        qualification=run_config.qualification,
+    )
+
+    year = params["year"]
+    hd_dep_count = params["hd_dep_count"]
+    hd_vehicle_count = params["hd_vehicle_count"]
+    cities = params["cities"]
+
+    cities_str = ", ".join(f"'{c}'" for c in cities)
+
+    return f"""
     SELECT c_last_name,
                    c_first_name,
                    ca_city,
@@ -39,13 +53,11 @@ def duckdb_impl(run_config: RunConfig) -> str:
                    AND store_sales.ss_store_sk = store.s_store_sk
                    AND store_sales.ss_hdemo_sk = household_demographics.hd_demo_sk
                    AND store_sales.ss_addr_sk = customer_address.ca_address_sk
-                   AND ( household_demographics.hd_dep_count = 6
-                          OR household_demographics.hd_vehicle_count = 0 )
+                   AND ( household_demographics.hd_dep_count = {hd_dep_count}
+                          OR household_demographics.hd_vehicle_count = {hd_vehicle_count} )
                    AND date_dim.d_dow IN ( 6, 0 )
-                   AND date_dim.d_year IN ( 2000, 2000 + 1, 2000 + 2 )
-                   AND store.s_city IN ( 'Midway', 'Fairview', 'Fairview',
-                                         'Fairview',
-                                         'Fairview' )
+                   AND date_dim.d_year IN ( {year}, {year} + 1, {year} + 2 )
+                   AND store.s_city IN ( {cities_str} )
             GROUP  BY ss_ticket_number,
                       ss_customer_sk,
                       ss_addr_sk,
@@ -66,6 +78,17 @@ def duckdb_impl(run_config: RunConfig) -> str:
 
 def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     """Query 46."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=46,
+        qualification=run_config.qualification,
+    )
+
+    year = params["year"]
+    hd_dep_count = params["hd_dep_count"]
+    hd_vehicle_count = params["hd_vehicle_count"]
+    cities = params["cities"]
+
     # Load tables
     store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
@@ -85,16 +108,19 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         .join(customer_address, left_on="ss_addr_sk", right_on="ca_address_sk")
         .filter(
             # Demographics filter (OR condition)
-            ((pl.col("hd_dep_count") == 6) | (pl.col("hd_vehicle_count") == 0))
+            (
+                (pl.col("hd_dep_count") == hd_dep_count)
+                | (pl.col("hd_vehicle_count") == hd_vehicle_count)
+            )
             &
             # Weekend filter (Saturday=6, Sunday=0)
             (pl.col("d_dow").is_in([6, 0]))
             &
             # Year filter
-            (pl.col("d_year").is_in([2000, 2001, 2002]))
+            (pl.col("d_year").is_in([year, year + 1, year + 2]))
             &
-            # City filter (Fairview appears multiple times in SQL, but unique values)
-            (pl.col("s_city").is_in(["Midway", "Fairview"]))
+            # City filter
+            (pl.col("s_city").is_in(cities))
         )
         .group_by(["ss_ticket_number", "ss_customer_sk", "ss_addr_sk", "ca_city"])
         .agg(

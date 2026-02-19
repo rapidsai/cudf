@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
 from cudf_polars.experimental.benchmarks.utils import get_data
 
 if TYPE_CHECKING:
@@ -17,7 +18,16 @@ if TYPE_CHECKING:
 
 def duckdb_impl(run_config: RunConfig) -> str:
     """Query 49."""
-    return """
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=49,
+        qualification=run_config.qualification,
+    )
+
+    year = params["year"]
+    month = params["month"]
+
+    return f"""
     SELECT 'web' AS channel,
                    web.item,
                    web.return_ratio,
@@ -55,8 +65,8 @@ def duckdb_impl(run_config: RunConfig) -> str:
                            AND ws.ws_net_paid > 0
                            AND ws.ws_quantity > 0
                            AND ws_sold_date_sk = d_date_sk
-                           AND d_year = 1999
-                           AND d_moy = 12
+                           AND d_year = {year}
+                           AND d_moy = {month}
                     GROUP  BY ws.ws_item_sk) in_web) web
     WHERE  ( web.return_rank <= 10
               OR web.currency_rank <= 10 )
@@ -98,8 +108,8 @@ def duckdb_impl(run_config: RunConfig) -> str:
                            AND cs.cs_net_paid > 0
                            AND cs.cs_quantity > 0
                            AND cs_sold_date_sk = d_date_sk
-                           AND d_year = 1999
-                           AND d_moy = 12
+                           AND d_year = {year}
+                           AND d_moy = {month}
                     GROUP  BY cs.cs_item_sk) in_cat) catalog
     WHERE  ( catalog.return_rank <= 10
               OR catalog.currency_rank <= 10 )
@@ -141,8 +151,8 @@ def duckdb_impl(run_config: RunConfig) -> str:
                            AND sts.ss_net_paid > 0
                            AND sts.ss_quantity > 0
                            AND ss_sold_date_sk = d_date_sk
-                           AND d_year = 1999
-                           AND d_moy = 12
+                           AND d_year = {year}
+                           AND d_moy = {month}
                     GROUP  BY sts.ss_item_sk) in_store) store
     WHERE  ( store.return_rank <= 10
               OR store.currency_rank <= 10 )
@@ -155,6 +165,15 @@ def duckdb_impl(run_config: RunConfig) -> str:
 
 def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     """Query 49."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=49,
+        qualification=run_config.qualification,
+    )
+
+    year = params["year"]
+    month = params["month"]
+
     # Load tables
     web_sales = get_data(run_config.dataset_path, "web_sales", run_config.suffix)
     web_returns = get_data(run_config.dataset_path, "web_returns", run_config.suffix)
@@ -183,8 +202,8 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
             & (pl.col("ws_net_profit") > 1)
             & (pl.col("ws_net_paid") > 0)
             & (pl.col("ws_quantity") > 0)
-            & (pl.col("d_year") == 1999)
-            & (pl.col("d_moy") == 12)
+            & (pl.col("d_year") == year)
+            & (pl.col("d_moy") == month)
         )
         .group_by("ws_item_sk")
         .agg(
@@ -241,8 +260,8 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
             & (pl.col("cs_net_profit") > 1)
             & (pl.col("cs_net_paid") > 0)
             & (pl.col("cs_quantity") > 0)
-            & (pl.col("d_year") == 1999)
-            & (pl.col("d_moy") == 12)
+            & (pl.col("d_year") == year)
+            & (pl.col("d_moy") == month)
         )
         .group_by("cs_item_sk")
         .agg(
@@ -302,8 +321,8 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
             & (pl.col("ss_net_profit") > 1)
             & (pl.col("ss_net_paid") > 0)
             & (pl.col("ss_quantity") > 0)
-            & (pl.col("d_year") == 1999)
-            & (pl.col("d_moy") == 12)
+            & (pl.col("d_year") == year)
+            & (pl.col("d_moy") == month)
         )
         .group_by("ss_item_sk")
         .agg(

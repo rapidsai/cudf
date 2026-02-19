@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
 from cudf_polars.experimental.benchmarks.utils import get_data
 
 if TYPE_CHECKING:
@@ -17,7 +18,15 @@ if TYPE_CHECKING:
 
 def duckdb_impl(run_config: RunConfig) -> str:
     """Query 44."""
-    return """
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=44,
+        qualification=run_config.qualification,
+    )
+
+    store_sk = params["store_sk"]
+
+    return f"""
     SELECT ascending.rnk,
                    i1.i_product_name best_performing,
                    i2.i_product_name worst_performing
@@ -29,13 +38,13 @@ def duckdb_impl(run_config: RunConfig) -> str:
                    FROM   (SELECT ss_item_sk         item_sk,
                                   Avg(ss_net_profit) rank_col
                            FROM   store_sales ss1
-                           WHERE  ss_store_sk = 4
+                           WHERE  ss_store_sk = {store_sk}
                            GROUP  BY ss_item_sk
                            HAVING Avg(ss_net_profit) > 0.9 *
                                   (SELECT Avg(ss_net_profit)
                                           rank_col
                                    FROM   store_sales
-                                   WHERE  ss_store_sk = 4
+                                   WHERE  ss_store_sk = {store_sk}
                                           AND ss_cdemo_sk IS
                                               NULL
                                    GROUP  BY ss_store_sk))V1)
@@ -49,13 +58,13 @@ def duckdb_impl(run_config: RunConfig) -> str:
                    FROM   (SELECT ss_item_sk         item_sk,
                                   Avg(ss_net_profit) rank_col
                            FROM   store_sales ss1
-                           WHERE  ss_store_sk = 4
+                           WHERE  ss_store_sk = {store_sk}
                            GROUP  BY ss_item_sk
                            HAVING Avg(ss_net_profit) > 0.9 *
                                   (SELECT Avg(ss_net_profit)
                                           rank_col
                                    FROM   store_sales
-                                   WHERE  ss_store_sk = 4
+                                   WHERE  ss_store_sk = {store_sk}
                                           AND ss_cdemo_sk IS
                                               NULL
                                    GROUP  BY ss_store_sk))V2)
@@ -73,14 +82,22 @@ def duckdb_impl(run_config: RunConfig) -> str:
 
 def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     """Query 44."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=44,
+        qualification=run_config.qualification,
+    )
+
+    store_sk = params["store_sk"]
+
     # Load tables
     store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
     item = get_data(run_config.dataset_path, "item", run_config.suffix)
 
-    # Step 1: Calculate benchmark (average profit for store 4 with null demographics)
+    # Step 1: Calculate benchmark (average profit for store with null demographics)
     benchmark = (
         store_sales.filter(
-            (pl.col("ss_store_sk") == 4) & (pl.col("ss_cdemo_sk").is_null())
+            (pl.col("ss_store_sk") == store_sk) & (pl.col("ss_cdemo_sk").is_null())
         )
         .group_by("ss_store_sk")
         .agg(
@@ -100,9 +117,9 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         .select("benchmark_profit")
     )
 
-    # Step 2: Calculate item-level average profits for store 4
+    # Step 2: Calculate item-level average profits for store
     item_profits = (
-        store_sales.filter(pl.col("ss_store_sk") == 4)
+        store_sales.filter(pl.col("ss_store_sk") == store_sk)
         .group_by("ss_item_sk")
         .agg(
             [

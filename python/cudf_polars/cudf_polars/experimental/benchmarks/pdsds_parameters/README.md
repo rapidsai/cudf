@@ -30,6 +30,15 @@ Pre-generated parameters for PDS-DS queries across a set of scale factors.
 - **Query 14**: `year`, `day` (day of month)
 - **Query 15**: `year`, `qoy` (quarter of year)
 - **Query 16**: `year`, `month`, `state`, `county` (list of 5 counties)
+- **Query 44**: `store_sk` (store key)
+- **Query 45**: `year`, `qoy` (quarter of year), `zip_codes` (list of 9 zip codes), `item_sks` (list of 10 item keys)
+- **Query 46**: `year`, `hd_dep_count` (household dependent count), `hd_vehicle_count` (household vehicle count), `cities` (list of cities)
+- **Query 47**: `year`
+- **Query 48**: `year`, `demographics` (list of 3 demographic rules with marital_status, education_status, price_min, price_max), `geography` (list of 3 geographic rules with states, profit_min, profit_max)
+- **Query 49**: `year`, `month`
+- **Query 50**: `year`, `month`
+- **Query 51**: `dms` (d_month_seq value)
+- **Query 52**: `year`, `month`, `manager_id`
 
 ## Usage
 

@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
 from cudf_polars.experimental.benchmarks.utils import get_data
 
 if TYPE_CHECKING:
@@ -17,7 +18,16 @@ if TYPE_CHECKING:
 
 def duckdb_impl(run_config: RunConfig) -> str:
     """Query 50."""
-    return """
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=50,
+        qualification=run_config.qualification,
+    )
+
+    year = params["year"]
+    month = params["month"]
+
+    return f"""
     SELECT s_store_name,
                    s_company_id,
                    s_street_number,
@@ -59,8 +69,8 @@ def duckdb_impl(run_config: RunConfig) -> str:
            store,
            date_dim d1,
            date_dim d2
-    WHERE  d2.d_year = 2002
-           AND d2.d_moy = 9
+    WHERE  d2.d_year = {year}
+           AND d2.d_moy = {month}
            AND ss_ticket_number = sr_ticket_number
            AND ss_item_sk = sr_item_sk
            AND ss_sold_date_sk = d1.d_date_sk
@@ -93,6 +103,15 @@ def duckdb_impl(run_config: RunConfig) -> str:
 
 def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     """Query 50."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=50,
+        qualification=run_config.qualification,
+    )
+
+    year = params["year"]
+    month = params["month"]
+
     # Load tables
     store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
     store_returns = get_data(
@@ -135,8 +154,8 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
             left_on="sr_returned_date_sk",
             right_on="d2_date_sk",
         )
-        # Filter for returns in 2002-09
-        .filter((pl.col("d2_year") == 2002) & (pl.col("d2_moy") == 9))
+        # Filter for returns in specified year and month
+        .filter((pl.col("d2_year") == year) & (pl.col("d2_moy") == month))
         # Pre-compute bucket indicator columns
         .with_columns(
             [

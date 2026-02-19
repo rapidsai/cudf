@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
 from cudf_polars.experimental.benchmarks.utils import get_data
 
 if TYPE_CHECKING:
@@ -17,7 +18,15 @@ if TYPE_CHECKING:
 
 def duckdb_impl(run_config: RunConfig) -> str:
     """Query 47."""
-    return """
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=47,
+        qualification=run_config.qualification,
+    )
+
+    year = params["year"]
+
+    return f"""
     WITH v1
          AS (SELECT i_category,
                     i_brand,
@@ -44,10 +53,10 @@ def duckdb_impl(run_config: RunConfig) -> str:
              WHERE  ss_item_sk = i_item_sk
                     AND ss_sold_date_sk = d_date_sk
                     AND ss_store_sk = s_store_sk
-                    AND ( d_year = 1999
-                           OR ( d_year = 1999 - 1
+                    AND ( d_year = {year}
+                           OR ( d_year = {year} - 1
                                 AND d_moy = 12 )
-                           OR ( d_year = 1999 + 1
+                           OR ( d_year = {year} + 1
                                 AND d_moy = 1 ) )
              GROUP  BY i_category,
                        i_brand,
@@ -78,7 +87,7 @@ def duckdb_impl(run_config: RunConfig) -> str:
                     AND v1.rn = v1_lead.rn - 1)
     SELECT *
     FROM   v2
-    WHERE  d_year = 1999
+    WHERE  d_year = {year}
            AND avg_monthly_sales > 0
            AND CASE
                  WHEN avg_monthly_sales > 0 THEN Abs(sum_sales - avg_monthly_sales)
@@ -94,6 +103,14 @@ def duckdb_impl(run_config: RunConfig) -> str:
 
 def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     """Query 47."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=47,
+        qualification=run_config.qualification,
+    )
+
+    year = params["year"]
+
     # Load tables
     item = get_data(run_config.dataset_path, "item", run_config.suffix)
     store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
@@ -105,10 +122,10 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         .join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
         .join(store, left_on="ss_store_sk", right_on="s_store_sk")
         .filter(
-            # Complex date filter: 1999 OR (1998 + Dec) OR (2000 + Jan)
-            (pl.col("d_year") == 1999)
-            | ((pl.col("d_year") == 1998) & (pl.col("d_moy") == 12))
-            | ((pl.col("d_year") == 2000) & (pl.col("d_moy") == 1))
+            # Complex date filter: year OR (year-1 + Dec) OR (year+1 + Jan)
+            (pl.col("d_year") == year)
+            | ((pl.col("d_year") == year - 1) & (pl.col("d_moy") == 12))
+            | ((pl.col("d_year") == year + 1) & (pl.col("d_moy") == 1))
         )
         .group_by(
             [
@@ -223,7 +240,7 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     # Step 3: Final query with filters and calculations
     return (
         v2.filter(
-            (pl.col("d_year") == 1999)
+            (pl.col("d_year") == year)
             & (pl.col("avg_monthly_sales") > 0)
             &
             # Percentage deviation > 10%

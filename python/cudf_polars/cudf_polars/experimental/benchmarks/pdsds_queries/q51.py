@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
 from cudf_polars.experimental.benchmarks.utils import get_data
 
 if TYPE_CHECKING:
@@ -17,7 +18,15 @@ if TYPE_CHECKING:
 
 def duckdb_impl(run_config: RunConfig) -> str:
     """Query 51."""
-    return """
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=51,
+        qualification=run_config.qualification,
+    )
+
+    dms = params["dms"]
+
+    return f"""
         WITH web_v1 AS
         (SELECT ws_item_sk item_sk,
                 d_date,
@@ -26,7 +35,7 @@ def duckdb_impl(run_config: RunConfig) -> str:
         FROM web_sales,
                 date_dim
         WHERE ws_sold_date_sk=d_date_sk
-            AND d_month_seq BETWEEN 1200 AND 1200+11
+            AND d_month_seq BETWEEN {dms} AND {dms}+11
             AND ws_item_sk IS NOT NULL
         GROUP BY ws_item_sk,
                     d_date),
@@ -38,7 +47,7 @@ def duckdb_impl(run_config: RunConfig) -> str:
         FROM store_sales,
                 date_dim
         WHERE ss_sold_date_sk=d_date_sk
-            AND d_month_seq BETWEEN 1200 AND 1200+11
+            AND d_month_seq BETWEEN {dms} AND {dms}+11
             AND ss_item_sk IS NOT NULL
         GROUP BY ss_item_sk,
                     d_date)
@@ -75,6 +84,14 @@ def duckdb_impl(run_config: RunConfig) -> str:
 
 def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     """Query 51."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=51,
+        qualification=run_config.qualification,
+    )
+
+    dms = params["dms"]
+
     web_sales = get_data(run_config.dataset_path, "web_sales", run_config.suffix)
     store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
@@ -83,7 +100,7 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     web_v1 = (
         web_sales.join(date_dim, left_on="ws_sold_date_sk", right_on="d_date_sk")
         .filter(
-            pl.col("d_month_seq").is_between(1200, 1200 + 11)
+            pl.col("d_month_seq").is_between(dms, dms + 11)
             & pl.col("ws_item_sk").is_not_null()
         )
         .group_by(["ws_item_sk", "d_date"])
@@ -105,7 +122,7 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     store_v1 = (
         store_sales.join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
         .filter(
-            pl.col("d_month_seq").is_between(1200, 1200 + 11)
+            pl.col("d_month_seq").is_between(dms, dms + 11)
             & pl.col("ss_item_sk").is_not_null()
         )
         .group_by(["ss_item_sk", "d_date"])
