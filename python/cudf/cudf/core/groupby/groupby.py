@@ -2763,6 +2763,14 @@ class GroupBy(Serializable, Reducible, Scannable):
             )
 
         combined.index = new_index
+
+        # If operating on a SeriesGroupBy, return a Series instead of
+        # a single-column DataFrame.
+        from cudf.core.series import Series
+
+        if isinstance(first, Series):
+            return combined.iloc[:, 0]
+
         return combined
 
     @_performance_tracking
