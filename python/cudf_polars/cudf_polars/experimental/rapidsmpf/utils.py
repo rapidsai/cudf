@@ -220,6 +220,8 @@ def get_partitioning_moduli(
     metadata: ChannelMetadata,
     key_indices: tuple[int, ...],
     nranks: int,
+    *,
+    allow_subset: bool = False,
 ) -> tuple[int, int | None]:
     """
     Get the moduli if data is hash partitioned on the given keys.
@@ -232,6 +234,11 @@ def get_partitioning_moduli(
         The column indices of the keys.
     nranks
         The number of ranks.
+    allow_subset
+        If True, treat partitioning as matching when the partitioning
+        key indices are a prefix of key_indices (e.g. partitioning on
+        (0,) matches key_indices (0, 1)). If False, the partitioning
+        keys must match key_indices exactly.
 
     Returns
     -------
@@ -257,7 +264,12 @@ def get_partitioning_moduli(
         inter_rank.modulus
         if (
             isinstance(inter_rank, HashScheme)
-            and inter_rank.column_indices == key_indices
+            and (
+                inter_rank.column_indices
+                == key_indices[: len(inter_rank.column_indices)]
+                if allow_subset
+                else inter_rank.column_indices == key_indices
+            )
         )
         else 0
     )
@@ -269,7 +281,14 @@ def get_partitioning_moduli(
     local = metadata.partitioning.local
     local_modulus = (
         local.modulus
-        if (isinstance(local, HashScheme) and local.column_indices == key_indices)
+        if (
+            isinstance(local, HashScheme)
+            and (
+                local.column_indices == key_indices[: len(local.column_indices)]
+                if allow_subset
+                else local.column_indices == key_indices
+            )
+        )
         else 0
     )
     if local_modulus != metadata.local_count:
