@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
 from cudf_polars.experimental.benchmarks.utils import get_data
 
 if TYPE_CHECKING:
@@ -17,7 +18,15 @@ if TYPE_CHECKING:
 
 def duckdb_impl(run_config: RunConfig) -> str:
     """Query 38."""
-    return """
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=38,
+        qualification=run_config.qualification,
+    )
+
+    dms = params["dms"]
+
+    return f"""
     SELECT Count(*)
     FROM   (SELECT DISTINCT c_last_name,
                             c_first_name,
@@ -27,7 +36,7 @@ def duckdb_impl(run_config: RunConfig) -> str:
                    customer
             WHERE  store_sales.ss_sold_date_sk = date_dim.d_date_sk
                    AND store_sales.ss_customer_sk = customer.c_customer_sk
-                   AND d_month_seq BETWEEN 1188 AND 1188 + 11
+                   AND d_month_seq BETWEEN {dms} AND {dms} + 11
             INTERSECT
             SELECT DISTINCT c_last_name,
                             c_first_name,
@@ -37,7 +46,7 @@ def duckdb_impl(run_config: RunConfig) -> str:
                    customer
             WHERE  catalog_sales.cs_sold_date_sk = date_dim.d_date_sk
                    AND catalog_sales.cs_bill_customer_sk = customer.c_customer_sk
-                   AND d_month_seq BETWEEN 1188 AND 1188 + 11
+                   AND d_month_seq BETWEEN {dms} AND {dms} + 11
             INTERSECT
             SELECT DISTINCT c_last_name,
                             c_first_name,
@@ -47,13 +56,21 @@ def duckdb_impl(run_config: RunConfig) -> str:
                    customer
             WHERE  web_sales.ws_sold_date_sk = date_dim.d_date_sk
                    AND web_sales.ws_bill_customer_sk = customer.c_customer_sk
-                   AND d_month_seq BETWEEN 1188 AND 1188 + 11) hot_cust
+                   AND d_month_seq BETWEEN {dms} AND {dms} + 11) hot_cust
     LIMIT 100;
     """
 
 
 def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     """Query 38."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=38,
+        qualification=run_config.qualification,
+    )
+
+    dms = params["dms"]
+
     # Load tables
     store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
     catalog_sales = get_data(
@@ -63,7 +80,7 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
     customer = get_data(run_config.dataset_path, "customer", run_config.suffix)
     # Filter date_dim for the specified month sequence range
-    date_filter = date_dim.filter(pl.col("d_month_seq").is_between(1188, 1188 + 11))
+    date_filter = date_dim.filter(pl.col("d_month_seq").is_between(dms, dms + 11))
     # Store sales customers with names and dates
     store_customers = (
         store_sales.join(date_filter, left_on="ss_sold_date_sk", right_on="d_date_sk")

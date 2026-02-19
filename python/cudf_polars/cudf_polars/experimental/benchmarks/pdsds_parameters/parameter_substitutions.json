@@ -523,6 +523,160 @@
           "Williamson County",
           "Williamson County"
         ]
+      },
+      "37": {
+        "price": 12,
+        "manufact": [
+          971,
+          695,
+          854,
+          709
+        ],
+        "invdate": "2001-04-23"
+      },
+      "38": {
+        "dms": 1176
+      },
+      "39": {
+        "year": 2002,
+        "month": 4
+      },
+      "40": {
+        "sales_date": "2002-03-20",
+        "year": 2002
+      },
+      "41": {
+        "manufact": 819,
+        "rules": [
+          {
+            "category": "Women",
+            "colors": [
+              "midnight",
+              "pale"
+            ],
+            "units": [
+              "Bundle",
+              "Case"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          },
+          {
+            "category": "Women",
+            "colors": [
+              "navy",
+              "navajo"
+            ],
+            "units": [
+              "Gross",
+              "Tsp"
+            ],
+            "sizes": [
+              "petite",
+              "N/A"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "sandy",
+              "cornsilk"
+            ],
+            "units": [
+              "Cup",
+              "Oz"
+            ],
+            "sizes": [
+              "economy",
+              "large"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "beige",
+              "bisque"
+            ],
+            "units": [
+              "Gram",
+              "Tbl"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          },
+          {
+            "category": "Women",
+            "colors": [
+              "thistle",
+              "brown"
+            ],
+            "units": [
+              "Unknown",
+              "Each"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          },
+          {
+            "category": "Women",
+            "colors": [
+              "almond",
+              "dodger"
+            ],
+            "units": [
+              "N/A",
+              "Carton"
+            ],
+            "sizes": [
+              "petite",
+              "N/A"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "lime",
+              "burlywood"
+            ],
+            "units": [
+              "Bunch",
+              "Pallet"
+            ],
+            "sizes": [
+              "economy",
+              "large"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "light",
+              "plum"
+            ],
+            "units": [
+              "Dram",
+              "Lb"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          }
+        ]
+      },
+      "42": {
+        "year": 2002,
+        "month": 12
+      },
+      "43": {
+        "year": 2002,
+        "gmt": -5.0
       }
     },
     "10": {
@@ -1047,6 +1201,160 @@
           "Walker County",
           "Ziebach County"
         ]
+      },
+      "37": {
+        "price": 12,
+        "manufact": [
+          971,
+          695,
+          854,
+          709
+        ],
+        "invdate": "2001-04-23"
+      },
+      "38": {
+        "dms": 1176
+      },
+      "39": {
+        "year": 2002,
+        "month": 4
+      },
+      "40": {
+        "sales_date": "2002-03-20",
+        "year": 2002
+      },
+      "41": {
+        "manufact": 819,
+        "rules": [
+          {
+            "category": "Women",
+            "colors": [
+              "midnight",
+              "pale"
+            ],
+            "units": [
+              "Bundle",
+              "Case"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          },
+          {
+            "category": "Women",
+            "colors": [
+              "navy",
+              "navajo"
+            ],
+            "units": [
+              "Gross",
+              "Tsp"
+            ],
+            "sizes": [
+              "petite",
+              "N/A"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "sandy",
+              "cornsilk"
+            ],
+            "units": [
+              "Cup",
+              "Oz"
+            ],
+            "sizes": [
+              "economy",
+              "large"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "beige",
+              "bisque"
+            ],
+            "units": [
+              "Gram",
+              "Tbl"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          },
+          {
+            "category": "Women",
+            "colors": [
+              "thistle",
+              "brown"
+            ],
+            "units": [
+              "Unknown",
+              "Each"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          },
+          {
+            "category": "Women",
+            "colors": [
+              "almond",
+              "dodger"
+            ],
+            "units": [
+              "N/A",
+              "Carton"
+            ],
+            "sizes": [
+              "petite",
+              "N/A"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "lime",
+              "burlywood"
+            ],
+            "units": [
+              "Bunch",
+              "Pallet"
+            ],
+            "sizes": [
+              "economy",
+              "large"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "light",
+              "plum"
+            ],
+            "units": [
+              "Dram",
+              "Lb"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          }
+        ]
+      },
+      "42": {
+        "year": 2002,
+        "month": 12
+      },
+      "43": {
+        "year": 2002,
+        "gmt": -6.0
       }
     },
     "50": {
@@ -1571,6 +1879,160 @@
           "Walker County",
           "Ziebach County"
         ]
+      },
+      "37": {
+        "price": 12,
+        "manufact": [
+          971,
+          695,
+          854,
+          709
+        ],
+        "invdate": "2001-04-23"
+      },
+      "38": {
+        "dms": 1176
+      },
+      "39": {
+        "year": 2002,
+        "month": 4
+      },
+      "40": {
+        "sales_date": "2002-03-20",
+        "year": 2002
+      },
+      "41": {
+        "manufact": 819,
+        "rules": [
+          {
+            "category": "Women",
+            "colors": [
+              "midnight",
+              "pale"
+            ],
+            "units": [
+              "Bundle",
+              "Case"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          },
+          {
+            "category": "Women",
+            "colors": [
+              "navy",
+              "navajo"
+            ],
+            "units": [
+              "Gross",
+              "Tsp"
+            ],
+            "sizes": [
+              "petite",
+              "N/A"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "sandy",
+              "cornsilk"
+            ],
+            "units": [
+              "Cup",
+              "Oz"
+            ],
+            "sizes": [
+              "economy",
+              "large"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "beige",
+              "bisque"
+            ],
+            "units": [
+              "Gram",
+              "Tbl"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          },
+          {
+            "category": "Women",
+            "colors": [
+              "thistle",
+              "brown"
+            ],
+            "units": [
+              "Unknown",
+              "Each"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          },
+          {
+            "category": "Women",
+            "colors": [
+              "almond",
+              "dodger"
+            ],
+            "units": [
+              "N/A",
+              "Carton"
+            ],
+            "sizes": [
+              "petite",
+              "N/A"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "lime",
+              "burlywood"
+            ],
+            "units": [
+              "Bunch",
+              "Pallet"
+            ],
+            "sizes": [
+              "economy",
+              "large"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "light",
+              "plum"
+            ],
+            "units": [
+              "Dram",
+              "Lb"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          }
+        ]
+      },
+      "42": {
+        "year": 2002,
+        "month": 12
+      },
+      "43": {
+        "year": 2002,
+        "gmt": -6.0
       }
     },
     "100": {
@@ -2095,6 +2557,160 @@
           "Daviess County",
           "Richland County"
         ]
+      },
+      "37": {
+        "price": 12,
+        "manufact": [
+          971,
+          695,
+          854,
+          709
+        ],
+        "invdate": "2001-04-23"
+      },
+      "38": {
+        "dms": 1176
+      },
+      "39": {
+        "year": 2002,
+        "month": 4
+      },
+      "40": {
+        "sales_date": "2002-03-20",
+        "year": 2002
+      },
+      "41": {
+        "manufact": 819,
+        "rules": [
+          {
+            "category": "Women",
+            "colors": [
+              "midnight",
+              "pale"
+            ],
+            "units": [
+              "Bundle",
+              "Case"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          },
+          {
+            "category": "Women",
+            "colors": [
+              "navy",
+              "navajo"
+            ],
+            "units": [
+              "Gross",
+              "Tsp"
+            ],
+            "sizes": [
+              "petite",
+              "N/A"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "sandy",
+              "cornsilk"
+            ],
+            "units": [
+              "Cup",
+              "Oz"
+            ],
+            "sizes": [
+              "economy",
+              "large"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "beige",
+              "bisque"
+            ],
+            "units": [
+              "Gram",
+              "Tbl"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          },
+          {
+            "category": "Women",
+            "colors": [
+              "thistle",
+              "brown"
+            ],
+            "units": [
+              "Unknown",
+              "Each"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          },
+          {
+            "category": "Women",
+            "colors": [
+              "almond",
+              "dodger"
+            ],
+            "units": [
+              "N/A",
+              "Carton"
+            ],
+            "sizes": [
+              "petite",
+              "N/A"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "lime",
+              "burlywood"
+            ],
+            "units": [
+              "Bunch",
+              "Pallet"
+            ],
+            "sizes": [
+              "economy",
+              "large"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "light",
+              "plum"
+            ],
+            "units": [
+              "Dram",
+              "Lb"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          }
+        ]
+      },
+      "42": {
+        "year": 2002,
+        "month": 12
+      },
+      "43": {
+        "year": 2002,
+        "gmt": -6.0
       }
     },
     "200": {
@@ -2619,6 +3235,160 @@
           "Walker County",
           "Ziebach County"
         ]
+      },
+      "37": {
+        "price": 12,
+        "manufact": [
+          971,
+          695,
+          854,
+          709
+        ],
+        "invdate": "2001-04-23"
+      },
+      "38": {
+        "dms": 1176
+      },
+      "39": {
+        "year": 2002,
+        "month": 4
+      },
+      "40": {
+        "sales_date": "2002-03-20",
+        "year": 2002
+      },
+      "41": {
+        "manufact": 819,
+        "rules": [
+          {
+            "category": "Women",
+            "colors": [
+              "midnight",
+              "pale"
+            ],
+            "units": [
+              "Bundle",
+              "Case"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          },
+          {
+            "category": "Women",
+            "colors": [
+              "navy",
+              "navajo"
+            ],
+            "units": [
+              "Gross",
+              "Tsp"
+            ],
+            "sizes": [
+              "petite",
+              "N/A"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "sandy",
+              "cornsilk"
+            ],
+            "units": [
+              "Cup",
+              "Oz"
+            ],
+            "sizes": [
+              "economy",
+              "large"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "beige",
+              "bisque"
+            ],
+            "units": [
+              "Gram",
+              "Tbl"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          },
+          {
+            "category": "Women",
+            "colors": [
+              "thistle",
+              "brown"
+            ],
+            "units": [
+              "Unknown",
+              "Each"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          },
+          {
+            "category": "Women",
+            "colors": [
+              "almond",
+              "dodger"
+            ],
+            "units": [
+              "N/A",
+              "Carton"
+            ],
+            "sizes": [
+              "petite",
+              "N/A"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "lime",
+              "burlywood"
+            ],
+            "units": [
+              "Bunch",
+              "Pallet"
+            ],
+            "sizes": [
+              "economy",
+              "large"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "light",
+              "plum"
+            ],
+            "units": [
+              "Dram",
+              "Lb"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          }
+        ]
+      },
+      "42": {
+        "year": 2002,
+        "month": 12
+      },
+      "43": {
+        "year": 2002,
+        "gmt": -5.0
       }
     },
     "400": {
@@ -3143,6 +3913,160 @@
           "Williamson County",
           "Ziebach County"
         ]
+      },
+      "37": {
+        "price": 12,
+        "manufact": [
+          971,
+          695,
+          854,
+          709
+        ],
+        "invdate": "2001-04-23"
+      },
+      "38": {
+        "dms": 1176
+      },
+      "39": {
+        "year": 2002,
+        "month": 4
+      },
+      "40": {
+        "sales_date": "2002-03-20",
+        "year": 2002
+      },
+      "41": {
+        "manufact": 819,
+        "rules": [
+          {
+            "category": "Women",
+            "colors": [
+              "midnight",
+              "pale"
+            ],
+            "units": [
+              "Bundle",
+              "Case"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          },
+          {
+            "category": "Women",
+            "colors": [
+              "navy",
+              "navajo"
+            ],
+            "units": [
+              "Gross",
+              "Tsp"
+            ],
+            "sizes": [
+              "petite",
+              "N/A"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "sandy",
+              "cornsilk"
+            ],
+            "units": [
+              "Cup",
+              "Oz"
+            ],
+            "sizes": [
+              "economy",
+              "large"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "beige",
+              "bisque"
+            ],
+            "units": [
+              "Gram",
+              "Tbl"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          },
+          {
+            "category": "Women",
+            "colors": [
+              "thistle",
+              "brown"
+            ],
+            "units": [
+              "Unknown",
+              "Each"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          },
+          {
+            "category": "Women",
+            "colors": [
+              "almond",
+              "dodger"
+            ],
+            "units": [
+              "N/A",
+              "Carton"
+            ],
+            "sizes": [
+              "petite",
+              "N/A"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "lime",
+              "burlywood"
+            ],
+            "units": [
+              "Bunch",
+              "Pallet"
+            ],
+            "sizes": [
+              "economy",
+              "large"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "light",
+              "plum"
+            ],
+            "units": [
+              "Dram",
+              "Lb"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          }
+        ]
+      },
+      "42": {
+        "year": 2002,
+        "month": 12
+      },
+      "43": {
+        "year": 2002,
+        "gmt": -6.0
       }
     },
     "1000": {
@@ -3667,6 +4591,160 @@
           "San Miguel County",
           "Oglethorpe County"
         ]
+      },
+      "37": {
+        "price": 12,
+        "manufact": [
+          971,
+          695,
+          854,
+          709
+        ],
+        "invdate": "2001-04-23"
+      },
+      "38": {
+        "dms": 1176
+      },
+      "39": {
+        "year": 2002,
+        "month": 4
+      },
+      "40": {
+        "sales_date": "2002-03-20",
+        "year": 2002
+      },
+      "41": {
+        "manufact": 819,
+        "rules": [
+          {
+            "category": "Women",
+            "colors": [
+              "midnight",
+              "pale"
+            ],
+            "units": [
+              "Bundle",
+              "Case"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          },
+          {
+            "category": "Women",
+            "colors": [
+              "navy",
+              "navajo"
+            ],
+            "units": [
+              "Gross",
+              "Tsp"
+            ],
+            "sizes": [
+              "petite",
+              "N/A"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "sandy",
+              "cornsilk"
+            ],
+            "units": [
+              "Cup",
+              "Oz"
+            ],
+            "sizes": [
+              "economy",
+              "large"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "beige",
+              "bisque"
+            ],
+            "units": [
+              "Gram",
+              "Tbl"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          },
+          {
+            "category": "Women",
+            "colors": [
+              "thistle",
+              "brown"
+            ],
+            "units": [
+              "Unknown",
+              "Each"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          },
+          {
+            "category": "Women",
+            "colors": [
+              "almond",
+              "dodger"
+            ],
+            "units": [
+              "N/A",
+              "Carton"
+            ],
+            "sizes": [
+              "petite",
+              "N/A"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "lime",
+              "burlywood"
+            ],
+            "units": [
+              "Bunch",
+              "Pallet"
+            ],
+            "sizes": [
+              "economy",
+              "large"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "light",
+              "plum"
+            ],
+            "units": [
+              "Dram",
+              "Lb"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          }
+        ]
+      },
+      "42": {
+        "year": 2002,
+        "month": 12
+      },
+      "43": {
+        "year": 2002,
+        "gmt": -6.0
       }
     },
     "3000": {
@@ -4191,6 +5269,160 @@
           "Williamson County",
           "Marshall County"
         ]
+      },
+      "37": {
+        "price": 12,
+        "manufact": [
+          971,
+          695,
+          854,
+          709
+        ],
+        "invdate": "2001-04-23"
+      },
+      "38": {
+        "dms": 1176
+      },
+      "39": {
+        "year": 2002,
+        "month": 4
+      },
+      "40": {
+        "sales_date": "2002-03-20",
+        "year": 2002
+      },
+      "41": {
+        "manufact": 819,
+        "rules": [
+          {
+            "category": "Women",
+            "colors": [
+              "midnight",
+              "pale"
+            ],
+            "units": [
+              "Bundle",
+              "Case"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          },
+          {
+            "category": "Women",
+            "colors": [
+              "navy",
+              "navajo"
+            ],
+            "units": [
+              "Gross",
+              "Tsp"
+            ],
+            "sizes": [
+              "petite",
+              "N/A"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "sandy",
+              "cornsilk"
+            ],
+            "units": [
+              "Cup",
+              "Oz"
+            ],
+            "sizes": [
+              "economy",
+              "large"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "beige",
+              "bisque"
+            ],
+            "units": [
+              "Gram",
+              "Tbl"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          },
+          {
+            "category": "Women",
+            "colors": [
+              "thistle",
+              "brown"
+            ],
+            "units": [
+              "Unknown",
+              "Each"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          },
+          {
+            "category": "Women",
+            "colors": [
+              "almond",
+              "dodger"
+            ],
+            "units": [
+              "N/A",
+              "Carton"
+            ],
+            "sizes": [
+              "petite",
+              "N/A"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "lime",
+              "burlywood"
+            ],
+            "units": [
+              "Bunch",
+              "Pallet"
+            ],
+            "sizes": [
+              "economy",
+              "large"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "light",
+              "plum"
+            ],
+            "units": [
+              "Dram",
+              "Lb"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          }
+        ]
+      },
+      "42": {
+        "year": 2002,
+        "month": 12
+      },
+      "43": {
+        "year": 2002,
+        "gmt": -6.0
       }
     },
     "10000": {
@@ -4715,6 +5947,160 @@
           "Levy County",
           "Richland County"
         ]
+      },
+      "37": {
+        "price": 12,
+        "manufact": [
+          971,
+          695,
+          854,
+          709
+        ],
+        "invdate": "2001-04-23"
+      },
+      "38": {
+        "dms": 1176
+      },
+      "39": {
+        "year": 2002,
+        "month": 4
+      },
+      "40": {
+        "sales_date": "2002-03-20",
+        "year": 2002
+      },
+      "41": {
+        "manufact": 819,
+        "rules": [
+          {
+            "category": "Women",
+            "colors": [
+              "midnight",
+              "pale"
+            ],
+            "units": [
+              "Bundle",
+              "Case"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          },
+          {
+            "category": "Women",
+            "colors": [
+              "navy",
+              "navajo"
+            ],
+            "units": [
+              "Gross",
+              "Tsp"
+            ],
+            "sizes": [
+              "petite",
+              "N/A"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "sandy",
+              "cornsilk"
+            ],
+            "units": [
+              "Cup",
+              "Oz"
+            ],
+            "sizes": [
+              "economy",
+              "large"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "beige",
+              "bisque"
+            ],
+            "units": [
+              "Gram",
+              "Tbl"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          },
+          {
+            "category": "Women",
+            "colors": [
+              "thistle",
+              "brown"
+            ],
+            "units": [
+              "Unknown",
+              "Each"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          },
+          {
+            "category": "Women",
+            "colors": [
+              "almond",
+              "dodger"
+            ],
+            "units": [
+              "N/A",
+              "Carton"
+            ],
+            "sizes": [
+              "petite",
+              "N/A"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "lime",
+              "burlywood"
+            ],
+            "units": [
+              "Bunch",
+              "Pallet"
+            ],
+            "sizes": [
+              "economy",
+              "large"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "light",
+              "plum"
+            ],
+            "units": [
+              "Dram",
+              "Lb"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          }
+        ]
+      },
+      "42": {
+        "year": 2002,
+        "month": 12
+      },
+      "43": {
+        "year": 2002,
+        "gmt": -5.0
       }
     },
     "30000": {
@@ -5239,6 +6625,160 @@
           "Barrow County",
           "Perry County"
         ]
+      },
+      "37": {
+        "price": 12,
+        "manufact": [
+          971,
+          695,
+          854,
+          709
+        ],
+        "invdate": "2001-04-23"
+      },
+      "38": {
+        "dms": 1176
+      },
+      "39": {
+        "year": 2002,
+        "month": 4
+      },
+      "40": {
+        "sales_date": "2002-03-20",
+        "year": 2002
+      },
+      "41": {
+        "manufact": 819,
+        "rules": [
+          {
+            "category": "Women",
+            "colors": [
+              "midnight",
+              "pale"
+            ],
+            "units": [
+              "Bundle",
+              "Case"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          },
+          {
+            "category": "Women",
+            "colors": [
+              "navy",
+              "navajo"
+            ],
+            "units": [
+              "Gross",
+              "Tsp"
+            ],
+            "sizes": [
+              "petite",
+              "N/A"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "sandy",
+              "cornsilk"
+            ],
+            "units": [
+              "Cup",
+              "Oz"
+            ],
+            "sizes": [
+              "economy",
+              "large"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "beige",
+              "bisque"
+            ],
+            "units": [
+              "Gram",
+              "Tbl"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          },
+          {
+            "category": "Women",
+            "colors": [
+              "thistle",
+              "brown"
+            ],
+            "units": [
+              "Unknown",
+              "Each"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          },
+          {
+            "category": "Women",
+            "colors": [
+              "almond",
+              "dodger"
+            ],
+            "units": [
+              "N/A",
+              "Carton"
+            ],
+            "sizes": [
+              "petite",
+              "N/A"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "lime",
+              "burlywood"
+            ],
+            "units": [
+              "Bunch",
+              "Pallet"
+            ],
+            "sizes": [
+              "economy",
+              "large"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "light",
+              "plum"
+            ],
+            "units": [
+              "Dram",
+              "Lb"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          }
+        ]
+      },
+      "42": {
+        "year": 2002,
+        "month": 12
+      },
+      "43": {
+        "year": 2002,
+        "gmt": -6.0
       }
     },
     "100000": {
@@ -5763,6 +7303,160 @@
           "Barrow County",
           "Perry County"
         ]
+      },
+      "37": {
+        "price": 12,
+        "manufact": [
+          971,
+          695,
+          854,
+          709
+        ],
+        "invdate": "2001-04-23"
+      },
+      "38": {
+        "dms": 1176
+      },
+      "39": {
+        "year": 2002,
+        "month": 4
+      },
+      "40": {
+        "sales_date": "2002-03-20",
+        "year": 2002
+      },
+      "41": {
+        "manufact": 819,
+        "rules": [
+          {
+            "category": "Women",
+            "colors": [
+              "midnight",
+              "pale"
+            ],
+            "units": [
+              "Bundle",
+              "Case"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          },
+          {
+            "category": "Women",
+            "colors": [
+              "navy",
+              "navajo"
+            ],
+            "units": [
+              "Gross",
+              "Tsp"
+            ],
+            "sizes": [
+              "petite",
+              "N/A"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "sandy",
+              "cornsilk"
+            ],
+            "units": [
+              "Cup",
+              "Oz"
+            ],
+            "sizes": [
+              "economy",
+              "large"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "beige",
+              "bisque"
+            ],
+            "units": [
+              "Gram",
+              "Tbl"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          },
+          {
+            "category": "Women",
+            "colors": [
+              "thistle",
+              "brown"
+            ],
+            "units": [
+              "Unknown",
+              "Each"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          },
+          {
+            "category": "Women",
+            "colors": [
+              "almond",
+              "dodger"
+            ],
+            "units": [
+              "N/A",
+              "Carton"
+            ],
+            "sizes": [
+              "petite",
+              "N/A"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "lime",
+              "burlywood"
+            ],
+            "units": [
+              "Bunch",
+              "Pallet"
+            ],
+            "sizes": [
+              "economy",
+              "large"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "light",
+              "plum"
+            ],
+            "units": [
+              "Dram",
+              "Lb"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          }
+        ]
+      },
+      "42": {
+        "year": 2002,
+        "month": 12
+      },
+      "43": {
+        "year": 2002,
+        "gmt": -5.0
       }
     },
     "qualification": {
@@ -6281,6 +7975,160 @@
           "Williamson County",
           "Williamson County"
         ]
+      },
+      "37": {
+        "price": 68,
+        "manufact": [
+          677,
+          940,
+          694,
+          808
+        ],
+        "invdate": "2000-02-01"
+      },
+      "38": {
+        "dms": 1200
+      },
+      "39": {
+        "year": 2001,
+        "month": 1
+      },
+      "40": {
+        "sales_date": "2000-03-11",
+        "year": 2000
+      },
+      "41": {
+        "manufact": 738,
+        "rules": [
+          {
+            "category": "Women",
+            "colors": [
+              "powder",
+              "khaki"
+            ],
+            "units": [
+              "Ounce",
+              "Oz"
+            ],
+            "sizes": [
+              "medium",
+              "extra large"
+            ]
+          },
+          {
+            "category": "Women",
+            "colors": [
+              "brown",
+              "honeydew"
+            ],
+            "units": [
+              "Bunch",
+              "Ton"
+            ],
+            "sizes": [
+              "N/A",
+              "small"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "floral",
+              "deep"
+            ],
+            "units": [
+              "N/A",
+              "Dozen"
+            ],
+            "sizes": [
+              "petite",
+              "large"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "light",
+              "cornflower"
+            ],
+            "units": [
+              "Box",
+              "Pound"
+            ],
+            "sizes": [
+              "medium",
+              "extra large"
+            ]
+          },
+          {
+            "category": "Women",
+            "colors": [
+              "midnight",
+              "snow"
+            ],
+            "units": [
+              "Pallet",
+              "Gross"
+            ],
+            "sizes": [
+              "medium",
+              "extra large"
+            ]
+          },
+          {
+            "category": "Women",
+            "colors": [
+              "cyan",
+              "papaya"
+            ],
+            "units": [
+              "Cup",
+              "Dram"
+            ],
+            "sizes": [
+              "N/A",
+              "small"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "orange",
+              "frosted"
+            ],
+            "units": [
+              "Each",
+              "Tbl"
+            ],
+            "sizes": [
+              "petite",
+              "large"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "forest",
+              "ghost"
+            ],
+            "units": [
+              "Lb",
+              "Bundle"
+            ],
+            "sizes": [
+              "medium",
+              "extra large"
+            ]
+          }
+        ]
+      },
+      "42": {
+        "month": 11,
+        "year": 2000
+      },
+      "43": {
+        "year": 2000,
+        "gmt": -5.0
       }
     }
   }

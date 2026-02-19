@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
 from cudf_polars.experimental.benchmarks.utils import get_data
 
 if TYPE_CHECKING:
@@ -17,7 +18,16 @@ if TYPE_CHECKING:
 
 def duckdb_impl(run_config: RunConfig) -> str:
     """Query 39."""
-    return """
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=39,
+        qualification=run_config.qualification,
+    )
+
+    year = params["year"]
+    month = params["month"]
+
+    return f"""
         WITH inv AS
         (SELECT w_warehouse_name,
                 w_warehouse_sk,
@@ -43,7 +53,7 @@ def duckdb_impl(run_config: RunConfig) -> str:
             WHERE inv_item_sk = i_item_sk
                 AND inv_warehouse_sk = w_warehouse_sk
                 AND inv_date_sk = d_date_sk
-                AND d_year =2001
+                AND d_year ={year}
             GROUP BY w_warehouse_name,
                     w_warehouse_sk,
                     i_item_sk,
@@ -66,8 +76,8 @@ def duckdb_impl(run_config: RunConfig) -> str:
             inv inv2
         WHERE inv1.i_item_sk = inv2.i_item_sk
         AND inv1.w_warehouse_sk = inv2.w_warehouse_sk
-        AND inv1.d_moy=1
-        AND inv2.d_moy=1+1
+        AND inv1.d_moy={month}
+        AND inv2.d_moy={month}+1
         ORDER BY inv1.w_warehouse_sk NULLS FIRST,
                 inv1.i_item_sk NULLS FIRST,
                 inv1.d_moy NULLS FIRST,
@@ -81,6 +91,15 @@ def duckdb_impl(run_config: RunConfig) -> str:
 
 def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     """Query 39."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=39,
+        qualification=run_config.qualification,
+    )
+
+    year = params["year"]
+    month = params["month"]
+
     inventory = get_data(run_config.dataset_path, "inventory", run_config.suffix)
     item = get_data(run_config.dataset_path, "item", run_config.suffix)
     warehouse = get_data(run_config.dataset_path, "warehouse", run_config.suffix)
@@ -90,7 +109,7 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         inventory.join(item, left_on="inv_item_sk", right_on="i_item_sk")
         .join(warehouse, left_on="inv_warehouse_sk", right_on="w_warehouse_sk")
         .join(date_dim, left_on="inv_date_sk", right_on="d_date_sk")
-        .filter(pl.col("d_year") == 2001)
+        .filter(pl.col("d_year") == year)
         .group_by(["w_warehouse_name", "inv_warehouse_sk", "inv_item_sk", "d_moy"])
         .agg(
             [
@@ -111,7 +130,7 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         .otherwise(pl.col("stdev") / pl.col("mean") > 1.0)
     )
 
-    inv1 = inv_cte.filter(pl.col("d_moy") == 1).select(
+    inv1 = inv_cte.filter(pl.col("d_moy") == month).select(
         [
             pl.col("inv_warehouse_sk").alias("w_warehouse_sk"),
             pl.col("inv_item_sk").alias("i_item_sk"),
@@ -122,7 +141,7 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     )
 
     inv2 = (
-        inv_cte.filter(pl.col("d_moy") == 2)
+        inv_cte.filter(pl.col("d_moy") == month + 1)
         .select(
             [
                 "inv_warehouse_sk",

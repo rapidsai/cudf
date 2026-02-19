@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
 from cudf_polars.experimental.benchmarks.utils import get_data
 
 if TYPE_CHECKING:
@@ -17,7 +18,16 @@ if TYPE_CHECKING:
 
 def duckdb_impl(run_config: RunConfig) -> str:
     """Query 42."""
-    return """
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=42,
+        qualification=run_config.qualification,
+    )
+
+    year = params["year"]
+    month = params["month"]
+
+    return f"""
     SELECT dt.d_year,
                    item.i_category_id,
                    item.i_category,
@@ -28,8 +38,8 @@ def duckdb_impl(run_config: RunConfig) -> str:
     WHERE  dt.d_date_sk = store_sales.ss_sold_date_sk
            AND store_sales.ss_item_sk = item.i_item_sk
            AND item.i_manager_id = 1
-           AND dt.d_moy = 12
-           AND dt.d_year = 2000
+           AND dt.d_moy = {month}
+           AND dt.d_year = {year}
     GROUP  BY dt.d_year,
               item.i_category_id,
               item.i_category
@@ -43,6 +53,15 @@ def duckdb_impl(run_config: RunConfig) -> str:
 
 def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     """Query 42."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=42,
+        qualification=run_config.qualification,
+    )
+
+    year = params["year"]
+    month = params["month"]
+
     # Load tables
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
     store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
@@ -52,8 +71,8 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         .join(item, left_on="ss_item_sk", right_on="i_item_sk")
         .filter(
             (pl.col("i_manager_id") == 1)
-            & (pl.col("d_moy") == 12)
-            & (pl.col("d_year") == 2000)
+            & (pl.col("d_moy") == month)
+            & (pl.col("d_year") == year)
         )
         .group_by(["d_year", "i_category_id", "i_category"])
         .agg([pl.col("ss_ext_sales_price").sum().alias("sum(ss_ext_sales_price)")])

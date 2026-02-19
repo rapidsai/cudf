@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
 from cudf_polars.experimental.benchmarks.utils import get_data
 
 if TYPE_CHECKING:
@@ -23,100 +24,71 @@ MANUFACTURER_ID_START = 765
 
 def duckdb_impl(run_config: RunConfig) -> str:
     """Query 41."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=41,
+        qualification=run_config.qualification,
+    )
+
+    manufact = params["manufact"]
+    rules = params["rules"]
+
     return f"""
     SELECT Distinct(i_product_name)
     FROM   item i1
-    WHERE  i_manufact_id BETWEEN {MANUFACTURER_ID_START} AND {MANUFACTURER_ID_START} + 40
+    WHERE  i_manufact_id BETWEEN {manufact} AND {manufact} + 40
         AND (SELECT Count(*) AS item_cnt
                 FROM   item
                 WHERE  ( i_manufact = i1.i_manufact
-                        AND ( ( i_category = 'Women'
-                                AND ( i_color = 'dim'
-                                        OR i_color = 'green' )
-                                AND ( i_units = 'Gross'
-                                        OR i_units = 'Dozen' )
-                                AND ( i_size = 'economy'
-                                        OR i_size = 'petite' ) )
-                                OR ( i_category = 'Women'
-                                    AND ( i_color = 'navajo'
-                                            OR i_color = 'aquamarine' )
-                                    AND ( i_units = 'Case'
-                                            OR i_units = 'Unknown' )
-                                    AND ( i_size = 'large'
-                                            OR i_size = 'N/A' ) )
-                                OR ( i_category = 'Men'
-                                    AND ( i_color = 'indian'
-                                            OR i_color = 'dark' )
-                                    AND ( i_units = 'Oz'
-                                            OR i_units = 'Lb' )
-                                    AND ( i_size = 'extra large'
-                                            OR i_size = 'small' ) )
-                                OR ( i_category = 'Men'
-                                    AND ( i_color = 'peach'
-                                            OR i_color = 'purple' )
-                                    AND ( i_units = 'Tbl'
-                                            OR i_units = 'Bunch' )
-                                    AND ( i_size = 'economy'
-                                            OR i_size = 'petite' ) ) ) )
+                        AND ( {
+        " or\n        ".join(
+            [
+                f"(i_category = '{rules[0]['category']}' and (i_color = '{rules[0]['colors'][0]}' or i_color = '{rules[0]['colors'][1]}') and (i_units = '{rules[0]['units'][0]}' or i_units = '{rules[0]['units'][1]}') and (i_size = '{rules[0]['sizes'][0]}' or i_size = '{rules[0]['sizes'][1]}'))",
+                f"(i_category = '{rules[1]['category']}' and (i_color = '{rules[1]['colors'][0]}' or i_color = '{rules[1]['colors'][1]}') and (i_units = '{rules[1]['units'][0]}' or i_units = '{rules[1]['units'][1]}') and (i_size = '{rules[1]['sizes'][0]}' or i_size = '{rules[1]['sizes'][1]}'))",
+                f"(i_category = '{rules[2]['category']}' and (i_color = '{rules[2]['colors'][0]}' or i_color = '{rules[2]['colors'][1]}') and (i_units = '{rules[2]['units'][0]}' or i_units = '{rules[2]['units'][1]}') and (i_size = '{rules[2]['sizes'][0]}' or i_size = '{rules[2]['sizes'][1]}'))",
+                f"(i_category = '{rules[3]['category']}' and (i_color = '{rules[3]['colors'][0]}' or i_color = '{rules[3]['colors'][1]}') and (i_units = '{rules[3]['units'][0]}' or i_units = '{rules[3]['units'][1]}') and (i_size = '{rules[3]['sizes'][0]}' or i_size = '{rules[3]['sizes'][1]}'))",
+            ]
+        )
+    } ) )
                         OR ( i_manufact = i1.i_manufact
-                            AND ( ( i_category = 'Women'
-                                    AND ( i_color = 'orchid'
-                                            OR i_color = 'peru' )
-                                    AND ( i_units = 'Carton'
-                                            OR i_units = 'Cup' )
-                                    AND ( i_size = 'economy'
-                                            OR i_size = 'petite' ) )
-                                    OR ( i_category = 'Women'
-                                        AND ( i_color = 'violet'
-                                                OR i_color = 'papaya' )
-                                        AND ( i_units = 'Ounce'
-                                                OR i_units = 'Box' )
-                                        AND ( i_size = 'large'
-                                                OR i_size = 'N/A' ) )
-                                    OR ( i_category = 'Men'
-                                        AND ( i_color = 'drab'
-                                                OR i_color = 'grey' )
-                                        AND ( i_units = 'Each'
-                                                OR i_units = 'N/A' )
-                                        AND ( i_size = 'extra large'
-                                                OR i_size = 'small' ) )
-                                    OR ( i_category = 'Men'
-                                        AND ( i_color = 'chocolate'
-                                                OR i_color = 'antique' )
-                                        AND ( i_units = 'Dram'
-                                                OR i_units = 'Gram' )
-                                        AND ( i_size = 'economy'
-                                                OR i_size = 'petite' ) ) ) )) > 0
+                            AND ( {
+        " or\n        ".join(
+            [
+                f"(i_category = '{rules[4]['category']}' and (i_color = '{rules[4]['colors'][0]}' or i_color = '{rules[4]['colors'][1]}') and (i_units = '{rules[4]['units'][0]}' or i_units = '{rules[4]['units'][1]}') and (i_size = '{rules[4]['sizes'][0]}' or i_size = '{rules[4]['sizes'][1]}'))",
+                f"(i_category = '{rules[5]['category']}' and (i_color = '{rules[5]['colors'][0]}' or i_color = '{rules[5]['colors'][1]}') and (i_units = '{rules[5]['units'][0]}' or i_units = '{rules[5]['units'][1]}') and (i_size = '{rules[5]['sizes'][0]}' or i_size = '{rules[5]['sizes'][1]}'))",
+                f"(i_category = '{rules[6]['category']}' and (i_color = '{rules[6]['colors'][0]}' or i_color = '{rules[6]['colors'][1]}') and (i_units = '{rules[6]['units'][0]}' or i_units = '{rules[6]['units'][1]}') and (i_size = '{rules[6]['sizes'][0]}' or i_size = '{rules[6]['sizes'][1]}'))",
+                f"(i_category = '{rules[7]['category']}' and (i_color = '{rules[7]['colors'][0]}' or i_color = '{rules[7]['colors'][1]}') and (i_units = '{rules[7]['units'][0]}' or i_units = '{rules[7]['units'][1]}') and (i_size = '{rules[7]['sizes'][0]}' or i_size = '{rules[7]['sizes'][1]}'))",
+            ]
+        )
+    } ) )) > 0
     ORDER  BY i_product_name
     LIMIT 100;
 
     """
 
 
-rules: list[tuple[str, list[str], list[str], list[str]]] = [
-    ("Women", ["dim", "green"], ["Gross", "Dozen"], ["economy", "petite"]),
-    ("Women", ["navajo", "aquamarine"], ["Case", "Unknown"], ["large", "N/A"]),
-    ("Men", ["indian", "dark"], ["Oz", "Lb"], ["extra large", "small"]),
-    ("Men", ["peach", "purple"], ["Tbl", "Bunch"], ["economy", "petite"]),
-    ("Women", ["orchid", "peru"], ["Carton", "Cup"], ["economy", "petite"]),
-    ("Women", ["violet", "papaya"], ["Ounce", "Box"], ["large", "N/A"]),
-    ("Men", ["drab", "grey"], ["Each", "N/A"], ["extra large", "small"]),
-    ("Men", ["chocolate", "antique"], ["Dram", "Gram"], ["economy", "petite"]),
-]
-
-
 def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     """Query 41."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=41,
+        qualification=run_config.qualification,
+    )
+
+    manufact = params["manufact"]
+    rules = params["rules"]
+
     item = get_data(run_config.dataset_path, "item", run_config.suffix)
 
+    # Convert rules from dict format to tuple format and build expressions
     rule_exprs = [
         (
-            (pl.col("i_category") == cat)
-            & pl.col("i_color").is_in(colors)
-            & pl.col("i_units").is_in(units)
-            & pl.col("i_size").is_in(sizes)
+            (pl.col("i_category") == rule["category"])
+            & pl.col("i_color").is_in(rule["colors"])
+            & pl.col("i_units").is_in(rule["units"])
+            & pl.col("i_size").is_in(rule["sizes"])
         )
-        for (cat, colors, units, sizes) in rules
+        for rule in rules
     ]
     subquery_conditions = reduce(op.or_, rule_exprs)
 
@@ -125,11 +97,7 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     )
 
     return (
-        item.filter(
-            pl.col("i_manufact_id").is_between(
-                MANUFACTURER_ID_START, MANUFACTURER_ID_START + 40
-            )
-        )
+        item.filter(pl.col("i_manufact_id").is_between(manufact, manufact + 40))
         .join(manufacturers_with_criteria, on="i_manufact", how="inner")
         .select("i_product_name")
         .unique()

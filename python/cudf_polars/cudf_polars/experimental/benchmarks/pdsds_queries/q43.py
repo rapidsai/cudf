@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
 from cudf_polars.experimental.benchmarks.utils import get_data
 
 if TYPE_CHECKING:
@@ -17,7 +18,16 @@ if TYPE_CHECKING:
 
 def duckdb_impl(run_config: RunConfig) -> str:
     """Query 43."""
-    return """
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=43,
+        qualification=run_config.qualification,
+    )
+
+    year = params["year"]
+    gmt = params["gmt"]
+
+    return f"""
     SELECT s_store_name,
                    s_store_id,
                    Sum(CASE
@@ -53,8 +63,8 @@ def duckdb_impl(run_config: RunConfig) -> str:
            store
     WHERE  d_date_sk = ss_sold_date_sk
            AND s_store_sk = ss_store_sk
-           AND s_gmt_offset = -5
-           AND d_year = 2002
+           AND s_gmt_offset = {gmt}
+           AND d_year = {year}
     GROUP  BY s_store_name,
               s_store_id
     ORDER  BY s_store_name,
@@ -72,6 +82,15 @@ def duckdb_impl(run_config: RunConfig) -> str:
 
 def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     """Query 43."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=43,
+        qualification=run_config.qualification,
+    )
+
+    year = params["year"]
+    gmt = params["gmt"]
+
     # Load tables
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
     store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
@@ -80,7 +99,7 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     return (
         store_sales.join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
         .join(store, left_on="ss_store_sk", right_on="s_store_sk")
-        .filter((pl.col("s_gmt_offset") == -5) & (pl.col("d_year") == 2002))
+        .filter((pl.col("s_gmt_offset") == gmt) & (pl.col("d_year") == year))
         .with_columns(
             [
                 # Pre-compute conditional sales amounts for each day

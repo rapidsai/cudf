@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
 from cudf_polars.experimental.benchmarks.utils import get_data
 
 if TYPE_CHECKING:
@@ -17,20 +18,28 @@ if TYPE_CHECKING:
 
 def duckdb_impl(run_config: RunConfig) -> str:
     """Query 40."""
-    return """
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=40,
+        qualification=run_config.qualification,
+    )
+
+    sales_date = params["sales_date"]
+
+    return f"""
     SELECT
                     w_state ,
                     i_item_id ,
                     Sum(
                     CASE
                                     WHEN (
-                                                                    Cast(d_date AS DATE) < Cast ('2002-06-01' AS DATE)) THEN cs_sales_price - COALESCE(cr_refunded_cash,0)
+                                                                    Cast(d_date AS DATE) < Cast ('{sales_date}' AS DATE)) THEN cs_sales_price - COALESCE(cr_refunded_cash,0)
                                     ELSE 0
                     END) AS sales_before ,
                     Sum(
                     CASE
                                     WHEN (
-                                                                    Cast(d_date AS DATE) >= Cast ('2002-06-01' AS DATE)) THEN cs_sales_price - COALESCE(cr_refunded_cash,0)
+                                                                    Cast(d_date AS DATE) >= Cast ('{sales_date}' AS DATE)) THEN cs_sales_price - COALESCE(cr_refunded_cash,0)
                                     ELSE 0
                     END) AS sales_after
     FROM            catalog_sales
@@ -45,8 +54,8 @@ def duckdb_impl(run_config: RunConfig) -> str:
     AND             i_item_sk = cs_item_sk
     AND             cs_warehouse_sk = w_warehouse_sk
     AND             cs_sold_date_sk = d_date_sk
-    AND             d_date BETWEEN (Cast ('2002-06-01' AS DATE) - INTERVAL '30' day) AND             (
-                                    cast ('2002-06-01' AS date) + INTERVAL '30' day)
+    AND             d_date BETWEEN (Cast ('{sales_date}' AS DATE) - INTERVAL '30' day) AND             (
+                                    cast ('{sales_date}' AS date) + INTERVAL '30' day)
     GROUP BY        w_state,
                     i_item_id
     ORDER BY        w_state,
@@ -57,6 +66,25 @@ def duckdb_impl(run_config: RunConfig) -> str:
 
 def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     """Query 40."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=40,
+        qualification=run_config.qualification,
+    )
+
+    sales_date = params["sales_date"]
+
+    # Parse and calculate dates
+    from datetime import datetime, timedelta
+
+    sales_date_obj = datetime.strptime(sales_date, "%Y-%m-%d")
+    start_date_obj = sales_date_obj - timedelta(days=30)
+    end_date_obj = sales_date_obj + timedelta(days=30)
+
+    target_date = pl.date(sales_date_obj.year, sales_date_obj.month, sales_date_obj.day)
+    start_date = pl.date(start_date_obj.year, start_date_obj.month, start_date_obj.day)
+    end_date = pl.date(end_date_obj.year, end_date_obj.month, end_date_obj.day)
+
     # Load tables
     catalog_sales = get_data(
         run_config.dataset_path, "catalog_sales", run_config.suffix
@@ -68,9 +96,6 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     item = get_data(run_config.dataset_path, "item", run_config.suffix)
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
     # Define the target date and date range
-    target_date = pl.date(2002, 6, 1)
-    start_date = pl.date(2002, 5, 2)  # 2002-06-01 - 30 days
-    end_date = pl.date(2002, 7, 1)  # 2002-06-01 + 30 days
     return (
         catalog_sales.join(
             catalog_returns,

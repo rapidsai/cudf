@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
 from cudf_polars.experimental.benchmarks.utils import get_data
 
 if TYPE_CHECKING:
@@ -17,7 +18,20 @@ if TYPE_CHECKING:
 
 def duckdb_impl(run_config: RunConfig) -> str:
     """Query 37."""
-    return """
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=37,
+        qualification=run_config.qualification,
+    )
+
+    price = params["price"]
+    manufact = params["manufact"]
+    invdate = params["invdate"]
+
+    # Format manufacturer list for SQL IN clause
+    manufact_list = ", ".join(str(m) for m in manufact)
+
+    return f"""
     SELECT
              i_item_id ,
              i_item_desc ,
@@ -26,12 +40,12 @@ def duckdb_impl(run_config: RunConfig) -> str:
              inventory,
              date_dim,
              catalog_sales
-    WHERE    i_current_price BETWEEN 20 AND      20 + 30
+    WHERE    i_current_price BETWEEN {price} AND      {price} + 30
     AND      inv_item_sk = i_item_sk
     AND      d_date_sk=inv_date_sk
-    AND      d_date BETWEEN Cast('1999-03-06' AS DATE) AND      (
-                      Cast('1999-03-06' AS DATE) + INTERVAL '60' day)
-    AND      i_manufact_id IN (843,815,850,840)
+    AND      d_date BETWEEN Cast('{invdate}' AS DATE) AND      (
+                      Cast('{invdate}' AS DATE) + INTERVAL '60' day)
+    AND      i_manufact_id IN ({manufact_list})
     AND      inv_quantity_on_hand BETWEEN 100 AND      500
     AND      cs_item_sk = i_item_sk
     GROUP BY i_item_id,
@@ -44,6 +58,25 @@ def duckdb_impl(run_config: RunConfig) -> str:
 
 def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     """Query 37."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=37,
+        qualification=run_config.qualification,
+    )
+
+    price = params["price"]
+    manufact = params["manufact"]
+    invdate = params["invdate"]
+
+    # Calculate end date (invdate + 60 days)
+    from datetime import datetime, timedelta
+
+    start_date_obj = datetime.strptime(invdate, "%Y-%m-%d")
+    end_date_obj = start_date_obj + timedelta(days=60)
+
+    start_date = pl.date(start_date_obj.year, start_date_obj.month, start_date_obj.day)
+    end_date = pl.date(end_date_obj.year, end_date_obj.month, end_date_obj.day)
+
     # Load tables
     item = get_data(run_config.dataset_path, "item", run_config.suffix)
     inventory = get_data(run_config.dataset_path, "inventory", run_config.suffix)
@@ -56,10 +89,10 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         .join(date_dim, left_on="inv_date_sk", right_on="d_date_sk")
         .join(catalog_sales, left_on="i_item_sk", right_on="cs_item_sk")
         .filter(
-            (pl.col("i_current_price").is_between(20, 50))
-            & (pl.col("i_manufact_id").is_in([843, 815, 850, 840]))
+            (pl.col("i_current_price").is_between(price, price + 30))
+            & (pl.col("i_manufact_id").is_in(manufact))
             & (pl.col("inv_quantity_on_hand").is_between(100, 500))
-            & (pl.col("d_date").is_between(pl.date(1999, 3, 6), pl.date(1999, 5, 5)))
+            & (pl.col("d_date").is_between(start_date, end_date))
         )
         .group_by(["i_item_id", "i_item_desc", "i_current_price"])
         .agg([])
