@@ -710,10 +710,8 @@ class NumericalColumn(NumericalBaseColumn):
         replacement: ColumnBase | list,
         all_nan: bool = False,
     ) -> Self:
-        """
-        Return col with *to_replace* replaced with *value*.
-        """
-        # TODO: all_nan and list arguments only used for this
+        """Return col with *to_replace* replaced with *value*."""
+        # TODO: The all_nan argument is only used for this
         # this subclass, try to factor these cases out of this method
 
         # If all of `to_replace`/`replacement` are `None`,
@@ -726,7 +724,6 @@ class NumericalColumn(NumericalBaseColumn):
                 to_replace,
                 replacement,
                 null_cast_dtype=self.dtype,
-                strict_type=False,
             )
         )
 
@@ -769,6 +766,7 @@ class NumericalColumn(NumericalBaseColumn):
         common_type = find_common_type(
             (to_replace_col.dtype, replacement_col.dtype, self.dtype)
         )
+        assert common_type is not None
         replaced = cast("Self", self.astype(common_type))
         old_col = to_replace_col.astype(common_type)
         new_col = replacement_col.astype(common_type)

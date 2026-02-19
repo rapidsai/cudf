@@ -17,11 +17,7 @@ import pylibcudf as plc
 
 import cudf
 from cudf.api.types import is_scalar
-from cudf.core.column.column import (
-    ColumnBase,
-    UnderlyingDtypeReplaceMixin,
-    column_empty,
-)
+from cudf.core.column.column import ColumnBase, as_column, column_empty
 from cudf.core.mixins import Scannable
 from cudf.errors import MixedTypeError
 from cudf.utils.dtypes import (
@@ -43,7 +39,7 @@ if TYPE_CHECKING:
     from cudf.core.column.string import StringColumn
 
 
-class TemporalBaseColumn(UnderlyingDtypeReplaceMixin, Scannable):
+class TemporalBaseColumn(ColumnBase, Scannable):
     """
     Base class for TimeDeltaColumn and DatetimeColumn.
     """
@@ -277,6 +273,34 @@ class TemporalBaseColumn(UnderlyingDtypeReplaceMixin, Scannable):
             return column_empty(0, dtype=CUDF_STRING_DTYPE)  # type:ignore[return-value]
         else:
             raise NotImplementedError("strftime is currently not implemented")
+
+    def find_and_replace(
+        self,
+        to_replace: ColumnBase | list,
+        replacement: ColumnBase | list,
+        all_nan: bool = False,
+    ) -> Self:
+        if not isinstance(to_replace, type(self)):
+            to_replace = as_column(to_replace)
+            if to_replace.can_cast_safely(self.dtype):
+                to_replace = to_replace.astype(self.dtype)
+        if not isinstance(replacement, type(self)):
+            replacement = as_column(replacement)
+            if replacement.can_cast_safely(self.dtype):
+                replacement = replacement.astype(self.dtype)
+        if isinstance(to_replace, type(self)):
+            to_replace = to_replace.astype(self._UNDERLYING_DTYPE)
+        if isinstance(replacement, type(self)):
+            replacement = replacement.astype(self._UNDERLYING_DTYPE)
+        try:
+            return cast(
+                "Self",
+                self.astype(self._UNDERLYING_DTYPE)
+                .find_and_replace(to_replace, replacement, all_nan)
+                .astype(self.dtype),
+            )
+        except TypeError:
+            return self.copy(deep=True)
 
     def can_cast_safely(self, to_dtype: DtypeObj) -> bool:
         if to_dtype.kind == self.dtype.kind:

@@ -394,9 +394,7 @@ class CategoricalColumn(ColumnBase):
         replacement: ColumnBase | list,
         all_nan: bool = False,
     ) -> Self:
-        """
-        Return col with *to_replace* replaced with *replacement*.
-        """
+        """Return col with *to_replace* replaced with *replacement*."""
         to_replace_col, replacement_col = (
             ColumnBase._prepare_find_and_replace_columns(
                 to_replace,
@@ -404,9 +402,6 @@ class CategoricalColumn(ColumnBase):
                 null_cast_dtype=self.categories.dtype,
             )
         )
-        # Deduplicate by old values, keeping last occurrence.
-        # This replicates pandas' behavior when to_replace has duplicates:
-        # pandas processes replacements sequentially, so the last occurrence wins.
         old_plc, new_plc = ColumnBase._dedupe_find_and_replace_mapping(
             to_replace_col, replacement_col
         )

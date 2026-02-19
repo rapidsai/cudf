@@ -387,10 +387,7 @@ class StringColumn(ColumnBase, Scannable):
         replacement: ColumnBase | list,
         all_nan: bool = False,
     ) -> Self:
-        """
-        Return col with *to_replace* replaced with *value*
-        """
-
+        """Return col with *to_replace* replaced with *value*"""
         to_replace_col, replacement_col = (
             ColumnBase._prepare_find_and_replace_columns(
                 to_replace,
