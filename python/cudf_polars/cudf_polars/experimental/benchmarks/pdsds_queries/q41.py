@@ -33,6 +33,20 @@ def duckdb_impl(run_config: RunConfig) -> str:
     manufact = params["manufact"]
     rules = params["rules"]
 
+    # Build SQL conditions for each rule (8 rules total)
+    formatted_rules = [
+        f"(i_category = '{rule['category']}' and\n"
+        f"        (i_color = '{rule['colors'][0]}' or i_color = '{rule['colors'][1]}') and\n"
+        f"        (i_units = '{rule['units'][0]}' or i_units = '{rule['units'][1]}') and\n"
+        f"        (i_size = '{rule['sizes'][0]}' or i_size = '{rule['sizes'][1]}')\n"
+        f"        )"
+        for rule in rules
+    ]
+
+    # Split rules into two groups (4 rules each for the two OR blocks)
+    rules_block1 = " or\n        ".join(formatted_rules[:4])
+    rules_block2 = " or\n        ".join(formatted_rules[4:])
+
     return f"""
     SELECT Distinct(i_product_name)
     FROM   item i1
@@ -40,27 +54,9 @@ def duckdb_impl(run_config: RunConfig) -> str:
         AND (SELECT Count(*) AS item_cnt
                 FROM   item
                 WHERE  ( i_manufact = i1.i_manufact
-                        AND ( {
-        " or\n        ".join(
-            [
-                f"(i_category = '{rules[0]['category']}' and (i_color = '{rules[0]['colors'][0]}' or i_color = '{rules[0]['colors'][1]}') and (i_units = '{rules[0]['units'][0]}' or i_units = '{rules[0]['units'][1]}') and (i_size = '{rules[0]['sizes'][0]}' or i_size = '{rules[0]['sizes'][1]}'))",
-                f"(i_category = '{rules[1]['category']}' and (i_color = '{rules[1]['colors'][0]}' or i_color = '{rules[1]['colors'][1]}') and (i_units = '{rules[1]['units'][0]}' or i_units = '{rules[1]['units'][1]}') and (i_size = '{rules[1]['sizes'][0]}' or i_size = '{rules[1]['sizes'][1]}'))",
-                f"(i_category = '{rules[2]['category']}' and (i_color = '{rules[2]['colors'][0]}' or i_color = '{rules[2]['colors'][1]}') and (i_units = '{rules[2]['units'][0]}' or i_units = '{rules[2]['units'][1]}') and (i_size = '{rules[2]['sizes'][0]}' or i_size = '{rules[2]['sizes'][1]}'))",
-                f"(i_category = '{rules[3]['category']}' and (i_color = '{rules[3]['colors'][0]}' or i_color = '{rules[3]['colors'][1]}') and (i_units = '{rules[3]['units'][0]}' or i_units = '{rules[3]['units'][1]}') and (i_size = '{rules[3]['sizes'][0]}' or i_size = '{rules[3]['sizes'][1]}'))",
-            ]
-        )
-    } ) )
+                        AND ( {rules_block1} ) )
                         OR ( i_manufact = i1.i_manufact
-                            AND ( {
-        " or\n        ".join(
-            [
-                f"(i_category = '{rules[4]['category']}' and (i_color = '{rules[4]['colors'][0]}' or i_color = '{rules[4]['colors'][1]}') and (i_units = '{rules[4]['units'][0]}' or i_units = '{rules[4]['units'][1]}') and (i_size = '{rules[4]['sizes'][0]}' or i_size = '{rules[4]['sizes'][1]}'))",
-                f"(i_category = '{rules[5]['category']}' and (i_color = '{rules[5]['colors'][0]}' or i_color = '{rules[5]['colors'][1]}') and (i_units = '{rules[5]['units'][0]}' or i_units = '{rules[5]['units'][1]}') and (i_size = '{rules[5]['sizes'][0]}' or i_size = '{rules[5]['sizes'][1]}'))",
-                f"(i_category = '{rules[6]['category']}' and (i_color = '{rules[6]['colors'][0]}' or i_color = '{rules[6]['colors'][1]}') and (i_units = '{rules[6]['units'][0]}' or i_units = '{rules[6]['units'][1]}') and (i_size = '{rules[6]['sizes'][0]}' or i_size = '{rules[6]['sizes'][1]}'))",
-                f"(i_category = '{rules[7]['category']}' and (i_color = '{rules[7]['colors'][0]}' or i_color = '{rules[7]['colors'][1]}') and (i_units = '{rules[7]['units'][0]}' or i_units = '{rules[7]['units'][1]}') and (i_size = '{rules[7]['sizes'][0]}' or i_size = '{rules[7]['sizes'][1]}'))",
-            ]
-        )
-    } ) )) > 0
+                            AND ( {rules_block2} ) )) > 0
     ORDER  BY i_product_name
     LIMIT 100;
 
