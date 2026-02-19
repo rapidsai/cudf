@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 """Multi-partition Distinct logic."""
 
@@ -24,14 +24,14 @@ if TYPE_CHECKING:
 
     from cudf_polars.dsl.ir import IR
     from cudf_polars.experimental.dispatch import LowerIRTransformer
-    from cudf_polars.utils.config import ConfigOptions
+    from cudf_polars.utils.config import ConfigOptions, StreamingExecutor
 
 
 def lower_distinct(
     ir: Distinct,
     child: IR,
     partition_info: MutableMapping[IR, PartitionInfo],
-    config_options: ConfigOptions,
+    config_options: ConfigOptions[StreamingExecutor],
     *,
     unique_fraction: float | None = None,
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
@@ -67,9 +67,6 @@ def lower_distinct(
 
     # Extract child partitioning
     child_count = partition_info[child].count
-    assert config_options.executor.name == "streaming", (
-        "'in-memory' executor not supported in 'lower_distinct'"
-    )
 
     # Assume shuffle is not stable for now. Therefore, we
     # require a tree reduction if row order matters.
@@ -172,9 +169,6 @@ def _(
     original_child = ir.children[0]
     child, partition_info = rec(ir.children[0])
     config_options = rec.state["config_options"]
-    assert config_options.executor.name == "streaming", (
-        "'in-memory' executor not supported in 'lower_ir_node'"
-    )
 
     subset: frozenset[str] = ir.subset or frozenset(ir.schema)
     unique_fraction_dict = _get_unique_fractions(
