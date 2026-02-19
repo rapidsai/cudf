@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
 from cudf_polars.experimental.benchmarks.utils import get_data
 
 if TYPE_CHECKING:
@@ -17,7 +18,18 @@ if TYPE_CHECKING:
 
 def duckdb_impl(run_config: RunConfig) -> str:
     """Query 33."""
-    return """
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=33,
+        qualification=run_config.qualification,
+    )
+
+    year = params["year"]
+    month = params["month"]
+    gmt = params["gmt"]
+    category = params["category"]
+
+    return f"""
     WITH ss
          AS (SELECT i_manufact_id,
                     Sum(ss_ext_sales_price) total_sales
@@ -27,13 +39,13 @@ def duckdb_impl(run_config: RunConfig) -> str:
                     item
              WHERE  i_manufact_id IN (SELECT i_manufact_id
                                       FROM   item
-                                      WHERE  i_category IN ( 'Books' ))
+                                      WHERE  i_category IN ( '{category}' ))
                     AND ss_item_sk = i_item_sk
                     AND ss_sold_date_sk = d_date_sk
-                    AND d_year = 1999
-                    AND d_moy = 3
+                    AND d_year = {year}
+                    AND d_moy = {month}
                     AND ss_addr_sk = ca_address_sk
-                    AND ca_gmt_offset = -5
+                    AND ca_gmt_offset = {gmt}
              GROUP  BY i_manufact_id),
          cs
          AS (SELECT i_manufact_id,
@@ -44,13 +56,13 @@ def duckdb_impl(run_config: RunConfig) -> str:
                     item
              WHERE  i_manufact_id IN (SELECT i_manufact_id
                                       FROM   item
-                                      WHERE  i_category IN ( 'Books' ))
+                                      WHERE  i_category IN ( '{category}' ))
                     AND cs_item_sk = i_item_sk
                     AND cs_sold_date_sk = d_date_sk
-                    AND d_year = 1999
-                    AND d_moy = 3
+                    AND d_year = {year}
+                    AND d_moy = {month}
                     AND cs_bill_addr_sk = ca_address_sk
-                    AND ca_gmt_offset = -5
+                    AND ca_gmt_offset = {gmt}
              GROUP  BY i_manufact_id),
          ws
          AS (SELECT i_manufact_id,
@@ -61,13 +73,13 @@ def duckdb_impl(run_config: RunConfig) -> str:
                     item
              WHERE  i_manufact_id IN (SELECT i_manufact_id
                                       FROM   item
-                                      WHERE  i_category IN ( 'Books' ))
+                                      WHERE  i_category IN ( '{category}' ))
                     AND ws_item_sk = i_item_sk
                     AND ws_sold_date_sk = d_date_sk
-                    AND d_year = 1999
-                    AND d_moy = 3
+                    AND d_year = {year}
+                    AND d_moy = {month}
                     AND ws_bill_addr_sk = ca_address_sk
-                    AND ca_gmt_offset = -5
+                    AND ca_gmt_offset = {gmt}
              GROUP  BY i_manufact_id)
     SELECT i_manufact_id,
                    Sum(total_sales) total_sales
@@ -90,22 +102,25 @@ def channel_total(  # noqa: D103
     date_dim: pl.LazyFrame,
     customer_address: pl.LazyFrame,
     item: pl.LazyFrame,
-    books_manufacturers: pl.LazyFrame,
+    category_manufacturers: pl.LazyFrame,
     *,
     sold_date_key: str,
     addr_key: str,
     item_key: str,
     price_col: str,
+    year: int,
+    month: int,
+    gmt: float,
 ) -> pl.LazyFrame:
     return (
         sales.join(date_dim, left_on=sold_date_key, right_on="d_date_sk")
         .join(customer_address, left_on=addr_key, right_on="ca_address_sk")
         .join(item, left_on=item_key, right_on="i_item_sk")
-        .join(books_manufacturers, on="i_manufact_id")
+        .join(category_manufacturers, on="i_manufact_id")
         .filter(
-            (pl.col("d_year") == 1999)
-            & (pl.col("d_moy") == 3)
-            & (pl.col("ca_gmt_offset") == -5)
+            (pl.col("d_year") == year)
+            & (pl.col("d_moy") == month)
+            & (pl.col("ca_gmt_offset") == gmt)
         )
         .group_by("i_manufact_id")
         .agg([pl.col(price_col).sum().alias("total_sales")])
@@ -114,6 +129,17 @@ def channel_total(  # noqa: D103
 
 def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     """Query 33."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=33,
+        qualification=run_config.qualification,
+    )
+
+    year = params["year"]
+    month = params["month"]
+    gmt = params["gmt"]
+    category = params["category"]
+
     store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
     catalog_sales = get_data(
         run_config.dataset_path, "catalog_sales", run_config.suffix
@@ -125,8 +151,8 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         run_config.dataset_path, "customer_address", run_config.suffix
     )
 
-    books_manufacturers = (
-        item.filter(pl.col("i_category") == "Books").select("i_manufact_id").unique()
+    category_manufacturers = (
+        item.filter(pl.col("i_category") == category).select("i_manufact_id").unique()
     )
 
     ss = channel_total(
@@ -134,33 +160,42 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         date_dim,
         customer_address,
         item,
-        books_manufacturers,
+        category_manufacturers,
         sold_date_key="ss_sold_date_sk",
         addr_key="ss_addr_sk",
         item_key="ss_item_sk",
         price_col="ss_ext_sales_price",
+        year=year,
+        month=month,
+        gmt=gmt,
     )
     cs = channel_total(
         catalog_sales,
         date_dim,
         customer_address,
         item,
-        books_manufacturers,
+        category_manufacturers,
         sold_date_key="cs_sold_date_sk",
         addr_key="cs_bill_addr_sk",
         item_key="cs_item_sk",
         price_col="cs_ext_sales_price",
+        year=year,
+        month=month,
+        gmt=gmt,
     )
     ws = channel_total(
         web_sales,
         date_dim,
         customer_address,
         item,
-        books_manufacturers,
+        category_manufacturers,
         sold_date_key="ws_sold_date_sk",
         addr_key="ws_bill_addr_sk",
         item_key="ws_item_sk",
         price_col="ws_ext_sales_price",
+        year=year,
+        month=month,
+        gmt=gmt,
     )
 
     return (

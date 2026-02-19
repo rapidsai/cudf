@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
 from cudf_polars.experimental.benchmarks.utils import get_data
 
 if TYPE_CHECKING:
@@ -17,7 +18,19 @@ if TYPE_CHECKING:
 
 def duckdb_impl(run_config: RunConfig) -> str:
     """Query 36."""
-    return """
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=36,
+        qualification=run_config.qualification,
+    )
+
+    year = params["year"]
+    state = params["state"]
+
+    # Format state list for SQL IN clause
+    state_list = ", ".join(f"'{s}'" for s in state)
+
+    return f"""
     SELECT Sum(ss_net_profit) / Sum(ss_ext_sales_price)                 AS
                    gross_margin,
                    i_category,
@@ -35,12 +48,11 @@ def duckdb_impl(run_config: RunConfig) -> str:
            date_dim d1,
            item,
            store
-    WHERE  d1.d_year = 2000
+    WHERE  d1.d_year = {year}
            AND d1.d_date_sk = ss_sold_date_sk
            AND i_item_sk = ss_item_sk
            AND s_store_sk = ss_store_sk
-           AND s_state IN ( 'TN', 'TN', 'TN', 'TN',
-                            'TN', 'TN', 'TN', 'TN' )
+           AND s_state IN ( {state_list} )
     GROUP  BY rollup( i_category, i_class )
     ORDER  BY lochierarchy DESC,
               CASE
@@ -86,6 +98,15 @@ def level(  # noqa: D103
 
 def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     """Query 36."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=36,
+        qualification=run_config.qualification,
+    )
+
+    year = params["year"]
+    state = params["state"]
+
     null_sentinel = "NULL"
     store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
@@ -96,7 +117,7 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         store_sales.join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
         .join(store, left_on="ss_store_sk", right_on="s_store_sk")
         .join(item, left_on="ss_item_sk", right_on="i_item_sk")
-        .filter((pl.col("d_year") == 2000) & (pl.col("s_state").is_in(["TN"])))
+        .filter((pl.col("d_year") == year) & (pl.col("s_state").is_in(state)))
     )
 
     level0 = level(base_data, ["i_category", "i_class"], null_sentinel, 0)

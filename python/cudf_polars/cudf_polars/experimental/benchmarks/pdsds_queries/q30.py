@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
 from cudf_polars.experimental.benchmarks.utils import get_data
 
 if TYPE_CHECKING:
@@ -17,7 +18,16 @@ if TYPE_CHECKING:
 
 def duckdb_impl(run_config: RunConfig) -> str:
     """Query 30."""
-    return """
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=30,
+        qualification=run_config.qualification,
+    )
+
+    year = params["year"]
+    state = params["state"]
+
+    return f"""
     WITH customer_total_return
          AS (SELECT wr_returning_customer_sk AS ctr_customer_sk,
                     ca_state                 AS ctr_state,
@@ -26,7 +36,7 @@ def duckdb_impl(run_config: RunConfig) -> str:
                     date_dim,
                     customer_address
              WHERE  wr_returned_date_sk = d_date_sk
-                    AND d_year = 2000
+                    AND d_year = {year}
                     AND wr_returning_addr_sk = ca_address_sk
              GROUP  BY wr_returning_customer_sk,
                        ca_state)
@@ -50,7 +60,7 @@ def duckdb_impl(run_config: RunConfig) -> str:
                                     FROM   customer_total_return ctr2
                                     WHERE  ctr1.ctr_state = ctr2.ctr_state)
            AND ca_address_sk = c_current_addr_sk
-           AND ca_state = 'IN'
+           AND ca_state = '{state}'
            AND ctr1.ctr_customer_sk = c_customer_sk
     ORDER  BY c_customer_id,
               c_salutation,
@@ -71,6 +81,15 @@ def duckdb_impl(run_config: RunConfig) -> str:
 
 def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     """Query 30."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=30,
+        qualification=run_config.qualification,
+    )
+
+    year = params["year"]
+    state = params["state"]
+
     # Load tables
     web_returns = get_data(run_config.dataset_path, "web_returns", run_config.suffix)
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
@@ -84,7 +103,7 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         .join(
             customer_address, left_on="wr_returning_addr_sk", right_on="ca_address_sk"
         )
-        .filter(pl.col("d_year") == 2000)
+        .filter(pl.col("d_year") == year)
         .group_by(
             [
                 pl.col("wr_returning_customer_sk").alias("ctr_customer_sk"),
@@ -109,7 +128,7 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         customer.join(
             customer_address, left_on="c_current_addr_sk", right_on="ca_address_sk"
         )
-        .filter(pl.col("ca_state") == "IN")
+        .filter(pl.col("ca_state") == state)
         .join(qualified_customers, left_on="c_customer_sk", right_on="ctr_customer_sk")
         .select(
             [

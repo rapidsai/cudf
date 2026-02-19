@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
 from cudf_polars.experimental.benchmarks.utils import get_data
 
 if TYPE_CHECKING:
@@ -17,7 +18,21 @@ if TYPE_CHECKING:
 
 def duckdb_impl(run_config: RunConfig) -> str:
     """Query 34."""
-    return """
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=34,
+        qualification=run_config.qualification,
+    )
+
+    year = params["year"]
+    bpone = params["bpone"]
+    bptwo = params["bptwo"]
+    county = params["county"]
+
+    # Format county list for SQL IN clause
+    county_list = ", ".join(f"'{c}'" for c in county)
+
+    return f"""
     SELECT c_last_name,
            c_first_name,
            c_salutation,
@@ -36,8 +51,8 @@ def duckdb_impl(run_config: RunConfig) -> str:
                    AND store_sales.ss_hdemo_sk = household_demographics.hd_demo_sk
                    AND ( date_dim.d_dom BETWEEN 1 AND 3
                           OR date_dim.d_dom BETWEEN 25 AND 28 )
-                   AND ( household_demographics.hd_buy_potential = '>10000'
-                          OR household_demographics.hd_buy_potential = 'unknown' )
+                   AND ( household_demographics.hd_buy_potential = '{bpone}'
+                          OR household_demographics.hd_buy_potential = '{bptwo}' )
                    AND household_demographics.hd_vehicle_count > 0
                    AND ( CASE
                            WHEN household_demographics.hd_vehicle_count > 0 THEN
@@ -45,15 +60,8 @@ def duckdb_impl(run_config: RunConfig) -> str:
                            household_demographics.hd_vehicle_count
                            ELSE NULL
                          END ) > 1.2
-                   AND date_dim.d_year IN ( 1999, 1999 + 1, 1999 + 2 )
-                   AND store.s_county IN ( 'Williamson County', 'Williamson County',
-                                           'Williamson County',
-                                                                 'Williamson County'
-                                           ,
-                                           'Williamson County', 'Williamson County',
-                                               'Williamson County',
-                                                                 'Williamson County'
-                                         )
+                   AND date_dim.d_year IN ( {year}, {year} + 1, {year} + 2 )
+                   AND store.s_county IN ( {county_list} )
             GROUP  BY ss_ticket_number,
                       ss_customer_sk) dn,
            customer
@@ -68,6 +76,17 @@ def duckdb_impl(run_config: RunConfig) -> str:
 
 def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     """Query 34."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=34,
+        qualification=run_config.qualification,
+    )
+
+    year = params["year"]
+    bpone = params["bpone"]
+    bptwo = params["bptwo"]
+    county = params["county"]
+
     # Load tables
     store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
@@ -83,8 +102,8 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         .filter(
             ((pl.col("d_dom").is_between(1, 3)) | (pl.col("d_dom").is_between(25, 28)))
             & (
-                (pl.col("hd_buy_potential") == ">10000")
-                | (pl.col("hd_buy_potential") == "unknown")
+                (pl.col("hd_buy_potential") == bpone)
+                | (pl.col("hd_buy_potential") == bptwo)
             )
             & (pl.col("hd_vehicle_count") > 0)
             & (
@@ -93,8 +112,8 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
                 .otherwise(None)
                 > 1.2
             )
-            & (pl.col("d_year").is_in([1999, 2000, 2001]))
-            & (pl.col("s_county") == "Williamson County")
+            & (pl.col("d_year").is_in([year, year + 1, year + 2]))
+            & (pl.col("s_county").is_in(county))
         )
         .group_by(["ss_ticket_number", "ss_customer_sk"])
         .agg([pl.len().alias("cnt")])

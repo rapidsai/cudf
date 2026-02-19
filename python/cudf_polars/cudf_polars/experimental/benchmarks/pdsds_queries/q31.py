@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
 from cudf_polars.experimental.benchmarks.utils import get_data
 
 if TYPE_CHECKING:
@@ -17,7 +18,16 @@ if TYPE_CHECKING:
 
 def duckdb_impl(run_config: RunConfig) -> str:
     """Query 31."""
-    return """
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=31,
+        qualification=run_config.qualification,
+    )
+
+    year = params["year"]
+    agg = params["agg"]
+
+    return f"""
     WITH ss
          AS (SELECT ca_county,
                     d_qoy,
@@ -57,22 +67,22 @@ def duckdb_impl(run_config: RunConfig) -> str:
            ws ws2,
            ws ws3
     WHERE  ss1.d_qoy = 1
-           AND ss1.d_year = 2001
+           AND ss1.d_year = {year}
            AND ss1.ca_county = ss2.ca_county
            AND ss2.d_qoy = 2
-           AND ss2.d_year = 2001
+           AND ss2.d_year = {year}
            AND ss2.ca_county = ss3.ca_county
            AND ss3.d_qoy = 3
-           AND ss3.d_year = 2001
+           AND ss3.d_year = {year}
            AND ss1.ca_county = ws1.ca_county
            AND ws1.d_qoy = 1
-           AND ws1.d_year = 2001
+           AND ws1.d_year = {year}
            AND ws1.ca_county = ws2.ca_county
            AND ws2.d_qoy = 2
-           AND ws2.d_year = 2001
+           AND ws2.d_year = {year}
            AND ws1.ca_county = ws3.ca_county
            AND ws3.d_qoy = 3
-           AND ws3.d_year = 2001
+           AND ws3.d_year = {year}
            AND CASE
                  WHEN ws1.web_sales > 0 THEN ws2.web_sales / ws1.web_sales
                  ELSE NULL
@@ -89,17 +99,24 @@ def duckdb_impl(run_config: RunConfig) -> str:
                        ss3.store_sales / ss2.store_sales
                        ELSE NULL
                      END
-    ORDER  BY ss1.ca_county,
-              ss1.d_year,
-              web_q1_q2_increase,
-              store_q1_q2_increase,
-              web_q2_q3_increase,
-              store_q2_q3_increase;
+    ORDER  BY {agg};
     """
 
 
 def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     """Query 31."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=31,
+        qualification=run_config.qualification,
+    )
+
+    year = params["year"]
+    agg = params["agg"]
+
+    # Map SQL field names to Polars column names (remove "ss1." prefix)
+    polars_agg = agg.replace("ss1.", "")
+
     # Load tables
     store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
     web_sales = get_data(run_config.dataset_path, "web_sales", run_config.suffix)
@@ -125,12 +142,12 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     )
 
     # Create filtered versions for each quarter
-    ss1 = ss.filter((pl.col("d_qoy") == 1) & (pl.col("d_year") == 2001))
-    ss2 = ss.filter((pl.col("d_qoy") == 2) & (pl.col("d_year") == 2001))
-    ss3 = ss.filter((pl.col("d_qoy") == 3) & (pl.col("d_year") == 2001))
-    ws1 = ws.filter((pl.col("d_qoy") == 1) & (pl.col("d_year") == 2001))
-    ws2 = ws.filter((pl.col("d_qoy") == 2) & (pl.col("d_year") == 2001))
-    ws3 = ws.filter((pl.col("d_qoy") == 3) & (pl.col("d_year") == 2001))
+    ss1 = ss.filter((pl.col("d_qoy") == 1) & (pl.col("d_year") == year))
+    ss2 = ss.filter((pl.col("d_qoy") == 2) & (pl.col("d_year") == year))
+    ss3 = ss.filter((pl.col("d_qoy") == 3) & (pl.col("d_year") == year))
+    ws1 = ws.filter((pl.col("d_qoy") == 1) & (pl.col("d_year") == year))
+    ws2 = ws.filter((pl.col("d_qoy") == 2) & (pl.col("d_year") == year))
+    ws3 = ws.filter((pl.col("d_qoy") == 3) & (pl.col("d_year") == year))
 
     # Join all quarters together by county
     return (
@@ -191,14 +208,5 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
                 "store_q2_q3_increase",
             ]
         )
-        .sort(
-            [
-                "ca_county",
-                "d_year",
-                "web_q1_q2_increase",
-                "store_q1_q2_increase",
-                "web_q2_q3_increase",
-                "store_q2_q3_increase",
-            ]
-        )
+        .sort([polars_agg])
     )

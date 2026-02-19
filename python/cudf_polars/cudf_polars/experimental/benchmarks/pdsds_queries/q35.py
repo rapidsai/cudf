@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
 from cudf_polars.experimental.benchmarks.utils import get_data
 
 if TYPE_CHECKING:
@@ -17,25 +18,36 @@ if TYPE_CHECKING:
 
 def duckdb_impl(run_config: RunConfig) -> str:
     """Query 35."""
-    return """
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=35,
+        qualification=run_config.qualification,
+    )
+
+    year = params["year"]
+    aggone = params["aggone"]
+    aggtwo = params["aggtwo"]
+    aggthree = params["aggthree"]
+
+    return f"""
     SELECT ca_state,
                    cd_gender,
                    cd_marital_status,
                    cd_dep_count,
                    Count(*) cnt1,
-                   Stddev_samp(cd_dep_count),
-                   Avg(cd_dep_count),
-                   Max(cd_dep_count),
+                   {aggone}(cd_dep_count),
+                   {aggtwo}(cd_dep_count),
+                   {aggthree}(cd_dep_count),
                    cd_dep_employed_count,
                    Count(*) cnt2,
-                   Stddev_samp(cd_dep_employed_count),
-                   Avg(cd_dep_employed_count),
-                   Max(cd_dep_employed_count),
+                   {aggone}(cd_dep_employed_count),
+                   {aggtwo}(cd_dep_employed_count),
+                   {aggthree}(cd_dep_employed_count),
                    cd_dep_college_count,
                    Count(*) cnt3,
-                   Stddev_samp(cd_dep_college_count),
-                   Avg(cd_dep_college_count),
-                   Max(cd_dep_college_count)
+                   {aggone}(cd_dep_college_count),
+                   {aggtwo}(cd_dep_college_count),
+                   {aggthree}(cd_dep_college_count)
     FROM   customer c,
            customer_address ca,
            customer_demographics
@@ -46,21 +58,21 @@ def duckdb_impl(run_config: RunConfig) -> str:
                               date_dim
                        WHERE  c.c_customer_sk = ss_customer_sk
                               AND ss_sold_date_sk = d_date_sk
-                              AND d_year = 2001
+                              AND d_year = {year}
                               AND d_qoy < 4)
            AND ( EXISTS (SELECT *
                          FROM   web_sales,
                                 date_dim
                          WHERE  c.c_customer_sk = ws_bill_customer_sk
                                 AND ws_sold_date_sk = d_date_sk
-                                AND d_year = 2001
+                                AND d_year = {year}
                                 AND d_qoy < 4)
                   OR EXISTS (SELECT *
                              FROM   catalog_sales,
                                     date_dim
                              WHERE  c.c_customer_sk = cs_ship_customer_sk
                                     AND cs_sold_date_sk = d_date_sk
-                                    AND d_year = 2001
+                                    AND d_year = {year}
                                     AND d_qoy < 4) )
     GROUP  BY ca_state,
               cd_gender,
@@ -80,6 +92,34 @@ def duckdb_impl(run_config: RunConfig) -> str:
 
 def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     """Query 35."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=35,
+        qualification=run_config.qualification,
+    )
+
+    year = params["year"]
+    aggone = params["aggone"]
+    aggtwo = params["aggtwo"]
+    aggthree = params["aggthree"]
+
+    # Helper to get Polars aggregation expression
+    def get_agg_expr(col_name: str, agg_func: str, alias: str) -> pl.Expr:
+        col = pl.col(col_name)
+        if agg_func == "sum":
+            return col.sum().alias(alias)
+        elif agg_func == "min":
+            return col.min().alias(alias)
+        elif agg_func == "max":
+            return col.max().alias(alias)
+        elif agg_func == "avg":
+            return col.mean().alias(alias)
+        elif agg_func == "stddev_samp":
+            return col.std().alias(alias)
+        else:
+            msg = f"Unknown aggregation function: {agg_func}"
+            raise ValueError(msg)
+
     # Load tables
     customer = get_data(run_config.dataset_path, "customer", run_config.suffix)
     customer_address = get_data(
@@ -101,21 +141,21 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     # Store sales existence check
     ss_customers = (
         store_sales.join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
-        .filter((pl.col("d_year") == 2001) & (pl.col("d_qoy") < 4))
+        .filter((pl.col("d_year") == year) & (pl.col("d_qoy") < 4))
         .select("ss_customer_sk")
         .unique()
     )
     # Web sales existence check
     ws_customers = (
         web_sales.join(date_dim, left_on="ws_sold_date_sk", right_on="d_date_sk")
-        .filter((pl.col("d_year") == 2001) & (pl.col("d_qoy") < 4))
+        .filter((pl.col("d_year") == year) & (pl.col("d_qoy") < 4))
         .select("ws_bill_customer_sk")
         .unique()
     )
     # Catalog sales existence check
     cs_customers = (
         catalog_sales.join(date_dim, left_on="cs_sold_date_sk", right_on="d_date_sk")
-        .filter((pl.col("d_year") == 2001) & (pl.col("d_qoy") < 4))
+        .filter((pl.col("d_year") == year) & (pl.col("d_qoy") < 4))
         .select("cs_ship_customer_sk")
         .unique()
     )
@@ -148,29 +188,35 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
             [
                 # Cast -> Int64 to match DuckDB
                 pl.len().cast(pl.Int64).alias("cnt1"),
-                pl.col("cd_dep_count").std().alias("stddev_samp(cd_dep_count)"),
-                pl.col("cd_dep_count").mean().alias("avg(cd_dep_count)"),
-                pl.col("cd_dep_count").max().alias("max(cd_dep_count)"),
+                get_agg_expr("cd_dep_count", aggone, f"{aggone}(cd_dep_count)"),
+                get_agg_expr("cd_dep_count", aggtwo, f"{aggtwo}(cd_dep_count)"),
+                get_agg_expr("cd_dep_count", aggthree, f"{aggthree}(cd_dep_count)"),
                 # Cast -> Int64 to match DuckDB
                 pl.len().cast(pl.Int64).alias("cnt2"),
-                pl.col("cd_dep_employed_count")
-                .std()
-                .alias("stddev_samp(cd_dep_employed_count)"),
-                pl.col("cd_dep_employed_count")
-                .mean()
-                .alias("avg(cd_dep_employed_count)"),
-                pl.col("cd_dep_employed_count")
-                .max()
-                .alias("max(cd_dep_employed_count)"),
+                get_agg_expr(
+                    "cd_dep_employed_count", aggone, f"{aggone}(cd_dep_employed_count)"
+                ),
+                get_agg_expr(
+                    "cd_dep_employed_count", aggtwo, f"{aggtwo}(cd_dep_employed_count)"
+                ),
+                get_agg_expr(
+                    "cd_dep_employed_count",
+                    aggthree,
+                    f"{aggthree}(cd_dep_employed_count)",
+                ),
                 # Cast -> Int64 to match DuckDB
                 pl.len().cast(pl.Int64).alias("cnt3"),
-                pl.col("cd_dep_college_count")
-                .std()
-                .alias("stddev_samp(cd_dep_college_count)"),
-                pl.col("cd_dep_college_count")
-                .mean()
-                .alias("avg(cd_dep_college_count)"),
-                pl.col("cd_dep_college_count").max().alias("max(cd_dep_college_count)"),
+                get_agg_expr(
+                    "cd_dep_college_count", aggone, f"{aggone}(cd_dep_college_count)"
+                ),
+                get_agg_expr(
+                    "cd_dep_college_count", aggtwo, f"{aggtwo}(cd_dep_college_count)"
+                ),
+                get_agg_expr(
+                    "cd_dep_college_count",
+                    aggthree,
+                    f"{aggthree}(cd_dep_college_count)",
+                ),
             ]
         )
         .select(
@@ -180,19 +226,19 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
                 "cd_marital_status",
                 "cd_dep_count",
                 "cnt1",
-                "stddev_samp(cd_dep_count)",
-                "avg(cd_dep_count)",
-                "max(cd_dep_count)",
+                f"{aggone}(cd_dep_count)",
+                f"{aggtwo}(cd_dep_count)",
+                f"{aggthree}(cd_dep_count)",
                 "cd_dep_employed_count",
                 "cnt2",
-                "stddev_samp(cd_dep_employed_count)",
-                "avg(cd_dep_employed_count)",
-                "max(cd_dep_employed_count)",
+                f"{aggone}(cd_dep_employed_count)",
+                f"{aggtwo}(cd_dep_employed_count)",
+                f"{aggthree}(cd_dep_employed_count)",
                 "cd_dep_college_count",
                 "cnt3",
-                "stddev_samp(cd_dep_college_count)",
-                "avg(cd_dep_college_count)",
-                "max(cd_dep_college_count)",
+                f"{aggone}(cd_dep_college_count)",
+                f"{aggtwo}(cd_dep_college_count)",
+                f"{aggthree}(cd_dep_college_count)",
             ]
         )
         .sort(
