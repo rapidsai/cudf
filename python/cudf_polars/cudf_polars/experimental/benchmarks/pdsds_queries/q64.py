@@ -167,6 +167,7 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     price = params["price"]
     colors = params["colors"]
 
+    # Load all required tables
     catalog_sales = get_data(
         run_config.dataset_path, "catalog_sales", run_config.suffix
     )
@@ -186,9 +187,15 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     customer_address = get_data(
         run_config.dataset_path, "customer_address", run_config.suffix
     )
+    household_demographics = get_data(
+        run_config.dataset_path, "household_demographics", run_config.suffix
+    )
+    income_band = get_data(run_config.dataset_path, "income_band", run_config.suffix)
+    promotion = get_data(run_config.dataset_path, "promotion", run_config.suffix)
     item = get_data(run_config.dataset_path, "item", run_config.suffix)
 
-    cs_ui_items = (
+    # CTE 1: cs_ui - catalog sales items with sales > 2 * refunds
+    cs_ui = (
         catalog_sales.select(["cs_item_sk", "cs_order_number", "cs_ext_list_price"])
         .join(
             catalog_returns.select(
@@ -202,7 +209,6 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
             ),
             left_on=["cs_item_sk", "cs_order_number"],
             right_on=["cr_item_sk", "cr_order_number"],
-            how="inner",
         )
         .group_by("cs_item_sk")
         .agg(
@@ -221,57 +227,92 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         .select("cs_item_sk")
     )
 
+    # Filter items by color and price
     filtered_items = item.filter(
         pl.col("i_color").is_in(colors)
         & pl.col("i_current_price").is_between(price, price + 10)
         & pl.col("i_current_price").is_between(price + 1, price + 15)
     ).select(["i_item_sk", "i_product_name"])
 
-    base = (
+    # Prepare date dimensions
+    d1 = date_dim.select(["d_date_sk", "d_year"]).rename(
+        {"d_date_sk": "d1_date_sk", "d_year": "d1_year"}
+    )
+    d2 = date_dim.select(["d_date_sk", "d_year"]).rename(
+        {"d_date_sk": "d2_date_sk", "d_year": "d2_year"}
+    )
+    d3 = date_dim.select(["d_date_sk", "d_year"]).rename(
+        {"d_date_sk": "d3_date_sk", "d_year": "d3_year"}
+    )
+
+    # Prepare customer demographics
+    cd1 = customer_demographics.select(["cd_demo_sk", "cd_marital_status"]).rename(
+        {"cd_demo_sk": "cd1_demo_sk", "cd_marital_status": "cd1_marital_status"}
+    )
+    cd2 = customer_demographics.select(["cd_demo_sk", "cd_marital_status"]).rename(
+        {"cd_demo_sk": "cd2_demo_sk", "cd_marital_status": "cd2_marital_status"}
+    )
+
+    # Prepare household demographics
+    hd1 = household_demographics.select(["hd_demo_sk", "hd_income_band_sk"]).rename(
+        {"hd_demo_sk": "hd1_demo_sk", "hd_income_band_sk": "hd1_income_band_sk"}
+    )
+    hd2 = household_demographics.select(["hd_demo_sk", "hd_income_band_sk"]).rename(
+        {"hd_demo_sk": "hd2_demo_sk", "hd_income_band_sk": "hd2_income_band_sk"}
+    )
+
+    # Prepare income bands
+    ib1 = income_band.select(["ib_income_band_sk"]).rename(
+        {"ib_income_band_sk": "ib1_income_band_sk"}
+    )
+    ib2 = income_band.select(["ib_income_band_sk"]).rename(
+        {"ib_income_band_sk": "ib2_income_band_sk"}
+    )
+
+    # Prepare customer addresses
+    ad1 = customer_address.select(
+        ["ca_address_sk", "ca_street_number", "ca_street_name", "ca_city", "ca_zip"]
+    ).rename(
+        {
+            "ca_address_sk": "ad1_address_sk",
+            "ca_street_number": "b_street_number",
+            "ca_street_name": "b_streen_name",
+            "ca_city": "b_city",
+            "ca_zip": "b_zip",
+        }
+    )
+    ad2 = customer_address.select(
+        ["ca_address_sk", "ca_street_number", "ca_street_name", "ca_city", "ca_zip"]
+    ).rename(
+        {
+            "ca_address_sk": "ad2_address_sk",
+            "ca_street_number": "c_street_number",
+            "ca_street_name": "c_street_name",
+            "ca_city": "c_city",
+            "ca_zip": "c_zip",
+        }
+    )
+
+    # CTE 2: cross_sales - main aggregation with all joins
+    cross_sales = (
         store_sales.join(
-            filtered_items, left_on="ss_item_sk", right_on="i_item_sk", how="inner"
-        )
-        .join(cs_ui_items, left_on="ss_item_sk", right_on="cs_item_sk", how="semi")
-        .join(
             store_returns.select(["sr_item_sk", "sr_ticket_number"]),
             left_on=["ss_item_sk", "ss_ticket_number"],
             right_on=["sr_item_sk", "sr_ticket_number"],
-            how="inner",
         )
-        .select(
-            [
-                "ss_item_sk",
-                "ss_store_sk",
-                "ss_sold_date_sk",
-                "ss_customer_sk",
-                "ss_cdemo_sk",
-                "ss_addr_sk",
-                "ss_wholesale_cost",
-                "ss_list_price",
-                "ss_coupon_amt",
-                pl.col("i_product_name"),
-            ]
-        )
-    )
-
-    base = (
-        base.join(
+        .join(cs_ui, left_on="ss_item_sk", right_on="cs_item_sk")
+        .join(d1, left_on="ss_sold_date_sk", right_on="d1_date_sk")
+        .join(
             store.select(["s_store_sk", "s_store_name", "s_zip"]),
             left_on="ss_store_sk",
             right_on="s_store_sk",
-            how="inner",
-        )
-        .join(
-            date_dim.select(["d_date_sk", "d_year"]).rename({"d_year": "syear"}),
-            left_on="ss_sold_date_sk",
-            right_on="d_date_sk",
-            how="inner",
         )
         .join(
             customer.select(
                 [
                     "c_customer_sk",
                     "c_current_cdemo_sk",
+                    "c_current_hdemo_sk",
                     "c_current_addr_sk",
                     "c_first_sales_date_sk",
                     "c_first_shipto_date_sk",
@@ -279,89 +320,25 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
             ),
             left_on="ss_customer_sk",
             right_on="c_customer_sk",
-            how="inner",
         )
+        .join(cd1, left_on="ss_cdemo_sk", right_on="cd1_demo_sk")
+        .join(cd2, left_on="c_current_cdemo_sk", right_on="cd2_demo_sk")
+        .filter(pl.col("cd1_marital_status") != pl.col("cd2_marital_status"))
+        .join(hd1, left_on="ss_hdemo_sk", right_on="hd1_demo_sk")
+        .join(hd2, left_on="c_current_hdemo_sk", right_on="hd2_demo_sk")
+        .join(ib1, left_on="hd1_income_band_sk", right_on="ib1_income_band_sk")
+        .join(ib2, left_on="hd2_income_band_sk", right_on="ib2_income_band_sk")
+        .join(ad1, left_on="ss_addr_sk", right_on="ad1_address_sk")
+        .join(ad2, left_on="c_current_addr_sk", right_on="ad2_address_sk")
+        .join(d2, left_on="c_first_sales_date_sk", right_on="d2_date_sk")
+        .join(d3, left_on="c_first_shipto_date_sk", right_on="d3_date_sk")
         .join(
-            customer_demographics.select(["cd_demo_sk", "cd_marital_status"]).rename(
-                {"cd_marital_status": "cd1_marital"}
-            ),
-            left_on="ss_cdemo_sk",
-            right_on="cd_demo_sk",
-            how="inner",
+            promotion.select(["p_promo_sk"]),
+            left_on="ss_promo_sk",
+            right_on="p_promo_sk",
         )
-        .join(
-            customer_demographics.select(["cd_demo_sk", "cd_marital_status"]).rename(
-                {"cd_demo_sk": "cd2_demo_sk", "cd_marital_status": "cd2_marital"}
-            ),
-            left_on="c_current_cdemo_sk",
-            right_on="cd2_demo_sk",
-            how="inner",
-        )
-        .filter(pl.col("cd1_marital") != pl.col("cd2_marital"))
-        .join(
-            customer_address.select(
-                [
-                    "ca_address_sk",
-                    "ca_street_number",
-                    "ca_street_name",
-                    "ca_city",
-                    "ca_zip",
-                ]
-            ).rename(
-                {
-                    "ca_address_sk": "b_addr_sk",
-                    "ca_street_number": "b_street_number",
-                    "ca_street_name": "b_streen_name",
-                    "ca_city": "b_city",
-                    "ca_zip": "b_zip",
-                }
-            ),
-            left_on="ss_addr_sk",
-            right_on="b_addr_sk",
-            how="inner",
-        )
-        .join(
-            customer_address.select(
-                [
-                    "ca_address_sk",
-                    "ca_street_number",
-                    "ca_street_name",
-                    "ca_city",
-                    "ca_zip",
-                ]
-            ).rename(
-                {
-                    "ca_address_sk": "c_addr_sk",
-                    "ca_street_number": "c_street_number",
-                    "ca_street_name": "c_street_name",
-                    "ca_city": "c_city",
-                    "ca_zip": "c_zip",
-                }
-            ),
-            left_on="c_current_addr_sk",
-            right_on="c_addr_sk",
-            how="inner",
-        )
-        .join(
-            date_dim.select(["d_date_sk", "d_year"]).rename(
-                {"d_date_sk": "d2_date_sk", "d_year": "fsyear"}
-            ),
-            left_on="c_first_sales_date_sk",
-            right_on="d2_date_sk",
-            how="inner",
-        )
-        .join(
-            date_dim.select(["d_date_sk", "d_year"]).rename(
-                {"d_date_sk": "d3_date_sk", "d_year": "s2year"}
-            ),
-            left_on="c_first_shipto_date_sk",
-            right_on="d3_date_sk",
-            how="inner",
-        )
-    )
-
-    cross_sales = (
-        base.group_by(
+        .join(filtered_items, left_on="ss_item_sk", right_on="i_item_sk")
+        .group_by(
             [
                 "i_product_name",
                 "ss_item_sk",
@@ -375,9 +352,9 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
                 "c_street_name",
                 "c_city",
                 "c_zip",
-                "syear",
-                "fsyear",
-                "s2year",
+                "d1_year",
+                "d2_year",
+                "d3_year",
             ]
         )
         .agg(
@@ -388,27 +365,43 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
                 pl.col("ss_coupon_amt").sum().alias("s3"),
             ]
         )
-        .with_columns(
+        .select(
             [
                 pl.col("i_product_name").alias("product_name"),
                 pl.col("ss_item_sk").alias("item_sk"),
                 pl.col("s_store_name").alias("store_name"),
                 pl.col("s_zip").alias("store_zip"),
+                "b_street_number",
+                "b_streen_name",
+                "b_city",
+                "b_zip",
+                "c_street_number",
+                "c_street_name",
+                "c_city",
+                "c_zip",
+                pl.col("d1_year").alias("syear"),
+                pl.col("d2_year").alias("fsyear"),
+                pl.col("d3_year").alias("s2year"),
+                "cnt",
+                "s1",
+                "s2",
+                "s3",
             ]
         )
     )
 
+    # Final query: self-join on cross_sales
     return (
         cross_sales.join(
             cross_sales,
             left_on=["item_sk", "store_name", "store_zip"],
             right_on=["item_sk", "store_name", "store_zip"],
-            suffix="_cs2",
+            suffix="_1",
         )
         .filter(
             (pl.col("syear") == year)
-            & (pl.col("syear_cs2") == year + 1)
-            & (pl.col("cnt_cs2") <= pl.col("cnt"))
+            & (pl.col("syear_1") == year + 1)
+            & (pl.col("cnt_1") <= pl.col("cnt"))
         )
         .select(
             [
@@ -428,16 +421,15 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
                 "s1",
                 "s2",
                 "s3",
-                pl.col("s1_cs2").alias("s1_1"),
-                pl.col("s2_cs2").alias("s2_1"),
-                pl.col("s3_cs2").alias("s3_1"),
-                pl.col("syear_cs2").alias("syear_1"),
-                pl.col("cnt_cs2").alias("cnt_1"),
+                pl.col("s1_1"),
+                pl.col("s2_1"),
+                pl.col("s3_1"),
+                pl.col("syear_1"),
+                pl.col("cnt_1"),
             ]
         )
         .sort(
             ["product_name", "store_name", "cnt_1", "s1", "s1_1"],
             nulls_last=True,
-            descending=[False, False, False, False, False],
         )
     )
