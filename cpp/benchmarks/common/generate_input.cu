@@ -541,12 +541,14 @@ std::unique_ptr<cudf::column> create_random_column(data_profile const& profile,
                                                    thrust::minstd_rand& engine,
                                                    cudf::size_type num_rows);
 
-template <typename T, cuda::std::enable_if_t<(cudf::is_numeric_not_bool<T>())>*>
+template <typename T>
+  requires(cudf::is_numeric_not_bool<T>())
 std::unique_ptr<cudf::column> create_distinct_rows_column(data_profile const& profile,
                                                           thrust::minstd_rand& engine,
                                                           cudf::size_type num_rows);
 
-template <typename T, cuda::std::enable_if_t<(!cudf::is_numeric_not_bool<T>())>*>
+template <typename T>
+  requires(!cudf::is_numeric_not_bool<T>())
 std::unique_ptr<cudf::column> create_distinct_rows_column(data_profile const& profile,
                                                           thrust::minstd_rand& engine,
                                                           cudf::size_type num_rows);
@@ -819,7 +821,8 @@ std::unique_ptr<cudf::column> create_random_column<cudf::list_view>(data_profile
 }
 
 // Numeric types: create a sequence of unique values, then shuffle
-template <typename T, CUDF_ENABLE_IF(cudf::is_numeric_not_bool<T>())>
+template <typename T>
+  requires(cudf::is_numeric_not_bool<T>())
 std::unique_ptr<cudf::column> create_distinct_rows_column(data_profile const& profile,
                                                           thrust::minstd_rand& engine,
                                                           cudf::size_type num_rows)
@@ -846,7 +849,8 @@ std::unique_ptr<cudf::column> create_distinct_rows_column(data_profile const& pr
 }
 
 // catch-all for all types not handled specifically above
-template <typename T, CUDF_ENABLE_IF(!cudf::is_numeric_not_bool<T>())>
+template <typename T>
+  requires(!cudf::is_numeric_not_bool<T>())
 std::unique_ptr<cudf::column> create_distinct_rows_column(data_profile const& profile,
                                                           thrust::minstd_rand& engine,
                                                           cudf::size_type num_rows)
