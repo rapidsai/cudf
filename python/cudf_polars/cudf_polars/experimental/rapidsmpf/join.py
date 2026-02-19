@@ -51,9 +51,8 @@ if TYPE_CHECKING:
     from cudf_polars.experimental.rapidsmpf.dispatch import SubNetGenerator
     from cudf_polars.experimental.rapidsmpf.tracing import ActorTracer
 
-# cuDF has a 2^31-1 (~2.15 billion) row limit for columns; use conservative limit
-# to account for estimation error (use 1.5 billion to have good margin)
-MAX_BROADCAST_ROWS = 1_500_000_000  # 1.5 billion rows max for broadcast side
+# Keep a conservative distance from the 2^31-1 (~2.15 billion) row limit
+MAX_BROADCAST_ROWS = 1_500_000_000
 
 
 def _is_partitioned_on_keys(
@@ -1178,7 +1177,6 @@ def _(
 
     elif use_dynamic:
         # Dynamic join - decide strategy at runtime
-        assert isinstance(executor, StreamingExecutor)
         assert executor.dynamic_planning is not None  # Checked in use_dynamic
         collective_ids = list(rec.state["collective_id_map"].get(ir, []))
         broadcast_threshold = (
@@ -1208,13 +1206,6 @@ def _(
             broadcast_side = "right"
         else:
             broadcast_side = "left"
-
-        # Get target partition size
-        assert isinstance(executor, StreamingExecutor), (
-            "Join actor requires streaming executor"
-        )
-        target_partition_size = executor.target_partition_size
-
         actors[ir] = [
             broadcast_join_actor(
                 rec.state["context"],
@@ -1225,7 +1216,7 @@ def _(
                 channels[right].reserve_output_slot(),
                 broadcast_side=broadcast_side,
                 collective_id=rec.state["collective_id_map"][ir][0],
-                target_partition_size=target_partition_size,
+                target_partition_size=executor.target_partition_size,
             )
         ]
         return actors, channels
