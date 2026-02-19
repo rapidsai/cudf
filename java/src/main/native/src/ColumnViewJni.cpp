@@ -2700,22 +2700,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_nansToNulls(JNIEnv* env,
   {
     cudf::jni::auto_set_device(env);
     auto const input = *reinterpret_cast<cudf::column_view*>(handle);
-    // get a new null mask by setting all the nans to null
-    auto [new_nullmask, new_null_count] = cudf::nans_to_nulls(input);
-    // create a column_view which is a no-copy wrapper around the original column without the null
-    // mask
-    auto const input_without_nullmask =
-      cudf::column_view(input.type(),
-                        input.size(),
-                        input.head<void>(),
-                        nullptr,
-                        0,
-                        input.offset(),
-                        std::vector<cudf::column_view>{input.child_begin(), input.child_end()});
-    // create a column by deep copying `input_without_nullmask`.
-    auto deep_copy = std::make_unique<cudf::column>(input_without_nullmask);
-    deep_copy->set_null_mask(std::move(*new_nullmask), new_null_count);
-    return release_as_jlong(deep_copy);
+    auto result      = cudf::column_nans_to_nulls(input);
+    return release_as_jlong(result);
   }
   JNI_CATCH(env, 0);
 }
