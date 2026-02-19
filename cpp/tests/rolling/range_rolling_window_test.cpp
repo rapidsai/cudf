@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -12,7 +12,7 @@
 #include <cudf/rolling.hpp>
 #include <cudf/table/table_view.hpp>
 
-#include <thrust/iterator/constant_iterator.h>
+#include <cuda/iterator>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 
@@ -90,8 +90,8 @@ template <typename WindowExecT>
 void verify_results_for_ascending(WindowExecT exec)
 {
   auto const n_rows       = exec.num_rows();
-  auto const all_valid    = thrust::make_constant_iterator<bool>(true);
-  auto const all_invalid  = thrust::make_constant_iterator<bool>(false);
+  auto const all_valid    = cuda::make_constant_iterator<bool>(true);
+  auto const all_invalid  = cuda::make_constant_iterator<bool>(false);
   auto const last_invalid = thrust::make_transform_iterator(
     thrust::make_counting_iterator(0), [&n_rows](auto i) { return i != (n_rows - 1); });
 
@@ -173,8 +173,8 @@ TYPED_TEST(TypedTimeRangeRollingTest, TimestampASC)
 template <typename WindowExecT>
 void verify_results_for_descending(WindowExecT exec)
 {
-  auto const all_valid     = thrust::make_constant_iterator<bool>(true);
-  auto const all_invalid   = thrust::make_constant_iterator<bool>(false);
+  auto const all_valid     = cuda::make_constant_iterator<bool>(true);
+  auto const all_invalid   = cuda::make_constant_iterator<bool>(false);
   auto const first_invalid = thrust::make_transform_iterator(thrust::make_counting_iterator(0),
                                                              [](auto i) { return i != 0; });
 

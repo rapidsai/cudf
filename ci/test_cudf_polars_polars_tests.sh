@@ -4,18 +4,14 @@
 
 set -euo pipefail
 
-RAPIDS_INIT_PIP_REMOVE_NVIDIA_INDEX="true"
-export RAPIDS_INIT_PIP_REMOVE_NVIDIA_INDEX
 source rapids-init-pip
 
 rapids-logger "Download wheels"
 
 RAPIDS_PY_CUDA_SUFFIX="$(rapids-wheel-ctk-name-gen "${RAPIDS_CUDA_VERSION}")"
 CUDF_POLARS_WHEELHOUSE=$(RAPIDS_PY_WHEEL_NAME="cudf_polars_${RAPIDS_PY_CUDA_SUFFIX}" RAPIDS_PY_WHEEL_PURE="1" rapids-download-wheels-from-github python)
-
-# Download libcudf and pylibcudf built in the previous step
 LIBCUDF_WHEELHOUSE=$(RAPIDS_PY_WHEEL_NAME="libcudf_${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels-from-github cpp)
-PYLIBCUDF_WHEELHOUSE=$(RAPIDS_PY_WHEEL_NAME="pylibcudf_${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels-from-github python)
+PYLIBCUDF_WHEELHOUSE=$(rapids-download-from-github "$(rapids-package-name "wheel_python" pylibcudf --stable --cuda "$RAPIDS_CUDA_VERSION")")
 
 rapids-logger "Install libcudf, pylibcudf and cudf_polars"
 rapids-pip-retry install \
@@ -38,6 +34,9 @@ sed -i '/^polars-cloud$/d' polars/py-polars/requirements-dev.txt
 sed -i 's/^deltalake>=1.1.4/deltalake>=1.1.4,<1.2.0/' polars/py-polars/requirements-dev.txt
 # pyiceberg depends on a non-documented attribute of pydantic.
 # AttributeError: 'pydantic_core._pydantic_core.ValidationInfo' object has no attribute 'current_schema_id'
+# Additionally, Iceberg tests attempt to filter a Pydantic warning that does not exist
+# in versions < 2.12, and trigger a pyparsing DeprecationWarning during collection.
+# See https://github.com/pola-rs/polars/pull/25854
 sed -i 's/^pydantic>=2.0.0.*/pydantic>=2.0.0,<2.12.0/' polars/py-polars/requirements-dev.txt
 # Iceberg tests include a call to a deprecated in 0.10.0
 # See https://github.com/pola-rs/polars/pull/25854

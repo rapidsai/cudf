@@ -27,6 +27,7 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/std/iterator>
 #include <cuda/std/tuple>
 #include <thrust/iterator/discard_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
@@ -1528,10 +1529,10 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> pr
   // StructBegin, StructEnd. Also, all LineEnd are removed as well, as these are not relevant after
   // this stage anymore
   filter_fst.Transduce(
-    thrust::make_reverse_iterator(thrust::make_zip_iterator(tokens.data(), token_indices.data()) +
-                                  tokens.size()),
+    cuda::std::make_reverse_iterator(
+      thrust::make_zip_iterator(tokens.data(), token_indices.data()) + tokens.size()),
     static_cast<SymbolOffsetT>(tokens.size()),
-    thrust::make_reverse_iterator(
+    cuda::std::make_reverse_iterator(
       thrust::make_zip_iterator(filtered_tokens_out.data(), filtered_token_indices_out.data()) +
       tokens.size()),
     thrust::make_discard_iterator(),

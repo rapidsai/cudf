@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from enum import IntEnum
@@ -13,6 +13,13 @@ class RoundingMethod(IntEnum):
     HALF_EVEN = ...
 
 def round(
+    source: Column,
+    decimal_places: int = 0,
+    round_method: RoundingMethod = RoundingMethod.HALF_UP,
+    stream: Stream | None = None,
+    mr: DeviceMemoryResource | None = None,
+) -> Column: ...
+def round_decimal(
     source: Column,
     decimal_places: int = 0,
     round_method: RoundingMethod = RoundingMethod.HALF_UP,

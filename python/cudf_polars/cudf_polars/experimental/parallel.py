@@ -37,7 +37,12 @@ from cudf_polars.experimental.dispatch import (
 from cudf_polars.experimental.io import _clear_source_info_cache
 from cudf_polars.experimental.repartition import Repartition
 from cudf_polars.experimental.statistics import collect_statistics
-from cudf_polars.experimental.utils import _concat, _contains_over, _lower_ir_fallback
+from cudf_polars.experimental.utils import (
+    _concat,
+    _contains_over,
+    _dynamic_planning_on,
+    _lower_ir_fallback,
+)
 
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
@@ -47,7 +52,7 @@ if TYPE_CHECKING:
 
     from cudf_polars.experimental.base import StatsCollector
     from cudf_polars.experimental.dispatch import LowerIRTransformer, State
-    from cudf_polars.utils.config import ConfigOptions
+    from cudf_polars.utils.config import ConfigOptions, StreamingExecutor
 
 
 @lower_ir_node.register(IR)
@@ -61,7 +66,7 @@ def _(
 
 
 def lower_ir_graph(
-    ir: IR, config_options: ConfigOptions
+    ir: IR, config_options: ConfigOptions[StreamingExecutor]
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo], StatsCollector]:
     """
     Rewrite an IR graph and extract partitioning information.
@@ -165,12 +170,8 @@ def task_graph(
 # The true type signature for get_scheduler() needs an overload. Not worth it.
 
 
-def get_scheduler(config_options: ConfigOptions) -> Any:
+def get_scheduler(config_options: ConfigOptions[StreamingExecutor]) -> Any:
     """Get appropriate task scheduler."""
-    assert config_options.executor.name == "streaming", (
-        "'in-memory' executor not supported in 'generate_ir_tasks'"
-    )
-
     cluster = config_options.executor.cluster
 
     if (
@@ -195,7 +196,7 @@ def get_scheduler(config_options: ConfigOptions) -> Any:
 def post_process_task_graph(
     graph: MutableMapping[Any, Any],
     key: str | tuple[str, int],
-    config_options: ConfigOptions,
+    config_options: ConfigOptions[StreamingExecutor],
 ) -> MutableMapping[Any, Any]:
     """
     Post-process the task graph.
@@ -214,10 +215,6 @@ def post_process_task_graph(
     graph
         A Dask-compatible task graph.
     """
-    assert config_options.executor.name == "streaming", (
-        "'in-memory' executor not supported in 'post_process_task_graph'"
-    )
-
     if config_options.executor.rapidsmpf_spill:  # pragma: no cover
         from cudf_polars.experimental.spilling import wrap_dataframe_in_spillable
 
@@ -229,7 +226,7 @@ def post_process_task_graph(
 
 def evaluate_rapidsmpf(
     ir: IR,
-    config_options: ConfigOptions,
+    config_options: ConfigOptions[StreamingExecutor],
 ) -> pl.DataFrame:  # pragma: no cover; rapidsmpf runtime not tested in CI yet
     """
     Evaluate with the RapidsMPF streaming runtime.
@@ -253,7 +250,7 @@ def evaluate_rapidsmpf(
 
 def evaluate_streaming(
     ir: IR,
-    config_options: ConfigOptions,
+    config_options: ConfigOptions[StreamingExecutor],
 ) -> pl.DataFrame:
     """
     Evaluate an IR graph with partitioning.
@@ -272,7 +269,6 @@ def evaluate_streaming(
     # Clear source info cache in case data was overwritten
     _clear_source_info_cache()
 
-    assert config_options.executor.name == "streaming", "Executor must be streaming"
     if (
         config_options.executor.runtime == "rapidsmpf"
     ):  # pragma: no cover; rapidsmpf runtime not tested in CI yet
@@ -437,11 +433,15 @@ def _(
 def _(
     ir: Slice, rec: LowerIRTransformer
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
+    # Check for dynamic planning - may have more partitions at runtime
+    config_options = rec.state["config_options"]
+    dynamic_planning = _dynamic_planning_on(config_options)
+
     if ir.offset == 0:
         # Taking the first N rows.
         # We don't know how large each partition is, so we reduce.
         new_node, partition_info = _lower_ir_pwise(ir, rec)
-        if partition_info[new_node].count > 1:
+        if partition_info[new_node].count > 1 or dynamic_planning:
             # Collapse down to single partition
             inter = Repartition(new_node.schema, new_node)
             partition_info[inter] = PartitionInfo(count=1)
@@ -460,7 +460,9 @@ def _(
 def _(
     ir: HStack, rec: LowerIRTransformer
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
-    if not all(expr.is_pointwise for expr in traversal([e.value for e in ir.columns])):
+    if not all(
+        expr.is_pointwise for expr in traversal([e.value for e in ir.columns])
+    ):  # pragma: no cover
         # TODO: Avoid fallback if/when possible
         return _lower_ir_fallback(
             ir, rec, msg="This HStack not supported for multiple partitions."

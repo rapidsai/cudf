@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 import textwrap
@@ -34,7 +34,7 @@ def test_null_series(nrows, all_supported_types_as_str, request):
         ps = sr.to_pandas()
 
     with pd.option_context("display.max_rows", int(nrows)):
-        psrepr = repr(ps).replace("NaN", "<NA>").replace("None", "<NA>")
+        psrepr = repr(ps).replace("NaN", "<NA>")
         if "UInt" in psrepr:
             psrepr = psrepr.replace("UInt", "uint")
         elif "Int" in psrepr:
@@ -76,75 +76,51 @@ def test_float_series(x):
 
 
 @pytest.mark.parametrize(
-    "sr,pandas_special_case",
+    "sr",
     [
-        (pd.Series([1, 2, 3], index=[10, 20, None]), False),
-        (pd.Series([1, None, 3], name="a", index=[None, "a", "b"]), True),
-        (pd.Series(None, index=[None, "a", "b"], dtype="float"), True),
-        (pd.Series([None, None], name="aa", index=[None, None]), False),
-        (pd.Series([1, 2, 3], index=[None, None, None]), False),
-        (
-            pd.Series(
-                [None, 2, 3],
-                index=np.array([1, None, None], dtype="datetime64[ns]"),
-            ),
-            False,
+        pd.Series([1, 2, 3], index=[10, 20, None]),
+        pd.Series([1, None, 3], name="a", index=[None, "a", "b"]),
+        pd.Series(None, index=[None, "a", "b"], dtype="float"),
+        pd.Series([None, None], name="aa", index=[None, None]),
+        pd.Series([1, 2, 3], index=[None, None, None]),
+        pd.Series(
+            [None, 2, 3],
+            index=np.array([1, None, None], dtype="datetime64[ns]"),
         ),
-        (
-            pd.Series(
-                [None, None, None],
-                index=np.array([None, None, None], dtype="datetime64[ns]"),
-            ),
-            False,
+        pd.Series(
+            [None, None, None],
+            index=np.array([None, None, None], dtype="datetime64[ns]"),
         ),
-        (
-            pd.Series(
-                [1, None, 3],
-                index=np.array([10, 15, None], dtype="datetime64[ns]"),
-            ),
-            False,
+        pd.Series(
+            [1, None, 3],
+            index=np.array([10, 15, None], dtype="datetime64[ns]"),
         ),
-        (
-            pd.DataFrame(
-                {"a": [1, 2, None], "v": [10, None, 22], "p": [100, 200, 300]}
-            ).set_index(["a", "v"])["p"],
-            False,
-        ),
-        (
-            pd.DataFrame(
-                {
-                    "a": [1, 2, None],
-                    "v": ["n", "c", "a"],
-                    "p": [None, None, None],
-                }
-            ).set_index(["a", "v"])["p"],
-            False,
-        ),
-        (
-            pd.DataFrame(
-                {
-                    "a": np.array([1, None, None], dtype="datetime64[ns]"),
-                    "v": ["n", "c", "a"],
-                    "p": [None, None, None],
-                }
-            ).set_index(["a", "v"])["p"],
-            False,
-        ),
+        pd.DataFrame(
+            {"a": [1, 2, None], "v": [10, None, 22], "p": [100, 200, 300]}
+        ).set_index(["a", "v"])["p"],
+        pd.DataFrame(
+            {
+                "a": [1, 2, None],
+                "v": ["n", "c", "a"],
+                "p": [None, None, None],
+            }
+        ).set_index(["a", "v"])["p"],
+        pd.DataFrame(
+            {
+                "a": np.array([1, None, None], dtype="datetime64[ns]"),
+                "v": ["n", "c", "a"],
+                "p": [None, None, None],
+            }
+        ).set_index(["a", "v"])["p"],
     ],
 )
-def test_series_null_index_repr(sr, pandas_special_case):
+def test_series_null_index_repr(sr):
     psr = sr
     gsr = cudf.from_pandas(psr)
 
-    expected_repr = repr(psr).replace("NaN", "<NA>").replace("None", "<NA>")
+    expected_repr = repr(psr).replace("NaN", "<NA>")
     actual_repr = repr(gsr)
 
-    if pandas_special_case:
-        # Pandas inconsistently print Index null values
-        # as `None` at some places and `NaN` at few other places
-        # Whereas cudf is consistent with strings `null` values
-        # to be printed as `None` everywhere.
-        actual_repr = repr(gsr).replace("None", "<NA>")
     assert expected_repr.split() == actual_repr.split()
 
 
@@ -517,12 +493,6 @@ def test_empty_series_name():
 @pytest.mark.parametrize("item", [0, slice(0, 1)])
 @pytest.mark.parametrize("data", [["a"], ["a", None], [None]])
 def test_string_repr(data, item, request):
-    if data == [None]:
-        request.applymarker(
-            pytest.mark.xfail(
-                reason="Missing value repr should be <NA> instead of None",
-            )
-        )
     ps = pd.Series(data, dtype="str", name="nice name")
     gs = cudf.Series(data, dtype="str", name="nice name")
 
