@@ -2508,14 +2508,24 @@ def test_string_extract(ps_gs, pat, expand, flags, flags_raise):
 
 
 def test_string_extract_named_groups():
-    pat = r"(?P<word>\w+)-(?P<number>\d+)"
     s = ["hello-123", "world-456", "goodbye-789"]
     gs = cudf.Series(s)
     ps = pd.Series(s)
 
-    expect = ps.str.extract(pat)
-    got = gs.str.extract(pat)
+    pat = r"(?P<word>\w+)-(?P<number>\d+)"
+    expect = ps.str.extract(pat, expand=True)
+    got = gs.str.extract(pat, expand=True)
+    assert_eq(expect, got)
+    expect = ps.str.extract(pat, expand=False)
+    got = gs.str.extract(pat, expand=False)
+    assert_eq(expect, got)
 
+    pat = r"(?P<word>\w+)-\d+"
+    expect = ps.str.extract(pat, expand=True)
+    got = gs.str.extract(pat, expand=True)
+    assert_eq(expect, got)
+    expect = ps.str.extract(pat, expand=False)
+    got = gs.str.extract(pat, expand=False)
     assert_eq(expect, got)
 
 

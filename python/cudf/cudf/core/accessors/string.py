@@ -630,16 +630,21 @@ class StringMethods(BaseAccessor):
         if len(group_names) > 0:
             pat = re.sub(r"\(\?P<([A-Za-z_][A-Za-z0-9_]*)>", "(", pat)
         data = self._column.extract(pat, flags)
+        result_name = None
+        if len(data) == 1 and expand is False:
+            _, data = data.popitem()  # type: ignore[assignment]
+            if len(group_names) > 0:
+                result_name = group_names[0]
+        elif expand is False and len(data) > 1:
+            expand = True
         if len(group_names) == len(data):
             named_data = {}
             for key, value in data.items():
                 named_data[group_names[key]] = value
             data = named_data  # type: ignore[assignment]
-        if len(data) == 1 and expand is False:
-            _, data = data.popitem()  # type: ignore[assignment]
-        elif expand is False and len(data) > 1:
-            expand = True
-        return self._return_or_inplace(data, expand=expand)
+        return self._return_or_inplace(
+            data, expand=expand, replace_name=result_name
+        )
 
     def contains(
         self,
