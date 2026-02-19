@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -986,6 +986,30 @@ TYPED_TEST(TransformTest, ComplexScalarOnly)
   auto expected = column_wrapper<bool>{true, true, true, true, true};
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
+template <typename T>
+struct DecimalComparisonTest : public cudf::test::BaseFixture {};
+
+TYPED_TEST_SUITE(DecimalComparisonTest, cudf::test::FixedPointTypes);
+
+TYPED_TEST(DecimalComparisonTest, DecimalComparison)
+{
+  using decimalXX = TypeParam;
+  using RepType   = cudf::device_storage_type_t<decimalXX>;
+
+  auto const scale = numeric::scale_type{-4};
+  auto c_a         = cudf::test::fixed_point_column_wrapper<RepType>({1, 2, 3, 4}, scale);
+  auto table       = cudf::table_view{{c_a}};
+
+  auto literal_value = cudf::fixed_point_scalar<decimalXX>(2, scale, true);
+  auto literal       = cudf::ast::literal(literal_value);
+  auto col_ref       = cudf::ast::column_reference(0);
+  auto expression    = cudf::ast::operation(cudf::ast::ast_operator::EQUAL, col_ref, literal);
+  auto result        = cudf::compute_column(table, expression);
+
+  auto expected = column_wrapper<bool>({false, true, false, false});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
 }
 
 CUDF_TEST_PROGRAM_MAIN()
