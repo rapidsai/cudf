@@ -63,7 +63,6 @@ jobs:
       id-token: write
     env:
       GH_TOKEN: ${{ github.token }}
-      SHARED_ACTIONS_REF: 'check-nightly-success'
     steps:
       - name: Get PR Info
         id: get-pr-info
