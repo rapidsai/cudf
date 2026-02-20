@@ -865,7 +865,7 @@ table_with_metadata reader_impl::finalize_output(read_mode mode,
   }
 
   // TODO: Instead of casting the columns after the read is done, we should
-  // be able to decode data directly into the target decimal type buffer,
+  // be able to decode data directly into the target decimal type buffer.
   if (_options.decimal_type.id() != type_id::EMPTY) {
     for (auto& out_column : out_columns) {
       auto const& col_type = out_column->type();
