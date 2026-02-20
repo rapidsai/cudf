@@ -85,6 +85,10 @@ PYTHON_ARGS_FOR_INSTALL=(
 INSTALL_PREFIX=${INSTALL_PREFIX:=${PREFIX:=${CONDA_PREFIX}}}
 PARALLEL_LEVEL=${PARALLEL_LEVEL:=$(nproc)}
 
+echo "--------------------------------"
+echo "PARALLEL_LEVEL: $PARALLEL_LEVEL"
+echo "--------------------------------"
+
 function hasArg {
     (( NUMARGS != 0 )) && (echo " ${ARGS} " | grep -q " $1 ")
 }
