@@ -15,6 +15,7 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pytest
+from packaging.version import parse
 
 import rmm  # noqa: F401
 
@@ -459,24 +460,39 @@ def all_supported_types_as_str(request):
     return request.param
 
 
+pandas_nullables_types_with_scalars = [
+    (1, pd.Int8Dtype()),
+    (1, pd.Int16Dtype()),
+    (1, pd.Int32Dtype()),
+    (1, pd.Int64Dtype()),
+    (1, pd.UInt8Dtype()),
+    (1, pd.UInt16Dtype()),
+    (1, pd.UInt32Dtype()),
+    (1, pd.UInt64Dtype()),
+    (1.5, pd.Float32Dtype()),
+    (1.5, pd.Float64Dtype()),
+    (True, pd.BooleanDtype()),
+]
+if parse(pd.__version__) >= parse("2.3.0"):
+    pandas_nullables_types_with_scalars.extend(
+        [
+            ("a", pd.StringDtype(na_value=np.nan, storage="python")),
+            ("a", pd.StringDtype(na_value=pd.NA, storage="python")),
+            ("a", pd.StringDtype(na_value=np.nan, storage="pyarrow")),
+            ("a", pd.StringDtype(na_value=pd.NA, storage="pyarrow")),
+        ]
+    )
+else:
+    pandas_nullables_types_with_scalars.extend(
+        [
+            ("a", pd.StringDtype(storage="python")),
+            ("a", pd.StringDtype(storage="pyarrow")),
+        ]
+    )
+
+
 @pytest.fixture(
-    params=[
-        (1, pd.Int8Dtype()),
-        (1, pd.Int16Dtype()),
-        (1, pd.Int32Dtype()),
-        (1, pd.Int64Dtype()),
-        (1, pd.UInt8Dtype()),
-        (1, pd.UInt16Dtype()),
-        (1, pd.UInt32Dtype()),
-        (1, pd.UInt64Dtype()),
-        (1.5, pd.Float32Dtype()),
-        (1.5, pd.Float64Dtype()),
-        (True, pd.BooleanDtype()),
-        ("a", pd.StringDtype(na_value=np.nan, storage="python")),
-        ("a", pd.StringDtype(na_value=pd.NA, storage="python")),
-        ("a", pd.StringDtype(na_value=np.nan, storage="pyarrow")),
-        ("a", pd.StringDtype(na_value=pd.NA, storage="pyarrow")),
-    ],
+    params=pandas_nullables_types_with_scalars,
     ids=lambda x: repr(x[1]),
 )
 def all_supported_pandas_nullable_extension_dtypes(request):
