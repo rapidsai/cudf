@@ -204,6 +204,8 @@ class bloom_filter_expression_converter : public equality_literals_collector {
     auto const [col_ref, literal, op, operator_arity] = extract_operands_and_operator(expr);
 
     if (col_ref != nullptr) {
+      CUDF_EXPECTS(operator_arity == 1 or literal != nullptr,
+                   "Binary operation must have a column reference and a literal as operands");
       col_ref->accept(*this);
 
       // Propagate the `_always_true` as expression to its unary operator parent
