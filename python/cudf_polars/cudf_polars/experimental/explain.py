@@ -320,8 +320,10 @@ def _serialize_literal(value: Any) -> Serializable:
     match value:
         case datetime.datetime() | datetime.date():
             return {"type": type(value).__name__, "value": value.isoformat()}
-        case _:
+        case int() | float() | bool():
             return {"type": type(value).__name__, "value": value}
+        case _:
+            return {"type": type(value).__name__, "value": str(value)}
 
 
 def _serialize_expr(expr: Expr | NamedExpr) -> dict[str, Serializable]:
