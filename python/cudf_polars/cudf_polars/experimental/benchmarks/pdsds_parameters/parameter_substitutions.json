@@ -523,6 +523,116 @@
           "Williamson County",
           "Williamson County"
         ]
+      },
+      "44": {
+        "store_sk": 1
+      },
+      "45": {
+        "year": 2001,
+        "qoy": 1,
+        "zip_codes": [
+          "85669",
+          "86197",
+          "88274",
+          "83405",
+          "86475",
+          "85392",
+          "85460",
+          "80348",
+          "81792"
+        ],
+        "item_sks": [
+          2,
+          3,
+          5,
+          7,
+          11,
+          13,
+          17,
+          19,
+          23,
+          29
+        ]
+      },
+      "46": {
+        "year": 2000,
+        "hd_dep_count": 6,
+        "hd_vehicle_count": 4,
+        "cities": [
+          "Fairview",
+          "Midway"
+        ]
+      },
+      "47": {
+        "year": 2001
+      },
+      "48": {
+        "year": 2002,
+        "demographics": [
+          {
+            "marital_status": "M",
+            "education_status": "4 yr Degree",
+            "price_min": 100.0,
+            "price_max": 150.0
+          },
+          {
+            "marital_status": "U",
+            "education_status": "College",
+            "price_min": 50.0,
+            "price_max": 100.0
+          },
+          {
+            "marital_status": "S",
+            "education_status": "2 yr Degree",
+            "price_min": 150.0,
+            "price_max": 200.0
+          }
+        ],
+        "geography": [
+          {
+            "states": [
+              "NH",
+              "OK",
+              "NC"
+            ],
+            "profit_min": 0,
+            "profit_max": 2000
+          },
+          {
+            "states": [
+              "MS",
+              "TX",
+              "TN"
+            ],
+            "profit_min": 150,
+            "profit_max": 3000
+          },
+          {
+            "states": [
+              "CA",
+              "KS",
+              "GA"
+            ],
+            "profit_min": 50,
+            "profit_max": 25000
+          }
+        ]
+      },
+      "49": {
+        "year": 2001,
+        "month": 11
+      },
+      "50": {
+        "year": 2001,
+        "month": 8
+      },
+      "51": {
+        "dms": 1176
+      },
+      "52": {
+        "manager_id": 1,
+        "month": 12,
+        "year": 2002
       }
     },
     "10": {
@@ -1047,6 +1157,119 @@
           "Walker County",
           "Ziebach County"
         ]
+      },
+      "44": {
+        "store_sk": 4
+      },
+      "45": {
+        "year": 2001,
+        "qoy": 1,
+        "zip_codes": [
+          "85669",
+          "86197",
+          "88274",
+          "83405",
+          "86475",
+          "85392",
+          "85460",
+          "80348",
+          "81792"
+        ],
+        "item_sks": [
+          2,
+          3,
+          5,
+          7,
+          11,
+          13,
+          17,
+          19,
+          23,
+          29
+        ]
+      },
+      "46": {
+        "year": 2000,
+        "hd_dep_count": 0,
+        "hd_vehicle_count": 4,
+        "cities": [
+          "Fairview",
+          "Oak Grove",
+          "Riverside",
+          "Pleasant Hill",
+          "Midway"
+        ]
+      },
+      "47": {
+        "year": 2001
+      },
+      "48": {
+        "year": 2002,
+        "demographics": [
+          {
+            "marital_status": "M",
+            "education_status": "4 yr Degree",
+            "price_min": 100.0,
+            "price_max": 150.0
+          },
+          {
+            "marital_status": "U",
+            "education_status": "College",
+            "price_min": 50.0,
+            "price_max": 100.0
+          },
+          {
+            "marital_status": "S",
+            "education_status": "2 yr Degree",
+            "price_min": 150.0,
+            "price_max": 200.0
+          }
+        ],
+        "geography": [
+          {
+            "states": [
+              "NH",
+              "OK",
+              "NC"
+            ],
+            "profit_min": 0,
+            "profit_max": 2000
+          },
+          {
+            "states": [
+              "MS",
+              "TX",
+              "TN"
+            ],
+            "profit_min": 150,
+            "profit_max": 3000
+          },
+          {
+            "states": [
+              "CA",
+              "KS",
+              "GA"
+            ],
+            "profit_min": 50,
+            "profit_max": 25000
+          }
+        ]
+      },
+      "49": {
+        "year": 2001,
+        "month": 11
+      },
+      "50": {
+        "year": 2001,
+        "month": 8
+      },
+      "51": {
+        "dms": 1176
+      },
+      "52": {
+        "manager_id": 1,
+        "month": 12,
+        "year": 2002
       }
     },
     "50": {
@@ -1571,6 +1794,119 @@
           "Walker County",
           "Ziebach County"
         ]
+      },
+      "44": {
+        "store_sk": 7
+      },
+      "45": {
+        "year": 2001,
+        "qoy": 1,
+        "zip_codes": [
+          "85669",
+          "86197",
+          "88274",
+          "83405",
+          "86475",
+          "85392",
+          "85460",
+          "80348",
+          "81792"
+        ],
+        "item_sks": [
+          2,
+          3,
+          5,
+          7,
+          11,
+          13,
+          17,
+          19,
+          23,
+          29
+        ]
+      },
+      "46": {
+        "year": 2000,
+        "hd_dep_count": 5,
+        "hd_vehicle_count": 1,
+        "cities": [
+          "Fairview",
+          "Five Points",
+          "Pleasant Hill",
+          "Riverside",
+          "Midway"
+        ]
+      },
+      "47": {
+        "year": 2001
+      },
+      "48": {
+        "year": 2002,
+        "demographics": [
+          {
+            "marital_status": "M",
+            "education_status": "4 yr Degree",
+            "price_min": 100.0,
+            "price_max": 150.0
+          },
+          {
+            "marital_status": "U",
+            "education_status": "College",
+            "price_min": 50.0,
+            "price_max": 100.0
+          },
+          {
+            "marital_status": "S",
+            "education_status": "2 yr Degree",
+            "price_min": 150.0,
+            "price_max": 200.0
+          }
+        ],
+        "geography": [
+          {
+            "states": [
+              "NH",
+              "OK",
+              "NC"
+            ],
+            "profit_min": 0,
+            "profit_max": 2000
+          },
+          {
+            "states": [
+              "MS",
+              "TX",
+              "TN"
+            ],
+            "profit_min": 150,
+            "profit_max": 3000
+          },
+          {
+            "states": [
+              "CA",
+              "KS",
+              "GA"
+            ],
+            "profit_min": 50,
+            "profit_max": 25000
+          }
+        ]
+      },
+      "49": {
+        "year": 2001,
+        "month": 11
+      },
+      "50": {
+        "year": 2001,
+        "month": 8
+      },
+      "51": {
+        "dms": 1176
+      },
+      "52": {
+        "manager_id": 1,
+        "month": 12,
+        "year": 2002
       }
     },
     "100": {
@@ -2095,6 +2431,119 @@
           "Daviess County",
           "Richland County"
         ]
+      },
+      "44": {
+        "store_sk": 184
+      },
+      "45": {
+        "year": 2001,
+        "qoy": 1,
+        "zip_codes": [
+          "85669",
+          "86197",
+          "88274",
+          "83405",
+          "86475",
+          "85392",
+          "85460",
+          "80348",
+          "81792"
+        ],
+        "item_sks": [
+          2,
+          3,
+          5,
+          7,
+          11,
+          13,
+          17,
+          19,
+          23,
+          29
+        ]
+      },
+      "46": {
+        "year": 1999,
+        "hd_dep_count": 7,
+        "hd_vehicle_count": 1,
+        "cities": [
+          "Centerville",
+          "Oak Grove",
+          "Oakland",
+          "Liberty",
+          "Midway"
+        ]
+      },
+      "47": {
+        "year": 2001
+      },
+      "48": {
+        "year": 2002,
+        "demographics": [
+          {
+            "marital_status": "M",
+            "education_status": "4 yr Degree",
+            "price_min": 100.0,
+            "price_max": 150.0
+          },
+          {
+            "marital_status": "U",
+            "education_status": "College",
+            "price_min": 50.0,
+            "price_max": 100.0
+          },
+          {
+            "marital_status": "S",
+            "education_status": "2 yr Degree",
+            "price_min": 150.0,
+            "price_max": 200.0
+          }
+        ],
+        "geography": [
+          {
+            "states": [
+              "NH",
+              "OK",
+              "NC"
+            ],
+            "profit_min": 0,
+            "profit_max": 2000
+          },
+          {
+            "states": [
+              "MS",
+              "TX",
+              "TN"
+            ],
+            "profit_min": 150,
+            "profit_max": 3000
+          },
+          {
+            "states": [
+              "CA",
+              "KS",
+              "GA"
+            ],
+            "profit_min": 50,
+            "profit_max": 25000
+          }
+        ]
+      },
+      "49": {
+        "year": 2001,
+        "month": 11
+      },
+      "50": {
+        "year": 2001,
+        "month": 8
+      },
+      "51": {
+        "dms": 1176
+      },
+      "52": {
+        "manager_id": 1,
+        "month": 12,
+        "year": 2002
       }
     },
     "200": {
@@ -2619,6 +3068,119 @@
           "Walker County",
           "Ziebach County"
         ]
+      },
+      "44": {
+        "store_sk": 16
+      },
+      "45": {
+        "year": 2001,
+        "qoy": 1,
+        "zip_codes": [
+          "85669",
+          "86197",
+          "88274",
+          "83405",
+          "86475",
+          "85392",
+          "85460",
+          "80348",
+          "81792"
+        ],
+        "item_sks": [
+          2,
+          3,
+          5,
+          7,
+          11,
+          13,
+          17,
+          19,
+          23,
+          29
+        ]
+      },
+      "46": {
+        "year": 1998,
+        "hd_dep_count": 8,
+        "hd_vehicle_count": 1,
+        "cities": [
+          "Pleasant Hill",
+          "Fairview",
+          "Riverside",
+          "Oak Grove",
+          "Midway"
+        ]
+      },
+      "47": {
+        "year": 2001
+      },
+      "48": {
+        "year": 2002,
+        "demographics": [
+          {
+            "marital_status": "M",
+            "education_status": "4 yr Degree",
+            "price_min": 100.0,
+            "price_max": 150.0
+          },
+          {
+            "marital_status": "U",
+            "education_status": "College",
+            "price_min": 50.0,
+            "price_max": 100.0
+          },
+          {
+            "marital_status": "S",
+            "education_status": "2 yr Degree",
+            "price_min": 150.0,
+            "price_max": 200.0
+          }
+        ],
+        "geography": [
+          {
+            "states": [
+              "NH",
+              "OK",
+              "NC"
+            ],
+            "profit_min": 0,
+            "profit_max": 2000
+          },
+          {
+            "states": [
+              "MS",
+              "TX",
+              "TN"
+            ],
+            "profit_min": 150,
+            "profit_max": 3000
+          },
+          {
+            "states": [
+              "CA",
+              "KS",
+              "GA"
+            ],
+            "profit_min": 50,
+            "profit_max": 25000
+          }
+        ]
+      },
+      "49": {
+        "year": 2001,
+        "month": 11
+      },
+      "50": {
+        "year": 2001,
+        "month": 8
+      },
+      "51": {
+        "dms": 1176
+      },
+      "52": {
+        "manager_id": 1,
+        "month": 12,
+        "year": 2002
       }
     },
     "400": {
@@ -3143,6 +3705,119 @@
           "Williamson County",
           "Ziebach County"
         ]
+      },
+      "44": {
+        "store_sk": 1
+      },
+      "45": {
+        "year": 2001,
+        "qoy": 1,
+        "zip_codes": [
+          "85669",
+          "86197",
+          "88274",
+          "83405",
+          "86475",
+          "85392",
+          "85460",
+          "80348",
+          "81792"
+        ],
+        "item_sks": [
+          2,
+          3,
+          5,
+          7,
+          11,
+          13,
+          17,
+          19,
+          23,
+          29
+        ]
+      },
+      "46": {
+        "year": 2000,
+        "hd_dep_count": 0,
+        "hd_vehicle_count": 2,
+        "cities": [
+          "Midway",
+          "Five Points",
+          "Fairview",
+          "Oak Grove",
+          "Pleasant Hill"
+        ]
+      },
+      "47": {
+        "year": 2001
+      },
+      "48": {
+        "year": 2002,
+        "demographics": [
+          {
+            "marital_status": "M",
+            "education_status": "4 yr Degree",
+            "price_min": 100.0,
+            "price_max": 150.0
+          },
+          {
+            "marital_status": "U",
+            "education_status": "College",
+            "price_min": 50.0,
+            "price_max": 100.0
+          },
+          {
+            "marital_status": "S",
+            "education_status": "2 yr Degree",
+            "price_min": 150.0,
+            "price_max": 200.0
+          }
+        ],
+        "geography": [
+          {
+            "states": [
+              "NH",
+              "OK",
+              "NC"
+            ],
+            "profit_min": 0,
+            "profit_max": 2000
+          },
+          {
+            "states": [
+              "MS",
+              "TX",
+              "TN"
+            ],
+            "profit_min": 150,
+            "profit_max": 3000
+          },
+          {
+            "states": [
+              "CA",
+              "KS",
+              "GA"
+            ],
+            "profit_min": 50,
+            "profit_max": 25000
+          }
+        ]
+      },
+      "49": {
+        "year": 2001,
+        "month": 11
+      },
+      "50": {
+        "year": 2001,
+        "month": 8
+      },
+      "51": {
+        "dms": 1176
+      },
+      "52": {
+        "manager_id": 1,
+        "month": 12,
+        "year": 2002
       }
     },
     "1000": {
@@ -3667,6 +4342,119 @@
           "San Miguel County",
           "Oglethorpe County"
         ]
+      },
+      "44": {
+        "store_sk": 487
+      },
+      "45": {
+        "year": 2001,
+        "qoy": 1,
+        "zip_codes": [
+          "85669",
+          "86197",
+          "88274",
+          "83405",
+          "86475",
+          "85392",
+          "85460",
+          "80348",
+          "81792"
+        ],
+        "item_sks": [
+          2,
+          3,
+          5,
+          7,
+          11,
+          13,
+          17,
+          19,
+          23,
+          29
+        ]
+      },
+      "46": {
+        "year": 1998,
+        "hd_dep_count": 8,
+        "hd_vehicle_count": 2,
+        "cities": [
+          "Centerville",
+          "Oakland",
+          "Union",
+          "Oakdale",
+          "Buena Vista"
+        ]
+      },
+      "47": {
+        "year": 2001
+      },
+      "48": {
+        "year": 2002,
+        "demographics": [
+          {
+            "marital_status": "M",
+            "education_status": "4 yr Degree",
+            "price_min": 100.0,
+            "price_max": 150.0
+          },
+          {
+            "marital_status": "U",
+            "education_status": "College",
+            "price_min": 50.0,
+            "price_max": 100.0
+          },
+          {
+            "marital_status": "S",
+            "education_status": "2 yr Degree",
+            "price_min": 150.0,
+            "price_max": 200.0
+          }
+        ],
+        "geography": [
+          {
+            "states": [
+              "NH",
+              "OK",
+              "NC"
+            ],
+            "profit_min": 0,
+            "profit_max": 2000
+          },
+          {
+            "states": [
+              "MS",
+              "TX",
+              "TN"
+            ],
+            "profit_min": 150,
+            "profit_max": 3000
+          },
+          {
+            "states": [
+              "CA",
+              "KS",
+              "GA"
+            ],
+            "profit_min": 50,
+            "profit_max": 25000
+          }
+        ]
+      },
+      "49": {
+        "year": 2001,
+        "month": 11
+      },
+      "50": {
+        "year": 2001,
+        "month": 8
+      },
+      "51": {
+        "dms": 1176
+      },
+      "52": {
+        "manager_id": 1,
+        "month": 12,
+        "year": 2002
       }
     },
     "3000": {
@@ -4191,6 +4979,119 @@
           "Williamson County",
           "Marshall County"
         ]
+      },
+      "44": {
+        "store_sk": 520
+      },
+      "45": {
+        "year": 2001,
+        "qoy": 1,
+        "zip_codes": [
+          "85669",
+          "86197",
+          "88274",
+          "83405",
+          "86475",
+          "85392",
+          "85460",
+          "80348",
+          "81792"
+        ],
+        "item_sks": [
+          2,
+          3,
+          5,
+          7,
+          11,
+          13,
+          17,
+          19,
+          23,
+          29
+        ]
+      },
+      "46": {
+        "year": 1998,
+        "hd_dep_count": 2,
+        "hd_vehicle_count": 2,
+        "cities": [
+          "Riverview",
+          "Summit",
+          "Centerville",
+          "Brownsville",
+          "Walnut Grove"
+        ]
+      },
+      "47": {
+        "year": 2001
+      },
+      "48": {
+        "year": 2002,
+        "demographics": [
+          {
+            "marital_status": "M",
+            "education_status": "4 yr Degree",
+            "price_min": 100.0,
+            "price_max": 150.0
+          },
+          {
+            "marital_status": "U",
+            "education_status": "College",
+            "price_min": 50.0,
+            "price_max": 100.0
+          },
+          {
+            "marital_status": "S",
+            "education_status": "2 yr Degree",
+            "price_min": 150.0,
+            "price_max": 200.0
+          }
+        ],
+        "geography": [
+          {
+            "states": [
+              "NH",
+              "OK",
+              "NC"
+            ],
+            "profit_min": 0,
+            "profit_max": 2000
+          },
+          {
+            "states": [
+              "MS",
+              "TX",
+              "TN"
+            ],
+            "profit_min": 150,
+            "profit_max": 3000
+          },
+          {
+            "states": [
+              "CA",
+              "KS",
+              "GA"
+            ],
+            "profit_min": 50,
+            "profit_max": 25000
+          }
+        ]
+      },
+      "49": {
+        "year": 2001,
+        "month": 11
+      },
+      "50": {
+        "year": 2001,
+        "month": 8
+      },
+      "51": {
+        "dms": 1176
+      },
+      "52": {
+        "manager_id": 1,
+        "month": 12,
+        "year": 2002
       }
     },
     "10000": {
@@ -4715,6 +5616,119 @@
           "Levy County",
           "Richland County"
         ]
+      },
+      "44": {
+        "store_sk": 145
+      },
+      "45": {
+        "year": 2001,
+        "qoy": 1,
+        "zip_codes": [
+          "85669",
+          "86197",
+          "88274",
+          "83405",
+          "86475",
+          "85392",
+          "85460",
+          "80348",
+          "81792"
+        ],
+        "item_sks": [
+          2,
+          3,
+          5,
+          7,
+          11,
+          13,
+          17,
+          19,
+          23,
+          29
+        ]
+      },
+      "46": {
+        "year": 1999,
+        "hd_dep_count": 3,
+        "hd_vehicle_count": 4,
+        "cities": [
+          "Antioch",
+          "Jefferson",
+          "Georgetown",
+          "Waterloo",
+          "Pleasant View"
+        ]
+      },
+      "47": {
+        "year": 2001
+      },
+      "48": {
+        "year": 2002,
+        "demographics": [
+          {
+            "marital_status": "M",
+            "education_status": "4 yr Degree",
+            "price_min": 100.0,
+            "price_max": 150.0
+          },
+          {
+            "marital_status": "U",
+            "education_status": "College",
+            "price_min": 50.0,
+            "price_max": 100.0
+          },
+          {
+            "marital_status": "S",
+            "education_status": "2 yr Degree",
+            "price_min": 150.0,
+            "price_max": 200.0
+          }
+        ],
+        "geography": [
+          {
+            "states": [
+              "NH",
+              "OK",
+              "NC"
+            ],
+            "profit_min": 0,
+            "profit_max": 2000
+          },
+          {
+            "states": [
+              "MS",
+              "TX",
+              "TN"
+            ],
+            "profit_min": 150,
+            "profit_max": 3000
+          },
+          {
+            "states": [
+              "CA",
+              "KS",
+              "GA"
+            ],
+            "profit_min": 50,
+            "profit_max": 25000
+          }
+        ]
+      },
+      "49": {
+        "year": 2001,
+        "month": 11
+      },
+      "50": {
+        "year": 2001,
+        "month": 8
+      },
+      "51": {
+        "dms": 1176
+      },
+      "52": {
+        "manager_id": 1,
+        "month": 12,
+        "year": 2002
       }
     },
     "30000": {
@@ -5239,6 +6253,119 @@
           "Barrow County",
           "Perry County"
         ]
+      },
+      "44": {
+        "store_sk": 439
+      },
+      "45": {
+        "year": 2001,
+        "qoy": 1,
+        "zip_codes": [
+          "85669",
+          "86197",
+          "88274",
+          "83405",
+          "86475",
+          "85392",
+          "85460",
+          "80348",
+          "81792"
+        ],
+        "item_sks": [
+          2,
+          3,
+          5,
+          7,
+          11,
+          13,
+          17,
+          19,
+          23,
+          29
+        ]
+      },
+      "46": {
+        "year": 1998,
+        "hd_dep_count": 8,
+        "hd_vehicle_count": 2,
+        "cities": [
+          "Five Corners",
+          "Macedonia",
+          "Millville",
+          "Brownsville",
+          "Glenwood"
+        ]
+      },
+      "47": {
+        "year": 2001
+      },
+      "48": {
+        "year": 2002,
+        "demographics": [
+          {
+            "marital_status": "M",
+            "education_status": "4 yr Degree",
+            "price_min": 100.0,
+            "price_max": 150.0
+          },
+          {
+            "marital_status": "U",
+            "education_status": "College",
+            "price_min": 50.0,
+            "price_max": 100.0
+          },
+          {
+            "marital_status": "S",
+            "education_status": "2 yr Degree",
+            "price_min": 150.0,
+            "price_max": 200.0
+          }
+        ],
+        "geography": [
+          {
+            "states": [
+              "NH",
+              "OK",
+              "NC"
+            ],
+            "profit_min": 0,
+            "profit_max": 2000
+          },
+          {
+            "states": [
+              "MS",
+              "TX",
+              "TN"
+            ],
+            "profit_min": 150,
+            "profit_max": 3000
+          },
+          {
+            "states": [
+              "CA",
+              "KS",
+              "GA"
+            ],
+            "profit_min": 50,
+            "profit_max": 25000
+          }
+        ]
+      },
+      "49": {
+        "year": 2001,
+        "month": 11
+      },
+      "50": {
+        "year": 2001,
+        "month": 8
+      },
+      "51": {
+        "dms": 1176
+      },
+      "52": {
+        "manager_id": 1,
+        "month": 12,
+        "year": 2002
       }
     },
     "100000": {
@@ -5763,6 +6890,119 @@
           "Barrow County",
           "Perry County"
         ]
+      },
+      "44": {
+        "store_sk": 253
+      },
+      "45": {
+        "year": 2001,
+        "qoy": 1,
+        "zip_codes": [
+          "85669",
+          "86197",
+          "88274",
+          "83405",
+          "86475",
+          "85392",
+          "85460",
+          "80348",
+          "81792"
+        ],
+        "item_sks": [
+          2,
+          3,
+          5,
+          7,
+          11,
+          13,
+          17,
+          19,
+          23,
+          29
+        ]
+      },
+      "46": {
+        "year": 1998,
+        "hd_dep_count": 5,
+        "hd_vehicle_count": 4,
+        "cities": [
+          "Antioch",
+          "Poplar Springs",
+          "Perryville",
+          "Sycamore",
+          "Elmwood"
+        ]
+      },
+      "47": {
+        "year": 2001
+      },
+      "48": {
+        "year": 2002,
+        "demographics": [
+          {
+            "marital_status": "M",
+            "education_status": "4 yr Degree",
+            "price_min": 100.0,
+            "price_max": 150.0
+          },
+          {
+            "marital_status": "U",
+            "education_status": "College",
+            "price_min": 50.0,
+            "price_max": 100.0
+          },
+          {
+            "marital_status": "S",
+            "education_status": "2 yr Degree",
+            "price_min": 150.0,
+            "price_max": 200.0
+          }
+        ],
+        "geography": [
+          {
+            "states": [
+              "NH",
+              "OK",
+              "NC"
+            ],
+            "profit_min": 0,
+            "profit_max": 2000
+          },
+          {
+            "states": [
+              "MS",
+              "TX",
+              "TN"
+            ],
+            "profit_min": 150,
+            "profit_max": 3000
+          },
+          {
+            "states": [
+              "CA",
+              "KS",
+              "GA"
+            ],
+            "profit_min": 50,
+            "profit_max": 25000
+          }
+        ]
+      },
+      "49": {
+        "year": 2001,
+        "month": 11
+      },
+      "50": {
+        "year": 2001,
+        "month": 8
+      },
+      "51": {
+        "dms": 1176
+      },
+      "52": {
+        "manager_id": 1,
+        "month": 12,
+        "year": 2002
       }
     },
     "qualification": {
@@ -6281,6 +7521,116 @@
           "Williamson County",
           "Williamson County"
         ]
+      },
+      "44": {
+        "store_sk": 4
+      },
+      "45": {
+        "year": 2000,
+        "qoy": 1,
+        "zip_codes": [
+          "85669",
+          "86197",
+          "88274",
+          "83405",
+          "86475",
+          "85392",
+          "85460",
+          "80348",
+          "81792"
+        ],
+        "item_sks": [
+          2,
+          3,
+          5,
+          7,
+          11,
+          13,
+          17,
+          19,
+          23,
+          29
+        ]
+      },
+      "46": {
+        "year": 2000,
+        "hd_dep_count": 6,
+        "hd_vehicle_count": 0,
+        "cities": [
+          "Midway",
+          "Fairview"
+        ]
+      },
+      "47": {
+        "year": 1999
+      },
+      "48": {
+        "year": 1999,
+        "demographics": [
+          {
+            "marital_status": "W",
+            "education_status": "Secondary",
+            "price_min": 100.0,
+            "price_max": 150.0
+          },
+          {
+            "marital_status": "M",
+            "education_status": "Advanced Degree",
+            "price_min": 50.0,
+            "price_max": 100.0
+          },
+          {
+            "marital_status": "D",
+            "education_status": "2 yr Degree",
+            "price_min": 150.0,
+            "price_max": 200.0
+          }
+        ],
+        "geography": [
+          {
+            "states": [
+              "TX",
+              "NE",
+              "MO"
+            ],
+            "profit_min": 0,
+            "profit_max": 2000
+          },
+          {
+            "states": [
+              "CO",
+              "TN",
+              "ND"
+            ],
+            "profit_min": 150,
+            "profit_max": 3000
+          },
+          {
+            "states": [
+              "OK",
+              "PA",
+              "CA"
+            ],
+            "profit_min": 50,
+            "profit_max": 25000
+          }
+        ]
+      },
+      "49": {
+        "year": 1999,
+        "month": 12
+      },
+      "50": {
+        "year": 2002,
+        "month": 9
+      },
+      "51": {
+        "dms": 1200
+      },
+      "52": {
+        "year": 1999,
+        "month": 11,
+        "manager_id": 1
       }
     }
   }
