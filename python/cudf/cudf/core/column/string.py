@@ -362,6 +362,8 @@ class StringColumn(ColumnBase, Scannable):
                 if PANDAS_GE_220:
                     # Prior versions only expect pa.string()
                     pa_array = pa_array.cast(pa.large_string())
+                else:
+                    pa_array = pa_array.cast(pa.string())
                 pandas_array = self.dtype.__from_arrow__(pa_array)
             elif self.dtype.na_value is np.nan:
                 pandas_array = pd.array(
