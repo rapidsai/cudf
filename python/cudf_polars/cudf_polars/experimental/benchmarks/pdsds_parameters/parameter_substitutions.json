@@ -523,6 +523,59 @@
           "Williamson County",
           "Williamson County"
         ]
+      },
+      "30": {
+        "year": 2001,
+        "state": "NH"
+      },
+      "31": {
+        "year": 2001,
+        "agg": "ss1.ca_county"
+      },
+      "32": {
+        "imid": 10,
+        "csdate": "2002-01-05",
+        "year": 2002
+      },
+      "33": {
+        "year": 2001,
+        "month": 5,
+        "gmt": -5.0,
+        "category": "Sports"
+      },
+      "34": {
+        "year": 1999,
+        "bpone": "501-1000",
+        "bptwo": "5001-10000",
+        "county": [
+          "Williamson County",
+          "Williamson County",
+          "Williamson County",
+          "Williamson County",
+          "Williamson County",
+          "Williamson County",
+          "Williamson County",
+          "Williamson County"
+        ]
+      },
+      "35": {
+        "year": 2002,
+        "aggone": "stddev_samp",
+        "aggtwo": "avg",
+        "aggthree": "stddev_samp"
+      },
+      "36": {
+        "year": 2001,
+        "state": [
+          "TN",
+          "TN",
+          "TN",
+          "TN",
+          "TN",
+          "TN",
+          "TN",
+          "TN"
+        ]
       }
     },
     "10": {
@@ -1046,6 +1099,59 @@
           "Williamson County",
           "Walker County",
           "Ziebach County"
+        ]
+      },
+      "30": {
+        "year": 2001,
+        "state": "NH"
+      },
+      "31": {
+        "year": 2001,
+        "agg": "ss1.ca_county"
+      },
+      "32": {
+        "imid": 10,
+        "csdate": "2002-01-05",
+        "year": 2002
+      },
+      "33": {
+        "year": 2001,
+        "month": 5,
+        "gmt": -6.0,
+        "category": "Sports"
+      },
+      "34": {
+        "year": 2000,
+        "bpone": "1001-5000",
+        "bptwo": "5001-10000",
+        "county": [
+          "Ziebach County",
+          "Walker County",
+          "Williamson County",
+          "Ziebach County",
+          "Ziebach County",
+          "Ziebach County",
+          "Ziebach County",
+          "Ziebach County"
+        ]
+      },
+      "35": {
+        "year": 2002,
+        "aggone": "stddev_samp",
+        "aggtwo": "avg",
+        "aggthree": "stddev_samp"
+      },
+      "36": {
+        "year": 2001,
+        "state": [
+          "SD",
+          "AL",
+          "TN",
+          "SD",
+          "SD",
+          "SD",
+          "SD",
+          "SD"
         ]
       }
     },
@@ -1571,6 +1677,59 @@
           "Walker County",
           "Ziebach County"
         ]
+      },
+      "30": {
+        "year": 2001,
+        "state": "NH"
+      },
+      "31": {
+        "year": 2001,
+        "agg": "ss1.ca_county"
+      },
+      "32": {
+        "imid": 10,
+        "csdate": "2002-01-05",
+        "year": 2002
+      },
+      "33": {
+        "year": 2001,
+        "month": 5,
+        "gmt": -6.0,
+        "category": "Sports"
+      },
+      "34": {
+        "year": 2000,
+        "bpone": "1001-5000",
+        "bptwo": "5001-10000",
+        "county": [
+          "Ziebach County",
+          "Walker County",
+          "Williamson County",
+          "Ziebach County",
+          "Ziebach County",
+          "Ziebach County",
+          "Ziebach County",
+          "Ziebach County"
+        ]
+      },
+      "35": {
+        "year": 2002,
+        "aggone": "stddev_samp",
+        "aggtwo": "avg",
+        "aggthree": "stddev_samp"
+      },
+      "36": {
+        "year": 2001,
+        "state": [
+          "SD",
+          "AL",
+          "TN",
+          "SD",
+          "SD",
+          "SD",
+          "SD",
+          "SD"
+        ]
       }
     },
     "100": {
@@ -2094,6 +2253,59 @@
           "Ziebach County",
           "Daviess County",
           "Richland County"
+        ]
+      },
+      "30": {
+        "year": 2001,
+        "state": "NH"
+      },
+      "31": {
+        "year": 2001,
+        "agg": "ss1.ca_county"
+      },
+      "32": {
+        "imid": 10,
+        "csdate": "2002-01-05",
+        "year": 2002
+      },
+      "33": {
+        "year": 2001,
+        "month": 5,
+        "gmt": -6.0,
+        "category": "Sports"
+      },
+      "34": {
+        "year": 1998,
+        "bpone": "1001-5000",
+        "bptwo": "5001-10000",
+        "county": [
+          "Barrow County",
+          "Walker County",
+          "Ziebach County",
+          "Daviess County",
+          "Richland County",
+          "Williamson County",
+          "Fairfield County",
+          "Franklin Parish"
+        ]
+      },
+      "35": {
+        "year": 2002,
+        "aggone": "stddev_samp",
+        "aggtwo": "avg",
+        "aggthree": "stddev_samp"
+      },
+      "36": {
+        "year": 1998,
+        "state": [
+          "GA",
+          "AL",
+          "SD",
+          "MO",
+          "OH",
+          "TN",
+          "SC",
+          "LA"
         ]
       }
     },
@@ -2619,6 +2831,59 @@
           "Walker County",
           "Ziebach County"
         ]
+      },
+      "30": {
+        "year": 2001,
+        "state": "NH"
+      },
+      "31": {
+        "year": 2001,
+        "agg": "ss1.ca_county"
+      },
+      "32": {
+        "imid": 10,
+        "csdate": "2002-01-05",
+        "year": 2002
+      },
+      "33": {
+        "year": 2001,
+        "month": 5,
+        "gmt": -5.0,
+        "category": "Sports"
+      },
+      "34": {
+        "year": 2000,
+        "bpone": "501-1000",
+        "bptwo": "0-500",
+        "county": [
+          "Fairfield County",
+          "Ziebach County",
+          "Williamson County",
+          "Walker County",
+          "Ziebach County",
+          "Walker County",
+          "Ziebach County",
+          "Ziebach County"
+        ]
+      },
+      "35": {
+        "year": 2002,
+        "aggone": "stddev_samp",
+        "aggtwo": "avg",
+        "aggthree": "stddev_samp"
+      },
+      "36": {
+        "year": 2001,
+        "state": [
+          "SD",
+          "AL",
+          "TN",
+          "SD",
+          "SD",
+          "SD",
+          "SD",
+          "SD"
+        ]
       }
     },
     "400": {
@@ -3142,6 +3407,59 @@
           "Ziebach County",
           "Williamson County",
           "Ziebach County"
+        ]
+      },
+      "30": {
+        "year": 2001,
+        "state": "NH"
+      },
+      "31": {
+        "year": 2001,
+        "agg": "ss1.ca_county"
+      },
+      "32": {
+        "imid": 10,
+        "csdate": "2002-01-05",
+        "year": 2002
+      },
+      "33": {
+        "year": 2001,
+        "month": 5,
+        "gmt": -6.0,
+        "category": "Sports"
+      },
+      "34": {
+        "year": 2000,
+        "bpone": "501-1000",
+        "bptwo": "5001-10000",
+        "county": [
+          "Ziebach County",
+          "Williamson County",
+          "Ziebach County",
+          "Williamson County",
+          "Ziebach County",
+          "Ziebach County",
+          "Ziebach County",
+          "Ziebach County"
+        ]
+      },
+      "35": {
+        "year": 2002,
+        "aggone": "stddev_samp",
+        "aggtwo": "avg",
+        "aggthree": "stddev_samp"
+      },
+      "36": {
+        "year": 2002,
+        "state": [
+          "SD",
+          "TN",
+          "SD",
+          "TN",
+          "SD",
+          "SD",
+          "SD",
+          "SD"
         ]
       }
     },
@@ -3667,6 +3985,59 @@
           "San Miguel County",
           "Oglethorpe County"
         ]
+      },
+      "30": {
+        "year": 2001,
+        "state": "NH"
+      },
+      "31": {
+        "year": 2001,
+        "agg": "ss1.ca_county"
+      },
+      "32": {
+        "imid": 10,
+        "csdate": "2002-01-05",
+        "year": 2002
+      },
+      "33": {
+        "year": 2001,
+        "month": 5,
+        "gmt": -6.0,
+        "category": "Sports"
+      },
+      "34": {
+        "year": 1998,
+        "bpone": ">10000",
+        "bptwo": "Unknown",
+        "county": [
+          "Barrow County",
+          "Bronx County",
+          "Kittitas County",
+          "Levy County",
+          "Richland County",
+          "Gogebic County",
+          "Dauphin County",
+          "Marshall County"
+        ]
+      },
+      "35": {
+        "year": 2002,
+        "aggone": "stddev_samp",
+        "aggtwo": "avg",
+        "aggthree": "stddev_samp"
+      },
+      "36": {
+        "year": 2000,
+        "state": [
+          "IN",
+          "MN",
+          "OH",
+          "NM",
+          "GA",
+          "MN",
+          "LA",
+          "AL"
+        ]
       }
     },
     "3000": {
@@ -4190,6 +4561,59 @@
           "Mobile County",
           "Williamson County",
           "Marshall County"
+        ]
+      },
+      "30": {
+        "year": 2001,
+        "state": "NH"
+      },
+      "31": {
+        "year": 2001,
+        "agg": "ss1.ca_county"
+      },
+      "32": {
+        "imid": 10,
+        "csdate": "2002-01-05",
+        "year": 2002
+      },
+      "33": {
+        "year": 2001,
+        "month": 5,
+        "gmt": -6.0,
+        "category": "Sports"
+      },
+      "34": {
+        "year": 1998,
+        "bpone": "501-1000",
+        "bptwo": "Unknown",
+        "county": [
+          "Anderson County",
+          "Sierra County",
+          "Kittitas County",
+          "Terrell County",
+          "Dauphin County",
+          "Adams County",
+          "Perry County",
+          "Appanoose County"
+        ]
+      },
+      "35": {
+        "year": 2002,
+        "aggone": "stddev_samp",
+        "aggtwo": "avg",
+        "aggthree": "stddev_samp"
+      },
+      "36": {
+        "year": 2000,
+        "state": [
+          "MO",
+          "MN",
+          "CO",
+          "NE",
+          "NY",
+          "AL",
+          "WV",
+          "LA"
         ]
       }
     },
@@ -4715,6 +5139,59 @@
           "Levy County",
           "Richland County"
         ]
+      },
+      "30": {
+        "year": 2001,
+        "state": "NH"
+      },
+      "31": {
+        "year": 2001,
+        "agg": "ss1.ca_county"
+      },
+      "32": {
+        "imid": 10,
+        "csdate": "2002-01-05",
+        "year": 2002
+      },
+      "33": {
+        "year": 2001,
+        "month": 5,
+        "gmt": -5.0,
+        "category": "Sports"
+      },
+      "34": {
+        "year": 1999,
+        "bpone": "501-1000",
+        "bptwo": "0-500",
+        "county": [
+          "Quay County",
+          "Cocke County",
+          "Franklin Parish",
+          "Daviess County",
+          "Wilkinson County",
+          "Perry County",
+          "Tehama County",
+          "Henry County"
+        ]
+      },
+      "35": {
+        "year": 2002,
+        "aggone": "stddev_samp",
+        "aggtwo": "avg",
+        "aggthree": "stddev_samp"
+      },
+      "36": {
+        "year": 1998,
+        "state": [
+          "NY",
+          "TN",
+          "TX",
+          "AL",
+          "WV",
+          "MI",
+          "MI",
+          "NM"
+        ]
       }
     },
     "30000": {
@@ -5238,6 +5715,59 @@
           "Ziebach County",
           "Barrow County",
           "Perry County"
+        ]
+      },
+      "30": {
+        "year": 2001,
+        "state": "NH"
+      },
+      "31": {
+        "year": 2001,
+        "agg": "ss1.ca_county"
+      },
+      "32": {
+        "imid": 10,
+        "csdate": "2002-01-05",
+        "year": 2002
+      },
+      "33": {
+        "year": 2001,
+        "month": 5,
+        "gmt": -6.0,
+        "category": "Sports"
+      },
+      "34": {
+        "year": 2000,
+        "bpone": "1001-5000",
+        "bptwo": "Unknown",
+        "county": [
+          "Schley County",
+          "Sierra County",
+          "Kittitas County",
+          "La Crosse County",
+          "Reagan County",
+          "Henry County",
+          "Tehama County",
+          "Surry County"
+        ]
+      },
+      "35": {
+        "year": 2002,
+        "aggone": "stddev_samp",
+        "aggtwo": "avg",
+        "aggthree": "stddev_samp"
+      },
+      "36": {
+        "year": 1999,
+        "state": [
+          "IN",
+          "MO",
+          "PA",
+          "OH",
+          "VT",
+          "CA",
+          "TN",
+          "TX"
         ]
       }
     },
@@ -5763,6 +6293,59 @@
           "Barrow County",
           "Perry County"
         ]
+      },
+      "30": {
+        "year": 2001,
+        "state": "NH"
+      },
+      "31": {
+        "year": 2001,
+        "agg": "ss1.ca_county"
+      },
+      "32": {
+        "imid": 10,
+        "csdate": "2002-01-05",
+        "year": 2002
+      },
+      "33": {
+        "year": 2001,
+        "month": 5,
+        "gmt": -5.0,
+        "category": "Sports"
+      },
+      "34": {
+        "year": 1999,
+        "bpone": "1001-5000",
+        "bptwo": "Unknown",
+        "county": [
+          "Stillwater County",
+          "Montgomery County",
+          "Blair County",
+          "Gage County",
+          "Garza County",
+          "Fairfield County",
+          "Franklin Parish",
+          "Hinds County"
+        ]
+      },
+      "35": {
+        "year": 2002,
+        "aggone": "stddev_samp",
+        "aggtwo": "avg",
+        "aggthree": "stddev_samp"
+      },
+      "36": {
+        "year": 2001,
+        "state": [
+          "AL",
+          "CO",
+          "KS",
+          "LA",
+          "OK",
+          "WV",
+          "IA",
+          "MI"
+        ]
       }
     },
     "qualification": {
@@ -6281,6 +6864,59 @@
           "Williamson County",
           "Williamson County"
         ]
+      },
+      "30": {
+        "year": 2002,
+        "state": "GA"
+      },
+      "31": {
+        "year": 2000,
+        "agg": "ss1.ca_county"
+      },
+      "32": {
+        "csdate": "2000-01-27",
+        "year": 2000,
+        "imid": 977
+      },
+      "33": {
+        "category": "Electronics",
+        "gmt": -5.0,
+        "month": 5,
+        "year": 1998
+      },
+      "34": {
+        "county": [
+          "Williamson County",
+          "Williamson County",
+          "Williamson County",
+          "Williamson County",
+          "Williamson County",
+          "Williamson County",
+          "Williamson County",
+          "Williamson County"
+        ],
+        "year": 1999,
+        "bptwo": "Unknown",
+        "bpone": ">10000"
+      },
+      "35": {
+        "year": 2002,
+        "aggone": "min",
+        "aggtwo": "max",
+        "aggthree": "avg"
+      },
+      "36": {
+        "state": [
+          "TN",
+          "TN",
+          "TN",
+          "TN",
+          "TN",
+          "TN",
+          "TN",
+          "TN"
+        ],
+        "year": 2000
       }
     }
   }
