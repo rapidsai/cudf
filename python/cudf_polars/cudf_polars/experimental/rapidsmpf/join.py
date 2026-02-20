@@ -64,53 +64,23 @@ if TYPE_CHECKING:
 MAX_BROADCAST_ROWS = 1_500_000_000
 
 
-def _is_partitioned_on_keys(
-    metadata: ChannelMetadata,
-    key_indices: tuple[int, ...],
-    target_modulus: int,
-) -> bool:
-    """
-    Check if data is already partitioned on the join keys with compatible modulus.
+@dataclass(frozen=True)
+class _SideSample:
+    """Sample chunks and aggregate size/row stats for one side of a join."""
 
-    Returns True if the data is partitioned on the specified key columns with
-    a modulus that is a multiple of the target modulus (meaning it can be used
-    directly or with local repartitioning).
-    """
-    if metadata.partitioning is None:
-        return False
-    inter_rank = metadata.partitioning.inter_rank
-    if inter_rank is None or inter_rank == "inherit":
-        return False
-    # Check if partitioned on same keys
-    if set(inter_rank.column_indices) != set(key_indices):
-        return False
-    # Check if modulus is compatible (existing modulus is a multiple of target)
-    # This means the existing partitioning is at least as fine-grained
-    return inter_rank.modulus % target_modulus == 0
+    chunks: list[TableChunk]
+    total_size: int
+    total_rows: int
 
 
-# def _get_key_partitioning_modulus(
-#     metadata: ChannelMetadata,
-#     key_indices: tuple[int, ...],
-#     nranks: int,
-# ) -> int | None:
-#     """
-#     Get the modulus if data is partitioned on the specified keys.
+@dataclass(frozen=True)
+class _JoinStrategy:
+    """Result of sampling and strategy selection for dynamic join."""
 
-#     Returns the modulus if partitioned on exactly the given keys, else None.
-#     """
-#     if metadata.partitioning is None:
-#         return None
-#     inter_rank = metadata.partitioning.inter_rank
-#     local = metadata.partitioning.local
-#     partitioning = local if (nranks == 0 and inter_rank is None) else inter_rank
-#     if (
-#         not isinstance(partitioning, HashScheme)
-#         or local is None
-#         or set(partitioning.column_indices) != set(key_indices)
-#     ):
-#         return None
-#     return partitioning.modulus
+    broadcast_side: Literal["left", "right"] | None
+    min_shuffle_modulus: int
+    left_sample: _SideSample
+    right_sample: _SideSample
 
 
 @define_actor()
@@ -150,7 +120,7 @@ async def broadcast_join_actor(
         The target partition size in bytes.
     """
     async with shutdown_on_error(
-        context, ch_left, ch_right, ch_out, trace_ir=ir
+        context, ch_out, ch_left, ch_right, trace_ir=ir
     ) as tracer:
         # Receive metadata.
         left_metadata, right_metadata = await asyncio.gather(
@@ -297,7 +267,7 @@ async def broadcast_join_actor(
                 large_chunk.stream,
             )
             large_chunk_size = large_chunk.data_alloc_size(MemoryType.DEVICE)
-            del large_chunk  # `large_df` keeps `large_chunk` alive.
+            del large_chunk
 
             # Lazily create empty small table if small_dfs is empty
             if not small_dfs:
@@ -340,6 +310,73 @@ async def broadcast_join_actor(
         await ch_out.drain(context)
 
 
+async def _collect_small_side_for_broadcast(
+    context: Context,
+    small_ch: Channel[TableChunk],
+    initial_chunks: list[TableChunk],
+    small_child: IR,
+    *,
+    need_allgather: bool,
+    collective_id: int,
+    ir_context: Any,
+) -> tuple[list[DataFrame], int]:
+    """
+    Drain small-side channel into chunks, then build DataFrame(s) for broadcast.
+
+    Returns (list of DataFrames to join against, total byte size of small side).
+    """
+    small_chunks: list[TableChunk] = list(initial_chunks)
+    small_size = sum(c.data_alloc_size(MemoryType.DEVICE) for c in small_chunks)
+    small_row_count = sum(c.table_view().num_rows() for c in small_chunks)
+    while (msg := await small_ch.recv(context)) is not None:
+        chunk = TableChunk.from_message(msg).make_available_and_spill(
+            context.br(), allow_overbooking=True
+        )
+        small_chunks.append(chunk)
+        small_size += chunk.data_alloc_size(MemoryType.DEVICE)
+        small_row_count += chunk.table_view().num_rows()
+        del msg
+
+    cudf_row_limit = 2**31 - 1
+    can_concatenate = small_row_count < cudf_row_limit
+    small_dfs: list[DataFrame] = []
+
+    if need_allgather:
+        allgather = AllGatherManager(context, collective_id)
+        for s_id in range(len(small_chunks)):
+            allgather.insert(s_id, small_chunks.pop(0))
+        allgather.insert_finished()
+        stream = ir_context.get_cuda_stream()
+        small_dfs = [
+            DataFrame.from_table(
+                await allgather.extract_concatenated(stream),
+                list(small_child.schema.keys()),
+                list(small_child.schema.values()),
+                stream,
+            )
+        ]
+    elif small_chunks:
+        if can_concatenate:
+            small_chunks, extra = await make_table_chunks_available_or_wait(
+                context,
+                small_chunks,
+                reserve_extra=small_size,
+                net_memory_delta=0,
+            )
+            with opaque_memory_usage(extra):
+                small_dfs = [
+                    _concat(
+                        *[chunk_to_frame(chunk, small_child) for chunk in small_chunks],
+                        context=ir_context,
+                    )
+                ]
+        else:
+            small_dfs = [chunk_to_frame(c, small_child) for c in small_chunks]
+        small_chunks.clear()
+
+    return small_dfs, small_size
+
+
 async def _broadcast_join(
     context: Context,
     ir: Join,
@@ -352,8 +389,7 @@ async def _broadcast_join(
     left_sample_chunks: list[TableChunk],
     right_sample_chunks: list[TableChunk],
     broadcast_side: Literal["left", "right"],
-    collective_id: int,
-    target_partition_size: int,
+    collective_ids: list[int],
     tracer: ActorTracer | None = None,
 ) -> None:
     """
@@ -361,7 +397,9 @@ async def _broadcast_join(
 
     The small side is gathered (if not already duplicated) and concatenated
     into a single DataFrame, then joined with each chunk from the large side.
+    Pops one collective ID from collective_ids for allgather when needed.
     """
+    collective_id = collective_ids.pop(0) if collective_ids else 0
     left, right = ir.children
     if tracer is not None:
         tracer.decision = f"broadcast_{broadcast_side}"
@@ -404,65 +442,15 @@ async def _broadcast_join(
     )
     await send_metadata(ch_out, context, metadata_out)
 
-    # Collect remaining small-side chunks
-    small_chunks: list[TableChunk] = list(small_initial_chunks)
-    small_size = sum(c.data_alloc_size(MemoryType.DEVICE) for c in small_chunks)
-    small_row_count = sum(c.table_view().num_rows() for c in small_chunks)
-    while (msg := await small_ch.recv(context)) is not None:
-        chunk = TableChunk.from_message(msg).make_available_and_spill(
-            context.br(), allow_overbooking=True
-        )
-        small_chunks.append(chunk)
-        small_size += chunk.data_alloc_size(MemoryType.DEVICE)
-        small_row_count += chunk.table_view().num_rows()
-        del msg
-
-    # Check if we can safely concatenate the small side
-    # cuDF column limit is 2^31-1 = 2,147,483,647 rows
-    cudf_row_limit = 2**31 - 1
-    can_concatenate = small_row_count < cudf_row_limit
-
-    # Build small-side DataFrame list
-    # If row count is safe, concatenate into single-element list for efficiency
-    # Otherwise, keep as list of individual DataFrames
-    small_dfs: list[DataFrame] = []
-
-    if need_allgather:
-        allgather = AllGatherManager(context, collective_id)
-        for s_id in range(len(small_chunks)):
-            allgather.insert(s_id, small_chunks.pop(0))
-        allgather.insert_finished()
-        stream = ir_context.get_cuda_stream()
-        small_dfs = [
-            DataFrame.from_table(
-                await allgather.extract_concatenated(stream),
-                list(small_child.schema.keys()),
-                list(small_child.schema.values()),
-                stream,
-            )
-        ]
-    elif small_chunks:
-        if can_concatenate:
-            # Safe to concatenate - produces single-element list
-            # (_concat is a no-op for single element)
-            # Reserve memory for concatenation (input + output ~= 2x input size)
-            small_chunks, extra = await make_table_chunks_available_or_wait(
-                context,
-                small_chunks,
-                reserve_extra=small_size,
-                net_memory_delta=0,
-            )
-            with opaque_memory_usage(extra):
-                small_dfs = [
-                    _concat(
-                        *[chunk_to_frame(chunk, small_child) for chunk in small_chunks],
-                        context=ir_context,
-                    )
-                ]
-        else:
-            # Too many rows to concatenate - keep as list of DataFrames
-            small_dfs = [chunk_to_frame(c, small_child) for c in small_chunks]
-        small_chunks.clear()
+    small_dfs, small_size = await _collect_small_side_for_broadcast(
+        context,
+        small_ch,
+        small_initial_chunks,
+        small_child,
+        need_allgather=need_allgather,
+        collective_id=collective_id,
+        ir_context=ir_context,
+    )
 
     # Stream through large side
     large_chunk_processed = False
@@ -558,7 +546,7 @@ async def _broadcast_join(
         await join_large_chunk(large_df, 0, 0)
         del large_df
 
-    del small_dfs, small_chunks
+    del small_dfs
     await ch_out.drain(context)
 
 
@@ -980,32 +968,28 @@ async def _choose_algorithm(
     ir: Join,
     left_metadata: ChannelMetadata,
     right_metadata: ChannelMetadata,
-    left_sample_chunks: list[TableChunk],
-    right_sample_chunks: list[TableChunk],
-    left_sample_size: int,
-    right_sample_size: int,
-    left_sample_rows: int,
-    right_sample_rows: int,
+    left_sample: _SideSample,
+    right_sample: _SideSample,
     collective_ids: list[int],
     broadcast_threshold: int,
     target_partition_size: int,
 ) -> tuple[Literal["left", "right"] | None, int]:
-    # Estimate total sizes and row counts
+    """Choose broadcast side or shuffle based on sampled sizes and join type."""
     left_local_count = left_metadata.local_count
     right_local_count = right_metadata.local_count
 
-    if left_sample_chunks:
-        left_avg_size = left_sample_size / len(left_sample_chunks)
-        left_avg_rows = left_sample_rows / len(left_sample_chunks)
+    if left_sample.chunks:
+        left_avg_size = left_sample.total_size / len(left_sample.chunks)
+        left_avg_rows = left_sample.total_rows / len(left_sample.chunks)
         left_estimate = int(left_avg_size * left_local_count)
         left_row_estimate = int(left_avg_rows * left_local_count)
     else:
         left_estimate = 0
         left_row_estimate = 0
 
-    if right_sample_chunks:
-        right_avg_size = right_sample_size / len(right_sample_chunks)
-        right_avg_rows = right_sample_rows / len(right_sample_chunks)
+    if right_sample.chunks:
+        right_avg_size = right_sample.total_size / len(right_sample.chunks)
+        right_avg_rows = right_sample.total_rows / len(right_sample.chunks)
         right_estimate = int(right_avg_size * right_local_count)
         right_row_estimate = int(right_avg_rows * right_local_count)
     else:
@@ -1162,10 +1146,11 @@ async def _sample_chunks(
     context: Context,
     ch: Channel[TableChunk],
     sample_chunk_count: int,
-) -> tuple[list[TableChunk], int, int]:
-    sample_chunks: list[TableChunk] = []
-    sample_size = 0
-    sample_rows = 0
+) -> _SideSample:
+    """Sample up to sample_chunk_count chunks from a channel; return chunks and stats."""
+    chunks: list[TableChunk] = []
+    total_size = 0
+    total_rows = 0
     for _ in range(sample_chunk_count):
         msg = await ch.recv(context)
         if msg is None:
@@ -1173,11 +1158,47 @@ async def _sample_chunks(
         chunk = TableChunk.from_message(msg).make_available_and_spill(
             context.br(), allow_overbooking=True
         )
-        sample_chunks.append(chunk)
-        sample_size += chunk.data_alloc_size(MemoryType.DEVICE)
-        sample_rows += chunk.table_view().num_rows()
+        chunks.append(chunk)
+        total_size += chunk.data_alloc_size(MemoryType.DEVICE)
+        total_rows += chunk.table_view().num_rows()
         del msg
-    return sample_chunks, sample_size, sample_rows
+    return _SideSample(chunks=chunks, total_size=total_size, total_rows=total_rows)
+
+
+async def _sample_and_choose_strategy(
+    context: Context,
+    ir: Join,
+    ch_left: Channel[TableChunk],
+    ch_right: Channel[TableChunk],
+    left_metadata: ChannelMetadata,
+    right_metadata: ChannelMetadata,
+    sample_chunk_count: int,
+    broadcast_threshold: int,
+    target_partition_size: int,
+    collective_ids: list[int],
+) -> _JoinStrategy:
+    """Sample both sides, allgather estimates, and choose broadcast vs shuffle."""
+    left_sample, right_sample = await asyncio.gather(
+        _sample_chunks(context, ch_left, sample_chunk_count),
+        _sample_chunks(context, ch_right, sample_chunk_count),
+    )
+    broadcast_side, min_shuffle_modulus = await _choose_algorithm(
+        context,
+        ir,
+        left_metadata,
+        right_metadata,
+        left_sample,
+        right_sample,
+        collective_ids,
+        broadcast_threshold,
+        target_partition_size,
+    )
+    return _JoinStrategy(
+        broadcast_side=broadcast_side,
+        min_shuffle_modulus=min_shuffle_modulus,
+        left_sample=left_sample,
+        right_sample=right_sample,
+    )
 
 
 @define_actor()
@@ -1202,7 +1223,7 @@ async def join_actor(
     - Shuffle: Both sides are large, shuffle by join keys
     """
     async with shutdown_on_error(
-        context, ch_left, ch_right, ch_out, trace_ir=ir
+        context, ch_out, ch_left, ch_right, trace_ir=ir
     ) as tracer:
         left_metadata, right_metadata = await asyncio.gather(
             recv_metadata(ch_left, context),
@@ -1235,32 +1256,20 @@ async def join_actor(
             )
             return
 
-        # Sample chunks from both sides concurrently
-        (
-            (left_sample_chunks, left_sample_size, left_sample_rows),
-            (right_sample_chunks, right_sample_size, right_sample_rows),
-        ) = await asyncio.gather(
-            _sample_chunks(context, ch_left, sample_chunk_count),
-            _sample_chunks(context, ch_right, sample_chunk_count),
-        )
-
-        broadcast_side, min_shuffle_modulus = await _choose_algorithm(
+        strategy = await _sample_and_choose_strategy(
             context,
             ir,
+            ch_left,
+            ch_right,
             left_metadata,
             right_metadata,
-            left_sample_chunks,
-            right_sample_chunks,
-            left_sample_size,
-            right_sample_size,
-            left_sample_rows,
-            right_sample_rows,
-            collective_ids,
+            sample_chunk_count,
             broadcast_threshold,
             target_partition_size,
+            collective_ids,
         )
 
-        if broadcast_side:
+        if strategy.broadcast_side is not None:
             await _broadcast_join(
                 context,
                 ir,
@@ -1270,11 +1279,10 @@ async def join_actor(
                 ch_right,
                 left_metadata,
                 right_metadata,
-                left_sample_chunks,
-                right_sample_chunks,
-                broadcast_side,
-                collective_ids.pop(0),
-                target_partition_size,
+                strategy.left_sample.chunks,
+                strategy.right_sample.chunks,
+                strategy.broadcast_side,
+                collective_ids,
                 tracer,
             )
         else:
@@ -1287,10 +1295,10 @@ async def join_actor(
                 ch_right,
                 left_state,
                 right_state,
-                min_shuffle_modulus,
+                strategy.min_shuffle_modulus,
                 collective_ids,
-                left_sample_chunks=left_sample_chunks,
-                right_sample_chunks=right_sample_chunks,
+                left_sample_chunks=strategy.left_sample.chunks,
+                right_sample_chunks=strategy.right_sample.chunks,
                 tracer=tracer,
             )
 
