@@ -331,8 +331,8 @@ def execute_with_cudf(
         if (
             memory_resource is None
             and translator.config_options.executor.name == "streaming"
-            and translator.config_options.executor.cluster == "distributed"
-        ):  # pragma: no cover; Requires distributed cluster
+            and translator.config_options.executor.cluster in ("distributed", "rrun")
+        ):  # pragma: no cover; Requires distributed cluster or rrun
             memory_resource = rmm.mr.get_current_device_resource()
         if len(ir_translation_errors):
             # TODO: Display these errors in user-friendly way.

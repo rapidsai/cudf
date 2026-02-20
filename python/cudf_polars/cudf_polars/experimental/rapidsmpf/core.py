@@ -75,7 +75,7 @@ def evaluate_logical_plan(
     config_options: ConfigOptions[StreamingExecutor],
     *,
     collect_metadata: bool = False,
-) -> tuple[pl.DataFrame, list[ChannelMetadata] | None]:
+) -> tuple[pl.DataFrame | None, list[ChannelMetadata] | None]:
     """
     Evaluate a logical plan with the RapidsMPF streaming runtime.
 
@@ -91,10 +91,18 @@ def evaluate_logical_plan(
     Returns
     -------
     The output DataFrame and metadata collector.
+    For rrun execution, non-root ranks return (None, None).
     """
     assert config_options.executor.runtime == "rapidsmpf", "Runtime must be rapidsmpf"
 
-    # Lower the IR graph on the client process (for now).
+    from cudf_polars.experimental.rapidsmpf.bootstrap_ctx import (
+        get_rank,
+        is_running_with_rrun,
+    )
+
+    is_rrun = is_running_with_rrun()
+
+    # Lower the IR graph on all processes (for rrun) or client process (for dask).
     ir, partition_info, stats = lower_ir_graph(ir, config_options)
 
     # Log the query plan structure for tracing (no-op if tracing disabled)
@@ -104,8 +112,51 @@ def evaluate_logical_plan(
     with ReserveOpIDs(ir, config_options) as collective_id_map:
         # Build and execute the streaming pipeline.
         # This must be done on all worker processes
-        # for cluster == "distributed".
+        # for cluster == "distributed" or cluster == "rrun".
         if (
+            config_options.executor.cluster == "rrun" or is_rrun
+        ):  # pragma: no cover; block depends on executor type and rrun cluster
+            # SPMD execution: All ranks execute, only rank 0 returns result.
+            # Get the pre-initialized worker context (set up once in run_polars)
+            # and create a lightweight streaming Context from it using the same
+            # pattern as Dask's _evaluate_pipeline_dask.
+            from rapidsmpf.config import Options as RmpfOptions
+            from rapidsmpf.config import get_environment_variables
+
+            from cudf_polars.experimental.rapidsmpf.bootstrap_ctx import (
+                get_rrun_worker_context,
+            )
+
+            worker_ctx = get_rrun_worker_context()
+            options = RmpfOptions(
+                {
+                    "num_streaming_threads": str(
+                        max(config_options.executor.max_io_threads, 1)
+                    )
+                }
+                | get_environment_variables()
+            )
+            with Context(
+                worker_ctx.comm, worker_ctx.br, options, worker_ctx.statistics
+            ) as rmpf_context:
+                result, metadata_collector = evaluate_pipeline(
+                    ir,
+                    partition_info,
+                    config_options,
+                    stats,
+                    collective_id_map,
+                    rmpf_context,
+                    collect_metadata=collect_metadata,
+                )
+
+            # Only rank 0 returns result to caller
+            rank = get_rank()
+            if rank == 0:
+                return result, metadata_collector
+            else:
+                return None, None
+
+        elif (
             config_options.executor.cluster == "distributed"
         ):  # pragma: no cover; block depends on executor type and Distributed cluster
             # Distributed execution: Use client.run
@@ -122,6 +173,7 @@ def evaluate_logical_plan(
                 collective_id_map,
                 collect_metadata=collect_metadata,
             )
+            return result, metadata_collector
         else:
             # Single-process execution: Run locally
             result, metadata_collector = evaluate_pipeline(
@@ -132,8 +184,7 @@ def evaluate_logical_plan(
                 collective_id_map,
                 collect_metadata=collect_metadata,
             )
-
-    return result, metadata_collector
+            return result, metadata_collector
 
 
 def evaluate_pipeline(
@@ -174,9 +225,11 @@ def evaluate_pipeline(
 
     _initial_mr: Any = None
     stream_pool: CudaStreamPool | bool = False
+
     if rmpf_context is not None:
-        # Using "distributed" mode.
-        # Always use the RapidsMPF stream pool for now.
+        # Using "distributed" or "rrun" mode.
+        # The caller has already set up the Context (from a pre-initialized
+        # WorkerContext). Always use the RapidsMPF stream pool for now.
         br = rmpf_context.br()
         stream_pool = True
         rmpf_context_manager = contextlib.nullcontext(rmpf_context)

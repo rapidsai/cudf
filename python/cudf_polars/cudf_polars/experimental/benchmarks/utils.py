@@ -479,6 +479,8 @@ def get_executor_options(
             executor_options["fallback_mode"] = run_config.fallback_mode
         if run_config.cluster == "distributed":
             executor_options["cluster"] = "distributed"
+        elif run_config.cluster == "rrun":
+            executor_options["cluster"] = "rrun"
         executor_options["stats_planning"] = {
             "use_reduction_planning": run_config.stats_planning,
             "use_sampling": (
@@ -550,6 +552,61 @@ def print_query_plan(
     return logical_plan, plan
 
 
+def _setup_rmm_for_rrun(args: argparse.Namespace, rank: int) -> None:  # type: ignore[no-untyped-def]
+    """
+    Set up RMM resources for rrun mode (similar to RMMPlugin for Dask workers).
+
+    This configures the RMM memory resource based on command-line arguments,
+    replicating what the Dask-CUDA RMMPlugin does for workers.
+
+    Parameters
+    ----------
+    args : argparse.Namespace
+        Parsed command line arguments containing RMM settings.
+    rank : int
+        The rank of the current process.
+    """
+    import rmm
+
+    pool_size = None
+    if args.rmm_pool_size is not None:
+        if isinstance(args.rmm_pool_size, str):
+            from dask.utils import parse_bytes
+
+            pool_size = parse_bytes(args.rmm_pool_size)
+        else:
+            # Assume it's a fraction
+            total_memory = rmm.mr.available_device_memory()[1]
+            pool_size = int(total_memory * args.rmm_pool_size)
+
+    if args.rmm_async:
+        if pool_size is not None:
+            initial_pool_size = (pool_size // 256) * 256
+            mr = rmm.mr.CudaAsyncMemoryResource(initial_pool_size=initial_pool_size)
+        else:
+            mr = rmm.mr.CudaAsyncMemoryResource()
+
+        if hasattr(args, "rmm_release_threshold") and args.rmm_release_threshold:
+            if isinstance(args.rmm_release_threshold, str):
+                from dask.utils import parse_bytes
+
+                release_threshold = parse_bytes(args.rmm_release_threshold)
+            else:
+                release_threshold = args.rmm_release_threshold
+            mr.release_threshold = release_threshold
+
+        rmm.mr.set_current_device_resource(mr)
+    elif pool_size is not None:
+        rmm.reinitialize(
+            pool_allocator=True,
+            initial_pool_size=pool_size,
+            maximum_pool_size=None,  # No maximum limit
+        )
+
+    if hasattr(args, "rmm_statistics") and args.rmm_statistics:
+        rmm.statistics.enable_statistics()
+
+
 def initialize_dask_cluster(run_config: RunConfig, args: argparse.Namespace):  # type: ignore[no-untyped-def]
     """
     Initialize a Dask distributed cluster.
@@ -571,6 +628,21 @@ def initialize_dask_cluster(run_config: RunConfig, args: argparse.Namespace):  #
     Client or None
         A Dask distributed Client, or None if not using distributed mode.
     """
+    # Check if running with rrun
+    try:
+        from cudf_polars.experimental.rapidsmpf.bootstrap_ctx import (
+            get_nranks,
+            get_rank,
+            is_running_with_rrun,
+        )
+
+        if is_running_with_rrun():
+            rank = get_rank()
+            nranks = get_nranks()
+            return None  # No Dask client is used with rrun
+    except ImportError:
+        pass
+
     if run_config.cluster != "distributed":
         return None
 
@@ -1075,7 +1147,49 @@ def run_polars(
     validation_failures: list[int] = []
     query_failures: list[tuple[int, int]] = []
 
-    client = initialize_dask_cluster(run_config, args)
+    # Check if running with rrun
+    is_rrun = False
+    rank = 0
+    nranks = 1
+    try:
+        from cudf_polars.experimental.rapidsmpf.bootstrap_ctx import (
+            get_nranks,
+            get_rank,
+            is_running_with_rrun,
+        )
+
+        if is_running_with_rrun():
+            is_rrun = True
+            rank = get_rank()
+            nranks = get_nranks()
+            # Update cluster and n_workers for rrun mode
+            run_config = dataclasses.replace(
+                run_config, cluster="rrun", n_workers=nranks
+            )
+            _setup_rmm_for_rrun(args, rank)
+
+            from cudf_polars.experimental.rapidsmpf.bootstrap_ctx import (
+                setup_rrun_worker_context,
+            )
+
+            setup_rrun_worker_context(
+                spill_device=run_config.spill_device,
+                spill_to_pinned_memory=run_config.spill_to_pinned_memory,
+                oom_protection=run_config.rapidsmpf_oom_protection,
+                max_io_threads=run_config.max_io_threads,
+            )
+
+            try:
+                rmm.statistics.enable_statistics()
+            except Exception:
+                pass
+    except ImportError:
+        pass  # rapidsmpf not available
+
+    if is_rrun:
+        client = None
+    else:
+        client = initialize_dask_cluster(run_config, args)
 
     # Update n_workers from the actual cluster when using scheduler file/address
     if client is not None:
@@ -1097,7 +1211,7 @@ def run_polars(
         engine = pl.GPUEngine(
             raise_on_fail=True,
             memory_resource=rmm.mr.CudaAsyncMemoryResource()
-            if run_config.rmm_async
+            if run_config.rmm_async and not is_rrun
             else None,
             cuda_stream_policy=run_config.stream_policy,
             executor=run_config.executor,
@@ -1131,10 +1245,21 @@ def run_polars(
             try:
                 result = execute_query(q_id, i, q, run_config, args, engine)
             except Exception:
-                print(f"❌ query={q_id} iteration={i} failed!")
-                print(traceback.format_exc())
+                if not is_rrun or rank == 0:
+                    print(f"❌ query={q_id} iteration={i} failed!")
+                    print(traceback.format_exc())
                 query_failures.append((q_id, i))
                 continue
+
+            # In rrun mode, result is None for non-root ranks
+            if is_rrun and result is None:
+                t1 = time.monotonic()
+                record = Record(
+                    query=q_id, iteration=i, duration=t1 - t0, shuffle_stats=None
+                )
+                records[q_id].append(record)
+                continue
+
             if run_config.shuffle == "rapidsmpf" and run_config.gather_shuffle_stats:
                 from rapidsmpf.integrations.dask.shuffler import (
                     clear_shuffle_statistics,
@@ -1154,28 +1279,31 @@ def run_polars(
                         executor=run_config.executor,
                         check_exact=False,
                     )
-                    print(f"✅ Query {q_id} passed validation!")
+                    if not is_rrun or rank == 0:
+                        print(f"✅ Query {q_id} passed validation!")
                 except AssertionError as e:
                     validation_failures.append(q_id)
-                    print(f"❌ Query {q_id} failed validation!\n{e}")
+                    if not is_rrun or rank == 0:
+                        print(f"❌ Query {q_id} failed validation!\n{e}")
 
             t1 = time.monotonic()
             record = Record(
                 query=q_id, iteration=i, duration=t1 - t0, shuffle_stats=shuffle_stats
             )
-            if args.print_results:
+            if args.print_results and (not is_rrun or rank == 0):
                 print(result)
 
-            if args.results_directory is not None and i == 0:
+            if args.results_directory is not None and i == 0 and (not is_rrun or rank == 0):
                 results_dir = Path(args.results_directory)
                 results_dir.mkdir(parents=True, exist_ok=True)
                 output_path = results_dir / f"q_{q_id:02d}.parquet"
                 result.write_parquet(output_path)
 
-            print(
-                f"Query {q_id} - Iteration {i} finished in {record.duration:0.4f}s",
-                flush=True,
-            )
+            if not is_rrun or rank == 0:
+                print(
+                    f"Query {q_id} - Iteration {i} finished in {record.duration:0.4f}s",
+                    flush=True,
+                )
             records[q_id].append(record)
 
     run_config = dataclasses.replace(run_config, records=dict(records), plans=plans)
@@ -1229,24 +1357,25 @@ def run_polars(
 
             run_config.records[query_id] = new_records
 
-    if args.summarize:
-        run_config.summarize()
+    if not is_rrun or rank == 0:
+        if args.summarize:
+            run_config.summarize()
+
+        if args.validate and run_config.executor != "cpu":
+            print("\nValidation Summary")
+            print("==================")
+            if validation_failures:
+                print(
+                    f"{len(validation_failures)} queries failed validation: {sorted(set(validation_failures))}"
+                )
+            else:
+                print("All validated queries passed.")
+
+        args.output.write(json.dumps(run_config.serialize(engine=engine)))
+        args.output.write("\n")
 
     if client is not None:
         client.close(timeout=60)
-
-    if args.validate and run_config.executor != "cpu":
-        print("\nValidation Summary")
-        print("==================")
-        if validation_failures:
-            print(
-                f"{len(validation_failures)} queries failed validation: {sorted(set(validation_failures))}"
-            )
-        else:
-            print("All validated queries passed.")
-
-    args.output.write(json.dumps(run_config.serialize(engine=engine)))
-    args.output.write("\n")
 
     if query_failures or validation_failures:
         sys.exit(1)
