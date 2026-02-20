@@ -203,7 +203,11 @@ class TemporalBaseColumn(ColumnBase, Scannable):
 
     @functools.cached_property
     def time_unit(self) -> str:
-        return np.datetime_data(self.dtype)[0]
+        if isinstance(self.dtype, np.dtype):
+            # np.dtype defaults to dtype[float64] for typing
+            return np.datetime_data(self.dtype)[0]  # type: ignore[arg-type]
+        else:
+            return cast("pd.ArrowDtype", self.dtype).pyarrow_dtype.unit
 
     @property
     def values(self) -> cp.ndarray:

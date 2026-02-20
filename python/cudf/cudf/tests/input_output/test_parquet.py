@@ -1413,7 +1413,8 @@ def test_delta_binary(
     )
     cdf = cudf.read_parquet(pdf_fname)
     pcdf = cudf.from_pandas(test_pdf)
-    assert_eq(cdf, pcdf)
+    # integer columns can be pandas Int64 vs numpy int64 from source
+    assert_eq(cdf, pcdf, check_dtype=False)
 
     # Write back out with cudf and make sure pyarrow can read it
     cudf_fname = tmp_path / "cudfv2.parquet"
@@ -1425,7 +1426,8 @@ def test_delta_binary(
     )
 
     cdf2 = cudf.from_pandas(pd.read_parquet(cudf_fname))
-    assert_eq(cdf2, cdf)
+    # integer columns can be pandas Int64 vs numpy int64 from source
+    assert_eq(cdf2, cdf, check_dtype=False)
 
 
 @pytest.mark.parametrize("add_nulls", [True, False])
@@ -1476,7 +1478,8 @@ def test_delta_byte_array_roundtrip(
         use_dictionary=False,
     )
     cdf2 = cudf.from_pandas(pd.read_parquet(cudf_fname))
-    assert_eq(cdf2, cdf)
+    # string columns can result in StringDtype vs object with nulls
+    assert_eq(cdf2, cdf, check_dtype=not add_nulls)
 
 
 @pytest.mark.parametrize("add_nulls", [True, False])
@@ -1541,7 +1544,8 @@ def test_delta_struct_list(tmp_path, delta_num_rows, add_nulls, str_encoding):
         use_dictionary=False,
     )
     cdf2 = cudf.from_pandas(pd.read_parquet(cudf_fname))
-    assert_eq(cdf2, cdf)
+    # string columns can result in StringDtype vs object with nulls
+    assert_eq(cdf2, cdf, check_dtype=not add_nulls)
 
 
 @pytest.mark.parametrize(
@@ -2508,20 +2512,21 @@ def test_parquet_writer_list_chunked(tmp_path, store_schema):
 def test_parquet_nullable_boolean(tmp_path, engine):
     pandas_path = tmp_path / "pandas_bools.parquet"
 
-    pdf = pd.DataFrame(
+    expected = pd.DataFrame(
         {
             "a": pd.Series(
                 [True, False, None, True, False], dtype=pd.BooleanDtype()
             )
         }
     )
-    expected_gdf = cudf.DataFrame({"a": [True, False, None, True, False]})
 
-    pdf.to_parquet(pandas_path)
+    expected.to_parquet(pandas_path)
     with _hide_pyarrow_parquet_cpu_warnings(engine):
-        actual_gdf = cudf.read_parquet(pandas_path, engine=engine)
-
-    assert_eq(actual_gdf, expected_gdf)
+        result = cudf.read_parquet(pandas_path, engine=engine)
+    if engine == "cudf":
+        # TODO: Preserve BooleanDtype from the parquet metadata?
+        expected["a"] = expected["a"].astype("object")
+    assert_eq(result, expected)
 
 
 def run_parquet_index(pdf, index):

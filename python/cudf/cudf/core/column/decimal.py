@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import warnings
 from decimal import Decimal
+from functools import cached_property
 from typing import TYPE_CHECKING, Any, ClassVar, cast
 
 import numpy as np
@@ -62,6 +63,20 @@ class DecimalBaseColumn(NumericalBaseColumn):
     _VALID_BINARY_OPERATIONS = BinaryOperand._SUPPORTED_BINARY_OPERATIONS
     _decimal_type_check: ClassVar[Callable[[DtypeObj], bool]]
 
+    @cached_property
+    def scale(self) -> int:
+        if isinstance(self.dtype, DecimalDtype):
+            return self.dtype.scale
+        else:
+            return cast("pd.ArrowDtype", self.dtype).pyarrow_dtype.scale
+
+    @cached_property
+    def precision(self) -> int:
+        if isinstance(self.dtype, DecimalDtype):
+            return self.dtype.precision
+        else:
+            return cast("pd.ArrowDtype", self.dtype).pyarrow_dtype.precision
+
     def _adjust_reduce_result_dtype(
         self,
         reduction_op: str,
@@ -106,7 +121,7 @@ class DecimalBaseColumn(NumericalBaseColumn):
         self,
         dtype: DecimalDtype,
     ) -> DecimalBaseColumn:
-        if isinstance(dtype, DecimalDtype) and dtype.scale < self.dtype.scale:  # type: ignore[union-attr]
+        if isinstance(dtype, DecimalDtype) and dtype.scale < self.scale:
             warnings.warn(
                 "cuDF truncates when downcasting decimals to a lower scale. "
                 "To round, use Series.round() or DataFrame.round()."
@@ -185,8 +200,8 @@ class DecimalBaseColumn(NumericalBaseColumn):
                 # This branch occurs if we have a DecimalBaseColumn of a
                 # different size (e.g. 64 instead of 32).
                 if (
-                    self.dtype.precision == other.dtype.precision  # type: ignore[union-attr]
-                    and self.dtype.scale == other.dtype.scale  # type: ignore[union-attr]
+                    self.precision == other.dtype.precision  # type: ignore[union-attr]
+                    and self.scale == other.dtype.scale  # type: ignore[union-attr]
                 ):
                     other = other.astype(self.dtype)
             other_cudf_dtype = other.dtype
@@ -318,8 +333,8 @@ class DecimalBaseColumn(NumericalBaseColumn):
                 "Decimal128Column",
                 self.astype(
                     cudf.Decimal128Dtype(
-                        self.dtype.precision,  # type: ignore[union-attr]
-                        self.dtype.scale,  # type: ignore[union-attr]
+                        self.precision,
+                        self.scale,
                     )
                 ),
             )
