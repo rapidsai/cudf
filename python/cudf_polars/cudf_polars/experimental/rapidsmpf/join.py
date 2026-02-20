@@ -725,6 +725,8 @@ async def get_dataframe_to_join(
     """Get the next DataFrame (from shuffle or channel) for one side of the join."""
     if shuffle is not None:
         table = await shuffle.extract_chunk(partition_id, stream)
+        if table.num_rows() == 0 and len(table.columns()) == 0:
+            table = empty_table_chunk(child, context, stream).table_view()
     else:
         chunk, channel_done = await get_unshuffled_chunk(
             context, ch, sample_chunks, channel_done=channel_done
@@ -910,8 +912,12 @@ class PartitioningState:
     """Table column indices that are locally partitioned, or None if inherited."""
 
     def __bool__(self) -> bool:
-        """True if there is effective inter-rank partitioning."""
-        return self.inter_rank_modulus > 0
+        """True if the table has proper partitioning."""
+        return (
+            self.inter_rank_modulus > 0
+            and self.local_modulus is not None
+            and self.local_modulus > 0
+        )
 
     def __eq__(self, other: object) -> bool:
         """Equal when moduli and same number of partitioned keys (for left vs right)."""
