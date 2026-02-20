@@ -75,88 +75,292 @@ struct CUDF_LTO_ALIAS decimal32 {
  private:
   int32_t _value    = 0;
   scale_type _scale = scale_type{};
+
+ public:
+  constexpr decimal32 operator+(decimal32 const&) const;
+  constexpr decimal32 operator-(decimal32 const&) const;
+  constexpr decimal32 operator*(decimal32 const&) const;
+  constexpr decimal32 operator/(decimal32 const&) const;
+  constexpr bool operator==(decimal32 const&) const;
+  constexpr bool operator!=(decimal32 const&) const;
+  constexpr bool operator<(decimal32 const&) const;
+  constexpr bool operator>(decimal32 const&) const;
+  constexpr bool operator<=(decimal32 const&) const;
+  constexpr bool operator>=(decimal32 const&) const;
 };
 
 struct CUDF_LTO_ALIAS decimal64 {
  private:
   int64_t _value    = 0;
   scale_type _scale = scale_type{};
+
+ public:
+  constexpr decimal64 operator+(decimal64 const&) const;
+  constexpr decimal64 operator-(decimal64 const&) const;
+  constexpr decimal64 operator*(decimal64 const&) const;
+  constexpr decimal64 operator/(decimal64 const&) const;
+  constexpr bool operator==(decimal64 const&) const;
+  constexpr bool operator!=(decimal64 const&) const;
+  constexpr bool operator<(decimal64 const&) const;
+  constexpr bool operator>(decimal64 const&) const;
+  constexpr bool operator<=(decimal64 const&) const;
+  constexpr bool operator>=(decimal64 const&) const;
 };
 
 struct CUDF_LTO_ALIAS decimal128 {
  private:
   __int128_t _value = 0;
   scale_type _scale = scale_type{};
+
+ public:
+  constexpr decimal128 operator+(decimal128 const&) const;
+  constexpr decimal128 operator-(decimal128 const&) const;
+  constexpr decimal128 operator*(decimal128 const&) const;
+  constexpr decimal128 operator/(decimal128 const&) const;
+  constexpr bool operator==(decimal128 const&) const;
+  constexpr bool operator!=(decimal128 const&) const;
+  constexpr bool operator<(decimal128 const&) const;
+  constexpr bool operator>(decimal128 const&) const;
+  constexpr bool operator<=(decimal128 const&) const;
+  constexpr bool operator>=(decimal128 const&) const;
 };
 
 struct CUDF_LTO_ALIAS timestamp_D {
  private:
   int32_t _rep = 0;
+
+ public:
+  constexpr timestamp_D operator+(timestamp_D const&) const;
+  constexpr timestamp_D operator-(timestamp_D const&) const;
+  constexpr timestamp_D operator*(timestamp_D const&) const;
+  constexpr timestamp_D operator/(timestamp_D const&) const;
+  constexpr bool operator==(timestamp_D const&) const;
+  constexpr bool operator!=(timestamp_D const&) const;
+  constexpr bool operator<(timestamp_D const&) const;
+  constexpr bool operator>(timestamp_D const&) const;
+  constexpr bool operator<=(timestamp_D const&) const;
+  constexpr bool operator>=(timestamp_D const&) const;
 };
 
 struct CUDF_LTO_ALIAS timestamp_h {
  private:
   int32_t _rep = 0;
+
+ public:
+  constexpr timestamp_h operator+(timestamp_h const&) const;
+  constexpr timestamp_h operator-(timestamp_h const&) const;
+  constexpr timestamp_h operator*(timestamp_h const&) const;
+  constexpr timestamp_h operator/(timestamp_h const&) const;
+  constexpr bool operator==(timestamp_h const&) const;
+  constexpr bool operator!=(timestamp_h const&) const;
+  constexpr bool operator<(timestamp_h const&) const;
+  constexpr bool operator>(timestamp_h const&) const;
+  constexpr bool operator<=(timestamp_h const&) const;
+  constexpr bool operator>=(timestamp_h const&) const;
 };
 
 struct CUDF_LTO_ALIAS timestamp_m {
  private:
   int32_t _rep = 0;
+
+ public:
+  constexpr timestamp_m operator+(timestamp_m const&) const;
+  constexpr timestamp_m operator-(timestamp_m const&) const;
+  constexpr timestamp_m operator*(timestamp_m const&) const;
+  constexpr timestamp_m operator/(timestamp_m const&) const;
+  constexpr bool operator==(timestamp_m const&) const;
+  constexpr bool operator!=(timestamp_m const&) const;
+  constexpr bool operator<(timestamp_m const&) const;
+  constexpr bool operator>(timestamp_m const&) const;
+  constexpr bool operator<=(timestamp_m const&) const;
+  constexpr bool operator>=(timestamp_m const&) const;
 };
 
 struct CUDF_LTO_ALIAS timestamp_s {
  private:
   int64_t _rep = 0;
+
+ public:
+  constexpr timestamp_s operator+(timestamp_s const&) const;
+  constexpr timestamp_s operator-(timestamp_s const&) const;
+  constexpr timestamp_s operator*(timestamp_s const&) const;
+  constexpr timestamp_s operator/(timestamp_s const&) const;
+  constexpr bool operator==(timestamp_s const&) const;
+  constexpr bool operator!=(timestamp_s const&) const;
+  constexpr bool operator<(timestamp_s const&) const;
+  constexpr bool operator>(timestamp_s const&) const;
+  constexpr bool operator<=(timestamp_s const&) const;
+  constexpr bool operator>=(timestamp_s const&) const;
 };
 
 struct CUDF_LTO_ALIAS timestamp_ms {
  private:
   int64_t _rep = 0;
+
+ public:
+  constexpr timestamp_ms operator+(timestamp_ms const&) const;
+  constexpr timestamp_ms operator-(timestamp_ms const&) const;
+  constexpr timestamp_ms operator*(timestamp_ms const&) const;
+  constexpr timestamp_ms operator/(timestamp_ms const&) const;
+  constexpr bool operator==(timestamp_ms const&) const;
+  constexpr bool operator!=(timestamp_ms const&) const;
+  constexpr bool operator<(timestamp_ms const&) const;
+  constexpr bool operator>(timestamp_ms const&) const;
+  constexpr bool operator<=(timestamp_ms const&) const;
+  constexpr bool operator>=(timestamp_ms const&) const;
 };
 
 struct CUDF_LTO_ALIAS timestamp_us {
  private:
   int64_t _rep = 0;
+
+ public:
+  constexpr timestamp_us operator+(timestamp_us const&) const;
+  constexpr timestamp_us operator-(timestamp_us const&) const;
+  constexpr timestamp_us operator*(timestamp_us const&) const;
+  constexpr timestamp_us operator/(timestamp_us const&) const;
+  constexpr bool operator==(timestamp_us const&) const;
+  constexpr bool operator!=(timestamp_us const&) const;
+  constexpr bool operator<(timestamp_us const&) const;
+  constexpr bool operator>(timestamp_us const&) const;
+  constexpr bool operator<=(timestamp_us const&) const;
+  constexpr bool operator>=(timestamp_us const&) const;
 };
 
 struct CUDF_LTO_ALIAS timestamp_ns {
  private:
   int64_t _rep = 0;
+
+ public:
+  constexpr timestamp_ns operator+(timestamp_ns const&) const;
+  constexpr timestamp_ns operator-(timestamp_ns const&) const;
+  constexpr timestamp_ns operator*(timestamp_ns const&) const;
+  constexpr timestamp_ns operator/(timestamp_ns const&) const;
+  constexpr bool operator==(timestamp_ns const&) const;
+  constexpr bool operator!=(timestamp_ns const&) const;
+  constexpr bool operator<(timestamp_ns const&) const;
+  constexpr bool operator>(timestamp_ns const&) const;
+  constexpr bool operator<=(timestamp_ns const&) const;
+  constexpr bool operator>=(timestamp_ns const&) const;
 };
 
 struct CUDF_LTO_ALIAS duration_D {
  private:
   int32_t _rep = 0;
+
+ public:
+  constexpr duration_D operator+(duration_D const&) const;
+  constexpr duration_D operator-(duration_D const&) const;
+  constexpr duration_D operator*(duration_D const&) const;
+  constexpr duration_D operator/(duration_D const&) const;
+  constexpr bool operator==(duration_D const&) const;
+  constexpr bool operator!=(duration_D const&) const;
+  constexpr bool operator<(duration_D const&) const;
+  constexpr bool operator>(duration_D const&) const;
+  constexpr bool operator<=(duration_D const&) const;
+  constexpr bool operator>=(duration_D const&) const;
 };
 
 struct CUDF_LTO_ALIAS duration_h {
  private:
   int32_t _rep = 0;
+
+ public:
+  constexpr duration_h operator+(duration_h const&) const;
+  constexpr duration_h operator-(duration_h const&) const;
+  constexpr duration_h operator*(duration_h const&) const;
+  constexpr duration_h operator/(duration_h const&) const;
+  constexpr bool operator==(duration_h const&) const;
+  constexpr bool operator!=(duration_h const&) const;
+  constexpr bool operator<(duration_h const&) const;
+  constexpr bool operator>(duration_h const&) const;
+  constexpr bool operator<=(duration_h const&) const;
+  constexpr bool operator>=(duration_h const&) const;
 };
 
 struct CUDF_LTO_ALIAS duration_m {
  private:
   int32_t _rep = 0;
+
+ public:
+  constexpr duration_m operator+(duration_m const&) const;
+  constexpr duration_m operator-(duration_m const&) const;
+  constexpr duration_m operator*(duration_m const&) const;
+  constexpr duration_m operator/(duration_m const&) const;
+  constexpr bool operator==(duration_m const&) const;
+  constexpr bool operator!=(duration_m const&) const;
+  constexpr bool operator<(duration_m const&) const;
+  constexpr bool operator>(duration_m const&) const;
+  constexpr bool operator<=(duration_m const&) const;
+  constexpr bool operator>=(duration_m const&) const;
 };
 
 struct CUDF_LTO_ALIAS duration_s {
  private:
   int64_t _rep = 0;
+
+ public:
+  constexpr duration_s operator+(duration_s const&) const;
+  constexpr duration_s operator-(duration_s const&) const;
+  constexpr duration_s operator*(duration_s const&) const;
+  constexpr duration_s operator/(duration_s const&) const;
+  constexpr bool operator==(duration_s const&) const;
+  constexpr bool operator!=(duration_s const&) const;
+  constexpr bool operator<(duration_s const&) const;
+  constexpr bool operator>(duration_s const&) const;
+  constexpr bool operator<=(duration_s const&) const;
+  constexpr bool operator>=(duration_s const&) const;
 };
 
 struct CUDF_LTO_ALIAS duration_ms {
  private:
   int64_t _rep = 0;
+
+ public:
+  constexpr duration_ms operator+(duration_ms const&) const;
+  constexpr duration_ms operator-(duration_ms const&) const;
+  constexpr duration_ms operator*(duration_ms const&) const;
+  constexpr duration_ms operator/(duration_ms const&) const;
+  constexpr bool operator==(duration_ms const&) const;
+  constexpr bool operator!=(duration_ms const&) const;
+  constexpr bool operator<(duration_ms const&) const;
+  constexpr bool operator>(duration_ms const&) const;
+  constexpr bool operator<=(duration_ms const&) const;
+  constexpr bool operator>=(duration_ms const&) const;
 };
 
 struct CUDF_LTO_ALIAS duration_us {
  private:
   int64_t _rep = 0;
+
+ public:
+  constexpr duration_us operator+(duration_us const&) const;
+  constexpr duration_us operator-(duration_us const&) const;
+  constexpr duration_us operator*(duration_us const&) const;
+  constexpr duration_us operator/(duration_us const&) const;
+  constexpr bool operator==(duration_us const&) const;
+  constexpr bool operator!=(duration_us const&) const;
+  constexpr bool operator<(duration_us const&) const;
+  constexpr bool operator>(duration_us const&) const;
+  constexpr bool operator<=(duration_us const&) const;
+  constexpr bool operator>=(duration_us const&) const;
 };
 
 struct CUDF_LTO_ALIAS duration_ns {
  private:
   int64_t _rep = 0;
+
+ public:
+  constexpr duration_ns operator+(duration_ns const&) const;
+  constexpr duration_ns operator-(duration_ns const&) const;
+  constexpr duration_ns operator*(duration_ns const&) const;
+  constexpr duration_ns operator/(duration_ns const&) const;
+  constexpr bool operator==(duration_ns const&) const;
+  constexpr bool operator!=(duration_ns const&) const;
+  constexpr bool operator<(duration_ns const&) const;
+  constexpr bool operator>(duration_ns const&) const;
+  constexpr bool operator<=(duration_ns const&) const;
+  constexpr bool operator>=(duration_ns const&) const;
 };
 
 template <typename T>
