@@ -646,7 +646,14 @@ inline __device__ void get_nesting_bounds(int& start_depth,
   start_depth = -1;
   end_depth   = -1;
   d           = -1;
-  if (input_value_count + t < target_input_value_count) {
+  // Clamp to decoded level count; for chunked reads the level buffers may be
+  // smaller than num_input_values when skip_rows/num_rows reduces the range.
+  auto const actual_num_values =
+    (s->page.num_decoded_level_values > 0)
+      ? cuda::std::min(s->page.num_input_values, s->page.num_decoded_level_values)
+      : s->page.num_input_values;
+  auto const max_idx = cuda::std::min(target_input_value_count, actual_num_values);
+  if (input_value_count + t < max_idx) {
     int const index = input_value_count + t;
     d               = (def != nullptr) ? def[index] : s->col.max_level[level_type::DEFINITION];
 
