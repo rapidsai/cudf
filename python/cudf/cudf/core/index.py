@@ -40,7 +40,12 @@ from cudf.core.column import (
     TimeDeltaColumn,
     access_columns,
 )
-from cudf.core.column.column import as_column, column_empty, concat_columns
+from cudf.core.column.column import (
+    _normalize_types_column,
+    as_column,
+    column_empty,
+    concat_columns,
+)
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.copy_types import GatherMap
 from cudf.core.dtype.validators import is_dtype_obj_numeric
@@ -379,8 +384,11 @@ class Index(SingleColumnFrame):
             ):
                 raise ValueError("Metadata dict must only contain a name")
             name = metadata.get("name")
+        normalized = _normalize_types_column(col)
         return cls._from_column(
-            ColumnBase.from_pylibcudf(col),
+            ColumnBase.create(
+                normalized, dtype=dtype_from_pylibcudf_column(normalized)
+            ),
             name=name,
         )
 

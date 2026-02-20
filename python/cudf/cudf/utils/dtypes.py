@@ -7,11 +7,13 @@ from typing import TYPE_CHECKING, Any, TypeGuard
 import numpy as np
 import pandas as pd
 import pyarrow as pa
+from pandas.core.arrays.arrow.extension_types import ArrowIntervalType
 from pandas.core.computation.common import result_type_many
 
 import pylibcudf as plc
 
 import cudf
+from cudf.core._internals.timezones import get_compatible_timezone
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -128,17 +130,19 @@ def cudf_dtype_to_pa_type(dtype: DtypeObj) -> pa.DataType:
 def cudf_dtype_from_pa_type(typ: pa.DataType) -> DtypeObj:
     """Given a pyarrow dtype, converts it into the equivalent cudf dtype."""
     if pa.types.is_list(typ):
-        return cudf.core.dtypes.ListDtype.from_arrow(typ)
+        return cudf.ListDtype.from_arrow(typ)
     elif pa.types.is_struct(typ):
-        return cudf.core.dtypes.StructDtype.from_arrow(typ)
+        return cudf.StructDtype.from_arrow(typ)
     elif pa.types.is_decimal(typ):
         if isinstance(typ, pa.Decimal256Type):
             raise NotImplementedError("cudf does not support Decimal256Type")
         if isinstance(typ, pa.Decimal32Type):
-            return cudf.core.dtypes.Decimal32Dtype.from_arrow(typ)
+            return cudf.Decimal32Dtype.from_arrow(typ)
         if isinstance(typ, pa.Decimal64Type):
-            return cudf.core.dtypes.Decimal64Dtype.from_arrow(typ)
-        return cudf.core.dtypes.Decimal128Dtype.from_arrow(typ)
+            return cudf.Decimal64Dtype.from_arrow(typ)
+        return cudf.Decimal128Dtype.from_arrow(typ)
+    elif pa.types.is_timestamp(typ) and typ.tz is not None:
+        return get_compatible_timezone(pd.DatetimeTZDtype(typ.unit, typ.tz))
     elif pa.types.is_large_string(typ) or pa.types.is_string(typ):
         return CUDF_STRING_DTYPE
     elif pa.types.is_date(typ):
@@ -152,6 +156,8 @@ def cudf_dtype_from_pa_type(typ: pa.DataType) -> DtypeObj:
     elif pa.types.is_null(typ):
         # Similar to PYLIBCUDF_TO_SUPPORTED_NUMPY_TYPES[plc.types.TypeId.EMPTY]
         return np.dtype(np.int8)
+    elif isinstance(typ, ArrowIntervalType):
+        return cudf.IntervalDtype.from_arrow(typ)
     else:
         return cudf.api.types.pandas_dtype(typ.to_pandas_dtype())
 
@@ -424,7 +430,7 @@ def pyarrow_dtype_to_cudf_dtype(dtype: pd.ArrowDtype) -> DtypeObj:
     elif pyarrow_dtype is pa.date32():
         raise TypeError("Unsupported type")
     elif isinstance(pyarrow_dtype, pa.DataType):
-        return pyarrow_dtype.to_pandas_dtype()
+        return np.dtype(pyarrow_dtype.to_pandas_dtype())
     else:
         raise TypeError(f"Unsupported Arrow type: {pyarrow_dtype}")
 
@@ -485,6 +491,8 @@ def dtype_to_pylibcudf_type(dtype) -> plc.DataType:
     elif isinstance(dtype, cudf.Decimal32Dtype):
         tid = plc.TypeId.DECIMAL32
         return plc.DataType(tid, -dtype.scale)
+    elif isinstance(dtype, cudf.CategoricalDtype):
+        dtype = dtype._codes_dtype
     # libcudf types don't support timezones so convert to the base type
     elif isinstance(dtype, pd.DatetimeTZDtype):
         dtype = _get_base_dtype(dtype)

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -14,7 +14,7 @@
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 
-#include <thrust/iterator/constant_iterator.h>
+#include <cuda/iterator>
 #include <thrust/iterator/counting_iterator.h>
 
 #include <algorithm>
@@ -265,7 +265,7 @@ TEST_F(RepeatErrorTestFixture, CountHasNulls)
   auto count =
     cudf::test::fixed_width_column_wrapper<cudf::size_type>(thrust::make_counting_iterator(0),
                                                             thrust::make_counting_iterator(0) + 100,
-                                                            thrust::make_constant_iterator(false));
+                                                            cuda::make_constant_iterator(false));
 
   cudf::table_view input_table{{input}};
 
