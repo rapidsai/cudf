@@ -1599,14 +1599,17 @@ def test_series_constructor_dtype_is_pandas_arrowdtype(
     request,
 ):
     scalar, dtype = all_supported_pandas_arrowdtypes
-    if (
-        PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION
-        and dtype.kind == "M"
-        and dtype.pyarrow_dtype.tz is not None
-    ):
-        pytest.skip(
-            f"RecursionError occurs in older versions of pandas/pyarrow for {dtype}"
-        )
+    if PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION:
+        if dtype.kind == "M" and dtype.pyarrow_dtype.tz is not None:
+            pytest.skip(
+                f"RecursionError occurs in older versions of pandas/pyarrow for {dtype}"
+            )
+        elif pa.types.is_decimal(dtype.pyarrow_dtype):
+            request.applymarker(
+                pytest.mark.xfail(
+                    reason="Decimal types coerced to object in older versions of pandas/pyarrow"
+                )
+            )
     result = cudf.Series([scalar], dtype=dtype)
     expected = pd.Series([scalar], dtype=dtype)
     assert result.dtype == expected.dtype
