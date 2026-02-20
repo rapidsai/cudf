@@ -432,8 +432,8 @@ class reader_impl {
   struct {
     // timestamp_type
     data_type timestamp_type;
-    // decimal_type
-    data_type decimal_type;
+    // decimal_width
+    type_id decimal_width;
     // User specified reading rows/stripes selection.
     int64_t const skip_rows;
     std::optional<int64_t> num_rows;

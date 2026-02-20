@@ -740,9 +740,8 @@ TEST_F(HybridScanTest, DecimalTypeOption)
     reinterpret_cast<std::byte const*>(parquet_buffer.data()), parquet_buffer.size()));
 
   auto const read_with_decimal_type = [&](cudf::type_id decimal_type_id) {
-    auto options = cudf::io::parquet_reader_options::builder()
-                     .decimal_type(cudf::data_type{decimal_type_id})
-                     .build();
+    auto options =
+      cudf::io::parquet_reader_options::builder().decimal_width(decimal_type_id).build();
 
     auto const footer_buffer = cudf::io::parquet::fetch_footer_to_host(*datasource);
     auto reader = std::make_unique<cudf::io::parquet::experimental::hybrid_scan_reader>(

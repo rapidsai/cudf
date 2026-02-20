@@ -229,7 +229,7 @@ hybrid_scan_reader_impl::prepare_dictionaries(
         parquet::detail::to_type_id(schema,
                                     options.is_enabled_convert_strings_to_categories(),
                                     options.get_timestamp_type().id(),
-                                    options.get_decimal_type().id());
+                                    options.get_decimal_width());
       auto const clock_rate = is_chrono(data_type{column_type_id})
                                 ? to_clockrate(options.get_timestamp_type().id())
                                 : int32_t{0};

@@ -802,7 +802,7 @@ class Scan(IR):
                 )
             parquet_reader_options = (
                 plc.io.parquet.ParquetReaderOptions.builder(plc.io.SourceInfo(paths))
-                .decimal_type(plc.DataType(plc.TypeId.DECIMAL128))
+                .decimal_width(plc.TypeId.DECIMAL128)
                 .build()
             )
 

@@ -99,8 +99,8 @@ class parquet_reader_options {
   bool _ignore_missing_columns = true;
   // Cast timestamp columns to a specific type
   data_type _timestamp_type{type_id::EMPTY};
-  // Cast decimal columns to a specific type
-  data_type _decimal_type{type_id::EMPTY};
+  // Cast decimal columns to a specific width
+  type_id _decimal_width{type_id::EMPTY};
   // Whether to use JIT compilation for filtering
   bool _use_jit_filter = false;
 
@@ -272,11 +272,11 @@ class parquet_reader_options {
   [[nodiscard]] data_type get_timestamp_type() const { return _timestamp_type; }
 
   /**
-   * @brief Returns decimal type used to cast decimal columns.
+   * @brief Returns decimal width used to cast decimal columns.
    *
-   * @return Decimal type used to cast decimal columns
+   * @return Decimal type_id used to cast decimal columns
    */
-  [[nodiscard]] data_type get_decimal_type() const { return _decimal_type; }
+  [[nodiscard]] type_id get_decimal_width() const { return _decimal_width; }
 
   /**
    * @brief Returns whether to use JIT compilation for filtering.
@@ -504,11 +504,12 @@ class parquet_reader_options {
   void set_timestamp_type(data_type type) { _timestamp_type = type; }
 
   /**
-   * @brief Sets decimal_type used to cast decimal columns.
+   * @brief Sets decimal width used to cast decimal columns.
    *
-   * @param type The decimal data_type to which all decimal columns need to be cast
+   * @param width The decimal type_id (DECIMAL32, DECIMAL64, or DECIMAL128) to which all decimal
+   * columns need to be cast. The scale of each column is preserved from the file.
    */
-  void set_decimal_type(data_type type) { _decimal_type = type; }
+  void set_decimal_width(type_id width) { _decimal_width = width; }
 };
 
 /**
@@ -733,14 +734,15 @@ class parquet_reader_options_builder {
   }
 
   /**
-   * @brief decimal_type used to cast decimal columns.
+   * @brief Sets the decimal width used to cast decimal columns.
    *
-   * @param type The decimal data_type to which all decimal columns need to be cast
+   * @param width The decimal type_id (DECIMAL32, DECIMAL64, or DECIMAL128) to which all decimal
+   * columns need to be cast. The scale of each column is preserved from the file.
    * @return this for chaining
    */
-  parquet_reader_options_builder& decimal_type(data_type type)
+  parquet_reader_options_builder& decimal_width(type_id width)
   {
-    options._decimal_type = type;
+    options._decimal_width = width;
     return *this;
   }
 

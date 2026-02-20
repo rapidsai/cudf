@@ -510,7 +510,7 @@ reader_impl::reader_impl(std::size_t chunk_read_limit,
   : _stream{std::move(stream)},
     _mr{std::move(mr)},
     _options{options.get_timestamp_type(),
-             options.get_decimal_type(),
+             options.get_decimal_width(),
              options.get_skip_rows(),
              options.get_num_rows(),
              options.get_skip_bytes(),
@@ -565,7 +565,7 @@ reader_impl::reader_impl(std::size_t chunk_read_limit,
                               _strings_to_categorical,
                               options.is_enabled_ignore_missing_columns(),
                               _options.timestamp_type.id(),
-                              _options.decimal_type.id());
+                              _options.decimal_width);
 
   // Save the states of the output buffers for reuse in `chunk_read()`.
   std::transform(
@@ -866,13 +866,13 @@ table_with_metadata reader_impl::finalize_output(read_mode mode,
 
   // TODO: Instead of casting the columns after the read is done, we should
   // be able to decode data directly into the target decimal type buffer.
-  if (_options.decimal_type.id() != type_id::EMPTY) {
+  if (_options.decimal_width != type_id::EMPTY) {
     for (auto& out_column : out_columns) {
       auto const& col_type = out_column->type();
       if (cudf::is_fixed_point(col_type)) {
-        if (col_type.id() != _options.decimal_type.id()) {
-          auto target_type = cudf::data_type{_options.decimal_type.id(), col_type.scale()};
-          out_column       = cudf::cast(out_column->view(), target_type, _stream, _mr);
+        if (col_type.id() != _options.decimal_width) {
+          auto const target_type = cudf::data_type{_options.decimal_width, col_type.scale()};
+          out_column             = cudf::cast(out_column->view(), target_type, _stream, _mr);
         }
       }
     }
