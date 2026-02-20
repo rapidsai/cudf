@@ -519,7 +519,15 @@ def get_partitioning_moduli(
     )
     if local_modulus != metadata.local_count:
         local_modulus = 0  # Local count is out of sync - Better to be safe
+
     local_modulus = local_modulus or (None if local == "inherit" else 0)
+
+    if local_modulus and not strict_inter_rank_modulus and trivial_inter_rank_modulus:
+        # Trivial inter-rank partitioning with local partitioning
+        # is the same as inter-rank partitioning with local="inherit".
+        # Use the latter representation for consistency.
+        inter_rank_modulus = local_modulus
+        local_modulus = None
 
     return inter_rank_modulus, local_modulus
 
