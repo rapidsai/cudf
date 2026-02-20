@@ -122,7 +122,6 @@ class PylibcudfFunction:
     def __init__(
         self,
         pylibcudf_function: Callable[..., Any],
-        *,
         dtype_policy: "DtypePolicy",
         mode: Literal["read", "write"] = "read",
     ) -> None:
@@ -1757,7 +1756,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         """Identify non-null values"""
         return PylibcudfFunction(
             plc.unary.is_valid,
-            dtype_policy=NpBoolDtypePolicy,
+            NpBoolDtypePolicy,
         )(self)
 
     def isnan(self) -> ColumnBase:
@@ -1774,7 +1773,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             return as_column(False, length=len(self))
         return PylibcudfFunction(
             plc.unary.is_null,
-            dtype_policy=NpBoolDtypePolicy,
+            NpBoolDtypePolicy,
         )(self)
 
     def notnull(self) -> ColumnBase:
@@ -1783,7 +1782,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             return as_column(True, length=len(self))
         return PylibcudfFunction(
             plc.unary.is_valid,
-            dtype_policy=NpBoolDtypePolicy,
+            NpBoolDtypePolicy,
         )(self)
 
     @cached_property

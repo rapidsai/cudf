@@ -148,7 +148,7 @@ class NumericalColumn(NumericalBaseColumn):
             return as_column(False, length=len(self))
         return PylibcudfFunction(
             plc.unary.is_nan,
-            dtype_policy=NpBoolDtypePolicy,
+            NpBoolDtypePolicy,
         )(self)
 
     def notnan(self) -> ColumnBase:
@@ -161,7 +161,7 @@ class NumericalColumn(NumericalBaseColumn):
             return as_column(True, length=len(self))
         return PylibcudfFunction(
             plc.unary.is_not_nan,
-            dtype_policy=NpBoolDtypePolicy,
+            NpBoolDtypePolicy,
         )(self)
 
     def isnull(self) -> ColumnBase:
@@ -1012,7 +1012,7 @@ class NumericalColumn(NumericalBaseColumn):
             "Self",
             PylibcudfFunction(
                 func,
-                dtype_policy=lambda *_dtypes: get_dtype_of_same_kind(
+                lambda *_dtypes: get_dtype_of_same_kind(
                     self.dtype, np.dtype(np.int32)
                 ),
             )(
