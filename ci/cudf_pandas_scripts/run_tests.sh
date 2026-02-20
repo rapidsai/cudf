@@ -126,7 +126,8 @@ IFS=',' read -r -a versions <<< "$output"
 
 for version in "${versions[@]}"; do
     echo "Installing pandas version: ${version}"
-    python -m pip install "numpy>=1.23,<2.0a0" "pandas==${version}.*"
+    # cupy>=14 requires numpy>=2.0; pin cupy<14 here to avoid conflicts with numpy<2
+    python -m pip install "numpy>=1.23,<2.0a0" "pandas==${version}.*" "cupy-${RAPIDS_PY_CUDA_SUFFIX}<14"
     python -m pytest -p cudf.pandas \
         --ignore=./python/cudf/cudf_pandas_tests/third_party_integration_tests/ \
         --numprocesses=8 \

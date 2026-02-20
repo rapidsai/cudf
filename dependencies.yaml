@@ -1221,20 +1221,6 @@ dependencies:
           - openpyxl
           # https://github.com/pytest-dev/pytest-rerunfailures/issues/302
           - pytest-rerunfailures!=16.0.0
-    specific:
-      - output_types: requirements
-        # cupy>=14 requires numpy>=2.0, but this job tests against numpy<2.
-        matrices:
-          - matrix:
-              cuda: "12.*"
-            packages:
-              - cupy-cuda12x<14.0.0
-          - matrix:
-              cuda: "13.*"
-            packages:
-              - cupy-cuda13x<14.0.0
-          - matrix:
-            packages:
   depends_on_dask_cuda:
     common:
       - output_types: conda
