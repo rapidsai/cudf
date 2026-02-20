@@ -263,7 +263,7 @@ def _return_arr_from_dtype(dtype, size):
             size=size * _get_extensionty_size(managed_udf_string)
         )
     if np.dtype(dtype).kind in ("M", "m"):
-        # cupy>14 rejects cp.empty() for datetime64
+        # cupy>=14 rejects cp.empty() for datetime64
         # or timedelta64 as unsupported dtypes.
         return cp.empty(size, dtype=np.int64).view(dtype)
     return cp.empty(size, dtype=dtype)
