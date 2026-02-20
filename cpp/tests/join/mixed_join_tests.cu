@@ -25,6 +25,7 @@
 #include <algorithm>
 #include <numeric>
 #include <random>
+#include <sstream>
 #include <stdexcept>
 #include <tuple>
 #include <utility>
@@ -49,6 +50,53 @@ auto const col_ref_right_0 = cudf::ast::column_reference(0, cudf::ast::table_ref
 // Common expressions.
 auto left_zero_eq_right_zero =
   cudf::ast::operation(cudf::ast::ast_operator::EQUAL, col_ref_left_0, col_ref_right_0);
+
+// Helper to convert C++ type to string for JIT predicates
+template <typename T>
+std::string type_to_cxx_string()
+{
+  if constexpr (std::is_same_v<T, int8_t>)
+    return "int8_t";
+  else if constexpr (std::is_same_v<T, int16_t>)
+    return "int16_t";
+  else if constexpr (std::is_same_v<T, int32_t>)
+    return "int32_t";
+  else if constexpr (std::is_same_v<T, int64_t>)
+    return "int64_t";
+  else if constexpr (std::is_same_v<T, uint8_t>)
+    return "uint8_t";
+  else if constexpr (std::is_same_v<T, uint16_t>)
+    return "uint16_t";
+  else if constexpr (std::is_same_v<T, uint32_t>)
+    return "uint32_t";
+  else if constexpr (std::is_same_v<T, uint64_t>)
+    return "uint64_t";
+  else if constexpr (std::is_same_v<T, float>)
+    return "float";
+  else if constexpr (std::is_same_v<T, double>)
+    return "double";
+  else
+    return "";
+}
+
+// Helper to generate JIT predicate for simple column comparison
+template <typename T>
+std::string make_jit_comparison(
+  int num_left_cols, int num_right_cols, int left_col_idx, int right_col_idx, std::string const& op)
+{
+  auto type_str = type_to_cxx_string<T>();
+  std::stringstream ss;
+  ss << "__device__ void predicate(bool* output";
+  for (int i = 0; i < num_left_cols; ++i)
+    ss << ", " << type_str << " left_col" << i;
+  for (int i = 0; i < num_right_cols; ++i)
+    ss << ", " << type_str << " right_col" << i;
+  ss << ") {\n";
+  ss << "  *output = left_col" << left_col_idx << " " << op << " right_col" << right_col_idx
+     << ";\n";
+  ss << "}\n";
+  return ss.str();
+}
 
 // Generate a single pair of left/right non-nullable columns of random data
 // suitable for testing a join against a reference join implementation.
@@ -241,7 +289,8 @@ struct MixedJoinPairReturnTest : public MixedJoinTest<T> {
                      cudf::ast::operation predicate,
                      std::vector<cudf::size_type> expected_counts,
                      std::vector<std::pair<cudf::size_type, cudf::size_type>> expected_outputs,
-                     cudf::null_equality compare_nulls = cudf::null_equality::EQUAL)
+                     cudf::null_equality compare_nulls = cudf::null_equality::EQUAL,
+                     std::string const& jit_predicate  = "")
   {
     auto [result_size, actual_counts] = this->join_size(
       left_equality, right_equality, left_conditional, right_conditional, predicate, compare_nulls);
@@ -257,8 +306,13 @@ struct MixedJoinPairReturnTest : public MixedJoinTest<T> {
                         0);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_counts_cw, actual_counts_view);
 
-    auto result = this->join(
-      left_equality, right_equality, left_conditional, right_conditional, predicate, compare_nulls);
+    auto result = this->join(left_equality,
+                             right_equality,
+                             left_conditional,
+                             right_conditional,
+                             predicate,
+                             compare_nulls,
+                             jit_predicate);
     std::vector<std::pair<cudf::size_type, cudf::size_type>> result_pairs;
     for (size_t i = 0; i < result.first->size(); ++i) {
       // Note: Not trying to be terribly efficient here since these tests are
@@ -284,41 +338,8 @@ struct MixedJoinPairReturnTest : public MixedJoinTest<T> {
             std::vector<cudf::size_type> conditional_columns,
             cudf::ast::operation predicate,
             std::vector<cudf::size_type> expected_counts,
-            std::vector<std::pair<cudf::size_type, cudf::size_type>> expected_outputs)
-  {
-    // Note that we need to maintain the column wrappers otherwise the
-    // resulting column views will be referencing potentially invalid memory.
-    auto [left_wrappers,
-          right_wrappers,
-          left_columns,
-          right_columns,
-          left_equality,
-          right_equality,
-          left_conditional,
-          right_conditional] =
-      this->parse_input(left_data, right_data, equality_columns, conditional_columns);
-    this->_test(left_equality,
-                right_equality,
-                left_conditional,
-                right_conditional,
-                predicate,
-                expected_counts,
-                expected_outputs);
-  }
-
-  /*
-   * Perform a join of tables constructed from two input data sets according to
-   * the provided predicate and verify that the outputs match the expected
-   * outputs (up to order).
-   */
-  void test_nulls(NullableColumnVector<T> left_data,
-                  NullableColumnVector<T> right_data,
-                  std::vector<cudf::size_type> equality_columns,
-                  std::vector<cudf::size_type> conditional_columns,
-                  cudf::ast::operation predicate,
-                  std::vector<cudf::size_type> expected_counts,
-                  std::vector<std::pair<cudf::size_type, cudf::size_type>> expected_outputs,
-                  cudf::null_equality compare_nulls = cudf::null_equality::EQUAL)
+            std::vector<std::pair<cudf::size_type, cudf::size_type>> expected_outputs,
+            std::string const& jit_predicate = "")
   {
     // Note that we need to maintain the column wrappers otherwise the
     // resulting column views will be referencing potentially invalid memory.
@@ -338,7 +359,45 @@ struct MixedJoinPairReturnTest : public MixedJoinTest<T> {
                 predicate,
                 expected_counts,
                 expected_outputs,
-                compare_nulls);
+                cudf::null_equality::EQUAL,
+                jit_predicate);
+  }
+
+  /*
+   * Perform a join of tables constructed from two input data sets according to
+   * the provided predicate and verify that the outputs match the expected
+   * outputs (up to order).
+   */
+  void test_nulls(NullableColumnVector<T> left_data,
+                  NullableColumnVector<T> right_data,
+                  std::vector<cudf::size_type> equality_columns,
+                  std::vector<cudf::size_type> conditional_columns,
+                  cudf::ast::operation predicate,
+                  std::vector<cudf::size_type> expected_counts,
+                  std::vector<std::pair<cudf::size_type, cudf::size_type>> expected_outputs,
+                  cudf::null_equality compare_nulls = cudf::null_equality::EQUAL,
+                  std::string const& jit_predicate  = "")
+  {
+    // Note that we need to maintain the column wrappers otherwise the
+    // resulting column views will be referencing potentially invalid memory.
+    auto [left_wrappers,
+          right_wrappers,
+          left_columns,
+          right_columns,
+          left_equality,
+          right_equality,
+          left_conditional,
+          right_conditional] =
+      this->parse_input(left_data, right_data, equality_columns, conditional_columns);
+    this->_test(left_equality,
+                right_equality,
+                left_conditional,
+                right_conditional,
+                predicate,
+                expected_counts,
+                expected_outputs,
+                compare_nulls,
+                jit_predicate);
   }
 
   /**
@@ -351,7 +410,8 @@ struct MixedJoinPairReturnTest : public MixedJoinTest<T> {
                               cudf::table_view left_conditional,
                               cudf::table_view right_conditional,
                               cudf::ast::operation predicate,
-                              cudf::null_equality compare_nulls = cudf::null_equality::EQUAL) = 0;
+                              cudf::null_equality compare_nulls = cudf::null_equality::EQUAL,
+                              std::string const& jit_predicate  = "") = 0;
 
   /**
    * This method must be implemented by subclasses for specific types of joins.
@@ -377,7 +437,8 @@ struct MixedInnerJoinTest : public MixedJoinPairReturnTest<T> {
                       cudf::table_view left_conditional,
                       cudf::table_view right_conditional,
                       cudf::ast::operation predicate,
-                      cudf::null_equality compare_nulls = cudf::null_equality::EQUAL) override
+                      cudf::null_equality compare_nulls = cudf::null_equality::EQUAL,
+                      std::string const& jit_predicate  = "") override
   {
     // Test both approaches and verify they produce the same results
     auto mixed_result = cudf::mixed_inner_join(
@@ -389,16 +450,27 @@ struct MixedInnerJoinTest : public MixedJoinPairReturnTest<T> {
       cudf::hash_join hash_joiner(right_equality, compare_nulls);
       auto hash_join_result = hash_joiner.inner_join(left_equality);
 
-      auto hash_filter_result = cudf::filter_join_indices(
+      // Verify AST filter_join_indices
+      auto ast_filter_result = cudf::filter_join_indices(
         left_conditional,
         right_conditional,
         cudf::device_span<cudf::size_type const>(*hash_join_result.first),
         cudf::device_span<cudf::size_type const>(*hash_join_result.second),
         predicate,
         cudf::join_kind::INNER_JOIN);
+      this->compare_join_results(mixed_result, ast_filter_result);
 
-      // Verify both approaches produce the same results
-      this->compare_join_results(mixed_result, hash_filter_result);
+      // Verify JIT filter_join_indices if provided
+      if (!jit_predicate.empty()) {
+        auto jit_filter_result = cudf::jit_filter_join_indices(
+          left_conditional,
+          right_conditional,
+          cudf::device_span<cudf::size_type const>(*hash_join_result.first),
+          cudf::device_span<cudf::size_type const>(*hash_join_result.second),
+          jit_predicate,
+          cudf::join_kind::INNER_JOIN);
+        this->compare_join_results(mixed_result, jit_filter_result);
+      }
     }
 
     return mixed_result;
@@ -426,13 +498,16 @@ TYPED_TEST(MixedInnerJoinTest, Empty)
 
 TYPED_TEST(MixedInnerJoinTest, BasicEquality)
 {
+  // Conditional table has 2 columns each. The AST predicate compares column 0.
+  auto jit_pred = make_jit_comparison<TypeParam>(2, 2, 0, 0, "==");
   this->test({{0, 1, 2}, {3, 4, 5}, {10, 20, 30}},
              {{0, 1, 3}, {5, 4, 5}, {30, 40, 50}},
              {0},
              {1, 2},
              left_zero_eq_right_zero,
              {0, 1, 0},
-             {{1, 1}});
+             {{1, 1}},
+             jit_pred);
 }
 
 TYPED_TEST(MixedInnerJoinTest, BasicNullEqualityEqual)
@@ -461,24 +536,28 @@ TYPED_TEST(MixedInnerJoinTest, BasicNullEqualityUnequal)
 
 TYPED_TEST(MixedInnerJoinTest, AsymmetricEquality)
 {
+  auto jit_pred = make_jit_comparison<TypeParam>(2, 2, 0, 0, "==");
   this->test({{0, 2, 1}, {3, 5, 4}, {10, 30, 20}},
              {{0, 1, 3}, {5, 4, 5}, {30, 40, 50}},
              {0},
              {1, 2},
              left_zero_eq_right_zero,
              {0, 0, 1},
-             {{2, 1}});
+             {{2, 1}},
+             jit_pred);
 }
 
 TYPED_TEST(MixedInnerJoinTest, AsymmetricLeftLargerEquality)
 {
+  auto jit_pred = make_jit_comparison<TypeParam>(2, 2, 0, 0, "==");
   this->test({{0, 2, 1, 4}, {3, 5, 4, 10}, {10, 30, 20, 100}},
              {{0, 1, 3}, {5, 4, 5}, {30, 40, 50}},
              {0},
              {1, 2},
              left_zero_eq_right_zero,
              {0, 0, 1, 0},
-             {{2, 1}});
+             {{2, 1}},
+             jit_pred);
 }
 
 TYPED_TEST(MixedInnerJoinTest, AsymmetricLeftLargerGreater)
@@ -487,24 +566,29 @@ TYPED_TEST(MixedInnerJoinTest, AsymmetricLeftLargerGreater)
   auto col_ref_right_1 = cudf::ast::column_reference(1, cudf::ast::table_reference::RIGHT);
   auto condition =
     cudf::ast::operation(cudf::ast::ast_operator::GREATER, col_ref_left_1, col_ref_right_1);
+  // Conditional tables have 2 columns each. Predicate compares column 1.
+  auto jit_pred = make_jit_comparison<TypeParam>(2, 2, 1, 1, ">");
   this->test({{2, 3, 9, 0, 1, 7, 4, 6, 5, 8}, {1, 2, 3, 4, 5, 6, 7, 8, 9, 0}},
              {{6, 5, 9, 8, 10, 32}, {0, 1, 2, 3, 4, 5}, {7, 8, 9, 0, 1, 2}},
              {0},
              {0, 1},
              condition,
              {0, 0, 1, 0, 0, 0, 0, 1, 1, 0},
-             {{2, 2}, {7, 0}, {8, 1}});
+             {{2, 2}, {7, 0}, {8, 1}},
+             jit_pred);
 }
 
 TYPED_TEST(MixedInnerJoinTest, AsymmetricRightLargerEquality)
 {
+  auto jit_pred = make_jit_comparison<TypeParam>(2, 2, 0, 0, "==");
   this->test({{0, 1, 3}, {5, 4, 5}, {30, 40, 50}},
              {{0, 2, 1, 4}, {3, 5, 4, 10}, {10, 30, 20, 100}},
              {0},
              {1, 2},
              left_zero_eq_right_zero,
              {0, 0, 1, 0},
-             {{1, 2}});
+             {{1, 2}},
+             jit_pred);
 }
 
 TYPED_TEST(MixedInnerJoinTest, BasicInequality)
@@ -728,7 +812,8 @@ struct MixedLeftJoinTest : public MixedJoinPairReturnTest<T> {
                       cudf::table_view left_conditional,
                       cudf::table_view right_conditional,
                       cudf::ast::operation predicate,
-                      cudf::null_equality compare_nulls = cudf::null_equality::EQUAL) override
+                      cudf::null_equality compare_nulls = cudf::null_equality::EQUAL,
+                      std::string const& jit_predicate  = "") override
   {
     // Test both approaches and verify they produce the same results
     auto mixed_result = cudf::mixed_left_join(
@@ -740,16 +825,27 @@ struct MixedLeftJoinTest : public MixedJoinPairReturnTest<T> {
       cudf::hash_join hash_joiner(right_equality, compare_nulls);
       auto hash_join_result = hash_joiner.left_join(left_equality);
 
-      auto hash_filter_result = cudf::filter_join_indices(
+      // Verify AST filter_join_indices
+      auto ast_filter_result = cudf::filter_join_indices(
         left_conditional,
         right_conditional,
         cudf::device_span<cudf::size_type const>(*hash_join_result.first),
         cudf::device_span<cudf::size_type const>(*hash_join_result.second),
         predicate,
         cudf::join_kind::LEFT_JOIN);
+      this->compare_join_results(mixed_result, ast_filter_result);
 
-      // Verify both approaches produce the same results
-      this->compare_join_results(mixed_result, hash_filter_result);
+      // Verify JIT filter_join_indices if provided
+      if (!jit_predicate.empty()) {
+        auto jit_filter_result = cudf::jit_filter_join_indices(
+          left_conditional,
+          right_conditional,
+          cudf::device_span<cudf::size_type const>(*hash_join_result.first),
+          cudf::device_span<cudf::size_type const>(*hash_join_result.second),
+          jit_predicate,
+          cudf::join_kind::LEFT_JOIN);
+        this->compare_join_results(mixed_result, jit_filter_result);
+      }
     }
 
     return mixed_result;
@@ -772,13 +868,16 @@ TYPED_TEST_SUITE(MixedLeftJoinTest, cudf::test::IntegralTypesNotBool);
 
 TYPED_TEST(MixedLeftJoinTest, Basic)
 {
+  // Conditional table has 2 columns each. The AST predicate compares column 0.
+  auto jit_pred = make_jit_comparison<TypeParam>(2, 2, 0, 0, "==");
   this->test({{0, 1, 2}, {3, 4, 5}, {10, 20, 30}},
              {{0, 1, 3}, {5, 4, 5}, {30, 40, 50}},
              {0},
              {1, 2},
              left_zero_eq_right_zero,
              {1, 1, 1},
-             {{0, cudf::JoinNoMatch}, {1, 1}, {2, cudf::JoinNoMatch}});
+             {{0, cudf::JoinNoMatch}, {1, 1}, {2, cudf::JoinNoMatch}},
+             jit_pred);
 }
 
 TYPED_TEST(MixedLeftJoinTest, Basic2)
@@ -901,7 +1000,8 @@ struct MixedFullJoinTest : public MixedJoinPairReturnTest<T> {
                       cudf::table_view left_conditional,
                       cudf::table_view right_conditional,
                       cudf::ast::operation predicate,
-                      cudf::null_equality compare_nulls = cudf::null_equality::EQUAL) override
+                      cudf::null_equality compare_nulls = cudf::null_equality::EQUAL,
+                      std::string const& jit_predicate  = "") override
   {
     // Test both approaches and verify they produce the same results
     auto mixed_result = cudf::mixed_full_join(
@@ -913,16 +1013,27 @@ struct MixedFullJoinTest : public MixedJoinPairReturnTest<T> {
       cudf::hash_join hash_joiner(right_equality, compare_nulls);
       auto hash_join_result = hash_joiner.full_join(left_equality);
 
-      auto hash_filter_result = cudf::filter_join_indices(
+      // Verify AST filter_join_indices
+      auto ast_filter_result = cudf::filter_join_indices(
         left_conditional,
         right_conditional,
         cudf::device_span<cudf::size_type const>(*hash_join_result.first),
         cudf::device_span<cudf::size_type const>(*hash_join_result.second),
         predicate,
         cudf::join_kind::FULL_JOIN);
+      this->compare_join_results(mixed_result, ast_filter_result);
 
-      // Verify both approaches produce the same results
-      this->compare_join_results(mixed_result, hash_filter_result);
+      // Verify JIT filter_join_indices if provided
+      if (!jit_predicate.empty()) {
+        auto jit_filter_result = cudf::jit_filter_join_indices(
+          left_conditional,
+          right_conditional,
+          cudf::device_span<cudf::size_type const>(*hash_join_result.first),
+          cudf::device_span<cudf::size_type const>(*hash_join_result.second),
+          jit_predicate,
+          cudf::join_kind::FULL_JOIN);
+        this->compare_join_results(mixed_result, jit_filter_result);
+      }
     }
 
     return mixed_result;
@@ -950,10 +1061,16 @@ struct MixedFullJoinTest : public MixedJoinPairReturnTest<T> {
              cudf::ast::operation predicate,
              std::vector<cudf::size_type> expected_counts,
              std::vector<std::pair<cudf::size_type, cudf::size_type>> expected_outputs,
-             cudf::null_equality compare_nulls = cudf::null_equality::EQUAL) override
+             cudf::null_equality compare_nulls = cudf::null_equality::EQUAL,
+             std::string const& jit_predicate  = "") override
   {
-    auto result = this->join(
-      left_equality, right_equality, left_conditional, right_conditional, predicate, compare_nulls);
+    auto result = this->join(left_equality,
+                             right_equality,
+                             left_conditional,
+                             right_conditional,
+                             predicate,
+                             compare_nulls,
+                             jit_predicate);
     std::vector<std::pair<cudf::size_type, cudf::size_type>> result_pairs;
     for (size_t i = 0; i < result.first->size(); ++i) {
       result_pairs.push_back({result.first->element(i, cudf::get_default_stream()),
@@ -970,6 +1087,8 @@ TYPED_TEST_SUITE(MixedFullJoinTest, cudf::test::IntegralTypesNotBool);
 
 TYPED_TEST(MixedFullJoinTest, Basic)
 {
+  // Conditional table has 2 columns each. The AST predicate compares column 0.
+  auto jit_pred = make_jit_comparison<TypeParam>(2, 2, 0, 0, "==");
   this->test({{0, 1, 2}, {3, 4, 5}, {10, 20, 30}},
              {{0, 1, 3}, {5, 4, 5}, {30, 40, 50}},
              {0},
@@ -980,7 +1099,8 @@ TYPED_TEST(MixedFullJoinTest, Basic)
               {1, 1},
               {2, cudf::JoinNoMatch},
               {cudf::JoinNoMatch, 0},
-              {cudf::JoinNoMatch, 2}});
+              {cudf::JoinNoMatch, 2}},
+             jit_pred);
 }
 
 TYPED_TEST(MixedFullJoinTest, Basic2)

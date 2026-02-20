@@ -174,6 +174,8 @@ ConfigureTest(
   join/mixed_join_tests.cu
   join/distinct_join_tests.cpp
   join/key_remapping_tests.cpp
+  join/jit_filter_join_indices_test.cpp
+  join/ast_vs_jit_filter_join_test.cpp
   GPUS 1
   PERCENT 100
 )
