@@ -377,6 +377,59 @@ async def _collect_small_side_for_broadcast(
     return small_dfs, small_size
 
 
+async def _broadcast_join_large_chunk(
+    context: Context,
+    ir: Join,
+    ir_context: Any,
+    ch_out: Channel[TableChunk],
+    small_dfs: list[DataFrame],
+    small_child: IR,
+    large_chunk: TableChunk,
+    large_child: IR,
+    seq_num: int,
+    small_size: int,
+    broadcast_side: Literal["left", "right"],
+    tracer: ActorTracer | None = None,
+) -> None:
+    """Join one large-side chunk with the small DataFrame(s) and send the result."""
+    large_df = chunk_to_frame(large_chunk, large_child)
+    large_chunk_size = large_chunk.data_alloc_size(MemoryType.DEVICE)
+
+    dfs_to_join = small_dfs
+    if not dfs_to_join:
+        stream = ir_context.get_cuda_stream()
+        empty_small = empty_table_chunk(small_child, context, stream)
+        dfs_to_join = [chunk_to_frame(empty_small, small_child)]
+
+    join_results: list[DataFrame] = []
+    input_bytes = large_chunk_size + small_size
+    with opaque_memory_usage(
+        await reserve_memory(context, size=input_bytes, net_memory_delta=0)
+    ):
+        for sdf in dfs_to_join:
+            result = await asyncio.to_thread(
+                ir.do_evaluate,
+                *ir._non_child_args,
+                *([large_df, sdf] if broadcast_side == "right" else [sdf, large_df]),
+                context=ir_context,
+            )
+            join_results.append(result)
+
+        df = _concat(*join_results, context=ir_context)
+        del join_results
+
+    if tracer is not None:
+        tracer.add_chunk(table=df.table)
+    await ch_out.send(
+        context,
+        Message(
+            seq_num,
+            TableChunk.from_pylibcudf_table(df.table, df.stream, exclusive_view=True),
+        ),
+    )
+    del df, large_df
+
+
 async def _broadcast_join(
     context: Context,
     ir: Join,
@@ -455,70 +508,23 @@ async def _broadcast_join(
     # Stream through large side
     large_chunk_processed = False
 
-    async def join_large_chunk(
-        large_df: DataFrame, seq_num: int, large_chunk_size: int
-    ) -> None:
-        """Join a large chunk with the small DataFrame(s) and send result."""
-        nonlocal small_dfs
-
-        # Get small DataFrames to join with (create empty if none)
-        dfs_to_join = small_dfs
-        if not dfs_to_join:
-            stream = ir_context.get_cuda_stream()
-            empty_small = empty_table_chunk(small_child, context, stream)
-            dfs_to_join = [chunk_to_frame(empty_small, small_child)]
-
-        # Join large chunk with each small DataFrame
-        join_results: list[DataFrame] = []
-        input_bytes = large_chunk_size + small_size
-        with opaque_memory_usage(
-            await reserve_memory(context, size=input_bytes, net_memory_delta=0)
-        ):
-            for sdf in dfs_to_join:
-                result = await asyncio.to_thread(
-                    ir.do_evaluate,
-                    *ir._non_child_args,
-                    *(
-                        [large_df, sdf]
-                        if broadcast_side == "right"
-                        else [sdf, large_df]
-                    ),
-                    context=ir_context,
-                )
-                join_results.append(result)
-
-            # Concatenate join results (_concat is no-op for single element)
-            df = _concat(*join_results, context=ir_context)
-            del join_results
-
-        if tracer is not None:
-            tracer.add_chunk(table=df.table)
-        await ch_out.send(
-            context,
-            Message(
-                seq_num,
-                TableChunk.from_pylibcudf_table(
-                    df.table, df.stream, exclusive_view=True
-                ),
-            ),
-        )
-        del df
-
-    # Process initial large chunks first
     for seq_num, chunk in enumerate(large_initial_chunks):
         large_chunk_processed = True
-        large_df = DataFrame.from_table(
-            chunk.table_view(),
-            list(large_child.schema.keys()),
-            list(large_child.schema.values()),
-            chunk.stream,
+        await _broadcast_join_large_chunk(
+            context,
+            ir,
+            ir_context,
+            ch_out,
+            small_dfs,
+            small_child,
+            chunk,
+            large_child,
+            seq_num,
+            small_size,
+            broadcast_side,
+            tracer=tracer,
         )
-        await join_large_chunk(
-            large_df, seq_num, chunk.data_alloc_size(MemoryType.DEVICE)
-        )
-        del large_df
 
-    # Process remaining large chunks from channel
     while (msg := await large_ch.recv(context)) is not None:
         large_chunk_processed = True
         large_chunk = TableChunk.from_message(msg).make_available_and_spill(
@@ -527,24 +533,40 @@ async def _broadcast_join(
         msg_seq = msg.sequence_number
         del msg
 
-        large_df = DataFrame.from_table(
-            large_chunk.table_view(),
-            list(large_child.schema.keys()),
-            list(large_child.schema.values()),
-            large_chunk.stream,
+        await _broadcast_join_large_chunk(
+            context,
+            ir,
+            ir_context,
+            ch_out,
+            small_dfs,
+            small_child,
+            large_chunk,
+            large_child,
+            msg_seq,
+            small_size,
+            broadcast_side,
+            tracer=tracer,
         )
-        await join_large_chunk(
-            large_df, msg_seq, large_chunk.data_alloc_size(MemoryType.DEVICE)
-        )
-        del large_df, large_chunk
+        del large_chunk
 
-    # Handle edge case: no large-side data received
     if not large_chunk_processed and small_dfs:
         stream = ir_context.get_cuda_stream()
         large_chunk = empty_table_chunk(large_child, context, stream)
-        large_df = chunk_to_frame(large_chunk, large_child)
-        await join_large_chunk(large_df, 0, 0)
-        del large_df
+        await _broadcast_join_large_chunk(
+            context,
+            ir,
+            ir_context,
+            ch_out,
+            small_dfs,
+            small_child,
+            large_chunk,
+            large_child,
+            0,
+            small_size,
+            broadcast_side,
+            tracer=tracer,
+        )
+        del large_chunk
 
     del small_dfs
     await ch_out.drain(context)
@@ -963,7 +985,7 @@ def _extract_partitioning_state(
     return PartitioningState.from_metadata(metadata, key_indices, nranks)
 
 
-async def _choose_algorithm(
+async def _choose_strategy(
     context: Context,
     ir: Join,
     left_metadata: ChannelMetadata,
@@ -1182,7 +1204,7 @@ async def _sample_and_choose_strategy(
         _sample_chunks(context, ch_left, sample_chunk_count),
         _sample_chunks(context, ch_right, sample_chunk_count),
     )
-    broadcast_side, min_shuffle_modulus = await _choose_algorithm(
+    broadcast_side, min_shuffle_modulus = await _choose_strategy(
         context,
         ir,
         left_metadata,
@@ -1311,8 +1333,7 @@ def _(
     left, right = ir.children
     partition_info = rec.state["partition_info"]
     output_count = partition_info[ir].count
-    config_options = rec.state["config_options"]
-    executor = config_options.executor
+    executor = rec.state["config_options"].executor
 
     # Check for dynamic planning
     join_type = ir.options[0]
