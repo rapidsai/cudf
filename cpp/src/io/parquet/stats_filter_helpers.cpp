@@ -52,22 +52,22 @@ std::reference_wrapper<ast::expression const> stats_columns_collector::visit(
   // Extract the column reference, literal, operator, and operator arity from the operands
   auto [col_ref, literal, op, operator_arity] = extract_operands_and_operator(expr);
 
-  if (col_ref != nullptr) {
-    CUDF_EXPECTS(operator_arity == 1 or literal != nullptr,
-                 "Binary operation must have a column reference and a literal as operands");
+  // Expression can be evaluated if it's in form of `col op lit` or `lit op col`
+  auto const can_evaluate_expression =
+    col_ref != nullptr and (operator_arity == 1 or literal != nullptr);
+
+  if (can_evaluate_expression) {
     col_ref->accept(*this);
 
     // Return early if this is a unary operation
     if (operator_arity == 1 and op != ast_operator::IS_NULL) { return expr; }
 
-    // Else if this is a supported binary operation, mark the column as needed
+    // Mark the column as needed for supported binary comparison operations
     if (op == ast_operator::EQUAL or op == ast_operator::NOT_EQUAL or op == ast_operator::LESS or
         op == ast_operator::LESS_EQUAL or op == ast_operator::GREATER or
         op == ast_operator::GREATER_EQUAL or op == ast_operator::IS_NULL) {
       _columns_mask[col_ref->get_column_index()] = true;
       if (op == ast_operator::IS_NULL) { _has_is_null_operator = true; }
-    } else {
-      CUDF_FAIL("Unsupported binary operation in Statistics AST");
     }
   } else {
     // Visit the operands and ignore any output as we only want to build the column mask
@@ -114,9 +114,11 @@ std::reference_wrapper<ast::expression const> stats_expression_converter::visit(
   // Extract the column reference, literal, operator, and operator arity from the operands
   auto [col_ref, literal_ptr, op, operator_arity] = extract_operands_and_operator(expr);
 
-  if (col_ref != nullptr) {
-    CUDF_EXPECTS(operator_arity == 1 or literal_ptr != nullptr,
-                 "Binary operation must have a column reference and a literal as operands");
+  // Expression can be evaluated if it's in form of `col op lit` or `lit op col`
+  auto const can_evaluate_expression =
+    col_ref != nullptr and (operator_arity == 1 or literal_ptr != nullptr);
+
+  if (can_evaluate_expression) {
     col_ref->accept(*this);
 
     auto const col_index = col_ref->get_column_index();
@@ -188,12 +190,13 @@ std::reference_wrapper<ast::expression const> stats_expression_converter::visit(
       default: CUDF_FAIL("Unsupported binary operation in Statistics AST");
     };
 
-  } else {
+  } else if (op == ast_operator::LOGICAL_AND or op == ast_operator::LOGICAL_OR or
+             op == ast_operator::NOT) {
+    // Logical combiners: recursively visit operands and reconstruct
     auto new_operands = visit_operands(expr.get_operands());
     if (operator_arity == 2) {
       _stats_expr.push(ast::operation{op, new_operands.front(), new_operands.back()});
     } else if (operator_arity == 1) {
-      // If the new_operands is just a `_always_true` literal, propagate it here
       if (&new_operands.front().get() == _always_true.get()) {
         _stats_expr.push(ast::operation{ast_operator::IDENTITY, _stats_expr.back()});
         return *_always_true;
@@ -201,6 +204,10 @@ std::reference_wrapper<ast::expression const> stats_expression_converter::visit(
         _stats_expr.push(ast::operation{op, new_operands.front()});
       }
     }
+  } else {
+    // Unsupported leaf operation (e.g. col op col, expr op col): treat as always_true
+    _stats_expr.push(ast::operation{ast_operator::IDENTITY, *_always_true});
+    return *_always_true;
   }
   return _stats_expr.back();
 }

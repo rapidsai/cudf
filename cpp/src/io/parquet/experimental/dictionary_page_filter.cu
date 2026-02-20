@@ -1398,9 +1398,11 @@ class dictionary_expression_converter : public equality_literals_collector {
     auto const [col_ref, literal, op, operator_arity] =
       parquet::detail::extract_operands_and_operator(expr);
 
-    if (col_ref != nullptr) {
-      CUDF_EXPECTS(operator_arity == 1 or literal != nullptr,
-                   "Binary operation must have a column reference and a literal as operands");
+    // Expression can be evaluated if it's in form of `col op lit` or `lit op col`
+    auto const can_evaluate_expression =
+      col_ref != nullptr and (operator_arity == 1 or literal != nullptr);
+
+    if (can_evaluate_expression) {
       col_ref->accept(*this);
 
       // Propagate the `_always_true` as expression to its unary operator parent
@@ -1438,12 +1440,12 @@ class dictionary_expression_converter : public equality_literals_collector {
       else {
         _dictionary_expr.push(ast::operation{ast_operator::IDENTITY, *_always_true});
       }
-    } else {
+    } else if (op == ast_operator::LOGICAL_AND or op == ast_operator::LOGICAL_OR or
+               op == ast_operator::NOT) {
       auto new_operands = visit_operands(expr.get_operands());
       if (operator_arity == 2) {
         _dictionary_expr.push(ast::operation{op, new_operands.front(), new_operands.back()});
       } else if (operator_arity == 1) {
-        // If the new_operands is just a `_always_true` literal, propagate it here
         if (&new_operands.front().get() == _always_true.get()) {
           _dictionary_expr.push(ast::operation{ast_operator::IDENTITY, _dictionary_expr.back()});
           return *_always_true;
@@ -1451,6 +1453,9 @@ class dictionary_expression_converter : public equality_literals_collector {
           _dictionary_expr.push(ast::operation{op, new_operands.front()});
         }
       }
+    } else {
+      _dictionary_expr.push(ast::operation{ast_operator::IDENTITY, *_always_true});
+      return *_always_true;
     }
     return _dictionary_expr.back();
   }
@@ -1581,9 +1586,7 @@ std::reference_wrapper<ast::expression const> dictionary_literals_collector::vis
   auto const [col_ref, literal, op, operator_arity] =
     parquet::detail::extract_operands_and_operator(expr);
 
-  if (col_ref != nullptr) {
-    CUDF_EXPECTS(operator_arity == 1 or literal != nullptr,
-                 "Binary operation must have a column reference and a literal as operands");
+  if (col_ref != nullptr and (operator_arity == 1 or literal != nullptr)) {
     col_ref->accept(*this);
 
     // Return early if this is a unary operation

@@ -300,11 +300,15 @@ extract_operands_and_operator(ast::operation const& expr)
   // Binary operation
   if (col_ref != nullptr) {
     auto* literal = dynamic_cast<ast::literal const*>(&operands[1].get());
+    if (literal == nullptr) { return {nullptr, nullptr, input_operator, operator_arity}; }
     return {col_ref, literal, input_operator, operator_arity};
   } else {
     auto const inverted_op = invert_non_commutative_operators(input_operator);
     auto* col_ref          = dynamic_cast<ast::column_reference const*>(&operands[1].get());
     auto* literal          = dynamic_cast<ast::literal const*>(&operands[0].get());
+    if (col_ref == nullptr or literal == nullptr) {
+      return {nullptr, nullptr, inverted_op, operator_arity};
+    }
     return {col_ref, literal, inverted_op, operator_arity};
   }
 }

@@ -385,6 +385,96 @@ TEST_F(HybridScanFiltersTest, FilterRowGroupsWithStats)
   EXPECT_EQ(reader->total_rows_in_row_groups(stats_filtered_row_groups), 0);
 }
 
+TEST_F(HybridScanFiltersTest, FilterRowGroupsWithComplexExpressions)
+{
+  srand(0xc002);
+  using T = uint32_t;
+
+  // Create a table with 4 row groups each with a single page.
+  auto constexpr num_concat         = 1;
+  auto constexpr rows_per_row_group = page_size_for_ordered_tests;
+  auto [written_table, file_buffer] = create_parquet_with_stats<T, num_concat, false>();
+
+  auto col_ref0 = cudf::ast::column_reference(0);
+  auto col_ref1 = cudf::ast::column_reference(1);
+
+  // Input datasource
+  auto const datasource = cudf::io::datasource::create(cudf::host_span<std::byte const>(
+    reinterpret_cast<std::byte const*>(file_buffer.data()), file_buffer.size()));
+
+  // Fetch footer
+  auto const footer_buffer = cudf::io::parquet::fetch_footer_to_host(*datasource);
+
+  // Test 1: col0 < col1 (col op col, no literal)
+  // Stats filter should treat this as always_true, keeping all 4 row groups
+  {
+    auto filter = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref0, col_ref1);
+
+    cudf::io::parquet_reader_options options =
+      cudf::io::parquet_reader_options::builder().filter(filter);
+
+    auto const reader = std::make_unique<cudf::io::parquet::experimental::hybrid_scan_reader>(
+      cudf::host_span<uint8_t const>{static_cast<uint8_t const*>(footer_buffer->data()),
+                                     footer_buffer->size()},
+      options);
+
+    auto input_row_group_indices = reader->all_row_groups(options);
+    EXPECT_EQ(input_row_group_indices.size(), 4);
+
+    auto stats_filtered = reader->filter_row_groups_with_stats(
+      input_row_group_indices, options, cudf::get_default_stream());
+    EXPECT_EQ(stats_filtered.size(), 4);
+  }
+
+  // Test 2: (col0 < 50) and (col0 < col1)
+  // Stats filter should prune based on col0 < 50 but treat col0 < col1 as always_true
+  {
+    auto literal_value = cudf::numeric_scalar<T>(50);
+    auto literal       = cudf::ast::literal(literal_value);
+    auto lhs           = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref0, literal);
+    auto rhs           = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref0, col_ref1);
+    auto filter = cudf::ast::operation(cudf::ast::ast_operator::LOGICAL_AND, lhs, rhs);
+
+    cudf::io::parquet_reader_options options =
+      cudf::io::parquet_reader_options::builder().filter(filter);
+
+    auto const reader = std::make_unique<cudf::io::parquet::experimental::hybrid_scan_reader>(
+      cudf::host_span<uint8_t const>{static_cast<uint8_t const*>(footer_buffer->data()),
+                                     footer_buffer->size()},
+      options);
+
+    auto input_row_group_indices = reader->all_row_groups(options);
+    auto stats_filtered          = reader->filter_row_groups_with_stats(
+      input_row_group_indices, options, cudf::get_default_stream());
+    // col0 < 50 should prune row groups where min(col0) >= 50
+    EXPECT_EQ(stats_filtered.size(), 1);
+    EXPECT_EQ(reader->total_rows_in_row_groups(stats_filtered), rows_per_row_group);
+  }
+
+  // Test 3: (col0 < 50) or (col0 < col1)
+  // col0 < col1 is always_true in stats, so the OR should keep all row groups
+  {
+    auto literal_value = cudf::numeric_scalar<T>(50);
+    auto literal       = cudf::ast::literal(literal_value);
+    auto lhs           = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref0, literal);
+    auto rhs           = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref0, col_ref1);
+    auto filter        = cudf::ast::operation(cudf::ast::ast_operator::LOGICAL_OR, lhs, rhs);
+
+    cudf::io::parquet_reader_options options =
+      cudf::io::parquet_reader_options::builder().filter(filter);
+
+    auto const reader = std::make_unique<cudf::io::parquet::experimental::hybrid_scan_reader>(
+      cudf::host_span<uint8_t const>{static_cast<uint8_t const*>(footer_buffer->data()),
+                                     footer_buffer->size()},
+      options);
+
+    auto input_row_group_indices = reader->all_row_groups(options);
+    auto stats_filtered          = reader->filter_row_groups_with_stats(
+      input_row_group_indices, options, cudf::get_default_stream());
+    EXPECT_EQ(stats_filtered.size(), 4);
+  }
+}
+
 TEST_F(HybridScanFiltersTest, FilterColumnSelection)
 {
   srand(0xc0al);

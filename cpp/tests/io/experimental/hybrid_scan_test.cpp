@@ -717,3 +717,72 @@ TEST_F(HybridScanTest, MaterializeMixedPayloadColumns)
   test_hybrid_scan<num_concat, num_rows>(
     {col0, col1, *col2, *col3, col4, *col5, *col6, *col7, *col8, *col9});
 }
+
+TEST_F(HybridScanTest, FilterWithColumnToColumnExpression)
+{
+  srand(0xbeef);
+  using T = uint32_t;
+
+  auto constexpr num_concat            = 1;
+  auto [written_table, parquet_buffer] = create_parquet_with_stats<T, num_concat>();
+
+  auto stream     = cudf::get_default_stream();
+  auto mr         = cudf::get_current_device_resource_ref();
+  auto aligned_mr = rmm::mr::aligned_resource_adaptor<rmm::mr::device_memory_resource>(
+    cudf::get_current_device_resource_ref(), bloom_filter_alignment);
+
+  // Create datasource from buffer
+  auto const datasource = cudf::io::datasource::create(cudf::host_span<std::byte const>(
+    reinterpret_cast<std::byte const*>(parquet_buffer.data()), parquet_buffer.size()));
+  auto& datasource_ref = *datasource;
+
+  auto col_ref0 = cudf::ast::column_name_reference("col0");
+  auto col_ref1 = cudf::ast::column_name_reference("col1");
+
+  // Test 1: (col0 < 100) and (col0 < col1) - mixed col-op-lit and col-op-col
+  {
+    auto literal_value = cudf::numeric_scalar<T>(100);
+    auto literal       = cudf::ast::literal(literal_value);
+    auto lhs           = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref0, literal);
+    auto rhs           = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref0, col_ref1);
+    auto filter = cudf::ast::operation(cudf::ast::ast_operator::LOGICAL_AND, lhs, rhs);
+
+    auto read_single_step =
+      hybrid_scan_single_step(datasource_ref, filter, std::nullopt, stream, mr);
+    auto read_chunked_single_step =
+      chunked_hybrid_scan_single_step(datasource_ref, filter, std::nullopt, stream, mr);
+
+    // Read expected using standard parquet reader
+    auto const src_info = cudf::io::source_info(
+      cudf::host_span<char>(parquet_buffer.data(), parquet_buffer.size()));
+    cudf::io::parquet_reader_options const read_opts =
+      cudf::io::parquet_reader_options::builder(src_info).filter(filter);
+    auto const expected = cudf::io::read_parquet(read_opts, stream, mr).tbl;
+
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected->view(), read_single_step->view());
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected->view(), read_chunked_single_step->view());
+  }
+
+  // Test 2: (col0 < 50) or (col0 < col1) - OR with col-op-col
+  {
+    auto literal_value = cudf::numeric_scalar<T>(50);
+    auto literal       = cudf::ast::literal(literal_value);
+    auto lhs           = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref0, literal);
+    auto rhs           = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref0, col_ref1);
+    auto filter        = cudf::ast::operation(cudf::ast::ast_operator::LOGICAL_OR, lhs, rhs);
+
+    auto read_single_step =
+      hybrid_scan_single_step(datasource_ref, filter, std::nullopt, stream, mr);
+    auto read_chunked_single_step =
+      chunked_hybrid_scan_single_step(datasource_ref, filter, std::nullopt, stream, mr);
+
+    auto const src_info = cudf::io::source_info(
+      cudf::host_span<char>(parquet_buffer.data(), parquet_buffer.size()));
+    cudf::io::parquet_reader_options const read_opts =
+      cudf::io::parquet_reader_options::builder(src_info).filter(filter);
+    auto const expected = cudf::io::read_parquet(read_opts, stream, mr).tbl;
+
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected->view(), read_single_step->view());
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected->view(), read_chunked_single_step->view());
+  }
+}

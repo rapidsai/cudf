@@ -203,7 +203,10 @@ class bloom_filter_expression_converter : public equality_literals_collector {
     // Extract the column reference, literal, operator, and operator arity from the operands
     auto const [col_ref, literal, op, operator_arity] = extract_operands_and_operator(expr);
 
-    if (col_ref != nullptr) {
+    auto const can_evaluate_expression =
+      col_ref != nullptr and (operator_arity == 1 or literal != nullptr);
+
+    if (can_evaluate_expression) {
       col_ref->accept(*this);
 
       // Propagate the `_always_true` as expression to its unary operator parent
@@ -230,12 +233,12 @@ class bloom_filter_expression_converter : public equality_literals_collector {
       else {
         _bloom_filter_expr.push(ast::operation{ast_operator::IDENTITY, *_always_true});
       }
-    } else {
+    } else if (op == ast_operator::LOGICAL_AND or op == ast_operator::LOGICAL_OR or
+               op == ast_operator::NOT) {
       auto new_operands = visit_operands(expr.get_operands());
       if (operator_arity == 2) {
         _bloom_filter_expr.push(ast::operation{op, new_operands.front(), new_operands.back()});
       } else if (operator_arity == 1) {
-        // If the new_operands is just a `_always_true` literal, propagate it here
         if (&new_operands.front().get() == _always_true.get()) {
           _bloom_filter_expr.push(
             ast::operation{ast_operator::IDENTITY, _bloom_filter_expr.back()});
@@ -244,6 +247,9 @@ class bloom_filter_expression_converter : public equality_literals_collector {
           _bloom_filter_expr.push(ast::operation{op, new_operands.front()});
         }
       }
+    } else {
+      _bloom_filter_expr.push(ast::operation{ast_operator::IDENTITY, *_always_true});
+      return *_always_true;
     }
     return _bloom_filter_expr.back();
   }
@@ -586,9 +592,11 @@ std::reference_wrapper<ast::expression const> equality_literals_collector::visit
   // Extract the column reference, literal, operator, and operator arity from the operands
   auto const [col_ref, literal, op, operator_arity] = extract_operands_and_operator(expr);
 
-  if (col_ref != nullptr) {
-    CUDF_EXPECTS(operator_arity == 1 or literal != nullptr,
-                 "Binary operation must have a column reference and a literal as operands");
+  // Expression can be evaluated if it's in form of `col op lit` or `lit op col`
+  auto const can_evaluate_expression =
+    col_ref != nullptr and (operator_arity == 1 or literal != nullptr);
+
+  if (can_evaluate_expression) {
     col_ref->accept(*this);
 
     // Return early if this is a unary operation
