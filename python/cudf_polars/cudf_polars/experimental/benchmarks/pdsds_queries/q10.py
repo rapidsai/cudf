@@ -186,12 +186,12 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
             [
                 # Cast -> Int64 to match DuckDB
                 # TODO: We should plan to make these optional
-                pl.len().alias("cnt1").cast(pl.Int64),
-                pl.len().alias("cnt2").cast(pl.Int64),
-                pl.len().alias("cnt3").cast(pl.Int64),
-                pl.len().alias("cnt4").cast(pl.Int64),
-                pl.len().alias("cnt5").cast(pl.Int64),
-                pl.len().alias("cnt6").cast(pl.Int64),
+                pl.len().alias("cnt1"),
+                pl.len().alias("cnt2"),
+                pl.len().alias("cnt3"),
+                pl.len().alias("cnt4"),
+                pl.len().alias("cnt5"),
+                pl.len().alias("cnt6"),
             ]
         )
         .sort(
