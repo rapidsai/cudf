@@ -30,6 +30,13 @@ Pre-generated parameters for PDS-DS queries across a set of scale factors.
 - **Query 14**: `year`, `day` (day of month)
 - **Query 15**: `year`, `qoy` (quarter of year)
 - **Query 16**: `year`, `month`, `state`, `county` (list of 5 counties)
+- **Query 37**: `price`, `manufact` (list of 4 manufacturer IDs), `invdate` (inventory date)
+- **Query 38**: `dms` (d_month_seq value)
+- **Query 39**: `year`, `month`
+- **Query 40**: `sales_date`, `year`
+- **Query 41**: `manufact` (manufacturer ID), `size` (list of 6 sizes), `color` (list of 16 colors), `unit` (list of 16 units)
+- **Query 42**: `year`, `month`
+- **Query 43**: `year`, `gmt` (GMT offset)
 
 ## Usage
 
