@@ -310,7 +310,6 @@ def _(
         # Get target partition size
         config_options = rec.state["config_options"]
         executor = config_options.executor
-        assert executor.name == "streaming", "Join node requires streaming executor"
         target_partition_size = executor.target_partition_size
 
         nodes[ir] = [
