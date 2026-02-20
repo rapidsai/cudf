@@ -318,8 +318,8 @@ def _(ir: Sort) -> dict[str, Serializable]:
 
 def _serialize_literal(value: Any) -> Serializable:
     match value:
-        case datetime.datetime():
-            return {"type": "datetime", "value": value.isoformat()}
+        case datetime.datetime() | datetime.date():
+            return {"type": type(value).__name__, "value": value.isoformat()}
         case _:
             return {"type": type(value).__name__, "value": value}
 

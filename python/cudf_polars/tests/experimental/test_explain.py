@@ -650,12 +650,14 @@ def test_filter_properties(predicate: pl.Expr, expected: dict):
     assert node.properties == expected
 
 
-def test_serialize_filter_datetime():
-    q = pl.LazyFrame({"a": [datetime.datetime(2026, 1, 1)]}).filter(
-        pl.col("a") > datetime.datetime(2026, 1, 1)
-    )
+@pytest.mark.parametrize(
+    "value", [datetime.datetime(2026, 1, 1), datetime.date(2026, 1, 1)]
+)
+def test_serialize_filter_datetime(value: datetime.datetime | datetime.date):
+    q = pl.LazyFrame({"a": value}).filter(pl.col("a") > value)
     dag = serialize_query(q, pl.GPUEngine(executor="streaming"))
     node = dag.nodes[dag.roots[0]]
+    type_name = "datetime" if isinstance(value, datetime.datetime) else "date"
     assert node.type == "Filter"
     assert node.properties == {
         "predicate": "a",
@@ -663,7 +665,7 @@ def test_serialize_filter_datetime():
         "left": {"type": "Col", "name": "a"},
         "right": {
             "type": "Literal",
-            "value": {"type": "datetime", "value": "2026-01-01T00:00:00"},
+            "value": {"type": type_name, "value": value.isoformat()},
         },
     }
 
