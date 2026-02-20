@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import dataclasses
+import datetime
 import json
 import re
 from typing import TYPE_CHECKING, Any
@@ -594,7 +595,7 @@ def test_scan_properties(tmp_path: Path, predicate: pl.Expr | None):
             "value": {
                 "left": {"name": "a", "type": "Col"},
                 "op": "GREATER",
-                "right": {"type": "Literal", "value": 1},
+                "right": {"type": "Literal", "value": {"type": "int", "value": 1}},
             },
         }
     engine = pl.GPUEngine(executor="streaming", raise_on_fail=True)
@@ -626,7 +627,7 @@ def test_sort_properties(*, descending: bool):
                 "predicate": "a",
                 "op": "GREATER",
                 "left": {"type": "Col", "name": "a"},
-                "right": {"type": "Literal", "value": 1},
+                "right": {"type": "Literal", "value": {"type": "int", "value": 1}},
             },
         ),
         (
@@ -647,6 +648,24 @@ def test_filter_properties(predicate: pl.Expr, expected: dict):
     node = dag.nodes[dag.roots[0]]
     assert node.type == "Filter"
     assert node.properties == expected
+
+
+def test_serialize_filter_datetime():
+    q = pl.LazyFrame({"a": [datetime.datetime(2026, 1, 1)]}).filter(
+        pl.col("a") > datetime.datetime(2026, 1, 1)
+    )
+    dag = serialize_query(q, pl.GPUEngine(executor="streaming"))
+    node = dag.nodes[dag.roots[0]]
+    assert node.type == "Filter"
+    assert node.properties == {
+        "predicate": "a",
+        "op": "GREATER",
+        "left": {"type": "Col", "name": "a"},
+        "right": {
+            "type": "Literal",
+            "value": {"type": "datetime", "value": "2026-01-01T00:00:00"},
+        },
+    }
 
 
 def test_select_properties():

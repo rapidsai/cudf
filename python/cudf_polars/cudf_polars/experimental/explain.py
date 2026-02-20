@@ -5,10 +5,11 @@
 from __future__ import annotations
 
 import dataclasses
+import datetime
 import functools
 from collections.abc import Mapping, Sequence
 from itertools import groupby
-from typing import TYPE_CHECKING, Self, TypeAlias
+from typing import TYPE_CHECKING, Any, Self, TypeAlias
 
 import cudf_polars.dsl.expressions.binaryop
 import cudf_polars.dsl.expressions.literal
@@ -315,6 +316,14 @@ def _(ir: Sort) -> dict[str, Serializable]:
     }
 
 
+def _serialize_literal(value: Any) -> Serializable:
+    match value:
+        case datetime.datetime():
+            return {"type": "datetime", "value": value.isoformat()}
+        case _:
+            return {"type": type(value).__name__, "value": value}
+
+
 def _serialize_expr(expr: Expr | NamedExpr) -> dict[str, Serializable]:
     match expr:
         case NamedExpr(name=name, value=value):
@@ -322,7 +331,7 @@ def _serialize_expr(expr: Expr | NamedExpr) -> dict[str, Serializable]:
         case cudf_polars.dsl.expressions.base.Col(name=name):
             return {"type": "Col", "name": name}
         case cudf_polars.dsl.expressions.literal.Literal(value=value):
-            return {"type": "Literal", "value": value}
+            return {"type": "Literal", "value": _serialize_literal(value)}
         case cudf_polars.dsl.expressions.binaryop.BinOp():
             return {
                 "op": expr.op.name,
