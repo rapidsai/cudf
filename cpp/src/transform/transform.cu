@@ -99,7 +99,7 @@ jitify2::ConfiguredKernel build_transform_kernel(
   auto kernel_reflection =
     jitify2::reflection::Template(kernel_name)
       .instantiate(build_jit_template_params(
-        is_null_aware, may_evaluate_null, has_user_data, {}, output_typenames, input_typenames));
+        is_null_aware, may_evaluate_null, has_user_data, {}, output_typenames, input_reflections));
 
   return cudf::jit::get_udf_kernel(*transform_jit_kernel_cu_jit, kernel_reflection, cuda_source)
     ->configure_1d_max_occupancy(0, 0, nullptr, stream.value());
@@ -131,7 +131,7 @@ jitify2::ConfiguredKernel build_span_kernel(std::string_view kernel_name,
   auto kernel_reflection =
     jitify2::reflection::Template(kernel_name)
       .instantiate(build_jit_template_params(
-        is_null_aware, may_evaluate_null, has_user_data, span_outputs, {}, output_typenames));
+        is_null_aware, may_evaluate_null, has_user_data, span_outputs, {}, input_reflections));
 
   return cudf::jit::get_udf_kernel(*transform_jit_kernel_cu_jit, kernel_reflection, cuda_source)
     ->configure_1d_max_occupancy(0, 0, nullptr, stream.value());
