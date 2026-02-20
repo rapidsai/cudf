@@ -1054,6 +1054,9 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         *,
         null_cast_dtype: DtypeObj | None = None,
     ) -> tuple[ColumnBase, ColumnBase]:
+        # If all of `to_replace`/`replacement` are `None`, the dtype of
+        # `to_replace_col`/`replacement_col` is inferred as `string`so we need to
+        # type-cast to self.dtype.
         to_replace_col = as_column(to_replace)
         if null_cast_dtype is not None and to_replace_col.is_all_null:
             to_replace_col = to_replace_col.astype(null_cast_dtype)

@@ -713,12 +713,6 @@ class NumericalColumn(NumericalBaseColumn):
         """Return col with *to_replace* replaced with *value*."""
         # TODO: The all_nan argument is only used for this
         # this subclass, try to factor these cases out of this method
-
-        # If all of `to_replace`/`replacement` are `None`,
-        # dtype of `to_replace_col`/`replacement_col`
-        # is inferred as `string`, but this is a valid
-        # float64 column too, Hence we will need to type-cast
-        # to self.dtype.
         to_replace_col, replacement_col = (
             ColumnBase._prepare_find_and_replace_columns(
                 to_replace,
