@@ -60,6 +60,7 @@ from cudf.core.column import (
     column_empty,
     concat_columns,
 )
+from cudf.core.column.column import _normalize_types_column
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.copy_types import BooleanMask
 from cudf.core.dtype.validators import is_dtype_obj_numeric
@@ -8499,6 +8500,16 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             raise ValueError(
                 "table must be a pylibcudf.Table or pylibcudf.io.TableWithMetadata"
             )
+
+        columns = tbl.columns()
+        normalized_columns = [_normalize_types_column(col) for col in columns]
+        if not all(
+            normalized_col is col
+            for normalized_col, col in zip(
+                normalized_columns, columns, strict=True
+            )
+        ):
+            tbl = plc.Table(normalized_columns)
 
         plc_columns = tbl.columns()
         cudf_cols = (
