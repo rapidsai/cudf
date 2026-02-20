@@ -476,17 +476,17 @@ pandas_nullables_types_with_scalars = [
 if parse(pd.__version__) >= parse("2.3.0"):
     pandas_nullables_types_with_scalars.extend(
         [
-            ("a", pd.StringDtype(storage="python")),
-            ("a", pd.StringDtype(storage="pyarrow")),
+            ("a", pd.StringDtype(na_value=np.nan, storage="python")),
+            ("a", pd.StringDtype(na_value=pd.NA, storage="python")),
+            ("a", pd.StringDtype(na_value=np.nan, storage="pyarrow")),
+            ("a", pd.StringDtype(na_value=pd.NA, storage="pyarrow")),
         ]
     )
 else:
     pandas_nullables_types_with_scalars.extend(
         [
-            ("a", pd.StringDtype(na_value=np.nan, storage="python")),
-            ("a", pd.StringDtype(na_value=pd.NA, storage="python")),
-            ("a", pd.StringDtype(na_value=np.nan, storage="pyarrow")),
-            ("a", pd.StringDtype(na_value=pd.NA, storage="pyarrow")),
+            ("a", pd.StringDtype(storage="python")),
+            ("a", pd.StringDtype(storage="pyarrow")),
         ]
     )
 
