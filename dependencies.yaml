@@ -114,6 +114,7 @@ files:
       - depends_on_cudf_kafka
       - depends_on_custreamz
       - depends_on_cudf_polars
+      - depends_on_rapidsmpf
   test_java:
     output: none
     includes:
