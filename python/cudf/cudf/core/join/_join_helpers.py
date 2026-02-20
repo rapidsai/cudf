@@ -57,7 +57,14 @@ class _IndexIndexer(_Indexer):
         return obj.index._data[self.name]
 
     def set(self, obj: DataFrame, value: ColumnBase):
-        obj.index._data.set_by_label(self.name, value)
+        if isinstance(obj.index.dtype, CategoricalDtype):
+            # We need to update the categories of the index as well as the
+            # codes when setting a new column on a categorical index. The
+            # categories are stored in the dtype of the index, so we need to
+            # update the dtype of the index to reflect the new categories.
+            obj.index = obj.index._from_data_like_self({self.name: value})
+        else:
+            obj.index._data.set_by_label(self.name, value)
 
 
 def _match_join_keys(
