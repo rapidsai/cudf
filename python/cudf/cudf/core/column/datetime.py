@@ -34,7 +34,6 @@ from cudf.utils.dtypes import (
     cudf_dtype_to_pa_type,
     dtype_from_pylibcudf_column,
     get_dtype_of_same_kind,
-    get_dtype_of_same_type,
 )
 from cudf.utils.scalar import pa_scalar_to_plc_scalar
 from cudf.utils.utils import _EQUALITY_OPS, is_na_like
@@ -188,21 +187,6 @@ class DatetimeColumn(TemporalBaseColumn):
         "__radd__",
         "__rsub__",
     }
-    _VALID_PLC_TYPES = {
-        plc.TypeId.TIMESTAMP_SECONDS,
-        plc.TypeId.TIMESTAMP_MILLISECONDS,
-        plc.TypeId.TIMESTAMP_MICROSECONDS,
-        plc.TypeId.TIMESTAMP_NANOSECONDS,
-    }
-
-    @classmethod
-    def _validate_args(
-        cls, plc_column: plc.Column, dtype: np.dtype
-    ) -> tuple[plc.Column, np.dtype]:
-        plc_column, dtype = super()._validate_args(plc_column, dtype)
-        if not getattr(dtype, "kind", None) == "M":
-            raise ValueError(f"dtype must be a datetime, got {dtype}")
-        return plc_column, dtype
 
     def _reduce(
         self,
@@ -305,7 +289,10 @@ class DatetimeColumn(TemporalBaseColumn):
     @functools.cached_property
     def is_month_end(self) -> ColumnBase:
         with self.access(mode="read", scope="internal"):
-            plc_result = plc.datetime.last_day_of_month(self.plc_column)
+            plc_result = plc.unary.cast(
+                plc.datetime.last_day_of_month(self.plc_column),
+                plc.DataType(plc.TypeId.TIMESTAMP_SECONDS),
+            )
             last_day_col = ColumnBase.create(
                 plc_result,
                 dtype_from_pylibcudf_column(plc_result),
@@ -759,16 +746,6 @@ class DatetimeColumn(TemporalBaseColumn):
         else:
             return result_col
 
-    def _with_type_metadata(self, dtype: DtypeObj) -> DatetimeColumn:
-        if isinstance(dtype, pd.DatetimeTZDtype):
-            return DatetimeTZColumn._from_preprocessed(
-                plc_column=self.plc_column,
-                dtype=dtype,
-            )
-        self._dtype = get_dtype_of_same_type(dtype, self.dtype)
-
-        return self
-
     def _find_ambiguous_and_nonexistent(
         self, zone_name: str
     ) -> tuple[NumericalColumn, NumericalColumn] | tuple[bool, bool]:
@@ -876,22 +853,6 @@ class DatetimeColumn(TemporalBaseColumn):
 
 
 class DatetimeTZColumn(DatetimeColumn):
-    @classmethod
-    def _validate_args(
-        cls, plc_column: plc.Column, dtype: pd.DatetimeTZDtype
-    ) -> tuple[plc.Column, pd.DatetimeTZDtype]:
-        # Manually validate TypeId since we can't call parent (different dtype type)
-        if not (
-            isinstance(plc_column, plc.Column)
-            and plc_column.type().id() in DatetimeColumn._VALID_PLC_TYPES
-        ):
-            raise ValueError(
-                f"plc_column must be a pylibcudf.Column with a TypeId in {DatetimeColumn._VALID_PLC_TYPES}"
-            )
-        if not isinstance(dtype, pd.DatetimeTZDtype):
-            raise ValueError("dtype must be a pandas.DatetimeTZDtype")
-        return plc_column, get_compatible_timezone(dtype)
-
     def to_pandas(
         self,
         *,
@@ -919,8 +880,11 @@ class DatetimeTZColumn(DatetimeColumn):
     @property
     def _utc_time(self) -> DatetimeColumn:
         """Return UTC time as naive timestamps."""
-        return DatetimeColumn._from_preprocessed(
-            self.plc_column, _get_base_dtype(self.dtype)
+        return cast(
+            "DatetimeColumn",
+            DatetimeColumn.create(
+                self.plc_column, _get_base_dtype(self.dtype), validate=False
+            ),
         )
 
     @functools.cached_property
@@ -945,9 +909,13 @@ class DatetimeTZColumn(DatetimeColumn):
     ) -> DatetimeColumn:
         if isinstance(dtype, pd.DatetimeTZDtype) and dtype != self.dtype:
             if dtype.unit != self.time_unit:
-                # TODO: Doesn't check that new unit is valid.
+                casted_plc = (
+                    super()
+                    .as_datetime_column(_get_base_dtype(dtype))
+                    .plc_column
+                )
                 casted = cast(
-                    DatetimeTZColumn, ColumnBase.create(self.plc_column, dtype)
+                    DatetimeTZColumn, ColumnBase.create(casted_plc, dtype)
                 )
             else:
                 casted = self
