@@ -13,6 +13,7 @@ from pandas.core.computation.common import result_type_many
 import pylibcudf as plc
 
 import cudf
+from cudf.core._internals.timezones import get_compatible_timezone
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -140,6 +141,8 @@ def cudf_dtype_from_pa_type(typ: pa.DataType) -> DtypeObj:
         if isinstance(typ, pa.Decimal64Type):
             return cudf.Decimal64Dtype.from_arrow(typ)
         return cudf.Decimal128Dtype.from_arrow(typ)
+    elif pa.types.is_timestamp(typ) and typ.tz is not None:
+        return get_compatible_timezone(pd.DatetimeTZDtype(typ.unit, typ.tz))
     elif pa.types.is_large_string(typ) or pa.types.is_string(typ):
         return CUDF_STRING_DTYPE
     elif pa.types.is_date(typ):
@@ -488,6 +491,8 @@ def dtype_to_pylibcudf_type(dtype) -> plc.DataType:
     elif isinstance(dtype, cudf.Decimal32Dtype):
         tid = plc.TypeId.DECIMAL32
         return plc.DataType(tid, -dtype.scale)
+    elif isinstance(dtype, cudf.CategoricalDtype):
+        dtype = dtype._codes_dtype
     # libcudf types don't support timezones so convert to the base type
     elif isinstance(dtype, pd.DatetimeTZDtype):
         dtype = _get_base_dtype(dtype)

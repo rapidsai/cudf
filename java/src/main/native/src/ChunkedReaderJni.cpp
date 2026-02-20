@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -126,7 +126,7 @@ Java_ai_rapids_cudf_ParquetChunkedReader_createWithDataSource(JNIEnv* env,
 
     auto opts_builder = cudf::io::parquet_reader_options::builder(source);
     if (n_filter_col_names.size() > 0) {
-      opts_builder = opts_builder.columns(n_filter_col_names.as_cpp_vector());
+      opts_builder = opts_builder.column_names(n_filter_col_names.as_cpp_vector());
     }
     auto const read_opts = opts_builder.convert_strings_to_categories(false)
                              .timestamp_type(cudf::data_type(static_cast<cudf::type_id>(unit)))
