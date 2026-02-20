@@ -137,18 +137,8 @@ def _wrap_buffer_or_span(
     """Wrap a buffer or span in a cudf Buffer.
 
     If the input is already a Buffer, it will be shallow-copied to track
-    that we are now sharing the same BufferOwner. If it's a gpumemoryview
-    or other span, it will be wrapped in a new Buffer.
-
-    Parameters
-    ----------
-    buffer_or_span : Buffer, gpumemoryview, or None
-        The buffer or span to wrap.
-
-    Returns
-    -------
-    Buffer or None
-        A wrapped Buffer, or None if input was None.
+    that we are now sharing the same BufferOwner. Any other non-None object will be
+    wrapped in a buffer via as_buffer.
     """
     if buffer_or_span is None:
         return None
@@ -157,16 +147,22 @@ def _wrap_buffer_or_span(
     return as_buffer(buffer_or_span)
 
 
-def _make_wrapped(
+def _rebuild_column(
     col: plc.Column,
     children: list[plc.Column],
     data_type: plc.DataType | None = None,
+    wrap_buffers: bool = False,
 ) -> plc.Column:
+    data = col.data()
+    mask = col.null_mask()
+    if wrap_buffers:
+        data = _wrap_buffer_or_span(data)
+        mask = _wrap_buffer_or_span(mask)
     return plc.Column(
         data_type=data_type or col.type(),
         size=col.size(),
-        data=_wrap_buffer_or_span(col.data()),
-        mask=_wrap_buffer_or_span(col.null_mask()),
+        data=data,
+        mask=mask,
         null_count=col.null_count(),
         offset=col.offset(),
         children=children,
@@ -176,7 +172,35 @@ def _make_wrapped(
 
 def _wrap_column(col: plc.Column) -> plc.Column:
     wrapped_children = [_wrap_column(child) for child in col.children()]
-    return _make_wrapped(col, wrapped_children)
+    return _rebuild_column(col, wrapped_children, wrap_buffers=True)
+
+
+def _normalize_types_column(col: plc.Column) -> plc.Column:
+    """Normalize unsupported types from external sources."""
+    type_id = col.type().id()
+    if type_id == plc.TypeId.TIMESTAMP_DAYS:
+        return plc.unary.cast(col, plc.DataType(plc.TypeId.TIMESTAMP_SECONDS))
+
+    if type_id == plc.TypeId.EMPTY:
+        plc_dtype = plc.DataType(plc.TypeId.INT8)
+        if col.size() == 0:
+            return plc.column_factories.make_empty_column(plc_dtype)
+        return plc.column_factories.make_numeric_column(
+            plc_dtype, col.size(), plc.types.MaskState.ALL_NULL
+        )
+
+    normalized_children = [
+        _normalize_types_column(child) for child in col.children()
+    ]
+    if all(
+        normalized_child is child
+        for normalized_child, child in zip(
+            normalized_children, col.children(), strict=True
+        )
+    ):
+        return col
+
+    return _rebuild_column(col, normalized_children)
 
 
 def _wrap_and_validate(
@@ -186,31 +210,20 @@ def _wrap_and_validate(
     if isinstance(dispatch_dtype, pd.ArrowDtype):
         dispatch_dtype = pyarrow_dtype_to_cudf_dtype(dispatch_dtype)
     type_id = col.type().id()
-
-    if type_id == plc.TypeId.TIMESTAMP_DAYS:
-        type_id = plc.TypeId.TIMESTAMP_SECONDS
-        col = plc.unary.cast(col, plc.DataType(type_id))
-    elif type_id == plc.TypeId.EMPTY:
-        if isinstance(dispatch_dtype, CategoricalDtype):
-            new_dtype = dtype_to_pylibcudf_type(dispatch_dtype._codes_dtype)
-        else:
-            new_dtype = plc.DataType(plc.TypeId.INT8)
-        col = plc.column_factories.make_numeric_column(
-            new_dtype, col.size(), plc.types.MaskState.ALL_NULL
-        )
-        type_id = new_dtype.id()
-
+    dtype_kind = dispatch_dtype.kind
     valid_types: set[plc.TypeId] = set()
     wrapped: plc.Column | None = None
-    dtype_kind = dispatch_dtype.kind
     if isinstance(dispatch_dtype, ListDtype):
         valid_types = {plc.TypeId.LIST}
         values, values_dtype = _wrap_and_validate(
             col.list_view().child(), dispatch_dtype.element_type
         )
         offsets = _wrap_column(col.list_view().offsets())
-        wrapped = _make_wrapped(
-            col, [offsets, values], data_type=plc.DataType(plc.TypeId.LIST)
+        wrapped = _rebuild_column(
+            col,
+            [offsets, values],
+            data_type=plc.DataType(plc.TypeId.LIST),
+            wrap_buffers=True,
         )
         dispatch_dtype = ListDtype(values_dtype)
     elif isinstance(dispatch_dtype, IntervalDtype):
@@ -228,10 +241,11 @@ def _wrap_and_validate(
                 ("Left", "Right"), col.children(), strict=True
             )
         ]
-        wrapped = _make_wrapped(
+        wrapped = _rebuild_column(
             col,
             wrapped_children,
             data_type=plc.DataType(plc.TypeId.STRUCT),
+            wrap_buffers=True,
         )
     elif isinstance(dispatch_dtype, StructDtype):
         valid_types = {plc.TypeId.STRUCT}
@@ -246,10 +260,11 @@ def _wrap_and_validate(
                     f"Field '{field_name}' validation failed"
                 ) from e
             wrapped_children.append(wrapped_child)
-        wrapped = _make_wrapped(
+        wrapped = _rebuild_column(
             col,
             wrapped_children,
             data_type=plc.DataType(plc.TypeId.STRUCT),
+            wrap_buffers=True,
         )
 
     wrapped = _wrap_column(col) if wrapped is None else wrapped
@@ -312,14 +327,15 @@ def _wrap_and_validate(
         and dtype_to_pylibcudf_type(dispatch_dtype) != wrapped.type()
     ):
         raise ValueError(
-            "dtype "
-            f"{dispatch_dtype} does not match the type of the plc_column "
-            f"{col.type().id()}"
+            f"dtype {dispatch_dtype} does not match the type of the plc_column "
+            f"{col.type().id()}. If normalization is required, please run the "
+            "column through _normalize_types_column first."
         )
     if type_id not in valid_types:
         raise ValueError(
             "plc_column must be a pylibcudf.Column with a TypeId in "
-            f"{valid_types}"
+            f"{valid_types}. If normalization is required, please run the "
+            "column through _normalize_types_column first."
         )
     return wrapped, dispatch_dtype
 
@@ -1219,24 +1235,26 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                     )
                 )
             categories_dtype = cudf_dtype_from_pa_type(dictionary.type)
-            categories = cls.create(
-                plc.Column.from_arrow(dictionary), categories_dtype
+            categories_plc = _normalize_types_column(
+                plc.Column.from_arrow(dictionary)
             )
+            categories = cls.create(categories_plc, categories_dtype)
+
             categorical_dtype = CategoricalDtype(
                 categories=categories, ordered=array.type.ordered
             )
             expected_codes_dtype = dtype_to_pylibcudf_type(
                 categorical_dtype._codes_dtype
             )
-            codes_plc = plc.Column.from_arrow(codes)
+            codes_plc = _normalize_types_column(plc.Column.from_arrow(codes))
             if codes_plc.type() != expected_codes_dtype:
                 codes_plc = plc.unary.cast(codes_plc, expected_codes_dtype)
             return ColumnBase.create(codes_plc, categorical_dtype)
         else:
-            return cls.create(
-                plc.Column.from_arrow(array),
-                cudf_dtype_from_pa_type(array.type),
-            )
+            plc_column = plc.Column.from_arrow(array)
+            dtype = cudf_dtype_from_pa_type(array.type)
+            normalized = _normalize_types_column(plc_column)
+            return cls.create(normalized, dtype)
 
     def _get_mask_as_column(self) -> ColumnBase:
         with self.access(mode="read", scope="internal"):
