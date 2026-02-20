@@ -1596,8 +1596,17 @@ def test_series_constructor_dtype_is_pandas_nullable_extension_type(
 
 def test_series_constructor_dtype_is_pandas_arrowdtype(
     all_supported_pandas_arrowdtypes,
+    request,
 ):
     scalar, dtype = all_supported_pandas_arrowdtypes
+    if (
+        PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION
+        and dtype.kind == "M"
+        and dtype.pyarrow_dtype.tz is not None
+    ):
+        pytest.skip(
+            f"RecursionError occurs in older versions of pandas/pyarrow for {dtype}"
+        )
     result = cudf.Series([scalar], dtype=dtype)
     expected = pd.Series([scalar], dtype=dtype)
     assert result.dtype == expected.dtype
