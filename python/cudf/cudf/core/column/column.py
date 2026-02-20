@@ -203,19 +203,6 @@ def _normalize_types_column(col: plc.Column) -> plc.Column:
     return _rebuild_column(col, normalized_children)
 
 
-def _normalize_types_table(table: plc.Table) -> plc.Table:
-    columns = table.columns()
-    normalized_columns = [_normalize_types_column(col) for col in columns]
-    if all(
-        normalized_col is col
-        for normalized_col, col in zip(
-            normalized_columns, columns, strict=True
-        )
-    ):
-        return table
-    return plc.Table(normalized_columns)
-
-
 def _wrap_and_validate(
     col: plc.Column, dtype: DtypeObj
 ) -> tuple[plc.Column, DtypeObj]:

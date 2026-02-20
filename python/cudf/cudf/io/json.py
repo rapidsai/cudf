@@ -13,7 +13,6 @@ import pandas as pd
 import pylibcudf as plc
 
 from cudf.core.column import access_columns
-from cudf.core.column.column import _normalize_types_table
 from cudf.core.dataframe import DataFrame
 from cudf.core.dtypes import (
     CategoricalDtype,
@@ -209,9 +208,8 @@ def read_json(
                     )
                 )
             )
-            normalized_table = _normalize_types_table(plc.Table(res_cols))
             return DataFrame.from_pylibcudf(
-                normalized_table,
+                plc.Table(res_cols),
                 metadata={
                     "columns": res_col_names,
                     "child_names": res_child_names,
@@ -237,13 +235,6 @@ def read_json(
                     extra_parameters=kwargs,
                 )
             )
-            if (
-                normalized := _normalize_types_table(table_w_meta.tbl)
-            ) is not table_w_meta.tbl:
-                table_w_meta = plc.io.TableWithMetadata(
-                    normalized,
-                    table_w_meta.column_names(include_children=True),
-                )
             df = DataFrame.from_pylibcudf(table_w_meta)
     else:
         warnings.warn(

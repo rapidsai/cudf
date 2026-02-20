@@ -3,7 +3,6 @@
 
 import pylibcudf as plc
 
-from cudf.core.column.column import _normalize_types_table
 from cudf.core.dataframe import DataFrame
 from cudf.utils import ioutils
 
@@ -47,11 +46,4 @@ def read_avro(
         options.set_columns(columns)
 
     tbl_w_meta = plc.io.avro.read_avro(options)
-    if (
-        normalized := _normalize_types_table(tbl_w_meta.tbl)
-    ) is not tbl_w_meta.tbl:
-        tbl_w_meta = plc.io.TableWithMetadata(
-            normalized,
-            tbl_w_meta.column_names(include_children=True),
-        )
     return DataFrame.from_pylibcudf(tbl_w_meta)

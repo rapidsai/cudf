@@ -15,7 +15,6 @@ import pylibcudf as plc
 
 from cudf.api.types import is_scalar
 from cudf.core.column import access_columns
-from cudf.core.column.column import _normalize_types_table
 from cudf.core.dataframe import DataFrame
 from cudf.core.dtypes import (
     CategoricalDtype,
@@ -281,13 +280,6 @@ def read_csv(
         options.set_na_values([str(val) for val in na_values])
 
     table_w_meta = plc.io.csv.read_csv(options)
-    if (
-        normalized := _normalize_types_table(table_w_meta.tbl)
-    ) is not table_w_meta.tbl:
-        table_w_meta = plc.io.TableWithMetadata(
-            normalized,
-            table_w_meta.column_names(include_children=True),
-        )
     df = DataFrame.from_pylibcudf(table_w_meta)
 
     if get_option("mode.pandas_compatible") and df.empty:

@@ -31,7 +31,6 @@ from cudf.core.column import (
     as_column,
     column_empty,
 )
-from cudf.core.column.column import _normalize_types_table
 from cudf.core.dataframe import DataFrame
 from cudf.core.dtypes import (
     CategoricalDtype,
@@ -1418,7 +1417,7 @@ def _read_parquet(
 
             plc_table = plc.Table(concatenated_columns)
             df = DataFrame.from_pylibcudf(
-                _normalize_types_table(plc_table),
+                plc_table,
                 metadata={
                     "columns": column_names,
                     "child_names": child_names,
@@ -1462,13 +1461,6 @@ def _read_parquet(
                 options.set_filter(filters)
 
             tbl_w_meta = plc.io.parquet.read_parquet(options)
-            if (
-                normalized := _normalize_types_table(tbl_w_meta.tbl)
-            ) is not tbl_w_meta.tbl:
-                tbl_w_meta = plc.io.TableWithMetadata(
-                    normalized,
-                    tbl_w_meta.column_names(include_children=True),
-                )
             df = DataFrame.from_pylibcudf(tbl_w_meta)
             df = _process_metadata(
                 df,
