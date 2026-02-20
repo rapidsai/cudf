@@ -6,7 +6,10 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Iterator
 from contextlib import ExitStack
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
+
+if TYPE_CHECKING:
+    from cudf._typing import DtypeObj, DtypePolicy
 
 
 def _flatten_and_access(
@@ -91,7 +94,7 @@ class PylibcudfFunction:
         self,
         pylibcudf_function: Callable[..., Any],
         *,
-        dtype_policy: Callable[[list[Any]], Any],
+        dtype_policy: "DtypePolicy",
         mode: Literal["read", "write"] = "read",
     ) -> None:
         self._pylibcudf_function = pylibcudf_function
@@ -117,7 +120,7 @@ class PylibcudfFunction:
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
         from cudf.core.column.column import ColumnBase
 
-        dtypes: list[Any] = []
+        dtypes: list["DtypeObj"] = []
         with ExitStack() as stack:
             plc_args = tuple(self._process(arg, stack, dtypes) for arg in args)
             plc_kwargs = {
@@ -125,5 +128,5 @@ class PylibcudfFunction:
                 for key, value in kwargs.items()
             }
             plc_result = self._pylibcudf_function(*plc_args, **plc_kwargs)
-        output_dtype = self._dtype_policy(dtypes)
+        output_dtype = self._dtype_policy(*dtypes)
         return ColumnBase.create(plc_result, dtype=output_dtype)

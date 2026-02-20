@@ -1,8 +1,8 @@
-# SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from collections.abc import Callable, Iterable
-from typing import TYPE_CHECKING, Any, Literal, TypeVar, Union
+from typing import TYPE_CHECKING, Any, Literal, Protocol, TypeVar, Union
 
 import numpy as np
 import pandas as pd
@@ -20,6 +20,11 @@ if TYPE_CHECKING:
 Dtype = Union["ExtensionDtype", str, np.dtype]
 # DtypeObj should be used otherwise
 DtypeObj = Union["ExtensionDtype", np.dtype]
+
+
+class DtypePolicy(Protocol):
+    def __call__(self, *dtypes: DtypeObj) -> DtypeObj: ...
+
 
 # scalars
 DatetimeLikeScalar = TypeVar(
