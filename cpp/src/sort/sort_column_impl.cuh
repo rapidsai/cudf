@@ -122,14 +122,16 @@ struct column_sorted_order_fn {
                   rmm::cuda_stream_view stream)
   {
     auto const keys = dictionary_column_view(input).keys();
-    // first, get sorted-order of just the keys (slow but expect keys.size <<< indices.size)
+    // For the keys we do an arg-sort of arg-sort to get the rank and use that as a map
+    // to sort the indices in rank order.
+    // First, get sorted-order of just the keys (slow but expect keys.size <<< indices.size)
     auto temp_mr = cudf::get_current_device_resource_ref();
     auto ordered_indices =
       cudf::detail::sorted_order<method>(keys, order::ASCENDING, null_precedence, stream, temp_mr);
-    // sort the ordered indices to get their ordered positions (very fast integer sort)
+    // Now, sort the ordered indices to get their ordered positions (very fast integer sort)
     ordered_indices = cudf::detail::sorted_order<method>(
       ordered_indices->view(), order::ASCENDING, null_precedence, stream, temp_mr);
-    // use the result as a map to over the dictionary indices
+    // And use the result as a map over the dictionary indices
     auto map = ordered_indices->view().template data<size_type>();
     auto itr = cudf::detail::indexalator_factory::make_input_iterator(
       dictionary_column_view(input).indices());
@@ -137,7 +139,7 @@ struct column_sorted_order_fn {
     thrust::gather(
       rmm::exec_policy_nosync(stream), itr, itr + input.size(), map, mapped_indices.begin());
 
-    // finally, sort-order the dictionary indices using mapped values
+    // Finally, sort-order the dictionary indices using mapped values
     auto mapped_view = column_view(data_type{type_to_id<size_type>()},
                                    input.size(),
                                    mapped_indices.data(),
