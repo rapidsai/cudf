@@ -59,7 +59,7 @@ cudf::io::parquet_reader_options make_parquet_reader_options(JNIEnv* env,
 
   auto builder = cudf::io::parquet_reader_options::builder(source);
   if (n_filter_col_names.size() > 0) {
-    builder = builder.columns(n_filter_col_names.as_cpp_vector());
+    builder = builder.column_names(n_filter_col_names.as_cpp_vector());
   }
   if (n_row_groups.size() > 0) {
     auto row_groups_vec = std::vector<std::vector<cudf::size_type>>{};
