@@ -152,6 +152,36 @@ def test_rapidsmpf_join_metadata(
             4,
             (0, 0),
         ),
+        (
+            4,
+            Partitioning(
+                inter_rank=None,
+                local=HashScheme((0, 1), 4),
+            ),
+            (0, 1),
+            1,
+            (4, None),
+        ),
+        (
+            4,
+            Partitioning(
+                inter_rank=None,
+                local=HashScheme((0, 1), 4),
+            ),
+            (0, 1),
+            4,
+            (0, 0),
+        ),
+        (
+            8,
+            Partitioning(
+                inter_rank=HashScheme((0, 1), 8),
+                local=None,
+            ),
+            (0, 1),
+            4,
+            (8, 0),
+        ),
     ],
 )
 def test_get_partitioning_moduli(
