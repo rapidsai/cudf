@@ -30,6 +30,16 @@ Pre-generated parameters for PDS-DS queries across a set of scale factors.
 - **Query 14**: `year`, `day` (day of month)
 - **Query 15**: `year`, `qoy` (quarter of year)
 - **Query 16**: `year`, `month`, `state`, `county` (list of 5 counties)
+- **Query 53**: `dms` (d_month_seq), `categories1` (list of 3), `classes1` (list of 4), `brands1` (list of 4), `categories2` (list of 3), `classes2` (list of 4), `brands2` (list of 4)
+- **Query 54**: `category`, `class`, `month`, `year`
+- **Query 55**: `year`, `month`, `manager_id`
+- **Query 56**: `year`, `month`, `colors` (list of 3), `gmt_offset`
+- **Query 57**: `year`
+- **Query 58**: `sales_date`
+- **Query 59**: `dms` (d_month_seq)
+- **Query 60**: `year`, `month`, `category`, `gmt_offset`
+- **Query 61**: `year`, `month`, `gmt_offset`, `category`
+- **Query 62**: `dms` (d_month_seq)
 
 ## Usage
 
