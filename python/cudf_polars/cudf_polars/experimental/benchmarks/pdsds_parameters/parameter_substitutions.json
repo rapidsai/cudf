@@ -523,6 +523,69 @@
           "Williamson County",
           "Williamson County"
         ]
+      },
+      "24": {
+        "market": 8,
+        "color": [
+          "rose",
+          "wheat"
+        ],
+        "amountone": "ss_net_profit"
+      },
+      "25": {
+        "year": 2001,
+        "agg": "stddev_samp"
+      },
+      "26": {
+        "year": 2002,
+        "gen": "M",
+        "ms": "U",
+        "es": "College"
+      },
+      "27": {
+        "year": 1999,
+        "gen": "M",
+        "ms": "U",
+        "es": "College",
+        "state": [
+          "TN",
+          "TN",
+          "TN",
+          "TN",
+          "TN",
+          "TN"
+        ]
+      },
+      "28": {
+        "listprice": [
+          160,
+          38,
+          68,
+          86,
+          101,
+          156
+        ],
+        "couponamt": [
+          8331,
+          6914,
+          5755,
+          2785,
+          6780,
+          13077
+        ],
+        "wholesalecost": [
+          46,
+          56,
+          5,
+          6,
+          66,
+          27
+        ]
+      },
+      "29": {
+        "year": 2000,
+        "month": 4,
+        "agg": "stddev_samp"
       }
     },
     "10": {
@@ -1047,6 +1110,69 @@
           "Walker County",
           "Ziebach County"
         ]
+      },
+      "24": {
+        "market": 8,
+        "color": [
+          "rose",
+          "wheat"
+        ],
+        "amountone": "ss_net_profit"
+      },
+      "25": {
+        "year": 2001,
+        "agg": "stddev_samp"
+      },
+      "26": {
+        "year": 2002,
+        "gen": "M",
+        "ms": "U",
+        "es": "College"
+      },
+      "27": {
+        "year": 1999,
+        "gen": "M",
+        "ms": "S",
+        "es": "College",
+        "state": [
+          "SD",
+          "AL",
+          "TN",
+          "SD",
+          "SD",
+          "SD"
+        ]
+      },
+      "28": {
+        "listprice": [
+          160,
+          38,
+          68,
+          86,
+          101,
+          156
+        ],
+        "couponamt": [
+          8331,
+          6914,
+          5755,
+          2785,
+          6780,
+          13077
+        ],
+        "wholesalecost": [
+          46,
+          56,
+          5,
+          6,
+          66,
+          27
+        ]
+      },
+      "29": {
+        "year": 2000,
+        "month": 4,
+        "agg": "stddev_samp"
       }
     },
     "50": {
@@ -1571,6 +1697,69 @@
           "Walker County",
           "Ziebach County"
         ]
+      },
+      "24": {
+        "market": 8,
+        "color": [
+          "rose",
+          "wheat"
+        ],
+        "amountone": "ss_net_profit"
+      },
+      "25": {
+        "year": 2001,
+        "agg": "stddev_samp"
+      },
+      "26": {
+        "year": 2002,
+        "gen": "M",
+        "ms": "U",
+        "es": "College"
+      },
+      "27": {
+        "year": 1999,
+        "gen": "M",
+        "ms": "S",
+        "es": "College",
+        "state": [
+          "SD",
+          "AL",
+          "TN",
+          "SD",
+          "SD",
+          "SD"
+        ]
+      },
+      "28": {
+        "listprice": [
+          160,
+          38,
+          68,
+          86,
+          101,
+          156
+        ],
+        "couponamt": [
+          8331,
+          6914,
+          5755,
+          2785,
+          6780,
+          13077
+        ],
+        "wholesalecost": [
+          46,
+          56,
+          5,
+          6,
+          66,
+          27
+        ]
+      },
+      "29": {
+        "year": 2000,
+        "month": 4,
+        "agg": "stddev_samp"
       }
     },
     "100": {
@@ -2095,6 +2284,69 @@
           "Daviess County",
           "Richland County"
         ]
+      },
+      "24": {
+        "market": 8,
+        "color": [
+          "rose",
+          "wheat"
+        ],
+        "amountone": "ss_net_profit"
+      },
+      "25": {
+        "year": 2001,
+        "agg": "stddev_samp"
+      },
+      "26": {
+        "year": 2002,
+        "gen": "M",
+        "ms": "U",
+        "es": "College"
+      },
+      "27": {
+        "year": 1999,
+        "gen": "M",
+        "ms": "W",
+        "es": "2 yr Degree",
+        "state": [
+          "GA",
+          "AL",
+          "SD",
+          "MO",
+          "OH",
+          "TN"
+        ]
+      },
+      "28": {
+        "listprice": [
+          160,
+          38,
+          68,
+          86,
+          101,
+          156
+        ],
+        "couponamt": [
+          8331,
+          6914,
+          5755,
+          2785,
+          6780,
+          13077
+        ],
+        "wholesalecost": [
+          46,
+          56,
+          5,
+          6,
+          66,
+          27
+        ]
+      },
+      "29": {
+        "year": 2000,
+        "month": 4,
+        "agg": "stddev_samp"
       }
     },
     "200": {
@@ -2619,6 +2871,69 @@
           "Walker County",
           "Ziebach County"
         ]
+      },
+      "24": {
+        "market": 8,
+        "color": [
+          "rose",
+          "wheat"
+        ],
+        "amountone": "ss_net_profit"
+      },
+      "25": {
+        "year": 2001,
+        "agg": "stddev_samp"
+      },
+      "26": {
+        "year": 2002,
+        "gen": "M",
+        "ms": "U",
+        "es": "College"
+      },
+      "27": {
+        "year": 1999,
+        "gen": "M",
+        "ms": "S",
+        "es": "College",
+        "state": [
+          "SD",
+          "AL",
+          "TN",
+          "SD",
+          "SD",
+          "SD"
+        ]
+      },
+      "28": {
+        "listprice": [
+          160,
+          38,
+          68,
+          86,
+          101,
+          156
+        ],
+        "couponamt": [
+          8331,
+          6914,
+          5755,
+          2785,
+          6780,
+          13077
+        ],
+        "wholesalecost": [
+          46,
+          56,
+          5,
+          6,
+          66,
+          27
+        ]
+      },
+      "29": {
+        "year": 2000,
+        "month": 4,
+        "agg": "stddev_samp"
       }
     },
     "400": {
@@ -3143,6 +3458,69 @@
           "Williamson County",
           "Ziebach County"
         ]
+      },
+      "24": {
+        "market": 8,
+        "color": [
+          "rose",
+          "wheat"
+        ],
+        "amountone": "ss_net_profit"
+      },
+      "25": {
+        "year": 2001,
+        "agg": "stddev_samp"
+      },
+      "26": {
+        "year": 2002,
+        "gen": "M",
+        "ms": "U",
+        "es": "College"
+      },
+      "27": {
+        "year": 1999,
+        "gen": "M",
+        "ms": "W",
+        "es": "4 yr Degree",
+        "state": [
+          "SD",
+          "TN",
+          "SD",
+          "TN",
+          "SD",
+          "SD"
+        ]
+      },
+      "28": {
+        "listprice": [
+          160,
+          38,
+          68,
+          86,
+          101,
+          156
+        ],
+        "couponamt": [
+          8331,
+          6914,
+          5755,
+          2785,
+          6780,
+          13077
+        ],
+        "wholesalecost": [
+          46,
+          56,
+          5,
+          6,
+          66,
+          27
+        ]
+      },
+      "29": {
+        "year": 2000,
+        "month": 4,
+        "agg": "stddev_samp"
       }
     },
     "1000": {
@@ -3667,6 +4045,69 @@
           "San Miguel County",
           "Oglethorpe County"
         ]
+      },
+      "24": {
+        "market": 8,
+        "color": [
+          "rose",
+          "wheat"
+        ],
+        "amountone": "ss_net_profit"
+      },
+      "25": {
+        "year": 2001,
+        "agg": "stddev_samp"
+      },
+      "26": {
+        "year": 2002,
+        "gen": "M",
+        "ms": "U",
+        "es": "College"
+      },
+      "27": {
+        "year": 1998,
+        "gen": "F",
+        "ms": "M",
+        "es": "Primary",
+        "state": [
+          "IN",
+          "MN",
+          "OH",
+          "NM",
+          "GA",
+          "MN"
+        ]
+      },
+      "28": {
+        "listprice": [
+          160,
+          38,
+          68,
+          86,
+          101,
+          156
+        ],
+        "couponamt": [
+          8331,
+          6914,
+          5755,
+          2785,
+          6780,
+          13077
+        ],
+        "wholesalecost": [
+          46,
+          56,
+          5,
+          6,
+          66,
+          27
+        ]
+      },
+      "29": {
+        "year": 2000,
+        "month": 4,
+        "agg": "stddev_samp"
       }
     },
     "3000": {
@@ -4191,6 +4632,69 @@
           "Williamson County",
           "Marshall County"
         ]
+      },
+      "24": {
+        "market": 8,
+        "color": [
+          "rose",
+          "wheat"
+        ],
+        "amountone": "ss_net_profit"
+      },
+      "25": {
+        "year": 2001,
+        "agg": "stddev_samp"
+      },
+      "26": {
+        "year": 2002,
+        "gen": "M",
+        "ms": "U",
+        "es": "College"
+      },
+      "27": {
+        "year": 2000,
+        "gen": "F",
+        "ms": "W",
+        "es": "Unknown",
+        "state": [
+          "MO",
+          "MN",
+          "CO",
+          "NE",
+          "NY",
+          "AL"
+        ]
+      },
+      "28": {
+        "listprice": [
+          160,
+          38,
+          68,
+          86,
+          101,
+          156
+        ],
+        "couponamt": [
+          8331,
+          6914,
+          5755,
+          2785,
+          6780,
+          13077
+        ],
+        "wholesalecost": [
+          46,
+          56,
+          5,
+          6,
+          66,
+          27
+        ]
+      },
+      "29": {
+        "year": 2000,
+        "month": 4,
+        "agg": "stddev_samp"
       }
     },
     "10000": {
@@ -4715,6 +5219,69 @@
           "Levy County",
           "Richland County"
         ]
+      },
+      "24": {
+        "market": 8,
+        "color": [
+          "rose",
+          "wheat"
+        ],
+        "amountone": "ss_net_profit"
+      },
+      "25": {
+        "year": 2001,
+        "agg": "stddev_samp"
+      },
+      "26": {
+        "year": 2002,
+        "gen": "M",
+        "ms": "U",
+        "es": "College"
+      },
+      "27": {
+        "year": 1999,
+        "gen": "F",
+        "ms": "M",
+        "es": "Advanced Degree",
+        "state": [
+          "NY",
+          "TN",
+          "TX",
+          "AL",
+          "WV",
+          "MI"
+        ]
+      },
+      "28": {
+        "listprice": [
+          160,
+          38,
+          68,
+          86,
+          101,
+          156
+        ],
+        "couponamt": [
+          8331,
+          6914,
+          5755,
+          2785,
+          6780,
+          13077
+        ],
+        "wholesalecost": [
+          46,
+          56,
+          5,
+          6,
+          66,
+          27
+        ]
+      },
+      "29": {
+        "year": 2000,
+        "month": 4,
+        "agg": "stddev_samp"
       }
     },
     "30000": {
@@ -5239,6 +5806,69 @@
           "Barrow County",
           "Perry County"
         ]
+      },
+      "24": {
+        "market": 8,
+        "color": [
+          "rose",
+          "wheat"
+        ],
+        "amountone": "ss_net_profit"
+      },
+      "25": {
+        "year": 2001,
+        "agg": "stddev_samp"
+      },
+      "26": {
+        "year": 2002,
+        "gen": "M",
+        "ms": "U",
+        "es": "College"
+      },
+      "27": {
+        "year": 2002,
+        "gen": "M",
+        "ms": "M",
+        "es": "Advanced Degree",
+        "state": [
+          "IN",
+          "MO",
+          "PA",
+          "OH",
+          "VT",
+          "CA"
+        ]
+      },
+      "28": {
+        "listprice": [
+          160,
+          38,
+          68,
+          86,
+          101,
+          156
+        ],
+        "couponamt": [
+          8331,
+          6914,
+          5755,
+          2785,
+          6780,
+          13077
+        ],
+        "wholesalecost": [
+          46,
+          56,
+          5,
+          6,
+          66,
+          27
+        ]
+      },
+      "29": {
+        "year": 2000,
+        "month": 4,
+        "agg": "stddev_samp"
       }
     },
     "100000": {
@@ -5763,6 +6393,69 @@
           "Barrow County",
           "Perry County"
         ]
+      },
+      "24": {
+        "market": 8,
+        "color": [
+          "rose",
+          "wheat"
+        ],
+        "amountone": "ss_net_profit"
+      },
+      "25": {
+        "year": 2001,
+        "agg": "stddev_samp"
+      },
+      "26": {
+        "year": 2002,
+        "gen": "M",
+        "ms": "U",
+        "es": "College"
+      },
+      "27": {
+        "year": 2001,
+        "gen": "M",
+        "ms": "S",
+        "es": "Advanced Degree",
+        "state": [
+          "AL",
+          "CO",
+          "KS",
+          "LA",
+          "OK",
+          "WV"
+        ]
+      },
+      "28": {
+        "listprice": [
+          160,
+          38,
+          68,
+          86,
+          101,
+          156
+        ],
+        "couponamt": [
+          8331,
+          6914,
+          5755,
+          2785,
+          6780,
+          13077
+        ],
+        "wholesalecost": [
+          46,
+          56,
+          5,
+          6,
+          66,
+          27
+        ]
+      },
+      "29": {
+        "year": 2000,
+        "month": 4,
+        "agg": "stddev_samp"
       }
     },
     "qualification": {
@@ -6281,6 +6974,69 @@
           "Williamson County",
           "Williamson County"
         ]
+      },
+      "24": {
+        "market": 8,
+        "color": [
+          "peach",
+          "saddle"
+        ],
+        "amountone": "ss_net_paid"
+      },
+      "25": {
+        "year": 2001,
+        "agg": "sum"
+      },
+      "26": {
+        "year": 2000,
+        "es": "College",
+        "ms": "S",
+        "gen": "M"
+      },
+      "27": {
+        "year": 2000,
+        "state": [
+          "TN",
+          "TN",
+          "TN",
+          "TN",
+          "TN",
+          "TN"
+        ],
+        "es": "College",
+        "ms": "S",
+        "gen": "M"
+      },
+      "28": {
+        "wholesalecost": [
+          14,
+          32,
+          4,
+          80,
+          38,
+          42
+        ],
+        "listprice": [
+          11,
+          91,
+          66,
+          142,
+          135,
+          28
+        ],
+        "couponamt": [
+          460,
+          1430,
+          920,
+          3054,
+          14180,
+          2513
+        ]
+      },
+      "29": {
+        "month": 9,
+        "year": 1999,
+        "agg": "sum"
       }
     }
   }
