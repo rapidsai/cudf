@@ -62,7 +62,7 @@ add_library(
 )
 target_link_libraries(
   cudf_benchmark_common PRIVATE cudf_datagen $<TARGET_NAME_IF_EXISTS:conda_env> GTest::gmock
-                                GTest::gtest
+                                GTest::gtest kvikio::kvikio
 )
 
 add_custom_command(
