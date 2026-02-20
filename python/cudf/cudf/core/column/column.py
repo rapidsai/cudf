@@ -47,7 +47,11 @@ from cudf.core.buffer import (
     Buffer,
     as_buffer,
 )
-from cudf.core.column.utils import access_columns
+from cudf.core.column.utils import (
+    NpBoolDtypePolicy,
+    PylibcudfFunction,
+    access_columns,
+)
 from cudf.core.copy_types import GatherMap
 from cudf.core.dtype.validators import (
     is_dtype_obj_decimal,
@@ -1706,10 +1710,10 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
     def is_valid(self) -> ColumnBase:
         """Identify non-null values"""
-        with self.access(mode="read", scope="internal"):
-            return ColumnBase.create(
-                plc.unary.is_valid(self.plc_column), np.dtype(np.bool_)
-            )
+        return PylibcudfFunction(
+            plc.unary.is_valid,
+            dtype_policy=NpBoolDtypePolicy,
+        )(self)
 
     def isnan(self) -> ColumnBase:
         """Identify NaN values in a Column."""
@@ -1723,23 +1727,19 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         """Identify missing values in a Column."""
         if not self.has_nulls(include_nan=False):
             return as_column(False, length=len(self))
-
-        with self.access(mode="read", scope="internal"):
-            return ColumnBase.create(
-                plc.unary.is_null(self.plc_column), np.dtype(np.bool_)
-            )
+        return PylibcudfFunction(
+            plc.unary.is_null,
+            dtype_policy=NpBoolDtypePolicy,
+        )(self)
 
     def notnull(self) -> ColumnBase:
         """Identify non-missing values in a Column."""
         if not self.has_nulls(include_nan=False):
-            result = as_column(True, length=len(self))
-        else:
-            with self.access(mode="read", scope="internal"):
-                result = ColumnBase.create(
-                    plc.unary.is_valid(self.plc_column), np.dtype(np.bool_)
-                )
-
-        return result
+            return as_column(True, length=len(self))
+        return PylibcudfFunction(
+            plc.unary.is_valid,
+            dtype_policy=NpBoolDtypePolicy,
+        )(self)
 
     @cached_property
     def nan_count(self) -> int:

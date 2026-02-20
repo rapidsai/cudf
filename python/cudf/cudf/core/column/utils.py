@@ -8,6 +8,8 @@ from collections.abc import Callable, Iterable, Iterator
 from contextlib import ExitStack
 from typing import TYPE_CHECKING, Any, Literal
 
+import numpy as np
+
 if TYPE_CHECKING:
     from cudf._typing import DtypeObj, DtypePolicy
 
@@ -130,3 +132,7 @@ class PylibcudfFunction:
             plc_result = self._pylibcudf_function(*plc_args, **plc_kwargs)
         output_dtype = self._dtype_policy(*dtypes)
         return ColumnBase.create(plc_result, dtype=output_dtype)
+
+
+def NpBoolDtypePolicy(*_dtypes: "DtypeObj") -> "DtypeObj":
+    return np.dtype(np.bool_)

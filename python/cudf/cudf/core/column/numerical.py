@@ -22,7 +22,7 @@ from cudf.core.column.column import (
     column_empty,
 )
 from cudf.core.column.numerical_base import NumericalBaseColumn
-from cudf.core.column.utils import PylibcudfFunction
+from cudf.core.column.utils import NpBoolDtypePolicy, PylibcudfFunction
 from cudf.core.mixins import BinaryOperand
 from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
@@ -147,7 +147,7 @@ class NumericalColumn(NumericalBaseColumn):
             return as_column(False, length=len(self))
         return PylibcudfFunction(
             plc.unary.is_nan,
-            dtype_policy=lambda *_dtypes: np.dtype(np.bool_),
+            dtype_policy=NpBoolDtypePolicy,
         )(self)
 
     def notnan(self) -> ColumnBase:
@@ -158,10 +158,10 @@ class NumericalColumn(NumericalBaseColumn):
         """
         if self.dtype.kind != "f":
             return as_column(True, length=len(self))
-        with self.access(mode="read", scope="internal"):
-            return ColumnBase.create(
-                plc.unary.is_not_nan(self.plc_column), np.dtype(np.bool_)
-            )
+        return PylibcudfFunction(
+            plc.unary.is_not_nan,
+            dtype_policy=NpBoolDtypePolicy,
+        )(self)
 
     def isnull(self) -> ColumnBase:
         """Identify missing values in a Column.
