@@ -492,23 +492,7 @@ else:
 
 
 @pytest.fixture(
-    params=[
-        (1, pd.Int8Dtype()),
-        (1, pd.Int16Dtype()),
-        (1, pd.Int32Dtype()),
-        (1, pd.Int64Dtype()),
-        (1, pd.UInt8Dtype()),
-        (1, pd.UInt16Dtype()),
-        (1, pd.UInt32Dtype()),
-        (1, pd.UInt64Dtype()),
-        (1.5, pd.Float32Dtype()),
-        (1.5, pd.Float64Dtype()),
-        (True, pd.BooleanDtype()),
-        ("a", pd.StringDtype(na_value=np.nan, storage="python")),
-        ("a", pd.StringDtype(na_value=pd.NA, storage="python")),
-        ("a", pd.StringDtype(na_value=np.nan, storage="pyarrow")),
-        ("a", pd.StringDtype(na_value=pd.NA, storage="pyarrow")),
-    ],
+    params=pandas_nullables_types_with_scalars,
     ids=lambda x: repr(x[1]),
 )
 def all_supported_pandas_nullable_extension_dtypes(request):
