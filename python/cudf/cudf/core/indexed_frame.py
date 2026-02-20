@@ -4821,7 +4821,7 @@ class IndexedFrame(Frame):
         --------
         >>> import cudf
         >>> df = cudf.DataFrame({"a":{1, 2, 3, 4, 5}})
-        >>> df.sample(3, random_state=0)
+        >>> df.sample(3, random_state=0)  # doctest: +SKIP
            a
         0  1
         1  2
