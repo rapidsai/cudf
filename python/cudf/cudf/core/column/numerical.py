@@ -146,10 +146,7 @@ class NumericalColumn(NumericalBaseColumn):
         """
         if self.dtype.kind != "f":
             return as_column(False, length=len(self))
-        return PylibcudfFunction(
-            plc.unary.is_nan,
-            NpBoolDtypePolicy,
-        )(self)
+        return PylibcudfFunction(plc.unary.is_nan, NpBoolDtypePolicy)(self)
 
     def notnan(self) -> ColumnBase:
         """Identify non-NaN values in a Column.

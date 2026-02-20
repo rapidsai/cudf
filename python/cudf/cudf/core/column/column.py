@@ -1754,10 +1754,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
     def is_valid(self) -> ColumnBase:
         """Identify non-null values"""
-        return PylibcudfFunction(
-            plc.unary.is_valid,
-            NpBoolDtypePolicy,
-        )(self)
+        return PylibcudfFunction(plc.unary.is_valid, NpBoolDtypePolicy)(self)
 
     def isnan(self) -> ColumnBase:
         """Identify NaN values in a Column."""
@@ -1771,19 +1768,13 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         """Identify missing values in a Column."""
         if not self.has_nulls(include_nan=False):
             return as_column(False, length=len(self))
-        return PylibcudfFunction(
-            plc.unary.is_null,
-            NpBoolDtypePolicy,
-        )(self)
+        return PylibcudfFunction(plc.unary.is_null, NpBoolDtypePolicy)(self)
 
     def notnull(self) -> ColumnBase:
         """Identify non-missing values in a Column."""
         if not self.has_nulls(include_nan=False):
             return as_column(True, length=len(self))
-        return PylibcudfFunction(
-            plc.unary.is_valid,
-            NpBoolDtypePolicy,
-        )(self)
+        return PylibcudfFunction(plc.unary.is_valid, NpBoolDtypePolicy)(self)
 
     @cached_property
     def nan_count(self) -> int:
