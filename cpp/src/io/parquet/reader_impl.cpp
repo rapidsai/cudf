@@ -869,8 +869,7 @@ table_with_metadata reader_impl::finalize_output(read_mode mode,
   if (_options.decimal_type.id() != type_id::EMPTY) {
     for (auto& out_column : out_columns) {
       auto const& col_type = out_column->type();
-      if (col_type.id() == type_id::DECIMAL32 || col_type.id() == type_id::DECIMAL64 ||
-          col_type.id() == type_id::DECIMAL128) {
+      if (cudf::is_fixed_point(col_type)) {
         if (col_type.id() != _options.decimal_type.id()) {
           auto target_type = cudf::data_type{_options.decimal_type.id(), col_type.scale()};
           out_column       = cudf::cast(out_column->view(), target_type, _stream, _mr);
