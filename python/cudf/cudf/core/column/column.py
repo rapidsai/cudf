@@ -47,11 +47,7 @@ from cudf.core.buffer import (
     Buffer,
     as_buffer,
 )
-from cudf.core.column.utils import (
-    NpBoolDtypePolicy,
-    PylibcudfFunction,
-    access_columns,
-)
+from cudf.core.column.utils import access_columns
 from cudf.core.copy_types import GatherMap
 from cudf.core.dtype.validators import (
     is_dtype_obj_decimal,
@@ -100,7 +96,13 @@ if TYPE_CHECKING:
     from collections.abc import Generator, Mapping
     from types import TracebackType
 
-    from cudf._typing import ColumnLike, Dtype, DtypeObj, ScalarLike
+    from cudf._typing import (
+        ColumnLike,
+        Dtype,
+        DtypeObj,
+        DtypePolicy,
+        ScalarLike,
+    )
     from cudf.core.column.categorical import CategoricalColumn
     from cudf.core.column.datetime import DatetimeColumn
     from cudf.core.column.decimal import DecimalBaseColumn
@@ -114,6 +116,49 @@ if PANDAS_GE_210:
     NumpyExtensionArray = pd.arrays.NumpyExtensionArray
 else:
     NumpyExtensionArray = pd.arrays.PandasArray
+
+
+class PylibcudfFunction:
+    def __init__(
+        self,
+        pylibcudf_function: Callable[..., Any],
+        *,
+        dtype_policy: "DtypePolicy",
+        mode: Literal["read", "write"] = "read",
+    ) -> None:
+        self._pylibcudf_function = pylibcudf_function
+        self._dtype_policy = dtype_policy
+        self._mode: Literal["read", "write"] = mode
+
+    def _process(
+        self,
+        value: Any,
+        stack: ExitStack,
+        dtypes: list["DtypeObj"],
+    ) -> Any:
+        if isinstance(value, ColumnBase):
+            accessed = stack.enter_context(
+                value.access(mode=self._mode, scope="internal")
+            )
+            dtypes.append(accessed.dtype)
+            return accessed.plc_column
+        return value
+
+    def __call__(self, *args: Any, **kwargs: Any) -> Any:
+        dtypes: list["DtypeObj"] = []
+        with ExitStack() as stack:
+            plc_args = tuple(self._process(arg, stack, dtypes) for arg in args)
+            plc_kwargs = {
+                key: self._process(value, stack, dtypes)
+                for key, value in kwargs.items()
+            }
+            plc_result = self._pylibcudf_function(*plc_args, **plc_kwargs)
+        output_dtype = self._dtype_policy(*dtypes)
+        return ColumnBase.create(plc_result, dtype=output_dtype)
+
+
+def NpBoolDtypePolicy(*_dtypes: "DtypeObj") -> "DtypeObj":
+    return np.dtype(np.bool_)
 
 
 def _can_values_be_equal(left: DtypeObj, right: DtypeObj) -> bool:

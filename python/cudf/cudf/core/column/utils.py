@@ -4,14 +4,9 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable, Iterator
+from collections.abc import Iterable, Iterator
 from contextlib import ExitStack
-from typing import TYPE_CHECKING, Any, Literal
-
-import numpy as np
-
-if TYPE_CHECKING:
-    from cudf._typing import DtypeObj, DtypePolicy
+from typing import Any
 
 
 def _flatten_and_access(
@@ -89,50 +84,3 @@ def access_columns(
     stack._objects_generator = _flatten_and_access(objs, stack, kwargs)
 
     return stack
-
-
-class PylibcudfFunction:
-    def __init__(
-        self,
-        pylibcudf_function: Callable[..., Any],
-        *,
-        dtype_policy: "DtypePolicy",
-        mode: Literal["read", "write"] = "read",
-    ) -> None:
-        self._pylibcudf_function = pylibcudf_function
-        self._dtype_policy = dtype_policy
-        self._mode: Literal["read", "write"] = mode
-
-    def _process(
-        self,
-        value: Any,
-        stack: ExitStack,
-        dtypes: list[Any],
-    ) -> Any:
-        from cudf.core.column.column import ColumnBase
-
-        if isinstance(value, ColumnBase):
-            accessed = stack.enter_context(
-                value.access(mode=self._mode, scope="internal")
-            )
-            dtypes.append(accessed.dtype)
-            return accessed.plc_column
-        return value
-
-    def __call__(self, *args: Any, **kwargs: Any) -> Any:
-        from cudf.core.column.column import ColumnBase
-
-        dtypes: list["DtypeObj"] = []
-        with ExitStack() as stack:
-            plc_args = tuple(self._process(arg, stack, dtypes) for arg in args)
-            plc_kwargs = {
-                key: self._process(value, stack, dtypes)
-                for key, value in kwargs.items()
-            }
-            plc_result = self._pylibcudf_function(*plc_args, **plc_kwargs)
-        output_dtype = self._dtype_policy(*dtypes)
-        return ColumnBase.create(plc_result, dtype=output_dtype)
-
-
-def NpBoolDtypePolicy(*_dtypes: "DtypeObj") -> "DtypeObj":
-    return np.dtype(np.bool_)

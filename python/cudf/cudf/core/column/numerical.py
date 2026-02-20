@@ -18,11 +18,12 @@ from cudf.api.types import is_scalar
 from cudf.core._internals import binaryop
 from cudf.core.column.column import (
     ColumnBase,
+    NpBoolDtypePolicy,
+    PylibcudfFunction,
     as_column,
     column_empty,
 )
 from cudf.core.column.numerical_base import NumericalBaseColumn
-from cudf.core.column.utils import NpBoolDtypePolicy, PylibcudfFunction
 from cudf.core.mixins import BinaryOperand
 from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
