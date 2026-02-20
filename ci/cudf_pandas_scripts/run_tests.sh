@@ -130,7 +130,7 @@ for version in "${versions[@]}"; do
     # requiring numpy<2. cupy>=14 dropped support for numpy<2, so we explicitly
     # downgrade cupy here to avoid an import failure when cupy tries
     # to load against the older numpy.
-    python -m pip install "numpy>=1.23,<2.0a0" "pandas==${version}.*" "cupy-${RAPIDS_PY_CUDA_SUFFIX}<14"
+    python -m pip install "numpy>=1.23,<2.0a0" "pandas==${version}.*" "cupy-cuda${RAPIDS_CUDA_VERSION%%.*}x<14"
     python -m pytest -p cudf.pandas \
         --ignore=./python/cudf/cudf_pandas_tests/third_party_integration_tests/ \
         --numprocesses=8 \
