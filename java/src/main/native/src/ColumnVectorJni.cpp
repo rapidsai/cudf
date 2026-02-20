@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -10,12 +10,10 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/concatenate.hpp>
 #include <cudf/copying.hpp>
-#include <cudf/detail/interop.hpp>
 #include <cudf/filling.hpp>
 #include <cudf/hashing.hpp>
 #include <cudf/interop.hpp>
 #include <cudf/lists/combine.hpp>
-#include <cudf/lists/detail/concatenate.hpp>
 #include <cudf/lists/filling.hpp>
 #include <cudf/reshape.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
@@ -396,11 +394,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_concatenate(JNIEnv* env
     auto columns =
       cudf::jni::native_jpointerArray<column_view>{env, column_handles}.get_dereferenced();
     auto const is_lists_column = columns[0].type().id() == cudf::type_id::LIST;
-    return release_as_jlong(
-      is_lists_column
-        ? cudf::lists::detail::concatenate(
-            columns, cudf::get_default_stream(), cudf::get_current_device_resource_ref())
-        : cudf::concatenate(columns));
+    return release_as_jlong(cudf::concatenate(columns));
   }
   JNI_CATCH(env, 0);
 }
