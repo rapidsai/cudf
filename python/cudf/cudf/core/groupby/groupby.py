@@ -2709,43 +2709,32 @@ class GroupBy(Serializable, Reducible, Scannable):
         """Compute multiple quantiles and return result with proper
         MultiIndex including quantile values as the innermost level.
         """
-        from cudf.core.dataframe import DataFrame
-
         # Compute each quantile separately and collect results
-        results = []
-        for qi in qs:
-
-            def func(x, _q=qi):
-                return getattr(x, "quantile")(
-                    q=_q, interpolation=interpolation
-                )
-
-            results.append(self.agg(func))
-
+        results = [self.quantile(qi, interpolation=interpolation) for qi in qs]
         nqs = len(qs)
         first = results[0]
         idx = first.index
         ngroups = len(idx)
 
         # Concatenate results (order: all groups for q0, then q1, ...)
-        combined = DataFrame._concat(results)
+        combined = concat(results, ignore_index=True)
 
         # Reorder to interleave: group0-q0, group0-q1, group1-q0, group1-q1
-        order = np.empty(ngroups * nqs, dtype=np.intp)
-        for i in range(nqs):
-            order[i::nqs] = np.arange(ngroups) + i * ngroups
+        order = (
+            np.arange(ngroups * nqs)
+            .reshape(ngroups, nqs, order="F")
+            .reshape(-1)
+        )
 
-        combined = combined.iloc[order].reset_index(drop=True)
+        combined = combined.iloc[order]
 
         # Build new MultiIndex with quantile as innermost level
         q_level = Index(qs, dtype=np.float64)
 
         if isinstance(idx, MultiIndex):
             levels = [*list(idx.levels), q_level]
-            new_codes = [
-                np.repeat(code.to_numpy(), nqs) for code in idx._codes
-            ]
-            new_codes.append(np.tile(np.arange(nqs), ngroups))
+            new_codes = [cp.repeat(code.values, nqs) for code in idx._codes]
+            new_codes.append(cp.tile(cp.arange(nqs), ngroups))
 
             new_index = MultiIndex(
                 levels=levels,
@@ -2756,8 +2745,8 @@ class GroupBy(Serializable, Reducible, Scannable):
             new_index = MultiIndex(
                 levels=[idx, q_level],
                 codes=[
-                    np.repeat(np.arange(ngroups, dtype=np.int64), nqs),
-                    np.tile(np.arange(nqs, dtype=np.int64), ngroups),
+                    cp.repeat(cp.arange(ngroups, dtype=np.int64), nqs),
+                    cp.tile(cp.arange(nqs, dtype=np.int64), ngroups),
                 ],
                 names=[idx.name, None],
             )
