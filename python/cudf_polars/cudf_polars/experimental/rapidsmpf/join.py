@@ -692,23 +692,15 @@ async def get_unshuffled_chunk(
     context: Context,
     ch: Channel[TableChunk],
     sample_chunks: list[TableChunk],
-    *,
-    channel_done: bool,
-) -> tuple[TableChunk | None, bool]:
-    """Return next chunk from sample list or channel, and updated channel_done flag."""
+) -> TableChunk | None:
+    """Return next chunk from sample list or channel."""
     if sample_chunks:
-        return sample_chunks.pop(0), channel_done
-    if not channel_done:
-        msg = await ch.recv(context)
-        if msg is None:
-            channel_done = True
-            return None, channel_done
-        chunk = TableChunk.from_message(msg).make_available_and_spill(
+        return sample_chunks.pop(0)
+    if (msg := await ch.recv(context)) is not None:
+        return TableChunk.from_message(msg).make_available_and_spill(
             context.br(), allow_overbooking=True
         )
-        del msg
-        return chunk, channel_done
-    return None, channel_done
+    return None
 
 
 async def get_dataframe_to_join(
@@ -716,26 +708,23 @@ async def get_dataframe_to_join(
     ch: Channel[TableChunk],
     sample_chunks: list[TableChunk],
     *,
-    channel_done: bool,
     shuffle: ShuffleManager | None,
     partition_id: int,
     stream: Stream,
     child: IR,
-) -> tuple[DataFrame, bool]:
+) -> DataFrame:
     """Get the next DataFrame (from shuffle or channel) for one side of the join."""
     if shuffle is not None:
         table = await shuffle.extract_chunk(partition_id, stream)
         if table.num_rows() == 0 and len(table.columns()) == 0:
             table = empty_table_chunk(child, context, stream).table_view()
     else:
-        chunk, channel_done = await get_unshuffled_chunk(
-            context, ch, sample_chunks, channel_done=channel_done
-        )
+        chunk = await get_unshuffled_chunk(context, ch, sample_chunks)
         table = (chunk or empty_table_chunk(child, context, stream)).table_view()
 
     return DataFrame.from_table(
         table, list(child.schema.keys()), list(child.schema.values()), stream
-    ), channel_done
+    )
 
 
 async def _join_chunks(
@@ -750,22 +739,16 @@ async def _join_chunks(
     left_shuffle: ShuffleManager | None,
     right_shuffle: ShuffleManager | None,
     *,
-    left_channel_done: bool,
-    right_channel_done: bool,
     partition_id: int,
     tracer: ActorTracer | None = None,
-) -> tuple[bool, bool]:
+) -> None:
     left, right = ir.children
     stream = ir_context.get_cuda_stream()
-    (
-        (left_df, left_channel_done),
-        (right_df, right_channel_done),
-    ) = await asyncio.gather(
+    left_df, right_df = await asyncio.gather(
         get_dataframe_to_join(
             context,
             ch_left,
             left_sample_chunks,
-            channel_done=left_channel_done,
             shuffle=left_shuffle,
             partition_id=partition_id,
             stream=stream,
@@ -775,7 +758,6 @@ async def _join_chunks(
             context,
             ch_right,
             right_sample_chunks,
-            channel_done=right_channel_done,
             shuffle=right_shuffle,
             partition_id=partition_id,
             stream=stream,
@@ -808,7 +790,6 @@ async def _join_chunks(
         ),
     )
     del df
-    return left_channel_done, right_channel_done
 
 
 async def _shuffle_join(
@@ -875,10 +856,8 @@ async def _shuffle_join(
         partition_ids = right_shuffle.local_partitions()
     else:
         partition_ids = list(range(local_count))
-    left_channel_done = left_shuffle is not None
-    right_channel_done = right_shuffle is not None
     for partition_id in partition_ids:
-        left_channel_done, right_channel_done = await _join_chunks(
+        await _join_chunks(
             context,
             ir,
             ir_context,
@@ -889,8 +868,6 @@ async def _shuffle_join(
             right_sample_chunks or [],
             left_shuffle,
             right_shuffle,
-            left_channel_done=left_channel_done,
-            right_channel_done=right_channel_done,
             partition_id=partition_id,
         )
 
