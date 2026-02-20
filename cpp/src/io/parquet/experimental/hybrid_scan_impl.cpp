@@ -18,6 +18,7 @@
 #include <cudf/io/parquet_schema.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/detail/utilities.hpp>
+#include <cudf/unary.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
@@ -128,7 +129,8 @@ void hybrid_scan_reader_impl::select_columns(read_columns_mode read_columns_mode
                                 options.is_enabled_use_pandas_metadata(),
                                 _strings_to_categorical,
                                 options.is_enabled_ignore_missing_columns(),
-                                _options.timestamp_type.id());
+                                _options.timestamp_type.id(),
+                                _options.decimal_width);
 
     _is_all_columns_selected     = true;
     _is_filter_columns_selected  = false;
@@ -148,7 +150,8 @@ void hybrid_scan_reader_impl::select_columns(read_columns_mode read_columns_mode
                                          _use_pandas_metadata,
                                          _strings_to_categorical,
                                          ignore_missing_columns,
-                                         _options.timestamp_type.id());
+                                         _options.timestamp_type.id(),
+                                         _options.decimal_width);
 
     _is_filter_columns_selected  = true;
     _is_payload_columns_selected = false;
@@ -164,7 +167,8 @@ void hybrid_scan_reader_impl::select_columns(read_columns_mode read_columns_mode
                                                  _use_pandas_metadata,
                                                  _strings_to_categorical,
                                                  options.is_enabled_ignore_missing_columns(),
-                                                 _options.timestamp_type.id());
+                                                 _options.timestamp_type.id(),
+                                                 _options.decimal_width);
 
     _is_payload_columns_selected = true;
     _is_filter_columns_selected  = false;
@@ -730,6 +734,7 @@ void hybrid_scan_reader_impl::reset_internal_state()
   _subpass_page_mask = cudf::detail::hostdevice_vector<bool>(0, _stream);
   _output_metadata.reset();
   _options.timestamp_type = cudf::data_type{};
+  _options.decimal_width  = type_id::EMPTY;
   _options.num_rows       = std::nullopt;
   _options.row_group_indices.clear();
   _num_sources             = 0;
@@ -750,6 +755,7 @@ void hybrid_scan_reader_impl::initialize_options(parquet_reader_options const& o
   _strings_to_categorical = options.is_enabled_convert_strings_to_categories();
 
   _options.timestamp_type = cudf::data_type{options.get_timestamp_type().id()};
+  _options.decimal_width  = options.get_decimal_width();
 
   _use_pandas_metadata = options.is_enabled_use_pandas_metadata();
 
@@ -944,6 +950,18 @@ table_with_metadata hybrid_scan_reader_impl::finalize_output(
 
   // increment the output chunk count
   _file_itm_data._output_chunk_count++;
+
+  // TODO: Instead of casting the columns after the read is done, we should
+  // be able to decode data directly into the target decimal type buffer.
+  if (_options.decimal_width != type_id::EMPTY) {
+    for (auto& col : out_columns) {
+      auto const col_type = col->type();
+      if (cudf::is_fixed_point(col_type) && col_type.id() != _options.decimal_width) {
+        auto const target_type = cudf::data_type{_options.decimal_width, col_type.scale()};
+        col                    = cudf::cast(col->view(), target_type, _stream, _mr);
+      }
+    }
+  }
 
   // Create a table from the output columns.
   auto read_table = std::make_unique<table>(std::move(out_columns));
