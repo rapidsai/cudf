@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 import pylibcudf as plc
@@ -45,5 +45,4 @@ def read_avro(
     if columns is not None and len(columns) > 0:
         options.set_columns(columns)
 
-    tbl_w_meta = plc.io.avro.read_avro(options)
-    return DataFrame.from_pylibcudf(tbl_w_meta)
+    return DataFrame.from_pylibcudf(plc.io.avro.read_avro(options))
