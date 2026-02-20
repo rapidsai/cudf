@@ -340,14 +340,15 @@ def _wrap_and_validate(
         and dtype_to_pylibcudf_type(dispatch_dtype) != wrapped.type()
     ):
         raise ValueError(
-            "dtype "
-            f"{dispatch_dtype} does not match the type of the plc_column "
-            f"{col.type().id()}"
+            f"dtype {dispatch_dtype} does not match the type of the plc_column "
+            f"{col.type().id()}. If normalization is required, please run the "
+            "column through _normalize_types_column first."
         )
     if type_id not in valid_types:
         raise ValueError(
             "plc_column must be a pylibcudf.Column with a TypeId in "
-            f"{valid_types}"
+            f"{valid_types}. If normalization is required, please run the "
+            "column through _normalize_types_column first."
         )
     return wrapped, dispatch_dtype
 
