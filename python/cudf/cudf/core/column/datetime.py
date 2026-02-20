@@ -288,7 +288,10 @@ class DatetimeColumn(TemporalBaseColumn):
     @functools.cached_property
     def is_month_end(self) -> ColumnBase:
         with self.access(mode="read", scope="internal"):
-            plc_result = plc.datetime.last_day_of_month(self.plc_column)
+            plc_result = plc.unary.cast(
+                plc.datetime.last_day_of_month(self.plc_column),
+                plc.DataType(plc.TypeId.TIMESTAMP_SECONDS),
+            )
             last_day_col = ColumnBase.create(
                 plc_result,
                 dtype_from_pylibcudf_column(plc_result),
