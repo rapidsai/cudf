@@ -8,12 +8,13 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/copying.hpp>
+#include <cudf/detail/algorithms/copy_if.cuh>
+#include <cudf/detail/algorithms/reduce.cuh>
 #include <cudf/detail/device_scalar.hpp>
 #include <cudf/detail/null_mask.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/row_operator/lexicographic.cuh>
 #include <cudf/detail/sizes_to_offsets_iterator.cuh>
-#include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/join/join.hpp>
 #include <cudf/join/sort_merge_join.hpp>
 #include <cudf/lists/lists_column_view.hpp>
@@ -36,6 +37,7 @@
 #include <cub/device/device_select.cuh>
 #include <cub/device/device_transform.cuh>
 #include <cuda/functional>
+#include <cuda/std/iterator>
 #include <cuda/std/tuple>
 #include <thrust/binary_search.h>
 #include <thrust/for_each.h>
@@ -553,12 +555,12 @@ void sort_merge_join::preprocessed_table::populate_nonnull_filter(rmm::cuda_stre
       rmm::device_uvector<int32_t> child_positions(offsets.size(), stream, temp_mr);
       auto unique_end = thrust::unique_by_key_copy(
         rmm::exec_policy_nosync(stream),
-        thrust::reverse_iterator(lcv.offsets_end()),
-        thrust::reverse_iterator(lcv.offsets_end()) + offsets.size(),
-        thrust::reverse_iterator(thrust::counting_iterator(offsets.size())),
-        thrust::reverse_iterator(offsets_subset.end()),
-        thrust::reverse_iterator(child_positions.end()));
-      auto subset_size   = cuda::std::distance(thrust::reverse_iterator(offsets_subset.end()),
+        cuda::std::reverse_iterator(lcv.offsets_end()),
+        cuda::std::reverse_iterator(lcv.offsets_end()) + offsets.size(),
+        cuda::std::reverse_iterator(thrust::counting_iterator(offsets.size())),
+        cuda::std::reverse_iterator(offsets_subset.end()),
+        cuda::std::reverse_iterator(child_positions.end()));
+      auto subset_size   = cuda::std::distance(cuda::std::reverse_iterator(offsets_subset.end()),
                                              cuda::std::get<0>(unique_end));
       auto subset_offset = offsets.size() - subset_size;
 
