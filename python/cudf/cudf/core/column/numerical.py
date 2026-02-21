@@ -18,8 +18,8 @@ from cudf.api.types import is_scalar
 from cudf.core._internals import binaryop
 from cudf.core.column.column import (
     ColumnBase,
-    NpBoolDtypePolicy,
     PylibcudfFunction,
+    as_callers_variant,
     as_column,
     column_empty,
 )
@@ -147,7 +147,7 @@ class NumericalColumn(NumericalBaseColumn):
         if self.dtype.kind != "f":
             return as_column(False, length=len(self))
         return PylibcudfFunction(
-            plc.unary.is_nan, NpBoolDtypePolicy
+            plc.unary.is_nan, as_callers_variant
         ).execute_with_args(self)
 
     def notnan(self) -> ColumnBase:
@@ -160,7 +160,7 @@ class NumericalColumn(NumericalBaseColumn):
             return as_column(True, length=len(self))
         return PylibcudfFunction(
             plc.unary.is_not_nan,
-            NpBoolDtypePolicy,
+            as_callers_variant,
         ).execute_with_args(self)
 
     def isnull(self) -> ColumnBase:

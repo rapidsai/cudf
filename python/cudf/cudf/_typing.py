@@ -8,6 +8,8 @@ import numpy as np
 import pandas as pd
 from packaging.version import parse
 
+import pylibcudf as plc
+
 if TYPE_CHECKING:
     from pandas.api.extensions import ExtensionDtype
 
@@ -23,7 +25,9 @@ DtypeObj = Union["ExtensionDtype", np.dtype]
 
 
 class DtypePolicy(Protocol):
-    def __call__(self, *dtypes: DtypeObj) -> DtypeObj: ...
+    def __call__(
+        self, result: plc.Column, dtypes: list[DtypeObj]
+    ) -> DtypeObj: ...
 
 
 # scalars

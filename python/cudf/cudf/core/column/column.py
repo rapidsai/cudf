@@ -149,12 +149,17 @@ class PylibcudfFunction:
                     dtypes.append(accessed.dtype)
                     plc_kwargs[k] = accessed.plc_column
             plc_result = self._pylibcudf_function(*plc_args, **plc_kwargs)
-        output_dtype = self._dtype_policy(*dtypes)
+        output_dtype = self._dtype_policy(plc_result, dtypes)
         return ColumnBase.create(plc_result, dtype=output_dtype)
 
 
-def NpBoolDtypePolicy(*_dtypes: "DtypeObj") -> "DtypeObj":
-    return np.dtype(np.bool_)
+def as_callers_variant(
+    result: plc.Column, dtypes: "list[DtypeObj]"
+) -> "DtypeObj":
+    assert len(dtypes) == 1
+    return get_dtype_of_same_kind(
+        dtypes[0], dtype_from_pylibcudf_column(result)
+    )
 
 
 def _can_values_be_equal(left: DtypeObj, right: DtypeObj) -> bool:
@@ -1770,7 +1775,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     def is_valid(self) -> ColumnBase:
         """Identify non-null values"""
         return PylibcudfFunction(
-            plc.unary.is_valid, NpBoolDtypePolicy
+            plc.unary.is_valid, as_callers_variant
         ).execute_with_args(self)
 
     def isnan(self) -> ColumnBase:
@@ -1786,7 +1791,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         if not self.has_nulls(include_nan=False):
             return as_column(False, length=len(self))
         return PylibcudfFunction(
-            plc.unary.is_null, NpBoolDtypePolicy
+            plc.unary.is_null, as_callers_variant
         ).execute_with_args(self)
 
     def notnull(self) -> ColumnBase:
@@ -1794,7 +1799,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         if not self.has_nulls(include_nan=False):
             return as_column(True, length=len(self))
         return PylibcudfFunction(
-            plc.unary.is_valid, NpBoolDtypePolicy
+            plc.unary.is_valid, as_callers_variant
         ).execute_with_args(self)
 
     @cached_property
