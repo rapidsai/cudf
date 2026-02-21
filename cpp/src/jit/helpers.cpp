@@ -1,9 +1,13 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "helpers.hpp"
+
+#include <cudf/detail/nvtx/ranges.hpp>
+
+#include <jit/cache.hpp>
 
 namespace cudf {
 namespace jit {
@@ -67,6 +71,25 @@ std::vector<input_column_reflection> reflect_input_columns(size_type base_column
     });
 
   return reflections;
+}
+
+jitify2::Kernel get_udf_kernel(jitify2::PreprocessedProgramData const& preprocessed_program_data,
+                               std::string const& kernel_name,
+                               std::string const& cuda_source)
+{
+  CUDF_FUNC_RANGE();
+
+  int runtime_version;
+  CUDF_CUDA_TRY(cudaRuntimeGetVersion(&runtime_version));
+  int constexpr min_pch_runtime_version = 12800;  // CUDA 12.8
+
+  std::vector<std::string> options;
+  options.emplace_back("-arch=sm_.");
+
+  if (runtime_version >= min_pch_runtime_version) { options.emplace_back("-pch"); }
+
+  return cudf::jit::get_program_cache(preprocessed_program_data)
+    .get_kernel(kernel_name, {}, {{"cudf/detail/operation-udf.hpp", cuda_source}}, options);
 }
 
 }  // namespace jit
