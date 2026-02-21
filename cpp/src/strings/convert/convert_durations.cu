@@ -17,7 +17,6 @@
 #include <rmm/device_uvector.hpp>
 
 #include <thrust/execution_policy.h>
-#include <thrust/functional.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform.h>
 #include <thrust/transform_reduce.h>

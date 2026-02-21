@@ -35,7 +35,6 @@
 #include <cuda/std/iterator>
 #include <thrust/copy.h>
 #include <thrust/execution_policy.h>
-#include <thrust/functional.h>
 #include <thrust/logical.h>
 #include <thrust/transform.h>
 
