@@ -103,11 +103,11 @@ rmm::device_uvector<cudf::size_type> create_token_row_offsets(
 
   auto tokens_offsets = rmm::device_uvector<cudf::size_type>(output_count + 1, stream);
 
-  cudf::detail::copy_if(thrust::counting_iterator<cudf::size_type>(0),
-                        thrust::counting_iterator<cudf::size_type>(tokens_counts),
-                        tokens_offsets.begin(),
-                        fn,
-                        stream);
+  cudf::detail::copy_if_async(thrust::counting_iterator<cudf::size_type>(0),
+                              thrust::counting_iterator<cudf::size_type>(tokens_counts),
+                              tokens_offsets.begin(),
+                              fn,
+                              stream);
 
   // set the last element to the total number of tokens
   tokens_offsets.set_element(output_count, tokens_counts, stream);

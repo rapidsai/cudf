@@ -218,4 +218,60 @@ OutputIterator copy_if(InputIterator begin,
   return output + num_selected.value(stream);
 }
 
+/**
+ * @copydoc cudf::detail::copy_if
+ *
+ * This function performs the copy_if operation asynchronously.
+ * It is useful when the calling function does not need the returned result
+ * and therefore prevents a stream synchronization.
+ */
+template <typename Predicate, typename InputIterator, typename OutputIterator>
+void copy_if_async(InputIterator begin,
+                   InputIterator end,
+                   OutputIterator output,
+                   Predicate predicate,
+                   rmm::cuda_stream_view stream)
+{
+  auto const num_items = cuda::std::distance(begin, end);
+
+  auto tmp_bytes = std::size_t{0};
+  auto no_out    = thrust::make_discard_iterator<int>();
+  CUDF_CUDA_TRY(cub::DeviceSelect::If(
+    nullptr, tmp_bytes, begin, output, no_out, num_items, predicate, stream.value()));
+
+  auto tmp_stg = rmm::device_buffer(tmp_bytes, stream, cudf::get_current_device_resource_ref());
+  CUDF_CUDA_TRY(cub::DeviceSelect::If(
+    tmp_stg.data(), tmp_bytes, begin, output, no_out, num_items, predicate, stream.value()));
+}
+
+/**
+ * @copydoc cudf::detail::copy_if
+ *
+ * This function performs the copy_if operation asynchronously.
+ * It is useful when the calling function does not need the returned result
+ * and therefore prevents a stream synchronization.
+ */
+template <typename InputIterator,
+          typename StencilIterator,
+          typename OutputIterator,
+          typename Predicate>
+void copy_if_async(InputIterator begin,
+                   InputIterator end,
+                   StencilIterator stencil,
+                   OutputIterator result,
+                   Predicate predicate,
+                   rmm::cuda_stream_view stream)
+{
+  auto const num_items = cuda::std::distance(begin, end);
+
+  auto tmp_bytes = std::size_t{0};
+  auto no_out    = thrust::make_discard_iterator<int>();
+  CUDF_CUDA_TRY(cub::DeviceSelect::FlaggedIf(
+    nullptr, tmp_bytes, begin, stencil, result, no_out, num_items, predicate, stream.value()));
+
+  auto tmp = rmm::device_buffer(tmp_bytes, stream, cudf::get_current_device_resource_ref());
+  CUDF_CUDA_TRY(cub::DeviceSelect::FlaggedIf(
+    tmp.data(), tmp_bytes, begin, stencil, result, no_out, num_items, predicate, stream.value()));
+}
+
 }  // namespace cudf::detail
