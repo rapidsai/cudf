@@ -293,10 +293,11 @@ class TemporalBaseColumn(ColumnBase, Scannable):
         if isinstance(replacement, type(self)):
             replacement = replacement.astype(self._UNDERLYING_DTYPE)
         try:
-            return (
-                self.astype(self._UNDERLYING_DTYPE)  # type:ignore[return-value]
+            return cast(
+                "Self",
+                self.astype(self._UNDERLYING_DTYPE)
                 .find_and_replace(to_replace, replacement, all_nan)
-                .astype(self.dtype)
+                .astype(self.dtype),
             )
         except TypeError:
             return self.copy(deep=True)
