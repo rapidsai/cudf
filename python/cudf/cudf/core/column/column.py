@@ -129,28 +129,25 @@ class PylibcudfFunction:
         self._dtype_policy = dtype_policy
         self._mode: Literal["read", "write"] = mode
 
-    def _process(
-        self,
-        value: Any,
-        stack: ExitStack,
-        dtypes: list["DtypeObj"],
-    ) -> Any:
-        if isinstance(value, ColumnBase):
-            accessed = stack.enter_context(
-                value.access(mode=self._mode, scope="internal")
-            )
-            dtypes.append(accessed.dtype)
-            return accessed.plc_column
-        return value
-
     def execute_with_args(self, *args: Any, **kwargs: Any) -> Any:
         dtypes: list["DtypeObj"] = []
         with ExitStack() as stack:
-            plc_args = tuple(self._process(arg, stack, dtypes) for arg in args)
-            plc_kwargs = {
-                key: self._process(value, stack, dtypes)
-                for key, value in kwargs.items()
-            }
+            plc_args = []
+            for arg in args:
+                if isinstance(arg, ColumnBase):
+                    accessed = stack.enter_context(
+                        arg.access(mode=self._mode, scope="internal")
+                    )
+                    dtypes.append(accessed.dtype)
+                    plc_args.append(accessed.plc_column)
+            plc_kwargs = {}
+            for k, v in kwargs.items():
+                if isinstance(v, ColumnBase):
+                    accessed = stack.enter_context(
+                        v.access(mode=self._mode, scope="internal")
+                    )
+                    dtypes.append(accessed.dtype)
+                    plc_kwargs[k] = accessed.plc_column
             plc_result = self._pylibcudf_function(*plc_args, **plc_kwargs)
         output_dtype = self._dtype_policy(*dtypes)
         return ColumnBase.create(plc_result, dtype=output_dtype)
