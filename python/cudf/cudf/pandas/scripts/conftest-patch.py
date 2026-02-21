@@ -6662,7 +6662,6 @@ NODEIDS_THAT_FAIL_WITH_CUDF_PANDAS = {
     "tests/series/methods/test_reindex.py::test_reindex_fill_value_datetimelike_upcast[0-datetime64[ns]]",
     "tests/series/methods/test_reindex.py::test_reindex_fill_value_datetimelike_upcast[0-timedelta64[ns]]",
     "tests/series/methods/test_reindex.py::test_reindex_pad2",
-    "tests/series/methods/test_reindex.py::test_reindexing_with_float64_NA_log",
     "tests/series/methods/test_replace.py::TestSeriesReplace::test_replace_datetime64",
     "tests/series/methods/test_replace.py::TestSeriesReplace::test_replace_dtype[string-input_data5-to_replace5-expected_data5]",
     "tests/series/methods/test_replace.py::TestSeriesReplace::test_replace_explicit_none",
@@ -7913,6 +7912,8 @@ NODEIDS_THAT_FLAKY_XFAIL_WITH_CUDF_PANDAS = {
     # Investigate why.
     "tests/indexes/test_common.py::test_sort_values_with_missing[nullable_int-first]",
     "tests/indexes/test_common.py::test_sort_values_with_missing[nullable_int-last]",
+    # flaky xpasses after https://github.com/rapidsai/cudf/pull/21499
+    "tests/series/methods/test_reindex.py::test_reindexing_with_float64_NA_log",
 }
 
 # TODO: Ideally cudf.pandas should be able to pass assertions with private APIs,
