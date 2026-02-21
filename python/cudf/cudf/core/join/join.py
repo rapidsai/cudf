@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any
 import pylibcudf as plc
 
 from cudf.core._internals import sorting
-from cudf.core.column import ColumnBase, access_columns, as_column
+from cudf.core.column import ColumnBase, access_columns
 from cudf.core.copy_types import GatherMap
 from cudf.core.dtypes import CategoricalDtype
 from cudf.core.join._join_helpers import (
@@ -279,9 +279,9 @@ class Merge:
         # tables, we gather from iota on both right and left, and then
         # sort the gather maps with those two columns as key.
         key_order = [
-            as_column(range(n), dtype=SIZE_TYPE_DTYPE).take(
-                map_, nullify=null, check_bounds=False
-            )
+            ColumnBase.from_range(range(n))
+            .astype(SIZE_TYPE_DTYPE)
+            .take(map_, nullify=null, check_bounds=False)
             for map_, n, null in zip(maps, lengths, nullify, strict=True)
         ]
         if self.how == "right":

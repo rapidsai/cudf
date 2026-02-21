@@ -1218,7 +1218,10 @@ class Series(SingleColumnFrame, IndexedFrame):
                     "default values in dicts are currently not supported."
                 )
             lhs = cudf.DataFrame(
-                {"x": self, "orig_order": as_column(range(len(self)))}
+                {
+                    "x": self,
+                    "orig_order": ColumnBase.from_range(range(len(self))),
+                }
             )
             rhs = cudf.DataFrame(
                 {
@@ -1239,7 +1242,10 @@ class Series(SingleColumnFrame, IndexedFrame):
                     "Reindexing only valid with uniquely valued Index objects"
                 )
             lhs = cudf.DataFrame(
-                {"x": self, "orig_order": as_column(range(len(self)))}
+                {
+                    "x": self,
+                    "orig_order": ColumnBase.from_range(range(len(self))),
+                }
             )
             rhs = cudf.DataFrame(
                 {
