@@ -3302,9 +3302,7 @@ class IndexedFrame(Frame):
             distinct = ColumnBase.create(
                 plc_column, dtype=dtype_from_pylibcudf_column(plc_column)
             )
-        result = as_column(
-            True, length=len(self), dtype=bool
-        )._scatter_by_column(
+        result = as_column(True, length=len(self))._scatter_by_column(
             cast(cudf.core.column.NumericalColumn, distinct),
             pa_scalar_to_plc_scalar(pa.scalar(False)),
             bounds_check=False,

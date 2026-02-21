@@ -627,10 +627,7 @@ class StructDtype(_BaseDtype):
     name = "struct"
 
     def __init__(self, fields: dict[str, Dtype]) -> None:
-        with cudf.option_context("mode.pandas_compatible", False):
-            # We need to temporarily disable pandas compatibility mode
-            # because `cudf.dtype("object")` raises an error.
-            self._fields = {k: cudf.dtype(v) for k, v in fields.items()}
+        self._fields = {k: dtype(v) for k, v in fields.items()}
 
     @property
     def fields(self) -> dict[str, DtypeObj]:
@@ -1027,7 +1024,7 @@ class IntervalDtype(_BaseDtype):
             self._subtype = None
             self._fields = {}
         else:
-            self._subtype = cudf.dtype(subtype)
+            self._subtype = dtype(subtype)
             # TODO: Remove self._subtype.kind == "U" once cudf.dtype no longer accepts
             # numpy string types
             if (
