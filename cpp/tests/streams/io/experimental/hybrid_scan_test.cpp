@@ -91,7 +91,7 @@ TEST_F(HybridScanTest, DictionaryPageFiltering)
   auto col3_ref      = cudf::ast::column_name_reference("col3");
   auto literal_value = cudf::numeric_scalar<int32_t>(0, true, cudf::test::get_default_stream());
   auto literal       = cudf::ast::literal(literal_value);
-  auto expr1         = cudf::ast::operation(cudf::ast::ast_operator::EQUAL, col3_ref, literal);
+  auto expr1         = cudf::ast::operation(cudf::ast::ast_operator::EQUAL, literal, col3_ref);
 
   auto col0_ref = cudf::ast::column_name_reference("col0");
   auto expr2    = cudf::ast::operation(cudf::ast::ast_operator::IDENTITY, col0_ref);
