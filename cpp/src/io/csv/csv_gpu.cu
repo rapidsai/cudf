@@ -653,7 +653,7 @@ CUDF_KERNEL void __launch_bounds__(rowofs_block_dim)
                          int escapechar,
                          int commentchar)
 {
-  auto start            = data.begin();
+  auto start            = data.data();
   auto const bk_ctxtree = ctxtree.subspan(blockIdx.x * bk_ctxtree_size, bk_ctxtree_size);
 
   char const* end = start + (min(parse_pos + chunk_size, data_size) - start_offset);

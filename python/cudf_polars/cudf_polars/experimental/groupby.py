@@ -191,7 +191,6 @@ def _(
 
     # Check for dynamic planning - may have more partitions at runtime
     config_options = rec.state["config_options"]
-    assert config_options.executor.name == "streaming"  # For type narrowing
 
     # Handle single-partition case
     if partition_info[child].count == 1 and not _dynamic_planning_on(config_options):
@@ -301,10 +300,6 @@ def _(
         partition_info[gb_inter] = PartitionInfo(count=post_aggregation_count)
     else:
         # N-ary tree reduction
-        assert config_options.executor.name == "streaming", (
-            "'in-memory' executor not supported in 'generate_ir_tasks'"
-        )
-
         n_ary = config_options.executor.groupby_n_ary
         count = child_count
         gb_inter = gb_pwise

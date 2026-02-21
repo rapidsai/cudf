@@ -9,8 +9,8 @@ from typing import TYPE_CHECKING, Any, cast
 
 from rapidsmpf.memory.buffer import MemoryType
 from rapidsmpf.memory.memory_reservation import opaque_memory_usage
+from rapidsmpf.streaming.core.actor import define_actor
 from rapidsmpf.streaming.core.message import Message
-from rapidsmpf.streaming.core.node import define_py_node
 from rapidsmpf.streaming.core.spillable_messages import SpillableMessages
 from rapidsmpf.streaming.cudf.channel_metadata import ChannelMetadata
 from rapidsmpf.streaming.cudf.table_chunk import (
@@ -42,7 +42,7 @@ if TYPE_CHECKING:
     from cudf_polars.experimental.rapidsmpf.dispatch import SubNetGenerator
 
 
-@define_py_node()
+@define_actor()
 async def default_node_single(
     context: Context,
     ir: IR,
@@ -147,7 +147,7 @@ async def default_node_single(
         await ch_out.drain(context)
 
 
-@define_py_node()
+@define_actor()
 async def default_node_multi(
     context: Context,
     ir: IR,
@@ -287,7 +287,7 @@ async def default_node_multi(
         await ch_out.drain(context)
 
 
-@define_py_node()
+@define_actor()
 async def fanout_node_bounded(
     context: Context,
     ch_in: Channel[TableChunk],
@@ -338,7 +338,7 @@ async def fanout_node_bounded(
         await asyncio.gather(*(ch.drain(context) for ch in chs_out))
 
 
-@define_py_node()
+@define_actor()
 async def fanout_node_unbounded(
     context: Context,
     ch_in: Channel[TableChunk],
@@ -581,7 +581,7 @@ def _(
     return nodes, channels
 
 
-@define_py_node()
+@define_actor()
 async def empty_node(
     context: Context,
     ir: Empty,
@@ -682,7 +682,7 @@ def generate_ir_sub_network_wrapper(
     return nodes, channels
 
 
-@define_py_node()
+@define_actor()
 async def metadata_feeder_node(
     context: Context,
     ir: IR,
@@ -717,7 +717,7 @@ async def metadata_feeder_node(
         await ch_out.drain(context)
 
 
-@define_py_node()
+@define_actor()
 async def metadata_drain_node(
     context: Context,
     ir: IR,

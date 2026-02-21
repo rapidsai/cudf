@@ -21,8 +21,8 @@
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/traits.hpp>
 
+#include <cuda/iterator>
 #include <thrust/host_vector.h>
-#include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
 
 #include <src/rolling/detail/rolling.hpp>
@@ -1280,7 +1280,7 @@ TEST_F(RollingTestUdf, StaticWindow)
 
   cudf::test::fixed_width_column_wrapper<int32_t> input(thrust::make_counting_iterator(0),
                                                         thrust::make_counting_iterator(size),
-                                                        thrust::make_constant_iterator(true));
+                                                        cuda::make_constant_iterator(true));
 
   std::unique_ptr<cudf::column> output;
 
@@ -1318,7 +1318,7 @@ TEST_F(RollingTestUdf, DynamicWindow)
 
   cudf::test::fixed_width_column_wrapper<int32_t> input(thrust::make_counting_iterator(0),
                                                         thrust::make_counting_iterator(size),
-                                                        thrust::make_constant_iterator(true));
+                                                        cuda::make_constant_iterator(true));
 
   auto prec = cudf::detail::make_counting_transform_iterator(
     0, [] __device__(cudf::size_type row) { return row % 2 + 2; });

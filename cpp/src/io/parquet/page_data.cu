@@ -6,12 +6,12 @@
 #include "page_data.cuh"
 #include "page_decode.cuh"
 
-#include <cudf/detail/utilities/algorithm.cuh>
+#include <cudf/detail/algorithms/reduce.cuh>
 #include <cudf/detail/utilities/batched_memcpy.hpp>
 
 #include <rmm/exec_policy.hpp>
 
-#include <cuda/std/iterator>
+#include <cuda/iterator>
 #include <thrust/iterator/transform_iterator.h>
 
 namespace cudf::io::parquet::detail {
@@ -599,7 +599,7 @@ void write_final_offsets(host_span<size_type const> offsets,
   auto d_dst_addrs = cudf::detail::make_device_uvector_async(
     buff_addrs, stream, cudf::get_current_device_resource_ref());
   // size_iter is simply a constant iterator of sizeof(size_type) bytes.
-  auto size_iter = thrust::make_constant_iterator(sizeof(size_type));
+  auto size_iter = cuda::make_constant_iterator(sizeof(size_type));
 
   // Copy offsets to buffers in batched manner.
   cudf::detail::batched_memcpy_async(

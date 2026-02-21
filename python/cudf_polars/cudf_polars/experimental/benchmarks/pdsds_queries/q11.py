@@ -9,18 +9,24 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
 from cudf_polars.experimental.benchmarks.utils import get_data
 
 if TYPE_CHECKING:
     from cudf_polars.experimental.benchmarks.utils import RunConfig
 
-# Target years
-YEAR_FIRST = 2001
-YEAR_SECOND = 2002
-
 
 def duckdb_impl(run_config: RunConfig) -> str:
     """Query 11."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=11,
+        qualification=run_config.qualification,
+    )
+
+    year_first = params["year"]
+    year_second = year_first + 1
+
     return f"""
     WITH year_total
          AS (
@@ -87,10 +93,10 @@ def duckdb_impl(run_config: RunConfig) -> str:
            AND t_w_firstyear.sale_type = 'w'
            AND t_s_secyear.sale_type = 's'
            AND t_w_secyear.sale_type = 'w'
-           AND t_s_firstyear.dyear = {YEAR_FIRST}
-           AND t_s_secyear.dyear = {YEAR_SECOND}
-           AND t_w_firstyear.dyear = {YEAR_FIRST}
-           AND t_w_secyear.dyear = {YEAR_SECOND}
+           AND t_s_firstyear.dyear = {year_first}
+           AND t_s_secyear.dyear = {year_second}
+           AND t_w_firstyear.dyear = {year_first}
+           AND t_w_secyear.dyear = {year_second}
            AND t_s_firstyear.year_total > 0
            AND t_w_firstyear.year_total > 0
            AND CASE
@@ -159,14 +165,22 @@ def create_year_total(
 
 def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     """Query 11."""
-    # Load required tables
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=11,
+        qualification=run_config.qualification,
+    )
+
+    year_first = params["year"]
+    year_second = year_first + 1
+
     customer = get_data(run_config.dataset_path, "customer", run_config.suffix)
     store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
     web_sales = get_data(run_config.dataset_path, "web_sales", run_config.suffix)
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
 
-    date_first = date_dim.filter(pl.col("d_year") == YEAR_FIRST)
-    date_second = date_dim.filter(pl.col("d_year") == YEAR_SECOND)
+    date_first = date_dim.filter(pl.col("d_year") == year_first)
+    date_second = date_dim.filter(pl.col("d_year") == year_second)
 
     # Total store sales 2001
     t_s_firstyear = create_year_total(

@@ -5,8 +5,8 @@
 
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/row_operator/equality.cuh>
-#include <cudf/detail/stream_compaction.hpp>
-#include <cudf/stream_compaction.hpp>
+#include <cudf/reduction/detail/unique_count.hpp>
+#include <cudf/reduction/unique_count.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
 

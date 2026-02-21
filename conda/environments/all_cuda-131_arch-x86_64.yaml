@@ -24,7 +24,7 @@ dependencies:
 - cuda-python>=13.0.1,<14.0
 - cuda-sanitizer-api
 - cuda-version=13.1
-- cupy>=13.6.0
+- cupy>=13.6.0,!=14.0.0
 - cxx-compiler
 - cython>=3.0.3,<3.2.0
 - dask-cuda==26.4.*,>=0.0.0a0
@@ -67,7 +67,7 @@ dependencies:
 - packaging
 - pandas>=2.0,<2.4.0
 - pandoc
-- polars>=1.30,<1.36
+- polars>=1.30,<1.39
 - pre-commit
 - pyarrow>=19.0.0
 - pydata-sphinx-theme>=0.15.4

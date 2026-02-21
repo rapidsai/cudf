@@ -25,7 +25,7 @@ from cudf_polars.experimental.rapidsmpf.dispatch import (
 )
 from cudf_polars.experimental.rapidsmpf.nodes import (
     default_node_multi,
-    define_py_node,
+    define_actor,
     shutdown_on_error,
 )
 from cudf_polars.experimental.rapidsmpf.utils import (
@@ -47,7 +47,7 @@ if TYPE_CHECKING:
     from cudf_polars.experimental.rapidsmpf.core import SubNetGenerator
 
 
-@define_py_node()
+@define_actor()
 async def broadcast_join_node(
     context: Context,
     ir: Join,
@@ -310,7 +310,6 @@ def _(
         # Get target partition size
         config_options = rec.state["config_options"]
         executor = config_options.executor
-        assert executor.name == "streaming", "Join node requires streaming executor"
         target_partition_size = executor.target_partition_size
 
         nodes[ir] = [

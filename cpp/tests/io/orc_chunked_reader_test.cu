@@ -34,6 +34,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/iterator>
 #include <thrust/iterator/counting_iterator.h>
 
 namespace {
@@ -1055,7 +1056,7 @@ struct OrcChunkedReaderInputLimitTest : public cudf::test::BaseFixture {};
 TEST_F(OrcChunkedReaderInputLimitTest, SingleFixedWidthColumn)
 {
   auto constexpr num_rows = 1'000'000;
-  auto const iter1        = thrust::make_constant_iterator(15);
+  auto const iter1        = cuda::make_constant_iterator(15);
   auto const col1         = doubles_col(iter1, iter1 + num_rows);
 
   auto const filename   = std::string{"single_col_fixed_width"};

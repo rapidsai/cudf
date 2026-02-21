@@ -8,8 +8,8 @@ import math
 from typing import TYPE_CHECKING, Any
 
 from rapidsmpf.memory.memory_reservation import opaque_memory_usage
+from rapidsmpf.streaming.core.actor import define_actor
 from rapidsmpf.streaming.core.message import Message
-from rapidsmpf.streaming.core.node import define_py_node
 from rapidsmpf.streaming.cudf.channel_metadata import ChannelMetadata
 from rapidsmpf.streaming.cudf.table_chunk import (
     TableChunk,
@@ -37,7 +37,7 @@ if TYPE_CHECKING:
     from cudf_polars.experimental.rapidsmpf.dispatch import SubNetGenerator
 
 
-@define_py_node()
+@define_actor()
 async def concatenate_node(
     context: Context,
     ir: Repartition,

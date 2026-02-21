@@ -21,7 +21,7 @@ requires-python = ">=3.11"
 dependencies = [
     "cachetools",
     "cuda-python>=13.0.1,<14.0",
-    "cupy-cuda13x>=13.6.0",
+    "cupy-cuda13x>=13.6.0,!=14.0.0",
     "fsspec>=0.6.0",
     "libcudf==26.4.*,>=0.0.0a0",
     "numba-cuda>=0.22.2",

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 """Query 6."""
@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
 from cudf_polars.experimental.benchmarks.utils import get_data
 
 if TYPE_CHECKING:
@@ -17,7 +18,14 @@ if TYPE_CHECKING:
 
 def duckdb_impl(run_config: RunConfig) -> str:
     """Query 6."""
-    return """
+    params = load_parameters(
+        int(run_config.scale_factor), query_id=6, qualification=run_config.qualification
+    )
+
+    year = params["year"]
+    month = params["month"]
+
+    return f"""
     SELECT a.ca_state state,
                    Count(*)   cnt
     FROM   customer_address a,
@@ -31,8 +39,8 @@ def duckdb_impl(run_config: RunConfig) -> str:
            AND s.ss_item_sk = i.i_item_sk
            AND d.d_month_seq = (SELECT DISTINCT ( d_month_seq )
                                 FROM   date_dim
-                                WHERE  d_year = 1998
-                                       AND d_moy = 7)
+                                WHERE  d_year = {year}
+                                       AND d_moy = {month})
            AND i.i_current_price > 1.2 * (SELECT Avg(j.i_current_price)
                                           FROM   item j
                                           WHERE  j.i_category = i.i_category)
@@ -46,7 +54,13 @@ def duckdb_impl(run_config: RunConfig) -> str:
 
 def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     """Query 6."""
-    # Load required tables
+    params = load_parameters(
+        int(run_config.scale_factor), query_id=6, qualification=run_config.qualification
+    )
+
+    year = params["year"]
+    month = params["month"]
+
     customer_address = get_data(
         run_config.dataset_path, "customer_address", run_config.suffix
     )
@@ -55,9 +69,9 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
     item = get_data(run_config.dataset_path, "item", run_config.suffix)
 
-    # Subquery 1: d_month_seq values for July 1998
+    # Subquery 1: d_month_seq values for July year
     target_month_seq_table = (
-        date_dim.filter((pl.col("d_year") == 1998) & (pl.col("d_moy") == 7))
+        date_dim.filter((pl.col("d_year") == year) & (pl.col("d_moy") == month))
         .select("d_month_seq")
         .unique()
     )

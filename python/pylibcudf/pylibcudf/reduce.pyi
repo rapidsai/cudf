@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from enum import IntEnum
@@ -9,7 +9,7 @@ from rmm.pylibrmm.stream import Stream
 from pylibcudf.aggregation import Aggregation
 from pylibcudf.column import Column
 from pylibcudf.scalar import Scalar
-from pylibcudf.types import DataType
+from pylibcudf.types import DataType, NanPolicy, NullPolicy
 
 class ScanType(IntEnum):
     INCLUSIVE = ...
@@ -37,3 +37,15 @@ def minmax(
 def is_valid_reduce_aggregation(
     source: DataType, agg: Aggregation
 ) -> bool: ...
+def unique_count(
+    source: Column,
+    null_handling: NullPolicy,
+    nan_handling: NanPolicy,
+    stream: Stream | None = None,
+) -> int: ...
+def distinct_count(
+    source: Column,
+    null_handling: NullPolicy,
+    nan_handling: NanPolicy,
+    stream: Stream | None = None,
+) -> int: ...

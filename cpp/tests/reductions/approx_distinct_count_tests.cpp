@@ -8,7 +8,7 @@
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/reduction/approx_distinct_count.hpp>
-#include <cudf/stream_compaction.hpp>
+#include <cudf/reduction/distinct_count.hpp>
 #include <cudf/table/table_view.hpp>
 
 #include <thrust/host_vector.h>

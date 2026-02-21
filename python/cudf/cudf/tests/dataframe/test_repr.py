@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 import textwrap
@@ -30,7 +30,7 @@ def test_null_dataframe(ncols):
     gdf = cudf.DataFrame(data)
     pdf = gdf.to_pandas()
     with pd.option_context("display.max_columns", int(ncols)):
-        pdf_repr = repr(pdf).replace("NaN", "<NA>").replace("None", "<NA>")
+        pdf_repr = repr(pdf).replace("NaN", "<NA>")
         assert pdf_repr.split() == repr(gdf).split()
 
 
@@ -183,98 +183,67 @@ def test_dataframe_sliced(gdf, slc, max_seq_items, max_rows):
         sliced_gdf = gdf[slc]
         sliced_pdf = pdf[slc]
 
-        expected_repr = repr(sliced_pdf).replace("None", "<NA>")
+        expected_repr = repr(sliced_pdf)
         actual_repr = repr(sliced_gdf)
 
         assert expected_repr == actual_repr
 
 
 @pytest.mark.parametrize(
-    "df,pandas_special_case",
+    "df",
     [
-        (pd.DataFrame({"a": [1, 2, 3]}, index=[10, 20, None]), False),
-        (
-            pd.DataFrame(
-                {
-                    "a": [1, None, 3],
-                    "string_col": ["hello", "world", "rapids"],
-                },
-                index=[None, "a", "b"],
-            ),
-            True,
+        pd.DataFrame({"a": [1, 2, 3]}, index=[10, 20, None]),
+        pd.DataFrame(
+            {
+                "a": [1, None, 3],
+                "string_col": ["hello", "world", "rapids"],
+            },
+            index=[None, "a", "b"],
         ),
-        (pd.DataFrame([], index=[None, "a", "b"]), False),
-        (pd.DataFrame({"aa": [None, None]}, index=[None, None]), False),
-        (pd.DataFrame({"aa": [1, 2, 3]}, index=[None, None, None]), False),
-        (
-            pd.DataFrame(
-                {"aa": [None, 2, 3]},
-                index=np.array([1, None, None], dtype="datetime64[ns]"),
-            ),
-            False,
+        pd.DataFrame([], index=[None, "a", "b"]),
+        pd.DataFrame({"aa": [None, None]}, index=[None, None]),
+        pd.DataFrame({"aa": [1, 2, 3]}, index=[None, None, None]),
+        pd.DataFrame(
+            {"aa": [None, 2, 3]},
+            index=np.array([1, None, None], dtype="datetime64[ns]"),
         ),
-        (
-            pd.DataFrame(
-                {"aa": [None, 2, 3]},
-                index=np.array([100, None, None], dtype="datetime64[ns]"),
-            ),
-            False,
+        pd.DataFrame(
+            {"aa": [None, 2, 3]},
+            index=np.array([100, None, None], dtype="datetime64[ns]"),
         ),
-        (
-            pd.DataFrame(
-                {"aa": [None, None, None]},
-                index=np.array([None, None, None], dtype="datetime64[ns]"),
-            ),
-            False,
+        pd.DataFrame(
+            {"aa": [None, None, None]},
+            index=np.array([None, None, None], dtype="datetime64[ns]"),
         ),
-        (
-            pd.DataFrame(
-                {"aa": [1, None, 3]},
-                index=np.array([10, 15, None], dtype="datetime64[ns]"),
-            ),
-            False,
+        pd.DataFrame(
+            {"aa": [1, None, 3]},
+            index=np.array([10, 15, None], dtype="datetime64[ns]"),
         ),
-        (
-            pd.DataFrame(
-                {"a": [1, 2, None], "v": [10, None, 22], "p": [100, 200, 300]}
-            ).set_index(["a", "v"]),
-            False,
-        ),
-        (
-            pd.DataFrame(
-                {
-                    "a": [1, 2, None],
-                    "v": ["n", "c", "a"],
-                    "p": [None, None, None],
-                }
-            ).set_index(["a", "v"]),
-            False,
-        ),
-        (
-            pd.DataFrame(
-                {
-                    "a": np.array([1, None, None], dtype="datetime64[ns]"),
-                    "v": ["n", "c", "a"],
-                    "p": [None, None, None],
-                }
-            ).set_index(["a", "v"]),
-            False,
-        ),
+        pd.DataFrame(
+            {"a": [1, 2, None], "v": [10, None, 22], "p": [100, 200, 300]}
+        ).set_index(["a", "v"]),
+        pd.DataFrame(
+            {
+                "a": [1, 2, None],
+                "v": ["n", "c", "a"],
+                "p": [None, None, None],
+            }
+        ).set_index(["a", "v"]),
+        pd.DataFrame(
+            {
+                "a": np.array([1, None, None], dtype="datetime64[ns]"),
+                "v": ["n", "c", "a"],
+                "p": [None, None, None],
+            }
+        ).set_index(["a", "v"]),
     ],
 )
-def test_dataframe_null_index_repr(df, pandas_special_case):
+def test_dataframe_null_index_repr(df):
     pdf = df
     gdf = cudf.from_pandas(pdf)
 
-    expected_repr = repr(pdf).replace("NaN", "<NA>").replace("None", "<NA>")
+    expected_repr = repr(pdf).replace("NaN", "<NA>")
     actual_repr = repr(gdf)
-
-    if pandas_special_case:
-        # Pandas inconsistently print Index null values
-        # as `None` at some places and `NaN` at few other places
-        # Whereas cudf is consistent with strings `null` values
-        # to be printed as `None` everywhere.
-        actual_repr = repr(gdf).replace("None", "<NA>")
 
     assert expected_repr.split() == actual_repr.split()
 

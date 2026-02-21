@@ -19,7 +19,7 @@ if TYPE_CHECKING:
     from types import TracebackType
 
     from cudf_polars.dsl.ir import IR
-    from cudf_polars.utils.config import ConfigOptions
+    from cudf_polars.utils.config import ConfigOptions, StreamingExecutor
 
 
 # Set of available collective IDs
@@ -67,13 +67,14 @@ class ReserveOpIDs:
     (e.g., for metadata gathering, shuffling multiple sides of a join).
     """
 
-    def __init__(self, ir: IR, config_options: ConfigOptions | None = None):
+    def __init__(
+        self, ir: IR, config_options: ConfigOptions[StreamingExecutor] | None = None
+    ):
         self.config_options = config_options
 
         # Check if dynamic planning is enabled
         self.dynamic_planning_enabled = (
             config_options is not None
-            and config_options.executor.name == "streaming"
             and config_options.executor.dynamic_planning is not None
         )
 

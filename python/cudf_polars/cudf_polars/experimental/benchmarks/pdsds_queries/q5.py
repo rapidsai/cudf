@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 """Query 5."""
@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
 from cudf_polars.experimental.benchmarks.utils import get_data
 
 if TYPE_CHECKING:
@@ -18,7 +19,13 @@ if TYPE_CHECKING:
 
 def duckdb_impl(run_config: RunConfig) -> str:
     """Query 5."""
-    return """
+    params = load_parameters(
+        int(run_config.scale_factor), query_id=5, qualification=run_config.qualification
+    )
+
+    sales_date = params["sales_date"]
+
+    return f"""
     WITH ssr AS
     (
              SELECT   s_store_id,
@@ -45,8 +52,8 @@ def duckdb_impl(run_config: RunConfig) -> str:
                       date_dim,
                       store
              WHERE    date_sk = d_date_sk
-             AND      d_date BETWEEN Cast('2002-08-22' AS DATE) AND      (
-                               Cast('2002-08-22' AS DATE) + INTERVAL '14' day)
+             AND      d_date BETWEEN Cast('{sales_date}' AS DATE) AND      (
+                               Cast('{sales_date}' AS DATE) + INTERVAL '14' day)
              AND      store_sk = s_store_sk
              GROUP BY s_store_id) , csr AS
     (
@@ -74,8 +81,8 @@ def duckdb_impl(run_config: RunConfig) -> str:
                       date_dim,
                       catalog_page
              WHERE    date_sk = d_date_sk
-             AND      d_date BETWEEN cast('2002-08-22' AS date) AND      (
-                               cast('2002-08-22' AS date) + INTERVAL '14' day)
+             AND      d_date BETWEEN cast('{sales_date}' AS date) AND      (
+                               cast('{sales_date}' AS date) + INTERVAL '14' day)
              AND      page_sk = cp_catalog_page_sk
              GROUP BY cp_catalog_page_id) , wsr AS
     (
@@ -107,8 +114,8 @@ def duckdb_impl(run_config: RunConfig) -> str:
                       date_dim,
                       web_site
              WHERE    date_sk = d_date_sk
-             AND      d_date BETWEEN cast('2002-08-22' AS date) AND      (
-                               cast('2002-08-22' AS date) + INTERVAL '14' day)
+             AND      d_date BETWEEN cast('{sales_date}' AS date) AND      (
+                               cast('{sales_date}' AS date) + INTERVAL '14' day)
              AND      wsr_web_site_sk = web_site_sk
              GROUP BY web_site_id)
     SELECT
@@ -150,7 +157,13 @@ def duckdb_impl(run_config: RunConfig) -> str:
 
 def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     """Query 5."""
-    # Load required tables
+    params = load_parameters(
+        int(run_config.scale_factor), query_id=5, qualification=run_config.qualification
+    )
+
+    sales_date_str = params["sales_date"]
+    year, month, day = map(int, sales_date_str.split("-"))
+
     store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
     store_returns = get_data(
         run_config.dataset_path, "store_returns", run_config.suffix
@@ -169,14 +182,20 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     web_site = get_data(run_config.dataset_path, "web_site", run_config.suffix)
 
     # Date range filter - use actual date values
-    start_date = date(2002, 8, 22)
+    start_date = date(year, month, day)
     end_date = start_date + timedelta(days=14)
+
+    # Convert to string literals for comparison (d_date is String in parquet)
+    start_date_str = pl.lit(start_date.strftime("%Y-%m-%d"))
+    end_date_str = pl.lit(end_date.strftime("%Y-%m-%d"))
 
     # Step 1: Create ssr CTE (Store Sales and Returns)
     # Filter sales and returns by date first, then transform
     store_sales_data = (
         store_sales.join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
-        .filter(pl.col("d_date").is_between(start_date, end_date, closed="both"))
+        .filter(
+            pl.col("d_date").is_between(start_date_str, end_date_str, closed="both")
+        )
         .select(
             [
                 pl.col("ss_store_sk").alias("store_sk"),
@@ -192,7 +211,9 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         store_returns.join(
             date_dim, left_on="sr_returned_date_sk", right_on="d_date_sk"
         )
-        .filter(pl.col("d_date").is_between(start_date, end_date, closed="both"))
+        .filter(
+            pl.col("d_date").is_between(start_date_str, end_date_str, closed="both")
+        )
         .select(
             [
                 pl.col("sr_store_sk").alias("store_sk"),
@@ -247,7 +268,9 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     # Filter sales and returns by date first, then transform
     catalog_sales_data = (
         catalog_sales.join(date_dim, left_on="cs_sold_date_sk", right_on="d_date_sk")
-        .filter(pl.col("d_date").is_between(start_date, end_date, closed="both"))
+        .filter(
+            pl.col("d_date").is_between(start_date_str, end_date_str, closed="both")
+        )
         .select(
             [
                 pl.col("cs_catalog_page_sk").alias("page_sk"),
@@ -263,7 +286,9 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         catalog_returns.join(
             date_dim, left_on="cr_returned_date_sk", right_on="d_date_sk"
         )
-        .filter(pl.col("d_date").is_between(start_date, end_date, closed="both"))
+        .filter(
+            pl.col("d_date").is_between(start_date_str, end_date_str, closed="both")
+        )
         .select(
             [
                 pl.col("cr_catalog_page_sk").alias("page_sk"),
@@ -320,7 +345,9 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     # Filter sales and returns by date first, then transform
     web_sales_data = (
         web_sales.join(date_dim, left_on="ws_sold_date_sk", right_on="d_date_sk")
-        .filter(pl.col("d_date").is_between(start_date, end_date, closed="both"))
+        .filter(
+            pl.col("d_date").is_between(start_date_str, end_date_str, closed="both")
+        )
         .select(
             [
                 pl.col("ws_web_site_sk").alias("wsr_web_site_sk"),
@@ -335,7 +362,9 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     # For web returns, we need the LEFT OUTER JOIN with web_sales, then filter by date
     web_returns_data = (
         web_returns.join(date_dim, left_on="wr_returned_date_sk", right_on="d_date_sk")
-        .filter(pl.col("d_date").is_between(start_date, end_date, closed="both"))
+        .filter(
+            pl.col("d_date").is_between(start_date_str, end_date_str, closed="both")
+        )
         .join(
             web_sales.select(["ws_item_sk", "ws_order_number", "ws_web_site_sk"]),
             left_on=["wr_item_sk", "wr_order_number"],
@@ -348,7 +377,7 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
                 pl.col("wr_returned_date_sk").alias("date_sk"),
                 pl.lit(0.0).alias("sales_price"),
                 pl.lit(0.0).alias("profit"),
-                pl.col("wr_return_amt").alias("return_amt"),
+                pl.col("wr_return_amt").cast(pl.Float64).alias("return_amt"),
                 pl.col("wr_net_loss").alias("net_loss"),
             ]
         )

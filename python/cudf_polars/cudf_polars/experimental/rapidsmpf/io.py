@@ -35,7 +35,7 @@ from cudf_polars.experimental.base import (
 from cudf_polars.experimental.io import SplitScan, scan_partition_plan
 from cudf_polars.experimental.rapidsmpf.dispatch import generate_ir_sub_network
 from cudf_polars.experimental.rapidsmpf.nodes import (
-    define_py_node,
+    define_actor,
     metadata_feeder_node,
     shutdown_on_error,
 )
@@ -120,9 +120,6 @@ def lower_dataframescan_rapidsmpf(
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
     """Lower a DataFrameScan node for the RapidsMPF streaming runtime."""
     config_options = rec.state["config_options"]
-    assert config_options.executor.name == "streaming", (
-        "'in-memory' executor not supported in 'lower_ir_node_rapidsmpf'"
-    )
 
     # NOTE: We calculate the expected partition count
     # to help trigger fallback warnings in lower_ir_graph.
@@ -136,7 +133,7 @@ def lower_dataframescan_rapidsmpf(
     return ir, {ir: PartitionInfo(count=count)}
 
 
-@define_py_node()
+@define_actor()
 async def dataframescan_node(
     context: Context,
     ir: DataFrameScan,
@@ -260,9 +257,6 @@ def _(
     ir: DataFrameScan, rec: SubNetGenerator
 ) -> tuple[dict[IR, list[Any]], dict[IR, ChannelManager]]:
     config_options = rec.state["config_options"]
-    assert config_options.executor.name == "streaming", (
-        "'in-memory' executor not supported in 'generate_ir_sub_network'"
-    )
     rows_per_partition = config_options.executor.max_rows_per_partition
     num_producers = rec.state["max_io_threads"]
     # Use target_partition_size as the estimated chunk size
@@ -374,7 +368,7 @@ async def read_chunk(
     )
 
 
-@define_py_node()
+@define_actor()
 async def scan_node(
     context: Context,
     ir: Scan,
@@ -651,9 +645,6 @@ def _(
 ) -> tuple[dict[IR, list[Any]], dict[IR, ChannelManager]]:
     config_options = rec.state["config_options"]
     executor = config_options.executor
-    assert executor.name == "streaming", (
-        "'in-memory' executor not supported in 'generate_ir_sub_network'"
-    )
     parquet_options = config_options.parquet_options
     partition_info = rec.state["partition_info"][ir]
     num_producers = rec.state["max_io_threads"]

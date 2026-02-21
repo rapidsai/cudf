@@ -5,7 +5,7 @@
 
 #include "distinct_helpers.hpp"
 
-#include <cudf/detail/utilities/algorithm.cuh>
+#include <cudf/detail/algorithms/copy_if.cuh>
 
 #include <cuda/functional>
 #include <cuda/std/atomic>

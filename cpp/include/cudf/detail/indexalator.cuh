@@ -11,9 +11,9 @@
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/utilities/traits.hpp>
 
+#include <cuda/iterator>
 #include <cuda/std/optional>
 #include <cuda/std/utility>
-#include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 
 namespace cudf {
@@ -340,7 +340,7 @@ struct indexalator_factory {
    */
   static auto make_input_pair_iterator(scalar const& input)
   {
-    return thrust::make_transform_iterator(thrust::make_constant_iterator<size_type>(0),
+    return thrust::make_transform_iterator(cuda::make_constant_iterator<size_type>(0),
                                            scalar_nullable_index_accessor{input});
   }
 
@@ -408,7 +408,7 @@ struct indexalator_factory {
    */
   static auto make_input_optional_iterator(scalar const& input)
   {
-    return thrust::make_transform_iterator(thrust::make_constant_iterator<size_type>(0),
+    return thrust::make_transform_iterator(cuda::make_constant_iterator<size_type>(0),
                                            scalar_optional_index_accessor{input});
   }
 };

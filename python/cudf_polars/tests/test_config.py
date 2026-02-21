@@ -443,6 +443,7 @@ def test_validate_shuffle_insertion_method() -> None:
         "client_device_threshold",
         "max_io_threads",
         "spill_to_pinned_memory",
+        "rapidsmpf_py_executor_max_workers",
     ],
 )
 def test_validate_streaming_executor_options(option: str) -> None:
@@ -1010,3 +1011,35 @@ def test_rapidsmpf_distributed_warns(monkeypatch: pytest.MonkeyPatch) -> None:
                 },
             )
         )
+
+
+def test_rapidsmpf_py_executor_max_workers_default() -> None:
+    config = ConfigOptions.from_polars_engine(
+        pl.GPUEngine(
+            executor="streaming",
+        )
+    )
+    assert config.executor.name == "streaming"
+    assert config.executor.rapidsmpf_py_executor_max_workers is None
+
+
+def test_rapidsmpf_py_executor_max_workers_from_executor_options() -> None:
+    config = ConfigOptions.from_polars_engine(
+        pl.GPUEngine(
+            executor="streaming",
+            executor_options={"rapidsmpf_py_executor_max_workers": 4},
+        )
+    )
+    assert config.executor.name == "streaming"
+    assert config.executor.rapidsmpf_py_executor_max_workers == 4
+
+
+def test_rapidsmpf_py_executor_max_workers_from_env(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    with monkeypatch.context() as m:
+        m.setenv("CUDF_POLARS__EXECUTOR__RAPIDSMPF_PY_EXECUTOR_MAX_WORKERS", "8")
+        engine = pl.GPUEngine(executor="streaming")
+        config = ConfigOptions.from_polars_engine(engine)
+        assert config.executor.name == "streaming"
+        assert config.executor.rapidsmpf_py_executor_max_workers == 8

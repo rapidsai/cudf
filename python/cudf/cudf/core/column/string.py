@@ -17,9 +17,9 @@ import pylibcudf as plc
 
 import cudf
 from cudf.api.types import is_scalar
+from cudf.core._compat import PANDAS_GE_220
 from cudf.core._internals import binaryop
 from cudf.core.column.column import ColumnBase, as_column, column_empty
-from cudf.core.dtype.validators import is_dtype_obj_string
 from cudf.core.mixins import Scannable
 from cudf.errors import MixedTypeError
 from cudf.utils.dtypes import (
@@ -97,7 +97,6 @@ class StringColumn(ColumnBase, Scannable):
         "__truediv__",
         "__floordiv__",
     }
-    _VALID_PLC_TYPES = {plc.TypeId.STRING}
     _VALID_SCANS = {
         "cummin",
         "cummax",
@@ -105,27 +104,12 @@ class StringColumn(ColumnBase, Scannable):
 
     @property
     def _PANDAS_NA_VALUE(self) -> ScalarLike:
-        """String columns return None as NA value in pandas compatibility mode."""
-        if cudf.get_option("mode.pandas_compatible"):
-            if is_pandas_nullable_extension_dtype(self.dtype):
-                return self.dtype.na_value
-            return None
-        return pd.NA
-
-    @classmethod
-    def _validate_args(
-        cls, plc_column: plc.Column, dtype: np.dtype
-    ) -> tuple[plc.Column, np.dtype]:
-        plc_column, dtype = super()._validate_args(plc_column, dtype)
-        if not is_dtype_obj_string(dtype):
-            if dtype.kind == "U":
-                # User _passed_ e.g. np.dtype(str), but we store np.dtype(object) like pandas
-                # >>> pd.Series(["a"], dtype=np.dtype(str)).dtype
-                # dtype('O')
-                dtype = np.dtype(object)
-            else:
-                raise ValueError("dtype must be a valid cuDF string dtype")
-        return plc_column, dtype
+        """Pandas NA value, mostly for a repr"""
+        if isinstance(self.dtype, (pd.StringDtype, pd.ArrowDtype)):
+            return self.dtype.na_value
+        # np.nan is also a valid NA value if dtype=object
+        # https://github.com/pandas-dev/pandas/pull/63900#discussion_r2740653899
+        return None
 
     @property
     def __cuda_array_interface__(self) -> Mapping[str, Any]:
@@ -147,16 +131,6 @@ class StringColumn(ColumnBase, Scannable):
         if isinstance(result, pa.Scalar):
             return result.as_py()
         return result
-
-    def to_arrow(self) -> pa.Array:
-        # All null string columns fail to convert in libcudf, so we must short-circuit
-        # the call to super().to_arrow().
-        # TODO: Investigate if the above is a bug in libcudf and fix it there.
-        if self.plc_column.num_children() == 0 or self.is_all_null:
-            return pa.NullArray.from_buffers(
-                pa.null(), len(self), [pa.py_buffer(b"")]
-            )
-        return super().to_arrow()
 
     def sum(
         self,
@@ -220,17 +194,6 @@ class StringColumn(ColumnBase, Scannable):
         other = [item] if is_scalar(item) else item
         return self.contains(as_column(other, dtype=self.dtype)).any()
 
-    def _with_type_metadata(self: Self, dtype: DtypeObj) -> Self:
-        """
-        Copies type metadata from self onto other, returning a new column.
-        """
-        # For pandas dtypes, store them directly in the column's dtype property
-        if (
-            isinstance(dtype, pd.ArrowDtype) and dtype.kind == "U"
-        ) or isinstance(dtype, pd.StringDtype):
-            self._dtype = dtype
-        return self
-
     def _get_pandas_compatible_dtype(self, target_dtype: np.dtype) -> DtypeObj:
         """
         Get the appropriate dtype for pandas-compatible mode.
@@ -256,7 +219,10 @@ class StringColumn(ColumnBase, Scannable):
             result = self.count_characters() > np.int8(0)
             if not is_pandas_nullable_extension_dtype(dtype):
                 result = result.fillna(False)
-            return result._with_type_metadata(dtype)
+            return cast(
+                cudf.core.column.numerical.NumericalColumn,
+                ColumnBase.create(result.plc_column, dtype),
+            )
 
         cast_func: Callable[[plc.Column, plc.DataType], plc.Column]
         if dtype.kind in {"i", "u"}:
@@ -387,15 +353,18 @@ class StringColumn(ColumnBase, Scannable):
         nullable: bool = False,
         arrow_type: bool = False,
     ) -> pd.Index:
-        if (
-            cudf.get_option("mode.pandas_compatible")
-            and isinstance(self.dtype, pd.StringDtype)
-            and self.dtype.storage in ["pyarrow", "python"]
-        ):
+        if isinstance(self.dtype, pd.StringDtype) and self.dtype.storage in [
+            "pyarrow",
+            "python",
+        ]:
             if self.dtype.storage == "pyarrow":
-                pandas_array = self.dtype.__from_arrow__(
-                    self.to_arrow().cast(pa.large_string())
-                )
+                pa_array = self.to_arrow()
+                if PANDAS_GE_220:
+                    # Prior versions only expect pa.string()
+                    pa_array = pa_array.cast(pa.large_string())
+                else:
+                    pa_array = pa_array.cast(pa.string())
+                pandas_array = self.dtype.__from_arrow__(pa_array)
             elif self.dtype.na_value is np.nan:
                 pandas_array = pd.array(
                     self.to_arrow().to_pandas(), dtype=self.dtype
@@ -423,39 +392,26 @@ class StringColumn(ColumnBase, Scannable):
         replacement: ColumnBase | list,
         all_nan: bool = False,
     ) -> Self:
-        """
-        Return col with *to_replace* replaced with *value*
-        """
-
-        to_replace_col = as_column(to_replace)
-        replacement_col = as_column(replacement)
-
-        if type(to_replace_col) is not type(replacement_col):
-            raise TypeError(
-                f"to_replace and value should be of same types,"
-                f"got to_replace dtype: {to_replace_col.dtype} and "
-                f"value dtype: {replacement_col.dtype}"
+        """Return col with *to_replace* replaced with *value*"""
+        to_replace_col, replacement_col = (
+            ColumnBase._prepare_find_and_replace_columns(
+                to_replace,
+                replacement,
             )
+        )
 
         if (
             to_replace_col.dtype != self.dtype
             and replacement_col.dtype != self.dtype
         ):
             return self.copy()
-        df = cudf.DataFrame._from_data(
-            {"old": to_replace_col, "new": replacement_col}
+
+        result = self._find_and_replace_with_dedup(
+            to_replace_col,
+            replacement_col,
+            self.dtype,
         )
-        df = df.drop_duplicates(subset=["old"], keep="last", ignore_index=True)
-        if df._data["old"].null_count == 1:
-            res = self.fillna(
-                df._data["new"]
-                .apply_boolean_mask(df._data["old"].isnull())
-                .element_indexing(0)
-            )
-            df = df.dropna(subset=["old"])
-        else:
-            res = self
-        return res.replace(df._data["old"], df._data["new"])
+        return cast("Self", result)
 
     def _binaryop(self, other: ColumnBinaryOperand, op: str) -> ColumnBase:
         reflect, op = self._check_reflected_op(op)
@@ -512,9 +468,8 @@ class StringColumn(ColumnBase, Scannable):
                         as_column(other, length=len(self)),
                     )
                 lhs, rhs = (other, self) if reflect else (self, other)
-                return lhs.concatenate([rhs], "", None)._with_type_metadata(
-                    self.dtype
-                )
+                concatenated = lhs.concatenate([rhs], "", None)
+                return ColumnBase.create(concatenated.plc_column, self.dtype)
             elif op in {
                 "__eq__",
                 "__ne__",

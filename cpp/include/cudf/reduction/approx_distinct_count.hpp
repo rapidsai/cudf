@@ -20,6 +20,12 @@
 
 namespace CUDF_EXPORT cudf {
 
+/**
+ * @addtogroup column_reduction
+ * @{
+ * @file
+ */
+
 // Forward declarations
 namespace hashing::detail {
 template <typename Key>
@@ -224,5 +230,7 @@ class approx_distinct_count {
  private:
   std::unique_ptr<impl_type> _impl;
 };
+
+/** @} */
 
 }  // namespace CUDF_EXPORT cudf

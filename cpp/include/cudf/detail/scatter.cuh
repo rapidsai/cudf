@@ -26,9 +26,8 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <cuda/std/iterator>
+#include <cuda/iterator>
 #include <thrust/count.h>
-#include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/scatter.h>
@@ -108,7 +107,7 @@ auto scatter_to_gather_complement(MapIterator scatter_map_begin,
   thrust::sequence(rmm::exec_policy_nosync(stream), gather_map.begin(), gather_map.end(), 0);
 
   auto const out_of_bounds_begin =
-    thrust::make_constant_iterator(std::numeric_limits<size_type>::lowest());
+    cuda::make_constant_iterator(std::numeric_limits<size_type>::lowest());
   auto const out_of_bounds_end =
     out_of_bounds_begin + cuda::std::distance(scatter_map_begin, scatter_map_end);
   thrust::scatter(rmm::exec_policy_nosync(stream),

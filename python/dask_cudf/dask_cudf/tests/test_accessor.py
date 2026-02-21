@@ -241,12 +241,13 @@ def data_str_1():
 
 @pytest.mark.parametrize("data", [data_str_1()])
 def test_string_slicing(data):
-    pdsr = pd.Series(data.copy())
-    sr = Series(pdsr)
-    dsr = dask_cudf.from_cudf(sr, npartitions=2)
-    base = pdsr.str.slice(0, 4)
-    test = dsr.str.slice(0, 4).compute()
-    assert_eq(base, test)
+    with dask.config.set({"dataframe.convert-string": False}):
+        pdsr = pd.Series(data.copy())
+        sr = Series(pdsr)
+        dsr = dask_cudf.from_cudf(sr, npartitions=2)
+        base = pdsr.str.slice(0, 4)
+        test = dsr.str.slice(0, 4).compute()
+        assert_eq(base, test)
 
 
 def test_categorical_categories():

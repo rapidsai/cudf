@@ -84,10 +84,8 @@ class TemporalBaseColumn(ColumnBase, Scannable):
             # call-overload must be ignored because numpy stubs only accept literal
             # time unit strings, but we're passing self.time_unit which is valid at runtime
             fill_value = self._NP_SCALAR(fill_value, self.time_unit)  # type: ignore[call-overload]
-        elif (
-            cudf.get_option("mode.pandas_compatible")
-            and is_scalar(fill_value)
-            and not isinstance(fill_value, (self._NP_SCALAR, self._PD_SCALAR))
+        elif is_scalar(fill_value) and not isinstance(
+            fill_value, (self._NP_SCALAR, self._PD_SCALAR)
         ):
             raise MixedTypeError(
                 f"Cannot use fill_value of type {type(fill_value)} with "
@@ -205,7 +203,11 @@ class TemporalBaseColumn(ColumnBase, Scannable):
 
     @functools.cached_property
     def time_unit(self) -> str:
-        return np.datetime_data(self.dtype)[0]
+        if isinstance(self.dtype, np.dtype):
+            # np.dtype defaults to dtype[float64] for typing
+            return np.datetime_data(self.dtype)[0]  # type: ignore[arg-type]
+        else:
+            return cast("pd.ArrowDtype", self.dtype).pyarrow_dtype.unit
 
     @property
     def values(self) -> cp.ndarray:
@@ -295,10 +297,11 @@ class TemporalBaseColumn(ColumnBase, Scannable):
         if isinstance(replacement, type(self)):
             replacement = replacement.astype(self._UNDERLYING_DTYPE)
         try:
-            return (
-                self.astype(self._UNDERLYING_DTYPE)  # type:ignore[return-value]
+            return cast(
+                "Self",
+                self.astype(self._UNDERLYING_DTYPE)
                 .find_and_replace(to_replace, replacement, all_nan)
-                .astype(self.dtype)
+                .astype(self.dtype),
             )
         except TypeError:
             return self.copy(deep=True)

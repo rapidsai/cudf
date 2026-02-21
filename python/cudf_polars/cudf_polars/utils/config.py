@@ -28,14 +28,13 @@ import importlib.util
 import json
 import os
 import warnings
-from typing import TYPE_CHECKING, Any, Literal, TypeVar
+from typing import TYPE_CHECKING, Any, Generic, Literal, TypeVar
 
 from rmm.pylibrmm.cuda_stream import CudaStreamFlags
 from rmm.pylibrmm.cuda_stream_pool import CudaStreamPool
 
 if TYPE_CHECKING:
     from collections.abc import Callable
-    from typing import Self
 
     import polars.lazyframe.engine_config
 
@@ -124,10 +123,7 @@ def rapidsmpf_distributed_available() -> bool:  # pragma: no cover
         return False
 
 
-# TODO: Use enum.StrEnum when we drop Python 3.10
-
-
-class StreamingFallbackMode(str, enum.Enum):
+class StreamingFallbackMode(enum.StrEnum):
     """
     How the streaming executor handles operations that don't support multiple partitions.
 
@@ -144,7 +140,7 @@ class StreamingFallbackMode(str, enum.Enum):
     SILENT = "silent"
 
 
-class Runtime(str, enum.Enum):
+class Runtime(enum.StrEnum):
     """
     The runtime to use for the streaming executor.
 
@@ -158,7 +154,7 @@ class Runtime(str, enum.Enum):
     RAPIDSMPF = "rapidsmpf"
 
 
-class Cluster(str, enum.Enum):
+class Cluster(enum.StrEnum):
     """
     The cluster configuration for the streaming executor.
 
@@ -173,7 +169,7 @@ class Cluster(str, enum.Enum):
     DISTRIBUTED = "distributed"
 
 
-class Scheduler(str, enum.Enum):
+class Scheduler(enum.StrEnum):
     """
     **Deprecated**: Use :class:`Cluster` instead.
 
@@ -187,7 +183,7 @@ class Scheduler(str, enum.Enum):
     DISTRIBUTED = "distributed"
 
 
-class ShuffleMethod(str, enum.Enum):
+class ShuffleMethod(enum.StrEnum):
     """
     The method to use for shuffling data between workers with the streaming executor.
 
@@ -209,7 +205,7 @@ class ShuffleMethod(str, enum.Enum):
     _RAPIDSMPF_SINGLE = "rapidsmpf-single"
 
 
-class ShufflerInsertionMethod(str, enum.Enum):
+class ShufflerInsertionMethod(enum.StrEnum):
     """
     The method to use for inserting chunks into the rapidsmpf shuffler.
 
@@ -704,6 +700,10 @@ class StreamingExecutor:
         or use regular pageable host memory. Pinned host memory offers higher
         bandwidth and lower latency for device to host transfers compared to
         regular pageable host memory.
+    rapidsmpf_py_executor_max_workers
+        Maximum number of workers for the Python ThreadPoolExecutor used by
+        the rapidsmpf runtime. Default is None, which uses ThreadPoolExecutor's
+        default behavior. This option is only used by the "rapidsmpf" runtime.
 
     Notes
     -----
@@ -810,6 +810,11 @@ class StreamingExecutor:
     spill_to_pinned_memory: bool = dataclasses.field(
         default_factory=_make_default_factory(
             f"{_env_prefix}__SPILL_TO_PINNED_MEMORY", bool, default=False
+        )
+    )
+    rapidsmpf_py_executor_max_workers: int | None = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__RAPIDSMPF_PY_EXECUTOR_MAX_WORKERS", int, default=None
         )
     )
 
@@ -959,6 +964,8 @@ class StreamingExecutor:
             raise TypeError("max_io_threads must be an int")
         if not isinstance(self.spill_to_pinned_memory, bool):
             raise TypeError("spill_to_pinned_memory must be bool")
+        if not isinstance(self.rapidsmpf_py_executor_max_workers, (int, type(None))):
+            raise TypeError("rapidsmpf_py_executor_max_workers must be int or None")
 
         # RapidsMPF spill is only supported for distributed clusters for now.
         # This is because the spilling API is still within the RMPF-Dask integration.
@@ -989,6 +996,9 @@ class InMemoryExecutor:
     name: Literal["in-memory"] = dataclasses.field(default="in-memory", init=False)
 
 
+ExecutorType = TypeVar("ExecutorType", StreamingExecutor, InMemoryExecutor)
+
+
 @dataclasses.dataclass(frozen=True, eq=True)
 class CUDAStreamPoolConfig:
     """
@@ -1012,7 +1022,7 @@ class CUDAStreamPoolConfig:
         )
 
 
-class CUDAStreamPolicy(str, enum.Enum):
+class CUDAStreamPolicy(enum.StrEnum):
     """
     The policy to use for acquiring new CUDA streams.
 
@@ -1063,7 +1073,7 @@ def _convert_cuda_stream_policy(
 
 
 @dataclasses.dataclass(frozen=True, eq=True)
-class ConfigOptions:
+class ConfigOptions(Generic[ExecutorType]):
     """
     Configuration for the polars GPUEngine.
 
@@ -1087,8 +1097,10 @@ class ConfigOptions:
 
     raise_on_fail: bool = False
     parquet_options: ParquetOptions = dataclasses.field(default_factory=ParquetOptions)
-    executor: StreamingExecutor | InMemoryExecutor = dataclasses.field(
-        default_factory=StreamingExecutor
+    # We need the type-ignore to pass type checking. Because StreamingExecutor
+    # is in ExecutorType, this is safe.
+    executor: ExecutorType = dataclasses.field(
+        default_factory=StreamingExecutor  # type: ignore[assignment]
     )
     device: int | None = None
     memory_resource_config: MemoryResourceConfig | None = None
@@ -1103,7 +1115,7 @@ class ConfigOptions:
     @classmethod
     def from_polars_engine(
         cls, engine: polars.lazyframe.engine_config.GPUEngine
-    ) -> Self:
+    ) -> ConfigOptions[ExecutorType]:
         """Create a :class:`ConfigOptions` from a :class:`~polars.lazyframe.engine_config.GPUEngine`."""
         # these are the valid top-level keys in the engine.config that
         # the user passes as **kwargs to GPUEngine.

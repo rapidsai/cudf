@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -339,81 +339,6 @@ std::unique_ptr<table> stable_distinct(
   nan_equality nans_equal           = nan_equality::ALL_EQUAL,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
-
-/**
- * @brief Count the number of consecutive groups of equivalent rows in a column.
- *
- * If `null_handling` is null_policy::EXCLUDE and `nan_handling` is  nan_policy::NAN_IS_NULL, both
- * `NaN` and `null` values are ignored. If `null_handling` is null_policy::EXCLUDE and
- * `nan_handling` is nan_policy::NAN_IS_VALID, only `null` is ignored, `NaN` is considered in count.
- *
- * `null`s are handled as equal.
- *
- * @param[in] input The column_view whose consecutive groups of equivalent rows will be counted
- * @param[in] null_handling flag to include or ignore `null` while counting
- * @param[in] nan_handling flag to consider `NaN==null` or not
- * @param[in] stream CUDA stream used for device memory operations and kernel launches
- *
- * @return number of consecutive groups of equivalent rows in the column
- */
-cudf::size_type unique_count(column_view const& input,
-                             null_policy null_handling,
-                             nan_policy nan_handling,
-                             rmm::cuda_stream_view stream = cudf::get_default_stream());
-
-/**
- * @brief Count the number of consecutive groups of equivalent rows in a table.
- *
- * @param[in] input Table whose consecutive groups of equivalent rows will be counted
- * @param[in] nulls_equal flag to denote if null elements should be considered equal
- *            nulls are not equal if null_equality::UNEQUAL.
- * @param[in] stream CUDA stream used for device memory operations and kernel launches
- *
- * @return number of consecutive groups of equivalent rows in the column
- */
-cudf::size_type unique_count(table_view const& input,
-                             null_equality nulls_equal    = null_equality::EQUAL,
-                             rmm::cuda_stream_view stream = cudf::get_default_stream());
-
-/**
- * @brief Count the distinct elements in the column_view.
- *
- * If `nulls_equal == nulls_equal::UNEQUAL`, all `null`s are distinct.
- *
- * Given an input column_view, number of distinct elements in this column_view is returned.
- *
- * If `null_handling` is null_policy::EXCLUDE and `nan_handling` is  nan_policy::NAN_IS_NULL, both
- * `NaN` and `null` values are ignored. If `null_handling` is null_policy::EXCLUDE and
- * `nan_handling` is nan_policy::NAN_IS_VALID, only `null` is ignored, `NaN` is considered in
- * distinct count.
- *
- * `null`s are handled as equal.
- *
- * @param[in] input The column_view whose distinct elements will be counted
- * @param[in] null_handling flag to include or ignore `null` while counting
- * @param[in] nan_handling flag to consider `NaN==null` or not
- * @param[in] stream CUDA stream used for device memory operations and kernel launches
- *
- * @return number of distinct rows in the table
- */
-cudf::size_type distinct_count(column_view const& input,
-                               null_policy null_handling,
-                               nan_policy nan_handling,
-                               rmm::cuda_stream_view stream = cudf::get_default_stream());
-
-/**
- * @brief Count the distinct rows in a table.
- *
- * @param[in] input Table whose distinct rows will be counted
- * @param[in] nulls_equal flag to denote if null elements should be considered equal.
- *            nulls are not equal if null_equality::UNEQUAL.
- * @param[in] stream CUDA stream used for device memory operations and kernel launches
- *
- * @return number of distinct rows in the table
- */
-cudf::size_type distinct_count(table_view const& input,
-                               null_equality nulls_equal    = null_equality::EQUAL,
-                               rmm::cuda_stream_view stream = cudf::get_default_stream());
 
 /**
  * @brief Creates a new column by applying a filter function against every

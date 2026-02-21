@@ -9,7 +9,7 @@ from rmm.pylibrmm.stream import Stream
 from pylibcudf.column import Column
 from pylibcudf.expressions import Expression
 from pylibcudf.table import Table
-from pylibcudf.types import NanEquality, NanPolicy, NullEquality, NullPolicy
+from pylibcudf.types import NanEquality, NullEquality
 
 class DuplicateKeepOption(IntEnum):
     KEEP_ANY = ...
@@ -71,18 +71,6 @@ def stable_distinct(
     stream: Stream | None = None,
     mr: DeviceMemoryResource | None = None,
 ) -> Table: ...
-def unique_count(
-    source: Column,
-    null_handling: NullPolicy,
-    nan_handling: NanPolicy,
-    stream: Stream | None = None,
-) -> int: ...
-def distinct_count(
-    source: Column,
-    null_handling: NullPolicy,
-    nan_handling: NanPolicy,
-    stream: Stream | None = None,
-) -> int: ...
 def filter(
     predicate_table: Table,
     predicate_expr: Expression,

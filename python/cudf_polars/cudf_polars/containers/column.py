@@ -326,7 +326,11 @@ class Column:
             self.obj.type()
         ):
             plc_col = plc.column.Column(
-                plc.DataType(plc.TypeId.INT64),
+                plc.DataType(
+                    plc.TypeId.INT32
+                    if self.obj.type().id() == plc.TypeId.TIMESTAMP_DAYS
+                    else plc.TypeId.INT64
+                ),
                 self.obj.size(),
                 self.obj.data(),
                 self.obj.null_mask(),

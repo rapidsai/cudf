@@ -14,6 +14,7 @@ and may be modified or removed at any time.
 from __future__ import annotations
 
 import contextlib
+import dataclasses
 import os
 from datetime import date
 from typing import TYPE_CHECKING
@@ -26,7 +27,6 @@ with contextlib.suppress(ImportError):
         get_data,
         run_duckdb,
         run_polars,
-        run_validate,
     )
 
 
@@ -38,25 +38,127 @@ if TYPE_CHECKING:
 os.environ["KVIKIO_COMPAT_MODE"] = os.environ.get("KVIKIO_COMPAT_MODE", "on")
 os.environ["KVIKIO_NTHREADS"] = os.environ.get("KVIKIO_NTHREADS", "8")
 
+# The dtype for count() aggregations depends on the presence
+# of the polars-runtime-64 package (`polars[rt64]`).
+HAS_POLARS_RT_64 = pl.config.plr.RUNTIME_REPR == "rt64"
+COUNT_DTYPE = pl.UInt64() if HAS_POLARS_RT_64 else pl.UInt32()
+
+# The pre-computed expected results come from DuckDB, which has
+# different casting rules than Polars. For example, in polars
+# Series[Decimal].mean() returns a Float64, while DuckDB returns a Decimal.
+#
+# This dictionary maps query ID to the casts to apply to the DuckDB
+# results necessary to match the cudf-polars results.
+# EXPECTED_CASTS_DECIMAL should be used when the input data uses
+# Decimal (rather than Float) for account balances, etc.
+# EXPECTED_CASTS_FLOATS should be used when the input data uses
+# Float (rather than Decimal) for account balances, etc.
+EXPECTED_CASTS_DECIMAL = {
+    1: [
+        pl.col("sum_qty").cast(pl.Decimal(15, 2)),
+        pl.col("sum_base_price").cast(pl.Decimal(15, 2)),
+        pl.col("sum_disc_price").cast(pl.Float64()),
+        pl.col("sum_charge").cast(pl.Float64()),
+        pl.col("avg_disc").cast(pl.Float64()),
+        pl.col("avg_price").cast(pl.Float64()),
+        pl.col("avg_qty").cast(pl.Float64()),
+        pl.col("count_order").cast(COUNT_DTYPE),
+    ],
+    3: [pl.col("revenue").cast(pl.Decimal(38, 2))],
+    4: [pl.col("order_count").cast(COUNT_DTYPE)],
+    5: [pl.col("revenue").cast(pl.Decimal(38, 2))],
+    6: [pl.col("revenue").cast(pl.Decimal(38, 2))],
+    7: [pl.col("l_year").cast(pl.Int32()), pl.col("revenue").cast(pl.Decimal(38, 2))],
+    8: [pl.col("o_year").cast(pl.Int32()), pl.col("mkt_share").cast(pl.Decimal(38, 2))],
+    9: [
+        pl.col("o_year").cast(pl.Int32()),
+        pl.col("sum_profit").cast(pl.Decimal(38, 2)),
+    ],
+    10: [pl.col("revenue").cast(pl.Decimal(38, 2))],
+    12: [
+        pl.col("high_line_count").cast(pl.Int32()),
+        pl.col("low_line_count").cast(pl.Int32()),
+    ],
+    13: [pl.col("c_count").cast(COUNT_DTYPE), pl.col("custdist").cast(COUNT_DTYPE)],
+    15: [pl.col("total_revenue").cast(pl.Decimal(38, 2))],
+    16: [pl.col("supplier_cnt").cast(COUNT_DTYPE)],
+    18: [pl.col("sum(l_quantity)").cast(pl.Decimal(15, 2))],
+    19: [pl.col("revenue").cast(pl.Decimal(38, 2))],
+    21: [pl.col("numwait").cast(COUNT_DTYPE)],
+    22: [
+        pl.col("numcust").cast(COUNT_DTYPE),
+        pl.col("totacctbal").cast(pl.Decimal(15, 2)),
+    ],
+}
+
+EXPECTED_CASTS_FLOAT = {
+    1: [pl.col("count_order").cast(COUNT_DTYPE)],
+    4: [pl.col("order_count").cast(COUNT_DTYPE)],
+    7: [pl.col("l_year").cast(pl.Int32())],
+    8: [pl.col("o_year").cast(pl.Int32())],
+    9: [pl.col("o_year").cast(pl.Int32())],
+    12: [
+        pl.col("high_line_count").cast(pl.Int32()),
+        pl.col("low_line_count").cast(pl.Int32()),
+    ],
+    13: [pl.col("c_count").cast(COUNT_DTYPE), pl.col("custdist").cast(COUNT_DTYPE)],
+    16: [pl.col("supplier_cnt").cast(COUNT_DTYPE)],
+    21: [pl.col("numwait").cast(COUNT_DTYPE)],
+    22: [pl.col("numcust").cast(COUNT_DTYPE)],
+}
+
+
+@dataclasses.dataclass
+class QueryResult:
+    """
+    Representation of a query's result.
+
+    Parameters
+    ----------
+    frame: pl.LazyFrame
+        The result of the query.
+    sort_by: list[tuple[str, bool]]
+        The columns that the query sorts by. Each tuple contains (column_name, descending_flag).
+    limit: int | None
+        The limit of the query, if any.
+
+    """
+
+    frame: pl.LazyFrame
+    sort_by: list[tuple[str, bool]]
+    limit: int | None = None
+
 
 class PDSHQueries:
     """PDS-H query definitions."""
 
     name: str = "pdsh"
+    EXPECTED_CASTS_DECIMAL = EXPECTED_CASTS_DECIMAL
+    EXPECTED_CASTS_FLOAT = EXPECTED_CASTS_FLOAT
+
+    @property
+    def duckdb_queries(self) -> PDSHDuckDBQueries:
+        """Link to the DuckDB queries for this benchmark."""
+        return PDSHDuckDBQueries()
 
     @staticmethod
-    def q0(run_config: RunConfig) -> pl.LazyFrame:
+    def q0(run_config: RunConfig) -> QueryResult:
         """Query 0."""
-        return pl.LazyFrame()
+        frame = pl.LazyFrame()
+
+        return QueryResult(
+            frame=frame,
+            sort_by=[],
+        )
 
     @staticmethod
-    def q1(run_config: RunConfig) -> pl.LazyFrame:
+    def q1(run_config: RunConfig) -> QueryResult:
         """Query 1."""
         lineitem = get_data(run_config.dataset_path, "lineitem", run_config.suffix)
 
         var1 = date(1998, 9, 2)
 
-        return (
+        frame = (
             lineitem.filter(pl.col("l_shipdate") <= var1)
             .group_by("l_returnflag", "l_linestatus")
             .agg(
@@ -80,8 +182,14 @@ class PDSHQueries:
             .sort("l_returnflag", "l_linestatus")
         )
 
+        return QueryResult(
+            frame=frame,
+            sort_by=[("l_returnflag", False), ("l_linestatus", False)],
+            limit=None,
+        )
+
     @staticmethod
-    def q2(run_config: RunConfig) -> pl.LazyFrame:
+    def q2(run_config: RunConfig) -> QueryResult:
         """Query 2."""
         nation = get_data(run_config.dataset_path, "nation", run_config.suffix)
         part = get_data(run_config.dataset_path, "part", run_config.suffix)
@@ -103,7 +211,7 @@ class PDSHQueries:
             .filter(pl.col("r_name") == var3)
         )
 
-        return (
+        frame = (
             q1.group_by("p_partkey")
             .agg(pl.min("ps_supplycost"))
             .join(q1, on=["p_partkey", "ps_supplycost"])
@@ -124,8 +232,19 @@ class PDSHQueries:
             .head(100)
         )
 
+        return QueryResult(
+            frame=frame,
+            sort_by=[
+                ("s_acctbal", True),
+                ("n_name", False),
+                ("s_name", False),
+                ("p_partkey", False),
+            ],
+            limit=100,
+        )
+
     @staticmethod
-    def q3(run_config: RunConfig) -> pl.LazyFrame:
+    def q3(run_config: RunConfig) -> QueryResult:
         """Query 3."""
         customer = get_data(run_config.dataset_path, "customer", run_config.suffix)
         lineitem = get_data(run_config.dataset_path, "lineitem", run_config.suffix)
@@ -134,7 +253,7 @@ class PDSHQueries:
         var1 = "BUILDING"
         var2 = date(1995, 3, 15)
 
-        return (
+        frame = (
             customer.filter(pl.col("c_mktsegment") == var1)
             .join(orders, left_on="c_custkey", right_on="o_custkey")
             .join(lineitem, left_on="o_orderkey", right_on="l_orderkey")
@@ -157,8 +276,14 @@ class PDSHQueries:
             .head(10)
         )
 
+        return QueryResult(
+            frame=frame,
+            sort_by=[("revenue", True), ("o_orderdate", False)],
+            limit=10,
+        )
+
     @staticmethod
-    def q4(run_config: RunConfig) -> pl.LazyFrame:
+    def q4(run_config: RunConfig) -> QueryResult:
         """Query 4."""
         lineitem = get_data(run_config.dataset_path, "lineitem", run_config.suffix)
         orders = get_data(run_config.dataset_path, "orders", run_config.suffix)
@@ -166,7 +291,7 @@ class PDSHQueries:
         var1 = date(1993, 7, 1)
         var2 = date(1993, 10, 1)
 
-        return (
+        frame = (
             # SQL exists translates to semi join in Polars API
             orders.join(
                 (lineitem.filter(pl.col("l_commitdate") < pl.col("l_receiptdate"))),
@@ -180,8 +305,13 @@ class PDSHQueries:
             .sort("o_orderpriority")
         )
 
+        return QueryResult(
+            frame=frame,
+            sort_by=[("o_orderpriority", False)],
+        )
+
     @staticmethod
-    def q5(run_config: RunConfig) -> pl.LazyFrame:
+    def q5(run_config: RunConfig) -> QueryResult:
         """Query 5."""
         path = run_config.dataset_path
         suffix = run_config.suffix
@@ -196,7 +326,7 @@ class PDSHQueries:
         var2 = date(1994, 1, 1)
         var3 = date(1995, 1, 1)
 
-        return (
+        frame = (
             region.join(nation, left_on="r_regionkey", right_on="n_regionkey")
             .join(customer, left_on="n_nationkey", right_on="c_nationkey")
             .join(orders, left_on="c_custkey", right_on="o_custkey")
@@ -218,8 +348,13 @@ class PDSHQueries:
             .sort(by="revenue", descending=True)
         )
 
+        return QueryResult(
+            frame=frame,
+            sort_by=[("revenue", True)],
+        )
+
     @staticmethod
-    def q6(run_config: RunConfig) -> pl.LazyFrame:
+    def q6(run_config: RunConfig) -> QueryResult:
         """Query 6."""
         path = run_config.dataset_path
         suffix = run_config.suffix
@@ -231,7 +366,7 @@ class PDSHQueries:
         var4 = 0.07
         var5 = 24
 
-        return (
+        frame = (
             lineitem.filter(pl.col("l_shipdate").is_between(var1, var2, closed="left"))
             .filter(pl.col("l_discount").is_between(var3, var4))
             .filter(pl.col("l_quantity") < var5)
@@ -241,8 +376,13 @@ class PDSHQueries:
             .select(pl.sum("revenue"))
         )
 
+        return QueryResult(
+            frame=frame,
+            sort_by=[],
+        )
+
     @staticmethod
-    def q7(run_config: RunConfig) -> pl.LazyFrame:
+    def q7(run_config: RunConfig) -> QueryResult:
         """Query 7."""
         customer = get_data(run_config.dataset_path, "customer", run_config.suffix)
         lineitem = get_data(run_config.dataset_path, "lineitem", run_config.suffix)
@@ -278,7 +418,7 @@ class PDSHQueries:
             .rename({"n_name": "supp_nation"})
         )
 
-        return (
+        frame = (
             pl.concat([q1, q2])
             .filter(pl.col("l_shipdate").is_between(var3, var4))
             .with_columns(
@@ -292,8 +432,13 @@ class PDSHQueries:
             .sort(by=["supp_nation", "cust_nation", "l_year"])
         )
 
+        return QueryResult(
+            frame=frame,
+            sort_by=[("supp_nation", False), ("cust_nation", False), ("l_year", False)],
+        )
+
     @staticmethod
-    def q8(run_config: RunConfig) -> pl.LazyFrame:
+    def q8(run_config: RunConfig) -> QueryResult:
         """Query 8."""
         customer = get_data(run_config.dataset_path, "customer", run_config.suffix)
         lineitem = get_data(run_config.dataset_path, "lineitem", run_config.suffix)
@@ -312,7 +457,7 @@ class PDSHQueries:
         n1 = nation.select("n_nationkey", "n_regionkey")
         n2 = nation.select("n_nationkey", "n_name")
 
-        return (
+        frame = (
             part.join(lineitem, left_on="p_partkey", right_on="l_partkey")
             .join(supplier, left_on="l_suppkey", right_on="s_suppkey")
             .join(orders, left_on="l_orderkey", right_on="o_orderkey")
@@ -337,12 +482,17 @@ class PDSHQueries:
                 .alias("_tmp")
             )
             .group_by("o_year")
-            .agg((pl.sum("_tmp") / pl.sum("volume")).round(2).alias("mkt_share"))
+            .agg((pl.sum("_tmp") / pl.sum("volume")).alias("mkt_share"))
             .sort("o_year")
         )
 
+        return QueryResult(
+            frame=frame,
+            sort_by=[("o_year", False)],
+        )
+
     @staticmethod
-    def q9(run_config: RunConfig) -> pl.LazyFrame:
+    def q9(run_config: RunConfig) -> QueryResult:
         """Query 9."""
         path = run_config.dataset_path
         suffix = run_config.suffix
@@ -353,7 +503,7 @@ class PDSHQueries:
         partsupp = get_data(path, "partsupp", suffix)
         supplier = get_data(path, "supplier", suffix)
 
-        return (
+        frame = (
             part.join(partsupp, left_on="p_partkey", right_on="ps_partkey")
             .join(supplier, left_on="ps_suppkey", right_on="s_suppkey")
             .join(
@@ -377,8 +527,13 @@ class PDSHQueries:
             .sort(by=["nation", "o_year"], descending=[False, True])
         )
 
+        return QueryResult(
+            frame=frame,
+            sort_by=[("nation", False), ("o_year", True)],
+        )
+
     @staticmethod
-    def q10(run_config: RunConfig) -> pl.LazyFrame:
+    def q10(run_config: RunConfig) -> QueryResult:
         """Query 10."""
         path = run_config.dataset_path
         suffix = run_config.suffix
@@ -390,7 +545,7 @@ class PDSHQueries:
         var1 = date(1993, 10, 1)
         var2 = date(1994, 1, 1)
 
-        return (
+        frame = (
             customer.join(orders, left_on="c_custkey", right_on="o_custkey")
             .join(lineitem, left_on="o_orderkey", right_on="l_orderkey")
             .join(nation, left_on="c_nationkey", right_on="n_nationkey")
@@ -425,8 +580,14 @@ class PDSHQueries:
             .head(20)
         )
 
+        return QueryResult(
+            frame=frame,
+            sort_by=[("revenue", True)],
+            limit=20,
+        )
+
     @staticmethod
-    def q11(run_config: RunConfig) -> pl.LazyFrame:
+    def q11(run_config: RunConfig) -> QueryResult:
         """Query 11."""
         nation = get_data(run_config.dataset_path, "nation", run_config.suffix)
         partsupp = get_data(run_config.dataset_path, "partsupp", run_config.suffix)
@@ -448,7 +609,7 @@ class PDSHQueries:
             * var2
         )
 
-        return (
+        frame = (
             q1.group_by("ps_partkey")
             .agg(
                 (pl.col("ps_supplycost") * pl.col("ps_availqty"))
@@ -462,8 +623,13 @@ class PDSHQueries:
             .sort("value", descending=True)
         )
 
+        return QueryResult(
+            frame=frame,
+            sort_by=[("value", True)],
+        )
+
     @staticmethod
-    def q12(run_config: RunConfig) -> pl.LazyFrame:
+    def q12(run_config: RunConfig) -> QueryResult:
         """Query 12."""
         lineitem = get_data(run_config.dataset_path, "lineitem", run_config.suffix)
         orders = get_data(run_config.dataset_path, "orders", run_config.suffix)
@@ -473,7 +639,7 @@ class PDSHQueries:
         var3 = date(1994, 1, 1)
         var4 = date(1995, 1, 1)
 
-        return (
+        frame = (
             orders.join(lineitem, left_on="o_orderkey", right_on="l_orderkey")
             .filter(pl.col("l_shipmode").is_in([var1, var2]))
             .filter(pl.col("l_commitdate") < pl.col("l_receiptdate"))
@@ -494,8 +660,13 @@ class PDSHQueries:
             .sort("l_shipmode")
         )
 
+        return QueryResult(
+            frame=frame,
+            sort_by=[("l_shipmode", False)],
+        )
+
     @staticmethod
-    def q13(run_config: RunConfig) -> pl.LazyFrame:
+    def q13(run_config: RunConfig) -> QueryResult:
         """Query 13."""
         customer = get_data(run_config.dataset_path, "customer", run_config.suffix)
         orders = get_data(run_config.dataset_path, "orders", run_config.suffix)
@@ -506,7 +677,8 @@ class PDSHQueries:
         orders = orders.filter(
             pl.col("o_comment").str.contains(f"{var1}.*{var2}").not_()
         )
-        return (
+
+        frame = (
             customer.join(orders, left_on="c_custkey", right_on="o_custkey", how="left")
             .group_by("c_custkey")
             .agg(pl.col("o_orderkey").count().alias("c_count"))
@@ -516,8 +688,13 @@ class PDSHQueries:
             .sort(by=["custdist", "c_count"], descending=[True, True])
         )
 
+        return QueryResult(
+            frame=frame,
+            sort_by=[("custdist", True), ("c_count", True)],
+        )
+
     @staticmethod
-    def q14(run_config: RunConfig) -> pl.LazyFrame:
+    def q14(run_config: RunConfig) -> QueryResult:
         """Query 14."""
         lineitem = get_data(run_config.dataset_path, "lineitem", run_config.suffix)
         part = get_data(run_config.dataset_path, "part", run_config.suffix)
@@ -525,7 +702,7 @@ class PDSHQueries:
         var1 = date(1995, 9, 1)
         var2 = date(1995, 10, 1)
 
-        return (
+        frame = (
             lineitem.join(part, left_on="l_partkey", right_on="p_partkey")
             .filter(pl.col("l_shipdate").is_between(var1, var2, closed="left"))
             .select(
@@ -542,8 +719,13 @@ class PDSHQueries:
             )
         )
 
+        return QueryResult(
+            frame=frame,
+            sort_by=[],
+        )
+
     @staticmethod
-    def q15(run_config: RunConfig) -> pl.LazyFrame:
+    def q15(run_config: RunConfig) -> QueryResult:
         """Query 15."""
         lineitem = get_data(run_config.dataset_path, "lineitem", run_config.suffix)
         supplier = get_data(run_config.dataset_path, "supplier", run_config.suffix)
@@ -562,7 +744,7 @@ class PDSHQueries:
             .select(pl.col("l_suppkey").alias("supplier_no"), pl.col("total_revenue"))
         )
 
-        return (
+        frame = (
             supplier.join(revenue, left_on="s_suppkey", right_on="supplier_no")
             .filter(pl.col("total_revenue") == pl.col("total_revenue").max())
             .with_columns(pl.col("total_revenue").round(2))
@@ -570,8 +752,13 @@ class PDSHQueries:
             .sort("s_suppkey")
         )
 
+        return QueryResult(
+            frame=frame,
+            sort_by=[("s_suppkey", False)],
+        )
+
     @staticmethod
-    def q16(run_config: RunConfig) -> pl.LazyFrame:
+    def q16(run_config: RunConfig) -> QueryResult:
         """Query 16."""
         part = get_data(run_config.dataset_path, "part", run_config.suffix)
         partsupp = get_data(run_config.dataset_path, "partsupp", run_config.suffix)
@@ -583,7 +770,7 @@ class PDSHQueries:
             pl.col("s_comment").str.contains(".*Customer.*Complaints.*")
         ).select(pl.col("s_suppkey"), pl.col("s_suppkey").alias("ps_suppkey"))
 
-        return (
+        frame = (
             part.join(partsupp, left_on="p_partkey", right_on="ps_partkey")
             .filter(pl.col("p_brand") != var1)
             .filter(pl.col("p_type").str.contains("MEDIUM POLISHED*").not_())
@@ -598,8 +785,18 @@ class PDSHQueries:
             )
         )
 
+        return QueryResult(
+            frame=frame,
+            sort_by=[
+                ("supplier_cnt", True),
+                ("p_brand", False),
+                ("p_type", False),
+                ("p_size", False),
+            ],
+        )
+
     @staticmethod
-    def q17(run_config: RunConfig) -> pl.LazyFrame:
+    def q17(run_config: RunConfig) -> QueryResult:
         """Query 17."""
         lineitem = get_data(run_config.dataset_path, "lineitem", run_config.suffix)
         part = get_data(run_config.dataset_path, "part", run_config.suffix)
@@ -613,7 +810,7 @@ class PDSHQueries:
             .join(lineitem, how="inner", left_on="p_partkey", right_on="l_partkey")
         )
 
-        return (
+        frame = (
             q1.group_by("p_partkey")
             .agg((0.2 * pl.col("l_quantity").mean()).alias("avg_quantity"))
             .select(pl.col("p_partkey").alias("key"), pl.col("avg_quantity"))
@@ -624,8 +821,13 @@ class PDSHQueries:
             )
         )
 
+        return QueryResult(
+            frame=frame,
+            sort_by=[],
+        )
+
     @staticmethod
-    def q18(run_config: RunConfig) -> pl.LazyFrame:
+    def q18(run_config: RunConfig) -> QueryResult:
         """Query 18."""
         path = run_config.dataset_path
         suffix = run_config.suffix
@@ -641,7 +843,7 @@ class PDSHQueries:
             .filter(pl.col("sum_quantity") > var1)
         )
 
-        return (
+        frame = (
             orders.join(q1, left_on="o_orderkey", right_on="l_orderkey", how="semi")
             .join(lineitem, left_on="o_orderkey", right_on="l_orderkey")
             .join(customer, left_on="o_custkey", right_on="c_custkey")
@@ -661,13 +863,19 @@ class PDSHQueries:
             .head(100)
         )
 
+        return QueryResult(
+            frame=frame,
+            sort_by=[("o_totalprice", True), ("o_orderdate", False)],
+            limit=100,
+        )
+
     @staticmethod
-    def q19(run_config: RunConfig) -> pl.LazyFrame:
+    def q19(run_config: RunConfig) -> QueryResult:
         """Query 19."""
         lineitem = get_data(run_config.dataset_path, "lineitem", run_config.suffix)
         part = get_data(run_config.dataset_path, "part", run_config.suffix)
 
-        return (
+        frame = (
             part.join(lineitem, left_on="p_partkey", right_on="l_partkey")
             .filter(pl.col("l_shipmode").is_in(["AIR", "AIR REG"]))
             .filter(pl.col("l_shipinstruct") == "DELIVER IN PERSON")
@@ -705,8 +913,13 @@ class PDSHQueries:
             )
         )
 
+        return QueryResult(
+            frame=frame,
+            sort_by=[],
+        )
+
     @staticmethod
-    def q20(run_config: RunConfig) -> pl.LazyFrame:
+    def q20(run_config: RunConfig) -> QueryResult:
         """Query 20."""
         lineitem = get_data(run_config.dataset_path, "lineitem", run_config.suffix)
         nation = get_data(run_config.dataset_path, "nation", run_config.suffix)
@@ -727,7 +940,7 @@ class PDSHQueries:
         q2 = nation.filter(pl.col("n_name") == var3)
         q3 = supplier.join(q2, left_on="s_nationkey", right_on="n_nationkey")
 
-        return (
+        frame = (
             part.filter(pl.col("p_name").str.starts_with(var4))
             .select(pl.col("p_partkey").unique())
             .join(partsupp, left_on="p_partkey", right_on="ps_partkey")
@@ -743,8 +956,13 @@ class PDSHQueries:
             .sort("s_name")
         )
 
+        return QueryResult(
+            frame=frame,
+            sort_by=[("s_name", False)],
+        )
+
     @staticmethod
-    def q21(run_config: RunConfig) -> pl.LazyFrame:
+    def q21(run_config: RunConfig) -> QueryResult:
         """Query 21."""
         lineitem = get_data(run_config.dataset_path, "lineitem", run_config.suffix)
         nation = get_data(run_config.dataset_path, "nation", run_config.suffix)
@@ -763,7 +981,7 @@ class PDSHQueries:
             )
         )
 
-        return (
+        frame = (
             q1.group_by("l_orderkey")
             .agg(pl.col("l_suppkey").len().alias("n_supp_by_order"))
             .join(q1, on="l_orderkey")
@@ -779,8 +997,14 @@ class PDSHQueries:
             .head(100)
         )
 
+        return QueryResult(
+            frame=frame,
+            sort_by=[("numwait", True), ("s_name", False)],
+            limit=100,
+        )
+
     @staticmethod
-    def q22(run_config: RunConfig) -> pl.LazyFrame:
+    def q22(run_config: RunConfig) -> QueryResult:
         """Query 22."""
         customer = get_data(run_config.dataset_path, "customer", run_config.suffix)
         orders = get_data(run_config.dataset_path, "orders", run_config.suffix)
@@ -799,7 +1023,7 @@ class PDSHQueries:
             pl.col("o_custkey").alias("c_custkey")
         )
 
-        return (
+        frame = (
             q1.join(q3, on="c_custkey", how="left")
             .filter(pl.col("o_custkey").is_null())
             .join(q2, how="cross")
@@ -812,11 +1036,18 @@ class PDSHQueries:
             .sort("cntrycode")
         )
 
+        return QueryResult(
+            frame=frame,
+            sort_by=[("cntrycode", False)],
+        )
+
 
 class PDSHDuckDBQueries:
     """PDS-H DuckDB query definitions."""
 
     name: str = "pdsh"
+    EXPECTED_CASTS_DECIMAL = EXPECTED_CASTS_DECIMAL
+    EXPECTED_CASTS_FLOAT = EXPECTED_CASTS_FLOAT
 
     @staticmethod
     def q1(run_config: RunConfig) -> str:
@@ -1583,7 +1814,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run PDS-H benchmarks.")
     parser.add_argument(
         "--engine",
-        choices=["polars", "duckdb", "validate"],
+        choices=["polars", "duckdb"],
         default="polars",
         help="Which engine to use for executing the benchmarks or to validate results.",
     )
@@ -1593,12 +1824,5 @@ if __name__ == "__main__":
         run_polars(PDSHQueries, extra_args, num_queries=22)
     elif args.engine == "duckdb":
         run_duckdb(PDSHDuckDBQueries, extra_args, num_queries=22)
-    elif args.engine == "validate":
-        run_validate(
-            PDSHQueries,
-            PDSHDuckDBQueries,
-            extra_args,
-            num_queries=22,
-            check_dtypes=True,
-            check_column_order=True,
-        )
+    else:
+        raise ValueError(f"Invalid engine: {args.engine}")

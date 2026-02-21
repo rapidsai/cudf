@@ -38,7 +38,7 @@ classifiers = [
 
 [project.optional-dependencies]
 test = [
-    "cupy-cuda13x>=13.6.0",
+    "cupy-cuda13x>=13.6.0,!=14.0.0",
     "fastavro>=0.22.9",
     "hypothesis>=6.131.7",
     "mmh3",

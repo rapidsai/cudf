@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -15,7 +15,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <thrust/iterator/constant_iterator.h>
+#include <cuda/iterator>
 #include <thrust/sequence.h>
 
 namespace cudf {
@@ -39,7 +39,7 @@ std::unique_ptr<cudf::column> make_lists_column_from_scalar(list_scalar const& v
   auto mr_final = size == 1 ? mr : cudf::get_current_device_resource_ref();
 
   // Handcraft a 1-row column
-  auto sizes_itr = thrust::constant_iterator<size_type>(value.view().size());
+  auto sizes_itr = cuda::constant_iterator<size_type>(value.view().size());
   auto offsets   = std::get<0>(
     cudf::detail::make_offsets_child_column(sizes_itr, sizes_itr + 1, stream, mr_final));
   size_type null_count = value.is_valid(stream) ? 0 : 1;
@@ -61,7 +61,7 @@ std::unique_ptr<cudf::column> make_lists_column_from_scalar(list_scalar const& v
                                       0,
                                       children_views);
 
-  auto begin = thrust::make_constant_iterator(0);
+  auto begin = cuda::make_constant_iterator(0);
   auto res   = cudf::detail::gather(table_view({one_row_col_view}),
                                   begin,
                                   begin + size,

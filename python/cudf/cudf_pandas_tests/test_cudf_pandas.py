@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION & AFFILIATES.  All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES.  All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 import collections
@@ -28,7 +28,6 @@ import pytest
 from nbconvert.preprocessors import ExecutePreprocessor
 from numba import (
     NumbaDeprecationWarning,
-    __version__ as numba_version,
     vectorize,
 )
 from packaging import version
@@ -720,9 +719,8 @@ def test_rolling_win_type():
 
 
 @pytest.mark.xfail(
-    version.parse(numba_version) >= version.parse("0.59")
-    and PANDAS_VERSION < version.parse("2.1"),
-    reason="numba.generated_jit removed in 0.59, requires pandas >= 2.1",
+    PANDAS_VERSION < version.parse("2.1"),
+    reason="requires pandas >= 2.1",
 )
 def test_rolling_apply_numba_engine():
     def weighted_mean(x):

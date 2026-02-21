@@ -2,7 +2,7 @@
  * SPDX-FileCopyrightText: Copyright 2018-2019 BlazingDB, Inc.
  * SPDX-FileCopyrightText: Copyright 2018 Christian Noboa Mardini <christian@blazingdb.com>
  * SPDX-FileCopyrightText: Copyright 2018 Rommel Quintanilla <rommel@blazingdb.com>
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 /*
@@ -32,8 +32,12 @@
 
 #include <cuda/std/type_traits>
 
+#pragma nv_hdrstop  // The above headers are used by the kernel below and need to be included before
+                    // it. Each UDF will have a different operation-udf.hpp generated for it, so we
+                    // need to put this pragma before including it to avoid PCH mismatch.
+
 // clang-format off
-#include <binaryop/jit/operation-udf.hpp>
+#include <cudf/detail/operation-udf.hpp>
 // clang-format on
 
 namespace cudf {

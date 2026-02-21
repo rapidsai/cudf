@@ -11,9 +11,7 @@ from pylibcudf.libcudf.stream_compaction cimport duplicate_keep_option
 from pylibcudf.libcudf.table.table cimport table
 from pylibcudf.libcudf.types cimport (
     nan_equality,
-    nan_policy,
     null_equality,
-    null_policy,
     size_type,
 )
 
@@ -31,14 +29,12 @@ __all__ = [
     "DuplicateKeepOption",
     "apply_boolean_mask",
     "distinct",
-    "distinct_count",
     "distinct_indices",
     "drop_nans",
     "drop_nulls",
     "filter",
     "stable_distinct",
     "unique",
-    "unique_count",
 ]
 
 cpdef Table drop_nulls(
@@ -328,73 +324,6 @@ cpdef Table stable_distinct(
             mr.get_mr()
         )
     return Table.from_libcudf(move(c_result), stream, mr)
-
-
-cpdef size_type unique_count(
-    Column source,
-    null_policy null_handling,
-    nan_policy nan_handling,
-    Stream stream=None
-):
-    """Returns the number of unique consecutive elements in the input column.
-
-    For details, see :cpp:func:`unique_count`.
-
-    Parameters
-    ----------
-    source : Column
-        The input column to count the unique elements of.
-    null_handling : null_policy
-        Flag to include or exclude nulls from the count.
-    nan_handling : nan_policy
-        Flag to include or exclude NaNs from the count.
-
-    Returns
-    -------
-    size_type
-        The number of unique consecutive elements in the input column.
-
-    Notes
-    -----
-    If the input column is sorted, then unique_count can produce the
-    same result as distinct_count, but faster.
-    """
-    stream = _get_stream(stream)
-
-    return cpp_stream_compaction.unique_count(
-        source.view(), null_handling, nan_handling, stream.view()
-    )
-
-
-cpdef size_type distinct_count(
-    Column source,
-    null_policy null_handling,
-    nan_policy nan_handling,
-    Stream stream=None
-):
-    """Returns the number of distinct elements in the input column.
-
-    For details, see :cpp:func:`distinct_count`.
-
-    Parameters
-    ----------
-    source : Column
-        The input column to count the unique elements of.
-    null_handling : null_policy
-        Flag to include or exclude nulls from the count.
-    nan_handling : nan_policy
-        Flag to include or exclude NaNs from the count.
-
-    Returns
-    -------
-    size_type
-        The number of distinct elements in the input column.
-    """
-    stream = _get_stream(stream)
-
-    return cpp_stream_compaction.distinct_count(
-        source.view(), null_handling, nan_handling, stream.view()
-    )
 
 
 cpdef Table filter(
