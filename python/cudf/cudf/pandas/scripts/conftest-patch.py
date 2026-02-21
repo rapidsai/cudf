@@ -10123,14 +10123,10 @@ def pytest_collection_modifyitems(session, config, items):
         # | NODEIDS_THAT_XFAIL_WITH_COPY_ON_WRITE_FALSE
         | NODEIDS_THAT_FAIL_DUE_TO_UNSUPPORTED_PANDAS_FEATURES
     )
-    TO_XFAIL = (
-        NODEIDS_THAT_FAIL_WITH_CUDF_PANDAS
-        | set(
-            chain.from_iterable(
-                NODEIDS_THAT_FAIL_WITH_CUDF_PANDAS_WITH_REASON.values()
-            )
+    TO_XFAIL = NODEIDS_THAT_FAIL_WITH_CUDF_PANDAS | set(
+        chain.from_iterable(
+            NODEIDS_THAT_FAIL_WITH_CUDF_PANDAS_WITH_REASON.values()
         )
-        | NODEIDS_THAT_ARE_FLAKY_WITH_COPY_ON_WRITE
     )
     # Strip out the suffixes pytest-repeat adds to ids so that matches still work
     if config.pluginmanager.has_plugin("repeat"):
