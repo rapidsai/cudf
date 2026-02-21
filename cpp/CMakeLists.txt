@@ -359,7 +359,7 @@ list(APPEND CUDF_JIT_COMPILE_FLAGS -std=c++${CUDF_CUDA_STANDARD} --device-int128
 )
 
 set(CUDF_LTO_JIT_ARCHITECTURES "80-real;90-real;100-real;120-real")
-add_library(cudf_lto_library OBJECT src/jit/lto/library.cu)
+add_library(cudf_lto_library OBJECT ${CMAKE_CURRENT_SOURCE_DIR}/include/jcudf/library.cu)
 target_compile_options(cudf_lto_library PRIVATE --compress-mode=none --gen-opt-lto)
 target_compile_definitions(cudf_lto_library PRIVATE CUDF_DISABLE_DEFAULT_EXPORT)
 set_target_properties(

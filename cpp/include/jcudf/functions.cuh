@@ -3,15 +3,12 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
-#include <cudf/jit/lto/types.cuh>
+#include <jcudf/types.cuh>
 
-namespace CUDF_LTO_EXPORT cudf {
+namespace JCUDF_EXPORT jcudf {
+namespace functions {
 
-namespace lto {
-
-namespace operators {
-
-#define UNOP_T(op, Ret, T, expr)                                             \
+#define UNOP_T(op, R, T, expr)                                               \
   __device__ __forceinline__ void op(R* out, T const& a) { *out = expr; }    \
                                                                              \
   __device__ __forceinline__ void op(optional<R>* out, optional<T> const& a) \
@@ -39,36 +36,8 @@ namespace operators {
     }                                                                                              \
   }
 
-#define EXTERN_UNOP_T(op, R, T)                                              \
-  __device__ extern void op(R* out, T const& a);                             \
-                                                                             \
-  __device__ __forceinline__ void op(optional<R>* out, optional<T> const& a) \
-  {                                                                          \
-    if (a.has_value()) {                                                     \
-      R r;                                                                   \
-      op(&r, *a);                                                            \
-      *out = r;                                                              \
-    } else {                                                                 \
-      *out = nullopt;                                                        \
-    }                                                                        \
-  }
-
-#define EXTERN_BINOP_T(op, R, T)                                                                   \
-  __device__ extern void op(R* out, T const& a, T const& b);                                       \
-                                                                                                   \
-  __device__ __forceinline__ void op(optional<R>* out, optional<T> const& a, optional<T> const& b) \
-  {                                                                                                \
-    if (a.has_value() && b.has_value()) {                                                          \
-      R r;                                                                                         \
-      op(&r, *a, *b);                                                                              \
-      *out = r;                                                                                    \
-    } else {                                                                                       \
-      *out = nullopt;                                                                              \
-    }                                                                                              \
-  }
-
-#define EXTERN_UNOP(op, T) EXTERN_UNOP_T(op, T, T)
-#define EXTERN_BINOP(op, T) EXTERN_BINOP_T(op, T, T)
+#define UNOP(op, T, expr)  UNOP_T(op, T, T, expr)
+#define BINOP(op, T, expr) BINOP_T(op, T, T, expr)
 
 #define ADD_OP(T)                  BINOP_T(add, T, T, (a + b))
 #define SUB_OP(T)                  BINOP_T(sub, T, T, (a - b))
@@ -87,7 +56,6 @@ namespace operators {
 #define IDENTITY_OP(T)             UNOP_T(identity, T, T, a)
 #define BIT_INVERT_OP(T)           UNOP_T(bit_invert, T, T, ~a)
 #define CAST_OP(out_type, in_type) UNOP_T(cast_to_##out_type, out_type, in_type, (out_type)(a))
-#define IS_NULL_OP(T)              UNOP_T(is_null, bool, T, !a.has_value())
 #define ABS_OP(T)                  UNOP_T(abs, T, T, ((a < 0) ? -a : a))
 #define MOD_OP(T)                  BINOP_T(mod, T, T, (a % b))
 #define PYMOD_OP(T)                BINOP_T(pymod, T, T, ((a % b + b) % b))
@@ -100,11 +68,18 @@ namespace operators {
   {                                                                                                \
     if (a.has_value() && b.has_value()) {                                                          \
       *out = (*a == *b);                                                                           \
-    } else if (!a.has_value() && !b.has_value()) {                                                 \
+    } else if (a.has_null() && b.has_null()) {                                                     \
       *out = true;                                                                                 \
     } else {                                                                                       \
       *out = false;                                                                                \
     }                                                                                              \
+  }
+
+#define IS_NULL_OP(T)                                                                \
+  __device__ __forceinline__ void is_null(bool* out, T const& a) { *out = false; }   \
+  __device__ __forceinline__ void is_null(optional<bool>* out, optional<T> const& a) \
+  {                                                                                  \
+    *out = a.has_null();                                                             \
   }
 
 ADD_OP(i32)
@@ -113,9 +88,9 @@ ADD_OP(u32)
 ADD_OP(u64)
 ADD_OP(f32)
 ADD_OP(f64)
-ADD_OP(decimal32)
-ADD_OP(decimal64)
-ADD_OP(decimal128)
+ADD_OP(dec32)
+ADD_OP(dec64)
+ADD_OP(dec128)
 ADD_OP(duration_D)
 ADD_OP(duration_s)
 ADD_OP(duration_ms)
@@ -127,9 +102,9 @@ SUB_OP(u32)
 SUB_OP(u64)
 SUB_OP(f32)
 SUB_OP(f64)
-SUB_OP(decimal32)
-SUB_OP(decimal64)
-SUB_OP(decimal128)
+SUB_OP(dec32)
+SUB_OP(dec64)
+SUB_OP(dec128)
 SUB_OP(duration_D)
 SUB_OP(duration_s)
 SUB_OP(duration_ms)
@@ -141,9 +116,9 @@ MUL_OP(u32)
 MUL_OP(u64)
 MUL_OP(f32)
 MUL_OP(f64)
-MUL_OP(decimal32)
-MUL_OP(decimal64)
-MUL_OP(decimal128)
+MUL_OP(dec32)
+MUL_OP(dec64)
+MUL_OP(dec128)
 
 DIV_OP(i32)
 DIV_OP(i64)
@@ -151,9 +126,9 @@ DIV_OP(u32)
 DIV_OP(u64)
 DIV_OP(f32)
 DIV_OP(f64)
-DIV_OP(decimal32)
-DIV_OP(decimal64)
-DIV_OP(decimal128)
+DIV_OP(dec32)
+DIV_OP(dec64)
+DIV_OP(dec128)
 
 EQ_OP(bool)
 EQ_OP(i8)
@@ -166,9 +141,9 @@ EQ_OP(u32)
 EQ_OP(u64)
 EQ_OP(f32)
 EQ_OP(f64)
-EQ_OP(decimal32)
-EQ_OP(decimal64)
-EQ_OP(decimal128)
+EQ_OP(dec32)
+EQ_OP(dec64)
+EQ_OP(dec128)
 EQ_OP(timestamp_D)
 EQ_OP(timestamp_s)
 EQ_OP(timestamp_ms)
@@ -191,9 +166,9 @@ LT_OP(u32)
 LT_OP(u64)
 LT_OP(f32)
 LT_OP(f64)
-LT_OP(decimal32)
-LT_OP(decimal64)
-LT_OP(decimal128)
+LT_OP(dec32)
+LT_OP(dec64)
+LT_OP(dec128)
 LT_OP(timestamp_D)
 LT_OP(timestamp_s)
 LT_OP(timestamp_ms)
@@ -216,9 +191,9 @@ GT_OP(u32)
 GT_OP(u64)
 GT_OP(f32)
 GT_OP(f64)
-GT_OP(decimal32)
-GT_OP(decimal64)
-GT_OP(decimal128)
+GT_OP(dec32)
+GT_OP(dec64)
+GT_OP(dec128)
 GT_OP(timestamp_D)
 GT_OP(timestamp_s)
 GT_OP(timestamp_ms)
@@ -241,9 +216,9 @@ LE_OP(u32)
 LE_OP(u64)
 LE_OP(f32)
 LE_OP(f64)
-LE_OP(decimal32)
-LE_OP(decimal64)
-LE_OP(decimal128)
+LE_OP(dec32)
+LE_OP(dec64)
+LE_OP(dec128)
 LE_OP(timestamp_D)
 LE_OP(timestamp_s)
 LE_OP(timestamp_ms)
@@ -266,9 +241,9 @@ GE_OP(u32)
 GE_OP(u64)
 GE_OP(f32)
 GE_OP(f64)
-GE_OP(decimal32)
-GE_OP(decimal64)
-GE_OP(decimal128)
+GE_OP(dec32)
+GE_OP(dec64)
+GE_OP(dec128)
 GE_OP(timestamp_D)
 GE_OP(timestamp_s)
 GE_OP(timestamp_ms)
@@ -310,9 +285,9 @@ IDENTITY_OP(u32)
 IDENTITY_OP(u64)
 IDENTITY_OP(f32)
 IDENTITY_OP(f64)
-IDENTITY_OP(decimal32)
-IDENTITY_OP(decimal64)
-IDENTITY_OP(decimal128)
+IDENTITY_OP(dec32)
+IDENTITY_OP(dec64)
+IDENTITY_OP(dec128)
 IDENTITY_OP(timestamp_D)
 IDENTITY_OP(timestamp_s)
 IDENTITY_OP(timestamp_ms)
@@ -376,9 +351,9 @@ IS_NULL_OP(u32)
 IS_NULL_OP(u64)
 IS_NULL_OP(f32)
 IS_NULL_OP(f64)
-IS_NULL_OP(decimal32)
-IS_NULL_OP(decimal64)
-IS_NULL_OP(decimal128)
+IS_NULL_OP(dec32)
+IS_NULL_OP(dec64)
+IS_NULL_OP(dec128)
 IS_NULL_OP(timestamp_D)
 IS_NULL_OP(timestamp_s)
 IS_NULL_OP(timestamp_ms)
@@ -397,76 +372,76 @@ ABS_OP(i64)
 ABS_OP(f32)
 ABS_OP(f64)
 
-EXTERN_UNOP(sin, f32);
-EXTERN_UNOP(sin, f64);
+UNOP(sin, f32, (__builtin_sinf(a)))
+UNOP(sin, f64, (__builtin_sin(a)))
 
-EXTERN_UNOP(cos, f32);
-EXTERN_UNOP(cos, f64);
+UNOP(cos, f32, (__builtin_cosf(a)))
+UNOP(cos, f64, (__builtin_cos(a)))
 
-EXTERN_UNOP(tan, f32);
-EXTERN_UNOP(tan, f64);
+UNOP(tan, f32, (__builtin_tanf(a)))
+UNOP(tan, f64, (__builtin_tan(a)))
 
-EXTERN_UNOP(arcsin, f32);
-EXTERN_UNOP(arcsin, f64);
+UNOP(arcsin, f32, (__builtin_asinf(a)))
+UNOP(arcsin, f64, (__builtin_asin(a)))
 
-EXTERN_UNOP(arccos, f32);
-EXTERN_UNOP(arccos, f64);
+UNOP(arccos, f32, (__builtin_acosf(a)))
+UNOP(arccos, f64, (__builtin_acos(a)))
 
-EXTERN_UNOP(arctan, f32);
-EXTERN_UNOP(arctan, f64);
+UNOP(arctan, f32, (__builtin_atanf(a)))
+UNOP(arctan, f64, (__builtin_atan(a)))
 
-EXTERN_UNOP(sinh, f32);
-EXTERN_UNOP(sinh, f64);
+UNOP(sinh, f32, (__builtin_sinhf(a)))
+UNOP(sinh, f64, (__builtin_sinh(a)))
 
-EXTERN_UNOP(cosh, f32);
-EXTERN_UNOP(cosh, f64);
+UNOP(cosh, f32, (__builtin_coshf(a)))
+UNOP(cosh, f64, (__builtin_cosh(a)))
 
-EXTERN_UNOP(tanh, f32);
-EXTERN_UNOP(tanh, f64);
+UNOP(tanh, f32, (__builtin_tanhf(a)))
+UNOP(tanh, f64, (__builtin_tanh(a)))
 
-EXTERN_UNOP(arcsinh, f32);
-EXTERN_UNOP(arcsinh, f64);
+UNOP(arcsinh, f32, (__builtin_asinhf(a)))
+UNOP(arcsinh, f64, (__builtin_asinh(a)))
 
-EXTERN_UNOP(arccosh, f32);
-EXTERN_UNOP(arccosh, f64);
+UNOP(arccosh, f32, (__builtin_acoshf(a)))
+UNOP(arccosh, f64, (__builtin_acosh(a)))
 
-EXTERN_UNOP(arctanh, f32);
-EXTERN_UNOP(arctanh, f64);
+UNOP(arctanh, f32, (__builtin_atanhf(a)))
+UNOP(arctanh, f64, (__builtin_atanh(a)))
 
-EXTERN_UNOP(exp, f32);
-EXTERN_UNOP(exp, f64);
+UNOP(exp, f32, (__builtin_expf(a)))
+UNOP(exp, f64, (__builtin_exp(a)))
 
-EXTERN_UNOP(log, f32);
-EXTERN_UNOP(log, f64);
+UNOP(log, f32, (__builtin_logf(a)))
+UNOP(log, f64, (__builtin_log(a)))
 
-EXTERN_UNOP(cbrt, f32);
-EXTERN_UNOP(cbrt, f64);
+UNOP(cbrt, f32, (__builtin_cbrtf(a)))
+UNOP(cbrt, f64, (__builtin_cbrt(a)))
 
-EXTERN_UNOP(ceil, f32);
-EXTERN_UNOP(ceil, f64);
+UNOP(ceil, f32, (__builtin_ceilf(a)))
+UNOP(ceil, f64, (__builtin_ceil(a)))
 
-EXTERN_UNOP(floor, f32);
-EXTERN_UNOP(floor, f64);
+UNOP(floor, f32, (__builtin_floorf(a)))
+UNOP(floor, f64, (__builtin_floor(a)))
 
-EXTERN_UNOP(rint, f32);
-EXTERN_UNOP(rint, f64);
+UNOP(rint, f32, (__builtin_rintf(a)))
+UNOP(rint, f64, (__builtin_rint(a)))
 
 MOD_OP(i32)
 MOD_OP(i64)
 MOD_OP(u32)
 MOD_OP(u64)
-EXTERN_BINOP(mod, f32);
-EXTERN_BINOP(mod, f64);
+BINOP(mod, f32, (__builtin_fmodf(a, b)))
+BINOP(mod, f64, (__builtin_fmod(a, b)))
 
 PYMOD_OP(i32)
 PYMOD_OP(i64)
 PYMOD_OP(u32)
 PYMOD_OP(u64)
-EXTERN_BINOP(pymod, f32);
-EXTERN_BINOP(pymod, f64);
+BINOP(pymod, f32, (__builtin_fmodf(__builtin_fmodf(a, b) + b, b)))
+BINOP(pymod, f64, (__builtin_fmod(__builtin_fmod(a, b) + b, b)))
 
-EXTERN_BINOP(pow, f32);
-EXTERN_BINOP(pow, f64);
+BINOP(pow, f32, (__builtin_powf(a, b)))
+BINOP(pow, f64, (__builtin_pow(a, b)))
 
 NULL_EQ_OP(bool)
 NULL_EQ_OP(i8)
@@ -479,9 +454,9 @@ NULL_EQ_OP(u32)
 NULL_EQ_OP(u64)
 NULL_EQ_OP(f32)
 NULL_EQ_OP(f64)
-NULL_EQ_OP(decimal32)
-NULL_EQ_OP(decimal64)
-NULL_EQ_OP(decimal128)
+NULL_EQ_OP(dec32)
+NULL_EQ_OP(dec64)
+NULL_EQ_OP(dec128)
 NULL_EQ_OP(timestamp_D)
 NULL_EQ_OP(timestamp_s)
 NULL_EQ_OP(timestamp_ms)
@@ -504,7 +479,7 @@ __device__ __forceinline__ void null_logical_and(optional<bool>* out,
 {
   if (a.has_value() && b.has_value()) {
     *out = (*a && *b);
-  } else if (!a.has_value() && !b.has_value()) {
+  } else if (a.has_null() && b.has_null()) {
     *out = nullopt;
   } else {
     bool valid = a.has_value() ? *a : *b;
@@ -527,7 +502,7 @@ __device__ __forceinline__ void null_logical_or(optional<bool>* out,
 {
   if (a.has_value() && b.has_value()) {
     *out = (*a || *b);
-  } else if (!a.has_value() && !b.has_value()) {
+  } else if (a.has_null() && b.has_null()) {
     *out = nullopt;
   } else {
     bool valid = a.has_value() ? *a : *b;
@@ -539,6 +514,5 @@ __device__ __forceinline__ void null_logical_or(optional<bool>* out,
   }
 }
 
-}  // namespace operators
-}  // namespace lto
-}  // namespace CUDF_LTO_EXPORT cudf
+}  // namespace functions
+}  // namespace JCUDF_EXPORT jcudf

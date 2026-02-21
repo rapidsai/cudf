@@ -1,7 +1,0 @@
-/*
- * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION.
- * SPDX-License-Identifier: Apache-2.0
- */
-#pragma once
-#include <cudf/jit/lto/types.cuh>
-#include <cudf/jit/lto/operators.cuh>

@@ -23,7 +23,6 @@
 #include <jit/row_ir.hpp>
 #include <jit/span.cuh>
 #include <jit/util.hpp>
-#include <jit_preprocessed_files/jit/lto/library.cuh.jit.hpp>
 
 namespace cudf {
 namespace transformation {
