@@ -49,31 +49,38 @@ std::reference_wrapper<ast::expression const> stats_columns_collector::visit(
 {
   using cudf::ast::ast_operator;
 
-  // Extract the column reference, literal, operator, and operator arity from the operands
-  auto [col_ref, literal, op, operator_arity] = extract_operands_and_operator(expr);
+  auto const input_op       = expr.get_operator();
+  auto const operator_arity = cudf::ast::detail::ast_operator_arity(input_op);
 
-  // Expression can be evaluated if it's in form of `col op lit` or `lit op col`
-  auto const can_evaluate_expression =
-    col_ref != nullptr and (operator_arity == 1 or literal != nullptr);
+  if (operator_arity == 1) {
+    auto const [kind, col_ref] = extract_unary_operand(expr);
 
-  if (can_evaluate_expression) {
+    if (kind == operand_kind::COLUMN_REF) {
+      col_ref->accept(*this);
+      if (input_op == ast_operator::IS_NULL) {
+        _columns_mask[col_ref->get_column_index()] = true;
+        _has_is_null_operator                      = true;
+      }
+    } else {
+      std::ignore = visit_operands(expr.get_operands());
+    }
+    return expr;
+  }
+
+  // Binary operation
+  auto const [op, lhs_kind, rhs_kind, col_ref, literal] = extract_binary_operands(expr);
+
+  if (lhs_kind == operand_kind::COLUMN_REF and rhs_kind == operand_kind::LITERAL) {
     col_ref->accept(*this);
-
-    // Return early if this is a unary operation
-    if (operator_arity == 1 and op != ast_operator::IS_NULL) { return expr; }
-
-    // Mark the column as needed for supported binary comparison operations
     if (op == ast_operator::EQUAL or op == ast_operator::NOT_EQUAL or op == ast_operator::LESS or
         op == ast_operator::LESS_EQUAL or op == ast_operator::GREATER or
-        op == ast_operator::GREATER_EQUAL or op == ast_operator::IS_NULL) {
+        op == ast_operator::GREATER_EQUAL) {
       _columns_mask[col_ref->get_column_index()] = true;
-      if (op == ast_operator::IS_NULL) { _has_is_null_operator = true; }
     }
   } else {
     // Visit the operands and ignore any output as we only want to build the column mask
     std::ignore = visit_operands(expr.get_operands());
   }
-
   return expr;
 }
 
@@ -111,39 +118,56 @@ std::reference_wrapper<ast::expression const> stats_expression_converter::visit(
 {
   using cudf::ast::ast_operator;
 
-  // Extract the column reference, literal, operator, and operator arity from the operands
-  auto [col_ref, literal_ptr, op, operator_arity] = extract_operands_and_operator(expr);
+  auto const input_op       = expr.get_operator();
+  auto const operator_arity = cudf::ast::detail::ast_operator_arity(input_op);
 
-  // Expression can be evaluated if it's in form of `col op lit` or `lit op col`
-  auto const can_evaluate_expression =
-    col_ref != nullptr and (operator_arity == 1 or literal_ptr != nullptr);
+  // Unary operation
+  if (operator_arity == 1) {
+    auto const [kind, col_ref] = extract_unary_operand(expr);
 
-  if (can_evaluate_expression) {
-    col_ref->accept(*this);
+    if (kind == operand_kind::COLUMN_REF) {
+      col_ref->accept(*this);
 
-    auto const col_index = col_ref->get_column_index();
+      auto const col_index = col_ref->get_column_index();
 
-    if (operator_arity == 1) {
       // Evaluate IS_NULL unary operator
-      if (op == ast_operator::IS_NULL) {
+      if (input_op == ast_operator::IS_NULL) {
         CUDF_EXPECTS(std::cmp_equal(_stats_cols_per_column, 3),
                      "IS_NULL operator cannot be evaluated without nullability information column");
         auto const& vnull =
           _stats_expr.push(ast::column_reference{col_index * _stats_cols_per_column + 2});
         _stats_expr.push(ast::operation{ast_operator::IDENTITY, vnull});
-        return _stats_expr.back();
       }  // For all other unary operators, push and return the `_always_true` expression
       else {
         _stats_expr.push(ast::operation{ast_operator::IDENTITY, *_always_true});
-        // Propagate the `_always_true` as expression to its unary operator parent
         return *_always_true;
       }
+    } else {
+      // For all other unary operators, visit operand and push expression
+      auto new_operands = visit_operands(expr.get_operands());
+      if (&new_operands.front().get() == _always_true.get()) {
+        // Pass through the _always_true child operand as is
+        _stats_expr.push(ast::operation{ast_operator::IDENTITY, _stats_expr.back()});
+        return *_always_true;
+      }
+      _stats_expr.push(ast::operation{input_op, new_operands.front()});
     }
+    return _stats_expr.back();
+  }
 
+  // Binary operation
+  auto const [op, lhs_kind, rhs_kind, col_ref, literal_ptr] = extract_binary_operands(expr);
+
+  // Push expressions for `col op lit` or `lit op col` forms
+  if (lhs_kind == operand_kind::COLUMN_REF and rhs_kind == operand_kind::LITERAL) {
+    col_ref->accept(*this);
+
+    auto const col_index = col_ref->get_column_index();
     // Push literal into the ast::tree
     auto const& literal = _stats_expr.push(*literal_ptr);
+
     switch (op) {
-      /* transform to stats conditions. op(col, literal)
+      /* transform to stats conditions
       col1 == val --> vmin <= val && vmax >= val
       col1 != val --> !(vmin == val && vmax == val)
       col1 >  val --> vmax > val
@@ -189,23 +213,12 @@ std::reference_wrapper<ast::expression const> stats_expression_converter::visit(
       }
       default: CUDF_FAIL("Unsupported binary operation in Statistics AST");
     };
-
-  } else if (op == ast_operator::LOGICAL_AND or op == ast_operator::LOGICAL_OR or
-             op == ast_operator::NOT) {
-    // Logical combiners: recursively visit operands and reconstruct
+  }  // Visit operands and push expression for `expr op expr` form
+  else if (lhs_kind == operand_kind::EXPRESSION and rhs_kind == operand_kind::EXPRESSION) {
     auto new_operands = visit_operands(expr.get_operands());
-    if (operator_arity == 2) {
-      _stats_expr.push(ast::operation{op, new_operands.front(), new_operands.back()});
-    } else if (operator_arity == 1) {
-      if (&new_operands.front().get() == _always_true.get()) {
-        _stats_expr.push(ast::operation{ast_operator::IDENTITY, _stats_expr.back()});
-        return *_always_true;
-      } else {
-        _stats_expr.push(ast::operation{op, new_operands.front()});
-      }
-    }
-  } else {
-    // Unsupported leaf operation (e.g. col op col, expr op col): treat as always_true
+    _stats_expr.push(ast::operation{op, new_operands.front(), new_operands.back()});
+  }  // Push _always_true for `col op col`, `expr op col`, `expr op lit` forms
+  else {
     _stats_expr.push(ast::operation{ast_operator::IDENTITY, *_always_true});
     return *_always_true;
   }

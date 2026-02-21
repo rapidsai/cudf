@@ -24,6 +24,46 @@
 namespace cudf::io::parquet::detail {
 
 /**
+ * @brief Classification of an AST expression operand
+ */
+enum class operand_kind : uint8_t { COLUMN_REF = 0, LITERAL = 1, EXPRESSION = 2 };
+
+/**
+ * @brief Extracted unary operand from an AST operation
+ */
+struct unary_operand {
+  operand_kind operand_type;
+  ast::column_reference const* col_ref;  ///< Non-null only when the operand is COLUMN_REF
+};
+
+/**
+ * @brief Extracted binary operator and operands from an AST operation
+ *
+ * For `lit op col` expressions, the input non-commutative operator is inverted and the
+ * operands are normalized to `col op lit` form.
+ */
+struct binary_operands {
+  ast::ast_operator op;  ///< Input or inverted operator to normalize the `lit op col` expressions
+  operand_kind lhs_type;
+  operand_kind rhs_type;
+  ast::column_reference const* col_ref;  ///< Non-null when exactly one operand is COLUMN_REF
+  ast::literal const* literal;           ///< Non-null when exactly one operand is LITERAL
+};
+
+/**
+ * @brief Extracts the unary operand from a unary operation
+ */
+[[nodiscard]] unary_operand extract_unary_operand(ast::operation const& expr);
+
+/**
+ * @brief Decomposes a binary operation into classified parts.
+ *
+ * When the expression is of the form `lit op col`, the operator is inverted and the result
+ * is normalized so that col_ref and literal are set as if the form were `col op lit`.
+ */
+[[nodiscard]] binary_operands extract_binary_operands(ast::operation const& expr);
+
+/**
  * @brief Collects column names from the expression ignoring the `skip_names`
  */
 class names_from_expression : public ast::detail::expression_transformer {
@@ -209,16 +249,5 @@ class equality_literals_collector : public ast::detail::expression_transformer {
   std::reference_wrapper<ast::expression const> ast_expr,
   host_span<std::vector<size_type> const> input_row_group_indices,
   rmm::cuda_stream_view stream);
-
-/**
- * @brief Extracts column reference, literal, operator, and operator arity from an operation
- * expression
- *
- * @param expr Input operation expression
- *
- * @return Tuple of column reference pointer, literal pointer, operator, and operator arity
- */
-[[nodiscard]] std::tuple<ast::column_reference const*, ast::literal const*, ast::ast_operator, int>
-extract_operands_and_operator(ast::operation const& expr);
 
 }  // namespace cudf::io::parquet::detail

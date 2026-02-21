@@ -1592,7 +1592,7 @@ TEST_F(ParquetReaderTest, FilterColumnToColumnExpression)
   auto col_ref_a = cudf::ast::column_reference(0);
   auto col_ref_b = cudf::ast::column_reference(1);
 
-  // Test 1: col_a < col_b (col op col - no literal involved)
+  // Filter: col_a < col_b
   {
     auto filter = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref_a, col_ref_b);
 
@@ -1605,7 +1605,7 @@ TEST_F(ParquetReaderTest, FilterColumnToColumnExpression)
     CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *expected);
   }
 
-  // Test 2: (col_a < 150) or (col_a < col_b) - mix of col-op-lit and col-op-col
+  // Filter: (col_a < 150) or (col_a < col_b)
   {
     auto lit_150 = cudf::numeric_scalar<int32_t>(150);
     auto literal = cudf::ast::literal(lit_150);
@@ -1622,8 +1622,7 @@ TEST_F(ParquetReaderTest, FilterColumnToColumnExpression)
     CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *expected);
   }
 
-  // Test 3: (col_a < 10) or ((col_a + col_b < col_c) and (col_b < 1))
-  // This exercises expression-op-col and col-op-lit in a complex tree
+  // Filter: (col_a < 10) or ((col_a + col_b < col_c) and (col_b < 1))
   {
     auto lit_10     = cudf::numeric_scalar<int32_t>(10);
     auto literal_10 = cudf::ast::literal(lit_10);

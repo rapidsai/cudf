@@ -18,6 +18,86 @@
 
 namespace cudf::io::parquet::detail {
 
+namespace {
+
+/**
+ * @brief Inverts the non-commutative comparison operator
+ *
+ * @param op Operator to invert
+ * @return Inverted operator
+ */
+ast::ast_operator invert_non_commutative_operator(ast::ast_operator op)
+{
+  switch (op) {
+    case ast::ast_operator::LESS: return ast::ast_operator::GREATER;
+    case ast::ast_operator::GREATER: return ast::ast_operator::LESS;
+    case ast::ast_operator::LESS_EQUAL: return ast::ast_operator::GREATER_EQUAL;
+    case ast::ast_operator::GREATER_EQUAL: return ast::ast_operator::LESS_EQUAL;
+    default: return op;
+  }
+}
+
+/**
+ * @brief Classifies an AST operand as column reference, literal, or expression
+ *
+ * @param operand AST operand to classify
+ * @return Classified operand kind
+ */
+[[nodiscard]] operand_kind classify_operand(ast::expression const& operand)
+{
+  if (dynamic_cast<ast::column_reference const*>(&operand) != nullptr) {
+    return operand_kind::COLUMN_REF;
+  } else if (dynamic_cast<ast::literal const*>(&operand) != nullptr) {
+    return operand_kind::LITERAL;
+  } else {
+    return operand_kind::EXPRESSION;
+  }
+}
+
+}  // namespace
+
+unary_operand extract_unary_operand(ast::operation const& expr)
+{
+  auto const& operands = expr.get_operands();
+  auto const& operand  = operands[0].get();
+  CUDF_EXPECTS(operands.size() == 1, "Expected single operand for a unary operation");
+
+  return {.operand_type = classify_operand(operand),
+          .col_ref      = dynamic_cast<ast::column_reference const*>(&operand)};
+}
+
+binary_operands extract_binary_operands(ast::operation const& expr)
+{
+  auto const operands = expr.get_operands();
+  auto const op       = expr.get_operator();
+  CUDF_EXPECTS(operands.size() == 2, "Expected two operands for a binary operation");
+
+  auto const& lhs = operands[0].get();
+  auto const& rhs = operands[1].get();
+
+  auto const lhs_kind = classify_operand(lhs);
+  auto const rhs_kind = classify_operand(rhs);
+
+  // Normalize `lit op col` to `col op lit` by inverting the operator
+  if (lhs_kind == operand_kind::LITERAL and rhs_kind == operand_kind::COLUMN_REF) {
+    return {.op       = invert_non_commutative_operator(op),
+            .lhs_type = rhs_kind,
+            .rhs_type = lhs_kind,
+            .col_ref  = dynamic_cast<ast::column_reference const*>(&rhs),
+            .literal  = dynamic_cast<ast::literal const*>(&lhs)};
+  } else {
+    return {.op       = op,
+            .lhs_type = lhs_kind,
+            .rhs_type = rhs_kind,
+            .col_ref  = (lhs_kind == operand_kind::COLUMN_REF)
+                          ? dynamic_cast<ast::column_reference const*>(&lhs)
+                          : dynamic_cast<ast::column_reference const*>(&rhs),
+            .literal  = (rhs_kind == operand_kind::LITERAL)
+                          ? dynamic_cast<ast::literal const*>(&rhs)
+                          : dynamic_cast<ast::literal const*>(&lhs)};
+  }
+}
+
 named_to_reference_converter::named_to_reference_converter(
   std::optional<std::reference_wrapper<ast::expression const>> expr, table_metadata const& metadata)
 {
@@ -260,57 +340,6 @@ std::optional<std::vector<std::vector<size_type>>> collect_filtered_row_group_in
   }
 
   return {filtered_row_group_indices};
-}
-
-namespace {
-
-/**
- * @brief Inverts the non-commutative binary operator
- *
- * @param op Operator to invert
- * @return Inverted operator
- */
-ast::ast_operator invert_non_commutative_operators(ast::ast_operator op)
-{
-  switch (op) {
-    case ast::ast_operator::LESS: return ast::ast_operator::GREATER;
-    case ast::ast_operator::GREATER: return ast::ast_operator::LESS;
-    case ast::ast_operator::LESS_EQUAL: return ast::ast_operator::GREATER_EQUAL;
-    case ast::ast_operator::GREATER_EQUAL: return ast::ast_operator::LESS_EQUAL;
-    default: return op;
-  }
-}
-
-}  // namespace
-
-std::tuple<ast::column_reference const*, ast::literal const*, ast::ast_operator, int>
-extract_operands_and_operator(ast::operation const& expr)
-{
-  auto const operands       = expr.get_operands();
-  auto const input_operator = expr.get_operator();
-  auto const operator_arity = cudf::ast::detail::ast_operator_arity(input_operator);
-  CUDF_EXPECTS(operator_arity == 1 or operator_arity == 2,
-               "Only unary and binary operations are supported");
-
-  auto* col_ref = dynamic_cast<ast::column_reference const*>(&operands[0].get());
-
-  // Unary operation
-  if (operator_arity == 1) { return {col_ref, nullptr, input_operator, operator_arity}; }
-
-  // Binary operation
-  if (col_ref != nullptr) {
-    auto* literal = dynamic_cast<ast::literal const*>(&operands[1].get());
-    if (literal == nullptr) { return {nullptr, nullptr, input_operator, operator_arity}; }
-    return {col_ref, literal, input_operator, operator_arity};
-  } else {
-    auto const inverted_op = invert_non_commutative_operators(input_operator);
-    auto* col_ref          = dynamic_cast<ast::column_reference const*>(&operands[1].get());
-    auto* literal          = dynamic_cast<ast::literal const*>(&operands[0].get());
-    if (col_ref == nullptr or literal == nullptr) {
-      return {nullptr, nullptr, inverted_op, operator_arity};
-    }
-    return {col_ref, literal, inverted_op, operator_arity};
-  }
 }
 
 }  // namespace cudf::io::parquet::detail

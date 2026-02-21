@@ -200,57 +200,65 @@ class bloom_filter_expression_converter : public equality_literals_collector {
   {
     using cudf::ast::ast_operator;
 
-    // Extract the column reference, literal, operator, and operator arity from the operands
-    auto const [col_ref, literal, op, operator_arity] = extract_operands_and_operator(expr);
+    auto const input_op       = expr.get_operator();
+    auto const operator_arity = cudf::ast::detail::ast_operator_arity(input_op);
 
-    auto const can_evaluate_expression =
-      col_ref != nullptr and (operator_arity == 1 or literal != nullptr);
+    // Unary operation
+    if (operator_arity == 1) {
+      auto const [kind, col_ref] = extract_unary_operand(expr);
 
-    if (can_evaluate_expression) {
-      col_ref->accept(*this);
-
-      // Propagate the `_always_true` as expression to its unary operator parent
-      if (operator_arity == 1) {
+      // For `op col` form, push the `_always_true` expression
+      if (kind == operand_kind::COLUMN_REF) {
+        col_ref->accept(*this);
         _bloom_filter_expr.push(ast::operation{ast_operator::IDENTITY, *_always_true});
         return *_always_true;
-      }
-
-      if (op == ast_operator::EQUAL) {
-        // Search the literal in this input column's equality literals list and add to the offset.
-        auto const col_idx            = col_ref->get_column_index();
-        auto const& equality_literals = _equality_literals[col_idx];
-        auto col_literal_offset       = _col_literals_offsets[col_idx];
-        auto const literal_iter =
-          std::find(equality_literals.cbegin(), equality_literals.cend(), literal);
-        CUDF_EXPECTS(literal_iter != equality_literals.end(), "Could not find the literal ptr");
-        col_literal_offset += std::distance(equality_literals.cbegin(), literal_iter);
-
-        // Evaluate boolean is_true(value) expression as IDENTITY(value)
-        auto const& value = _bloom_filter_expr.push(ast::column_reference{col_literal_offset});
-        _bloom_filter_expr.push(ast::operation{ast_operator::IDENTITY, value});
-      }
-      // For all other expressions, push the `_always_true` expression
+      }  // For `op expr` form, visit operands and push expression
       else {
-        _bloom_filter_expr.push(ast::operation{ast_operator::IDENTITY, *_always_true});
-      }
-    } else if (op == ast_operator::LOGICAL_AND or op == ast_operator::LOGICAL_OR or
-               op == ast_operator::NOT) {
-      auto new_operands = visit_operands(expr.get_operands());
-      if (operator_arity == 2) {
-        _bloom_filter_expr.push(ast::operation{op, new_operands.front(), new_operands.back()});
-      } else if (operator_arity == 1) {
+        auto new_operands = visit_operands(expr.get_operands());
         if (&new_operands.front().get() == _always_true.get()) {
+          // Pass through the _always_true child operand as is
           _bloom_filter_expr.push(
             ast::operation{ast_operator::IDENTITY, _bloom_filter_expr.back()});
           return *_always_true;
         } else {
-          _bloom_filter_expr.push(ast::operation{op, new_operands.front()});
+          _bloom_filter_expr.push(ast::operation{input_op, new_operands.front()});
         }
       }
-    } else {
+    }
+
+    // Binary operation
+    auto const [op, lhs_kind, rhs_kind, col_ref, literal] = extract_binary_operands(expr);
+
+    // Push expressions for `col op lit` or `lit op col` forms
+    if (lhs_kind == operand_kind::COLUMN_REF and rhs_kind == operand_kind::LITERAL) {
+      col_ref->accept(*this);
+
+      if (op == ast_operator::EQUAL) {
+        auto const col_idx            = col_ref->get_column_index();
+        auto const& equality_literals = _equality_literals[col_idx];
+        auto col_literal_offset       = _col_literals_offsets[col_idx];
+
+        auto const literal_iter =
+          std::find(equality_literals.cbegin(), equality_literals.cend(), literal);
+        CUDF_EXPECTS(literal_iter != equality_literals.end(),
+                     "Bloom filter expression converter encountered an unexpected literal");
+
+        col_literal_offset += std::distance(equality_literals.cbegin(), literal_iter);
+        auto const& value = _bloom_filter_expr.push(ast::column_reference{col_literal_offset});
+        _bloom_filter_expr.push(ast::operation{ast_operator::IDENTITY, value});
+      } else {
+        _bloom_filter_expr.push(ast::operation{ast_operator::IDENTITY, *_always_true});
+      }
+    }  // Visit operands and push expression for `expr op expr` form
+    else if (lhs_kind == operand_kind::EXPRESSION and rhs_kind == operand_kind::EXPRESSION) {
+      auto new_operands = visit_operands(expr.get_operands());
+      _bloom_filter_expr.push(ast::operation{op, new_operands.front(), new_operands.back()});
+    }  // Push _always_true for `col op col`, `expr op col`, `expr op lit` forms
+    else {
       _bloom_filter_expr.push(ast::operation{ast_operator::IDENTITY, *_always_true});
       return *_always_true;
     }
+
     return _bloom_filter_expr.back();
   }
 
@@ -589,29 +597,33 @@ std::reference_wrapper<ast::expression const> equality_literals_collector::visit
 {
   using cudf::ast::ast_operator;
 
-  // Extract the column reference, literal, operator, and operator arity from the operands
-  auto const [col_ref, literal, op, operator_arity] = extract_operands_and_operator(expr);
+  auto const input_op       = expr.get_operator();
+  auto const operator_arity = cudf::ast::detail::ast_operator_arity(input_op);
 
-  // Expression can be evaluated if it's in form of `col op lit` or `lit op col`
-  auto const can_evaluate_expression =
-    col_ref != nullptr and (operator_arity == 1 or literal != nullptr);
+  if (operator_arity == 1) {
+    auto const [kind, col_ref] = extract_unary_operand(expr);
 
-  if (can_evaluate_expression) {
+    if (kind == operand_kind::COLUMN_REF) {
+      col_ref->accept(*this);
+    } else {
+      std::ignore = visit_operands(expr.get_operands());
+    }
+    return expr;
+  }
+
+  // Binary operation
+  auto const [op, lhs_kind, rhs_kind, col_ref, literal] = extract_binary_operands(expr);
+
+  if (lhs_kind == operand_kind::COLUMN_REF and rhs_kind == operand_kind::LITERAL) {
     col_ref->accept(*this);
-
-    // Return early if this is a unary operation
-    if (operator_arity == 1) { return expr; }
-
-    // Push to the corresponding column's literals list iff equality predicate is seen
     if (op == ast_operator::EQUAL) {
       auto const col_idx = col_ref->get_column_index();
       _literals[col_idx].emplace_back(const_cast<ast::literal*>(literal));
     }
   } else {
-    // Just visit the operands and ignore any output
+    // For all other forms, visit operands to collect any nested literals
     std::ignore = visit_operands(expr.get_operands());
   }
-
   return expr;
 }
 
