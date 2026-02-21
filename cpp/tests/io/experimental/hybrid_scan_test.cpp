@@ -718,10 +718,10 @@ TEST_F(HybridScanTest, MaterializeMixedPayloadColumns)
     {col0, col1, *col2, *col3, col4, *col5, *col6, *col7, *col8, *col9});
 }
 
-TEST_F(HybridScanTest, FilterWithColumnToColumnExpression)
+TEST_F(HybridScanTest, ExtendedFilterExpressions)
 {
   srand(0xbeef);
-  using T = uint32_t;
+  using T = uint64_t;
 
   auto constexpr num_concat            = 1;
   auto [written_table, parquet_buffer] = create_parquet_with_stats<T, num_concat>();
@@ -732,57 +732,71 @@ TEST_F(HybridScanTest, FilterWithColumnToColumnExpression)
     cudf::get_current_device_resource_ref(), bloom_filter_alignment);
 
   // Create datasource from buffer
-  auto const datasource = cudf::io::datasource::create(cudf::host_span<std::byte const>(
+  auto const datasource     = cudf::io::datasource::create(cudf::host_span<std::byte const>(
     reinterpret_cast<std::byte const*>(parquet_buffer.data()), parquet_buffer.size()));
-  auto& datasource_ref  = *datasource;
+  auto const datasource_ref = std::ref(*datasource);
 
   auto col_ref0 = cudf::ast::column_name_reference("col0");
   auto col_ref1 = cudf::ast::column_name_reference("col1");
 
-  // Test 1: (col0 < 100) and (col0 < col1) - mixed col-op-lit and col-op-col
+  // Filter: (col0 < 100) and (col0 < col1)
   {
     auto literal_value = cudf::numeric_scalar<T>(100);
     auto literal       = cudf::ast::literal(literal_value);
-    auto lhs           = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref0, literal);
-    auto rhs           = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref0, col_ref1);
-    auto filter        = cudf::ast::operation(cudf::ast::ast_operator::LOGICAL_AND, lhs, rhs);
+    auto col0_lt_100   = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref0, literal);
+    auto col0_lt_col1  = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref0, col_ref1);
+    auto filter =
+      cudf::ast::operation(cudf::ast::ast_operator::LOGICAL_AND, col0_lt_100, col0_lt_col1);
+
+    auto constexpr num_filter_columns = 2;
+
+    auto [filter_table, payload_table] =
+      hybrid_scan(datasource_ref, filter, num_filter_columns, std::nullopt, stream, mr, aligned_mr);
 
     auto read_single_step =
       hybrid_scan_single_step(datasource_ref, filter, std::nullopt, stream, mr);
-    auto read_chunked_single_step =
-      chunked_hybrid_scan_single_step(datasource_ref, filter, std::nullopt, stream, mr);
 
-    // Read expected using standard parquet reader
-    auto const src_info =
-      cudf::io::source_info(cudf::host_span<char>(parquet_buffer.data(), parquet_buffer.size()));
-    cudf::io::parquet_reader_options const read_opts =
-      cudf::io::parquet_reader_options::builder(src_info).filter(filter);
-    auto const expected = cudf::io::read_parquet(read_opts, stream, mr).tbl;
+    auto predicate = cudf::compute_column(written_table->view(), filter);
+    auto expected  = cudf::apply_boolean_mask(written_table->view(), *predicate);
 
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected->view(), read_single_step->view());
-    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected->view(), read_chunked_single_step->view());
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected->select({0, 1}), filter_table->view());
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected->select({2}), payload_table->view());
   }
 
-  // Test 2: (col0 < 50) or (col0 < col1) - OR with col-op-col
+  // Filter: (col0 < 10) or ((col0 + col1 > 0) and (col1 < 1))
   {
-    auto literal_value = cudf::numeric_scalar<T>(50);
-    auto literal       = cudf::ast::literal(literal_value);
-    auto lhs           = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref0, literal);
-    auto rhs           = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref0, col_ref1);
-    auto filter        = cudf::ast::operation(cudf::ast::ast_operator::LOGICAL_OR, lhs, rhs);
+    auto literal_10_value = cudf::numeric_scalar<T>(10);
+    auto literal_10       = cudf::ast::literal(literal_10_value);
+    auto literal_1_value  = cudf::numeric_scalar<T>(1);
+    auto literal_1        = cudf::ast::literal(literal_1_value);
+    auto literal_0_value  = cudf::numeric_scalar<T>(0);
+    auto literal_0        = cudf::ast::literal(literal_0_value);
+
+    auto col0_lt_10     = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref0, literal_10);
+    auto col0_plus_col1 = cudf::ast::operation(cudf::ast::ast_operator::ADD, col_ref0, col_ref1);
+    auto col0_plus_col1_gt_0 =
+      cudf::ast::operation(cudf::ast::ast_operator::GREATER, col0_plus_col1, literal_0);
+    auto col1_lt_1 = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref1, literal_1);
+    auto col0_plus_col1_gt_0_expr =
+      cudf::ast::operation(cudf::ast::ast_operator::LOGICAL_AND, col0_plus_col1_gt_0, col1_lt_1);
+
+    auto filter = cudf::ast::operation(
+      cudf::ast::ast_operator::LOGICAL_OR, col0_lt_10, col0_plus_col1_gt_0_expr);
+
+    auto constexpr num_filter_columns = 2;
+
+    auto [filter_table, payload_table] =
+      hybrid_scan(datasource_ref, filter, num_filter_columns, std::nullopt, stream, mr, aligned_mr);
 
     auto read_single_step =
       hybrid_scan_single_step(datasource_ref, filter, std::nullopt, stream, mr);
-    auto read_chunked_single_step =
-      chunked_hybrid_scan_single_step(datasource_ref, filter, std::nullopt, stream, mr);
 
-    auto const src_info =
-      cudf::io::source_info(cudf::host_span<char>(parquet_buffer.data(), parquet_buffer.size()));
-    cudf::io::parquet_reader_options const read_opts =
-      cudf::io::parquet_reader_options::builder(src_info).filter(filter);
-    auto const expected = cudf::io::read_parquet(read_opts, stream, mr).tbl;
+    auto predicate = cudf::compute_column(written_table->view(), filter);
+    auto expected  = cudf::apply_boolean_mask(written_table->view(), *predicate);
 
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected->view(), read_single_step->view());
-    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected->view(), read_chunked_single_step->view());
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected->select({0, 1}), filter_table->view());
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected->select({2}), payload_table->view());
   }
 }

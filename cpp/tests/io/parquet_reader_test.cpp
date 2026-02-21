@@ -1563,29 +1563,23 @@ TEST_F(ParquetReaderTest, FilterReferenceExpression)
   CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *expected);
 }
 
-TEST_F(ParquetReaderTest, FilterColumnToColumnExpression)
+TEST_F(ParquetReaderTest, ExtendedFilterExpressions)
 {
   // Create a parquet file with 3 int32 columns for col-to-col comparison testing
-  auto constexpr num_rows = 20000;
-  auto col_a              = cudf::test::fixed_width_column_wrapper<int32_t>(
-    thrust::make_counting_iterator(0), thrust::make_counting_iterator(num_rows));
+  auto constexpr num_rows = 20'000;
+  auto col_a = cudf::test::fixed_width_column_wrapper<int32_t>(thrust::counting_iterator(0),
+                                                               thrust::counting_iterator(num_rows));
   auto col_b = cudf::test::fixed_width_column_wrapper<int32_t>(
-    thrust::make_counting_iterator(num_rows), thrust::make_counting_iterator(2 * num_rows));
+    thrust::counting_iterator(num_rows), thrust::counting_iterator(2 * num_rows));
   auto col_c = cudf::test::fixed_width_column_wrapper<int32_t>(
-    thrust::make_counting_iterator(2 * num_rows), thrust::make_counting_iterator(3 * num_rows));
+    thrust::counting_iterator(2 * num_rows), thrust::counting_iterator(3 * num_rows));
 
   auto const written_table = cudf::table_view{{col_a, col_b, col_c}};
 
-  cudf::io::table_input_metadata metadata(written_table);
-  metadata.column_metadata[0].set_name("col_a");
-  metadata.column_metadata[1].set_name("col_b");
-  metadata.column_metadata[2].set_name("col_c");
-
-  auto const filepath = temp_env->get_temp_filepath("FilterColumnToColumn.parquet");
+  auto const filepath = temp_env->get_temp_filepath("ExtendedFilterExpressions.parquet");
   cudf::io::parquet_writer_options const out_opts =
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, written_table)
-      .metadata(std::move(metadata))
-      .row_group_size_rows(8000)
+      .row_group_size_rows(5'000)
       .stats_level(cudf::io::statistics_freq::STATISTICS_ROWGROUP);
   cudf::io::write_parquet(out_opts);
 
@@ -1607,11 +1601,11 @@ TEST_F(ParquetReaderTest, FilterColumnToColumnExpression)
 
   // Filter: (col_a < 150) or (col_a < col_b)
   {
-    auto lit_150 = cudf::numeric_scalar<int32_t>(150);
-    auto literal = cudf::ast::literal(lit_150);
-    auto lhs     = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref_a, literal);
-    auto rhs     = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref_a, col_ref_b);
-    auto filter  = cudf::ast::operation(cudf::ast::ast_operator::LOGICAL_OR, lhs, rhs);
+    auto literal_150_value = cudf::numeric_scalar<int32_t>(150);
+    auto literal_150       = cudf::ast::literal(literal_150_value);
+    auto lhs    = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref_a, literal_150);
+    auto rhs    = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref_a, col_ref_b);
+    auto filter = cudf::ast::operation(cudf::ast::ast_operator::LOGICAL_OR, lhs, rhs);
 
     auto predicate = cudf::compute_column(written_table, filter);
     auto expected  = cudf::apply_boolean_mask(written_table, *predicate);
@@ -1624,19 +1618,20 @@ TEST_F(ParquetReaderTest, FilterColumnToColumnExpression)
 
   // Filter: (col_a < 10) or ((col_a + col_b < col_c) and (col_b < 1))
   {
-    auto lit_10     = cudf::numeric_scalar<int32_t>(10);
-    auto literal_10 = cudf::ast::literal(lit_10);
-    auto lit_1      = cudf::numeric_scalar<int32_t>(1);
-    auto literal_1  = cudf::ast::literal(lit_1);
+    auto literal_10_value = cudf::numeric_scalar<int32_t>(10);
+    auto literal_10       = cudf::ast::literal(literal_10_value);
+    auto literal_1_value  = cudf::numeric_scalar<int32_t>(1);
+    auto literal_1        = cudf::ast::literal(literal_1_value);
 
     auto col_ref_c = cudf::ast::column_reference(2);
 
-    auto a_lt_10  = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref_a, literal_10);
-    auto a_add_b  = cudf::ast::operation(cudf::ast::ast_operator::ADD, col_ref_a, col_ref_b);
-    auto sum_lt_c = cudf::ast::operation(cudf::ast::ast_operator::LESS, a_add_b, col_ref_c);
-    auto b_lt_1   = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref_b, literal_1);
-    auto and_expr = cudf::ast::operation(cudf::ast::ast_operator::LOGICAL_AND, sum_lt_c, b_lt_1);
-    auto filter   = cudf::ast::operation(cudf::ast::ast_operator::LOGICAL_OR, a_lt_10, and_expr);
+    auto a_lt_10       = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref_a, literal_10);
+    auto a_plus_b      = cudf::ast::operation(cudf::ast::ast_operator::ADD, col_ref_a, col_ref_b);
+    auto a_plus_b_lt_c = cudf::ast::operation(cudf::ast::ast_operator::LESS, a_plus_b, col_ref_c);
+    auto b_lt_1        = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref_b, literal_1);
+    auto and_expr =
+      cudf::ast::operation(cudf::ast::ast_operator::LOGICAL_AND, a_plus_b_lt_c, b_lt_1);
+    auto filter = cudf::ast::operation(cudf::ast::ast_operator::LOGICAL_OR, a_lt_10, and_expr);
 
     auto predicate = cudf::compute_column(written_table, filter);
     auto expected  = cudf::apply_boolean_mask(written_table, *predicate);
