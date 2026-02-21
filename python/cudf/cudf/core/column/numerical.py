@@ -18,11 +18,12 @@ from cudf.api.types import is_scalar
 from cudf.core._internals import binaryop
 from cudf.core.column.column import (
     ColumnBase,
+    PylibcudfFunction,
+    as_callers_variant,
     as_column,
     column_empty,
 )
 from cudf.core.column.numerical_base import NumericalBaseColumn
-from cudf.core.column.utils import access_columns
 from cudf.core.mixins import BinaryOperand
 from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
@@ -145,10 +146,9 @@ class NumericalColumn(NumericalBaseColumn):
         """
         if self.dtype.kind != "f":
             return as_column(False, length=len(self))
-        with self.access(mode="read", scope="internal"):
-            return ColumnBase.create(
-                plc.unary.is_nan(self.plc_column), np.dtype(np.bool_)
-            )
+        return PylibcudfFunction(
+            plc.unary.is_nan, as_callers_variant
+        ).execute_with_args(self)
 
     def notnan(self) -> ColumnBase:
         """Identify non-NaN values in a Column.
@@ -158,10 +158,10 @@ class NumericalColumn(NumericalBaseColumn):
         """
         if self.dtype.kind != "f":
             return as_column(True, length=len(self))
-        with self.access(mode="read", scope="internal"):
-            return ColumnBase.create(
-                plc.unary.is_not_nan(self.plc_column), np.dtype(np.bool_)
-            )
+        return PylibcudfFunction(
+            plc.unary.is_not_nan,
+            as_callers_variant,
+        ).execute_with_args(self)
 
     def isnull(self) -> ColumnBase:
         """Identify missing values in a Column.
@@ -956,25 +956,21 @@ class NumericalColumn(NumericalBaseColumn):
         bin_col = as_column(bins, dtype=bins.dtype)
         if bin_col.nullable:
             raise ValueError("`bins` cannot contain null entries.")
-
-        with access_columns(bin_col, self, mode="read", scope="internal") as (
-            bin_col,
-            self,
-        ):
-            return cast(
-                Self,
-                ColumnBase.create(
-                    getattr(
-                        plc.search, "lower_bound" if right else "upper_bound"
-                    )(
-                        plc.Table([bin_col.plc_column]),
-                        plc.Table([self.plc_column]),
-                        [plc.types.Order.ASCENDING],
-                        [plc.types.NullOrder.BEFORE],
-                    ),
-                    get_dtype_of_same_kind(self.dtype, np.dtype(np.int32)),
+        func = plc.search.lower_bound if right else plc.search.upper_bound
+        return cast(
+            "Self",
+            PylibcudfFunction(
+                func,
+                lambda *_dtypes: get_dtype_of_same_kind(
+                    self.dtype, np.dtype(np.int32)
                 ),
-            )
+            ).execute_with_args(
+                plc.Table([bin_col.plc_column]),
+                plc.Table([self.plc_column]),
+                [plc.types.Order.ASCENDING],
+                [plc.types.NullOrder.BEFORE],
+            ),
+        )
 
 
 def _normalize_find_and_replace_input(
