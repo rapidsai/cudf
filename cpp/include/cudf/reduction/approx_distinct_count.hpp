@@ -38,6 +38,28 @@ class approx_distinct_count;
 }
 
 /**
+ * @brief Strong type wrapper for approximate distinct count standard error parameter
+ *
+ * Use this type to construct an `approx_distinct_count` with a desired error tolerance
+ * instead of specifying precision directly.
+ *
+ * Example:
+ * @code{.cpp}
+ *   auto sketch = cudf::approx_distinct_count(table, cudf::approx_standard_error{0.01});  // ~1%
+ * error
+ * @endcode
+ */
+struct approx_standard_error {
+  double value;  ///< The standard error value (must be positive)
+
+  /**
+   * @brief Constructs an approx_standard_error with the given value
+   * @param v The standard error value (must be positive, e.g., 0.01 for ~1% error)
+   */
+  explicit constexpr approx_standard_error(double v) : value{v} {}
+};
+
+/**
  * @brief Object-oriented HyperLogLog sketch for approximate distinct counting.
  *
  * This class provides an object-oriented interface to HyperLogLog sketches, allowing
@@ -85,7 +107,7 @@ class approx_distinct_count {
     cudf::detail::approx_distinct_count<cudf::hashing::detail::XXHash_64>;  ///< Implementation type
 
   /**
-   * @brief Constructs an approximate distinct count sketch from a table
+   * @brief Constructs an approximate distinct count sketch from a table with specified precision
    *
    * @param input Table whose rows will be added to the sketch
    * @param precision The precision parameter for HyperLogLog (4-18). Higher precision gives
@@ -101,28 +123,49 @@ class approx_distinct_count {
                         rmm::cuda_stream_view stream = cudf::get_default_stream());
 
   /**
-   * @brief Constructs an approximate distinct count sketch from serialized sketch bytes
+   * @brief Constructs an approximate distinct count sketch from a table with specified standard
+   * error
    *
-   * This constructor enables distributed distinct counting by allowing sketches to be
-   * constructed from serialized data. The sketch data is copied into the newly created
-   * object, which then owns its own independent storage.
+   * This constructor allows specifying the desired standard error (error tolerance) directly,
+   * which is more intuitive than specifying the precision parameter. The precision is calculated
+   * as: `ceil(2 * log2(1.04 / standard_error))`.
    *
-   * @warning The precision parameter must match the precision used to create the original
-   * sketch. The size of the sketch span must be exactly 2^precision bytes. The null and
-   * NaN handling policies must match those used when creating the original sketch.
-   * Providing incompatible parameters will produce incorrect results or errors.
+   * Since precision must be an integer, the actual standard error may be better (smaller)
+   * than requested. Use the `standard_error()` getter to retrieve the actual value.
    *
-   * @param sketch_span The serialized sketch bytes to reconstruct from
-   * @param precision The precision parameter that was used to create the sketch (4-18)
+   * @param input Table whose rows will be added to the sketch
+   * @param error The desired standard error (e.g., `approx_standard_error{0.01}` for ~1%)
    * @param null_handling `INCLUDE` or `EXCLUDE` rows with nulls (default: `EXCLUDE`)
    * @param nan_handling `NAN_IS_VALID` or `NAN_IS_NULL` (default: `NAN_IS_NULL`)
    * @param stream CUDA stream used for device memory operations and kernel launches
+   *
+   * @throws std::invalid_argument if standard_error value is not positive
    */
-  approx_distinct_count(cuda::std::span<cuda::std::byte> sketch_span,
-                        std::int32_t precision,
+  approx_distinct_count(table_view const& input,
+                        approx_standard_error error,
                         null_policy null_handling    = null_policy::EXCLUDE,
                         nan_policy nan_handling      = nan_policy::NAN_IS_NULL,
                         rmm::cuda_stream_view stream = cudf::get_default_stream());
+
+  /**
+   * @brief Constructs a non-owning sketch that operates on user-allocated storage
+   *
+   * This constructor creates a sketch that operates directly on the provided storage
+   * without copying. This enables zero-copy operations on pre-existing buffers, such as
+   * sketch data stored in a column or received from another process.
+   *
+   * @warning The caller must ensure the storage remains valid for the lifetime of this
+   * object. The sketch will read from and write to the provided storage directly.
+   *
+   * @param sketch_span The sketch bytes to operate on (must remain valid)
+   * @param precision The precision parameter for the sketch (4-18)
+   * @param null_handling `INCLUDE` or `EXCLUDE` rows with nulls (default: `EXCLUDE`)
+   * @param nan_handling `NAN_IS_VALID` or `NAN_IS_NULL` (default: `NAN_IS_NULL`)
+   */
+  approx_distinct_count(cuda::std::span<cuda::std::byte> sketch_span,
+                        std::int32_t precision,
+                        null_policy null_handling = null_policy::EXCLUDE,
+                        nan_policy nan_handling   = nan_policy::NAN_IS_NULL);
 
   ~approx_distinct_count();
 
@@ -172,7 +215,7 @@ class approx_distinct_count {
    * @param sketch_span The sketch bytes to merge into this sketch
    * @param stream CUDA stream used for device memory operations and kernel launches
    */
-  void merge(cuda::std::span<cuda::std::byte> sketch_span,
+  void merge(cuda::std::span<cuda::std::byte const> sketch_span,
              rmm::cuda_stream_view stream = cudf::get_default_stream());
 
   /**
@@ -226,6 +269,31 @@ class approx_distinct_count {
    * @return The precision value set at construction
    */
   [[nodiscard]] std::int32_t precision() const noexcept;
+
+  /**
+   * @brief Gets the standard error (error tolerance) for this sketch
+   *
+   * The standard error is calculated from precision as: `1.04 / sqrt(2^precision)`.
+   * This represents the expected relative error of the cardinality estimate.
+   *
+   * @return The actual standard error based on the sketch's precision
+   */
+  [[nodiscard]] double standard_error() const noexcept;
+
+  /**
+   * @brief Gets the number of bytes required for sketch storage at a given precision
+   *
+   * @param precision The HLL precision parameter (4-18)
+   * @return The number of bytes required for the sketch
+   */
+  [[nodiscard]] static std::size_t sketch_bytes(std::int32_t precision);
+
+  /**
+   * @brief Gets the alignment required for sketch storage
+   *
+   * @return The required alignment in bytes
+   */
+  [[nodiscard]] static std::size_t sketch_alignment();
 
  private:
   std::unique_ptr<impl_type> _impl;
