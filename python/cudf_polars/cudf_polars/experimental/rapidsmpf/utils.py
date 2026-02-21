@@ -19,6 +19,7 @@ try:
 except ImportError:
     pass
 
+from rapidsmpf.memory.memory_reservation import opaque_memory_usage
 from rapidsmpf.memory.packed_data import PackedData
 from rapidsmpf.streaming.coll.allgather import AllGather
 from rapidsmpf.streaming.core.message import Message
@@ -27,11 +28,15 @@ from rapidsmpf.streaming.cudf.channel_metadata import (
     HashScheme,
     Partitioning,
 )
-from rapidsmpf.streaming.cudf.table_chunk import TableChunk
+from rapidsmpf.streaming.cudf.table_chunk import (
+    TableChunk,
+    make_table_chunks_available_or_wait,
+)
 
 import pylibcudf as plc
 
 from cudf_polars.containers import DataFrame
+from cudf_polars.experimental.utils import _concat
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator, Callable, Mapping
@@ -214,6 +219,317 @@ async def recv_metadata(ch: Channel[TableChunk], ctx: Context) -> ChannelMetadat
     msg = await ch.recv_metadata(ctx)
     assert msg is not None, f"Expected ChannelMetadata message, got {msg}."
     return ChannelMetadata.from_message(msg)
+
+
+def _evaluate_chunk_sync(
+    chunk: TableChunk,
+    ir: IR,
+    ir_context: Any,
+) -> TableChunk:
+    """
+    Apply an IR node's do_evaluate to a table chunk (synchronous).
+
+    This is an internal helper. Use `evaluate_chunk` for the async version
+    with memory reservation.
+
+    Parameters
+    ----------
+    chunk
+        The input table chunk (must be available).
+    ir
+        The IR node to evaluate.
+    ir_context
+        The IR execution context.
+
+    Returns
+    -------
+    The resulting table chunk after evaluation.
+    """
+    input_schema = ir.children[0].schema
+    names = list(input_schema.keys())
+    dtypes = list(input_schema.values())
+    df = ir.do_evaluate(
+        *ir._non_child_args,
+        DataFrame.from_table(chunk.table_view(), names, dtypes, chunk.stream),
+        context=ir_context,
+    )
+    return TableChunk.from_pylibcudf_table(df.table, chunk.stream, exclusive_view=True)
+
+
+async def evaluate_chunk(
+    context: Context,
+    chunk: TableChunk,
+    *irs: IR,
+    ir_context: Any,
+) -> TableChunk:
+    """
+    Make chunk available, reserve memory, and evaluate.
+
+    Parameters
+    ----------
+    context
+        The rapidsmpf streaming context.
+    chunk
+        The input table chunk.
+    irs
+        The IR node(s) to evaluate. Evaluations are chained
+        in order within a single memory reservation.
+    ir_context
+        The IR execution context.
+
+    Returns
+    -------
+    The resulting table chunk after evaluation.
+    """
+    assert len(irs) > 0, "Expected at least one IR node"
+    chunk, extra = await make_table_chunks_available_or_wait(
+        context,
+        chunk,
+        reserve_extra=chunk.data_alloc_size(),
+        net_memory_delta=0,
+    )
+    with opaque_memory_usage(extra):
+        for single_ir in irs:
+            chunk = await asyncio.to_thread(
+                _evaluate_chunk_sync, chunk, single_ir, ir_context
+            )
+        return chunk
+
+
+async def concat_batch(
+    batch: list[TableChunk],
+    context: Context,
+    schema: Mapping[str, DataType],
+    ir_context: Any,
+) -> TableChunk:
+    """
+    Concatenate a list of table chunks.
+
+    Parameters
+    ----------
+    batch
+        The list of table chunks to concatenate.
+    context
+        The rapidsmpf context.
+    schema
+        The schema of the table chunks.
+    ir_context
+        The IR execution context.
+
+    Returns
+    -------
+    The table chunk after concatenation.
+    """
+    batch, extra = await make_table_chunks_available_or_wait(
+        context,
+        batch,
+        reserve_extra=sum(c.data_alloc_size() for c in batch),
+        net_memory_delta=0,
+    )
+    with opaque_memory_usage(extra):
+        df = await asyncio.to_thread(
+            _concat,
+            *[
+                DataFrame.from_table(
+                    c.table_view(),
+                    list(schema.keys()),
+                    list(schema.values()),
+                    c.stream,
+                )
+                for c in batch
+            ],
+            context=ir_context,
+        )
+        del batch
+    return TableChunk.from_pylibcudf_table(df.table, df.stream, exclusive_view=True)
+
+
+async def evaluate_batch(
+    batch: list[TableChunk],
+    context: Context,
+    *irs: IR,
+    ir_context: Any,
+) -> TableChunk:
+    """
+    Concatenate a list of table chunks and evaluate the result.
+
+    Parameters
+    ----------
+    batch
+        The list of table chunks to evaluate.
+    context
+        The rapidsmpf context.
+    irs
+        The IR node(s) to evaluate. Evaluations are chained
+        in order within a single memory reservation.
+    ir_context
+        The IR execution context.
+
+    Returns
+    -------
+    The table chunk after evaluation.
+    """
+    assert len(irs) > 0, "Expected at least one IR node"
+    first_ir = irs[0]
+    input_schema = first_ir.children[0].schema
+    chunk = await concat_batch(batch, context, input_schema, ir_context)
+    del batch
+    return await evaluate_chunk(context, chunk, *irs, ir_context=ir_context)
+
+
+async def chunkwise_evaluate(
+    context: Context,
+    ir: IR,
+    ir_context: Any,
+    ch_out: Channel[TableChunk],
+    ch_in: Channel[TableChunk],
+    metadata: ChannelMetadata,
+    *,
+    handle_empty_input: bool = False,
+    tracer: ActorTracer | None = None,
+) -> None:
+    """
+    Apply IR evaluation chunk-by-chunk, preserving partitioning.
+
+    Use when data is already partitioned on the relevant keys and each
+    chunk can be processed independently.
+
+    Parameters
+    ----------
+    context
+        The rapidsmpf streaming context.
+    ir
+        The IR node to evaluate.
+    ir_context
+        The IR execution context.
+    ch_out
+        The output channel.
+    ch_in
+        The input channel.
+    metadata
+        The channel metadata to forward (partitioning preserved).
+    handle_empty_input
+        If True and no chunks are received, create an empty chunk and evaluate
+        it. Use for operations like aggregations that always produce output.
+    tracer
+        Optional tracer for runtime metrics.
+    """
+    await send_metadata(ch_out, context, metadata)
+    if tracer is not None and metadata.duplicated:
+        tracer.set_duplicated()
+
+    seq_num = 0
+    received_any = False
+    while (msg := await ch_in.recv(context)) is not None:
+        received_any = True
+        result = await evaluate_chunk(
+            context, TableChunk.from_message(msg), ir, ir_context=ir_context
+        )
+        del msg
+        if tracer is not None:
+            tracer.add_chunk(table=result.table_view())
+        await ch_out.send(context, Message(seq_num, result))
+        seq_num += 1
+
+    if handle_empty_input and not received_any:
+        chunk = empty_table_chunk(ir.children[0], context, ir_context.get_cuda_stream())
+        result = await evaluate_chunk(context, chunk, ir, ir_context=ir_context)
+        del chunk
+        if tracer is not None:
+            tracer.add_chunk(table=result.table_view())
+        await ch_out.send(context, Message(seq_num, result))
+
+    await ch_out.drain(context)
+
+
+def get_partitioning_moduli(
+    metadata: ChannelMetadata,
+    key_indices: tuple[int, ...],
+    nranks: int,
+    *,
+    allow_subset: bool = False,
+) -> tuple[int, int | None]:
+    """
+    Get the moduli if data is hash partitioned on the given keys.
+
+    Parameters
+    ----------
+    metadata
+        The channel metadata.
+    key_indices
+        The column indices of the keys.
+    nranks
+        The number of ranks.
+    allow_subset
+        If True, treat partitioning as matching when the partitioning
+        key indices are a prefix of key_indices (e.g. partitioning on
+        (0,) matches key_indices (0, 1)). If False, the partitioning
+        keys must match key_indices exactly.
+
+    Returns
+    -------
+    inter_rank_modulus
+        Inter-rank modulus.
+        Return value of 0 means the data is not partitioned between ranks.
+    local_modulus
+        Local modulus.
+        Return value of 0 means the data is not partitioned within a rank.
+        Return value of None means that the local partitioning inherits the
+        inter-rank partitioning.
+    """
+    # NOTE: This function will need to be updated when we support
+    # order-based partitioning. For ordered data, we can return a
+    # "boundaries" TableChunk instead of a single integer (modulus).
+
+    trivial_inter_rank_modulus = 1 if nranks == 1 else 0
+    if metadata.partitioning is None:
+        return trivial_inter_rank_modulus, 0
+
+    inter_rank = metadata.partitioning.inter_rank
+    strict_inter_rank_modulus = (
+        inter_rank.modulus
+        if (
+            isinstance(inter_rank, HashScheme)
+            and (
+                inter_rank.column_indices
+                == key_indices[: len(inter_rank.column_indices)]
+                if allow_subset
+                else inter_rank.column_indices == key_indices
+            )
+        )
+        else 0
+    )
+    inter_rank_modulus = strict_inter_rank_modulus or trivial_inter_rank_modulus
+    if not inter_rank_modulus:
+        # Local partitioning is meaningless without inter-rank partitioning
+        return 0, 0
+
+    local = metadata.partitioning.local
+    local_modulus = (
+        local.modulus
+        if (
+            isinstance(local, HashScheme)
+            and (
+                local.column_indices == key_indices[: len(local.column_indices)]
+                if allow_subset
+                else local.column_indices == key_indices
+            )
+        )
+        else 0
+    )
+    if local_modulus != metadata.local_count:
+        local_modulus = 0  # Local count is out of sync - Better to be safe
+
+    local_modulus = local_modulus or (None if local == "inherit" else 0)
+
+    if local_modulus and not strict_inter_rank_modulus and trivial_inter_rank_modulus:
+        # Trivial inter-rank partitioning with local partitioning
+        # is the same as inter-rank partitioning with local="inherit".
+        # Use the latter representation for consistency.
+        inter_rank_modulus = local_modulus
+        local_modulus = None
+
+    return inter_rank_modulus, local_modulus
 
 
 class ChannelManager:
