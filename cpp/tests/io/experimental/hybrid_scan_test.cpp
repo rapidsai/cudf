@@ -734,7 +734,7 @@ TEST_F(HybridScanTest, FilterWithColumnToColumnExpression)
   // Create datasource from buffer
   auto const datasource = cudf::io::datasource::create(cudf::host_span<std::byte const>(
     reinterpret_cast<std::byte const*>(parquet_buffer.data()), parquet_buffer.size()));
-  auto& datasource_ref = *datasource;
+  auto& datasource_ref  = *datasource;
 
   auto col_ref0 = cudf::ast::column_name_reference("col0");
   auto col_ref1 = cudf::ast::column_name_reference("col1");
@@ -745,7 +745,7 @@ TEST_F(HybridScanTest, FilterWithColumnToColumnExpression)
     auto literal       = cudf::ast::literal(literal_value);
     auto lhs           = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref0, literal);
     auto rhs           = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref0, col_ref1);
-    auto filter = cudf::ast::operation(cudf::ast::ast_operator::LOGICAL_AND, lhs, rhs);
+    auto filter        = cudf::ast::operation(cudf::ast::ast_operator::LOGICAL_AND, lhs, rhs);
 
     auto read_single_step =
       hybrid_scan_single_step(datasource_ref, filter, std::nullopt, stream, mr);
@@ -753,8 +753,8 @@ TEST_F(HybridScanTest, FilterWithColumnToColumnExpression)
       chunked_hybrid_scan_single_step(datasource_ref, filter, std::nullopt, stream, mr);
 
     // Read expected using standard parquet reader
-    auto const src_info = cudf::io::source_info(
-      cudf::host_span<char>(parquet_buffer.data(), parquet_buffer.size()));
+    auto const src_info =
+      cudf::io::source_info(cudf::host_span<char>(parquet_buffer.data(), parquet_buffer.size()));
     cudf::io::parquet_reader_options const read_opts =
       cudf::io::parquet_reader_options::builder(src_info).filter(filter);
     auto const expected = cudf::io::read_parquet(read_opts, stream, mr).tbl;
@@ -776,8 +776,8 @@ TEST_F(HybridScanTest, FilterWithColumnToColumnExpression)
     auto read_chunked_single_step =
       chunked_hybrid_scan_single_step(datasource_ref, filter, std::nullopt, stream, mr);
 
-    auto const src_info = cudf::io::source_info(
-      cudf::host_span<char>(parquet_buffer.data(), parquet_buffer.size()));
+    auto const src_info =
+      cudf::io::source_info(cudf::host_span<char>(parquet_buffer.data(), parquet_buffer.size()));
     cudf::io::parquet_reader_options const read_opts =
       cudf::io::parquet_reader_options::builder(src_info).filter(filter);
     auto const expected = cudf::io::read_parquet(read_opts, stream, mr).tbl;
