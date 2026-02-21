@@ -146,7 +146,9 @@ class NumericalColumn(NumericalBaseColumn):
         """
         if self.dtype.kind != "f":
             return as_column(False, length=len(self))
-        return PylibcudfFunction(plc.unary.is_nan, NpBoolDtypePolicy)(self)
+        return PylibcudfFunction(
+            plc.unary.is_nan, NpBoolDtypePolicy
+        ).execute_with_args(self)
 
     def notnan(self) -> ColumnBase:
         """Identify non-NaN values in a Column.
@@ -159,7 +161,7 @@ class NumericalColumn(NumericalBaseColumn):
         return PylibcudfFunction(
             plc.unary.is_not_nan,
             NpBoolDtypePolicy,
-        )(self)
+        ).execute_with_args(self)
 
     def isnull(self) -> ColumnBase:
         """Identify missing values in a Column.
@@ -1012,7 +1014,7 @@ class NumericalColumn(NumericalBaseColumn):
                 lambda *_dtypes: get_dtype_of_same_kind(
                     self.dtype, np.dtype(np.int32)
                 ),
-            )(
+            ).execute_with_args(
                 plc.Table([bin_col.plc_column]),
                 plc.Table([self.plc_column]),
                 [plc.types.Order.ASCENDING],

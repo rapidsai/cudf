@@ -143,7 +143,7 @@ class PylibcudfFunction:
             return accessed.plc_column
         return value
 
-    def __call__(self, *args: Any, **kwargs: Any) -> Any:
+    def execute_with_args(self, *args: Any, **kwargs: Any) -> Any:
         dtypes: list["DtypeObj"] = []
         with ExitStack() as stack:
             plc_args = tuple(self._process(arg, stack, dtypes) for arg in args)
@@ -1772,7 +1772,9 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
     def is_valid(self) -> ColumnBase:
         """Identify non-null values"""
-        return PylibcudfFunction(plc.unary.is_valid, NpBoolDtypePolicy)(self)
+        return PylibcudfFunction(
+            plc.unary.is_valid, NpBoolDtypePolicy
+        ).execute_with_args(self)
 
     def isnan(self) -> ColumnBase:
         """Identify NaN values in a Column."""
@@ -1786,13 +1788,17 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         """Identify missing values in a Column."""
         if not self.has_nulls(include_nan=False):
             return as_column(False, length=len(self))
-        return PylibcudfFunction(plc.unary.is_null, NpBoolDtypePolicy)(self)
+        return PylibcudfFunction(
+            plc.unary.is_null, NpBoolDtypePolicy
+        ).execute_with_args(self)
 
     def notnull(self) -> ColumnBase:
         """Identify non-missing values in a Column."""
         if not self.has_nulls(include_nan=False):
             return as_column(True, length=len(self))
-        return PylibcudfFunction(plc.unary.is_valid, NpBoolDtypePolicy)(self)
+        return PylibcudfFunction(
+            plc.unary.is_valid, NpBoolDtypePolicy
+        ).execute_with_args(self)
 
     @cached_property
     def nan_count(self) -> int:
