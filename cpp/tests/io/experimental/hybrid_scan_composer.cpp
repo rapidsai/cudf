@@ -165,7 +165,6 @@ std::unique_ptr<cudf::table> concatenate_tables(std::vector<std::unique_ptr<cudf
 std::tuple<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::table>> hybrid_scan(
   cudf::io::datasource& datasource,
   cudf::ast::operation const& filter_expression,
-  cudf::size_type num_filter_columns,
   std::optional<std::vector<std::string>> const& payload_column_names,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr,
@@ -233,7 +232,6 @@ std::tuple<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::table>> hybrid_sc
 std::tuple<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::table>> chunked_hybrid_scan(
   cudf::io::datasource& datasource,
   cudf::ast::operation const& filter_expression,
-  cudf::size_type num_filter_columns,
   std::optional<std::vector<std::string>> const& payload_column_names,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr,
