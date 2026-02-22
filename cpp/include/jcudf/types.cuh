@@ -4,17 +4,7 @@
  */
 #pragma once
 
-#if (defined(__GNUC__) && !defined(__MINGW32__) && !defined(__MINGW64__))
-
-#define JCUDF_EXPORT __attribute__((visibility("default")))
-
-#else
-
-#define JCUDF_EXPORT
-
-#endif
-
-namespace JCUDF_EXPORT jcudf {
+namespace jcudf {
 
 using i8   = signed char;
 using i16  = signed short;
@@ -42,11 +32,18 @@ using size_type = i32;
 
 using bitmask_t = u32;
 
-__device__ constexpr bool bit_is_set(bitmask_t const* bitmask, usize bit_index)
+template <typename T>
+__device__ constexpr bool bit_is_set(T const* bitmask, usize bit_index)
 {
-  constexpr auto bits_per_word = sizeof(bitmask_t) * 8;
-  return bitmask[bit_index / bits_per_word] & (bitmask_t{1} << (bit_index % bits_per_word));
+  constexpr auto bits_per_word = sizeof(T) * 8;
+  return bitmask[bit_index / bits_per_word] & (T{1} << (bit_index % bits_per_word));
 }
+
+template <typename T, typename U>
+inline constexpr bool Same = false;
+
+template <typename T>
+inline constexpr bool Same<T, T> = true;
 
 enum class type_id : i32 {
   EMPTY                  = 0,
@@ -155,224 +152,135 @@ struct scaled_t {};
 
 inline constexpr scaled_t scaled;
 
-struct dec32 {
-  i32 _value = 0;
+template <typename R>
+struct dec {
+  using Rep = R;
+
+  R _value = 0;
 
   i32 _scale = 0;
 
-  __device__ constexpr dec32(scaled_t, i32 value, i32 scale) : _value{value}, _scale{scale} {}
+  __device__ constexpr dec(scaled_t, R value, i32 scale) : _value{value}, _scale{scale} {}
 
-  constexpr dec32() = default;
+  constexpr dec() = default;
 
-  __device__ constexpr i32 value() const { return _value; }
+  __device__ constexpr R value() const { return _value; }
 
   __device__ constexpr i32 scale() const { return _scale; }
 };
 
-struct dec64 {
-  i64 _value = 0;
+using dec32  = dec<i32>;
+using dec64  = dec<i64>;
+using dec128 = dec<i128>;
 
-  i32 _scale = 0;
+template <typename R>
+__device__ constexpr auto rescale(dec<R> a, i32 scale)
+{
+  return dec<R>{scaled, dec_rescale(a._value, a._scale, scale), scale};
+}
 
-  __device__ constexpr dec64(scaled_t, i64 value, i32 scale) : _value{value}, _scale{scale} {}
+template <typename R>
+__device__ constexpr auto operator+(dec<R> a, dec<R> b)
+{
+  auto scale = min(a._scale, b._scale);
+  auto r     = rescale(a, scale)._value + rescale(b, scale)._value;
+  return dec<R>{scaled, r, scale};
+}
 
-  constexpr dec64() = default;
+template <typename R>
+__device__ constexpr auto operator-(dec<R> a, dec<R> b)
+{
+  auto scale = min(a._scale, b._scale);
+  auto r     = rescale(a, scale)._value - rescale(b, scale)._value;
+  return dec<R>{scaled, r, scale};
+}
 
-  __device__ constexpr i64 value() const { return _value; }
+template <typename R>
+__device__ constexpr auto operator*(dec<R> a, dec<R> b)
+{
+  return dec<R>{scaled, a._value * b._value, a._scale + b._scale};
+}
 
-  __device__ constexpr i32 scale() const { return _scale; }
+template <typename R>
+__device__ constexpr auto operator/(dec<R> a, dec<R> b)
+{
+  return dec<R>{scaled, a._value / b._value, a._scale - b._scale};
+}
+
+template <typename R>
+__device__ constexpr auto operator%(dec<R> a, dec<R> b)
+{
+  auto scale = min(a._scale, b._scale);
+  auto r     = rescale(a, scale)._value % rescale(b, scale)._value;
+  return dec<R>{scaled, r, scale};
+}
+
+template <typename R>
+__device__ constexpr int operator<=>(dec<R> a, dec<R> b)
+{
+  auto scale = min(a._scale, b._scale);
+  return rescale(a, scale)._value - rescale(b, scale)._value;
+}
+
+enum class timestamp_unit : i32 { D, h, m, s, ms, us, ns };
+
+template <typename R, timestamp_unit Unit>
+struct timestamp {
+  using Rep = R;
+
+  R _rep = 0;
+
+  __device__ constexpr R count() const { return _rep; }
 };
 
-struct dec128 {
-  i128 _value = 0;
+using timestamp_D  = timestamp<i32, timestamp_unit::D>;
+using timestamp_h  = timestamp<i32, timestamp_unit::h>;
+using timestamp_m  = timestamp<i32, timestamp_unit::m>;
+using timestamp_s  = timestamp<i64, timestamp_unit::s>;
+using timestamp_ms = timestamp<i64, timestamp_unit::ms>;
+using timestamp_us = timestamp<i64, timestamp_unit::us>;
+using timestamp_ns = timestamp<i64, timestamp_unit::ns>;
 
-  i32 _scale = 0;
+template <typename R, timestamp_unit Unit>
+__device__ constexpr int operator<=>(timestamp<R, Unit> a, timestamp<R, Unit> b)
+{
+  return a._rep - b._rep;
+}
 
-  __device__ constexpr dec128(scaled_t, i128 value, i32 scale) : _value{value}, _scale{scale} {}
+template <typename R, timestamp_unit Unit>
+struct duration {
+  using Rep = R;
 
-  constexpr dec128() = default;
+  R _rep = 0;
 
-  __device__ constexpr i128 value() const { return _value; }
-
-  __device__ constexpr i32 scale() const { return _scale; }
+  __device__ constexpr R count() const { return _rep; }
 };
 
-#define DECIMAL_OPS(T)                                                               \
-  __device__ constexpr T rescale(T a, i32 scale)                                     \
-  {                                                                                  \
-    return T{scaled, dec_rescale(a._value, a._scale, scale), scale};                 \
-  }                                                                                  \
-                                                                                     \
-  __device__ constexpr T operator+(T const& a, T const& b)                           \
-  {                                                                                  \
-    auto scale = min(a._scale, b._scale);                                            \
-    auto r     = rescale(a, scale)._value + rescale(b, scale)._value;                \
-    return T{scaled, r, scale};                                                      \
-  }                                                                                  \
-                                                                                     \
-  __device__ constexpr T operator-(T const& a, T const& b)                           \
-  {                                                                                  \
-    auto scale = min(a._scale, b._scale);                                            \
-    auto r     = rescale(a, scale)._value - rescale(b, scale)._value;                \
-    return T{scaled, r, scale};                                                      \
-  }                                                                                  \
-                                                                                     \
-  __device__ constexpr T operator*(T const& a, T const& b)                           \
-  {                                                                                  \
-    return T{scaled, a._value + b._value, a._scale + b._scale};                      \
-  }                                                                                  \
-                                                                                     \
-  __device__ constexpr T operator/(T const& a, T const& b)                           \
-  {                                                                                  \
-    return T{scaled, a._value / b._value, a._scale - b._scale};                      \
-  }                                                                                  \
-                                                                                     \
-  __device__ constexpr T operator%(T const& a, T const& b)                           \
-  {                                                                                  \
-    auto scale = min(a._scale, b._scale);                                            \
-    auto r     = rescale(a, scale)._value % rescale(b, scale)._value;                \
-    return T{scaled, r, scale};                                                      \
-  }                                                                                  \
-                                                                                     \
-  __device__ constexpr bool operator==(T const& a, T const& b)                       \
-  {                                                                                  \
-    auto scale = min(a._scale, b._scale);                                            \
-    return rescale(a, scale)._value == rescale(b, scale)._value;                     \
-  }                                                                                  \
-                                                                                     \
-  __device__ constexpr bool operator!=(T const& a, T const& b) { return !(a == b); } \
-                                                                                     \
-  __device__ constexpr bool operator>(T const& a, T const& b)                        \
-  {                                                                                  \
-    auto scale = min(a._scale, b._scale);                                            \
-    return rescale(a, scale)._value > rescale(b, scale)._value;                      \
-  }                                                                                  \
-                                                                                     \
-  __device__ constexpr bool operator<(T const& a, T const& b)                        \
-  {                                                                                  \
-    auto scale = min(a._scale, b._scale);                                            \
-    return rescale(a, scale)._value < rescale(b, scale)._value;                      \
-  }                                                                                  \
-                                                                                     \
-  __device__ constexpr bool operator>=(T const& a, T const& b)                       \
-  {                                                                                  \
-    auto scale = min(a._scale, b._scale);                                            \
-    return rescale(a, scale)._value >= rescale(b, scale)._value;                     \
-  }                                                                                  \
-                                                                                     \
-  __device__ constexpr bool operator<=(T const& a, T const& b)                       \
-  {                                                                                  \
-    auto scale = min(a._scale, b._scale);                                            \
-    return rescale(a, scale)._value <= rescale(b, scale)._value;                     \
-  }
+using duration_D  = duration<i32, timestamp_unit::D>;
+using duration_h  = duration<i32, timestamp_unit::h>;
+using duration_m  = duration<i32, timestamp_unit::m>;
+using duration_s  = duration<i64, timestamp_unit::s>;
+using duration_ms = duration<i64, timestamp_unit::ms>;
+using duration_us = duration<i64, timestamp_unit::us>;
+using duration_ns = duration<i64, timestamp_unit::ns>;
 
-DECIMAL_OPS(dec32)
-DECIMAL_OPS(dec64)
-DECIMAL_OPS(dec128)
+template <typename R, timestamp_unit Unit>
+__device__ constexpr duration<R, Unit> operator+(duration<R, Unit> a, duration<R, Unit> b)
+{
+  return duration<R, Unit>{a._rep + b._rep};
+}
 
-struct timestamp_D {
-  i32 _rep = 0;
-};
+template <typename R, timestamp_unit Unit>
+__device__ constexpr duration<R, Unit> operator-(duration<R, Unit> a, duration<R, Unit> b)
+{
+  return duration<R, Unit>{a._rep - b._rep};
+}
 
-struct timestamp_h {
-  i32 _rep = 0;
-};
-
-struct timestamp_m {
-  i32 _rep = 0;
-};
-
-struct timestamp_s {
-  i64 _rep = 0;
-};
-
-struct timestamp_ms {
-  i64 _rep = 0;
-};
-
-struct timestamp_us {
-  i64 _rep = 0;
-};
-
-struct timestamp_ns {
-  i64 _rep = 0;
-};
-
-#define TIMESTAMP_OPS(T)                                                      \
-  __device__ constexpr bool operator==(T a, T b) { return a._rep == b._rep; } \
-  __device__ constexpr bool operator!=(T a, T b) { return a._rep != b._rep; } \
-  __device__ constexpr bool operator>(T a, T b) { return a._rep > b._rep; }   \
-  __device__ constexpr bool operator<(T a, T b) { return a._rep < b._rep; }   \
-  __device__ constexpr bool operator>=(T a, T b) { return a._rep >= b._rep; } \
-  __device__ constexpr bool operator<=(T a, T b) { return a._rep <= b._rep; }
-
-TIMESTAMP_OPS(timestamp_D)
-TIMESTAMP_OPS(timestamp_h)
-TIMESTAMP_OPS(timestamp_m)
-TIMESTAMP_OPS(timestamp_s)
-TIMESTAMP_OPS(timestamp_ms)
-TIMESTAMP_OPS(timestamp_us)
-TIMESTAMP_OPS(timestamp_ns)
-
-struct duration_D {
-  i32 _rep = 0;
-
-  __device__ constexpr auto count() const { return _rep; }
-};
-
-struct duration_h {
-  i32 _rep = 0;
-
-  __device__ constexpr auto count() const { return _rep; }
-};
-
-struct duration_m {
-  i32 _rep = 0;
-
-  __device__ constexpr auto count() const { return _rep; }
-};
-
-struct duration_s {
-  i64 _rep = 0;
-
-  __device__ constexpr auto count() const { return _rep; }
-};
-
-struct duration_ms {
-  i64 _rep = 0;
-
-  __device__ constexpr auto count() const { return _rep; }
-};
-
-struct duration_us {
-  i64 _rep = 0;
-
-  __device__ constexpr auto count() const { return _rep; }
-};
-
-struct duration_ns {
-  i64 _rep = 0;
-
-  __device__ constexpr auto count() const { return _rep; }
-};
-
-#define DURATION_OPS(T)                                                       \
-  __device__ constexpr T operator+(T a, T b) { return T{a._rep + b._rep}; }   \
-  __device__ constexpr T operator-(T a, T b) { return T{a._rep - b._rep}; }   \
-  __device__ constexpr bool operator==(T a, T b) { return a._rep == b._rep; } \
-  __device__ constexpr bool operator!=(T a, T b) { return a._rep != b._rep; } \
-  __device__ constexpr bool operator>(T a, T b) { return a._rep > b._rep; }   \
-  __device__ constexpr bool operator<(T a, T b) { return a._rep < b._rep; }   \
-  __device__ constexpr bool operator>=(T a, T b) { return a._rep >= b._rep; } \
-  __device__ constexpr bool operator<=(T a, T b) { return a._rep <= b._rep; }
-
-DURATION_OPS(duration_D)
-DURATION_OPS(duration_h)
-DURATION_OPS(duration_m)
-DURATION_OPS(duration_s)
-DURATION_OPS(duration_ms)
-DURATION_OPS(duration_us)
-DURATION_OPS(duration_ns)
+template <typename R, timestamp_unit Unit>
+__device__ constexpr int operator<=>(duration<R, Unit> a, duration<R, Unit> b)
+{
+  return a._rep - b._rep;
+}
 
 struct string_view {
   static constexpr size_type const UNKNOWN_STRING_LENGTH{-1};
@@ -416,34 +324,9 @@ struct string_view {
   }
 };
 
-__device__ constexpr bool operator==(string_view const& a, string_view const& b)
+__device__ constexpr int operator<=>(string_view const& a, string_view const& b)
 {
-  return a.compare(b) == 0;
-}
-
-__device__ constexpr bool operator!=(string_view const& a, string_view const& b)
-{
-  return a.compare(b) != 0;
-}
-
-__device__ constexpr bool operator<(string_view const& a, string_view const& b)
-{
-  return a.compare(b) < 0;
-}
-
-__device__ constexpr bool operator>(string_view const& a, string_view const& b)
-{
-  return a.compare(b) > 0;
-}
-
-__device__ constexpr bool operator<=(string_view const& a, string_view const& b)
-{
-  return a.compare(b) <= 0;
-}
-
-__device__ constexpr bool operator>=(string_view const& a, string_view const& b)
-{
-  return a.compare(b) >= 0;
+  return a.compare(b);
 }
 
 struct inplace_t {};
@@ -502,40 +385,6 @@ struct optional {
 template <typename T>
 optional(T) -> optional<T>;
 
-#define INST(T) template struct optional<T>;
-
-INST(bool);
-INST(i8);
-INST(i16);
-INST(i32);
-INST(i64);
-INST(u8);
-INST(u16);
-INST(u32);
-INST(u64);
-INST(f32);
-INST(f64);
-INST(timestamp_D);
-INST(timestamp_h);
-INST(timestamp_m);
-INST(timestamp_s);
-INST(timestamp_ms);
-INST(timestamp_us);
-INST(timestamp_ns);
-INST(duration_D);
-INST(duration_h);
-INST(duration_m);
-INST(duration_s);
-INST(duration_ms);
-INST(duration_us);
-INST(duration_ns);
-INST(dec32);
-INST(dec64);
-INST(dec128);
-INST(string_view);
-
-#undef INST
-
 template <typename T>
 struct span {
   T* _data = nullptr;
@@ -556,44 +405,32 @@ struct span {
 
   __device__ constexpr span<T const> as_const() const { return span<T const>{_data, _size}; }
 
-  __device__ constexpr T& element(usize idx) const { return _data[idx]; }
+  template <typename U = T>
+  __device__ constexpr T& element(usize idx) const
+  {
+    return _data[idx];
+  }
+
+  __device__ constexpr bool nullable() const { return false; }
+
+  __device__ constexpr bool is_valid_nocheck(usize element_index) const { return true; }
+
+  __device__ constexpr bool is_valid(usize element_index) const { return true; }
+
+  __device__ constexpr bool is_null(usize element_index) const { return false; }
+
+  template <typename U = T>
+  __device__ constexpr optional<T> nullable_element(usize idx) const
+  {
+    if (!is_valid(idx)) return nullopt;
+    return element<U>(idx);
+  }
 
   __device__ constexpr void assign(usize idx, T value) const { _data[idx] = value; }
 };
 
-#define INST(T) template struct span<T>;
-
-INST(bool);
-INST(i8);
-INST(i16);
-INST(i32);
-INST(i64);
-INST(u8);
-INST(u16);
-INST(u32);
-INST(u64);
-INST(f32);
-INST(f64);
-INST(timestamp_D);
-INST(timestamp_h);
-INST(timestamp_m);
-INST(timestamp_s);
-INST(timestamp_ms);
-INST(timestamp_us);
-INST(timestamp_ns);
-INST(duration_D);
-INST(duration_h);
-INST(duration_m);
-INST(duration_s);
-INST(duration_ms);
-INST(duration_us);
-INST(duration_ns);
-INST(dec32);
-INST(dec64);
-INST(dec128);
-INST(string_view);
-
-#undef INST
+template <typename T>
+span(T*, usize) -> span<T>;
 
 template <typename T>
 struct optional_span {
@@ -634,48 +471,42 @@ struct optional_span {
 
   __device__ constexpr bool is_null(usize element_index) const { return !is_valid(element_index); }
 
-  __device__ constexpr T& element(usize idx) const { return _data[idx]; }
+  template <typename U = T>
+  __device__ constexpr T& element(usize idx) const
+  {
+    return _data[idx];
+  }
 
-  __device__ constexpr optional<T> nullable_element(usize idx) const;
+  template <typename U = T>
+  __device__ constexpr optional<T> nullable_element(usize idx) const
+  {
+    if (!is_valid(idx)) return nullopt;
+    return element<U>(idx);
+  }
 
-  __device__ constexpr void assign(usize idx, T value) const { _data[idx] = value; }
+  template <typename U = T>
+  __device__ constexpr void assign(usize idx, T value) const
+  {
+    _data[idx] = value;
+  }
 };
 
-#define INST(T) template struct optional_span<T>;
+template <typename T>
+optional_span(T*, usize, bitmask_t const*) -> optional_span<T>;
 
-INST(bool);
-INST(i8);
-INST(i16);
-INST(i32);
-INST(i64);
-INST(u8);
-INST(u16);
-INST(u32);
-INST(u64);
-INST(f32);
-INST(f64);
-INST(timestamp_D);
-INST(timestamp_h);
-INST(timestamp_m);
-INST(timestamp_s);
-INST(timestamp_ms);
-INST(timestamp_us);
-INST(timestamp_ns);
-INST(duration_D);
-INST(duration_h);
-INST(duration_m);
-INST(duration_s);
-INST(duration_ms);
-INST(duration_us);
-INST(duration_ns);
-INST(dec32);
-INST(dec64);
-INST(dec128);
-INST(string_view);
+struct alignas(16) column_view {
+  template <typename T>
+  static constexpr bool HasSpanLayout =
+    Same<T, bool> || Same<T, i8> || Same<T, i16> || Same<T, i32> || Same<T, i64> || Same<T, u8> ||
+    Same<T, u16> || Same<T, u32> || Same<T, u64> || Same<T, f32> || Same<T, f64> ||
+    Same<T, timestamp_D> || Same<T, timestamp_h> || Same<T, timestamp_m> || Same<T, timestamp_s> ||
+    Same<T, timestamp_ms> || Same<T, timestamp_us> || Same<T, timestamp_ns> ||
+    Same<T, duration_D> || Same<T, duration_h> || Same<T, duration_m> || Same<T, duration_s> ||
+    Same<T, duration_ms> || Same<T, duration_us> || Same<T, duration_ns>;
 
-#undef INST
+  template <typename T>
+  static constexpr bool HasDecimalLayout = Same<T, dec32> || Same<T, dec64> || Same<T, dec128>;
 
-struct alignas(16) column_device_view {
   data_type _type = {};
 
   size_type _size = 0;
@@ -686,7 +517,7 @@ struct alignas(16) column_device_view {
 
   size_type _offset = 0;
 
-  column_device_view* _d_children = nullptr;
+  column_view* _d_children = nullptr;
 
   size_type _num_children = 0;
 
@@ -717,7 +548,49 @@ struct alignas(16) column_device_view {
   __device__ constexpr size_type num_child_columns() const { return _num_children; }
 
   template <typename T>
-  __device__ T element(size_type idx) const;
+  __device__ auto& element(size_type idx) const
+    requires(HasSpanLayout<T>)
+  {
+    return static_cast<T const*>(_data)[_offset + idx];
+  }
+
+  template <typename T>
+  __device__ auto element(size_type idx) const
+    requires(HasDecimalLayout<T>)
+  {
+    return T{scaled, static_cast<typename T::Rep const*>(_data)[_offset + idx], _type.scale()};
+  }
+
+  template <typename T>
+  __device__ string_view element(size_type idx) const
+    requires(Same<T, string_view>)
+  {
+    static constexpr i32 OFFSETS_CHILD = 0;
+    auto i                             = _offset + idx;
+    auto* str_data                     = static_cast<char const*>(_data);
+    auto& offsets                      = _d_children[OFFSETS_CHILD];
+    auto* i32_runs                     = static_cast<i32 const*>(offsets._data);
+    auto* i64_runs                     = static_cast<i64 const*>(offsets._data);
+
+    i64 run_begin = 0;
+    i64 run_end   = 0;
+
+    switch (offsets.type().id()) {
+      case type_id::INT32:
+        run_begin = i32_runs[i];
+        run_end   = i32_runs[i + 1];
+        break;
+      case type_id::INT64:
+        run_begin = i64_runs[i];
+        run_end   = i64_runs[i + 1];
+        break;
+      default: __builtin_unreachable();
+    }
+
+    i64 run_size = run_end - run_begin;
+
+    return string_view{str_data + run_begin, static_cast<size_type>(run_size)};
+  }
 
   template <typename T>
   __device__ optional<T> nullable_element(size_type idx) const
@@ -727,140 +600,13 @@ struct alignas(16) column_device_view {
   }
 };
 
-#define SPEC(T)                                                    \
-  template <>                                                      \
-  __device__ T column_device_view::element<T>(size_type idx) const \
-  {                                                                \
-    return static_cast<T const*>(_data)[_offset + idx];            \
-  }
-
-SPEC(bool)
-SPEC(i8)
-SPEC(i16)
-SPEC(i32)
-SPEC(i64)
-SPEC(u8)
-SPEC(u16)
-SPEC(u32)
-SPEC(u64)
-SPEC(f32)
-SPEC(f64)
-SPEC(timestamp_D)
-SPEC(timestamp_h)
-SPEC(timestamp_m)
-SPEC(timestamp_s)
-SPEC(timestamp_ms)
-SPEC(timestamp_us)
-SPEC(timestamp_ns)
-SPEC(duration_D)
-SPEC(duration_h)
-SPEC(duration_m)
-SPEC(duration_s)
-SPEC(duration_ms)
-SPEC(duration_us)
-SPEC(duration_ns)
-
-#undef SPEC
-
-#define SPEC(T, Repr)                                                                \
-  template <>                                                                        \
-  __device__ T column_device_view::element<T>(size_type idx) const                   \
-  {                                                                                  \
-    return T{scaled, static_cast<Repr const*>(_data)[_offset + idx], _type.scale()}; \
-  }
-
-SPEC(dec32, i32)
-SPEC(dec64, i64)
-SPEC(dec128, i128)
-
-#undef SPEC
-
-template <>
-__device__ string_view column_device_view::element<string_view>(size_type idx) const
-{
-  static constexpr i32 OFFSETS_CHILD = 0;
-  auto i                             = _offset + idx;
-  auto* str_data                     = static_cast<char const*>(_data);
-  auto& offsets                      = _d_children[OFFSETS_CHILD];
-  auto* i32_runs                     = static_cast<i32 const*>(offsets._data);
-  auto* i64_runs                     = static_cast<i64 const*>(offsets._data);
-
-  i64 run_begin = 0;
-  i64 run_end   = 0;
-
-  switch (offsets.type().id()) {
-    case type_id::INT32:
-      run_begin = i32_runs[i];
-      run_end   = i32_runs[i + 1];
-      break;
-    case type_id::INT64:
-      run_begin = i64_runs[i];
-      run_end   = i64_runs[i + 1];
-      break;
-    default: __builtin_unreachable();
-  }
-
-  i64 run_size = run_end - run_begin;
-
-  return string_view{str_data + run_begin, static_cast<size_type>(run_size)};
-}
-
-#define INST(T) \
-  template __device__ optional<T> column_device_view::nullable_element<T>(size_type idx) const;
-
-INST(bool)
-INST(i8)
-INST(i16)
-INST(i32)
-INST(i64)
-INST(u8)
-INST(u16)
-INST(u32)
-INST(u64)
-INST(f32)
-INST(f64)
-INST(timestamp_D)
-INST(timestamp_h)
-INST(timestamp_m)
-INST(timestamp_s)
-INST(timestamp_ms)
-INST(timestamp_us)
-INST(timestamp_ns)
-INST(duration_D)
-INST(duration_h)
-INST(duration_m)
-INST(duration_s)
-INST(duration_ms)
-INST(duration_us)
-INST(duration_ns)
-INST(dec32)
-INST(dec64)
-INST(dec128)
-INST(string_view)
-
-#undef INST
-
-/// @brief Type-erased parameters for LTO-JIT-compiled transform operations.
-struct transform_operator_params {
-  /// @brief Pointer to scope data (e.g. column views, scalars, etc.).
-  void* const* scope = nullptr;
-
-  /// @brief Total number of rows to process.
-  size_type num_rows = 0;
-
-  /// @brief Current row index.
-  size_type row_index = 0;
-};
-
 // TODO: scope variables should be aligned to avoid uncoalesced reads/writes
 namespace scope {
 
 using args = void* const*;
 
 template <int ScopeIndex,
-          typename ColumnType /* = column_device_view, mutable_column_device_view, span,
-                                 optional_span ... */
-          ,
+          typename ColumnType /* = column_view, span, optional_span ... */,
           typename T /* = int, float, fixed_point, string_view ... */,
           bool IsScalar,
           bool IsNullable>
@@ -921,4 +667,4 @@ struct user_data {
 };
 
 }  // namespace scope
-}  // namespace JCUDF_EXPORT jcudf
+}  // namespace jcudf

@@ -45,17 +45,17 @@ TEST_F(RTCTest, CompileKernelBasic)
 {
   auto fn = [] {
     char const* udf = R"***(
-    #include "jcudf/functions.cuh"
+    #include "jcudf/types.cuh"
 
     #pragma nv_hdrstop
 
     struct operator_params{
-      void* scope;
+      void* const * scope;
       jcudf::size_type row_index;
     };
 
     struct kernel_params{
-      void* scope;
+      void* const * scope;
       jcudf::size_type num_rows;
     };
 
@@ -63,15 +63,14 @@ TEST_F(RTCTest, CompileKernelBasic)
       using namespace jcudf;
 
       // unpack inputs from scope using the appropriate getters based on the LTO context
-      using s0          = scope::column<0, column_device_view, int, false, false>;
-      using s1          = scope::column<1, column_device_view, int, false, false>;
-      using s2          = scope::column<2, mutable_column_device_view, int, false, false>;
+      using s0          = scope::column<0, column_view, int, false, false>;
+      using s1          = scope::column<1, column_view, int, false, false>;
+      using s2          = scope::column<2, optional_span<int>, int, false, false>;
 
       auto a0 = s0::element(p.scope, p.row_index);
       auto a1 = s1::element(p.scope, p.row_index);
-      int a2;
 
-      functions::add(&a2, &a0, &a1);
+      int a2 = a0 + a1;
 
       s2::assign(p.scope, p.row_index, a2);
     }
@@ -82,23 +81,33 @@ TEST_F(RTCTest, CompileKernelBasic)
       auto stride = static_cast<jcudf::i64>(blockDim.x) * static_cast<jcudf::i64>(gridDim.x);
 
       for(jcudf::i64 i = offset; i < params.num_rows; i += stride){
-        operator_params p{params.scope, i};
+        operator_params p{params.scope, static_cast<jcudf::size_type>(i)};
         transform_operator(p);
       }
     }
     )***";
-    static int i    = 0;
+
+    /*udf = R"***(
+      #include "jcudf/functions.cuh"
+
+    #pragma nv_hdrstop
+
+    extern "C" __global__ void transform_kernel(){
+      // empty kernel for testing purposes
+    }
+
+    )***";*/
+    static int i = 0;
 
     i++;
     auto key = std::format("test_udf_key_{}", i);
 
-    auto lib = cudf::compile_kernel("test_fragment",
-                                    key,
-                                    udf,
-                                    "transform_kernel",
-                                    /*use_cache=*/true,
-                                    /*use_pch=*/true,
-                                    /*log_pch=*/true);
+    auto lib = cudf::compile_cuda_kernel("test_kernel",
+                                         key,
+                                         udf,
+                                         /*use_cache=*/true,
+                                         /*use_pch=*/true,
+                                         /*log_pch=*/true);
 
     auto kernel = lib->get_kernel("transform_kernel");
 

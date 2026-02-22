@@ -160,6 +160,8 @@ struct [[nodiscard]] fragment_t {
     binary_type target_type              = binary_type::LTO_IR;
   };
 
+  static std::vector<uint8_t> compile_raw(compile_params const& params);
+
   [[nodiscard]] static fragment load(load_params const& params);
 
   [[nodiscard]] static fragment compile(compile_params const& params);

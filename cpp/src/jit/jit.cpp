@@ -331,10 +331,10 @@ int32_t get_current_device_physical_model()
   return props.major * 10 + props.minor;
 }
 
-rtc::fragment compile_udf_uncached(char const* name,
-                                   char const* cuda_code,
-                                   bool use_pch,
-                                   bool log_pch)
+rtc::fragment compile_udf_to_lto_ir_uncached(char const* name,
+                                             char const* cuda_code,
+                                             bool use_pch,
+                                             bool log_pch)
 {
   CUDF_FUNC_RANGE();
 
@@ -404,9 +404,95 @@ rtc::fragment compile_udf_uncached(char const* name,
   return frag;
 }
 
-std::tuple<rtc::library, rtc::blob> link_udf_uncached(char const* name,
-                                                      rtc::fragment const& fragment,
-                                                      char const* kernel_symbol)
+std::tuple<rtc::library, rtc::blob> compile_kernel_to_cubin_uncached(char const* name,
+                                                                     char const* cuda_code,
+                                                                     bool use_pch,
+                                                                     bool log_pch)
+{
+  CUDF_FUNC_RANGE();
+
+  auto& bundle = cudf::get_context().jit_bundle();
+  auto begin   = std::chrono::steady_clock::now();
+  auto sm      = get_current_device_physical_model();
+
+  auto include_dirs    = bundle.get_include_directories();
+  auto compile_options = bundle.get_compile_options();
+  auto pch_dir         = cudf::get_context().get_jit_pch_dir();
+
+  std::vector<std::string> options;
+
+  for (auto const& include_dir : include_dirs) {
+    options.emplace_back(std::format("-I{}", include_dir));
+  }
+
+  for (auto const& compile_option : compile_options) {
+    options.emplace_back(compile_option);
+  }
+
+  // TODO: experiment with:
+  // --fdevice-time-trace=jit_comp_trace.json
+  // --time=compile_trace.json
+  // -time
+
+  options.emplace_back(std::format("--gpu-architecture=sm_{}", sm));
+  options.emplace_back("--restrict");
+  options.emplace_back("--minimal");
+  options.emplace_back("--split-compile=0");
+
+
+  auto pch_file = std::format("/home/coder/cudf/jit.pch");
+
+  static int can_use = 0;
+
+  if (use_pch) {
+    // options.emplace_back("--pch");
+    options.emplace_back(std::format("--pch-dir={}", pch_dir));
+    if(can_use){
+    options.emplace_back(std::format("--use-pch={}", pch_file));
+    } else{
+    options.emplace_back(std::format("--create-pch={}", pch_file));
+    }
+    can_use = 1;
+
+    if (log_pch) {
+      options.emplace_back("--pch-verbose=true");
+      options.emplace_back("--pch-messages=true");
+    }
+  }
+
+  std::vector<char const*> options_cstr;
+  for (auto const& option : options) {
+    options_cstr.emplace_back(option.c_str());
+  }
+
+  auto params = rtc::fragment_t::compile_params{.name        = name,
+                                                .source      = cuda_code,
+                                                .headers     = {},
+                                                .options     = options_cstr,
+                                                .target_type = rtc::binary_type::CUBIN};
+
+  auto cubin = rtc::fragment_t::compile_raw(params);
+
+  auto end = std::chrono::steady_clock::now();
+
+  auto duration = end - begin;
+
+  CUDF_LOG_WARN(
+    "Compiled fragment `%s` in %f ms",
+    name,
+    std::chrono::duration_cast<std::chrono::duration<double, std::milli>>(duration).count());
+
+  auto library = rtc::library_t::load(
+    rtc::library_t::load_params{.binary = cubin, .type = rtc::binary_type::CUBIN});
+
+  auto blob = rtc::blob_t::from_vector(std::move(cubin));
+
+  return std::make_tuple(library, std::make_shared<rtc::blob_t>(std::move(blob)));
+}
+
+std::tuple<rtc::library, rtc::blob> link_udf_lto_ir_uncached(char const* name,
+                                                             rtc::fragment const& fragment,
+                                                             char const* kernel_symbol)
 {
   CUDF_FUNC_RANGE();
 
@@ -468,12 +554,12 @@ std::tuple<rtc::library, rtc::blob> link_udf_uncached(char const* name,
   return std::make_tuple(linked_library, blob);
 }
 
-rtc::fragment compile_udf(char const* name,
-                          char const* key,
-                          char const* cuda_udf,
-                          bool use_cache,
-                          bool use_pch,
-                          bool log_pch)
+rtc::fragment compile_udf_to_lto_ir(char const* name,
+                                    char const* key,
+                                    char const* cuda_udf,
+                                    bool use_cache,
+                                    bool use_pch,
+                                    bool log_pch)
 {
   CUDF_FUNC_RANGE();
 
@@ -499,7 +585,7 @@ bundle={})***",
 
   auto cache_key_sha256 = hash_string(cache_key);
 
-  auto compile = [&] { return compile_udf_uncached(name, cuda_udf, use_pch, log_pch); };
+  auto compile = [&] { return compile_udf_to_lto_ir_uncached(name, cuda_udf, use_pch, log_pch); };
 
   if (!use_cache) { return compile(); }
 
@@ -511,11 +597,11 @@ bundle={})***",
   return fut.get();
 }
 
-rtc::library link_udf(char const* name,
-                      char const* key,
-                      rtc::fragment const& fragment,
-                      char const* kernel_symbol,
-                      bool use_cache)
+rtc::library link_lto_ir_udf(char const* name,
+                             char const* key,
+                             rtc::fragment const& fragment,
+                             char const* kernel_symbol,
+                             bool use_cache)
 {
   CUDF_FUNC_RANGE();
 
@@ -543,7 +629,7 @@ bundle={})***",
 
   auto cache_key_sha256 = hash_string(cache_key);
 
-  auto link = [&] { return link_udf_uncached(name, fragment, kernel_symbol); };
+  auto link = [&] { return link_udf_lto_ir_uncached(name, fragment, kernel_symbol); };
 
   if (!use_cache) {
     auto [lib, blob] = link();
@@ -556,49 +642,107 @@ bundle={})***",
   return fut.get();
 }
 
-rtc::library compile_cuda_library(char const* name,
-                                  char const* key,
-                                  char const* cuda_udf,
-                                  char const* kernel_symbol,
-                                  bool use_cache,
-                                  bool use_pch,
-                                  bool log_pch)
+rtc::library compile_kernel_to_cubin(char const* name,
+                                     char const* key,
+                                     char const* cuda_source,
+                                     bool use_cache,
+                                     bool use_pch,
+                                     bool log_pch)
 {
   CUDF_FUNC_RANGE();
-  auto fragment = compile_udf(name, key, cuda_udf, use_cache, use_pch, log_pch);
-  auto library  = link_udf(name, key, fragment, kernel_symbol, use_cache);
+
+  auto& cache  = cudf::get_context().rtc_cache();
+  auto& bundle = cudf::get_context().jit_bundle();
+
+  auto runtime     = get_runtime_version();
+  auto driver      = get_driver_version();
+  auto sm          = get_current_device_physical_model();
+  auto bundle_hash = bundle.get_hash();
+
+  auto cache_key = std::format(R"***(binary_type=CUBIN
+key={}
+cuda_runtime={}
+cuda_driver={}
+arch={}
+bundle={})***",
+                               key,
+                               runtime,
+                               driver,
+                               sm,
+                               bundle_hash);
+
+  auto cache_key_sha256 = hash_string(cache_key);
+
+  auto compile = [&] {
+    return compile_kernel_to_cubin_uncached(name, cuda_source, use_pch, log_pch);
+  };
+
+  if (!use_cache) {
+    auto [lib, blob] = compile();
+    return lib;
+  }
+
+  auto fut = cache.query_or_insert_library(cache_key_sha256,
+                                           rtc::binary_type::CUBIN,
+                                           rtc::library_compile_function_t::from_functor(compile));
+
+  return fut.get();
+}
+
+rtc::library compile_and_link_kernel(char const* name,
+                                     char const* key,
+                                     char const* cuda_udf,
+                                     char const* kernel_symbol,
+                                     bool use_cache,
+                                     bool use_pch,
+                                     bool log_pch)
+{
+  CUDF_FUNC_RANGE();
+  auto fragment = compile_udf_to_lto_ir(name, key, cuda_udf, use_cache, use_pch, log_pch);
+  auto library  = link_lto_ir_udf(name, key, fragment, kernel_symbol, use_cache);
   return library;
 }
 
 }  // namespace
 
-rtc::library compile_kernel(std::string const& name,
-                            std::string const& key,
-                            std::string const& cuda_udf,
-                            std::string const& kernel_symbol,
-                            bool use_cache,
-                            bool use_pch,
-                            bool log_pch)
+rtc::library compile_lto_kernel(std::string const& name,
+                                std::string const& key,
+                                std::string const& cuda_udf,
+                                std::string const& kernel_symbol,
+                                bool use_cache,
+                                bool use_pch,
+                                bool log_pch)
 {
-  return compile_cuda_library(name.c_str(),
-                              key.c_str(),
-                              cuda_udf.c_str(),
-                              kernel_symbol.c_str(),
-                              use_cache,
-                              use_pch,
-                              log_pch);
+  return compile_and_link_kernel(name.c_str(),
+                                 key.c_str(),
+                                 cuda_udf.c_str(),
+                                 kernel_symbol.c_str(),
+                                 use_cache,
+                                 use_pch,
+                                 log_pch);
 }
 
-rtc::library compile_lto_ir_kernel(std::string const& name,
-                                   std::string const& key,
-                                   std::span<uint8_t const> lto_ir_binary,
-                                   std::string const& kernel_symbol,
-                                   bool use_cache)
+[[nodiscard]] rtc::library compile_cuda_kernel(std::string const& name,
+                                               std::string const& key,
+                                               std::string const& cuda_udf,
+                                               bool use_cache,
+                                               bool use_pch,
+                                               bool log_pch)
+{
+  return compile_kernel_to_cubin(
+    name.c_str(), key.c_str(), cuda_udf.c_str(), use_cache, use_pch, log_pch);
+}
+
+rtc::library compile_and_link_lto_ir_kernel(std::string const& name,
+                                            std::string const& key,
+                                            std::span<uint8_t const> lto_ir_binary,
+                                            std::string const& kernel_symbol,
+                                            bool use_cache)
 {
   auto blob     = std::make_shared<rtc::blob_t>(rtc::blob_t::from_static_data(lto_ir_binary));
   auto fragment = rtc::fragment_t::load(
     rtc::fragment_t::load_params{.binary = blob, .type = rtc::binary_type::LTO_IR});
-  return link_udf(name.c_str(), key.c_str(), fragment, kernel_symbol.c_str(), use_cache);
+  return link_lto_ir_udf(name.c_str(), key.c_str(), fragment, kernel_symbol.c_str(), use_cache);
 }
 
 }  // namespace CUDF_EXPORT cudf

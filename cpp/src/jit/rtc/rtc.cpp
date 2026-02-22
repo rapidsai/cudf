@@ -288,7 +288,7 @@ fragment fragment_t::load(load_params const& params)
   return std::make_shared<fragment_t>(params.binary, params.type);
 }
 
-fragment fragment_t::compile(compile_params const& params)
+std::vector<unsigned char> fragment_t::compile_raw(compile_params const& params)
 {
   CUDF_FUNC_RANGE();
 
@@ -325,9 +325,7 @@ fragment fragment_t::compile(compile_params const& params)
       CUDFRTC_CHECK_NVRTC(
         params, program, nvrtcGetLTOIR(program, reinterpret_cast<char*>(lto_ir.data())));
 
-      auto shared_blob = std::make_shared<blob_t>(blob_t::from_vector(std::move(lto_ir)));
-
-      return std::make_shared<fragment_t>(std::move(shared_blob), binary_type::LTO_IR);
+      return lto_ir;
 
     } break;
     case binary_type::CUBIN: {
@@ -339,13 +337,21 @@ fragment fragment_t::compile(compile_params const& params)
       CUDFRTC_CHECK_NVRTC(
         params, program, nvrtcGetCUBIN(program, reinterpret_cast<char*>(cubin.data())));
 
-      auto shared_blob = std::make_shared<blob_t>(blob_t::from_vector(std::move(cubin)));
-
-      return std::make_shared<fragment_t>(std::move(shared_blob), binary_type::CUBIN);
+      return cubin;
 
     } break;
     default: CUDF_FAIL("Unsupported binary type for compiling fragment");
   }
+}
+
+fragment fragment_t::compile(compile_params const& params)
+{
+  CUDF_FUNC_RANGE();
+
+  auto result = compile_raw(params);
+
+  return std::make_shared<fragment_t>(
+    std::make_shared<rtc::blob_t>(rtc::blob_t::from_vector(std::move(result))), params.target_type);
 }
 
 blob const& fragment_t::get(binary_type type) const

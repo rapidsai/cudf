@@ -36,18 +36,25 @@ struct [[nodiscard]] jit_bundle_t {
   [[nodiscard]] std::vector<std::string> get_compile_options() const;
 };
 
-[[nodiscard]] rtc::library compile_kernel(std::string const& name,
-                                          std::string const& key,
-                                          std::string const& cuda_udf,
-                                          std::string const& kernel_symbol,
-                                          bool use_cache = true,
-                                          bool use_pch   = true,
-                                          bool log_pch   = false);
+[[nodiscard]] rtc::library compile_lto_kernel(std::string const& name,
+                                              std::string const& key,
+                                              std::string const& cuda_udf,
+                                              std::string const& kernel_symbol,
+                                              bool use_cache = true,
+                                              bool use_pch   = true,
+                                              bool log_pch   = false);
 
-[[nodiscard]] rtc::library compile_lto_ir_kernel(std::string const& name,
-                                                 std::string const& key,
-                                                 std::span<uint8_t const> lto_ir_binary,
-                                                 std::string const& kernel_symbol,
-                                                 bool use_cache = true);
+[[nodiscard]] rtc::library compile_cuda_kernel(std::string const& name,
+                                               std::string const& key,
+                                               std::string const& cuda_udf,
+                                               bool use_cache = true,
+                                               bool use_pch   = true,
+                                               bool log_pch   = false);
+
+[[nodiscard]] rtc::library compile_and_link_lto_ir_kernel(std::string const& name,
+                                                          std::string const& key,
+                                                          std::span<uint8_t const> lto_ir_binary,
+                                                          std::string const& kernel_symbol,
+                                                          bool use_cache = true);
 
 }  // namespace CUDF_EXPORT cudf
