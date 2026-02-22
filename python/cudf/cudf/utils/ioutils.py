@@ -1305,6 +1305,10 @@ encoding : str, default 'utf-8'
 compression : str, None
     A string representing the compression scheme to use in the output file
     Compression while writing csv is not supported currently
+quoting : int, optional
+    Control field quoting behavior per ``csv.QUOTE_*`` constants.
+    Use one of ``csv.QUOTE_MINIMAL`` (0) or ``csv.QUOTE_NONE`` (3).
+    Default is ``csv.QUOTE_MINIMAL``.
 lineterminator : str, optional
     The newline character or character sequence to use in the output file.
     Defaults to :data:`os.linesep`.
@@ -1326,7 +1330,8 @@ None or str
 
 Notes
 -----
-- Follows the standard of Pandas csv.QUOTE_NONNUMERIC for all output.
+- Supports ``csv.QUOTE_MINIMAL`` and ``csv.QUOTE_NONE`` quoting styles,
+  consistent with pandas. Other quoting styles raise ``NotImplementedError``.
 - The default behaviour is to write all rows of the dataframe at once.
   This can lead to memory or overflow errors for large tables. If this
   happens, consider setting the ``chunksize`` argument to some

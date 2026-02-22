@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
+import csv
 import itertools
 import warnings
 from collections.abc import Collection, Mapping
@@ -362,11 +363,15 @@ def to_csv(
     index: bool = True,
     encoding=None,
     compression=None,
+    quoting: int | None = None,
     lineterminator: str = "\n",
     chunksize: int | None = None,
     storage_options=None,
 ):
     """{docstring}"""
+
+    if quoting is None:
+        quoting = csv.QUOTE_MINIMAL
 
     if not isinstance(sep, str):
         raise TypeError(f'"sep" must be string, not {type(sep).__name__}')
@@ -383,6 +388,12 @@ def to_csv(
     if compression:
         error_msg = "Writing compressed csv is not currently supported in cudf"
         raise NotImplementedError(error_msg)
+
+    if quoting not in (csv.QUOTE_MINIMAL, csv.QUOTE_NONE):
+        raise NotImplementedError(
+            f"quoting={quoting} is not supported. "
+            "Only csv.QUOTE_MINIMAL (0) and csv.QUOTE_NONE (3) are supported."
+        )
 
     return_as_string = False
     if path_or_buf is None:
@@ -437,6 +448,7 @@ def to_csv(
                 lineterminator=lineterminator,
                 rows_per_chunk=rows_per_chunk,
                 index=index,
+                quoting=quoting,
             )
     else:
         _plc_write_csv(
@@ -448,6 +460,7 @@ def to_csv(
             lineterminator=lineterminator,
             rows_per_chunk=rows_per_chunk,
             index=index,
+            quoting=quoting,
         )
 
     if return_as_string:
@@ -464,6 +477,7 @@ def _plc_write_csv(
     lineterminator: str = "\n",
     rows_per_chunk: int = 8,
     index: bool = True,
+    quoting: int = csv.QUOTE_MINIMAL,
 ) -> None:
     iter_columns = (
         itertools.chain(table.index._columns, table._columns)
@@ -494,6 +508,12 @@ def _plc_write_csv(
                 for name in all_names
             ]
         try:
+            # Map csv.QUOTE_* to QuoteStyle
+            quote_style = (
+                plc.io.types.QuoteStyle.NONE
+                if quoting == csv.QUOTE_NONE
+                else plc.io.types.QuoteStyle.MINIMAL
+            )
             plc.io.csv.write_csv(
                 (
                     plc.io.csv.CsvWriterOptions.builder(
@@ -507,6 +527,7 @@ def _plc_write_csv(
                     .inter_column_delimiter(str(sep))
                     .true_value("True")
                     .false_value("False")
+                    .quoting(quote_style)
                     .build()
                 )
             )
