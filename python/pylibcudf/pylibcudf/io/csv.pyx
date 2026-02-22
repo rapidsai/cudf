@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from libcpp cimport bool
@@ -867,6 +867,22 @@ cdef class CsvWriterOptionsBuilder:
             Builder to build CsvWriterOptions
         """
         self.c_obj.false_value(val.encode())
+        return self
+
+    cpdef CsvWriterOptionsBuilder compression(self, compression_type comp):
+        """Sets the compression type for the output
+
+        Parameters
+        ----------
+        comp : CompressionType
+            Compression type (NONE, ZSTD, etc.)
+
+        Returns
+        -------
+        CsvWriterOptionsBuilder
+            Builder to build CsvWriterOptions
+        """
+        self.c_obj.compression(comp)
         return self
 
     cpdef CsvWriterOptions build(self):

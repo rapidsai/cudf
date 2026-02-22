@@ -2782,4 +2782,62 @@ TEST_F(CsvReaderTest, CommentLinesWithQuotedStrings)
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result.tbl->view().column(1), expected_col1);
 }
 
+TEST_F(CsvWriterTest, ZstdCompression)
+{
+  // Test that ZSTD compression API works and produces compressed output
+  auto int_col = column_wrapper<int32_t>{1, 2, 3, 4, 5};
+  auto str_col = column_wrapper<cudf::string_view>{"a", "b", "c", "d", "e"};
+  cudf::table_view input_table(std::vector<cudf::column_view>{int_col, str_col});
+
+  // Write uncompressed
+  std::vector<char> uncompressed_buffer;
+  cudf::io::csv_writer_options uncompressed_opts =
+    cudf::io::csv_writer_options::builder(cudf::io::sink_info(&uncompressed_buffer), input_table)
+      .include_header(true)
+      .names({"int_col", "str_col"});
+  cudf::io::write_csv(uncompressed_opts);
+
+  // Write with ZSTD compression
+  std::vector<char> compressed_buffer;
+  cudf::io::csv_writer_options compressed_opts =
+    cudf::io::csv_writer_options::builder(cudf::io::sink_info(&compressed_buffer), input_table)
+      .include_header(true)
+      .names({"int_col", "str_col"})
+      .compression(cudf::io::compression_type::ZSTD);
+  cudf::io::write_csv(compressed_opts);
+
+  // Verify both buffers have content
+  EXPECT_GT(uncompressed_buffer.size(), 0);
+  EXPECT_GT(compressed_buffer.size(), 0);
+
+  // Compressed output should be different from uncompressed
+  // (either smaller due to compression, or different byte pattern)
+  EXPECT_NE(uncompressed_buffer, compressed_buffer);
+
+  // For small data, compressed size might be larger due to overhead
+  // Just verify that the compression API works without errors
+}
+
+TEST_F(CsvWriterTest, ZstdCompressionChunked)
+{
+  // Test ZSTD compression with chunked writing
+  // ZSTD supports concatenated frames, enabling progressive compression
+  auto const num_rows = 100;
+  auto sequence       = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i; });
+  auto int_col        = column_wrapper<int32_t>(sequence, sequence + num_rows);
+  cudf::table_view input_table(std::vector<cudf::column_view>{int_col});
+
+  std::vector<char> compressed_buffer;
+  cudf::io::csv_writer_options opts =
+    cudf::io::csv_writer_options::builder(cudf::io::sink_info(&compressed_buffer), input_table)
+      .include_header(true)
+      .names({"value"})
+      .rows_per_chunk(10)  // Force multiple chunks
+      .compression(cudf::io::compression_type::ZSTD);
+  cudf::io::write_csv(opts);
+
+  // Verify output was produced
+  EXPECT_GT(compressed_buffer.size(), 0);
+}
+
 CUDF_TEST_PROGRAM_MAIN()

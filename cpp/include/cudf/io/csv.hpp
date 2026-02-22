@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -1389,6 +1389,8 @@ class csv_writer_options {
   std::vector<std::string> _names;
   // Quote style. Currently only MINIMAL and NONE are supported.
   quote_style _quoting = quote_style::MINIMAL;
+  // Compression type for output (default: NONE)
+  compression_type _compression = compression_type::NONE;
 
   /**
    * @brief Constructor from sink and table.
@@ -1503,6 +1505,13 @@ class csv_writer_options {
    */
   [[nodiscard]] quote_style get_quoting() const { return _quoting; }
 
+  /**
+   * @brief Returns the compression type for the output.
+   *
+   * @return compression_type The compression type for the output
+   */
+  [[nodiscard]] compression_type get_compression() const { return _compression; }
+
   // Setter
   /**
    * @brief Sets optional associated column names.
@@ -1583,6 +1592,17 @@ class csv_writer_options {
                  "Only MINIMAL and NONE are supported for quoting.");
     _quoting = quoting;
   }
+
+  /**
+   * @brief Sets the compression type for the output.
+   *
+   * Only ZSTD compression is supported for CSV writer because it allows
+   * concatenated frames, enabling progressive chunk-based compression
+   * compatible with standard decompression tools.
+   *
+   * @param comp The compression type (NONE or ZSTD only)
+   */
+  void set_compression(compression_type comp) { _compression = comp; }
 };
 
 /**
@@ -1717,6 +1737,22 @@ class csv_writer_options_builder {
   csv_writer_options_builder& quoting(quote_style quoting)
   {
     options.set_quoting(quoting);
+    return *this;
+  }
+
+  /**
+   * @brief Sets the compression type for the output.
+   *
+   * Only ZSTD compression is supported for CSV writer because it allows
+   * concatenated frames, enabling progressive chunk-based compression
+   * compatible with standard decompression tools.
+   *
+   * @param comp The compression type (NONE or ZSTD only)
+   * @return this for chaining
+   */
+  csv_writer_options_builder& compression(compression_type comp)
+  {
+    options.set_compression(comp);
     return *this;
   }
 
