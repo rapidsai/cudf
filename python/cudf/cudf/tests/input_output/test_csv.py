@@ -2290,3 +2290,130 @@ def test_read_csv_gcs(monkeypatch):
     with fs.open(f"gcs://{fpath}") as f:
         got = cudf.read_csv(f)
     assert_eq(pdf, got)
+
+
+class TestCsvCp932Encoding:
+    """Tests for CP932 (Shift-JIS) encoding support in to_csv."""
+
+    def test_to_csv_cp932_basic(self):
+        """Test basic Japanese text output with CP932 encoding."""
+        df = cudf.DataFrame({"text": ["Hello", "日本語", "テスト"]})
+        buf = BytesIO()
+        df.to_csv(buf, encoding="cp932", index=False)
+        result = buf.getvalue()
+
+        # Verify output is valid CP932
+        decoded = result.decode("cp932")
+        assert "Hello" in decoded
+        assert "日本語" in decoded
+        assert "テスト" in decoded
+
+    def test_to_csv_cp932_hiragana(self):
+        """Test hiragana characters with CP932 encoding."""
+        df = cudf.DataFrame({"text": ["あいうえお"]})
+        buf = BytesIO()
+        df.to_csv(buf, encoding="cp932", index=False)
+        result = buf.getvalue()
+
+        # Verify the bytes are correct CP932 encoding
+        decoded = result.decode("cp932")
+        assert "あいうえお" in decoded
+
+    def test_to_csv_cp932_katakana(self):
+        """Test full-width katakana characters with CP932 encoding."""
+        df = cudf.DataFrame({"text": ["アイウエオ"]})
+        buf = BytesIO()
+        df.to_csv(buf, encoding="cp932", index=False)
+        result = buf.getvalue()
+
+        decoded = result.decode("cp932")
+        assert "アイウエオ" in decoded
+
+    def test_to_csv_cp932_half_width_katakana(self):
+        """Test half-width katakana (single-byte in CP932)."""
+        df = cudf.DataFrame({"text": ["ｱｲｳｴｵ"]})
+        buf = BytesIO()
+        df.to_csv(buf, encoding="cp932", index=False)
+        result = buf.getvalue()
+
+        decoded = result.decode("cp932")
+        assert "ｱｲｳｴｵ" in decoded
+
+    def test_to_csv_cp932_kanji(self):
+        """Test kanji characters with CP932 encoding."""
+        df = cudf.DataFrame({"text": ["漢字", "日本"]})
+        buf = BytesIO()
+        df.to_csv(buf, encoding="cp932", index=False)
+        result = buf.getvalue()
+
+        decoded = result.decode("cp932")
+        assert "漢字" in decoded
+        assert "日本" in decoded
+
+    def test_to_csv_cp932_mixed_content(self):
+        """Test mixed ASCII and Japanese content."""
+        df = cudf.DataFrame(
+            {
+                "name": ["田中", "鈴木"],
+                "code": ["ABC123", "XYZ789"],
+                "value": [100, 200],
+            }
+        )
+        buf = BytesIO()
+        df.to_csv(buf, encoding="cp932", index=False)
+        result = buf.getvalue()
+
+        decoded = result.decode("cp932")
+        assert "田中" in decoded
+        assert "ABC123" in decoded
+
+    def test_to_csv_cp932_multiple_string_columns(self):
+        """Test multiple string columns with CP932 encoding."""
+        df = cudf.DataFrame(
+            {
+                "col1": ["あ", "い"],
+                "col2": ["ア", "イ"],
+                "col3": ["亜", "伊"],
+            }
+        )
+        buf = BytesIO()
+        df.to_csv(buf, encoding="cp932", index=False)
+        result = buf.getvalue()
+
+        decoded = result.decode("cp932")
+        assert "あ" in decoded
+        assert "ア" in decoded
+        assert "亜" in decoded
+
+    def test_to_csv_cp932_with_nulls(self):
+        """Test CP932 encoding with null values."""
+        df = cudf.DataFrame({"text": ["テスト", None, "日本語"]})
+        buf = BytesIO()
+        df.to_csv(buf, encoding="cp932", index=False)
+        result = buf.getvalue()
+
+        decoded = result.decode("cp932")
+        assert "テスト" in decoded
+        assert "日本語" in decoded
+
+    def test_to_csv_cp932_unsupported_char_raises(self):
+        """Test that unsupported characters (emoji) raise an error."""
+        df = cudf.DataFrame({"text": ["Hello 😀"]})
+        buf = BytesIO()
+
+        with pytest.raises(
+            RuntimeError, match="cannot be represented in CP932"
+        ):
+            df.to_csv(buf, encoding="cp932", index=False)
+
+    def test_to_csv_cp932_to_file(self, tmp_path):
+        """Test writing CP932 encoded CSV to a file."""
+        df = cudf.DataFrame({"text": ["日本語テスト"]})
+        filepath = tmp_path / "test_cp932.csv"
+        df.to_csv(filepath, encoding="cp932", index=False)
+
+        # Read back and verify
+        with open(filepath, "rb") as f:
+            content = f.read()
+        decoded = content.decode("cp932")
+        assert "日本語テスト" in decoded

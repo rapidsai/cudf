@@ -1300,8 +1300,9 @@ header : bool, default True
 index : bool, default True
     Write out the index as a column
 encoding : str, default 'utf-8'
-    A string representing the encoding to use in the output file
-    Only 'utf-8' is currently supported
+    A string representing the encoding to use in the output file.
+    Supported encodings: 'utf-8', 'cp932'.
+    Use 'cp932' for Shift-JIS encoded output (Japanese text).
 compression : str, None
     A string representing the compression scheme to use in the output file
     Compression while writing csv is not supported currently

@@ -12,6 +12,7 @@ import numpy as np
 import pandas as pd
 
 import pylibcudf as plc
+from pylibcudf.strings.convert import convert_cp932 as plc_convert_cp932
 
 from cudf.api.types import is_scalar
 from cudf.core.column import access_columns
@@ -373,10 +374,10 @@ def to_csv(
     elif len(sep) > 1:
         raise TypeError('"sep" must be a 1-character string')
 
-    if encoding and encoding != "utf-8":
+    if encoding and encoding not in ("utf-8", "cp932"):
         error_msg = (
             f"Encoding {encoding} is not supported. "
-            + "Currently, only utf-8 encoding is supported."
+            + "Currently, only utf-8 and cp932 encodings are supported."
         )
         raise NotImplementedError(error_msg)
 
@@ -437,6 +438,7 @@ def to_csv(
                 lineterminator=lineterminator,
                 rows_per_chunk=rows_per_chunk,
                 index=index,
+                encoding=encoding,
             )
     else:
         _plc_write_csv(
@@ -448,6 +450,7 @@ def to_csv(
             lineterminator=lineterminator,
             rows_per_chunk=rows_per_chunk,
             index=index,
+            encoding=encoding,
         )
 
     if return_as_string:
@@ -464,6 +467,7 @@ def _plc_write_csv(
     lineterminator: str = "\n",
     rows_per_chunk: int = 8,
     index: bool = True,
+    encoding: str | None = None,
 ) -> None:
     iter_columns = (
         itertools.chain(table.index._columns, table._columns)
@@ -474,7 +478,16 @@ def _plc_write_csv(
     columns_list = list(iter_columns)
 
     with access_columns(*columns_list, mode="read", scope="internal"):
-        columns = [col.plc_column for col in columns_list]
+        columns = []
+        for col in columns_list:
+            plc_col = col.plc_column
+            # Convert string columns to CP932 if encoding is cp932
+            if (
+                encoding == "cp932"
+                and plc_col.type().id() == plc.TypeId.STRING
+            ):
+                plc_col = plc_convert_cp932.utf8_to_cp932(plc_col)
+            columns.append(plc_col)
         col_names = []
         if header:
             table_names = (
@@ -493,6 +506,13 @@ def _plc_write_csv(
                 else (str(name) if name not in (None, "") else "")
                 for name in all_names
             ]
+        # Map encoding string to pylibcudf enum
+        # For cp932, we already converted strings to CP932 bytes above,
+        # so we use BINARY encoding to write them as-is
+        if encoding == "cp932":
+            plc_encoding = plc.io.types.StringEncoding.BINARY
+        else:
+            plc_encoding = plc.io.types.StringEncoding.UTF8
         try:
             plc.io.csv.write_csv(
                 (
@@ -507,6 +527,7 @@ def _plc_write_csv(
                     .inter_column_delimiter(str(sep))
                     .true_value("True")
                     .false_value("False")
+                    .encoding(plc_encoding)
                     .build()
                 )
             )

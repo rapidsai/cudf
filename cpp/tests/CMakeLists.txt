@@ -615,6 +615,7 @@ ConfigureTest(
   strings/strip_tests.cpp
   strings/translate_tests.cpp
   strings/urls_tests.cpp
+  strings/cp932_tests.cpp
 )
 
 # ##################################################################################################

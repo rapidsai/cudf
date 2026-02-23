@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 import io
 import os
@@ -56,6 +56,10 @@ class QuoteStyle(IntEnum):
     ALL = ...
     NONNUMERIC = ...
     NONE = ...
+
+class StringEncoding(IntEnum):
+    UTF8 = ...
+    BINARY = ...
 
 ColumnNameSpec: TypeAlias = tuple[str, list[ColumnNameSpec]]
 ChildNameSpec: TypeAlias = Mapping[str, ChildNameSpec]
