@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 """
@@ -22,7 +22,6 @@ with contextlib.suppress(ImportError):
     from cudf_polars.experimental.benchmarks.utils import (
         run_duckdb,
         run_polars,
-        run_validate,
     )
 
 if TYPE_CHECKING:
@@ -72,6 +71,11 @@ class PDSDSPolarsQueries(PDSDSQueries):
 
     q_impl = "polars_impl"
 
+    @property
+    def duckdb_queries(self) -> PDSDSDuckDBQueries:
+        """Link to the DuckDB queries for this benchmark."""
+        return PDSDSDuckDBQueries()
+
 
 class PDSDSDuckDBQueries(PDSDSQueries):
     """DuckDB Queries."""
@@ -85,7 +89,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run PDS-DS benchmarks.")
     parser.add_argument(
         "--engine",
-        choices=["polars", "duckdb", "validate"],
+        choices=["polars", "duckdb"],
         default="polars",
         help="Which engine to use for executing the benchmarks or to validate results.",
     )
@@ -95,12 +99,5 @@ if __name__ == "__main__":
         run_polars(PDSDSPolarsQueries, extra_args, num_queries=99)
     elif args.engine == "duckdb":
         run_duckdb(PDSDSDuckDBQueries, extra_args, num_queries=99)
-    elif args.engine == "validate":
-        run_validate(
-            PDSDSPolarsQueries,
-            PDSDSDuckDBQueries,
-            extra_args,
-            num_queries=99,
-            check_dtypes=True,
-            check_column_order=True,
-        )
+    else:
+        raise ValueError(f"Invalid engine: {args.engine}")
