@@ -7,6 +7,8 @@
 #include "jit_filter_join_indices_kernel.cuh"
 
 #include <cudf/column/column_device_view.cuh>
+#include <cudf/detail/algorithms/copy_if.cuh>
+#include <cudf/detail/algorithms/reduce.cuh>
 #include <cudf/detail/cuco_helpers.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
@@ -25,12 +27,10 @@
 #include <rmm/exec_policy.hpp>
 #include <rmm/mr/polymorphic_allocator.hpp>
 
-#include <cub/cub.cuh>
+#include <cub/device/device_transform.cuh>
 #include <cuco/static_set.cuh>
 #include <cuda/iterator>
 #include <cuda/std/tuple>
-#include <thrust/copy.h>
-#include <thrust/count.h>
 #include <thrust/iterator/zip_iterator.h>
 
 #include <jit/cache.hpp>
@@ -184,10 +184,10 @@ apply_join_semantics(cudf::table_view const& left,
     auto valid_predicate = [=] __device__(size_type i) -> bool { return predicate_results_ptr[i]; };
 
     auto const num_valid =
-      thrust::count_if(rmm::exec_policy_nosync(stream),
-                       thrust::counting_iterator{0},
-                       thrust::counting_iterator{static_cast<size_type>(left_indices.size())},
-                       valid_predicate);
+      cudf::detail::count_if(thrust::counting_iterator<size_type>(0),
+                             thrust::counting_iterator{static_cast<size_type>(left_indices.size())},
+                             valid_predicate,
+                             stream);
 
     if (num_valid == 0) { return make_empty_result(); }
 
@@ -198,12 +198,13 @@ apply_join_semantics(cudf::table_view const& left,
     auto output_iter = thrust::make_zip_iterator(
       cuda::std::tuple{filtered_left_indices->begin(), filtered_right_indices->begin()});
 
-    thrust::copy_if(rmm::exec_policy_nosync(stream),
-                    input_iter,
-                    input_iter + left_indices.size(),
-                    thrust::counting_iterator{0},
-                    output_iter,
-                    [valid_predicate] __device__(size_type idx) { return valid_predicate(idx); });
+    cudf::detail::copy_if(
+      input_iter,
+      input_iter + left_indices.size(),
+      thrust::counting_iterator<size_type>{0},
+      output_iter,
+      [valid_predicate] __device__(size_type idx) { return valid_predicate(idx); },
+      stream);
 
     return std::pair{std::move(filtered_left_indices), std::move(filtered_right_indices)};
 
@@ -239,29 +240,11 @@ apply_join_semantics(cudf::table_view const& left,
 
     auto const num_invalid = left.num_rows() - num_filter_passing;
 
-    // Rest of LEFT_JOIN logic follows AST implementation...
-    cudf::detail::device_scalar<size_t> d_num_valid(stream);
-    {
-      auto const predicate_it =
-        cuda::transform_iterator{predicate_results_ptr,
-                                 cuda::proclaim_return_type<size_t>(
-                                   [] __device__(auto val) -> size_t { return val ? 1 : 0; })};
-      size_t temp_storage_bytes = 0;
-      cub::DeviceReduce::Sum(nullptr,
-                             temp_storage_bytes,
-                             predicate_it,
-                             d_num_valid.data(),
-                             left_indices.size(),
-                             stream.value());
-      rmm::device_buffer temp_storage(temp_storage_bytes, stream);
-      cub::DeviceReduce::Sum(temp_storage.data(),
-                             temp_storage_bytes,
-                             predicate_it,
-                             d_num_valid.data(),
-                             left_indices.size(),
-                             stream.value());
-    }
-    auto const num_valid   = d_num_valid.value(stream);
+    auto const num_valid = cudf::detail::count_if(
+      thrust::counting_iterator<size_type>(0),
+      thrust::counting_iterator{static_cast<size_type>(left_indices.size())},
+      [predicate_results_ptr] __device__(size_type i) -> bool { return predicate_results_ptr[i]; },
+      stream);
     auto const output_size = num_valid + num_invalid;
     if (output_size == 0) { return make_empty_result(); }
 
@@ -275,52 +258,24 @@ apply_join_semantics(cudf::table_view const& left,
         return predicate_results_ptr[i];
       };
 
-      size_t temp_storage_bytes = 0;
-      cub::DeviceSelect::FlaggedIf(nullptr,
-                                   temp_storage_bytes,
-                                   input_iter,
-                                   cuda::counting_iterator<size_t>(0),
-                                   output_iter,
-                                   d_num_valid.data(),
-                                   left_indices.size(),
-                                   valid_predicate,
-                                   stream.value());
-      rmm::device_buffer temp_storage(temp_storage_bytes, stream);
-      cub::DeviceSelect::FlaggedIf(temp_storage.data(),
-                                   temp_storage_bytes,
-                                   input_iter,
-                                   cuda::counting_iterator<size_t>(0),
-                                   output_iter,
-                                   d_num_valid.data(),
-                                   left_indices.size(),
-                                   valid_predicate,
-                                   stream.value());
+      cudf::detail::copy_if(input_iter,
+                            input_iter + left_indices.size(),
+                            cuda::counting_iterator<size_t>(0),
+                            output_iter,
+                            valid_predicate,
+                            stream);
     }
     if (num_invalid > 0) {
-      size_t temp_storage_bytes       = 0;
       auto filter_passing_indices_ref = filter_passing_indices.ref(cuco::contains);
       auto is_unmatched_idx           = [filter_passing_indices_ref] __device__(size_type idx) {
         auto is_unmatched = !filter_passing_indices_ref.contains(idx);
         return is_unmatched;
       };
-      cudf::detail::device_scalar<size_t> d_num_invalid(num_invalid, stream);
-      cub::DeviceSelect::If(nullptr,
-                            temp_storage_bytes,
-                            cuda::counting_iterator<size_t>(0),
+      cudf::detail::copy_if(cuda::counting_iterator<size_t>(0),
+                            cuda::counting_iterator<size_t>(left.num_rows()),
                             filtered_left_indices->begin() + num_valid,
-                            d_num_invalid.data(),
-                            left.num_rows(),
                             is_unmatched_idx,
-                            stream.value());
-      rmm::device_buffer temp_storage(temp_storage_bytes, stream);
-      cub::DeviceSelect::If(temp_storage.data(),
-                            temp_storage_bytes,
-                            cuda::counting_iterator<size_t>(0),
-                            filtered_left_indices->begin() + num_valid,
-                            d_num_invalid.data(),
-                            left.num_rows(),
-                            is_unmatched_idx,
-                            stream.value());
+                            stream);
 
       cub::DeviceTransform::Fill(
         filtered_right_indices->begin() + num_valid, num_invalid, JoinNoMatch, stream.value());
@@ -335,10 +290,10 @@ apply_join_semantics(cudf::table_view const& left,
     };
 
     auto const failed_matched_count =
-      thrust::count_if(rmm::exec_policy_nosync(stream),
-                       thrust::counting_iterator{0},
-                       thrust::counting_iterator{static_cast<size_type>(left_indices.size())},
-                       is_failed_matched_pair);
+      cudf::detail::count_if(thrust::counting_iterator{0},
+                             thrust::counting_iterator{static_cast<size_type>(left_indices.size())},
+                             is_failed_matched_pair,
+                             stream);
     auto const output_size = left_indices.size() + failed_matched_count;
 
     if (output_size == 0) { return make_empty_result(); }
@@ -368,12 +323,12 @@ apply_join_semantics(cudf::table_view const& left,
         0, [=] __device__(size_type i) -> cuda::std::tuple<size_type, size_type> {
           return cuda::std::tuple{JoinNoMatch, right_ptr[i]};
         });
-      thrust::copy_if(rmm::exec_policy_nosync(stream),
-                      failed_match_iter,
-                      failed_match_iter + left_indices.size(),
-                      thrust::counting_iterator{0},
-                      secondary_iter,
-                      is_failed_matched_pair);
+      cudf::detail::copy_if(failed_match_iter,
+                            failed_match_iter + left_indices.size(),
+                            thrust::counting_iterator{0},
+                            secondary_iter,
+                            is_failed_matched_pair,
+                            stream);
     }
 
     return std::pair{std::move(filtered_left_indices), std::move(filtered_right_indices)};
