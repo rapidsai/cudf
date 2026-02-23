@@ -1,16 +1,12 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <benchmarks/common/generate_input.hpp>
 
 #include <cudf/copying.hpp>
-
-#include <thrust/execution_policy.h>
-#include <thrust/random.h>
-#include <thrust/reverse.h>
-#include <thrust/shuffle.h>
+#include <cudf/filling.hpp>
 
 #include <nvbench/nvbench.cuh>
 
@@ -20,20 +16,22 @@ static void bench_scatter(nvbench::state& state)
   auto const num_cols = static_cast<cudf::size_type>(state.get_int64("num_cols"));
   auto const coalesce = static_cast<bool>(state.get_int64("coalesce"));
 
-  // Gather indices
-  auto scatter_map_table =
-    create_sequence_table({cudf::type_to_id<cudf::size_type>()}, row_count{num_rows});
-  auto scatter_map = scatter_map_table->get_column(0).mutable_view();
-
-  if (coalesce) {
-    thrust::reverse(
-      thrust::device, scatter_map.begin<cudf::size_type>(), scatter_map.end<cudf::size_type>());
-  } else {
-    thrust::shuffle(thrust::device,
-                    scatter_map.begin<cudf::size_type>(),
-                    scatter_map.end<cudf::size_type>(),
-                    thrust::default_random_engine());
+  if (static_cast<long>(num_rows) * static_cast<long>(num_cols) >
+      std::numeric_limits<int32_t>::max()) {  // reasonable limit
+    state.skip("input benchmark size too large");
+    return;
   }
+  auto scatter_map = [&] {
+    if (coalesce) {
+      return cudf::sequence(num_rows,
+                            cudf::numeric_scalar<cudf::size_type>(num_rows - 1),
+                            cudf::numeric_scalar<cudf::size_type>(-1));
+    }
+
+    data_profile const profile = data_profile_builder().cardinality(0).no_validity().distribution(
+      cudf::type_to_id<cudf::size_type>(), distribution_id::UNIFORM, 0, num_rows - 1);
+    return create_random_column(cudf::type_to_id<cudf::size_type>(), row_count{num_rows}, profile);
+  }();
 
   // Every element is valid
   auto source_table = create_sequence_table(cycle_dtypes({cudf::type_to_id<int64_t>()}, num_cols),
@@ -46,12 +44,13 @@ static void bench_scatter(nvbench::state& state)
   state.add_global_memory_reads<int8_t>(source_table->alloc_size());
   state.add_global_memory_writes<int8_t>(target_table->alloc_size());
 
-  state.exec(nvbench::exec_tag::sync,
-             [&](nvbench::launch&) { cudf::scatter(*source_table, scatter_map, *target_table); });
+  state.exec(nvbench::exec_tag::sync, [&](nvbench::launch&) {
+    cudf::scatter(*source_table, scatter_map->view(), *target_table);
+  });
 }
 
 NVBENCH_BENCH(bench_scatter)
   .set_name("scatter")
-  .add_int64_axis("num_rows", {64, 512, 4096, 32768, 262144, 2097152, 16777216, 134217728})
-  .add_int64_axis("num_cols", {1, 8})
+  .add_int64_axis("num_rows", {4096, 32768, 262144, 2097152, 16777216})
+  .add_int64_axis("num_cols", {1, 8, 100, 1000})
   .add_int64_axis("coalesce", {true, false});
