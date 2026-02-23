@@ -30,7 +30,6 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <thrust/functional.h>
 #include <thrust/gather.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/logical.h>

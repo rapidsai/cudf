@@ -45,7 +45,7 @@ namespace {
 // Other valid types in the future would be UUID (still treated as string) and FLOAT16 (which
 // for now would also be treated as a string).
 [[maybe_unused]] inline bool is_treat_fixed_length_as_string(
-  std::optional<LogicalType> const& logical_type)
+  cuda::std::optional<LogicalType> const& logical_type)
 {
   if (!logical_type.has_value()) { return true; }
   return logical_type->type != LogicalType::DECIMAL;
