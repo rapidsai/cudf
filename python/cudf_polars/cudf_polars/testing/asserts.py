@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 """Device-aware assertions."""
@@ -132,12 +132,7 @@ def assert_gpu_result_equal(
     # the type checker errors with:
     # Argument 4 to "assert_frame_equal" has incompatible type "**dict[str, float]"; expected "bool"  [arg-type]
     # which seems to be a bug in the type checker / type annotations.
-    assert_frame_equal(
-        expect,
-        got,
-        **assert_kwargs_bool,
-        **tol_kwargs,  # type: ignore[arg-type]
-    )
+    assert_frame_equal(expect, got, **assert_kwargs_bool, **tol_kwargs)  # type: ignore[arg-type]
 
 
 def assert_ir_translation_raises(q: pl.LazyFrame, *exceptions: type[Exception]) -> None:

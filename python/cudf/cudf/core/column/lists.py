@@ -15,7 +15,6 @@ import pylibcudf as plc
 
 import cudf
 from cudf.core.column.column import ColumnBase, as_column, column_empty
-from cudf.core.dtype.validators import is_dtype_obj_list
 from cudf.core.dtypes import ListDtype
 from cudf.core.missing import NA
 from cudf.utils.dtypes import get_dtype_of_same_kind
@@ -35,27 +34,6 @@ if TYPE_CHECKING:
 
 class ListColumn(ColumnBase):
     _VALID_BINARY_OPERATIONS = {"__add__", "__radd__", "__eq__", "__ne__"}
-    _VALID_PLC_TYPES = {plc.TypeId.LIST}
-
-    @classmethod
-    def _validate_args(
-        cls, plc_column: plc.Column, dtype: DtypeObj
-    ) -> tuple[plc.Column, DtypeObj]:
-        plc_column, dtype = super()._validate_args(plc_column, dtype)
-        if not is_dtype_obj_list(dtype):
-            raise ValueError("dtype must be a cudf.ListDtype")
-
-        child = plc_column.list_view().child()
-        try:
-            ColumnBase._validate_dtype_recursively(
-                child, ListDtype.from_list_dtype(dtype).element_type
-            )
-        except ValueError as e:
-            raise ValueError(
-                f"List element type validation failed: {e}"
-            ) from e
-
-        return plc_column, dtype
 
     def _get_sliced_child(self) -> ColumnBase:
         """Get a child column properly sliced to match the parent's view."""
@@ -118,15 +96,6 @@ class ListColumn(ColumnBase):
         raise NotImplementedError(
             "Lists are not yet supported via `__cuda_array_interface__`"
         )
-
-    def _with_type_metadata(self: Self, dtype: DtypeObj) -> Self:
-        if isinstance(dtype, ListDtype):
-            self._dtype = dtype
-        elif isinstance(dtype, pd.ArrowDtype) and isinstance(
-            dtype.pyarrow_dtype, pa.ListType
-        ):
-            self._dtype = dtype
-        return self
 
     def copy(self, deep: bool = True) -> Self:
         # Since list columns are immutable, both deep and shallow copies share

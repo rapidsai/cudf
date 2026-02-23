@@ -60,6 +60,7 @@ from cudf.core.column import (
     column_empty,
     concat_columns,
 )
+from cudf.core.column.column import _normalize_types_column
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.copy_types import BooleanMask
 from cudf.core.dtype.validators import is_dtype_obj_numeric
@@ -2139,16 +2140,6 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                     "Only a column name can be used for the "
                     "key in a dtype mappings argument."
                 )
-            if cudf.get_option("mode.pandas_compatible"):
-                for d in dtype.values():  # type: ignore[union-attr]
-                    if inspect.isclass(d) and issubclass(
-                        d, pd.api.extensions.ExtensionDtype
-                    ):
-                        msg = (
-                            f"Expected an instance of {d.__name__}, "
-                            "but got the class instead. Try instantiating 'dtype'."
-                        )
-                        raise TypeError(msg)
             dtype = {
                 col_name: cudf.dtype(dtype)
                 for col_name, dtype in dtype.items()  # type: ignore[union-attr]
@@ -8500,9 +8491,22 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 "table must be a pylibcudf.Table or pylibcudf.io.TableWithMetadata"
             )
 
+        columns = tbl.columns()
+        normalized_columns = [_normalize_types_column(col) for col in columns]
+        if not all(
+            normalized_col is col
+            for normalized_col, col in zip(
+                normalized_columns, columns, strict=True
+            )
+        ):
+            tbl = plc.Table(normalized_columns)
+
         plc_columns = tbl.columns()
         cudf_cols = (
-            ColumnBase.from_pylibcudf(plc_col) for plc_col in plc_columns
+            ColumnBase.create(
+                plc_col, dtype=dtype_from_pylibcudf_column(plc_col)
+            )
+            for plc_col in plc_columns
         )
         # We only have child names if the source is a pylibcudf.io.TableWithMetadata.
         if child_names is not None:
@@ -8988,8 +8992,9 @@ def _cast_cols_to_common_dtypes(col_idxs, list_of_columns, dtypes, categories):
 def _reassign_categories(categories, cols, col_idxs):
     for name, idx in zip(cols, col_idxs, strict=True):
         if idx in categories:
-            cols[name] = cols[name]._with_type_metadata(
-                CategoricalDtype(categories=categories[idx], ordered=False)
+            cols[name] = ColumnBase.create(
+                cols[name].plc_column,
+                CategoricalDtype(categories=categories[idx], ordered=False),
             )
 
 

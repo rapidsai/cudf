@@ -73,6 +73,7 @@ from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
     SIZE_TYPE_DTYPE,
     can_convert_to_column,
+    cudf_dtype_to_pa_type,
     dtype_from_pylibcudf_column,
     find_common_type,
     get_dtype_of_same_kind,
@@ -506,6 +507,14 @@ class IndexedFrame(Frame):
             raise TypeError(
                 "got an unexpected keyword argument 'numeric_only'"
             )
+
+        for col in self._columns:
+            if isinstance(col.dtype, pd.ArrowDtype):
+                if pa.types.is_decimal(col.dtype.pyarrow_dtype):
+                    raise NotImplementedError(
+                        "Decimal ArrowDtype does not support cumulative operations"
+                    )
+
         cast_to_int = op in ("cumsum", "cumprod")
         skipna = True if skipna is None else skipna
 
@@ -2948,8 +2957,30 @@ class IndexedFrame(Frame):
         check that the number of rows of self matches the validated
         number of rows.
         """
+
         if not gather_map.nullify and len(self) != gather_map.nrows:
             raise IndexError("Gather map is out of bounds")
+        index_names = self.index.names if keep_index else None
+
+        try:
+            # No need to gather if the gather map is already in the correct order
+            can_gather_with_copy = (
+                len(gather_map.column) == len(self)
+                and len(self) > 0
+                and gather_map.column.equals(
+                    as_column(cp.arange(start=0, stop=len(self)))
+                )
+            )
+        except (AttributeError, TypeError):
+            can_gather_with_copy = False
+        if can_gather_with_copy:
+            if keep_index:
+                return self.copy(deep=True)
+            return self._from_columns_like_self(
+                [col.copy(deep=True) for col in self._columns],
+                self._column_names,
+                index_names,
+            )
         columns_to_gather = (
             list(itertools.chain(self.index._columns, self._columns))
             if keep_index
@@ -2969,7 +3000,7 @@ class IndexedFrame(Frame):
                 )
             ],
             self._column_names,
-            self.index.names if keep_index else None,
+            index_names,
         )
 
     def _slice(self, arg: slice, keep_index: bool = True) -> Self:
@@ -4812,7 +4843,7 @@ class IndexedFrame(Frame):
         --------
         >>> import cudf
         >>> df = cudf.DataFrame({"a":{1, 2, 3, 4, 5}})
-        >>> df.sample(3, random_state=0)
+        >>> df.sample(3, random_state=0)  # doctest: +SKIP
            a
         0  1
         1  2
@@ -6640,6 +6671,18 @@ class IndexedFrame(Frame):
         All other dtypes are always returned as-is as all dtypes in
         cudf are nullable.
         """
+        if dtype_backend == "pyarrow":
+            cols = []
+            for col in self._columns:
+                arrow_dtype = pd.ArrowDtype(
+                    pa.null()
+                    if col.null_count == len(col)
+                    else cudf_dtype_to_pa_type(col.dtype)
+                )
+                cols.append(ColumnBase.create(col.plc_column, arrow_dtype))
+            return self._from_data_like_self(
+                self._data._from_columns_like_self(cols, verify=False)
+            )
         if not (convert_floating and convert_integer):
             return self.copy()
         else:
