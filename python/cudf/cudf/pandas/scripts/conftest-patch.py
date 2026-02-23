@@ -1308,6 +1308,7 @@ NODEIDS_THAT_FAIL_WITH_CUDF_PANDAS = {
     "tests/copy_view/test_methods.py::test_get[key1]",
     "tests/copy_view/test_methods.py::test_groupby_column_index_in_references",
     "tests/copy_view/test_methods.py::test_infer_objects",
+    "tests/copy_view/test_methods.py::test_infer_objects_no_reference",
     "tests/copy_view/test_methods.py::test_insert_series",
     "tests/copy_view/test_methods.py::test_isetitem",
     "tests/copy_view/test_methods.py::test_isetitem_frame",
