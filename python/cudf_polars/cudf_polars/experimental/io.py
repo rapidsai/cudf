@@ -428,7 +428,7 @@ def _(
 def _prepare_sink_directory(path: str) -> None:
     """Prepare for a multi-partition sink."""
     # TODO: Support cloud storage
-    Path(path).mkdir(parents=True)
+    Path(path).mkdir(parents=True, exist_ok=True)
 
 
 def _sink_to_directory(
