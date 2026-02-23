@@ -714,31 +714,16 @@ class NumericalColumn(NumericalBaseColumn):
         replacement: ColumnBase | list,
         all_nan: bool = False,
     ) -> Self:
-        """
-        Return col with *to_replace* replaced with *value*.
-        """
-        # TODO: all_nan and list arguments only used for this
+        """Return col with *to_replace* replaced with *value*."""
+        # TODO: The all_nan argument is only used for this
         # this subclass, try to factor these cases out of this method
-
-        # If all of `to_replace`/`replacement` are `None`,
-        # dtype of `to_replace_col`/`replacement_col`
-        # is inferred as `string`, but this is a valid
-        # float64 column too, Hence we will need to type-cast
-        # to self.dtype.
-        to_replace_col = as_column(to_replace)
-        if to_replace_col.is_all_null:
-            to_replace_col = to_replace_col.astype(self.dtype)
-
-        replacement_col = as_column(replacement)
-        if replacement_col.is_all_null:
-            replacement_col = replacement_col.astype(self.dtype)
-
-        if not isinstance(to_replace_col, type(replacement_col)):
-            raise TypeError(
-                f"to_replace and value should be of same types,"
-                f"got to_replace dtype: {to_replace_col.dtype} and "
-                f"value dtype: {replacement_col.dtype}"
+        to_replace_col, replacement_col = (
+            ColumnBase._prepare_find_and_replace_columns(
+                to_replace,
+                replacement,
+                null_cast_dtype=self.dtype,
             )
+        )
 
         if not isinstance(to_replace_col, NumericalColumn) and not isinstance(
             replacement_col, NumericalColumn
@@ -779,52 +764,17 @@ class NumericalColumn(NumericalBaseColumn):
         common_type = find_common_type(
             (to_replace_col.dtype, replacement_col.dtype, self.dtype)
         )
+        assert common_type is not None
         replaced = cast("Self", self.astype(common_type))
         old_col = to_replace_col.astype(common_type)
         new_col = replacement_col.astype(common_type)
 
-        # Deduplicate by old values, keeping last occurrence.
-        # This replicates pandas' behavior when to_replace has duplicates:
-        # pandas processes replacements sequentially, so the last occurrence wins.
-        # For example, df.replace([1, 2, 1], [10, 20, 30]) replaces 1→30 (not 1→10).
-        # Work with plc.Column objects directly to avoid creating intermediate ColumnBases.
-        with old_col.access(mode="read", scope="internal"):
-            with new_col.access(mode="read", scope="internal"):
-                old_plc, new_plc = plc.stream_compaction.stable_distinct(
-                    plc.Table([old_col.plc_column, new_col.plc_column]),
-                    keys=[0],  # Deduplicate by first column (old values)
-                    keep=plc.stream_compaction.DuplicateKeepOption.KEEP_LAST,
-                    nulls_equal=plc.types.NullEquality.EQUAL,
-                    nans_equal=plc.types.NanEquality.ALL_EQUAL,
-                ).columns()
-
-        # Handle null replacement separately if there's a null in old values
-        if old_plc.null_count() == 1:
-            # Find the replacement value for null
-            old_isnull_plc = plc.unary.is_null(old_plc)
-            (filtered_column,) = plc.stream_compaction.apply_boolean_mask(
-                plc.Table([new_plc]), old_isnull_plc
-            ).columns()
-            # We know there's exactly 1 null, so filtered result has 1 row
-            replacement_for_null = (
-                plc.copying.get_element(filtered_column, 0).to_arrow().as_py()
-            )
-            replaced = replaced.fillna(replacement_for_null)
-
-            # Drop the null row from old/new columns
-            old_plc, new_plc = plc.stream_compaction.drop_nulls(
-                plc.Table([old_plc, new_plc]),
-                keys=[0],  # Check nulls in first column only
-                keep_threshold=1,  # Keep rows with at least 1 non-null in keys
-            ).columns()
-
-        with replaced.access(mode="read", scope="internal"):
-            result_plc = plc.replace.find_and_replace_all(
-                replaced.plc_column,
-                old_plc,
-                new_plc,
-            )
-        return cast("Self", ColumnBase.create(result_plc, common_type))
+        result = replaced._find_and_replace_with_dedup(
+            old_col,
+            new_col,
+            common_type,
+        )
+        return cast("Self", result)
 
     def _validate_fillna_value(
         self, fill_value: ScalarLike | ColumnLike

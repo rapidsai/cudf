@@ -1047,6 +1047,87 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         """Return a CuPy representation of the Column."""
         raise NotImplementedError(f"CuPy does not support {self.dtype}")
 
+    @staticmethod
+    def _prepare_find_and_replace_columns(
+        to_replace: ColumnBase | list,
+        replacement: ColumnBase | list,
+        *,
+        null_cast_dtype: DtypeObj | None = None,
+    ) -> tuple[ColumnBase, ColumnBase]:
+        # If all of `to_replace`/`replacement` are `None`, the dtype of
+        # `to_replace_col`/`replacement_col` is inferred as `string`so we need to
+        # type-cast to self.dtype.
+        to_replace_col = as_column(to_replace)
+        if null_cast_dtype is not None and to_replace_col.is_all_null:
+            to_replace_col = to_replace_col.astype(null_cast_dtype)
+
+        replacement_col = as_column(replacement)
+        if null_cast_dtype is not None and replacement_col.is_all_null:
+            replacement_col = replacement_col.astype(null_cast_dtype)
+
+        if type(to_replace_col) is not type(replacement_col):
+            raise TypeError(
+                "to_replace and value should be of same types,"
+                f"got to_replace dtype: {to_replace_col.dtype} and "
+                f"value dtype: {replacement_col.dtype}"
+            )
+
+        return to_replace_col, replacement_col
+
+    @staticmethod
+    def _dedupe_find_and_replace_mapping(
+        old_col: ColumnBase,
+        new_col: ColumnBase,
+    ) -> tuple[plc.Column, plc.Column]:
+        """Deduplicate old/new mapping with keep-last semantics.
+
+        This replicates pandas' behavior when to_replace has duplicates:
+        pandas processes replacements sequentially, so the last occurrence wins.
+        """
+        with access_columns(old_col, new_col, mode="read", scope="internal"):
+            columns = plc.stream_compaction.stable_distinct(
+                plc.Table([old_col.plc_column, new_col.plc_column]),
+                keys=[0],
+                keep=plc.stream_compaction.DuplicateKeepOption.KEEP_LAST,
+                nulls_equal=plc.types.NullEquality.EQUAL,
+                nans_equal=plc.types.NanEquality.ALL_EQUAL,
+            ).columns()
+        return columns[0], columns[1]
+
+    def _find_and_replace_with_dedup(
+        self,
+        old_col: ColumnBase,
+        new_col: ColumnBase,
+        result_dtype: DtypeObj,
+    ) -> ColumnBase:
+        """Apply find/replace using keep-last mapping and null handling."""
+        old_plc, new_plc = ColumnBase._dedupe_find_and_replace_mapping(
+            old_col, new_col
+        )
+
+        replaced = self
+        if old_plc.null_count() == 1:
+            old_isnull_plc = plc.unary.is_null(old_plc)
+            (filtered_column,) = plc.stream_compaction.apply_boolean_mask(
+                plc.Table([new_plc]), old_isnull_plc
+            ).columns()
+            replacement_for_null = filtered_column.to_scalar().to_py()
+            replaced = replaced.fillna(replacement_for_null)
+
+            old_plc, new_plc = plc.stream_compaction.drop_nulls(
+                plc.Table([old_plc, new_plc]),
+                keys=[0],
+                keep_threshold=1,
+            ).columns()
+
+        with replaced.access(mode="read", scope="internal"):
+            result_plc = plc.replace.find_and_replace_all(
+                replaced.plc_column,
+                old_plc,
+                new_plc,
+            )
+        return ColumnBase.create(result_plc, result_dtype)
+
     def find_and_replace(
         self,
         to_replace: ColumnBase | list,

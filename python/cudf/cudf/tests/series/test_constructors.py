@@ -1602,10 +1602,8 @@ def test_series_constructor_dtype_is_pandas_arrowdtype(
                 f"RecursionError occurs in older versions of pandas/pyarrow for {dtype}"
             )
         elif pa.types.is_decimal(dtype.pyarrow_dtype):
-            request.applymarker(
-                pytest.mark.xfail(
-                    reason="Decimal types coerced to object in older versions of pandas/pyarrow"
-                )
+            pytest.skip(
+                "Decimal types coerced to object in older versions of pandas/pyarrow"
             )
     result = cudf.Series([scalar], dtype=dtype)
     expected = pd.Series([scalar], dtype=dtype)
