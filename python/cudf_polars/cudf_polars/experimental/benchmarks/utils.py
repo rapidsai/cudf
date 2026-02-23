@@ -1273,12 +1273,7 @@ def check_input_data_type(run_config: RunConfig) -> Literal["decimal", "float"]:
 
     This is determined by looking at the ``c_acctbal`` column of the customer table.
     """
-    if run_config.suffix == "":
-        path = Path(run_config.dataset_path) / f"customer{run_config.suffix}"
-    else:
-        path = (Path(run_config.dataset_path) / "customer").with_suffix(
-            run_config.suffix
-        )
+    path = (Path(run_config.dataset_path) / "customer").with_suffix(run_config.suffix)
     t = pl.scan_parquet(path).select(pl.col("c_acctbal")).collect_schema()["c_acctbal"]
 
     if t.is_decimal():
