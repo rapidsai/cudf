@@ -4992,6 +4992,12 @@ class CategoricalIndex(Index):
             data.dtype, CategoricalDtype
         ):
             data = data._column
+            if (
+                isinstance(dtype, CategoricalDtype)
+                and dtype._categories is None
+            ):
+                # dtype="category" was passed, but data is already categorical
+                dtype = None
         else:
             data = as_column(
                 data, dtype=dtype if dtype is not None else CategoricalDtype()
