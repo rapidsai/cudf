@@ -394,40 +394,17 @@ class CategoricalColumn(ColumnBase):
         replacement: ColumnBase | list,
         all_nan: bool = False,
     ) -> Self:
-        """
-        Return col with *to_replace* replaced with *replacement*.
-        """
-        to_replace_col = as_column(to_replace)
-        if to_replace_col.is_all_null:
-            to_replace_col = to_replace_col.astype(self.categories.dtype)
-        replacement_col = as_column(replacement)
-        if replacement_col.is_all_null:
-            replacement_col = replacement_col.astype(self.categories.dtype)
-
-        # We must have two categoricals (with possibly different categories)
-        if type(to_replace_col) is not type(replacement_col):
-            raise TypeError(
-                f"to_replace and value should be of same types,"
-                f"got to_replace dtype: {to_replace_col.dtype} and "
-                f"value dtype: {replacement_col.dtype}"
+        """Return col with *to_replace* replaced with *replacement*."""
+        to_replace_col, replacement_col = (
+            ColumnBase._prepare_find_and_replace_columns(
+                to_replace,
+                replacement,
+                null_cast_dtype=self.categories.dtype,
             )
-        # Deduplicate by old values, keeping last occurrence.
-        # This replicates pandas' behavior when to_replace has duplicates:
-        # pandas processes replacements sequentially, so the last occurrence wins.
-        with to_replace_col.access(mode="read", scope="internal"):
-            with replacement_col.access(mode="read", scope="internal"):
-                old_plc, new_plc = plc.stream_compaction.stable_distinct(
-                    plc.Table(
-                        [
-                            to_replace_col.plc_column,
-                            replacement_col.plc_column,
-                        ]
-                    ),
-                    [0],
-                    plc.stream_compaction.DuplicateKeepOption.KEEP_LAST,
-                    plc.types.NullEquality.EQUAL,
-                    plc.types.NanEquality.ALL_EQUAL,
-                ).columns()
+        )
+        old_plc, new_plc = ColumnBase._dedupe_find_and_replace_mapping(
+            to_replace_col, replacement_col
+        )
 
         replaced = self
         if old_plc.null_count() == 1:
