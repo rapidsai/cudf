@@ -8,6 +8,8 @@ BinaryOperand = _create_delegating_mixin(
     "Mixin encapsulating binary operations.",
     "BINARY_OPERATION",
     "_binaryop",
+    # divmod and rdivmod are handled separately below and are automatically added
+    # whenever division and modulo operations are present.
     {
         # Numeric operations.
         "__add__",
@@ -17,7 +19,6 @@ BinaryOperand = _create_delegating_mixin(
         "__truediv__",
         "__floordiv__",
         "__mod__",
-        # "__divmod__", # Implemented on BinaryOperand directly
         "__pow__",
         # "__lshift__", # Not yet implemented
         # "__rshift__", # Not yet implemented
@@ -32,7 +33,6 @@ BinaryOperand = _create_delegating_mixin(
         "__rtruediv__",
         "__rfloordiv__",
         "__rmod__",
-        # "__rdivmod__", # Implemented on BinaryOperand directly
         "__rpow__",
         # "__rlshift__", # Not yet implemented
         # "__rrshift__", # Not yet implemented

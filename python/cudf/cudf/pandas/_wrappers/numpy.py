@@ -120,19 +120,10 @@ def wrap_ndarray(cls, arr: cupy.ndarray | numpy.ndarray, constructor):
 
 def ndarray__array_ufunc__(self, ufunc, method, *inputs, **kwargs):
     if method == "__call__" and len(inputs) > 1:
-        self_priority = getattr(self, "__array_priority__", 0)
-        try:
-            self_priority = float(self_priority)
-        except (TypeError, ValueError):
-            self_priority = 0
+        self_priority = float(getattr(self, "__array_priority__", 0))
         for inp in inputs:
-            if inp is self:
-                continue
-            inp_priority = getattr(inp, "__array_priority__", None)
-            if inp_priority is None:
-                continue
             try:
-                inp_priority = float(inp_priority)
+                inp_priority = float(getattr(inp, "__array_priority__", 0))
             except (TypeError, ValueError):
                 continue
             if inp_priority > self_priority:
