@@ -6,6 +6,7 @@ from __future__ import annotations
 import cupy
 import cupy._core.flags
 import numpy
+import pandas as pd
 from packaging import version
 
 from cudf.options import _env_get_bool
@@ -154,11 +155,25 @@ def ndarray__array_ufunc__(self, ufunc, method, *inputs, **kwargs):
     return result
 
 
+def _is_pandas_like_object(other) -> bool:
+    if is_proxy_object(other):
+        other = other._fsproxy_slow
+    return isinstance(other, (pd.Series, pd.Index))
+
+
 def ndarray__divmod__(self, other):
+    if _is_pandas_like_object(other):
+        if is_proxy_object(other):
+            return other.__rdivmod__(self)
+        return other.__rdivmod__(self._fsproxy_wrapped)
     return numpy.divmod(self, other)
 
 
 def ndarray__rdivmod__(self, other):
+    if _is_pandas_like_object(other):
+        if is_proxy_object(other):
+            return other.__divmod__(self)
+        return other.__divmod__(self._fsproxy_wrapped)
     return numpy.divmod(other, self)
 
 
