@@ -25,6 +25,7 @@
 #include <thrust/scan.h>
 #include <thrust/transform.h>
 
+#include <algorithm>
 #include <limits>
 #include <numeric>
 #include <vector>
@@ -297,7 +298,7 @@ void reader_impl::allocate_level_decode_space()
   subpass.level_decode_data =
     rmm::device_buffer(total_memory_size, _stream, cudf::get_current_device_resource_ref());
 
-  // Set buffer pointers for each page using running offsets
+  // Set buffer pointers and decoded count for each page using running offsets
   auto* current_ptr = static_cast<uint8_t*>(subpass.level_decode_data.data());
   for (size_t idx = 0; idx < num_pages; idx++) {
     if (def_level_sizes[idx] == 0) {
@@ -313,6 +314,15 @@ void reader_impl::allocate_level_decode_space()
       pages[idx].lvl_decode_buf[level_type::REPETITION] = current_ptr;
       current_ptr += rep_level_sizes[idx];
     }
+
+    // Clamp kernel level reads to the actual decoded count (may be less than num_input_values
+    // for flat columns with skip_rows/num_rows).
+    CUDF_EXPECTS(def_level_sizes[idx] % pass.level_type_size == 0,
+                 "Definition level size is not a multiple of the level type size");
+    CUDF_EXPECTS(rep_level_sizes[idx] % pass.level_type_size == 0,
+                 "Repetition level size is not a multiple of the level type size");
+    pages[idx].num_decoded_level_values =
+      std::max(def_level_sizes[idx], rep_level_sizes[idx]) / pass.level_type_size;
   }
 }
 
