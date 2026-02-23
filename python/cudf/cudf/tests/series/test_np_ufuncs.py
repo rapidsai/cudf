@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 import datetime
 import operator
@@ -51,6 +51,7 @@ def test_ufunc_series(request, numpy_ufunc, has_nulls, indexed):
     request.applymarker(
         pytest.mark.xfail(
             condition=numpy_ufunc.__name__.startswith("bitwise")
+            and numpy_ufunc != np.bitwise_count
             and indexed
             and has_nulls,
             reason="https://github.com/pandas-dev/pandas/issues/52500",
