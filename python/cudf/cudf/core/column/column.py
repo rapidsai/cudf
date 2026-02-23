@@ -3195,21 +3195,12 @@ def as_column(
                 arbitrary = arbitrary.array
             if dtype is None:
                 dtype = arbitrary.dtype
-            result = as_column(
+            return as_column(
                 pa.array(arbitrary, from_pandas=True),
                 nan_as_null=nan_as_null,
                 dtype=dtype,
                 length=length,
             )
-            # if cudf.get_option("mode.pandas_compatible"):
-            #     # Store pandas extension dtype directly in the column's dtype property
-            #     if (
-            #         is_pandas_nullable_extension_dtype(arbitrary.dtype)
-            #         and isinstance(result.dtype, np.dtype)
-            #         and result.dtype.kind == "f"
-            #     ):
-            #         result = result.nans_to_nulls()
-            return result
         elif isinstance(
             arbitrary.dtype, pd.api.extensions.ExtensionDtype
         ) and not isinstance(arbitrary, NumpyExtensionArray):
