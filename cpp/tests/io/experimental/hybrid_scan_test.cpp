@@ -265,7 +265,7 @@ std::unique_ptr<cudf::table> test_hybrid_scan_column_selection(
 // Base test fixture for tests
 struct HybridScanTest : public cudf::test::BaseFixture {};
 
-TEST_F(HybridScanTest, PruneRowGroupsOnlyAndScanSelectColumns)
+TEST_F(HybridScanTest, FilterRowGroupsOnlyAndScanSelectColumns)
 {
   srand(0xc0ffee);
   using T = uint32_t;
@@ -328,7 +328,7 @@ TEST_F(HybridScanTest, PruneRowGroupsOnlyAndScanSelectColumns)
   }
 }
 
-TEST_F(HybridScanTest, PruneDataPagesOnlyAndScanAllColumns)
+TEST_F(HybridScanTest, FilterDataPagesOnlyAndScanAllColumns)
 {
   srand(0xf00d);
   using T = cudf::duration_ms;

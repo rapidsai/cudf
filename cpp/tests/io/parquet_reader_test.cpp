@@ -1641,6 +1641,24 @@ TEST_F(ParquetReaderTest, ExtendedFilterExpressions)
     auto result = cudf::io::read_parquet(read_opts);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *expected);
   }
+
+  // Filter: false AND (50 > col_a)
+  {
+    auto literal_50_value = cudf::numeric_scalar<int32_t>(50);
+    auto literal_50       = cudf::ast::literal(literal_50_value);
+    auto literal_0_value  = cudf::numeric_scalar<bool>(false);
+    auto literal_0        = cudf::ast::literal(literal_0_value);
+    auto a_lt_50 = cudf::ast::operation(cudf::ast::ast_operator::GREATER, literal_50, col_ref_a);
+    auto filter  = cudf::ast::operation(cudf::ast::ast_operator::LOGICAL_AND, literal_0, a_lt_50);
+
+    auto predicate = cudf::compute_column(written_table, filter);
+    auto expected  = cudf::apply_boolean_mask(written_table, *predicate);
+
+    cudf::io::parquet_reader_options read_opts =
+      cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath}).filter(filter);
+    auto result = cudf::io::read_parquet(read_opts);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *expected);
+  }
 }
 
 TEST_F(ParquetReaderTest, FilterNamedExpression)

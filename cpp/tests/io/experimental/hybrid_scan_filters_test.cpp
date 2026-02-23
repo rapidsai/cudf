@@ -625,7 +625,7 @@ TYPED_TEST(PageFilteringWithPageIndexStats, FilterPagesWithPageIndexStats)
 
   // A table concatenated multiple times by itself with result in a parquet file with a row group
   // per concatenation with multiple pages per row group. Since all row groups will be identical, we
-  // can only prune pages based on `PageIndex` stats
+  // can only prune pages based on page index stats
   auto constexpr num_concat = 2;
   auto const file_buffer    = std::get<1>(create_parquet_with_stats<T, num_concat, false>());
 
@@ -765,7 +765,7 @@ TYPED_TEST(PageFilteringWithPageIndexStats, FilterPagesWithPageIndexStats)
   }
 }
 
-TEST_F(HybridScanFiltersTest, FilterRowGroupsWithDictBasic)
+TEST_F(HybridScanFiltersTest, FilterRowGroupsWithDictionary)
 {
   srand(0xcafe);
   using T = uint32_t;
@@ -794,13 +794,15 @@ TEST_F(HybridScanFiltersTest, FilterRowGroupsWithDictBasic)
 
   auto const reader_ref = std::ref(*reader);
 
+  auto col0_ref = cudf::ast::column_name_reference("col0");
+  auto col2_ref = cudf::ast::column_name_reference("col2");
+
   {
     // Filtering - table[0] != 1000
     auto uint_literal_value = cudf::numeric_scalar<T>(1000);
     auto uint_literal       = cudf::ast::literal(uint_literal_value);
-    auto uint_col_ref       = cudf::ast::column_name_reference("col0");
     auto filter_expression =
-      cudf::ast::operation(cudf::ast::ast_operator::NOT_EQUAL, uint_col_ref, uint_literal);
+      cudf::ast::operation(cudf::ast::ast_operator::NOT_EQUAL, col0_ref, uint_literal);
     constexpr size_t expected_row_groups = 4;
     EXPECT_EQ(
       filter_row_groups_with_dictionaries(datasource_ref, reader_ref, filter_expression, stream, mr)
@@ -812,9 +814,8 @@ TEST_F(HybridScanFiltersTest, FilterRowGroupsWithDictBasic)
     // Filtering - table[0] == 1000
     auto uint_literal_value = cudf::numeric_scalar<T>(1000);
     auto uint_literal       = cudf::ast::literal(uint_literal_value);
-    auto uint_col_ref       = cudf::ast::column_name_reference("col0");
     auto filter_expression =
-      cudf::ast::operation(cudf::ast::ast_operator::EQUAL, uint_literal, uint_col_ref);
+      cudf::ast::operation(cudf::ast::ast_operator::EQUAL, uint_literal, col0_ref);
     constexpr size_t expected_row_groups = 0;
     EXPECT_EQ(
       filter_row_groups_with_dictionaries(datasource_ref, reader_ref, filter_expression, stream, mr)
@@ -826,9 +827,8 @@ TEST_F(HybridScanFiltersTest, FilterRowGroupsWithDictBasic)
     // Filtering - table[2] != 0100
     auto str_literal_value = cudf::string_scalar("0100");  // in all row groups
     auto str_literal       = cudf::ast::literal(str_literal_value);
-    auto str_col_ref       = cudf::ast::column_name_reference("col2");
     auto filter_expression =
-      cudf::ast::operation(cudf::ast::ast_operator::NOT_EQUAL, str_col_ref, str_literal);
+      cudf::ast::operation(cudf::ast::ast_operator::NOT_EQUAL, col2_ref, str_literal);
 
     constexpr size_t expected_row_groups = 0;
     EXPECT_EQ(
@@ -841,9 +841,8 @@ TEST_F(HybridScanFiltersTest, FilterRowGroupsWithDictBasic)
     // Filtering - table[2] == 0100
     auto str_literal_value = cudf::string_scalar("0100");  // in all row groups
     auto str_literal       = cudf::ast::literal(str_literal_value);
-    auto str_col_ref       = cudf::ast::column_name_reference("col2");
     auto filter_expression =
-      cudf::ast::operation(cudf::ast::ast_operator::EQUAL, str_col_ref, str_literal);
+      cudf::ast::operation(cudf::ast::ast_operator::EQUAL, col2_ref, str_literal);
 
     constexpr size_t expected_row_groups = 4;
     EXPECT_EQ(
@@ -856,15 +855,13 @@ TEST_F(HybridScanFiltersTest, FilterRowGroupsWithDictBasic)
     // Filtering - table[0] != 50 AND table[2] == 0100
     auto uint_literal_value = cudf::numeric_scalar<T>(50);
     auto uint_literal       = cudf::ast::literal(uint_literal_value);
-    auto uint_col_ref       = cudf::ast::column_name_reference("col0");
     auto uint_filter_expression =
-      cudf::ast::operation(cudf::ast::ast_operator::NOT_EQUAL, uint_col_ref, uint_literal);
+      cudf::ast::operation(cudf::ast::ast_operator::NOT_EQUAL, col0_ref, uint_literal);
 
     auto str_literal_value = cudf::string_scalar("0100");
     auto str_literal       = cudf::ast::literal(str_literal_value);
-    auto str_col_ref       = cudf::ast::column_name_reference("col2");
     auto str_filter_expression =
-      cudf::ast::operation(cudf::ast::ast_operator::EQUAL, str_col_ref, str_literal);
+      cudf::ast::operation(cudf::ast::ast_operator::EQUAL, col2_ref, str_literal);
     auto filter_expression = cudf::ast::operation(
       cudf::ast::ast_operator::LOGICAL_AND, uint_filter_expression, str_filter_expression);
 
@@ -881,11 +878,10 @@ TEST_F(HybridScanFiltersTest, FilterRowGroupsWithDictBasic)
     auto uint_literal_value2 = cudf::numeric_scalar<T>(100);
     auto uint_literal        = cudf::ast::literal(uint_literal_value);
     auto uint_literal2       = cudf::ast::literal(uint_literal_value2);
-    auto uint_col_ref        = cudf::ast::column_name_reference("col0");
     auto uint_filter_expression =
-      cudf::ast::operation(cudf::ast::ast_operator::NOT_EQUAL, uint_col_ref, uint_literal);
+      cudf::ast::operation(cudf::ast::ast_operator::NOT_EQUAL, col0_ref, uint_literal);
     auto uint_filter_expression2 =
-      cudf::ast::operation(cudf::ast::ast_operator::NOT_EQUAL, uint_col_ref, uint_literal2);
+      cudf::ast::operation(cudf::ast::ast_operator::NOT_EQUAL, col0_ref, uint_literal2);
     auto filter_expression = cudf::ast::operation(
       cudf::ast::ast_operator::LOGICAL_AND, uint_filter_expression, uint_filter_expression2);
 
@@ -902,11 +898,10 @@ TEST_F(HybridScanFiltersTest, FilterRowGroupsWithDictBasic)
     auto uint_literal_value2 = cudf::numeric_scalar<T>(50);
     auto uint_literal        = cudf::ast::literal(uint_literal_value);
     auto uint_literal2       = cudf::ast::literal(uint_literal_value2);
-    auto uint_col_ref        = cudf::ast::column_name_reference("col0");
     auto uint_filter_expression =
-      cudf::ast::operation(cudf::ast::ast_operator::NOT_EQUAL, uint_col_ref, uint_literal);
+      cudf::ast::operation(cudf::ast::ast_operator::NOT_EQUAL, col0_ref, uint_literal);
     auto uint_filter_expression2 =
-      cudf::ast::operation(cudf::ast::ast_operator::EQUAL, uint_col_ref, uint_literal2);
+      cudf::ast::operation(cudf::ast::ast_operator::EQUAL, col0_ref, uint_literal2);
     auto filter_expression = cudf::ast::operation(
       cudf::ast::ast_operator::LOGICAL_AND, uint_filter_expression, uint_filter_expression2);
 
@@ -923,11 +918,10 @@ TEST_F(HybridScanFiltersTest, FilterRowGroupsWithDictBasic)
     auto str_literal_value2 = cudf::string_scalar("0101");  // in no row group
     auto str_literal        = cudf::ast::literal(str_literal_value);
     auto str_literal2       = cudf::ast::literal(str_literal_value2);
-    auto str_col_ref        = cudf::ast::column_name_reference("col2");
     auto str_filter_expression =
-      cudf::ast::operation(cudf::ast::ast_operator::NOT_EQUAL, str_col_ref, str_literal);
+      cudf::ast::operation(cudf::ast::ast_operator::NOT_EQUAL, col2_ref, str_literal);
     auto str_filter_expression2 =
-      cudf::ast::operation(cudf::ast::ast_operator::NOT_EQUAL, str_col_ref, str_literal2);
+      cudf::ast::operation(cudf::ast::ast_operator::NOT_EQUAL, col2_ref, str_literal2);
     auto filter_expression = cudf::ast::operation(
       cudf::ast::ast_operator::LOGICAL_OR, str_filter_expression, str_filter_expression2);
 
@@ -942,15 +936,13 @@ TEST_F(HybridScanFiltersTest, FilterRowGroupsWithDictBasic)
     // Filtering - table[0] != 50 or table[2] != 0100
     auto uint_literal_value = cudf::numeric_scalar<T>(50);
     auto uint_literal       = cudf::ast::literal(uint_literal_value);
-    auto uint_col_ref       = cudf::ast::column_name_reference("col0");
     auto uint_filter_expression =
-      cudf::ast::operation(cudf::ast::ast_operator::NOT_EQUAL, uint_col_ref, uint_literal);
+      cudf::ast::operation(cudf::ast::ast_operator::NOT_EQUAL, col0_ref, uint_literal);
 
     auto str_literal_value = cudf::string_scalar("0100");
     auto str_literal       = cudf::ast::literal(str_literal_value);
-    auto str_col_ref       = cudf::ast::column_name_reference("col2");
     auto str_filter_expression =
-      cudf::ast::operation(cudf::ast::ast_operator::NOT_EQUAL, str_col_ref, str_literal);
+      cudf::ast::operation(cudf::ast::ast_operator::NOT_EQUAL, col2_ref, str_literal);
     auto filter_expression = cudf::ast::operation(
       cudf::ast::ast_operator::LOGICAL_OR, uint_filter_expression, str_filter_expression);
 
@@ -965,15 +957,13 @@ TEST_F(HybridScanFiltersTest, FilterRowGroupsWithDictBasic)
     // Filtering - table[0] != 50 and table[2] != 0100
     auto uint_literal_value = cudf::numeric_scalar<T>(50);
     auto uint_literal       = cudf::ast::literal(uint_literal_value);
-    auto uint_col_ref       = cudf::ast::column_name_reference("col0");
     auto uint_filter_expression =
-      cudf::ast::operation(cudf::ast::ast_operator::NOT_EQUAL, uint_col_ref, uint_literal);
+      cudf::ast::operation(cudf::ast::ast_operator::NOT_EQUAL, col0_ref, uint_literal);
 
     auto str_literal_value = cudf::string_scalar("0100");
     auto str_literal       = cudf::ast::literal(str_literal_value);
-    auto str_col_ref       = cudf::ast::column_name_reference("col2");
     auto str_filter_expression =
-      cudf::ast::operation(cudf::ast::ast_operator::NOT_EQUAL, str_col_ref, str_literal);
+      cudf::ast::operation(cudf::ast::ast_operator::NOT_EQUAL, col2_ref, str_literal);
     auto filter_expression = cudf::ast::operation(
       cudf::ast::ast_operator::LOGICAL_AND, uint_filter_expression, str_filter_expression);
 
@@ -992,13 +982,12 @@ TEST_F(HybridScanFiltersTest, FilterRowGroupsWithDictBasic)
     auto uint_literal        = cudf::ast::literal(uint_literal_value);
     auto uint_literal2       = cudf::ast::literal(uint_literal_value2);
     auto uint_literal3       = cudf::ast::literal(uint_literal_value3);
-    auto uint_col_ref        = cudf::ast::column_name_reference("col0");
     auto uint_filter_expression =
-      cudf::ast::operation(cudf::ast::ast_operator::EQUAL, uint_col_ref, uint_literal);
+      cudf::ast::operation(cudf::ast::ast_operator::EQUAL, col0_ref, uint_literal);
     auto uint_filter_expression2 =
-      cudf::ast::operation(cudf::ast::ast_operator::EQUAL, uint_col_ref, uint_literal2);
+      cudf::ast::operation(cudf::ast::ast_operator::EQUAL, col0_ref, uint_literal2);
     auto uint_filter_expression3 =
-      cudf::ast::operation(cudf::ast::ast_operator::EQUAL, uint_col_ref, uint_literal3);
+      cudf::ast::operation(cudf::ast::ast_operator::EQUAL, col0_ref, uint_literal3);
     auto composed_filter_expression = cudf::ast::operation(
       cudf::ast::ast_operator::LOGICAL_OR, uint_filter_expression, uint_filter_expression2);
     auto filter_expression = cudf::ast::operation(
@@ -1019,13 +1008,12 @@ TEST_F(HybridScanFiltersTest, FilterRowGroupsWithDictBasic)
     auto uint_literal        = cudf::ast::literal(uint_literal_value);
     auto uint_literal2       = cudf::ast::literal(uint_literal_value2);
     auto uint_literal3       = cudf::ast::literal(uint_literal_value3);
-    auto uint_col_ref        = cudf::ast::column_name_reference("col0");
     auto uint_filter_expression =
-      cudf::ast::operation(cudf::ast::ast_operator::NOT_EQUAL, uint_col_ref, uint_literal);
+      cudf::ast::operation(cudf::ast::ast_operator::NOT_EQUAL, col0_ref, uint_literal);
     auto uint_filter_expression2 =
-      cudf::ast::operation(cudf::ast::ast_operator::NOT_EQUAL, uint_col_ref, uint_literal2);
+      cudf::ast::operation(cudf::ast::ast_operator::NOT_EQUAL, col0_ref, uint_literal2);
     auto uint_filter_expression3 =
-      cudf::ast::operation(cudf::ast::ast_operator::NOT_EQUAL, uint_col_ref, uint_literal3);
+      cudf::ast::operation(cudf::ast::ast_operator::NOT_EQUAL, col0_ref, uint_literal3);
     auto composed_filter_expression = cudf::ast::operation(
       cudf::ast::ast_operator::LOGICAL_OR, uint_filter_expression, uint_filter_expression2);
     auto filter_expression = cudf::ast::operation(
@@ -1046,13 +1034,12 @@ TEST_F(HybridScanFiltersTest, FilterRowGroupsWithDictBasic)
     auto str_literal        = cudf::ast::literal(str_literal_value);
     auto str_literal2       = cudf::ast::literal(str_literal_value2);
     auto str_literal3       = cudf::ast::literal(str_literal_value3);
-    auto str_col_ref        = cudf::ast::column_name_reference("col2");
     auto str_filter_expression =
-      cudf::ast::operation(cudf::ast::ast_operator::NOT_EQUAL, str_col_ref, str_literal);
+      cudf::ast::operation(cudf::ast::ast_operator::NOT_EQUAL, col2_ref, str_literal);
     auto str_filter_expression2 =
-      cudf::ast::operation(cudf::ast::ast_operator::NOT_EQUAL, str_col_ref, str_literal2);
+      cudf::ast::operation(cudf::ast::ast_operator::NOT_EQUAL, col2_ref, str_literal2);
     auto str_filter_expression3 =
-      cudf::ast::operation(cudf::ast::ast_operator::NOT_EQUAL, str_col_ref, str_literal3);
+      cudf::ast::operation(cudf::ast::ast_operator::NOT_EQUAL, col2_ref, str_literal3);
     auto composed_filter_expression = cudf::ast::operation(
       cudf::ast::ast_operator::LOGICAL_AND, str_filter_expression, str_filter_expression2);
     auto filter_expression = cudf::ast::operation(
@@ -1063,6 +1050,20 @@ TEST_F(HybridScanFiltersTest, FilterRowGroupsWithDictBasic)
       filter_row_groups_with_dictionaries(datasource_ref, reader_ref, filter_expression, stream, mr)
         .size(),
       expected_row_groups);
+  }
+
+  // Filtering - (50 == table[0]) AND (table[0] != table[2])
+  {
+    auto literal_50_value = cudf::numeric_scalar<T>(50);
+    auto literal_50       = cudf::ast::literal(literal_50_value);
+    auto lhs = cudf::ast::operation(cudf::ast::ast_operator::EQUAL, col0_ref, literal_50);
+    auto rhs = cudf::ast::operation(cudf::ast::ast_operator::NOT_EQUAL, col0_ref, col2_ref);
+    auto const filter_expression =
+      cudf::ast::operation(cudf::ast::ast_operator::LOGICAL_AND, lhs, rhs);
+    auto const result = filter_row_groups_with_dictionaries(
+      datasource_ref, reader_ref, filter_expression, stream, mr);
+    auto const expected = std::vector<cudf::size_type>{1};
+    EXPECT_EQ(result, expected);
   }
 }
 
