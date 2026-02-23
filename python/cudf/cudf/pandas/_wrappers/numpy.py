@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION & AFFILIATES.  All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES.  All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -118,6 +118,24 @@ def wrap_ndarray(cls, arr: cupy.ndarray | numpy.ndarray, constructor):
 
 
 def ndarray__array_ufunc__(self, ufunc, method, *inputs, **kwargs):
+    if method == "__call__" and len(inputs) > 1:
+        self_priority = getattr(self, "__array_priority__", 0)
+        try:
+            self_priority = float(self_priority)
+        except (TypeError, ValueError):
+            self_priority = 0
+        for inp in inputs:
+            if inp is self:
+                continue
+            inp_priority = getattr(inp, "__array_priority__", None)
+            if inp_priority is None:
+                continue
+            try:
+                inp_priority = float(inp_priority)
+            except (TypeError, ValueError):
+                continue
+            if inp_priority > self_priority:
+                return NotImplemented
     result, _ = _fast_slow_function_call(
         getattr(ufunc, method),
         None,
@@ -134,6 +152,14 @@ def ndarray__array_ufunc__(self, ufunc, method, *inputs, **kwargs):
     ):
         return numpy.asarray(result)
     return result
+
+
+def ndarray__divmod__(self, other):
+    return numpy.divmod(self, other)
+
+
+def ndarray__rdivmod__(self, other):
+    return numpy.divmod(other, self)
 
 
 def ndarray__reduce__(self):
@@ -209,6 +235,8 @@ ndarray = make_final_proxy_type(
         "__cuda_array_interface__": cuda_array_interface,
         "__array_interface__": array_interface,
         "__array_ufunc__": ndarray__array_ufunc__,
+        "__divmod__": ndarray__divmod__,
+        "__rdivmod__": ndarray__rdivmod__,
         "__reduce__": ndarray__reduce__,
         # ndarrays are unhashable
         "__hash__": None,

@@ -3870,6 +3870,72 @@ class Series(SingleColumnFrame, IndexedFrame):
             index=index,
         )
 
+    def __divmod__(self, other):
+        """
+        Return integer division and modulo of Series and other, element-wise.
+
+        Equivalent to ``divmod(series, other)``, but returns a tuple of Series.
+
+        Parameters
+        ----------
+        other : scalar or Series
+
+        Returns
+        -------
+        tuple of two Series
+            First element is integer division, second element is modulo.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series([10, 20, 30])
+        >>> quotient, remainder = divmod(s, 3)
+        >>> quotient
+        0     3
+        1     6
+        2    10
+        dtype: int64
+        >>> remainder
+        0    1
+        1    2
+        2    0
+        dtype: int64
+        """
+        return self.__floordiv__(other), self.__mod__(other)
+
+    def __rdivmod__(self, other):
+        """
+        Return integer division and modulo of other and Series, element-wise.
+
+        Equivalent to ``divmod(other, series)``, but returns a tuple of Series.
+
+        Parameters
+        ----------
+        other : scalar or Series
+
+        Returns
+        -------
+        tuple of two Series
+            First element is integer division, second element is modulo.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series([10, 20, 30])
+        >>> quotient, remainder = divmod(100, s)
+        >>> quotient
+        0    10
+        1     5
+        2     3
+        dtype: int64
+        >>> remainder
+        0    0
+        1    0
+        2   10
+        dtype: int64
+        """
+        return self.__rfloordiv__(other), self.__rmod__(other)
+
 
 def make_binop_func(op):
     # This function is used to wrap binary operations in Frame with an
