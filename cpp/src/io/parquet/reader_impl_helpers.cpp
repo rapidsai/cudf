@@ -55,7 +55,7 @@ namespace {
   return static_cast<size_type>(total_row_groups);
 }
 
-std::optional<LogicalType> converted_to_logical_type(SchemaElement const& schema)
+cuda::std::optional<LogicalType> converted_to_logical_type(SchemaElement const& schema)
 {
   if (schema.converted_type.has_value()) {
     switch (schema.converted_type.value()) {
@@ -86,7 +86,7 @@ std::optional<LogicalType> converted_to_logical_type(SchemaElement const& schema
       default: return LogicalType{LogicalType::UNDEFINED};
     }
   }
-  return std::nullopt;
+  return cuda::std::nullopt;
 }
 
 }  // namespace
