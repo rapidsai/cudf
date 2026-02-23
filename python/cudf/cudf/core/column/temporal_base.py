@@ -190,7 +190,11 @@ class TemporalBaseColumn(ColumnBase, Scannable):
 
     @functools.cached_property
     def time_unit(self) -> str:
-        return np.datetime_data(self.dtype)[0]
+        if isinstance(self.dtype, np.dtype):
+            # np.dtype defaults to dtype[float64] for typing
+            return np.datetime_data(self.dtype)[0]  # type: ignore[arg-type]
+        else:
+            return cast("pd.ArrowDtype", self.dtype).pyarrow_dtype.unit
 
     @property
     def values(self) -> cp.ndarray:
@@ -280,10 +284,11 @@ class TemporalBaseColumn(ColumnBase, Scannable):
         if isinstance(replacement, type(self)):
             replacement = replacement.astype(self._UNDERLYING_DTYPE)
         try:
-            return (
-                self.astype(self._UNDERLYING_DTYPE)  # type:ignore[return-value]
+            return cast(
+                "Self",
+                self.astype(self._UNDERLYING_DTYPE)
                 .find_and_replace(to_replace, replacement, all_nan)
-                .astype(self.dtype)
+                .astype(self.dtype),
             )
         except TypeError:
             return self.copy(deep=True)

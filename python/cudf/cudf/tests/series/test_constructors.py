@@ -1577,3 +1577,33 @@ def test_series_constructor_numpy_dtype_str(pandas_compatible):
     result = cudf.Series(data, dtype=dtype)
     assert result.dtype == np.dtype(object)
     assert_eq(result, expected)
+
+
+def test_series_constructor_dtype_is_pandas_nullable_extension_type(
+    all_supported_pandas_nullable_extension_dtypes,
+):
+    scalar, dtype = all_supported_pandas_nullable_extension_dtypes
+    result = cudf.Series([scalar], dtype=dtype)
+    expected = pd.Series([scalar], dtype=dtype)
+    assert result.dtype == expected.dtype
+    assert_eq(result, expected)
+
+
+def test_series_constructor_dtype_is_pandas_arrowdtype(
+    all_supported_pandas_arrowdtypes,
+    request,
+):
+    scalar, dtype = all_supported_pandas_arrowdtypes
+    if PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION:
+        if dtype.kind == "M" and dtype.pyarrow_dtype.tz is not None:
+            pytest.skip(
+                f"RecursionError occurs in older versions of pandas/pyarrow for {dtype}"
+            )
+        elif pa.types.is_decimal(dtype.pyarrow_dtype):
+            pytest.skip(
+                "Decimal types coerced to object in older versions of pandas/pyarrow"
+            )
+    result = cudf.Series([scalar], dtype=dtype)
+    expected = pd.Series([scalar], dtype=dtype)
+    assert result.dtype == expected.dtype
+    assert_eq(result, expected)

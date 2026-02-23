@@ -48,6 +48,15 @@ def test_ufunc_series(request, numpy_ufunc, has_nulls, indexed):
             reason="Can't call cupy on column with nulls",
         )
     )
+    request.applymarker(
+        pytest.mark.xfail(
+            condition=numpy_ufunc.__name__.startswith("bitwise")
+            and numpy_ufunc != np.bitwise_count
+            and indexed
+            and has_nulls,
+            reason="https://github.com/pandas-dev/pandas/issues/52500",
+        )
+    )
 
     N = 100
     # Avoid zeros in either array to skip division by 0 errors. Also limit the

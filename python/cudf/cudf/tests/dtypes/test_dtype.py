@@ -14,10 +14,10 @@ from cudf.testing import assert_eq
     [
         (np.dtype("int8"), np.dtype("int8")),
         (np.int8, np.dtype("int8")),
-        (pd.Int8Dtype(), np.dtype("int8")),
+        (pd.Int8Dtype(), pd.Int8Dtype()),
         (pd.StringDtype(), pd.StringDtype()),
         ("int8", np.dtype("int8")),
-        ("boolean", np.dtype("bool")),
+        ("boolean", pd.BooleanDtype()),
         ("bool_", np.dtype("bool")),
         (np.bool_, np.dtype("bool")),
         (int, np.dtype("int64")),
@@ -49,6 +49,7 @@ from cudf.testing import assert_eq
         (cudf.IntervalDtype("int"), cudf.IntervalDtype("int64")),
         (pd.IntervalDtype("int64"), cudf.IntervalDtype("int64")),
     ],
+    ids=repr,
 )
 def test_dtype(in_dtype, expect):
     assert_eq(cudf.dtype(in_dtype), expect)

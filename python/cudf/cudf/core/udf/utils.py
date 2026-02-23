@@ -264,6 +264,11 @@ def _return_arr_from_dtype(dtype, size):
         return rmm.DeviceBuffer(
             size=size * _get_extensionty_size(managed_udf_string)
         )
+    if dtype.kind in {"M", "m"}:
+        # cupy>=14 rejects cp.empty() for datetime64
+        # or timedelta64 as unsupported dtypes.
+        # See https://github.com/cupy/cupy/pull/9711
+        return cp.empty(size, dtype=np.int64).view(dtype)
     return cp.empty(size, dtype=dtype)
 
 

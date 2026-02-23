@@ -402,42 +402,21 @@ def _maybe_convert_to_default_type(dtype: DtypeObj) -> DtypeObj:
     return dtype
 
 
-def _get_base_dtype(dtype: pd.DatetimeTZDtype) -> np.dtype:
-    # TODO: replace the use of this function with just `dtype.base`
-    # when Pandas 2.1.0 is the minimum version we support:
-    # https://github.com/pandas-dev/pandas/pull/52706
+def _get_base_dtype(dtype: pd.DatetimeTZDtype | pd.ArrowDtype) -> np.dtype:
     if isinstance(dtype, pd.DatetimeTZDtype):
+        # TODO: replace below with dtype.base when Pandas 2.1.0 is the minimum version we support:
+        # https://github.com/pandas-dev/pandas/pull/52706
         return np.dtype(f"<M8[{dtype.unit}]")
     else:
-        return dtype.base
+        return dtype.numpy_dtype
 
 
 def pyarrow_dtype_to_cudf_dtype(dtype: pd.ArrowDtype) -> DtypeObj:
-    """Given a pandas ArrowDtype, converts it into the equivalent cudf pandas
-    dtype.
-    """
-
-    pyarrow_dtype = dtype.pyarrow_dtype
-    if isinstance(pyarrow_dtype, pa.Decimal128Type):
-        return cudf.Decimal128Dtype.from_arrow(pyarrow_dtype)
-    elif isinstance(pyarrow_dtype, pa.Decimal64Type):
-        return cudf.Decimal64Dtype.from_arrow(pyarrow_dtype)
-    elif isinstance(pyarrow_dtype, pa.Decimal32Type):
-        return cudf.Decimal32Dtype.from_arrow(pyarrow_dtype)
-    elif isinstance(pyarrow_dtype, pa.ListType):
-        return cudf.ListDtype.from_arrow(pyarrow_dtype)
-    elif isinstance(pyarrow_dtype, pa.StructType):
-        return cudf.StructDtype.from_arrow(pyarrow_dtype)
-    elif pa.types.is_large_string(pyarrow_dtype) or pa.types.is_string(
-        pyarrow_dtype
-    ):
-        return DEFAULT_STRING_DTYPE
-    elif pa.types.is_date(pyarrow_dtype):
-        raise TypeError("Unsupported type")
-    elif isinstance(pyarrow_dtype, pa.DataType):
-        return np.dtype(pyarrow_dtype.to_pandas_dtype())
+    """Convert a pandas.ArrowDtype to a default cuDF dtype."""
+    if pa.types.is_date(dtype.pyarrow_dtype):
+        raise TypeError(f"Unsupported type: {dtype.pyarrow_dtype}")
     else:
-        raise TypeError(f"Unsupported Arrow type: {pyarrow_dtype}")
+        return cudf_dtype_from_pa_type(dtype.pyarrow_dtype)
 
 
 def is_pandas_nullable_numpy_dtype(dtype_to_check) -> bool:

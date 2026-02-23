@@ -21,7 +21,14 @@ import pylibcudf as plc
 
 import cudf
 from cudf.core.abc import Serializable
-from cudf.core.dtype.validators import is_dtype_obj_string
+from cudf.core.dtype.validators import (
+    is_dtype_obj_datetime_tz,
+    is_dtype_obj_interval,
+    is_dtype_obj_list,
+    is_dtype_obj_numeric,
+    is_dtype_obj_string,
+    is_dtype_obj_struct,
+)
 from cudf.utils.docutils import doc_apply
 from cudf.utils.dtypes import (
     DEFAULT_STRING_DTYPE,
@@ -42,6 +49,9 @@ if TYPE_CHECKING:
     from cudf.core.index import Index
 
 
+PANDAS_NUMPY_DTYPE = pd.core.dtypes.dtypes.NumpyEADtype
+
+
 def dtype(arbitrary: Any) -> DtypeObj:
     """
     Return the cuDF-supported dtype corresponding to `arbitrary`.
@@ -58,7 +68,7 @@ def dtype(arbitrary: Any) -> DtypeObj:
     dtype: the cuDF-supported dtype that best matches `arbitrary`
     """
     #  first, check if `arbitrary` is one of our extension types:
-    if isinstance(arbitrary, (_BaseDtype, pd.DatetimeTZDtype)):
+    if isinstance(arbitrary, _BaseDtype):
         return arbitrary
     if inspect.isclass(arbitrary) and issubclass(
         arbitrary, pd.api.extensions.ExtensionDtype
@@ -87,38 +97,21 @@ def dtype(arbitrary: Any) -> DtypeObj:
             raise TypeError(f"Unsupported type {np_dtype}")
         return np_dtype
 
-    # use `pandas_dtype` to try and interpret
-    # `arbitrary` as a Pandas extension type.
-    #  Return the corresponding NumPy/cuDF type.
+    # lastly, try interpreting arbitrary as a pandas dtype that we support:
     pd_dtype = pd.api.types.pandas_dtype(arbitrary)  # noqa: TID251
-    if isinstance(pd_dtype, pd.StringDtype):
-        return pd_dtype
-    elif isinstance(pd_dtype, pd.CategoricalDtype):
-        return CategoricalDtype(pd_dtype.categories, pd_dtype.ordered)
-    elif is_pandas_nullable_extension_dtype(pd_dtype):
-        if isinstance(pd_dtype, pd.ArrowDtype):
-            arrow_type = pd_dtype.pyarrow_dtype
-            if (
-                arrow_type == pa.date32()
-                or arrow_type == pa.binary()
-                or isinstance(arrow_type, pa.DictionaryType)
-            ) or (
-                cudf.get_option("mode.pandas_compatible")
-                and isinstance(arrow_type, pa.TimestampType)
-                and getattr(arrow_type, "tz", None) is not None
-            ):
-                raise NotImplementedError(
-                    f"cuDF does not yet support {pd_dtype}"
-                )
-        if cudf.get_option("mode.pandas_compatible"):
-            return pd_dtype
-        else:
-            return dtype(pd_dtype.numpy_dtype)
-    elif isinstance(pd_dtype, pd.core.dtypes.dtypes.NumpyEADtype):
+    if isinstance(pd_dtype, PANDAS_NUMPY_DTYPE):
         return dtype(pd_dtype.numpy_dtype)
     elif isinstance(pd_dtype, pd.IntervalDtype):
         return IntervalDtype(pd_dtype.subtype, pd_dtype.closed)
-    elif isinstance(pd_dtype, pd.DatetimeTZDtype):
+    elif (
+        pd_dtype.kind in "mM"
+        or is_dtype_obj_string(pd_dtype)
+        or is_dtype_obj_list(pd_dtype)
+        or is_dtype_obj_struct(pd_dtype)
+        or is_dtype_obj_interval(pd_dtype)
+        or is_dtype_obj_numeric(pd_dtype, include_decimal=True)
+        or is_dtype_obj_datetime_tz(pd_dtype)
+    ):
         return pd_dtype
     else:
         raise TypeError(f"Cannot interpret {arbitrary} as a valid cuDF dtype")
@@ -608,15 +601,23 @@ class StructDtype(_BaseDtype):
     Examples
     --------
     >>> import cudf
-    >>> struct_dtype = cudf.StructDtype({"a": "int64", "b": "string"})
+    >>> struct_dtype = cudf.StructDtype({"a": "int64", "b": "float64"})
     >>> struct_dtype
+    <<<<<<< HEAD
     StructDtype({'a': dtype('int64'), 'b': <StringDtype(na_value=<NA>)>})
+    =======
+    StructDtype({'a': dtype('int64'), 'b': dtype('float64')})
+    >>>>>>> upstream/main
 
     A nested ``StructDtype`` can also be constructed in the following way:
 
     >>> nested_struct_dtype = cudf.StructDtype({"dict_data": struct_dtype, "c": "uint8"})
     >>> nested_struct_dtype
+    <<<<<<< HEAD
     StructDtype({'dict_data': StructDtype({'a': dtype('int64'), 'b': <StringDtype(na_value=<NA>)>}), 'c': dtype('uint8')})
+    =======
+    StructDtype({'dict_data': StructDtype({'a': dtype('int64'), 'b': dtype('float64')}), 'c': dtype('uint8')})
+    >>>>>>> upstream/main
     """
 
     name = "struct"
@@ -635,11 +636,17 @@ class StructDtype(_BaseDtype):
         Examples
         --------
         >>> import cudf
-        >>> struct_dtype = cudf.StructDtype({"a": "int64", "b": "string"})
+        >>> struct_dtype = cudf.StructDtype({"a": "int64", "b": "float64"})
         >>> struct_dtype
+        <<<<<<< HEAD
         StructDtype({'a': dtype('int64'), 'b': <StringDtype(na_value=<NA>)>})
         >>> struct_dtype.fields
         {'a': dtype('int64'), 'b': <StringDtype(na_value=<NA>)>}
+        =======
+        StructDtype({'a': dtype('int64'), 'b': dtype('float64')})
+        >>> struct_dtype.fields
+        {'a': dtype('int64'), 'b': dtype('float64')}
+        >>>>>>> upstream/main
         """
         return self._fields
 
@@ -675,11 +682,15 @@ class StructDtype(_BaseDtype):
         Examples
         --------
         >>> import cudf
-        >>> struct_type = cudf.StructDtype({"x": "int32", "y": "string"})
+        >>> struct_type = cudf.StructDtype({"x": "int32", "y": "float64"})
         >>> struct_type
+        <<<<<<< HEAD
         StructDtype({'x': dtype('int32'), 'y': <StringDtype(na_value=<NA>)>})
+        =======
+        StructDtype({'x': dtype('int32'), 'y': dtype('float64')})
+        >>>>>>> upstream/main
         >>> struct_type.to_arrow()
-        StructType(struct<x: int32, y: string>)
+        StructType(struct<x: int32, y: double>)
         """
         return pa.struct(
             # dict[str, DataType] should be compatible but pyarrow stubs are too strict
