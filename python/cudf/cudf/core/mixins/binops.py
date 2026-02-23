@@ -81,5 +81,33 @@ def _rdivmod(self, other):
     return self.__rfloordiv__(other), self.__rmod__(other)
 
 
-BinaryOperand.__divmod__ = _divmod
-BinaryOperand.__rdivmod__ = _rdivmod
+_binaryoperand_init_subclass = BinaryOperand.__init_subclass__
+
+
+def _binaryoperand_init_subclass_with_divmod(cls, **kwargs) -> None:
+    _binaryoperand_init_subclass.__get__(cls, BinaryOperand)()
+
+    valid_operations: set[str] = set()
+    for base_cls in cls.__mro__:
+        valid_operations |= getattr(
+            base_cls, "_VALID_BINARY_OPERATIONS", set()
+        )
+
+    if (
+        "__floordiv__" in valid_operations
+        and "__mod__" in valid_operations
+        and "__divmod__" not in cls.__dict__
+    ):
+        cls.__divmod__ = _divmod
+
+    if (
+        "__rfloordiv__" in valid_operations
+        and "__rmod__" in valid_operations
+        and "__rdivmod__" not in cls.__dict__
+    ):
+        cls.__rdivmod__ = _rdivmod
+
+
+BinaryOperand.__init_subclass__ = classmethod(
+    _binaryoperand_init_subclass_with_divmod
+)
