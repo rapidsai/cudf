@@ -51,7 +51,7 @@ from cudf.core.column.column import concat_columns
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.common import pipe
 from cudf.core.copy_types import BooleanMask, GatherMap
-from cudf.core.dtype.validators import is_dtype_obj_numeric
+from cudf.core.dtype.validators import is_dtype_obj_list, is_dtype_obj_numeric
 from cudf.core.dtypes import ListDtype
 from cudf.core.frame import Frame
 from cudf.core.groupby.groupby import GroupBy
@@ -5490,17 +5490,13 @@ class IndexedFrame(Frame):
         return None
 
     @_performance_tracking
-    def _explode(self, explode_column: Any, ignore_index: bool):
+    def _explode(self, explode_column: Hashable, ignore_index: bool):
         # Helper function for `explode` in `Series` and `Dataframe`, explodes a
         # specified nested column. Other columns' corresponding rows are
         # duplicated. If ignore_index is set, the original index is not
         # exploded and will be replaced with a `RangeIndex`.
-        dtype = self._data[explode_column].dtype
-        is_list_dtype = isinstance(dtype, ListDtype) or (
-            isinstance(dtype, pd.ArrowDtype)
-            and isinstance(dtype.pyarrow_dtype, pa.ListType)
-        )
-        if not is_list_dtype:
+        explode_dtype = self._data[explode_column].dtype
+        if not is_dtype_obj_list(explode_dtype):
             result = self.copy()
             if ignore_index:
                 result.index = RangeIndex(len(result))
@@ -5511,9 +5507,7 @@ class IndexedFrame(Frame):
 
         # Build result dtypes: for the exploded column, use its element type
         # to preserve struct dtype key names; for all others, preserve original dtype
-        element_type = cast(
-            ListDtype, self._columns[column_index].dtype
-        ).element_type
+        element_type = ListDtype.from_list_dtype(explode_dtype).element_type
         explode_column_idx = column_index + len(idx_cols)
         result_dtypes = [
             element_type if i == explode_column_idx else col.dtype
