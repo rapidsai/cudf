@@ -17,6 +17,7 @@ import pylibcudf as plc
 
 import cudf
 from cudf.api.types import is_scalar
+from cudf.core._compat import PANDAS_GE_220
 from cudf.core._internals import binaryop
 from cudf.core.column.column import ColumnBase, as_column, column_empty
 from cudf.core.mixins import Scannable
@@ -357,9 +358,13 @@ class StringColumn(ColumnBase, Scannable):
             "python",
         ]:
             if self.dtype.storage == "pyarrow":
-                pandas_array = self.dtype.__from_arrow__(
-                    self.to_arrow().cast(pa.large_string())
-                )
+                pa_array = self.to_arrow()
+                if PANDAS_GE_220:
+                    # Prior versions only expect pa.string()
+                    pa_array = pa_array.cast(pa.large_string())
+                else:
+                    pa_array = pa_array.cast(pa.string())
+                pandas_array = self.dtype.__from_arrow__(pa_array)
             elif self.dtype.na_value is np.nan:
                 pandas_array = pd.array(
                     self.to_arrow().to_pandas(), dtype=self.dtype
