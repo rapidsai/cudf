@@ -1223,6 +1223,9 @@ def parse_args(
     if parsed_args.output_expected_directory and not parsed_args.validate:
         raise ValueError("Must specify --validate to use --output-expected-directory.")
 
+    if parsed_args.suffix and not parsed_args.suffix.startswith("."):
+        parsed_args.suffix = f".{parsed_args.suffix}"
+
     return parsed_args
 
 
@@ -1273,7 +1276,9 @@ def check_input_data_type(run_config: RunConfig) -> Literal["decimal", "float"]:
     if run_config.suffix == "":
         path = Path(run_config.dataset_path) / f"customer{run_config.suffix}"
     else:
-        path = Path(run_config.dataset_path) / f"customer.{run_config.suffix}"
+        path = (Path(run_config.dataset_path) / "customer").with_suffix(
+            run_config.suffix
+        )
     t = pl.scan_parquet(path).select(pl.col("c_acctbal")).collect_schema()["c_acctbal"]
 
     if t.is_decimal():
