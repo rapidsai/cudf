@@ -39,7 +39,7 @@ from cudf.core.column import (
     ColumnBase,
     as_column,
 )
-from cudf.core.column.column import concat_columns
+from cudf.core.column.column import _normalize_types_column, concat_columns
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.dtype.validators import is_dtype_obj_numeric
 from cudf.core.dtypes import CategoricalDtype, IntervalDtype
@@ -64,6 +64,7 @@ from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
     _get_nan_for_dtype,
+    dtype_from_pylibcudf_column,
     find_common_type,
     get_dtype_of_same_kind,
     is_mixed_with_object_dtype,
@@ -3862,8 +3863,11 @@ class Series(SingleColumnFrame, IndexedFrame):
                 )
             name = metadata.get("name")
             index = metadata.get("index")
+        normalized = _normalize_types_column(col)
         return cls._from_column(
-            ColumnBase.from_pylibcudf(col),
+            ColumnBase.create(
+                normalized, dtype=dtype_from_pylibcudf_column(normalized)
+            ),
             name=name,
             index=index,
         )

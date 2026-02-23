@@ -19,10 +19,9 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/std/functional>
+#include <cuda/std/iterator>
 #include <cuda/std/limits>
 #include <cuda/std/utility>
-#include <thrust/functional.h>
-#include <thrust/iterator/reverse_iterator.h>
 #include <thrust/scan.h>
 #include <thrust/tabulate.h>
 #include <thrust/transform.h>

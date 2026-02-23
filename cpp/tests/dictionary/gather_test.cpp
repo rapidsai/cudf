@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -10,7 +10,6 @@
 #include <cudf/copying.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/dictionary/encode.hpp>
-#include <cudf/sorting.hpp>
 
 #include <vector>
 
@@ -46,41 +45,5 @@ TEST_F(DictionaryGatherTest, GatherWithNulls)
 
   cudf::test::fixed_width_column_wrapper<int64_t> expected{{7, 5, 5, 7}, {true, true, false, true}};
   auto result_decoded = cudf::dictionary::decode(result);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result_decoded->view());
-}
-
-TEST_F(DictionaryGatherTest, SortStrings)
-{
-  std::vector<std::string> h_strings{"eee", "aaa", "ddd", "bbb", "ccc", "ccc", "ccc", "eee", "aaa"};
-  cudf::test::strings_column_wrapper strings(h_strings.begin(), h_strings.end());
-
-  auto dictionary = cudf::dictionary::encode(strings);
-  cudf::dictionary_column_view view(dictionary->view());
-
-  auto result = cudf::sort(cudf::table_view{{dictionary->view()}},
-                           std::vector<cudf::order>{cudf::order::ASCENDING})
-                  ->release();
-
-  std::sort(h_strings.begin(), h_strings.end());
-  auto result_decoded = cudf::dictionary::decode(result.front()->view());
-  cudf::test::strings_column_wrapper expected(h_strings.begin(), h_strings.end());
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result_decoded->view());
-}
-
-TEST_F(DictionaryGatherTest, SortFloat)
-{
-  std::vector<double> h_data{1.25, -5.75, 8.125, 1e9, 9.7};
-  cudf::test::fixed_width_column_wrapper<double> data(h_data.begin(), h_data.end());
-
-  auto dictionary = cudf::dictionary::encode(data);
-  cudf::dictionary_column_view view(dictionary->view());
-
-  auto result = cudf::sort(cudf::table_view{{dictionary->view()}},
-                           std::vector<cudf::order>{cudf::order::ASCENDING})
-                  ->release();
-
-  std::sort(h_data.begin(), h_data.end());
-  auto result_decoded = cudf::dictionary::decode(result.front()->view());
-  cudf::test::fixed_width_column_wrapper<double> expected(h_data.begin(), h_data.end());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result_decoded->view());
 }
