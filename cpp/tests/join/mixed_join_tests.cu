@@ -802,6 +802,139 @@ TEST_F(MixedInnerJoinTest2, UnaryRightTableColumnReference)
               expected_outputs);
 }
 
+TEST_F(MixedInnerJoinTest2, FloatingPointConditionalComparison)
+{
+  // Test with double conditional columns and >= predicate.
+  // Equality columns are int32_t, conditional columns are double.
+  auto const col_ref_left_1  = cudf::ast::column_reference(0, cudf::ast::table_reference::LEFT);
+  auto const col_ref_right_1 = cudf::ast::column_reference(0, cudf::ast::table_reference::RIGHT);
+  auto const predicate =
+    cudf::ast::operation(cudf::ast::ast_operator::GREATER_EQUAL, col_ref_left_1, col_ref_right_1);
+
+  std::string jit_pred = R"(
+    __device__ void predicate(bool* output, double left_col0, double right_col0) {
+      *output = left_col0 >= right_col0;
+    }
+  )";
+
+  auto left_col0  = cudf::test::fixed_width_column_wrapper<int32_t>{1, 2, 3};
+  auto left_col1  = cudf::test::fixed_width_column_wrapper<double>{1.5, 2.7, 3.1};
+  auto right_col0 = cudf::test::fixed_width_column_wrapper<int32_t>{1, 2, 3};
+  auto right_col1 = cudf::test::fixed_width_column_wrapper<double>{1.2, 2.8, 3.0};
+
+  auto left_equality     = cudf::table_view{{left_col0}};
+  auto right_equality    = cudf::table_view{{right_col0}};
+  auto left_conditional  = cudf::table_view{{left_col1}};
+  auto right_conditional = cudf::table_view{{right_col1}};
+
+  // left_col1 >= right_col1: 1.5>=1.2 (T), 2.7>=2.8 (F), 3.1>=3.0 (T)
+  this->_test(left_equality,
+              right_equality,
+              left_conditional,
+              right_conditional,
+              predicate,
+              {1, 0, 1},
+              {{0, 0}, {2, 2}},
+              cudf::null_equality::EQUAL,
+              jit_pred);
+}
+
+TEST_F(MixedInnerJoinTest2, MultiColumnAndPredicate)
+{
+  // Test compound predicate: (left.col0 > right.col0) AND (left.col1 > right.col1)
+  auto const col_ref_left_0  = cudf::ast::column_reference(0, cudf::ast::table_reference::LEFT);
+  auto const col_ref_right_0 = cudf::ast::column_reference(0, cudf::ast::table_reference::RIGHT);
+  auto const col_ref_left_1  = cudf::ast::column_reference(1, cudf::ast::table_reference::LEFT);
+  auto const col_ref_right_1 = cudf::ast::column_reference(1, cudf::ast::table_reference::RIGHT);
+
+  auto const cmp0 =
+    cudf::ast::operation(cudf::ast::ast_operator::GREATER, col_ref_left_0, col_ref_right_0);
+  auto const cmp1 =
+    cudf::ast::operation(cudf::ast::ast_operator::GREATER, col_ref_left_1, col_ref_right_1);
+  auto const predicate =
+    cudf::ast::operation(cudf::ast::ast_operator::LOGICAL_AND, cmp0, cmp1);
+
+  std::string jit_pred = R"(
+    __device__ void predicate(bool* output, int32_t left_col0, int32_t left_col1,
+                              int32_t right_col0, int32_t right_col1) {
+      *output = (left_col0 > right_col0) && (left_col1 > right_col1);
+    }
+  )";
+
+  // Equality col: {1,2,3,4} matched to {1,2,3,4}
+  // Conditional col0: {10,20,30,40} vs {15,15,25,35}
+  // Conditional col1: {100,200,300,400} vs {150,150,250,350}
+  // Both conditions pass only for indices 1 (20>15,200>150) and 2 (30>25,300>250)
+  auto left_eq_col  = cudf::test::fixed_width_column_wrapper<int32_t>{1, 2, 3, 4};
+  auto right_eq_col = cudf::test::fixed_width_column_wrapper<int32_t>{1, 2, 3, 4};
+
+  auto left_cond_col0  = cudf::test::fixed_width_column_wrapper<int32_t>{10, 20, 30, 40};
+  auto left_cond_col1  = cudf::test::fixed_width_column_wrapper<int32_t>{100, 200, 300, 400};
+  auto right_cond_col0 = cudf::test::fixed_width_column_wrapper<int32_t>{15, 15, 25, 35};
+  auto right_cond_col1 = cudf::test::fixed_width_column_wrapper<int32_t>{150, 150, 250, 350};
+
+  auto left_equality     = cudf::table_view{{left_eq_col}};
+  auto right_equality    = cudf::table_view{{right_eq_col}};
+  auto left_conditional  = cudf::table_view{{left_cond_col0, left_cond_col1}};
+  auto right_conditional = cudf::table_view{{right_cond_col0, right_cond_col1}};
+
+  this->_test(left_equality,
+              right_equality,
+              left_conditional,
+              right_conditional,
+              predicate,
+              {0, 1, 1, 1},
+              {{1, 1}, {2, 2}, {3, 3}},
+              cudf::null_equality::EQUAL,
+              jit_pred);
+}
+
+TEST_F(MixedInnerJoinTest2, AllFilteredOut)
+{
+  // Test where predicate filters out all results (left.col1 > right.col1, but all right > left)
+  auto const col_ref_left_1  = cudf::ast::column_reference(1, cudf::ast::table_reference::LEFT);
+  auto const col_ref_right_1 = cudf::ast::column_reference(1, cudf::ast::table_reference::RIGHT);
+  auto const predicate =
+    cudf::ast::operation(cudf::ast::ast_operator::GREATER, col_ref_left_1, col_ref_right_1);
+
+  auto jit_pred = make_jit_comparison<int32_t>(2, 2, 1, 1, ">");
+
+  this->test({{0, 1, 2}, {0, 1, 2}, {10, 20, 30}},
+             {{0, 1, 2}, {0, 1, 2}, {50, 60, 70}},
+             {0},
+             {1, 2},
+             predicate,
+             {0, 0, 0},
+             {},
+             jit_pred);
+}
+
+TEST_F(MixedInnerJoinTest2, InvalidJoinKind)
+{
+  auto left_col    = cudf::test::fixed_width_column_wrapper<int32_t>{1};
+  auto right_col   = cudf::test::fixed_width_column_wrapper<int32_t>{1};
+  auto left_table  = cudf::table_view{{left_col}};
+  auto right_table = cudf::table_view{{right_col}};
+
+  auto left_indices  = cudf::test::fixed_width_column_wrapper<cudf::size_type>{0};
+  auto right_indices = cudf::test::fixed_width_column_wrapper<cudf::size_type>{0};
+  auto left_span =
+    cudf::device_span<cudf::size_type const>(left_indices.operator cudf::column_view().data<cudf::size_type>(), 1);
+  auto right_span =
+    cudf::device_span<cudf::size_type const>(right_indices.operator cudf::column_view().data<cudf::size_type>(), 1);
+
+  std::string predicate_code = R"(
+    __device__ void predicate(bool* output, int32_t left_val, int32_t right_val) {
+      *output = left_val > right_val;
+    }
+  )";
+
+  EXPECT_THROW(cudf::jit_filter_join_indices(
+                 left_table, right_table, left_span, right_span, predicate_code,
+                 cudf::join_kind::LEFT_SEMI_JOIN),
+               std::invalid_argument);
+}
+
 /**
  * Tests of mixed left joins.
  */

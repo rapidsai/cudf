@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include "generate_input_tables.cuh"
+#include "generate_input_tables.hpp"
 #include "join_common.hpp"
 
 #include <cudf/ast/expressions.hpp>

@@ -352,8 +352,8 @@ filter_join_indices(cudf::table_view const& left,
  *
  * // Step 2: Apply JIT-compiled conditional filter
  * std::string predicate_code = R"(
- *   __device__ bool predicate(double left_val, double right_val) {
- *     return left_val > right_val;
+ *   __device__ void predicate(bool* output, double left_val, double right_val) {
+ *     *output = left_val > right_val;
  *   }
  * )";
  * auto [filtered_left, filtered_right] = cudf::jit_filter_join_indices(
@@ -369,9 +369,10 @@ filter_join_indices(cudf::table_view const& left,
  *
  * The predicate_code must define a device function with signature:
  * ```cpp
- * __device__ bool predicate(T1 left_col0, T2 left_col1, ..., T1 right_col0, T2 right_col1, ...)
+ * __device__ void predicate(bool* output, T1 left_col0, T2 left_col1, ..., T1 right_col0, T2 right_col1, ...)
  * ```
- * Where the parameters correspond to columns in left table followed by right table.
+ * The first parameter is a pointer to a bool that the function must set to `true` or `false`.
+ * The remaining parameters correspond to columns in the left table followed by the right table.
  *
  * @throw std::invalid_argument if join_kind is not INNER_JOIN, LEFT_JOIN, or FULL_JOIN.
  * @throw std::invalid_argument if left_indices and right_indices have different sizes.

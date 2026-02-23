@@ -7,7 +7,7 @@
 
 #include <cudf/column/column_device_view_base.cuh>
 #include <cudf/types.hpp>
-#include <cudf/utilities/span.hpp>
+#include <jit/span.cuh>
 
 namespace cudf::join::jit {
 
@@ -24,8 +24,8 @@ namespace cudf::join::jit {
  * @param user_data Optional user data for predicate function
  */
 template <bool has_user_data, typename... InputAccessors>
-CUDF_KERNEL void filter_join_kernel(cudf::device_span<cudf::size_type const> left_indices,
-                                    cudf::device_span<cudf::size_type const> right_indices,
+CUDF_KERNEL void filter_join_kernel(cudf::jit::device_span<cudf::size_type const> left_indices,
+                                    cudf::jit::device_span<cudf::size_type const> right_indices,
                                     cudf::column_device_view_core const* left_tables,
                                     cudf::column_device_view_core const* right_tables,
                                     bool* predicate_results,
