@@ -1253,6 +1253,27 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             )
 
     @classmethod
+    def from_range(cls, rng: range) -> ColumnBase:
+        """
+        Create a Column from a range object.
+
+        Parameters
+        ----------
+        rng : range
+            The range to create the Column from.
+
+        Returns
+        -------
+        Column
+        """
+        plc_result = plc.filling.sequence(
+            len(rng),
+            plc.Scalar.from_py(rng.start),
+            plc.Scalar.from_py(rng.step),
+        )
+        return cls.create(plc_result, dtype_from_pylibcudf_column(plc_result))
+
+    @classmethod
     def from_arrow(cls, array: pa.Array | pa.ChunkedArray) -> ColumnBase:
         """
         Convert PyArrow Array/ChunkedArray to column
@@ -1503,10 +1524,9 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             return cast("Self", ColumnBase.create(result, self.dtype))
         else:
             # Need to create a gather map for given slice with stride
-            gather_map = as_column(
-                range(start, stop, stride),
-                dtype=np.dtype(np.int32),
-            )
+            gather_map = ColumnBase.from_range(
+                range(start, stop, stride)
+            ).astype(SIZE_TYPE_DTYPE)
             return self.take(gather_map)
 
     def _cast_setitem_value(self, value: Any) -> plc.Scalar | ColumnBase:
@@ -1623,10 +1643,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         # step != 1, create a scatter map with arange
         scatter_map = cast(
             "cudf.core.column.NumericalColumn",
-            as_column(
-                rng,
-                dtype=np.dtype(np.int32),
-            ),
+            ColumnBase.from_range(rng).astype(SIZE_TYPE_DTYPE),
         )
 
         return self._scatter_by_column(scatter_map, value)
@@ -1886,9 +1903,11 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         else:
             value = as_column(value, dtype=self.dtype, length=1)
         mask = value.contains(self)
-        return as_column(
-            range(len(self)), dtype=SIZE_TYPE_DTYPE
-        ).apply_boolean_mask(mask)  # type: ignore[return-value]
+        return (
+            ColumnBase.from_range(range(len(self)))  # type: ignore[return-value]
+            .astype(SIZE_TYPE_DTYPE)
+            .apply_boolean_mask(mask)
+        )
 
     def _find_first_and_last(self, value: ScalarLike) -> tuple[int, int]:
         indices = self.indices_of(value)
@@ -2244,7 +2263,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         ):
             return cast(
                 "cudf.core.column.NumericalColumn",
-                as_column(range(len(self) - 1, -1, -1)),
+                ColumnBase.from_range(range(len(self) - 1, -1, -1)),
             )
         else:
             return cast(
@@ -2656,8 +2675,10 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         left_gather_map = ColumnBase.create(left_rows, SIZE_TYPE_DTYPE)
         right_gather_map = ColumnBase.create(right_rows, SIZE_TYPE_DTYPE)
 
-        codes = as_column(range(len(cats)), dtype=dtype).take(
-            right_gather_map, nullify=True
+        codes = (
+            ColumnBase.from_range(range(len(cats)))
+            .astype(dtype)
+            .take(right_gather_map, nullify=True)
         )
         del right_gather_map
         del right_rows
@@ -3089,18 +3110,9 @@ def as_column(
         dtype = cudf.dtype(dtype)
 
     if isinstance(arbitrary, (range, pd.RangeIndex, cudf.RangeIndex)):
-        column = ColumnBase.create(
-            plc.filling.sequence(
-                len(arbitrary),
-                pa_scalar_to_plc_scalar(
-                    pa.scalar(arbitrary.start, type=pa.int64())
-                ),
-                pa_scalar_to_plc_scalar(
-                    pa.scalar(arbitrary.step, type=pa.int64())
-                ),
-            ),
-            np.dtype(np.int64),
-        )
+        if not isinstance(arbitrary, range):
+            arbitrary = range(arbitrary.start, arbitrary.stop, arbitrary.step)
+        column = ColumnBase.from_range(arbitrary)
         if cudf.get_option("default_integer_bitwidth") and dtype is None:
             dtype = np.dtype(
                 f"i{cudf.get_option('default_integer_bitwidth') // 8}"
