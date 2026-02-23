@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -77,6 +77,16 @@ enum class quote_style : int32_t {
   ALL,         ///< Quote all fields
   NONNUMERIC,  ///< Quote all non-numeric fields
   NONE         ///< Never quote fields; disable quotation parsing
+};
+
+/**
+ * @brief String encoding mode for CSV writer
+ *
+ * Controls how string columns are processed during CSV writing.
+ */
+enum class string_encoding : int32_t {
+  UTF8,   ///< Treat strings as UTF-8 encoded text (default)
+  BINARY  ///< Treat strings as raw byte sequences (preserves non-UTF-8 data like Shift-JIS)
 };
 
 /**

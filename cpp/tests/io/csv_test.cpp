@@ -469,6 +469,30 @@ TEST_F(CsvWriterTest, QuotingDisabled)
   test_quoting_disabled_with_delimiter('\u0001');
 }
 
+TEST_F(CsvWriterTest, BinaryEncoding)
+{
+  // Test with strings containing bytes that need proper byte-level handling
+  // In binary mode, each byte is treated independently (not as UTF-8 codepoints)
+  auto const input_strings = cudf::test::strings_column_wrapper{
+    "simple", "with,comma", "with\"quote", "with\nnewline", "mixed,\"\nall"};
+  auto const input_table = table_view{{input_strings}};
+
+  auto const filepath = temp_env->get_temp_dir() + "binary_encoding.csv";
+
+  // Write with binary encoding
+  auto w_options = cudf::io::csv_writer_options::builder(cudf::io::sink_info{filepath}, input_table)
+                     .include_header(false)
+                     .encoding(cudf::io::string_encoding::BINARY);
+  cudf::io::write_csv(w_options.build());
+
+  // Read back and verify
+  auto r_options =
+    cudf::io::csv_reader_options::builder(cudf::io::source_info{filepath}).header(-1);
+  auto r_table = cudf::io::read_csv(r_options.build());
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(r_table.tbl->view().column(0), input_strings);
+}
+
 TEST_F(CsvReaderTest, MultiColumn)
 {
   constexpr auto num_rows = 10;

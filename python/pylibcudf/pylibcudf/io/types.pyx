@@ -49,6 +49,7 @@ from pylibcudf.libcudf.io.types import (
     dictionary_policy as DictionaryPolicy,  # no-cython-lint
     quote_style as QuoteStyle,  # no-cython-lint
     statistics_freq as StatisticsFreq,  # no-cython-lint
+    string_encoding as StringEncoding,  # no-cython-lint
 )
 
 __all__ = [
@@ -62,6 +63,7 @@ __all__ = [
     "SinkInfo",
     "SourceInfo",
     "StatisticsFreq",
+    "StringEncoding",
     "TableInputMetadata",
     "TableWithMetadata",
 ]
@@ -680,3 +682,4 @@ CompressionType.__str__ = CompressionType.__repr__
 DictionaryPolicy.__str__ = DictionaryPolicy.__repr__
 QuoteStyle.__str__ = QuoteStyle.__repr__
 StatisticsFreq.__str__ = StatisticsFreq.__repr__
+StringEncoding.__str__ = StringEncoding.__repr__

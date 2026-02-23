@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -112,6 +112,82 @@ struct escape_strings_fn {
   }
 };
 
+/**
+ * @brief Functor to modify a string column for CSV format using byte-level processing.
+ *
+ * Similar to escape_strings_fn, but processes strings as raw byte sequences
+ * instead of UTF-8 characters. This preserves non-UTF-8 data like Shift-JIS.
+ */
+struct escape_strings_bytes_fn {
+  column_device_view const d_column;
+  string_view const d_delimiter;
+  size_type* d_sizes{};
+  char* d_chars{};
+  cudf::detail::input_offsetalator d_offsets;
+
+  __device__ void operator()(size_type idx)
+  {
+    if (d_column.is_null(idx)) {
+      if (!d_chars) { d_sizes[idx] = 0; }
+      return;
+    }
+
+    constexpr char const quote    = '"';
+    constexpr char const new_line = '\n';
+
+    auto const d_str        = d_column.element<string_view>(idx);
+    char const* str_data    = d_str.data();
+    size_type const str_len = d_str.size_bytes();
+    char const delimiter    = d_delimiter.data()[0];
+
+    // Check if quoting is needed (byte-level check)
+    bool quote_row = false;
+    for (size_type i = 0; i < str_len; ++i) {
+      char byte = str_data[i];
+      if (byte == quote || byte == new_line || byte == delimiter) {
+        quote_row = true;
+        break;
+      }
+    }
+
+    char* d_buffer  = d_chars ? d_chars + d_offsets[idx] : nullptr;
+    size_type bytes = 0;
+
+    // Opening quote
+    if (quote_row) {
+      if (d_buffer)
+        *d_buffer++ = quote;
+      else
+        ++bytes;
+    }
+
+    // Copy bytes, escaping quotes
+    for (size_type i = 0; i < str_len; ++i) {
+      char byte = str_data[i];
+      if (byte == quote) {
+        if (d_buffer)
+          *d_buffer++ = quote;
+        else
+          ++bytes;
+      }
+      if (d_buffer)
+        *d_buffer++ = byte;
+      else
+        ++bytes;
+    }
+
+    // Closing quote
+    if (quote_row) {
+      if (d_buffer)
+        *d_buffer++ = quote;
+      else
+        ++bytes;
+    }
+
+    if (!d_chars) { d_sizes[idx] = bytes; }
+  }
+};
+
 struct column_to_strings_fn {
   explicit column_to_strings_fn(csv_writer_options const& options,
                                 rmm::cuda_stream_view stream,
@@ -154,15 +230,34 @@ struct column_to_strings_fn {
     string_scalar delimiter{std::string{options_.get_inter_column_delimiter()}, true, stream_};
 
     auto d_column = column_device_view::create(column_v, stream_);
-    escape_strings_fn fn{*d_column, delimiter.value(stream_)};
-    auto [offsets_column, chars] =
-      cudf::strings::detail::make_strings_children(fn, column_v.size(), stream_, mr_);
 
-    return make_strings_column(column_v.size(),
-                               std::move(offsets_column),
-                               chars.release(),
-                               column_v.null_count(),
-                               cudf::detail::copy_bitmask(column_v, stream_, mr_));
+    // Helper to create the escaped strings column
+    auto make_escaped_column = [&](auto& fn) {
+      auto [offsets_column, chars] =
+        cudf::strings::detail::make_strings_children(fn, column_v.size(), stream_, mr_);
+      return make_strings_column(column_v.size(),
+                                 std::move(offsets_column),
+                                 chars.release(),
+                                 column_v.null_count(),
+                                 cudf::detail::copy_bitmask(column_v, stream_, mr_));
+    };
+
+    // Choose byte-level or UTF-8 character-level escaping based on encoding option.
+    //
+    // Byte-level escaping (escape_strings_bytes_fn) is used for BINARY encoding,
+    // where each byte is treated independently. This preserves data integrity for
+    // arbitrary binary data (e.g., Shift-JIS, other legacy encodings).
+    //
+    // Character-level escaping (escape_strings_fn) is used for UTF-8 encoded strings,
+    // where escaping is performed at the Unicode code point level. This correctly
+    // handles multi-byte UTF-8 characters.
+    if (options_.get_encoding() == cudf::io::string_encoding::BINARY) {
+      escape_strings_bytes_fn fn{*d_column, delimiter.value(stream_)};
+      return make_escaped_column(fn);
+    } else {
+      escape_strings_fn fn{*d_column, delimiter.value(stream_)};
+      return make_escaped_column(fn);
+    }
   }
 
   // ints:

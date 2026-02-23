@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 cimport pylibcudf.libcudf.io.data_sink as cudf_io_data_sink
 cimport pylibcudf.libcudf.io.datasource as cudf_io_datasource
@@ -30,6 +30,10 @@ cdef extern from "cudf/io/types.hpp" \
         ALL
         NONNUMERIC
         NONE
+
+    cpdef enum class string_encoding(int32_t):
+        UTF8
+        BINARY
 
     cpdef enum class compression_type(int32_t):
         NONE

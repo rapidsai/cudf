@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 cimport pylibcudf.libcudf.io.types as cudf_io_types
 cimport pylibcudf.libcudf.table.table_view as cudf_table_view
@@ -281,6 +281,7 @@ cdef extern from "cudf/io/csv.hpp" \
         string get_true_value() except +libcudf_exception_handler
         string get_false_value() except +libcudf_exception_handler
         vector[string] get_names() except +libcudf_exception_handler
+        cudf_io_types.string_encoding get_encoding() except +libcudf_exception_handler
 
         # setter
         void set_metadata(
@@ -294,6 +295,9 @@ cdef extern from "cudf/io/csv.hpp" \
         void set_true_value(string val) except +libcudf_exception_handler
         void set_false_value(string val) except +libcudf_exception_handler
         void set_names(vector[string] val) except +libcudf_exception_handler
+        void set_encoding(
+            cudf_io_types.string_encoding enc
+        ) except +libcudf_exception_handler
 
         @staticmethod
         csv_writer_options_builder builder(
@@ -331,6 +335,9 @@ cdef extern from "cudf/io/csv.hpp" \
         ) except +libcudf_exception_handler
         csv_writer_options_builder& false_value(
             string val
+        ) except +libcudf_exception_handler
+        csv_writer_options_builder& encoding(
+            cudf_io_types.string_encoding enc
         ) except +libcudf_exception_handler
 
         csv_writer_options build() except +libcudf_exception_handler

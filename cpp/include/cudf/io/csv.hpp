@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -1389,6 +1389,8 @@ class csv_writer_options {
   std::vector<std::string> _names;
   // Quote style. Currently only MINIMAL and NONE are supported.
   quote_style _quoting = quote_style::MINIMAL;
+  // String encoding mode for string columns
+  string_encoding _encoding = string_encoding::UTF8;
 
   /**
    * @brief Constructor from sink and table.
@@ -1503,6 +1505,13 @@ class csv_writer_options {
    */
   [[nodiscard]] quote_style get_quoting() const { return _quoting; }
 
+  /**
+   * @brief Returns the string encoding mode for the writer.
+   *
+   * @return string_encoding The encoding mode for string columns
+   */
+  [[nodiscard]] string_encoding get_encoding() const { return _encoding; }
+
   // Setter
   /**
    * @brief Sets optional associated column names.
@@ -1583,6 +1592,15 @@ class csv_writer_options {
                  "Only MINIMAL and NONE are supported for quoting.");
     _quoting = quoting;
   }
+
+  /**
+   * @brief Sets the string encoding mode for the writer.
+   *
+   * @param enc The new string_encoding mode for the writer.
+   *   - UTF8: Treat strings as UTF-8 encoded text (default)
+   *   - BINARY: Treat strings as raw byte sequences (preserves non-UTF-8 data)
+   */
+  void set_encoding(string_encoding enc) { _encoding = enc; }
 };
 
 /**
@@ -1717,6 +1735,20 @@ class csv_writer_options_builder {
   csv_writer_options_builder& quoting(quote_style quoting)
   {
     options.set_quoting(quoting);
+    return *this;
+  }
+
+  /**
+   * @brief Sets the string encoding mode for the writer.
+   *
+   * @param enc The new string_encoding mode for the writer.
+   *   - UTF8: Treat strings as UTF-8 encoded text (default)
+   *   - BINARY: Treat strings as raw byte sequences (preserves non-UTF-8 data)
+   * @return this for chaining
+   */
+  csv_writer_options_builder& encoding(string_encoding enc)
+  {
+    options.set_encoding(enc);
     return *this;
   }
 

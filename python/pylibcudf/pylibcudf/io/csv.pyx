@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from libcpp cimport bool
@@ -23,6 +23,7 @@ from pylibcudf.libcudf.io.csv cimport (
 from pylibcudf.libcudf.io.types cimport (
     compression_type,
     quote_style,
+    string_encoding,
     table_with_metadata,
 )
 
@@ -867,6 +868,22 @@ cdef class CsvWriterOptionsBuilder:
             Builder to build CsvWriterOptions
         """
         self.c_obj.false_value(val.encode())
+        return self
+
+    cpdef CsvWriterOptionsBuilder encoding(self, string_encoding enc):
+        """Sets the string encoding for the output.
+
+        Parameters
+        ----------
+        enc : StringEncoding
+            The encoding to use (UTF8 or BINARY)
+
+        Returns
+        -------
+        CsvWriterOptionsBuilder
+            Builder to build CsvWriterOptions
+        """
+        self.c_obj.encoding(enc)
         return self
 
     cpdef CsvWriterOptions build(self):
