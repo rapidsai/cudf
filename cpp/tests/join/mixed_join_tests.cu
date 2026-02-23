@@ -935,6 +935,67 @@ TEST_F(MixedInnerJoinTest2, InvalidJoinKind)
                std::invalid_argument);
 }
 
+TEST_F(MixedInnerJoinTest2, JitOnlyPredicate)
+{
+  // Test a predicate that cannot be expressed with AST: popcount-based matching.
+  // Match pairs where XOR of values has at most 1 bit set.
+  auto left_eq_col  = cudf::test::fixed_width_column_wrapper<int32_t>{0, 1, 2, 3};
+  auto right_eq_col = cudf::test::fixed_width_column_wrapper<int32_t>{0, 1, 2, 3};
+  auto left_cond =
+    cudf::test::fixed_width_column_wrapper<int32_t>{0b0001, 0b0011, 0b0111, 0b1111};
+  auto right_cond =
+    cudf::test::fixed_width_column_wrapper<int32_t>{0b0000, 0b0111, 0b0001, 0b0000};
+
+  auto left_equality     = cudf::table_view{{left_eq_col}};
+  auto right_equality    = cudf::table_view{{right_eq_col}};
+  auto left_conditional  = cudf::table_view{{left_cond}};
+  auto right_conditional = cudf::table_view{{right_cond}};
+
+  cudf::hash_join hash_joiner(right_equality, cudf::null_equality::EQUAL);
+  auto hash_result = hash_joiner.inner_join(left_equality);
+
+  std::string jit_pred = R"(
+    __device__ void predicate(bool* output, int32_t left_val, int32_t right_val) {
+      *output = __popc(left_val ^ right_val) <= 1;
+    }
+  )";
+
+  auto result = cudf::jit_filter_join_indices(
+    left_conditional,
+    right_conditional,
+    cudf::device_span<cudf::size_type const>(*hash_result.first),
+    cudf::device_span<cudf::size_type const>(*hash_result.second),
+    jit_pred,
+    cudf::join_kind::INNER_JOIN);
+
+  // XOR popcount per equality-matched pair:
+  //   (0,0): 0b0001^0b0000 = popcount 1 → PASS
+  //   (1,1): 0b0011^0b0111 = popcount 1 → PASS
+  //   (2,2): 0b0111^0b0001 = popcount 2 → FAIL
+  //   (3,3): 0b1111^0b0000 = popcount 4 → FAIL
+  auto left_view = cudf::column_view(cudf::data_type{cudf::type_to_id<cudf::size_type>()},
+                                     result.first->size(),
+                                     result.first->data(),
+                                     nullptr,
+                                     0);
+  auto right_view = cudf::column_view(cudf::data_type{cudf::type_to_id<cudf::size_type>()},
+                                      result.second->size(),
+                                      result.second->data(),
+                                      nullptr,
+                                      0);
+  auto left_host  = cudf::test::to_host<cudf::size_type>(left_view).first;
+  auto right_host = cudf::test::to_host<cudf::size_type>(right_view).first;
+
+  std::vector<std::pair<cudf::size_type, cudf::size_type>> actual_pairs;
+  for (size_t i = 0; i < left_host.size(); ++i) {
+    actual_pairs.emplace_back(left_host[i], right_host[i]);
+  }
+  std::sort(actual_pairs.begin(), actual_pairs.end());
+
+  std::vector<std::pair<cudf::size_type, cudf::size_type>> expected_pairs{{0, 0}, {1, 1}};
+  EXPECT_EQ(actual_pairs, expected_pairs);
+}
+
 /**
  * Tests of mixed left joins.
  */
