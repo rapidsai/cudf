@@ -24,6 +24,7 @@ from cudf.core.column.column import (
     column_empty,
 )
 from cudf.core.column.numerical_base import NumericalBaseColumn
+from cudf.core.column.utils import access_columns
 from cudf.core.mixins import BinaryOperand
 from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
@@ -956,21 +957,25 @@ class NumericalColumn(NumericalBaseColumn):
         bin_col = as_column(bins, dtype=bins.dtype)
         if bin_col.nullable:
             raise ValueError("`bins` cannot contain null entries.")
-        func = plc.search.lower_bound if right else plc.search.upper_bound
-        return cast(
-            "Self",
-            PylibcudfFunction(
-                func,
-                lambda *_dtypes: get_dtype_of_same_kind(
-                    self.dtype, np.dtype(np.int32)
+
+        with access_columns(bin_col, self, mode="read", scope="internal") as (
+            bin_col,
+            self,
+        ):
+            return cast(
+                Self,
+                ColumnBase.create(
+                    getattr(
+                        plc.search, "lower_bound" if right else "upper_bound"
+                    )(
+                        plc.Table([bin_col.plc_column]),
+                        plc.Table([self.plc_column]),
+                        [plc.types.Order.ASCENDING],
+                        [plc.types.NullOrder.BEFORE],
+                    ),
+                    get_dtype_of_same_kind(self.dtype, np.dtype(np.int32)),
                 ),
-            ).execute_with_args(
-                plc.Table([bin_col.plc_column]),
-                plc.Table([self.plc_column]),
-                [plc.types.Order.ASCENDING],
-                [plc.types.NullOrder.BEFORE],
-            ),
-        )
+            )
 
 
 def _normalize_find_and_replace_input(
