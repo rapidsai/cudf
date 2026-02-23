@@ -851,8 +851,7 @@ TEST_F(MixedInnerJoinTest2, MultiColumnAndPredicate)
     cudf::ast::operation(cudf::ast::ast_operator::GREATER, col_ref_left_0, col_ref_right_0);
   auto const cmp1 =
     cudf::ast::operation(cudf::ast::ast_operator::GREATER, col_ref_left_1, col_ref_right_1);
-  auto const predicate =
-    cudf::ast::operation(cudf::ast::ast_operator::LOGICAL_AND, cmp0, cmp1);
+  auto const predicate = cudf::ast::operation(cudf::ast::ast_operator::LOGICAL_AND, cmp0, cmp1);
 
   std::string jit_pred = R"(
     __device__ void predicate(bool* output, int32_t left_col0, int32_t left_col1,
@@ -918,10 +917,10 @@ TEST_F(MixedInnerJoinTest2, InvalidJoinKind)
 
   auto left_indices  = cudf::test::fixed_width_column_wrapper<cudf::size_type>{0};
   auto right_indices = cudf::test::fixed_width_column_wrapper<cudf::size_type>{0};
-  auto left_span =
-    cudf::device_span<cudf::size_type const>(left_indices.operator cudf::column_view().data<cudf::size_type>(), 1);
-  auto right_span =
-    cudf::device_span<cudf::size_type const>(right_indices.operator cudf::column_view().data<cudf::size_type>(), 1);
+  auto left_span     = cudf::device_span<cudf::size_type const>(
+    left_indices.operator cudf::column_view().data<cudf::size_type>(), 1);
+  auto right_span = cudf::device_span<cudf::size_type const>(
+    right_indices.operator cudf::column_view().data<cudf::size_type>(), 1);
 
   std::string predicate_code = R"(
     __device__ void predicate(bool* output, int32_t left_val, int32_t right_val) {
@@ -929,9 +928,12 @@ TEST_F(MixedInnerJoinTest2, InvalidJoinKind)
     }
   )";
 
-  EXPECT_THROW(cudf::jit_filter_join_indices(
-                 left_table, right_table, left_span, right_span, predicate_code,
-                 cudf::join_kind::LEFT_SEMI_JOIN),
+  EXPECT_THROW(cudf::jit_filter_join_indices(left_table,
+                                             right_table,
+                                             left_span,
+                                             right_span,
+                                             predicate_code,
+                                             cudf::join_kind::LEFT_SEMI_JOIN),
                std::invalid_argument);
 }
 
@@ -941,10 +943,8 @@ TEST_F(MixedInnerJoinTest2, JitOnlyPredicate)
   // Match pairs where XOR of values has at most 1 bit set.
   auto left_eq_col  = cudf::test::fixed_width_column_wrapper<int32_t>{0, 1, 2, 3};
   auto right_eq_col = cudf::test::fixed_width_column_wrapper<int32_t>{0, 1, 2, 3};
-  auto left_cond =
-    cudf::test::fixed_width_column_wrapper<int32_t>{0b0001, 0b0011, 0b0111, 0b1111};
-  auto right_cond =
-    cudf::test::fixed_width_column_wrapper<int32_t>{0b0000, 0b0111, 0b0001, 0b0000};
+  auto left_cond  = cudf::test::fixed_width_column_wrapper<int32_t>{0b0001, 0b0011, 0b0111, 0b1111};
+  auto right_cond = cudf::test::fixed_width_column_wrapper<int32_t>{0b0000, 0b0111, 0b0001, 0b0000};
 
   auto left_equality     = cudf::table_view{{left_eq_col}};
   auto right_equality    = cudf::table_view{{right_eq_col}};
@@ -960,20 +960,20 @@ TEST_F(MixedInnerJoinTest2, JitOnlyPredicate)
     }
   )";
 
-  auto result = cudf::jit_filter_join_indices(
-    left_conditional,
-    right_conditional,
-    cudf::device_span<cudf::size_type const>(*hash_result.first),
-    cudf::device_span<cudf::size_type const>(*hash_result.second),
-    jit_pred,
-    cudf::join_kind::INNER_JOIN);
+  auto result =
+    cudf::jit_filter_join_indices(left_conditional,
+                                  right_conditional,
+                                  cudf::device_span<cudf::size_type const>(*hash_result.first),
+                                  cudf::device_span<cudf::size_type const>(*hash_result.second),
+                                  jit_pred,
+                                  cudf::join_kind::INNER_JOIN);
 
   // XOR popcount per equality-matched pair:
   //   (0,0): 0b0001^0b0000 = popcount 1 → PASS
   //   (1,1): 0b0011^0b0111 = popcount 1 → PASS
   //   (2,2): 0b0111^0b0001 = popcount 2 → FAIL
   //   (3,3): 0b1111^0b0000 = popcount 4 → FAIL
-  auto left_view = cudf::column_view(cudf::data_type{cudf::type_to_id<cudf::size_type>()},
+  auto left_view  = cudf::column_view(cudf::data_type{cudf::type_to_id<cudf::size_type>()},
                                      result.first->size(),
                                      result.first->data(),
                                      nullptr,

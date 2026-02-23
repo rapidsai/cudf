@@ -7,6 +7,7 @@
 
 #include <cudf/column/column_device_view_base.cuh>
 #include <cudf/types.hpp>
+
 #include <jit/span.cuh>
 
 namespace cudf::join::jit {

@@ -369,7 +369,8 @@ filter_join_indices(cudf::table_view const& left,
  *
  * The predicate_code must define a device function with signature:
  * ```cpp
- * __device__ void predicate(bool* output, T1 left_col0, T2 left_col1, ..., T1 right_col0, T2 right_col1, ...)
+ * __device__ void predicate(bool* output, T1 left_col0, T2 left_col1, ..., T1 right_col0, T2
+ * right_col1, ...)
  * ```
  * The first parameter is a pointer to a bool that the function must set to `true` or `false`.
  * The remaining parameters correspond to columns in the left table followed by the right table.
