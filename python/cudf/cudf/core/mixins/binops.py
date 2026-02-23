@@ -84,8 +84,9 @@ def _rdivmod(self, other):
 _binaryoperand_init_subclass = BinaryOperand.__init_subclass__
 
 
-def _binaryoperand_init_subclass_with_divmod(cls, **kwargs) -> None:
-    _binaryoperand_init_subclass.__get__(cls, BinaryOperand)()
+@classmethod
+def _binaryoperand_init_subclass_with_divmod(cls) -> None:
+    _binaryoperand_init_subclass.__func__(cls)
 
     valid_operations: set[str] = set()
     for base_cls in cls.__mro__:
@@ -108,6 +109,4 @@ def _binaryoperand_init_subclass_with_divmod(cls, **kwargs) -> None:
         cls.__rdivmod__ = _rdivmod
 
 
-BinaryOperand.__init_subclass__ = classmethod(
-    _binaryoperand_init_subclass_with_divmod
-)
+BinaryOperand.__init_subclass__ = _binaryoperand_init_subclass_with_divmod
