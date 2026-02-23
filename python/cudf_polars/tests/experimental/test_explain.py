@@ -711,8 +711,8 @@ def test_shuffle_properties():
             "max_rows_per_partition": 1,
             "cluster": DEFAULT_CLUSTER,
             "runtime": DEFAULT_RUNTIME,
+            "shuffle_method": DEFAULT_RUNTIME,
             "broadcast_join_limit": 1,
-            "shuffle_method": "tasks",
             "shuffler_insertion_method": "insert_chunks",
         },
     )
@@ -721,9 +721,17 @@ def test_shuffle_properties():
     shuffle_nodes = [n for n in dag.nodes.values() if n.type == "Shuffle"]
     assert len(shuffle_nodes) >= 1, "Expected at least one Shuffle node in lowered plan"
     node = shuffle_nodes[0]
+
+    if DEFAULT_RUNTIME == "tasks":
+        shuffle_method = "tasks"
+    elif DEFAULT_CLUSTER == "single":
+        shuffle_method = "rapidsmpf-single"
+    else:
+        shuffle_method = "rapidsmpf"
+
     assert node.properties == {
         "keys": ["a"],
-        "shuffle_method": "tasks",
+        "shuffle_method": shuffle_method,
         "shuffler_insertion_method": "insert_chunks",
     }
 

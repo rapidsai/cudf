@@ -303,8 +303,8 @@ def _(ir: GroupBy) -> dict[str, Serializable]:
 def _(ir: Shuffle) -> dict[str, Serializable]:
     return {
         "keys": [ne.name for ne in ir.keys],
-        "shuffle_method": ir.shuffle_method,
-        "shuffler_insertion_method": ir.shuffler_insertion_method,
+        "shuffle_method": ir.shuffle_method.value,
+        "shuffler_insertion_method": ir.shuffler_insertion_method.value,
     }
 
 
