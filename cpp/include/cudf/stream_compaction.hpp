@@ -6,6 +6,7 @@
 #pragma once
 
 #include <cudf/column/column_view.hpp>
+#include <cudf/column/scalar_column_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/export.hpp>
@@ -422,7 +423,7 @@ std::unique_ptr<table> stable_distinct(
  * @return The filtered target columns
  */
 std::vector<std::unique_ptr<column>> filter_extended(
-  std::vector<std::variant<column_view, scalar_column_view>> const& predicate_inputs,
+  std::span<std::variant<column_view, scalar_column_view> const> predicate_inputs,
   std::string const& predicate_udf,
   std::vector<column_view> const& filter_columns,
   bool is_ptx,

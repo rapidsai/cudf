@@ -6,6 +6,7 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
+#include <cudf/column/scalar_column_view.hpp>
 #include <cudf/detail/utilities/cuda_memcpy.hpp>
 
 #include <thrust/iterator/transform_iterator.h>

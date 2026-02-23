@@ -6,6 +6,7 @@
 #pragma once
 
 #include <cudf/ast/expressions.hpp>
+#include <cudf/column/scalar_column_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/export.hpp>
 #include <cudf/utilities/memory_resource.hpp>
@@ -101,7 +102,7 @@ namespace CUDF_EXPORT cudf {
  *                      every element of the input
  */
 std::unique_ptr<column> transform_extended(
-  std::vector<std::variant<column_view, scalar_column_view>> const& inputs,
+  std::span<std::variant<column_view, scalar_column_view> const> inputs,
   std::string const& udf,
   data_type output_type,
   bool is_ptx,

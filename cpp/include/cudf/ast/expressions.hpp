@@ -514,9 +514,10 @@ class operation : public expression {
 
 namespace detail {
 
-/// @brief An expression that represents a filter predicate. This is an internal expression used in
-/// filter operations. It is not intended to be used by external code and is not a part of the
-/// public API.
+/// @brief An expression that represents a filter predicate.
+///
+/// This is an internal expression used in filter operations. It is not intended to be used by
+/// external code and is not a part of the public API.
 class filter_predicate : public expression {
  public:
   /**

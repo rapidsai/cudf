@@ -493,7 +493,7 @@ std::unique_ptr<column> transform(InputsView inputs,
 }  // namespace detail
 
 std::unique_ptr<column> transform_extended(
-  std::vector<std::variant<column_view, scalar_column_view>> const& inputs,
+  std::span<std::variant<column_view, scalar_column_view> const> inputs,
   std::string const& udf,
   data_type output_type,
   bool is_ptx,

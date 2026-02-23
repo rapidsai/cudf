@@ -81,7 +81,7 @@ std::unique_ptr<table> filter(table_view const& predicate_table,
 }
 
 std::vector<std::unique_ptr<column>> filter_extended(
-  std::vector<std::variant<column_view, scalar_column_view>> const& predicate_inputs,
+  std::span<std::variant<column_view, scalar_column_view> const> predicate_inputs,
   std::string const& predicate_udf,
   std::vector<column_view> const& filter_columns,
   bool is_ptx,
