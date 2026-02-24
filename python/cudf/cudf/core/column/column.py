@@ -3198,7 +3198,10 @@ def as_column(
                 elif dtype is None:
                     # Going through Arrow below erases pandas extension dtypes
                     # of the categories, if any, so always along pass the exact type
-                    dtype = arbitrary.dtype
+                    dtype = CategoricalDtype(
+                        categories=arbitrary.dtype.categories,
+                        ordered=arbitrary.dtype.ordered,
+                    )
             result = as_column(
                 pa.array(arbitrary, from_pandas=True),
                 nan_as_null=nan_as_null,
