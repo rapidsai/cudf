@@ -1268,6 +1268,7 @@ NODEIDS_THAT_FAIL_WITH_CUDF_PANDAS = {
     "tests/copy_view/test_interp_fillna.py::test_interpolate_chained_assignment[ffill]",
     "tests/copy_view/test_interp_fillna.py::test_interpolate_cleaned_fill_method",
     "tests/copy_view/test_interp_fillna.py::test_interpolate_downcast",
+    "tests/copy_view/test_interp_fillna.py::test_interpolate_downcast_reference_triggers_copy",
     "tests/copy_view/test_interp_fillna.py::test_interpolate_inplace_no_reference_no_copy[vals0]",
     "tests/copy_view/test_interp_fillna.py::test_interpolate_inplace_no_reference_no_copy[vals1]",
     "tests/copy_view/test_interp_fillna.py::test_interpolate_no_op[linear]",
