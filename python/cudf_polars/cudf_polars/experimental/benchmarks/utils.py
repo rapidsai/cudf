@@ -820,10 +820,8 @@ def _query_type(num_queries: int) -> Callable[[str | int], list[int]]:
     return parse
 
 
-def parse_args(
-    args: Sequence[str] | None = None, num_queries: int = 22
-) -> argparse.Namespace:
-    """Parse command line arguments."""
+def build_parser(num_queries: int = 22) -> argparse.ArgumentParser:
+    """Build the argument parser for PDS-H/PDS-DS benchmarks."""
     parser = argparse.ArgumentParser(
         prog="Cudf-Polars PDS-H Benchmarks",
         description="Experimental streaming-executor benchmarks.",
@@ -1196,6 +1194,17 @@ def parse_args(
             - silent : Silently fall back to single partition"""),
     )
 
+    return parser
+
+
+def parse_args(
+    args: Sequence[str] | None = None,
+    num_queries: int = 22,
+    parser: argparse.ArgumentParser | None = None,
+) -> argparse.Namespace:
+    """Parse command line arguments."""
+    if parser is None:
+        parser = build_parser(num_queries)
     parsed_args = parser.parse_args(args)
 
     if parsed_args.rmm_pool_size is None and not parsed_args.rmm_async:
@@ -1284,11 +1293,10 @@ def check_input_data_type(run_config: RunConfig) -> Literal["decimal", "float"]:
 
 def run_polars(
     benchmark: Any,
-    options: Sequence[str] | None = None,
+    args: argparse.Namespace,
     num_queries: int = 22,
 ) -> None:
     """Run the queries using the given benchmark and executor options."""
-    args = parse_args(options, num_queries=num_queries)
     vars(args).update({"query_set": benchmark.name})
     run_config = RunConfig.from_args(args)
     validation_failures: list[int] = []
@@ -1713,10 +1721,9 @@ def execute_duckdb_query(
 
 
 def run_duckdb(
-    duckdb_queries_cls: Any, options: Sequence[str] | None = None, *, num_queries: int
+    duckdb_queries_cls: Any, args: argparse.Namespace, *, num_queries: int
 ) -> None:
     """Run the benchmark with DuckDB."""
-    args = parse_args(options, num_queries=num_queries)
     vars(args).update({"query_set": duckdb_queries_cls.name})
     run_config = RunConfig.from_args(args)
     records: defaultdict[int, list[Record]] = defaultdict(list)
