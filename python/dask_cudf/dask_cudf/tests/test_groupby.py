@@ -180,33 +180,34 @@ def test_groupby_multi_column(func):
 
 
 def test_reset_index_multiindex():
-    df = cudf.DataFrame()
-    df["id_1"] = ["a", "a", "b"]
-    df["id_2"] = [0, 0, 1]
-    df["val"] = [1, 2, 3]
+    with dask.config.set({"dataframe.convert-string": False}):
+        df = cudf.DataFrame()
+        df["id_1"] = ["a", "a", "b"]
+        df["id_2"] = [0, 0, 1]
+        df["val"] = [1, 2, 3]
 
-    df_lookup = cudf.DataFrame()
-    df_lookup["id_1"] = ["a", "b"]
-    df_lookup["metadata"] = [0, 1]
+        df_lookup = cudf.DataFrame()
+        df_lookup["id_1"] = ["a", "b"]
+        df_lookup["metadata"] = [0, 1]
 
-    gddf = dask_cudf.from_cudf(df, npartitions=2)
-    gddf_lookup = dask_cudf.from_cudf(df_lookup, npartitions=2)
+        gddf = dask_cudf.from_cudf(df, npartitions=2)
+        gddf_lookup = dask_cudf.from_cudf(df_lookup, npartitions=2)
 
-    ddf = dd.from_pandas(df.to_pandas(), npartitions=2)
-    ddf_lookup = dd.from_pandas(df_lookup.to_pandas(), npartitions=2)
+        ddf = dd.from_pandas(df.to_pandas(), npartitions=2)
+        ddf_lookup = dd.from_pandas(df_lookup.to_pandas(), npartitions=2)
 
-    # Note: 'id_2' has wrong type (object) until after compute
-    dd.assert_eq(
-        gddf.groupby(by=["id_1", "id_2"])
-        .val.sum()
-        .reset_index()
-        .merge(gddf_lookup, on="id_1")
-        .compute(),
-        ddf.groupby(by=["id_1", "id_2"])
-        .val.sum()
-        .reset_index()
-        .merge(ddf_lookup, on="id_1"),
-    )
+        # Note: 'id_2' has wrong type (object) until after compute
+        dd.assert_eq(
+            gddf.groupby(by=["id_1", "id_2"])
+            .val.sum()
+            .reset_index()
+            .merge(gddf_lookup, on="id_1")
+            .compute(),
+            ddf.groupby(by=["id_1", "id_2"])
+            .val.sum()
+            .reset_index()
+            .merge(ddf_lookup, on="id_1"),
+        )
 
 
 @pytest.mark.parametrize("split_out", [1, 2, 3])
@@ -712,28 +713,29 @@ def test_groupby_unique_lists():
 )
 @pytest.mark.parametrize("agg", ["first", "last"])
 def test_groupby_first_last(data, agg):
-    pdf = pd.DataFrame(data)
-    gdf = cudf.DataFrame(pdf)
+    with dask.config.set({"dataframe.convert-string": False}):
+        pdf = pd.DataFrame(data)
+        gdf = cudf.DataFrame(pdf)
 
-    ddf = dd.from_pandas(pdf, npartitions=2)
-    gddf = dask_cudf.from_cudf(gdf, npartitions=2)
+        ddf = dd.from_pandas(pdf, npartitions=2)
+        gddf = dask_cudf.from_cudf(gdf, npartitions=2)
 
-    dd.assert_eq(
-        ddf.groupby("a").agg(agg),
-        gddf.groupby("a").agg(agg),
-    )
+        dd.assert_eq(
+            ddf.groupby("a").agg(agg),
+            gddf.groupby("a").agg(agg),
+        )
 
-    dd.assert_eq(
-        getattr(ddf.groupby("a"), agg)(),
-        getattr(gddf.groupby("a"), agg)(),
-    )
+        dd.assert_eq(
+            getattr(ddf.groupby("a"), agg)(),
+            getattr(gddf.groupby("a"), agg)(),
+        )
 
-    dd.assert_eq(gdf.groupby("a").agg(agg), gddf.groupby("a").agg(agg))
+        dd.assert_eq(gdf.groupby("a").agg(agg), gddf.groupby("a").agg(agg))
 
-    dd.assert_eq(
-        getattr(gdf.groupby("a"), agg)(),
-        getattr(gddf.groupby("a"), agg)(),
-    )
+        dd.assert_eq(
+            getattr(gdf.groupby("a"), agg)(),
+            getattr(gddf.groupby("a"), agg)(),
+        )
 
 
 @pytest.mark.xfail(reason="Co-alignment check fails in dask-expr")

@@ -35,7 +35,6 @@
 #include <cuda/std/iterator>
 #include <thrust/copy.h>
 #include <thrust/execution_policy.h>
-#include <thrust/functional.h>
 #include <thrust/logical.h>
 #include <thrust/transform.h>
 
@@ -419,7 +418,7 @@ std::unique_ptr<cudf::column> tokenize_with_vocabulary(cudf::strings_column_view
 
   auto d_tmp_offsets = rmm::device_uvector<int64_t>(total_count + 1, stream);
   d_tmp_offsets.set_element(total_count, chars_size, stream);
-  cudf::detail::copy_if(
+  cudf::detail::copy_if_async(
     thrust::counting_iterator<int64_t>(0),
     thrust::counting_iterator<int64_t>(chars_size),
     d_tmp_offsets.begin(),

@@ -19,7 +19,6 @@
 
 #include <cuda/functional>
 #include <thrust/fill.h>
-#include <thrust/functional.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/reduce.h>
 #include <thrust/tabulate.h>
