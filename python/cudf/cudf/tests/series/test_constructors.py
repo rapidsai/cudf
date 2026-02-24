@@ -906,17 +906,14 @@ def test_series_arrow_category_types_roundtrip():
     pi = pd.Index(ps)
     pdf = pi.to_frame()
 
-    with cudf.option_context("mode.pandas_compatible", True):
-        with pytest.raises(NotImplementedError):
-            cudf.from_pandas(ps)
+    with pytest.raises(TypeError):
+        cudf.from_pandas(ps)
 
-    with cudf.option_context("mode.pandas_compatible", True):
-        with pytest.raises(NotImplementedError):
-            cudf.from_pandas(pi)
+    with pytest.raises(TypeError):
+        cudf.from_pandas(pi)
 
-    with cudf.option_context("mode.pandas_compatible", True):
-        with pytest.raises(NotImplementedError):
-            cudf.from_pandas(pdf)
+    with pytest.raises(TypeError):
+        cudf.from_pandas(pdf)
 
 
 @pytest.mark.parametrize(
@@ -1612,3 +1609,18 @@ def test_series_constructor_dtype_is_pandas_arrowdtype(
     expected = pd.Series([scalar], dtype=dtype)
     assert result.dtype == expected.dtype
     assert_eq(result, expected)
+
+
+def test_build_series_from_nullable_pandas_dtype(
+    all_supported_pandas_nullable_extension_dtypes,
+):
+    scalar, dtype = all_supported_pandas_nullable_extension_dtypes
+    expected = pd.Series([scalar, pd.NA], dtype=dtype)
+    result = cudf.Series(expected)
+
+    assert result.dtype == expected.dtype
+
+    expect_mask = expected.isna()
+    got_mask = result.isna().to_numpy()
+
+    np.testing.assert_array_equal(expect_mask, got_mask)
