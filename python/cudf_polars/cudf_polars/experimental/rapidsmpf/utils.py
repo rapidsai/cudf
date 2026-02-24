@@ -47,7 +47,7 @@ if TYPE_CHECKING:
 
     from rmm.pylibrmm.stream import Stream
 
-    from cudf_polars.dsl.ir import IR
+    from cudf_polars.dsl.ir import IR, IRExecutionContext
     from cudf_polars.experimental.rapidsmpf.dispatch import SubNetGenerator
     from cudf_polars.experimental.rapidsmpf.tracing import ActorTracer
     from cudf_polars.typing import DataType
@@ -224,7 +224,7 @@ async def recv_metadata(ch: Channel[TableChunk], ctx: Context) -> ChannelMetadat
 def _evaluate_chunk_sync(
     chunk: TableChunk,
     ir: IR,
-    ir_context: Any,
+    ir_context: IRExecutionContext,
 ) -> TableChunk:
     """
     Apply an IR node's do_evaluate to a table chunk (synchronous).
@@ -260,7 +260,7 @@ async def evaluate_chunk(
     context: Context,
     chunk: TableChunk,
     *irs: IR,
-    ir_context: Any,
+    ir_context: IRExecutionContext,
 ) -> TableChunk:
     """
     Make chunk available, reserve memory, and evaluate.
@@ -300,7 +300,7 @@ async def concat_batch(
     batch: list[TableChunk],
     context: Context,
     schema: Mapping[str, DataType],
-    ir_context: Any,
+    ir_context: IRExecutionContext,
 ) -> TableChunk:
     """
     Concatenate a list of table chunks.
@@ -348,7 +348,7 @@ async def evaluate_batch(
     batch: list[TableChunk],
     context: Context,
     *irs: IR,
-    ir_context: Any,
+    ir_context: IRExecutionContext,
 ) -> TableChunk:
     """
     Concatenate a list of table chunks and evaluate the result.
@@ -380,7 +380,7 @@ async def evaluate_batch(
 async def chunkwise_evaluate(
     context: Context,
     ir: IR,
-    ir_context: Any,
+    ir_context: IRExecutionContext,
     ch_out: Channel[TableChunk],
     ch_in: Channel[TableChunk],
     metadata: ChannelMetadata,
@@ -485,19 +485,21 @@ def get_partitioning_moduli(
     if metadata.partitioning is None:
         return trivial_inter_rank_modulus, 0
 
+    def _keys_match(
+        scheme: HashScheme | None | str, key_indices: tuple[int, ...]
+    ) -> bool:
+        if isinstance(scheme, HashScheme):
+            target_key_indices = key_indices
+            current_key_indices = scheme.column_indices
+            if allow_subset:
+                target_key_indices = target_key_indices[: len(current_key_indices)]
+            return target_key_indices == current_key_indices
+        else:
+            return False
+
     inter_rank = metadata.partitioning.inter_rank
     strict_inter_rank_modulus = (
-        inter_rank.modulus
-        if (
-            isinstance(inter_rank, HashScheme)
-            and (
-                inter_rank.column_indices
-                == key_indices[: len(inter_rank.column_indices)]
-                if allow_subset
-                else inter_rank.column_indices == key_indices
-            )
-        )
-        else 0
+        inter_rank.modulus if _keys_match(inter_rank, key_indices) else 0
     )
     inter_rank_modulus = strict_inter_rank_modulus or trivial_inter_rank_modulus
     if not inter_rank_modulus:
@@ -505,18 +507,7 @@ def get_partitioning_moduli(
         return 0, 0
 
     local = metadata.partitioning.local
-    local_modulus = (
-        local.modulus
-        if (
-            isinstance(local, HashScheme)
-            and (
-                local.column_indices == key_indices[: len(local.column_indices)]
-                if allow_subset
-                else local.column_indices == key_indices
-            )
-        )
-        else 0
-    )
+    local_modulus = local.modulus if _keys_match(local, key_indices) else 0
     if local_modulus != metadata.local_count:
         local_modulus = 0  # Local count is out of sync - Better to be safe
 

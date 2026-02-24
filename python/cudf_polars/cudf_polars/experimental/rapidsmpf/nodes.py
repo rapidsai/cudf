@@ -138,7 +138,7 @@ async def default_node_multi(
         duplicated = True
         partitioning = None
         for idx, md_child in enumerate(
-            await asyncio.gather(*[recv_metadata(ch, context) for ch in chs_in])
+            await asyncio.gather(*(recv_metadata(ch, context) for ch in chs_in))
         ):
             # Use simple "max" rule to determine counts.
             local_count = max(md_child.local_count, local_count)
