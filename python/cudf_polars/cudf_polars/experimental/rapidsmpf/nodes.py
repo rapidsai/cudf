@@ -19,7 +19,7 @@ from rapidsmpf.streaming.cudf.table_chunk import (
 )
 
 from cudf_polars.containers import DataFrame
-from cudf_polars.dsl.ir import IR, Cache, Empty, Filter, Projection
+from cudf_polars.dsl.ir import IR, Cache, Empty, Filter, Projection, Select
 from cudf_polars.experimental.rapidsmpf.dispatch import (
     generate_ir_sub_network,
 )
@@ -30,6 +30,7 @@ from cudf_polars.experimental.rapidsmpf.utils import (
     process_children,
     recv_metadata,
     remap_partitioning,
+    remap_partitioning_select,
     send_metadata,
     shutdown_on_error,
 )
@@ -83,6 +84,9 @@ async def default_node_single(
             partitioning = remap_partitioning(
                 metadata_in.partitioning, ir.children[0].schema, ir.schema
             )
+        elif isinstance(ir, Select):
+            # Always try to remap partitioning for Select nodes
+            partitioning = remap_partitioning_select(ir, metadata_in.partitioning)
         metadata_out = ChannelMetadata(
             local_count=metadata_in.local_count,
             partitioning=partitioning,

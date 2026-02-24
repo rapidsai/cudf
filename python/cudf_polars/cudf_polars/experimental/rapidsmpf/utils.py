@@ -32,6 +32,7 @@ from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 import pylibcudf as plc
 
 from cudf_polars.containers import DataFrame
+from cudf_polars.dsl.expr import Col
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator, Callable, Mapping
@@ -42,7 +43,7 @@ if TYPE_CHECKING:
 
     from rmm.pylibrmm.stream import Stream
 
-    from cudf_polars.dsl.ir import IR
+    from cudf_polars.dsl.ir import IR, Select
     from cudf_polars.experimental.rapidsmpf.dispatch import SubNetGenerator
     from cudf_polars.experimental.rapidsmpf.tracing import ActorTracer
     from cudf_polars.typing import DataType
@@ -159,6 +160,61 @@ def remap_partitioning(
     new_inter_rank = remap_hash_scheme(partitioning.inter_rank)
     new_local = remap_hash_scheme(partitioning.local)
     return Partitioning(inter_rank=new_inter_rank, local=new_local)
+
+
+def remap_partitioning_select(
+    select: Select, partitioning: Partitioning | None
+) -> Partitioning | None:
+    """
+    Remap partitioning for simple Select nodes.
+
+    Parameters
+    ----------
+    select
+        The select node.
+    partitioning
+        The input partitioning.
+
+    Returns
+    -------
+    The remapped partitioning. When partition keys are not preserved,
+    inter_rank (and optionally local) will be None.
+
+    Notes
+    -----
+    A Select preserves partitioning if all partition key columns are
+    output as simple Col references (unchanged values). Other columns
+    can be computed expressions - only the partition keys matter.
+    """
+    if partitioning is None:
+        return None  # Nothing to preserve
+
+    old_schema = select.children[0].schema
+
+    def _check_keys(scheme: HashScheme | None | str) -> HashScheme | None | str:
+        # Pass through the scheme only if it can be remapped
+        if isinstance(scheme, HashScheme):
+            try:
+                old_names = list(old_schema.keys())
+                partition_key_names = {old_names[i] for i in scheme.column_indices}
+            except IndexError:
+                return None  # Column missing in old schema
+            output_expr_map = {ne.name: ne.value for ne in select.exprs}
+            for key_name in partition_key_names:
+                if key_name not in output_expr_map:
+                    return None
+                expr = output_expr_map[key_name]
+                if not isinstance(expr, Col) or expr.name != key_name:
+                    return None
+        elif scheme not in (None, "inherit"):  # pragma: no cover
+            return None  # Guard against new/unsupported scheme types
+        return scheme
+
+    partitioning = Partitioning(
+        inter_rank=_check_keys(partitioning.inter_rank),
+        local=_check_keys(partitioning.local),
+    )
+    return remap_partitioning(partitioning, old_schema, select.schema)
 
 
 async def send_metadata(
