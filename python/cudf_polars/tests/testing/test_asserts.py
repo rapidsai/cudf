@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -10,6 +10,10 @@ import pytest
 
 import polars as pl
 
+from cudf_polars.experimental.benchmarks.asserts import (
+    ValidationError,
+    assert_tpch_result_equal,
+)
 from cudf_polars.testing.asserts import (
     assert_collect_raises,
     assert_gpu_result_equal,
@@ -117,3 +121,124 @@ def test_sink_ir_translation_raises_sink_error_before_translation(tmp_path: Path
         assert_sink_ir_translation_raises(
             df, tmp_path / "out.csv", {"foo": True}, NotImplementedError
         )
+
+
+def test_assert_tpch_result_equal_ties() -> None:
+    epsilon = 1e-5
+
+    left = pl.DataFrame(
+        {"a": [1.0, 2.0, 3.0, 3.0, 3.0 + epsilon], "b": ["a", "b", "c", "d", "e"]}
+    )
+    right = pl.DataFrame(
+        {"a": [1.0, 2.0, 3.0 - epsilon, 3.0, 3.0], "b": ["a", "b", "e", "c", "d"]}
+    )
+
+    assert_tpch_result_equal(
+        left,
+        right,
+        sort_by=[("a", False)],
+        abs_tol=2 * epsilon,
+        check_exact=False,
+        limit=5,
+    )
+
+
+def test_assert_tpch_result_equal_ties_non_numeric() -> None:
+    epsilon = 1e-5
+
+    left = pl.DataFrame(
+        {"a": [1.0, 2.0, 3.0, 3.0, 3.0 + epsilon], "b": ["a", "b", "c", "c", "c"]}
+    )
+    right = pl.DataFrame(
+        {"a": [1.0, 2.0, 3.0 - epsilon, 3.0, 3.0], "b": ["a", "b", "c", "c", "c"]}
+    )
+
+    assert_tpch_result_equal(
+        left,
+        right,
+        sort_by=[("b", False)],
+        abs_tol=2 * epsilon,
+        check_exact=False,
+        limit=5,
+    )
+
+
+def test_assert_tpch_result_equal_ties_non_numeric_non_string() -> None:
+    epsilon = 1e-5
+
+    left = pl.DataFrame(
+        {"a": [1.0, 2.0, 3.0, 3.0, 3.0 + epsilon], "b": [1, 2, 3, 3, 3]}
+    )
+    right = pl.DataFrame(
+        {"a": [1.0, 2.0, 3.0 - epsilon, 3.0, 3.0], "b": [1, 2, 3, 3, 3]}
+    )
+
+    assert_tpch_result_equal(
+        left,
+        right,
+        sort_by=[("b", False)],
+        abs_tol=2 * epsilon,
+        check_exact=False,
+        limit=5,
+    )
+
+
+def test_assert_tpch_result_equal_ties_multi_column_sort_by() -> None:
+    epsilon = 1e-5
+
+    left = pl.DataFrame(
+        {"a": [1.0, 2.0, 3.0, 3.0, 3.0 + epsilon], "b": ["a", "b", "c", "c", "c"]}
+    )
+    right = pl.DataFrame(
+        {"a": [1.0, 2.0, 3.0 - epsilon, 3.0, 3.0], "b": ["a", "b", "c", "c", "c"]}
+    )
+
+    assert_tpch_result_equal(
+        left,
+        right,
+        sort_by=[("b", False), ("a", False)],
+        abs_tol=2 * epsilon,
+        check_exact=False,
+        limit=5,
+    )
+
+
+def test_assert_tpch_result_equal_raises_column_names_mismatch() -> None:
+    left = pl.DataFrame({"a": [1, 2], "b": [3, 4]})
+    right = pl.DataFrame({"a": [1, 2], "c": [3, 4]})
+
+    with pytest.raises(ValidationError, match="Column names mismatch"):
+        assert_tpch_result_equal(left, right, sort_by=[])
+
+
+def test_assert_tpch_result_equal_raises_schema_mismatch() -> None:
+    left = pl.DataFrame({"a": [1, 2], "b": [3, 4]})
+    right = pl.DataFrame({"a": [1.0, 2.0], "b": [3, 4]})
+
+    with pytest.raises(ValidationError, match="Schema mismatch"):
+        assert_tpch_result_equal(left, right, sort_by=[])
+
+
+def test_assert_tpch_result_equal_raises_sort_by_columns_mismatch() -> None:
+    left = pl.DataFrame({"a": [1, 2, 3], "b": ["x", "y", "z"]})
+    right = pl.DataFrame({"a": [1, 2, 99], "b": ["x", "y", "z"]})
+
+    with pytest.raises(ValidationError, match="sort_by columns mismatch"):
+        assert_tpch_result_equal(left, right, sort_by=[("a", False)], limit=3)
+
+
+def test_assert_tpch_result_equal_raises_result_mismatch() -> None:
+    left = pl.DataFrame({"a": [1, 2, 3], "b": ["x", "y", "z"]})
+    right = pl.DataFrame({"a": [1, 2, 3], "b": ["x", "y", "wrong"]})
+
+    with pytest.raises(ValidationError, match="Result mismatch"):
+        assert_tpch_result_equal(left, right, sort_by=[])
+
+
+def test_assert_tpch_result_equal_raises_result_mismatch_non_ties() -> None:
+    # Same sort_by values, but a differing value in the "before" part.
+    left = pl.DataFrame({"a": [1.0, 2.0, 3.0, 3.0], "b": ["a", "b", "c", "d"]})
+    right = pl.DataFrame({"a": [1.0, 2.0, 3.0, 3.0], "b": ["a", "wrong", "c", "d"]})
+
+    with pytest.raises(ValidationError, match="Result mismatch in non-ties part"):
+        assert_tpch_result_equal(left, right, sort_by=[("a", False)], limit=4)
