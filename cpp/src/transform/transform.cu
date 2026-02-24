@@ -280,7 +280,7 @@ std::unique_ptr<column> transform_operation(size_type row_size,
 
   if (may_return_nulls) {
     auto valid_count_value = valid_count.value(stream);
-    auto null_count        = base_column.size() - valid_count_value;
+    auto null_count        = row_size - valid_count_value;
     output->set_null_count(null_count);
   }
 
@@ -347,11 +347,11 @@ std::unique_ptr<column> string_view_operation(size_type row_size,
 
   if (may_return_nulls) {
     auto valid_count_value = valid_count.value(stream);
-    auto null_count        = base_column.size() - valid_count_value;
+    auto null_count        = row_size - valid_count_value;
     output->set_null_mask(std::move(*null_mask), null_count);
   } else {
     output->set_null_mask(
-      cudf::create_null_mask(base_column.size(), cudf::mask_state::UNALLOCATED, stream, mr), 0);
+      cudf::create_null_mask(row_size, cudf::mask_state::UNALLOCATED, stream, mr), 0);
   }
 
   return output;
