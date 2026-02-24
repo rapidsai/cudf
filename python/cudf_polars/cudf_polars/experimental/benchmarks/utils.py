@@ -1271,14 +1271,13 @@ def check_input_data_type(
     run_config: RunConfig,
 ) -> tuple[Literal["decimal", "float"], Literal["date", "timestamp"]]:
     """
-    Check whether the input data types for types that can vary.
+    Check the input data types columns with variable data types.
 
     Our queries might be run on datasets that use different data types for different
     types of columns. Our validation supports:
 
     1. 'decimal' or 'float' for non-integer numeric columns (e.g. 'c_acctbal')
     2. 'date' or 'timestamp' for date type columns (e.g. 'o_orderdate')
-
 
     This is determined by looking at the ``c_acctbal`` column of the customer table.
     """
