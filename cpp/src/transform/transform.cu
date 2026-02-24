@@ -140,8 +140,9 @@ jitify2::ConfiguredKernel build_span_kernel(std::string const& kernel_name,
 void launch_column_output_kernel(jitify2::ConfiguredKernel& kernel,
                                  std::vector<mutable_column_view> const& output_columns,
                                  std::vector<column_view> const& input_columns,
-                                 std::optional<bool*> intermediate_null_mask,
-                                 std::optional<void*> user_data,
+                                 bool* intermediate_null_mask,
+                                 cudf::size_type* valid_count,
+                                 void* user_data,
                                  rmm::cuda_stream_view stream,
                                  rmm::device_async_resource_ref mr)
 {
@@ -153,10 +154,12 @@ void launch_column_output_kernel(jitify2::ConfiguredKernel& kernel,
 
   mutable_column_device_view const* p_outputs = outputs.data();
   column_device_view const* p_inputs          = inputs.data();
-  bool* p_intermediate_null_mask              = intermediate_null_mask.value_or(nullptr);
-  void* p_user_data                           = user_data.value_or(nullptr);
+  bool* p_intermediate_null_mask              = intermediate_null_mask;
+  cudf::size_type* p_valid_count              = valid_count;
+  void* p_user_data                           = user_data;
 
-  std::array<void*, 4> args{&p_outputs, &p_inputs, &p_intermediate_null_mask, &p_user_data};
+  std::array<void*, 5> args{
+    &p_outputs, &p_inputs, &p_intermediate_null_mask, &p_valid_count, &p_user_data};
 
   kernel->launch_raw(args.data());
 }
@@ -165,8 +168,9 @@ template <typename T>
 void launch_span_kernel(jitify2::ConfiguredKernel& kernel,
                         cudf::jit::device_optional_span<T> const& output,
                         std::vector<column_view> const& input_cols,
-                        std::optional<bool*> intermediate_null_mask,
-                        std::optional<void*> user_data,
+                        bool* intermediate_null_mask,
+                        cudf::size_type* valid_count,
+                        void* user_data,
                         rmm::cuda_stream_view stream,
                         rmm::device_async_resource_ref mr)
 {
@@ -177,39 +181,14 @@ void launch_span_kernel(jitify2::ConfiguredKernel& kernel,
 
   cudf::jit::device_optional_span<T> const* p_outputs = outputs.data();
   column_device_view const* p_inputs                  = inputs.data();
-  bool* p_intermediate_null_mask                      = intermediate_null_mask.value_or(nullptr);
-  void* p_user_data                                   = user_data.value_or(nullptr);
+  bool* p_intermediate_null_mask                      = intermediate_null_mask;
+  cudf::size_type* p_valid_count                      = valid_count;
+  void* p_user_data                                   = user_data;
 
-  std::array<void*, 4> args{&p_outputs, &p_inputs, &p_intermediate_null_mask, &p_user_data};
+  std::array<void*, 5> args{
+    &p_outputs, &p_inputs, &p_intermediate_null_mask, &p_valid_count, &p_user_data};
 
   kernel->launch_raw(args.data());
-}
-
-std::tuple<rmm::device_buffer, size_type> and_null_mask(column_view base_column,
-                                                        std::vector<column_view> const& inputs,
-                                                        rmm::cuda_stream_view stream,
-                                                        rmm::device_async_resource_ref mr)
-{
-  // collect the non-scalar elements that contribute to the resulting bitmask
-  std::vector<column_view> bitmask_columns;
-
-  // to handle null masks for scalars, we just check if the scalar element is null. If it is null,
-  // then all the rows of the transform output will be null. This helps us prevent creating
-  // column-sized bitmasks for each scalar.
-  for (column_view const& col : inputs) {
-    if (cudf::jit::is_scalar(base_column.size(), col.size())) {
-      // all nulls
-      if (col.has_nulls()) {
-        return std::make_tuple(
-          create_null_mask(base_column.size(), mask_state::ALL_NULL, stream, mr),
-          base_column.size());
-      }
-    } else {
-      bitmask_columns.emplace_back(col);
-    }
-  }
-
-  return cudf::bitmask_and(table_view{bitmask_columns}, stream, mr);
 }
 
 bool may_evaluate_null(column_view base_column,
@@ -240,23 +219,21 @@ std::unique_ptr<column> transform_operation(column_view base_column,
                                             rmm::cuda_stream_view stream,
                                             rmm::device_async_resource_ref mr)
 {
-  auto output = make_fixed_width_column(
-    output_type, base_column.size(), cudf::mask_state::UNALLOCATED, stream, mr);
-
   auto may_return_nulls = may_evaluate_null(base_column, inputs, is_null_aware, null_policy);
+  auto output           = make_fixed_width_column(
+    output_type,
+    base_column.size(),
+    may_return_nulls ? cudf::mask_state::UNINITIALIZED : cudf::mask_state::UNALLOCATED,
+    stream,
+    mr);
+
+  rmm::device_scalar<cudf::size_type> valid_count(0, stream, mr);
 
   std::optional<rmm::device_uvector<bool>> intermediate_null_mask = std::nullopt;
 
-  if (is_null_aware == null_aware::NO) {
-    if (may_return_nulls) {
-      auto [and_mask_buffer, and_mask_null_count] = and_null_mask(base_column, inputs, stream, mr);
-      output->set_null_mask(std::move(and_mask_buffer), and_mask_null_count);
-    }
-  } else if (is_null_aware == null_aware::YES) {
-    if (may_return_nulls) {
-      intermediate_null_mask =
-        std::make_optional<rmm::device_uvector<bool>>(base_column.size(), stream, mr);
-    }
+  if (may_return_nulls) {
+    auto padded_size       = rmm::align_up(base_column.size(), sizeof(cudf::bitmask_type) * 8);
+    intermediate_null_mask = std::make_optional<rmm::device_uvector<bool>>(padded_size, stream, mr);
   }
 
   auto kernel = build_transform_kernel(is_fixed_point(output_type)
@@ -273,25 +250,20 @@ std::unique_ptr<column> transform_operation(column_view base_column,
                                        stream,
                                        mr);
 
-  launch_column_output_kernel(kernel,
-                              {*output},
-                              inputs,
-                              intermediate_null_mask.has_value()
-                                ? std::optional<bool*>(intermediate_null_mask->data())
-                                : std::nullopt,
-                              user_data,
-                              stream,
-                              mr);
+  launch_column_output_kernel(
+    kernel,
+    {*output},
+    inputs,
+    intermediate_null_mask.has_value() ? intermediate_null_mask->data() : nullptr,
+    valid_count.data(),
+    user_data.value_or(nullptr),
+    stream,
+    mr);
 
-  if (intermediate_null_mask.has_value()) {
-    auto [null_mask, null_count] = detail::valid_if(
-      intermediate_null_mask->begin(),
-      intermediate_null_mask->end(),
-      [] __device__(bool element) { return element; },
-      stream,
-      mr);
-
-    output->set_null_mask(std::move(null_mask), null_count);
+  if (may_return_nulls) {
+    auto valid_count_value = valid_count.value(stream);
+    auto null_count        = base_column.size() - valid_count_value;
+    output->set_null_count(null_count);
   }
 
   return output;
@@ -311,21 +283,23 @@ std::unique_ptr<column> string_view_operation(column_view base_column,
 
   auto may_return_nulls = may_evaluate_null(base_column, inputs, is_null_aware, null_policy);
 
-  std::optional<rmm::device_uvector<bool>> intermediate_null_mask   = std::nullopt;
-  std::optional<std::tuple<rmm::device_buffer, size_type>> and_mask = std::nullopt;
+  rmm::device_scalar<cudf::size_type> valid_count(0, stream, mr);
+  std::optional<rmm::device_uvector<bool>> intermediate_null_mask = std::nullopt;
+  std::optional<rmm::device_buffer> null_mask                     = std::nullopt;
 
-  if (is_null_aware == null_aware::NO) {
-    if (may_return_nulls) { and_mask = and_null_mask(base_column, inputs, stream, mr); }
-  } else if (is_null_aware == null_aware::YES) {
-    if (may_return_nulls) {
-      intermediate_null_mask =
-        std::make_optional<rmm::device_uvector<bool>>(base_column.size(), stream, mr);
-    }
+  if (may_return_nulls) {
+    auto padded_size = rmm::align_up(base_column.size(), sizeof(cudf::bitmask_type) * 8);
+
+    // TODO(lamarrr): due to padding, we need to account for the null count and valid count
+
+    intermediate_null_mask = std::make_optional<rmm::device_uvector<bool>>(padded_size, stream, mr);
+    null_mask              = std::make_optional<rmm::device_buffer>(
+      cudf::bitmask_allocation_size_bytes(base_column.size()), stream, mr);
   }
 
   auto output_span = cudf::jit::device_optional_span<string_view>{
     cudf::jit::device_span<string_view>{string_views.data(), string_views.size()},
-    and_mask.has_value() ? static_cast<bitmask_type*>(std::get<0>(*and_mask).data()) : nullptr};
+    null_mask.has_value() ? static_cast<bitmask_type*>(null_mask->data()) : nullptr};
 
   auto kernel = build_span_kernel("cudf::transformation::jit::span_kernel",
                                   base_column.size(),
@@ -339,30 +313,25 @@ std::unique_ptr<column> string_view_operation(column_view base_column,
                                   stream,
                                   mr);
 
-  launch_span_kernel<string_view>(kernel,
-                                  output_span,
-                                  inputs,
-                                  intermediate_null_mask.has_value()
-                                    ? std::optional<bool*>(intermediate_null_mask->data())
-                                    : std::nullopt,
-                                  user_data,
-                                  stream,
-                                  mr);
+  launch_span_kernel<string_view>(
+    kernel,
+    output_span,
+    inputs,
+    intermediate_null_mask.has_value() ? intermediate_null_mask->data() : nullptr,
+    valid_count.data(),
+    user_data.value_or(nullptr),
+    stream,
+    mr);
 
   auto output = make_strings_column(string_views, cudf::string_view{}, stream, mr);
 
-  if (and_mask.has_value()) {
-    auto [and_mask_buffer, and_mask_null_count] = std::move(*and_mask);
-    output->set_null_mask(std::move(and_mask_buffer), and_mask_null_count);
-  } else if (intermediate_null_mask.has_value()) {
-    auto [null_mask, null_count] = detail::valid_if(
-      intermediate_null_mask->begin(),
-      intermediate_null_mask->end(),
-      [] __device__(bool element) { return element; },
-      stream,
-      mr);
-
-    output->set_null_mask(std::move(null_mask), null_count);
+  if (may_return_nulls) {
+    auto valid_count_value = valid_count.value(stream);
+    auto null_count        = base_column.size() - valid_count_value;
+    output->set_null_mask(std::move(*null_mask), null_count);
+  } else {
+    output->set_null_mask(
+      cudf::create_null_mask(base_column.size(), cudf::mask_state::UNALLOCATED, stream, mr), 0);
   }
 
   return output;
