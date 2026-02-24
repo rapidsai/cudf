@@ -1100,10 +1100,9 @@ async def _choose_strategy(
 
     estimated_output_size = max(left_total, right_total)
     ideal_output_count = max(1, estimated_output_size // target_partition_size)
-    ideal_modulus = nranks * ideal_output_count
     # Limit the output count to 10x the larger input side
     max_output_chunks = 10 * max(left_total_chunks, right_total_chunks)
-    min_shuffle_modulus = min(ideal_modulus, max_output_chunks)
+    min_shuffle_modulus = min(ideal_output_count, max_output_chunks)
 
     return broadcast_side, min_shuffle_modulus
 
