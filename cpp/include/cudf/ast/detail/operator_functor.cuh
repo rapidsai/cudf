@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -744,6 +744,13 @@ struct operator_functor<ast_operator::NULL_LOGICAL_OR, true> {
     return {};
   }
 };
+
+constexpr bool flatten_predicate(possibly_null_value_t<bool, false> value) { return value; }
+
+constexpr bool flatten_predicate(possibly_null_value_t<bool, true> value)
+{
+  return value.has_value() && *value;
+}
 
 }  // namespace ast::detail
 }  // namespace CUDF_EXPORT cudf
