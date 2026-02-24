@@ -1505,7 +1505,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 index,
             )
         pa_scalar = plc_scalar.to_arrow(
-            metadata=[_dtype_to_metadata(self.dtype)],
+            metadata=_dtype_to_metadata(self.dtype),  # type: ignore[arg-type]
         )
         if not pa_scalar.is_valid:
             return self._PANDAS_NA_VALUE
