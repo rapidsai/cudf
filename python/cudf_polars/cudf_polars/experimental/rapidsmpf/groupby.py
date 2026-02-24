@@ -567,32 +567,30 @@ async def _choose_strategy(
     -------
     The output count.
     """
+    aggregated_size = aggregated.data_alloc_size(MemoryType.DEVICE)
+    local_estimated_size = (aggregated_size // max(1, chunks_received)) * local_count
+
     if skip_global_comm:
-        total_size = aggregated.data_alloc_size(MemoryType.DEVICE)
+        total_estimated_size = local_estimated_size
         total_chunk_count = local_count
-        total_chunks_received = chunks_received
         total_need_shuffle = int(not input_drained)
     else:
         (
-            total_size,
+            total_estimated_size,
             total_chunk_count,
-            total_chunks_received,
             total_need_shuffle,
         ) = await allgather_reduce(
             context,
             collective_ids.pop(),
-            aggregated.data_alloc_size(MemoryType.DEVICE),
+            local_estimated_size,
             local_count,
-            chunks_received,
             int(not input_drained),
         )
 
     ideal_count = 1
     use_tree = total_need_shuffle == 0
     if not use_tree:
-        if total_chunks_received > 0:
-            total_size = (total_size // total_chunks_received) * total_chunk_count
-        ideal_count = max(2, total_size // target_partition_size)
+        ideal_count = max(2, total_estimated_size // target_partition_size)
 
     output_count_limit = local_count if skip_global_comm else total_chunk_count
     output_count = min(ideal_count, output_count_limit)
@@ -611,7 +609,7 @@ async def _choose_strategy(
 
 
 @define_actor()
-async def keyed_reduction_actor(
+async def groupby_actor(
     context: Context,
     ir: GroupBy | Distinct,
     ir_context: IRExecutionContext,
@@ -754,7 +752,7 @@ def _(
         f"{type(ir).__name__} requires 2 collective IDs, got {len(collective_ids)}"
     )
     actors[ir] = [
-        keyed_reduction_actor(
+        groupby_actor(
             rec.state["context"],
             ir,
             rec.state["ir_context"],
