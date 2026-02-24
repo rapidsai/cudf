@@ -232,7 +232,7 @@ def _wrap_and_validate(
             wrap_buffers=True,
         )
         if isinstance(dtype, ListDtype):
-            # dtype may have gotten normalized
+            # values_dtype may have gotten normalized
             # e.g. np.dtype(str), pd.DatetimeTZDtype
             dtype = ListDtype(values_dtype)
     elif is_dtype_obj_interval(dtype):
