@@ -24,7 +24,9 @@ import polars as pl
 with contextlib.suppress(ImportError):
     from cudf_polars.experimental.benchmarks.utils import (
         RunConfig,
+        build_parser,
         get_data,
+        parse_args,
         run_duckdb,
         run_polars,
     )
@@ -1809,20 +1811,18 @@ class PDSHDuckDBQueries:
 
 
 if __name__ == "__main__":
-    import argparse
-
-    parser = argparse.ArgumentParser(description="Run PDS-H benchmarks.")
+    parser = build_parser(num_queries=22)
     parser.add_argument(
         "--engine",
         choices=["polars", "duckdb"],
         default="polars",
         help="Which engine to use for executing the benchmarks or to validate results.",
     )
-    args, extra_args = parser.parse_known_args()
+    args = parse_args(parser=parser)
 
     if args.engine == "polars":
-        run_polars(PDSHQueries, extra_args, num_queries=22)
+        run_polars(PDSHQueries, args, num_queries=22)
     elif args.engine == "duckdb":
-        run_duckdb(PDSHDuckDBQueries, extra_args, num_queries=22)
+        run_duckdb(PDSHDuckDBQueries, args, num_queries=22)
     else:
         raise ValueError(f"Invalid engine: {args.engine}")

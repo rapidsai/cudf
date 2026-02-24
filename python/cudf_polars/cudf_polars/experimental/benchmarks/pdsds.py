@@ -20,6 +20,8 @@ from typing import TYPE_CHECKING
 
 with contextlib.suppress(ImportError):
     from cudf_polars.experimental.benchmarks.utils import (
+        build_parser,
+        parse_args,
         run_duckdb,
         run_polars,
     )
@@ -84,20 +86,18 @@ class PDSDSDuckDBQueries(PDSDSQueries):
 
 
 if __name__ == "__main__":
-    import argparse
-
-    parser = argparse.ArgumentParser(description="Run PDS-DS benchmarks.")
+    parser = build_parser(num_queries=99)
     parser.add_argument(
         "--engine",
         choices=["polars", "duckdb"],
         default="polars",
         help="Which engine to use for executing the benchmarks or to validate results.",
     )
-    args, extra_args = parser.parse_known_args()
+    args = parse_args(parser=parser)
 
     if args.engine == "polars":
-        run_polars(PDSDSPolarsQueries, extra_args, num_queries=99)
+        run_polars(PDSDSPolarsQueries, args, num_queries=99)
     elif args.engine == "duckdb":
-        run_duckdb(PDSDSDuckDBQueries, extra_args, num_queries=99)
+        run_duckdb(PDSDSDuckDBQueries, args, num_queries=99)
     else:
         raise ValueError(f"Invalid engine: {args.engine}")
