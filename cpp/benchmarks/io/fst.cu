@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -19,7 +19,7 @@
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_uvector.hpp>
 
-#include <thrust/iterator/discard_iterator.h>
+#include <cuda/iterator>
 
 #include <nvbench/nvbench.cuh>
 
@@ -136,7 +136,7 @@ void BM_FST_JSON_no_outidx(nvbench::state& state)
     parser.Transduce(d_input.data(),
                      static_cast<SymbolOffsetT>(d_input.size()),
                      output_gpu.device_ptr(),
-                     thrust::make_discard_iterator(),
+                     cuda::make_discard_iterator(),
                      output_gpu_size.device_ptr(),
                      start_state,
                      stream.value());
@@ -174,8 +174,8 @@ void BM_FST_JSON_no_out(nvbench::state& state)
     // Allocate device-side temporary storage & run algorithm
     parser.Transduce(d_input.data(),
                      static_cast<SymbolOffsetT>(d_input.size()),
-                     thrust::make_discard_iterator(),
-                     thrust::make_discard_iterator(),
+                     cuda::make_discard_iterator(),
+                     cuda::make_discard_iterator(),
                      output_gpu_size.device_ptr(),
                      start_state,
                      stream.value());
@@ -214,7 +214,7 @@ void BM_FST_JSON_no_str(nvbench::state& state)
     // Allocate device-side temporary storage & run algorithm
     parser.Transduce(d_input.data(),
                      static_cast<SymbolOffsetT>(d_input.size()),
-                     thrust::make_discard_iterator(),
+                     cuda::make_discard_iterator(),
                      out_indexes_gpu.device_ptr(),
                      output_gpu_size.device_ptr(),
                      start_state,
