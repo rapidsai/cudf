@@ -67,6 +67,10 @@ namespace CUDF_EXPORT cudf {
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
+/**
+ * @brief Typedef for inputs to the transform function. Each input can be either a column or a
+ * scalar column.
+ */
 using transform_input = std::variant<column_view, scalar_column_view>;
 
 /**
