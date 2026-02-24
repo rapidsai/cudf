@@ -159,7 +159,10 @@ def cudf_dtype_from_pa_type(typ: pa.DataType) -> DtypeObj:
     elif isinstance(typ, ArrowIntervalType):
         return cudf.IntervalDtype.from_arrow(typ)
     else:
-        return cudf.api.types.pandas_dtype(typ.to_pandas_dtype())
+        try:
+            return cudf.api.types.pandas_dtype(typ.to_pandas_dtype())
+        except NotImplementedError as err:
+            raise TypeError(f"Unsupported type: {typ}") from err
 
 
 def is_column_like(obj):
