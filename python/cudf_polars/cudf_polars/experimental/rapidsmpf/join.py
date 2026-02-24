@@ -325,7 +325,7 @@ async def _collect_small_side_for_broadcast(
 
     Returns (list of DataFrames to join against, total byte size of small side).
     """
-    small_chunks: list[TableChunk] = list(initial_chunks)
+    small_chunks: list[TableChunk] = initial_chunks
     small_size = sum(c.data_alloc_size(MemoryType.DEVICE) for c in small_chunks)
     small_row_count = sum(c.table_view().num_rows() for c in small_chunks)
     while (msg := await small_ch.recv(context)) is not None:
@@ -815,7 +815,7 @@ async def _shuffle_join(
         left_state,
         right_state,
         min_shuffle_modulus,
-    )
+    )  # Global modulus
 
     left_key_indices, right_key_indices, output_key_indices = _get_key_indices(
         ir, n_partitioned_keys
@@ -1136,15 +1136,15 @@ def _choose_shuffle_modulus(
                 modulus = max(left_existing_modulus, right_existing_modulus)
     elif left_existing_modulus is not None:
         # Only left is partitioned - use its modulus if sufficient
-        modulus = max(left_existing_modulus, min_shuffle_modulus)
+        modulus = left_existing_modulus
     elif right_existing_modulus is not None:
         # Only right is partitioned - use its modulus if sufficient
-        modulus = max(right_existing_modulus, min_shuffle_modulus)
+        modulus = right_existing_modulus
     else:
         # Neither side partitioned - can choose freely
         # Use at least nranks for distributed efficiency
-        modulus = max(context.comm().nranks, min_shuffle_modulus)
-    return modulus
+        modulus = context.comm().nranks
+    return max(modulus, min_shuffle_modulus)
 
 
 async def _sample_chunks(
