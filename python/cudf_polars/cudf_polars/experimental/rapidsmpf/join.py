@@ -891,10 +891,8 @@ class PartitioningState:
 
     def __bool__(self) -> bool:
         """True if the table has proper partitioning."""
-        return (
-            self.inter_rank_modulus > 0
-            and self.local_modulus is not None
-            and self.local_modulus > 0
+        return self.inter_rank_modulus > 0 and (
+            self.local_modulus is None or self.local_modulus > 0
         )
 
     def __eq__(self, other: object) -> bool:
