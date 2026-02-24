@@ -1736,7 +1736,7 @@ class StringColumn(ColumnBase, Scannable):
             if len(self) == 0:
                 return cast(
                     Self,
-                    as_column([], dtype=np.dtype("object")),
+                    column_empty(0, dtype=self.dtype),
                 )
             plc_result = method(
                 self.plc_column,

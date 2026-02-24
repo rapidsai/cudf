@@ -543,6 +543,10 @@ class GroupBy(Serializable, Reducible, Scannable):
             self.grouping, self._dropna
         )
 
+    @cached_property
+    def _range_column_from_obj(self) -> ColumnBase:
+        return ColumnBase.from_range(range(len(self.obj)))
+
     def __iter__(self):
         group_names, offsets, _, grouped_values = self._grouped()
         if isinstance(group_names, Index):
@@ -617,7 +621,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         {10: array([0, 1]), 40: array([2])}
         """
         offsets, group_keys, (indices,) = self._groups(
-            [as_column(range(len(self.obj)), dtype=SIZE_TYPE_DTYPE)]
+            [self._range_column_from_obj]
         )
 
         key_dtypes = [col.dtype for col in group_keys]
@@ -1314,9 +1318,7 @@ class GroupBy(Serializable, Reducible, Scannable):
             # Can't use _mimic_pandas_order because we need to
             # subsample the gather map from the full input ordering,
             # rather than permuting the gather map of the output.
-            _, _, (ordering,) = self._groups(
-                [as_column(range(0, len(self.obj)))]
-            )
+            _, _, (ordering,) = self._groups([self._range_column_from_obj])
             # Invert permutation from original order to groups on the
             # subset of entries we want.
             gather_map = ordering.take(to_take).argsort()
@@ -2910,7 +2912,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         # result coming back from libcudf has null_count few rows than
         # the input, so we must produce an ordering from the full
         # input range.
-        _, _, (ordering,) = self._groups([as_column(range(0, len(self.obj)))])
+        _, _, (ordering,) = self._groups([self._range_column_from_obj])
         if self._dropna and any(
             c.has_nulls(include_nan=True) > 0
             for c in self.grouping._key_columns

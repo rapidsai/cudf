@@ -4122,6 +4122,58 @@ def test_chunked_parquet_reader_nrows_skiprows(
         assert_eq(expected, got)
 
 
+@pytest.mark.parametrize(
+    "column_encoding",
+    [
+        "DELTA_BINARY_PACKED",
+        "DELTA_LENGTH_BYTE_ARRAY",
+        "DELTA_BYTE_ARRAY",
+    ],
+)
+def test_chunked_parquet_reader_delta_decode_level_bounds(
+    column_encoding, tmp_path
+):
+    n_rows = 2000
+
+    if column_encoding == "DELTA_BINARY_PACKED":
+        # Nullable int32 column
+        data = list(range(n_rows))
+        validity = [None if i % 4 == 3 else data[i] for i in range(n_rows)]
+        table = pa.table({"col": pa.array(validity, type=pa.int32())})
+    else:
+        # Nullable string column for DELTA_LENGTH_BYTE_ARRAY / DELTA_BYTE_ARRAY
+        strings = [None if i % 4 == 3 else f"str_{i}" for i in range(n_rows)]
+        table = pa.table({"col": pa.array(strings, type=pa.string())})
+
+    fname = tmp_path / "delta_level_bounds.parquet"
+    pq.write_table(
+        table,
+        fname,
+        version="2.6",
+        data_page_version="2.0",
+        data_page_size=4 * 1024,  # small pages -> many pages per RG
+        row_group_size=1000,
+        column_encoding=column_encoding,
+        use_dictionary=False,
+    )
+
+    skip = 101
+    nrows = 99
+
+    expected = cudf.read_parquet(fname, nrows=nrows, skip_rows=skip)
+
+    with cudf.option_context("io.parquet.low_memory", True):
+        got = cudf.read_parquet(
+            [fname],
+            _chunk_read_limit=256,
+            _pass_read_limit=256,
+            nrows=nrows,
+            skip_rows=skip,
+        ).reset_index(drop=True)
+        expected = expected.reset_index(drop=True)
+        assert_eq(expected, got)
+
+
 def test_parquet_reader_pandas_compatibility():
     df = pd.DataFrame(
         {"a": [1, 2, 3, 4] * 10000, "b": ["av", "qw", "hi", "xyz"] * 10000}

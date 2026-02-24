@@ -214,7 +214,7 @@ def _convert_str_col(
     # future see StringColumn.as_numerical_column
     converted_col = (
         col.to_lower()
-        .find_and_replace(as_column([""]), as_column(["NaN"]))
+        .find_and_replace(as_column("", length=1), as_column("NaN", length=1))
         .replace_multiple(
             as_column(["+", "inf", "inity"]),  # type: ignore[arg-type]
             as_column(["", "Inf", ""]),  # type: ignore[arg-type]

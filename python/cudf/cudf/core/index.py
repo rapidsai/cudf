@@ -2259,7 +2259,7 @@ class RangeIndex(Index):
     @_performance_tracking
     def _column(self) -> ColumnBase:
         if len(self) > 0:
-            return as_column(self._range, dtype=self.dtype)
+            return ColumnBase.from_range(self._range).astype(self.dtype)
         else:
             return column_empty(0, dtype=self.dtype)
 
@@ -2984,10 +2984,11 @@ class RangeIndex(Index):
                 f"{type(self).__name__}."
             )
         try:
-            i = [self._range.index(value)]
+            return as_column(
+                self._range.index(value), length=1, dtype=SIZE_TYPE_DTYPE
+            )  # type: ignore[return-value]
         except ValueError:
-            i = []
-        return as_column(i, dtype=SIZE_TYPE_DTYPE)  # type: ignore[return-value]
+            return column_empty(0, dtype=SIZE_TYPE_DTYPE)  # type: ignore[return-value]
 
     @_performance_tracking
     def nans_to_nulls(self) -> Self:

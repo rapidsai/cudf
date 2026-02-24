@@ -3463,8 +3463,6 @@ NODEIDS_THAT_FAIL_WITH_CUDF_PANDAS = {
     "tests/groupby/test_cumulative.py::test_numpy_compat[cumprod]",
     "tests/groupby/test_cumulative.py::test_numpy_compat[cumsum]",
     "tests/groupby/test_groupby.py::test_as_index_select_column",
-    "tests/groupby/test_groupby.py::test_basic_aggregations[float32]",
-    "tests/groupby/test_groupby.py::test_basic_aggregations[float32]",
     "tests/groupby/test_groupby.py::test_basic_aggregations[int32]",
     "tests/groupby/test_groupby.py::test_decimal_na_sort[True]",
     "tests/groupby/test_groupby.py::test_frame_groupby_columns",

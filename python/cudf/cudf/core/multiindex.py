@@ -19,11 +19,10 @@ import pylibcudf as plc
 import cudf
 from cudf.api.extensions import no_default
 from cudf.api.types import is_integer, is_list_like, is_scalar
-from cudf.core import column
 from cudf.core._internals import sorting
 from cudf.core.algorithms import factorize
-from cudf.core.column import access_columns
-from cudf.core.column.column import ColumnBase
+from cudf.core.column.column import ColumnBase, as_column
+from cudf.core.column.utils import access_columns
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.dtype.validators import (
     is_dtype_obj_numeric,
@@ -146,7 +145,7 @@ class MultiIndex(Index):
     """
 
     _levels: list[cudf.Index] | None
-    _codes: list[column.ColumnBase] | None
+    _codes: list[ColumnBase] | None
 
     @_performance_tracking
     def __init__(
@@ -194,16 +193,16 @@ class MultiIndex(Index):
                 new_level = new_level.copy(deep=True)
             new_levels.append(new_level)
 
-        new_codes: list[column.ColumnBase] = []
+        new_codes: list[ColumnBase] = []
         for code in codes:
             if not (is_list_like(code) or is_column_like(code)):
                 raise TypeError("Each code must be list-like")
-            new_code = column.as_column(code, dtype=np.dtype(np.int64))
+            new_code = as_column(code, dtype=np.dtype(np.int64))
             if copy and new_code is code:
                 new_code = new_code.copy(deep=True)
             new_codes.append(new_code)
 
-        source_data: dict[Hashable, column.ColumnBase] = {}
+        source_data: dict[Hashable, ColumnBase] = {}
         for i, (code, level) in enumerate(
             zip(new_codes, new_levels, strict=True)
         ):
@@ -392,7 +391,7 @@ class MultiIndex(Index):
             codes = []
             for col in self._data.values():
                 code, cats = factorize(col)
-                codes.append(column.as_column(code.astype(np.dtype(np.int64))))
+                codes.append(as_column(code.astype(np.dtype(np.int64))))
                 levels.append(cats)
             self._levels = levels
             self._codes = codes
@@ -434,7 +433,7 @@ class MultiIndex(Index):
         cls,
         data: ColumnAccessor,
         levels: list[cudf.Index] | None,
-        codes: list[column.ColumnBase] | None,
+        codes: list[ColumnBase] | None,
         names: pd.core.indexes.frozen.FrozenList,
         name: Any = None,
     ) -> Self:
@@ -526,7 +525,7 @@ class MultiIndex(Index):
         else:
             levels = self._levels
         if self._codes is not None:
-            codes: list[column.ColumnBase] | None = [
+            codes: list[ColumnBase] | None = [
                 code.copy(deep=deep) for code in self._codes
             ]
         else:
@@ -548,9 +547,9 @@ class MultiIndex(Index):
             # TODO: Update the following two arange calls to
             # a single arange call once arange has support for
             # a vector start/end points.
-            indices = column.as_column(range(n))
+            indices = ColumnBase.from_range(range(n))
             indices = indices.append(
-                column.as_column(range(len(self) - n, len(self), 1))
+                ColumnBase.from_range(range(len(self) - n, len(self), 1))
             )
             preprocess = self.take(indices)
         else:
@@ -733,7 +732,7 @@ class MultiIndex(Index):
                             cudf.Series,
                             cudf.Index,
                             cudf.DataFrame,
-                            column.ColumnBase,
+                            ColumnBase,
                         ),
                     )
                 )
@@ -755,7 +754,7 @@ class MultiIndex(Index):
             self_df = self.to_frame(index=False).reset_index()
             values_df = values_idx.to_frame(index=False)
             idx = self_df.merge(values_df, how="leftsemi")._data["index"]
-            res = column.as_column(False, length=len(self))
+            res = as_column(False, length=len(self))
             res[idx] = True
             result = res.values
         else:
@@ -774,7 +773,7 @@ class MultiIndex(Index):
         """Computes the valid set of indices of values in the lookup"""
         # TODO: A non-slice(None) will probably raise in as_column
         lookup_dict = {
-            i: column.as_column(row)
+            i: as_column(row)
             for i, row in enumerate(row_tuple)
             if not (isinstance(row, slice) and row == slice(None))
         }
@@ -785,18 +784,19 @@ class MultiIndex(Index):
                 verify=False,
             )
         )
+
         data_table = cudf.concat(
-            [
-                frame,
-                cudf.DataFrame._from_data(
-                    ColumnAccessor(
-                        {"idx": column.as_column(range(len(frame)))},
-                        verify=False,
-                    )
-                ),
-            ],
-            axis=1,
-        )
+                [
+                    frame,
+                    cudf.DataFrame._from_data(
+                        ColumnAccessor(
+                            {"idx": ColumnBase.from_range(range(len(frame)))},
+                            verify=False,
+                        )
+                    ),
+                ],
+                axis=1,
+            )
         # Sort indices in pandas compatible mode
         # because we want the indices to be fetched
         # in a deterministic order.
@@ -804,7 +804,7 @@ class MultiIndex(Index):
         # obtain deterministic ordering.
         if cudf.get_option("mode.pandas_compatible"):
             lookup_order = "_" + "_".join(map(str, lookup._column_names))
-            lookup[lookup_order] = column.as_column(range(len(lookup)))
+            lookup[lookup_order] = ColumnBase.from_range(range(len(lookup)))
             postprocess = operator.methodcaller(
                 "sort_values", by=[lookup_order, "idx"]
             )
@@ -837,14 +837,14 @@ class MultiIndex(Index):
             ):
                 stop = row_tuple.stop or max_length
                 start, stop, step = row_tuple.indices(stop)
-                return column.as_column(range(start, stop, step))
+                return ColumnBase.from_range(range(start, stop, step))
             start_values = self._compute_validity_mask(
                 index, row_tuple.start, max_length
             )
             stop_values = self._compute_validity_mask(
                 index, row_tuple.stop, max_length
             )
-            return column.as_column(
+            return ColumnBase.from_range(
                 range(start_values.min(), stop_values.max() + 1)
             )
         elif isinstance(row_tuple, numbers.Number):
@@ -937,7 +937,7 @@ class MultiIndex(Index):
         valid_indices = self._get_valid_indices_by_tuple(
             df.index, row_tuple, len(df)
         )
-        if isinstance(valid_indices, column.ColumnBase):
+        if isinstance(valid_indices, ColumnBase):
             indices = cudf.Series._from_column(valid_indices)
         else:
             indices = cudf.Series(valid_indices)
@@ -1030,7 +1030,7 @@ class MultiIndex(Index):
         else:
             idx = index
 
-        indexer = column.as_column(idx)
+        indexer = as_column(idx)
         ca = self._data._from_columns_like_self(
             (col.take(indexer) for col in self._columns), verify=False
         )
@@ -1710,8 +1710,8 @@ class MultiIndex(Index):
         self._maybe_materialize_codes_and_levels()
         pd_codes = (
             code.find_and_replace(
-                column.as_column(np.iinfo(SIZE_TYPE_DTYPE).min, length=1),
-                column.as_column(-1, length=1),
+                as_column(np.iinfo(SIZE_TYPE_DTYPE).min, length=1),
+                as_column(-1, length=1),
             )
             for code in self._codes  # type: ignore[union-attr]
         )
@@ -1954,7 +1954,7 @@ class MultiIndex(Index):
                 "index must be monotonic increasing or decreasing"
             )
 
-        result = column.as_column(
+        result = as_column(
             -1,
             length=len(target),
             dtype=SIZE_TYPE_DTYPE,
@@ -2031,7 +2031,7 @@ class MultiIndex(Index):
             sort_inds,
         ) = _lexsorted_equal_range(
             partial_index,
-            [column.as_column(k, length=1) for k in key],
+            [as_column(k, length=1) for k in key],
             is_sorted,
         )
 
@@ -2166,7 +2166,7 @@ class MultiIndex(Index):
     @_performance_tracking
     def _from_columns_like_self(
         self,
-        columns: list[column.ColumnBase],
+        columns: list[ColumnBase],
         column_names: Iterable[str] | None = None,
     ):
         result = super()._from_columns_like_self(columns, column_names)
@@ -2176,7 +2176,7 @@ class MultiIndex(Index):
     @_performance_tracking
     def _split_columns_by_levels(
         self, levels: tuple, *, in_levels: bool
-    ) -> Generator[tuple[Any, column.ColumnBase], None, None]:
+    ) -> Generator[tuple[Any, ColumnBase], None, None]:
         # This function assumes that for levels with duplicate names, they are
         # specified by indices, not name by ``levels``. E.g. [None, None] can
         # only be specified by 0, 1, not "None".
@@ -2225,7 +2225,7 @@ class MultiIndex(Index):
 
     def _columns_for_reset_index(
         self, levels: tuple | None
-    ) -> Generator[tuple[Any, column.ColumnBase], None, None]:
+    ) -> Generator[tuple[Any, ColumnBase], None, None]:
         """Return the columns and column names for .reset_index"""
         if levels is None:
             for i, (col, name) in enumerate(

@@ -7,6 +7,8 @@
 #include <cudf/ast/detail/operators.hpp>
 #include <cudf/ast/expressions.hpp>
 #include <cudf/io/types.hpp>
+#include <cudf/stream_compaction.hpp>
+#include <cudf/transform.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/export.hpp>
 
@@ -397,6 +399,56 @@ struct [[nodiscard]] operation final : node {
 };
 
 /**
+ * @brief An IR node that flattens a boolean predicate to be used in a filter operation.
+ * This node replaces null values with false.
+ */
+struct [[nodiscard]] filter_predicate final : node {
+ private:
+  std::string id_;                ///< The identifier of the IR node
+  std::unique_ptr<node> source_;  ///< The source IR node from which the predicate value is taken
+
+ public:
+  filter_predicate(std::unique_ptr<node> source);
+
+  /**
+   * @copydoc node::get_id
+   */
+  [[nodiscard]] std::string_view get_id() override;
+
+  /**
+   * @copydoc node::get_type
+   */
+  [[nodiscard]] data_type get_type() override;
+
+  /**
+   * @copydoc node::is_null_aware
+   */
+  [[nodiscard]] bool is_null_aware() override;
+
+  /**
+   * @copydoc node::is_always_valid
+   */
+  [[nodiscard]] bool is_always_valid() override;
+
+  /**
+   * @brief Get the source IR node from which the value is taken
+   */
+  [[nodiscard]] node& get_source();
+
+  /**
+   * @copydoc node::instantiate
+   */
+  void instantiate(instance_context& ctx, instance_info const& info) override;
+
+  /**
+   * @copydoc node::generate_code
+   */
+  [[nodiscard]] std::string generate_code(instance_context& ctx,
+                                          target_info const& info,
+                                          instance_info const& instance) override;
+};
+
+/**
  * @brief A specification of an input column to the AST
  */
 struct ast_column_input_spec {
@@ -425,13 +477,15 @@ using ast_input_spec = std::variant<ast_column_input_spec, ast_scalar_input_spec
 struct [[nodiscard]] transform_args {
   std::vector<std::unique_ptr<column>> scalar_columns =
     {};  ///< The scalar columns created during the expression conversion
-  std::vector<column_view> columns = {};  ///< The input columns to the transform
-  std::string udf                  = {};  ///< The user-defined function to apply
+  std::vector<std::variant<column_view, scalar_column_view>> inputs =
+    {};                                 ///< The input columns to the transform UDF
+  std::string udf                = {};  ///< The user-defined function to apply
   data_type output_type          = data_type{type_id::EMPTY};  ///< The output type of the transform
   bool is_ptx                    = false;           ///< Whether the transform is a PTX kernel
   std::optional<void*> user_data = std::nullopt;    ///< User data to pass to the transform
   null_aware is_null_aware       = null_aware::NO;  ///< Whether the transform is null-aware
   output_nullability null_policy = output_nullability::PRESERVE;  ///< Null-transformation policy
+  std::optional<size_type> row_size = std::nullopt;  ///< The row size of the transform operation
 };
 
 /**
@@ -440,12 +494,15 @@ struct [[nodiscard]] transform_args {
 struct [[nodiscard]] filter_args {
   std::vector<std::unique_ptr<column>> scalar_columns =
     {};  ///< The scalar columns created during the expression conversion
-  std::vector<column_view> predicate_columns = {};  ///< The input columns to the predicate UDF
-  std::string predicate_udf = {};  ///< The user-defined function to apply as a predicate
-  std::vector<column_view> filter_columns = {};     ///< The input columns to the filter
-  bool is_ptx                             = false;  ///< Whether the filter is a PTX device function
-  std::optional<void*> user_data          = std::nullopt;    ///< User data to pass to the filter
-  null_aware is_null_aware                = null_aware::NO;  ///< Whether the filter is null-aware
+  std::vector<std::variant<column_view, scalar_column_view>> inputs =
+    {};                                          ///< The input columns to the transform UDF
+  std::vector<column_view> filter_columns = {};  ///< The input columns to the filter
+  std::string udf                = {};     ///< The user-defined function to apply as a predicate
+  bool is_ptx                    = false;  ///< Whether the filter is a PTX device function
+  std::optional<void*> user_data = std::nullopt;    ///< User data to pass to the filter
+  null_aware is_null_aware       = null_aware::NO;  ///< Whether the filter is null-aware
+  output_nullability predicate_nullability =
+    output_nullability::PRESERVE;  ///< Null-transformation policy for the predicate output
 };
 
 /**
@@ -495,12 +552,16 @@ struct [[nodiscard]] ast_converter {
   friend class ast::column_reference;
   friend class ast::operation;
   friend class ast::column_name_reference;
+  friend class ast::detail::filter_predicate;
 
   [[nodiscard]] std::unique_ptr<row_ir::node> add_ir_node(ast::literal const& expr);
 
   [[nodiscard]] std::unique_ptr<row_ir::node> add_ir_node(ast::column_reference const& expr);
 
   [[nodiscard]] std::unique_ptr<row_ir::node> add_ir_node(ast::operation const& expr);
+
+  [[nodiscard]] std::unique_ptr<row_ir::node> add_ir_node(
+    ast::detail::filter_predicate const& expr);
 
   [[nodiscard]] std::span<ast_input_spec const> get_input_specs() const;
 
