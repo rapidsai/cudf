@@ -42,7 +42,6 @@ from ..annotation import nvtx
 from ..fast_slow_proxy import (
     _CUDF_PANDAS_NVTX_COLORS,
     _DELETE,
-    _BlockState,
     _fast_slow_function_call,
     _FastSlowAttribute,
     _FunctionProxy,
@@ -339,37 +338,6 @@ def _Series_dtype(self):
     return _maybe_wrap_result(self._fsproxy_wrapped.dtype, None)
 
 
-def _is_arrow_dtype(obj) -> bool:
-    if is_proxy_object(obj):
-        obj = obj._fsproxy_slow
-    dtype = getattr(obj, "dtype", None)
-    return isinstance(dtype, pd.ArrowDtype)
-
-
-def _series_divmod(self, other):
-    transfer_block = None
-    if _is_arrow_dtype(self) or _is_arrow_dtype(other):
-        transfer_block = _BlockState.TO_FAST
-    return _fast_slow_function_call(
-        lambda lhs, rhs: lhs.__divmod__(rhs),
-        transfer_block,
-        self,
-        other,
-    )[0]
-
-
-def _series_rdivmod(self, other):
-    transfer_block = None
-    if _is_arrow_dtype(self) or _is_arrow_dtype(other):
-        transfer_block = _BlockState.TO_FAST
-    return _fast_slow_function_call(
-        lambda lhs, rhs: lhs.__rdivmod__(rhs),
-        transfer_block,
-        self,
-        other,
-    )[0]
-
-
 DataFrame = make_final_proxy_type(
     "DataFrame",
     cudf.DataFrame,
@@ -472,8 +440,6 @@ Series = make_final_proxy_type(
         "argsort": _argsort,
         "to_xarray": _to_xarray,
         "attrs": _FastSlowAttribute("attrs"),
-        "__divmod__": _series_divmod,
-        "__rdivmod__": _series_rdivmod,
         "_mgr": _FastSlowAttribute("_mgr", private=True),
         "array": _FastSlowAttribute("array", private=True),
         "sparse": _FastSlowAttribute("sparse", private=True),

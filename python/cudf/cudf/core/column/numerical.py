@@ -122,6 +122,45 @@ def _division_needs_sign_flip(
     return bool(cp.all(result_sign != numerator_sign))
 
 
+def _arrow_dtype_base(dtype: DtypeObj) -> DtypeObj:
+    if isinstance(dtype, pd.ArrowDtype):
+        return dtype.numpy_dtype
+    return dtype
+
+
+def _arrow_floor_division_invalid(
+    lhs: ColumnBinaryOperand,
+    rhs: ColumnBinaryOperand,
+    dtype: DtypeObj,
+) -> str | None:
+    if not (isinstance(dtype, pd.ArrowDtype) and dtype.kind in "iu"):
+        return None
+    iinfo = np.iinfo(dtype.numpy_dtype)
+    if isinstance(rhs, pa.Scalar):
+        rhs_value = rhs.as_py() if rhs.is_valid else None
+        if rhs_value == 0:
+            return "divide by zero"
+        if rhs_value != -1:
+            return None
+        if isinstance(lhs, pa.Scalar):
+            lhs_value = lhs.as_py() if lhs.is_valid else None
+            return "overflow" if lhs_value == iinfo.min else None
+        if isinstance(lhs, NumericalColumn):
+            return "overflow" if iinfo.min in lhs else None
+        return None
+    if isinstance(rhs, NumericalColumn):
+        if 0 in rhs:
+            return "divide by zero"
+        if -1 not in rhs:
+            return None
+        if isinstance(lhs, pa.Scalar):
+            lhs_value = lhs.as_py() if lhs.is_valid else None
+            return "overflow" if lhs_value == iinfo.min else None
+        if isinstance(lhs, NumericalColumn):
+            return "overflow" if iinfo.min in lhs else None
+    return None
+
+
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
 
@@ -420,16 +459,45 @@ class NumericalColumn(NumericalBaseColumn):
             if isinstance(other, pa.Scalar)
             else other.dtype
         )
+        arrow_dtype = (
+            self.dtype
+            if isinstance(self.dtype, pd.ArrowDtype)
+            else other_cudf_dtype
+            if isinstance(other_cudf_dtype, pd.ArrowDtype)
+            else None
+        )
+        if arrow_dtype is not None and op == "__mod__":
+            raise NotImplementedError("ArrowDtype does not support modulo")
+        if arrow_dtype is not None and op == "__truediv__":
+            if (
+                _arrow_dtype_base(self.dtype).kind == "b"
+                or _arrow_dtype_base(other_cudf_dtype).kind == "b"
+            ):
+                raise TypeError("ArrowDtype boolean division is not supported")
 
         if out_dtype is None:
-            out_dtype = find_common_type((self.dtype, other_cudf_dtype))
+            if arrow_dtype is not None:
+                base_self_dtype = _arrow_dtype_base(self.dtype)
+                base_other_dtype = _arrow_dtype_base(other_cudf_dtype)
+                base_common_dtype = find_common_type(
+                    (base_self_dtype, base_other_dtype)
+                )
+                out_dtype = get_dtype_of_same_kind(
+                    arrow_dtype, base_common_dtype
+                )
+            else:
+                out_dtype = find_common_type((self.dtype, other_cudf_dtype))
             if op in {"__mod__", "__floordiv__"}:
                 tmp = self if reflect else other
                 tmp_dtype = self.dtype if reflect else other_cudf_dtype
                 # Guard against division by zero for integers.
-                if tmp_dtype.kind in "iu" and (
-                    (isinstance(tmp, NumericalColumn) and 0 in tmp)
-                    or (isinstance(tmp, pa.Scalar) and tmp.as_py() == 0)
+                if (
+                    arrow_dtype is None
+                    and tmp_dtype.kind in "iu"
+                    and (
+                        (isinstance(tmp, NumericalColumn) and 0 in tmp)
+                        or (isinstance(tmp, pa.Scalar) and tmp.as_py() == 0)
+                    )
                 ):
                     out_dtype = get_dtype_of_same_kind(
                         out_dtype, np.dtype(np.float64)
@@ -464,6 +532,17 @@ class NumericalColumn(NumericalBaseColumn):
             else (self.dtype, other_cudf_dtype)
         )
         lhs, rhs = (other, self) if reflect else (self, other)
+        if arrow_dtype is not None and op == "__floordiv__":
+            invalid_reason = _arrow_floor_division_invalid(
+                lhs, rhs, arrow_dtype
+            )
+            if invalid_reason is not None:
+                raise pa.ArrowInvalid(invalid_reason)
+        if arrow_dtype is not None and op == "__truediv__":
+            lhs_kind = _arrow_dtype_base(lhs_dtype).kind
+            rhs_kind = _arrow_dtype_base(rhs_dtype).kind
+            if lhs_kind in "iu" and rhs_kind in "iu":
+                out_dtype = pd.ArrowDtype(pa.float64())
         if out_dtype.kind == "f" and is_pandas_nullable_extension_dtype(
             out_dtype
         ):
