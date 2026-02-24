@@ -517,6 +517,8 @@ TEST_F(CudftableTest, DeviceBufferSource)
                                 buffer.size(),
                                 cudaMemcpyHostToDevice,
                                 cudf::get_default_stream().value()));
+  // Ensure the data is copied to the device before the host read, because the host read does not
+  // take the stream
   cudf::get_default_stream().synchronize();
 
   auto device_span = cudf::device_span<std::byte const>(
