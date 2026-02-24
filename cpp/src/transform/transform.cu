@@ -12,6 +12,7 @@
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/null_mask.hpp>
 #include <cudf/stream_compaction.hpp>
+#include <cudf/strings/detail/strings_column_factories.cuh>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
@@ -280,7 +281,9 @@ std::unique_ptr<column> transform_operation(size_type row_size,
 
   if (may_return_nulls) {
     auto valid_count_value = valid_count.value(stream);
-    auto null_count        = row_size - valid_count_value;
+    CUDF_EXPECTS(
+      valid_count_value <= row_size, "Valid count cannot exceed total row size", logic_error);
+    auto null_count = row_size - valid_count_value;
     output->set_null_count(null_count);
   }
 
@@ -343,18 +346,27 @@ std::unique_ptr<column> string_view_operation(size_type row_size,
     stream,
     mr);
 
-  auto output = make_strings_column(string_views, cudf::string_view{}, stream, mr);
-
   if (may_return_nulls) {
     auto valid_count_value = valid_count.value(stream);
-    auto null_count        = row_size - valid_count_value;
-    output->set_null_mask(std::move(*null_mask), null_count);
-  } else {
-    output->set_null_mask(
-      cudf::create_null_mask(row_size, cudf::mask_state::UNALLOCATED, stream, mr), 0);
-  }
+    CUDF_EXPECTS(
+      valid_count_value <= row_size, "Valid count cannot exceed total row size", logic_error);
+    auto null_count = row_size - valid_count_value;
 
-  return output;
+    return cudf::strings::detail::make_strings_column_with_null_mask(
+      device_span<string_view>{output_span.data(), output_span.size()},
+      std::move(*null_mask),
+      null_count,
+      stream,
+      mr);
+
+  } else {
+    return cudf::strings::detail::make_strings_column_with_null_mask(
+      device_span<string_view>{output_span.data(), output_span.size()},
+      rmm::device_buffer{0, stream, mr},
+      0,
+      stream,
+      mr);
+  }
 }
 
 void check_row_size(std::optional<size_type> in_row_size, InputsView inputs)
