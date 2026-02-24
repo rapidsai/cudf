@@ -155,7 +155,6 @@ int main(int argc, char const** argv)
     try {
       return extract_input_sources(
         input_paths, input_multiplier, num_threads, io_source_type, default_stream);
-      default_stream.synchronize();
     } catch (const std::exception& e) {
       print_usage();
       throw std::runtime_error(e.what());

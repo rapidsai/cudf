@@ -24,7 +24,8 @@ void benchmark(F&& f, std::size_t iterations)
       f();
 
       auto elapsed_time_ms =
-        std::chrono::duration_cast<std::chrono::milliseconds>(timer.elapsed()).count();
+        std::chrono::duration_cast<std::chrono::microseconds>(timer.elapsed()).count() /
+        double{1000.0};
 
       std::cout << "Iteration: " << iter << ", time: " << elapsed_time_ms << " ms\n";
 

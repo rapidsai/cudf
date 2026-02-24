@@ -375,7 +375,7 @@ std::unique_ptr<cudf::table> two_step_materialize(
 }  // namespace
 
 template <bool single_step_read, bool use_page_index>
-std::unique_ptr<cudf::table> inline hybrid_scan(
+std::unique_ptr<cudf::table> hybrid_scan(
   io_source const& io_source,
   std::optional<cudf::ast::operation const> filter_expression,
   std::unordered_set<hybrid_scan_filter_type> const& filters,
