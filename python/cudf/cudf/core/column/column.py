@@ -1047,6 +1047,87 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         """Return a CuPy representation of the Column."""
         raise NotImplementedError(f"CuPy does not support {self.dtype}")
 
+    @staticmethod
+    def _prepare_find_and_replace_columns(
+        to_replace: ColumnBase | list,
+        replacement: ColumnBase | list,
+        *,
+        null_cast_dtype: DtypeObj | None = None,
+    ) -> tuple[ColumnBase, ColumnBase]:
+        # If all of `to_replace`/`replacement` are `None`, the dtype of
+        # `to_replace_col`/`replacement_col` is inferred as `string`so we need to
+        # type-cast to self.dtype.
+        to_replace_col = as_column(to_replace)
+        if null_cast_dtype is not None and to_replace_col.is_all_null:
+            to_replace_col = to_replace_col.astype(null_cast_dtype)
+
+        replacement_col = as_column(replacement)
+        if null_cast_dtype is not None and replacement_col.is_all_null:
+            replacement_col = replacement_col.astype(null_cast_dtype)
+
+        if type(to_replace_col) is not type(replacement_col):
+            raise TypeError(
+                "to_replace and value should be of same types,"
+                f"got to_replace dtype: {to_replace_col.dtype} and "
+                f"value dtype: {replacement_col.dtype}"
+            )
+
+        return to_replace_col, replacement_col
+
+    @staticmethod
+    def _dedupe_find_and_replace_mapping(
+        old_col: ColumnBase,
+        new_col: ColumnBase,
+    ) -> tuple[plc.Column, plc.Column]:
+        """Deduplicate old/new mapping with keep-last semantics.
+
+        This replicates pandas' behavior when to_replace has duplicates:
+        pandas processes replacements sequentially, so the last occurrence wins.
+        """
+        with access_columns(old_col, new_col, mode="read", scope="internal"):
+            columns = plc.stream_compaction.stable_distinct(
+                plc.Table([old_col.plc_column, new_col.plc_column]),
+                keys=[0],
+                keep=plc.stream_compaction.DuplicateKeepOption.KEEP_LAST,
+                nulls_equal=plc.types.NullEquality.EQUAL,
+                nans_equal=plc.types.NanEquality.ALL_EQUAL,
+            ).columns()
+        return columns[0], columns[1]
+
+    def _find_and_replace_with_dedup(
+        self,
+        old_col: ColumnBase,
+        new_col: ColumnBase,
+        result_dtype: DtypeObj,
+    ) -> ColumnBase:
+        """Apply find/replace using keep-last mapping and null handling."""
+        old_plc, new_plc = ColumnBase._dedupe_find_and_replace_mapping(
+            old_col, new_col
+        )
+
+        replaced = self
+        if old_plc.null_count() == 1:
+            old_isnull_plc = plc.unary.is_null(old_plc)
+            (filtered_column,) = plc.stream_compaction.apply_boolean_mask(
+                plc.Table([new_plc]), old_isnull_plc
+            ).columns()
+            replacement_for_null = filtered_column.to_scalar().to_py()
+            replaced = replaced.fillna(replacement_for_null)
+
+            old_plc, new_plc = plc.stream_compaction.drop_nulls(
+                plc.Table([old_plc, new_plc]),
+                keys=[0],
+                keep_threshold=1,
+            ).columns()
+
+        with replaced.access(mode="read", scope="internal"):
+            result_plc = plc.replace.find_and_replace_all(
+                replaced.plc_column,
+                old_plc,
+                new_plc,
+            )
+        return ColumnBase.create(result_plc, result_dtype)
+
     def find_and_replace(
         self,
         to_replace: ColumnBase | list,
@@ -1170,6 +1251,27 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                     metadata=_dtype_to_metadata(self.dtype)
                 )
             )
+
+    @classmethod
+    def from_range(cls, rng: range) -> ColumnBase:
+        """
+        Create a Column from a range object.
+
+        Parameters
+        ----------
+        rng : range
+            The range to create the Column from.
+
+        Returns
+        -------
+        Column
+        """
+        plc_result = plc.filling.sequence(
+            len(rng),
+            plc.Scalar.from_py(rng.start),
+            plc.Scalar.from_py(rng.step),
+        )
+        return cls.create(plc_result, dtype_from_pylibcudf_column(plc_result))
 
     @classmethod
     def from_arrow(cls, array: pa.Array | pa.ChunkedArray) -> ColumnBase:
@@ -1422,10 +1524,9 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             return cast("Self", ColumnBase.create(result, self.dtype))
         else:
             # Need to create a gather map for given slice with stride
-            gather_map = as_column(
-                range(start, stop, stride),
-                dtype=np.dtype(np.int32),
-            )
+            gather_map = ColumnBase.from_range(
+                range(start, stop, stride)
+            ).astype(SIZE_TYPE_DTYPE)
             return self.take(gather_map)
 
     def _cast_setitem_value(self, value: Any) -> plc.Scalar | ColumnBase:
@@ -1542,10 +1643,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         # step != 1, create a scatter map with arange
         scatter_map = cast(
             "cudf.core.column.NumericalColumn",
-            as_column(
-                rng,
-                dtype=np.dtype(np.int32),
-            ),
+            ColumnBase.from_range(rng).astype(SIZE_TYPE_DTYPE),
         )
 
         return self._scatter_by_column(scatter_map, value)
@@ -1805,9 +1903,11 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         else:
             value = as_column(value, dtype=self.dtype, length=1)
         mask = value.contains(self)
-        return as_column(
-            range(len(self)), dtype=SIZE_TYPE_DTYPE
-        ).apply_boolean_mask(mask)  # type: ignore[return-value]
+        return (
+            ColumnBase.from_range(range(len(self)))  # type: ignore[return-value]
+            .astype(SIZE_TYPE_DTYPE)
+            .apply_boolean_mask(mask)
+        )
 
     def _find_first_and_last(self, value: ScalarLike) -> tuple[int, int]:
         indices = self.indices_of(value)
@@ -2062,11 +2162,18 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             elif is_dtype_obj_interval(dtype):
                 result = self.as_interval_column(dtype)  # type: ignore[arg-type]
             elif is_dtype_obj_list(dtype) or is_dtype_obj_struct(dtype):
-                if self.dtype != dtype:
+                if isinstance(dtype, pd.ArrowDtype):
+                    equiv_dtype = pyarrow_dtype_to_cudf_dtype(dtype)
+                else:
+                    equiv_dtype = dtype
+                if self.dtype != equiv_dtype:
                     raise NotImplementedError(
                         f"Casting {self.dtype} columns not currently supported"
                     )
-                result = self
+                elif self.dtype != dtype:
+                    result = ColumnBase.create(self.plc_column, dtype)
+                else:
+                    result = self
             elif is_dtype_obj_decimal(dtype):
                 result = self.as_decimal_column(dtype)  # type: ignore[arg-type]
             elif dtype.kind == "M":
@@ -2156,7 +2263,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         ):
             return cast(
                 "cudf.core.column.NumericalColumn",
-                as_column(range(len(self) - 1, -1, -1)),
+                ColumnBase.from_range(range(len(self) - 1, -1, -1)),
             )
         else:
             return cast(
@@ -2568,8 +2675,10 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         left_gather_map = ColumnBase.create(left_rows, SIZE_TYPE_DTYPE)
         right_gather_map = ColumnBase.create(right_rows, SIZE_TYPE_DTYPE)
 
-        codes = as_column(range(len(cats)), dtype=dtype).take(
-            right_gather_map, nullify=True
+        codes = (
+            ColumnBase.from_range(range(len(cats)))
+            .astype(dtype)
+            .take(right_gather_map, nullify=True)
         )
         del right_gather_map
         del right_rows
@@ -3001,18 +3110,9 @@ def as_column(
         dtype = cudf.dtype(dtype)
 
     if isinstance(arbitrary, (range, pd.RangeIndex, cudf.RangeIndex)):
-        column = ColumnBase.create(
-            plc.filling.sequence(
-                len(arbitrary),
-                pa_scalar_to_plc_scalar(
-                    pa.scalar(arbitrary.start, type=pa.int64())
-                ),
-                pa_scalar_to_plc_scalar(
-                    pa.scalar(arbitrary.step, type=pa.int64())
-                ),
-            ),
-            np.dtype(np.int64),
-        )
+        if not isinstance(arbitrary, range):
+            arbitrary = range(arbitrary.start, arbitrary.stop, arbitrary.step)
+        column = ColumnBase.from_range(arbitrary)
         if cudf.get_option("default_integer_bitwidth") and dtype is None:
             dtype = np.dtype(
                 f"i{cudf.get_option('default_integer_bitwidth') // 8}"
@@ -3191,7 +3291,7 @@ def as_column(
                 )
             elif inferred_dtype == "boolean":
                 if cudf.get_option("mode.pandas_compatible"):
-                    if dtype != np.dtype("bool") or pd.isna(arbitrary).any():
+                    if dtype.kind != "b" or pd.isna(arbitrary).any():
                         raise MixedTypeError(
                             f"Cannot have mixed values with {inferred_dtype}"
                         )
