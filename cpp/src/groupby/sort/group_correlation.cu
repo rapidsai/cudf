@@ -18,9 +18,9 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/iterator>
 #include <cuda/std/tuple>
 #include <thrust/iterator/counting_iterator.h>
-#include <thrust/iterator/discard_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/transform.h>
@@ -154,7 +154,7 @@ std::unique_ptr<column> group_covariance(column_view const& values_0,
   cudf::detail::reduce_by_key_async(group_labels.begin(),
                                     group_labels.end(),
                                     corr_iter,
-                                    thrust::make_discard_iterator(),
+                                    cuda::make_discard_iterator(),
                                     d_result,
                                     cuda::std::plus<result_type>(),
                                     stream);
