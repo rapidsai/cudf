@@ -69,6 +69,20 @@ _CONSTRUCTORS = frozenset(
 )
 
 
+def _ndarray_slow_to_fast(arr: numpy.ndarray) -> cupy.ndarray:
+    if (
+        isinstance(arr, numpy.ndarray)
+        and arr.shape == ()
+        and arr.dtype.kind == "f"
+        and numpy.signbit(arr).any()
+        and arr.dtype.itemsize in (2, 4, 8)
+    ):
+        uint_dtype = numpy.dtype(f"u{arr.dtype.itemsize}")
+        bits = arr.view(uint_dtype)
+        return cupy.asarray(bits).view(arr.dtype)
+    return cupy.asarray(arr)
+
+
 def wrap_ndarray(cls, arr: cupy.ndarray | numpy.ndarray, constructor):
     """Wrap an ndarray in a proxy type
 
@@ -231,7 +245,7 @@ ndarray = make_final_proxy_type(
     cupy.ndarray,
     numpy.ndarray,
     fast_to_slow=cupy.ndarray.get,
-    slow_to_fast=cupy.asarray,
+    slow_to_fast=_ndarray_slow_to_fast,
     bases=(ProxyNDarrayBase,),
     additional_attributes={
         "__array__": array_method,
