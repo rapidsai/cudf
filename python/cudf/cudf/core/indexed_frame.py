@@ -206,9 +206,11 @@ def _indices_from_labels(obj, labels):
     # so we will sort it with its initial ordering which is stored
     # in column "__"
     lhs = cudf.DataFrame(
-        {"__": as_column(range(len(idx_labels)))}, index=idx_labels
+        {"__": ColumnBase.from_range(range(len(idx_labels)))}, index=idx_labels
     )
-    rhs = cudf.DataFrame({"_": as_column(range(len(obj)))}, index=obj.index)
+    rhs = cudf.DataFrame(
+        {"_": ColumnBase.from_range(range(len(obj)))}, index=obj.index
+    )
     return lhs.join(rhs).sort_values(by=["__", "_"])["_"]
 
 
@@ -2957,8 +2959,30 @@ class IndexedFrame(Frame):
         check that the number of rows of self matches the validated
         number of rows.
         """
+
         if not gather_map.nullify and len(self) != gather_map.nrows:
             raise IndexError("Gather map is out of bounds")
+        index_names = self.index.names if keep_index else None
+
+        try:
+            # No need to gather if the gather map is already in the correct order
+            can_gather_with_copy = (
+                len(gather_map.column) == len(self)
+                and len(self) > 0
+                and gather_map.column.equals(
+                    ColumnBase.from_range(range(len(self)))
+                )
+            )
+        except (AttributeError, TypeError):
+            can_gather_with_copy = False
+        if can_gather_with_copy:
+            if keep_index:
+                return self.copy(deep=True)
+            return self._from_columns_like_self(
+                [col.copy(deep=True) for col in self._columns],
+                self._column_names,
+                index_names,
+            )
         columns_to_gather = (
             list(itertools.chain(self.index._columns, self._columns))
             if keep_index
@@ -2978,7 +3002,7 @@ class IndexedFrame(Frame):
                 )
             ],
             self._column_names,
-            self.index.names if keep_index else None,
+            index_names,
         )
 
     def _slice(self, arg: slice, keep_index: bool = True) -> Self:
@@ -3044,10 +3068,9 @@ class IndexedFrame(Frame):
                 GatherMap.from_column_unchecked(
                     cast(
                         cudf.core.column.numerical.NumericalColumn,
-                        as_column(
-                            range(start, stop, stride),
-                            dtype=SIZE_TYPE_DTYPE,
-                        ),
+                        ColumnBase.from_range(
+                            range(start, stop, stride)
+                        ).astype(SIZE_TYPE_DTYPE),
                     ),
                     len(self),
                     nullify=False,
@@ -3826,9 +3849,9 @@ class IndexedFrame(Frame):
         # to recover ordering after index alignment.
         sort_col_id = str(uuid4())
         if how == "left":
-            lhs[sort_col_id] = as_column(range(len(lhs)))
+            lhs[sort_col_id] = ColumnBase.from_range(range(len(lhs)))
         elif how == "right":
-            rhs[sort_col_id] = as_column(range(len(rhs)))
+            rhs[sort_col_id] = ColumnBase.from_range(range(len(rhs)))
 
         result = lhs.join(rhs, how=how, sort=sort)
         if how in ("left", "right"):
@@ -4821,7 +4844,7 @@ class IndexedFrame(Frame):
         --------
         >>> import cudf
         >>> df = cudf.DataFrame({"a":{1, 2, 3, 4, 5}})
-        >>> df.sample(3, random_state=0)
+        >>> df.sample(3, random_state=0)  # doctest: +SKIP
            a
         0  1
         1  2
