@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#include <cudf/ast/detail/operator_functor.cuh>
 #include <cudf/column/column_device_view_base.cuh>
 #include <cudf/detail/utilities/grid_1d.cuh>
 #include <cudf/types.hpp>

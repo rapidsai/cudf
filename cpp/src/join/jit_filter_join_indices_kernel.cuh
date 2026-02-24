@@ -5,6 +5,7 @@
 
 #pragma once
 
+#include <cudf/ast/expressions.hpp>
 #include <cudf/join/join.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/span.hpp>
@@ -46,6 +47,23 @@ jit_filter_join_indices(cudf::table_view const& left,
                         std::string const& predicate_code,
                         join_kind join_kind,
                         bool is_ptx,
+                        rmm::cuda_stream_view stream,
+                        rmm::device_async_resource_ref mr);
+
+/**
+ * @copydoc cudf::jit_filter_join_indices(table_view const&, table_view const&,
+ *   device_span<size_type const>, device_span<size_type const>,
+ *   ast::expression const&, join_kind, rmm::cuda_stream_view,
+ *   rmm::device_async_resource_ref)
+ */
+std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+          std::unique_ptr<rmm::device_uvector<size_type>>>
+jit_filter_join_indices(cudf::table_view const& left,
+                        cudf::table_view const& right,
+                        cudf::device_span<size_type const> left_indices,
+                        cudf::device_span<size_type const> right_indices,
+                        ast::expression const& predicate,
+                        join_kind join_kind,
                         rmm::cuda_stream_view stream,
                         rmm::device_async_resource_ref mr);
 

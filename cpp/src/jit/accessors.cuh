@@ -194,5 +194,54 @@ struct join_column_accessor {
   }
 };
 
+// Join-specific accessor for scalar (literal) values.
+// Scalar columns are appended to the left table's device views.
+// Always reads at row 0 since scalar columns have size 1.
+template <typename T, int32_t Index>
+struct join_scalar_accessor {
+  using type                     = T;
+  static constexpr int32_t index = Index;
+
+  static __device__ T element(cudf::column_device_view_core const* left_tables,
+                              cudf::column_device_view_core const*,
+                              cudf::size_type,
+                              cudf::size_type,
+                              cudf::size_type)
+  {
+    return left_tables[index].template element<T>(0);
+  }
+
+  static __device__ bool is_null(cudf::column_device_view_core const* left_tables,
+                                 cudf::column_device_view_core const*,
+                                 cudf::size_type,
+                                 cudf::size_type,
+                                 cudf::size_type)
+  {
+    return left_tables[index].is_null(0);
+  }
+
+  static __device__ bool is_valid(cudf::column_device_view_core const* left_tables,
+                                  cudf::column_device_view_core const*,
+                                  cudf::size_type,
+                                  cudf::size_type,
+                                  cudf::size_type)
+  {
+    return left_tables[index].is_valid(0);
+  }
+
+  static __device__ cuda::std::optional<T> nullable_element(
+    cudf::column_device_view_core const* left_tables,
+    cudf::column_device_view_core const* right_tables,
+    cudf::size_type left_row_idx,
+    cudf::size_type right_row_idx,
+    cudf::size_type thread_idx)
+  {
+    if (is_null(left_tables, right_tables, left_row_idx, right_row_idx, thread_idx)) {
+      return cuda::std::nullopt;
+    }
+    return element(left_tables, right_tables, left_row_idx, right_row_idx, thread_idx);
+  }
+};
+
 }  // namespace jit
 }  // namespace cudf

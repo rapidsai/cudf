@@ -405,6 +405,34 @@ jit_filter_join_indices(
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
+/**
+ * @brief Filters join indices using a JIT-compiled predicate from an AST expression.
+ *
+ * This overload converts an AST expression referencing columns from both left and right
+ * tables into JIT-compiled CUDA code and uses it to filter the join index pairs.
+ *
+ * @param left The left table for predicate evaluation
+ * @param right The right table for predicate evaluation
+ * @param left_indices Device span of row indices in left table from join
+ * @param right_indices Device span of row indices in right table from join
+ * @param predicate An AST expression that returns a boolean for each pair of rows
+ * @param join_kind The type of join operation (INNER_JOIN, LEFT_JOIN, or FULL_JOIN)
+ * @param stream CUDA stream for operations
+ * @param mr Device memory resource
+ * @return A pair of device vectors [filtered_left_indices, filtered_right_indices]
+ */
+std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+          std::unique_ptr<rmm::device_uvector<size_type>>>
+jit_filter_join_indices(
+  cudf::table_view const& left,
+  cudf::table_view const& right,
+  cudf::device_span<size_type const> left_indices,
+  cudf::device_span<size_type const> right_indices,
+  cudf::ast::expression const& predicate,
+  cudf::join_kind join_kind,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
 /** @} */  // end of group
 
 }  // namespace CUDF_EXPORT cudf

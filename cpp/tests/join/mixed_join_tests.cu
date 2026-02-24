@@ -471,6 +471,16 @@ struct MixedInnerJoinTest : public MixedJoinPairReturnTest<T> {
           cudf::join_kind::INNER_JOIN);
         this->compare_join_results(mixed_result, jit_filter_result);
       }
+
+      // Verify AST-based JIT filter_join_indices
+      auto jit_ast_filter_result = cudf::jit_filter_join_indices(
+        left_conditional,
+        right_conditional,
+        cudf::device_span<cudf::size_type const>(*hash_join_result.first),
+        cudf::device_span<cudf::size_type const>(*hash_join_result.second),
+        predicate,
+        cudf::join_kind::INNER_JOIN);
+      this->compare_join_results(mixed_result, jit_ast_filter_result);
     }
 
     return mixed_result;
@@ -1040,6 +1050,16 @@ struct MixedLeftJoinTest : public MixedJoinPairReturnTest<T> {
           cudf::join_kind::LEFT_JOIN);
         this->compare_join_results(mixed_result, jit_filter_result);
       }
+
+      // Verify AST-based JIT filter_join_indices
+      auto jit_ast_filter_result = cudf::jit_filter_join_indices(
+        left_conditional,
+        right_conditional,
+        cudf::device_span<cudf::size_type const>(*hash_join_result.first),
+        cudf::device_span<cudf::size_type const>(*hash_join_result.second),
+        predicate,
+        cudf::join_kind::LEFT_JOIN);
+      this->compare_join_results(mixed_result, jit_ast_filter_result);
     }
 
     return mixed_result;
@@ -1228,6 +1248,16 @@ struct MixedFullJoinTest : public MixedJoinPairReturnTest<T> {
           cudf::join_kind::FULL_JOIN);
         this->compare_join_results(mixed_result, jit_filter_result);
       }
+
+      // Verify AST-based JIT filter_join_indices
+      auto jit_ast_filter_result = cudf::jit_filter_join_indices(
+        left_conditional,
+        right_conditional,
+        cudf::device_span<cudf::size_type const>(*hash_join_result.first),
+        cudf::device_span<cudf::size_type const>(*hash_join_result.second),
+        predicate,
+        cudf::join_kind::FULL_JOIN);
+      this->compare_join_results(mixed_result, jit_ast_filter_result);
     }
 
     return mixed_result;
