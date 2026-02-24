@@ -20,8 +20,7 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
-#include <thrust/functional.h>
-#include <thrust/iterator/constant_iterator.h>
+#include <cuda/iterator>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform.h>
 
@@ -66,9 +65,8 @@ scalar_as_column_view::return_type scalar_as_column_view::operator()<cudf::strin
   auto& h_scalar_type_view = static_cast<cudf::scalar_type_t<T>&>(const_cast<scalar&>(s));
 
   // build offsets column from the string size
-  auto offsets_transformer_itr =
-    thrust::make_constant_iterator<size_type>(h_scalar_type_view.size());
-  auto offsets_column = std::get<0>(cudf::detail::make_offsets_child_column(
+  auto offsets_transformer_itr = cuda::make_constant_iterator<size_type>(h_scalar_type_view.size());
+  auto offsets_column          = std::get<0>(cudf::detail::make_offsets_child_column(
     offsets_transformer_itr, offsets_transformer_itr + 1, stream, mr));
 
   auto chars_column_v = column_view(

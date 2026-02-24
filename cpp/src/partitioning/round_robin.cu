@@ -4,9 +4,9 @@
  */
 
 #include <cudf/copying.hpp>
+#include <cudf/detail/algorithms/copy_if.cuh>
 #include <cudf/detail/gather.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/null_mask.hpp>
@@ -104,7 +104,7 @@ std::pair<std::unique_ptr<cudf::table>, std::vector<cudf::size_type>> degenerate
     // copy rotated right partition indexes that
     // fall in the interval [0, nrows):
     //(this relies on a _stable_ copy_if())
-    cudf::detail::copy_if(
+    cudf::detail::copy_if_async(
       rotated_iter_begin,
       rotated_iter_begin + num_partitions,
       d_row_indices.begin(),

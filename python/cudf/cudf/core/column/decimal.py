@@ -5,7 +5,8 @@ from __future__ import annotations
 
 import warnings
 from decimal import Decimal
-from typing import TYPE_CHECKING, Any, ClassVar, Self, cast
+from functools import cached_property
+from typing import TYPE_CHECKING, Any, ClassVar, cast
 
 import numpy as np
 import pandas as pd
@@ -34,7 +35,6 @@ from cudf.core.mixins import BinaryOperand
 from cudf.utils.dtypes import (
     cudf_dtype_to_pa_type,
     get_dtype_of_same_kind,
-    get_dtype_of_same_type,
 )
 from cudf.utils.scalar import pa_scalar_to_plc_scalar
 from cudf.utils.utils import is_na_like
@@ -63,20 +63,19 @@ class DecimalBaseColumn(NumericalBaseColumn):
     _VALID_BINARY_OPERATIONS = BinaryOperand._SUPPORTED_BINARY_OPERATIONS
     _decimal_type_check: ClassVar[Callable[[DtypeObj], bool]]
 
-    @classmethod
-    def _validate_args(  # type: ignore[override]
-        cls, plc_column: plc.Column, dtype: DecimalDtype
-    ) -> tuple[plc.Column, DecimalDtype]:
-        plc_column, dtype = super()._validate_args(plc_column, dtype)  # type: ignore[assignment]
-        if not cls._decimal_type_check(dtype):
-            raise ValueError(
-                f"{dtype=} must be a valid decimal dtype instance"
-            )
-        return plc_column, dtype
+    @cached_property
+    def scale(self) -> int:
+        if isinstance(self.dtype, DecimalDtype):
+            return self.dtype.scale
+        else:
+            return cast("pd.ArrowDtype", self.dtype).pyarrow_dtype.scale
 
-    def _with_type_metadata(self: Self, dtype: DtypeObj) -> Self:
-        self._dtype = get_dtype_of_same_type(dtype, self.dtype)
-        return self
+    @cached_property
+    def precision(self) -> int:
+        if isinstance(self.dtype, DecimalDtype):
+            return self.dtype.precision
+        else:
+            return cast("pd.ArrowDtype", self.dtype).pyarrow_dtype.precision
 
     def _adjust_reduce_result_dtype(
         self,
@@ -122,7 +121,7 @@ class DecimalBaseColumn(NumericalBaseColumn):
         self,
         dtype: DecimalDtype,
     ) -> DecimalBaseColumn:
-        if isinstance(dtype, DecimalDtype) and dtype.scale < self.dtype.scale:  # type: ignore[union-attr]
+        if isinstance(dtype, DecimalDtype) and dtype.scale < self.scale:
             warnings.warn(
                 "cuDF truncates when downcasting decimals to a lower scale. "
                 "To round, use Series.round() or DataFrame.round()."
@@ -201,8 +200,8 @@ class DecimalBaseColumn(NumericalBaseColumn):
                 # This branch occurs if we have a DecimalBaseColumn of a
                 # different size (e.g. 64 instead of 32).
                 if (
-                    self.dtype.precision == other.dtype.precision  # type: ignore[union-attr]
-                    and self.dtype.scale == other.dtype.scale  # type: ignore[union-attr]
+                    self.precision == other.dtype.precision  # type: ignore[union-attr]
+                    and self.scale == other.dtype.scale  # type: ignore[union-attr]
                 ):
                     other = other.astype(self.dtype)
             other_cudf_dtype = other.dtype
@@ -334,8 +333,8 @@ class DecimalBaseColumn(NumericalBaseColumn):
                 "Decimal128Column",
                 self.astype(
                     cudf.Decimal128Dtype(
-                        self.dtype.precision,  # type: ignore[union-attr]
-                        self.dtype.scale,  # type: ignore[union-attr]
+                        self.precision,
+                        self.scale,
                     )
                 ),
             )
@@ -356,19 +355,16 @@ class DecimalBaseColumn(NumericalBaseColumn):
 
 
 class Decimal32Column(DecimalBaseColumn):
-    _VALID_PLC_TYPES = {plc.TypeId.DECIMAL32}
     _decimal_cls = Decimal32Dtype
     _decimal_type_check = is_dtype_obj_decimal32
 
 
 class Decimal64Column(DecimalBaseColumn):
-    _VALID_PLC_TYPES = {plc.TypeId.DECIMAL64}
     _decimal_cls = Decimal64Dtype
     _decimal_type_check = is_dtype_obj_decimal64
 
 
 class Decimal128Column(DecimalBaseColumn):
-    _VALID_PLC_TYPES = {plc.TypeId.DECIMAL128}
     _decimal_cls = Decimal128Dtype
     _decimal_type_check = is_dtype_obj_decimal128
 

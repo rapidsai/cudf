@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -13,9 +13,14 @@ from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
 )
 from cudf_polars.utils.config import StreamingFallbackMode
+from cudf_polars.utils.versions import POLARS_VERSION_LT_136
 
 
-def test_rolling_datetime():
+def test_rolling_datetime(request):
+    if not POLARS_VERSION_LT_136:
+        request.applymarker(
+            pytest.mark.xfail(reason="See https://github.com/pola-rs/polars/pull/25117")
+        )
     dates = [
         "2020-01-01 13:45:48",
         "2020-01-01 16:42:13",

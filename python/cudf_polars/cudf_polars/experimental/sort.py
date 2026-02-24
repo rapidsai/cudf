@@ -386,7 +386,6 @@ class RMPFIntegrationSortedShuffle:  # pragma: no cover
                     shuffler.extract(partition_id),
                     br=context.br,
                     allow_overbooking=True,
-                    statistics=context.statistics,
                 ),
                 br=context.br,
                 stream=stream,
@@ -559,9 +558,6 @@ def _(
 
     # Extract shuffle method
     config_options = rec.state["config_options"]
-    assert config_options.executor.name == "streaming", (
-        "'in-memory' executor not supported in 'lower_ir_node'"
-    )
     # Avoid rapidsmpf shuffle with maintain_order=True (for now)
     shuffle_method = (
         ShuffleMethod("tasks") if ir.stable else config_options.executor.shuffle_method

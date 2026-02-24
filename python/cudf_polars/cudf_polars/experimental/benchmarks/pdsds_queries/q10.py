@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 """Query 10."""
@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
 from cudf_polars.experimental.benchmarks.utils import get_data
 
 if TYPE_CHECKING:
@@ -17,7 +18,15 @@ if TYPE_CHECKING:
 
 def duckdb_impl(run_config: RunConfig) -> str:
     """Query 10."""
-    return """
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=10,
+        qualification=run_config.qualification,
+    )
+
+    counties = params["county"]
+
+    return f"""
     SELECT cd_gender,
                    cd_marital_status,
                    cd_education_status,
@@ -36,10 +45,7 @@ def duckdb_impl(run_config: RunConfig) -> str:
            customer_address ca,
            customer_demographics
     WHERE  c.c_current_addr_sk = ca.ca_address_sk
-           AND ca_county IN ( 'Lycoming County', 'Sheridan County',
-                              'Kandiyohi County',
-                              'Pike County',
-                                               'Greene County' )
+           AND ca_county IN ( {", ".join(f"'{county}'" for county in counties)} )
            AND cd_demo_sk = c.c_current_cdemo_sk
            AND EXISTS (SELECT *
                        FROM   store_sales,
@@ -84,7 +90,14 @@ def duckdb_impl(run_config: RunConfig) -> str:
 
 def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     """Query 10."""
-    # Load required tables
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=10,
+        qualification=run_config.qualification,
+    )
+
+    counties = params["county"]
+
     customer = get_data(run_config.dataset_path, "customer", run_config.suffix)
     customer_address = get_data(
         run_config.dataset_path, "customer_address", run_config.suffix
@@ -98,15 +111,6 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         run_config.dataset_path, "catalog_sales", run_config.suffix
     )
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
-
-    # Target counties and date range
-    target_counties = [
-        "Lycoming County",
-        "Sheridan County",
-        "Kandiyohi County",
-        "Pike County",
-        "Greene County",
-    ]
 
     # Get customers with store sales in the target period (EXISTS condition 1)
     store_customers = (
@@ -152,7 +156,7 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         .join(
             customer_demographics, left_on="c_current_cdemo_sk", right_on="cd_demo_sk"
         )
-        .filter(pl.col("ca_county").is_in(target_counties))
+        .filter(pl.col("ca_county").is_in(counties))
         # Apply EXISTS conditions through joins
         .join(
             store_customers,

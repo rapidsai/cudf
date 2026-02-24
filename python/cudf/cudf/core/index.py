@@ -40,11 +40,16 @@ from cudf.core.column import (
     TimeDeltaColumn,
     access_columns,
 )
-from cudf.core.column.column import as_column, column_empty, concat_columns
+from cudf.core.column.column import (
+    _normalize_types_column,
+    as_column,
+    column_empty,
+    concat_columns,
+)
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.copy_types import GatherMap
 from cudf.core.dtype.validators import is_dtype_obj_numeric
-from cudf.core.dtypes import IntervalDtype, dtype as cudf_dtype
+from cudf.core.dtypes import CategoricalDtype, IntervalDtype
 from cudf.core.join._join_helpers import _match_join_keys
 from cudf.core.single_column_frame import SingleColumnFrame
 from cudf.errors import MixedTypeError
@@ -55,6 +60,7 @@ from cudf.utils.dtypes import (
     _maybe_convert_to_default_type,
     cudf_dtype_from_pa_type,
     cudf_dtype_to_pa_type,
+    dtype_from_pylibcudf_column,
     dtype_to_pylibcudf_type,
     find_common_type,
     is_mixed_with_object_dtype,
@@ -108,30 +114,28 @@ def _lexsorted_equal_range(
         sort_vals = idx
     sources = sort_vals._columns
     len_sources = len(sources)
-    lower_bound = ColumnBase.from_pylibcudf(
-        sorting.search_sorted(
-            sort_vals._columns,
-            keys,
-            side="left",
-            ascending=itertools.repeat(
-                sort_vals.is_monotonic_increasing, times=len_sources
-            ),
-            na_position=itertools.repeat("last", times=len_sources),
-        )
-    ).element_indexing(0)
-    upper_bound = ColumnBase.from_pylibcudf(
-        sorting.search_sorted(
-            sources,
-            keys,
-            side="right",
-            ascending=itertools.repeat(
-                sort_vals.is_monotonic_increasing, times=len_sources
-            ),
-            na_position=itertools.repeat("last", times=len_sources),
-        )
-    ).element_indexing(0)
+    plc_lower_bound = sorting.search_sorted(
+        sort_vals._columns,
+        keys,
+        side="left",
+        ascending=itertools.repeat(
+            sort_vals.is_monotonic_increasing, times=len_sources
+        ),
+        na_position=itertools.repeat("last", times=len_sources),
+    )
+    lower_bound = plc.copying.get_element(plc_lower_bound, 0).to_py()
+    plc_upper_bound = sorting.search_sorted(
+        sources,
+        keys,
+        side="right",
+        ascending=itertools.repeat(
+            sort_vals.is_monotonic_increasing, times=len_sources
+        ),
+        na_position=itertools.repeat("last", times=len_sources),
+    )
+    upper_bound = plc.copying.get_element(plc_upper_bound, 0).to_py()
 
-    return lower_bound, upper_bound, sort_inds
+    return cast(int, lower_bound), cast(int, upper_bound), sort_inds
 
 
 def _index_from_data(data: MutableMapping, name: Any = no_default):
@@ -380,8 +384,11 @@ class Index(SingleColumnFrame):
             ):
                 raise ValueError("Metadata dict must only contain a name")
             name = metadata.get("name")
+        normalized = _normalize_types_column(col)
         return cls._from_column(
-            ColumnBase.from_pylibcudf(col),
+            ColumnBase.create(
+                normalized, dtype=dtype_from_pylibcudf_column(normalized)
+            ),
             name=name,
         )
 
@@ -1992,8 +1999,12 @@ class Index(SingleColumnFrame):
                 plc.Table([rcol.plc_column]),
                 plc.types.NullEquality.EQUAL,
             )
-            scatter_map = ColumnBase.from_pylibcudf(left_plc)
-            indices = ColumnBase.from_pylibcudf(right_plc)
+            scatter_map = ColumnBase.create(
+                left_plc, dtype=dtype_from_pylibcudf_column(left_plc)
+            )
+            indices = ColumnBase.create(
+                right_plc, dtype=dtype_from_pylibcudf_column(right_plc)
+            )
         result = result._scatter_by_column(scatter_map, indices)
         result_series = cudf.Series._from_column(result)
 
@@ -2613,7 +2624,7 @@ class RangeIndex(Index):
     @_performance_tracking
     def _column(self) -> ColumnBase:
         if len(self) > 0:
-            return as_column(self._range, dtype=self.dtype)
+            return ColumnBase.from_range(self._range).astype(self.dtype)
         else:
             return column_empty(0, dtype=self.dtype)
 
@@ -2735,7 +2746,7 @@ class RangeIndex(Index):
 
     @_performance_tracking
     def astype(self, dtype: Dtype, copy: bool = True) -> Self:
-        dtype = cudf_dtype(dtype)
+        dtype = cudf.dtype(dtype)
         if self.dtype == dtype:
             return self if not copy else self.copy()
         return self._as_int_index().astype(dtype, copy=copy)
@@ -3359,10 +3370,11 @@ class RangeIndex(Index):
                 f"{type(self).__name__}."
             )
         try:
-            i = [self._range.index(value)]
+            return as_column(
+                self._range.index(value), length=1, dtype=SIZE_TYPE_DTYPE
+            )  # type: ignore[return-value]
         except ValueError:
-            i = []
-        return as_column(i, dtype=SIZE_TYPE_DTYPE)  # type: ignore[return-value]
+            return column_empty(0, dtype=SIZE_TYPE_DTYPE)  # type: ignore[return-value]
 
     @_performance_tracking
     def nans_to_nulls(self) -> Self:
@@ -4957,7 +4969,14 @@ class CategoricalIndex(Index):
         name=None,
         nan_as_null=no_default,
     ):
-        if isinstance(dtype, (pd.CategoricalDtype, cudf.CategoricalDtype)):
+        if dtype is not None:
+            dtype = cudf.dtype(dtype)
+            if not isinstance(dtype, CategoricalDtype):
+                raise ValueError(
+                    f"dtype must be a CategoricalDtype, got {dtype}"
+                )
+
+        if isinstance(dtype, CategoricalDtype):
             if categories is not None or ordered is not None:
                 raise ValueError(
                     "Cannot specify `categories` or "
@@ -4971,21 +4990,26 @@ class CategoricalIndex(Index):
         elif isinstance(getattr(data, "dtype", None), pd.CategoricalDtype):
             data = as_column(data)
         elif isinstance(data, (cudf.Series, Index)) and isinstance(
-            data.dtype, cudf.CategoricalDtype
+            data.dtype, CategoricalDtype
         ):
             data = data._column
-        else:
-            if dtype is None or (
-                isinstance(dtype, str) and dtype == "category"
+            if (
+                isinstance(dtype, CategoricalDtype)
+                and dtype._categories is None
             ):
-                dtype = cudf.CategoricalDtype()
-            data = as_column(data, dtype=dtype)
-            # dtype has already been taken care
-            dtype = None
+                # dtype="category" was passed, but data is already categorical
+                dtype = None
+        else:
+            data = as_column(
+                data, dtype=dtype if dtype is not None else CategoricalDtype()
+            )
+            if dtype is not None:
+                # dtype has already been taken care
+                dtype = None
 
         if categories is not None:
             data = data.set_categories(categories, ordered=ordered)
-        elif isinstance(dtype, (pd.CategoricalDtype, cudf.CategoricalDtype)):
+        elif isinstance(dtype, CategoricalDtype):
             data = data.set_categories(dtype.categories, ordered=ordered)
         elif ordered is True and data.ordered is False:
             data = data.as_ordered(ordered=True)
@@ -5281,17 +5305,13 @@ def interval_range(
     pa_start = pa_start.cast(cudf_dtype_to_pa_type(common_dtype))
     pa_freq = pa_freq.cast(cudf_dtype_to_pa_type(common_dtype))
 
-    # No columns to access here - sequence creates new data
-    bin_edges = ColumnBase.from_pylibcudf(
-        plc.filling.sequence(
-            size=periods + 1,
-            init=pa_scalar_to_plc_scalar(pa_start),
-            step=pa_scalar_to_plc_scalar(pa_freq),
-        )
+    plc_result = plc.filling.sequence(
+        size=periods + 1,
+        init=pa_scalar_to_plc_scalar(pa_start),
+        step=pa_scalar_to_plc_scalar(pa_freq),
     )
-    return IntervalIndex.from_breaks(
-        bin_edges.astype(common_dtype), closed=closed, name=name
-    )
+    bin_edges = ColumnBase.create(plc_result, dtype=common_dtype)
+    return IntervalIndex.from_breaks(bin_edges, closed=closed, name=name)
 
 
 class IntervalIndex(Index):

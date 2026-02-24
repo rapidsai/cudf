@@ -9,8 +9,8 @@
 #include "page_string_utils.cuh"
 #include "parquet_gpu.cuh"
 
+#include <cudf/detail/algorithms/reduce.cuh>
 #include <cudf/detail/iterator.cuh>
-#include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/detail/utilities/assert.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/grid_1d.cuh>
@@ -23,6 +23,7 @@
 
 #include <cooperative_groups.h>
 #include <cub/cub.cuh>
+#include <cuda/iterator>
 #include <cuda/std/chrono>
 #include <cuda/std/functional>
 #include <cuda/std/iterator>
@@ -31,8 +32,6 @@
 #include <cuda/std/utility>
 #include <thrust/binary_search.h>
 #include <thrust/gather.h>
-#include <thrust/iterator/discard_iterator.h>
-#include <thrust/iterator/reverse_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/merge.h>
@@ -1837,8 +1836,8 @@ CUDF_KERNEL void __launch_bounds__(block_size, 8)
               }
             } else {
               thrust::copy(thrust::seq,
-                           thrust::make_reverse_iterator(v_char_ptr + sizeof(v)),
-                           thrust::make_reverse_iterator(v_char_ptr),
+                           cuda::std::make_reverse_iterator(v_char_ptr + sizeof(v)),
+                           cuda::std::make_reverse_iterator(v_char_ptr),
                            dst + pos);
             }
           } else {
@@ -2784,8 +2783,8 @@ __device__ void byte_reverse128(__int128_t v, void* dst)
   auto const v_char_ptr = reinterpret_cast<unsigned char const*>(&v);
   auto const d_char_ptr = static_cast<unsigned char*>(dst);
   thrust::copy(thrust::seq,
-               thrust::make_reverse_iterator(v_char_ptr + sizeof(v)),
-               thrust::make_reverse_iterator(v_char_ptr),
+               cuda::std::make_reverse_iterator(v_char_ptr + sizeof(v)),
+               cuda::std::make_reverse_iterator(v_char_ptr),
                d_char_ptr);
 }
 

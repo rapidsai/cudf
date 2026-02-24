@@ -5,9 +5,10 @@
 
 #include "rolling_collect_list.cuh"
 
+#include <cudf/detail/algorithms/copy_if.cuh>
+#include <cudf/detail/algorithms/reduce.cuh>
 #include <cudf/detail/get_value.cuh>
 #include <cudf/detail/iterator.cuh>
-#include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/device_uvector.hpp>
@@ -15,8 +16,6 @@
 #include <cuda/functional>
 #include <thrust/execution_policy.h>
 #include <thrust/fill.h>
-#include <thrust/functional.h>
-#include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/scan.h>
 #include <thrust/scatter.h>
@@ -118,11 +117,11 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> purge_null_entries(
                                                 gather_map.size() - num_child_nulls,
                                                 mask_state::UNALLOCATED,
                                                 stream);
-  cudf::detail::copy_if(gather_map.template begin<size_type>(),
-                        gather_map.template end<size_type>(),
-                        new_gather_map->mutable_view().template begin<size_type>(),
-                        input_row_not_null,
-                        stream);
+  cudf::detail::copy_if_async(gather_map.template begin<size_type>(),
+                              gather_map.template end<size_type>(),
+                              new_gather_map->mutable_view().template begin<size_type>(),
+                              input_row_not_null,
+                              stream);
 
   // Recalculate offsets after null entries are purged.
   auto new_sizes = make_fixed_width_column(
