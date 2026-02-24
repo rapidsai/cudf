@@ -740,7 +740,7 @@ async def _join_chunks(
     right_shuffle: ShuffleManager | None,
     *,
     partition_id: int,
-    tracer: ActorTracer | None = None,
+    tracer: ActorTracer | None,
 ) -> None:
     left, right = ir.children
     stream = ir_context.get_cuda_stream()
@@ -869,6 +869,7 @@ async def _shuffle_join(
             left_shuffle,
             right_shuffle,
             partition_id=partition_id,
+            tracer=tracer,
         )
 
     del left_shuffle, right_shuffle
