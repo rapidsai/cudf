@@ -6,7 +6,6 @@ from __future__ import annotations
 import cupy
 import cupy._core.flags
 import numpy
-import pandas as pd
 from packaging import version
 
 from cudf.options import _env_get_bool
@@ -160,26 +159,189 @@ def ndarray__array_ufunc__(self, ufunc, method, *inputs, **kwargs):
     return result
 
 
-def _is_pandas_like_object(other) -> bool:
-    if is_proxy_object(other):
-        other = other._fsproxy_slow
-    return isinstance(other, (pd.Series, pd.Index))
+def _other_has_higher_priority(self, other) -> bool:
+    self_priority = float(getattr(self, "__array_priority__", 0.0))
+    try:
+        other_priority = float(getattr(other, "__array_priority__", 0.0))
+    except (TypeError, ValueError):
+        return False
+    return other_priority > self_priority
+
+
+def ndarray__add__(self, other):
+    if _other_has_higher_priority(self, other):
+        return NotImplemented
+    return numpy.add(self, other)
+
+
+def ndarray__radd__(self, other):
+    return numpy.add(other, self)
+
+
+def ndarray__sub__(self, other):
+    if _other_has_higher_priority(self, other):
+        return NotImplemented
+    return numpy.subtract(self, other)
+
+
+def ndarray__rsub__(self, other):
+    return numpy.subtract(other, self)
+
+
+def ndarray__mul__(self, other):
+    if _other_has_higher_priority(self, other):
+        return NotImplemented
+    return numpy.multiply(self, other)
+
+
+def ndarray__rmul__(self, other):
+    return numpy.multiply(other, self)
+
+
+def ndarray__truediv__(self, other):
+    if _other_has_higher_priority(self, other):
+        return NotImplemented
+    return numpy.true_divide(self, other)
+
+
+def ndarray__rtruediv__(self, other):
+    return numpy.true_divide(other, self)
+
+
+def ndarray__floordiv__(self, other):
+    if _other_has_higher_priority(self, other):
+        return NotImplemented
+    return numpy.floor_divide(self, other)
+
+
+def ndarray__rfloordiv__(self, other):
+    return numpy.floor_divide(other, self)
+
+
+def ndarray__mod__(self, other):
+    if _other_has_higher_priority(self, other):
+        return NotImplemented
+    return numpy.mod(self, other)
+
+
+def ndarray__rmod__(self, other):
+    return numpy.mod(other, self)
+
+
+def ndarray__pow__(self, other):
+    if _other_has_higher_priority(self, other):
+        return NotImplemented
+    return numpy.power(self, other)
+
+
+def ndarray__rpow__(self, other):
+    return numpy.power(other, self)
 
 
 def ndarray__divmod__(self, other):
-    if _is_pandas_like_object(other):
-        if is_proxy_object(other):
-            return other.__rdivmod__(self)
-        return other.__rdivmod__(self._fsproxy_wrapped)
+    if _other_has_higher_priority(self, other):
+        return NotImplemented
     return numpy.divmod(self, other)
 
 
 def ndarray__rdivmod__(self, other):
-    if _is_pandas_like_object(other):
-        if is_proxy_object(other):
-            return other.__divmod__(self)
-        return other.__divmod__(self._fsproxy_wrapped)
     return numpy.divmod(other, self)
+
+
+def ndarray__matmul__(self, other):
+    if _other_has_higher_priority(self, other):
+        return NotImplemented
+    return numpy.matmul(self, other)
+
+
+def ndarray__rmatmul__(self, other):
+    return numpy.matmul(other, self)
+
+
+def ndarray__and__(self, other):
+    if _other_has_higher_priority(self, other):
+        return NotImplemented
+    return numpy.bitwise_and(self, other)
+
+
+def ndarray__rand__(self, other):
+    return numpy.bitwise_and(other, self)
+
+
+def ndarray__or__(self, other):
+    if _other_has_higher_priority(self, other):
+        return NotImplemented
+    return numpy.bitwise_or(self, other)
+
+
+def ndarray__ror__(self, other):
+    return numpy.bitwise_or(other, self)
+
+
+def ndarray__xor__(self, other):
+    if _other_has_higher_priority(self, other):
+        return NotImplemented
+    return numpy.bitwise_xor(self, other)
+
+
+def ndarray__rxor__(self, other):
+    return numpy.bitwise_xor(other, self)
+
+
+def ndarray__lshift__(self, other):
+    if _other_has_higher_priority(self, other):
+        return NotImplemented
+    return numpy.left_shift(self, other)
+
+
+def ndarray__rlshift__(self, other):
+    return numpy.left_shift(other, self)
+
+
+def ndarray__rshift__(self, other):
+    if _other_has_higher_priority(self, other):
+        return NotImplemented
+    return numpy.right_shift(self, other)
+
+
+def ndarray__rrshift__(self, other):
+    return numpy.right_shift(other, self)
+
+
+def ndarray__lt__(self, other):
+    if _other_has_higher_priority(self, other):
+        return NotImplemented
+    return numpy.less(self, other)
+
+
+def ndarray__le__(self, other):
+    if _other_has_higher_priority(self, other):
+        return NotImplemented
+    return numpy.less_equal(self, other)
+
+
+def ndarray__gt__(self, other):
+    if _other_has_higher_priority(self, other):
+        return NotImplemented
+    return numpy.greater(self, other)
+
+
+def ndarray__ge__(self, other):
+    if _other_has_higher_priority(self, other):
+        return NotImplemented
+    return numpy.greater_equal(self, other)
+
+
+def ndarray__eq__(self, other):
+    if _other_has_higher_priority(self, other):
+        return NotImplemented
+    return numpy.equal(self, other)
+
+
+def ndarray__ne__(self, other):
+    if _other_has_higher_priority(self, other):
+        return NotImplemented
+    return numpy.not_equal(self, other)
 
 
 def ndarray__reduce__(self):
@@ -255,8 +417,40 @@ ndarray = make_final_proxy_type(
         "__cuda_array_interface__": cuda_array_interface,
         "__array_interface__": array_interface,
         "__array_ufunc__": ndarray__array_ufunc__,
+        "__add__": ndarray__add__,
+        "__radd__": ndarray__radd__,
+        "__sub__": ndarray__sub__,
+        "__rsub__": ndarray__rsub__,
+        "__mul__": ndarray__mul__,
+        "__rmul__": ndarray__rmul__,
+        "__truediv__": ndarray__truediv__,
+        "__rtruediv__": ndarray__rtruediv__,
+        "__floordiv__": ndarray__floordiv__,
+        "__rfloordiv__": ndarray__rfloordiv__,
+        "__mod__": ndarray__mod__,
+        "__rmod__": ndarray__rmod__,
+        "__pow__": ndarray__pow__,
+        "__rpow__": ndarray__rpow__,
         "__divmod__": ndarray__divmod__,
         "__rdivmod__": ndarray__rdivmod__,
+        "__matmul__": ndarray__matmul__,
+        "__rmatmul__": ndarray__rmatmul__,
+        "__and__": ndarray__and__,
+        "__rand__": ndarray__rand__,
+        "__or__": ndarray__or__,
+        "__ror__": ndarray__ror__,
+        "__xor__": ndarray__xor__,
+        "__rxor__": ndarray__rxor__,
+        "__lshift__": ndarray__lshift__,
+        "__rlshift__": ndarray__rlshift__,
+        "__rshift__": ndarray__rshift__,
+        "__rrshift__": ndarray__rrshift__,
+        "__lt__": ndarray__lt__,
+        "__le__": ndarray__le__,
+        "__gt__": ndarray__gt__,
+        "__ge__": ndarray__ge__,
+        "__eq__": ndarray__eq__,
+        "__ne__": ndarray__ne__,
         "__reduce__": ndarray__reduce__,
         # ndarrays are unhashable
         "__hash__": None,
