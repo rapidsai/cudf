@@ -23,7 +23,6 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pyarrow.compute as pc
-from pandas.core.arrays.arrow.extension_types import ArrowIntervalType
 
 import pylibcudf as plc
 from rmm.pylibrmm.stream import DEFAULT_STREAM
@@ -110,6 +109,34 @@ if PANDAS_GE_210:
     NumpyExtensionArray = pd.arrays.NumpyExtensionArray
 else:
     NumpyExtensionArray = pd.arrays.PandasArray
+
+
+def _replace_nested_none_with_NA(py_scalar: Any) -> Any:
+    """
+    Replace the None values from pyarrow.Scalar.as_py() with pd.NA.
+
+    Used in ColumnBase.element_indexing().
+
+    Parameters
+    ----------
+    py_scalar: Any
+
+    Returns
+    -------
+    Any
+        Python scalar
+    """
+    if isinstance(py_scalar, dict):
+        return {
+            key: _replace_nested_none_with_NA(value)
+            for key, value in py_scalar.items()
+        }
+    elif isinstance(py_scalar, list):
+        return [_replace_nested_none_with_NA(value) for value in py_scalar]
+    elif py_scalar is None:
+        return pd.NA
+    else:
+        return py_scalar
 
 
 def _can_values_be_equal(left: DtypeObj, right: DtypeObj) -> bool:
@@ -1308,8 +1335,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 "yet supported in pyarrow, see: "
                 "https://github.com/apache/arrow/issues/20213"
             )
-        elif isinstance(array.type, ArrowIntervalType):
-            return cudf.core.column.IntervalColumn.from_arrow(array)
         elif pa.types.is_null(array.type):
             # default "empty" type
             array = array.cast(pa.string())
@@ -1505,12 +1530,12 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 index,
             )
         pa_scalar = plc_scalar.to_arrow(
-            metadata=_dtype_to_metadata(self.dtype),  # type: ignore[arg-type]
+            metadata=_dtype_to_metadata(self.dtype),
         )
         if not pa_scalar.is_valid:
             return self._PANDAS_NA_VALUE
         else:
-            return pa_scalar.as_py()
+            return _replace_nested_none_with_NA(pa_scalar.as_py())
 
     def slice(self, start: int, stop: int, stride: int | None = None) -> Self:
         stride = 1 if stride is None else stride
