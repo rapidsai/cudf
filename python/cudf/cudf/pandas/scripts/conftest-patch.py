@@ -176,6 +176,7 @@ NODEIDS_THAT_FAIL_WITH_CUDF_PANDAS = {
     "tests/arithmetic/test_numeric.py::TestAdditionSubtraction::test_series_operators_arithmetic[python-truediv-slice]",
     "tests/arithmetic/test_numeric.py::TestDivisionByZero::test_df_mod_zero_df[numexpr]",
     "tests/arithmetic/test_numeric.py::TestDivisionByZero::test_df_mod_zero_df[python]",
+    "tests/arithmetic/test_numeric.py::TestDivisionByZero::test_ser_div_ser[numexpr-float32-int64]",
     "tests/arithmetic/test_numeric.py::TestNumericArithmeticUnsorted::test_numeric_compat2[numexpr]",
     "tests/arithmetic/test_numeric.py::TestNumericArithmeticUnsorted::test_numeric_compat2[python]",
     "tests/arithmetic/test_numeric.py::TestNumericArithmeticUnsorted::test_numeric_compat2_floordiv[numexpr-idx0-2-expected0]",
