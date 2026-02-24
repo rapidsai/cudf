@@ -2,7 +2,8 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+import functools
+from typing import TYPE_CHECKING, Any, Self, cast
 
 import pandas as pd
 import pyarrow as pa
@@ -10,9 +11,6 @@ import pyarrow as pa
 import cudf
 from cudf.core.column.column import ColumnBase
 from cudf.core.dtypes import StructDtype
-from cudf.utils.dtypes import (
-    get_dtype_of_same_kind,
-)
 from cudf.utils.scalar import (
     maybe_nested_pa_scalar_to_py,
     pa_scalar_to_plc_scalar,
@@ -21,10 +19,10 @@ from cudf.utils.utils import is_na_like
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
-    from typing import Self
 
     import pylibcudf as plc
 
+    from cudf._typing import DtypeObj
     from cudf.core.column.string import StringColumn
 
 
@@ -46,32 +44,56 @@ class StructColumn(ColumnBase):
     the number of fields in the Struct Dtype.
     """
 
-    def _get_sliced_child(self, idx: int) -> ColumnBase:
+    @functools.cached_property
+    def fields(self) -> dict[str, DtypeObj]:
+        if isinstance(self.dtype, StructDtype):
+            return self.dtype.fields
+        else:
+            return {
+                field.name: pd.ArrowDtype(field.type)
+                for field in cast("pd.ArrowDtype", self.dtype).pyarrow_dtype
+            }
+
+    def _get_sliced_child(self, loc: int | str) -> tuple[ColumnBase, str]:
         """
         Get a child column properly sliced to match the parent's view.
 
         Parameters
         ----------
-        idx : int
-            The positional index of the child column to get.
+        loc : int | str
+            If int, the positional index of the child column to get.
+            If str, the label of the child column to get.
 
         Returns
         -------
-        ColumnBase
-            The child column at positional index `idx`.
+        tuple[ColumnBase, str]
+            The child column at the specified location with the associated field name.
         """
-        if idx < 0 or idx >= self.plc_column.num_children():
-            raise IndexError(
-                f"Index {idx} out of range for {self.plc_column.num_children()} children"
+        if isinstance(loc, int):
+            if loc < 0 or loc >= self.plc_column.num_children():
+                raise IndexError(
+                    f"Index {loc} out of range for {self.plc_column.num_children()} children"
+                )
+            int_loc = loc
+            field_label = list(self.fields.keys())[loc]
+            sub_type = self.fields[field_label]
+        elif isinstance(loc, str):
+            if loc not in self.fields:
+                raise KeyError(
+                    f"Field {loc} not found in {self.fields.keys()}"
+                )
+            int_loc = list(self.fields.keys()).index(loc)
+            field_label = loc
+            sub_type = self.fields[loc]
+        else:
+            raise ValueError(
+                f"loc must be an integer location or string label, not {loc}"
             )
 
-        sliced_plc_col = self.plc_column.struct_view().get_sliced_child(idx)
-        sub_dtype = list(
-            StructDtype.from_struct_dtype(self.dtype).fields.values()
-        )[idx]
-        return ColumnBase.create(
-            sliced_plc_col, get_dtype_of_same_kind(self.dtype, sub_dtype)
+        sliced_plc_col = self.plc_column.struct_view().get_sliced_child(
+            int_loc
         )
+        return ColumnBase.create(sliced_plc_col, sub_type), field_label
 
     def _prep_pandas_compat_repr(self) -> StringColumn | Self:
         """
@@ -110,18 +132,19 @@ class StructColumn(ColumnBase):
         return result
 
     def _cast_setitem_value(self, value: Any) -> plc.Scalar:
+        pa_type = (
+            self.dtype.to_arrow()
+            if isinstance(self.dtype, StructDtype)
+            else cast("pd.ArrowDtype", self.dtype).pyarrow_dtype
+        )
         if isinstance(value, dict):
             new_value = {
                 field: _maybe_na_to_none(value.get(field, None))
-                for field in self.dtype.fields  # type: ignore[union-attr]
+                for field in self.fields
             }
-            return pa_scalar_to_plc_scalar(
-                pa.scalar(new_value, type=self.dtype.to_arrow())  # type: ignore[union-attr]
-            )
+            return pa_scalar_to_plc_scalar(pa.scalar(new_value, type=pa_type))
         elif value is None or value is cudf.NA:
-            return pa_scalar_to_plc_scalar(
-                pa.scalar(None, type=self.dtype.to_arrow())  # type: ignore[union-attr]
-            )
+            return pa_scalar_to_plc_scalar(pa.scalar(None, type=pa_type))
         else:
             raise ValueError(
                 f"Can not set {type(value).__name__} into StructColumn"

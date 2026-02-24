@@ -6,11 +6,10 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from cudf.core.accessors.base_accessor import BaseAccessor
-from cudf.core.column.struct import StructColumn
 from cudf.core.dtype.validators import is_dtype_obj_struct
-from cudf.core.dtypes import StructDtype
 
 if TYPE_CHECKING:
+    from cudf.core.column.struct import StructColumn
     from cudf.core.dataframe import DataFrame
     from cudf.core.index import Index
     from cudf.core.series import Series
@@ -30,7 +29,7 @@ class StructMethods(BaseAccessor):
             )
         super().__init__(parent=parent)
 
-    def field(self, key) -> Series | Index:
+    def field(self, key: int | str) -> Series | Index:
         """
         Extract children of the specified struct column
         in the Series
@@ -57,26 +56,7 @@ class StructMethods(BaseAccessor):
         1    3
         Name: a, dtype: int64
         """
-        struct_dtype_fields = StructDtype.from_struct_dtype(
-            self._column.dtype
-        ).fields
-        field_keys = list(struct_dtype_fields.keys())
-        result_name = None
-        if key in struct_dtype_fields:
-            pos = field_keys.index(key)
-            result_name = key
-        elif isinstance(key, int):
-            pos = key
-            try:
-                result_name = field_keys[key]
-            except IndexError as err:
-                raise IndexError(f"Index {key} out of range") from err
-        else:
-            raise KeyError(
-                f"Field '{key}' is not found in the set of existing keys."
-            )
-        assert isinstance(self._column, StructColumn)
-        result = self._column._get_sliced_child(pos)
+        result, result_name = self._column._get_sliced_child(key)
         return self._return_or_inplace(result, replace_name=result_name)
 
     def explode(self) -> DataFrame:
@@ -107,12 +87,11 @@ class StructMethods(BaseAccessor):
         from cudf.core.column_accessor import ColumnAccessor
         from cudf.core.dataframe import DataFrame
 
-        assert isinstance(self._column, StructColumn)
         data = {
-            name: self._column._get_sliced_child(i).copy(deep=True)
-            for i, name in enumerate(self._column.dtype.fields)  # type: ignore[arg-type]
+            field: self._column._get_sliced_child(field)[0].copy(deep=True)
+            for field in self._column.fields
         }
         rangeindex = len(data) == 0
         return DataFrame._from_data(
-            ColumnAccessor(data, rangeindex=rangeindex)
+            ColumnAccessor(data, rangeindex=rangeindex)  # type: ignore[arg-type]
         )
