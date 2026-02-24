@@ -206,9 +206,11 @@ def _indices_from_labels(obj, labels):
     # so we will sort it with its initial ordering which is stored
     # in column "__"
     lhs = cudf.DataFrame(
-        {"__": as_column(range(len(idx_labels)))}, index=idx_labels
+        {"__": ColumnBase.from_range(range(len(idx_labels)))}, index=idx_labels
     )
-    rhs = cudf.DataFrame({"_": as_column(range(len(obj)))}, index=obj.index)
+    rhs = cudf.DataFrame(
+        {"_": ColumnBase.from_range(range(len(obj)))}, index=obj.index
+    )
     return lhs.join(rhs).sort_values(by=["__", "_"])["_"]
 
 
@@ -2968,7 +2970,7 @@ class IndexedFrame(Frame):
                 len(gather_map.column) == len(self)
                 and len(self) > 0
                 and gather_map.column.equals(
-                    as_column(cp.arange(start=0, stop=len(self)))
+                    ColumnBase.from_range(range(len(self)))
                 )
             )
         except (AttributeError, TypeError):
@@ -3066,10 +3068,9 @@ class IndexedFrame(Frame):
                 GatherMap.from_column_unchecked(
                     cast(
                         cudf.core.column.numerical.NumericalColumn,
-                        as_column(
-                            range(start, stop, stride),
-                            dtype=SIZE_TYPE_DTYPE,
-                        ),
+                        ColumnBase.from_range(
+                            range(start, stop, stride)
+                        ).astype(SIZE_TYPE_DTYPE),
                     ),
                     len(self),
                     nullify=False,
@@ -3848,9 +3849,9 @@ class IndexedFrame(Frame):
         # to recover ordering after index alignment.
         sort_col_id = str(uuid4())
         if how == "left":
-            lhs[sort_col_id] = as_column(range(len(lhs)))
+            lhs[sort_col_id] = ColumnBase.from_range(range(len(lhs)))
         elif how == "right":
-            rhs[sort_col_id] = as_column(range(len(rhs)))
+            rhs[sort_col_id] = ColumnBase.from_range(range(len(rhs)))
 
         result = lhs.join(rhs, how=how, sort=sort)
         if how in ("left", "right"):
