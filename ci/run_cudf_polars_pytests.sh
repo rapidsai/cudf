@@ -20,7 +20,7 @@ python -m pytest --cache-clear "$@" tests --executor streaming --blocksize-mode 
 
 # Test the "streaming" executor with "rapidsmpf" runtime and the "single" cluster mode with dynamic planning
 # TODO: Enable dynamic planning
-CUDF_POLARS__EXECUTOR__SHUFFLE_METHOD=rapidsmpf python -m pytest --cache-clear "$@" tests \
+CUDF_POLARS__PARQUET_OPTIONS__USE_RAPIDSMPF_NATIVE=1 CUDF_POLARS__EXECUTOR__SHUFFLE_METHOD=rapidsmpf python -m pytest --cache-clear "$@" tests \
     --executor streaming \
     --cluster single \
     --runtime rapidsmpf
