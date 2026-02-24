@@ -720,7 +720,11 @@ async def get_dataframe_to_join(
             table = empty_table_chunk(child, context, stream).table_view()
     else:
         chunk = await get_unshuffled_chunk(context, ch, sample_chunks)
-        table = (chunk or empty_table_chunk(child, context, stream)).table_view()
+        if chunk is None:
+            chunk = empty_table_chunk(child, context, stream)
+        else:
+            stream = chunk.stream
+        table = chunk.table_view()
 
     return DataFrame.from_table(
         table, list(child.schema.keys()), list(child.schema.values()), stream
