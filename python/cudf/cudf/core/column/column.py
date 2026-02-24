@@ -3181,40 +3181,23 @@ def as_column(
                         categories=new_cats, ordered=arbitrary.dtype.ordered
                     )
                     arbitrary = arbitrary.astype(new_dtype)
+                elif dtype is None:
+                    # Going through Arrow below erases pandas extension dtypes
+                    # of the categories, if any, so always along pass the exact type
+                    dtype = arbitrary.dtype
             result = as_column(
                 pa.array(arbitrary, from_pandas=True),
                 nan_as_null=nan_as_null,
                 dtype=dtype,
                 length=length,
             )
-            if (
-                isinstance(arbitrary.dtype, pd.CategoricalDtype)
-                and is_pandas_nullable_extension_dtype(
-                    arbitrary.dtype.categories.dtype
-                )
-                and dtype is None
-            ):
-                # Store pandas extension dtype directly in the column's dtype property
-                # TODO: Move this to near isinstance(arbitrary.dtype.categories.dtype, pd.IntervalDtype)
-                # check above, for which merge should be working fully with pandas nullable extension dtypes.
-                result = ColumnBase.create(
-                    result.plc_column,
-                    CategoricalDtype(
-                        categories=arbitrary.dtype.categories,
-                        ordered=arbitrary.dtype.ordered,
-                    ),
-                )
             return result
         elif is_pandas_nullable_extension_dtype(arbitrary.dtype):
-            if (
-                isinstance(arbitrary.dtype, pd.ArrowDtype)
-                and (arrow_type := arbitrary.dtype.pyarrow_dtype) is not None
-                and (
-                    pa.types.is_date32(arrow_type)
-                    or pa.types.is_binary(arrow_type)
-                    or pa.types.is_dictionary(arrow_type)
-                )
+            if isinstance(arbitrary.dtype, pd.ArrowDtype) and pa.types.is_date(
+                arbitrary.dtype.pyarrow_dtype
             ):
+                # TODO: See if we can centralize this check with other
+                # dtype conversion functions
                 raise NotImplementedError(
                     f"cuDF does not yet support {arbitrary.dtype}"
                 )
@@ -3222,22 +3205,14 @@ def as_column(
                 # pandas arrays define __arrow_array__ for better
                 # pyarrow.array conversion
                 arbitrary = arbitrary.array
-            result = as_column(
+            if dtype is None:
+                dtype = arbitrary.dtype
+            return as_column(
                 pa.array(arbitrary, from_pandas=True),
                 nan_as_null=nan_as_null,
                 dtype=dtype,
                 length=length,
             )
-            if cudf.get_option("mode.pandas_compatible"):
-                # Store pandas extension dtype directly in the column's dtype property
-                if (
-                    is_pandas_nullable_extension_dtype(arbitrary.dtype)
-                    and isinstance(result.dtype, np.dtype)
-                    and result.dtype.kind == "f"
-                ):
-                    result = result.nans_to_nulls()
-                result = ColumnBase.create(result.plc_column, arbitrary.dtype)
-            return result
         elif isinstance(
             arbitrary.dtype, pd.api.extensions.ExtensionDtype
         ) and not isinstance(arbitrary, NumpyExtensionArray):
