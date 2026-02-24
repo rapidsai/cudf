@@ -592,6 +592,8 @@ def test_null_partition(tmpdir):
         ddf[["x", "id"]],
         ddf_read[["x", "id"]],
         check_divisions=False,
+        # Int64 is cast to float64 in dask
+        check_dtype=False,
     )
 
 
