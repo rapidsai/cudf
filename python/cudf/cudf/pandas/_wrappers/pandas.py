@@ -346,44 +346,6 @@ def _is_arrow_dtype(obj) -> bool:
     return isinstance(dtype, pd.ArrowDtype)
 
 
-def _maybe_promote_mod_block(result, left, right):
-    if is_proxy_object(left):
-        left = left._fsproxy_fast
-    if is_proxy_object(right):
-        right = right._fsproxy_fast
-    if is_proxy_object(result):
-        result_fast = result._fsproxy_fast
-    else:
-        result_fast = result
-    if not (
-        isinstance(left, cudf.DataFrame)
-        and isinstance(right, cudf.DataFrame)
-        and isinstance(result_fast, cudf.DataFrame)
-    ):
-        return result
-    int_cols = []
-    for col in result_fast.columns:
-        if col not in left.columns or col not in right.columns:
-            continue
-        try:
-            left_kind = left.dtypes[col].kind
-            right_kind = right.dtypes[col].kind
-        except Exception:
-            continue
-        if left_kind in "iu" and right_kind in "iu":
-            int_cols.append(col)
-    if not int_cols:
-        return result
-    try:
-        has_nan = bool(result_fast[int_cols].isna().any().any())
-    except Exception:
-        return result
-    if not has_nan:
-        return result
-    result_fast[int_cols] = result_fast[int_cols].astype("float64")
-    return result
-
-
 def _series_divmod(self, other):
     transfer_block = None
     if _is_arrow_dtype(self) or _is_arrow_dtype(other):
@@ -406,26 +368,6 @@ def _series_rdivmod(self, other):
         self,
         other,
     )[0]
-
-
-def _frame_mod(self, other):
-    result = _fast_slow_function_call(
-        lambda lhs, rhs: lhs.__mod__(rhs),
-        None,
-        self,
-        other,
-    )[0]
-    return _maybe_promote_mod_block(result, self, other)
-
-
-def _frame_rmod(self, other):
-    result = _fast_slow_function_call(
-        lambda lhs, rhs: lhs.__rmod__(rhs),
-        None,
-        self,
-        other,
-    )[0]
-    return _maybe_promote_mod_block(result, other, self)
 
 
 DataFrame = make_final_proxy_type(
@@ -461,8 +403,6 @@ DataFrame = make_final_proxy_type(
         "memory_usage": _FastSlowAttribute("memory_usage"),
         "__sizeof__": _FastSlowAttribute("__sizeof__"),
         "to_xarray": _to_xarray,
-        "__mod__": _frame_mod,
-        "__rmod__": _frame_rmod,
     },
 )
 
