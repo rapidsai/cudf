@@ -16,6 +16,7 @@
 #include <cudf/join/mixed_join.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/type_dispatcher.hpp>
 
 #include <thrust/device_vector.h>
 #include <thrust/execution_policy.h>
@@ -51,40 +52,12 @@ auto const col_ref_right_0 = cudf::ast::column_reference(0, cudf::ast::table_ref
 auto left_zero_eq_right_zero =
   cudf::ast::operation(cudf::ast::ast_operator::EQUAL, col_ref_left_0, col_ref_right_0);
 
-// Helper to convert C++ type to string for JIT predicates
-template <typename T>
-std::string type_to_cxx_string()
-{
-  if constexpr (std::is_same_v<T, int8_t>)
-    return "int8_t";
-  else if constexpr (std::is_same_v<T, int16_t>)
-    return "int16_t";
-  else if constexpr (std::is_same_v<T, int32_t>)
-    return "int32_t";
-  else if constexpr (std::is_same_v<T, int64_t>)
-    return "int64_t";
-  else if constexpr (std::is_same_v<T, uint8_t>)
-    return "uint8_t";
-  else if constexpr (std::is_same_v<T, uint16_t>)
-    return "uint16_t";
-  else if constexpr (std::is_same_v<T, uint32_t>)
-    return "uint32_t";
-  else if constexpr (std::is_same_v<T, uint64_t>)
-    return "uint64_t";
-  else if constexpr (std::is_same_v<T, float>)
-    return "float";
-  else if constexpr (std::is_same_v<T, double>)
-    return "double";
-  else
-    return "";
-}
-
 // Helper to generate JIT predicate for simple column comparison
 template <typename T>
 std::string make_jit_comparison(
   int num_left_cols, int num_right_cols, int left_col_idx, int right_col_idx, std::string const& op)
 {
-  auto type_str = type_to_cxx_string<T>();
+  auto type_str = cudf::type_to_name(cudf::data_type{cudf::type_to_id<T>()});
   std::stringstream ss;
   ss << "__device__ void predicate(bool* output";
   for (int i = 0; i < num_left_cols; ++i)
