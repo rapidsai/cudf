@@ -11,6 +11,7 @@ from rapidsmpf.shuffler import Shuffler
 
 from cudf_polars.dsl.ir import Distinct, GroupBy
 from cudf_polars.dsl.traversal import traversal
+from cudf_polars.experimental.io import StreamingSink
 from cudf_polars.experimental.join import Join
 from cudf_polars.experimental.repartition import Repartition
 from cudf_polars.experimental.shuffle import Shuffle
@@ -79,10 +80,17 @@ class ReserveOpIDs:
         )
 
         # Find all collective IR nodes.
-        collective_types: tuple[type, ...] = (Shuffle, Join, Repartition)
+        collective_types: tuple[type, ...] = (Shuffle, Join, Repartition, StreamingSink)
         if self.dynamic_planning_enabled:
             # Include GroupBy and Distinct when dynamic planning is enabled
-            collective_types = (Shuffle, Join, Repartition, GroupBy, Distinct)
+            collective_types = (
+                Shuffle,
+                Join,
+                Repartition,
+                StreamingSink,
+                GroupBy,
+                Distinct,
+            )
 
         self.collective_nodes: list[IR] = [
             node for node in traversal([ir]) if isinstance(node, collective_types)

@@ -4,9 +4,10 @@
 from __future__ import annotations
 
 import dataclasses
+import datetime
 import json
 import re
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import pytest
 
@@ -576,20 +577,34 @@ def test_serialize_query():
     json.dumps(dataclasses.asdict(dag))
 
 
-def test_scan_properties(tmp_path: Path):
+@pytest.mark.parametrize("predicate", [None, pl.col("a") > 1])
+def test_scan_properties(tmp_path: Path, predicate: pl.Expr | None):
     pl.DataFrame({"a": [1, 2, 3]}).write_parquet(tmp_path / "test.parquet")
 
     q = pl.scan_parquet(tmp_path / "test.parquet")
+    expected_properties: dict[str, Any] = {
+        "paths": [str(tmp_path / "test.parquet")],
+        "typ": "parquet",
+        "predicate": None,
+    }
+    if predicate is not None:
+        q = q.filter(predicate)
+        expected_properties["predicate"] = {
+            "type": "NamedExpr",
+            "name": "a",
+            "value": {
+                "left": {"name": "a", "type": "Col"},
+                "op": "GREATER",
+                "right": {"type": "Literal", "value": {"type": "int", "value": 1}},
+            },
+        }
     engine = pl.GPUEngine(executor="streaming", raise_on_fail=True)
     dag = serialize_query(q, engine)
 
     # walk Union -> Scan
     node = dag.nodes[dag.nodes[dag.roots[0]].children[0]]
     assert node.type == "Scan"
-    assert node.properties == {
-        "paths": [str(tmp_path / "test.parquet")],
-        "typ": "parquet",
-    }
+    assert node.properties == expected_properties
 
 
 @pytest.mark.parametrize("descending", [False, True])
@@ -612,7 +627,7 @@ def test_sort_properties(*, descending: bool):
                 "predicate": "a",
                 "op": "GREATER",
                 "left": {"type": "Col", "name": "a"},
-                "right": {"type": "Literal", "value": 1},
+                "right": {"type": "Literal", "value": {"type": "int", "value": 1}},
             },
         ),
         (
@@ -635,6 +650,35 @@ def test_filter_properties(predicate: pl.Expr, expected: dict):
     assert node.properties == expected
 
 
+@pytest.mark.parametrize(
+    "value, expected",
+    [
+        (datetime.datetime(2026, 1, 1), "2026-01-01T00:00:00"),
+        (datetime.date(2026, 1, 1), "2026-01-01"),
+        (1, 1),
+        (1.0, 1.0),
+        (True, True),
+        ("a", "a"),
+    ],
+)
+def test_serialize_filter_literal(value: Any, expected: str):
+    q = pl.LazyFrame({"a": value}).filter(pl.col("a") > value)
+    dag = serialize_query(q, pl.GPUEngine(executor="streaming"))
+    node = dag.nodes[dag.roots[0]]
+    type_name = type(value).__name__
+
+    assert node.type == "Filter"
+    assert node.properties == {
+        "predicate": "a",
+        "op": "GREATER",
+        "left": {"type": "Col", "name": "a"},
+        "right": {
+            "type": "Literal",
+            "value": {"type": type_name, "value": expected},
+        },
+    }
+
+
 def test_select_properties():
     q = pl.LazyFrame({"a": [1, 2, 3]}).select(pl.col("a") + 1)
     dag = serialize_query(q, pl.GPUEngine(executor="streaming"))
@@ -652,6 +696,44 @@ def test_hstack_properties():
     node = dag.nodes[dag.roots[0]]
     assert node.type == "HStack"
     assert node.properties == {"columns": ["a", "b"]}
+
+
+def test_shuffle_properties():
+    # Join with broadcast_join_limit=1 forces shuffle-based join, producing
+    # Shuffle nodes in the lowered plan.
+    left = pl.LazyFrame({"a": ["x", "y", "x"], "b": [1, 2, 3]})
+    right = pl.LazyFrame({"a": ["x", "y", "z"], "c": [4, 5, 6]})
+    q = left.join(right, on="a", how="inner")
+    engine = pl.GPUEngine(
+        executor="streaming",
+        raise_on_fail=True,
+        executor_options={
+            "max_rows_per_partition": 1,
+            "cluster": DEFAULT_CLUSTER,
+            "runtime": DEFAULT_RUNTIME,
+            "shuffle_method": DEFAULT_RUNTIME,
+            "broadcast_join_limit": 1,
+            "shuffler_insertion_method": "insert_chunks",
+        },
+    )
+    dag = serialize_query(q, engine)
+
+    shuffle_nodes = [n for n in dag.nodes.values() if n.type == "Shuffle"]
+    assert len(shuffle_nodes) >= 1, "Expected at least one Shuffle node in lowered plan"
+    node = shuffle_nodes[0]
+
+    if DEFAULT_RUNTIME == "tasks":
+        shuffle_method = "tasks"
+    elif DEFAULT_CLUSTER == "single":
+        shuffle_method = "rapidsmpf-single"
+    else:
+        shuffle_method = "rapidsmpf"
+
+    assert node.properties == {
+        "keys": ["a"],
+        "shuffle_method": shuffle_method,
+        "shuffler_insertion_method": "insert_chunks",
+    }
 
 
 @pytest.mark.skipif(
