@@ -75,20 +75,16 @@ BinaryOperand._check_reflected_op = staticmethod(_check_reflected_op)
 
 def _divmod(self, other):
     div_result = self.__floordiv__(other)
-    if div_result is NotImplemented:
-        return NotImplemented
     mod_result = self.__mod__(other)
-    if mod_result is NotImplemented:
+    if div_result is NotImplemented or mod_result is NotImplemented:
         return NotImplemented
     return div_result, mod_result
 
 
 def _rdivmod(self, other):
     div_result = self.__rfloordiv__(other)
-    if div_result is NotImplemented:
-        return NotImplemented
     mod_result = self.__rmod__(other)
-    if mod_result is NotImplemented:
+    if div_result is NotImplemented or mod_result is NotImplemented:
         return NotImplemented
     return div_result, mod_result
 
