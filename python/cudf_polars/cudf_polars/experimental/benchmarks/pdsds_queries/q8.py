@@ -438,7 +438,9 @@ TARGET_ZIPS = [
 
 def duckdb_impl(run_config: RunConfig) -> str:
     """Query 8."""
-    params = load_parameters(int(run_config.scale_factor), query_id=8)
+    params = load_parameters(
+        int(run_config.scale_factor), query_id=8, qualification=run_config.qualification
+    )
 
     zip_codes = params["zip_codes"]
 
@@ -477,7 +479,9 @@ def duckdb_impl(run_config: RunConfig) -> str:
 
 def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     """Query 8."""
-    params = load_parameters(int(run_config.scale_factor), query_id=8)
+    params = load_parameters(
+        int(run_config.scale_factor), query_id=8, qualification=run_config.qualification
+    )
 
     year = params["year"]
     qoy = params["qoy"]

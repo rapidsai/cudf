@@ -123,10 +123,7 @@ def rapidsmpf_distributed_available() -> bool:  # pragma: no cover
         return False
 
 
-# TODO: Use enum.StrEnum when we drop Python 3.10
-
-
-class StreamingFallbackMode(str, enum.Enum):
+class StreamingFallbackMode(enum.StrEnum):
     """
     How the streaming executor handles operations that don't support multiple partitions.
 
@@ -143,7 +140,7 @@ class StreamingFallbackMode(str, enum.Enum):
     SILENT = "silent"
 
 
-class Runtime(str, enum.Enum):
+class Runtime(enum.StrEnum):
     """
     The runtime to use for the streaming executor.
 
@@ -157,7 +154,7 @@ class Runtime(str, enum.Enum):
     RAPIDSMPF = "rapidsmpf"
 
 
-class Cluster(str, enum.Enum):
+class Cluster(enum.StrEnum):
     """
     The cluster configuration for the streaming executor.
 
@@ -172,7 +169,7 @@ class Cluster(str, enum.Enum):
     DISTRIBUTED = "distributed"
 
 
-class Scheduler(str, enum.Enum):
+class Scheduler(enum.StrEnum):
     """
     **Deprecated**: Use :class:`Cluster` instead.
 
@@ -186,7 +183,7 @@ class Scheduler(str, enum.Enum):
     DISTRIBUTED = "distributed"
 
 
-class ShuffleMethod(str, enum.Enum):
+class ShuffleMethod(enum.StrEnum):
     """
     The method to use for shuffling data between workers with the streaming executor.
 
@@ -208,7 +205,7 @@ class ShuffleMethod(str, enum.Enum):
     _RAPIDSMPF_SINGLE = "rapidsmpf-single"
 
 
-class ShufflerInsertionMethod(str, enum.Enum):
+class ShufflerInsertionMethod(enum.StrEnum):
     """
     The method to use for inserting chunks into the rapidsmpf shuffler.
 
@@ -1039,7 +1036,7 @@ class CUDAStreamPoolConfig:
         )
 
 
-class CUDAStreamPolicy(str, enum.Enum):
+class CUDAStreamPolicy(enum.StrEnum):
     """
     The policy to use for acquiring new CUDA streams.
 
