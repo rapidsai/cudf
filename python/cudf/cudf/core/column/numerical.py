@@ -39,6 +39,89 @@ from cudf.utils.dtypes import (
 from cudf.utils.scalar import pa_scalar_to_plc_scalar
 from cudf.utils.utils import is_na_like
 
+
+def _operand_all_zero(operand: ColumnBinaryOperand) -> bool:
+    if isinstance(operand, ColumnBase):
+        if operand.null_count:
+            return False
+        try:
+            values = operand.values
+        except Exception:
+            return False
+        return bool(cp.all(values == 0))
+    if isinstance(operand, pa.Scalar):
+        if not operand.is_valid:
+            return False
+        try:
+            return operand.as_py() == 0
+        except Exception:
+            return False
+    return False
+
+
+def _operand_has_negative_zero(operand: ColumnBinaryOperand) -> bool:
+    if isinstance(operand, ColumnBase):
+        if operand.null_count or operand.dtype.kind != "f":
+            return False
+        try:
+            values = operand.values
+        except Exception:
+            return False
+        return bool(cp.any((values == 0) & cp.signbit(values)))
+    if isinstance(operand, pa.Scalar):
+        if not operand.is_valid:
+            return False
+        value = operand.as_py()
+        try:
+            return value == 0 and bool(np.signbit(value))
+        except Exception:
+            return False
+    return False
+
+
+def _division_needs_sign_flip(
+    result: ColumnBase,
+    numerator: ColumnBinaryOperand,
+    *,
+    expect_match: bool,
+) -> bool:
+    try:
+        result_values = result.values
+    except Exception:
+        return False
+    if result_values.size == 0:
+        return False
+    mask = cp.isinf(result_values)
+    if isinstance(numerator, ColumnBase):
+        try:
+            numerator_values = numerator.values
+        except Exception:
+            return False
+        mask &= numerator_values != 0
+        if not cp.any(mask):
+            return False
+        result_sign = cp.signbit(result_values[mask])
+        numerator_sign = cp.signbit(numerator_values[mask])
+    elif isinstance(numerator, pa.Scalar):
+        if not numerator.is_valid:
+            return False
+        num_value = numerator.as_py()
+        try:
+            if num_value == 0:
+                return False
+        except Exception:
+            return False
+        if not cp.any(mask):
+            return False
+        result_sign = cp.signbit(result_values[mask])
+        numerator_sign = np.signbit(num_value)
+    else:
+        return False
+    if expect_match:
+        return bool(cp.all(result_sign == numerator_sign))
+    return bool(cp.all(result_sign != numerator_sign))
+
+
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
 
@@ -411,6 +494,12 @@ class NumericalColumn(NumericalBaseColumn):
             # If the output dtype is a pandas nullable extension type,
             # we need to ensure that the result is a NumericalColumn.
             res = res.nans_to_nulls()
+        if op in {"__truediv__", "__floordiv__"} and _operand_all_zero(rhs):
+            if _operand_has_negative_zero(rhs):
+                if _division_needs_sign_flip(res, lhs, expect_match=True):
+                    res = res * -1
+            elif _division_needs_sign_flip(res, lhs, expect_match=False):
+                res = res * -1
         if op in {"__mod__", "__floordiv__"} and tmp_dtype.kind == "b":
             res = res.astype(
                 get_dtype_of_same_kind(out_dtype, np.dtype(np.int8))

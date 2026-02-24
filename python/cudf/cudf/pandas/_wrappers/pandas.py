@@ -9,7 +9,6 @@ import inspect
 import os
 import pickle
 
-import cupy
 import numpy as np
 import pandas as pd
 
@@ -347,112 +346,6 @@ def _is_arrow_dtype(obj) -> bool:
     return isinstance(dtype, pd.ArrowDtype)
 
 
-def _has_negative_zero(obj) -> bool:
-    if is_proxy_object(obj):
-        obj = obj._fsproxy_slow
-    try:
-        return np.signbit(np.array(obj)).any()
-    except Exception:
-        return False
-
-
-def _divmod_needs_negative_zero_adjustment(result_left) -> bool:
-    if is_proxy_object(result_left):
-        result_left = result_left._fsproxy_fast
-    values = getattr(result_left, "values", result_left)
-    if isinstance(values, cupy.ndarray):
-        inf_mask = cupy.isinf(values)
-        return bool(cupy.any(inf_mask & ~cupy.signbit(values)))
-    arr = np.asarray(values)
-    inf_mask = np.isinf(arr)
-    return bool(np.any(inf_mask & ~np.signbit(arr)))
-
-
-def _is_all_zero(obj) -> bool:
-    if is_proxy_object(obj):
-        obj = obj._fsproxy_slow
-    try:
-        return bool(np.all(np.array(obj) == 0))
-    except Exception:
-        return False
-
-
-def _division_needs_sign_flip(result, numerator) -> bool:
-    if is_proxy_object(result):
-        result = result._fsproxy_fast
-    if is_proxy_object(numerator):
-        numerator = numerator._fsproxy_fast
-    result_values = getattr(result, "values", result)
-    numerator_values = getattr(numerator, "values", numerator)
-    if isinstance(result_values, cupy.ndarray) or isinstance(
-        numerator_values, cupy.ndarray
-    ):
-        result_values = cupy.asarray(result_values)
-        numerator_values = cupy.asarray(numerator_values)
-        mask = cupy.isinf(result_values) & (numerator_values != 0)
-        if not cupy.any(mask):
-            return False
-        mismatch = cupy.signbit(result_values[mask]) != cupy.signbit(
-            numerator_values[mask]
-        )
-        return bool(cupy.all(mismatch))
-    result_values = np.asarray(result_values)
-    numerator_values = np.asarray(numerator_values)
-    mask = np.isinf(result_values) & (numerator_values != 0)
-    if not np.any(mask):
-        return False
-    mismatch = np.signbit(result_values[mask]) != np.signbit(
-        numerator_values[mask]
-    )
-    return bool(np.all(mismatch))
-
-
-def _division_needs_negative_zero_flip(result, numerator) -> bool:
-    if is_proxy_object(result):
-        result = result._fsproxy_fast
-    if is_proxy_object(numerator):
-        numerator = numerator._fsproxy_fast
-    result_values = getattr(result, "values", result)
-    numerator_values = getattr(numerator, "values", numerator)
-    if isinstance(result_values, cupy.ndarray) or isinstance(
-        numerator_values, cupy.ndarray
-    ):
-        result_values = cupy.asarray(result_values)
-        numerator_values = cupy.asarray(numerator_values)
-        mask = cupy.isinf(result_values) & (numerator_values != 0)
-        if not cupy.any(mask):
-            return False
-        matches = cupy.signbit(result_values[mask]) == cupy.signbit(
-            numerator_values[mask]
-        )
-        return bool(cupy.all(matches))
-    result_values = np.asarray(result_values)
-    numerator_values = np.asarray(numerator_values)
-    mask = np.isinf(result_values) & (numerator_values != 0)
-    if not np.any(mask):
-        return False
-    matches = np.signbit(result_values[mask]) == np.signbit(
-        numerator_values[mask]
-    )
-    return bool(np.all(matches))
-
-
-def _maybe_fix_division_sign(result, numerator, divisor):
-    if _is_all_zero(divisor):
-        if _has_negative_zero(divisor):
-            if _division_needs_negative_zero_flip(result, numerator):
-                try:
-                    return result * -1
-                except Exception:
-                    return result
-        elif _division_needs_sign_flip(result, numerator):
-            try:
-                return result * -1
-            except Exception:
-                return result
-    return result
-
-
 def _maybe_promote_mod_block(result, left, right):
     if is_proxy_object(left):
         left = left._fsproxy_fast
@@ -515,156 +408,6 @@ def _series_rdivmod(self, other):
     )[0]
 
 
-def _index_divmod(self, other):
-    result = _fast_slow_function_call(
-        lambda lhs, rhs: lhs.__divmod__(rhs),
-        None,
-        self,
-        other,
-    )[0]
-    result_left = _maybe_fix_division_sign(result[0], self, other)
-    if _has_negative_zero(other) and _divmod_needs_negative_zero_adjustment(
-        result_left
-    ):
-        result_left = result_left * -1
-    return (result_left, result[1])
-
-
-def _index_rdivmod(self, other):
-    result = _fast_slow_function_call(
-        lambda lhs, rhs: lhs.__rdivmod__(rhs),
-        None,
-        self,
-        other,
-    )[0]
-    result_left = _maybe_fix_division_sign(result[0], other, self)
-    if _has_negative_zero(self) and _divmod_needs_negative_zero_adjustment(
-        result_left
-    ):
-        result_left = result_left * -1
-    return (result_left, result[1])
-
-
-def _index_truediv(self, other):
-    result = _fast_slow_function_call(
-        lambda lhs, rhs: lhs.__truediv__(rhs),
-        None,
-        self,
-        other,
-    )[0]
-    return _maybe_fix_division_sign(result, self, other)
-
-
-def _index_floordiv(self, other):
-    result = _fast_slow_function_call(
-        lambda lhs, rhs: lhs.__floordiv__(rhs),
-        None,
-        self,
-        other,
-    )[0]
-    return _maybe_fix_division_sign(result, self, other)
-
-
-def _index_rtruediv(self, other):
-    result = _fast_slow_function_call(
-        lambda lhs, rhs: lhs.__rtruediv__(rhs),
-        None,
-        self,
-        other,
-    )[0]
-    return _maybe_fix_division_sign(result, other, self)
-
-
-def _index_rfloordiv(self, other):
-    result = _fast_slow_function_call(
-        lambda lhs, rhs: lhs.__rfloordiv__(rhs),
-        None,
-        self,
-        other,
-    )[0]
-    return _maybe_fix_division_sign(result, other, self)
-
-
-def _series_truediv(self, other):
-    result = _fast_slow_function_call(
-        lambda lhs, rhs: lhs.__truediv__(rhs),
-        None,
-        self,
-        other,
-    )[0]
-    return _maybe_fix_division_sign(result, self, other)
-
-
-def _series_floordiv(self, other):
-    result = _fast_slow_function_call(
-        lambda lhs, rhs: lhs.__floordiv__(rhs),
-        None,
-        self,
-        other,
-    )[0]
-    return _maybe_fix_division_sign(result, self, other)
-
-
-def _series_rtruediv(self, other):
-    result = _fast_slow_function_call(
-        lambda lhs, rhs: lhs.__rtruediv__(rhs),
-        None,
-        self,
-        other,
-    )[0]
-    return _maybe_fix_division_sign(result, other, self)
-
-
-def _series_rfloordiv(self, other):
-    result = _fast_slow_function_call(
-        lambda lhs, rhs: lhs.__rfloordiv__(rhs),
-        None,
-        self,
-        other,
-    )[0]
-    return _maybe_fix_division_sign(result, other, self)
-
-
-def _frame_truediv(self, other):
-    result = _fast_slow_function_call(
-        lambda lhs, rhs: lhs.__truediv__(rhs),
-        None,
-        self,
-        other,
-    )[0]
-    return _maybe_fix_division_sign(result, self, other)
-
-
-def _frame_floordiv(self, other):
-    result = _fast_slow_function_call(
-        lambda lhs, rhs: lhs.__floordiv__(rhs),
-        None,
-        self,
-        other,
-    )[0]
-    return _maybe_fix_division_sign(result, self, other)
-
-
-def _frame_rtruediv(self, other):
-    result = _fast_slow_function_call(
-        lambda lhs, rhs: lhs.__rtruediv__(rhs),
-        None,
-        self,
-        other,
-    )[0]
-    return _maybe_fix_division_sign(result, other, self)
-
-
-def _frame_rfloordiv(self, other):
-    result = _fast_slow_function_call(
-        lambda lhs, rhs: lhs.__rfloordiv__(rhs),
-        None,
-        self,
-        other,
-    )[0]
-    return _maybe_fix_division_sign(result, other, self)
-
-
 def _frame_mod(self, other):
     result = _fast_slow_function_call(
         lambda lhs, rhs: lhs.__mod__(rhs),
@@ -718,10 +461,6 @@ DataFrame = make_final_proxy_type(
         "memory_usage": _FastSlowAttribute("memory_usage"),
         "__sizeof__": _FastSlowAttribute("__sizeof__"),
         "to_xarray": _to_xarray,
-        "__truediv__": _frame_truediv,
-        "__floordiv__": _frame_floordiv,
-        "__rtruediv__": _frame_rtruediv,
-        "__rfloordiv__": _frame_rfloordiv,
         "__mod__": _frame_mod,
         "__rmod__": _frame_rmod,
     },
@@ -795,10 +534,6 @@ Series = make_final_proxy_type(
         "attrs": _FastSlowAttribute("attrs"),
         "__divmod__": _series_divmod,
         "__rdivmod__": _series_rdivmod,
-        "__truediv__": _series_truediv,
-        "__floordiv__": _series_floordiv,
-        "__rtruediv__": _series_rtruediv,
-        "__rfloordiv__": _series_rfloordiv,
         "_mgr": _FastSlowAttribute("_mgr", private=True),
         "array": _FastSlowAttribute("array", private=True),
         "sparse": _FastSlowAttribute("sparse", private=True),
@@ -873,12 +608,6 @@ Index = make_final_proxy_type(
         # TODO: Handle special cases like mergesort being unsupported
         # and raising for certain types like Categorical and RangeIndex
         "argsort": _argsort,
-        "__divmod__": _index_divmod,
-        "__rdivmod__": _index_rdivmod,
-        "__truediv__": _index_truediv,
-        "__floordiv__": _index_floordiv,
-        "__rtruediv__": _index_rtruediv,
-        "__rfloordiv__": _index_rfloordiv,
     },
 )
 
@@ -898,12 +627,6 @@ RangeIndex = make_final_proxy_type(
         "_range": _FastSlowAttribute("_range"),
         "_engine": _FastSlowAttribute("_engine", private=True),
         "_cache": _FastSlowAttribute("_cache", private=True),
-        "__divmod__": _index_divmod,
-        "__rdivmod__": _index_rdivmod,
-        "__truediv__": _index_truediv,
-        "__floordiv__": _index_floordiv,
-        "__rtruediv__": _index_rtruediv,
-        "__rfloordiv__": _index_rfloordiv,
     },
 )
 
