@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -103,7 +103,6 @@ __device__ void e164_format(void* scratch,
 
   rmm::device_uvector<char> scratch(maximum_size * static_cast<std::size_t>(num_rows), stream, mr);
 
-  // a column with size 1 is considered a scalar
   auto size = cudf::make_column_from_scalar(
     cudf::numeric_scalar<int32_t>(maximum_size, true, stream, mr), 1, stream, mr);
 
@@ -114,17 +113,19 @@ __device__ void e164_format(void* scratch,
   auto transformed     = std::vector<int32_t>{2, 3, 4, 5};
   auto min_visible_age = cudf::make_column_from_scalar(
     cudf::numeric_scalar<int32_t>(21, true, stream, mr), 1, stream, mr);
+  cudf::transform_input inputs[] = {
+    country_code, area_code, phone_code, age, *min_visible_age, *size};
 
-  auto formatted =
-    cudf::transform({country_code, area_code, phone_code, age, *min_visible_age, *size},
-                    udf,
-                    cudf::data_type{cudf::type_id::STRING},
-                    false,
-                    scratch.data(),
-                    cudf::null_aware::NO,
-                    cudf::output_nullability::PRESERVE,
-                    stream,
-                    mr);
+  auto formatted = cudf::transform_extended(inputs,
+                                            udf,
+                                            cudf::data_type{cudf::type_id::STRING},
+                                            false,
+                                            scratch.data(),
+                                            cudf::null_aware::NO,
+                                            std::nullopt,
+                                            cudf::output_nullability::PRESERVE,
+                                            stream,
+                                            mr);
 
   return std::make_tuple(std::move(formatted), transformed);
 }

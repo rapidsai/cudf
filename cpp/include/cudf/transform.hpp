@@ -67,6 +67,8 @@ namespace CUDF_EXPORT cudf {
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
+using transform_input = std::variant<column_view, scalar_column_view>;
+
 /**
  * @brief Creates a new column by applying a transform function against every
  * element of the input columns.
@@ -102,7 +104,7 @@ namespace CUDF_EXPORT cudf {
  *                      every element of the input
  */
 std::unique_ptr<column> transform_extended(
-  std::span<std::variant<column_view, scalar_column_view> const> inputs,
+  std::span<transform_input const> inputs,
   std::string const& udf,
   data_type output_type,
   bool is_ptx,
