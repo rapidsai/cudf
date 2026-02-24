@@ -114,7 +114,7 @@ __device__ void e164_format(void* scratch,
   auto min_visible_age = cudf::make_column_from_scalar(
     cudf::numeric_scalar<int32_t>(21, true, stream, mr), 1, stream, mr);
   cudf::transform_input inputs[] = {
-    country_code, area_code, phone_code, age, *min_visible_age, *size};
+    country_code, area_code, phone_code, age, *min_visible_age, cudf::scalar_column_view(*size)};
 
   auto formatted = cudf::transform_extended(inputs,
                                             udf,
