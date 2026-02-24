@@ -381,6 +381,17 @@ jitify2::StringVec build_join_filter_template_params_from_specs(
   return template_params;
 }
 
+void validate_column_types(cudf::table_view const& table, char const* side)
+{
+  for (auto const& col : table) {
+    CUDF_EXPECTS(
+      cudf::is_fixed_width(col.type()) || col.type().id() == type_id::STRING,
+      "jit_filter_join_indices does not support nested or dictionary column types in the " +
+        std::string(side) + " table.",
+      std::invalid_argument);
+  }
+}
+
 }  // anonymous namespace
 
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
@@ -406,6 +417,9 @@ jit_filter_join_indices(cudf::table_view const& left,
                  join_kind == join_kind::FULL_JOIN,
                "jit_filter_join_indices only supports INNER_JOIN, LEFT_JOIN, and FULL_JOIN.",
                std::invalid_argument);
+
+  validate_column_types(left, "left");
+  validate_column_types(right, "right");
 
   auto make_empty_result = [&]() {
     return std::pair{std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr),
@@ -467,6 +481,9 @@ jit_filter_join_indices(cudf::table_view const& left,
                  join_kind == join_kind::FULL_JOIN,
                "jit_filter_join_indices only supports INNER_JOIN, LEFT_JOIN, and FULL_JOIN.",
                std::invalid_argument);
+
+  validate_column_types(left, "left");
+  validate_column_types(right, "right");
 
   if (left_indices.empty()) {
     return std::pair{std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr),
