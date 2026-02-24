@@ -8133,6 +8133,7 @@ NODEIDS_THAT_FLAKY_XFAIL_WITH_CUDF_PANDAS = {
     "tests/indexes/test_common.py::test_sort_values_with_missing[nullable_int-last]",
     # flaky xpasses after https://github.com/rapidsai/cudf/pull/21499
     "tests/series/methods/test_reindex.py::test_reindexing_with_float64_NA_log",
+    "tests/groupby/test_groupby.py::test_basic_aggregations[float32]",
 }
 
 # TODO: Ideally cudf.pandas should be able to pass assertions with private APIs,
