@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 
     from cudf_polars.dsl.ir import IR
     from cudf_polars.experimental.base import PartitionInfo, StatsCollector
-    from cudf_polars.experimental.parallel import ConfigOptions
+    from cudf_polars.experimental.parallel import ConfigOptions, StreamingExecutor
 
 
 class EvaluatePipelineCallback(Protocol):
@@ -33,7 +33,7 @@ class EvaluatePipelineCallback(Protocol):
         self,
         ir: IR,
         partition_info: MutableMapping[IR, PartitionInfo],
-        config_options: ConfigOptions,
+        config_options: ConfigOptions[StreamingExecutor],
         stats: StatsCollector,
         collective_id_map: dict[IR, list[int]],
         rmpf_context: Context | None = None,
@@ -111,7 +111,7 @@ def _evaluate_pipeline_dask(
     callback: EvaluatePipelineCallback,
     ir: IR,
     partition_info: MutableMapping[IR, PartitionInfo],
-    config_options: ConfigOptions,
+    config_options: ConfigOptions[StreamingExecutor],
     stats: StatsCollector,
     collective_id_map: dict[IR, list[int]],
     dask_worker: Any = None,
@@ -147,7 +147,6 @@ def _evaluate_pipeline_dask(
     The output DataFrame and metadata collector.
     """
     assert dask_worker is not None, "Dask worker must be provided"
-    assert config_options.executor.name == "streaming", "Executor must be streaming"
 
     # NOTE: The Dask-CUDA cluster must be bootstrapped
     # ahead of time using bootstrap_dask_cluster
@@ -158,9 +157,7 @@ def _evaluate_pipeline_dask(
         | get_environment_variables()
     )
     dask_context = get_worker_context(dask_worker)
-    with Context(
-        dask_context.comm, dask_context.br, options, dask_context.statistics
-    ) as rmpf_context:
+    with Context(dask_context.comm, dask_context.br, options) as rmpf_context:
         # IDs are already reserved by the caller, just pass them through
         return callback(
             ir,

@@ -292,7 +292,7 @@ void update_null_mask(cudf::detail::hostdevice_2dvector<column_desc>& chunks,
       if (child_valid_map_base != nullptr) {
         rmm::device_uvector<uint32_t> dst_idx(child_mask_len, stream);
         // Copy indexes at which the parent has valid value.
-        cudf::detail::copy_if(
+        cudf::detail::copy_if_async(
           thrust::counting_iterator<size_type>(0),
           thrust::counting_iterator<size_type>(parent_mask_len),
           dst_idx.begin(),
