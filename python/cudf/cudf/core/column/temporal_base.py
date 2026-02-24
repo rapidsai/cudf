@@ -230,7 +230,6 @@ class TemporalBaseColumn(ColumnBase, Scannable):
         result = super().element_indexing(index)
         if result is self._PANDAS_NA_VALUE:
             return result
-        result = result.as_py()
         return self._PD_SCALAR(result)
 
     def to_pandas(

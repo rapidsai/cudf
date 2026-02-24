@@ -19,7 +19,6 @@ from cudf.core.dtypes import ListDtype
 from cudf.core.missing import NA
 from cudf.utils.dtypes import get_dtype_of_same_kind
 from cudf.utils.scalar import (
-    maybe_nested_pa_scalar_to_py,
     pa_scalar_to_plc_scalar,
 )
 from cudf.utils.utils import is_na_like
@@ -50,15 +49,6 @@ class ListColumn(ColumnBase):
         """
         # TODO: handle if self.has_nulls(): case
         return self
-
-    def element_indexing(self, index: int) -> list:
-        result = super().element_indexing(index)
-        if isinstance(result, pa.Scalar):
-            py_element = maybe_nested_pa_scalar_to_py(result)
-            return ListDtype.from_list_dtype(
-                self.dtype
-            )._recursively_replace_fields(py_element)
-        return result
 
     def _cast_setitem_value(self, value: Any) -> plc.Scalar:
         if isinstance(value, list) or value is None:
@@ -98,11 +88,6 @@ class ListColumn(ColumnBase):
         raise NotImplementedError(
             "Lists are not yet supported via `__cuda_array_interface__`"
         )
-
-    def copy(self, deep: bool = True) -> Self:
-        # Since list columns are immutable, both deep and shallow copies share
-        # the underlying device data and mask.
-        return super().copy(deep=False)
 
     def leaves(self) -> ColumnBase:
         if isinstance(self.elements, ListColumn):

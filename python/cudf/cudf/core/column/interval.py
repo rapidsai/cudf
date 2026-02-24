@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import functools
-from typing import TYPE_CHECKING, Any, Literal, Self
+from typing import TYPE_CHECKING, Any, Literal, Self, cast
 
 import pandas as pd
 import pyarrow as pa
@@ -14,12 +14,10 @@ from cudf.core._internals import binaryop
 from cudf.core.column.column import (
     ColumnBase,
     _handle_nulls,
-    as_column,
     dtype_from_pylibcudf_column,
 )
 from cudf.core.dtypes import IntervalDtype, _dtype_to_metadata
 from cudf.utils.dtypes import get_dtype_of_same_kind
-from cudf.utils.scalar import maybe_nested_pa_scalar_to_py
 
 if TYPE_CHECKING:
     from cudf._typing import ColumnBinaryOperand, DtypeObj
@@ -27,14 +25,21 @@ if TYPE_CHECKING:
 
 
 class IntervalColumn(ColumnBase):
-    @classmethod
-    def from_arrow(cls, array: pa.Array | pa.ChunkedArray) -> Self:
-        if not isinstance(array, pa.ExtensionArray):
-            raise ValueError("Expected ExtensionArray for interval data")
-        new_col = super().from_arrow(array.storage)
-        return ColumnBase.create(
-            new_col.plc_column, IntervalDtype.from_arrow(array.type)
-        )  # type: ignore[return-value]
+    @functools.cached_property
+    def subtype(self) -> DtypeObj:
+        if isinstance(self.dtype, IntervalDtype):
+            return self.dtype.subtype
+        else:
+            return pd.ArrowDtype(
+                cast("pd.ArrowDtype", self.dtype).pyarrow_dtype.subtype
+            )
+
+    @functools.cached_property
+    def closed(self) -> Literal["left", "right", "neither", "both"]:
+        if isinstance(self.dtype, IntervalDtype):
+            return self.dtype.closed
+        else:
+            return cast("pd.ArrowDtype", self.dtype).pyarrow_dtype.closed
 
     def to_arrow(self) -> pa.Array:
         typ = self.dtype.to_arrow()  # type: ignore[union-attr]
@@ -85,18 +90,15 @@ class IntervalColumn(ColumnBase):
             validate=False,
         )
 
-    def copy(self, deep: bool = True) -> Self:
-        plc_col = self.plc_column
-        if deep:
-            plc_col = plc_col.copy()
-        return ColumnBase.create(plc_col, self.dtype)  # type: ignore[return-value]
-
     @functools.cached_property
     def is_empty(self) -> ColumnBase:
         left_equals_right = (self.right == self.left).fillna(False)
-        not_closed_both = as_column(
-            self.dtype.closed != "both",  # type: ignore[union-attr]
-            length=len(self),
+        not_closed_both = ColumnBase.create(
+            plc.Column.from_scalar(
+                plc.Scalar.from_py(self.closed != "both"),
+                len(self),
+            ),
+            left_equals_right.dtype,
         )
         return left_equals_right & not_closed_both
 
@@ -116,11 +118,11 @@ class IntervalColumn(ColumnBase):
     def length(self) -> ColumnBase:
         return self.right - self.left
 
-    @property
+    @functools.cached_property
     def left(self) -> ColumnBase:
         return ColumnBase.create(
             self.plc_column.children()[0],
-            self.dtype.subtype,  # type: ignore[union-attr]
+            self.subtype,
         )
 
     @functools.cached_property
@@ -131,11 +133,11 @@ class IntervalColumn(ColumnBase):
             # datetime safe version
             return self.left + 0.5 * self.length
 
-    @property
+    @functools.cached_property
     def right(self) -> ColumnBase:
         return ColumnBase.create(
             self.plc_column.children()[1],
-            self.dtype.subtype,  # type: ignore[union-attr]
+            self.subtype,
         )
 
     @property
@@ -150,9 +152,12 @@ class IntervalColumn(ColumnBase):
     def set_closed(
         self, closed: Literal["left", "right", "both", "neither"]
     ) -> Self:
-        return ColumnBase.create(  # type: ignore[return-value]
-            self.plc_column,
-            IntervalDtype(self.dtype.subtype, closed),  # type: ignore[union-attr]
+        return cast(
+            "Self",
+            ColumnBase.create(
+                self.plc_column,
+                IntervalDtype(self.subtype, closed),
+            ),
         )
 
     def _binaryop(self, other: ColumnBinaryOperand, op: str) -> ColumnBase:
@@ -214,16 +219,13 @@ class IntervalColumn(ColumnBase):
         elif arrow_type:
             raise NotImplementedError(f"{arrow_type=} is not implemented.")
 
-        pd_type = self.dtype.to_pandas()  # type: ignore[union-attr]
+        pd_type = cast("IntervalDtype", self.dtype).to_pandas()
         return pd.Index(pd_type.__from_arrow__(self.to_arrow()), dtype=pd_type)
 
     def element_indexing(
         self, index: int
     ) -> pd.Interval | dict[Any, Any] | None:
         result = super().element_indexing(index)
-        if isinstance(result, pa.Scalar):
-            py_element = maybe_nested_pa_scalar_to_py(result)
-            result = self.dtype._recursively_replace_fields(py_element)  # type: ignore[union-attr]
         if isinstance(result, dict):
-            return pd.Interval(**result, closed=self.dtype.closed)  # type: ignore[union-attr]
+            return pd.Interval(**result, closed=self.closed)
         return result

@@ -548,28 +548,6 @@ class ListDtype(_BaseDtype):
     def itemsize(self) -> int:
         return self.element_type.itemsize
 
-    def _recursively_replace_fields(self, result: list) -> list:
-        """
-        Return a new list result but with the keys of dict element by the keys in StructDtype.fields.keys().
-
-        Intended when result comes from pylibcudf without preserved nested field names.
-        """
-        if isinstance(self.element_type, StructDtype):
-            return [
-                self.element_type._recursively_replace_fields(res)
-                if isinstance(res, dict)
-                else res
-                for res in result
-            ]
-        elif isinstance(self.element_type, ListDtype):
-            return [
-                self.element_type._recursively_replace_fields(res)
-                if isinstance(res, list)
-                else res
-                for res in result
-            ]
-        return result
-
     @classmethod
     def from_list_dtype(cls, obj) -> Self:
         if isinstance(obj, ListDtype):
@@ -738,26 +716,6 @@ class StructDtype(_BaseDtype):
     @cached_property
     def itemsize(self) -> int:
         return sum(field.itemsize for field in self.fields.values())
-
-    def _recursively_replace_fields(self, result: dict) -> dict:
-        """
-        Return a new dict result but with the keys replaced by the keys in self.fields.keys().
-
-        Intended when result comes from pylibcudf without preserved nested field names.
-        """
-        new_result = {}
-        for (new_field, field_dtype), result_value in zip(
-            self.fields.items(), result.values(), strict=True
-        ):
-            if isinstance(field_dtype, StructDtype) and isinstance(
-                result_value, dict
-            ):
-                new_result[new_field] = (
-                    field_dtype._recursively_replace_fields(result_value)
-                )
-            else:
-                new_result[new_field] = result_value
-        return new_result
 
     @classmethod
     def from_struct_dtype(cls, obj) -> Self:
@@ -1097,44 +1055,6 @@ class IntervalDtype(_BaseDtype):
     def __hash__(self) -> int:
         return hash((self.subtype, self.closed))
 
-    def _recursively_replace_fields(self, result: dict) -> dict:
-        """
-        Return a new dict result but with the keys replaced by "left" and "right".
-
-        Intended when result comes from pylibcudf without preserved nested field names.
-        Converts dict with numeric/string keys to {"left": ..., "right": ...}.
-        Handles nested StructDtype and ListDtype recursively.
-        """
-        # Convert the dict keys (which may be numeric like 0, 1 or string like "0", "1")
-        # to the proper field names "left" and "right"
-        values = list(result.values())
-        if len(values) != 2:
-            raise ValueError(
-                f"Expected 2 fields for IntervalDtype, got {len(values)}"
-            )
-
-        new_result = {}
-        for field_name, result_value in zip(
-            ["left", "right"], values, strict=True
-        ):
-            if self._subtype is None:
-                new_result[field_name] = result_value
-            elif isinstance(self._subtype, StructDtype) and isinstance(
-                result_value, dict
-            ):
-                new_result[field_name] = (
-                    self._subtype._recursively_replace_fields(result_value)
-                )
-            elif isinstance(self._subtype, ListDtype) and isinstance(
-                result_value, list
-            ):
-                new_result[field_name] = (
-                    self._subtype._recursively_replace_fields(result_value)
-                )
-            else:
-                new_result[field_name] = result_value
-        return new_result
-
     def serialize(self) -> tuple[dict, list]:
         header = {
             "fields": (
@@ -1460,6 +1380,8 @@ def _dtype_to_metadata(dtype: DtypeObj) -> plc.interop.ColumnMetadata:
         cm.children_meta.append(_dtype_to_metadata(dtype.element_type))
     elif isinstance(dtype, DecimalDtype):
         cm.precision = dtype.precision
+    elif isinstance(dtype, pd.DatetimeTZDtype):
+        cm.timezone = str(dtype.tz)
     elif isinstance(dtype, pd.ArrowDtype):
         if pa.types.is_struct(dtype.pyarrow_dtype):
             for field in dtype.pyarrow_dtype:
@@ -1467,6 +1389,21 @@ def _dtype_to_metadata(dtype: DtypeObj) -> plc.interop.ColumnMetadata:
                     _dtype_to_metadata(pd.ArrowDtype(field.type))
                 )
                 cm.children_meta[-1].name = field.name
+        elif isinstance(dtype.pyarrow_dtype, ArrowIntervalType):
+            left_meta = _dtype_to_metadata(
+                pd.ArrowDtype(dtype.pyarrow_dtype.subtype)
+            )
+            left_meta.name = "left"
+            right_meta = left_meta.replace(name="right")  # type: ignore[attr-defined]
+            cm.children_meta.append(left_meta)
+            cm.children_meta.append(right_meta)
+        elif pa.types.is_decimal(dtype.pyarrow_dtype):
+            cm.precision = dtype.pyarrow_dtype.precision
+        elif (
+            pa.types.is_timestamp(dtype.pyarrow_dtype)
+            and (tz := dtype.pyarrow_dtype.tz) is not None
+        ):
+            cm.timezone = str(tz)
         elif pa.types.is_list(dtype.pyarrow_dtype) or pa.types.is_large_list(
             dtype.pyarrow_dtype
         ):
@@ -1477,5 +1414,4 @@ def _dtype_to_metadata(dtype: DtypeObj) -> plc.interop.ColumnMetadata:
                     pd.ArrowDtype(dtype.pyarrow_dtype.value_type)
                 )
             )
-    # TODO: Support timezone metadata
     return cm
