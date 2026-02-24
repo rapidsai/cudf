@@ -70,6 +70,10 @@ class DecomposedGroupBy:
     """The decomposed select IR node. Always None for Distinct."""
     need_preshuffle: bool
     """Whether the operation requires preshuffling."""
+    output_indices: tuple[int, ...]
+    """The output indices of the GroupBy keys."""
+    shuffle_indices: tuple[int, ...]
+    """The column indices to shuffle on."""
 
     @classmethod
     def from_ir(cls, ir: GroupBy | Distinct) -> DecomposedGroupBy:
@@ -78,6 +82,8 @@ class DecomposedGroupBy:
         reduction_ir: GroupBy | Distinct
         select_ir: Select | None
         need_preshuffle: bool
+        output_indices: tuple[int, ...]
+        shuffle_indices: tuple[int, ...]
 
         if isinstance(ir, Distinct):
             piecewise_ir = reduction_ir = ir
@@ -114,13 +120,10 @@ class DecomposedGroupBy:
                 NamedExpr(k.name, Col(k.value.dtype, k.name)) for k in ir.keys
             )
 
-            # Reduction groupby schema and IR (must match pwise_schema for tree reduction)
+            # Reduction groupby schema and IR
             reduction_schema = {k.name: k.value.dtype for k in groupby_keys} | {
                 k.name: k.value.dtype for k in reduction_exprs
             }
-            assert pwise_schema == reduction_schema, (
-                "piecewise and reduction schemas must match for tree reduction"
-            )
             reduction_ir = GroupBy(
                 reduction_schema,
                 groupby_keys,
@@ -145,12 +148,21 @@ class DecomposedGroupBy:
         else:  # pragma: no cover
             raise TypeError(f"Unsupported IR type: {type(ir)}")
 
+        # Distinguish between output and shuffle indices
+        output_indices = _key_indices(ir, ir.schema)
+        if isinstance(ir, Distinct):
+            shuffle_indices = output_indices
+        else:
+            shuffle_indices = _key_indices(piecewise_ir, piecewise_ir.schema)
+
         return cls(
             ir=ir,
             piecewise_ir=piecewise_ir,
             reduction_ir=reduction_ir,
             select_ir=select_ir,
             need_preshuffle=need_preshuffle,
+            output_indices=output_indices,
+            shuffle_indices=shuffle_indices,
         )
 
 
@@ -252,8 +264,8 @@ async def _tree_reduce(
     ch_out: Channel[TableChunk],
     metadata_in: ChannelMetadata,
     collective_id: int,
-    allgather_context: Context | None,
     *,
+    local: bool,
     aggregated: TableChunk,
     tracer: ActorTracer | None = None,
 ) -> None:
@@ -275,16 +287,14 @@ async def _tree_reduce(
     aggregated
         The aggregated result for already-evaluated chunks.
     collective_id
-        Collective ID for allgather (used when allgather_context is not None).
-    allgather_context
-        Context for allgather; if None, no allgather is performed.
+        Collective ID for allgather (used when local is False).
+    local
+        Whether to use a local aggregation.
     tracer
         Optional tracer for runtime metrics.
     """
     need_allgather = (
-        allgather_context is not None
-        and not metadata_in.duplicated
-        and context.comm().nranks > 1
+        not local and not metadata_in.duplicated and context.comm().nranks > 1
     )
 
     metadata_out = ChannelMetadata(
@@ -295,7 +305,7 @@ async def _tree_reduce(
     await send_metadata(ch_out, context, metadata_out)
 
     if need_allgather:
-        allgather = AllGatherManager(allgather_context, collective_id)
+        allgather = AllGatherManager(context, collective_id)
 
         allgather.insert(
             0,
@@ -306,7 +316,7 @@ async def _tree_reduce(
 
         stream = ir_context.get_cuda_stream()
         aggregated = await evaluate_chunk(
-            allgather_context,
+            context,
             TableChunk.from_pylibcudf_table(
                 await allgather.extract_concatenated(stream),
                 stream,
@@ -337,9 +347,9 @@ async def _shuffle_reduce(
     metadata_in: ChannelMetadata,
     modulus: int,
     collective_id: int,
-    shuffle_context: Context | None,
     target_partition_size: int,
     *,
+    local: bool,
     aggregated: TableChunk,
     input_drained: bool = False,
     tracer: ActorTracer | None = None,
@@ -368,10 +378,10 @@ async def _shuffle_reduce(
         The modulus for the shuffle operation.
     collective_id
         The collective ID for the shuffle operation.
-    shuffle_context
-        Context to use for shuffling.
     target_partition_size
         Target partition size for local aggregation batches.
+    local
+        Whether to use a local shuffle operation.
     aggregated
         The aggregated result for already-evaluated chunks.
     input_drained
@@ -379,25 +389,14 @@ async def _shuffle_reduce(
     tracer
         Optional tracer for runtime metrics.
     """
-    if shuffle_context is None:
-        if context.comm().nranks == 1:
-            shuffle_context = context
-        else:
-            options = Options(get_environment_variables())
-            local_comm = single_comm(options)
-            shuffle_context = Context(local_comm, context.br(), options)
-    assert shuffle_context is not None, "Shuffle context required."
+    shuffle_context = context
+    if local and context.comm().nranks > 1:
+        options = Options(get_environment_variables())
+        local_comm = single_comm(options)
+        shuffle_context = Context(local_comm, context.br(), options)
     shuf_nranks = shuffle_context.comm().nranks
     shuf_rank = shuffle_context.comm().rank
     modulus = max(shuf_nranks, modulus)
-
-    output_key_indices = _key_indices(decomposed.ir, decomposed.ir.schema)
-    if isinstance(decomposed.ir, Distinct):
-        shuffle_key_indices = output_key_indices
-    else:
-        shuffle_key_indices = _key_indices(
-            decomposed.piecewise_ir, decomposed.piecewise_ir.schema
-        )
 
     if shuf_nranks == 1:
         inter_rank_scheme = (
@@ -405,11 +404,13 @@ async def _shuffle_reduce(
             if metadata_in.partitioning is None
             else metadata_in.partitioning.inter_rank
         )
-        local_scheme = HashScheme(column_indices=output_key_indices, modulus=modulus)
+        local_scheme = HashScheme(
+            column_indices=decomposed.output_indices, modulus=modulus
+        )
         local_output_count = modulus
     else:
         inter_rank_scheme = HashScheme(
-            column_indices=output_key_indices, modulus=modulus
+            column_indices=decomposed.output_indices, modulus=modulus
         )
         local_scheme = "inherit"
         local_output_count = (modulus - shuf_rank + shuf_nranks - 1) // shuf_nranks
@@ -422,7 +423,7 @@ async def _shuffle_reduce(
     await send_metadata(ch_out, context, metadata_out)
 
     shuffle = ShuffleManager(
-        shuffle_context, modulus, shuffle_key_indices, collective_id
+        shuffle_context, modulus, decomposed.shuffle_indices, collective_id
     )
 
     shuffle.insert_chunk(
@@ -527,7 +528,7 @@ def _require_tree(ir: GroupBy | Distinct) -> bool:
         )
 
 
-async def _select_algorithm(
+async def _choose_strategy(
     context: Context,
     local_count: int,
     aggregated: TableChunk,
@@ -537,7 +538,7 @@ async def _select_algorithm(
     target_partition_size: int,
     skip_global_comm: bool,  # noqa: FBT001
     tracer: ActorTracer | None,
-) -> tuple[int, Context | None]:
+) -> int:
     """
     Select the best algorithm for the given context and metadata.
 
@@ -564,10 +565,7 @@ async def _select_algorithm(
 
     Returns
     -------
-    output_count
-        The output count.
-    collective_context
-        The context to use for shuffle or allgather.
+    The output count.
     """
     if skip_global_comm:
         total_size = aggregated.data_alloc_size(MemoryType.DEVICE)
@@ -598,7 +596,6 @@ async def _select_algorithm(
 
     output_count_limit = local_count if skip_global_comm else total_chunk_count
     output_count = min(ideal_count, output_count_limit)
-    collective_context = None if skip_global_comm else context
     if tracer is not None:
         tracer.decision = (
             "tree_local"
@@ -610,7 +607,7 @@ async def _select_algorithm(
             else "shuffle"
         )
 
-    return output_count, collective_context
+    return output_count
 
 
 @define_actor()
@@ -695,7 +692,7 @@ async def keyed_reduction_actor(
         )
 
         skip_global_comm = metadata_in.duplicated or partitioned_inter_rank
-        output_count, collective_context = await _select_algorithm(
+        output_count = await _choose_strategy(
             context,
             metadata_in.local_count,
             aggregated,
@@ -715,7 +712,7 @@ async def keyed_reduction_actor(
                 ch_out,
                 metadata_in,
                 collective_ids.pop(),
-                collective_context,
+                local=skip_global_comm,
                 aggregated=aggregated,
                 tracer=tracer,
             )
@@ -729,8 +726,8 @@ async def keyed_reduction_actor(
                 metadata_in,
                 output_count,
                 collective_ids.pop(),
-                collective_context,
                 target_partition_size,
+                local=skip_global_comm,
                 aggregated=aggregated,
                 input_drained=input_drained,
                 tracer=tracer,
