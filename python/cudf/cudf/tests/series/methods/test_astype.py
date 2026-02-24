@@ -211,27 +211,12 @@ def test_numeric_to_timedelta(
     assert_eq(expected, actual)
 
 
-@pytest.mark.parametrize(
-    "alias,expect_dtype",
-    [
-        ("UInt8", "uint8"),
-        ("UInt16", "uint16"),
-        ("UInt32", "uint32"),
-        ("UInt64", "uint64"),
-        ("Int8", "int8"),
-        ("Int16", "int16"),
-        ("Int32", "int32"),
-        ("Int64", "int64"),
-        ("boolean", "bool"),
-        ("Float32", "float32"),
-        ("Float64", "float64"),
-    ],
-)
-def test_astype_with_aliases(alias, expect_dtype):
-    pd_data = pd.Series([1, 2, 0])
-    gd_data = cudf.Series(pd_data)
+def test_astype_with_aliases(all_supported_pandas_nullable_extension_dtypes):
+    scalar, dtype = all_supported_pandas_nullable_extension_dtypes
+    expected = pd.Series([scalar]).astype(str(dtype))
+    result = cudf.Series([scalar]).astype(str(dtype))
 
-    assert_eq(pd_data.astype(expect_dtype), gd_data.astype(alias))
+    assert_eq(expected, result)
 
 
 def test_timedelta_datetime_cast_invalid():
@@ -823,20 +808,12 @@ def test_astype_naive_to_aware_raises():
         ser.to_pandas().astype("datetime64[ns, UTC]")
 
 
-@pytest.mark.parametrize(
-    "np_dtype,pd_dtype",
-    [
-        tuple(item)
-        for item in cudf.utils.dtypes.np_dtypes_to_pandas_dtypes.items()
-    ],
-)
 def test_series_astype_pandas_nullable(
-    all_supported_types_as_str, np_dtype, pd_dtype
+    all_supported_pandas_nullable_extension_dtypes,
 ):
-    source = cudf.Series([0, 1, None], dtype=all_supported_types_as_str)
-
-    expect = source.astype(np_dtype)
-    got = source.astype(pd_dtype)
+    scalar, dtype = all_supported_pandas_nullable_extension_dtypes
+    got = cudf.Series([scalar, None]).astype(dtype)
+    expect = cudf.Series([scalar, None], dtype=dtype)
 
     assert_eq(expect, got)
 
