@@ -106,44 +106,6 @@ if TYPE_CHECKING:
     from cudf.core.series import Series
 
 
-def _maybe_promote_mod_block_result(
-    result: "IndexedFrame",
-    left: "IndexedFrame",
-    right: Any,
-    op: str,
-) -> "IndexedFrame":
-    if op != "__mod__":
-        return result
-    if not (
-        isinstance(result, cudf.DataFrame)
-        and isinstance(left, cudf.DataFrame)
-        and isinstance(right, cudf.DataFrame)
-    ):
-        return result
-    int_cols: list[Hashable] = []
-    for col in result._data:
-        if col not in left._data or col not in right._data:
-            continue
-        left_kind = left._data[col].dtype.kind
-        right_kind = right._data[col].dtype.kind
-        if left_kind in "iu" and right_kind in "iu":
-            int_cols.append(col)
-    if not int_cols:
-        return result
-    has_nan = False
-    for col in int_cols:
-        try:
-            if bool(result[col].isna().any()):
-                has_nan = True
-                break
-        except Exception:
-            return result
-    if not has_nan:
-        return result
-    result[int_cols] = result[int_cols].astype("float64")
-    return result
-
-
 doc_reset_index_template = """
         Reset the index of the {klass}, or a level of it.
 
@@ -5045,7 +5007,7 @@ class IndexedFrame(Frame):
         )
         if operands is NotImplemented:
             return NotImplemented
-        result = self._from_data(
+        return self._from_data(
             ColumnAccessor(
                 type(self)._colwise_binop(operands, op),
                 **ca_attributes,
@@ -5053,7 +5015,6 @@ class IndexedFrame(Frame):
             index=out_index,
             attrs=self.attrs,
         )
-        return _maybe_promote_mod_block_result(result, self, other, op)
 
     def _make_operands_and_index_for_binop(
         self,

@@ -332,12 +332,6 @@ def _to_xarray(self):
         return xr.Dataset.from_dataframe(self)
 
 
-def _Series_dtype(self):
-    # Fast-path to extract dtype from the current
-    # object without round-tripping through the slow<->fast
-    return _maybe_wrap_result(self._fsproxy_wrapped.dtype, None)
-
-
 DataFrame = make_final_proxy_type(
     "DataFrame",
     cudf.DataFrame,
@@ -389,6 +383,12 @@ if ipython_shell:
     # See: https://ipython.readthedocs.io/en/stable/config/integrating.html#formatters-for-third-party-types
     html_formatter = ipython_shell.display_formatter.formatters["text/html"]
     html_formatter.for_type(DataFrame, custom_repr_html)
+
+
+def _Series_dtype(self):
+    # Fast-path to extract dtype from the current
+    # object without round-tripping through the slow<->fast
+    return _maybe_wrap_result(self._fsproxy_wrapped.dtype, None)
 
 
 _SeriesAtIndexer = make_intermediate_proxy_type(
