@@ -252,7 +252,6 @@ async def _local_aggregation(
             context,
             ir_context.get_cuda_stream(),
         )
-    del evaluated_chunks
 
     return aggregated, input_drained, chunks_received
 
@@ -458,16 +457,15 @@ async def _shuffle_reduce(
             stream,
             exclusive_view=True,
         )
-        output_chunk = await evaluate_chunk(
+        partition_chunk = await evaluate_chunk(
             context,
             partition_chunk,
             *extract_irs,
             ir_context=ir_context,
         )
-        del partition_chunk
         if tracer is not None:
-            tracer.add_chunk(table=output_chunk.table_view())
-        await ch_out.send(context, Message(partition_id, output_chunk))
+            tracer.add_chunk(table=partition_chunk.table_view())
+        await ch_out.send(context, Message(partition_id, partition_chunk))
 
     await ch_out.drain(context)
 
