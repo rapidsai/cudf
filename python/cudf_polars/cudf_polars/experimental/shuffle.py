@@ -121,7 +121,6 @@ class RMPFIntegration:  # pragma: no cover
                     shuffler.extract(partition_id),
                     br=context.br,
                     allow_overbooking=True,
-                    statistics=context.statistics,
                 ),
                 br=context.br,
                 stream=DEFAULT_STREAM,
