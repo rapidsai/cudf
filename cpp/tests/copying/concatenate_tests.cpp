@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -15,9 +15,9 @@
 #include <cudf/concatenate.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/iterator.cuh>
-#include <cudf/detail/null_mask.hpp>
 #include <cudf/dictionary/encode.hpp>
 #include <cudf/filling.hpp>
+#include <cudf/null_mask.hpp>
 #include <cudf/strings/utilities.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/default_stream.hpp>
@@ -56,8 +56,7 @@ struct TypedColumnTest : public cudf::test::BaseFixture {
       cudaMemcpyAsync(typed_data, h_data.data(), data.size(), cudaMemcpyDefault, stream.value()));
     CUDF_CUDA_TRY(
       cudaMemcpyAsync(typed_mask, h_mask.data(), mask.size(), cudaMemcpyDefault, stream.value()));
-    _null_count = cudf::detail::null_count(
-      static_cast<cudf::bitmask_type*>(mask.data()), 0, _num_elements, stream);
+    _null_count = cudf::null_count(static_cast<cudf::bitmask_type*>(mask.data()), 0, _num_elements);
     stream.synchronize();
   }
 
