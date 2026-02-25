@@ -65,6 +65,7 @@ struct nullate {
 
 /**
  * @brief A type tag to specify that a column should be treated as a dictionary column.
+ *
  * @tparam IndexType The type of the dictionary indices
  * @tparam KeyType The type of the dictionary keys
  */
@@ -106,9 +107,8 @@ namespace detail {
  */
 class alignas(16) column_device_view_base {
  public:
-  // TODO: merge this offsets column index with `strings_column_view::offsets_column_index`
   static constexpr size_type offsets_column_index{0};  ///< Child index of the offsets column
-  static constexpr size_type dictionary_offsets_column_index =
+  static constexpr size_type dictionary_indices_column_index =
     0;  ///< Child index of the dictionary offsets column
   static constexpr size_type dictionary_keys_column_index =
     1;  ///< Child index of the dictionary key column
@@ -506,9 +506,9 @@ class alignas(16) column_device_view_core : public detail::column_device_view_ba
   template <typename T, CUDF_ENABLE_IF(is_dictionary_encoded<T>)>
   [[nodiscard]] __device__ decltype(auto) element(size_type element_index) const noexcept
   {
-    auto const& offsets = child(dictionary_offsets_column_index);
+    auto const& indices = child(dictionary_indices_column_index);
     auto const& keys    = child(dictionary_keys_column_index);
-    auto const index    = offsets.template element<typename T::index_type>(element_index);
+    auto const index    = indices.template element<typename T::index_type>(element_index);
     return keys.template element<typename T::key_type>(index);
   }
 
