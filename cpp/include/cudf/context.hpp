@@ -90,12 +90,16 @@ void teardown();
  */
 void enable_jit_cache(bool enable);
 
-/// @brief Clear the JIT program cache, removing all cached programs from memory and disk. This is a
-/// more expensive operation than simply disabling the cache, as it involves deleting cached files
-/// from disk, but it also frees up any memory used by the cached programs. Use
-/// `enable_jit_cache(false)` if you want to temporarily disable caching without clearing existing
-/// cache contents.
-/// @warning For benchmarking or testing purposes, prefer `enable_jit_cache`.
+/**
+ * @brief Clear the JIT program cache, removing all cached programs from memory and disk.
+ *
+ * This is a more expensive operation than simply disabling the cache, as it involves deleting
+ * cached files from disk, but it also frees up any memory used by the cached programs. Use
+ * `enable_jit_cache(false)` if you want to temporarily disable caching without clearing existing
+ * cache contents.
+ *
+ * @warning For benchmarking or testing purposes, prefer `enable_jit_cache`.
+ */
 void clear_jit_cache();
 
 }  // namespace CUDF_EXPORT cudf
