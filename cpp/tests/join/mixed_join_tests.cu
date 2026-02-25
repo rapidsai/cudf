@@ -920,6 +920,50 @@ TEST_F(MixedInnerJoinTest2, InvalidJoinKind)
                std::invalid_argument);
 }
 
+TEST_F(MixedInnerJoinTest2, UnsupportedColumnType)
+{
+  auto int_col    = cudf::test::fixed_width_column_wrapper<int32_t>{1};
+  auto struct_col = cudf::test::structs_column_wrapper{int_col};
+  auto valid_col  = cudf::test::fixed_width_column_wrapper<int32_t>{1};
+
+  auto struct_table = cudf::table_view{{struct_col}};
+  auto valid_table  = cudf::table_view{{valid_col}};
+
+  auto indices = cudf::test::fixed_width_column_wrapper<cudf::size_type>{0};
+  auto span    = cudf::device_span<cudf::size_type const>(
+    indices.operator cudf::column_view().data<cudf::size_type>(), 1);
+
+  auto const col_ref_l = cudf::ast::column_reference(0, cudf::ast::table_reference::LEFT);
+  auto const col_ref_r = cudf::ast::column_reference(0, cudf::ast::table_reference::RIGHT);
+  auto const pred      = cudf::ast::operation(cudf::ast::ast_operator::EQUAL, col_ref_l, col_ref_r);
+
+  std::string jit_pred = R"(
+    __device__ void predicate(bool* output, int32_t left_col0, int32_t right_col0) {
+      *output = left_col0 == right_col0;
+    }
+  )";
+
+  // JIT filter (string predicate) — struct in left table
+  EXPECT_THROW(cudf::jit_filter_join_indices(
+                 struct_table, valid_table, span, span, jit_pred, cudf::join_kind::INNER_JOIN),
+               std::invalid_argument);
+
+  // JIT filter (string predicate) — struct in right table
+  EXPECT_THROW(cudf::jit_filter_join_indices(
+                 valid_table, struct_table, span, span, jit_pred, cudf::join_kind::INNER_JOIN),
+               std::invalid_argument);
+
+  // JIT filter (AST predicate) — struct in left table
+  EXPECT_THROW(cudf::jit_filter_join_indices(
+                 struct_table, valid_table, span, span, pred, cudf::join_kind::INNER_JOIN),
+               std::invalid_argument);
+
+  // JIT filter (AST predicate) — struct in right table
+  EXPECT_THROW(cudf::jit_filter_join_indices(
+                 valid_table, struct_table, span, span, pred, cudf::join_kind::INNER_JOIN),
+               std::invalid_argument);
+}
+
 TEST_F(MixedInnerJoinTest2, JitOnlyPredicate)
 {
   // Test a predicate that cannot be expressed with AST: popcount-based matching.
