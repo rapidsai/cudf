@@ -189,10 +189,49 @@ def assert_tpch_result_equal(
     if sort_by and limit and len(left) > 0:
         # Handle the .sort_by(...).head(n) case; First, split the data into two parts
         # "before" and "ties"
-        sort_by_cols, sort_by_descending = zip(*sort_by, strict=False)
-        (split_at,) = left.select(sort_by_cols).max().to_dicts()
-        # This will be True before the ties and False for the ties.
-        expr = pl.Expr.or_(*[pl.col(col).lt(val) for col, val in split_at.items()])
+        # Problem: suppose we're splitting on a float column: small, floating-point precision
+        # differences, which we'd ignore in assert_frame_equal, might cause us to
+        # split the two dataframes at different, but not meaningfully different, points.
+        # Suppose you have:
+        #
+        # result  : [a, b, c, d, d+epsilon]
+        # expected: [a, b, c, d-epsilon, d]
+        #
+        # For epsilon less than our tolerance, we'd want to consider this valid.
+        # Meaning that the split point should be `d+epsilon` and the
+        # partitions should be
+        # result:   [ [a, b, c], [d, d + epsilon] ]
+        # expected: [ [a, b, c], [d - epsilon, d] ]
+
+        sort_by_descending_list = list(sort_by_descending)
+        (split_at,) = (
+            left.select(sort_by_cols)
+            .sort(by=sort_by_cols, descending=sort_by_descending_list)
+            .tail(1)
+            .to_dicts()
+        )
+        # Note that we multiply abs_tol by 2; In our example above, our split point will
+        # be d + epsilon; but we want to consider d - epsilon tied to the "real" split point
+        # of 'd' as well.
+
+        exprs = []
+        for (col, val), desc in zip(
+            split_at.items(), sort_by_descending_list, strict=True
+        ):
+            if isinstance(val, float):
+                exprs.append(
+                    pl.col(col).lt(val - 2 * abs_tol)
+                    | pl.col(col).gt(val + 2 * abs_tol)
+                )
+            else:
+                if desc:
+                    # then "before" means "greater than"
+                    op = pl.col(col).gt
+                else:
+                    op = pl.col(col).lt
+                exprs.append(op(val))
+
+        expr = pl.Expr.or_(*exprs)
 
         result_first = left.filter(expr)
         expected_first = right.filter(expr)
@@ -220,7 +259,11 @@ def assert_tpch_result_equal(
             )
         except AssertionError as e:
             raise ValidationError(
-                message="Result mismatch in non-ties part", details={"error": str(e)}
+                message="Result mismatch in non-ties part",
+                details={
+                    "error": str(e),
+                    "split_at": str(split_at),
+                },
             ) from e
 
         # Now for the ties:
@@ -231,12 +274,18 @@ def assert_tpch_result_equal(
         # 1. the schema matches (checked above)
         # 2. the values in ``sort_by`` match (else the Expr above would be False)
         # so all that's left to check is that the lengths match.
-        if len(result_ties) != len(expected_ties):
+        if len(result_ties) != len(expected_ties):  # pragma: no cover
+            # This *should* be unreachable... We've already checked that the
+            # lengths of the two full dataframes match and that the lengths
+            # of the two "ties" portions match, so the non-ties portion
+            # must match too.
+            # But we'll check just in case.
             raise ValidationError(
                 message="Ties length mismatch",
                 details={
                     "expected_length": len(expected_ties),
                     "result_length": len(result_ties),
+                    "split_at": str(split_at),
                 },
             )
     else:
