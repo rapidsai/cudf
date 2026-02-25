@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
@@ -10,6 +10,7 @@ from pylibcudf.libcudf.column.column_factories cimport (
     make_fixed_width_column as cpp_make_fixed_width_column,
     make_numeric_column as cpp_make_numeric_column,
     make_timestamp_column as cpp_make_timestamp_column,
+    make_empty_lists_column as cpp_make_empty_lists_column,
 )
 from pylibcudf.libcudf.types cimport mask_state, size_type
 from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
@@ -28,6 +29,7 @@ __all__ = [
     "make_fixed_width_column",
     "make_numeric_column",
     "make_timestamp_column",
+    "make_empty_lists_column",
 ]
 
 cpdef Column make_empty_column(
@@ -250,5 +252,34 @@ cpdef Column make_fixed_width_column(
             stream.view(),
             mr.get_mr()
         )
+
+    return Column.from_libcudf(move(result), stream, mr)
+
+
+cpdef Column make_empty_lists_column(
+    DataType child_type_,
+    Stream stream=None,
+    DeviceMemoryResource mr=None,
+):
+    """Creates an empty column of the specified type.
+
+    For details, see :cpp:func::`make_empty_lists_column`.
+
+    Parameters
+    ----------
+    child_type_ : DataType
+        The child column data type for the list column.
+
+    Returns
+    -------
+    Column
+        An empty Column
+    """
+    cdef unique_ptr[column] result
+    stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
+
+    with nogil:
+        result = cpp_make_empty_lists_column(child_type_.c_obj)
 
     return Column.from_libcudf(move(result), stream, mr)
