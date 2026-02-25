@@ -24,7 +24,7 @@
 /**
  * @brief Available IO source types
  */
-enum class io_source_type { FILEPATH, HOST_BUFFER, PINNED_BUFFER, DEVICE_BUFFER };
+enum class io_source_type : uint8_t { FILEPATH, HOST_BUFFER, PINNED_BUFFER, DEVICE_BUFFER };
 
 /**
  * @brief Get io source type from the string keyword argument
