@@ -3762,6 +3762,43 @@ class DatetimeIndex(Index):
             result._freq = _validate_freq(self._freq)
         return result
 
+    def sort_values(
+        self,
+        return_indexer: bool = False,
+        ascending: bool = True,
+        na_position: Literal["first", "last"] = "last",
+        key=None,
+    ) -> Self | tuple[Self, cupy.ndarray]:
+        result = super().sort_values(
+            return_indexer=return_indexer,
+            ascending=ascending,
+            na_position=na_position,
+            key=key,
+        )
+        if return_indexer:
+            sorted_index, indexer = cast(tuple[Self, cupy.ndarray], result)
+        else:
+            sorted_index = cast(Self, result)
+
+        if return_indexer and cudf.get_option("mode.pandas_compatible"):
+            indexer = indexer.astype(np.intp)
+
+        if isinstance(sorted_index, DatetimeIndex) and self._freq is not None:
+            new_freq = _validate_freq(self._freq)
+            if not ascending:
+                pandas_freq = _freq_to_pandas_offset(self._freq)
+                if pandas_freq is not None:
+                    try:
+                        pandas_freq = -pandas_freq
+                    except TypeError:
+                        pandas_freq = pandas_freq * -1
+                    new_freq = _validate_freq(pandas_freq)
+            sorted_index._freq = new_freq
+
+        if return_indexer:
+            return sorted_index, indexer
+        return sorted_index
+
     def union(self, other, sort: bool | None = None) -> Index:
         result = super().union(other, sort=sort)
         if not isinstance(result, DatetimeIndex):
