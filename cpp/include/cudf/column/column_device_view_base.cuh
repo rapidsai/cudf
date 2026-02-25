@@ -63,13 +63,23 @@ struct nullate {
   };
 };
 
+/**
+ * @brief A type tag to specify that a column should be treated as a dictionary column.
+ * @tparam IndexType The type of the dictionary indices
+ * @tparam KeyType The type of the dictionary keys
+ */
 template <typename IndexType, typename KeyType>
   requires(is_index_type<IndexType>())
 struct dictionary_element {
-  using index_type = IndexType;
-  using key_type   = KeyType;
+  using index_type = IndexType;  ///< The type of the dictionary indices
+  using key_type   = KeyType;    ///< The type of the dictionary keys
+
+  key_type key{};  ///< The dictionary key for this element
 };
 
+/**
+ * @brief A type trait to determine if a type is a dictionary encoded type.
+ */
 template <typename T>
 inline constexpr bool is_dictionary_encoded = false;
 
@@ -471,7 +481,7 @@ class alignas(16) column_device_view_core : public detail::column_device_view_ba
   }
 
   /**
-   * @brief Returns a copy of the element at the specified index
+   * @brief Returns a decoded copy of the element at the specified index.
    *
    * If the element at the specified index is NULL, i.e.,
    * `is_null(element_index) == true`, then any attempt to use the result will
@@ -482,8 +492,8 @@ class alignas(16) column_device_view_core : public detail::column_device_view_ba
    * This function does not participate in overload resolution if `is_dictionary_encoded<T>` is
    * false.
    *
-   * @tparam T The element type, i.e. dictionary_element<int32_t, float> for a dictionary column
-   * with int32 indices and float values
+   * @tparam T The element type, i.e. `dictionary_element<int32_t, float>` for a dictionary column
+   * with `int32_t` indices and `float` values
    * @param element_index Position of the desired element
    * @return The element at the specified index
    */
