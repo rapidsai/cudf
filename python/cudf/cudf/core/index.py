@@ -1917,6 +1917,35 @@ class Index(SingleColumnFrame):
         except TypeError:
             return False
 
+    def is_(self, other: Any) -> bool:
+        if self is other:
+            return True
+        if not isinstance(other, Index):
+            return False
+        self_column = getattr(self, "_column", None)
+        other_column = getattr(other, "_column", None)
+        if self_column is not None and other_column is not None:
+            return self_column is other_column
+        self_columns = getattr(self, "_columns", None)
+        other_columns = getattr(other, "_columns", None)
+        if (
+            self_columns is None
+            or other_columns is None
+            or len(self_columns) != len(other_columns)
+        ):
+            return False
+        return all(
+            lcol is rcol
+            for lcol, rcol in zip(self_columns, other_columns, strict=True)
+        )
+
+    def view(self, cls=None):
+        if cls is None or cls is type(self):
+            return type(self)._from_column(self._column, name=self.name)
+        if cls is np.ndarray or isinstance(cls, np.dtype):
+            return self.to_numpy().view(cls)
+        return self.astype(cls)
+
     @_performance_tracking
     def copy(self, name: Hashable = None, deep: bool = False) -> Self:
         """
@@ -3724,6 +3753,13 @@ class DatetimeIndex(Index):
         idx_copy = super().copy(name=name, deep=deep)
         idx_copy._freq = _validate_freq(self._freq)
         return idx_copy
+
+    def view(self, cls=None):
+        if cls is None or cls is type(self):
+            return type(self)._from_column(
+                self._column, name=self.name, freq=self._freq
+            )
+        return super().view(cls)
 
     def as_unit(self, unit: str, round_ok: bool = True) -> Self:
         """
