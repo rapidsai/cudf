@@ -79,16 +79,12 @@ static void bench_scatter_lists(nvbench::state& state, nvbench::type_list<TypePa
                                   std::move(source_offsets),
                                   std::move(source_base_col),
                                   0,
-                                  cudf::create_null_mask(num_rows, cudf::mask_state::UNALLOCATED),
-                                  stream,
-                                  mr);
+                                  cudf::create_null_mask(num_rows, cudf::mask_state::UNALLOCATED));
   auto target = make_lists_column(num_rows,
                                   std::move(target_offsets),
                                   std::move(target_base_col),
                                   0,
-                                  cudf::create_null_mask(num_rows, cudf::mask_state::UNALLOCATED),
-                                  stream,
-                                  mr);
+                                  cudf::create_null_mask(num_rows, cudf::mask_state::UNALLOCATED));
 
   auto scatter_map   = make_fixed_width_column(cudf::data_type{cudf::type_to_id<cudf::size_type>()},
                                              num_rows,

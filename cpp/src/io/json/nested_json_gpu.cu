@@ -2247,9 +2247,7 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
                                 std::move(offsets_column),
                                 std::move(child_column),
                                 null_count,
-                                std::move(result_bitmask),
-                                stream,
-                                mr),
+                                std::move(result_bitmask)),
               std::move(column_names)};
       break;
     }
