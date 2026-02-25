@@ -619,6 +619,19 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         return len(self) - self.null_count
 
     @cached_property
+    def nan_count(self) -> int:
+        return 0
+
+    @cached_property
+    def count(self) -> int:  # type: ignore[override]
+        """Return the number non-NA and NaN values in the column for the public count API."""
+        return self.valid_count - (
+            self.nan_count
+            if not is_pandas_nullable_extension_dtype(self.dtype)
+            else 0
+        )
+
+    @cached_property
     def mask(self) -> None | Buffer:
         """Get mask buffer from pylibcudf column."""
         return cast("Buffer | None", self.plc_column.null_mask())
@@ -1865,10 +1878,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 )
 
         return result
-
-    @cached_property
-    def nan_count(self) -> int:
-        return 0
 
     def interpolate(self, index: Index) -> ColumnBase:
         # figure out where the nans are

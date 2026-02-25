@@ -7754,6 +7754,10 @@ NODEIDS_THAT_FAIL_WITH_CUDF_PANDAS_WITH_REASON: dict[str, set[str]] = {
         "tests/arrays/string_/test_string_arrow.py::test_pickle_roundtrip[na_value0]",
         "tests/arrays/string_/test_string_arrow.py::test_pickle_roundtrip[nan]",
     },
+    "https://github.com/pandas-dev/pandas/issues/64297": {
+        "tests/indexes/interval/test_constructors.py::test_ea_dtype[Float64]",
+        "tests/indexes/interval/test_constructors.py::test_ea_dtype[float64[pyarrow]]",
+    },
 }
 
 NODEIDS_THAT_XPASS_WITH_CUDF_PANDAS = {
