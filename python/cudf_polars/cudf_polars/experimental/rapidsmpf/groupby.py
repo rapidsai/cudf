@@ -331,7 +331,6 @@ async def _tree_reduce(
     if tracer is not None:
         tracer.add_chunk(table=aggregated.table_view())
     await ch_out.send(context, Message(0, aggregated))
-    del aggregated
 
     await ch_out.drain(context)
 
