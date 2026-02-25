@@ -34,7 +34,6 @@
 #include <thrust/fill.h>
 #include <thrust/gather.h>
 #include <thrust/iterator/counting_iterator.h>
-#include <thrust/iterator/discard_iterator.h>
 #include <thrust/iterator/permutation_iterator.h>
 #include <thrust/iterator/transform_output_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
@@ -558,7 +557,7 @@ std::pair<size_t, rmm::device_uvector<size_type>> remapped_field_nodes_after_uni
   key_set.insert_and_find_async(counting_iter,
                                 counting_iter + num_keys,
                                 found_keys.begin(),
-                                thrust::make_discard_iterator(),
+                                cuda::make_discard_iterator(),
                                 stream.value());
   // set.size will synchronize the stream before return.
   return {key_set.size(stream), std::move(found_keys)};
