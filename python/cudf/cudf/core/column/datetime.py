@@ -867,6 +867,9 @@ class DatetimeTZColumn(DatetimeColumn):
                 "There is no nullable pandas type for datetime with timezone."
             )
         else:
+            # TODO: Using self._utc_time.to_pandas().tz_localize("UTC").tz_convert(self.tz)
+            # would be the more definitive conversion, but test_localize_nonexistent
+            # and test_localize_ambiguous fail (off by ~1 hour) for some obscure timezones
             return self._local_time.to_pandas().tz_localize(
                 self.tz,
                 ambiguous="NaT",
