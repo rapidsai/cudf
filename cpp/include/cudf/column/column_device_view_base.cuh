@@ -79,10 +79,16 @@ struct dictionary_element {
 
 /**
  * @brief A type trait to determine if a type is a dictionary encoded type.
+ * @tparam T The type to check
  */
 template <typename T>
 inline constexpr bool is_dictionary_encoded = false;
 
+/**
+ * @brief A type trait to determine if a type is a dictionary encoded type.
+ * @tparam IndexType The type of the dictionary indices
+ * @tparam KeyType The type of the dictionary keys
+ */
 template <typename IndexType, typename KeyType>
 inline constexpr bool is_dictionary_encoded<dictionary_element<IndexType, KeyType>> = true;
 
