@@ -3762,6 +3762,16 @@ class DatetimeIndex(Index):
             result._freq = _validate_freq(self._freq)
         return result
 
+    def get_loc(self, key) -> int | slice | cupy.ndarray:
+        if cudf.get_option("mode.pandas_compatible") and isinstance(key, str):
+            pandas_loc = self.to_pandas().get_loc(key)
+            if isinstance(pandas_loc, slice):
+                return pandas_loc
+            if isinstance(pandas_loc, np.ndarray):
+                return cupy.asarray(pandas_loc)
+            return int(pandas_loc)
+        return super().get_loc(key)
+
     def sort_values(
         self,
         return_indexer: bool = False,

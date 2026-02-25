@@ -354,6 +354,10 @@ class _SeriesLocIndexer(_FrameIndexer):
                 raise NotImplementedError(
                     "Interval indexing is not supported."
                 )
+            if isinstance(
+                self._frame.index, cudf.DatetimeIndex
+            ) and isinstance(arg, str):
+                return self._frame.index.get_loc(arg)
             if not is_dtype_obj_numeric(
                 index_dtype, include_decimal=False
             ) and not (
