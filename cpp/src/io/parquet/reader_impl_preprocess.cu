@@ -19,8 +19,8 @@
 
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/iterator>
 #include <thrust/fill.h>
-#include <thrust/iterator/discard_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/scan.h>
 #include <thrust/transform.h>
@@ -1007,7 +1007,7 @@ void reader_impl::allocate_columns(read_mode mode, size_t skip_rows, size_t num_
       cudf::detail::reduce_by_key(reduction_keys,
                                   reduction_keys + num_keys_this_iter,
                                   size_input.cbegin(),
-                                  thrust::make_discard_iterator(),
+                                  cuda::make_discard_iterator(),
                                   sizes.d_begin() + (key_start / subpass.pages.size()),
                                   cuda::std::plus<>{},
                                   _stream);

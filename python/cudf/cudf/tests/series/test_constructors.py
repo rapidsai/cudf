@@ -1541,7 +1541,7 @@ def test_as_column_types():
 
     pds = pd.Series([1, 2, 4], dtype="int64")
     gds = cudf.Series._from_column(
-        as_column(cudf.Series([1, 2, 4]), dtype="int64")
+        as_column(cudf.Series([1, 2, 4]), dtype=np.dtype("int64"))
     )
 
     assert_eq(pds, gds)
