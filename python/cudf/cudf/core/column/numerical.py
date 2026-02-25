@@ -307,7 +307,11 @@ class NumericalColumn(NumericalBaseColumn):
             # in terms of `notnull` or `NULL_NOT_EQUALS`.
             if type(other) is int and self.dtype.kind in "iu":
                 truthiness = None
-                iinfo = np.iinfo(self.dtype)
+                if not isinstance(self.dtype, np.dtype):
+                    info_type = self.dtype.numpy_dtype
+                else:
+                    info_type = self.dtype
+                iinfo = np.iinfo(info_type)
                 if iinfo.min > other:
                     truthiness = op in {"__ne__", "__gt__", "__ge__"}
                 elif iinfo.max < other:
