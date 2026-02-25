@@ -78,11 +78,16 @@ void initialize(init_flags flags = init_flags::INIT_JIT_CACHE);
 /// teardown and that only one thread calls teardown at a time.
 void teardown();
 
-/// @brief Enable or disable the JIT program cache. When disabled, the cache will not be used for
-/// storing or retrieving compiled programs, effectively bypassing the cache. When enabled, the
-/// cache will be used as normal. This can be used to temporarily disable caching without clearing
-/// the existing cache contents, allowing for easy re-enabling of the cache later.
-/// @param enable If `true`, the JIT program cache is enabled; if `false`, it is disabled.
+/**
+  * @brief Enable or disable the JIT program cache
+  * 
+  * When disabled, the cache will not be used for
+  * storing or retrieving compiled programs, effectively bypassing the cache. When enabled, the
+  * cache will be used as normal. This can be used to temporarily disable caching without clearing
+  * the existing cache contents, allowing for easy re-enabling of the cache later.
+  * 
+  * @param enable If `true`, the JIT program cache is enabled; if `false`, it is disabled.
+  */
 void enable_jit_cache(bool enable);
 
 /// @brief Clear the JIT program cache, removing all cached programs from memory and disk. This is a
