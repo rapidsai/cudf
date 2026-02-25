@@ -30,6 +30,13 @@ Pre-generated parameters for PDS-DS queries across a set of scale factors.
 - **Query 14**: `year`, `day` (day of month)
 - **Query 15**: `year`, `qoy` (quarter of year)
 - **Query 16**: `year`, `month`, `state`, `county` (list of 5 counties)
+- **Query 30**: `year`, `state`
+- **Query 31**: `year`, `agg` (ORDER BY field)
+- **Query 32**: `imid` (manufacturer ID), `csdate` (catalog sales date), `year`
+- **Query 33**: `year`, `month`, `gmt` (GMT offset), `category`
+- **Query 34**: `year`, `bpone` (buy potential 1), `bptwo` (buy potential 2), `county` (list of 8 counties)
+- **Query 35**: `year`, `aggone`, `aggtwo`, `aggthree` (aggregation functions: sum/min/max/avg/stddev_samp)
+- **Query 36**: `year`, `state` (list of 8 states)
 
 ## Usage
 
