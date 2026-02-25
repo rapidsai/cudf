@@ -2811,6 +2811,7 @@ TEST_F(ParquetMetadataReaderTest, TestCudfTypes)
   EXPECT_EQ(schema_root.child(4).cudf_type().id(), cudf::type_id::LIST);
   ASSERT_EQ(schema_root.child(4).num_children(), 1);
   EXPECT_EQ(schema_root.child(4).child(0).name(), "list");
+  EXPECT_EQ(schema_root.child(4).child(0).cudf_type().id(), cudf::type_id::EMPTY);
   ASSERT_EQ(schema_root.child(4).child(0).num_children(), 1);
   EXPECT_EQ(schema_root.child(4).child(0).child(0).cudf_type().id(), cudf::type_id::INT32);
 
