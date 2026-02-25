@@ -480,17 +480,16 @@ std::unique_ptr<column> make_strings_column(size_type num_strings,
  * data    (depth 2)   {1, 2, 3, 4, 5, 6, 7}
  * @endcode
  *
- * @param[in] num_rows The number of lists the column represents.
- * @param[in] offsets_column The column of offset values for this column. Each value should
+ * @param num_rows The number of lists the column represents.
+ * @param offsets_column The column of offset values for this column. Each value should
  * represent the starting offset into the child elements that corresponds to the beginning of the
  * row, with the first row starting at 0. The length of row N can be determined by subtracting
- * offsets[N+1] - offsets[N]. The total number of offsets should be 1 longer than the # of rows in
- * the column.
- * @param[in] child_column The column of nested data referenced by the lists represented by the
- * offsets_column. Note: the child column may itself be
- * further nested.
- * @param[in] null_count The number of null list entries.
- * @param[in] null_mask The bits specifying the null lists in device memory.
+ * `offsets[N+1] - offsets[N]`. The total number of offsets should be 1 longer than the
+ * number of rows in the column.
+ * @param child_column The column of nested data referenced by the lists represented by the
+ * offsets_column. Note: the child column may itself be further nested.
+ * @param null_count The number of null list entries.
+ * @param null_mask The bits specifying the null lists in device memory.
  * @return Constructed lists column
  */
 std::unique_ptr<cudf::column> make_lists_column(size_type num_rows,
