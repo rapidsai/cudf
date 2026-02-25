@@ -10,13 +10,16 @@ import dataclasses
 import importlib
 import json
 import os
+import pprint
 import statistics
 import sys
 import textwrap
 import time
 import traceback
+import uuid
 from collections import defaultdict
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
 import nvtx
@@ -35,19 +38,103 @@ except ImportError:
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
-    from pathlib import Path
-
 
 ExecutorType = Literal["in-memory", "cpu"]
 
 
 @dataclasses.dataclass
-class Record:
+class ValidationResult:
+    """
+    Result of a validation run.
+
+    Parameters
+    ----------
+    status
+        The status of the validation. Either 'Passed' or 'Failed'.
+    message
+        The message from the validation. This should be ``None`` if
+        the validation passed, and a string describing the failure otherwise.
+    details
+        Additional details about the validation failure.
+    """
+
+    status: Literal["Passed", "Failed"]
+    message: str | None
+    details: dict[str, Any] | None = None
+
+    @classmethod
+    def from_error(cls, error: Exception) -> ValidationResult:
+        """
+        Create a ValidationResult from some exception.
+
+        Parameters
+        ----------
+        error : Exception
+            The error to create a ValidationResult from.
+
+        Returns
+        -------
+        ValidationResult
+            The ValidationResult created from the error.
+        """
+        return cls(status="Failed", message=str(error))
+
+
+@dataclasses.dataclass
+class ValidationMethod:
+    """
+    Information about how the validation was performed.
+
+    Parameters
+    ----------
+    expected_source
+        A name indicating the source of the expected results.
+
+        - 'pandas': Run pandas against the same data
+        - 'duckdb': Compare against pre-computed DuckDB results
+
+    comparison_method
+        How the comparison was performed. Currently, only
+        'pandas' is supported, which indicates that ``pandas.testing.assert_frame_equal``
+        was used.
+
+    comparison_options
+        Additional options passed to the comparison method, controlling
+        things like the tolerance for floating point comparisons.
+    """
+
+    expected_source: Literal["duckdb", "pandas"]
+    comparison_method: Literal["pandas"]
+    comparison_options: dict[str, Any]
+
+
+@dataclasses.dataclass(kw_only=True)
+class FailedRecord:
+    """Records a failed query iteration."""
+
+    query: int
+    iteration: int
+    status: Literal["error"] = "error"
+    traceback: str
+
+
+@dataclasses.dataclass(kw_only=True)
+class SuccessRecord:
     """Results for a single run of a single PDS-H query."""
 
     query: int
     duration: float
-    shuffle_stats: None = None
+    validation_result: ValidationResult | None = None
+    status: Literal["success"] = "success"
+
+
+@dataclasses.dataclass
+class QueryRunResult:
+    """Result of running a single query (all iterations)."""
+
+    query_records: list[SuccessRecord | FailedRecord]
+    iteration_failures: list[tuple[int, int]]
+    validation_failed: bool
 
 
 @dataclasses.dataclass
@@ -181,7 +268,9 @@ class RunConfig:
     versions: PackageVersions = dataclasses.field(
         default_factory=PackageVersions.collect
     )
-    records: dict[int, list[Record]] = dataclasses.field(default_factory=dict)
+    records: dict[int, list[SuccessRecord | FailedRecord]] = dataclasses.field(
+        default_factory=dict
+    )
     dataset_path: Path
     scale_factor: int | float
     iterations: int
@@ -191,7 +280,9 @@ class RunConfig:
     hardware: HardwareInfo = dataclasses.field(
         default_factory=HardwareInfo.collect
     )
+    run_id: uuid.UUID = dataclasses.field(default_factory=uuid.uuid4)
     query_set: str
+    validation_method: ValidationMethod | None = None
 
     @classmethod
     def from_args(cls, args: argparse.Namespace) -> RunConfig:
@@ -235,6 +326,21 @@ class RunConfig:
                     f"but the inferred scale factor is {sf_inf}."
                 )
 
+        if args.validate_directory:
+            validation_method = ValidationMethod(
+                expected_source="duckdb",
+                comparison_method="pandas",
+                comparison_options={},
+            )
+        elif args.validate:
+            validation_method = ValidationMethod(
+                expected_source="pandas",
+                comparison_method="pandas",
+                comparison_options={},
+            )
+        else:
+            validation_method = None
+
         return cls(
             queries=args.query,
             executor=executor,
@@ -243,11 +349,14 @@ class RunConfig:
             iterations=args.iterations,
             suffix=args.suffix,
             query_set=args.query_set,
+            validation_method=validation_method,
         )
 
     def serialize(self) -> dict:
         """Serialize the run config to a dictionary."""
-        return dataclasses.asdict(self)
+        result = dataclasses.asdict(self)
+        result["run_id"] = str(self.run_id)
+        return result
 
     def summarize(self) -> None:
         """Print a summary of the results."""
@@ -260,20 +369,29 @@ class RunConfig:
             print(f"scale_factor: {self.scale_factor}")  # noqa: T201
             print(f"executor: {self.executor}")  # noqa: T201
             if len(records) > 0:
+                valid_durations = [
+                    record.duration
+                    for record in records
+                    if record.status == "success"
+                ]
                 print(f"iterations: {self.iterations}")  # noqa: T201
                 print("---------------------------------------")  # noqa: T201
                 print(  # noqa: T201
-                    f"min time : {min(record.duration for record in records):0.4f}"
+                    f"min time : {min(valid_durations):0.4f}"
                 )
                 print(  # noqa: T201
-                    f"max time : {max(record.duration for record in records):0.4f}"
+                    f"max time : {max(valid_durations):0.4f}"
                 )
                 print(  # noqa: T201
-                    f"mean time: {statistics.mean(record.duration for record in records):0.4f}"
+                    f"mean time: {statistics.mean(valid_durations):0.4f}"
                 )
                 print("=======================================")  # noqa: T201
         total_mean_time = sum(
-            statistics.mean(record.duration for record in records)
+            statistics.mean(
+                record.duration
+                for record in records
+                if record.status == "success"
+            )
             for records in self.records.values()
             if records
         )
@@ -297,7 +415,7 @@ def execute_query(
     i: int,
     q: Callable[[RunConfig], pd.DataFrame],
     run_config: RunConfig,
-) -> pd.DataFrame:
+) -> tuple[pd.DataFrame, float]:
     """Execute a query with NVTX annotation."""
     with nvtx.annotate(
         message=f"Query {q_id} - Iteration {i}",
@@ -306,9 +424,15 @@ def execute_query(
     ):
         if run_config.executor == "cpu":
             with disable_module_accelerator():
-                return q(run_config)
-        assert cudf.pandas.LOADED
-        return q(run_config)
+                start_time = time.monotonic()
+                result = q(run_config)
+                end_time = time.monotonic()
+        else:
+            assert cudf.pandas.LOADED
+            start_time = time.monotonic()
+            result = q(run_config)
+            end_time = time.monotonic()
+        return result, end_time - start_time
 
 
 def _query_type(num_queries: int) -> Callable[[str | int], list[int]]:
@@ -328,6 +452,17 @@ def _query_type(num_queries: int) -> Callable[[str | int], list[int]]:
         return sorted(result)
 
     return parse
+
+
+def list_validation_files(
+    validate_directory: Path,
+) -> dict[int, Path]:
+    """List the validation files in the given directory."""
+    validation_files: dict[int, Path] = {}
+    for q_path in validate_directory.glob("q*.parquet"):
+        q_id = int(q_path.stem.lstrip("q").lstrip("_"))
+        validation_files[q_id] = q_path
+    return validation_files
 
 
 def parse_args(
@@ -414,18 +549,148 @@ def parse_args(
         default=True,
     )
     parser.add_argument(
+        "--validate-directory",
+        type=Path,
+        default=None,
+        help=(
+            "Validate the results against a directory with a pre-computed set of 'golden' results. "
+            "The directory should contain one parquet file per query, named 'qDD.parquet', where DD is the "
+            "zero-padded query number. The JSON output will include the validation results for each record."
+        ),
+    )
+    parser.add_argument(
         "--validate",
         action=argparse.BooleanOptionalAction,
         default=False,
-        help="Validate the result against CPU execution.",
+        help=(
+            "Validate the result against CPU execution. This will "
+            "run the query with both GPU and baseline engine (pandas), collect the "
+            "results in memory, and compare them using pandas'. "
+            "At larger scale factors, computing the expected result can be slow so "
+            "--validate-directory should be used instead."
+        ),
     )
-    parser.add_argument(
-        "--baseline",
-        choices=["duckdb", "cpu"],
-        default="duckdb",
-        help="Which engine to use as the baseline for validation.",
+    parsed_args = parser.parse_args(args)
+    if parsed_args.validate_directory and parsed_args.validate:
+        raise ValueError(
+            "Specify either --validate-directory or --validate, not both."
+        )
+    if (
+        parsed_args.validate_directory is not None
+        and not parsed_args.validate_directory.exists()
+    ):
+        raise FileNotFoundError(
+            f"--validate-directory: {parsed_args.validate_directory} does not exist."
+        )
+    if parsed_args.validate_directory:
+        validation_files = list_validation_files(
+            parsed_args.validate_directory
+        )
+        missing_files = [
+            str(x)
+            for x in set(parsed_args.query) - set(validation_files.keys())
+        ]
+
+        if missing_files:
+            raise ValueError(
+                f"Missing files for queries: {','.join(missing_files)}"
+            )
+    return parsed_args
+
+
+def run_pandas_query_iteration(
+    q_id: int,
+    iteration: int,
+    q: Callable[[RunConfig], pd.DataFrame],
+    run_config: RunConfig,
+    args: argparse.Namespace,
+    expected: pd.DataFrame | None,
+) -> SuccessRecord:
+    """Run a single query iteration. Caller must wrap in try/except."""
+    result, duration = execute_query(q_id, iteration, q, run_config)
+
+    if expected is not None:
+        try:
+            with disable_module_accelerator():
+                pd.testing.assert_frame_equal(result, expected)
+        except Exception as e:
+            validation_result = ValidationResult.from_error(e)
+        else:
+            validation_result = ValidationResult(status="Passed", message=None)
+    else:
+        validation_result = None
+
+    if args.print_results:
+        print(result)  # noqa: T201
+
+    return SuccessRecord(
+        query=q_id, duration=duration, validation_result=validation_result
     )
-    return parser.parse_args(args)
+
+
+def run_pandas_query(
+    q_id: int,
+    benchmark: Any,
+    run_config: RunConfig,
+    args: argparse.Namespace,
+    validation_files: dict[int, Path] | None,
+) -> QueryRunResult:
+    """Run all iterations for a single query. Caller must wrap in try/except."""
+    try:
+        q = getattr(benchmark, f"q{q_id}")
+    except AttributeError as err:
+        raise NotImplementedError(f"Query {q_id} not implemented.") from err
+
+    expected: pd.DataFrame | None = None
+    if args.validate:
+        cpu_run_config = dataclasses.replace(run_config, executor="cpu")
+        expected, _ = execute_query(q_id, 0, q, cpu_run_config)
+    elif validation_files is not None:
+        expected = pd.read_parquet(validation_files[q_id])
+    else:
+        expected = None
+
+    query_records: list[SuccessRecord | FailedRecord] = []
+    iteration_failures: list[tuple[int, int]] = []
+    validation_failed = False
+    record: SuccessRecord | FailedRecord
+
+    for i in range(args.iterations):
+        try:
+            record = run_pandas_query_iteration(
+                q_id, i, q, run_config, args, expected
+            )
+        except Exception:
+            print(f"❌ query={q_id} iteration={i} failed!")  # noqa: T201
+            print(traceback.format_exc())  # noqa: T201
+            iteration_failures.append((q_id, i))
+            record = FailedRecord(
+                query=q_id,
+                iteration=i,
+                traceback=traceback.format_exc(),
+            )
+        else:
+            if (
+                record.validation_result
+                and record.validation_result.status == "Failed"
+            ):
+                validation_failed = True
+                print(  # noqa: T201
+                    f"❌ Query {q_id} failed validation!\n{record.validation_result.message}"
+                )
+                if record.validation_result.details:
+                    pprint.pprint(record.validation_result.details)  # noqa: T203
+                else:
+                    print(  # noqa: T201
+                        f"Query {q_id} - Iteration {i} finished in {record.duration:0.4f}s",
+                        flush=True,
+                    )
+        query_records.append(record)
+    return QueryRunResult(
+        query_records=query_records,
+        iteration_failures=iteration_failures,
+        validation_failed=validation_failed,
+    )
 
 
 def run_pandas(
@@ -440,60 +705,42 @@ def run_pandas(
     validation_failures: list[int] = []
     query_failures: list[tuple[int, int]] = []
 
-    records: defaultdict[int, list[Record]] = defaultdict(list)
+    records: defaultdict[int, list[SuccessRecord | FailedRecord]] = (
+        defaultdict(list)
+    )
+
+    if args.validate_directory is not None:
+        validation_files = list_validation_files(args.validate_directory)
+    else:
+        validation_files = None
 
     for q_id in run_config.queries:
         try:
-            q = getattr(benchmark, f"q{q_id}")
-        except AttributeError as err:
-            raise NotImplementedError(
-                f"Query {q_id} not implemented."
-            ) from err
-
-        records[q_id] = []
-
-        for i in range(args.iterations):
-            t0 = time.monotonic()
-
-            try:
-                result = execute_query(q_id, i, q, run_config)
-            except Exception:
-                print(f"❌ query={q_id} iteration={i} failed!")  # noqa: T201
-                print(traceback.format_exc())  # noqa: T201
-                query_failures.append((q_id, i))
-                continue
-
-            t1 = time.monotonic()
-            if args.validate and run_config.executor != "cpu":
-                cpu_run_config = dataclasses.replace(
-                    run_config, executor="cpu"
-                )
-                try:
-                    cpu_result = execute_query(q_id, i, q, cpu_run_config)
-                except Exception:
-                    print(  # noqa: T201
-                        f"❌ query={q_id} unable to execute on CPU. Skipping validation."
-                    )
-                    print(traceback.format_exc())  # noqa: T201
-                else:
-                    try:
-                        with disable_module_accelerator():
-                            pd.testing.assert_frame_equal(
-                                result._fsproxy_slow, cpu_result
-                            )
-                        print(f"✅ Query {q_id} passed validation!")  # noqa: T201
-                    except AssertionError as e:
-                        validation_failures.append(q_id)
-                        print(f"❌ Query {q_id} failed validation!\n{e}")  # noqa: T201
-
-            record = Record(query=q_id, duration=t1 - t0, shuffle_stats=None)
-            if args.print_results:
-                print(result)  # noqa: T201
-
-            print(  # noqa: T201
-                f"Query {q_id} - Iteration {i} finished in {record.duration:0.4f}s"
+            result = run_pandas_query(
+                q_id=q_id,
+                benchmark=benchmark,
+                run_config=run_config,
+                args=args,
+                validation_files=validation_files,
             )
-            records[q_id].append(record)
+        except Exception:
+            print(f"❌ query={q_id} failed (setup or execution)!")  # noqa: T201
+            print(traceback.format_exc())  # noqa: T201
+            query_failures.append((q_id, -1))
+            record = FailedRecord(
+                query=q_id,
+                iteration=-1,
+                traceback=traceback.format_exc(),
+            )
+            result = QueryRunResult(
+                query_records=[record],
+                iteration_failures=[],
+                validation_failed=False,
+            )
+
+        query_failures.extend(result.iteration_failures)
+        if result.validation_failed:
+            validation_failures.append(q_id)
 
     run_config = dataclasses.replace(run_config, records=dict(records))
 
@@ -513,5 +760,5 @@ def run_pandas(
     args.output.write(json.dumps(run_config.serialize()))
     args.output.write("\n")
 
-    if query_failures or validation_failures:
-        sys.exit(1)
+    exit_code = 1 if (query_failures or validation_failures) else 0
+    sys.exit(exit_code)
