@@ -2838,6 +2838,20 @@ TEST_F(CsvWriterTest, ZstdCompressionChunked)
 
   // Verify output was produced
   EXPECT_GT(compressed_buffer.size(), 0);
+
+  // Read back and verify content
+  cudf::io::csv_reader_options read_opts =
+    cudf::io::csv_reader_options::builder(
+      cudf::io::source_info(compressed_buffer.data(), compressed_buffer.size()))
+      .compression(cudf::io::compression_type::ZSTD);
+  auto const result = cudf::io::read_csv(read_opts);
+
+  // Verify we read the correct number of rows
+  EXPECT_EQ(result.tbl->num_rows(), num_rows);
+  EXPECT_EQ(result.tbl->num_columns(), 1);
+
+  // Verify the content matches the original data
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(input_table.column(0), result.tbl->view().column(0));
 }
 
 CUDF_TEST_PROGRAM_MAIN()

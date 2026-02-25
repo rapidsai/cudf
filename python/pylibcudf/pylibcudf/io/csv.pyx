@@ -875,7 +875,10 @@ cdef class CsvWriterOptionsBuilder:
         Parameters
         ----------
         comp : CompressionType
-            Compression type (NONE, ZSTD, etc.)
+            Compression type. Only NONE and ZSTD are supported for CSV writer.
+            ZSTD is used because it supports concatenated frames, enabling
+            progressive chunk-based compression compatible with standard
+            decompression tools.
 
         Returns
         -------

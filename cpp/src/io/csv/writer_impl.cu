@@ -542,8 +542,15 @@ void write_chunked(data_sink* out_sink,
   write_data_with_compression(
     out_sink, contents_w_nl.data->data(), total_num_bytes, compression, stream);
 
-  // Needs newline at the end, to separate from next chunk (only for uncompressed writes)
-  if (compression == compression_type::NONE) {
+  // Write trailing newline to separate from next chunk
+  if (compression != compression_type::NONE) {
+    // For compressed output, write newline as separate ZSTD frame.
+    // ZSTD supports concatenated frames, so they will be correctly joined during decompression.
+    // This approach avoids copying the entire data buffer just to append a newline,
+    // which is important for memory efficiency with large chunks.
+    write_data_with_compression(out_sink, newline.data(), newline.size(), compression, stream);
+  } else {
+    // For uncompressed output, write newline directly
     if (out_sink->is_device_write_preferred(newline.size())) {
       out_sink->device_write(newline.data(), newline.size(), stream);
     } else {

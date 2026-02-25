@@ -507,7 +507,6 @@ def _plc_write_csv(
                 else (str(name) if name not in (None, "") else "")
                 for name in all_names
             ]
-
         try:
             plc.io.csv.write_csv(
                 (

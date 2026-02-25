@@ -1601,8 +1601,14 @@ class csv_writer_options {
    * compatible with standard decompression tools.
    *
    * @param comp The compression type (NONE or ZSTD only)
+   * @throw cudf::logic_error if compression type is not NONE or ZSTD
    */
-  void set_compression(compression_type comp) { _compression = comp; }
+  void set_compression(compression_type comp)
+  {
+    CUDF_EXPECTS(comp == compression_type::NONE || comp == compression_type::ZSTD,
+                 "Only NONE and ZSTD compression are supported for CSV writer");
+    _compression = comp;
+  }
 };
 
 /**
