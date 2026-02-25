@@ -816,7 +816,7 @@ class DatetimeColumn(TemporalBaseColumn):
         tz: str | None,
         ambiguous: Literal["NaT"] = "NaT",
         nonexistent: Literal["NaT"] = "NaT",
-    ) -> DatetimeColumn:
+    ) -> DatetimeColumn | DatetimeTZColumn:
         if tz is None:
             return self.copy()
         ambiguous, nonexistent = _check_ambiguous_and_nonexistent(
@@ -843,9 +843,12 @@ class DatetimeColumn(TemporalBaseColumn):
         )
         offsets_to_utc = offsets.take(indices, nullify=True)
         gmt_data = localized - offsets_to_utc
-        return cast(
-            DatetimeColumn, ColumnBase.create(gmt_data.plc_column, dtype)
+        result = cast(
+            DatetimeTZColumn, ColumnBase.create(gmt_data.plc_column, dtype)
         )
+        # Avoid re-computing local times from UTC times
+        result._local_time = localized
+        return result
 
     def tz_convert(self, tz: str | None) -> DatetimeColumn:
         raise TypeError(
