@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -63,6 +63,19 @@ struct nullate {
   };
 };
 
+template <typename IndexType, typename KeyType>
+  requires(is_index_type<IndexType>())
+struct dictionary_element {
+  using index_type = IndexType;
+  using key_type   = KeyType;
+};
+
+template <typename T>
+inline constexpr bool is_dictionary_encoded = false;
+
+template <typename IndexType, typename KeyType>
+inline constexpr bool is_dictionary_encoded<dictionary_element<IndexType, KeyType>> = true;
+
 namespace detail {
 /**
  * @brief An immutable, non-owning view of device data as a column of elements
@@ -79,6 +92,10 @@ class alignas(16) column_device_view_base {
  public:
   // TODO: merge this offsets column index with `strings_column_view::offsets_column_index`
   static constexpr size_type offsets_column_index{0};  ///< Child index of the offsets column
+  static constexpr size_type dictionary_offsets_column_index =
+    0;  ///< Child index of the dictionary offsets column
+  static constexpr size_type dictionary_keys_column_index =
+    1;  ///< Child index of the dictionary key column
 
   column_device_view_base()                               = delete;
   ~column_device_view_base()                              = default;
@@ -451,6 +468,32 @@ class alignas(16) column_device_view_core : public detail::column_device_view_ba
     using rep        = typename T::rep;
     auto const scale = scale_type{_type.scale()};
     return T{scaled_integer<rep>{data<rep>()[element_index], scale}};
+  }
+
+  /**
+   * @brief Returns a copy of the element at the specified index
+   *
+   * If the element at the specified index is NULL, i.e.,
+   * `is_null(element_index) == true`, then any attempt to use the result will
+   * lead to undefined behavior.
+   *
+   * This function accounts for the offset.
+   *
+   * This function does not participate in overload resolution if `is_dictionary_encoded<T>` is
+   * false.
+   *
+   * @tparam T The element type, i.e. dictionary_element<int32_t, float> for a dictionary column
+   * with int32 indices and float values
+   * @param element_index Position of the desired element
+   * @return The element at the specified index
+   */
+  template <typename T, CUDF_ENABLE_IF(is_dictionary_encoded<T>)>
+  [[nodiscard]] __device__ decltype(auto) element(size_type element_index) const noexcept
+  {
+    auto const& offsets = child(dictionary_offsets_column_index);
+    auto const& keys    = child(dictionary_keys_column_index);
+    auto const index    = offsets.template element<typename T::index_type>(element_index);
+    return keys.template element<typename T::key_type>(index);
   }
 
   /**

@@ -5,9 +5,12 @@
 
 #include "helpers.hpp"
 
+#include <cudf/column/column_device_view_base.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 
 #include <jit/cache.hpp>
+
+#include <format>
 
 namespace cudf {
 namespace jit {
@@ -111,13 +114,30 @@ std::vector<std::string> input_type_names(
   return names;
 }
 
+std::string get_jit_element_type_name(column_view const& view)
+{
+  if (is_fixed_width(view.type()) || view.type().id() == type_id::STRING) {
+    return type_to_name(view.type());
+  } else if (view.type().id() == type_id::DICTIONARY32) {
+    return std::format(
+      "cudf::dictionary_element<{}, {}>",
+      get_jit_element_type_name(
+        view.child(column_device_view_core::dictionary_offsets_column_index)),
+      get_jit_element_type_name(view.child(column_device_view_core::dictionary_keys_column_index)));
+  } else {
+    CUDF_FAIL("Unsupported type for JIT compilation: " + type_to_name(view.type()));
+  }
+}
+
+std::string get_jit_element_type_name(scalar_column_view const& view)
+{
+  return get_jit_element_type_name(view.as_column_view());
+}
+
 input_reflection reflect_input(std::variant<column_view, scalar_column_view> const& input)
 {
-  auto get_type_name = [](auto const& var) {
-    return std::visit([](auto& a) { return type_to_name(a.type()); }, var);
-  };
-
-  return input_reflection{get_type_name(input), std::holds_alternative<scalar_column_view>(input)};
+  auto type_name = std::visit([](auto& a) { return get_jit_element_type_name(a); }, input);
+  return input_reflection{type_name, std::holds_alternative<scalar_column_view>(input)};
 }
 
 std::vector<input_reflection> reflect_inputs(
