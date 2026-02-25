@@ -228,7 +228,7 @@ class ListColumn(ColumnBase):
             ColumnBase.create(plc_leaf_col, result_dtype),
         )
 
-    @property
+    @cached_property
     def element_type(self) -> DtypeObj:
         """
         Returns the element type of the list column.
@@ -236,9 +236,8 @@ class ListColumn(ColumnBase):
         if isinstance(self.dtype, ListDtype):
             return self.dtype.element_type
         else:
-            return get_dtype_of_same_kind(
-                self.dtype,
-                self.dtype.pyarrow_dtype.value_type.to_pandas_dtype(),  # type: ignore[union-attr]
+            return pd.ArrowDtype(
+                cast("pd.ArrowDtype", self.dtype).pyarrow_dtype.value_type
             )
 
     def to_pandas(

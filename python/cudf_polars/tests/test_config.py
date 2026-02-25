@@ -776,7 +776,7 @@ def test_cuda_stream_policy_from_config(*, rapidsmpf_single_available: bool) -> 
         executor_options={"runtime": "rapidsmpf"},
         cuda_stream_policy={
             "pool_size": 32,
-            "flags": rmm.pylibrmm.cuda_stream.CudaStreamFlags.NON_BLOCKING,
+            "flags": rmm.pylibrmm.CudaStreamFlags.NON_BLOCKING,
         },
     )
     if rapidsmpf_single_available:
@@ -784,8 +784,7 @@ def test_cuda_stream_policy_from_config(*, rapidsmpf_single_available: bool) -> 
         assert isinstance(config.cuda_stream_policy, CUDAStreamPoolConfig)
         assert config.cuda_stream_policy.pool_size == 32
         assert (
-            config.cuda_stream_policy.flags
-            == rmm.pylibrmm.cuda_stream.CudaStreamFlags.NON_BLOCKING
+            config.cuda_stream_policy.flags == rmm.pylibrmm.CudaStreamFlags.NON_BLOCKING
         )
         config.cuda_stream_policy.build().get_stream()  # no exception
     else:
@@ -841,10 +840,7 @@ def test_cuda_stream_policy_default_rapidsmpf(monkeypatch: pytest.MonkeyPatch) -
     )
     assert isinstance(config.cuda_stream_policy, CUDAStreamPoolConfig)
     assert config.cuda_stream_policy.pool_size == 16
-    assert (
-        config.cuda_stream_policy.flags
-        == rmm.pylibrmm.cuda_stream.CudaStreamFlags.NON_BLOCKING
-    )
+    assert config.cuda_stream_policy.flags == rmm.pylibrmm.CudaStreamFlags.NON_BLOCKING
 
     # "new" user argument
     monkeypatch.setenv("CUDF_POLARS__CUDA_STREAM_POLICY", "new")
