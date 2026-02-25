@@ -907,18 +907,6 @@ class PartitioningState:
             and len(self.local_indices or ()) == len(other.local_indices or ())
         )
 
-    @property
-    def is_simply_partitioned(self) -> bool:
-        """
-        Whether the data is simply partitioned.
-
-        Notes
-        -----
-        Return True if the data is partitioned and the
-        total number of chunks matches the inter-rank modulus.
-        """
-        return self.inter_rank_modulus != 0 and self.local_modulus is None
-
     @classmethod
     def from_metadata(
         cls,
