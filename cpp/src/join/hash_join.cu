@@ -31,7 +31,6 @@
 #include <cuda/iterator>
 #include <cuda/std/functional>
 #include <cuda/std/iterator>
-#include <thrust/iterator/discard_iterator.h>
 #include <thrust/iterator/transform_output_iterator.h>
 #include <thrust/scatter.h>
 #include <thrust/uninitialized_fill.h>
@@ -454,7 +453,7 @@ std::size_t get_full_join_size(
                               iter + probe_table_num_rows,
                               equality,
                               hash_table.hash_function(),
-                              thrust::make_discard_iterator(),
+                              cuda::make_discard_iterator(),
                               out_build_begin,
                               stream.value());
   } else {
@@ -470,7 +469,7 @@ std::size_t get_full_join_size(
                                 iter + probe_table_num_rows,
                                 equality,
                                 hash_table.hash_function(),
-                                thrust::make_discard_iterator(),
+                                cuda::make_discard_iterator(),
                                 out_build_begin,
                                 stream.value());
     };
