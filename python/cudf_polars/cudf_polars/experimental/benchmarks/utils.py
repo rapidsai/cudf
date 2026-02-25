@@ -1018,8 +1018,8 @@ def build_parser(num_queries: int = 22) -> argparse.ArgumentParser:
         default=None,
         type=float,
         help=textwrap.dedent("""\
-            Passed to dask_cuda.LocalCUDACluster to control the release
-            threshold for RMM pool memory.
+            Passed to dask_cuda.LocalCUDACluster or CudaAsyncMemoryResource
+            to control the release threshold for RMM pool memory.
             Default: None (no release threshold)"""),
     )
     parser.add_argument(
@@ -1291,10 +1291,10 @@ class QueryResult:
     frame: pl.LazyFrame
         The result of the query.
     sort_by: list[tuple[str, bool]]
-        The columns that the query sorts by. Each tuple contains
-        (column_name, descending_flag).
+        The columns that the query sorts by. Each tuple contains (column_name, descending_flag).
     limit: int | None
         The limit of the query, if any.
+
     """
 
     frame: pl.LazyFrame
@@ -1302,9 +1302,17 @@ class QueryResult:
     limit: int | None = None
 
 
-def check_input_data_type(run_config: RunConfig) -> Literal["decimal", "float"]:
+def check_input_data_type(
+    run_config: RunConfig,
+) -> tuple[Literal["decimal", "float"], Literal["date", "timestamp"]]:
     """
-    Check whether the input data uses Decimal or Float for monetary columns.
+    Check the input data types columns with variable data types.
+
+    Our queries might be run on datasets that use different data types for different
+    types of columns. Our validation supports:
+
+    1. 'decimal' or 'float' for non-integer numeric columns (e.g. 'c_acctbal')
+    2. 'date' or 'timestamp' for date type columns (e.g. 'o_orderdate')
 
     For PDS-H, this is determined by the ``c_acctbal`` column in the
     customer table.  For PDS-DS, we use ``i_current_price`` from the item table.
@@ -1316,10 +1324,29 @@ def check_input_data_type(run_config: RunConfig) -> Literal["decimal", "float"]:
     path = (Path(run_config.dataset_path) / table).with_suffix(run_config.suffix)
     t = pl.scan_parquet(path).select(pl.col(col)).collect_schema()[col]
 
+    num_type: Literal["decimal", "float"]
+    date_type: Literal["date", "timestamp"]
     if t.is_decimal():
-        return "decimal"
+        num_type = "decimal"
     else:
-        return "float"
+        num_type = "float"
+
+    if run_config.query_set == "pdsds":
+        date_type = "date"
+    else:
+        path = (Path(run_config.dataset_path) / "orders").with_suffix(run_config.suffix)
+        t = (
+            pl.scan_parquet(path)
+            .select(pl.col("o_orderdate"))
+            .collect_schema()["o_orderdate"]
+        )
+
+        if t.to_python() is datetime.date:
+            date_type = "date"
+        else:
+            date_type = "timestamp"
+
+    return num_type, date_type
 
 
 def run_polars(
@@ -1343,7 +1370,7 @@ def run_polars(
     records: defaultdict[int, list[Record]] = defaultdict(list)
     plans: dict[int, SerializablePlan] = {}
     engine: pl.GPUEngine | None = None
-    input_data_type: Literal["decimal", "float"] = check_input_data_type(run_config)
+    numeric_type, date_type = check_input_data_type(run_config)
 
     if args.validate_directory is not None:
         validation_files = list_validation_files(args.validate_directory)
@@ -1358,7 +1385,9 @@ def run_polars(
             parquet_options = {}
         engine = pl.GPUEngine(
             raise_on_fail=True,
-            memory_resource=rmm.mr.CudaAsyncMemoryResource()
+            memory_resource=rmm.mr.CudaAsyncMemoryResource(
+                release_threshold=args.rmm_release_threshold
+            )
             if run_config.rmm_async
             else None,
             cuda_stream_policy=run_config.stream_policy,
@@ -1384,10 +1413,12 @@ def run_polars(
 
         records[q_id] = []
 
-        if input_data_type == "decimal":
-            casts = benchmark.EXPECTED_CASTS_DECIMAL.get(q_id, [])
-        else:
-            casts = benchmark.EXPECTED_CASTS_FLOAT.get(q_id, [])
+        casts = benchmark.EXPECTED_CASTS.get(q_id, [])
+
+        if numeric_type == "decimal":
+            casts.extend(benchmark.EXPECTED_CASTS_DECIMAL.get(q_id, []))
+        if date_type == "timestamp":
+            casts.extend(benchmark.EXPECTED_CASTS_TIMESTAMP.get(q_id, []))
 
         # First, compute / load the expected result if we're validating
         # We assume the expected result is deterministic / the same for each iteration

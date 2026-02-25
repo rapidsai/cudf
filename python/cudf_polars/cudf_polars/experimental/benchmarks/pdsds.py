@@ -75,7 +75,7 @@ class PDSDSPolarsQueries(PDSDSQueries):
     """Polars Queries."""
 
     q_impl = "polars_impl"
-    # See comments for EXPECTED_CASTS_DECIMAL and EXPECTED_CASTS_FLOAT
+    # See comments for EXPECTED_CASTS and EXPECTED_CASTS_DECIMAL
     # in cudf/python/cudf_polars/cudf_polars/experimental/benchmarks/pdsh.py
     # for more details.
     EXPECTED_CASTS_DECIMAL: ClassVar[dict] = {
@@ -93,30 +93,19 @@ class PDSDSPolarsQueries(PDSDSQueries):
             pl.col("sales").cast(pl.Decimal(18, 2)),
             pl.col("returns1").cast(pl.Decimal(18, 2)),
         ],
-        6: [pl.col("cnt").cast(COUNT_DTYPE)],
         8: [pl.col("sum(ss_net_profit)").cast(pl.Decimal(18, 2))],
-        10: [
-            pl.col("cnt1").cast(COUNT_DTYPE),
-            pl.col("cnt2").cast(COUNT_DTYPE),
-            pl.col("cnt3").cast(COUNT_DTYPE),
-            pl.col("cnt4").cast(COUNT_DTYPE),
-            pl.col("cnt5").cast(COUNT_DTYPE),
-            pl.col("cnt6").cast(COUNT_DTYPE),
-        ],
         12: [
             pl.col("itemrevenue").cast(pl.Decimal(18, 2)),
             pl.col("revenueratio").cast(pl.Decimal(38, 2)),
         ],
         13: [pl.col("sum(ss_ext_wholesale_cost)").cast(pl.Decimal(18, 2))],
-        14: [pl.col("sum_number_sales").cast(COUNT_DTYPE)],
         15: [pl.col("sum(cs_sales_price)").cast(pl.Decimal(18, 2))],
         16: [
-            pl.col("order count").cast(COUNT_DTYPE),
             pl.col("total shipping cost").cast(pl.Decimal(18, 2)),
             pl.col("total net profit").cast(pl.Decimal(18, 2)),
         ],
     }
-    EXPECTED_CASTS_FLOAT: ClassVar[dict] = {
+    EXPECTED_CASTS: ClassVar[dict] = {
         6: [pl.col("cnt").cast(COUNT_DTYPE)],
         10: [
             pl.col("cnt1").cast(COUNT_DTYPE),

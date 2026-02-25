@@ -24,10 +24,10 @@
 
 #include <cuda/atomic>
 #include <cuda/functional>
+#include <cuda/iterator>
 #include <cuda/std/utility>
 #include <thrust/for_each.h>
 #include <thrust/gather.h>
-#include <thrust/iterator/discard_iterator.h>
 #include <thrust/iterator/permutation_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/reduce.h>
@@ -157,7 +157,7 @@ reduce_to_column_tree(tree_meta_t const& tree,
                              sorted_col_ids.begin(),
                              sorted_col_ids.end(),
                              ordered_node_ids.begin(),
-                             thrust::make_discard_iterator(),
+                             cuda::make_discard_iterator(),
                              unique_node_ids.begin());
 
   thrust::copy_n(

@@ -51,45 +51,8 @@ os.environ["KVIKIO_NTHREADS"] = os.environ.get("KVIKIO_NTHREADS", "8")
 # Decimal (rather than Float) for account balances, etc.
 # EXPECTED_CASTS_FLOATS should be used when the input data uses
 # Float (rather than Decimal) for account balances, etc.
-EXPECTED_CASTS_DECIMAL = {
-    1: [
-        pl.col("sum_qty").cast(pl.Decimal(15, 2)),
-        pl.col("sum_base_price").cast(pl.Decimal(15, 2)),
-        pl.col("sum_disc_price").cast(pl.Float64()),
-        pl.col("sum_charge").cast(pl.Float64()),
-        pl.col("avg_disc").cast(pl.Float64()),
-        pl.col("avg_price").cast(pl.Float64()),
-        pl.col("avg_qty").cast(pl.Float64()),
-        pl.col("count_order").cast(COUNT_DTYPE),
-    ],
-    3: [pl.col("revenue").cast(pl.Decimal(38, 2))],
-    4: [pl.col("order_count").cast(COUNT_DTYPE)],
-    5: [pl.col("revenue").cast(pl.Decimal(38, 2))],
-    6: [pl.col("revenue").cast(pl.Decimal(38, 2))],
-    7: [pl.col("l_year").cast(pl.Int32()), pl.col("revenue").cast(pl.Decimal(38, 2))],
-    8: [pl.col("o_year").cast(pl.Int32()), pl.col("mkt_share").cast(pl.Decimal(38, 2))],
-    9: [
-        pl.col("o_year").cast(pl.Int32()),
-        pl.col("sum_profit").cast(pl.Decimal(38, 2)),
-    ],
-    10: [pl.col("revenue").cast(pl.Decimal(38, 2))],
-    12: [
-        pl.col("high_line_count").cast(pl.Int32()),
-        pl.col("low_line_count").cast(pl.Int32()),
-    ],
-    13: [pl.col("c_count").cast(COUNT_DTYPE), pl.col("custdist").cast(COUNT_DTYPE)],
-    15: [pl.col("total_revenue").cast(pl.Decimal(38, 2))],
-    16: [pl.col("supplier_cnt").cast(COUNT_DTYPE)],
-    18: [pl.col("sum(l_quantity)").cast(pl.Decimal(15, 2))],
-    19: [pl.col("revenue").cast(pl.Decimal(38, 2))],
-    21: [pl.col("numwait").cast(COUNT_DTYPE)],
-    22: [
-        pl.col("numcust").cast(COUNT_DTYPE),
-        pl.col("totacctbal").cast(pl.Decimal(15, 2)),
-    ],
-}
 
-EXPECTED_CASTS_FLOAT = {
+EXPECTED_CASTS = {
     1: [pl.col("count_order").cast(COUNT_DTYPE)],
     4: [pl.col("order_count").cast(COUNT_DTYPE)],
     7: [pl.col("l_year").cast(pl.Int32())],
@@ -106,12 +69,48 @@ EXPECTED_CASTS_FLOAT = {
 }
 
 
+EXPECTED_CASTS_DECIMAL = {
+    1: [
+        pl.col("sum_qty").cast(pl.Decimal(15, 2)),
+        pl.col("sum_base_price").cast(pl.Decimal(15, 2)),
+        pl.col("sum_disc_price").cast(pl.Float64()),
+        pl.col("sum_charge").cast(pl.Float64()),
+        pl.col("avg_disc").cast(pl.Float64()),
+        pl.col("avg_price").cast(pl.Float64()),
+        pl.col("avg_qty").cast(pl.Float64()),
+    ],
+    3: [pl.col("revenue").cast(pl.Decimal(38, 2))],
+    5: [pl.col("revenue").cast(pl.Decimal(38, 2))],
+    6: [pl.col("revenue").cast(pl.Decimal(38, 2))],
+    7: [pl.col("revenue").cast(pl.Decimal(38, 2))],
+    8: [pl.col("mkt_share").cast(pl.Decimal(38, 2))],
+    9: [
+        pl.col("sum_profit").cast(pl.Decimal(38, 2)),
+    ],
+    10: [pl.col("revenue").cast(pl.Decimal(38, 2))],
+    15: [pl.col("total_revenue").cast(pl.Decimal(38, 2))],
+    18: [pl.col("sum(l_quantity)").cast(pl.Decimal(15, 2))],
+    19: [pl.col("revenue").cast(pl.Decimal(38, 2))],
+    22: [
+        pl.col("totacctbal").cast(pl.Decimal(15, 2)),
+    ],
+}
+
+# When operating on timestamp data from tpchgen-rs, duckdb uses
+# Datetime[us, tz=none] while polars uses Datetime[ms, tz=none].
+EXPECTED_CASTS_TIMESTAMP = {
+    3: [pl.col("o_orderdate").cast(pl.Datetime("ms"))],
+    18: [pl.col("o_orderdate").cast(pl.Datetime("ms"))],
+}
+
+
 class PDSHQueries:
     """PDS-H query definitions."""
 
     name: str = "pdsh"
+    EXPECTED_CASTS = EXPECTED_CASTS
     EXPECTED_CASTS_DECIMAL = EXPECTED_CASTS_DECIMAL
-    EXPECTED_CASTS_FLOAT = EXPECTED_CASTS_FLOAT
+    EXPECTED_CASTS_TIMESTAMP = EXPECTED_CASTS_TIMESTAMP
 
     @property
     def duckdb_queries(self) -> PDSHDuckDBQueries:
@@ -1023,8 +1022,9 @@ class PDSHDuckDBQueries:
     """PDS-H DuckDB query definitions."""
 
     name: str = "pdsh"
+    EXPECTED_CASTS = EXPECTED_CASTS
     EXPECTED_CASTS_DECIMAL = EXPECTED_CASTS_DECIMAL
-    EXPECTED_CASTS_FLOAT = EXPECTED_CASTS_FLOAT
+    EXPECTED_CASTS_TIMESTAMP = EXPECTED_CASTS_TIMESTAMP
 
     @staticmethod
     def q1(run_config: RunConfig) -> str:
