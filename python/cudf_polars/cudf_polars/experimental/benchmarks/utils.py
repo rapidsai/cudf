@@ -33,6 +33,11 @@ import polars.testing
 
 import rmm.statistics
 
+# The dtype for count() aggregations depends on the presence
+# of the polars-runtime-64 package (`polars[rt64]`).
+HAS_POLARS_RT_64 = pl.config.plr.RUNTIME_REPR == "rt64"
+COUNT_DTYPE = pl.UInt64() if HAS_POLARS_RT_64 else pl.UInt32()
+
 try:
     import duckdb
 
@@ -1276,14 +1281,40 @@ def validate_result(
         return ValidationResult(status="Passed", message=None)
 
 
+@dataclasses.dataclass
+class QueryResult:
+    """
+    Representation of a query's result.
+
+    Parameters
+    ----------
+    frame: pl.LazyFrame
+        The result of the query.
+    sort_by: list[tuple[str, bool]]
+        The columns that the query sorts by. Each tuple contains
+        (column_name, descending_flag).
+    limit: int | None
+        The limit of the query, if any.
+    """
+
+    frame: pl.LazyFrame
+    sort_by: list[tuple[str, bool]]
+    limit: int | None = None
+
+
 def check_input_data_type(run_config: RunConfig) -> Literal["decimal", "float"]:
     """
-    Check whether the input data uses Decimal or Float for account balances, etc.
+    Check whether the input data uses Decimal or Float for monetary columns.
 
-    This is determined by looking at the ``c_acctbal`` column of the customer table.
+    For PDS-H, this is determined by the ``c_acctbal`` column in the
+    customer table.  For PDS-DS, we use ``i_current_price`` from the item table.
     """
-    path = (Path(run_config.dataset_path) / "customer").with_suffix(run_config.suffix)
-    t = pl.scan_parquet(path).select(pl.col("c_acctbal")).collect_schema()["c_acctbal"]
+    if run_config.query_set == "pdsds":
+        table, col = "item", "i_current_price"
+    else:
+        table, col = "customer", "c_acctbal"
+    path = (Path(run_config.dataset_path) / table).with_suffix(run_config.suffix)
+    t = pl.scan_parquet(path).select(pl.col(col)).collect_schema()[col]
 
     if t.is_decimal():
         return "decimal"
@@ -1463,8 +1494,9 @@ def run_polars(
                     pprint.pprint(validation_result.details)
 
             else:
+                prefix = "✅ " if validation_result else ""
                 print(
-                    f"Query {q_id} - Iteration {i} finished in {record.duration:0.4f}s",
+                    f"{prefix}Query {q_id} - Iteration {i} finished in {record.duration:0.4f}s",
                     flush=True,
                 )
             records[q_id].append(record)
@@ -1534,7 +1566,7 @@ def run_polars(
                 f"{len(validation_failures)} queries failed validation: {sorted(set(validation_failures))}"
             )
         else:
-            print("All validated queries passed.")
+            print("✅ All validated queries passed.")
 
     args.output.write(json.dumps(run_config.serialize(engine=engine)))
     args.output.write("\n")
