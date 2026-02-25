@@ -421,18 +421,77 @@ def get_units(value):
 
 # for pandas compatibility
 class MonthEnd:
+    def __init__(self, n: int = 1, *, freqstr: str | None = None) -> None:
+        self._n = n
+        self._freqstr = freqstr
+
+    @property
+    def n(self) -> int:
+        return self._n
+
+    @property
+    def freqstr(self) -> str:
+        if self._freqstr is not None:
+            return self._freqstr
+        return self._maybe_as_fast_pandas_offset().freqstr
+
     def _maybe_as_fast_pandas_offset(self):
-        return pd._libs.tslibs.offsets.MonthEnd()
+        return pd._libs.tslibs.offsets.MonthEnd(n=self._n)
+
+    def __mul__(self, other):
+        if not is_integer(other):
+            return NotImplemented
+        return MonthEnd(n=self._n * int(other))
+
+    def __rmul__(self, other):
+        return self.__mul__(other)
 
     def __eq__(self, other):
+        if isinstance(other, str):
+            return self.freqstr == other
+        if isinstance(other, MonthEnd):
+            return self._n == other._n
         return self._maybe_as_fast_pandas_offset() == other
 
 
 class YearEnd:
+    def __init__(
+        self, n: int = 1, *, month: int = 12, freqstr: str | None = None
+    ) -> None:
+        self._n = n
+        self._month = month
+        self._freqstr = freqstr
+
+    @property
+    def n(self) -> int:
+        return self._n
+
+    @property
+    def month(self) -> int:
+        return self._month
+
+    @property
+    def freqstr(self) -> str:
+        if self._freqstr is not None:
+            return self._freqstr
+        return self._maybe_as_fast_pandas_offset().freqstr
+
     def _maybe_as_fast_pandas_offset(self):
-        return pd._libs.tslibs.offsets.YearEnd(month=12)
+        return pd._libs.tslibs.offsets.YearEnd(n=self._n, month=self._month)
+
+    def __mul__(self, other):
+        if not is_integer(other):
+            return NotImplemented
+        return YearEnd(n=self._n * int(other), month=self._month)
+
+    def __rmul__(self, other):
+        return self.__mul__(other)
 
     def __eq__(self, other):
+        if isinstance(other, str):
+            return self.freqstr == other
+        if isinstance(other, YearEnd):
+            return self._n == other._n and self._month == other._month
         return self._maybe_as_fast_pandas_offset() == other
 
 
@@ -547,16 +606,35 @@ class DateOffset:
 
     def __eq__(self, other):
         if isinstance(other, str):
-            return self._maybe_as_fast_pandas_offset() == other
+            return self.freqstr == other
+        if isinstance(other, (MonthEnd, YearEnd)):
+            return (
+                self._pandas_offset() == other._maybe_as_fast_pandas_offset()
+            )
+        if isinstance(
+            other, (pd_offset.Tick, pd_offset.Week, pd_offset.DateOffset)
+        ):
+            return self._pandas_offset() == other
         if not isinstance(other, DateOffset):
             return NotImplemented
-        return self.kwds == other.kwds
+        return self.kwds == other.kwds and self.n == other.n
 
     def __init__(self, n=1, normalize=False, **kwds):
         if normalize:
             raise NotImplementedError(
                 "normalize not yet supported for DateOffset"
             )
+
+        self._weekday = kwds.pop("weekday", None)
+        if self._weekday is not None:
+            if not is_integer(self._weekday):
+                raise TypeError("weekday must be an integer")
+            self._weekday = int(self._weekday)
+            if not 0 <= self._weekday <= 6:
+                raise ValueError("weekday must be between 0 and 6")
+
+        self._n = n
+        self._freqstr: str | None = kwds.pop("_freqstr", None)
 
         all_possible_units = {
             "years",
@@ -633,6 +711,29 @@ class DateOffset:
     @property
     def kwds(self):
         return self._kwds
+
+    @property
+    def n(self) -> int:
+        if self._n != 1:
+            return self._n
+        if len(self._kwds) == 1:
+            return int(next(iter(self._kwds.values())))
+        return 1
+
+    @property
+    def freqstr(self) -> str:
+        if self._freqstr is not None:
+            return self._freqstr
+        return self._pandas_offset().freqstr
+
+    def _pandas_offset(self):
+        if self._freqstr is not None:
+            return pd.tseries.frequencies.to_offset(self._freqstr)
+        if self._weekday is not None and "weeks" in self._kwds:
+            return pd_offset.Week(
+                n=self._kwds.get("weeks", 1), weekday=self._weekday
+            )
+        return self._maybe_as_fast_pandas_offset()
 
     def _combine_months_and_years(self, **kwargs):
         # TODO: if months is zero, don't do a binop
@@ -713,6 +814,18 @@ class DateOffset:
         new_scalars = {k: -v for k, v in self._kwds.items()}
         return DateOffset(**new_scalars)
 
+    def __mul__(self, other):
+        if not is_integer(other):
+            return NotImplemented
+        scale = int(other)
+        return DateOffset(
+            **{k: v * scale for k, v in self._kwds.items()},
+            weekday=self._weekday,
+        )
+
+    def __rmul__(self, other):
+        return self.__mul__(other)
+
     def __repr__(self):
         includes = []
         for unit in sorted(self._UNITS_TO_CODES):
@@ -731,6 +844,18 @@ class DateOffset:
         Parse a string and return a DateOffset object
         expects strings of the form 3D, 25W, 10ms, 42ns, etc.
         """
+        if "-" in freqstr:
+            offset = pd.tseries.frequencies.to_offset(freqstr)
+            if isinstance(offset, pd_offset.MonthEnd):
+                return MonthEnd(n=offset.n, freqstr=offset.freqstr)
+            if isinstance(offset, pd_offset.YearEnd):
+                return YearEnd(
+                    n=offset.n, month=offset.month, freqstr=offset.freqstr
+                )
+            if isinstance(offset, (pd_offset.Tick, pd_offset.Week)):
+                return cls._from_pandas_ticks_or_weeks(offset)
+            raise ValueError(f"Invalid frequency string: {freqstr}")
+
         match = cls._FREQSTR_REGEX.match(freqstr)
 
         if match is None:
@@ -744,23 +869,38 @@ class DateOffset:
         # Certain frequency strings are deprecated in pandas
         # and automatically swapped on construction
         if freq_part in ("M", "ME"):
-            return MonthEnd()
+            month_end = MonthEnd(n=int(numeric_part or 1))
+            month_end._freqstr = freqstr
+            return month_end
         elif freq_part in ("Y", "YE"):
-            return YearEnd()
+            year_end = YearEnd(n=int(numeric_part or 1))
+            year_end._freqstr = freqstr
+            return year_end
 
         if freq_part not in cls._CODES_TO_UNITS:
             raise ValueError(f"Cannot interpret frequency str: {freqstr}")
 
-        return cls(**{cls._CODES_TO_UNITS[freq_part]: int(numeric_part)})
+        offset = cls(**{cls._CODES_TO_UNITS[freq_part]: int(numeric_part)})
+        offset._freqstr = freqstr
+        return offset
 
     @classmethod
     def _from_pandas_ticks_or_weeks(
         cls,
         tick: pd.tseries.offsets.Tick | pd.tseries.offsets.Week,
     ) -> Self:
-        return cls(**{cls._TICK_OR_WEEK_TO_UNITS[type(tick)]: tick.n})
+        offset = cls(
+            **{cls._TICK_OR_WEEK_TO_UNITS[type(tick)]: tick.n},
+            weekday=getattr(tick, "weekday", None),
+        )
+        offset._freqstr = tick.freqstr
+        return offset
 
     def _maybe_as_fast_pandas_offset(self):
+        if self._weekday is not None and "weeks" in self.kwds:
+            return pd_offset.Week(
+                n=self.kwds.get("weeks", 1), weekday=self._weekday
+            )
         if (
             len(self.kwds) == 1
             and _has_fixed_frequency(self)
