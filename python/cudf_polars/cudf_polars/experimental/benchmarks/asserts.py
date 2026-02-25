@@ -201,22 +201,42 @@ def assert_tpch_result_equal(
         #
         # For epsilon less than our tolerance, we'd want to consider this valid.
 
-        (split_at,) = left.select(sort_by_cols).max().to_dicts()
-        # Note that we multiple abs_tol by 2; In our example above, our split point will
+        # Use the lexicographic last row in the query's sort order (ORDER BY ...).
+        sort_by_descending_list = list(sort_by_descending)
+        (split_at,) = (
+            left.select(sort_by_cols)
+            .sort(by=sort_by_cols, descending=sort_by_descending_list)
+            .tail(1)
+            .to_dicts()
+        )
+        # Note that we multiply abs_tol by 2; In our example above, our split point will
         # be d + epsilon; but we want to consider d - epsilon tied to the "real" split point
         # of 'd' as well.
+        #
+        # "Strictly before" in the sort order: for each column, ascending means "before" =
+        # less than, descending means "before" = greater than. Build lexicographic
+        # "row < split_at" as: cond_0 or (eq_0 and cond_1) or (eq_0 and eq_1 and cond_2) ...
 
         exprs = []
-        for col, val in split_at.items():
+        for (col, val), desc in zip(
+            split_at.items(), sort_by_descending_list, strict=True
+        ):
             if isinstance(val, float):
+                # eq = (pl.col(col) >= val - 2 * abs_tol) & (pl.col(col) <= val + 2 * abs_tol)
                 exprs.append(
                     pl.col(col).lt(val - 2 * abs_tol)
                     | pl.col(col).gt(val + 2 * abs_tol)
                 )
             else:
-                exprs.append(pl.col(col).lt(val))
+                if desc:
+                    # then "before" means "greater than"
+                    op = pl.col(col).gt
+                else:
+                    op = pl.col(col).lt
+                exprs.append(op(val))
 
         expr = pl.Expr.or_(*exprs)
+
         result_first = left.filter(expr)
         expected_first = right.filter(expr)
 
