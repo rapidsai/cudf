@@ -513,11 +513,8 @@ TEST_F(CudftableTest, DeviceBufferSource)
 
   rmm::device_buffer device_buffer(buffer.size(), cudf::get_default_stream());
   auto const stream = cudf::get_default_stream();
-  CUDF_CUDA_TRY(cudaMemcpyAsync(device_buffer.data(),
-                                buffer.data(),
-                                buffer.size(),
-                                cudaMemcpyHostToDevice,
-                                stream.value()));
+  CUDF_CUDA_TRY(cudaMemcpyAsync(
+    device_buffer.data(), buffer.data(), buffer.size(), cudaMemcpyHostToDevice, stream.value()));
   // Ensure the data is copied to the device before the host read, because the host read does not
   // take the stream
   stream.synchronize();
