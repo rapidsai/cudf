@@ -7,6 +7,7 @@
 
 #include <cudf/column/column_device_view_base.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/utilities/type_dispatcher.hpp>
 
 #include <jit/cache.hpp>
 
@@ -114,25 +115,54 @@ std::vector<std::string> input_type_names(
   return names;
 }
 
-std::string get_jit_element_type_name(column_view const& view)
-{
-  if (is_fixed_width(view.type()) || view.type().id() == type_id::STRING) {
+namespace {
+
+std::string get_jit_element_type_name_impl(column_view const& view);
+
+struct jit_element_type_name_fn {
+  template <typename T>
+    requires(is_fixed_width<T>() || std::is_same_v<T, cudf::string_view>)
+  std::string operator()(column_view const& view) const
+  {
     return type_to_name(view.type());
-  } else if (view.type().id() == type_id::DICTIONARY32) {
+  }
+
+  template <typename T>
+    requires(std::is_same_v<T, cudf::dictionary32>)
+  std::string operator()(column_view const& view) const
+  {
     return std::format(
       "cudf::dictionary_element<{}, {}>",
-      get_jit_element_type_name(
-        view.child(column_device_view_core::dictionary_offsets_column_index)),
-      get_jit_element_type_name(view.child(column_device_view_core::dictionary_keys_column_index)));
-  } else {
+      get_jit_element_type_name_impl(
+        view.child(column_device_view::dictionary_indices_column_index)),
+      get_jit_element_type_name_impl(view.child(column_device_view::dictionary_keys_column_index)));
+  }
+
+  template <typename T>
+    requires(!is_fixed_width<T>() && !std::is_same_v<T, cudf::string_view> &&
+             !std::is_same_v<T, cudf::dictionary32>)
+  std::string operator()(column_view const& view) const
+  {
     CUDF_FAIL("Unsupported type for JIT compilation: " + type_to_name(view.type()));
   }
+};
+
+std::string get_jit_element_type_name_impl(column_view const& view)
+{
+  return cudf::type_dispatcher(view.type(), jit_element_type_name_fn{}, view);
+}
+
+std::string get_jit_element_type_name(column_view const& view)
+{
+  return get_jit_element_type_name_impl(view);
 }
 
 std::string get_jit_element_type_name(scalar_column_view const& view)
 {
   return get_jit_element_type_name(view.as_column_view());
 }
+
+}  // namespace
 
 input_reflection reflect_input(std::variant<column_view, scalar_column_view> const& input)
 {

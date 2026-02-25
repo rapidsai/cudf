@@ -429,7 +429,7 @@ void perform_checks(std::optional<size_type> in_row_size, data_type output_type,
                            thrust::make_transform_iterator(inputs.end(), get_type),
                            [](data_type t) {
                              return is_fixed_width(t) || (t.id() == type_id::STRING) ||
-                                    (t.id() == type_id::DICTIONARY32);
+                                    cudf::is_dictionary(t);
                            }),
                "Transforms only support input of fixed-width, string, and dictionary types",
                std::invalid_argument);
