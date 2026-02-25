@@ -58,7 +58,7 @@ dependencies:
 - ninja
 - notebook
 - numba-cuda>=0.22.2
-- numba>=0.60.0,<0.62.0
+- numba>=0.60.0,<0.65.0
 - numpy>=1.23,<3.0
 - numpydoc
 - nvidia-ml-py>=12
