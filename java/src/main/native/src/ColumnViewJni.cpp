@@ -1562,7 +1562,10 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_transform(
     std::string n_udf(n_j_udf.get());
     cudf::transform_input inputs[] = {*column};
     return release_as_jlong(
-      cudf::transform_extended(inputs, n_udf, cudf::data_type(cudf::type_id::INT32), j_is_ptx));
+      cudf::transform_extended(inputs,
+                               n_udf,
+                               cudf::data_type(cudf::type_id::INT32),
+                               j_is_ptx ? cudf::transform_spec::PTX : cudf::transform_spec::CUDA));
   }
   JNI_CATCH(env, 0);
 }

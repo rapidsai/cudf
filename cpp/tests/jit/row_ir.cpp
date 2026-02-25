@@ -262,7 +262,7 @@ TEST_F(RowIRCudaCodeGenTest, AstConversionBasic)
 
   ASSERT_EQ(transform_args.scalar_columns.size(), 1);
   ASSERT_EQ(transform_args.scalar_columns[0]->view().size(), 1);
-  EXPECT_FALSE(transform_args.is_ptx);
+  EXPECT_EQ(transform_args.source_type, cudf::udf_source_type::CUDA);
   EXPECT_EQ(transform_args.is_null_aware, null_aware::NO);
   EXPECT_EQ(transform_args.null_policy, output_nullability::ALL_VALID);
   EXPECT_EQ(transform_args.output_type, data_type{type_id::INT32});
@@ -298,7 +298,7 @@ return;
   auto result = cudf::transform_extended(transform_args.inputs,
                                          transform_args.udf,
                                          transform_args.output_type,
-                                         transform_args.is_ptx,
+                                         transform_args.source_type,
                                          transform_args.user_data,
                                          transform_args.is_null_aware,
                                          transform_args.row_size,
