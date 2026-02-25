@@ -554,6 +554,19 @@ class Series(SingleColumnFrame, IndexedFrame):
             data = {}
         if dtype is not None:
             dtype = cudf.dtype(dtype)
+        if (
+            cudf.get_option("mode.pandas_compatible")
+            and dtype is not None
+            and getattr(dtype, "kind", None) == "f"
+            and data is not None
+            and hasattr(data, "dtype")
+            and (
+                getattr(data.dtype, "kind", None) in ("m", "M")
+                or isinstance(data.dtype, pd.PeriodDtype)
+            )
+        ):
+            type_name = type(data).__name__.rstrip("Index")
+            raise TypeError(f"Cannot cast {type_name} to {dtype}")
         attrs = None
         if isinstance(data, (pd.Series, pd.Index, Index, Series)):
             attrs = deepcopy(getattr(data, "attrs", None))
