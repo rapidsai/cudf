@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2023-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -42,6 +42,7 @@ compute_row_frequencies(table_view const& input,
  * A histogram column is a structs column `STRUCT<T, int64_t>` where T is type of the input
  * values.
  *
+ * @param values Based the empty histogram the data types in this column
  * @returns An empty histogram column
  */
 [[nodiscard]] std::unique_ptr<column> make_empty_histogram_like(column_view const& values);
