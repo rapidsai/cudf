@@ -194,7 +194,6 @@ async def broadcast_join_actor(
                     context.br(), allow_overbooking=True
                 )
             )
-            del msg
             small_size += small_chunks[-1].data_alloc_size(MemoryType.DEVICE)
 
         if need_allgather:
@@ -531,7 +530,6 @@ async def _broadcast_join(
             context.br(), allow_overbooking=True
         )
         msg_seq = msg.sequence_number
-        del msg
 
         await _broadcast_join_large_chunk(
             context,
@@ -684,7 +682,6 @@ async def drain_into_shuffle(
                     context.br(), allow_overbooking=True
                 )
             )
-            del msg
         await shuffle.insert_finished()
 
 
@@ -945,12 +942,8 @@ class PartitioningState:
             elif inter_rank_hashed:
                 inter_rank_indices = metadata.partitioning.inter_rank.column_indices
             elif local_hashed:
-                if nranks == 1 and local_modulus:
-                    inter_rank_modulus = local_modulus
-                    inter_rank_indices = metadata.partitioning.local.column_indices
-                    local_modulus = None
-                else:
-                    local_indices = metadata.partitioning.local.column_indices
+                # Use equivalent to trivial inter-rank partitioning.
+                inter_rank_indices = metadata.partitioning.local.column_indices
 
         return cls(
             inter_rank_modulus=inter_rank_modulus,
@@ -1168,7 +1161,6 @@ async def _sample_chunks(
         chunks.append(chunk)
         total_size += chunk.data_alloc_size(MemoryType.DEVICE)
         total_rows += chunk.table_view().num_rows()
-        del msg
     return _SideSample(chunks=chunks, total_size=total_size, total_rows=total_rows)
 
 
