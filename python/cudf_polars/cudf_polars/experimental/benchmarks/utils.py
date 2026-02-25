@@ -792,7 +792,7 @@ def execute_query(
     run_config: RunConfig,
     args: argparse.Namespace,
     engine: None | pl.GPUEngine = None,
-) -> pl.DataFrame:
+) -> tuple[pl.DataFrame, float]:
     """Execute a query with NVTX annotation."""
     with nvtx.annotate(
         message=f"Query {q_id} - Iteration {i}",
@@ -800,7 +800,9 @@ def execute_query(
         color="green",
     ):
         if run_config.executor == "cpu":
-            return q.collect(engine="streaming")
+            t0 = time.monotonic()
+            result = q.collect(engine="streaming")
+            t1 = time.monotonic()
 
         elif CUDF_POLARS_AVAILABLE:
             assert isinstance(engine, pl.GPUEngine)
@@ -811,20 +813,29 @@ def execute_query(
                     translator.config_options
                 )
                 if run_config.executor == "in-memory":
-                    return ir.evaluate(
+                    t0 = time.monotonic()
+                    result = ir.evaluate(
                         cache={}, timer=None, context=context
                     ).to_polars()
+                    t1 = time.monotonic()
                 elif run_config.executor == "streaming":
-                    return evaluate_streaming(
+                    t0 = time.monotonic()
+                    result = evaluate_streaming(
                         ir,
                         translator.config_options,
                     )
-                assert_never(run_config.executor)
+                    t1 = time.monotonic()
+                else:
+                    assert_never(run_config.executor)
             else:
-                return q.collect(engine=engine)
+                t0 = time.monotonic()
+                result = q.collect(engine=engine)
+                t1 = time.monotonic()
 
         else:
             raise RuntimeError("The requested engine is not supported.")
+
+        return result, t1 - t0
 
 
 def _query_type(num_queries: int) -> Callable[[str | int], list[int]]:
@@ -1353,9 +1364,7 @@ def run_polars_query_iteration(
     client: Any,
 ) -> SuccessRecord:
     """Run a single query iteration. Caller must wrap in try/except."""
-    t0 = time.monotonic()
-    result = execute_query(q_id, iteration, q, run_config, args, engine)
-    t1 = time.monotonic()
+    result, duration = execute_query(q_id, iteration, q, run_config, args, engine)
 
     if run_config.shuffle == "rapidsmpf" and run_config.gather_shuffle_stats:
         from rapidsmpf.integrations.dask.shuffler import (
@@ -1391,7 +1400,7 @@ def run_polars_query_iteration(
     return SuccessRecord(
         query=q_id,
         iteration=iteration,
-        duration=t1 - t0,
+        duration=duration,
         shuffle_stats=shuffle_stats,
         validation_result=validation_result,
     )
