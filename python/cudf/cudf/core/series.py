@@ -1418,6 +1418,12 @@ class Series(SingleColumnFrame, IndexedFrame):
                 if len(self) > len(preprocess):
                     lines[-1] = lines[-1] + ", Length: %d" % len(self)
                 lines[-1] = lines[-1] + ", "
+            elif lines[-1].startswith("Freq: "):
+                freq_line = lines[-1].split(", dtype:", 1)[0]
+                if len(self) > len(preprocess) and "Length:" not in freq_line:
+                    freq_line = freq_line + ", Length: %d" % len(self)
+                lines = lines[:-1]
+                lines.append(freq_line + ", ")
             elif lines[-1].startswith("Length: "):
                 lines = lines[:-1]
                 lines.append("Length: %d" % len(self))
