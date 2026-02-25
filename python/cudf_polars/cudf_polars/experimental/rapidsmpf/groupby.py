@@ -220,7 +220,6 @@ async def _local_aggregation(
             decomposed.piecewise_ir,
             ir_context=ir_context,
         )
-        del msg
         total_size += chunk.data_alloc_size(MemoryType.DEVICE)
         evaluated_chunks.append(chunk)
         if total_size > target_partition_size and len(evaluated_chunks) > 1:
