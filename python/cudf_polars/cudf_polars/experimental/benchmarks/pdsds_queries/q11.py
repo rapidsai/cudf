@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
-from cudf_polars.experimental.benchmarks.utils import get_data
+from cudf_polars.experimental.benchmarks.utils import QueryResult, get_data
 
 if TYPE_CHECKING:
     from cudf_polars.experimental.benchmarks.utils import RunConfig
@@ -163,7 +163,7 @@ def create_year_total(
     )
 
 
-def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
+def polars_impl(run_config: RunConfig) -> QueryResult:
     """Query 11."""
     params = load_parameters(
         int(run_config.scale_factor),
@@ -250,53 +250,62 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     )
 
     # Join the tables and filter to get customers whose web and store spending grew from 2001 -> 2002
-    return (
-        t_s_secyear.join(
-            t_s_firstyear,
-            left_on="s_sec_customer_id",
-            right_on="s_first_customer_id",
-            how="inner",
-        )
-        .join(
-            t_w_firstyear,
-            left_on="s_sec_customer_id",
-            right_on="w_first_customer_id",
-            how="inner",
-        )
-        .join(
-            t_w_secyear,
-            left_on="s_sec_customer_id",
-            right_on="w_sec_customer_id",
-            how="inner",
-        )
-        .filter(
-            (pl.col("s_first_year_total") > 0)
-            & (pl.col("w_first_year_total") > 0)
-            & (
-                pl.when(pl.col("w_first_year_total") > 0)
-                .then(pl.col("w_sec_year_total") / pl.col("w_first_year_total"))
-                .otherwise(0.0)
-                > pl.when(pl.col("s_first_year_total") > 0)
-                .then(pl.col("s_sec_year_total") / pl.col("s_first_year_total"))
-                .otherwise(0.0)
+    return QueryResult(
+        frame=(
+            t_s_secyear.join(
+                t_s_firstyear,
+                left_on="s_sec_customer_id",
+                right_on="s_first_customer_id",
+                how="inner",
             )
-        )
-        .select(
-            [
-                pl.col("s_sec_customer_id").alias("customer_id"),
-                pl.col("customer_first_name"),
-                pl.col("customer_last_name"),
-                pl.col("customer_birth_country"),
-            ]
-        )
-        .sort(
-            [
-                "customer_id",
-                "customer_first_name",
-                "customer_last_name",
-                "customer_birth_country",
-            ],
-            nulls_last=True,
-        )
-        .limit(100)
+            .join(
+                t_w_firstyear,
+                left_on="s_sec_customer_id",
+                right_on="w_first_customer_id",
+                how="inner",
+            )
+            .join(
+                t_w_secyear,
+                left_on="s_sec_customer_id",
+                right_on="w_sec_customer_id",
+                how="inner",
+            )
+            .filter(
+                (pl.col("s_first_year_total") > 0)
+                & (pl.col("w_first_year_total") > 0)
+                & (
+                    pl.when(pl.col("w_first_year_total") > 0)
+                    .then(pl.col("w_sec_year_total") / pl.col("w_first_year_total"))
+                    .otherwise(0.0)
+                    > pl.when(pl.col("s_first_year_total") > 0)
+                    .then(pl.col("s_sec_year_total") / pl.col("s_first_year_total"))
+                    .otherwise(0.0)
+                )
+            )
+            .select(
+                [
+                    pl.col("s_sec_customer_id").alias("customer_id"),
+                    pl.col("customer_first_name"),
+                    pl.col("customer_last_name"),
+                    pl.col("customer_birth_country"),
+                ]
+            )
+            .sort(
+                [
+                    "customer_id",
+                    "customer_first_name",
+                    "customer_last_name",
+                    "customer_birth_country",
+                ],
+                nulls_last=True,
+            )
+            .limit(100)
+        ),
+        sort_by=[
+            ("customer_id", False),
+            ("customer_first_name", False),
+            ("customer_last_name", False),
+            ("customer_birth_country", False),
+        ],
+        limit=100,
     )
