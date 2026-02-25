@@ -19,9 +19,9 @@ from cudf.core._internals import binaryop
 from cudf.core.column.column import (
     ColumnBase,
     PylibcudfFunction,
-    as_callers_variant,
     as_column,
     column_empty,
+    np_bool_dtype_policy,
 )
 from cudf.core.column.numerical_base import NumericalBaseColumn
 from cudf.core.column.utils import access_columns
@@ -149,7 +149,7 @@ class NumericalColumn(NumericalBaseColumn):
         if self.dtype.kind != "f":
             return as_column(False, length=len(self))
         return PylibcudfFunction(
-            plc.unary.is_nan, as_callers_variant
+            plc.unary.is_nan, np_bool_dtype_policy
         ).execute_with_args(self)
 
     def notnan(self) -> ColumnBase:
@@ -162,7 +162,7 @@ class NumericalColumn(NumericalBaseColumn):
             return as_column(True, length=len(self))
         return PylibcudfFunction(
             plc.unary.is_not_nan,
-            as_callers_variant,
+            np_bool_dtype_policy,
         ).execute_with_args(self)
 
     def isnull(self) -> ColumnBase:
