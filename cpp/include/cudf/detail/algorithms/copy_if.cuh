@@ -13,10 +13,10 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cub/device/device_select.cuh>
+#include <cuda/iterator>
 #include <cuda/std/functional>
 #include <cuda/stream_ref>
 #include <thrust/copy.h>
-#include <thrust/iterator/discard_iterator.h>
 
 namespace cudf::detail {
 
@@ -235,7 +235,7 @@ void copy_if_async(InputIterator begin,
   auto const num_items = cuda::std::distance(begin, end);
 
   auto tmp_bytes = std::size_t{0};
-  auto no_out    = thrust::make_discard_iterator<int>();
+  auto no_out    = cuda::make_discard_iterator<int>();
   CUDF_CUDA_TRY(cub::DeviceSelect::If(
     nullptr, tmp_bytes, begin, output, no_out, num_items, predicate, stream.value()));
 
@@ -265,7 +265,7 @@ void copy_if_async(InputIterator begin,
   auto const num_items = cuda::std::distance(begin, end);
 
   auto tmp_bytes = std::size_t{0};
-  auto no_out    = thrust::make_discard_iterator<int>();
+  auto no_out    = cuda::make_discard_iterator<int>();
   CUDF_CUDA_TRY(cub::DeviceSelect::FlaggedIf(
     nullptr, tmp_bytes, begin, stencil, result, no_out, num_items, predicate, stream.value()));
 

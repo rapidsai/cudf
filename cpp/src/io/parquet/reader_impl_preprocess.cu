@@ -19,12 +19,13 @@
 
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/iterator>
 #include <thrust/fill.h>
-#include <thrust/iterator/discard_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/scan.h>
 #include <thrust/transform.h>
 
+#include <algorithm>
 #include <limits>
 #include <numeric>
 #include <vector>
@@ -297,7 +298,7 @@ void reader_impl::allocate_level_decode_space()
   subpass.level_decode_data =
     rmm::device_buffer(total_memory_size, _stream, cudf::get_current_device_resource_ref());
 
-  // Set buffer pointers for each page using running offsets
+  // Set buffer pointers and decoded count for each page using running offsets
   auto* current_ptr = static_cast<uint8_t*>(subpass.level_decode_data.data());
   for (size_t idx = 0; idx < num_pages; idx++) {
     if (def_level_sizes[idx] == 0) {
@@ -313,6 +314,15 @@ void reader_impl::allocate_level_decode_space()
       pages[idx].lvl_decode_buf[level_type::REPETITION] = current_ptr;
       current_ptr += rep_level_sizes[idx];
     }
+
+    // Clamp kernel level reads to the actual decoded count (may be less than num_input_values
+    // for flat columns with skip_rows/num_rows).
+    CUDF_EXPECTS(def_level_sizes[idx] % pass.level_type_size == 0,
+                 "Definition level size is not a multiple of the level type size");
+    CUDF_EXPECTS(rep_level_sizes[idx] % pass.level_type_size == 0,
+                 "Repetition level size is not a multiple of the level type size");
+    pages[idx].num_decoded_level_values =
+      std::max(def_level_sizes[idx], rep_level_sizes[idx]) / pass.level_type_size;
   }
 }
 
@@ -997,7 +1007,7 @@ void reader_impl::allocate_columns(read_mode mode, size_t skip_rows, size_t num_
       cudf::detail::reduce_by_key(reduction_keys,
                                   reduction_keys + num_keys_this_iter,
                                   size_input.cbegin(),
-                                  thrust::make_discard_iterator(),
+                                  cuda::make_discard_iterator(),
                                   sizes.d_begin() + (key_start / subpass.pages.size()),
                                   cuda::std::plus<>{},
                                   _stream);
