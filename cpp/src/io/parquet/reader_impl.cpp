@@ -848,6 +848,20 @@ std::optional<std::vector<std::string>> reader_impl::get_column_projection(
   }
 }
 
+void reader_impl::apply_decimal_width_cast(std::vector<std::unique_ptr<column>>& out_columns)
+{
+  // TODO: Instead of casting the columns after the read is done, we should
+  // be able to decode data directly into the target decimal type buffer.
+  if (_options.decimal_width == type_id::EMPTY) { return; }
+  for (auto& col : out_columns) {
+    auto const col_type = col->type();
+    if (cudf::is_fixed_point(col_type) && col_type.id() != _options.decimal_width) {
+      col =
+        cudf::cast(col->view(), data_type{_options.decimal_width, col_type.scale()}, _stream, _mr);
+    }
+  }
+}
+
 table_with_metadata reader_impl::finalize_output(read_mode mode,
                                                  table_metadata& out_metadata,
                                                  std::vector<std::unique_ptr<column>>& out_columns)
@@ -864,19 +878,7 @@ table_with_metadata reader_impl::finalize_output(read_mode mode,
     }
   }
 
-  // TODO: Instead of casting the columns after the read is done, we should
-  // be able to decode data directly into the target decimal type buffer.
-  if (_options.decimal_width != type_id::EMPTY) {
-    for (auto& out_column : out_columns) {
-      auto const& col_type = out_column->type();
-      if (cudf::is_fixed_point(col_type)) {
-        if (col_type.id() != _options.decimal_width) {
-          auto const target_type = cudf::data_type{_options.decimal_width, col_type.scale()};
-          out_column             = cudf::cast(out_column->view(), target_type, _stream, _mr);
-        }
-      }
-    }
-  }
+  apply_decimal_width_cast(out_columns);
 
   if (!_output_metadata) {
     populate_metadata(out_metadata);

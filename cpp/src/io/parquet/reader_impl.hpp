@@ -425,6 +425,13 @@ class reader_impl {
   [[nodiscard]] std::optional<std::vector<std::string>> get_column_projection(
     parquet_reader_options const& options, bool ignore_missing_columns) const;
 
+  /**
+   * @brief Cast any fixed-point output columns to the decimal width specified in options.
+   *
+   * @param out_columns Output columns to cast
+   */
+  void apply_decimal_width_cast(std::vector<std::unique_ptr<cudf::column>>& out_columns);
+
   rmm::cuda_stream_view _stream;
   rmm::device_async_resource_ref _mr{cudf::get_current_device_resource_ref()};
 
