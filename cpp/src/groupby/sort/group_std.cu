@@ -21,9 +21,9 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/iterator>
 #include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
-#include <thrust/iterator/discard_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/transform.h>
 
@@ -81,7 +81,7 @@ void reduce_by_key_fn(column_device_view const& values,
   cudf::detail::reduce_by_key_async(group_labels.begin(),
                                     group_labels.end(),
                                     vars.begin(),
-                                    thrust::make_discard_iterator(),
+                                    cuda::make_discard_iterator(),
                                     d_result,
                                     cuda::std::plus<ResultType>(),
                                     stream);
