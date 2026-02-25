@@ -389,6 +389,12 @@ std::unique_ptr<table> stable_distinct(
   rmm::device_async_resource_ref mr        = cudf::get_current_device_resource_ref());
 
 /**
+ * @brief Typedef for inputs to the filter function. Each input can be either a column or a
+ * scalar column.
+ */
+using filter_input = std::variant<column_view, scalar_column_view>;
+
+/**
  * @brief Creates a new column by applying a filter function against every
  * element of the input columns.
  *
