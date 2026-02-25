@@ -12,7 +12,7 @@ import statistics
 from collections import defaultdict
 from functools import partial
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal, overload
 
 import polars as pl
 
@@ -40,6 +40,7 @@ from cudf_polars.experimental.base import (
 )
 from cudf_polars.experimental.dispatch import generate_ir_tasks, lower_ir_node
 from cudf_polars.utils.cuda_stream import get_cuda_stream
+from cudf_polars.utils.versions import POLARS_VERSION_LT_137
 
 if TYPE_CHECKING:
     from collections.abc import Hashable, MutableMapping
@@ -63,10 +64,6 @@ def _(
     ir: DataFrameScan, rec: LowerIRTransformer
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
     config_options = rec.state["config_options"]
-
-    assert config_options.executor.name == "streaming", (
-        "'in-memory' executor not supported in 'generate_ir_tasks'"
-    )
 
     # RapidsMPF runtime: Use rapidsmpf-specific lowering
     if (
@@ -99,15 +96,11 @@ def _(
 
 
 def scan_partition_plan(
-    ir: Scan, stats: StatsCollector, config_options: ConfigOptions
+    ir: Scan, stats: StatsCollector, config_options: ConfigOptions[StreamingExecutor]
 ) -> IOPartitionPlan:
     """Extract the partitioning plan of a Scan operation."""
     if ir.typ == "parquet":
         # TODO: Use system info to set default blocksize
-        assert config_options.executor.name == "streaming", (
-            "'in-memory' executor not supported in 'generate_ir_tasks'"
-        )
-
         blocksize: int = config_options.executor.target_partition_size
         column_stats = stats.column_stats.get(ir, {})
         column_sizes: list[int] = []
@@ -422,16 +415,6 @@ def _(
             "please remove the target directory before calling 'collect'. "
         )
 
-    # RapidsMPF runtime: StreamingSink not supported, fall back to single partition
-    if (
-        executor_options.runtime == "rapidsmpf"
-    ):  # pragma: no cover; Requires rapidsmpf runtime
-        from cudf_polars.experimental.utils import _lower_ir_fallback
-
-        return _lower_ir_fallback(
-            ir, rec, msg=f"Class {type(ir)} does not support multiple partitions."
-        )
-
     new_node = StreamingSink(
         ir.schema,
         ir.reconstruct([child]),
@@ -445,7 +428,7 @@ def _(
 def _prepare_sink_directory(path: str) -> None:
     """Prepare for a multi-partition sink."""
     # TODO: Support cloud storage
-    Path(path).mkdir(parents=True)
+    Path(path).mkdir(parents=True, exist_ok=True)
 
 
 def _sink_to_directory(
@@ -467,10 +450,9 @@ def _sink_to_directory(
 def _sink_to_parquet_file(
     path: str,
     options: dict[str, Any],
-    finalize: bool,  # noqa: FBT001
     writer: plc.io.parquet.ChunkedParquetWriter | None,
     df: DataFrame,
-) -> plc.io.parquet.ChunkedParquetWriter | DataFrame:
+) -> plc.io.parquet.ChunkedParquetWriter:
     """Sink a partition to an open Parquet file."""
     # Set up a new chunked Parquet writer if necessary.
     if writer is None:
@@ -490,22 +472,36 @@ def _sink_to_parquet_file(
     )
     writer.write(df.table)
 
-    # Finalize or return active writer.
-    if finalize:
-        writer.close([])
-        return df
-    else:
-        return writer
+    return writer
+
+
+@overload
+def _sink_to_file(
+    kind: Literal["Parquet"],
+    path: str,
+    options: dict[str, Any],
+    writer_state: plc.io.parquet.ChunkedParquetWriter,
+    df: DataFrame,
+) -> plc.io.parquet.ChunkedParquetWriter: ...
+
+
+@overload
+def _sink_to_file(
+    kind: str,
+    path: str,
+    options: dict[str, Any],
+    writer_state: None,
+    df: DataFrame,
+) -> Literal[True]: ...
 
 
 def _sink_to_file(
     kind: str,
     path: str,
     options: dict[str, Any],
-    finalize: bool,  # noqa: FBT001
     writer_state: Any,
     df: DataFrame,
-) -> Any:
+) -> Literal[True] | plc.io.parquet.ChunkedParquetWriter:
     """Sink a partition to an open file."""
     if kind == "Parquet":
         # Parquet writer will pass along a
@@ -513,7 +509,6 @@ def _sink_to_file(
         return _sink_to_parquet_file(
             path,
             options,
-            finalize,
             writer_state,
             df,
         )
@@ -528,7 +523,7 @@ def _sink_to_file(
             # Path.open returns IO[Any] but SinkInfo needs more specific IO types
             sink = plc.io.types.SinkInfo([f])  # type: ignore[arg-type]
             Sink._write_csv(sink, use_options, df)
-    elif kind == "Json":
+    elif kind == "Json" if POLARS_VERSION_LT_137 else "NDJson":
         mode = "wb" if writer_state is None else "ab"
         with Path.open(Path(path), mode) as f:
             # Path.open returns IO[Any] but SinkInfo needs more specific IO types
@@ -537,10 +532,18 @@ def _sink_to_file(
     else:  # pragma: no cover; Shouldn't get here.
         raise NotImplementedError(f"{kind} not yet supported in _sink_to_file")
 
-    # Default return type is bool | DataFrame.
-    # We only return a DataFrame for the final sink task.
-    # The other tasks return a "ready" signal of True.
-    return df if finalize else True
+    return True
+
+
+def _finalize_file_sink(
+    kind: str,
+    writer_state: Any,
+    df: DataFrame,
+) -> DataFrame:
+    """Finalize the file sink by closing the writer."""
+    if kind == "Parquet" and writer_state is not None:
+        writer_state.close([])
+    return df.slice((0, 0))
 
 
 def _file_sink_graph(
@@ -569,15 +572,22 @@ def _file_sink_graph(
             sink.kind,
             sink.path,
             sink.options,
-            i == count - 1,  # Whether to finalize
             None if i == 0 else (sink_name, i - 1),  # Writer state
             (child_name, i),
         )
         for i in range(count)
     }
 
-    # Make sure final tasks point to empty DataFrame output
-    graph.update({(name, i): (sink_name, count - 1) for i in range(count)})
+    # Finalize task closes the writer after all chunks are written
+    graph[(sink_name, "finalize")] = (
+        _finalize_file_sink,
+        sink.kind,
+        (sink_name, count - 1),  # Writer state from last task
+        (child_name, count - 1),  # Last source df for creating empty result
+    )
+
+    # Make sure final tasks point to finalize task
+    graph.update({(name, i): (sink_name, "finalize") for i in range(count)})
     return graph
 
 
@@ -907,13 +917,10 @@ def _sample_pq_stats(
 
 def _extract_scan_stats(
     ir: Scan,
-    config_options: ConfigOptions,
+    config_options: ConfigOptions[StreamingExecutor],
 ) -> dict[str, ColumnStats]:
     """Extract base ColumnStats for a Scan node."""
     if ir.typ == "parquet":
-        assert config_options.executor.name == "streaming", (
-            "Only streaming executor is supported in _extract_scan_stats"
-        )
         table_source_info = _sample_pq_stats(
             tuple(ir.paths),
             config_options.parquet_options.max_footer_samples,
@@ -989,12 +996,9 @@ class DataFrameSourceInfo(DataSourceInfo):
 
 
 def _extract_dataframescan_stats(
-    ir: DataFrameScan, config_options: ConfigOptions
+    ir: DataFrameScan, config_options: ConfigOptions[StreamingExecutor]
 ) -> dict[str, ColumnStats]:
     """Extract base ColumnStats for a DataFrameScan node."""
-    assert config_options.executor.name == "streaming", (
-        "Only streaming executor is supported in _extract_dataframescan_stats"
-    )
     table_source_info = DataFrameSourceInfo(
         pl.DataFrame._from_pydf(ir.df),
         config_options.executor.stats_planning,

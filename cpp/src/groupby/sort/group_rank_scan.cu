@@ -22,7 +22,6 @@
 #include <cuda/std/iterator>
 #include <cuda/std/limits>
 #include <cuda/std/utility>
-#include <thrust/functional.h>
 #include <thrust/scan.h>
 #include <thrust/tabulate.h>
 #include <thrust/transform.h>

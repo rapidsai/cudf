@@ -4,6 +4,7 @@
 import warnings
 from collections.abc import Iterator
 from functools import partial
+from typing import cast
 
 import cupy as cp
 import numpy as np
@@ -58,7 +59,7 @@ def _nonempty_index(idx):
         return cudf.DatetimeIndex(data, name=idx.name)
     elif isinstance(idx, cudf.CategoricalIndex):
         return cudf.CategoricalIndex.from_codes(
-            [0, 0],
+            np.array([0, 0], dtype=idx.codes.dtype),
             categories=idx.dtype.categories,
             ordered=idx.dtype.ordered,
             name=idx.name,
@@ -95,12 +96,13 @@ def _get_non_empty_data(
 ) -> cudf.core.column.ColumnBase:
     """Return a non-empty column as metadata from a column."""
     if isinstance(s.dtype, cudf.CategoricalDtype):
+        s = cast("cudf.core.column.CategoricalColumn", s)
         categories = (
-            s.categories if len(s.categories) else [UNKNOWN_CATEGORIES]  # type: ignore[attr-defined]
+            s.categories if len(s.categories) else [UNKNOWN_CATEGORIES]
         )
         codes = cudf.core.column.as_column(
             0,
-            dtype=np.dtype(np.uint8),
+            dtype=s.codes.dtype,
             length=2,
         )
         return cudf.core.column.ColumnBase.create(
@@ -128,7 +130,7 @@ def _get_non_empty_data(
         date_data = cudf.date_range("2001-01-01", periods=2, freq=s.time_unit)  # type: ignore[attr-defined]
         return date_data.tz_localize(str(s.dtype.tz))._column
     elif s.dtype.kind in "fiubmM":
-        return cudf.core.column.as_column(np.arange(0, 2, dtype=s.dtype))
+        return cudf.core.column.as_column(np.arange(0, 2), dtype=s.dtype)
     elif isinstance(s.dtype, cudf.core.dtypes.DecimalDtype):
         return cudf.core.column.as_column(range(2), dtype=s.dtype)
     else:

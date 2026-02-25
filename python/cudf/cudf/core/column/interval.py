@@ -10,56 +10,23 @@ import pyarrow as pa
 
 import pylibcudf as plc
 
+from cudf.core._internals import binaryop
 from cudf.core.column.column import (
     ColumnBase,
     _handle_nulls,
     as_column,
     dtype_from_pylibcudf_column,
 )
-from cudf.core.dtype.validators import is_dtype_obj_interval
 from cudf.core.dtypes import IntervalDtype, _dtype_to_metadata
+from cudf.utils.dtypes import get_dtype_of_same_kind
 from cudf.utils.scalar import maybe_nested_pa_scalar_to_py
 
 if TYPE_CHECKING:
-    from cudf._typing import DtypeObj
+    from cudf._typing import ColumnBinaryOperand, DtypeObj
     from cudf.core.buffer import Buffer
 
 
 class IntervalColumn(ColumnBase):
-    _VALID_PLC_TYPES = {plc.TypeId.STRUCT}
-
-    @classmethod
-    def _validate_args(
-        cls, plc_column: plc.Column, dtype: DtypeObj
-    ) -> tuple[plc.Column, DtypeObj]:
-        # Validate plc_column TypeId - IntervalColumn uses STRUCT type
-        if not (
-            isinstance(plc_column, plc.Column)
-            and plc_column.type().id() == plc.TypeId.STRUCT
-        ):
-            raise ValueError(
-                "plc_column must be a pylibcudf.Column with TypeId STRUCT"
-            )
-        if plc_column.num_children() != 2:
-            raise ValueError(
-                "plc_column must have two children (left edges, right edges)."
-            )
-        if not is_dtype_obj_interval(dtype):
-            raise ValueError(f"dtype must be an interval type: Got {dtype}.")
-
-        # Validate that children dtypes are compatible with target subtype
-        for i, child in enumerate(plc_column.children()):
-            try:
-                ColumnBase._validate_dtype_recursively(
-                    child, IntervalDtype.from_interval_dtype(dtype).subtype
-                )
-            except ValueError as e:
-                raise ValueError(
-                    f"{'Right' if i else 'Left'} interval bound validation failed: {e}"
-                ) from e
-
-        return plc_column, dtype
-
     @classmethod
     def from_arrow(cls, array: pa.Array | pa.ChunkedArray) -> Self:
         if not isinstance(array, pa.ExtensionArray):
@@ -187,6 +154,22 @@ class IntervalColumn(ColumnBase):
             self.plc_column,
             IntervalDtype(self.dtype.subtype, closed),  # type: ignore[union-attr]
         )
+
+    def _binaryop(self, other: ColumnBinaryOperand, op: str) -> ColumnBase:
+        reflect, op = self._check_reflected_op(op)
+        if not isinstance(other, type(self)):
+            return NotImplemented
+        if op == "NULL_EQUALS":
+            lefts_equal = self.left._binaryop(other.left, "NULL_EQUALS")
+            rights_equal = self.right._binaryop(other.right, "NULL_EQUALS")
+            return binaryop.binaryop(
+                lefts_equal,
+                rights_equal,
+                "__and__",
+                get_dtype_of_same_kind(self.dtype, lefts_equal.dtype),
+            )
+        else:
+            raise TypeError(f"{op} not supported with {type(other).__name__}")
 
     def as_interval_column(self, dtype: IntervalDtype) -> Self:
         if not isinstance(dtype, IntervalDtype):
