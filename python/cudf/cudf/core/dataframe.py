@@ -6470,7 +6470,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         return coerced, mask, common_dtype
 
     @_performance_tracking
-    def count(self, axis=0, numeric_only=False):
+    def count(self, axis: Axis = 0, numeric_only: bool = False) -> Series:
         """
         Count ``non-NA`` cells for each column or row.
 
@@ -6503,23 +6503,9 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         axis = self._get_axis_from_axis_arg(axis)
         if axis != 0:
             raise NotImplementedError("Only axis=0 is currently supported.")
-        length = len(self)
         return Series._from_column(
-            as_column(
-                [
-                    length
-                    - (
-                        col.null_count
-                        + (
-                            0
-                            if is_pandas_nullable_extension_dtype(col.dtype)
-                            else col.nan_count
-                        )
-                    )
-                    for col in self._columns
-                ]
-            ),
-            index=Index(self._column_names),
+            as_column([col.count for col in self._columns]),
+            index=Index(self._data.to_pandas_index),
             attrs=self.attrs,
         )
 
