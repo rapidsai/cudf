@@ -3689,7 +3689,11 @@ class DatetimeIndex(Index):
             return result
         try:
             return result._with_freq(pandas_freq)
-        except (TypeError, ValueError):
+        except (TypeError, ValueError, AssertionError):
+            try:
+                result.freq = pandas_freq
+            except (TypeError, ValueError):
+                return result
             return result
 
     def find_label_range(self, loc: slice) -> slice:
