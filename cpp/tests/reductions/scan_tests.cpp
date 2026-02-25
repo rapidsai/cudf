@@ -272,6 +272,57 @@ TYPED_TEST(ScanProductTest, InclusiveWithNullsInclude)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
 
+// ============== Scan Count ==============
+template <typename T>
+struct ScanCountTest : public cudf::test::BaseFixture {};
+
+TYPED_TEST_SUITE(ScanCountTest, cudf::test::NumericTypes);
+
+TYPED_TEST(ScanCountTest, InclusiveNoNulls)
+{
+  cudf::test::fixed_width_column_wrapper<TypeParam, int32_t> col({5, 4, 6, 0, 1, 6, 5, 3});
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> expected({1, 2, 3, 4, 5, 6, 7, 8});
+
+  auto result = cudf::scan(
+    col, *cudf::make_count_aggregation<cudf::scan_aggregation>(), cudf::scan_type::INCLUSIVE);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+
+  result =
+    cudf::scan(col,
+               *cudf::make_count_aggregation<cudf::scan_aggregation>(cudf::null_policy::INCLUDE),
+               cudf::scan_type::INCLUSIVE);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
+TYPED_TEST(ScanCountTest, InclusiveWithNullsExclude)
+{
+  cudf::test::fixed_width_column_wrapper<TypeParam, int32_t> col({5, 4, 6, 0, 1, 6, 5, 3},
+                                                                 {1, 1, 1, 0, 1, 1, 1, 1});
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> expected({1, 2, 3, 4, 4, 5, 6, 7},
+                                                                   {1, 1, 1, 0, 1, 1, 1, 1});
+
+  auto result = cudf::scan(col,
+                           *cudf::make_count_aggregation<cudf::scan_aggregation>(),
+                           cudf::scan_type::INCLUSIVE,
+                           cudf::null_policy::EXCLUDE);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
+TYPED_TEST(ScanCountTest, InclusiveWithNullsInclude)
+{
+  cudf::test::fixed_width_column_wrapper<TypeParam, int32_t> col({5, 4, 6, 0, 1, 6, 5, 3},
+                                                                 {1, 1, 1, 0, 1, 1, 1, 1});
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> expected({1, 2, 3, 0, 0, 0, 0, 0},
+                                                                   {1, 1, 1, 0, 0, 0, 0, 0});
+
+  auto result =
+    cudf::scan(col,
+               *cudf::make_count_aggregation<cudf::scan_aggregation>(cudf::null_policy::INCLUDE),
+               cudf::scan_type::INCLUSIVE,
+               cudf::null_policy::INCLUDE);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
 // ============== Fixed-point Min/Max/Sum ==============
 template <typename T>
 struct ScanMinFixedPointTest : public cudf::test::BaseFixture {};
