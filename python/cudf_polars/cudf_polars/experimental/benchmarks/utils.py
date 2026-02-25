@@ -173,18 +173,27 @@ class ValidationMethod:
     comparison_options: dict[str, Any]
 
 
-@dataclasses.dataclass
-class Record:
+@dataclasses.dataclass(kw_only=True)
+class FailedRecord:
+    """Records a failed query iteration."""
+
+    query: int
+    iteration: int
+    status: Literal["error"] = "error"
+    traceback: str
+
+
+@dataclasses.dataclass(kw_only=True)
+class SuccessRecord:
     """Results for a single run of a single PDS-H query."""
 
     query: int
     iteration: int
-    duration: float | None
+    duration: float
     shuffle_stats: dict[str, dict[str, int | float]] | None = None
     traces: list[dict[str, Any]] | None = None
     validation_result: ValidationResult | None = None
-    status: Literal["success", "error"] = "success"
-    traceback: str | None = None
+    status: Literal["success"] = "success"
 
     @classmethod
     def new(
@@ -194,9 +203,7 @@ class Record:
         duration: float,
         shuffle_stats: dict[str, dict[str, int | float]] | None = None,
         traces: list[dict[str, Any]] | None = None,
-        status: Literal["success", "error"] = "success",
-        traceback: str | None = None,
-    ) -> Record:
+    ) -> SuccessRecord:
         """Create a Record from plain data."""
         return cls(
             query=query,
@@ -204,8 +211,6 @@ class Record:
             duration=duration,
             shuffle_stats=shuffle_stats,
             traces=traces,
-            status=status,
-            traceback=traceback,
         )
 
 
@@ -213,7 +218,7 @@ class Record:
 class QueryRunResult:
     """Result of running a single query (all iterations)."""
 
-    query_records: list[Record]
+    query_records: list[SuccessRecord | FailedRecord]
     plan: SerializablePlan | None
     iteration_failures: list[tuple[int, int]]
     validation_failed: bool
@@ -352,7 +357,9 @@ class RunConfig:
     versions: PackageVersions = dataclasses.field(
         default_factory=PackageVersions.collect
     )
-    records: dict[int, list[Record]] = dataclasses.field(default_factory=dict)
+    records: dict[int, list[SuccessRecord | FailedRecord]] = dataclasses.field(
+        default_factory=dict
+    )
     plans: dict[int, SerializablePlan] = dataclasses.field(default_factory=dict)
     dataset_path: Path
     scale_factor: int | float
@@ -566,7 +573,7 @@ class RunConfig:
                     print(f"rapidsmpf_spill: {self.rapidsmpf_spill}")
             if len(records) > 0:
                 valid_durations = [
-                    record.duration for record in records if record.duration is not None
+                    record.duration for record in records if record.status == "success"
                 ]
                 print(f"iterations: {self.iterations}")
                 print("---------------------------------------")
@@ -576,7 +583,7 @@ class RunConfig:
                 print("=======================================")
         total_mean_time = sum(
             statistics.mean(
-                record.duration for record in records if record.duration is not None
+                record.duration for record in records if record.status == "success"
             )
             for records in self.records.values()
             if records
@@ -1344,10 +1351,12 @@ def run_polars_query_iteration(
     expected: pl.DataFrame | None,
     query_result: Any,
     client: Any,
-) -> Record:
+) -> SuccessRecord:
     """Run a single query iteration. Caller must wrap in try/except."""
     t0 = time.monotonic()
     result = execute_query(q_id, iteration, q, run_config, args, engine)
+    t1 = time.monotonic()
+
     if run_config.shuffle == "rapidsmpf" and run_config.gather_shuffle_stats:
         from rapidsmpf.integrations.dask.shuffler import (
             clear_shuffle_statistics,
@@ -1359,7 +1368,6 @@ def run_polars_query_iteration(
     else:
         shuffle_stats = None
 
-    t1 = time.monotonic()
     if expected is not None:
         validation_result = validate_result(
             result,
@@ -1380,7 +1388,7 @@ def run_polars_query_iteration(
         output_path = results_dir / f"q_{q_id:02d}.parquet"
         result.write_parquet(output_path)
 
-    return Record(
+    return SuccessRecord(
         query=q_id,
         iteration=iteration,
         duration=t1 - t0,
@@ -1446,9 +1454,10 @@ def run_polars_query(
         expected_dir.mkdir(parents=True, exist_ok=True)
         expected.write_parquet(expected_dir / f"q_{q_id:02d}.parquet")
 
-    query_records: list[Record] = []
+    query_records: list[SuccessRecord | FailedRecord] = []
     iteration_failures: list[tuple[int, int]] = []
     validation_failed = False
+    record: SuccessRecord | FailedRecord
 
     for i in range(args.iterations):
         if _HAS_STRUCTLOG and run_config.collect_traces:
@@ -1472,11 +1481,10 @@ def run_polars_query(
             print(f"❌ query={q_id} iteration={i} failed!")
             print(traceback.format_exc())
             iteration_failures.append((q_id, i))
-            record = Record(
+            record = FailedRecord(
                 query=q_id,
                 iteration=i,
                 status="error",
-                duration=None,
                 traceback=traceback.format_exc(),
             )
 
@@ -1522,7 +1530,7 @@ def run_polars(
         actual_n_workers = client.scheduler_info()["n_workers"]
         run_config = dataclasses.replace(run_config, n_workers=actual_n_workers)
 
-    records: defaultdict[int, list[Record]] = defaultdict(list)
+    records: defaultdict[int, list[SuccessRecord | FailedRecord]] = defaultdict(list)
     plans: dict[int, SerializablePlan] = {}
     engine: pl.GPUEngine | None = None
     numeric_type, date_type = check_input_data_type(run_config)
@@ -1568,11 +1576,9 @@ def run_polars(
             print(f"❌ query={q_id} failed (setup or execution)!")
             print(traceback.format_exc())
             query_failures.append((q_id, -1))
-            record = Record(
+            record = FailedRecord(
                 query=q_id,
                 iteration=-1,
-                status="error",
-                duration=None,
                 traceback=traceback.format_exc(),
             )
             result = QueryRunResult(
@@ -1633,10 +1639,12 @@ def run_polars(
             assert len(by_iteration) == len(run_records)  # same number of iterations
             all_traces = [list(iteration) for iteration in by_iteration]
 
-            new_records = [
-                dataclasses.replace(record, traces=traces)
-                for record, traces in zip(run_records, all_traces, strict=True)
-            ]
+            new_records: list[SuccessRecord | FailedRecord] = []
+            for rec, traces in zip(run_records, all_traces, strict=True):
+                if rec.status == "success":
+                    new_records.append(dataclasses.replace(rec, traces=traces))
+                else:
+                    new_records.append(rec)
 
             run_config.records[query_id] = new_records
 
@@ -1846,7 +1854,7 @@ def run_duckdb(
     """Run the benchmark with DuckDB."""
     vars(args).update({"query_set": duckdb_queries_cls.name})
     run_config = RunConfig.from_args(args)
-    records: defaultdict[int, list[Record]] = defaultdict(list)
+    records: defaultdict[int, list[SuccessRecord | FailedRecord]] = defaultdict(list)
 
     for q_id in run_config.queries:
         try:
@@ -1878,7 +1886,7 @@ def run_duckdb(
                 query_set=duckdb_queries_cls.name,
             )
             t1 = time.time()
-            record = Record(query=q_id, iteration=i, duration=t1 - t0)
+            record = SuccessRecord(query=q_id, iteration=i, duration=t1 - t0)
             if args.print_results:
                 print(result)
             print(f"Query {q_id} - Iteration {i} finished in {record.duration:0.4f}s")
