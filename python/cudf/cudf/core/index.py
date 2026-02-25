@@ -26,6 +26,7 @@ from cudf.api.types import (
     is_integer,
     is_list_like,
     is_scalar,
+    is_timedelta64_dtype,
 )
 from cudf.core._compat import PANDAS_LT_300
 from cudf.core._internals import copying, sorting
@@ -3703,6 +3704,13 @@ class DatetimeIndex(Index):
 
     def __getitem__(self, index):
         value = super().__getitem__(index)
+        if (
+            isinstance(value, DatetimeIndex)
+            and self._freq is not None
+            and isinstance(index, slice)
+            and index.step in (None, 1)
+        ):
+            value._freq = _validate_freq(self._freq)
         if isinstance(value, np.datetime64):
             return pd.Timestamp(value)
         return value
@@ -3724,6 +3732,68 @@ class DatetimeIndex(Index):
             except (TypeError, ValueError):
                 return result
             return result
+
+    @staticmethod
+    def _is_timedelta_like(other: Any) -> bool:
+        if isinstance(
+            other, (datetime.timedelta, np.timedelta64, pd.Timedelta)
+        ):
+            return True
+        dtype = getattr(other, "dtype", None)
+        if dtype is not None:
+            return is_timedelta64_dtype(dtype)
+        return False
+
+    def _binaryop(
+        self,
+        other: Any,
+        op: str,
+        fill_value: Any = None,
+        *args,
+        **kwargs,
+    ) -> SingleColumnFrame:
+        result = super()._binaryop(other, op, fill_value, *args, **kwargs)
+        if (
+            isinstance(result, DatetimeIndex)
+            and self._freq is not None
+            and op in {"__add__", "__sub__", "__radd__"}
+            and self._is_timedelta_like(other)
+        ):
+            result._freq = _validate_freq(self._freq)
+        return result
+
+    def union(self, other, sort: bool | None = None) -> Index:
+        result = super().union(other, sort=sort)
+        if not isinstance(result, DatetimeIndex):
+            return result
+        if not isinstance(other, DatetimeIndex):
+            return result
+        if len(self) == 0 and len(other):
+            result._freq = _validate_freq(other._freq)
+        elif len(other) == 0 and len(self):
+            result._freq = _validate_freq(self._freq)
+        elif (
+            self._freq is not None
+            and other._freq is not None
+            and self.equals(other)
+        ):
+            result._freq = _validate_freq(self._freq)
+        return result
+
+    def intersection(self, other, sort: bool | None = False) -> Index:
+        result = super().intersection(other, sort=sort)
+        if not isinstance(result, DatetimeIndex):
+            return result
+        if not isinstance(other, DatetimeIndex):
+            return result
+        if (
+            len(result)
+            and self._freq is not None
+            and other._freq is not None
+            and self._freq == other._freq
+        ):
+            result._freq = _validate_freq(self._freq)
+        return result
 
     def find_label_range(self, loc: slice) -> slice:
         # For indexing, try to interpret slice arguments as datetime-convertible
