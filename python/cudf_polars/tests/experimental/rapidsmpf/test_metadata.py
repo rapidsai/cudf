@@ -308,6 +308,27 @@ def test_remap_partitioning_select_drops_key() -> None:
     assert result.local == "inherit"
 
 
+def test_remap_partitioning_select_renamed_key() -> None:
+    """Partitioning is preserved when a key column is renamed in the Select."""
+    engine = pl.GPUEngine(executor="streaming")
+    q = pl.LazyFrame({"a": [1], "b": [2], "c": [3]})
+    child = Translator(q._ldf.visit(), engine).translate_ir()
+    # Output (a_renamed, b) where a_renamed is Col("a")
+    out_schema = {"a_renamed": child.schema["a"], "b": child.schema["b"]}
+    exprs = (
+        expr.NamedExpr("a_renamed", expr.Col(child.schema["a"], "a")),
+        expr.NamedExpr("b", expr.Col(child.schema["b"], "b")),
+    )
+    select = Select(out_schema, exprs, should_broadcast=False, df=child)
+    part = Partitioning(inter_rank=HashScheme((0, 1), 8), local="inherit")
+    result = remap_partitioning_select(select, part)
+    assert result is not None
+    assert result.inter_rank is not None
+    assert result.inter_rank.column_indices == (0, 1)  # a_renamed, b in output
+    assert result.inter_rank.modulus == 8
+    assert result.local == "inherit"
+
+
 def test_remap_partitioning_reorder_columns() -> None:
     old_schema = {
         "a": DataType(pl.Int64),

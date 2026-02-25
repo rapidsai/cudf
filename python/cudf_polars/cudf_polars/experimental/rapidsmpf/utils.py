@@ -191,30 +191,35 @@ def remap_partitioning_select(
 
     old_schema = select.children[0].schema
 
-    def _check_keys(scheme: HashScheme | None | str) -> HashScheme | None | str:
-        # Pass through the scheme only if it can be remapped
+    def _process_scheme(scheme: HashScheme | None | str) -> HashScheme | None | str:
         if isinstance(scheme, HashScheme):
             try:
                 old_names = list(old_schema.keys())
                 partition_key_names = {old_names[i] for i in scheme.column_indices}
             except IndexError:
-                return None  # Column missing in old schema
-            output_expr_map = {ne.name: ne.value for ne in select.exprs}
-            for key_name in partition_key_names:
-                if key_name not in output_expr_map:
-                    return None
-                expr = output_expr_map[key_name]
-                if not isinstance(expr, Col) or expr.name != key_name:
-                    return None
-        elif scheme not in (None, "inherit"):  # pragma: no cover
-            return None  # Guard against new/unsupported scheme types
+                return None
+            # Map old key name -> output name
+            old_to_new: dict[str, str] = {}
+            for ne in select.exprs:
+                # Can preserve Col expressions - Even if the name changes
+                if isinstance(ne.value, Col) and ne.value.name in partition_key_names:
+                    old_to_new[ne.value.name] = ne.name
+            if set(old_to_new) != partition_key_names:
+                return None
+            output_names = list(select.schema.keys())
+            ordered_old = [old_names[i] for i in scheme.column_indices]
+            new_indices = tuple(
+                output_names.index(old_to_new[old]) for old in ordered_old
+            )
+            return HashScheme(new_indices, scheme.modulus)
+        if scheme not in (None, "inherit"):  # pragma: no cover
+            return None
         return scheme
 
-    partitioning = Partitioning(
-        inter_rank=_check_keys(partitioning.inter_rank),
-        local=_check_keys(partitioning.local),
+    return Partitioning(
+        inter_rank=_process_scheme(partitioning.inter_rank),
+        local=_process_scheme(partitioning.local),
     )
-    return remap_partitioning(partitioning, old_schema, select.schema)
 
 
 async def send_metadata(
