@@ -40,6 +40,15 @@ from cudf.utils.scalar import pa_scalar_to_plc_scalar
 from cudf.utils.utils import is_na_like
 
 
+def _needs_flip(
+    rhs_has_negative_zero: bool, result_sign: cp.ndarray, lhs_sign: cp.ndarray
+) -> bool:
+    if rhs_has_negative_zero:
+        return bool(cp.all(result_sign == lhs_sign))
+    else:
+        return bool(cp.all(result_sign != lhs_sign))
+
+
 def _arrow_dtype_base(dtype: DtypeObj) -> DtypeObj:
     if isinstance(dtype, pd.ArrowDtype):
         return dtype.numpy_dtype
@@ -492,75 +501,51 @@ class NumericalColumn(NumericalBaseColumn):
             # we need to ensure that the result is a NumericalColumn.
             res = res.nans_to_nulls()
         if op in {"__truediv__", "__floordiv__"}:
-            rhs_all_zero = False
             rhs_has_negative_zero = False
             if isinstance(rhs, ColumnBase):
                 if rhs.null_count == 0:
                     rhs_values = rhs.values
-                    rhs_all_zero = bool(cp.all(rhs_values == 0))
+                    rhs_all_zero = cp.all(rhs_values == 0)
                     if rhs_all_zero and rhs.dtype.kind == "f":
-                        rhs_has_negative_zero = bool(
-                            cp.any((rhs_values == 0) & cp.signbit(rhs_values))
-                        )
-            elif isinstance(rhs, pa.Scalar):
+                        rhs_has_negative_zero = cp.any(cp.signbit(rhs_values))
+            else:
+                assert isinstance(rhs, pa.Scalar)
                 if rhs.is_valid:
                     rhs_value = rhs.as_py()
                     rhs_all_zero = rhs_value == 0
                     if rhs_all_zero:
-                        rhs_has_negative_zero = bool(np.signbit(rhs_value))
-            if rhs_all_zero:
-                flip_needed = False
-                if not (res.dtype.kind == "b" and res.null_count != 0):
-                    result_values = res.values
-                    if result_values.size != 0:
-                        mask = cp.isinf(result_values)
-                        if isinstance(lhs, ColumnBase):
-                            if not (
-                                lhs.dtype.kind == "b" and lhs.null_count != 0
+                        rhs_has_negative_zero = np.signbit(rhs_value)
+            if (
+                rhs_all_zero
+                and not res.dtype.kind == "b"
+                or res.null_count == 0
+            ):
+                result_values = res.values
+                if result_values.size != 0:
+                    result_is_inf = cp.isinf(result_values)
+                    if isinstance(lhs, ColumnBase):
+                        if not lhs.dtype.kind == "b" or lhs.null_count == 0:
+                            lhs_values = lhs.values
+                            mask = result_is_inf & (lhs_values != 0)
+                            if cp.any(mask) and _needs_flip(
+                                rhs_has_negative_zero,
+                                cp.signbit(result_values[mask]),
+                                cp.signbit(lhs_values[mask]),
                             ):
-                                numerator_values = lhs.values
-                                mask &= numerator_values != 0
-                                if cp.any(mask):
-                                    result_sign = cp.signbit(
-                                        result_values[mask]
-                                    )
-                                    numerator_sign = cp.signbit(
-                                        numerator_values[mask]
-                                    )
-                                    if rhs_has_negative_zero:
-                                        flip_needed = bool(
-                                            cp.all(
-                                                result_sign == numerator_sign
-                                            )
-                                        )
-                                    else:
-                                        flip_needed = bool(
-                                            cp.all(
-                                                result_sign != numerator_sign
-                                            )
-                                        )
-                        elif isinstance(lhs, pa.Scalar):
-                            if lhs.is_valid:
-                                num_value = lhs.as_py()
-                                if num_value != 0 and cp.any(mask):
-                                    result_sign = cp.signbit(
-                                        result_values[mask]
-                                    )
-                                    numerator_sign = np.signbit(num_value)
-                                    if rhs_has_negative_zero:
-                                        flip_needed = bool(
-                                            cp.all(
-                                                result_sign == numerator_sign
-                                            )
-                                        )
-                                    else:
-                                        flip_needed = bool(
-                                            cp.all(
-                                                result_sign != numerator_sign
-                                            )
-                                        )
-                if flip_needed:
-                    res = res * -1
+                                res *= -1
+                    elif isinstance(lhs, pa.Scalar):
+                        if lhs.is_valid:
+                            num_value = lhs.as_py()
+                            if not (
+                                num_value == 0 or not cp.any(result_is_inf)
+                            ):
+                                mask = result_is_inf
+                                if _needs_flip(
+                                    rhs_has_negative_zero,
+                                    cp.signbit(result_values[mask]),
+                                    np.signbit(num_value),
+                                ):
+                                    res *= -1
         if op in {"__mod__", "__floordiv__"} and tmp_dtype.kind == "b":
             res = res.astype(
                 get_dtype_of_same_kind(out_dtype, np.dtype(np.int8))
