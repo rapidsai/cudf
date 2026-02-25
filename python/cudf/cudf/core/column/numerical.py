@@ -432,6 +432,7 @@ class NumericalColumn(NumericalBaseColumn):
             # we need to ensure that the result is a NumericalColumn.
             res = res.nans_to_nulls()
         if op in {"__truediv__", "__floordiv__"}:
+            rhs_all_zero = False
             rhs_has_negative_zero = False
             if isinstance(rhs, ColumnBase):
                 if rhs.null_count == 0:
