@@ -218,12 +218,6 @@ def test_assert_tpch_result_equal_split_at_lexicographic_not_per_column_max() ->
 
 
 def test_assert_tpch_result_equal_split_at_ascending_so_lt_is_valid() -> None:
-    """With ORDER BY a DESC, .lt(split_at_val) is wrong for the 'before' filter.
-
-    We must use the query's sort order for split_at and .lt/.gt per column so
-    \"strictly before\" is correct. Here left and right differ in the non-tie
-    row (2,b) vs (2,c); we must raise ValidationError.
-    """
     left = pl.DataFrame({"a": [3, 2, 1], "c": ["a", "b", "x"]})
     right = pl.DataFrame({"a": [3, 2, 1], "c": ["a", "c", "x"]})
     with pytest.raises(ValidationError, match="Result mismatch in non-ties part"):
@@ -236,12 +230,6 @@ def test_assert_tpch_result_equal_split_at_ascending_so_lt_is_valid() -> None:
 
 
 def test_assert_tpch_result_equal_split_at_uses_query_order_mixed_asc_desc() -> None:
-    """With ORDER BY a DESC, b ASC, ascending-only split_at gives the wrong row.
-
-    Rows (3,1), (3,2), (2,3). Query order last = (2,3); ascending last = (3,2).
-    Left and right differ only in (3,2) (c='b' vs 'X'). We must raise.
-    With ascending-only split_at we put (3,2) in ties and falsely pass.
-    """
     left = pl.DataFrame({"a": [3, 3, 2], "b": [1, 2, 3], "c": ["a", "b", "c"]})
     right = pl.DataFrame({"a": [3, 3, 2], "b": [1, 2, 3], "c": ["a", "X", "c"]})
     with pytest.raises(ValidationError, match="Result mismatch in non-ties part"):

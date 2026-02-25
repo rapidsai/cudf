@@ -203,8 +203,6 @@ def assert_tpch_result_equal(
         # result:   [ [a, b, c], [d, d + epsilon] ]
         # expected: [ [a, b, c], [d - epsilon, d] ]
 
-        sort_by_cols, sort_by_descending = zip(*sort_by, strict=True)
-
         sort_by_descending_list = list(sort_by_descending)
         (split_at,) = (
             left.select(sort_by_cols)
