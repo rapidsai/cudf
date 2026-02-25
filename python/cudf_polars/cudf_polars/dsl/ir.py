@@ -184,12 +184,6 @@ _BINOPS = {
 }
 
 
-_DECIMAL_TYPES = {plc.TypeId.DECIMAL32, plc.TypeId.DECIMAL64, plc.TypeId.DECIMAL128}
-
-
-_FLOAT_TYPES = {plc.TypeId.FLOAT32, plc.TypeId.FLOAT64}
-
-
 class IR(Node["IR"]):
     """Abstract plan node, representing an unevaluated dataframe."""
 
