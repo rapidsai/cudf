@@ -7,7 +7,7 @@
 
 find_package(Threads REQUIRED)
 
-add_library(cudf_datagen STATIC common/generate_input.cu)
+add_library(cudf_datagen STATIC common/generate_input.cu common/generate_nested_types.cpp)
 target_compile_features(cudf_datagen PUBLIC cxx_std_20 cuda_std_20)
 
 target_compile_options(
@@ -99,8 +99,8 @@ endfunction()
 # ##################################################################################################
 # * copying benchmarks ----------------------------------------------------------------------------
 ConfigureNVBench(
-  COPYING_NVBENCH copying/concatenate.cpp copying/copy_if_else.cpp copying/gather.cu
-  copying/scatter.cu copying/shift.cpp
+  COPYING_NVBENCH copying/concatenate.cpp copying/copy_if_else.cpp copying/gather.cpp
+  copying/scatter.cpp copying/shift.cpp
 )
 
 # ##################################################################################################
@@ -137,11 +137,9 @@ ConfigureNVBench(
   STREAM_COMPACTION_NVBENCH
   stream_compaction/apply_boolean_mask.cpp
   stream_compaction/distinct.cpp
-  stream_compaction/distinct_count.cpp
   stream_compaction/stable_distinct.cpp
   stream_compaction/stream_compaction_common.cpp
   stream_compaction/unique.cpp
-  stream_compaction/unique_count.cpp
 )
 
 # ##################################################################################################
@@ -154,6 +152,8 @@ ConfigureNVBench(
   join/mixed_join.cu
   join/distinct_join.cu
   join/filter_join_indices.cu
+  join/generate_input_tables.cu
+  join/jit_filter_join_indices.cu
   join/multiplicity_join.cu
   join/sort_merge_join.cu
   join/join_heuristics.cu
@@ -212,6 +212,7 @@ ConfigureNVBench(
   REDUCTION_NVBENCH
   reduction/anyall.cpp
   reduction/dictionary.cpp
+  reduction/distinct_count.cpp
   reduction/histogram.cpp
   reduction/minmax.cpp
   reduction/rank.cpp
@@ -219,6 +220,7 @@ ConfigureNVBench(
   reduction/scan.cpp
   reduction/scan_structs.cpp
   reduction/segmented_reduce.cpp
+  reduction/unique_count.cpp
 )
 
 # ##################################################################################################
@@ -457,7 +459,9 @@ ConfigureNVBench(
 # ##################################################################################################
 # * dictionary benchmark
 # ---------------------------------------------------------------------------------
-ConfigureNVBench(DICTIONARY_NVBENCH dictionary/encode.cpp)
+ConfigureNVBench(
+  DICTIONARY_NVBENCH dictionary/encode.cpp dictionary/set_keys.cpp dictionary/sort.cpp
+)
 
 add_custom_target(
   run_benchmarks

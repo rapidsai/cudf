@@ -10,12 +10,12 @@
 #include "io/orc/reader_impl_helpers.hpp"
 #include "io/utilities/hostdevice_span.hpp"
 
+#include <cudf/detail/algorithms/copy_if.cuh>
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/device_scalar.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/structs/utilities.hpp>
 #include <cudf/detail/transform.hpp>
-#include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/config_utils.hpp>
@@ -180,15 +180,14 @@ rmm::device_buffer decompress_stripe_data(
   any_block_failure[0] = false;
   any_block_failure.host_to_device_async(stream);
 
-  device_span<device_span<uint8_t const>> inflate_in_view{inflate_in.data(), num_compressed_blocks};
-  device_span<device_span<uint8_t>> inflate_out_view{inflate_out.data(), num_compressed_blocks};
-  cudf::io::detail::decompress(decompressor.compression(),
-                               inflate_in_view,
-                               inflate_out_view,
-                               inflate_res,
-                               max_uncomp_block_size,
-                               total_decomp_size,
-                               stream);
+  cudf::io::detail::decompress(
+    decompressor.compression(),
+    device_span<device_span<uint8_t const>>{inflate_in.data(), num_compressed_blocks},
+    device_span<device_span<uint8_t>>{inflate_out.data(), num_compressed_blocks},
+    inflate_res,
+    max_uncomp_block_size,
+    total_decomp_size,
+    stream);
 
   // Check if any block has been failed to decompress.
   // Not using `thrust::any` or `thrust::count_if` to defer stream sync.
@@ -203,11 +202,12 @@ rmm::device_buffer decompress_stripe_data(
                    });
 
   if (num_uncompressed_blocks > 0) {
-    device_span<device_span<uint8_t const>> copy_in_view{inflate_in.data() + num_compressed_blocks,
-                                                         num_uncompressed_blocks};
-    device_span<device_span<uint8_t>> copy_out_view{inflate_out.data() + num_compressed_blocks,
-                                                    num_uncompressed_blocks};
-    cudf::io::detail::gpu_copy_uncompressed_blocks(copy_in_view, copy_out_view, stream);
+    cudf::io::detail::gpu_copy_uncompressed_blocks(
+      device_span<device_span<uint8_t const>>{inflate_in.data() + num_compressed_blocks,
+                                              num_uncompressed_blocks},
+      device_span<device_span<uint8_t>>{inflate_out.data() + num_compressed_blocks,
+                                        num_uncompressed_blocks},
+      stream);
   }
 
   // Copy without stream sync, thus need to wait for stream sync below to access.
@@ -292,7 +292,7 @@ void update_null_mask(cudf::detail::hostdevice_2dvector<column_desc>& chunks,
       if (child_valid_map_base != nullptr) {
         rmm::device_uvector<uint32_t> dst_idx(child_mask_len, stream);
         // Copy indexes at which the parent has valid value.
-        cudf::detail::copy_if(
+        cudf::detail::copy_if_async(
           thrust::counting_iterator<size_type>(0),
           thrust::counting_iterator<size_type>(parent_mask_len),
           dst_idx.begin(),

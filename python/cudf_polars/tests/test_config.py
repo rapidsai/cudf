@@ -443,6 +443,7 @@ def test_validate_shuffle_insertion_method() -> None:
         "client_device_threshold",
         "max_io_threads",
         "spill_to_pinned_memory",
+        "rapidsmpf_py_executor_max_workers",
     ],
 )
 def test_validate_streaming_executor_options(option: str) -> None:
@@ -775,7 +776,7 @@ def test_cuda_stream_policy_from_config(*, rapidsmpf_single_available: bool) -> 
         executor_options={"runtime": "rapidsmpf"},
         cuda_stream_policy={
             "pool_size": 32,
-            "flags": rmm.pylibrmm.cuda_stream.CudaStreamFlags.NON_BLOCKING,
+            "flags": rmm.pylibrmm.CudaStreamFlags.NON_BLOCKING,
         },
     )
     if rapidsmpf_single_available:
@@ -783,8 +784,7 @@ def test_cuda_stream_policy_from_config(*, rapidsmpf_single_available: bool) -> 
         assert isinstance(config.cuda_stream_policy, CUDAStreamPoolConfig)
         assert config.cuda_stream_policy.pool_size == 32
         assert (
-            config.cuda_stream_policy.flags
-            == rmm.pylibrmm.cuda_stream.CudaStreamFlags.NON_BLOCKING
+            config.cuda_stream_policy.flags == rmm.pylibrmm.CudaStreamFlags.NON_BLOCKING
         )
         config.cuda_stream_policy.build().get_stream()  # no exception
     else:
@@ -840,10 +840,7 @@ def test_cuda_stream_policy_default_rapidsmpf(monkeypatch: pytest.MonkeyPatch) -
     )
     assert isinstance(config.cuda_stream_policy, CUDAStreamPoolConfig)
     assert config.cuda_stream_policy.pool_size == 16
-    assert (
-        config.cuda_stream_policy.flags
-        == rmm.pylibrmm.cuda_stream.CudaStreamFlags.NON_BLOCKING
-    )
+    assert config.cuda_stream_policy.flags == rmm.pylibrmm.CudaStreamFlags.NON_BLOCKING
 
     # "new" user argument
     monkeypatch.setenv("CUDF_POLARS__CUDA_STREAM_POLICY", "new")
@@ -983,30 +980,33 @@ def test_memory_resource_config_hash(options) -> None:
     assert hash(config) == hash(config)
 
 
-def test_rapidsmpf_distributed_warns(monkeypatch: pytest.MonkeyPatch) -> None:
-    # Emulate the case that rapidsmpf is available
-    # (even if it's not actually installed)
-    monkeypatch.setattr(
-        cudf_polars.utils.config,
-        "rapidsmpf_single_available",
-        lambda: True,
-    )
-    monkeypatch.setattr(
-        cudf_polars.utils.config,
-        "rapidsmpf_distributed_available",
-        lambda: True,
-    )
-
-    with pytest.warns(
-        UserWarning,
-        match="The rapidsmpf runtime does NOT support distributed execution yet.",
-    ):
-        ConfigOptions.from_polars_engine(
-            pl.GPUEngine(
-                executor="streaming",
-                executor_options={
-                    "runtime": "rapidsmpf",
-                    "cluster": "distributed",
-                },
-            )
+def test_rapidsmpf_py_executor_max_workers_default() -> None:
+    config = ConfigOptions.from_polars_engine(
+        pl.GPUEngine(
+            executor="streaming",
         )
+    )
+    assert config.executor.name == "streaming"
+    assert config.executor.rapidsmpf_py_executor_max_workers is None
+
+
+def test_rapidsmpf_py_executor_max_workers_from_executor_options() -> None:
+    config = ConfigOptions.from_polars_engine(
+        pl.GPUEngine(
+            executor="streaming",
+            executor_options={"rapidsmpf_py_executor_max_workers": 4},
+        )
+    )
+    assert config.executor.name == "streaming"
+    assert config.executor.rapidsmpf_py_executor_max_workers == 4
+
+
+def test_rapidsmpf_py_executor_max_workers_from_env(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    with monkeypatch.context() as m:
+        m.setenv("CUDF_POLARS__EXECUTOR__RAPIDSMPF_PY_EXECUTOR_MAX_WORKERS", "8")
+        engine = pl.GPUEngine(executor="streaming")
+        config = ConfigOptions.from_polars_engine(engine)
+        assert config.executor.name == "streaming"
+        assert config.executor.rapidsmpf_py_executor_max_workers == 8

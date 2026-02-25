@@ -49,7 +49,13 @@ from cudf_polars.utils.cuda_stream import (
     get_new_cuda_stream,
     join_cuda_streams,
 )
-from cudf_polars.utils.versions import POLARS_VERSION_LT_131, POLARS_VERSION_LT_134
+from cudf_polars.utils.versions import (
+    POLARS_VERSION_LT_131,
+    POLARS_VERSION_LT_134,
+    POLARS_VERSION_LT_136,
+    POLARS_VERSION_LT_137,
+    POLARS_VERSION_LT_138,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Generator, Hashable, Iterable, Sequence
@@ -178,12 +184,6 @@ _BINOPS = {
 }
 
 
-_DECIMAL_TYPES = {plc.TypeId.DECIMAL32, plc.TypeId.DECIMAL64, plc.TypeId.DECIMAL128}
-
-
-_FLOAT_TYPES = {plc.TypeId.FLOAT32, plc.TypeId.FLOAT64}
-
-
 class IR(Node["IR"]):
     """Abstract plan node, representing an unevaluated dataframe."""
 
@@ -193,6 +193,8 @@ class IR(Node["IR"]):
     # Concrete classes should set this up with the arguments that will
     # be passed to do_evaluate.
     _non_child_args: tuple[Any, ...]
+    # The number of non-child arguments to pass to do_evaluate.
+    _n_non_child_args: ClassVar[int]
     schema: Schema
     """Mapping from column names to their data types."""
 
@@ -294,6 +296,7 @@ class ErrorNode(IR):
         "schema",
         "error",
     )
+    _n_non_child_args = 0
     error: str
     """The error."""
 
@@ -308,6 +311,7 @@ class PythonScan(IR):
 
     __slots__ = ("options", "predicate")
     _non_child = ("schema", "options", "predicate")
+    _n_non_child_args = 3
     options: Any
     """Arbitrary options."""
     predicate: expr.NamedExpr | None
@@ -447,6 +451,7 @@ class Scan(IR):
         "predicate",
         "parquet_options",
     )
+    _n_non_child_args = 11
     typ: str
     """What type of file are we reading? Parquet, CSV, etc..."""
     reader_options: dict[str, Any]
@@ -667,6 +672,18 @@ class Scan(IR):
             total_rows = min(total_rows, self.n_rows)
         return max(total_rows, 0)
 
+    @staticmethod
+    def _get_parquet_row_count_from_metadata(
+        paths: list[str], skip_rows: int, n_rows: int
+    ) -> int:
+        # Zero-width parquet files lose their row count when read through
+        # pylibcudf. See https://github.com/rapidsai/cudf/issues/21428
+        meta = plc.io.parquet_metadata.read_parquet_metadata(plc.io.SourceInfo(paths))
+        num_rows = meta.num_rows() - skip_rows
+        if n_rows != -1:
+            num_rows = min(num_rows, n_rows)
+        return max(num_rows, 0)
+
     @classmethod
     @log_do_evaluate
     @nvtx_annotate_cudf_polars(message="Scan")
@@ -840,11 +857,17 @@ class Scan(IR):
                         concatenated_columns[i] = plc.concatenate.concatenate(
                             [concatenated_columns[i], columns.pop()], stream=stream
                         )
+                num_rows = (
+                    cls._get_parquet_row_count_from_metadata(paths, skip_rows, n_rows)
+                    if not names
+                    else None
+                )
                 df = DataFrame.from_table(
                     plc.Table(concatenated_columns),
                     names=names,
                     dtypes=[schema[name] for name in names],
                     stream=stream,
+                    num_rows=num_rows,
                 )
                 df = _align_parquet_schema(df, schema)
                 if include_file_paths is not None:
@@ -857,11 +880,17 @@ class Scan(IR):
                 )
                 # TODO: consider nested column names?
                 col_names = tbl_w_meta.column_names(include_children=False)
+                num_rows = (
+                    cls._get_parquet_row_count_from_metadata(paths, skip_rows, n_rows)
+                    if not col_names
+                    else None
+                )
                 df = DataFrame.from_table(
                     tbl_w_meta.tbl,
                     col_names,
                     [schema[name] for name in col_names],
                     stream=stream,
+                    num_rows=num_rows,
                 )
                 df = _align_parquet_schema(df, schema)
                 if include_file_paths is not None:
@@ -941,6 +970,7 @@ class Sink(IR):
         "options",
         "cloud_options",
     )
+    _n_non_child_args = 5
 
     kind: str
     """The type of file to write to. Eg. Parquet, CSV, etc."""
@@ -1035,7 +1065,7 @@ class Sink(IR):
                     f"Compression type '{compression}' is not supported."
                 )
         elif (
-            kind == "Json"
+            kind == "Json" if POLARS_VERSION_LT_137 else "NDJson"
         ):  # pragma: no cover; options are validated on the polars side
             if not all(
                 plc.io.json.is_supported_write_json(dtype.plc_type)
@@ -1219,13 +1249,13 @@ class Sink(IR):
         """Write the dataframe to a file."""
         target = plc.io.SinkInfo([path])
 
-        if options.get("mkdir", False):
-            Path(path).parent.mkdir(parents=True, exist_ok=True)
+        if POLARS_VERSION_LT_136 and options.get("mkdir", False):
+            Path(path).parent.mkdir(parents=True, exist_ok=True)  # pragma: no cover
         if kind == "Csv":
             cls._write_csv(target, options, df)
         elif kind == "Parquet":
             cls._write_parquet(target, parquet_options, options, df)
-        elif kind == "Json":
+        elif kind == "Json" if POLARS_VERSION_LT_137 else "NDJson":
             cls._write_json(target, df)
 
         return DataFrame([], stream=df.stream)
@@ -1240,6 +1270,7 @@ class Cache(IR):
 
     __slots__ = ("key", "refcount")
     _non_child = ("schema", "key", "refcount")
+    _n_non_child_args = 2
     key: int
     """The cache key."""
     refcount: int | None
@@ -1314,6 +1345,7 @@ class DataFrameScan(IR):
 
     __slots__ = ("_id_for_hash", "df", "projection")
     _non_child = ("schema", "df", "projection")
+    _n_non_child_args = 3
     df: Any
     """Polars internal PyDataFrame object."""
     projection: tuple[str, ...] | None
@@ -1411,8 +1443,17 @@ class DataFrameScan(IR):
         context: IRExecutionContext,
     ) -> DataFrame:
         """Evaluate and return a dataframe."""
+        pl_df = pl.DataFrame._from_pydf(df) if not isinstance(df, pl.DataFrame) else df
+        height = pl_df.height
+
         if projection is not None:
             df = df.select(projection)
+
+        # Zero-width dataframes lose their row count when converted through
+        # pylibcudf. See https://github.com/rapidsai/cudf/issues/21428
+        if len(schema) == 0:
+            return DataFrame([], stream=context.get_cuda_stream(), num_rows=height)
+
         df = DataFrame.from_polars(df, stream=context.get_cuda_stream())
         assert all(
             c.obj.type() == dtype.plc_type
@@ -1426,6 +1467,7 @@ class Select(IR):
 
     __slots__ = ("exprs", "should_broadcast")
     _non_child = ("schema", "exprs", "should_broadcast")
+    _n_non_child_args = 2
     exprs: tuple[expr.NamedExpr, ...]
     """List of expressions to evaluate to form the new dataframe."""
     should_broadcast: bool
@@ -1542,6 +1584,7 @@ class Reduce(IR):
 
     __slots__ = ("exprs",)
     _non_child = ("schema", "exprs")
+    _n_non_child_args = 1
     exprs: tuple[expr.NamedExpr, ...]
     """List of expressions to evaluate to form the new dataframe."""
 
@@ -1593,6 +1636,7 @@ class Rolling(IR):
         "agg_requests",
         "zlice",
     )
+    _n_non_child_args = 8
     index: expr.NamedExpr
     """Column being rolled over."""
     index_dtype: plc.DataType
@@ -1748,6 +1792,15 @@ class Rolling(IR):
         ).slice(zlice)
 
 
+def _has_struct_in_list(polars_type: pl.DataType) -> bool:
+    if not isinstance(polars_type, pl.List):
+        return False
+    current = polars_type.inner
+    while isinstance(current, pl.List):
+        current = current.inner
+    return isinstance(current, pl.Struct)
+
+
 class GroupBy(IR):
     """Perform a groupby."""
 
@@ -1764,6 +1817,7 @@ class GroupBy(IR):
         "maintain_order",
         "zlice",
     )
+    _n_non_child_args = 5
     keys: tuple[expr.NamedExpr, ...]
     """Grouping keys."""
     agg_requests: tuple[expr.NamedExpr, ...]
@@ -1784,10 +1838,19 @@ class GroupBy(IR):
     ):
         self.schema = schema
         self.keys = tuple(keys)
+        for dtype in schema.values():
+            if _has_struct_in_list(dtype.polars_type):
+                raise NotImplementedError("Nested list[struct] types not supported")
         for request in agg_requests:
             expr = request.value
-            if isinstance(expr, unary.UnaryFunction) and expr.name == "value_counts":
-                raise NotImplementedError("value_counts is not supported in groupby")
+            if (
+                POLARS_VERSION_LT_136
+                and isinstance(expr, unary.UnaryFunction)
+                and expr.name == "value_counts"
+            ):
+                raise NotImplementedError(
+                    "value_counts is not supported in groupby"
+                )  # pragma: no cover; Nested list[struct] types not supported
             if any(
                 isinstance(child, unary.UnaryFunction) and child.name == "value_counts"
                 for child in expr.children
@@ -2068,6 +2131,7 @@ class ConditionalJoin(IR):
 
     __slots__ = ("ast_predicate", "options", "predicate")
     _non_child = ("schema", "predicate", "options")
+    _n_non_child_args = 2
     predicate: expr.Expr
     """Expression predicate to join on"""
     options: tuple[
@@ -2178,6 +2242,7 @@ class Join(IR):
 
     __slots__ = ("left_on", "options", "right_on")
     _non_child = ("schema", "left_on", "right_on", "options")
+    _n_non_child_args = 3
     left_on: tuple[expr.NamedExpr, ...]
     """List of expressions used as keys in the left frame."""
     right_on: tuple[expr.NamedExpr, ...]
@@ -2584,6 +2649,7 @@ class HStack(IR):
 
     __slots__ = ("columns", "should_broadcast")
     _non_child = ("schema", "columns", "should_broadcast")
+    _n_non_child_args = 2
     should_broadcast: bool
     """Should the resulting evaluated columns be broadcast to the same length."""
 
@@ -2636,6 +2702,7 @@ class Distinct(IR):
 
     __slots__ = ("keep", "stable", "subset", "zlice")
     _non_child = ("schema", "keep", "subset", "zlice", "stable")
+    _n_non_child_args = 4
     keep: plc.stream_compaction.DuplicateKeepOption
     """Which distinct value to keep."""
     subset: frozenset[str] | None
@@ -2730,6 +2797,7 @@ class Sort(IR):
 
     __slots__ = ("by", "null_order", "order", "stable", "zlice")
     _non_child = ("schema", "by", "order", "null_order", "stable", "zlice")
+    _n_non_child_args = 5
     by: tuple[expr.NamedExpr, ...]
     """Sort keys."""
     order: tuple[plc.types.Order, ...]
@@ -2812,6 +2880,7 @@ class Slice(IR):
 
     __slots__ = ("length", "offset")
     _non_child = ("schema", "offset", "length")
+    _n_non_child_args = 2
     offset: int
     """Start of the slice."""
     length: int | None
@@ -2839,6 +2908,7 @@ class Filter(IR):
 
     __slots__ = ("mask",)
     _non_child = ("schema", "mask")
+    _n_non_child_args = 1
     mask: expr.NamedExpr
     """Expression to produce the filter mask."""
 
@@ -2866,6 +2936,7 @@ class Projection(IR):
 
     __slots__ = ()
     _non_child = ("schema",)
+    _n_non_child_args = 1
 
     def __init__(self, schema: Schema, df: IR):
         self.schema = schema
@@ -2893,6 +2964,7 @@ class MergeSorted(IR):
 
     __slots__ = ("key",)
     _non_child = ("schema", "key")
+    _n_non_child_args = 1
     key: str
     """Key that is sorted."""
 
@@ -2943,6 +3015,7 @@ class MapFunction(IR):
 
     __slots__ = ("name", "options")
     _non_child = ("schema", "name", "options")
+    _n_non_child_args = 3
     name: str
     """Name of the function to apply"""
     options: Any
@@ -2956,6 +3029,7 @@ class MapFunction(IR):
             "unpivot",
             "row_index",
             "fast_count",
+            "hint_sorted",
         ]
     )
 
@@ -2971,7 +3045,14 @@ class MapFunction(IR):
                 f"Unhandled map function {self.name}"
             )  # pragma: no cover
         if self.name == "explode":
-            (to_explode,) = self.options
+            if POLARS_VERSION_LT_136 or len(self.options) == 1:
+                (to_explode,) = self.options
+            else:
+                (to_explode, empty_as_null, keep_nulls) = self.options
+                if (POLARS_VERSION_LT_136 and not empty_as_null) or not keep_nulls:
+                    raise NotImplementedError(
+                        "Explode an empty or null list/array"
+                    )  # pragma: no cover
             if len(to_explode) > 1:
                 # TODO: straightforward, but need to error check
                 # polars requires that all to-explode columns have the
@@ -2992,7 +3073,7 @@ class MapFunction(IR):
             indices, pivotees, variable_name, value_name = self.options
             value_name = "value" if value_name is None else value_name
             variable_name = "variable" if variable_name is None else variable_name
-            if len(pivotees) == 0:
+            if POLARS_VERSION_LT_136 and len(pivotees) == 0:  # pragma: no cover
                 index = frozenset(indices)
                 pivotees = [name for name in df.schema if name not in index]
             if not all(
@@ -3011,7 +3092,7 @@ class MapFunction(IR):
             )
         elif self.name == "row_index":
             col_name, offset = options
-            if col_name in df.schema:
+            if POLARS_VERSION_LT_138 and col_name in df.schema:  # pragma: no cover
                 raise NotImplementedError("Duplicate row index name")
             self.options = (col_name, offset)
         elif self.name == "fast_count":
@@ -3023,6 +3104,10 @@ class MapFunction(IR):
             raise NotImplementedError(
                 "Fast count unsupported for CSV scans"
             )  # pragma: no cover
+        elif (
+            self.name == "hint_sorted"
+        ):  # pragma: no cover; polars prunes hints in some cases
+            raise NotImplementedError("Hint sorted unsupported")
         self._non_child_args = (schema, name, self.options)
 
     def get_hashable(self) -> Hashable:
@@ -3146,6 +3231,7 @@ class Union(IR):
 
     __slots__ = ("zlice",)
     _non_child = ("schema", "zlice")
+    _n_non_child_args = 1
     zlice: Zlice | None
     """Optional slice to apply to the result."""
 
@@ -3178,6 +3264,7 @@ class HConcat(IR):
 
     __slots__ = ("should_broadcast",)
     _non_child = ("schema", "should_broadcast")
+    _n_non_child_args = 1
 
     def __init__(
         self,
@@ -3277,6 +3364,7 @@ class Empty(IR):
 
     __slots__ = ("schema",)
     _non_child = ("schema",)
+    _n_non_child_args = 1
 
     def __init__(self, schema: Schema):
         self.schema = schema

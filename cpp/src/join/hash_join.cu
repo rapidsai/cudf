@@ -6,6 +6,7 @@
 #include "join_common_utils.hpp"
 
 #include <cudf/copying.hpp>
+#include <cudf/detail/algorithms/reduce.cuh>
 #include <cudf/detail/cuco_helpers.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/join/hash_join.cuh>
@@ -14,7 +15,6 @@
 #include <cudf/detail/row_operator/hashing.cuh>
 #include <cudf/detail/row_operator/primitive_row_operators.cuh>
 #include <cudf/detail/structs/utilities.hpp>
-#include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/join/hash_join.hpp>
 #include <cudf/join/join.hpp>
 #include <cudf/utilities/error.hpp>
@@ -28,10 +28,9 @@
 #include <rmm/exec_policy.hpp>
 #include <rmm/mr/polymorphic_allocator.hpp>
 
+#include <cuda/iterator>
 #include <cuda/std/functional>
 #include <cuda/std/iterator>
-#include <thrust/iterator/constant_iterator.h>
-#include <thrust/iterator/discard_iterator.h>
 #include <thrust/iterator/transform_output_iterator.h>
 #include <thrust/scatter.h>
 #include <thrust/uninitialized_fill.h>
@@ -454,7 +453,7 @@ std::size_t get_full_join_size(
                               iter + probe_table_num_rows,
                               equality,
                               hash_table.hash_function(),
-                              thrust::make_discard_iterator(),
+                              cuda::make_discard_iterator(),
                               out_build_begin,
                               stream.value());
   } else {
@@ -470,7 +469,7 @@ std::size_t get_full_join_size(
                                 iter + probe_table_num_rows,
                                 equality,
                                 hash_table.hash_function(),
-                                thrust::make_discard_iterator(),
+                                cuda::make_discard_iterator(),
                                 out_build_begin,
                                 stream.value());
     };
@@ -507,8 +506,8 @@ std::size_t get_full_join_size(
     // invalid_index_map[index_ptr[i]] = 0 for i = 0 to right_table_row_count
     // Thus specifying that those locations are valid
     thrust::scatter_if(rmm::exec_policy_nosync(stream),
-                       thrust::make_constant_iterator(0),
-                       thrust::make_constant_iterator(0) + right_indices->size(),
+                       cuda::make_constant_iterator(0),
+                       cuda::make_constant_iterator(0) + right_indices->size(),
                        right_indices->begin(),      // Index locations
                        right_indices->begin(),      // Stencil - Check if index location is valid
                        invalid_index_map->begin(),  // Output indices

@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 
 from cudf.api.types import is_dtype_equal
+from cudf.core.dtype.validators import is_dtype_obj_numeric
 from cudf.core.dtypes import (
     CategoricalDtype,
     Decimal32Dtype,
@@ -20,7 +21,6 @@ from cudf.core.reshape import concat
 from cudf.utils.dtypes import (
     find_common_type,
     get_dtype_of_same_kind,
-    is_dtype_obj_numeric,
 )
 
 if TYPE_CHECKING:
@@ -58,7 +58,14 @@ class _IndexIndexer(_Indexer):
         return obj.index._data[self.name]
 
     def set(self, obj: DataFrame, value: ColumnBase):
-        obj.index._data.set_by_label(self.name, value)
+        if isinstance(obj.index.dtype, CategoricalDtype):
+            # We need to update the categories of the index as well as the
+            # codes when setting a new column on a categorical index. The
+            # categories are stored in the dtype of the index, so we need to
+            # update the dtype of the index to reflect the new categories.
+            obj.index = obj.index._from_data_like_self({self.name: value})
+        else:
+            obj.index._data.set_by_label(self.name, value)
 
 
 def _match_join_keys(
@@ -124,7 +131,7 @@ def _match_join_keys(
 
     if how == "left" and rcol.fillna(0).can_cast_safely(ltype):
         return lcol, rcol.astype(ltype)
-    elif common_type is None:
+    if common_type is None:
         common_type = np.dtype(np.float64)
     return lcol.astype(common_type), rcol.astype(common_type)
 

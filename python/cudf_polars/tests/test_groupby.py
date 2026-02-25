@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -15,7 +15,11 @@ from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
     assert_ir_translation_raises,
 )
-from cudf_polars.utils.versions import POLARS_VERSION_LT_132, POLARS_VERSION_LT_1321
+from cudf_polars.utils.versions import (
+    POLARS_VERSION_LT_132,
+    POLARS_VERSION_LT_136,
+    POLARS_VERSION_LT_1321,
+)
 
 
 @pytest.fixture
@@ -229,10 +233,7 @@ def test_groupby_nan_minmax_raises(op):
     "expr",
     [
         pl.lit(1).alias("value"),
-        pytest.param(
-            pl.lit([[4, 5, 6]]).alias("value"),
-            marks=pytest.mark.xfail(reason="Need to expose OtherScalar in rust IR"),
-        ),
+        pl.lit([[4, 5, 6]]).alias("value"),
         pytest.param(
             pl.Series("value", [[4, 5, 6]], dtype=pl.List(pl.Int32)),
             marks=pytest.mark.xfail(
@@ -262,6 +263,25 @@ def test_groupby_unary_non_pointwise_raises(df, expr):
 
 def test_groupby_agg_broadcast_raises(df):
     q = df.group_by("key1").agg(pl.col("int") + pl.col("float").max())
+    assert_ir_translation_raises(q, NotImplementedError)
+
+
+@pytest.mark.parametrize(
+    "dtype",
+    [
+        pl.List(pl.Struct({"foo": pl.Int64, "bar": pl.String})),
+        pl.List(pl.List(pl.Struct({"foo": pl.Int64, "bar ": pl.String}))),
+        pl.List(pl.List(pl.List(pl.Struct({"foo": pl.Int64, "bar": pl.String})))),
+    ],
+)
+def test_groupby_nested_list_struct_raises(dtype):
+    ldf = pl.LazyFrame(
+        {
+            "key": [1, 2, 3],
+            "value": pl.Series([[], [], []], dtype=dtype),
+        }
+    )
+    q = ldf.group_by("key").agg(pl.col("value"))
     assert_ir_translation_raises(q, NotImplementedError)
 
 
@@ -361,7 +381,15 @@ def test_groupby_sum_all_null_group_returns_null():
     ],
     ids=["sum", "mean", "median", "quantile-0.5"],
 )
-def test_groupby_aggs_keep_unsupported_as_null(df: pl.LazyFrame, agg_expr) -> None:
+def test_groupby_aggs_keep_unsupported_as_null(
+    request, df: pl.LazyFrame, agg_expr
+) -> None:
+    request.applymarker(
+        pytest.mark.xfail(
+            condition="sum" in str(agg_expr) and not POLARS_VERSION_LT_136,
+            reason="polars raises now",
+        )
+    )
     lf = df.filter(pl.col("datetime") == date(2004, 12, 1))
     q = lf.group_by("datetime").agg(agg_expr)
     assert_gpu_result_equal(q)
@@ -439,3 +467,9 @@ def test_groupby_literal_agg():
     df = pl.LazyFrame({"c0": [True, False]})
     q = df.group_by("c0").agg(pl.lit(1).is_not_null())
     assert_gpu_result_equal(q, check_row_order=False)
+
+
+def test_groupby_empty_keys_raises():
+    df = pl.LazyFrame({"x": [1, 2, 3]})
+    q = df.group_by([]).agg(pl.len())
+    assert_ir_translation_raises(q, NotImplementedError)

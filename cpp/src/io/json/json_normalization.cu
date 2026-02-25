@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -19,12 +19,11 @@
 
 #include <cub/device/device_copy.cuh>
 #include <cuda/atomic>
+#include <cuda/iterator>
 #include <cuda/std/functional>
 #include <cuda/std/iterator>
 #include <thrust/binary_search.h>
 #include <thrust/gather.h>
-#include <thrust/iterator/constant_iterator.h>
-#include <thrust/iterator/discard_iterator.h>
 #include <thrust/reduce.h>
 #include <thrust/remove.h>
 
@@ -313,7 +312,7 @@ void normalize_single_quotes(datasource::owning_buffer<rmm::device_buffer>& inda
   parser.Transduce(reinterpret_cast<SymbolT const*>(indata.data()),
                    static_cast<SymbolOffsetT>(indata.size()),
                    static_cast<SymbolT*>(outbuf.data()),
-                   thrust::make_discard_iterator(),
+                   cuda::make_discard_iterator(),
                    outbuf_size.data(),
                    normalize_quotes::start_state,
                    stream);
@@ -397,7 +396,7 @@ std::
   cudf::detail::device_scalar<SymbolOffsetT> outbuf_indices_size(stream, mr);
   parser.Transduce(inbuf.data(),
                    static_cast<SymbolOffsetT>(inbuf.size()),
-                   thrust::make_discard_iterator(),
+                   cuda::make_discard_iterator(),
                    outbuf_indices.data(),
                    outbuf_indices_size.data(),
                    normalize_whitespace::start_state,
@@ -424,8 +423,8 @@ std::
   auto stencil = cudf::detail::make_zeroed_device_uvector_async<bool>(
     static_cast<std::size_t>(inbuf_size), stream, cudf::get_current_device_resource_ref());
   thrust::scatter(rmm::exec_policy_nosync(stream),
-                  thrust::make_constant_iterator(true),
-                  thrust::make_constant_iterator(true) + num_deletions,
+                  cuda::make_constant_iterator(true),
+                  cuda::make_constant_iterator(true) + num_deletions,
                   outbuf_indices.begin(),
                   stencil.begin());
   thrust::remove_if(rmm::exec_policy_nosync(stream),

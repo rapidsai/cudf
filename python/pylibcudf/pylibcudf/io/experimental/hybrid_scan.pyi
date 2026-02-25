@@ -39,6 +39,7 @@ class HybridScanReader:
     def total_rows_in_row_groups(
         self, row_group_indices: list[int]
     ) -> int: ...
+    def reset_column_selection(self) -> None: ...
     def filter_row_groups_with_stats(
         self,
         row_group_indices: list[int],
@@ -80,6 +81,7 @@ class HybridScanReader:
         mask_data_pages: UseDataPageMask,
         options: ParquetReaderOptions,
         stream: Stream | None = None,
+        mr: DeviceMemoryResource | None = None,
     ) -> TableWithMetadata: ...
     def payload_column_chunks_byte_ranges(
         self, row_group_indices: list[int], options: ParquetReaderOptions
@@ -92,6 +94,18 @@ class HybridScanReader:
         mask_data_pages: UseDataPageMask,
         options: ParquetReaderOptions,
         stream: Stream | None = None,
+        mr: DeviceMemoryResource | None = None,
+    ) -> TableWithMetadata: ...
+    def all_column_chunks_byte_ranges(
+        self, row_group_indices: list[int], options: ParquetReaderOptions
+    ) -> list[ByteRangeInfo]: ...
+    def materialize_all_columns(
+        self,
+        row_group_indices: list[int],
+        column_chunk_data: list[Span],
+        options: ParquetReaderOptions,
+        stream: Stream | None = None,
+        mr: DeviceMemoryResource | None = None,
     ) -> TableWithMetadata: ...
     def setup_chunking_for_filter_columns(
         self,
@@ -103,9 +117,11 @@ class HybridScanReader:
         column_chunk_data: list[Span],
         options: ParquetReaderOptions,
         stream: Stream | None = None,
+        mr: DeviceMemoryResource | None = None,
     ) -> None: ...
     def materialize_filter_columns_chunk(
-        self, row_mask: Column, stream: Stream | None = None
+        self,
+        row_mask: Column,
     ) -> TableWithMetadata: ...
     def setup_chunking_for_payload_columns(
         self,
@@ -117,8 +133,10 @@ class HybridScanReader:
         column_chunk_data: list[Span],
         options: ParquetReaderOptions,
         stream: Stream | None = None,
+        mr: DeviceMemoryResource | None = None,
     ) -> None: ...
     def materialize_payload_columns_chunk(
-        self, row_mask: Column, stream: Stream | None = None
+        self,
+        row_mask: Column,
     ) -> TableWithMetadata: ...
     def has_next_table_chunk(self) -> bool: ...

@@ -307,7 +307,7 @@ def test_assign():
 
     # Using `loc[:, ["x", "y"]]` was broken for dask-expr 0.4.0
     dd.assert_eq(got[["x", "y"]], df)
-    np.testing.assert_array_equal(got["z"].compute().values_host, pdcol)
+    np.testing.assert_array_equal(got["z"].compute().to_numpy(), pdcol.values)
 
 
 @pytest.mark.parametrize("data_type", ["int8", "int16", "int32", "int64"])
@@ -612,34 +612,35 @@ def test_hash_object_dispatch(index):
     ],
 )
 def test_make_meta_backends(index):
-    dtypes = ["int8", "int32", "int64", "float64"]
-    df = cudf.DataFrame({dt: np.arange(0, 3, dtype=dt) for dt in dtypes})
-    df["strings"] = ["cat", "dog", "fish"]
-    df["cats"] = df["strings"].astype("category")
-    df["time_s"] = np.array(
-        ["2018-10-07", "2018-10-08", "2018-10-09"], dtype="datetime64[s]"
-    )
-    df["time_ms"] = df["time_s"].astype("datetime64[ms]")
-    df["time_ns"] = df["time_s"].astype("datetime64[ns]")
-    df = df.set_index(index)
-
-    # Check "empty" metadata types
-    chk_meta = dask_make_meta(df)
-    dd.assert_eq(chk_meta.dtypes, df.dtypes)
-
-    # Check "non-empty" metadata types
-    chk_meta_nonempty = meta_nonempty(df)
-    dd.assert_eq(chk_meta.dtypes, chk_meta_nonempty.dtypes)
-
-    # Check dask code path if not MultiIndex
-    if not isinstance(df.index, cudf.MultiIndex):
-        ddf = dask_cudf.from_cudf(df, npartitions=1)
+    with dask.config.set({"dataframe.convert-string": False}):
+        dtypes = ["int8", "int32", "int64", "float64"]
+        df = cudf.DataFrame({dt: np.arange(0, 3, dtype=dt) for dt in dtypes})
+        df["strings"] = ["cat", "dog", "fish"]
+        df["cats"] = df["strings"].astype("category")
+        df["time_s"] = np.array(
+            ["2018-10-07", "2018-10-08", "2018-10-09"], dtype="datetime64[s]"
+        )
+        df["time_ms"] = df["time_s"].astype("datetime64[ms]")
+        df["time_ns"] = df["time_s"].astype("datetime64[ns]")
+        df = df.set_index(index)
 
         # Check "empty" metadata types
-        dd.assert_eq(ddf._meta.dtypes, df.dtypes)
+        chk_meta = dask_make_meta(df)
+        dd.assert_eq(chk_meta.dtypes, df.dtypes)
 
         # Check "non-empty" metadata types
-        dd.assert_eq(ddf._meta.dtypes, ddf._meta_nonempty.dtypes)
+        chk_meta_nonempty = meta_nonempty(df)
+        dd.assert_eq(chk_meta.dtypes, chk_meta_nonempty.dtypes)
+
+        # Check dask code path if not MultiIndex
+        if not isinstance(df.index, cudf.MultiIndex):
+            ddf = dask_cudf.from_cudf(df, npartitions=1)
+
+            # Check "empty" metadata types
+            dd.assert_eq(ddf._meta.dtypes, df.dtypes)
+
+            # Check "non-empty" metadata types
+            dd.assert_eq(ddf._meta.dtypes, ddf._meta_nonempty.dtypes)
 
 
 @pytest.mark.parametrize(
@@ -770,36 +771,37 @@ def test_index_map_partitions():
 
 
 def test_merging_categorical_columns():
-    df_1 = cudf.DataFrame(
-        {"id_1": [0, 1, 2, 3], "cat_col": ["a", "b", "f", "f"]}
-    )
+    with dask.config.set({"dataframe.convert-string": False}):
+        df_1 = cudf.DataFrame(
+            {"id_1": [0, 1, 2, 3], "cat_col": ["a", "b", "f", "f"]}
+        )
 
-    ddf_1 = dask_cudf.from_cudf(df_1, npartitions=2)
+        ddf_1 = dask_cudf.from_cudf(df_1, npartitions=2)
 
-    ddf_1 = ddf_1.categorize(columns=["cat_col"])
+        ddf_1 = ddf_1.categorize(columns=["cat_col"])
 
-    df_2 = cudf.DataFrame(
-        {"id_2": [111, 112, 113], "cat_col": ["g", "h", "f"]}
-    )
+        df_2 = cudf.DataFrame(
+            {"id_2": [111, 112, 113], "cat_col": ["g", "h", "f"]}
+        )
 
-    ddf_2 = dask_cudf.from_cudf(df_2, npartitions=2)
+        ddf_2 = dask_cudf.from_cudf(df_2, npartitions=2)
 
-    ddf_2 = ddf_2.categorize(columns=["cat_col"])
+        ddf_2 = ddf_2.categorize(columns=["cat_col"])
 
-    expected = cudf.DataFrame(
-        {
-            "id_1": [2, 3],
-            "cat_col": cudf.Series(
-                ["f", "f"],
-                dtype=cudf.CategoricalDtype(
-                    categories=["a", "b", "f", "g", "h"], ordered=False
+        expected = cudf.DataFrame(
+            {
+                "id_1": [2, 3],
+                "cat_col": cudf.Series(
+                    ["f", "f"],
+                    dtype=cudf.CategoricalDtype(
+                        categories=["a", "b", "f", "g", "h"], ordered=False
+                    ),
                 ),
-            ),
-            "id_2": [113, 113],
-        }
-    )
-    with pytest.warns(UserWarning, match="mismatch"):
-        dd.assert_eq(ddf_1.merge(ddf_2), expected)
+                "id_2": [113, 113],
+            }
+        )
+        with pytest.warns(UserWarning, match="mismatch"):
+            dd.assert_eq(ddf_1.merge(ddf_2), expected)
 
 
 def test_correct_meta():

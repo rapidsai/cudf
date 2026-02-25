@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -22,14 +22,18 @@ void test_udf(char const* udf, Data data_init, cudf::size_type size, bool is_ptx
   auto data_iter = cudf::detail::make_counting_transform_iterator(0, data_init);
   cudf::test::fixed_width_column_wrapper<dtype, typename decltype(data_iter)::value_type> in(
     data_iter, data_iter + size, all_valid);
-  cudf::transform({in},
-                  udf,
-                  cudf::data_type(cudf::type_to_id<dtype>()),
-                  is_ptx,
-                  std::nullopt,
-                  cudf::null_aware::NO,
-                  cudf::output_nullability::PRESERVE,
-                  cudf::test::get_default_stream());
+
+  cudf::transform_input inputs[] = {in};
+
+  cudf::transform_extended(inputs,
+                           udf,
+                           cudf::data_type(cudf::type_to_id<dtype>()),
+                           is_ptx,
+                           std::nullopt,
+                           cudf::null_aware::NO,
+                           std::nullopt,
+                           cudf::output_nullability::PRESERVE,
+                           cudf::test::get_default_stream());
 }
 
 TEST_F(TransformTest, Transform)
@@ -142,7 +146,7 @@ TEST_F(TransformTest, NaNsToNulls)
   std::vector<bool> mask   = {true, true, true, true, false, false};
   auto input_column =
     cudf::test::fixed_width_column_wrapper<float>(input.begin(), input.end(), mask.begin());
-  cudf::nans_to_nulls(input_column, cudf::test::get_default_stream());
+  cudf::column_nans_to_nulls(input_column, cudf::test::get_default_stream());
 }
 
 TEST_F(TransformTest, RowBitCount)

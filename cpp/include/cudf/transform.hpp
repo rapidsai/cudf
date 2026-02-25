@@ -1,16 +1,20 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
 
 #include <cudf/ast/expressions.hpp>
+#include <cudf/column/scalar_column_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/export.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <memory>
+#include <optional>
+#include <variant>
+#include <vector>
 
 namespace CUDF_EXPORT cudf {
 
@@ -52,7 +56,7 @@ namespace CUDF_EXPORT cudf {
  * @return              The column resulting from applying the transform function to
  *                      every element of the input
  */
-std::unique_ptr<column> transform(
+[[deprecated("Use transform_extended instead")]] std::unique_ptr<column> transform(
   std::vector<column_view> const& inputs,
   std::string const& transform_udf,
   data_type output_type,
@@ -64,8 +68,62 @@ std::unique_ptr<column> transform(
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
+ * @brief Typedef for inputs to the transform function. Each input can be either a column or a
+ * scalar column.
+ */
+using transform_input = std::variant<column_view, scalar_column_view>;
+
+/**
+ * @brief Creates a new column by applying a transform function against every
+ * element of the input columns.
+ *
+ * Computes:
+ * `out[i] = F(inputs[i]...)`.
+ *
+ *
+ * @throws std::invalid_argument if any of the input columns have different sizes (except scalars)
+ * @throws std::invalid_argument if `output_type` or any of the inputs are not fixed-width or string
+ * types
+ * @throws std::invalid_argument if any of the input columns have nulls
+ * @throws std::invalid_argument if the inputs only have a scalar with no column inputs and
+ * `row_size` is not provided. This is because the row size cannot be inferred from the inputs in
+ * this case.
+ * @throws std::logic_error if JIT is not supported by the runtime
+ *
+ * The size of the resulting column is the `row_size` if provided, otherwise it is inferred from
+ * the input columns.
+ *
+ * @param inputs        Immutable views of the inputs to transform (columns and scalar columns)
+ * @param udf The PTX/CUDA string of the transform function to apply
+ * @param output_type   The output type that is compatible with the output type in the UDF
+ * @param is_ptx        true: the UDF is treated as PTX code; false: the UDF is treated as CUDA code
+ * @param user_data     User-defined device data to pass to the UDF.
+ * @param is_null_aware Signifies the UDF will receive row inputs as optional values
+ * @param null_policy   Signifies if a null mask should be created for the output column
+ * @param row_size The row size of the transform operation. If not provided, it is inferred from the
+ * input columns.
+ * @param stream        CUDA stream used for device memory operations and kernel launches
+ * @param mr            Device memory resource used to allocate the returned column's device memory
+ * @return              The column resulting from applying the transform function to
+ *                      every element of the input
+ */
+std::unique_ptr<column> transform_extended(
+  std::span<transform_input const> inputs,
+  std::string const& udf,
+  data_type output_type,
+  bool is_ptx,
+  std::optional<void*> user_data    = std::nullopt,
+  null_aware is_null_aware          = null_aware::NO,
+  std::optional<size_type> row_size = std::nullopt,
+  output_nullability null_policy    = output_nullability::PRESERVE,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
+/**
  * @brief Creates a null_mask from `input` by converting `NaN` to null and
  * preserving existing null values and also returns new null_count.
+ *
+ * @deprecated in release 26.04. Use column_nans_to_nulls instead.
  *
  * @throws cudf::logic_error if `input.type()` is a non-floating type
  *
@@ -75,7 +133,23 @@ std::unique_ptr<column> transform(
  * @return A pair containing a `device_buffer` with the new bitmask and its
  * null count obtained by replacing `NaN` in `input` with null.
  */
-std::pair<std::unique_ptr<rmm::device_buffer>, size_type> nans_to_nulls(
+[[deprecated]] std::pair<std::unique_ptr<rmm::device_buffer>, size_type> nans_to_nulls(
+  column_view const& input,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
+/**
+ * @brief Creates a null_mask from `input` by converting `NaN` elements to null rows
+ * and preserving existing null values
+ *
+ * @throws cudf::logic_error if `input.type()` is a non-floating type
+ *
+ * @param input  An immutable view of the input column of floating-point type
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr     Device memory resource used to allocate the returned bitmask
+ * @return       A new column with the null mask created from the input column
+ */
+std::unique_ptr<column> column_nans_to_nulls(
   column_view const& input,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());

@@ -34,6 +34,7 @@
 #include <cudf/lists/explode.hpp>
 #include <cudf/merge.hpp>
 #include <cudf/partitioning.hpp>
+#include <cudf/reduction/distinct_count.hpp>
 #include <cudf/replace.hpp>
 #include <cudf/reshape.hpp>
 #include <cudf/rolling.hpp>
@@ -2100,7 +2101,7 @@ Java_ai_rapids_cudf_Table_readParquetFromDataSource(JNIEnv* env,
 
     auto builder = cudf::io::parquet_reader_options::builder(source);
     if (n_filter_col_names.size() > 0) {
-      builder = builder.columns(n_filter_col_names.as_cpp_vector());
+      builder = builder.column_names(n_filter_col_names.as_cpp_vector());
     }
 
     cudf::io::parquet_reader_options opts =
@@ -2157,7 +2158,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_readParquet(JNIEnv* env,
 
     auto builder = cudf::io::parquet_reader_options::builder(source);
     if (n_filter_col_names.size() > 0) {
-      builder = builder.columns(n_filter_col_names.as_cpp_vector());
+      builder = builder.column_names(n_filter_col_names.as_cpp_vector());
     }
 
     cudf::io::parquet_reader_options opts =

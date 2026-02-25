@@ -6,12 +6,27 @@ from __future__ import annotations
 
 import asyncio
 import operator
-from contextlib import asynccontextmanager, contextmanager
+import struct
+from contextlib import asynccontextmanager
 from functools import reduce
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any
 
-from rapidsmpf.streaming.chunks.arbitrary import ArbitraryChunk
+from cudf_polars.dsl.tracing import LOG_TRACES, Scope
+
+try:
+    import structlog
+    import structlog.contextvars
+except ImportError:
+    pass
+
+from rapidsmpf.memory.packed_data import PackedData
+from rapidsmpf.streaming.coll.allgather import AllGather
 from rapidsmpf.streaming.core.message import Message
+from rapidsmpf.streaming.cudf.channel_metadata import (
+    ChannelMetadata,
+    HashScheme,
+    Partitioning,
+)
 from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 
 import pylibcudf as plc
@@ -19,9 +34,8 @@ import pylibcudf as plc
 from cudf_polars.containers import DataFrame
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator, Callable, Iterator
+    from collections.abc import AsyncIterator, Callable, Mapping
 
-    from rapidsmpf.memory.memory_reservation import MemoryReservation
     from rapidsmpf.streaming.core.channel import Channel
     from rapidsmpf.streaming.core.context import Context
     from rapidsmpf.streaming.core.spillable_messages import SpillableMessages
@@ -30,106 +44,125 @@ if TYPE_CHECKING:
 
     from cudf_polars.dsl.ir import IR
     from cudf_polars.experimental.rapidsmpf.dispatch import SubNetGenerator
+    from cudf_polars.experimental.rapidsmpf.tracing import ActorTracer
+    from cudf_polars.typing import DataType
 
 
 @asynccontextmanager
 async def shutdown_on_error(
-    context: Context, *channels: Channel[Any]
-) -> AsyncIterator[None]:
+    context: Context,
+    *channels: Channel[Any],
+    trace_ir: IR | None = None,
+) -> AsyncIterator[ActorTracer | None]:
     """
     Shutdown on error for rapidsmpf.
+
+    This context manager handles channel cleanup on errors and optionally
+    emits structlog tracing events when LOG_TRACES is enabled.
 
     Parameters
     ----------
     context
         The rapidsmpf context.
     channels
-        The channels to shutdown.
+        The channels to shutdown on error.
+    trace_ir
+        Optional IR node to enable tracing for this streaming actor.
+        When provided and LOG_TRACES is enabled, an ActorTracer
+        is yielded for collecting stats, and a structlog event is
+        emitted on exit.
+
+    Yields
+    ------
+    ActorTracer | None
+        An actor tracer for collecting stats (if tracing enabled), else None.
     """
-    # TODO: This probably belongs in rapidsmpf.
+    # Create tracer only if LOG_TRACES is enabled and IR is provided
+    tracer: ActorTracer | None = None
+    if LOG_TRACES and trace_ir is not None:
+        from cudf_polars.experimental.rapidsmpf.tracing import (
+            ActorTracer,
+        )
+
+        ir_id = trace_ir.get_stable_id()
+        ir_type = type(trace_ir).__name__
+        tracer = ActorTracer(ir_id, ir_type)
+        structlog.contextvars.bind_contextvars(actor_ir_id=ir_id, actor_ir_type=ir_type)
+
     try:
-        yield
+        yield tracer
     except BaseException:
         await asyncio.gather(*(ch.shutdown(context) for ch in channels))
         raise
+    finally:
+        if tracer is not None:
+            log = structlog.get_logger()
+            record: dict[str, Any] = {
+                "scope": Scope.ACTOR.value,
+                "actor_ir_id": tracer.ir_id,
+                "actor_ir_type": tracer.ir_type,
+                "chunk_count": tracer.chunk_count,
+                "duplicated": tracer.duplicated,
+            }
+            if tracer.row_count is not None:
+                record["rows"] = tracer.row_count
+            if tracer.decision is not None:
+                record["decision"] = tracer.decision
+            log.info("Streaming Actor", **record)
+            structlog.contextvars.unbind_contextvars("actor_ir_id", "actor_ir_type")
 
 
-class HashPartitioned:
+def remap_partitioning(
+    partitioning: Partitioning | None,
+    old_schema: Mapping[str, DataType],
+    new_schema: Mapping[str, DataType],
+) -> Partitioning | None:
     """
-    Hash-partitioned metadata.
+    Remap partitioning column indices from old schema to new schema.
 
-    Attributes
+    Since HashScheme uses column indices rather than names, we need to
+    remap indices when propagating partitioning through operations that
+    may change the schema (column order or presence).
+
+    Parameters
     ----------
-    columns
-        Columns the data is hash-partitioned on.
-    scope
-        Whether data is partitioned locally (within a rank) or
-        globally (across all ranks).
-    count
-        The modulus used for hash partitioning (number of partitions).
+    partitioning
+        The partitioning to remap.
+    old_schema
+        The schema where the partitioning was established.
+    new_schema
+        The new schema to remap to.
+
+    Returns
+    -------
+    The remapped partitioning, or None if the inter-rank partitioning
+    columns are not present in the new schema.
     """
+    if partitioning is None:
+        return None
 
-    __slots__ = ("columns", "count", "scope")
+    old_names = list(old_schema.keys())
+    new_name_to_idx = {name: i for i, name in enumerate(new_schema.keys())}
 
-    columns: tuple[str, ...]
-    scope: Literal["local", "global"]
-    count: int
+    def remap_hash_scheme(hs: HashScheme | None | str) -> HashScheme | None | str:
+        if isinstance(hs, HashScheme):
+            try:
+                new_indices = tuple(
+                    new_name_to_idx[old_names[i]] for i in hs.column_indices
+                )
+            except (IndexError, KeyError):
+                return None  # Column missing in old or new schema
+            return HashScheme(new_indices, hs.modulus)
+        else:
+            return hs  # None or "inherit" passes through unchanged
 
-    def __init__(
-        self,
-        columns: tuple[str, ...],
-        scope: Literal["local", "global"],
-        count: int,
-    ):
-        self.columns = columns
-        self.scope = scope
-        self.count = count
-
-
-class Metadata:
-    """Metadata payload for a channel."""
-
-    __slots__ = (
-        "duplicated",
-        "global_count",
-        "local_count",
-        "partitioning",
-    )
-
-    # Chunk counts
-    local_count: int
-    """Local chunk-count estimate for the current rank."""
-    global_count: int | None
-    """Global chunk-count estimate across all ranks."""
-
-    # Partitioning
-    partitioning: HashPartitioned | None
-    """How the data is hash-partitioned, or None if not partitioned."""
-
-    # Duplication
-    duplicated: bool
-    """Whether the data is duplicated (identical) on all workers."""
-
-    def __init__(
-        self,
-        local_count: int,
-        *,
-        global_count: int | None = None,
-        partitioning: HashPartitioned | None = None,
-        duplicated: bool = False,
-    ):
-        if local_count < 0:  # pragma: no cover
-            raise ValueError(f"Local count must be non-negative. Got: {local_count}")
-        self.local_count = local_count
-        if global_count is not None and global_count < 0:  # pragma: no cover
-            raise ValueError(f"Global count must be non-negative. Got: {global_count}")
-        self.global_count = global_count
-        self.partitioning = partitioning
-        self.duplicated = duplicated
+    new_inter_rank = remap_hash_scheme(partitioning.inter_rank)
+    new_local = remap_hash_scheme(partitioning.local)
+    return Partitioning(inter_rank=new_inter_rank, local=new_local)
 
 
 async def send_metadata(
-    ch: Channel[TableChunk], ctx: Context, metadata: Metadata
+    ch: Channel[TableChunk], ctx: Context, metadata: ChannelMetadata
 ) -> None:
     """
     Send metadata and drain the metadata queue.
@@ -142,13 +175,27 @@ async def send_metadata(
         The streaming context.
     metadata :
         The metadata to send.
+
+    Notes
+    -----
+    This function copies the metadata before sending, so the caller
+    retains ownership of the original metadata object.
     """
-    msg = Message(0, ArbitraryChunk(metadata))
+    msg = Message(
+        0,
+        # Copy metadata before sending since Message consumes the handle.
+        # Metadata is small, so copying is cheap.
+        ChannelMetadata(
+            local_count=metadata.local_count,
+            partitioning=metadata.partitioning,
+            duplicated=metadata.duplicated,
+        ),
+    )
     await ch.send_metadata(ctx, msg)
     await ch.drain_metadata(ctx)
 
 
-async def recv_metadata(ch: Channel[TableChunk], ctx: Context) -> Metadata:
+async def recv_metadata(ch: Channel[TableChunk], ctx: Context) -> ChannelMetadata:
     """
     Receive metadata from a channel's metadata queue.
 
@@ -161,12 +208,102 @@ async def recv_metadata(ch: Channel[TableChunk], ctx: Context) -> Metadata:
 
     Returns
     -------
-    Metadata
+    ChannelMetadata
         The received metadata.
     """
     msg = await ch.recv_metadata(ctx)
-    assert msg is not None, f"Expected Metadata message, got {msg}."
-    return ArbitraryChunk.from_message(msg).release()
+    assert msg is not None, f"Expected ChannelMetadata message, got {msg}."
+    return ChannelMetadata.from_message(msg)
+
+
+def get_partitioning_moduli(
+    metadata: ChannelMetadata,
+    key_indices: tuple[int, ...],
+    nranks: int,
+    *,
+    allow_subset: bool = False,
+) -> tuple[int, int | None]:
+    """
+    Get the moduli if data is hash partitioned on the given keys.
+
+    Parameters
+    ----------
+    metadata
+        The channel metadata.
+    key_indices
+        The column indices of the keys.
+    nranks
+        The number of ranks.
+    allow_subset
+        If True, treat partitioning as matching when the partitioning
+        key indices are a prefix of key_indices (e.g. partitioning on
+        (0,) matches key_indices (0, 1)). If False, the partitioning
+        keys must match key_indices exactly.
+
+    Returns
+    -------
+    inter_rank_modulus
+        Inter-rank modulus.
+        Return value of 0 means the data is not partitioned between ranks.
+    local_modulus
+        Local modulus.
+        Return value of 0 means the data is not partitioned within a rank.
+        Return value of None means that the local partitioning inherits the
+        inter-rank partitioning.
+    """
+    # NOTE: This function will need to be updated when we support
+    # order-based partitioning. For ordered data, we can return a
+    # "boundaries" TableChunk instead of a single integer (modulus).
+
+    trivial_inter_rank_modulus = 1 if nranks == 1 else 0
+    if metadata.partitioning is None:
+        return trivial_inter_rank_modulus, 0
+
+    inter_rank = metadata.partitioning.inter_rank
+    strict_inter_rank_modulus = (
+        inter_rank.modulus
+        if (
+            isinstance(inter_rank, HashScheme)
+            and (
+                inter_rank.column_indices
+                == key_indices[: len(inter_rank.column_indices)]
+                if allow_subset
+                else inter_rank.column_indices == key_indices
+            )
+        )
+        else 0
+    )
+    inter_rank_modulus = strict_inter_rank_modulus or trivial_inter_rank_modulus
+    if not inter_rank_modulus:
+        # Local partitioning is meaningless without inter-rank partitioning
+        return 0, 0
+
+    local = metadata.partitioning.local
+    local_modulus = (
+        local.modulus
+        if (
+            isinstance(local, HashScheme)
+            and (
+                local.column_indices == key_indices[: len(local.column_indices)]
+                if allow_subset
+                else local.column_indices == key_indices
+            )
+        )
+        else 0
+    )
+    if local_modulus != metadata.local_count:
+        local_modulus = 0  # Local count is out of sync - Better to be safe
+
+    local_modulus = local_modulus or (None if local == "inherit" else 0)
+
+    if local_modulus and not strict_inter_rank_modulus and trivial_inter_rank_modulus:
+        # Trivial inter-rank partitioning with local partitioning
+        # is the same as inter-rank partitioning with local="inherit".
+        # Use the latter representation for consistency.
+        inter_rank_modulus = local_modulus
+        local_modulus = None
+
+    return inter_rank_modulus, local_modulus
 
 
 class ChannelManager:
@@ -249,6 +386,38 @@ def process_children(
     return nodes, channels
 
 
+def _make_empty_column(dtype: DataType, stream: Stream) -> plc.Column:
+    """
+    Create an empty (0-row) column, including for nested types.
+
+    ``plc.column_factories.make_empty_column`` rejects LIST and STRUCT,
+    so we build those by hand with the correct child structure.
+
+    Parameters
+    ----------
+    dtype
+        The cudf-polars DataType (carries child-type metadata for nested types).
+    stream
+        CUDA stream for any device allocations.
+    """
+    if dtype.id() == plc.TypeId.LIST:
+        offsets = plc.Column.from_scalar(
+            plc.Scalar.from_py(0, plc.DataType(plc.TypeId.INT32), stream=stream),
+            1,
+            stream=stream,
+        )
+        child = _make_empty_column(dtype.children[0], stream)
+        return plc.Column(dtype.plc_type, 0, None, None, 0, 0, [offsets, child])
+
+    if dtype.id() == plc.TypeId.STRUCT:
+        children = [
+            _make_empty_column(child_dtype, stream) for child_dtype in dtype.children
+        ]
+        return plc.Column(dtype.plc_type, 0, None, None, 0, 0, children)
+
+    return plc.column_factories.make_empty_column(dtype.plc_type, stream=stream)
+
+
 def empty_table_chunk(ir: IR, context: Context, stream: Stream) -> TableChunk:
     """
     Make an empty table chunk.
@@ -266,12 +435,7 @@ def empty_table_chunk(ir: IR, context: Context, stream: Stream) -> TableChunk:
     -------
     The empty table chunk.
     """
-    # Create an empty table with the correct schema
-    # Use dtype.plc_type to get the full DataType (preserves precision/scale for Decimals)
-    empty_columns = [
-        plc.column_factories.make_empty_column(dtype.plc_type, stream=stream)
-        for dtype in ir.schema.values()
-    ]
+    empty_columns = [_make_empty_column(dtype, stream) for dtype in ir.schema.values()]
     empty_table = plc.Table(empty_columns)
 
     return TableChunk.from_pylibcudf_table(
@@ -374,25 +538,44 @@ def make_spill_function(
     return spill_func
 
 
-@contextmanager
-def opaque_reservation(
+async def allgather_reduce(
     context: Context,
-    estimated_bytes: int,
-) -> Iterator[MemoryReservation]:
+    op_id: int,
+    *local_values: int,
+) -> tuple[int, ...]:
     """
-    Reserve memory for opaque allocations.
+    Allgather local scalar values and sum each across all ranks.
 
     Parameters
     ----------
     context
-        The RapidsMPF context.
-    estimated_bytes
-        The estimated number of bytes to reserve.
+        The rapidsmpf context.
+    op_id
+        The collective operation ID for this allgather.
+    *local_values
+        One or more local scalar values to contribute.
 
-    Yields
-    ------
-    The memory reservation.
+    Returns
+    -------
+    tuple[int, ...]
+        The sum of each local_value across all ranks.
     """
-    yield context.br().reserve_device_memory_and_spill(
-        estimated_bytes, allow_overbooking=True
-    )
+    n = len(local_values)
+    fmt = f"<{'q' * n}"
+    data = struct.pack(fmt, *local_values)
+    packed = PackedData.from_host_bytes(data, context.br())
+
+    allgather = AllGather(context, op_id)
+    allgather.insert(0, packed)
+    allgather.insert_finished()
+
+    results = await allgather.extract_all(context, ordered=False)
+
+    totals = [0] * n
+    for packed_result in results:
+        result_bytes = packed_result.to_host_bytes()
+        values = struct.unpack(fmt, result_bytes)
+        for i, v in enumerate(values):
+            totals[i] += v
+
+    return tuple(totals)
