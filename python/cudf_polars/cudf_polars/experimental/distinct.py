@@ -87,7 +87,7 @@ def lower_distinct(
     if ir.zlice is not None and ir.zlice[1] is not None:
         # Head/tail slice operation has been pushed into Distinct
         # (caller ensures only simple slices reach here)
-        n_ary = max(int(1_000_000 / ir.zlice[1]), 2)
+        n_ary = max(1_000_000 // ir.zlice[1], 2)
     elif unique_fraction is not None:
         # Use unique_fraction to determine partitioning
         n_ary = min(max(int(1.0 / unique_fraction), 2), child_count)
