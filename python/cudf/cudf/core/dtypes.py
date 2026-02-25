@@ -36,7 +36,6 @@ from cudf.utils.dtypes import (
     SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES,
     cudf_dtype_from_pa_type,
     cudf_dtype_to_pa_type,
-    is_pandas_nullable_extension_dtype,
     min_unsigned_type,
 )
 
@@ -1074,9 +1073,7 @@ class IntervalDtype(_BaseDtype):
 
     def to_pandas(self) -> pd.IntervalDtype:
         return pd.IntervalDtype(
-            subtype=self.subtype.numpy_dtype
-            if is_pandas_nullable_extension_dtype(self.subtype)
-            else self.subtype,
+            subtype=self.subtype,
             closed=self.closed,
         )
 
