@@ -4516,7 +4516,7 @@ class DatetimeIndex(Index):
         """
         # .quarter is already a cached_property
         return Index._from_column(
-            self._column.quarter.astype(np.dtype(np.int8))
+            self._column.quarter.astype(np.dtype(np.int8)), name=self.name
         )
 
     @_performance_tracking
