@@ -189,8 +189,6 @@ def assert_tpch_result_equal(
     if sort_by and limit:
         # Handle the .sort_by(...).head(n) case; First, split the data into two parts
         # "before" and "ties"
-        sort_by_cols, sort_by_descending = zip(*sort_by, strict=True)
-
         # Problem: suppose we're splitting on a float column: small, floating-point precision
         # differences, which we'd ignore in assert_frame_equal, might cause us to
         # split the two dataframes at different, but not meaningfully different, points.
@@ -200,8 +198,13 @@ def assert_tpch_result_equal(
         # expected: [a, b, c, d-epsilon, d]
         #
         # For epsilon less than our tolerance, we'd want to consider this valid.
+        # Meaning that the split point should be `d+epsilon` and the
+        # partitions should be
+        # result:   [ [a, b, c], [d, d + epsilon] ]
+        # expected: [ [a, b, c], [d - epsilon, d] ]
 
-        # Use the lexicographic last row in the query's sort order (ORDER BY ...).
+        sort_by_cols, sort_by_descending = zip(*sort_by, strict=True)
+
         sort_by_descending_list = list(sort_by_descending)
         (split_at,) = (
             left.select(sort_by_cols)
@@ -212,17 +215,12 @@ def assert_tpch_result_equal(
         # Note that we multiply abs_tol by 2; In our example above, our split point will
         # be d + epsilon; but we want to consider d - epsilon tied to the "real" split point
         # of 'd' as well.
-        #
-        # "Strictly before" in the sort order: for each column, ascending means "before" =
-        # less than, descending means "before" = greater than. Build lexicographic
-        # "row < split_at" as: cond_0 or (eq_0 and cond_1) or (eq_0 and eq_1 and cond_2) ...
 
         exprs = []
         for (col, val), desc in zip(
             split_at.items(), sort_by_descending_list, strict=True
         ):
             if isinstance(val, float):
-                # eq = (pl.col(col) >= val - 2 * abs_tol) & (pl.col(col) <= val + 2 * abs_tol)
                 exprs.append(
                     pl.col(col).lt(val - 2 * abs_tol)
                     | pl.col(col).gt(val + 2 * abs_tol)
