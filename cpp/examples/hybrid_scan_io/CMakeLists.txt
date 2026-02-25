@@ -26,7 +26,9 @@ rapids_cmake_build_type("Release")
 # gcc>=14. We can remove this once we upgrade to a newer sccache version.
 set(CMAKE_CXX_SCAN_FOR_MODULES OFF)
 
-add_library(hybrid_scan_utils OBJECT common_utils.cpp io_source.cpp io_utils.cpp)
+add_library(
+  hybrid_scan_utils OBJECT common_utils.cpp io_source.cpp io_utils.cpp hybrid_scan_composer.cpp
+)
 target_compile_features(hybrid_scan_utils PRIVATE cxx_std_20)
 target_link_libraries(hybrid_scan_utils PRIVATE cudf::cudf)
 
@@ -47,6 +49,24 @@ target_link_libraries(
 )
 target_compile_features(hybrid_scan_pipeline PRIVATE cxx_std_20)
 install(TARGETS hybrid_scan_pipeline DESTINATION bin/examples/libcudf/hybrid_scan_io)
+
+# Build and install hybrid_scan_multifile_single_step
+add_executable(hybrid_scan_multifile_single_step hybrid_scan_multifile_single_step.cpp)
+target_link_libraries(
+  hybrid_scan_multifile_single_step PRIVATE cudf::cudf $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp>
+                                            $<TARGET_OBJECTS:hybrid_scan_utils>
+)
+target_compile_features(hybrid_scan_multifile_single_step PRIVATE cxx_std_20)
+install(TARGETS hybrid_scan_multifile_single_step DESTINATION bin/examples/libcudf/hybrid_scan_io)
+
+# Build and install hybrid_scan_multifile_two_step
+add_executable(hybrid_scan_multifile_two_step hybrid_scan_multifile_two_step.cpp)
+target_link_libraries(
+  hybrid_scan_multifile_two_step PRIVATE cudf::cudf $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp>
+                                         $<TARGET_OBJECTS:hybrid_scan_utils>
+)
+target_compile_features(hybrid_scan_multifile_two_step PRIVATE cxx_std_20)
+install(TARGETS hybrid_scan_multifile_two_step DESTINATION bin/examples/libcudf/hybrid_scan_io)
 
 # Install the example.parquet file
 install(FILES ${CMAKE_CURRENT_LIST_DIR}/example.parquet

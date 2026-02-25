@@ -2140,16 +2140,6 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                     "Only a column name can be used for the "
                     "key in a dtype mappings argument."
                 )
-            if cudf.get_option("mode.pandas_compatible"):
-                for d in dtype.values():  # type: ignore[union-attr]
-                    if inspect.isclass(d) and issubclass(
-                        d, pd.api.extensions.ExtensionDtype
-                    ):
-                        msg = (
-                            f"Expected an instance of {d.__name__}, "
-                            "but got the class instead. Try instantiating 'dtype'."
-                        )
-                        raise TypeError(msg)
             dtype = {
                 col_name: cudf.dtype(dtype)
                 for col_name, dtype in dtype.items()  # type: ignore[union-attr]
@@ -6499,7 +6489,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         return coerced, mask, common_dtype
 
     @_performance_tracking
-    def count(self, axis=0, numeric_only=False):
+    def count(self, axis: Axis = 0, numeric_only: bool = False) -> Series:
         """
         Count ``non-NA`` cells for each column or row.
 
@@ -6532,23 +6522,9 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         axis = self._get_axis_from_axis_arg(axis)
         if axis != 0:
             raise NotImplementedError("Only axis=0 is currently supported.")
-        length = len(self)
         return Series._from_column(
-            as_column(
-                [
-                    length
-                    - (
-                        col.null_count
-                        + (
-                            0
-                            if is_pandas_nullable_extension_dtype(col.dtype)
-                            else col.nan_count
-                        )
-                    )
-                    for col in self._columns
-                ]
-            ),
-            index=Index(self._column_names),
+            as_column([col.count for col in self._columns]),
+            index=Index(self._data.to_pandas_index),
             attrs=self.attrs,
         )
 

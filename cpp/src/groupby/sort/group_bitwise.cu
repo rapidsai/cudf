@@ -17,8 +17,8 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/resource_ref.hpp>
 
+#include <cuda/iterator>
 #include <cuda/std/functional>
-#include <thrust/iterator/discard_iterator.h>
 
 namespace cudf::groupby::detail {
 
@@ -42,7 +42,7 @@ struct bitwise_group_reduction_functor {
       cudf::detail::reduce_by_key_async(group_labels.data(),
                                         group_labels.data() + group_labels.size(),
                                         inp_iter,
-                                        thrust::make_discard_iterator(),
+                                        cuda::make_discard_iterator(),
                                         out_iter,
                                         binop,
                                         stream);
