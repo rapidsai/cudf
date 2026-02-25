@@ -67,7 +67,7 @@ fi
 
 CS_EXCLUDE_NAMES="kns=nvcomp,kns=zstd,kns=_no_sanitize,kns=_no_${TOOL_NAME}"
 CS_STREAM_ORDERED_RACES="all"
-if [ "LARGE_STRINGS_TEST" == "${TEST_NAME}" ]; then
+if [ "${TEST_NAME}" == "LARGE_STRINGS_TEST" ]; then
   CS_STREAM_ORDERED_RACES="no"
 fi
 
