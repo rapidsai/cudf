@@ -186,7 +186,7 @@ def assert_tpch_result_equal(
         sort_by_cols = ()
         sort_by_descending = ()
 
-    if sort_by and limit:
+    if sort_by and limit and len(left) > 0:
         # Handle the .sort_by(...).head(n) case; First, split the data into two parts
         # "before" and "ties"
         sort_by_cols, sort_by_descending = zip(*sort_by, strict=False)
