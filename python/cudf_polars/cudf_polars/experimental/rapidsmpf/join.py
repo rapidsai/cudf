@@ -623,8 +623,12 @@ def _create_shuffle_managers(
         local_indices=(),
     )
 
-    shuffle_left = not left_partitioning or left_partitioning != left_partitioning_desired
-    shuffle_right = not right_partitioning or right_partitioning != right_partitioning_desired
+    shuffle_left = (
+        not left_partitioning or left_partitioning != left_partitioning_desired
+    )
+    shuffle_right = (
+        not right_partitioning or right_partitioning != right_partitioning_desired
+    )
 
     left_shuffle = (
         ShuffleManager(
@@ -1022,8 +1026,12 @@ def _choose_shuffle_modulus(
     right_partitioning: NormalizedPartitioning,
     min_shuffle_modulus: int,
 ) -> int:
-    left_existing_modulus = left_partitioning.inter_rank_modulus if left_partitioning else None
-    right_existing_modulus = right_partitioning.inter_rank_modulus if right_partitioning else None
+    left_existing_modulus = (
+        left_partitioning.inter_rank_modulus if left_partitioning else None
+    )
+    right_existing_modulus = (
+        right_partitioning.inter_rank_modulus if right_partitioning else None
+    )
 
     # Determine which modulus to use, preferring existing partitioning
     # if it provides at least the minimum needed partitions
@@ -1142,11 +1150,11 @@ async def join_actor(
         )
 
         nranks = context.comm().nranks
-        left_partitioning = NormalizedPartitioning.resolve(
-            left_metadata, nranks, ir.left_on, ir.children[0].schema
+        left_partitioning = NormalizedPartitioning.resolve_from_exprs(
+            left_metadata, nranks, exprs=ir.left_on, schema=ir.children[0].schema
         )
-        right_partitioning = NormalizedPartitioning.resolve(
-            right_metadata, nranks, ir.right_on, ir.children[1].schema
+        right_partitioning = NormalizedPartitioning.resolve_from_exprs(
+            right_metadata, nranks, exprs=ir.right_on, schema=ir.children[1].schema
         )
 
         # Skip sampling when both sides have aligned partitioning

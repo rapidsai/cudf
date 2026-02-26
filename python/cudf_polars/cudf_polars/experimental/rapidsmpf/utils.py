@@ -556,25 +556,21 @@ class NormalizedPartitioning:
         )
 
     @classmethod
-    def resolve(
+    def resolve_from_indices(
         cls,
         metadata: ChannelMetadata,
         nranks: int,
-        keys: tuple[NamedExpr, ...],
-        schema: Schema,
         *,
+        indices: tuple[int, ...],
         allow_subset: bool = True,
     ) -> NormalizedPartitioning:
-        """Resolve normalized partitioning from channel metadata for the given keys and schema."""
-
-        schema_keys = list(schema.keys())
-        key_indices = tuple(schema_keys.index(expr.name) for expr in keys)
+        """Resolve normalized partitioning from channel metadata for the given key column indices."""
         inter_rank_modulus, local_modulus = get_partitioning_moduli(
-            metadata, key_indices, nranks, allow_subset=allow_subset
+            metadata, indices, nranks, allow_subset=allow_subset
         )
 
         local_indices_val: tuple[int, ...] = ()
-        inter_rank_indices: tuple[int, ...] = key_indices
+        inter_rank_indices: tuple[int, ...] = indices
         if inter_rank_modulus and metadata.partitioning is not None:
             inter_rank_hashed = isinstance(metadata.partitioning.inter_rank, HashScheme)
             local_hashed = isinstance(metadata.partitioning.local, HashScheme)
@@ -591,6 +587,23 @@ class NormalizedPartitioning:
             inter_rank_indices=inter_rank_indices,
             local_modulus=local_modulus,
             local_indices=local_indices_val,
+        )
+
+    @classmethod
+    def resolve_from_exprs(
+        cls,
+        metadata: ChannelMetadata,
+        nranks: int,
+        *,
+        exprs: tuple[NamedExpr, ...],
+        schema: Schema,
+        allow_subset: bool = True,
+    ) -> NormalizedPartitioning:
+        """Resolve normalized partitioning from channel metadata for the given expression keys and schema."""
+        schema_keys = list(schema.keys())
+        key_indices = tuple(schema_keys.index(expr.name) for expr in exprs)
+        return cls.resolve_from_indices(
+            metadata, nranks, indices=key_indices, allow_subset=allow_subset
         )
 
 
