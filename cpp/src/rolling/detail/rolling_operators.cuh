@@ -238,7 +238,7 @@ struct DeviceRollingArgMinMaxDictionary : DeviceRollingArgMinMaxBase<cudf::dicti
 
   struct keys_dispatch_fn {
     template <typename T>
-      requires(cudf::is_relationally_comparable<T, T>() and not cudf::is_dictionary<T>())
+      requires(cudf::is_dictionary_key<T>())
     size_type __device__ operator()(column_device_view const& dict,
                                     bool has_nulls,
                                     size_type start_index,
@@ -263,7 +263,7 @@ struct DeviceRollingArgMinMaxDictionary : DeviceRollingArgMinMaxBase<cudf::dicti
       return count >= min_periods ? index : -1;
     }
     template <typename T>
-      requires(!cudf::is_relationally_comparable<T, T>() or cudf::is_dictionary<T>())
+      requires(not cudf::is_dictionary_key<T>())
     size_type __device__
     operator()(column_device_view const&, bool, size_type, size_type, size_type)
     {
