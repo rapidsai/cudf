@@ -96,7 +96,7 @@ if TYPE_CHECKING:
     from collections.abc import Generator, Mapping
     from types import TracebackType
 
-    from cudf._typing import ColumnLike, Dtype, DtypeObj, ScalarLike
+    from cudf._typing import ColumnLike, DtypeObj, ScalarLike
     from cudf.core.column.categorical import CategoricalColumn
     from cudf.core.column.datetime import DatetimeColumn
     from cudf.core.column.decimal import DecimalBaseColumn
@@ -596,6 +596,19 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         as a property for convenience.
         """
         return len(self) - self.null_count
+
+    @cached_property
+    def nan_count(self) -> int:
+        return 0
+
+    @cached_property
+    def count(self) -> int:  # type: ignore[override]
+        """Return the number non-NA and NaN values in the column for the public count API."""
+        return self.valid_count - (
+            self.nan_count
+            if not is_pandas_nullable_extension_dtype(self.dtype)
+            else 0
+        )
 
     @cached_property
     def mask(self) -> None | Buffer:
@@ -1615,9 +1628,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
         self._check_scatter_key_length(num_keys, value)
 
-        if step == 1 and not isinstance(
-            self.dtype, (cudf.StructDtype, cudf.ListDtype)
-        ):
+        if step == 1 and not isinstance(self.dtype, (StructDtype, ListDtype)):
             # NOTE: List & Struct dtypes aren't supported by both
             # inplace & out-of-place fill. Hence we need to use scatter for
             # these two types.
@@ -1856,10 +1867,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 )
 
         return result
-
-    @cached_property
-    def nan_count(self) -> int:
-        return 0
 
     def interpolate(self, index: Index) -> ColumnBase:
         # figure out where the nans are
@@ -3064,10 +3071,14 @@ def check_invalid_array(shape: tuple, dtype: np.dtype) -> None:
 def as_column(
     arbitrary: Any,
     nan_as_null: bool | None = None,
-    dtype: Dtype | None = None,
+    dtype: DtypeObj | None = None,
     length: int | None = None,
 ) -> ColumnBase:
-    """Create a Column from an arbitrary object
+    """
+    Create a Column from an arbitrary object.
+
+    Consider using ColumnBase classmethod constructors if
+    arbitrary is a known type.
 
     Parameters
     ----------
@@ -3079,7 +3090,7 @@ def as_column(
         form a new validity mask. If False, leaves NaN values as is.
         Only applies when arbitrary is not a cudf object
         (Index, Series, Column).
-    dtype : optional
+    dtype : DtypeObj, optional
         Optionally typecast the constructed Column to the given
         dtype.
     length : int, optional
@@ -3104,10 +3115,22 @@ def as_column(
     * pandas.Categorical objects
     * range objects
     """
-    # Always convert dtype up front so that downstream calls can assume it is a dtype
-    # object rather than a string.
-    if dtype is not None:
-        dtype = cudf.dtype(dtype)
+    if not (
+        dtype is None
+        or isinstance(
+            dtype,
+            (
+                np.dtype,
+                CategoricalDtype,
+                IntervalDtype,
+                ListDtype,
+                StructDtype,
+                DecimalDtype,
+            ),
+        )
+        or is_pandas_nullable_extension_dtype(dtype)
+    ):
+        raise ValueError(f"dtype must be None or a dtype object, got {dtype}")
 
     if isinstance(arbitrary, (range, pd.RangeIndex, cudf.RangeIndex)):
         if not isinstance(arbitrary, range):
@@ -3181,40 +3204,26 @@ def as_column(
                         categories=new_cats, ordered=arbitrary.dtype.ordered
                     )
                     arbitrary = arbitrary.astype(new_dtype)
+                elif dtype is None:
+                    # Going through Arrow below erases pandas extension dtypes
+                    # of the categories, if any, so always along pass the exact type
+                    dtype = CategoricalDtype(
+                        categories=arbitrary.dtype.categories,
+                        ordered=arbitrary.dtype.ordered,
+                    )
             result = as_column(
                 pa.array(arbitrary, from_pandas=True),
                 nan_as_null=nan_as_null,
                 dtype=dtype,
                 length=length,
             )
-            if (
-                isinstance(arbitrary.dtype, pd.CategoricalDtype)
-                and is_pandas_nullable_extension_dtype(
-                    arbitrary.dtype.categories.dtype
-                )
-                and dtype is None
-            ):
-                # Store pandas extension dtype directly in the column's dtype property
-                # TODO: Move this to near isinstance(arbitrary.dtype.categories.dtype, pd.IntervalDtype)
-                # check above, for which merge should be working fully with pandas nullable extension dtypes.
-                result = ColumnBase.create(
-                    result.plc_column,
-                    CategoricalDtype(
-                        categories=arbitrary.dtype.categories,
-                        ordered=arbitrary.dtype.ordered,
-                    ),
-                )
             return result
         elif is_pandas_nullable_extension_dtype(arbitrary.dtype):
-            if (
-                isinstance(arbitrary.dtype, pd.ArrowDtype)
-                and (arrow_type := arbitrary.dtype.pyarrow_dtype) is not None
-                and (
-                    pa.types.is_date32(arrow_type)
-                    or pa.types.is_binary(arrow_type)
-                    or pa.types.is_dictionary(arrow_type)
-                )
+            if isinstance(arbitrary.dtype, pd.ArrowDtype) and pa.types.is_date(
+                arbitrary.dtype.pyarrow_dtype
             ):
+                # TODO: See if we can centralize this check with other
+                # dtype conversion functions
                 raise NotImplementedError(
                     f"cuDF does not yet support {arbitrary.dtype}"
                 )
@@ -3222,22 +3231,14 @@ def as_column(
                 # pandas arrays define __arrow_array__ for better
                 # pyarrow.array conversion
                 arbitrary = arbitrary.array
-            result = as_column(
+            if dtype is None:
+                dtype = arbitrary.dtype
+            return as_column(
                 pa.array(arbitrary, from_pandas=True),
                 nan_as_null=nan_as_null,
                 dtype=dtype,
                 length=length,
             )
-            if cudf.get_option("mode.pandas_compatible"):
-                # Store pandas extension dtype directly in the column's dtype property
-                if (
-                    is_pandas_nullable_extension_dtype(arbitrary.dtype)
-                    and isinstance(result.dtype, np.dtype)
-                    and result.dtype.kind == "f"
-                ):
-                    result = result.nans_to_nulls()
-                result = ColumnBase.create(result.plc_column, arbitrary.dtype)
-            return result
         elif isinstance(
             arbitrary.dtype, pd.api.extensions.ExtensionDtype
         ) and not isinstance(arbitrary, NumpyExtensionArray):
@@ -3567,11 +3568,11 @@ def as_column(
         else:
             ser = pd.Series(arbitrary, dtype=dtype)
         return as_column(ser, nan_as_null=nan_as_null)
-    elif isinstance(dtype, (cudf.StructDtype, cudf.ListDtype)):
+    elif isinstance(dtype, (StructDtype, ListDtype)):
         try:
             data = pa.array(arbitrary, type=dtype.to_arrow())
         except (pa.ArrowInvalid, pa.ArrowTypeError):
-            if isinstance(dtype, cudf.ListDtype):
+            if isinstance(dtype, ListDtype):
                 # e.g. test_cudf_list_struct_write
                 return cudf.core.column.ListColumn.from_sequences(arbitrary)
             raise
@@ -3579,7 +3580,6 @@ def as_column(
 
     from_pandas = nan_as_null is None or nan_as_null
     if dtype is not None:
-        dtype = cudf.dtype(dtype)
         try:
             arbitrary = pa.array(
                 arbitrary,

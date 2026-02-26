@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -134,20 +134,23 @@ __device__ void format_phone(void* scratch,
   auto size = cudf::make_column_from_scalar(
     cudf::numeric_scalar<int32_t>(MAX_ENTRY_LENGTH, true, stream, mr), 1, stream, mr);
 
-  auto country_code = table.column(2);
-  auto area_code    = table.column(3);
-  auto phone_number = table.column(4);
-  auto transformed  = std::vector<int32_t>{2, 3, 4};
+  auto country_code              = table.column(2);
+  auto area_code                 = table.column(3);
+  auto phone_number              = table.column(4);
+  auto transformed               = std::vector<int32_t>{2, 3, 4};
+  cudf::transform_input inputs[] = {
+    country_code, area_code, phone_number, cudf::scalar_column_view(*size)};
 
-  auto result = cudf::transform({country_code, area_code, phone_number, *size},
-                                udf,
-                                cudf::data_type{cudf::type_id::STRING},
-                                false,
-                                scratch.data(),
-                                cudf::null_aware::NO,
-                                cudf::output_nullability::PRESERVE,
-                                stream,
-                                mr);
+  auto result = cudf::transform_extended(inputs,
+                                         udf,
+                                         cudf::data_type{cudf::type_id::STRING},
+                                         false,
+                                         scratch.data(),
+                                         cudf::null_aware::NO,
+                                         std::nullopt,
+                                         cudf::output_nullability::PRESERVE,
+                                         stream,
+                                         mr);
 
   return {std::move(result), std::move(transformed)};
 }
