@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -21,7 +21,6 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <thrust/functional.h>
 #include <thrust/transform_scan.h>
 
 namespace cudf {
@@ -117,7 +116,7 @@ std::unique_ptr<column> extract_all_record(strings_column_view const& input,
 
   // Return an empty lists column if there are no valid rows
   if (strings_count == null_count) {
-    return cudf::lists::detail::make_empty_lists_column(data_type{type_id::STRING}, stream, mr);
+    return cudf::lists::detail::make_empty_lists_column(data_type{type_id::STRING});
   }
 
   // Convert counts into offsets.
@@ -138,13 +137,8 @@ std::unique_ptr<column> extract_all_record(strings_column_view const& input,
   auto strings_output = make_strings_column(indices.begin(), indices.end(), stream, mr);
 
   // Build the lists column from the offsets and the strings.
-  return make_lists_column(strings_count,
-                           std::move(offsets),
-                           std::move(strings_output),
-                           null_count,
-                           std::move(null_mask),
-                           stream,
-                           mr);
+  return make_lists_column(
+    strings_count, std::move(offsets), std::move(strings_output), null_count, std::move(null_mask));
 }
 
 }  // namespace detail
