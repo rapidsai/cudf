@@ -550,7 +550,7 @@ bool is_dictionary(data_type type);
  *
  * @tparam T  The type to verify
  * @return true `T` can be a dictionary key type
- * @return false  `T` cannot be dictionary key type
+ * @return false  `T` cannot be a dictionary key type
  */
 template <typename T>
 constexpr inline bool is_dictionary_key()
