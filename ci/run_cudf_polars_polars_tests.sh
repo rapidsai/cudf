@@ -16,6 +16,7 @@ DESELECTED_TESTS=(
     "tests/unit/test_polars_import.py::test_fork_safety" # test started to hang in polars-1.14
     "tests/unit/operations/test_join.py::test_join_4_columns_with_validity" # fails in some systems, see https://github.com/pola-rs/polars/issues/19870
     "tests/unit/io/test_csv.py::test_read_web_file" # fails in rockylinux8 due to SSL CA issues
+    "tests/unit/io/test_lazy_parquet.py::test_scan_parquet_local_with_async" # Will fail until we have https://github.com/pola-rs/polars/pull/26616
     # TODO: Debug and re-enable the following tests
     "tests/unit/sql/test_distinct.py::test_distinct_with_full_outer_join" # SQLite in CI doesn't support FULL OUTER JOIN
     "tests/unit/sql/test_distinct.py::test_distinct_basic_single_column"
@@ -33,7 +34,6 @@ DESELECTED_TESTS=(
     "tests/unit/io/test_write.py::test_write_async[read_parquet-<lambda>]" # kvikio file creation error in CI
     "tests/unit/io/test_write.py::test_write_async[<lambda>-<lambda>0]" # kvikio file creation error in CI
     "tests/unit/io/test_write.py::test_write_async[<lambda>-<lambda>2]" # kvikio file creation error in CI
-    "tests/unit/io/test_lazy_parquet.py::test_scan_parquet_local_with_async" # Uncertain why this failing, to be investigated soon
 )
 
 if [[ $(arch) == "aarch64" ]]; then

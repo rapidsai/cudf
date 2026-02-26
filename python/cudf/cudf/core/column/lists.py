@@ -55,7 +55,9 @@ class ListColumn(ColumnBase):
         result = super().element_indexing(index)
         if isinstance(result, pa.Scalar):
             py_element = maybe_nested_pa_scalar_to_py(result)
-            return self.dtype._recursively_replace_fields(py_element)  # type: ignore[union-attr]
+            return ListDtype.from_list_dtype(
+                self.dtype
+            )._recursively_replace_fields(py_element)
         return result
 
     def _cast_setitem_value(self, value: Any) -> plc.Scalar:
@@ -226,7 +228,7 @@ class ListColumn(ColumnBase):
             ColumnBase.create(plc_leaf_col, result_dtype),
         )
 
-    @property
+    @cached_property
     def element_type(self) -> DtypeObj:
         """
         Returns the element type of the list column.
@@ -234,9 +236,8 @@ class ListColumn(ColumnBase):
         if isinstance(self.dtype, ListDtype):
             return self.dtype.element_type
         else:
-            return get_dtype_of_same_kind(
-                self.dtype,
-                self.dtype.pyarrow_dtype.value_type.to_pandas_dtype(),  # type: ignore[union-attr]
+            return pd.ArrowDtype(
+                cast("pd.ArrowDtype", self.dtype).pyarrow_dtype.value_type
             )
 
     def to_pandas(
