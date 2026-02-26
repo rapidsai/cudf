@@ -338,9 +338,6 @@ def assert_tpch_result_equal(
                     message="Result mismatch", details={"error": str(e)}
                 ) from e
         else:
-            # Float-sort path: partition into tie bands by canonical sort key
-            # (float columns rounded to abs_tol grid), then compare each band
-            # as multiset (sort by non-sort columns, then assert_frame_equal).
             _compare_sorted_frames_by_float_bands(
                 left_sorted,
                 right_sorted,
