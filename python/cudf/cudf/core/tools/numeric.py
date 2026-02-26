@@ -11,7 +11,7 @@ import pandas as pd
 from cudf.core.column import as_column
 from cudf.core.dtype.validators import is_dtype_obj_numeric
 from cudf.core.dtypes import CategoricalDtype, ListDtype, StructDtype
-from cudf.core.index import ensure_index
+from cudf.core.index import Index, ensure_index
 from cudf.core.series import Series
 from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
@@ -188,14 +188,17 @@ def to_numeric(
                     col = col.cast(downcast_dtype)
                     break
 
+    if not isinstance(arg, (Series, pd.Series)) and col.has_nulls():
+        # To match pandas, always return a floating type filled with nan.
+        col = col.astype(np.dtype(np.float64)).fillna(np.nan)
+
     if isinstance(arg, (Series, pd.Series)):
         return Series._from_column(
             col, name=arg.name, index=ensure_index(arg.index)
         )
+    elif isinstance(arg, (Index, pd.Index)):
+        return Index._from_column(col, name=arg.name)
     else:
-        if col.has_nulls():
-            # To match pandas, always return a floating type filled with nan.
-            col = col.astype(np.dtype(np.float64)).fillna(np.nan)
         return col.values
 
 
