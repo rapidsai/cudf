@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -40,7 +40,7 @@ std::unique_ptr<column> split_record_fn(strings_column_view const& input,
                                         rmm::device_async_resource_ref mr)
 {
   if (input.is_empty()) {
-    return cudf::lists::detail::make_empty_lists_column(data_type{type_id::STRING}, stream, mr);
+    return cudf::lists::detail::make_empty_lists_column(data_type{type_id::STRING});
   }
   if (input.size() == input.null_count()) {
     auto offsets = std::make_unique<column>(input.offsets(), stream, mr);
@@ -49,9 +49,7 @@ std::unique_ptr<column> split_record_fn(strings_column_view const& input,
                              std::move(offsets),
                              std::move(results),
                              input.null_count(),
-                             cudf::detail::copy_bitmask(input.parent(), stream, mr),
-                             stream,
-                             mr);
+                             cudf::detail::copy_bitmask(input.parent(), stream, mr));
   }
 
   // builds the offsets and the vector of all tokens
@@ -67,9 +65,7 @@ std::unique_ptr<column> split_record_fn(strings_column_view const& input,
                            std::move(offsets),
                            std::move(strings_child),
                            input.null_count(),
-                           cudf::detail::copy_bitmask(input.parent(), stream, mr),
-                           stream,
-                           mr);
+                           cudf::detail::copy_bitmask(input.parent(), stream, mr));
 }
 
 }  // namespace

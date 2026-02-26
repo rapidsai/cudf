@@ -49,7 +49,7 @@ from cudf.core.column.column import (
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.copy_types import GatherMap
 from cudf.core.dtype.validators import is_dtype_obj_numeric
-from cudf.core.dtypes import IntervalDtype, dtype as cudf_dtype
+from cudf.core.dtypes import CategoricalDtype, IntervalDtype
 from cudf.core.join._join_helpers import _match_join_keys
 from cudf.core.single_column_frame import SingleColumnFrame
 from cudf.errors import MixedTypeError
@@ -2746,7 +2746,7 @@ class RangeIndex(Index):
 
     @_performance_tracking
     def astype(self, dtype: Dtype, copy: bool = True) -> Self:
-        dtype = cudf_dtype(dtype)
+        dtype = cudf.dtype(dtype)
         if self.dtype == dtype:
             return self if not copy else self.copy()
         return self._as_int_index().astype(dtype, copy=copy)
@@ -4969,7 +4969,14 @@ class CategoricalIndex(Index):
         name=None,
         nan_as_null=no_default,
     ):
-        if isinstance(dtype, (pd.CategoricalDtype, cudf.CategoricalDtype)):
+        if dtype is not None:
+            dtype = cudf.dtype(dtype)
+            if not isinstance(dtype, CategoricalDtype):
+                raise ValueError(
+                    f"dtype must be a CategoricalDtype, got {dtype}"
+                )
+
+        if isinstance(dtype, CategoricalDtype):
             if categories is not None or ordered is not None:
                 raise ValueError(
                     "Cannot specify `categories` or "
@@ -4983,21 +4990,26 @@ class CategoricalIndex(Index):
         elif isinstance(getattr(data, "dtype", None), pd.CategoricalDtype):
             data = as_column(data)
         elif isinstance(data, (cudf.Series, Index)) and isinstance(
-            data.dtype, cudf.CategoricalDtype
+            data.dtype, CategoricalDtype
         ):
             data = data._column
-        else:
-            if dtype is None or (
-                isinstance(dtype, str) and dtype == "category"
+            if (
+                isinstance(dtype, CategoricalDtype)
+                and dtype._categories is None
             ):
-                dtype = cudf.CategoricalDtype()
-            data = as_column(data, dtype=dtype)
-            # dtype has already been taken care
-            dtype = None
+                # dtype="category" was passed, but data is already categorical
+                dtype = None
+        else:
+            data = as_column(
+                data, dtype=dtype if dtype is not None else CategoricalDtype()
+            )
+            if dtype is not None:
+                # dtype has already been taken care
+                dtype = None
 
         if categories is not None:
             data = data.set_categories(categories, ordered=ordered)
-        elif isinstance(dtype, (pd.CategoricalDtype, cudf.CategoricalDtype)):
+        elif isinstance(dtype, CategoricalDtype):
             data = data.set_categories(dtype.categories, ordered=ordered)
         elif ordered is True and data.ordered is False:
             data = data.as_ordered(ordered=True)

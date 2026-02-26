@@ -36,7 +36,6 @@ from cudf.utils.dtypes import (
     SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES,
     cudf_dtype_from_pa_type,
     cudf_dtype_to_pa_type,
-    is_pandas_nullable_extension_dtype,
     min_unsigned_type,
 )
 
@@ -597,10 +596,7 @@ class StructDtype(_BaseDtype):
     name = "struct"
 
     def __init__(self, fields: dict[str, Dtype]) -> None:
-        with cudf.option_context("mode.pandas_compatible", False):
-            # We need to temporarily disable pandas compatibility mode
-            # because `cudf.dtype("object")` raises an error.
-            self._fields = {k: cudf.dtype(v) for k, v in fields.items()}
+        self._fields = {k: dtype(v) for k, v in fields.items()}
 
     @property
     def fields(self) -> dict[str, DtypeObj]:
@@ -977,7 +973,7 @@ class IntervalDtype(_BaseDtype):
             self._subtype = None
             self._fields = {}
         else:
-            self._subtype = cudf.dtype(subtype)
+            self._subtype = dtype(subtype)
             # TODO: Remove self._subtype.kind == "U" once cudf.dtype no longer accepts
             # numpy string types
             if (
@@ -1035,9 +1031,7 @@ class IntervalDtype(_BaseDtype):
 
     def to_pandas(self) -> pd.IntervalDtype:
         return pd.IntervalDtype(
-            subtype=self.subtype.numpy_dtype
-            if is_pandas_nullable_extension_dtype(self.subtype)
-            else self.subtype,
+            subtype=self.subtype,
             closed=self.closed,
         )
 
