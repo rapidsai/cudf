@@ -293,9 +293,7 @@ std::unique_ptr<column> concatenate_rows(table_view const& input,
     std::move(offsets),
     std::move(contents.children[lists_column_view::child_column_index]),
     null_count,
-    std::move(null_mask),
-    stream,
-    mr);
+    std::move(null_mask));
 }
 
 }  // namespace detail

@@ -390,6 +390,20 @@ def _cast_literals_to_physical_types(
     return node
 
 
+def _prepare_parquet_predicate(
+    predicate: expr.Expr,
+    paths: list[str],
+    schema: Schema,
+    columns: list[str] | None,
+) -> expr.Expr:
+    cols = columns or list(schema.keys())
+    if any(isinstance(schema[c].polars_type, pl.Decimal) for c in cols if c in schema):
+        return _cast_literals_to_physical_types(
+            predicate, _parquet_physical_types(paths, cols)
+        )
+    return predicate
+
+
 def _align_parquet_schema(df: DataFrame, schema: Schema) -> DataFrame:
     # TODO: Alternatively set the schema of the parquet reader to decimal128
     cast_list = []
@@ -815,11 +829,8 @@ class Scan(IR):
             if predicate is not None and row_index is None:
                 # Can't apply filters during read if we have a row index.
                 filters = to_parquet_filter(
-                    _cast_literals_to_physical_types(
-                        predicate.value,
-                        _parquet_physical_types(
-                            paths, with_columns or list(schema.keys())
-                        ),
+                    _prepare_parquet_predicate(
+                        predicate.value, paths, schema, with_columns
                     ),
                     stream=stream,
                 )

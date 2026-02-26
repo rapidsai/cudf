@@ -714,6 +714,9 @@ def run_pandas(
     else:
         validation_files = None
 
+    if args.save_results_dir is not None:
+        os.makedirs(args.save_results_dir, exist_ok=True)
+
     for q_id in run_config.queries:
         try:
             result = run_pandas_query(

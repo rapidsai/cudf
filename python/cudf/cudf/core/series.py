@@ -489,6 +489,7 @@ class Series(SingleColumnFrame, IndexedFrame):
     _iloc_indexer_type = _SeriesIlocIndexer
     _groupby = SeriesGroupBy
     _resampler = SeriesResampler
+    __array_priority__ = pd.Series.__array_priority__
 
     # The `constructor*` properties are used by `dask` (and `dask_cudf`)
     @property
