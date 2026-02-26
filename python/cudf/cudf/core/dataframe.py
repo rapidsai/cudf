@@ -850,10 +850,23 @@ def _mapping_to_column_accessor(
     for key in scalar_keys:
         scalar = col_data[key]
         if scalar is None or scalar is cudf.NA:
-            scalar = pa.scalar(None, type=pa.string())
-        col_data[key] = as_column(
-            scalar, nan_as_null=nan_as_null, length=scalar_length, dtype=dtype
-        )
+            new_plc_col = plc.Column.from_scalar(
+                plc.Scalar.from_py(
+                    None, dtype=plc.DataType(plc.TypeId.STRING)
+                ),
+                scalar_length,
+            )
+            new_col = ColumnBase.create(
+                new_plc_col, dtype_from_pylibcudf_column(new_plc_col)
+            )
+        else:
+            new_col = as_column(
+                scalar,
+                nan_as_null=nan_as_null,
+                length=scalar_length,
+                dtype=dtype,
+            )
+        col_data[key] = new_col
 
     if tuple_key_count and len(tuple_key_lengths) > 1:
         # All tuple keys must be the same length

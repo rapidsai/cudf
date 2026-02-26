@@ -81,7 +81,6 @@ from cudf.utils.dtypes import (
     is_pandas_nullable_extension_dtype,
 )
 from cudf.utils.performance_tracking import _performance_tracking
-from cudf.utils.scalar import pa_scalar_to_plc_scalar
 from cudf.utils.utils import _warn_no_dask_cudf
 
 if TYPE_CHECKING:
@@ -3294,20 +3293,33 @@ class IndexedFrame(Frame):
             raise ValueError('keep must be either "first", "last" or False')
 
         with access_columns(*columns, mode="read", scope="internal"):
-            plc_column = plc.stream_compaction.distinct_indices(
+            distinct_indices = plc.stream_compaction.distinct_indices(
                 plc.Table([col.plc_column for col in columns]),
                 keep_option,
                 plc.types.NullEquality.EQUAL,
                 plc.types.NanEquality.ALL_EQUAL,
             )
-            distinct = ColumnBase.create(
-                plc_column, dtype=dtype_from_pylibcudf_column(plc_column)
+            plc_result = plc.copying.scatter(
+                [
+                    plc.Scalar.from_py(
+                        False, dtype=plc.DataType(plc.TypeId.BOOL8)
+                    )
+                ],
+                distinct_indices,
+                plc.Table(
+                    [
+                        plc.Column.from_scalar(
+                            plc.Scalar.from_py(
+                                True, dtype=plc.DataType(plc.TypeId.BOOL8)
+                            ),
+                            len(self),
+                        )
+                    ]
+                ),
+            ).columns()[0]
+            result = ColumnBase.create(
+                plc_result, dtype=dtype_from_pylibcudf_column(plc_result)
             )
-        result = as_column(True, length=len(self))._scatter_by_column(
-            cast(cudf.core.column.NumericalColumn, distinct),
-            pa_scalar_to_plc_scalar(pa.scalar(False)),
-            bounds_check=False,
-        )
         return cudf.Series._from_column(
             result, index=self.index, name=name, attrs=self.attrs
         )
