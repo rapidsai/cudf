@@ -28,140 +28,59 @@ def duckdb_impl(run_config: RunConfig) -> str:
     month = params["month"]
 
     return f"""
-    WITH frequent_ss_items
-         AS (SELECT Substr(i_item_desc, 1, 30) itemdesc,
-                    i_item_sk                  item_sk,
-                    d_date                     solddate,
-                    Count(*)                   cnt
-             FROM   store_sales,
-                    date_dim,
-                    item
-             WHERE  ss_sold_date_sk = d_date_sk
-                    AND ss_item_sk = i_item_sk
-                    AND d_year IN ( {year}, {year} + 1, {year} + 2, {year} + 3 )
-             GROUP  BY Substr(i_item_desc, 1, 30),
-                       i_item_sk,
-                       d_date
-             HAVING Count(*) > 4),
-         max_store_sales
-         AS (SELECT Max(csales) tpcds_cmax
-             FROM   (SELECT c_customer_sk,
-                            Sum(ss_quantity * ss_sales_price) csales
-                     FROM   store_sales,
-                            customer,
-                            date_dim
-                     WHERE  ss_customer_sk = c_customer_sk
-                            AND ss_sold_date_sk = d_date_sk
-                            AND d_year IN ( {year}, {year} + 1, {year} + 2, {year} + 3 )
-                     GROUP  BY c_customer_sk)),
-         best_ss_customer
-         AS (SELECT c_customer_sk,
-                    Sum(ss_quantity * ss_sales_price) ssales
-             FROM   store_sales,
-                    customer
-             WHERE  ss_customer_sk = c_customer_sk
-             GROUP  BY c_customer_sk
-             HAVING Sum(ss_quantity * ss_sales_price) >
-                    ( 95 / 100.0 ) * (SELECT *
-                                      FROM   max_store_sales))
-    SELECT Sum(sales)
-    FROM   (SELECT cs_quantity * cs_list_price sales
-            FROM   catalog_sales,
-                   date_dim
-            WHERE  d_year = {year}
-                   AND d_moy = {month}
-                   AND cs_sold_date_sk = d_date_sk
-                   AND cs_item_sk IN (SELECT item_sk
-                                      FROM   frequent_ss_items)
-                   AND cs_bill_customer_sk IN (SELECT c_customer_sk
-                                               FROM   best_ss_customer)
-            UNION ALL
-            SELECT ws_quantity * ws_list_price sales
-            FROM   web_sales,
-                   date_dim
-            WHERE  d_year = {year}
-                   AND d_moy = {month}
-                   AND ws_sold_date_sk = d_date_sk
-                   AND ws_item_sk IN (SELECT item_sk
-                                      FROM   frequent_ss_items)
-                   AND ws_bill_customer_sk IN (SELECT c_customer_sk
-                                               FROM   best_ss_customer)) LIMIT 100;
-
-    WITH frequent_ss_items
-         AS (SELECT Substr(i_item_desc, 1, 30) itemdesc,
-                    i_item_sk                  item_sk,
-                    d_date                     solddate,
-                    Count(*)                   cnt
-             FROM   store_sales,
-                    date_dim,
-                    item
-             WHERE  ss_sold_date_sk = d_date_sk
-                    AND ss_item_sk = i_item_sk
-                    AND d_year IN ( {year}, {year} + 1, {year} + 2, {year} + 3 )
-             GROUP  BY Substr(i_item_desc, 1, 30),
-                       i_item_sk,
-                       d_date
-             HAVING Count(*) > 4),
-         max_store_sales
-         AS (SELECT Max(csales) tpcds_cmax
-             FROM   (SELECT c_customer_sk,
-                            Sum(ss_quantity * ss_sales_price) csales
-                     FROM   store_sales,
-                            customer,
-                            date_dim
-                     WHERE  ss_customer_sk = c_customer_sk
-                            AND ss_sold_date_sk = d_date_sk
-                            AND d_year IN ( {year}, {year} + 1, {year} + 2, {year} + 3 )
-                     GROUP  BY c_customer_sk)),
-         best_ss_customer
-         AS (SELECT c_customer_sk,
-                    Sum(ss_quantity * ss_sales_price) ssales
-             FROM   store_sales,
-                    customer
-             WHERE  ss_customer_sk = c_customer_sk
-             GROUP  BY c_customer_sk
-             HAVING Sum(ss_quantity * ss_sales_price) >
-                    ( 95 / 100.0 ) * (SELECT *
-                                      FROM   max_store_sales))
-    SELECT c_last_name,
-                   c_first_name,
-                   sales
-    FROM   (SELECT c_last_name,
-                   c_first_name,
-                   Sum(cs_quantity * cs_list_price) sales
-            FROM   catalog_sales,
-                   customer,
-                   date_dim
-            WHERE  d_year = {year}
-                   AND d_moy = {month}
-                   AND cs_sold_date_sk = d_date_sk
-                   AND cs_item_sk IN (SELECT item_sk
-                                      FROM   frequent_ss_items)
-                   AND cs_bill_customer_sk IN (SELECT c_customer_sk
-                                               FROM   best_ss_customer)
-                   AND cs_bill_customer_sk = c_customer_sk
-            GROUP  BY c_last_name,
-                      c_first_name
-            UNION ALL
-            SELECT c_last_name,
-                   c_first_name,
-                   Sum(ws_quantity * ws_list_price) sales
-            FROM   web_sales,
-                   customer,
-                   date_dim
-            WHERE  d_year = {year}
-                   AND d_moy = {month}
-                   AND ws_sold_date_sk = d_date_sk
-                   AND ws_item_sk IN (SELECT item_sk
-                                      FROM   frequent_ss_items)
-                   AND ws_bill_customer_sk IN (SELECT c_customer_sk
-                                               FROM   best_ss_customer)
-                   AND ws_bill_customer_sk = c_customer_sk
-            GROUP  BY c_last_name,
-                      c_first_name)
-    ORDER  BY c_last_name,
-              c_first_name,
-              sales
+    WITH frequent_ss_items AS
+      (SELECT itemdesc,
+              i_item_sk item_sk,
+              d_date solddate,
+              count(*) cnt
+       FROM store_sales,
+            date_dim,
+            (SELECT SUBSTRING(i_item_desc, 1, 30) itemdesc, *
+             FROM item) sq1
+       WHERE ss_sold_date_sk = d_date_sk
+         AND ss_item_sk = i_item_sk
+         AND d_year IN ({year}, {year}+1, {year}+2, {year}+3)
+       GROUP BY itemdesc, i_item_sk, d_date
+       HAVING count(*) > 4),
+    max_store_sales AS
+      (SELECT max(csales) tpcds_cmax
+       FROM (SELECT c_customer_sk,
+                    sum(ss_quantity*ss_sales_price) csales
+             FROM store_sales, customer, date_dim
+             WHERE ss_customer_sk = c_customer_sk
+               AND ss_sold_date_sk = d_date_sk
+               AND d_year IN ({year}, {year}+1, {year}+2, {year}+3)
+             GROUP BY c_customer_sk) sq2),
+    best_ss_customer AS
+      (SELECT c_customer_sk,
+              sum(ss_quantity*ss_sales_price) ssales
+       FROM store_sales, customer, max_store_sales
+       WHERE ss_customer_sk = c_customer_sk
+       GROUP BY c_customer_sk
+       HAVING sum(ss_quantity*ss_sales_price) > (95/100.0) * max(tpcds_cmax))
+    SELECT c_last_name, c_first_name, sales
+    FROM (SELECT c_last_name, c_first_name,
+                 sum(cs_quantity*cs_list_price) sales
+          FROM catalog_sales, customer, date_dim, frequent_ss_items, best_ss_customer
+          WHERE d_year = {year}
+            AND d_moy = {month}
+            AND cs_sold_date_sk = d_date_sk
+            AND cs_item_sk = item_sk
+            AND cs_bill_customer_sk = best_ss_customer.c_customer_sk
+            AND cs_bill_customer_sk = customer.c_customer_sk
+          GROUP BY c_last_name, c_first_name
+          UNION ALL
+          SELECT c_last_name, c_first_name,
+                 sum(ws_quantity*ws_list_price) sales
+          FROM web_sales, customer, date_dim, frequent_ss_items, best_ss_customer
+          WHERE d_year = {year}
+            AND d_moy = {month}
+            AND ws_sold_date_sk = d_date_sk
+            AND ws_item_sk = item_sk
+            AND ws_bill_customer_sk = best_ss_customer.c_customer_sk
+            AND ws_bill_customer_sk = customer.c_customer_sk
+          GROUP BY c_last_name, c_first_name) sq3
+    ORDER BY c_last_name NULLS FIRST, c_first_name NULLS FIRST, sales NULLS FIRST
     LIMIT 100;
     """
 
@@ -177,7 +96,6 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     year = params["year"]
     month = params["month"]
 
-    # Load tables
     store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
     item = get_data(run_config.dataset_path, "item", run_config.suffix)
@@ -187,47 +105,40 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     )
     web_sales = get_data(run_config.dataset_path, "web_sales", run_config.suffix)
 
-    # Step 1: Build frequent_ss_items (items sold frequently in store sales)
     frequent_ss_items = (
         store_sales.join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
         .join(item, left_on="ss_item_sk", right_on="i_item_sk")
         .filter(pl.col("d_year").is_in([year, year + 1, year + 2, year + 3]))
-        .with_columns([pl.col("i_item_desc").str.slice(0, 30).alias("itemdesc")])
+        .with_columns(pl.col("i_item_desc").str.slice(0, 30).alias("itemdesc"))
         .group_by(["itemdesc", "ss_item_sk", "d_date"])
-        .agg([pl.len().alias("cnt")])
+        .agg(pl.len().alias("cnt"))
         .filter(pl.col("cnt") > 4)
         .select("ss_item_sk")
         .unique()
     )
 
-    # Step 2: Build best_ss_customer (high-value store sales customers)
-    # First calculate customer sales totals
     customer_sales = (
         store_sales.join(customer, left_on="ss_customer_sk", right_on="c_customer_sk")
         .join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
         .filter(pl.col("d_year").is_in([year, year + 1, year + 2, year + 3]))
         .group_by("ss_customer_sk")
-        .agg([(pl.col("ss_quantity") * pl.col("ss_sales_price")).sum().alias("csales")])
+        .agg((pl.col("ss_quantity") * pl.col("ss_sales_price")).sum().alias("csales"))
     )
 
-    # Calculate threshold (95% of max customer sales)
-    max_sales_table = customer_sales.select(pl.col("csales").max().alias("max_sales"))
-    threshold_table = max_sales_table.with_columns(
-        (pl.col("max_sales") * 0.95).alias("threshold")
-    ).select("threshold")
+    threshold = customer_sales.select(
+        (pl.col("csales").max() * 0.95).alias("threshold")
+    )
 
-    # Get customers above threshold
     best_customers = (
         store_sales.join(customer, left_on="ss_customer_sk", right_on="c_customer_sk")
         .group_by("ss_customer_sk")
-        .agg([(pl.col("ss_quantity") * pl.col("ss_sales_price")).sum().alias("ssales")])
-        .join(threshold_table, how="cross")
+        .agg((pl.col("ss_quantity") * pl.col("ss_sales_price")).sum().alias("ssales"))
+        .join(threshold, how="cross")
         .filter(pl.col("ssales") > pl.col("threshold"))
         .select("ss_customer_sk")
         .unique()
     )
 
-    # Step 3: Main query - Catalog sales part
     catalog_part = (
         catalog_sales.join(
             customer, left_on="cs_bill_customer_sk", right_on="c_customer_sk"
@@ -244,10 +155,9 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         )
         .filter((pl.col("d_year") == year) & (pl.col("d_moy") == month))
         .group_by(["c_last_name", "c_first_name"])
-        .agg([(pl.col("cs_quantity") * pl.col("cs_list_price")).sum().alias("sales")])
+        .agg((pl.col("cs_quantity") * pl.col("cs_list_price")).sum().alias("sales"))
     )
 
-    # Step 4: Main query - Web sales part
     web_part = (
         web_sales.join(
             customer, left_on="ws_bill_customer_sk", right_on="c_customer_sk"
@@ -264,12 +174,11 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         )
         .filter((pl.col("d_year") == year) & (pl.col("d_moy") == month))
         .group_by(["c_last_name", "c_first_name"])
-        .agg([(pl.col("ws_quantity") * pl.col("ws_list_price")).sum().alias("sales")])
+        .agg((pl.col("ws_quantity") * pl.col("ws_list_price")).sum().alias("sales"))
     )
 
-    # Step 5: Combine results
     return (
         pl.concat([catalog_part, web_part])
-        .sort(["c_last_name", "c_first_name", "sales"])
+        .sort(["c_last_name", "c_first_name", "sales"], nulls_last=False)
         .limit(100)
     )
