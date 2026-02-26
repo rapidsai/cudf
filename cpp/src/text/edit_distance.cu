@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -429,9 +429,7 @@ std::unique_ptr<cudf::column> edit_distance_matrix(cudf::strings_column_view con
                                  std::move(offsets_column),
                                  std::move(results),
                                  0,  // no nulls
-                                 rmm::device_buffer{0, stream, mr},
-                                 stream,
-                                 mr);
+                                 rmm::device_buffer{0, stream, mr});
 }
 
 }  // namespace detail
