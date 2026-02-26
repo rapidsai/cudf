@@ -18,8 +18,10 @@ from cudf.api.types import is_scalar
 from cudf.core._internals import binaryop
 from cudf.core.column.column import (
     ColumnBase,
+    PylibcudfFunction,
     as_column,
     column_empty,
+    np_bool_dtype_policy,
 )
 from cudf.core.column.numerical_base import NumericalBaseColumn
 from cudf.core.column.utils import access_columns
@@ -156,10 +158,9 @@ class NumericalColumn(NumericalBaseColumn):
         """
         if self.dtype.kind != "f":
             return as_column(False, length=len(self))
-        with self.access(mode="read", scope="internal"):
-            return ColumnBase.create(
-                plc.unary.is_nan(self.plc_column), np.dtype(np.bool_)
-            )
+        return PylibcudfFunction(
+            plc.unary.is_nan, np_bool_dtype_policy
+        ).execute_with_args(self)
 
     def notnan(self) -> ColumnBase:
         """Identify non-NaN values in a Column.
@@ -169,10 +170,10 @@ class NumericalColumn(NumericalBaseColumn):
         """
         if self.dtype.kind != "f":
             return as_column(True, length=len(self))
-        with self.access(mode="read", scope="internal"):
-            return ColumnBase.create(
-                plc.unary.is_not_nan(self.plc_column), np.dtype(np.bool_)
-            )
+        return PylibcudfFunction(
+            plc.unary.is_not_nan,
+            np_bool_dtype_policy,
+        ).execute_with_args(self)
 
     def isnull(self) -> ColumnBase:
         """Identify missing values in a Column.
