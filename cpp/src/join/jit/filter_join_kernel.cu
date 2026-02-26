@@ -84,8 +84,7 @@ CUDF_KERNEL void filter_join_kernel(cudf::jit::device_span<cudf::size_type const
           InputAccessors::element(left_tables, right_tables, left_idx, right_idx, i)...);
       } else {
         GENERIC_JOIN_FILTER_OP(
-          &result,
-          InputAccessors::element(left_tables, right_tables, left_idx, right_idx, i)...);
+          &result, InputAccessors::element(left_tables, right_tables, left_idx, right_idx, i)...);
       }
       predicate_results[i] = result;
     }

@@ -1030,15 +1030,17 @@ TEST_F(MixedInnerJoinTest2, NullAwareLogicalOperators)
   auto const col_ref_left_1  = cudf::ast::column_reference(0, cudf::ast::table_reference::LEFT);
   auto const col_ref_right_1 = cudf::ast::column_reference(0, cudf::ast::table_reference::RIGHT);
 
-  auto scalar_5 = cudf::numeric_scalar<int32_t>(5);
+  auto scalar_5  = cudf::numeric_scalar<int32_t>(5);
   auto literal_5 = cudf::ast::literal(scalar_5);
 
   // left.col1 > 5
   auto left_cmp = cudf::ast::operation(cudf::ast::ast_operator::GREATER, col_ref_left_1, literal_5);
   // right.col1 > 5
-  auto right_cmp = cudf::ast::operation(cudf::ast::ast_operator::GREATER, col_ref_right_1, literal_5);
+  auto right_cmp =
+    cudf::ast::operation(cudf::ast::ast_operator::GREATER, col_ref_right_1, literal_5);
   // (left.col1 > 5) NULL_LOGICAL_AND (right.col1 > 5)
-  auto predicate = cudf::ast::operation(cudf::ast::ast_operator::NULL_LOGICAL_AND, left_cmp, right_cmp);
+  auto predicate =
+    cudf::ast::operation(cudf::ast::ast_operator::NULL_LOGICAL_AND, left_cmp, right_cmp);
 
   // Data where both conditions must be true
   // Left: [0,1,2,3,4], [3,6,8,4,10]  -> rows 1,2,4 have col1 > 5
@@ -1053,7 +1055,6 @@ TEST_F(MixedInnerJoinTest2, NullAwareLogicalOperators)
              {0, 1, 1, 0, 1},
              {{1, 1}, {2, 2}, {4, 4}});
 }
-
 
 /**
  * Tests of mixed left joins.
@@ -1263,28 +1264,27 @@ TEST_F(MixedLeftJoinTest_int32, NullableFilter)
   // conditional_columns = {0, 1} selects columns 0 and 1 from both tables
   // Left conditional table: [c0, c1] → index 1 is c1
   // Right conditional table: [u_c0, dummy] → index 0 is u_c0
-  auto const col_ref_left_c1 = cudf::ast::column_reference(1, cudf::ast::table_reference::LEFT);
+  auto const col_ref_left_c1    = cudf::ast::column_reference(1, cudf::ast::table_reference::LEFT);
   auto const col_ref_right_u_c0 = cudf::ast::column_reference(0, cudf::ast::table_reference::RIGHT);
 
-  auto scalar_0 = cudf::numeric_scalar<int32_t>(0);
+  auto scalar_0  = cudf::numeric_scalar<int32_t>(0);
   auto literal_0 = cudf::ast::literal(scalar_0);
 
   // c1 + u_c0
-  auto add_expr = cudf::ast::operation(
-    cudf::ast::ast_operator::ADD, col_ref_left_c1, col_ref_right_u_c0);
+  auto add_expr =
+    cudf::ast::operation(cudf::ast::ast_operator::ADD, col_ref_left_c1, col_ref_right_u_c0);
   // c1 + u_c0 > 0
-  auto predicate = cudf::ast::operation(
-    cudf::ast::ast_operator::GREATER, add_expr, literal_0);
+  auto predicate = cudf::ast::operation(cudf::ast::ast_operator::GREATER, add_expr, literal_0);
 
   // Left table: c0 (equality key), c1 (nullable filter column)
   // Right table: u_c0 (equality key), dummy (for consistent structure)
   this->test_nulls(
-    {{{1, 2, 3, 4, 5}, {1, 1, 1, 1, 1}},     // c0 - equality column (all valid)
-     {{10, 0, 30, 0, 50}, {1, 0, 1, 0, 1}}}, // c1 - filter column (nulls at indices 1,3)
-    {{{1, 2, 3, 4, 5}, {1, 1, 1, 1, 1}},     // u_c0 - equality column (all valid)
-     {{0, 0, 0, 0, 0}, {1, 1, 1, 1, 1}}},    // dummy - padding column
-    {0},      // equality columns (c0 and u_c0)
-    {0, 1},   // conditional columns (both columns for AST references)
+    {{{1, 2, 3, 4, 5}, {1, 1, 1, 1, 1}},      // c0 - equality column (all valid)
+     {{10, 0, 30, 0, 50}, {1, 0, 1, 0, 1}}},  // c1 - filter column (nulls at indices 1,3)
+    {{{1, 2, 3, 4, 5}, {1, 1, 1, 1, 1}},      // u_c0 - equality column (all valid)
+     {{0, 0, 0, 0, 0}, {1, 1, 1, 1, 1}}},     // dummy - padding column
+    {0},                                      // equality columns (c0 and u_c0)
+    {0, 1},  // conditional columns (both columns for AST references)
     predicate,
     {1, 1, 1, 1, 1},  // expected counts: one output per probe row
     {{0, 0}, {1, cudf::JoinNoMatch}, {2, 2}, {3, cudf::JoinNoMatch}, {4, 4}});
@@ -1298,11 +1298,12 @@ TEST_F(MixedLeftJoinTest_int32, NullableColumnsWithArithmeticFilter)
 
   auto const col_ref_left_1  = cudf::ast::column_reference(0, cudf::ast::table_reference::LEFT);
   auto const col_ref_right_1 = cudf::ast::column_reference(0, cudf::ast::table_reference::RIGHT);
-  auto scalar_0 = cudf::numeric_scalar<int32_t>(0);
-  auto literal_0 = cudf::ast::literal(scalar_0);
+  auto scalar_0              = cudf::numeric_scalar<int32_t>(0);
+  auto literal_0             = cudf::ast::literal(scalar_0);
 
   // left.col1 + right.col1
-  auto add_expr = cudf::ast::operation(cudf::ast::ast_operator::ADD, col_ref_left_1, col_ref_right_1);
+  auto add_expr =
+    cudf::ast::operation(cudf::ast::ast_operator::ADD, col_ref_left_1, col_ref_right_1);
   // (left.col1 + right.col1) > 0
   auto predicate = cudf::ast::operation(cudf::ast::ast_operator::GREATER, add_expr, literal_0);
 
@@ -1322,10 +1323,11 @@ TEST_F(MixedLeftJoinTest_int32, NullableColumnsWithArithmeticFilter)
   // - Row 4 (key=5): no match -> (4, JoinNoMatch)
 
   this->test_nulls(
-    {{{1, 2, 3, 4, 5}, {1, 1, 1, 1, 1}}, {{10, 0, 30, 0, 50}, {1, 0, 1, 0, 1}}},  // Left: col0, col1 (0=null)
-    {{{1, 2, 3}, {1, 1, 1}}, {{1, 2, 3}, {1, 1, 1}}},                              // Right: col0, col1
-    {0},          // Equality column
-    {1},          // Conditional column
+    {{{1, 2, 3, 4, 5}, {1, 1, 1, 1, 1}},
+     {{10, 0, 30, 0, 50}, {1, 0, 1, 0, 1}}},           // Left: col0, col1 (0=null)
+    {{{1, 2, 3}, {1, 1, 1}}, {{1, 2, 3}, {1, 1, 1}}},  // Right: col0, col1
+    {0},                                               // Equality column
+    {1},                                               // Conditional column
     predicate,
     {1, 1, 1, 1, 1},  // Expected counts
     {{0, 0}, {1, cudf::JoinNoMatch}, {2, 2}, {3, cudf::JoinNoMatch}, {4, cudf::JoinNoMatch}},
@@ -1494,13 +1496,14 @@ TEST_F(MixedFullJoinTest_int32, NullableColumnsWithModuloFilter)
 
   auto const col_ref_left_1  = cudf::ast::column_reference(0, cudf::ast::table_reference::LEFT);
   auto const col_ref_right_1 = cudf::ast::column_reference(0, cudf::ast::table_reference::RIGHT);
-  auto scalar_1 = cudf::numeric_scalar<int32_t>(1);
-  auto scalar_2 = cudf::numeric_scalar<int32_t>(2);
-  auto literal_1 = cudf::ast::literal(scalar_1);
-  auto literal_2 = cudf::ast::literal(scalar_2);
+  auto scalar_1              = cudf::numeric_scalar<int32_t>(1);
+  auto scalar_2              = cudf::numeric_scalar<int32_t>(2);
+  auto literal_1             = cudf::ast::literal(scalar_1);
+  auto literal_2             = cudf::ast::literal(scalar_2);
 
   // (left.col1 + right.col1)
-  auto add_expr = cudf::ast::operation(cudf::ast::ast_operator::ADD, col_ref_left_1, col_ref_right_1);
+  auto add_expr =
+    cudf::ast::operation(cudf::ast::ast_operator::ADD, col_ref_left_1, col_ref_right_1);
   // (left.col1 + right.col1) % 2
   auto mod_expr = cudf::ast::operation(cudf::ast::ast_operator::MOD, add_expr, literal_2);
   // (left.col1 + right.col1) % 2 == 1
@@ -1522,14 +1525,17 @@ TEST_F(MixedFullJoinTest_int32, NullableColumnsWithModuloFilter)
 
   this->test_nulls(
     {{{0, 1, 2, 3}, {1, 1, 1, 1}}, {{10, 0, 12, 13}, {1, 0, 1, 1}}},  // Left: col0, col1
-    {{{0, 1, 2}, {1, 1, 1}}, {{20, 21, 0}, {1, 1, 0}}},                // Right: col0, col1
-    {0},          // Equality column
-    {1},          // Conditional column
+    {{{0, 1, 2}, {1, 1, 1}}, {{20, 21, 0}, {1, 1, 0}}},               // Right: col0, col1
+    {0},                                                              // Equality column
+    {1},                                                              // Conditional column
     predicate,
     {2, 2, 2, 1},  // Expected counts (each unmatched pair counted separately)
-    {{0, cudf::JoinNoMatch}, {cudf::JoinNoMatch, 0},
-     {1, cudf::JoinNoMatch}, {cudf::JoinNoMatch, 1},
-     {2, cudf::JoinNoMatch}, {cudf::JoinNoMatch, 2},
+    {{0, cudf::JoinNoMatch},
+     {cudf::JoinNoMatch, 0},
+     {1, cudf::JoinNoMatch},
+     {cudf::JoinNoMatch, 1},
+     {2, cudf::JoinNoMatch},
+     {cudf::JoinNoMatch, 2},
      {3, cudf::JoinNoMatch}},
     cudf::null_equality::EQUAL);
 }
