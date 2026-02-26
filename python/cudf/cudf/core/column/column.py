@@ -96,7 +96,7 @@ if TYPE_CHECKING:
     from collections.abc import Generator, Mapping
     from types import TracebackType
 
-    from cudf._typing import ColumnLike, DtypeObj, ScalarLike
+    from cudf._typing import ColumnLike, DtypeObj, DtypePolicy, ScalarLike
     from cudf.core.column.categorical import CategoricalColumn
     from cudf.core.column.datetime import DatetimeColumn
     from cudf.core.column.decimal import DecimalBaseColumn
@@ -105,6 +105,47 @@ if TYPE_CHECKING:
     from cudf.core.column.string import StringColumn
     from cudf.core.column.timedelta import TimeDeltaColumn
     from cudf.core.index import Index
+
+
+class PylibcudfFunction:
+    def __init__(
+        self,
+        pylibcudf_function: Callable[..., Any],
+        dtype_policy: "DtypePolicy",
+        mode: Literal["read", "write"] = "read",
+    ) -> None:
+        self._pylibcudf_function = pylibcudf_function
+        self._dtype_policy = dtype_policy
+        self._mode: Literal["read", "write"] = mode
+
+    def execute_with_args(self, *args: Any, **kwargs: Any) -> Any:
+        dtypes: list["DtypeObj"] = []
+        with ExitStack() as stack:
+            plc_args = []
+            for arg in args:
+                if isinstance(arg, ColumnBase):
+                    accessed = stack.enter_context(
+                        arg.access(mode=self._mode, scope="internal")
+                    )
+                    dtypes.append(accessed.dtype)
+                    plc_args.append(accessed.plc_column)
+            plc_kwargs = {}
+            for k, v in kwargs.items():
+                if isinstance(v, ColumnBase):
+                    accessed = stack.enter_context(
+                        v.access(mode=self._mode, scope="internal")
+                    )
+                    dtypes.append(accessed.dtype)
+                    plc_kwargs[k] = accessed.plc_column
+            plc_result = self._pylibcudf_function(*plc_args, **plc_kwargs)
+        output_dtype = self._dtype_policy(plc_result, dtypes)
+        return ColumnBase.create(plc_result, dtype=output_dtype)
+
+
+def np_bool_dtype_policy(
+    result: plc.Column, dtypes: "list[DtypeObj]"
+) -> "DtypeObj":
+    return np.dtype(np.bool_)
 
 
 def _can_values_be_equal(left: DtypeObj, right: DtypeObj) -> bool:
@@ -1828,10 +1869,9 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
     def is_valid(self) -> ColumnBase:
         """Identify non-null values"""
-        with self.access(mode="read", scope="internal"):
-            return ColumnBase.create(
-                plc.unary.is_valid(self.plc_column), np.dtype(np.bool_)
-            )
+        return PylibcudfFunction(
+            plc.unary.is_valid, np_bool_dtype_policy
+        ).execute_with_args(self)
 
     def isnan(self) -> ColumnBase:
         """Identify NaN values in a Column."""
@@ -1845,23 +1885,17 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         """Identify missing values in a Column."""
         if not self.has_nulls(include_nan=False):
             return as_column(False, length=len(self))
-
-        with self.access(mode="read", scope="internal"):
-            return ColumnBase.create(
-                plc.unary.is_null(self.plc_column), np.dtype(np.bool_)
-            )
+        return PylibcudfFunction(
+            plc.unary.is_null, np_bool_dtype_policy
+        ).execute_with_args(self)
 
     def notnull(self) -> ColumnBase:
         """Identify non-missing values in a Column."""
         if not self.has_nulls(include_nan=False):
-            result = as_column(True, length=len(self))
-        else:
-            with self.access(mode="read", scope="internal"):
-                result = ColumnBase.create(
-                    plc.unary.is_valid(self.plc_column), np.dtype(np.bool_)
-                )
-
-        return result
+            return as_column(True, length=len(self))
+        return PylibcudfFunction(
+            plc.unary.is_valid, np_bool_dtype_policy
+        ).execute_with_args(self)
 
     def interpolate(self, index: Index) -> ColumnBase:
         if is_dtype_obj_string(self.dtype):

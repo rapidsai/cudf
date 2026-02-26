@@ -125,6 +125,11 @@ class TimeDeltaColumn(TemporalBaseColumn):
             else other.dtype
         )
         other_is_null_scalar = is_na_like(other)
+        if (
+            isinstance(self.dtype, pd.ArrowDtype)
+            or isinstance(other_cudf_dtype, pd.ArrowDtype)
+        ) and op == "__mod__":
+            raise NotImplementedError("ArrowDtype does not support modulo")
 
         if other_cudf_dtype.kind == "m":
             # TODO: pandas will allow these operators to work but return false
