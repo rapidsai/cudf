@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
-from cudf_polars.experimental.benchmarks.utils import get_data
+from cudf_polars.experimental.benchmarks.utils import QueryResult, get_data
 
 if TYPE_CHECKING:
     from cudf_polars.experimental.benchmarks.utils import RunConfig
@@ -123,11 +123,23 @@ def channel_total(  # noqa: D103
             & (pl.col("ca_gmt_offset") == gmt)
         )
         .group_by("i_manufact_id")
-        .agg([pl.col(price_col).sum().alias("total_sales")])
+        .agg(
+            [
+                pl.col(price_col).sum().alias("total_sales"),
+                pl.col(price_col).count().alias("_n"),
+            ]
+        )
+        .with_columns(
+            pl.when(pl.col("_n") > 0)
+            .then(pl.col("total_sales"))
+            .otherwise(None)
+            .alias("total_sales")
+        )
+        .drop("_n")
     )
 
 
-def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
+def polars_impl(run_config: RunConfig) -> QueryResult:
     """Query 33."""
     params = load_parameters(
         int(run_config.scale_factor),
@@ -198,11 +210,27 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         gmt=gmt,
     )
 
-    return (
-        pl.concat([ss, cs, ws])
-        .group_by("i_manufact_id")
-        .agg([pl.col("total_sales").sum().alias("total_sales")])
-        .select(["i_manufact_id", "total_sales"])
-        .sort("total_sales")
-        .limit(100)
+    return QueryResult(
+        frame=(
+            pl.concat([ss, cs, ws])
+            .group_by("i_manufact_id")
+            .agg(
+                [
+                    pl.col("total_sales").sum().alias("total_sales"),
+                    pl.col("total_sales").count().alias("_n"),
+                ]
+            )
+            .with_columns(
+                pl.when(pl.col("_n") > 0)
+                .then(pl.col("total_sales"))
+                .otherwise(None)
+                .alias("total_sales")
+            )
+            .drop("_n")
+            .select(["i_manufact_id", "total_sales"])
+            .sort("total_sales", nulls_last=True)
+            .limit(100)
+        ),
+        sort_by=[("total_sales", False)],
+        limit=100,
     )
