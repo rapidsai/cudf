@@ -280,3 +280,102 @@ def test_assert_tpch_result_equal_raises_result_mismatch_non_ties() -> None:
 
     with pytest.raises(ValidationError, match="Result mismatch in non-ties part"):
         assert_tpch_result_equal(left, right, sort_by=[("a", False)], limit=4)
+
+
+def test_assert_tpch_result_equal_q11_ties():
+    # Previously, we claimed q11 was failing validation because of these values.
+    # In reality, these *are* considered equal.
+
+    left = pl.DataFrame(
+        {
+            "ps_partkey": [124439984, 69940887, 118230270, 191696233, 158970051],
+            "value": [8005096.8, 8005095.75, 8005095.75, 8005093.11, 8005090.24],
+        }
+    )
+    right = pl.DataFrame(
+        {
+            "ps_partkey": [124439984, 118230270, 69940887, 191696233, 158970051],
+            "value": [
+                8005096.8,
+                8005095.75,
+                8005095.749999999,
+                8005093.109999999,
+                8005090.24,
+            ],
+        }
+    )
+    sort_by = [("value", True)]  # descending=True
+
+    assert_tpch_result_equal(
+        left, right, sort_by=sort_by, check_exact=False, abs_tol=1e-2
+    )
+
+
+def test_assert_tpch_result_equal_float_sort_mixed_sort_columns() -> None:
+    """Float + non-float sort_by: exercises canonical key else branch (non-float col)."""
+    # Same row order so sort_by columns check passes; one value differs within tol.
+    left = pl.DataFrame(
+        {
+            "ps_partkey": [1, 2, 3],
+            "value": [8005096.8, 8005095.75, 8005095.75],
+        }
+    )
+    right = pl.DataFrame(
+        {
+            "ps_partkey": [1, 2, 3],
+            "value": [8005096.8, 8005095.75, 8005095.749999999],
+        }
+    )
+    assert_tpch_result_equal(
+        left,
+        right,
+        sort_by=[("value", True), ("ps_partkey", False)],
+        check_exact=False,
+        abs_tol=1e-2,
+    )
+
+
+def test_assert_tpch_result_equal_float_sort_raises_value_mismatch_in_band() -> None:
+    """Float sort, same bands but wrong value in a band -> ValidationError."""
+    left = pl.DataFrame(
+        {
+            "ps_partkey": [124439984, 69940887, 118230270],
+            "value": [8005096.8, 8005095.75, 8005095.75],
+        }
+    )
+    right = pl.DataFrame(
+        {
+            "ps_partkey": [124439984, 69940887, 999999999],  # wrong in tie band
+            "value": [8005096.8, 8005095.75, 8005095.749999999],
+        }
+    )
+    with pytest.raises(ValidationError, match="Result mismatch"):
+        assert_tpch_result_equal(
+            left,
+            right,
+            sort_by=[("value", True)],
+            check_exact=False,
+            abs_tol=1e-2,
+        )
+
+
+def test_assert_tpch_result_equal_float_sort():
+    left = pl.DataFrame(
+        {
+            "key": ["a", "b", "c", "d", "e"],
+            "value": [1.0, 1.1, 1.2, 1.21, 1.22],
+        }
+    )
+    # Three immaterial changes:
+    # 1. swap the "d" and "e" rows
+    # 2. change the value of "c" from 1.20 -> 1.12
+    # 3. change the value of "d" from 1.21 -> 1.20
+    right = pl.DataFrame(
+        {
+            "key": ["a", "b", "d", "c", "e"],
+            "value": [1.0, 1.1, 1.20, 1.21, 1.22],
+        }
+    )
+    assert_tpch_result_equal(
+        left, right, sort_by=[("value", False)], abs_tol=0.02, check_exact=False
+    )

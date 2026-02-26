@@ -5,7 +5,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 import polars as pl
 import polars.testing
@@ -250,21 +250,40 @@ def assert_tpch_result_equal(
         result_first = result_first.sort(by=by, descending=descending)
         expected_first = expected_first.sort(by=by, descending=descending)
 
-        # validate this part normally:
-        try:
-            polars.testing.assert_frame_equal(
-                result_first,
-                expected_first,
-                **polars_kwargs,  # type: ignore[arg-type]
-            )
-        except AssertionError as e:
-            raise ValidationError(
-                message="Result mismatch in non-ties part",
-                details={
-                    "error": str(e),
-                    "split_at": str(split_at),
-                },
-            ) from e
+        sort_by_cols_list = list(sort_by_cols)
+        has_float_sort = any(
+            left.schema[col] in (pl.Float32, pl.Float64) for col in sort_by_cols_list
+        )
+
+        if not has_float_sort:
+            try:
+                polars.testing.assert_frame_equal(
+                    result_first,
+                    expected_first,
+                    **polars_kwargs,  # type: ignore[arg-type]
+                )
+            except AssertionError as e:
+                raise ValidationError(
+                    message="Result mismatch in non-ties part",
+                    details={
+                        "error": str(e),
+                        "split_at": str(split_at),
+                    },
+                ) from e
+        else:
+            try:
+                _compare_sorted_frames_by_float_bands(
+                    result_first,
+                    expected_first,
+                    sort_by_cols_list=sort_by_cols_list,
+                    abs_tol=abs_tol,
+                    polars_kwargs=polars_kwargs,
+                )
+            except ValidationError as e:
+                raise ValidationError(
+                    message="Result mismatch in non-ties part",
+                    details={**(e.details or {}), "split_at": str(split_at)},
+                ) from e
 
         # Now for the ties:
         result_ties = left.filter(~expr)
@@ -289,10 +308,8 @@ def assert_tpch_result_equal(
                 },
             )
     else:
-        # Before we compare, we need to sort the result and expected.
-        # We need to sort by *all* the columns, starting with the
-        # columns in `sort_by`; We don't care about the sort order of the remaining
-        # columns, just that they're in the same order.
+        # No limit: sort then compare. If any sort column is float, use
+        # band-based comparison so row order within float ties is not required.
         by = list(sort_by_cols) + [
             col for col in left.columns if col not in sort_by_cols
         ]
@@ -300,14 +317,101 @@ def assert_tpch_result_equal(
             len(left.columns) - len(sort_by_cols)
         )
 
-        left = left.sort(by=by, descending=descending)
-        right = right.sort(by=by, descending=descending)
+        left_sorted = left.sort(by=by, descending=descending)
+        right_sorted = right.sort(by=by, descending=descending)
 
-        try:
-            polars.testing.assert_frame_equal(left, right, **polars_kwargs)  # type: ignore[arg-type]
-        except AssertionError as e:
-            raise ValidationError(
-                message="Result mismatch", details={"error": str(e)}
-            ) from e
+        sort_by_cols_list = list(sort_by_cols)
+        has_float_sort = any(
+            left_sorted.schema[col] in (pl.Float32, pl.Float64)
+            for col in sort_by_cols_list
+        )
+
+        if not has_float_sort:
+            try:
+                polars.testing.assert_frame_equal(
+                    left_sorted,
+                    right_sorted,
+                    **polars_kwargs,  # type: ignore[arg-type]
+                )
+            except AssertionError as e:
+                raise ValidationError(
+                    message="Result mismatch", details={"error": str(e)}
+                ) from e
+        else:
+            # Float-sort path: partition into tie bands by canonical sort key
+            # (float columns rounded to abs_tol grid), then compare each band
+            # as multiset (sort by non-sort columns, then assert_frame_equal).
+            _compare_sorted_frames_by_float_bands(
+                left_sorted,
+                right_sorted,
+                sort_by_cols_list=sort_by_cols_list,
+                abs_tol=abs_tol,
+                polars_kwargs=polars_kwargs,
+            )
 
     return None
+
+
+def _compare_sorted_frames_by_float_bands(
+    left: pl.DataFrame,
+    right: pl.DataFrame,
+    *,
+    sort_by_cols_list: list[str],
+    abs_tol: float,
+    polars_kwargs: dict[str, bool | float],
+) -> None:
+    """
+    Compare two already-sorted frames by partitioning into bands on sort key.
+
+    Float sort columns are bucketed by (x / abs_tol).round() * abs_tol so that
+    values within tolerance get the same band. Bands are compared in order;
+    within each band, rows are sorted by non-sort columns then compared.
+    """
+    assert len(left) == len(right), "Row count mismatch"
+
+    canonical_exprs: list[pl.Expr] = []
+    canonical_col_names: list[str] = []
+    for col in sort_by_cols_list:
+        name = f"_band_canonical_{col}"
+        canonical_col_names.append(name)
+        if left.schema[col] in (pl.Float32, pl.Float64):
+            canonical_exprs.append(
+                ((pl.col(col) / abs_tol).round() * abs_tol).alias(name)
+            )
+        else:
+            canonical_exprs.append(pl.col(col).alias(name))
+
+    def add_band_id(df: pl.DataFrame) -> pl.DataFrame:
+        return df.with_columns(canonical_exprs).with_columns(
+            pl.struct(canonical_col_names).rle_id().alias("_band_id")
+        )
+
+    left_banded = add_band_id(left)
+    right_banded = add_band_id(right)
+
+    # max() can be time or int, but we know it's int.
+    n_bands_left = cast(int, left_banded["_band_id"].max()) + 1
+    n_bands_right = cast(int, right_banded["_band_id"].max()) + 1
+    assert n_bands_left == n_bands_right, "Band count mismatch"
+
+    other_cols = [c for c in left.columns if c not in sort_by_cols_list]
+    drop_cols = ["_band_id", *canonical_col_names]
+
+    for band_id in range(n_bands_left):
+        left_band = left_banded.filter(pl.col("_band_id") == band_id).drop(drop_cols)
+        right_band = right_banded.filter(pl.col("_band_id") == band_id).drop(drop_cols)
+        if other_cols:
+            left_band = left_band.sort(by=other_cols)
+            right_band = right_band.sort(by=other_cols)
+        assert len(left_band) == len(right_band), "Band length mismatch"
+        try:
+            polars.testing.assert_frame_equal(
+                left_band,
+                right_band,
+                **polars_kwargs,  # type: ignore[arg-type]
+            )
+        except AssertionError as e:
+            raise ValidationError(
+                message="Result mismatch",
+                details={"error": str(e), "band_id": band_id},
+            ) from e
