@@ -55,7 +55,6 @@ if TYPE_CHECKING:
 
     from rmm.pylibrmm.stream import Stream
 
-    from cudf_polars.dsl.expr import NamedExpr
     from cudf_polars.dsl.ir import IR, IRExecutionContext
     from cudf_polars.experimental.rapidsmpf.dispatch import SubNetGenerator
     from cudf_polars.experimental.rapidsmpf.tracing import ActorTracer
@@ -606,32 +605,32 @@ def _create_shuffle_managers(
     modulus: int,
     left_key_indices: tuple[int, ...],
     right_key_indices: tuple[int, ...],
-    left_state: NormalizedPartitioning,
-    right_state: NormalizedPartitioning,
+    left_partitioning: NormalizedPartitioning,
+    right_partitioning: NormalizedPartitioning,
     collective_ids: list[int],
     tracer: ActorTracer | None,
 ) -> tuple[ShuffleManager | None, ShuffleManager | None]:
-    left_desired_state = NormalizedPartitioning(
+    left_partitioning_desired = NormalizedPartitioning(
         inter_rank_modulus=modulus,
         inter_rank_indices=left_key_indices,
         local_modulus=None,
         local_indices=(),
     )
-    right_desired_state = NormalizedPartitioning(
+    right_partitioning_desired = NormalizedPartitioning(
         inter_rank_modulus=modulus,
         inter_rank_indices=right_key_indices,
         local_modulus=None,
         local_indices=(),
     )
 
-    shuffle_left = not left_state or left_state != left_desired_state
-    shuffle_right = not right_state or right_state != right_desired_state
+    shuffle_left = not left_partitioning or left_partitioning != left_partitioning_desired
+    shuffle_right = not right_partitioning or right_partitioning != right_partitioning_desired
 
     left_shuffle = (
         ShuffleManager(
             context,
             modulus,
-            left_desired_state.inter_rank_indices,
+            left_partitioning_desired.inter_rank_indices,
             collective_ids.pop(0),
         )
         if shuffle_left
@@ -642,7 +641,7 @@ def _create_shuffle_managers(
         ShuffleManager(
             context,
             modulus,
-            right_desired_state.inter_rank_indices,
+            right_partitioning_desired.inter_rank_indices,
             collective_ids.pop(0),
         )
         if shuffle_right
@@ -800,8 +799,8 @@ async def _shuffle_join(
     ch_out: Channel[TableChunk],
     ch_left: Channel[TableChunk],
     ch_right: Channel[TableChunk],
-    left_state: NormalizedPartitioning,
-    right_state: NormalizedPartitioning,
+    left_partitioning: NormalizedPartitioning,
+    right_partitioning: NormalizedPartitioning,
     min_shuffle_modulus: int,
     collective_ids: list[int],
     *,
@@ -813,8 +812,8 @@ async def _shuffle_join(
     """Execute a shuffle (hash) join."""
     modulus = _choose_shuffle_modulus(
         context,
-        left_state,
-        right_state,
+        left_partitioning,
+        right_partitioning,
         min_shuffle_modulus,
     )  # Global modulus
 
@@ -840,8 +839,8 @@ async def _shuffle_join(
         modulus,
         left_key_indices,
         right_key_indices,
-        left_state,
-        right_state,
+        left_partitioning,
+        right_partitioning,
         collective_ids,
         tracer,
     )
@@ -875,17 +874,6 @@ async def _shuffle_join(
 
     del left_shuffle, right_shuffle
     await ch_out.drain(context)
-
-
-def _extract_partitioning_state(
-    metadata: ChannelMetadata,
-    ir: IR,
-    on: tuple[NamedExpr, ...],
-    nranks: int,
-) -> NormalizedPartitioning:
-    schema_keys = list(ir.schema.keys())
-    key_indices = tuple(schema_keys.index(expr.name) for expr in on)
-    return NormalizedPartitioning.from_metadata(metadata, key_indices, nranks)
 
 
 async def _choose_strategy(
@@ -1030,12 +1018,12 @@ async def _choose_strategy(
 
 def _choose_shuffle_modulus(
     context: Context,
-    left_state: NormalizedPartitioning,
-    right_state: NormalizedPartitioning,
+    left_partitioning: NormalizedPartitioning,
+    right_partitioning: NormalizedPartitioning,
     min_shuffle_modulus: int,
 ) -> int:
-    left_existing_modulus = left_state.inter_rank_modulus if left_state else None
-    right_existing_modulus = right_state.inter_rank_modulus if right_state else None
+    left_existing_modulus = left_partitioning.inter_rank_modulus if left_partitioning else None
+    right_existing_modulus = right_partitioning.inter_rank_modulus if right_partitioning else None
 
     # Determine which modulus to use, preferring existing partitioning
     # if it provides at least the minimum needed partitions
@@ -1154,15 +1142,15 @@ async def join_actor(
         )
 
         nranks = context.comm().nranks
-        left_state = _extract_partitioning_state(
-            left_metadata, ir.children[0], ir.left_on, nranks
+        left_partitioning = NormalizedPartitioning.resolve(
+            left_metadata, nranks, ir.left_on, ir.children[0].schema
         )
-        right_state = _extract_partitioning_state(
-            right_metadata, ir.children[1], ir.right_on, nranks
+        right_partitioning = NormalizedPartitioning.resolve(
+            right_metadata, nranks, ir.right_on, ir.children[1].schema
         )
 
         # Skip sampling when both sides have aligned partitioning
-        if left_state and left_state == right_state:
+        if left_partitioning and left_partitioning == right_partitioning:
             await _shuffle_join(
                 context,
                 ir,
@@ -1170,11 +1158,11 @@ async def join_actor(
                 ch_out,
                 ch_left,
                 ch_right,
-                left_state,
-                right_state,
-                left_state.inter_rank_modulus,
+                left_partitioning,
+                right_partitioning,
+                left_partitioning.inter_rank_modulus,
                 collective_ids,
-                n_partitioned_keys=len(left_state.inter_rank_indices),
+                n_partitioned_keys=len(left_partitioning.inter_rank_indices),
                 tracer=tracer,
             )
             return
@@ -1216,8 +1204,8 @@ async def join_actor(
                 ch_out,
                 ch_left,
                 ch_right,
-                left_state,
-                right_state,
+                left_partitioning,
+                right_partitioning,
                 strategy.min_shuffle_modulus,
                 collective_ids,
                 left_sample_chunks=strategy.left_sample.chunks,

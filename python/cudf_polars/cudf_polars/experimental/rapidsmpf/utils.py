@@ -48,10 +48,11 @@ if TYPE_CHECKING:
 
     from rmm.pylibrmm.stream import Stream
 
+    from cudf_polars.dsl.expr import NamedExpr
     from cudf_polars.dsl.ir import IR, IRExecutionContext
     from cudf_polars.experimental.rapidsmpf.dispatch import SubNetGenerator
     from cudf_polars.experimental.rapidsmpf.tracing import ActorTracer
-    from cudf_polars.typing import DataType
+    from cudf_polars.typing import DataType, Schema
 
 
 @asynccontextmanager
@@ -529,9 +530,13 @@ class NormalizedPartitioning:
     """Normalized view of partitioning for a set of key column indices."""
 
     inter_rank_modulus: int
+    """The inter-rank modulus."""
     inter_rank_indices: tuple[int, ...]
+    """The inter-rank column indices."""
     local_modulus: int | None
+    """The local modulus."""
     local_indices: tuple[int, ...]
+    """The local column indices."""
 
     def __bool__(self) -> bool:
         """True if partitioned (inter-rank and, when set, local)."""
@@ -551,15 +556,21 @@ class NormalizedPartitioning:
         )
 
     @classmethod
-    def from_metadata(
+    def resolve(
         cls,
         metadata: ChannelMetadata,
-        key_indices: tuple[int, ...],
         nranks: int,
+        keys: tuple[NamedExpr, ...],
+        schema: Schema,
+        *,
+        allow_subset: bool = True,
     ) -> NormalizedPartitioning:
-        """Build from channel metadata and key indices (allow_subset=True)."""
+        """Resolve normalized partitioning from channel metadata for the given keys and schema."""
+
+        schema_keys = list(schema.keys())
+        key_indices = tuple(schema_keys.index(expr.name) for expr in keys)
         inter_rank_modulus, local_modulus = get_partitioning_moduli(
-            metadata, key_indices, nranks, allow_subset=True
+            metadata, key_indices, nranks, allow_subset=allow_subset
         )
 
         local_indices_val: tuple[int, ...] = ()
