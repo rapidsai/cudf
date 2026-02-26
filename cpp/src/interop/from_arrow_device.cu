@@ -141,7 +141,6 @@ struct binary_view_to_string_index_pair {
     auto const size  = static_cast<cudf::size_type>(item.inlined.size);
     auto const data  = (size <= NANOARROW_BINARY_VIEW_INLINE_SIZE)
                          ? reinterpret_cast<char const*>(item.inlined.data)
-                        //: "abcdefghijklmnopqrstuvwxyz";
                          : d_ptrs[item.ref.buffer_index] + item.ref.offset;
     return {data, size};
   }
@@ -166,6 +165,8 @@ dispatch_tuple_t dispatch_from_arrow_device::operator()<cudf::string_view>(
   auto const size       = static_cast<size_type>(input->length);
   auto const null_count = static_cast<size_type>(input->null_count);
   auto const offset     = static_cast<size_type>(input->offset);
+
+  owned_columns_t owned;
 
   if (schema->type == NANOARROW_TYPE_STRING_VIEW) {
     ArrowArrayView view;
@@ -195,10 +196,8 @@ dispatch_tuple_t dispatch_from_arrow_device::operator()<cudf::string_view>(
     // gather strings into output column
     auto out_col =
       cudf::strings::detail::make_strings_column(d_indices.begin(), d_indices.end(), stream, mr);
-    auto out_view = out_col->view();
-    owned_columns_t owned;
     owned.emplace_back(std::move(out_col));
-    return std::make_tuple<column_view, owned_columns_t>(std::move(out_view), std::move(owned));
+    return std::make_tuple<column_view, owned_columns_t>(owned.front()->view(), std::move(owned));
   }
 
   // expects TYPE_STRING and TYPE_LARGE_STRING types
@@ -212,7 +211,8 @@ dispatch_tuple_t dispatch_from_arrow_device::operator()<cudf::string_view>(
                                   0};
 
   return std::make_tuple<column_view, owned_columns_t>(
-    {type, size, input->buffers[2], null_mask, null_count, offset, {offsets_view}}, {});
+    {type, size, input->buffers[2], null_mask, null_count, offset, {offsets_view}},
+    std::move(owned));
 }
 
 template <>
