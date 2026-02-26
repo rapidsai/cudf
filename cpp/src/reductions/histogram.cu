@@ -1,9 +1,10 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/algorithms/copy_if.cuh>
 #include <cudf/detail/cuco_helpers.hpp>
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/iterator.cuh>
@@ -21,7 +22,6 @@
 #include <cuda/atomic>
 #include <cuda/functional>
 #include <cuda/std/tuple>
-#include <thrust/copy.h>
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/uninitialized_fill.h>
 
@@ -186,8 +186,7 @@ compute_row_frequencies(table_view const& input,
 
   // Reduction results above are either group sizes of equal rows, or `0`.
   // The final output is non-zero group sizes only.
-  thrust::copy_if(
-    rmm::exec_policy_nosync(stream), input_it, input_it + num_rows, output_it, is_not_zero{});
+  cudf::detail::copy_if_async(input_it, input_it + num_rows, output_it, is_not_zero{}, stream);
 
   return {std::move(distinct_indices), std::move(distinct_counts)};
 }

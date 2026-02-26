@@ -9,6 +9,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
+#include <cudf/detail/algorithms/reduce.cuh>
 #include <cudf/detail/device_scalar.hpp>
 #include <cudf/dictionary/detail/iterator.cuh>
 #include <cudf/dictionary/dictionary_column_view.hpp>
@@ -20,11 +21,10 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/iterator>
 #include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
-#include <thrust/iterator/discard_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
-#include <thrust/reduce.h>
 #include <thrust/transform.h>
 
 namespace cudf {
@@ -78,12 +78,13 @@ void reduce_by_key_fn(column_device_view const& values,
   thrust::transform(
     rmm::exec_policy_nosync(stream), itr, itr + values.size(), vars.begin(), var_fn);
 
-  thrust::reduce_by_key(rmm::exec_policy_nosync(stream),
-                        group_labels.begin(),
-                        group_labels.end(),
-                        vars.begin(),
-                        thrust::make_discard_iterator(),
-                        d_result);
+  cudf::detail::reduce_by_key_async(group_labels.begin(),
+                                    group_labels.end(),
+                                    vars.begin(),
+                                    cuda::make_discard_iterator(),
+                                    d_result,
+                                    cuda::std::plus<ResultType>(),
+                                    stream);
 }
 
 struct var_functor {

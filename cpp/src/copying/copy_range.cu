@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -26,7 +26,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
-#include <thrust/iterator/constant_iterator.h>
+#include <cuda/iterator>
 
 #include <memory>
 #include <stdexcept>
@@ -51,7 +51,7 @@ void in_place_copy_range(cudf::column_view const& source,
       stream);
   } else {
     cudf::detail::copy_range(p_source_device_view->begin<T>() + source_begin,
-                             thrust::make_constant_iterator(true),  // dummy
+                             cuda::make_constant_iterator(true),  // dummy
                              target,
                              target_begin,
                              target_begin + (source_end - source_begin),

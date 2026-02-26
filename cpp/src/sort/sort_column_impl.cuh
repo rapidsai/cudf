@@ -6,8 +6,10 @@
 #pragma once
 
 #include "sort.hpp"
+#include "sort_radix.hpp"
 
 #include <cudf/column/column_device_view.cuh>
+#include <cudf/detail/indexalator.cuh>
 #include <cudf/detail/row_operator/common_utils.cuh>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/utilities/error.hpp>
@@ -15,33 +17,14 @@
 #include <cudf/utilities/traits.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
 #include <cub/device/device_merge_sort.cuh>
+#include <thrust/gather.h>
 
 namespace cudf {
 namespace detail {
-
-/**
- * @brief Sort indices of a single column.
- *
- * This API offers fast sorting for primitive types. It cannot handle nested types and will not
- * consider `NaN` as equivalent to other `NaN`.
- *
- * @tparam method Whether to use stable sort
- * @param input Column to sort. The column data is not modified.
- * @param column_order Ascending or descending sort order
- * @param null_precedence How null rows are to be ordered
- * @param stream CUDA stream used for device memory operations and kernel launches
- * @param mr Device memory resource used to allocate the returned column's device memory
- * @return Sorted indices for the input column.
- */
-template <sort_method method>
-std::unique_ptr<column> sorted_order(column_view const& input,
-                                     order column_order,
-                                     null_order null_precedence,
-                                     rmm::cuda_stream_view stream,
-                                     rmm::device_async_resource_ref mr);
 
 /**
  * @brief Comparator functor needed for single column sort.
@@ -61,16 +44,9 @@ struct simple_comparator {
       }
     }
 
-    auto left_elememt  = d_column.type().id() == type_id::DICTIONARY32
-                           ? d_column.child(dictionary_column_view::keys_column_index)
-                              .element<T>(d_column.element<dictionary32>(lhs).value())
-                           : d_column.element<T>(lhs);
-    auto right_elememt = d_column.type().id() == type_id::DICTIONARY32
-                           ? d_column.child(dictionary_column_view::keys_column_index)
-                               .element<T>(d_column.element<dictionary32>(rhs).value())
-                           : d_column.element<T>(rhs);
-
-    return relational_compare(left_elememt, right_elememt) ==
+    auto const left_element  = d_column.element<T>(lhs);
+    auto const right_element = d_column.element<T>(rhs);
+    return relational_compare(left_element, right_element) ==
            (ascending ? weak_ordering::LESS : weak_ordering::GREATER);
   }
   column_device_view const d_column;
@@ -119,7 +95,8 @@ struct column_sorted_order_fn {
     }
   }
 
-  template <typename T, CUDF_ENABLE_IF(cudf::is_relationally_comparable<T, T>())>
+  template <typename T>
+    requires(cudf::is_relationally_comparable<T, T>() and not cudf::is_dictionary<T>())
   void operator()(column_view const& input,
                   mutable_column_view& indices,
                   bool ascending,
@@ -129,10 +106,51 @@ struct column_sorted_order_fn {
     sorted_order<T>(input, indices, ascending, null_precedence, stream);
   }
 
-  template <typename T, CUDF_ENABLE_IF(not cudf::is_relationally_comparable<T, T>())>
+  template <typename T>
+    requires(not cudf::is_relationally_comparable<T, T>())
   void operator()(column_view const&, mutable_column_view&, bool, null_order, rmm::cuda_stream_view)
   {
     CUDF_FAIL("Column type must be relationally comparable");
+  }
+
+  template <typename T>
+    requires(is_dictionary<T>())
+  void operator()(column_view const& input,
+                  mutable_column_view& indices,
+                  bool ascending,
+                  null_order null_precedence,
+                  rmm::cuda_stream_view stream)
+  {
+    auto const keys = dictionary_column_view(input).keys();
+    // For the keys we do an arg-sort of arg-sort to get the rank and use that as a map
+    // to sort the indices in rank order.
+    // First, get sorted-order of just the keys (slow but expect keys.size <<< indices.size)
+    auto temp_mr = cudf::get_current_device_resource_ref();
+    auto ordered_indices =
+      cudf::detail::sorted_order<method>(keys, order::ASCENDING, null_precedence, stream, temp_mr);
+    // Now, sort the ordered indices to get their ordered positions (very fast integer sort)
+    ordered_indices = cudf::detail::sorted_order<method>(
+      ordered_indices->view(), order::ASCENDING, null_precedence, stream, temp_mr);
+    // And use the result as a map over the dictionary indices
+    auto map = ordered_indices->view().template data<size_type>();
+    auto itr = cudf::detail::indexalator_factory::make_input_iterator(
+      dictionary_column_view(input).indices());
+    auto mapped_indices = rmm::device_uvector<size_type>(input.size(), stream);
+    thrust::gather(
+      rmm::exec_policy_nosync(stream), itr, itr + input.size(), map, mapped_indices.begin());
+
+    // Finally, sort-order the dictionary indices using mapped values
+    auto mapped_view = column_view(data_type{type_to_id<size_type>()},
+                                   input.size(),
+                                   mapped_indices.data(),
+                                   input.null_mask(),
+                                   input.null_count());
+    // these should be very fast since they are sorting integers
+    if (input.has_nulls()) {
+      sorted_order<size_type>(mapped_view, indices, ascending, null_precedence, stream);
+    } else {
+      sorted_order_radix(mapped_view, indices, ascending, stream);
+    }
   }
 };
 

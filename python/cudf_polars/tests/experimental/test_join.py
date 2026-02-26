@@ -218,12 +218,10 @@ def test_join_and_slice(zlice):
     # Need sort to match order after a join
     q = left.join(right, on="a", how="inner").sort(pl.col("a")).slice(*zlice)
     if zlice == (2, 2):
-        msg = (
-            "does not support multiple partitions."
-            if DEFAULT_RUNTIME == "rapidsmpf"
-            else "does not support a multi-partition slice with an offset."
-        )
-        with pytest.warns(UserWarning, match=msg):
+        with pytest.warns(
+            UserWarning,
+            match="does not support a multi-partition slice with an offset.",
+        ):
             assert_gpu_result_equal(q, engine=engine)
     else:
         assert_gpu_result_equal(q, engine=engine)

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 import datetime
 import zoneinfo
@@ -211,27 +211,12 @@ def test_numeric_to_timedelta(
     assert_eq(expected, actual)
 
 
-@pytest.mark.parametrize(
-    "alias,expect_dtype",
-    [
-        ("UInt8", "uint8"),
-        ("UInt16", "uint16"),
-        ("UInt32", "uint32"),
-        ("UInt64", "uint64"),
-        ("Int8", "int8"),
-        ("Int16", "int16"),
-        ("Int32", "int32"),
-        ("Int64", "int64"),
-        ("boolean", "bool"),
-        ("Float32", "float32"),
-        ("Float64", "float64"),
-    ],
-)
-def test_astype_with_aliases(alias, expect_dtype):
-    pd_data = pd.Series([1, 2, 0])
-    gd_data = cudf.Series(pd_data)
+def test_astype_with_aliases(all_supported_pandas_nullable_extension_dtypes):
+    scalar, dtype = all_supported_pandas_nullable_extension_dtypes
+    expected = pd.Series([scalar]).astype(str(dtype))
+    result = cudf.Series([scalar]).astype(str(dtype))
 
-    assert_eq(pd_data.astype(expect_dtype), gd_data.astype(alias))
+    assert_eq(expected, result)
 
 
 def test_timedelta_datetime_cast_invalid():
@@ -462,7 +447,7 @@ def test_string_timstamp_typecast_to_different_datetime_resolutions(
     gdf_sr = cudf.Series(pd_sr)
 
     expect = pd_sr.values.astype(datetime_types_as_str)
-    got = gdf_sr.astype(datetime_types_as_str).values_host
+    got = gdf_sr.astype(datetime_types_as_str).to_numpy()
 
     np.testing.assert_equal(expect, got)
 
@@ -823,20 +808,12 @@ def test_astype_naive_to_aware_raises():
         ser.to_pandas().astype("datetime64[ns, UTC]")
 
 
-@pytest.mark.parametrize(
-    "np_dtype,pd_dtype",
-    [
-        tuple(item)
-        for item in cudf.utils.dtypes.np_dtypes_to_pandas_dtypes.items()
-    ],
-)
 def test_series_astype_pandas_nullable(
-    all_supported_types_as_str, np_dtype, pd_dtype
+    all_supported_pandas_nullable_extension_dtypes,
 ):
-    source = cudf.Series([0, 1, None], dtype=all_supported_types_as_str)
-
-    expect = source.astype(np_dtype)
-    got = source.astype(pd_dtype)
+    scalar, dtype = all_supported_pandas_nullable_extension_dtypes
+    got = cudf.Series([scalar, None]).astype(dtype)
+    expect = cudf.Series([scalar, None], dtype=dtype)
 
     assert_eq(expect, got)
 
@@ -1142,7 +1119,7 @@ def test_typecast_from_float_to_decimal(
     got = data.astype(float_types_as_str)
 
     pa_arr = got.to_arrow().cast(
-        pa.decimal128(to_dtype.precision, to_dtype.scale)
+        pa.decimal64(to_dtype.precision, to_dtype.scale)
     )
     expected = cudf.Series._from_column(Decimal64Column.from_arrow(pa_arr))
 
@@ -1174,7 +1151,7 @@ def test_typecast_from_int_to_decimal(integer_types_as_str, precision, scale):
     pa_arr = (
         got.to_arrow()
         .cast("float64")
-        .cast(pa.decimal128(to_dtype.precision, to_dtype.scale))
+        .cast(pa.decimal64(to_dtype.precision, to_dtype.scale))
     )
     expected = cudf.Series._from_column(Decimal64Column.from_arrow(pa_arr))
 
@@ -1227,12 +1204,15 @@ def test_typecast_to_from_decimal(from_dtype, to_dtype):
         )
     s = data.astype(from_dtype)
 
-    pa_arr = s.to_arrow().cast(
-        pa.decimal128(to_dtype.precision, to_dtype.scale), safe=False
-    )
     if isinstance(to_dtype, cudf.Decimal32Dtype):
+        pa_arr = s.to_arrow().cast(
+            pa.decimal32(to_dtype.precision, to_dtype.scale), safe=False
+        )
         expected = cudf.Series._from_column(Decimal32Column.from_arrow(pa_arr))
     elif isinstance(to_dtype, cudf.Decimal64Dtype):
+        pa_arr = s.to_arrow().cast(
+            pa.decimal64(to_dtype.precision, to_dtype.scale), safe=False
+        )
         expected = cudf.Series._from_column(Decimal64Column.from_arrow(pa_arr))
 
     with expect_warning_if(to_dtype.scale < s.dtype.scale, UserWarning):

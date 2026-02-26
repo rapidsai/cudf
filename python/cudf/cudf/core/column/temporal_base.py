@@ -26,14 +26,12 @@ from cudf.utils.dtypes import (
     cudf_dtype_to_pa_type,
     dtype_to_pylibcudf_type,
     find_common_type,
-    is_pandas_nullable_extension_dtype,
 )
 from cudf.utils.utils import is_na_like
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
-
-    from typing_extensions import Self
+    from typing import Self
 
     from cudf._typing import ColumnLike, DtypeObj, ScalarLike
     from cudf.core.column.numerical import NumericalColumn
@@ -45,16 +43,18 @@ class TemporalBaseColumn(ColumnBase, Scannable):
     Base class for TimeDeltaColumn and DatetimeColumn.
     """
 
+    _VALID_REDUCTIONS = {
+        "mean",
+        "std",
+    }
+    _VALID_SCANS = {
+        "cummin",
+        "cummax",
+    }
     _PANDAS_NA_VALUE = pd.NaT
     _UNDERLYING_DTYPE: np.dtype[np.int64] = np.dtype(np.int64)
     _NP_SCALAR: ClassVar[type[np.datetime64] | type[np.timedelta64]]
     _PD_SCALAR: pd.Timestamp | pd.Timedelta
-    _VALID_SCANS = {
-        "cumsum",
-        "cumprod",
-        "cummin",
-        "cummax",
-    }
 
     def __contains__(self, item: np.datetime64 | np.timedelta64) -> bool:
         """
@@ -83,10 +83,8 @@ class TemporalBaseColumn(ColumnBase, Scannable):
             # call-overload must be ignored because numpy stubs only accept literal
             # time unit strings, but we're passing self.time_unit which is valid at runtime
             fill_value = self._NP_SCALAR(fill_value, self.time_unit)  # type: ignore[call-overload]
-        elif (
-            cudf.get_option("mode.pandas_compatible")
-            and is_scalar(fill_value)
-            and not isinstance(fill_value, (self._NP_SCALAR, self._PD_SCALAR))
+        elif is_scalar(fill_value) and not isinstance(
+            fill_value, (self._NP_SCALAR, self._PD_SCALAR)
         ):
             raise MixedTypeError(
                 f"Cannot use fill_value of type {type(fill_value)} with "
@@ -133,7 +131,18 @@ class TemporalBaseColumn(ColumnBase, Scannable):
 
         if is_scalar(other):
             if is_na_like(other):
-                return pa.scalar(None, type=cudf_dtype_to_pa_type(self.dtype))
+                if isinstance(
+                    other, (np.datetime64, np.timedelta64)
+                ) and np.isnat(other):
+                    try:
+                        arrow_type = cudf_dtype_to_pa_type(other.dtype)
+                    except pa.ArrowNotImplementedError:
+                        arrow_type = cudf_dtype_to_pa_type(
+                            np.dtype(f"{other.dtype.type.__name__}[ns]")
+                        )
+                else:
+                    arrow_type = cudf_dtype_to_pa_type(self.dtype)
+                return pa.scalar(None, type=arrow_type)
             elif self.dtype.kind == "M" and isinstance(other, pd.Timestamp):
                 if other.tz is not None:
                     raise NotImplementedError(
@@ -193,15 +202,19 @@ class TemporalBaseColumn(ColumnBase, Scannable):
 
     @functools.cached_property
     def time_unit(self) -> str:
-        return np.datetime_data(self.dtype)[0]
+        if isinstance(self.dtype, np.dtype):
+            # np.dtype defaults to dtype[float64] for typing
+            return np.datetime_data(self.dtype)[0]  # type: ignore[arg-type]
+        else:
+            return cast("pd.ArrowDtype", self.dtype).pyarrow_dtype.unit
 
     @property
     def values(self) -> cp.ndarray:
         """
         Return a CuPy representation of the TemporalBaseColumn.
         """
-        if is_pandas_nullable_extension_dtype(self.dtype):
-            dtype = getattr(self.dtype, "numpy_dtype", self.dtype)
+        if isinstance(self.dtype, pd.ArrowDtype):
+            dtype = self.dtype.numpy_dtype
         else:
             dtype = self.dtype
 
@@ -217,11 +230,7 @@ class TemporalBaseColumn(ColumnBase, Scannable):
         if result is self._PANDAS_NA_VALUE:
             return result
         result = result.as_py()
-        if cudf.get_option("mode.pandas_compatible"):
-            return self._PD_SCALAR(result)
-        elif isinstance(result, self._PD_SCALAR):
-            return result.to_numpy()
-        return self.dtype.type(result).astype(self.dtype, copy=False)
+        return self._PD_SCALAR(result)
 
     def to_pandas(
         self,
@@ -229,27 +238,12 @@ class TemporalBaseColumn(ColumnBase, Scannable):
         nullable: bool = False,
         arrow_type: bool = False,
     ) -> pd.Index:
-        if arrow_type and nullable:
-            raise ValueError(
-                f"{arrow_type=} and {nullable=} cannot both be set."
+        if nullable and not arrow_type:
+            raise NotImplementedError(
+                f"pandas does not have a native nullable type for {self.dtype}."
             )
-        if (
-            cudf.get_option("mode.pandas_compatible")
-            and isinstance(self.dtype, pd.ArrowDtype)
-        ) or arrow_type:
-            return super().to_pandas(nullable=nullable, arrow_type=arrow_type)
-
-        elif nullable:
-            raise NotImplementedError(f"{nullable=} is not implemented.")
-        pa_array = self.to_arrow()
-        if arrow_type:
-            return pd.Index(pd.arrays.ArrowExtensionArray(pa_array))
         else:
-            # Workaround until the following issue is fixed:
-            # https://github.com/apache/arrow/issues/45341
-            return pd.Index(
-                pa_array.to_numpy(zero_copy_only=False, writable=True)
-            )
+            return super().to_pandas(nullable=nullable, arrow_type=arrow_type)
 
     def as_numerical_column(self, dtype: np.dtype) -> NumericalColumn:
         new_plc_column = plc.Column(
@@ -263,7 +257,9 @@ class TemporalBaseColumn(ColumnBase, Scannable):
         )
         return cast(
             cudf.core.column.numerical.NumericalColumn,
-            type(self).from_pylibcudf(new_plc_column).astype(dtype),
+            ColumnBase.create(new_plc_column, self._UNDERLYING_DTYPE).astype(
+                dtype
+            ),
         )
 
     def ceil(self, freq: str) -> ColumnBase:
@@ -300,10 +296,11 @@ class TemporalBaseColumn(ColumnBase, Scannable):
         if isinstance(replacement, type(self)):
             replacement = replacement.astype(self._UNDERLYING_DTYPE)
         try:
-            return (
-                self.astype(self._UNDERLYING_DTYPE)  # type:ignore[return-value]
+            return cast(
+                "Self",
+                self.astype(self._UNDERLYING_DTYPE)
                 .find_and_replace(to_replace, replacement, all_nan)
-                .astype(self.dtype)
+                .astype(self.dtype),
             )
         except TypeError:
             return self.copy(deep=True)
@@ -313,11 +310,11 @@ class TemporalBaseColumn(ColumnBase, Scannable):
             to_res, _ = np.datetime_data(to_dtype)
             max_val = self.max()
             if isinstance(max_val, (pd.Timedelta, pd.Timestamp)):
-                max_val = max_val.to_numpy()
+                max_val = max_val.to_numpy().astype(self.dtype)
             max_val = max_val.astype(self._UNDERLYING_DTYPE, copy=False)
             min_val = self.min()
             if isinstance(min_val, (pd.Timedelta, pd.Timestamp)):
-                min_val = min_val.to_numpy()
+                min_val = min_val.to_numpy().astype(self.dtype)
             min_val = min_val.astype(self._UNDERLYING_DTYPE, copy=False)
             # call-overload must be ignored because numpy stubs only accept literal strings
             # for time units (e.g., "ns", "us") to allow compile-time validation,
@@ -345,28 +342,34 @@ class TemporalBaseColumn(ColumnBase, Scannable):
             return False
 
     def mean(
-        self, skipna: bool = True, min_count: int = 0
+        self, skipna: bool = True, min_count: int = 0, **kwargs: Any
     ) -> pd.Timestamp | pd.Timedelta:
         return self._PD_SCALAR(
-            self.astype(self._UNDERLYING_DTYPE).mean(  # type:ignore[call-arg]
-                skipna=skipna, min_count=min_count
+            self.astype(self._UNDERLYING_DTYPE).mean(
+                skipna=skipna, min_count=min_count, **kwargs
             ),
             unit=self.time_unit,
         ).as_unit(self.time_unit)
 
     def std(
-        self, skipna: bool = True, min_count: int = 0, ddof: int = 1
+        self, skipna: bool = True, min_count: int = 0, **kwargs: Any
     ) -> pd.Timedelta:
+        # Extract ddof from kwargs, defaulting to 1
+        ddof = kwargs.pop("ddof", 1)
         return pd.Timedelta(
-            self.astype(self._UNDERLYING_DTYPE).std(  # type:ignore[call-arg]
-                skipna=skipna, min_count=min_count, ddof=ddof
+            self.astype(self._UNDERLYING_DTYPE).std(
+                skipna=skipna, min_count=min_count, ddof=ddof, **kwargs
             ),
             unit=self.time_unit,
         ).as_unit(self.time_unit)
 
-    def median(self, skipna: bool = True) -> pd.Timestamp | pd.Timedelta:
+    def median(
+        self, skipna: bool = True, min_count: int = 0, **kwargs: Any
+    ) -> pd.Timestamp | pd.Timedelta:
         return self._PD_SCALAR(
-            self.astype(self._UNDERLYING_DTYPE).median(skipna=skipna),  # type:ignore[call-arg]
+            self.astype(self._UNDERLYING_DTYPE).median(
+                skipna=skipna, min_count=min_count, **kwargs
+            ),
             unit=self.time_unit,
         ).as_unit(self.time_unit)
 

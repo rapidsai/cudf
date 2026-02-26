@@ -37,7 +37,6 @@
 #include <thrust/binary_search.h>
 #include <thrust/execution_policy.h>
 #include <thrust/for_each.h>
-#include <thrust/functional.h>
 #include <thrust/remove.h>
 #include <thrust/transform_reduce.h>
 

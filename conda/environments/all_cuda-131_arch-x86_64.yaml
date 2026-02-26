@@ -6,6 +6,7 @@ channels:
 - conda-forge
 dependencies:
 - aiobotocore>=2.2.0,<3
+- binutils
 - boto3>=1.21.21
 - botocore>=1.24.21
 - breathe>=4.35.0
@@ -23,7 +24,7 @@ dependencies:
 - cuda-python>=13.0.1,<14.0
 - cuda-sanitizer-api
 - cuda-version=13.1
-- cupy>=13.6.0
+- cupy>=13.6.0,!=14.0.0
 - cxx-compiler
 - cython>=3.0.3,<3.2.0
 - dask-cuda==26.4.*,>=0.0.0a0
@@ -56,8 +57,8 @@ dependencies:
 - nbsphinx
 - ninja
 - notebook
-- numba-cuda>=0.22.2,<0.23.0
-- numba>=0.60.0,<0.62.0
+- numba-cuda>=0.22.2
+- numba>=0.60.0,<0.65.0
 - numpy>=1.23,<3.0
 - numpydoc
 - nvidia-ml-py>=12
@@ -66,9 +67,9 @@ dependencies:
 - packaging
 - pandas>=2.0,<2.4.0
 - pandoc
-- polars>=1.30,<1.36
+- polars>=1.30,<1.39
 - pre-commit
-- pyarrow>=15.0.0
+- pyarrow>=19.0.0
 - pydata-sphinx-theme>=0.15.4
 - pytest
 - pytest-benchmark
@@ -79,7 +80,7 @@ dependencies:
 - pytest-xdist
 - python-confluent-kafka>=2.8.0,<2.9.0
 - python-xxhash
-- python>=3.10,<3.14
+- python>=3.11,<3.14
 - rapids-build-backend>=0.4.0,<0.5.0
 - rapids-dask-dependency==26.4.*,>=0.0.0a0
 - rapids-logger==0.2.*,>=0.0.0a0

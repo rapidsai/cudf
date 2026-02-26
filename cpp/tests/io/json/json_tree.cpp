@@ -147,8 +147,7 @@ bool compare_vector(std::vector<T> const& cpu_vec,
                     std::string const& name)
 {
   auto stream  = cudf::get_default_stream();
-  auto gpu_vec = cudf::detail::make_std_vector_async(d_vec, stream);
-  stream.synchronize();
+  auto gpu_vec = cudf::detail::make_std_vector(d_vec, stream);
   return compare_vector(cpu_vec, gpu_vec, name);
 }
 
@@ -886,9 +885,8 @@ TEST_P(JsonTreeTraversalTest, CPUvsGPUTraversal)
 #endif
 
   // convert to sequence because gpu col id might be have random id
-  auto gpu_col_id_vec = cudf::detail::make_std_vector_async(gpu_col_id, stream);
-  stream.synchronize();
-  auto gpu_col_id2 = translate_col_id(gpu_col_id_vec);
+  auto gpu_col_id_vec = cudf::detail::make_std_vector(gpu_col_id, stream);
+  auto gpu_col_id2    = translate_col_id(gpu_col_id_vec);
   EXPECT_FALSE(compare_vector(cpu_col_id, gpu_col_id2, "col_id"));
   EXPECT_FALSE(compare_vector(cpu_row_offsets, gpu_row_offsets, "row_offsets"));
 }

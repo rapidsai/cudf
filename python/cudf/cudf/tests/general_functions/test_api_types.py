@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 import numpy as np
@@ -919,9 +919,9 @@ def test_is_struct_dtype(obj, expect):
         (cudf.CategoricalDtype, False),
         (cudf.ListDtype, False),
         (cudf.StructDtype, False),
-        (cudf.Decimal128Dtype, True),
-        (cudf.Decimal64Dtype, True),
-        (cudf.Decimal32Dtype, True),
+        (cudf.Decimal128Dtype, False),
+        (cudf.Decimal64Dtype, False),
+        (cudf.Decimal32Dtype, False),
         (cudf.IntervalDtype, False),
         # cuDF dtype instances.
         (cudf.CategoricalDtype(["a"]), False),

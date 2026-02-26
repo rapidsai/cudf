@@ -752,6 +752,27 @@ auto mr = new my_custom_resource{...};
 rmm::device_uvector<int32_t> v2{100, s, mr};
 ```
 
+## Memory Copies
+
+libcudf code should prefer `cudf::detail::cuda_memcpy_async` and `cudf::detail::cuda_memcpy` over
+direct calls to `cudaMemcpyAsync`. The cudf wrappers may use `cudaMemcpyBatchAsync` on supported
+systems (CUDA 13.0+), which reduces driver-side locking overhead compared to individual
+`cudaMemcpyAsync` calls.
+
+For device-to-device copies, use `cudf::detail::memcpy_async` (which wraps `cudaMemcpyBatchAsync`
+when available) and check errors with `CUDF_CUDA_TRY` at the call site:
+
+```c++
+CUDF_CUDA_TRY(cudf::detail::memcpy_async(dst, src, size_bytes, cudaMemcpyDefault, stream));
+```
+
+For host-to-device or device-to-host copies, prefer the typed span-based wrappers:
+
+```c++
+cudf::detail::cuda_memcpy_async<T>(device_span<T>{dst}, host_span<T const>{src}, stream);
+cudf::detail::cuda_memcpy_async<T>(host_span<T>{dst}, device_span<T const>{src}, stream);
+```
+
 ## Default Parameters
 
 While public libcudf APIs are free to include default function parameters, detail functions should

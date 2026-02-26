@@ -10,13 +10,12 @@ import warnings
 from collections.abc import Mapping
 from copy import deepcopy
 from shutil import get_terminal_size
-from typing import TYPE_CHECKING, Any, Literal, overload
+from typing import TYPE_CHECKING, Any, Literal, Self, assert_never, overload
 
 import cupy as cp
 import numpy as np
 import pandas as pd
 import pyarrow as pa
-from typing_extensions import Self, assert_never
 
 import pylibcudf as plc  # noqa: TC002
 
@@ -40,8 +39,9 @@ from cudf.core.column import (
     ColumnBase,
     as_column,
 )
-from cudf.core.column.column import concat_columns
+from cudf.core.column.column import _normalize_types_column, concat_columns
 from cudf.core.column_accessor import ColumnAccessor
+from cudf.core.dtype.validators import is_dtype_obj_numeric
 from cudf.core.dtypes import CategoricalDtype, IntervalDtype
 from cudf.core.groupby.groupby import SeriesGroupBy, groupby_doc_template
 from cudf.core.index import (
@@ -64,9 +64,9 @@ from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
     _get_nan_for_dtype,
+    dtype_from_pylibcudf_column,
     find_common_type,
     get_dtype_of_same_kind,
-    is_dtype_obj_numeric,
     is_mixed_with_object_dtype,
     is_pandas_nullable_extension_dtype,
 )
@@ -194,10 +194,8 @@ class _SeriesIlocIndexer(_FrameIndexer):
                 len(self._frame),
             )
         except KeyError as err:
-            if (
-                cudf.get_option("mode.pandas_compatible")
-                and "boolean label can not be used without a boolean index"
-                in str(err)
+            if "boolean label can not be used without a boolean index" in str(
+                err
             ):
                 raise ValueError(str(err)) from err
         return self._frame._getitem_preprocessed(indexing_spec)
@@ -269,7 +267,19 @@ class _SeriesIlocIndexer(_FrameIndexer):
 
 
 class _SeriesiAtIndexer(_SeriesIlocIndexer):
-    pass
+    @_performance_tracking
+    def __getitem__(self, key):
+        indexing_utils.validate_scalar_key(
+            key, "iAt based indexing can only have integer indexers"
+        )
+        return super().__getitem__(key)
+
+    @_performance_tracking
+    def __setitem__(self, key, value):
+        indexing_utils.validate_scalar_key(
+            key, "iAt based indexing can only have integer indexers"
+        )
+        return super().__setitem__(key, value)
 
 
 class _SeriesLocIndexer(_FrameIndexer):
@@ -413,7 +423,19 @@ class _SeriesLocIndexer(_FrameIndexer):
 
 
 class _SeriesAtIndexer(_SeriesLocIndexer):
-    pass
+    @_performance_tracking
+    def __getitem__(self, key):
+        indexing_utils.validate_scalar_key(
+            key, "Invalid call for scalar access (getting)!"
+        )
+        return super().__getitem__(key)
+
+    @_performance_tracking
+    def __setitem__(self, key, value):
+        indexing_utils.validate_scalar_key(
+            key, "Invalid call for scalar access (getting)!"
+        )
+        return super().__setitem__(key, value)
 
 
 class Series(SingleColumnFrame, IndexedFrame):
@@ -508,7 +530,7 @@ class Series(SingleColumnFrame, IndexedFrame):
         >>> cudf.Series.from_arrow(pa.array(["a", "b", None]))
         0       a
         1       b
-        2    <NA>
+        2    None
         dtype: object
         """
         return cls._from_column(ColumnBase.from_arrow(array))
@@ -688,17 +710,17 @@ class Series(SingleColumnFrame, IndexedFrame):
         0    12
         1    13
         2    14
-        dtype: int16
+        dtype: int32
         >>> s.dt.second
         0    0
         1    0
         2    0
-        dtype: int16
+        dtype: int32
         >>> s.dt.day
         0    3
         1    3
         2    3
-        dtype: int16
+        dtype: int32
 
         Returns
         -------
@@ -1015,7 +1037,7 @@ class Series(SingleColumnFrame, IndexedFrame):
         10       a
         11       b
         12       c
-        13    <NA>
+        13    None
         15       d
         Name: sample, dtype: object
         >>> series.to_frame()
@@ -1023,7 +1045,7 @@ class Series(SingleColumnFrame, IndexedFrame):
         10      a
         11      b
         12      c
-        13   <NA>
+        13   None
         15      d
         """
         res = self._to_frame(name=name, index=self.index)
@@ -1154,7 +1176,7 @@ class Series(SingleColumnFrame, IndexedFrame):
         >>> s
         0      cat
         1      dog
-        2     <NA>
+        2     None
         3   rabbit
         dtype: object
 
@@ -1165,8 +1187,8 @@ class Series(SingleColumnFrame, IndexedFrame):
         >>> s.map({'cat': 'kitten', 'dog': 'puppy'})
         0   kitten
         1    puppy
-        2     <NA>
-        3     <NA>
+        2     None
+        3     None
         dtype: object
 
         It also accepts numeric functions:
@@ -1196,7 +1218,10 @@ class Series(SingleColumnFrame, IndexedFrame):
                     "default values in dicts are currently not supported."
                 )
             lhs = cudf.DataFrame(
-                {"x": self, "orig_order": as_column(range(len(self)))}
+                {
+                    "x": self,
+                    "orig_order": ColumnBase.from_range(range(len(self))),
+                }
             )
             rhs = cudf.DataFrame(
                 {
@@ -1217,7 +1242,10 @@ class Series(SingleColumnFrame, IndexedFrame):
                     "Reindexing only valid with uniquely valued Index objects"
                 )
             lhs = cudf.DataFrame(
-                {"x": self, "orig_order": as_column(range(len(self)))}
+                {
+                    "x": self,
+                    "orig_order": ColumnBase.from_range(range(len(self))),
+                }
             )
             rhs = cudf.DataFrame(
                 {
@@ -1498,7 +1526,7 @@ class Series(SingleColumnFrame, IndexedFrame):
             dtype_mismatch = False
             for obj in objs[1:]:
                 if (
-                    obj.null_count == len(obj)
+                    obj._is_all_null
                     or len(obj) == 0
                     or isinstance(obj._column.dtype, CategoricalDtype)
                     or isinstance(objs[0]._column.dtype, CategoricalDtype)
@@ -1528,22 +1556,27 @@ class Series(SingleColumnFrame, IndexedFrame):
         col = concat_columns([o._column for o in objs])
 
         if len(objs):
-            col = col._with_type_metadata(objs[0].dtype)
+            col = ColumnBase.create(col.plc_column, objs[0].dtype)
 
         result = cls._from_column(col, name=name, index=result_index)
-        if cudf.get_option("mode.pandas_compatible"):
-            if isinstance(result.index, DatetimeIndex):
-                try:
-                    result.index._freq = result.index.inferred_freq
-                except NotImplementedError:
-                    result.index._freq = None
+        if isinstance(result.index, DatetimeIndex):
+            try:
+                result.index._freq = result.index.inferred_freq
+            except NotImplementedError:
+                result.index._freq = None
         return result
 
     @property
     @_performance_tracking
     def valid_count(self) -> int:
         """Number of non-null values"""
-        return len(self) - self._column.null_count
+        return self._column.valid_count
+
+    @property
+    @_performance_tracking
+    def _is_all_null(self) -> bool:
+        """Check if all values in the Series are null."""
+        return self._column.is_all_null
 
     @property
     @_performance_tracking
@@ -1652,7 +1685,7 @@ class Series(SingleColumnFrame, IndexedFrame):
         >>> ser = cudf.Series(['', None, 'abc'])
         >>> ser
         0
-        1    <NA>
+        1    None
         2     abc
         dtype: object
         >>> ser.dropna()
@@ -1879,10 +1912,8 @@ class Series(SingleColumnFrame, IndexedFrame):
                 "The bool_only parameter is not supported for Series."
             )
         result = super().all(axis, skipna, **kwargs)
-        if (
-            cudf.get_option("mode.pandas_compatible")
-            and isinstance(result, bool)
-            and not isinstance(self.dtype, pd.ArrowDtype)
+        if isinstance(result, bool) and not isinstance(
+            self.dtype, pd.ArrowDtype
         ):
             return np.bool_(result)
         return result
@@ -1900,10 +1931,8 @@ class Series(SingleColumnFrame, IndexedFrame):
                 "The bool_only parameter is not supported for Series."
             )
         result = super().any(axis, skipna, **kwargs)
-        if (
-            cudf.get_option("mode.pandas_compatible")
-            and isinstance(result, bool)
-            and not isinstance(self.dtype, pd.ArrowDtype)
+        if isinstance(result, bool) and not isinstance(
+            self.dtype, pd.ArrowDtype
         ):
             return np.bool_(result)
         return result
@@ -2010,15 +2039,6 @@ class Series(SingleColumnFrame, IndexedFrame):
     ) -> Self:
         if copy is None:
             copy = True
-        if cudf.get_option("mode.pandas_compatible"):
-            if inspect.isclass(dtype) and issubclass(
-                dtype, pd.api.extensions.ExtensionDtype
-            ):
-                msg = (
-                    f"Expected an instance of {dtype.__name__}, "
-                    "but got the class instead. Try instantiating 'dtype'."
-                )
-                raise TypeError(msg)
         if is_dict_like(dtype):
             if len(dtype) > 1 or self.name not in dtype:  # type: ignore[arg-type,operator]
                 raise KeyError(
@@ -2628,16 +2648,8 @@ class Series(SingleColumnFrame, IndexedFrame):
         >>> ser = cudf.Series([1, 5, 2, 4, 3])
         >>> ser.count()
         5
-
-        .. pandas-compat::
-            :meth:`pandas.Series.count`
-
-            Parameters currently not supported is `level`.
         """
-        valid_count = self.valid_count
-        if cudf.get_option("mode.pandas_compatible"):
-            return valid_count - self._column.nan_count
-        return valid_count
+        return self._column.count
 
     @_performance_tracking
     def mode(self, dropna=True):
@@ -3023,15 +3035,15 @@ class Series(SingleColumnFrame, IndexedFrame):
         0       a
         1       a
         2       b
-        3    <NA>
+        3    None
         4       b
-        5    <NA>
+        5    None
         6       c
         dtype: object
         >>> series.unique()
         0       a
         1       b
-        2    <NA>
+        2    None
         3       c
         dtype: object
         """
@@ -3160,7 +3172,7 @@ class Series(SingleColumnFrame, IndexedFrame):
         if bins is not None:
             series_bins = cudf.cut(self, bins, include_lowest=True)
         result_name = "proportion" if normalize else "count"
-        if dropna and self.null_count == len(self):
+        if dropna and self._is_all_null:
             return Series(
                 [],
                 dtype=np.int64,
@@ -3200,8 +3212,8 @@ class Series(SingleColumnFrame, IndexedFrame):
         # this condition makes sure we do too if bins is given
         if bins is not None and len(res) == len(res.index.categories):
             struct_col = res.index._column._get_decategorized_column()
-            interval_col = struct_col._with_type_metadata(
-                res.index.dtype.categories.dtype
+            interval_col = ColumnBase.create(
+                struct_col.plc_column, res.index.dtype.categories.dtype
             )
             res.index = cudf.IntervalIndex._from_column(
                 interval_col, name=res.index.name
@@ -3849,8 +3861,11 @@ class Series(SingleColumnFrame, IndexedFrame):
                 )
             name = metadata.get("name")
             index = metadata.get("index")
+        normalized = _normalize_types_column(col)
         return cls._from_column(
-            ColumnBase.from_pylibcudf(col),
+            ColumnBase.create(
+                normalized, dtype=dtype_from_pylibcudf_column(normalized)
+            ),
             name=name,
             index=index,
         )
@@ -4258,13 +4273,10 @@ class DatetimeProperties(BaseDatelikeProperties):
         dtype: int16
         """
         res = self.series._column.weekday
-        if cudf.get_option("mode.pandas_compatible"):
-            # Pandas returns int64 for weekday
-            res = res.astype(
-                get_dtype_of_same_kind(
-                    self.series._column.dtype, np.dtype("int64")
-                )
-            )
+        # Pandas returns int64 for weekday
+        res = res.astype(
+            get_dtype_of_same_kind(self.series.dtype, np.dtype("int64"))
+        )
         return self._return_result_like_self(res)
 
     day_of_week = dayofweek
@@ -4599,13 +4611,6 @@ class DatetimeProperties(BaseDatelikeProperties):
         dtype: int16
         """
         res = self.series._column.days_in_month
-        if cudf.get_option("mode.pandas_compatible"):
-            # Pandas returns int64 for dayofweek
-            res = res.astype(
-                get_dtype_of_same_kind(
-                    self.series._column.dtype, np.dtype("int64")
-                )
-            )
         return self._return_result_like_self(res)
 
     daysinmonth = days_in_month

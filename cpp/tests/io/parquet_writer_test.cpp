@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -19,6 +19,8 @@
 #include <cudf/io/types.hpp>
 #include <cudf/unary.hpp>
 #include <cudf/utilities/memory_resource.hpp>
+
+#include <cuda/iterator>
 
 #include <src/io/parquet/parquet_common.hpp>
 
@@ -148,7 +150,7 @@ TEST_F(ParquetWriterTest, MultiIndex)
   cudf::io::parquet_reader_options in_opts =
     cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath})
       .use_pandas_metadata(true)
-      .columns({"int32s", "floats", "doubles"});
+      .column_names({"int32s", "floats", "doubles"});
   auto result = cudf::io::read_parquet(in_opts);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
@@ -1620,7 +1622,7 @@ TEST_F(ParquetWriterTest, RowGroupMetadata)
 {
   using column_type      = int;
   constexpr int num_rows = 1'000;
-  auto const ones        = thrust::make_constant_iterator(1);
+  auto const ones        = cuda::make_constant_iterator(1);
   auto const col =
     cudf::test::fixed_width_column_wrapper<column_type>{ones, ones + num_rows, no_nulls()};
   auto const table = table_view({col});
@@ -1711,11 +1713,11 @@ TEST_F(ParquetWriterTest, UserRequestedEncodings)
   constexpr int num_rows = 500;
   std::mt19937 engine{31337};
 
-  auto const ones = thrust::make_constant_iterator(1);
+  auto const ones = cuda::make_constant_iterator(1);
   auto const col =
     cudf::test::fixed_width_column_wrapper<int32_t>{ones, ones + num_rows, no_nulls()};
 
-  auto const strings = thrust::make_constant_iterator("string");
+  auto const strings = cuda::make_constant_iterator("string");
   auto const string_col =
     cudf::test::strings_column_wrapper(strings, strings + num_rows, no_nulls());
 
@@ -1869,7 +1871,7 @@ TEST_F(ParquetWriterTest, DeltaBinaryStartsWithNulls)
   constexpr int num_rows  = 500;
   constexpr int num_nulls = 150;
 
-  auto const ones = thrust::make_constant_iterator(1);
+  auto const ones = cuda::make_constant_iterator(1);
   auto valids     = cudf::detail::make_counting_transform_iterator(
     0, [num_nulls](auto i) { return i >= num_nulls; });
   auto const col      = cudf::test::fixed_width_column_wrapper<int>{ones, ones + num_rows, valids};

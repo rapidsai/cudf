@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 import numpy as np
@@ -74,7 +74,7 @@ def test_groupby_cats():
         {"cats": pd.Categorical(list("aabaacaab")), "vals": rng.random(9)}
     )
 
-    cats = df["cats"].values_host
+    cats = df["cats"].to_numpy()
     vals = df["vals"].to_numpy()
 
     grouped = df.groupby(["cats"], as_index=False).mean()
@@ -469,6 +469,22 @@ def test_groupby_quantile(request, interpolation, q):
     gdresult = gdg.quantile(q, interpolation=interpolation)
 
     assert_groupby_results_equal(pdresult, gdresult)
+
+
+def test_groupby_quantile_array_multiple_levels():
+    pdf = pd.DataFrame(
+        {
+            "A": [0, 1, 2],
+            "B": [3, 4, 5],
+            "c": ["a", "a", "a"],
+            "d": ["a", "a", "b"],
+        }
+    )
+    gdf = cudf.DataFrame(pdf)
+
+    expected = pdf.groupby(["c", "d"]).quantile([0.25, 0.75])
+    result = gdf.groupby(["c", "d"]).quantile([0.25, 0.75])
+    assert_groupby_results_equal(expected, result)
 
 
 def test_groupby_std():
