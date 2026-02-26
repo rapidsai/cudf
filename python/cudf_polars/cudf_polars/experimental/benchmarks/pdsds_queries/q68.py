@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
-from cudf_polars.experimental.benchmarks.utils import get_data
+from cudf_polars.experimental.benchmarks.utils import QueryResult, get_data
 
 if TYPE_CHECKING:
     from cudf_polars.experimental.benchmarks.utils import RunConfig
@@ -74,7 +74,7 @@ def duckdb_impl(run_config: RunConfig) -> str:
     """
 
 
-def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
+def polars_impl(run_config: RunConfig) -> QueryResult:
     """Query 68."""
     params = load_parameters(
         int(run_config.scale_factor),
@@ -122,28 +122,32 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         )
         .with_columns([pl.col("ca_city").alias("bought_city")])
     )
-    return (
-        dn.join(customer, left_on="ss_customer_sk", right_on="c_customer_sk")
-        .join(
-            customer_address.select(
-                ["ca_address_sk", pl.col("ca_city").alias("current_city")]
-            ),
-            left_on="c_current_addr_sk",
-            right_on="ca_address_sk",
-        )
-        .filter(pl.col("current_city") != pl.col("bought_city"))
-        .select(
-            [
-                "c_last_name",
-                "c_first_name",
-                pl.col("current_city").alias("ca_city"),
-                "bought_city",
-                "ss_ticket_number",
-                "extended_price",
-                "extended_tax",
-                "list_price",
-            ]
-        )
-        .sort(["c_last_name", "ss_ticket_number"], nulls_last=True)
-        .limit(100)
+    return QueryResult(
+        frame=(
+            dn.join(customer, left_on="ss_customer_sk", right_on="c_customer_sk")
+            .join(
+                customer_address.select(
+                    ["ca_address_sk", pl.col("ca_city").alias("current_city")]
+                ),
+                left_on="c_current_addr_sk",
+                right_on="ca_address_sk",
+            )
+            .filter(pl.col("current_city") != pl.col("bought_city"))
+            .select(
+                [
+                    "c_last_name",
+                    "c_first_name",
+                    pl.col("current_city").alias("ca_city"),
+                    "bought_city",
+                    "ss_ticket_number",
+                    "extended_price",
+                    "extended_tax",
+                    "list_price",
+                ]
+            )
+            .sort(["c_last_name", "ss_ticket_number"], nulls_last=True)
+            .limit(100)
+        ),
+        sort_by=[("c_last_name", False), ("ss_ticket_number", False)],
+        limit=100,
     )

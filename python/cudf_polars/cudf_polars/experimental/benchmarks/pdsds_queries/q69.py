@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
-from cudf_polars.experimental.benchmarks.utils import get_data
+from cudf_polars.experimental.benchmarks.utils import QueryResult, get_data
 
 if TYPE_CHECKING:
     from cudf_polars.experimental.benchmarks.utils import RunConfig
@@ -79,7 +79,7 @@ def duckdb_impl(run_config: RunConfig) -> str:
     """
 
 
-def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
+def polars_impl(run_config: RunConfig) -> QueryResult:
     """Query 69."""
     params = load_parameters(
         int(run_config.scale_factor),
@@ -125,58 +125,70 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         .unique()
     )
     exclude_customers = pl.concat([web_customers, catalog_customers]).unique()
-    return (
-        customer.join(
-            customer_address, left_on="c_current_addr_sk", right_on="ca_address_sk"
-        )
-        .filter(pl.col("ca_state").is_in(states))
-        .join(
-            customer_demographics, left_on="c_current_cdemo_sk", right_on="cd_demo_sk"
-        )
-        .join(store_customers, left_on="c_customer_sk", right_on="ss_customer_sk")
-        .join(
-            exclude_customers,
-            left_on="c_customer_sk",
-            right_on="customer_sk",
-            how="anti",
-        )
-        .group_by(
-            [
-                "cd_gender",
-                "cd_marital_status",
-                "cd_education_status",
-                "cd_purchase_estimate",
-                "cd_credit_rating",
-            ]
-        )
-        .agg(
-            [
-                pl.len().alias("cnt1"),
-                pl.len().alias("cnt2"),
-                pl.len().alias("cnt3"),
-            ]
-        )
-        .select(
-            [
-                "cd_gender",
-                "cd_marital_status",
-                "cd_education_status",
-                "cnt1",
-                "cd_purchase_estimate",
-                "cnt2",
-                "cd_credit_rating",
-                "cnt3",
-            ]
-        )
-        .sort(
-            [
-                "cd_gender",
-                "cd_marital_status",
-                "cd_education_status",
-                "cd_purchase_estimate",
-                "cd_credit_rating",
-            ],
-            nulls_last=True,
-        )
-        .limit(100)
+    return QueryResult(
+        frame=(
+            customer.join(
+                customer_address, left_on="c_current_addr_sk", right_on="ca_address_sk"
+            )
+            .filter(pl.col("ca_state").is_in(states))
+            .join(
+                customer_demographics,
+                left_on="c_current_cdemo_sk",
+                right_on="cd_demo_sk",
+            )
+            .join(store_customers, left_on="c_customer_sk", right_on="ss_customer_sk")
+            .join(
+                exclude_customers,
+                left_on="c_customer_sk",
+                right_on="customer_sk",
+                how="anti",
+            )
+            .group_by(
+                [
+                    "cd_gender",
+                    "cd_marital_status",
+                    "cd_education_status",
+                    "cd_purchase_estimate",
+                    "cd_credit_rating",
+                ]
+            )
+            .agg(
+                [
+                    pl.len().alias("cnt1"),
+                    pl.len().alias("cnt2"),
+                    pl.len().alias("cnt3"),
+                ]
+            )
+            .select(
+                [
+                    "cd_gender",
+                    "cd_marital_status",
+                    "cd_education_status",
+                    "cnt1",
+                    "cd_purchase_estimate",
+                    "cnt2",
+                    "cd_credit_rating",
+                    "cnt3",
+                ]
+            )
+            .sort(
+                [
+                    "cd_gender",
+                    "cd_marital_status",
+                    "cd_education_status",
+                    "cd_purchase_estimate",
+                    "cd_credit_rating",
+                ],
+                nulls_last=True,
+            )
+            .limit(100)
+        ),
+        sort_by=[
+            ("cd_gender", False),
+            ("cd_marital_status", False),
+            ("cd_education_status", False),
+            ("cd_purchase_estimate", False),
+            ("cd_credit_rating", False),
+        ],
+        limit=100,
     )

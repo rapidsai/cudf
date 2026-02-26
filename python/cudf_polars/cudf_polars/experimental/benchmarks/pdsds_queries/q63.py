@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
-from cudf_polars.experimental.benchmarks.utils import get_data
+from cudf_polars.experimental.benchmarks.utils import QueryResult, get_data
 
 if TYPE_CHECKING:
     from cudf_polars.experimental.benchmarks.utils import RunConfig
@@ -74,7 +74,7 @@ def duckdb_impl(run_config: RunConfig) -> str:
     """
 
 
-def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
+def polars_impl(run_config: RunConfig) -> QueryResult:
     """Query 63."""
     params = load_parameters(
         int(run_config.scale_factor),
@@ -133,22 +133,30 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         )
     )
 
-    return (
-        inner_query.with_columns(
-            pl.when(pl.col("avg_monthly_sales") > 0)
-            .then(
-                (pl.col("sum_sales") - pl.col("avg_monthly_sales")).abs()
-                / pl.col("avg_monthly_sales")
+    return QueryResult(
+        frame=(
+            inner_query.with_columns(
+                pl.when(pl.col("avg_monthly_sales") > 0)
+                .then(
+                    (pl.col("sum_sales") - pl.col("avg_monthly_sales")).abs()
+                    / pl.col("avg_monthly_sales")
+                )
+                .otherwise(None)
+                .alias("deviation")
             )
-            .otherwise(None)
-            .alias("deviation")
-        )
-        .filter(pl.col("deviation") > 0.1)
-        .select(["i_manager_id", "sum_sales", "avg_monthly_sales"])
-        .sort(
-            ["i_manager_id", "avg_monthly_sales", "sum_sales"],
-            nulls_last=True,
-            descending=[False, False, False],
-        )
-        .limit(100)
+            .filter(pl.col("deviation") > 0.1)
+            .select(["i_manager_id", "sum_sales", "avg_monthly_sales"])
+            .sort(
+                ["i_manager_id", "avg_monthly_sales", "sum_sales"],
+                nulls_last=True,
+                descending=[False, False, False],
+            )
+            .limit(100)
+        ),
+        sort_by=[
+            ("i_manager_id", False),
+            ("avg_monthly_sales", False),
+            ("sum_sales", False),
+        ],
+        limit=100,
     )

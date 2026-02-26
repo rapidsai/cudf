@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
-from cudf_polars.experimental.benchmarks.utils import get_data
+from cudf_polars.experimental.benchmarks.utils import QueryResult, get_data
 
 if TYPE_CHECKING:
     from cudf_polars.experimental.benchmarks.utils import RunConfig
@@ -155,7 +155,7 @@ def duckdb_impl(run_config: RunConfig) -> str:
     """
 
 
-def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
+def polars_impl(run_config: RunConfig) -> QueryResult:
     """Query 64."""
     params = load_parameters(
         int(run_config.scale_factor),
@@ -391,45 +391,55 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     )
 
     # Final query: self-join on cross_sales
-    return (
-        cross_sales.join(
-            cross_sales,
-            left_on=["item_sk", "store_name", "store_zip"],
-            right_on=["item_sk", "store_name", "store_zip"],
-            suffix="_1",
-        )
-        .filter(
-            (pl.col("syear") == year)
-            & (pl.col("syear_1") == year + 1)
-            & (pl.col("cnt_1") <= pl.col("cnt"))
-        )
-        .select(
-            [
-                "product_name",
-                "store_name",
-                "store_zip",
-                "b_street_number",
-                "b_streen_name",
-                "b_city",
-                "b_zip",
-                "c_street_number",
-                "c_street_name",
-                "c_city",
-                "c_zip",
-                "syear",
-                "cnt",
-                "s1",
-                "s2",
-                "s3",
-                pl.col("s1_1"),
-                pl.col("s2_1"),
-                pl.col("s3_1"),
-                pl.col("syear_1"),
-                pl.col("cnt_1"),
-            ]
-        )
-        .sort(
-            ["product_name", "store_name", "cnt_1", "s1", "s1_1"],
-            nulls_last=True,
-        )
+    return QueryResult(
+        frame=(
+            cross_sales.join(
+                cross_sales,
+                left_on=["item_sk", "store_name", "store_zip"],
+                right_on=["item_sk", "store_name", "store_zip"],
+                suffix="_1",
+            )
+            .filter(
+                (pl.col("syear") == year)
+                & (pl.col("syear_1") == year + 1)
+                & (pl.col("cnt_1") <= pl.col("cnt"))
+            )
+            .select(
+                [
+                    "product_name",
+                    "store_name",
+                    "store_zip",
+                    "b_street_number",
+                    "b_streen_name",
+                    "b_city",
+                    "b_zip",
+                    "c_street_number",
+                    "c_street_name",
+                    "c_city",
+                    "c_zip",
+                    "syear",
+                    "cnt",
+                    "s1",
+                    "s2",
+                    "s3",
+                    pl.col("s1_1"),
+                    pl.col("s2_1"),
+                    pl.col("s3_1"),
+                    pl.col("syear_1"),
+                    pl.col("cnt_1"),
+                ]
+            )
+            .sort(
+                ["product_name", "store_name", "cnt_1", "s1", "s1_1"],
+                nulls_last=True,
+            )
+        ),
+        sort_by=[
+            ("product_name", False),
+            ("store_name", False),
+            ("cnt_1", False),
+            ("s1", False),
+            ("s1_1", False),
+        ],
+        limit=None,
     )
