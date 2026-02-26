@@ -270,8 +270,8 @@ std::unique_ptr<column> make_tdigest_column(size_type num_rows,
     cudf::make_structs_column(centroids_size, std::move(inner_children), 0, {}, stream, mr);
 
   // grouped into lists
-  auto tdigest = cudf::make_lists_column(
-    num_rows, std::move(tdigest_offsets), std::move(tdigest_data), 0, {}, stream, mr);
+  auto tdigest =
+    cudf::make_lists_column(num_rows, std::move(tdigest_offsets), std::move(tdigest_data), 0, {});
 
   // create the final column
   std::vector<std::unique_ptr<column>> children;
@@ -365,9 +365,7 @@ std::unique_ptr<column> percentile_approx(tdigest_column_view const& input,
       cudf::make_empty_column(type_id::FLOAT64),
       input.size(),
       cudf::detail::create_null_mask(
-        input.size(), mask_state::ALL_NULL, rmm::cuda_stream_view(stream), mr),
-      stream,
-      mr);
+        input.size(), mask_state::ALL_NULL, rmm::cuda_stream_view(stream), mr));
   }
 
   // if any of the input digests are empty, nullify the corresponding output rows (values will be
@@ -390,9 +388,7 @@ std::unique_ptr<column> percentile_approx(tdigest_column_view const& input,
                                  std::move(offsets),
                                  detail::compute_approx_percentiles(input, percentiles, stream, mr),
                                  null_count,
-                                 std::move(bitmask),
-                                 stream,
-                                 mr);
+                                 std::move(bitmask));
 }
 
 }  // namespace tdigest
