@@ -36,10 +36,10 @@ from cudf_polars.experimental.rapidsmpf.dispatch import (
 from cudf_polars.experimental.rapidsmpf.nodes import default_node_multi
 from cudf_polars.experimental.rapidsmpf.utils import (
     ChannelManager,
+    NormalizedPartitioning,
     allgather_reduce,
     chunk_to_frame,
     empty_table_chunk,
-    get_partitioning_moduli,
     process_children,
     recv_metadata,
     remap_partitioning,
@@ -606,22 +606,22 @@ def _create_shuffle_managers(
     modulus: int,
     left_key_indices: tuple[int, ...],
     right_key_indices: tuple[int, ...],
-    left_state: PartitioningState,
-    right_state: PartitioningState,
+    left_state: NormalizedPartitioning,
+    right_state: NormalizedPartitioning,
     collective_ids: list[int],
     tracer: ActorTracer | None,
 ) -> tuple[ShuffleManager | None, ShuffleManager | None]:
-    left_desired_state = PartitioningState(
+    left_desired_state = NormalizedPartitioning(
         inter_rank_modulus=modulus,
         inter_rank_indices=left_key_indices,
         local_modulus=None,
-        local_indices=None,
+        local_indices=(),
     )
-    right_desired_state = PartitioningState(
+    right_desired_state = NormalizedPartitioning(
         inter_rank_modulus=modulus,
         inter_rank_indices=right_key_indices,
         local_modulus=None,
-        local_indices=None,
+        local_indices=(),
     )
 
     shuffle_left = not left_state or left_state != left_desired_state
@@ -800,8 +800,8 @@ async def _shuffle_join(
     ch_out: Channel[TableChunk],
     ch_left: Channel[TableChunk],
     ch_right: Channel[TableChunk],
-    left_state: PartitioningState,
-    right_state: PartitioningState,
+    left_state: NormalizedPartitioning,
+    right_state: NormalizedPartitioning,
     min_shuffle_modulus: int,
     collective_ids: list[int],
     *,
@@ -877,79 +877,15 @@ async def _shuffle_join(
     await ch_out.drain(context)
 
 
-@dataclass(frozen=True)
-class PartitioningState:
-    """Partitioning state derived from channel metadata and key indices."""
-
-    inter_rank_modulus: int
-    """Inter-rank hash modulus (0 if not partitioned between ranks)."""
-    inter_rank_indices: tuple[int, ...]
-    """Table column indices that are inter-rank partitioned."""
-    local_modulus: int | None
-    """Local hash modulus (0 if not partitioned within rank, None if inherited)."""
-    local_indices: tuple[int, ...] | None
-    """Table column indices that are locally partitioned, or None if inherited."""
-
-    def __bool__(self) -> bool:
-        """True if the table has proper partitioning."""
-        return self.inter_rank_modulus > 0 and (
-            self.local_modulus is None or self.local_modulus > 0
-        )
-
-    def __eq__(self, other: object) -> bool:
-        """Equal when moduli and same number of partitioned keys (for left vs right)."""
-        if not isinstance(other, PartitioningState):
-            return NotImplemented
-        return (
-            self.inter_rank_modulus == other.inter_rank_modulus
-            and self.local_modulus == other.local_modulus
-            and len(self.inter_rank_indices) == len(other.inter_rank_indices)
-            and len(self.local_indices or ()) == len(other.local_indices or ())
-        )
-
-    @classmethod
-    def from_metadata(
-        cls,
-        metadata: ChannelMetadata,
-        key_indices: tuple[int, ...],
-        nranks: int,
-    ) -> PartitioningState:
-        """Build state from channel metadata and key indices (allow_subset=True)."""
-        inter_rank_modulus, local_modulus = get_partitioning_moduli(
-            metadata, key_indices, nranks, allow_subset=True
-        )
-
-        local_indices: tuple[int, ...] | None = None
-        inter_rank_indices: tuple[int, ...] = key_indices
-        if inter_rank_modulus and metadata.partitioning is not None:
-            inter_rank_hashed = isinstance(metadata.partitioning.inter_rank, HashScheme)
-            local_hashed = isinstance(metadata.partitioning.local, HashScheme)
-            if local_hashed and inter_rank_hashed:
-                inter_rank_indices = metadata.partitioning.inter_rank.column_indices
-                local_indices = metadata.partitioning.local.column_indices
-            elif inter_rank_hashed:
-                inter_rank_indices = metadata.partitioning.inter_rank.column_indices
-            elif local_hashed:
-                # Use equivalent to trivial inter-rank partitioning.
-                inter_rank_indices = metadata.partitioning.local.column_indices
-
-        return cls(
-            inter_rank_modulus=inter_rank_modulus,
-            inter_rank_indices=inter_rank_indices,
-            local_modulus=local_modulus,
-            local_indices=local_indices or (),
-        )
-
-
 def _extract_partitioning_state(
     metadata: ChannelMetadata,
     ir: IR,
     on: tuple[NamedExpr, ...],
     nranks: int,
-) -> PartitioningState:
+) -> NormalizedPartitioning:
     schema_keys = list(ir.schema.keys())
     key_indices = tuple(schema_keys.index(expr.name) for expr in on)
-    return PartitioningState.from_metadata(metadata, key_indices, nranks)
+    return NormalizedPartitioning.from_metadata(metadata, key_indices, nranks)
 
 
 async def _choose_strategy(
@@ -1094,8 +1030,8 @@ async def _choose_strategy(
 
 def _choose_shuffle_modulus(
     context: Context,
-    left_state: PartitioningState,
-    right_state: PartitioningState,
+    left_state: NormalizedPartitioning,
+    right_state: NormalizedPartitioning,
     min_shuffle_modulus: int,
 ) -> int:
     left_existing_modulus = left_state.inter_rank_modulus if left_state else None

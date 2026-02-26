@@ -8,6 +8,7 @@ import asyncio
 import operator
 import struct
 from contextlib import asynccontextmanager
+from dataclasses import dataclass
 from functools import reduce
 from typing import TYPE_CHECKING, Any
 
@@ -521,6 +522,65 @@ def get_partitioning_moduli(
         local_modulus = None
 
     return inter_rank_modulus, local_modulus
+
+
+@dataclass(frozen=True)
+class NormalizedPartitioning:
+    """Normalized view of partitioning for a set of key column indices."""
+
+    inter_rank_modulus: int
+    inter_rank_indices: tuple[int, ...]
+    local_modulus: int | None
+    local_indices: tuple[int, ...]
+
+    def __bool__(self) -> bool:
+        """True if partitioned (inter-rank and, when set, local)."""
+        return self.inter_rank_modulus > 0 and (
+            self.local_modulus is None or self.local_modulus > 0
+        )
+
+    def __eq__(self, other: object) -> bool:
+        """Equal when moduli and key lengths match."""
+        if not isinstance(other, NormalizedPartitioning):
+            return NotImplemented
+        return (
+            self.inter_rank_modulus == other.inter_rank_modulus
+            and self.local_modulus == other.local_modulus
+            and len(self.inter_rank_indices) == len(other.inter_rank_indices)
+            and len(self.local_indices) == len(other.local_indices)
+        )
+
+    @classmethod
+    def from_metadata(
+        cls,
+        metadata: ChannelMetadata,
+        key_indices: tuple[int, ...],
+        nranks: int,
+    ) -> NormalizedPartitioning:
+        """Build from channel metadata and key indices (allow_subset=True)."""
+        inter_rank_modulus, local_modulus = get_partitioning_moduli(
+            metadata, key_indices, nranks, allow_subset=True
+        )
+
+        local_indices_val: tuple[int, ...] = ()
+        inter_rank_indices: tuple[int, ...] = key_indices
+        if inter_rank_modulus and metadata.partitioning is not None:
+            inter_rank_hashed = isinstance(metadata.partitioning.inter_rank, HashScheme)
+            local_hashed = isinstance(metadata.partitioning.local, HashScheme)
+            if local_hashed and inter_rank_hashed:
+                inter_rank_indices = metadata.partitioning.inter_rank.column_indices
+                local_indices_val = metadata.partitioning.local.column_indices
+            elif inter_rank_hashed:
+                inter_rank_indices = metadata.partitioning.inter_rank.column_indices
+            elif local_hashed:
+                inter_rank_indices = metadata.partitioning.local.column_indices
+
+        return cls(
+            inter_rank_modulus=inter_rank_modulus,
+            inter_rank_indices=inter_rank_indices,
+            local_modulus=local_modulus,
+            local_indices=local_indices_val,
+        )
 
 
 class ChannelManager:
