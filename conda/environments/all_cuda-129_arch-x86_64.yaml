@@ -78,7 +78,7 @@ dependencies:
 - pytest-httpserver
 - pytest-rerunfailures!=16.0.0
 - pytest-xdist
-- python-confluent-kafka>=2.8.0,<2.9.0
+- python-confluent-kafka
 - python-xxhash
 - python>=3.11
 - pytorch>=2.4.0
