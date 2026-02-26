@@ -158,6 +158,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         .join(
             customer_demographics, left_on="c_current_cdemo_sk", right_on="cd_demo_sk"
         )
+        # Note: Inner join duplicates rows when a customer has multiple sales.
+        # Semi join just filters to customers that have at least one match,
+        # which is what we need to match the SQL (for `EXISTS`).
         .join(
             store_exists, left_on="c_customer_sk", right_on="ss_customer_sk", how="semi"
         )
