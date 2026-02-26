@@ -42,7 +42,7 @@ compute_row_frequencies(table_view const& input,
  * A histogram column is a structs column `STRUCT<T, int64_t>` where T is type of the input
  * values.
  *
- * @param values Based the empty histogram the data types in this column
+ * @param values The empty histogram value type will match the data type of this column
  * @returns An empty histogram column
  */
 [[nodiscard]] std::unique_ptr<column> make_empty_histogram_like(column_view const& values);
