@@ -18,8 +18,10 @@ from cudf.api.types import is_scalar
 from cudf.core._internals import binaryop
 from cudf.core.column.column import (
     ColumnBase,
+    PylibcudfFunction,
     as_column,
     column_empty,
+    np_bool_dtype_policy,
 )
 from cudf.core.column.numerical_base import NumericalBaseColumn
 from cudf.core.column.utils import access_columns
@@ -38,6 +40,16 @@ from cudf.utils.dtypes import (
 )
 from cudf.utils.scalar import pa_scalar_to_plc_scalar
 from cudf.utils.utils import is_na_like
+
+
+def _needs_flip(
+    rhs_has_negative_zero: bool, result_sign: cp.ndarray, lhs_sign: cp.ndarray
+) -> bool:
+    if rhs_has_negative_zero:
+        return bool(cp.all(result_sign == lhs_sign))
+    else:
+        return bool(cp.all(result_sign != lhs_sign))
+
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
@@ -97,9 +109,10 @@ class NumericalColumn(NumericalBaseColumn):
         """
         Return a CuPy representation of the NumericalColumn.
         """
-        dtype = self.dtype
-        if is_pandas_nullable_extension_dtype(dtype):
-            dtype = getattr(dtype, "numpy_dtype", dtype)
+        if not isinstance(self.dtype, np.dtype):
+            dtype = self.dtype.numpy_dtype
+        else:
+            dtype = self.dtype
 
         if len(self) == 0:
             return cp.empty(0, dtype=dtype)
@@ -145,10 +158,9 @@ class NumericalColumn(NumericalBaseColumn):
         """
         if self.dtype.kind != "f":
             return as_column(False, length=len(self))
-        with self.access(mode="read", scope="internal"):
-            return ColumnBase.create(
-                plc.unary.is_nan(self.plc_column), np.dtype(np.bool_)
-            )
+        return PylibcudfFunction(
+            plc.unary.is_nan, np_bool_dtype_policy
+        ).execute_with_args(self)
 
     def notnan(self) -> ColumnBase:
         """Identify non-NaN values in a Column.
@@ -158,10 +170,10 @@ class NumericalColumn(NumericalBaseColumn):
         """
         if self.dtype.kind != "f":
             return as_column(True, length=len(self))
-        with self.access(mode="read", scope="internal"):
-            return ColumnBase.create(
-                plc.unary.is_not_nan(self.plc_column), np.dtype(np.bool_)
-            )
+        return PylibcudfFunction(
+            plc.unary.is_not_nan,
+            np_bool_dtype_policy,
+        ).execute_with_args(self)
 
     def isnull(self) -> ColumnBase:
         """Identify missing values in a Column.
@@ -307,7 +319,11 @@ class NumericalColumn(NumericalBaseColumn):
             # in terms of `notnull` or `NULL_NOT_EQUALS`.
             if type(other) is int and self.dtype.kind in "iu":
                 truthiness = None
-                iinfo = np.iinfo(self.dtype)
+                if not isinstance(self.dtype, np.dtype):
+                    info_type = self.dtype.numpy_dtype
+                else:
+                    info_type = self.dtype
+                iinfo = np.iinfo(info_type)
                 if iinfo.min > other:
                     truthiness = op in {"__ne__", "__gt__", "__ge__"}
                 elif iinfo.max < other:
@@ -332,6 +348,16 @@ class NumericalColumn(NumericalBaseColumn):
             if isinstance(other, pa.Scalar)
             else other.dtype
         )
+        if isinstance(self.dtype, pd.ArrowDtype) or isinstance(
+            other_cudf_dtype, pd.ArrowDtype
+        ):
+            if op == "__mod__":
+                raise NotImplementedError("ArrowDtype does not support modulo")
+            if op == "__truediv__":
+                if self.dtype.kind == "b" or other_cudf_dtype.kind == "b":
+                    raise TypeError(
+                        "ArrowDtype boolean division is not supported"
+                    )
 
         if out_dtype is None:
             out_dtype = find_common_type((self.dtype, other_cudf_dtype))
@@ -406,6 +432,53 @@ class NumericalColumn(NumericalBaseColumn):
             # If the output dtype is a pandas nullable extension type,
             # we need to ensure that the result is a NumericalColumn.
             res = res.nans_to_nulls()
+        if op in {"__truediv__", "__floordiv__"}:
+            rhs_all_zero = False
+            rhs_has_negative_zero = False
+            if isinstance(rhs, ColumnBase):
+                if rhs.null_count == 0:
+                    rhs_values = rhs.values
+                    rhs_all_zero = cp.all(rhs_values == 0)
+                    if rhs_all_zero and rhs.dtype.kind == "f":
+                        rhs_has_negative_zero = cp.any(cp.signbit(rhs_values))
+            else:
+                assert isinstance(rhs, pa.Scalar)
+                if rhs.is_valid:
+                    rhs_value = rhs.as_py()
+                    rhs_all_zero = rhs_value == 0
+                    if rhs_all_zero:
+                        rhs_has_negative_zero = np.signbit(rhs_value)
+            if (
+                rhs_all_zero
+                and not res.dtype.kind == "b"
+                or res.null_count == 0
+            ):
+                result_values = res.values
+                if result_values.size != 0:
+                    result_is_inf = cp.isinf(result_values)
+                    if isinstance(lhs, ColumnBase):
+                        if not lhs.dtype.kind == "b" or lhs.null_count == 0:
+                            lhs_values = lhs.values
+                            mask = result_is_inf & (lhs_values != 0)
+                            if cp.any(mask) and _needs_flip(
+                                rhs_has_negative_zero,
+                                cp.signbit(result_values[mask]),
+                                cp.signbit(lhs_values[mask]),
+                            ):
+                                res *= -1
+                    elif isinstance(lhs, pa.Scalar):
+                        if lhs.is_valid:
+                            num_value = lhs.as_py()
+                            if not (
+                                num_value == 0 or not cp.any(result_is_inf)
+                            ):
+                                mask = result_is_inf
+                                if _needs_flip(
+                                    rhs_has_negative_zero,
+                                    cp.signbit(result_values[mask]),
+                                    np.signbit(num_value),
+                                ):
+                                    res *= -1
         if op in {"__mod__", "__floordiv__"} and tmp_dtype.kind == "b":
             res = res.astype(
                 get_dtype_of_same_kind(out_dtype, np.dtype(np.int8))

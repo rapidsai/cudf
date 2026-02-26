@@ -10,6 +10,7 @@ import pyarrow as pa
 
 import pylibcudf as plc
 
+from cudf.core._internals import binaryop
 from cudf.core.column.column import (
     ColumnBase,
     _handle_nulls,
@@ -17,10 +18,11 @@ from cudf.core.column.column import (
     dtype_from_pylibcudf_column,
 )
 from cudf.core.dtypes import IntervalDtype, _dtype_to_metadata
+from cudf.utils.dtypes import get_dtype_of_same_kind
 from cudf.utils.scalar import maybe_nested_pa_scalar_to_py
 
 if TYPE_CHECKING:
-    from cudf._typing import DtypeObj
+    from cudf._typing import ColumnBinaryOperand, DtypeObj
     from cudf.core.buffer import Buffer
 
 
@@ -152,6 +154,22 @@ class IntervalColumn(ColumnBase):
             self.plc_column,
             IntervalDtype(self.dtype.subtype, closed),  # type: ignore[union-attr]
         )
+
+    def _binaryop(self, other: ColumnBinaryOperand, op: str) -> ColumnBase:
+        reflect, op = self._check_reflected_op(op)
+        if not isinstance(other, type(self)):
+            return NotImplemented
+        if op == "NULL_EQUALS":
+            lefts_equal = self.left._binaryop(other.left, "NULL_EQUALS")
+            rights_equal = self.right._binaryop(other.right, "NULL_EQUALS")
+            return binaryop.binaryop(
+                lefts_equal,
+                rights_equal,
+                "__and__",
+                get_dtype_of_same_kind(self.dtype, lefts_equal.dtype),
+            )
+        else:
+            raise TypeError(f"{op} not supported with {type(other).__name__}")
 
     def as_interval_column(self, dtype: IntervalDtype) -> Self:
         if not isinstance(dtype, IntervalDtype):

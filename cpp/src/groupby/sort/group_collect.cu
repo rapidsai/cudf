@@ -108,9 +108,7 @@ std::unique_ptr<column> group_collect(column_view const& values,
                            std::move(offsets_column),
                            std::move(child_column),
                            0,
-                           rmm::device_buffer{0, stream, mr},
-                           stream,
-                           mr);
+                           rmm::device_buffer{0, stream, mr});
 }
 }  // namespace detail
 }  // namespace groupby
