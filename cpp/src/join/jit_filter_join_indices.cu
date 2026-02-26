@@ -51,12 +51,14 @@ namespace {
 // Build template parameters for JIT kernel
 jitify2::StringVec build_join_filter_template_params(std::vector<column_view> const& left_columns,
                                                      std::vector<column_view> const& right_columns,
-                                                     bool has_user_data)
+                                                     bool has_user_data,
+                                                     bool has_nulls)
 {
   jitify2::StringVec template_params;
 
-  // Add has_user_data template parameter
+  // Add has_user_data and has_nulls template parameters
   template_params.emplace_back(jitify2::reflection::reflect(has_user_data));
+  template_params.emplace_back(jitify2::reflection::reflect(has_nulls));
 
   // Add left column accessors
   for (size_t i = 0; i < left_columns.size(); ++i) {
@@ -85,6 +87,7 @@ jitify2::ConfiguredKernel build_join_filter_kernel(std::string const& predicate_
                                                    std::vector<column_view> const& right_columns,
                                                    bool is_ptx,
                                                    bool has_user_data,
+                                                   bool has_nulls,
                                                    rmm::cuda_stream_view stream,
                                                    rmm::device_async_resource_ref mr)
 {
@@ -107,7 +110,7 @@ jitify2::ConfiguredKernel build_join_filter_kernel(std::string const& predicate_
 
   // Build template parameters and kernel name
   auto template_args =
-    build_join_filter_template_params(left_columns, right_columns, has_user_data);
+    build_join_filter_template_params(left_columns, right_columns, has_user_data, has_nulls);
   auto kernel_name =
     jitify2::reflection::Template("cudf::join::jit::filter_join_kernel").instantiate(template_args);
 
@@ -350,10 +353,12 @@ apply_join_semantics(cudf::table_view const& left,
 jitify2::StringVec build_join_filter_template_params_from_specs(
   std::vector<row_ir::ast_input_spec> const& input_specs,
   cudf::table_view const& left,
-  cudf::table_view const& right)
+  cudf::table_view const& right,
+  bool has_nulls)
 {
   jitify2::StringVec template_params;
   template_params.emplace_back(jitify2::reflection::reflect(false));  // has_user_data = false
+  template_params.emplace_back(jitify2::reflection::reflect(has_nulls));
 
   // Scalar columns are appended to the left table's device views,
   // starting at index left.num_columns().
@@ -437,6 +442,7 @@ jit_filter_join_indices(cudf::table_view const& left,
                                          right_cols,
                                          is_ptx,
                                          false,  // has_user_data = false for now
+                                         false,  // has_nulls = false for string predicates
                                          stream,
                                          mr);
 
@@ -495,9 +501,11 @@ jit_filter_join_indices(cudf::table_view const& left,
   auto filter_result = row_ir::ast_converter::filter(
     row_ir::target::CUDA, predicate, ast_args, table_view{}, stream, mr);
 
+  bool const has_nulls = filter_result.is_null_aware == null_aware::YES;
+
   // Build template params matching the AST input order
   auto template_args =
-    build_join_filter_template_params_from_specs(filter_result.input_specs, left, right);
+    build_join_filter_template_params_from_specs(filter_result.input_specs, left, right, has_nulls);
 
   auto const cuda_source =
     cudf::jit::parse_single_function_cuda(filter_result.udf, "GENERIC_JOIN_FILTER_OP");

@@ -30,7 +30,7 @@ namespace cudf::join::jit {
 // This must match the definition in cudf/join/join.hpp
 constexpr cudf::size_type JoinNoMatch = cuda::std::numeric_limits<cudf::size_type>::min();
 
-template <bool has_user_data, typename... InputAccessors>
+template <bool has_user_data, bool has_nulls, typename... InputAccessors>
 CUDF_KERNEL void filter_join_kernel(cudf::jit::device_span<cudf::size_type const> left_indices,
                                     cudf::jit::device_span<cudf::size_type const> right_indices,
                                     cudf::column_device_view_core const* left_tables,
@@ -52,22 +52,43 @@ CUDF_KERNEL void filter_join_kernel(cudf::jit::device_span<cudf::size_type const
       continue;
     }
 
-    bool result = false;
-
     // Each accessor receives both tables and both indices, and internally selects
     // the appropriate table based on whether it's a left or right accessor.
-    if constexpr (has_user_data) {
-      GENERIC_JOIN_FILTER_OP(
-        user_data,
-        i,
-        &result,
-        InputAccessors::element(left_tables, right_tables, left_idx, right_idx, i)...);
+    if constexpr (has_nulls) {
+      // Null-aware path: pass optional<T> inputs, get optional<bool> result
+      cuda::std::optional<bool> result{false};
+      if constexpr (has_user_data) {
+        GENERIC_JOIN_FILTER_OP(
+          user_data,
+          i,
+          &result,
+          InputAccessors::nullable_element(left_tables, right_tables, left_idx, right_idx, i)...);
+      } else {
+        GENERIC_JOIN_FILTER_OP(
+          &result,
+          InputAccessors::nullable_element(left_tables, right_tables, left_idx, right_idx, i)...);
+      }
+      predicate_results[i] = result.has_value() && result.value();
     } else {
-      GENERIC_JOIN_FILTER_OP(
-        &result, InputAccessors::element(left_tables, right_tables, left_idx, right_idx, i)...);
+      // Non-null-aware path: if any input is null, predicate is false
+      if ((InputAccessors::is_null(left_tables, right_tables, left_idx, right_idx, i) || ...)) {
+        predicate_results[i] = false;
+        continue;
+      }
+      bool result = false;
+      if constexpr (has_user_data) {
+        GENERIC_JOIN_FILTER_OP(
+          user_data,
+          i,
+          &result,
+          InputAccessors::element(left_tables, right_tables, left_idx, right_idx, i)...);
+      } else {
+        GENERIC_JOIN_FILTER_OP(
+          &result,
+          InputAccessors::element(left_tables, right_tables, left_idx, right_idx, i)...);
+      }
+      predicate_results[i] = result;
     }
-
-    predicate_results[i] = result;
   }
 }
 

@@ -1023,6 +1023,38 @@ TEST_F(MixedInnerJoinTest2, JitOnlyPredicate)
   EXPECT_EQ(actual_pairs, expected_pairs);
 }
 
+TEST_F(MixedInnerJoinTest2, NullAwareLogicalOperators)
+{
+  // Test NULL_LOGICAL_AND operator which triggers has_nulls=true in code generator.
+  // This replicates the behavior of Velox's innerJoinWithMixedFilterPrecomputation test.
+  auto const col_ref_left_1  = cudf::ast::column_reference(0, cudf::ast::table_reference::LEFT);
+  auto const col_ref_right_1 = cudf::ast::column_reference(0, cudf::ast::table_reference::RIGHT);
+
+  auto scalar_5 = cudf::numeric_scalar<int32_t>(5);
+  auto literal_5 = cudf::ast::literal(scalar_5);
+
+  // left.col1 > 5
+  auto left_cmp = cudf::ast::operation(cudf::ast::ast_operator::GREATER, col_ref_left_1, literal_5);
+  // right.col1 > 5
+  auto right_cmp = cudf::ast::operation(cudf::ast::ast_operator::GREATER, col_ref_right_1, literal_5);
+  // (left.col1 > 5) NULL_LOGICAL_AND (right.col1 > 5)
+  auto predicate = cudf::ast::operation(cudf::ast::ast_operator::NULL_LOGICAL_AND, left_cmp, right_cmp);
+
+  // Data where both conditions must be true
+  // Left: [0,1,2,3,4], [3,6,8,4,10]  -> rows 1,2,4 have col1 > 5
+  // Right: [0,1,2,3,4], [1,7,9,2,6]  -> rows 1,2,4 have col1 > 5
+  // Matches on key: all 5 rows
+  // Filter passes: rows 1, 2, 4 (where both cols > 5)
+  this->test({{0, 1, 2, 3, 4}, {3, 6, 8, 4, 10}},
+             {{0, 1, 2, 3, 4}, {1, 7, 9, 2, 6}},
+             {0},
+             {1},
+             predicate,
+             {0, 1, 1, 0, 1},
+             {{1, 1}, {2, 2}, {4, 4}});
+}
+
+
 /**
  * Tests of mixed left joins.
  */
@@ -1136,45 +1168,6 @@ TYPED_TEST(MixedLeftJoinTest, Basic2)
              {{0, cudf::JoinNoMatch}, {1, cudf::JoinNoMatch}, {2, cudf::JoinNoMatch}, {3, 3}});
 }
 
-using MixedLeftJoinTest_int32 = MixedLeftJoinTest<int32_t>;
-TEST_F(MixedLeftJoinTest_int32, ReinsertFilteredRows)
-{
-  // Use int32_t specifically - this type works well with AST MOD operations
-  auto const col_ref_left_conditional =
-    cudf::ast::column_reference(0, cudf::ast::table_reference::LEFT);
-  auto const col_ref_right_conditional =
-    cudf::ast::column_reference(0, cudf::ast::table_reference::RIGHT);
-  auto scalar_1  = cudf::numeric_scalar<int32_t>(1);
-  auto scalar_2  = cudf::numeric_scalar<int32_t>(2);
-  auto literal_2 = cudf::ast::literal(scalar_2);
-  auto literal_1 = cudf::ast::literal(scalar_1);
-
-  // (A.c2 + B.c2)
-  auto add_expr = cudf::ast::operation(
-    cudf::ast::ast_operator::ADD, col_ref_left_conditional, col_ref_right_conditional);
-
-  // (A.c2 + B.c2) % 2
-  auto mod_expr = cudf::ast::operation(cudf::ast::ast_operator::MOD, add_expr, literal_2);
-
-  // (A.c2 + B.c2) % 2 == 1
-  auto predicate = cudf::ast::operation(cudf::ast::ast_operator::EQUAL, mod_expr, literal_1);
-
-  this->test({{0, 1, 2, 3, 4, 5, 6}, {0, 1, 2, 3, 4, 5, 6}},
-             {{0, 1, 2, 3, 4, 0, 1}, {111, 113, 115, 117, 119, 121, 123}},
-             {0},
-             {1},
-             predicate,
-             {2, 1, 1, 1, 1, 1, 1},
-             {{0, 0},
-              {0, 5},
-              {1, cudf::JoinNoMatch},
-              {2, 2},
-              {3, cudf::JoinNoMatch},
-              {4, 4},
-              {5, cudf::JoinNoMatch},
-              {6, cudf::JoinNoMatch}});
-}
-
 TYPED_TEST(MixedLeftJoinTest, SizeBasedLeftJoinRegression)
 {
   // Regression test for bug where mixed_left_join with size data would fail
@@ -1219,6 +1212,124 @@ TYPED_TEST(MixedLeftJoinTest, SizeBasedLeftJoinRegression)
   EXPECT_EQ(left_indices->size(), left_indices_no_size->size());
   EXPECT_EQ(right_indices->size(), right_indices_no_size->size());
   EXPECT_EQ(left_indices->size(), output_size);
+}
+
+using MixedLeftJoinTest_int32 = MixedLeftJoinTest<int32_t>;
+TEST_F(MixedLeftJoinTest_int32, ReinsertFilteredRows)
+{
+  // Use int32_t specifically - this type works well with AST MOD operations
+  auto const col_ref_left_conditional =
+    cudf::ast::column_reference(0, cudf::ast::table_reference::LEFT);
+  auto const col_ref_right_conditional =
+    cudf::ast::column_reference(0, cudf::ast::table_reference::RIGHT);
+  auto scalar_1  = cudf::numeric_scalar<int32_t>(1);
+  auto scalar_2  = cudf::numeric_scalar<int32_t>(2);
+  auto literal_2 = cudf::ast::literal(scalar_2);
+  auto literal_1 = cudf::ast::literal(scalar_1);
+
+  // (A.c2 + B.c2)
+  auto add_expr = cudf::ast::operation(
+    cudf::ast::ast_operator::ADD, col_ref_left_conditional, col_ref_right_conditional);
+
+  // (A.c2 + B.c2) % 2
+  auto mod_expr = cudf::ast::operation(cudf::ast::ast_operator::MOD, add_expr, literal_2);
+
+  // (A.c2 + B.c2) % 2 == 1
+  auto predicate = cudf::ast::operation(cudf::ast::ast_operator::EQUAL, mod_expr, literal_1);
+
+  this->test({{0, 1, 2, 3, 4, 5, 6}, {0, 1, 2, 3, 4, 5, 6}},
+             {{0, 1, 2, 3, 4, 0, 1}, {111, 113, 115, 117, 119, 121, 123}},
+             {0},
+             {1},
+             predicate,
+             {2, 1, 1, 1, 1, 1, 1},
+             {{0, 0},
+              {0, 5},
+              {1, cudf::JoinNoMatch},
+              {2, 2},
+              {3, cudf::JoinNoMatch},
+              {4, 4},
+              {5, cudf::JoinNoMatch},
+              {6, cudf::JoinNoMatch}});
+}
+
+TEST_F(MixedLeftJoinTest_int32, NullableFilter)
+{
+  // Replicates Velox's leftJoinWithNullableFilter test
+  // Tests that NULL filter results are treated as FALSE
+  // Filter: c1 + u_c0 > 0 (c1 is nullable, so expression can be NULL)
+
+  // AST column references into conditional table
+  // conditional_columns = {0, 1} selects columns 0 and 1 from both tables
+  // Left conditional table: [c0, c1] → index 1 is c1
+  // Right conditional table: [u_c0, dummy] → index 0 is u_c0
+  auto const col_ref_left_c1 = cudf::ast::column_reference(1, cudf::ast::table_reference::LEFT);
+  auto const col_ref_right_u_c0 = cudf::ast::column_reference(0, cudf::ast::table_reference::RIGHT);
+
+  auto scalar_0 = cudf::numeric_scalar<int32_t>(0);
+  auto literal_0 = cudf::ast::literal(scalar_0);
+
+  // c1 + u_c0
+  auto add_expr = cudf::ast::operation(
+    cudf::ast::ast_operator::ADD, col_ref_left_c1, col_ref_right_u_c0);
+  // c1 + u_c0 > 0
+  auto predicate = cudf::ast::operation(
+    cudf::ast::ast_operator::GREATER, add_expr, literal_0);
+
+  // Left table: c0 (equality key), c1 (nullable filter column)
+  // Right table: u_c0 (equality key), dummy (for consistent structure)
+  this->test_nulls(
+    {{{1, 2, 3, 4, 5}, {1, 1, 1, 1, 1}},     // c0 - equality column (all valid)
+     {{10, 0, 30, 0, 50}, {1, 0, 1, 0, 1}}}, // c1 - filter column (nulls at indices 1,3)
+    {{{1, 2, 3, 4, 5}, {1, 1, 1, 1, 1}},     // u_c0 - equality column (all valid)
+     {{0, 0, 0, 0, 0}, {1, 1, 1, 1, 1}}},    // dummy - padding column
+    {0},      // equality columns (c0 and u_c0)
+    {0, 1},   // conditional columns (both columns for AST references)
+    predicate,
+    {1, 1, 1, 1, 1},  // expected counts: one output per probe row
+    {{0, 0}, {1, cudf::JoinNoMatch}, {2, 2}, {3, cudf::JoinNoMatch}, {4, 4}});
+}
+
+TEST_F(MixedLeftJoinTest_int32, NullableColumnsWithArithmeticFilter)
+{
+  // Test nullable columns with non-null-aware arithmetic filter (ADD + GREATER).
+  // This replicates the behavior of Velox's leftJoinWithNullableFilter test.
+  // Rows with NULL in conditional column should have filter treated as false.
+
+  auto const col_ref_left_1  = cudf::ast::column_reference(0, cudf::ast::table_reference::LEFT);
+  auto const col_ref_right_1 = cudf::ast::column_reference(0, cudf::ast::table_reference::RIGHT);
+  auto scalar_0 = cudf::numeric_scalar<int32_t>(0);
+  auto literal_0 = cudf::ast::literal(scalar_0);
+
+  // left.col1 + right.col1
+  auto add_expr = cudf::ast::operation(cudf::ast::ast_operator::ADD, col_ref_left_1, col_ref_right_1);
+  // (left.col1 + right.col1) > 0
+  auto predicate = cudf::ast::operation(cudf::ast::ast_operator::GREATER, add_expr, literal_0);
+
+  // Left table: key col0, nullable conditional col1
+  // col0: [1, 2, 3, 4, 5]
+  // col1: [10, NULL, 30, NULL, 50]  (nulls at positions 1 and 3)
+  //
+  // Right table: key col0, non-nullable conditional col1
+  // col0: [1, 2, 3]
+  // col1: [1, 2, 3]
+  //
+  // Expected: Left join - all left rows appear
+  // - Row 0 (key=1): matches right row 0, filter: 10+1=11>0 TRUE  -> (0,0)
+  // - Row 1 (key=2): matches right row 1, filter: NULL+2=NULL FALSE -> (1, JoinNoMatch)
+  // - Row 2 (key=3): matches right row 2, filter: 30+3=33>0 TRUE -> (2,2)
+  // - Row 3 (key=4): no match -> (3, JoinNoMatch)
+  // - Row 4 (key=5): no match -> (4, JoinNoMatch)
+
+  this->test_nulls(
+    {{{1, 2, 3, 4, 5}, {1, 1, 1, 1, 1}}, {{10, 0, 30, 0, 50}, {1, 0, 1, 0, 1}}},  // Left: col0, col1 (0=null)
+    {{{1, 2, 3}, {1, 1, 1}}, {{1, 2, 3}, {1, 1, 1}}},                              // Right: col0, col1
+    {0},          // Equality column
+    {1},          // Conditional column
+    predicate,
+    {1, 1, 1, 1, 1},  // Expected counts
+    {{0, 0}, {1, cudf::JoinNoMatch}, {2, 2}, {3, cudf::JoinNoMatch}, {4, cudf::JoinNoMatch}},
+    cudf::null_equality::EQUAL);
 }
 
 /**
@@ -1373,6 +1484,54 @@ TYPED_TEST(MixedFullJoinTest, Basic2)
               {cudf::JoinNoMatch, 0},
               {cudf::JoinNoMatch, 1},
               {cudf::JoinNoMatch, 2}});
+}
+
+using MixedFullJoinTest_int32 = MixedFullJoinTest<int32_t>;
+TEST_F(MixedFullJoinTest_int32, NullableColumnsWithModuloFilter)
+{
+  // Test full join with nullable columns and modulo filter.
+  // This replicates the behavior of Velox's fullJoinWithFilters test.
+
+  auto const col_ref_left_1  = cudf::ast::column_reference(0, cudf::ast::table_reference::LEFT);
+  auto const col_ref_right_1 = cudf::ast::column_reference(0, cudf::ast::table_reference::RIGHT);
+  auto scalar_1 = cudf::numeric_scalar<int32_t>(1);
+  auto scalar_2 = cudf::numeric_scalar<int32_t>(2);
+  auto literal_1 = cudf::ast::literal(scalar_1);
+  auto literal_2 = cudf::ast::literal(scalar_2);
+
+  // (left.col1 + right.col1)
+  auto add_expr = cudf::ast::operation(cudf::ast::ast_operator::ADD, col_ref_left_1, col_ref_right_1);
+  // (left.col1 + right.col1) % 2
+  auto mod_expr = cudf::ast::operation(cudf::ast::ast_operator::MOD, add_expr, literal_2);
+  // (left.col1 + right.col1) % 2 == 1
+  auto predicate = cudf::ast::operation(cudf::ast::ast_operator::EQUAL, mod_expr, literal_1);
+
+  // Left table: key col0, nullable conditional col1
+  // col0: [0, 1, 2, 3]
+  // col1: [10, NULL, 12, 13]  (null at position 1)
+  //
+  // Right table: key col0, nullable conditional col1
+  // col0: [0, 1, 2]
+  // col1: [20, 21, NULL]  (null at position 2)
+  //
+  // Full join with filter (left.col1 + right.col1) % 2 == 1:
+  // - (0,0): 10+20=30, 30%2=0 != 1 -> FAIL, both appear unmatched
+  // - (1,1): NULL+21=NULL -> FAIL, both appear unmatched
+  // - (2,2): 12+NULL=NULL -> FAIL, both appear unmatched
+  // - (3,_): no match, left appears unmatched
+
+  this->test_nulls(
+    {{{0, 1, 2, 3}, {1, 1, 1, 1}}, {{10, 0, 12, 13}, {1, 0, 1, 1}}},  // Left: col0, col1
+    {{{0, 1, 2}, {1, 1, 1}}, {{20, 21, 0}, {1, 1, 0}}},                // Right: col0, col1
+    {0},          // Equality column
+    {1},          // Conditional column
+    predicate,
+    {2, 2, 2, 1},  // Expected counts (each unmatched pair counted separately)
+    {{0, cudf::JoinNoMatch}, {cudf::JoinNoMatch, 0},
+     {1, cudf::JoinNoMatch}, {cudf::JoinNoMatch, 1},
+     {2, cudf::JoinNoMatch}, {cudf::JoinNoMatch, 2},
+     {3, cudf::JoinNoMatch}},
+    cudf::null_equality::EQUAL);
 }
 
 template <typename T>
