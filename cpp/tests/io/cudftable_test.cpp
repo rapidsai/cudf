@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -512,8 +512,12 @@ TEST_F(CudftableTest, DeviceBufferSource)
                                             .build());
 
   rmm::device_buffer device_buffer(buffer.size(), cudf::get_default_stream());
-  CUDF_CUDA_TRY(
-    cudaMemcpy(device_buffer.data(), buffer.data(), buffer.size(), cudaMemcpyHostToDevice));
+  auto const stream = cudf::get_default_stream();
+  CUDF_CUDA_TRY(cudaMemcpyAsync(
+    device_buffer.data(), buffer.data(), buffer.size(), cudaMemcpyHostToDevice, stream.value()));
+  // Ensure the data is copied to the device before the host read, because the host read does not
+  // take the stream
+  stream.synchronize();
 
   auto device_span = cudf::device_span<std::byte const>(
     static_cast<std::byte const*>(device_buffer.data()), device_buffer.size());
