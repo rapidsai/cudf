@@ -339,18 +339,14 @@ _COMPARISON_BINOPS = {
 
 
 def _parquet_physical_types(
-    schema: Schema, paths: list[str], columns: list[str] | None, stream: Stream
+    paths: list[str], columns: list[str] | None
 ) -> dict[str, plc.DataType]:
-    # TODO: Read the physical types as cudf::data_type's using
-    # read_parquet_metadata or another parquet API
-    options = plc.io.parquet.ParquetReaderOptions.builder(
-        plc.io.SourceInfo(paths)
-    ).build()
+    metadata = plc.io.parquet_metadata.read_parquet_metadata(plc.io.SourceInfo(paths))
+    column_types = metadata.schema().column_types()
+
     if columns is not None:
-        options.set_column_names(columns)
-    options.set_num_rows(0)
-    df = plc.io.parquet.read_parquet(options, stream=stream)
-    return dict(zip(schema.keys(), [c.type() for c in df.tbl.columns()], strict=True))
+        return {name: column_types[name] for name in columns if name in column_types}
+    return column_types  # pragma: no cover
 
 
 def _cast_literal_to_decimal(
@@ -795,7 +791,7 @@ class Scan(IR):
                     _cast_literals_to_physical_types(
                         predicate.value,
                         _parquet_physical_types(
-                            schema, paths, with_columns or list(schema.keys()), stream
+                            paths, with_columns or list(schema.keys())
                         ),
                     ),
                     stream=stream,
