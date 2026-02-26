@@ -85,12 +85,6 @@ class IntervalColumn(ColumnBase):
             validate=False,
         )
 
-    def copy(self, deep: bool = True) -> Self:
-        plc_col = self.plc_column
-        if deep:
-            plc_col = plc_col.copy()
-        return ColumnBase.create(plc_col, self.dtype)  # type: ignore[return-value]
-
     @functools.cached_property
     def is_empty(self) -> ColumnBase:
         left_equals_right = (self.right == self.left).fillna(False)
