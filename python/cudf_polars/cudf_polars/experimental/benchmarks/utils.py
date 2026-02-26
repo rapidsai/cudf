@@ -576,10 +576,10 @@ class RunConfig:
                     print(f"rapidsmpf_oom_protection: {self.rapidsmpf_oom_protection}")
                     print(f"spill_device: {self.spill_device}")
                     print(f"rapidsmpf_spill: {self.rapidsmpf_spill}")
-            if len(records) > 0:
-                valid_durations = [
-                    record.duration for record in records if record.status == "success"
-                ]
+            valid_durations = [
+                record.duration for record in records if record.status == "success"
+            ]
+            if len(valid_durations) > 0:
                 print(f"iterations: {self.iterations}")
                 print("---------------------------------------")
                 print(f"min time : {min(valid_durations):0.4f}")
