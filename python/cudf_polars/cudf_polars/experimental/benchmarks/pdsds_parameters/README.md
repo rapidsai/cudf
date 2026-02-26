@@ -98,8 +98,7 @@ params = load_parameters(scale_factor=1, query_id=8, qualification=True)
       "10": {"county": ["Lake County", "Terrell County", ...], "month": 4, "year": 2001},
       "11": {"year": 2000, "select_one": "t_s_secyear.customer_preferred_cust_flag"}
     },
-    "100": {
-      "1": {"county": 9, "state": "MI", "year": 2001, "agg_field": "SR_RETURN_AMT"},
+    "10": {
       ...
     }
   }
