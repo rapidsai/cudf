@@ -153,6 +153,34 @@ def np_bool_dtype_policy(
     return np.dtype(np.bool_)
 
 
+def _replace_nested_none_with_NA(py_scalar: Any) -> Any:
+    """
+    Replace the None values from pyarrow.Scalar.as_py() with pd.NA.
+
+    Used in ColumnBase.element_indexing().
+
+    Parameters
+    ----------
+    py_scalar: Any
+
+    Returns
+    -------
+    Any
+        Python scalar
+    """
+    if isinstance(py_scalar, dict):
+        return {
+            key: _replace_nested_none_with_NA(value)
+            for key, value in py_scalar.items()
+        }
+    elif isinstance(py_scalar, list):
+        return [_replace_nested_none_with_NA(value) for value in py_scalar]
+    elif py_scalar is None:
+        return pd.NA
+    else:
+        return py_scalar
+
+
 def _can_values_be_equal(left: DtypeObj, right: DtypeObj) -> bool:
     """
     Given 2 possibly not equal dtypes, can they both hold equivalent values.
@@ -1532,16 +1560,22 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         return cast("Self", ColumnBase.create(plc_col, self.dtype))
 
     def element_indexing(self, index: int) -> ScalarLike:
-        """Default implementation for indexing to an element
+        """
+        Access an element from the column at the given index.
+
+        Parameters
+        ----------
+        index : int
+            The index of the element to access.
+
+        Returns
+        -------
+        ScalarLike
+            The element at the given index.
 
         Raises
         ------
         ``IndexError`` if out-of-bound
-
-        Notes
-        -----
-        Subclass should override this method to not return a pyarrow.Scalar
-        (May not be needed once pylibcudf.Scalar.as_py() exists.)
         """
         if index < 0:
             index = len(self) + index
@@ -1552,13 +1586,13 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 self.plc_column,
                 index,
             )
-        py_element = plc_scalar.to_arrow()
-        if not py_element.is_valid:
+        pa_scalar = plc_scalar.to_arrow(
+            metadata=_dtype_to_metadata(self.dtype),
+        )
+        if not pa_scalar.is_valid:
             return self._PANDAS_NA_VALUE
-        # Calling .as_py() on a pyarrow.StructScalar with duplicate field names
-        # would raise. So we need subclasses to convert handle pyarrow scalars
-        # manually
-        return py_element
+        else:
+            return _replace_nested_none_with_NA(pa_scalar.as_py())
 
     def slice(self, start: int, stop: int, stride: int | None = None) -> Self:
         stride = 1 if stride is None else stride

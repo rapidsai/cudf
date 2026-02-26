@@ -18,7 +18,6 @@ from cudf.core.column.column import (
 )
 from cudf.core.dtypes import IntervalDtype
 from cudf.utils.dtypes import get_dtype_of_same_kind
-from cudf.utils.scalar import maybe_nested_pa_scalar_to_py
 
 if TYPE_CHECKING:
     from cudf._typing import ColumnBinaryOperand, DtypeObj
@@ -34,6 +33,13 @@ class IntervalColumn(ColumnBase):
         return ColumnBase.create(
             new_col.plc_column, IntervalDtype.from_arrow(array.type)
         )  # type: ignore[return-value]
+
+    @functools.cached_property
+    def closed(self) -> Literal["left", "right", "neither", "both"]:
+        if isinstance(self.dtype, IntervalDtype):
+            return self.dtype.closed
+        else:
+            return cast("pd.ArrowDtype", self.dtype).pyarrow_dtype.closed
 
     def to_arrow(self) -> pa.Array:
         pa_array = super().to_arrow()
@@ -210,13 +216,8 @@ class IntervalColumn(ColumnBase):
         pd_type = self.dtype.to_pandas()  # type: ignore[union-attr]
         return pd.Index(pd_type.__from_arrow__(self.to_arrow()), dtype=pd_type)
 
-    def element_indexing(
-        self, index: int
-    ) -> pd.Interval | dict[Any, Any] | None:
+    def element_indexing(self, index: int) -> pd.Interval | None:
         result = super().element_indexing(index)
-        if isinstance(result, pa.Scalar):
-            py_element = maybe_nested_pa_scalar_to_py(result)
-            result = self.dtype._recursively_replace_fields(py_element)  # type: ignore[union-attr]
         if isinstance(result, dict):
-            return pd.Interval(**result, closed=self.dtype.closed)  # type: ignore[union-attr]
+            return pd.Interval(**result, closed=self.closed)
         return result
