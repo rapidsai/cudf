@@ -30,7 +30,7 @@ namespace cudf::join::jit {
 // This must match the definition in cudf/join/join.hpp
 constexpr cudf::size_type JoinNoMatch = cuda::std::numeric_limits<cudf::size_type>::min();
 
-template <bool has_user_data, bool has_nulls, typename... InputAccessors>
+template <bool has_user_data, null_aware is_null_aware, typename... InputAccessors>
 CUDF_KERNEL void filter_join_kernel(cudf::jit::device_span<cudf::size_type const> left_indices,
                                     cudf::jit::device_span<cudf::size_type const> right_indices,
                                     cudf::column_device_view_core const* left_tables,
@@ -54,7 +54,7 @@ CUDF_KERNEL void filter_join_kernel(cudf::jit::device_span<cudf::size_type const
 
     // Each accessor receives both tables and both indices, and internally selects
     // the appropriate table based on whether it's a left or right accessor.
-    if constexpr (has_nulls) {
+    if constexpr (is_null_aware == null_aware::YES) {
       // Null-aware path: pass optional<T> inputs, get optional<bool> result
       cuda::std::optional<bool> result{false};
       if constexpr (has_user_data) {
