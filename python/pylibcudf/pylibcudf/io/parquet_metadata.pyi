@@ -1,7 +1,8 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from pylibcudf.io.types import SourceInfo
+from pylibcudf.types import DataType
 
 __all__ = [
     "ParquetColumnSchema",
@@ -18,6 +19,7 @@ class ParquetColumnSchema:
 
 class ParquetSchema:
     def root(self) -> ParquetColumnSchema: ...
+    def column_types(self) -> dict[str, DataType]: ...
 
 class ParquetMetadata:
     def schema(self) -> ParquetSchema: ...

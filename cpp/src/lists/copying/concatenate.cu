@@ -122,13 +122,8 @@ std::unique_ptr<column> concatenate(host_span<column_view const> columns,
     has_nulls ? cudf::detail::concatenate_masks(columns, null_mask_data, stream) : size_type{0};
 
   // assemble into outgoing list column
-  return make_lists_column(total_list_count,
-                           std::move(offsets),
-                           std::move(data),
-                           null_count,
-                           std::move(null_mask),
-                           stream,
-                           mr);
+  return make_lists_column(
+    total_list_count, std::move(offsets), std::move(data), null_count, std::move(null_mask));
 }
 
 }  // namespace detail

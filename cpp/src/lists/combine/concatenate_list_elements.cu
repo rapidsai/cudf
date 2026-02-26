@@ -95,9 +95,7 @@ std::unique_ptr<column> concatenate_lists_ignore_null(column_view const& input,
                            std::move(out_offsets),
                            std::move(out_entries),
                            null_count,
-                           null_count > 0 ? std::move(null_mask) : rmm::device_buffer{},
-                           stream,
-                           mr);
+                           null_count > 0 ? std::move(null_mask) : rmm::device_buffer{});
 }
 
 /**
@@ -221,9 +219,7 @@ std::unique_ptr<column> concatenate_lists_nullifying_rows(column_view const& inp
                            std::move(list_offsets),
                            std::move(list_entries),
                            null_count,
-                           null_count ? std::move(null_mask) : rmm::device_buffer{},
-                           stream,
-                           mr);
+                           null_count ? std::move(null_mask) : rmm::device_buffer{});
 }
 
 }  // namespace
