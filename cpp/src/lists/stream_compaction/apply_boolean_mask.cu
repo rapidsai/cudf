@@ -85,9 +85,7 @@ std::unique_ptr<column> apply_boolean_mask(lists_column_view const& input,
                                  make_output_offsets(),
                                  make_filtered_child(),
                                  input.null_count(),
-                                 cudf::detail::copy_bitmask(input.parent(), stream, mr),
-                                 stream,
-                                 mr);
+                                 cudf::detail::copy_bitmask(input.parent(), stream, mr));
 }
 }  // namespace detail
 
