@@ -339,18 +339,14 @@ _COMPARISON_BINOPS = {
 
 
 def _parquet_physical_types(
-    schema: Schema, paths: list[str], columns: list[str] | None, stream: Stream
+    paths: list[str], columns: list[str] | None
 ) -> dict[str, plc.DataType]:
-    # TODO: Read the physical types as cudf::data_type's using
-    # read_parquet_metadata or another parquet API
-    options = plc.io.parquet.ParquetReaderOptions.builder(
-        plc.io.SourceInfo(paths)
-    ).build()
+    metadata = plc.io.parquet_metadata.read_parquet_metadata(plc.io.SourceInfo(paths))
+    column_types = metadata.schema().column_types()
+
     if columns is not None:
-        options.set_column_names(columns)
-    options.set_num_rows(0)
-    df = plc.io.parquet.read_parquet(options, stream=stream)
-    return dict(zip(schema.keys(), [c.type() for c in df.tbl.columns()], strict=True))
+        return {name: column_types[name] for name in columns if name in column_types}
+    return column_types  # pragma: no cover
 
 
 def _cast_literal_to_decimal(
@@ -392,6 +388,20 @@ def _cast_literals_to_physical_types(
 
         return node.reconstruct([left, right])
     return node
+
+
+def _prepare_parquet_predicate(
+    predicate: expr.Expr,
+    paths: list[str],
+    schema: Schema,
+    columns: list[str] | None,
+) -> expr.Expr:
+    cols = columns or list(schema.keys())
+    if any(isinstance(schema[c].polars_type, pl.Decimal) for c in cols if c in schema):
+        return _cast_literals_to_physical_types(
+            predicate, _parquet_physical_types(paths, cols)
+        )
+    return predicate
 
 
 def _align_parquet_schema(df: DataFrame, schema: Schema) -> DataFrame:
@@ -819,11 +829,8 @@ class Scan(IR):
             if predicate is not None and row_index is None:
                 # Can't apply filters during read if we have a row index.
                 filters = to_parquet_filter(
-                    _cast_literals_to_physical_types(
-                        predicate.value,
-                        _parquet_physical_types(
-                            schema, paths, with_columns or list(schema.keys()), stream
-                        ),
+                    _prepare_parquet_predicate(
+                        predicate.value, paths, schema, with_columns
                     ),
                     stream=stream,
                 )
