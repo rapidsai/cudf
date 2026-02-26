@@ -213,15 +213,21 @@ def test_parquet_options(executor: str) -> None:
     )
     assert config.parquet_options.chunked is True
     assert config.parquet_options.n_output_chunks == 1
+    assert config.parquet_options.use_jit_filter is False
 
     config = ConfigOptions.from_polars_engine(
         pl.GPUEngine(
             executor=executor,
-            parquet_options={"chunked": False, "n_output_chunks": 16},
+            parquet_options={
+                "chunked": False,
+                "n_output_chunks": 16,
+                "use_jit_filter": True,
+            },
         )
     )
     assert config.parquet_options.chunked is False
     assert config.parquet_options.n_output_chunks == 16
+    assert config.parquet_options.use_jit_filter is True
 
 
 def test_parquet_options_from_none() -> None:
@@ -479,6 +485,7 @@ def test_parquet_options_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
         m.setenv("CUDF_POLARS__PARQUET_OPTIONS__MAX_FOOTER_SAMPLES", "0")
         m.setenv("CUDF_POLARS__PARQUET_OPTIONS__MAX_ROW_GROUP_SAMPLES", "0")
         m.setenv("CUDF_POLARS__PARQUET_OPTIONS__USE_RAPIDSMPF_NATIVE", "0")
+        m.setenv("CUDF_POLARS__PARQUET_OPTIONS__USE_JIT_FILTER", "1")
 
         # Test default
         engine = pl.GPUEngine()
@@ -490,6 +497,7 @@ def test_parquet_options_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
         assert config.parquet_options.max_footer_samples == 0
         assert config.parquet_options.max_row_group_samples == 0
         assert config.parquet_options.use_rapidsmpf_native is False
+        assert config.parquet_options.use_jit_filter is True
 
     with monkeypatch.context() as m:
         m.setenv("CUDF_POLARS__PARQUET_OPTIONS__CHUNKED", "foo")
@@ -589,6 +597,7 @@ def test_cardinality_factor_compat() -> None:
         "max_footer_samples",
         "max_row_group_samples",
         "use_rapidsmpf_native",
+        "use_jit_filter",
     ],
 )
 def test_validate_parquet_options(option: str) -> None:
