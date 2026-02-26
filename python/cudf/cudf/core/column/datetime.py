@@ -869,11 +869,6 @@ class DatetimeTZColumn(DatetimeColumn):
                 nonexistent="NaT",
             )
 
-    def to_arrow(self) -> pa.Array:
-        # Cast to expected timestamp array type for assume_timezone
-        local_array = cast(pa.TimestampArray, self._local_time.to_arrow())
-        return pa.compute.assume_timezone(local_array, str(self.tz))
-
     @functools.cached_property
     def time_unit(self) -> str:
         if isinstance(self.dtype, pd.DatetimeTZDtype):
