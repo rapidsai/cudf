@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -7,7 +7,10 @@
 
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/logger.hpp>
+#include <cudf/utilities/error.hpp>
 #include <cudf/utilities/memory_resource.hpp>
+
+#include <kvikio/file_utils.hpp>
 
 #include <rmm/mr/pinned_host_memory_resource.hpp>
 
@@ -17,6 +20,7 @@
 #include <cstdio>
 #include <fstream>
 #include <numeric>
+#include <regex>
 #include <string>
 #include <utility>
 
@@ -211,55 +215,80 @@ std::vector<cudf::size_type> segments_in_chunk(int num_segments, int num_chunks,
   return selected_segments;
 }
 
-// Executes the command and returns stderr output
-std::string exec_cmd(std::string_view cmd)
-{
-  // Prevent the output from the command from mixing with the original process' output
-  std::fflush(nullptr);
-  // Switch stderr and stdout to only capture stderr
-  auto const redirected_cmd = std::string{"( "}.append(cmd).append(" 3>&2 2>&1 1>&3) 2>/dev/null");
-  std::unique_ptr<FILE, int (*)(FILE*)> pipe(popen(redirected_cmd.c_str(), "r"), pclose);
-  CUDF_EXPECTS(pipe != nullptr, "popen() failed");
-
-  std::array<char, 128> buffer;
-  std::string error_out;
-  while (fgets(buffer.data(), buffer.size(), pipe.get()) != nullptr) {
-    error_out += buffer.data();
-  }
-  return error_out;
-}
-
-void log_l3_warning_once()
+namespace {
+void log_page_cache_warning_once()
 {
   static bool is_logged = false;
   if (not is_logged) {
     CUDF_LOG_WARN(
-      "Running benchmarks without dropping the L3 cache; results may not reflect file IO "
+      "Running benchmarks without dropping the page cache; results may not reflect file IO "
       "throughput");
     is_logged = true;
   }
 }
 
-void try_drop_l3_cache()
+std::pair<bool, bool> parse_cache_dropping_env()
 {
-  static bool is_drop_cache_enabled = std::getenv("CUDF_BENCHMARK_DROP_CACHE") != nullptr;
+  bool is_drop_cache_enabled{false};
+  bool is_file_scope{true};
+
+  auto const* env = std::getenv("CUDF_BENCHMARK_DROP_CACHE");
+  if (env == nullptr) { return {is_drop_cache_enabled, is_file_scope}; }
+
+  // Trim leading/trailing whitespace
+  std::regex const static pattern{R"(^\s+|\s+$)"};
+  auto env_sanitized = std::regex_replace(env, pattern, "");
+
+  // Convert to lowercase
+  std::transform(
+    env_sanitized.begin(), env_sanitized.end(), env_sanitized.begin(), [](unsigned char c) {
+      return std::tolower(c);
+    });
+
+  // Interpret value
+  if (env_sanitized == "true" or env_sanitized == "on" or env_sanitized == "yes" or
+      env_sanitized == "1" or env_sanitized == "system" or env_sanitized == "file") {
+    is_drop_cache_enabled = true;
+    is_file_scope         = (env_sanitized != "system");
+    return {is_drop_cache_enabled, is_file_scope};
+  }
+
+  if (env_sanitized == "false" or env_sanitized == "off" or env_sanitized == "no" or
+      env_sanitized == "0") {
+    return {is_drop_cache_enabled, is_file_scope};
+  }
+
+  CUDF_FAIL(
+    "Environment variable CUDF_BENCHMARK_DROP_CACHE has an unknown value: " + std::string{env},
+    std::invalid_argument);
+}
+}  // namespace
+
+void drop_page_cache_if_enabled(std::vector<std::string> const& file_paths)
+{
+  static auto const parsed_env                = parse_cache_dropping_env();
+  auto [is_drop_cache_enabled, is_file_scope] = parsed_env;
   if (not is_drop_cache_enabled) {
-    log_l3_warning_once();
+    log_page_cache_warning_once();
     return;
   }
 
-  // When data are written to a file, Linux first places them in dirty pages, and then uses a
-  // writeback mechanism to move them to the file system. sysctl vm.drop_caches=3 is only capable of
-  // dropping the clean cache. The dirty pages may still affect the performance of cold cache
-  // benchmark. A call to sync() triggers the writeback process and makes dirty pages clean, ready
-  // to be dropped. This function never fails and does not require sudo.
-  sync();
+  if (not is_file_scope) {
+    if (not kvikio::drop_system_page_cache()) {
+      CUDF_FAIL("Failed to execute the drop cache command");
+    }
+    return;
+  }
 
-  std::array drop_cache_cmds{"/sbin/sysctl vm.drop_caches=3", "sudo /sbin/sysctl vm.drop_caches=3"};
-  CUDF_EXPECTS(std::any_of(drop_cache_cmds.cbegin(),
-                           drop_cache_cmds.cend(),
-                           [](auto& cmd) { return exec_cmd(cmd).empty(); }),
-               "Failed to execute the drop cache command");
+  if (file_paths.empty()) {
+    CUDF_LOG_WARN("No file is specified for page cache dropping");
+    return;
+  }
+
+  for (const auto& path : file_paths) {
+    if (path.empty()) { continue; }
+    kvikio::drop_file_page_cache(path);
+  }
 }
 
 io_type retrieve_io_type_enum(std::string_view io_string)
