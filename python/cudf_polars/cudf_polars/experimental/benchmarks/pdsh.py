@@ -14,7 +14,6 @@ and may be modified or removed at any time.
 from __future__ import annotations
 
 import contextlib
-import dataclasses
 import os
 from datetime import date
 from typing import TYPE_CHECKING
@@ -23,6 +22,8 @@ import polars as pl
 
 with contextlib.suppress(ImportError):
     from cudf_polars.experimental.benchmarks.utils import (
+        COUNT_DTYPE,
+        QueryResult,
         RunConfig,
         build_parser,
         get_data,
@@ -39,11 +40,6 @@ if TYPE_CHECKING:
 # on each worker takes ~15 sec extra
 os.environ["KVIKIO_COMPAT_MODE"] = os.environ.get("KVIKIO_COMPAT_MODE", "on")
 os.environ["KVIKIO_NTHREADS"] = os.environ.get("KVIKIO_NTHREADS", "8")
-
-# The dtype for count() aggregations depends on the presence
-# of the polars-runtime-64 package (`polars[rt64]`).
-HAS_POLARS_RT_64 = pl.config.plr.RUNTIME_REPR == "rt64"
-COUNT_DTYPE = pl.UInt64() if HAS_POLARS_RT_64 else pl.UInt32()
 
 # The pre-computed expected results come from DuckDB, which has
 # different casting rules than Polars. For example, in polars
@@ -106,27 +102,6 @@ EXPECTED_CASTS_TIMESTAMP = {
     3: [pl.col("o_orderdate").cast(pl.Datetime("ms"))],
     18: [pl.col("o_orderdate").cast(pl.Datetime("ms"))],
 }
-
-
-@dataclasses.dataclass
-class QueryResult:
-    """
-    Representation of a query's result.
-
-    Parameters
-    ----------
-    frame: pl.LazyFrame
-        The result of the query.
-    sort_by: list[tuple[str, bool]]
-        The columns that the query sorts by. Each tuple contains (column_name, descending_flag).
-    limit: int | None
-        The limit of the query, if any.
-
-    """
-
-    frame: pl.LazyFrame
-    sort_by: list[tuple[str, bool]]
-    limit: int | None = None
 
 
 class PDSHQueries:

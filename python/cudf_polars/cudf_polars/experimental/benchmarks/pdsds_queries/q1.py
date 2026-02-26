@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
-from cudf_polars.experimental.benchmarks.utils import get_data
+from cudf_polars.experimental.benchmarks.utils import QueryResult, get_data
 
 if TYPE_CHECKING:
     from cudf_polars.experimental.benchmarks.utils import RunConfig
@@ -51,7 +51,7 @@ def duckdb_impl(run_config: RunConfig) -> str:
     """
 
 
-def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
+def polars_impl(run_config: RunConfig) -> QueryResult:
     """Query 1."""
     params = load_parameters(
         int(run_config.scale_factor), query_id=1, qualification=run_config.qualification
@@ -89,15 +89,19 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     )
 
     # Step 3: Join everything together and apply filters
-    return (
-        customer_total_return.join(
-            store_avg_returns, left_on="ctr_store_sk", right_on="ctr_store_sk"
-        )
-        .filter(pl.col("ctr_total_return") > pl.col("avg_return_threshold"))
-        .join(store, left_on="ctr_store_sk", right_on="s_store_sk")
-        .filter(pl.col("s_state") == state)
-        .join(customer, left_on="ctr_customer_sk", right_on="c_customer_sk")
-        .select(["c_customer_id"])
-        .sort("c_customer_id")
-        .limit(100)
+    return QueryResult(
+        frame=(
+            customer_total_return.join(
+                store_avg_returns, left_on="ctr_store_sk", right_on="ctr_store_sk"
+            )
+            .filter(pl.col("ctr_total_return") > pl.col("avg_return_threshold"))
+            .join(store, left_on="ctr_store_sk", right_on="s_store_sk")
+            .filter(pl.col("s_state") == state)
+            .join(customer, left_on="ctr_customer_sk", right_on="c_customer_sk")
+            .select(["c_customer_id"])
+            .sort("c_customer_id")
+            .limit(100)
+        ),
+        sort_by=[("c_customer_id", False)],
+        limit=100,
     )

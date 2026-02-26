@@ -26,7 +26,6 @@ from cudf.utils.dtypes import (
     cudf_dtype_to_pa_type,
     dtype_to_pylibcudf_type,
     find_common_type,
-    is_pandas_nullable_extension_dtype,
 )
 from cudf.utils.utils import is_na_like
 
@@ -214,8 +213,8 @@ class TemporalBaseColumn(ColumnBase, Scannable):
         """
         Return a CuPy representation of the TemporalBaseColumn.
         """
-        if is_pandas_nullable_extension_dtype(self.dtype):
-            dtype = getattr(self.dtype, "numpy_dtype", self.dtype)
+        if isinstance(self.dtype, pd.ArrowDtype):
+            dtype = self.dtype.numpy_dtype
         else:
             dtype = self.dtype
 

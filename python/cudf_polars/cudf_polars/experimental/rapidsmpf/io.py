@@ -24,8 +24,7 @@ from cudf_polars.dsl.ir import (
     DataFrameScan,
     Scan,
     Sink,
-    _cast_literals_to_physical_types,
-    _parquet_physical_types,
+    _prepare_parquet_predicate,
 )
 from cudf_polars.dsl.to_ast import to_parquet_filter
 from cudf_polars.experimental.base import (
@@ -50,7 +49,6 @@ from cudf_polars.experimental.rapidsmpf.nodes import (
 )
 from cudf_polars.experimental.rapidsmpf.utils import (
     ChannelManager,
-    allgather_reduce,
     chunk_to_frame,
     empty_table_chunk,
     process_children,
@@ -592,14 +590,8 @@ def make_rapidsmpf_read_parquet_node(
         filter_obj = None
         if ir.predicate is not None:
             filter_expr = to_parquet_filter(
-                _cast_literals_to_physical_types(
-                    ir.predicate.value,
-                    _parquet_physical_types(
-                        ir.schema,
-                        ir.paths,
-                        ir.with_columns or list(ir.schema.keys()),
-                        stream,
-                    ),
+                _prepare_parquet_predicate(
+                    ir.predicate.value, ir.paths, ir.schema, ir.with_columns
                 ),
                 stream=stream,
             )
@@ -774,16 +766,17 @@ async def sink_node(
 
     async with shutdown_on_error(context, ch_in, ch_out):
         metadata = await recv_metadata(ch_in, context)
+        await send_metadata(
+            ch_out, context, ChannelMetadata(local_count=1, duplicated=True)
+        )
 
+        path_root = f"{ir.sink.path}/part"
         if context.comm().nranks > 1:
-            count = sum(
-                await allgather_reduce(context, collective_id, metadata.local_count)
-            )
-        else:
-            count = metadata.local_count
-
-        width = math.ceil(math.log10(count)) if count > 1 else 1
-        width = max(width, 6)
+            rank_width = math.ceil(math.log10(context.comm().nranks))
+            rank_str = str(context.comm().rank).zfill(rank_width)
+            path_root = f"{path_root}.{rank_str}"
+        count_width = math.ceil(math.log10(metadata.local_count))
+        count_width = max(count_width, 6)
 
         if ir.executor_options.sink_to_directory:
             _prepare_sink_directory(ir.sink.path)
@@ -792,9 +785,8 @@ async def sink_node(
                 chunk = TableChunk.from_message(msg).make_available_and_spill(
                     context.br(), allow_overbooking=True
                 )
-                i += 1
                 df = chunk_to_frame(chunk, child_ir)
-                part_path = f"{ir.sink.path}/part.{str(i).zfill(width)}.{suffix}"
+                part_path = f"{path_root}.{str(i).zfill(count_width)}.{suffix}"
                 await asyncio.to_thread(
                     Sink.do_evaluate,
                     ir.sink.schema,
@@ -805,6 +797,7 @@ async def sink_node(
                     df,
                     context=ir_context,
                 )
+                i += 1
         else:
             # Write chunks to a single file
             writer_state = None
@@ -832,9 +825,6 @@ async def sink_node(
         # Signal completion on the metadata and data channels with empty results
         stream = ir_context.get_cuda_stream()
         empty_chunk = empty_table_chunk(ir, context, stream)
-        await send_metadata(
-            ch_out, context, ChannelMetadata(local_count=1, duplicated=True)
-        )
         await ch_out.send(context, Message(0, empty_chunk))
         await ch_out.drain(context)
 

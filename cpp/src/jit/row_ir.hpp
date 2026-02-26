@@ -486,6 +486,7 @@ struct [[nodiscard]] transform_args {
   null_aware is_null_aware       = null_aware::NO;  ///< Whether the transform is null-aware
   output_nullability null_policy = output_nullability::PRESERVE;  ///< Null-transformation policy
   std::optional<size_type> row_size = std::nullopt;  ///< The row size of the transform operation
+  std::vector<ast_input_spec> input_specs = {};      ///< The input specs (table ref + column index)
 };
 
 /**
@@ -503,13 +504,16 @@ struct [[nodiscard]] filter_args {
   null_aware is_null_aware       = null_aware::NO;  ///< Whether the filter is null-aware
   output_nullability predicate_nullability =
     output_nullability::PRESERVE;  ///< Null-transformation policy for the predicate output
+  std::vector<ast_input_spec> input_specs = {};  ///< The input specs (table ref + column index)
 };
 
 /**
  * @brief The AST input column arguments used to resolve the column expressions
  */
 struct ast_args {
-  table_view table = {};  ///< The table view containing the columns
+  table_view table       = {};  ///< The table view containing the columns (single-table case)
+  table_view left_table  = {};  ///< The left table for join predicates
+  table_view right_table = {};  ///< The right table for join predicates
 };
 
 /**

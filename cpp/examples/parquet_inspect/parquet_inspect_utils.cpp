@@ -187,8 +187,7 @@ auto make_page_data_list_column(cudf::host_span<T const> data,
                                  std::move(offsets_column),
                                  std::move(page_data_column),
                                  0,
-                                 rmm::device_buffer{},
-                                 stream);
+                                 rmm::device_buffer{});
 }
 
 }  // namespace
