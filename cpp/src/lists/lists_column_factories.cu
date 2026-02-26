@@ -28,13 +28,12 @@ std::unique_ptr<cudf::column> make_lists_column_from_scalar(list_scalar const& v
                                                             rmm::device_async_resource_ref mr)
 {
   if (size == 0) {
-    return make_lists_column(0,
-                             make_empty_column(type_to_id<size_type>()),
-                             empty_like(value.view()),
-                             0,
-                             cudf::detail::create_null_mask(0, mask_state::UNALLOCATED, stream, mr),
-                             stream,
-                             mr);
+    return make_lists_column(
+      0,
+      make_empty_column(type_to_id<size_type>()),
+      empty_like(value.view()),
+      0,
+      cudf::detail::create_null_mask(0, mask_state::UNALLOCATED, stream, mr));
   }
   auto mr_final = size == 1 ? mr : cudf::get_current_device_resource_ref();
 
@@ -49,7 +48,7 @@ std::unique_ptr<cudf::column> make_lists_column_from_scalar(list_scalar const& v
   if (size == 1) {
     auto child = std::make_unique<column>(value.view(), stream, mr_final);
     return make_lists_column(
-      1, std::move(offsets), std::move(child), null_count, std::move(null_mask), stream, mr_final);
+      1, std::move(offsets), std::move(child), null_count, std::move(null_mask));
   }
 
   auto children_views   = std::vector<column_view>{offsets->view(), value.view()};
@@ -71,14 +70,11 @@ std::unique_ptr<cudf::column> make_lists_column_from_scalar(list_scalar const& v
   return std::move(res->release()[0]);
 }
 
-std::unique_ptr<column> make_empty_lists_column(data_type child_type,
-                                                rmm::cuda_stream_view stream,
-                                                rmm::device_async_resource_ref mr)
+std::unique_ptr<column> make_empty_lists_column(data_type child_type)
 {
   auto offsets = make_empty_column(data_type(type_to_id<size_type>()));
   auto child   = make_empty_column(child_type);
-  return make_lists_column(
-    0, std::move(offsets), std::move(child), 0, rmm::device_buffer{}, stream, mr);
+  return make_lists_column(0, std::move(offsets), std::move(child), 0, rmm::device_buffer{});
 }
 
 std::unique_ptr<column> make_all_nulls_lists_column(size_type size,
@@ -93,18 +89,15 @@ std::unique_ptr<column> make_all_nulls_lists_column(size_type size,
   }();
   auto child     = make_empty_column(child_type);
   auto null_mask = cudf::detail::create_null_mask(size, mask_state::ALL_NULL, stream, mr);
-  return make_lists_column(
-    size, std::move(offsets), std::move(child), size, std::move(null_mask), stream, mr);
+  return make_lists_column(size, std::move(offsets), std::move(child), size, std::move(null_mask));
 }
 
 }  // namespace detail
 }  // namespace lists
 
-std::unique_ptr<column> make_empty_lists_column(data_type child_type,
-                                                rmm::cuda_stream_view stream,
-                                                rmm::device_async_resource_ref mr)
+std::unique_ptr<column> make_empty_lists_column(data_type child_type)
 {
-  return lists::detail::make_empty_lists_column(child_type, stream, mr);
+  return lists::detail::make_empty_lists_column(child_type);
 }
 
 /**
@@ -114,9 +107,7 @@ std::unique_ptr<column> make_lists_column(size_type num_rows,
                                           std::unique_ptr<column> offsets_column,
                                           std::unique_ptr<column> child_column,
                                           size_type null_count,
-                                          rmm::device_buffer&& null_mask,
-                                          rmm::cuda_stream_view stream,
-                                          rmm::device_async_resource_ref mr)
+                                          rmm::device_buffer&& null_mask)
 {
   if (null_count > 0) { CUDF_EXPECTS(null_mask.size() > 0, "Column with nulls must be nullable."); }
   CUDF_EXPECTS(

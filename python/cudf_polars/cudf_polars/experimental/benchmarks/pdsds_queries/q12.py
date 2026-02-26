@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
-from cudf_polars.experimental.benchmarks.utils import get_data
+from cudf_polars.experimental.benchmarks.utils import QueryResult, get_data
 
 if TYPE_CHECKING:
     from cudf_polars.experimental.benchmarks.utils import RunConfig
@@ -59,7 +59,7 @@ def duckdb_impl(run_config: RunConfig) -> str:
     """
 
 
-def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
+def polars_impl(run_config: RunConfig) -> QueryResult:
     """Query 12."""
     params = load_parameters(
         int(run_config.scale_factor),
@@ -79,43 +79,54 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     start_date = date.fromisoformat(sdate)
     end_date = start_date + timedelta(days=30)
 
-    # Convert to string literals for comparison (d_date is String in parquet)
-    start_date_str = pl.lit(start_date.isoformat())
-    end_date_str = pl.lit(end_date.isoformat())
+    start_date_lit = pl.lit(start_date)
+    end_date_lit = pl.lit(end_date)
 
-    return (
-        web_sales.join(item, left_on="ws_item_sk", right_on="i_item_sk")
-        .join(date_dim, left_on="ws_sold_date_sk", right_on="d_date_sk")
-        .filter(
-            pl.col("i_category").is_in(categories)
-            & pl.col("d_date").is_between(start_date_str, end_date_str, closed="both")
-        )
-        .group_by(
-            ["i_item_id", "i_item_desc", "i_category", "i_class", "i_current_price"]
-        )
-        .agg(
-            [
-                pl.when(pl.col("ws_ext_sales_price").count() > 0)
-                .then(pl.col("ws_ext_sales_price").sum())
-                .otherwise(None)
-                .alias("itemrevenue")
-            ]
-        )
-        .with_columns(
-            [
-                (
-                    pl.col("itemrevenue")
-                    * 100
-                    / pl.when(pl.col("itemrevenue").count() > 0)
-                    .then(pl.col("itemrevenue").sum())
+    return QueryResult(
+        frame=(
+            web_sales.join(item, left_on="ws_item_sk", right_on="i_item_sk")
+            .join(date_dim, left_on="ws_sold_date_sk", right_on="d_date_sk")
+            .filter(
+                pl.col("i_category").is_in(categories)
+                & pl.col("d_date").is_between(
+                    start_date_lit, end_date_lit, closed="both"
+                )
+            )
+            .group_by(
+                ["i_item_id", "i_item_desc", "i_category", "i_class", "i_current_price"]
+            )
+            .agg(
+                [
+                    pl.when(pl.col("ws_ext_sales_price").count() > 0)
+                    .then(pl.col("ws_ext_sales_price").sum())
                     .otherwise(None)
-                    .over("i_class")
-                ).alias("revenueratio")
-            ]
-        )
-        .sort(
-            ["i_category", "i_class", "i_item_id", "i_item_desc", "revenueratio"],
-            nulls_last=True,
-        )
-        .limit(100)
+                    .alias("itemrevenue")
+                ]
+            )
+            .with_columns(
+                [
+                    (
+                        pl.col("itemrevenue")
+                        * 100
+                        / pl.when(pl.col("itemrevenue").count() > 0)
+                        .then(pl.col("itemrevenue").sum())
+                        .otherwise(None)
+                        .over("i_class")
+                    ).alias("revenueratio")
+                ]
+            )
+            .sort(
+                ["i_category", "i_class", "i_item_id", "i_item_desc", "revenueratio"],
+                nulls_last=True,
+            )
+            .limit(100)
+        ),
+        sort_by=[
+            ("i_category", False),
+            ("i_class", False),
+            ("i_item_id", False),
+            ("i_item_desc", False),
+            ("revenueratio", False),
+        ],
+        limit=100,
     )
