@@ -1098,9 +1098,6 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
   size_t string_output_offset     = 0;
   int const init_valid_map_offset = s->nesting_info[s->col.max_nesting_depth - 1].valid_map_offset;
 
-  uint32_t* const str_offsets =
-    s->col.column_string_offset_base + (has_strings_t ? page_string_offset_indices[page_idx] : 0);
-
   // Skip ahead in the decoding so that we don't repeat work
   skip_ahead_in_decoding<decode_block_size_t,
                          rolling_buf_size,
@@ -1180,6 +1177,8 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
 
     auto decode_values = [&]<copy_mode copy_mode_t>() {
       if constexpr (has_strings_t) {
+        uint32_t* const str_offsets =
+          s->col.column_string_offset_base + page_string_offset_indices[page_idx];
         string_output_offset =
           decode_strings<decode_block_size_t, has_dict_t, has_lists_t, split_decode_t, copy_mode_t>(
             s, sb, valid_count, next_valid_count, t, str_offsets, string_output_offset);
