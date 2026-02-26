@@ -523,6 +523,184 @@
           "Williamson County",
           "Williamson County"
         ]
+      },
+      "24": {
+        "market": 8,
+        "color": [
+          "rose",
+          "wheat"
+        ],
+        "amountone": "ss_net_profit"
+      },
+      "25": {
+        "year": 2001,
+        "agg": "stddev_samp"
+      },
+      "26": {
+        "year": 2002,
+        "gen": "M",
+        "ms": "U",
+        "es": "College"
+      },
+      "27": {
+        "year": 1999,
+        "gen": "M",
+        "ms": "U",
+        "es": "College",
+        "state": [
+          "TN",
+          "TN",
+          "TN",
+          "TN",
+          "TN",
+          "TN"
+        ]
+      },
+      "28": {
+        "listprice": [
+          160,
+          38,
+          68,
+          86,
+          101,
+          156
+        ],
+        "couponamt": [
+          8331,
+          6914,
+          5755,
+          2785,
+          6780,
+          13077
+        ],
+        "wholesalecost": [
+          46,
+          56,
+          5,
+          6,
+          66,
+          27
+        ]
+      },
+      "29": {
+        "year": 2000,
+        "month": 4,
+        "agg": "stddev_samp"
+      },
+      "30": {
+        "year": 2001,
+        "state": "NH"
+      },
+      "31": {
+        "year": 2001,
+        "agg": "ss1.ca_county"
+      },
+      "32": {
+        "imid": 10,
+        "csdate": "2002-01-05",
+        "year": 2002
+      },
+      "33": {
+        "year": 2001,
+        "month": 5,
+        "gmt": -5.0,
+        "category": "Sports"
+      },
+      "34": {
+        "year": 1999,
+        "bpone": "501-1000",
+        "bptwo": "5001-10000",
+        "county": [
+          "Williamson County",
+          "Williamson County",
+          "Williamson County",
+          "Williamson County",
+          "Williamson County",
+          "Williamson County",
+          "Williamson County",
+          "Williamson County"
+        ]
+      },
+      "35": {
+        "year": 2002,
+        "aggone": "stddev_samp",
+        "aggtwo": "avg",
+        "aggthree": "stddev_samp"
+      },
+      "36": {
+        "year": 2001,
+        "state": [
+          "TN",
+          "TN",
+          "TN",
+          "TN",
+          "TN",
+          "TN",
+          "TN",
+          "TN"
+        ]
+      },
+      "63": {
+        "dms": 1176
+      },
+      "64": {
+        "year": 1999,
+        "price": 15,
+        "colors": [
+          "chartreuse",
+          "orange",
+          "firebrick",
+          "floral",
+          "medium",
+          "pink"
+        ]
+      },
+      "65": {
+        "dms": 1176
+      },
+      "66": {
+        "year": 2000,
+        "time_one": 44564,
+        "smc": [
+          "DHL",
+          "PRIVATECARRIER"
+        ],
+        "sales_one": "ws_ext_sales_price",
+        "net_one": "ws_net_paid_inc_ship_tax",
+        "sales_two": "cs_sales_price",
+        "net_two": "cs_net_profit"
+      },
+      "67": {
+        "dms": 1176
+      },
+      "68": {
+        "year": 2000,
+        "dep_cnt": 6,
+        "veh_cnt": 4,
+        "city_a": "Fairview",
+        "city_b": "Midway"
+      },
+      "69": {
+        "year": 2004,
+        "month": 4,
+        "states": [
+          "IA",
+          "MN",
+          "MT"
+        ]
+      },
+      "70": {
+        "dms": 1176
+      },
+      "71": {
+        "year": 2001,
+        "month": 11,
+        "manager": 1
+      },
+      "72": {
+        "year": 2002,
+        "bp": "--",
+        "ms": "U"
       }
     },
     "10": {
@@ -1047,6 +1225,184 @@
           "Walker County",
           "Ziebach County"
         ]
+      },
+      "24": {
+        "market": 8,
+        "color": [
+          "rose",
+          "wheat"
+        ],
+        "amountone": "ss_net_profit"
+      },
+      "25": {
+        "year": 2001,
+        "agg": "stddev_samp"
+      },
+      "26": {
+        "year": 2002,
+        "gen": "M",
+        "ms": "U",
+        "es": "College"
+      },
+      "27": {
+        "year": 1999,
+        "gen": "M",
+        "ms": "S",
+        "es": "College",
+        "state": [
+          "SD",
+          "AL",
+          "TN",
+          "SD",
+          "SD",
+          "SD"
+        ]
+      },
+      "28": {
+        "listprice": [
+          160,
+          38,
+          68,
+          86,
+          101,
+          156
+        ],
+        "couponamt": [
+          8331,
+          6914,
+          5755,
+          2785,
+          6780,
+          13077
+        ],
+        "wholesalecost": [
+          46,
+          56,
+          5,
+          6,
+          66,
+          27
+        ]
+      },
+      "29": {
+        "year": 2000,
+        "month": 4,
+        "agg": "stddev_samp"
+      },
+      "30": {
+        "year": 2001,
+        "state": "NH"
+      },
+      "31": {
+        "year": 2001,
+        "agg": "ss1.ca_county"
+      },
+      "32": {
+        "imid": 10,
+        "csdate": "2002-01-05",
+        "year": 2002
+      },
+      "33": {
+        "year": 2001,
+        "month": 5,
+        "gmt": -6.0,
+        "category": "Sports"
+      },
+      "34": {
+        "year": 2000,
+        "bpone": "1001-5000",
+        "bptwo": "5001-10000",
+        "county": [
+          "Ziebach County",
+          "Walker County",
+          "Williamson County",
+          "Ziebach County",
+          "Ziebach County",
+          "Ziebach County",
+          "Ziebach County",
+          "Ziebach County"
+        ]
+      },
+      "35": {
+        "year": 2002,
+        "aggone": "stddev_samp",
+        "aggtwo": "avg",
+        "aggthree": "stddev_samp"
+      },
+      "36": {
+        "year": 2001,
+        "state": [
+          "SD",
+          "AL",
+          "TN",
+          "SD",
+          "SD",
+          "SD",
+          "SD",
+          "SD"
+        ]
+      },
+      "63": {
+        "dms": 1176
+      },
+      "64": {
+        "year": 1999,
+        "price": 15,
+        "colors": [
+          "chartreuse",
+          "orange",
+          "firebrick",
+          "floral",
+          "medium",
+          "pink"
+        ]
+      },
+      "65": {
+        "dms": 1176
+      },
+      "66": {
+        "year": 2000,
+        "time_one": 44564,
+        "smc": [
+          "DHL",
+          "PRIVATECARRIER"
+        ],
+        "sales_one": "ws_ext_sales_price",
+        "net_one": "ws_net_paid_inc_ship_tax",
+        "sales_two": "cs_sales_price",
+        "net_two": "cs_net_profit"
+      },
+      "67": {
+        "dms": 1176
+      },
+      "68": {
+        "year": 2000,
+        "dep_cnt": 0,
+        "veh_cnt": 4,
+        "city_a": "Fairview",
+        "city_b": "Oak Grove"
+      },
+      "69": {
+        "year": 2004,
+        "month": 4,
+        "states": [
+          "IA",
+          "MN",
+          "MT"
+        ]
+      },
+      "70": {
+        "dms": 1176
+      },
+      "71": {
+        "year": 2001,
+        "month": 11,
+        "manager": 1
+      },
+      "72": {
+        "year": 2002,
+        "bp": "--",
+        "ms": "U"
       }
     },
     "50": {
@@ -1571,6 +1927,184 @@
           "Walker County",
           "Ziebach County"
         ]
+      },
+      "24": {
+        "market": 8,
+        "color": [
+          "rose",
+          "wheat"
+        ],
+        "amountone": "ss_net_profit"
+      },
+      "25": {
+        "year": 2001,
+        "agg": "stddev_samp"
+      },
+      "26": {
+        "year": 2002,
+        "gen": "M",
+        "ms": "U",
+        "es": "College"
+      },
+      "27": {
+        "year": 1999,
+        "gen": "M",
+        "ms": "S",
+        "es": "College",
+        "state": [
+          "SD",
+          "AL",
+          "TN",
+          "SD",
+          "SD",
+          "SD"
+        ]
+      },
+      "28": {
+        "listprice": [
+          160,
+          38,
+          68,
+          86,
+          101,
+          156
+        ],
+        "couponamt": [
+          8331,
+          6914,
+          5755,
+          2785,
+          6780,
+          13077
+        ],
+        "wholesalecost": [
+          46,
+          56,
+          5,
+          6,
+          66,
+          27
+        ]
+      },
+      "29": {
+        "year": 2000,
+        "month": 4,
+        "agg": "stddev_samp"
+      },
+      "30": {
+        "year": 2001,
+        "state": "NH"
+      },
+      "31": {
+        "year": 2001,
+        "agg": "ss1.ca_county"
+      },
+      "32": {
+        "imid": 10,
+        "csdate": "2002-01-05",
+        "year": 2002
+      },
+      "33": {
+        "year": 2001,
+        "month": 5,
+        "gmt": -6.0,
+        "category": "Sports"
+      },
+      "34": {
+        "year": 2000,
+        "bpone": "1001-5000",
+        "bptwo": "5001-10000",
+        "county": [
+          "Ziebach County",
+          "Walker County",
+          "Williamson County",
+          "Ziebach County",
+          "Ziebach County",
+          "Ziebach County",
+          "Ziebach County",
+          "Ziebach County"
+        ]
+      },
+      "35": {
+        "year": 2002,
+        "aggone": "stddev_samp",
+        "aggtwo": "avg",
+        "aggthree": "stddev_samp"
+      },
+      "36": {
+        "year": 2001,
+        "state": [
+          "SD",
+          "AL",
+          "TN",
+          "SD",
+          "SD",
+          "SD",
+          "SD",
+          "SD"
+        ]
+      },
+      "63": {
+        "dms": 1176
+      },
+      "64": {
+        "year": 1999,
+        "price": 15,
+        "colors": [
+          "chartreuse",
+          "orange",
+          "firebrick",
+          "floral",
+          "medium",
+          "pink"
+        ]
+      },
+      "65": {
+        "dms": 1176
+      },
+      "66": {
+        "year": 2000,
+        "time_one": 44564,
+        "smc": [
+          "DHL",
+          "PRIVATECARRIER"
+        ],
+        "sales_one": "ws_ext_sales_price",
+        "net_one": "ws_net_paid_inc_ship_tax",
+        "sales_two": "cs_sales_price",
+        "net_two": "cs_net_profit"
+      },
+      "67": {
+        "dms": 1176
+      },
+      "68": {
+        "year": 2000,
+        "dep_cnt": 5,
+        "veh_cnt": 1,
+        "city_a": "Fairview",
+        "city_b": "Five Points"
+      },
+      "69": {
+        "year": 2004,
+        "month": 4,
+        "states": [
+          "IA",
+          "MN",
+          "MT"
+        ]
+      },
+      "70": {
+        "dms": 1176
+      },
+      "71": {
+        "year": 2001,
+        "month": 11,
+        "manager": 1
+      },
+      "72": {
+        "year": 2002,
+        "bp": "--",
+        "ms": "U"
       }
     },
     "100": {
@@ -2095,6 +2629,184 @@
           "Daviess County",
           "Richland County"
         ]
+      },
+      "24": {
+        "market": 8,
+        "color": [
+          "rose",
+          "wheat"
+        ],
+        "amountone": "ss_net_profit"
+      },
+      "25": {
+        "year": 2001,
+        "agg": "stddev_samp"
+      },
+      "26": {
+        "year": 2002,
+        "gen": "M",
+        "ms": "U",
+        "es": "College"
+      },
+      "27": {
+        "year": 1999,
+        "gen": "M",
+        "ms": "W",
+        "es": "2 yr Degree",
+        "state": [
+          "GA",
+          "AL",
+          "SD",
+          "MO",
+          "OH",
+          "TN"
+        ]
+      },
+      "28": {
+        "listprice": [
+          160,
+          38,
+          68,
+          86,
+          101,
+          156
+        ],
+        "couponamt": [
+          8331,
+          6914,
+          5755,
+          2785,
+          6780,
+          13077
+        ],
+        "wholesalecost": [
+          46,
+          56,
+          5,
+          6,
+          66,
+          27
+        ]
+      },
+      "29": {
+        "year": 2000,
+        "month": 4,
+        "agg": "stddev_samp"
+      },
+      "30": {
+        "year": 2001,
+        "state": "NH"
+      },
+      "31": {
+        "year": 2001,
+        "agg": "ss1.ca_county"
+      },
+      "32": {
+        "imid": 10,
+        "csdate": "2002-01-05",
+        "year": 2002
+      },
+      "33": {
+        "year": 2001,
+        "month": 5,
+        "gmt": -6.0,
+        "category": "Sports"
+      },
+      "34": {
+        "year": 1998,
+        "bpone": "1001-5000",
+        "bptwo": "5001-10000",
+        "county": [
+          "Barrow County",
+          "Walker County",
+          "Ziebach County",
+          "Daviess County",
+          "Richland County",
+          "Williamson County",
+          "Fairfield County",
+          "Franklin Parish"
+        ]
+      },
+      "35": {
+        "year": 2002,
+        "aggone": "stddev_samp",
+        "aggtwo": "avg",
+        "aggthree": "stddev_samp"
+      },
+      "36": {
+        "year": 1998,
+        "state": [
+          "GA",
+          "AL",
+          "SD",
+          "MO",
+          "OH",
+          "TN",
+          "SC",
+          "LA"
+        ]
+      },
+      "63": {
+        "dms": 1176
+      },
+      "64": {
+        "year": 1999,
+        "price": 15,
+        "colors": [
+          "chartreuse",
+          "orange",
+          "firebrick",
+          "floral",
+          "medium",
+          "pink"
+        ]
+      },
+      "65": {
+        "dms": 1176
+      },
+      "66": {
+        "year": 2000,
+        "time_one": 44564,
+        "smc": [
+          "DHL",
+          "PRIVATECARRIER"
+        ],
+        "sales_one": "ws_ext_sales_price",
+        "net_one": "ws_net_paid_inc_ship_tax",
+        "sales_two": "cs_sales_price",
+        "net_two": "cs_net_profit"
+      },
+      "67": {
+        "dms": 1176
+      },
+      "68": {
+        "year": 1999,
+        "dep_cnt": 7,
+        "veh_cnt": 1,
+        "city_a": "Centerville",
+        "city_b": "Oak Grove"
+      },
+      "69": {
+        "year": 2004,
+        "month": 4,
+        "states": [
+          "IA",
+          "MN",
+          "MT"
+        ]
+      },
+      "70": {
+        "dms": 1176
+      },
+      "71": {
+        "year": 2001,
+        "month": 11,
+        "manager": 1
+      },
+      "72": {
+        "year": 2002,
+        "bp": "--",
+        "ms": "U"
       }
     },
     "200": {
@@ -2619,6 +3331,184 @@
           "Walker County",
           "Ziebach County"
         ]
+      },
+      "24": {
+        "market": 8,
+        "color": [
+          "rose",
+          "wheat"
+        ],
+        "amountone": "ss_net_profit"
+      },
+      "25": {
+        "year": 2001,
+        "agg": "stddev_samp"
+      },
+      "26": {
+        "year": 2002,
+        "gen": "M",
+        "ms": "U",
+        "es": "College"
+      },
+      "27": {
+        "year": 1999,
+        "gen": "M",
+        "ms": "S",
+        "es": "College",
+        "state": [
+          "SD",
+          "AL",
+          "TN",
+          "SD",
+          "SD",
+          "SD"
+        ]
+      },
+      "28": {
+        "listprice": [
+          160,
+          38,
+          68,
+          86,
+          101,
+          156
+        ],
+        "couponamt": [
+          8331,
+          6914,
+          5755,
+          2785,
+          6780,
+          13077
+        ],
+        "wholesalecost": [
+          46,
+          56,
+          5,
+          6,
+          66,
+          27
+        ]
+      },
+      "29": {
+        "year": 2000,
+        "month": 4,
+        "agg": "stddev_samp"
+      },
+      "30": {
+        "year": 2001,
+        "state": "NH"
+      },
+      "31": {
+        "year": 2001,
+        "agg": "ss1.ca_county"
+      },
+      "32": {
+        "imid": 10,
+        "csdate": "2002-01-05",
+        "year": 2002
+      },
+      "33": {
+        "year": 2001,
+        "month": 5,
+        "gmt": -5.0,
+        "category": "Sports"
+      },
+      "34": {
+        "year": 2000,
+        "bpone": "501-1000",
+        "bptwo": "0-500",
+        "county": [
+          "Fairfield County",
+          "Ziebach County",
+          "Williamson County",
+          "Walker County",
+          "Ziebach County",
+          "Walker County",
+          "Ziebach County",
+          "Ziebach County"
+        ]
+      },
+      "35": {
+        "year": 2002,
+        "aggone": "stddev_samp",
+        "aggtwo": "avg",
+        "aggthree": "stddev_samp"
+      },
+      "36": {
+        "year": 2001,
+        "state": [
+          "SD",
+          "AL",
+          "TN",
+          "SD",
+          "SD",
+          "SD",
+          "SD",
+          "SD"
+        ]
+      },
+      "63": {
+        "dms": 1176
+      },
+      "64": {
+        "year": 1999,
+        "price": 15,
+        "colors": [
+          "chartreuse",
+          "orange",
+          "firebrick",
+          "floral",
+          "medium",
+          "pink"
+        ]
+      },
+      "65": {
+        "dms": 1176
+      },
+      "66": {
+        "year": 2000,
+        "time_one": 44564,
+        "smc": [
+          "DHL",
+          "PRIVATECARRIER"
+        ],
+        "sales_one": "ws_ext_sales_price",
+        "net_one": "ws_net_paid_inc_ship_tax",
+        "sales_two": "cs_sales_price",
+        "net_two": "cs_net_profit"
+      },
+      "67": {
+        "dms": 1176
+      },
+      "68": {
+        "year": 1998,
+        "dep_cnt": 8,
+        "veh_cnt": 1,
+        "city_a": "Pleasant Hill",
+        "city_b": "Fairview"
+      },
+      "69": {
+        "year": 2004,
+        "month": 4,
+        "states": [
+          "IA",
+          "MN",
+          "MT"
+        ]
+      },
+      "70": {
+        "dms": 1176
+      },
+      "71": {
+        "year": 2001,
+        "month": 11,
+        "manager": 1
+      },
+      "72": {
+        "year": 2002,
+        "bp": "--",
+        "ms": "U"
       }
     },
     "400": {
@@ -3143,6 +4033,184 @@
           "Williamson County",
           "Ziebach County"
         ]
+      },
+      "24": {
+        "market": 8,
+        "color": [
+          "rose",
+          "wheat"
+        ],
+        "amountone": "ss_net_profit"
+      },
+      "25": {
+        "year": 2001,
+        "agg": "stddev_samp"
+      },
+      "26": {
+        "year": 2002,
+        "gen": "M",
+        "ms": "U",
+        "es": "College"
+      },
+      "27": {
+        "year": 1999,
+        "gen": "M",
+        "ms": "W",
+        "es": "4 yr Degree",
+        "state": [
+          "SD",
+          "TN",
+          "SD",
+          "TN",
+          "SD",
+          "SD"
+        ]
+      },
+      "28": {
+        "listprice": [
+          160,
+          38,
+          68,
+          86,
+          101,
+          156
+        ],
+        "couponamt": [
+          8331,
+          6914,
+          5755,
+          2785,
+          6780,
+          13077
+        ],
+        "wholesalecost": [
+          46,
+          56,
+          5,
+          6,
+          66,
+          27
+        ]
+      },
+      "29": {
+        "year": 2000,
+        "month": 4,
+        "agg": "stddev_samp"
+      },
+      "30": {
+        "year": 2001,
+        "state": "NH"
+      },
+      "31": {
+        "year": 2001,
+        "agg": "ss1.ca_county"
+      },
+      "32": {
+        "imid": 10,
+        "csdate": "2002-01-05",
+        "year": 2002
+      },
+      "33": {
+        "year": 2001,
+        "month": 5,
+        "gmt": -6.0,
+        "category": "Sports"
+      },
+      "34": {
+        "year": 2000,
+        "bpone": "501-1000",
+        "bptwo": "5001-10000",
+        "county": [
+          "Ziebach County",
+          "Williamson County",
+          "Ziebach County",
+          "Williamson County",
+          "Ziebach County",
+          "Ziebach County",
+          "Ziebach County",
+          "Ziebach County"
+        ]
+      },
+      "35": {
+        "year": 2002,
+        "aggone": "stddev_samp",
+        "aggtwo": "avg",
+        "aggthree": "stddev_samp"
+      },
+      "36": {
+        "year": 2002,
+        "state": [
+          "SD",
+          "TN",
+          "SD",
+          "TN",
+          "SD",
+          "SD",
+          "SD",
+          "SD"
+        ]
+      },
+      "63": {
+        "dms": 1176
+      },
+      "64": {
+        "year": 1999,
+        "price": 15,
+        "colors": [
+          "chartreuse",
+          "orange",
+          "firebrick",
+          "floral",
+          "medium",
+          "pink"
+        ]
+      },
+      "65": {
+        "dms": 1176
+      },
+      "66": {
+        "year": 2000,
+        "time_one": 44564,
+        "smc": [
+          "DHL",
+          "PRIVATECARRIER"
+        ],
+        "sales_one": "ws_ext_sales_price",
+        "net_one": "ws_net_paid_inc_ship_tax",
+        "sales_two": "cs_sales_price",
+        "net_two": "cs_net_profit"
+      },
+      "67": {
+        "dms": 1176
+      },
+      "68": {
+        "year": 2000,
+        "dep_cnt": 0,
+        "veh_cnt": 2,
+        "city_a": "Midway",
+        "city_b": "Five Points"
+      },
+      "69": {
+        "year": 2004,
+        "month": 4,
+        "states": [
+          "IA",
+          "MN",
+          "MT"
+        ]
+      },
+      "70": {
+        "dms": 1176
+      },
+      "71": {
+        "year": 2001,
+        "month": 11,
+        "manager": 1
+      },
+      "72": {
+        "year": 2002,
+        "bp": "--",
+        "ms": "U"
       }
     },
     "1000": {
@@ -3667,6 +4735,184 @@
           "San Miguel County",
           "Oglethorpe County"
         ]
+      },
+      "24": {
+        "market": 8,
+        "color": [
+          "rose",
+          "wheat"
+        ],
+        "amountone": "ss_net_profit"
+      },
+      "25": {
+        "year": 2001,
+        "agg": "stddev_samp"
+      },
+      "26": {
+        "year": 2002,
+        "gen": "M",
+        "ms": "U",
+        "es": "College"
+      },
+      "27": {
+        "year": 1998,
+        "gen": "F",
+        "ms": "M",
+        "es": "Primary",
+        "state": [
+          "IN",
+          "MN",
+          "OH",
+          "NM",
+          "GA",
+          "MN"
+        ]
+      },
+      "28": {
+        "listprice": [
+          160,
+          38,
+          68,
+          86,
+          101,
+          156
+        ],
+        "couponamt": [
+          8331,
+          6914,
+          5755,
+          2785,
+          6780,
+          13077
+        ],
+        "wholesalecost": [
+          46,
+          56,
+          5,
+          6,
+          66,
+          27
+        ]
+      },
+      "29": {
+        "year": 2000,
+        "month": 4,
+        "agg": "stddev_samp"
+      },
+      "30": {
+        "year": 2001,
+        "state": "NH"
+      },
+      "31": {
+        "year": 2001,
+        "agg": "ss1.ca_county"
+      },
+      "32": {
+        "imid": 10,
+        "csdate": "2002-01-05",
+        "year": 2002
+      },
+      "33": {
+        "year": 2001,
+        "month": 5,
+        "gmt": -6.0,
+        "category": "Sports"
+      },
+      "34": {
+        "year": 1998,
+        "bpone": ">10000",
+        "bptwo": "Unknown",
+        "county": [
+          "Barrow County",
+          "Bronx County",
+          "Kittitas County",
+          "Levy County",
+          "Richland County",
+          "Gogebic County",
+          "Dauphin County",
+          "Marshall County"
+        ]
+      },
+      "35": {
+        "year": 2002,
+        "aggone": "stddev_samp",
+        "aggtwo": "avg",
+        "aggthree": "stddev_samp"
+      },
+      "36": {
+        "year": 2000,
+        "state": [
+          "IN",
+          "MN",
+          "OH",
+          "NM",
+          "GA",
+          "MN",
+          "LA",
+          "AL"
+        ]
+      },
+      "63": {
+        "dms": 1176
+      },
+      "64": {
+        "year": 1999,
+        "price": 15,
+        "colors": [
+          "chartreuse",
+          "orange",
+          "firebrick",
+          "floral",
+          "medium",
+          "pink"
+        ]
+      },
+      "65": {
+        "dms": 1176
+      },
+      "66": {
+        "year": 2000,
+        "time_one": 44564,
+        "smc": [
+          "DHL",
+          "PRIVATECARRIER"
+        ],
+        "sales_one": "ws_ext_sales_price",
+        "net_one": "ws_net_paid_inc_ship_tax",
+        "sales_two": "cs_sales_price",
+        "net_two": "cs_net_profit"
+      },
+      "67": {
+        "dms": 1176
+      },
+      "68": {
+        "year": 1998,
+        "dep_cnt": 8,
+        "veh_cnt": 2,
+        "city_a": "Centerville",
+        "city_b": "Oakland"
+      },
+      "69": {
+        "year": 2004,
+        "month": 4,
+        "states": [
+          "IA",
+          "MN",
+          "MT"
+        ]
+      },
+      "70": {
+        "dms": 1176
+      },
+      "71": {
+        "year": 2001,
+        "month": 11,
+        "manager": 1
+      },
+      "72": {
+        "year": 2002,
+        "bp": "--",
+        "ms": "U"
       }
     },
     "3000": {
@@ -4191,6 +5437,184 @@
           "Williamson County",
           "Marshall County"
         ]
+      },
+      "24": {
+        "market": 8,
+        "color": [
+          "rose",
+          "wheat"
+        ],
+        "amountone": "ss_net_profit"
+      },
+      "25": {
+        "year": 2001,
+        "agg": "stddev_samp"
+      },
+      "26": {
+        "year": 2002,
+        "gen": "M",
+        "ms": "U",
+        "es": "College"
+      },
+      "27": {
+        "year": 2000,
+        "gen": "F",
+        "ms": "W",
+        "es": "Unknown",
+        "state": [
+          "MO",
+          "MN",
+          "CO",
+          "NE",
+          "NY",
+          "AL"
+        ]
+      },
+      "28": {
+        "listprice": [
+          160,
+          38,
+          68,
+          86,
+          101,
+          156
+        ],
+        "couponamt": [
+          8331,
+          6914,
+          5755,
+          2785,
+          6780,
+          13077
+        ],
+        "wholesalecost": [
+          46,
+          56,
+          5,
+          6,
+          66,
+          27
+        ]
+      },
+      "29": {
+        "year": 2000,
+        "month": 4,
+        "agg": "stddev_samp"
+      },
+      "30": {
+        "year": 2001,
+        "state": "NH"
+      },
+      "31": {
+        "year": 2001,
+        "agg": "ss1.ca_county"
+      },
+      "32": {
+        "imid": 10,
+        "csdate": "2002-01-05",
+        "year": 2002
+      },
+      "33": {
+        "year": 2001,
+        "month": 5,
+        "gmt": -6.0,
+        "category": "Sports"
+      },
+      "34": {
+        "year": 1998,
+        "bpone": "501-1000",
+        "bptwo": "Unknown",
+        "county": [
+          "Anderson County",
+          "Sierra County",
+          "Kittitas County",
+          "Terrell County",
+          "Dauphin County",
+          "Adams County",
+          "Perry County",
+          "Appanoose County"
+        ]
+      },
+      "35": {
+        "year": 2002,
+        "aggone": "stddev_samp",
+        "aggtwo": "avg",
+        "aggthree": "stddev_samp"
+      },
+      "36": {
+        "year": 2000,
+        "state": [
+          "MO",
+          "MN",
+          "CO",
+          "NE",
+          "NY",
+          "AL",
+          "WV",
+          "LA"
+        ]
+      },
+      "63": {
+        "dms": 1176
+      },
+      "64": {
+        "year": 1999,
+        "price": 15,
+        "colors": [
+          "chartreuse",
+          "orange",
+          "firebrick",
+          "floral",
+          "medium",
+          "pink"
+        ]
+      },
+      "65": {
+        "dms": 1176
+      },
+      "66": {
+        "year": 2000,
+        "time_one": 44564,
+        "smc": [
+          "DHL",
+          "PRIVATECARRIER"
+        ],
+        "sales_one": "ws_ext_sales_price",
+        "net_one": "ws_net_paid_inc_ship_tax",
+        "sales_two": "cs_sales_price",
+        "net_two": "cs_net_profit"
+      },
+      "67": {
+        "dms": 1176
+      },
+      "68": {
+        "year": 1998,
+        "dep_cnt": 2,
+        "veh_cnt": 2,
+        "city_a": "Riverview",
+        "city_b": "Summit"
+      },
+      "69": {
+        "year": 2004,
+        "month": 4,
+        "states": [
+          "IA",
+          "MN",
+          "MT"
+        ]
+      },
+      "70": {
+        "dms": 1176
+      },
+      "71": {
+        "year": 2001,
+        "month": 11,
+        "manager": 1
+      },
+      "72": {
+        "year": 2002,
+        "bp": "--",
+        "ms": "U"
       }
     },
     "10000": {
@@ -4715,6 +6139,184 @@
           "Levy County",
           "Richland County"
         ]
+      },
+      "24": {
+        "market": 8,
+        "color": [
+          "rose",
+          "wheat"
+        ],
+        "amountone": "ss_net_profit"
+      },
+      "25": {
+        "year": 2001,
+        "agg": "stddev_samp"
+      },
+      "26": {
+        "year": 2002,
+        "gen": "M",
+        "ms": "U",
+        "es": "College"
+      },
+      "27": {
+        "year": 1999,
+        "gen": "F",
+        "ms": "M",
+        "es": "Advanced Degree",
+        "state": [
+          "NY",
+          "TN",
+          "TX",
+          "AL",
+          "WV",
+          "MI"
+        ]
+      },
+      "28": {
+        "listprice": [
+          160,
+          38,
+          68,
+          86,
+          101,
+          156
+        ],
+        "couponamt": [
+          8331,
+          6914,
+          5755,
+          2785,
+          6780,
+          13077
+        ],
+        "wholesalecost": [
+          46,
+          56,
+          5,
+          6,
+          66,
+          27
+        ]
+      },
+      "29": {
+        "year": 2000,
+        "month": 4,
+        "agg": "stddev_samp"
+      },
+      "30": {
+        "year": 2001,
+        "state": "NH"
+      },
+      "31": {
+        "year": 2001,
+        "agg": "ss1.ca_county"
+      },
+      "32": {
+        "imid": 10,
+        "csdate": "2002-01-05",
+        "year": 2002
+      },
+      "33": {
+        "year": 2001,
+        "month": 5,
+        "gmt": -5.0,
+        "category": "Sports"
+      },
+      "34": {
+        "year": 1999,
+        "bpone": "501-1000",
+        "bptwo": "0-500",
+        "county": [
+          "Quay County",
+          "Cocke County",
+          "Franklin Parish",
+          "Daviess County",
+          "Wilkinson County",
+          "Perry County",
+          "Tehama County",
+          "Henry County"
+        ]
+      },
+      "35": {
+        "year": 2002,
+        "aggone": "stddev_samp",
+        "aggtwo": "avg",
+        "aggthree": "stddev_samp"
+      },
+      "36": {
+        "year": 1998,
+        "state": [
+          "NY",
+          "TN",
+          "TX",
+          "AL",
+          "WV",
+          "MI",
+          "MI",
+          "NM"
+        ]
+      },
+      "63": {
+        "dms": 1176
+      },
+      "64": {
+        "year": 1999,
+        "price": 15,
+        "colors": [
+          "chartreuse",
+          "orange",
+          "firebrick",
+          "floral",
+          "medium",
+          "pink"
+        ]
+      },
+      "65": {
+        "dms": 1176
+      },
+      "66": {
+        "year": 2000,
+        "time_one": 44564,
+        "smc": [
+          "DHL",
+          "PRIVATECARRIER"
+        ],
+        "sales_one": "ws_ext_sales_price",
+        "net_one": "ws_net_paid_inc_ship_tax",
+        "sales_two": "cs_sales_price",
+        "net_two": "cs_net_profit"
+      },
+      "67": {
+        "dms": 1176
+      },
+      "68": {
+        "year": 1999,
+        "dep_cnt": 3,
+        "veh_cnt": 4,
+        "city_a": "Antioch",
+        "city_b": "Jefferson"
+      },
+      "69": {
+        "year": 2004,
+        "month": 4,
+        "states": [
+          "IA",
+          "MN",
+          "MT"
+        ]
+      },
+      "70": {
+        "dms": 1176
+      },
+      "71": {
+        "year": 2001,
+        "month": 11,
+        "manager": 1
+      },
+      "72": {
+        "year": 2002,
+        "bp": "--",
+        "ms": "U"
       }
     },
     "30000": {
@@ -5239,6 +6841,184 @@
           "Barrow County",
           "Perry County"
         ]
+      },
+      "24": {
+        "market": 8,
+        "color": [
+          "rose",
+          "wheat"
+        ],
+        "amountone": "ss_net_profit"
+      },
+      "25": {
+        "year": 2001,
+        "agg": "stddev_samp"
+      },
+      "26": {
+        "year": 2002,
+        "gen": "M",
+        "ms": "U",
+        "es": "College"
+      },
+      "27": {
+        "year": 2002,
+        "gen": "M",
+        "ms": "M",
+        "es": "Advanced Degree",
+        "state": [
+          "IN",
+          "MO",
+          "PA",
+          "OH",
+          "VT",
+          "CA"
+        ]
+      },
+      "28": {
+        "listprice": [
+          160,
+          38,
+          68,
+          86,
+          101,
+          156
+        ],
+        "couponamt": [
+          8331,
+          6914,
+          5755,
+          2785,
+          6780,
+          13077
+        ],
+        "wholesalecost": [
+          46,
+          56,
+          5,
+          6,
+          66,
+          27
+        ]
+      },
+      "29": {
+        "year": 2000,
+        "month": 4,
+        "agg": "stddev_samp"
+      },
+      "30": {
+        "year": 2001,
+        "state": "NH"
+      },
+      "31": {
+        "year": 2001,
+        "agg": "ss1.ca_county"
+      },
+      "32": {
+        "imid": 10,
+        "csdate": "2002-01-05",
+        "year": 2002
+      },
+      "33": {
+        "year": 2001,
+        "month": 5,
+        "gmt": -6.0,
+        "category": "Sports"
+      },
+      "34": {
+        "year": 2000,
+        "bpone": "1001-5000",
+        "bptwo": "Unknown",
+        "county": [
+          "Schley County",
+          "Sierra County",
+          "Kittitas County",
+          "La Crosse County",
+          "Reagan County",
+          "Henry County",
+          "Tehama County",
+          "Surry County"
+        ]
+      },
+      "35": {
+        "year": 2002,
+        "aggone": "stddev_samp",
+        "aggtwo": "avg",
+        "aggthree": "stddev_samp"
+      },
+      "36": {
+        "year": 1999,
+        "state": [
+          "IN",
+          "MO",
+          "PA",
+          "OH",
+          "VT",
+          "CA",
+          "TN",
+          "TX"
+        ]
+      },
+      "63": {
+        "dms": 1176
+      },
+      "64": {
+        "year": 1999,
+        "price": 15,
+        "colors": [
+          "chartreuse",
+          "orange",
+          "firebrick",
+          "floral",
+          "medium",
+          "pink"
+        ]
+      },
+      "65": {
+        "dms": 1176
+      },
+      "66": {
+        "year": 2000,
+        "time_one": 44564,
+        "smc": [
+          "DHL",
+          "PRIVATECARRIER"
+        ],
+        "sales_one": "ws_ext_sales_price",
+        "net_one": "ws_net_paid_inc_ship_tax",
+        "sales_two": "cs_sales_price",
+        "net_two": "cs_net_profit"
+      },
+      "67": {
+        "dms": 1176
+      },
+      "68": {
+        "year": 1998,
+        "dep_cnt": 8,
+        "veh_cnt": 2,
+        "city_a": "Five Corners",
+        "city_b": "Macedonia"
+      },
+      "69": {
+        "year": 2004,
+        "month": 4,
+        "states": [
+          "IA",
+          "MN",
+          "MT"
+        ]
+      },
+      "70": {
+        "dms": 1176
+      },
+      "71": {
+        "year": 2001,
+        "month": 11,
+        "manager": 1
+      },
+      "72": {
+        "year": 2002,
+        "bp": "--",
+        "ms": "U"
       }
     },
     "100000": {
@@ -5763,6 +7543,184 @@
           "Barrow County",
           "Perry County"
         ]
+      },
+      "24": {
+        "market": 8,
+        "color": [
+          "rose",
+          "wheat"
+        ],
+        "amountone": "ss_net_profit"
+      },
+      "25": {
+        "year": 2001,
+        "agg": "stddev_samp"
+      },
+      "26": {
+        "year": 2002,
+        "gen": "M",
+        "ms": "U",
+        "es": "College"
+      },
+      "27": {
+        "year": 2001,
+        "gen": "M",
+        "ms": "S",
+        "es": "Advanced Degree",
+        "state": [
+          "AL",
+          "CO",
+          "KS",
+          "LA",
+          "OK",
+          "WV"
+        ]
+      },
+      "28": {
+        "listprice": [
+          160,
+          38,
+          68,
+          86,
+          101,
+          156
+        ],
+        "couponamt": [
+          8331,
+          6914,
+          5755,
+          2785,
+          6780,
+          13077
+        ],
+        "wholesalecost": [
+          46,
+          56,
+          5,
+          6,
+          66,
+          27
+        ]
+      },
+      "29": {
+        "year": 2000,
+        "month": 4,
+        "agg": "stddev_samp"
+      },
+      "30": {
+        "year": 2001,
+        "state": "NH"
+      },
+      "31": {
+        "year": 2001,
+        "agg": "ss1.ca_county"
+      },
+      "32": {
+        "imid": 10,
+        "csdate": "2002-01-05",
+        "year": 2002
+      },
+      "33": {
+        "year": 2001,
+        "month": 5,
+        "gmt": -5.0,
+        "category": "Sports"
+      },
+      "34": {
+        "year": 1999,
+        "bpone": "1001-5000",
+        "bptwo": "Unknown",
+        "county": [
+          "Stillwater County",
+          "Montgomery County",
+          "Blair County",
+          "Gage County",
+          "Garza County",
+          "Fairfield County",
+          "Franklin Parish",
+          "Hinds County"
+        ]
+      },
+      "35": {
+        "year": 2002,
+        "aggone": "stddev_samp",
+        "aggtwo": "avg",
+        "aggthree": "stddev_samp"
+      },
+      "36": {
+        "year": 2001,
+        "state": [
+          "AL",
+          "CO",
+          "KS",
+          "LA",
+          "OK",
+          "WV",
+          "IA",
+          "MI"
+        ]
+      },
+      "63": {
+        "dms": 1176
+      },
+      "64": {
+        "year": 1999,
+        "price": 15,
+        "colors": [
+          "chartreuse",
+          "orange",
+          "firebrick",
+          "floral",
+          "medium",
+          "pink"
+        ]
+      },
+      "65": {
+        "dms": 1176
+      },
+      "66": {
+        "year": 2000,
+        "time_one": 44564,
+        "smc": [
+          "DHL",
+          "PRIVATECARRIER"
+        ],
+        "sales_one": "ws_ext_sales_price",
+        "net_one": "ws_net_paid_inc_ship_tax",
+        "sales_two": "cs_sales_price",
+        "net_two": "cs_net_profit"
+      },
+      "67": {
+        "dms": 1176
+      },
+      "68": {
+        "year": 1998,
+        "dep_cnt": 5,
+        "veh_cnt": 4,
+        "city_a": "Antioch",
+        "city_b": "Poplar Springs"
+      },
+      "69": {
+        "year": 2004,
+        "month": 4,
+        "states": [
+          "IA",
+          "MN",
+          "MT"
+        ]
+      },
+      "70": {
+        "dms": 1176
+      },
+      "71": {
+        "year": 2001,
+        "month": 11,
+        "manager": 1
+      },
+      "72": {
+        "year": 2002,
+        "bp": "--",
+        "ms": "U"
       }
     },
     "qualification": {
@@ -6281,6 +8239,122 @@
           "Williamson County",
           "Williamson County"
         ]
+      },
+      "24": {
+        "market": 8,
+        "color": [
+          "peach",
+          "saddle"
+        ],
+        "amountone": "ss_net_paid"
+      },
+      "25": {
+        "year": 2001,
+        "agg": "sum"
+      },
+      "26": {
+        "year": 2000,
+        "es": "College",
+        "ms": "S",
+        "gen": "M"
+      },
+      "27": {
+        "year": 2000,
+        "state": [
+          "TN",
+          "TN",
+          "TN",
+          "TN",
+          "TN",
+          "TN"
+        ],
+        "es": "College",
+        "ms": "S",
+        "gen": "M"
+      },
+      "28": {
+        "wholesalecost": [
+          14,
+          32,
+          4,
+          80,
+          38,
+          42
+        ],
+        "listprice": [
+          11,
+          91,
+          66,
+          142,
+          135,
+          28
+        ],
+        "couponamt": [
+          460,
+          1430,
+          920,
+          3054,
+          14180,
+          2513
+        ]
+      },
+      "29": {
+        "month": 9,
+        "year": 1999,
+        "agg": "sum"
+      },
+      "30": {
+        "year": 2002,
+        "state": "GA"
+      },
+      "31": {
+        "year": 2000,
+        "agg": "ss1.ca_county"
+      },
+      "32": {
+        "csdate": "2000-01-27",
+        "year": 2000,
+        "imid": 977
+      },
+      "33": {
+        "category": "Electronics",
+        "gmt": -5.0,
+        "month": 5,
+        "year": 1998
+      },
+      "34": {
+        "county": [
+          "Williamson County",
+          "Williamson County",
+          "Williamson County",
+          "Williamson County",
+          "Williamson County",
+          "Williamson County",
+          "Williamson County",
+          "Williamson County"
+        ],
+        "year": 1999,
+        "bptwo": "Unknown",
+        "bpone": ">10000"
+      },
+      "35": {
+        "year": 2002,
+        "aggone": "min",
+        "aggtwo": "max",
+        "aggthree": "avg"
+      },
+      "36": {
+        "state": [
+          "TN",
+          "TN",
+          "TN",
+          "TN",
+          "TN",
+          "TN",
+          "TN",
+          "TN"
+        ],
+        "year": 2000
       }
     }
   }

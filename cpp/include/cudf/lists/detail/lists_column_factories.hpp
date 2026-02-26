@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -33,12 +33,8 @@ std::unique_ptr<cudf::column> make_lists_column_from_scalar(list_scalar const& v
  * A list column requires a child type and so cannot be created with `make_empty_column`.
  *
  * @param child_type The type used for the empty child column
- * @param stream CUDA stream used for device memory operations and kernel launches
- * @param mr Device memory resource used to allocate the returned column's device memory
  */
-std::unique_ptr<column> make_empty_lists_column(data_type child_type,
-                                                rmm::cuda_stream_view stream,
-                                                rmm::device_async_resource_ref mr);
+std::unique_ptr<column> make_empty_lists_column(data_type child_type);
 
 /**
  * @brief Create a lists column with all null rows.

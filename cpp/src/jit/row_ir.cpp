@@ -398,9 +398,6 @@ std::unique_ptr<row_ir::node> ast_converter::add_ir_node(ast::literal const& exp
 
 std::unique_ptr<row_ir::node> ast_converter::add_ir_node(ast::column_reference const& expr)
 {
-  CUDF_EXPECTS(expr.get_table_source() == ast::table_reference::LEFT,
-               "IR input column reference must be LEFT.",
-               std::invalid_argument);
   auto index =
     add_ast_input(ast_column_input_spec{expr.get_table_source(), expr.get_column_index()});
   return std::make_unique<row_ir::get_input>(index);
@@ -421,11 +418,21 @@ std::unique_ptr<row_ir::node> ast_converter::add_ir_node(ast::detail::filter_pre
   return std::make_unique<row_ir::filter_predicate>(std::move(operand));
 }
 
+// Resolve the table for a column input spec, preferring left_table/right_table for join cases,
+// falling back to args.table for the single-table case.
+table_view const& resolve_table(ast_column_input_spec const& in, ast_args const& args)
+{
+  if (in.table == ast::table_reference::LEFT) {
+    return args.left_table.num_columns() > 0 ? args.left_table : args.table;
+  }
+  return args.right_table;
+}
+
 void ast_converter::add_input_var(ast_column_input_spec const& in, ast_args const& args)
 {
   // TODO(lamarrr): consider mangling column name to make debugging easier
   auto id   = std::format("in_{}", input_vars_.size());
-  auto type = args.table.column(in.column).type();
+  auto type = resolve_table(in, args).column(in.column).type();
   input_vars_.emplace_back(std::move(id), type);
 }
 
@@ -458,10 +465,7 @@ decltype(auto) dispatch_input_spec(ast_input_spec const& in, Fn&& fn, Args&&... 
 std::variant<column_view, scalar_column_view> get_column_view(ast_column_input_spec const& spec,
                                                               ast_args const& args)
 {
-  CUDF_EXPECTS(spec.table == ast::table_reference::LEFT,
-               "Table reference must be LEFT",
-               std::invalid_argument);
-  return args.table.column(spec.column);
+  return resolve_table(spec, args).column(spec.column);
 }
 
 std::variant<column_view, scalar_column_view> get_column_view(ast_scalar_input_spec const& spec,
@@ -627,7 +631,8 @@ transform_args ast_converter::compute_column(target target_id,
                                .user_data      = std::nullopt,
                                .is_null_aware  = is_null_aware,
                                .null_policy    = output_nullability,
-                               .row_size       = args.table.num_rows()};
+                               .row_size       = args.table.num_rows(),
+                               .input_specs    = std::move(converter.input_specs_)};
 
   if (get_context().dump_codegen()) {
     std::cout << "Generated code for transform: " << result.udf << std::endl;
@@ -663,7 +668,8 @@ filter_args ast_converter::filter(target target_id,
                             .is_ptx                = transform.is_ptx,
                             .user_data             = transform.user_data,
                             .is_null_aware         = transform.is_null_aware,
-                            .predicate_nullability = transform.null_policy};
+                            .predicate_nullability = transform.null_policy,
+                            .input_specs           = std::move(transform.input_specs)};
 
   return result;
 }

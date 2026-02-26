@@ -33,6 +33,11 @@ import polars.testing
 
 import rmm.statistics
 
+# The dtype for count() aggregations depends on the presence
+# of the polars-runtime-64 package (`polars[rt64]`).
+HAS_POLARS_RT_64 = pl.config.plr.RUNTIME_REPR == "rt64"
+COUNT_DTYPE = pl.UInt64() if HAS_POLARS_RT_64 else pl.UInt32()
+
 try:
     import duckdb
 
@@ -173,8 +178,18 @@ class ValidationMethod:
     comparison_options: dict[str, Any]
 
 
-@dataclasses.dataclass
-class Record:
+@dataclasses.dataclass(kw_only=True)
+class FailedRecord:
+    """Records a failed query iteration."""
+
+    query: int
+    iteration: int
+    status: Literal["error"] = "error"
+    traceback: str
+
+
+@dataclasses.dataclass(kw_only=True)
+class SuccessRecord:
     """Results for a single run of a single PDS-H query."""
 
     query: int
@@ -183,6 +198,7 @@ class Record:
     shuffle_stats: dict[str, dict[str, int | float]] | None = None
     traces: list[dict[str, Any]] | None = None
     validation_result: ValidationResult | None = None
+    status: Literal["success"] = "success"
 
     @classmethod
     def new(
@@ -192,7 +208,7 @@ class Record:
         duration: float,
         shuffle_stats: dict[str, dict[str, int | float]] | None = None,
         traces: list[dict[str, Any]] | None = None,
-    ) -> Record:
+    ) -> SuccessRecord:
         """Create a Record from plain data."""
         return cls(
             query=query,
@@ -201,6 +217,16 @@ class Record:
             shuffle_stats=shuffle_stats,
             traces=traces,
         )
+
+
+@dataclasses.dataclass
+class QueryRunResult:
+    """Result of running a single query (all iterations)."""
+
+    query_records: list[SuccessRecord | FailedRecord]
+    plan: SerializablePlan | None
+    iteration_failures: list[tuple[int, int]]
+    validation_failed: bool
 
 
 @dataclasses.dataclass
@@ -336,7 +362,9 @@ class RunConfig:
     versions: PackageVersions = dataclasses.field(
         default_factory=PackageVersions.collect
     )
-    records: dict[int, list[Record]] = dataclasses.field(default_factory=dict)
+    records: dict[int, list[SuccessRecord | FailedRecord]] = dataclasses.field(
+        default_factory=dict
+    )
     plans: dict[int, SerializablePlan] = dataclasses.field(default_factory=dict)
     dataset_path: Path
     scale_factor: int | float
@@ -548,17 +576,20 @@ class RunConfig:
                     print(f"rapidsmpf_oom_protection: {self.rapidsmpf_oom_protection}")
                     print(f"spill_device: {self.spill_device}")
                     print(f"rapidsmpf_spill: {self.rapidsmpf_spill}")
-            if len(records) > 0:
+            valid_durations = [
+                record.duration for record in records if record.status == "success"
+            ]
+            if len(valid_durations) > 0:
                 print(f"iterations: {self.iterations}")
                 print("---------------------------------------")
-                print(f"min time : {min(record.duration for record in records):0.4f}")
-                print(f"max time : {max(record.duration for record in records):0.4f}")
-                print(
-                    f"mean time: {statistics.mean(record.duration for record in records):0.4f}"
-                )
+                print(f"min time : {min(valid_durations):0.4f}")
+                print(f"max time : {max(valid_durations):0.4f}")
+                print(f"mean time: {statistics.mean(valid_durations):0.4f}")
                 print("=======================================")
         total_mean_time = sum(
-            statistics.mean(record.duration for record in records)
+            statistics.mean(
+                record.duration for record in records if record.status == "success"
+            )
             for records in self.records.values()
             if records
         )
@@ -766,7 +797,7 @@ def execute_query(
     run_config: RunConfig,
     args: argparse.Namespace,
     engine: None | pl.GPUEngine = None,
-) -> pl.DataFrame:
+) -> tuple[pl.DataFrame, float]:
     """Execute a query with NVTX annotation."""
     with nvtx.annotate(
         message=f"Query {q_id} - Iteration {i}",
@@ -774,7 +805,9 @@ def execute_query(
         color="green",
     ):
         if run_config.executor == "cpu":
-            return q.collect(engine="streaming")
+            t0 = time.monotonic()
+            result = q.collect(engine="streaming")
+            t1 = time.monotonic()
 
         elif CUDF_POLARS_AVAILABLE:
             assert isinstance(engine, pl.GPUEngine)
@@ -785,20 +818,29 @@ def execute_query(
                     translator.config_options
                 )
                 if run_config.executor == "in-memory":
-                    return ir.evaluate(
+                    t0 = time.monotonic()
+                    result = ir.evaluate(
                         cache={}, timer=None, context=context
                     ).to_polars()
+                    t1 = time.monotonic()
                 elif run_config.executor == "streaming":
-                    return evaluate_streaming(
+                    t0 = time.monotonic()
+                    result = evaluate_streaming(
                         ir,
                         translator.config_options,
                     )
-                assert_never(run_config.executor)
+                    t1 = time.monotonic()
+                else:
+                    assert_never(run_config.executor)
             else:
-                return q.collect(engine=engine)
+                t0 = time.monotonic()
+                result = q.collect(engine=engine)
+                t1 = time.monotonic()
 
         else:
             raise RuntimeError("The requested engine is not supported.")
+
+        return result, t1 - t0
 
 
 def _query_type(num_queries: int) -> Callable[[str | int], list[int]]:
@@ -820,10 +862,8 @@ def _query_type(num_queries: int) -> Callable[[str | int], list[int]]:
     return parse
 
 
-def parse_args(
-    args: Sequence[str] | None = None, num_queries: int = 22
-) -> argparse.Namespace:
-    """Parse command line arguments."""
+def build_parser(num_queries: int = 22) -> argparse.ArgumentParser:
+    """Build the argument parser for PDS-H/PDS-DS benchmarks."""
     parser = argparse.ArgumentParser(
         prog="Cudf-Polars PDS-H Benchmarks",
         description="Experimental streaming-executor benchmarks.",
@@ -1015,8 +1055,8 @@ def parse_args(
         default=None,
         type=float,
         help=textwrap.dedent("""\
-            Passed to dask_cuda.LocalCUDACluster to control the release
-            threshold for RMM pool memory.
+            Passed to dask_cuda.LocalCUDACluster or CudaAsyncMemoryResource
+            to control the release threshold for RMM pool memory.
             Default: None (no release threshold)"""),
     )
     parser.add_argument(
@@ -1196,6 +1236,17 @@ def parse_args(
             - silent : Silently fall back to single partition"""),
     )
 
+    return parser
+
+
+def parse_args(
+    args: Sequence[str] | None = None,
+    num_queries: int = 22,
+    parser: argparse.ArgumentParser | None = None,
+) -> argparse.Namespace:
+    """Parse command line arguments."""
+    if parser is None:
+        parser = build_parser(num_queries)
     parsed_args = parser.parse_args(args)
 
     if parsed_args.rmm_pool_size is None and not parsed_args.rmm_async:
@@ -1267,28 +1318,250 @@ def validate_result(
         return ValidationResult(status="Passed", message=None)
 
 
-def check_input_data_type(run_config: RunConfig) -> Literal["decimal", "float"]:
+@dataclasses.dataclass
+class QueryResult:
     """
-    Check whether the input data uses Decimal or Float for account balances, etc.
+    Representation of a query's result.
 
-    This is determined by looking at the ``c_acctbal`` column of the customer table.
+    Parameters
+    ----------
+    frame: pl.LazyFrame
+        The result of the query.
+    sort_by: list[tuple[str, bool]]
+        The columns that the query sorts by. Each tuple contains (column_name, descending_flag).
+    limit: int | None
+        The limit of the query, if any.
+
     """
-    path = (Path(run_config.dataset_path) / "customer").with_suffix(run_config.suffix)
-    t = pl.scan_parquet(path).select(pl.col("c_acctbal")).collect_schema()["c_acctbal"]
 
-    if t.is_decimal():
-        return "decimal"
+    frame: pl.LazyFrame
+    sort_by: list[tuple[str, bool]]
+    limit: int | None = None
+
+
+def check_input_data_type(
+    run_config: RunConfig,
+) -> tuple[Literal["decimal", "float"], Literal["date", "timestamp"]]:
+    """
+    Check the input data types columns with variable data types.
+
+    Our queries might be run on datasets that use different data types for different
+    types of columns. Our validation supports:
+
+    1. 'decimal' or 'float' for non-integer numeric columns (e.g. 'c_acctbal')
+    2. 'date' or 'timestamp' for date type columns (e.g. 'o_orderdate')
+
+    For PDS-H, this is determined by the ``c_acctbal`` column in the
+    customer table.  For PDS-DS, we use ``i_current_price`` from the item table.
+    """
+    if run_config.query_set == "pdsds":
+        table, col = "item", "i_current_price"
     else:
-        return "float"
+        table, col = "customer", "c_acctbal"
+    path = (Path(run_config.dataset_path) / table).with_suffix(run_config.suffix)
+    t = pl.scan_parquet(path).select(pl.col(col)).collect_schema()[col]
+
+    num_type: Literal["decimal", "float"]
+    date_type: Literal["date", "timestamp"]
+    if t.is_decimal():
+        num_type = "decimal"
+    else:
+        num_type = "float"
+
+    if run_config.query_set == "pdsds":
+        date_type = "date"
+    else:
+        path = (Path(run_config.dataset_path) / "orders").with_suffix(run_config.suffix)
+        t = (
+            pl.scan_parquet(path)
+            .select(pl.col("o_orderdate"))
+            .collect_schema()["o_orderdate"]
+        )
+
+        if t.to_python() is datetime.date:
+            date_type = "date"
+        else:
+            date_type = "timestamp"
+
+    return num_type, date_type
+
+
+def run_polars_query_iteration(
+    q_id: int,
+    iteration: int,
+    q: pl.LazyFrame,
+    run_config: RunConfig,
+    args: argparse.Namespace,
+    engine: pl.GPUEngine | None,
+    expected: pl.DataFrame | None,
+    query_result: Any,
+    client: Any,
+) -> SuccessRecord:
+    """Run a single query iteration. Caller must wrap in try/except."""
+    result, duration = execute_query(q_id, iteration, q, run_config, args, engine)
+
+    if run_config.shuffle == "rapidsmpf" and run_config.gather_shuffle_stats:
+        from rapidsmpf.integrations.dask.shuffler import (
+            clear_shuffle_statistics,
+            gather_shuffle_statistics,
+        )
+
+        shuffle_stats = gather_shuffle_statistics(client)
+        clear_shuffle_statistics(client)
+    else:
+        shuffle_stats = None
+
+    if expected is not None:
+        validation_result = validate_result(
+            result,
+            expected,
+            query_result.sort_by,
+            limit=query_result.limit,
+            **get_validation_options(args),
+        )
+    else:
+        validation_result = None
+
+    if args.print_results:
+        print(result)
+
+    if args.results_directory is not None and iteration == 0:
+        results_dir = Path(args.results_directory)
+        results_dir.mkdir(parents=True, exist_ok=True)
+        output_path = results_dir / f"q_{q_id:02d}.parquet"
+        result.write_parquet(output_path)
+
+    return SuccessRecord(
+        query=q_id,
+        iteration=iteration,
+        duration=duration,
+        shuffle_stats=shuffle_stats,
+        validation_result=validation_result,
+    )
+
+
+def run_polars_query(
+    q_id: int,
+    benchmark: Any,
+    run_config: RunConfig,
+    args: argparse.Namespace,
+    engine: pl.GPUEngine | None,
+    client: Any,
+    numeric_type: str,
+    date_type: str,
+    validation_files: dict[int, Path] | None,
+) -> QueryRunResult:
+    """Run all iterations for a single query. Caller must wrap in try/except."""
+    query_result = getattr(benchmark, f"q{q_id}")(run_config)
+    q = query_result.frame
+
+    print_query_plan(q_id, q, args, run_config, engine, print_plans=args.print_plans)
+    plan = None
+    if (args.explain or args.explain_logical) and engine is not None:
+        from cudf_polars.experimental.explain import serialize_query
+
+        plan = serialize_query(q, engine)
+
+    casts = benchmark.EXPECTED_CASTS.get(q_id, [])
+    if numeric_type == "decimal":
+        casts.extend(benchmark.EXPECTED_CASTS_DECIMAL.get(q_id, []))
+    if date_type == "timestamp":
+        casts.extend(benchmark.EXPECTED_CASTS_TIMESTAMP.get(q_id, []))
+
+    expected: pl.DataFrame | None = None
+    if args.validate:
+        if args.baseline == "cpu":
+            expected = q.collect()
+        elif args.baseline == "duckdb":
+            duckdb_queries_cls = benchmark().duckdb_queries
+            get_ddb = getattr(duckdb_queries_cls, f"q{q_id}")
+            base_sql = get_ddb(run_config)
+            expected = execute_duckdb_query(
+                base_sql,
+                run_config.dataset_path,
+                query_set=duckdb_queries_cls.name,
+                suffix=run_config.suffix,
+            ).with_columns(*casts)
+        else:
+            raise ValueError(f"Invalid baseline: {args.baseline}")
+    elif validation_files is not None:
+        expected = pl.read_parquet(validation_files[q_id]).with_columns(*casts)
+    else:
+        expected = None
+
+    if args.output_expected_directory is not None:
+        assert expected is not None, (
+            "Expected result must be computed before writing to disk."
+        )
+        expected_dir = Path(args.output_expected_directory)
+        expected_dir.mkdir(parents=True, exist_ok=True)
+        expected.write_parquet(expected_dir / f"q_{q_id:02d}.parquet")
+
+    query_records: list[SuccessRecord | FailedRecord] = []
+    iteration_failures: list[tuple[int, int]] = []
+    validation_failed = False
+    record: SuccessRecord | FailedRecord
+
+    for i in range(args.iterations):
+        if _HAS_STRUCTLOG and run_config.collect_traces:
+            setup_logging(q_id, i)
+            if client is not None:
+                client.run(setup_logging, q_id, i)
+
+        try:
+            record = run_polars_query_iteration(
+                q_id=q_id,
+                iteration=i,
+                q=q,
+                run_config=run_config,
+                args=args,
+                engine=engine,
+                expected=expected,
+                query_result=query_result,
+                client=client,
+            )
+        except Exception:
+            print(f"❌ query={q_id} iteration={i} failed!")
+            print(traceback.format_exc())
+            iteration_failures.append((q_id, i))
+            record = FailedRecord(
+                query=q_id,
+                iteration=i,
+                status="error",
+                traceback=traceback.format_exc(),
+            )
+
+        else:
+            if record.validation_result and record.validation_result.status == "Failed":
+                validation_failed = True
+                print(
+                    f"❌ Query {q_id} failed validation!\n{record.validation_result.message}"
+                )
+                if record.validation_result.details:
+                    pprint.pprint(record.validation_result.details)
+            else:
+                prefix = "✅ " if record.validation_result else ""
+                print(
+                    f"{prefix}Query {q_id} - Iteration {i} finished in {record.duration:0.4f}s",
+                    flush=True,
+                )
+
+        query_records.append(record)
+
+    return QueryRunResult(
+        query_records=query_records,
+        plan=plan,
+        iteration_failures=iteration_failures,
+        validation_failed=validation_failed,
+    )
 
 
 def run_polars(
     benchmark: Any,
-    options: Sequence[str] | None = None,
+    args: argparse.Namespace,
     num_queries: int = 22,
 ) -> None:
     """Run the queries using the given benchmark and executor options."""
-    args = parse_args(options, num_queries=num_queries)
     vars(args).update({"query_set": benchmark.name})
     run_config = RunConfig.from_args(args)
     validation_failures: list[int] = []
@@ -1301,13 +1574,15 @@ def run_polars(
         actual_n_workers = client.scheduler_info()["n_workers"]
         run_config = dataclasses.replace(run_config, n_workers=actual_n_workers)
 
-    records: defaultdict[int, list[Record]] = defaultdict(list)
+    records: defaultdict[int, list[SuccessRecord | FailedRecord]] = defaultdict(list)
     plans: dict[int, SerializablePlan] = {}
     engine: pl.GPUEngine | None = None
-    input_data_type: Literal["decimal", "float"] = check_input_data_type(run_config)
+    numeric_type, date_type = check_input_data_type(run_config)
 
     if args.validate_directory is not None:
         validation_files = list_validation_files(args.validate_directory)
+    else:
+        validation_files = None
 
     if run_config.executor != "cpu":
         executor_options = get_executor_options(run_config, benchmark=benchmark)
@@ -1319,7 +1594,9 @@ def run_polars(
             parquet_options = {}
         engine = pl.GPUEngine(
             raise_on_fail=True,
-            memory_resource=rmm.mr.CudaAsyncMemoryResource()
+            memory_resource=rmm.mr.CudaAsyncMemoryResource(
+                release_threshold=args.rmm_release_threshold
+            )
             if run_config.rmm_async
             else None,
             cuda_stream_policy=run_config.stream_policy,
@@ -1330,136 +1607,39 @@ def run_polars(
 
     for q_id in run_config.queries:
         try:
-            query_result = getattr(benchmark, f"q{q_id}")(run_config)
-            q = query_result.frame
-        except AttributeError as err:
-            raise NotImplementedError(f"Query {q_id} not implemented.") from err
-
-        print_query_plan(
-            q_id, q, args, run_config, engine, print_plans=args.print_plans
-        )
-        if (args.explain or args.explain_logical) and engine is not None:
-            from cudf_polars.experimental.explain import serialize_query
-
-            plans[q_id] = serialize_query(q, engine)
-
-        records[q_id] = []
-
-        if input_data_type == "decimal":
-            casts = benchmark.EXPECTED_CASTS_DECIMAL.get(q_id, [])
-        else:
-            casts = benchmark.EXPECTED_CASTS_FLOAT.get(q_id, [])
-
-        # First, compute / load the expected result if we're validating
-        # We assume the expected result is deterministic / the same for each iteration
-
-        expected: pl.DataFrame | None = None
-        if args.validate:
-            if args.baseline == "cpu":
-                expected = q.collect()
-            elif args.baseline == "duckdb":
-                duckdb_queries_cls = benchmark().duckdb_queries
-                get_ddb = getattr(duckdb_queries_cls, f"q{q_id}")
-
-                base_sql = get_ddb(run_config)
-                expected = execute_duckdb_query(
-                    base_sql,
-                    run_config.dataset_path,
-                    query_set=duckdb_queries_cls.name,
-                    suffix=run_config.suffix,
-                ).with_columns(*casts)
-            else:
-                raise ValueError(f"Invalid baseline: {args.baseline}")
-        elif args.validate_directory is not None:
-            expected = pl.read_parquet(validation_files[q_id]).with_columns(*casts)
-
-        else:
-            expected = None
-
-        if args.output_expected_directory is not None:
-            assert expected is not None, (
-                "Expected result must be computed before writing to disk."
+            result = run_polars_query(
+                q_id=q_id,
+                benchmark=benchmark,
+                run_config=run_config,
+                args=args,
+                engine=engine,
+                client=client,
+                numeric_type=numeric_type,
+                date_type=date_type,
+                validation_files=validation_files,
             )
-            expected_dir = Path(args.output_expected_directory)
-            expected_dir.mkdir(parents=True, exist_ok=True)
-            expected.write_parquet(expected_dir / f"q_{q_id:02d}.parquet")
-
-        for i in range(args.iterations):
-            if _HAS_STRUCTLOG and run_config.collect_traces:
-                setup_logging(q_id, i)
-                if client is not None:
-                    client.run(setup_logging, q_id, i)
-
-            t0 = time.monotonic()
-
-            try:
-                result = execute_query(q_id, i, q, run_config, args, engine)
-            except Exception:
-                print(f"❌ query={q_id} iteration={i} failed!")
-                print(traceback.format_exc())
-                query_failures.append((q_id, i))
-                continue
-            if run_config.shuffle == "rapidsmpf" and run_config.gather_shuffle_stats:
-                from rapidsmpf.integrations.dask.shuffler import (
-                    clear_shuffle_statistics,
-                    gather_shuffle_statistics,
-                )
-
-                shuffle_stats = gather_shuffle_statistics(client)
-                clear_shuffle_statistics(client)
-            else:
-                shuffle_stats = None
-
-            t1 = time.monotonic()
-            # Post-execution things to take care of:
-            # 1. Validation, if `--validate` or `--validate-directory` is set
-            if expected is not None:
-                validation_result = validate_result(
-                    result,
-                    expected,
-                    query_result.sort_by,
-                    limit=query_result.limit,
-                    **get_validation_options(args),
-                )
-            else:
-                validation_result = None
-
-            record = Record(
+        except Exception:
+            print(f"❌ query={q_id} failed (setup or execution)!")
+            print(traceback.format_exc())
+            query_failures.append((q_id, -1))
+            record = FailedRecord(
                 query=q_id,
-                iteration=i,
-                duration=t1 - t0,
-                shuffle_stats=shuffle_stats,
-                validation_result=validation_result,
+                iteration=-1,
+                traceback=traceback.format_exc(),
             )
-            if args.print_results:
-                print(result)
-
-            # 2. Persist the results, if `--results-directory` is set
-            if args.results_directory is not None and i == 0:
-                results_dir = Path(args.results_directory)
-                results_dir.mkdir(parents=True, exist_ok=True)
-                output_path = results_dir / f"q_{q_id:02d}.parquet"
-                result.write_parquet(output_path)
-
-            record = dataclasses.replace(
-                record,
-                validation_result=validation_result,
+            result = QueryRunResult(
+                query_records=[record],
+                plan=None,
+                iteration_failures=[],
+                validation_failed=False,
             )
 
-            if validation_result and validation_result.status == "Failed":
-                validation_failures.append(q_id)
-                print(
-                    f"❌ Query {q_id} failed validation!\n{validation_result.message}"
-                )
-                if validation_result.details:
-                    pprint.pprint(validation_result.details)
-
-            else:
-                print(
-                    f"Query {q_id} - Iteration {i} finished in {record.duration:0.4f}s",
-                    flush=True,
-                )
-            records[q_id].append(record)
+        records[q_id] = result.query_records
+        if result.plan is not None:
+            plans[q_id] = result.plan
+        query_failures.extend(result.iteration_failures)
+        if result.validation_failed:
+            validation_failures.append(q_id)
 
     run_config = dataclasses.replace(run_config, records=dict(records), plans=plans)
 
@@ -1505,10 +1685,12 @@ def run_polars(
             assert len(by_iteration) == len(run_records)  # same number of iterations
             all_traces = [list(iteration) for iteration in by_iteration]
 
-            new_records = [
-                dataclasses.replace(record, traces=traces)
-                for record, traces in zip(run_records, all_traces, strict=True)
-            ]
+            new_records: list[SuccessRecord | FailedRecord] = []
+            for rec, traces in zip(run_records, all_traces, strict=True):
+                if rec.status == "success":
+                    new_records.append(dataclasses.replace(rec, traces=traces))
+                else:
+                    new_records.append(rec)
 
             run_config.records[query_id] = new_records
 
@@ -1526,13 +1708,13 @@ def run_polars(
                 f"{len(validation_failures)} queries failed validation: {sorted(set(validation_failures))}"
             )
         else:
-            print("All validated queries passed.")
+            print("✅ All validated queries passed.")
 
     args.output.write(json.dumps(run_config.serialize(engine=engine)))
     args.output.write("\n")
 
-    if query_failures or validation_failures:
-        sys.exit(1)
+    exit_code = 1 if (query_failures or validation_failures) else 0
+    sys.exit(exit_code)
 
 
 def setup_logging(query_id: int, iteration: int) -> None:  # noqa: D103
@@ -1713,13 +1895,12 @@ def execute_duckdb_query(
 
 
 def run_duckdb(
-    duckdb_queries_cls: Any, options: Sequence[str] | None = None, *, num_queries: int
+    duckdb_queries_cls: Any, args: argparse.Namespace, *, num_queries: int
 ) -> None:
     """Run the benchmark with DuckDB."""
-    args = parse_args(options, num_queries=num_queries)
     vars(args).update({"query_set": duckdb_queries_cls.name})
     run_config = RunConfig.from_args(args)
-    records: defaultdict[int, list[Record]] = defaultdict(list)
+    records: defaultdict[int, list[SuccessRecord | FailedRecord]] = defaultdict(list)
 
     for q_id in run_config.queries:
         try:
@@ -1751,7 +1932,7 @@ def run_duckdb(
                 query_set=duckdb_queries_cls.name,
             )
             t1 = time.time()
-            record = Record(query=q_id, iteration=i, duration=t1 - t0)
+            record = SuccessRecord(query=q_id, iteration=i, duration=t1 - t0)
             if args.print_results:
                 print(result)
             print(f"Query {q_id} - Iteration {i} finished in {record.duration:0.4f}s")

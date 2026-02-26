@@ -80,7 +80,7 @@ void BM_filter_string_row_groups_with_dicts_common(nvbench::state& state,
 
   state.exec(
     nvbench::exec_tag::sync | nvbench::exec_tag::timer, [&](nvbench::launch& launch, auto& timer) {
-      try_drop_l3_cache();
+      drop_page_cache_if_enabled(read_opts.get_source().filepaths());
 
       timer.start();
 
