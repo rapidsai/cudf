@@ -25,6 +25,7 @@ from cudf_polars.experimental.rapidsmpf.dispatch import (
 )
 from cudf_polars.experimental.rapidsmpf.utils import (
     ChannelManager,
+    chunkwise_evaluate,
     empty_table_chunk,
     make_spill_function,
     process_children,
@@ -76,7 +77,7 @@ async def default_node_single(
     Chunks are processed in the order they are received.
     """
     async with shutdown_on_error(context, ch_in, ch_out, trace_ir=ir) as tracer:
-        # Recv/send metadata.
+        # Recv metadata and prepare output metadata
         metadata_in = await recv_metadata(ch_in, context)
         partitioning = None
         if preserve_partitioning:
@@ -92,63 +93,18 @@ async def default_node_single(
             partitioning=partitioning,
             duplicated=metadata_in.duplicated,
         )
-        await send_metadata(ch_out, context, metadata_out)
-        if tracer is not None and metadata_in.duplicated:
-            tracer.set_duplicated()
 
-        # Recv/send data.
-        seq_num = 0
-        receiving = True
-        received_any = False
-        while receiving:
-            msg = await ch_in.recv(context)
-            if msg is None:
-                receiving = False
-                if received_any:
-                    break
-                else:
-                    # Make sure we have an empty chunk in case do_evaluate
-                    # always produces rows (e.g. aggregation)
-                    chunk = empty_table_chunk(
-                        ir.children[0], context, ir_context.get_cuda_stream()
-                    )
-            else:
-                received_any = True
-                chunk = TableChunk.from_message(msg)
-                seq_num = msg.sequence_number
-
-            chunk, extra = await make_table_chunks_available_or_wait(
-                context,
-                chunk,
-                reserve_extra=chunk.data_alloc_size(),
-                net_memory_delta=0,
-            )
-            with opaque_memory_usage(extra):
-                df = await asyncio.to_thread(
-                    ir.do_evaluate,
-                    *ir._non_child_args,
-                    DataFrame.from_table(
-                        chunk.table_view(),
-                        list(ir.children[0].schema.keys()),
-                        list(ir.children[0].schema.values()),
-                        chunk.stream,
-                    ),
-                    context=ir_context,
-                )
-            if tracer is not None:
-                tracer.add_chunk(table=df.table)
-            await ch_out.send(
-                context,
-                Message(
-                    seq_num,
-                    TableChunk.from_pylibcudf_table(
-                        df.table, chunk.stream, exclusive_view=True
-                    ),
-                ),
-            )
-            del df, chunk
-
-        await ch_out.drain(context)
+        # Process chunks (handle empty input for aggregation-like operations)
+        await chunkwise_evaluate(
+            context,
+            ir,
+            ir_context,
+            ch_out,
+            ch_in,
+            metadata_out,
+            handle_empty_input=True,
+            tracer=tracer,
+        )
 
 
 @define_actor()
@@ -185,8 +141,9 @@ async def default_node_multi(
         local_count = 1
         duplicated = True
         partitioning = None
-        for idx, ch_in in enumerate(chs_in):
-            md_child = await recv_metadata(ch_in, context)
+        for idx, md_child in enumerate(
+            await asyncio.gather(*(recv_metadata(ch, context) for ch in chs_in))
+        ):
             # Use simple "max" rule to determine counts.
             local_count = max(md_child.local_count, local_count)
             # Set "duplicated" to False as soon as we
