@@ -12,7 +12,6 @@ from rapidsmpf.memory.buffer import MemoryType
 from rapidsmpf.memory.memory_reservation import opaque_memory_usage
 from rapidsmpf.streaming.core.actor import define_actor
 from rapidsmpf.streaming.core.memory_reserve_or_wait import (
-    missing_net_memory_delta,
     reserve_memory,
 )
 from rapidsmpf.streaming.core.message import Message
@@ -128,191 +127,26 @@ async def broadcast_join_actor(
     async with shutdown_on_error(
         context, ch_out, ch_left, ch_right, trace_ir=ir
     ) as tracer:
-        # Receive metadata.
         left_metadata, right_metadata = await asyncio.gather(
             recv_metadata(ch_left, context),
             recv_metadata(ch_right, context),
         )
-
-        partitioning: Partitioning | None = None
-        if broadcast_side == "right":
-            # Broadcast right, stream left
-            small_ch = ch_right
-            large_ch = ch_left
-            small_child = ir.children[1]
-            large_child = ir.children[0]
-            # Preserve left-side partitioning metadata
-            local_count = left_metadata.local_count
-            # Remap partitioning from child schema to output schema
-            partitioning = remap_partitioning(
-                left_metadata.partitioning, large_child.schema, ir.schema
-            )
-            # Check if the right-side is already broadcasted
-            small_duplicated = right_metadata.duplicated
-        else:
-            # Broadcast left, stream right
-            small_ch = ch_left
-            large_ch = ch_right
-            small_child = ir.children[0]
-            large_child = ir.children[1]
-            # Preserve right-side partitioning metadata
-            local_count = right_metadata.local_count
-            if ir.options[0] == "Right":
-                # Remap partitioning from child schema to output schema
-                partitioning = remap_partitioning(
-                    right_metadata.partitioning, large_child.schema, ir.schema
-                )
-            # Check if the right-side is already broadcasted
-            small_duplicated = left_metadata.duplicated
-
-        if tracer is not None:
-            tracer.decision = f"broadcast_{broadcast_side}"
-
-        # Determine which metadata belongs to the large side
-        large_metadata = left_metadata if broadcast_side == "right" else right_metadata
-
-        # Allgather is a collective - all ranks must participate even with no local data
-        need_allgather = context.comm().nranks > 1 and not small_duplicated
-
-        # The result is duplicated if:
-        # - The small side is/will be duplicated (already duplicated OR will be AllGathered)
-        # - AND the large side is already duplicated
-        output_duplicated = (
-            small_duplicated or need_allgather
-        ) and large_metadata.duplicated
-
-        # Send metadata.
-        output_metadata = ChannelMetadata(
-            local_count=local_count,
-            partitioning=partitioning,
-            duplicated=output_duplicated,
+        await _broadcast_join(
+            context,
+            ir,
+            ir_context,
+            ch_out,
+            ch_left,
+            ch_right,
+            left_metadata,
+            right_metadata,
+            [],  # No sampled chunks
+            [],  # No sampled chunks
+            broadcast_side,
+            [collective_id],
+            target_partition_size,
+            tracer=tracer,
         )
-        await send_metadata(ch_out, context, output_metadata)
-        if tracer is not None:
-            tracer.set_duplicated(duplicated=output_metadata.duplicated)
-
-        # Collect small-side (may be empty if no data received)
-        small_chunks: list[TableChunk] = []
-        small_size = 0
-        while (msg := await small_ch.recv(context)) is not None:
-            small_chunks.append(
-                TableChunk.from_message(msg).make_available_and_spill(
-                    context.br(), allow_overbooking=True
-                )
-            )
-            small_size += small_chunks[-1].data_alloc_size(MemoryType.DEVICE)
-
-        if need_allgather:
-            allgather = AllGatherManager(context, collective_id)
-            for s_id in range(len(small_chunks)):
-                allgather.insert(s_id, small_chunks.pop(0))
-            allgather.insert_finished()
-            stream = ir_context.get_cuda_stream()
-            # extract_concatenated returns a plc.Table, not a TableChunk
-            small_dfs = [
-                DataFrame.from_table(
-                    await allgather.extract_concatenated(stream),
-                    list(small_child.schema.keys()),
-                    list(small_child.schema.values()),
-                    stream,
-                )
-            ]
-        elif len(small_chunks) > 1 and (
-            ir.options[0] != "Inner" or small_size < target_partition_size
-        ):
-            # Pre-concat for non-inner joins, otherwise
-            # we need a local shuffle, and face additional
-            # memory pressure anyway.
-            small_dfs = [
-                _concat(
-                    *[chunk_to_frame(chunk, small_child) for chunk in small_chunks],
-                    context=ir_context,
-                )
-            ]
-            small_chunks.clear()  # small_dfs is not a view of small_chunks anymore
-        else:
-            small_dfs = [
-                chunk_to_frame(small_chunk, small_child) for small_chunk in small_chunks
-            ]
-
-        # Stream through large side, joining with the small-side
-        seq_num = 0
-        large_chunk_processed = False
-        receiving_large_chunks = True
-        while receiving_large_chunks:
-            msg = await large_ch.recv(context)
-            if msg is None:
-                receiving_large_chunks = False
-                if large_chunk_processed:
-                    # Normal exit - We've processed all large-table data
-                    break
-                elif small_dfs:
-                    # We received small-table data, but no large-table data.
-                    # This may never happen, but we can handle it by generating
-                    # an empty large-table chunk
-                    stream = ir_context.get_cuda_stream()
-                    large_chunk = empty_table_chunk(large_child, context, stream)
-                else:
-                    # We received no data for either the small or large table.
-                    # Drain the output channel and return
-                    await ch_out.drain(context)
-                    return
-            else:
-                large_chunk_processed = True
-                large_chunk = await TableChunk.from_message(msg).make_available_or_wait(
-                    context,
-                    net_memory_delta=missing_net_memory_delta,
-                )
-                seq_num = msg.sequence_number
-
-            large_df = DataFrame.from_table(
-                large_chunk.table_view(),
-                list(large_child.schema.keys()),
-                list(large_child.schema.values()),
-                large_chunk.stream,
-            )
-            large_chunk_size = large_chunk.data_alloc_size(MemoryType.DEVICE)
-            del large_chunk
-
-            # Lazily create empty small table if small_dfs is empty
-            if not small_dfs:
-                stream = ir_context.get_cuda_stream()
-                empty_small_chunk = empty_table_chunk(small_child, context, stream)
-                small_dfs = [chunk_to_frame(empty_small_chunk, small_child)]
-
-            input_bytes = large_chunk_size + small_size
-            with opaque_memory_usage(
-                await reserve_memory(context, size=input_bytes, net_memory_delta=0)
-            ):
-                df = _concat(
-                    *[
-                        await asyncio.to_thread(
-                            ir.do_evaluate,
-                            *ir._non_child_args,
-                            *(
-                                [large_df, small_df]
-                                if broadcast_side == "right"
-                                else [small_df, large_df]
-                            ),
-                            context=ir_context,
-                        )
-                        for small_df in small_dfs
-                    ],
-                    context=ir_context,
-                )
-                del large_df
-
-            # Send output chunk
-            output_chunk = TableChunk.from_pylibcudf_table(
-                df.table, df.stream, exclusive_view=True
-            )
-            if tracer is not None:
-                tracer.add_chunk(table=output_chunk.table_view())
-            await ch_out.send(context, Message(seq_num, output_chunk))
-            del df, output_chunk
-
-        del small_dfs, small_chunks
-        await ch_out.drain(context)
 
 
 async def _collect_small_side_for_broadcast(
@@ -324,6 +158,7 @@ async def _collect_small_side_for_broadcast(
     need_allgather: bool,
     collective_id: int,
     ir_context: Any,
+    concat_size_limit: int | None,
 ) -> tuple[list[DataFrame], int]:
     """
     Drain small-side channel into chunks, then build DataFrame(s) for broadcast.
@@ -343,7 +178,8 @@ async def _collect_small_side_for_broadcast(
         del msg
 
     cudf_row_limit = 2**31 - 1
-    can_concatenate = small_row_count < cudf_row_limit
+    if (can_concatenate := small_row_count < cudf_row_limit) and concat_size_limit:
+        can_concatenate = small_size <= concat_size_limit
     small_dfs: list[DataFrame] = []
 
     if need_allgather:
@@ -449,6 +285,7 @@ async def _broadcast_join(
     right_sample_chunks: list[TableChunk],
     broadcast_side: Literal["left", "right"],
     collective_ids: list[int],
+    target_partition_size: int,
     *,
     tracer: ActorTracer | None,
 ) -> None:
@@ -510,6 +347,7 @@ async def _broadcast_join(
         need_allgather=need_allgather,
         collective_id=collective_id,
         ir_context=ir_context,
+        concat_size_limit=(target_partition_size if ir.options[0] == "Inner" else None),
     )
 
     # Stream through large side
@@ -1234,6 +1072,7 @@ async def join_actor(
                 strategy.right_sample.chunks,
                 strategy.broadcast_side,
                 collective_ids,
+                target_partition_size,
                 tracer=tracer,
             )
         else:
