@@ -86,6 +86,7 @@ class StructMethods(BaseAccessor):
         """
         from cudf.core.column_accessor import ColumnAccessor
         from cudf.core.dataframe import DataFrame
+        from cudf.core.series import Series
 
         data = {
             field: self._column._get_sliced_child(field)[0].copy(deep=True)
@@ -93,5 +94,8 @@ class StructMethods(BaseAccessor):
         }
         rangeindex = len(data) == 0
         return DataFrame._from_data(
-            ColumnAccessor(data, rangeindex=rangeindex)  # type: ignore[arg-type]
+            ColumnAccessor(data, rangeindex=rangeindex),  # type: ignore[arg-type]
+            index=self._parent.index
+            if isinstance(self._parent, Series)
+            else None,
         )
