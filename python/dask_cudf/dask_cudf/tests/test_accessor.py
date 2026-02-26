@@ -530,9 +530,12 @@ def test_dask_struct_field_Int_Error(data):
 )
 def test_struct_explode(data):
     expect = Series(data).struct.explode()
-    got = dask_cudf.from_cudf(Series(data), 2).struct.explode()
+    got = dask_cudf.from_cudf(Series(data), 2).struct.explode().compute()
     # Output index will not agree for >1 partitions
-    assert_eq(expect, got.compute().reset_index(drop=True))
+    if len(data[0]) == 0:
+        # expect.columns is an empty RangeIndex, got is an empty Index[object]
+        got.columns = expect.columns
+    assert_eq(expect, got)
 
 
 def test_tz_localize():
