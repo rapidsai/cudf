@@ -64,22 +64,29 @@ MAX_BROADCAST_ROWS = 1_500_000_000
 
 
 @dataclass(frozen=True)
-class _SideSample:
-    """Sample chunks and aggregate size/row stats for one side of a join."""
+class ChildSample:
+    """Sampled chunks and aggregate size/row stats for one side of a join."""
 
     chunks: list[TableChunk]
+    """The sampled chunks."""
     total_size: int
+    """The total estimated size of the child table."""
     total_rows: int
+    """The total estimated number of rows in the child table."""
 
 
 @dataclass(frozen=True)
-class _JoinStrategy:
-    """Result of sampling and strategy selection for dynamic join."""
+class JoinStrategy:
+    """Summary of sampling and strategy selection for a dynamic join."""
 
     broadcast_side: Literal["left", "right"] | None
+    """The side to broadcast. If None, the strategy is not a broadcast join."""
     min_shuffle_modulus: int
-    left_sample: _SideSample
-    right_sample: _SideSample
+    """The minimum shuffle modulus."""
+    left_sample: ChildSample
+    """Left-side sample information."""
+    right_sample: ChildSample
+    """Right-side sample information."""
 
 
 @define_actor()
@@ -387,7 +394,8 @@ async def _broadcast_join_large_chunk(
     seq_num: int,
     small_size: int,
     broadcast_side: Literal["left", "right"],
-    tracer: ActorTracer | None = None,
+    *,
+    tracer: ActorTracer | None,
 ) -> None:
     """Join one large-side chunk with the small DataFrame(s) and send the result."""
     large_df = chunk_to_frame(large_chunk, large_child)
@@ -441,7 +449,8 @@ async def _broadcast_join(
     right_sample_chunks: list[TableChunk],
     broadcast_side: Literal["left", "right"],
     collective_ids: list[int],
-    tracer: ActorTracer | None = None,
+    *,
+    tracer: ActorTracer | None,
 ) -> None:
     """
     Execute a broadcast join after initial sampling.
@@ -808,10 +817,10 @@ async def _shuffle_join(
     min_shuffle_modulus: int,
     collective_ids: list[int],
     *,
+    tracer: ActorTracer | None,
     n_partitioned_keys: int | None = None,
     left_sample_chunks: list[TableChunk] | None = None,
     right_sample_chunks: list[TableChunk] | None = None,
-    tracer: ActorTracer | None = None,
 ) -> None:
     """Execute a shuffle (hash) join."""
     modulus = _choose_shuffle_modulus(
@@ -885,13 +894,13 @@ async def _choose_strategy(
     ir: Join,
     left_metadata: ChannelMetadata,
     right_metadata: ChannelMetadata,
-    left_sample: _SideSample,
-    right_sample: _SideSample,
+    left_sample: ChildSample,
+    right_sample: ChildSample,
     collective_ids: list[int],
     broadcast_threshold: int,
     target_partition_size: int,
 ) -> tuple[Literal["left", "right"] | None, int]:
-    """Choose broadcast side or shuffle based on sampled sizes and join type."""
+    """Choose potential broadcast side and minimum shuffle modulus."""
     left_local_count = left_metadata.local_count
     right_local_count = right_metadata.local_count
 
@@ -1026,6 +1035,7 @@ def _choose_shuffle_modulus(
     right_partitioning: NormalizedPartitioning,
     min_shuffle_modulus: int,
 ) -> int:
+    """Choose an appropriate modulus for a shuffle join."""
     left_existing_modulus = (
         left_partitioning.inter_rank_modulus if left_partitioning else None
     )
@@ -1066,7 +1076,7 @@ async def _sample_chunks(
     context: Context,
     ch: Channel[TableChunk],
     sample_chunk_count: int,
-) -> _SideSample:
+) -> ChildSample:
     """Sample up to sample_chunk_count chunks from a channel; return chunks and stats."""
     chunks: list[TableChunk] = []
     total_size = 0
@@ -1081,7 +1091,7 @@ async def _sample_chunks(
         chunks.append(chunk)
         total_size += chunk.data_alloc_size(MemoryType.DEVICE)
         total_rows += chunk.table_view().num_rows()
-    return _SideSample(chunks=chunks, total_size=total_size, total_rows=total_rows)
+    return ChildSample(chunks=chunks, total_size=total_size, total_rows=total_rows)
 
 
 async def _sample_and_choose_strategy(
@@ -1095,7 +1105,7 @@ async def _sample_and_choose_strategy(
     broadcast_threshold: int,
     target_partition_size: int,
     collective_ids: list[int],
-) -> _JoinStrategy:
+) -> JoinStrategy:
     """Sample both sides, allgather estimates, and choose broadcast vs shuffle."""
     left_sample, right_sample = await asyncio.gather(
         _sample_chunks(context, ch_left, sample_chunk_count),
@@ -1112,7 +1122,7 @@ async def _sample_and_choose_strategy(
         broadcast_threshold,
         target_partition_size,
     )
-    return _JoinStrategy(
+    return JoinStrategy(
         broadcast_side=broadcast_side,
         min_shuffle_modulus=min_shuffle_modulus,
         left_sample=left_sample,
@@ -1136,10 +1146,32 @@ async def join_actor(
     """
     Dynamic Join actor that selects the best strategy at runtime.
 
-    Strategy selection based on sampled data:
-    - Broadcast right: If right side is small (< broadcast_threshold)
-    - Broadcast left: If left side is small (< broadcast_threshold)
-    - Shuffle: Both sides are large, shuffle by join keys
+    Receives metadata from the left and right channels, then either
+    executes a shuffle join or a broadcast join. Strategy is chosen
+    at runtime from sampled chunks when partitioning is not aligned.
+
+    Parameters
+    ----------
+    context
+        RapidsMPF context (communicator, etc.).
+    ir
+        The Join IR node.
+    ir_context
+        Execution context for the plan.
+    ch_out
+        Output channel for the join result.
+    ch_left
+        Input channel for the left side.
+    ch_right
+        Input channel for the right side.
+    sample_chunk_count
+        Number of chunks to sample per side for strategy selection.
+    broadcast_threshold
+        Max rows on one side to allow broadcast join (small side sent to all ranks).
+    target_partition_size
+        Target partition size used when choosing shuffle modulus.
+    collective_ids
+        List of collective IDs for shuffle/broadcast; consumed as needed.
     """
     async with shutdown_on_error(
         context, ch_out, ch_left, ch_right, trace_ir=ir
@@ -1202,7 +1234,7 @@ async def join_actor(
                 strategy.right_sample.chunks,
                 strategy.broadcast_side,
                 collective_ids,
-                tracer,
+                tracer=tracer,
             )
         else:
             await _shuffle_join(

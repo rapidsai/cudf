@@ -444,41 +444,14 @@ async def chunkwise_evaluate(
     await ch_out.drain(context)
 
 
-def get_partitioning_moduli(
+def _get_partitioning_moduli(
     metadata: ChannelMetadata,
     key_indices: tuple[int, ...],
     nranks: int,
     *,
     allow_subset: bool = False,
 ) -> tuple[int, int | None]:
-    """
-    Get the moduli if data is hash partitioned on the given keys.
-
-    Parameters
-    ----------
-    metadata
-        The channel metadata.
-    key_indices
-        The column indices of the keys.
-    nranks
-        The number of ranks.
-    allow_subset
-        If True, treat partitioning as matching when the partitioning
-        key indices are a prefix of key_indices (e.g. partitioning on
-        (0,) matches key_indices (0, 1)). If False, the partitioning
-        keys must match key_indices exactly.
-
-    Returns
-    -------
-    inter_rank_modulus
-        Inter-rank modulus.
-        Return value of 0 means the data is not partitioned between ranks.
-    local_modulus
-        Local modulus.
-        Return value of 0 means the data is not partitioned within a rank.
-        Return value of None means that the local partitioning inherits the
-        inter-rank partitioning.
-    """
+    """Return (inter_rank_modulus, local_modulus) for hash partitioning on key_indices. Internal to NormalizedPartitioning."""
     # NOTE: This function will need to be updated when we support
     # order-based partitioning. For ordered data, we can return a
     # "boundaries" TableChunk instead of a single integer (modulus).
@@ -564,8 +537,28 @@ class NormalizedPartitioning:
         indices: tuple[int, ...],
         allow_subset: bool = True,
     ) -> NormalizedPartitioning:
-        """Resolve normalized partitioning from channel metadata for the given key column indices."""
-        inter_rank_modulus, local_modulus = get_partitioning_moduli(
+        """
+        Resolve partitioning from metadata and column indices.
+
+        Parameters
+        ----------
+        metadata
+            The channel metadata.
+        nranks
+            The number of ranks.
+        indices
+            The column indices of the keys (e.g. from a groupby or distinct).
+        allow_subset
+            If True, treat partitioning as matching when the partitioning key
+            indices are a prefix of indices. If False, the partitioning keys
+            must match indices exactly.
+
+        Returns
+        -------
+        NormalizedPartitioning
+            The resolved inter-rank and local moduli and column indices.
+        """
+        inter_rank_modulus, local_modulus = _get_partitioning_moduli(
             metadata, indices, nranks, allow_subset=allow_subset
         )
 
@@ -599,7 +592,30 @@ class NormalizedPartitioning:
         schema: Schema,
         allow_subset: bool = True,
     ) -> NormalizedPartitioning:
-        """Resolve normalized partitioning from channel metadata for the given expression keys and schema."""
+        """
+        Resolve partitioning from metadata and key expressions.
+
+        Parameters
+        ----------
+        metadata
+            The channel metadata.
+        nranks
+            The number of ranks.
+        exprs
+            The key expressions (e.g. join keys). Each expr's name is used to
+            look up the column index in schema.
+        schema
+            The schema of the data. Used to map expr names to column indices.
+        allow_subset
+            If True, treat partitioning as matching when the partitioning key
+            indices are a prefix of the resolved indices. If False, they must
+            match exactly.
+
+        Returns
+        -------
+        NormalizedPartitioning
+            The resolved inter-rank and local moduli and column indices.
+        """
         schema_keys = list(schema.keys())
         key_indices = tuple(schema_keys.index(expr.name) for expr in exprs)
         return cls.resolve_from_indices(
