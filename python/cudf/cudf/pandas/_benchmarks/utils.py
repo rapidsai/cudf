@@ -414,6 +414,12 @@ def parse_args(
         default=True,
     )
     parser.add_argument(
+        "--save-results-dir",
+        type=str,
+        default=None,
+        help="Directory to save each query result as a parquet file.",
+    )
+    parser.add_argument(
         "--validate",
         action=argparse.BooleanOptionalAction,
         default=False,
@@ -441,6 +447,9 @@ def run_pandas(
     query_failures: list[tuple[int, int]] = []
 
     records: defaultdict[int, list[Record]] = defaultdict(list)
+
+    if args.save_results_dir is not None:
+        os.makedirs(args.save_results_dir, exist_ok=True)
 
     for q_id in run_config.queries:
         try:
@@ -487,6 +496,16 @@ def run_pandas(
                         print(f"❌ Query {q_id} failed validation!\n{e}")  # noqa: T201
 
             record = Record(query=q_id, duration=t1 - t0, shuffle_stats=None)
+            if args.save_results_dir is not None and i == 0:
+                parquet_path = os.path.join(
+                    args.save_results_dir,
+                    f"q{q_id}.parquet",
+                )
+                result.to_parquet(parquet_path)
+                print(  # noqa: T201
+                    f"Saved result to {parquet_path}"
+                )
+
             if args.print_results:
                 print(result)  # noqa: T201
 

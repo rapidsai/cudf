@@ -30,3 +30,9 @@ python -m pytest --cache-clear "$@" "tests/experimental" \
     --executor streaming \
     --cluster distributed \
     --cov-fail-under=0  # No code-coverage requirement for these tests.
+
+# Run experimental tests with the "distributed" cluster mode and the "rapidsmpf" runtime
+python -m pytest --cache-clear "$@" "tests/experimental" \
+    --executor streaming \
+    --cluster distributed \
+    --runtime rapidsmpf
