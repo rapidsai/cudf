@@ -216,5 +216,5 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
             .limit(100)
         ),
         sort_by=[],
-        limit=None,
+        limit=100,
     )
