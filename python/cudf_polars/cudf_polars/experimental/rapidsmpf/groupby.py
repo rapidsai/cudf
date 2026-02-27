@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Any
 from rapidsmpf.communicator.single import new_communicator as single_comm
 from rapidsmpf.config import Options, get_environment_variables
 from rapidsmpf.memory.buffer import MemoryType
+from rapidsmpf.progress_thread import ProgressThread
 from rapidsmpf.streaming.core.actor import define_actor
 from rapidsmpf.streaming.core.context import Context
 from rapidsmpf.streaming.core.message import Message
@@ -389,7 +390,13 @@ async def _shuffle_reduce(
     shuffle_context = context
     if local and context.comm().nranks > 1:
         options = Options(get_environment_variables())
-        local_comm = single_comm(options)
+        local_comm = single_comm(
+            nranks=1,
+            ucx_worker=None,
+            root_ucxx_address=None,
+            options=options,
+            progress_thread=ProgressThread(),
+        )
         shuffle_context = Context(local_comm, context.br(), options)
     shuf_nranks = shuffle_context.comm().nranks
     shuf_rank = shuffle_context.comm().rank
