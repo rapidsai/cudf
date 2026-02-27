@@ -90,10 +90,10 @@ enum class io_method { GDS_DEVICE, PLAIN_DEVICE, HOST };
  * @brief A single IO read operation to be issued against the datasource.
  */
 struct io_op {
-  size_t src_offset;   ///< Source offset in the datasource
-  size_t read_size;    ///< Number of bytes to read
-  uint8_t* dest;       ///< Destination pointer in device memory
-  io_method method;    ///< How to perform the read
+  size_t src_offset;  ///< Source offset in the datasource
+  size_t read_size;   ///< Number of bytes to read
+  uint8_t* dest;      ///< Destination pointer in device memory
+  io_method method;   ///< How to perform the read
 };
 
 }  // namespace
@@ -190,10 +190,10 @@ fetch_byte_ranges_to_device_async(
       buffers.emplace_back(plan.aligned_size + GDS_PAGE_SIZE, stream, mr);
       auto* buf_ptr = static_cast<uint8_t*>(buffers.back().data());
 
-      // Find the first page-aligned address within the buffer
-      auto* aligned_dest = reinterpret_cast<uint8_t*>(
-        (reinterpret_cast<uintptr_t>(buf_ptr) + GDS_PAGE_SIZE - 1) &
-        ~(static_cast<uintptr_t>(GDS_PAGE_SIZE) - 1));
+      // Find the first page-aligned address within the buffer by rounding up to GDS_PAGE_SIZE
+      auto const addr               = reinterpret_cast<uintptr_t>(buf_ptr);
+      auto constexpr alignment_mask = static_cast<uintptr_t>(GDS_PAGE_SIZE) - 1;
+      auto* aligned_dest = reinterpret_cast<uint8_t*>((addr + alignment_mask) & ~alignment_mask);
 
       // The actual requested data starts at aligned_dest + prefix_bytes
       auto* data_start           = aligned_dest + plan.prefix_bytes;
