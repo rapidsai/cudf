@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
-from cudf_polars.experimental.benchmarks.utils import get_data
+from cudf_polars.experimental.benchmarks.utils import QueryResult, get_data
 
 if TYPE_CHECKING:
     from cudf_polars.experimental.benchmarks.utils import RunConfig
@@ -62,7 +62,7 @@ def duckdb_impl(run_config: RunConfig) -> str:
     """
 
 
-def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
+def polars_impl(run_config: RunConfig) -> QueryResult:
     """Query 19."""
     params = load_parameters(
         int(run_config.scale_factor),
@@ -83,36 +83,48 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         run_config.dataset_path, "customer_address", run_config.suffix
     )
     store = get_data(run_config.dataset_path, "store", run_config.suffix)
-    return (
-        date_dim.join(store_sales, left_on="d_date_sk", right_on="ss_sold_date_sk")
-        .join(item, left_on="ss_item_sk", right_on="i_item_sk")
-        .join(customer, left_on="ss_customer_sk", right_on="c_customer_sk")
-        .join(customer_address, left_on="c_current_addr_sk", right_on="ca_address_sk")
-        .join(store, left_on="ss_store_sk", right_on="s_store_sk")
-        .filter(
-            (pl.col("i_manager_id") == manager)
-            & (pl.col("d_moy") == month)
-            & (pl.col("d_year") == year)
-            & (
-                pl.col("ca_zip").cast(pl.Utf8).str.slice(0, 5)
-                != pl.col("s_zip").cast(pl.Utf8).str.slice(0, 5)
+    return QueryResult(
+        frame=(
+            date_dim.join(store_sales, left_on="d_date_sk", right_on="ss_sold_date_sk")
+            .join(item, left_on="ss_item_sk", right_on="i_item_sk")
+            .join(customer, left_on="ss_customer_sk", right_on="c_customer_sk")
+            .join(
+                customer_address, left_on="c_current_addr_sk", right_on="ca_address_sk"
             )
-        )
-        .group_by(["i_brand", "i_brand_id", "i_manufact_id", "i_manufact"])
-        .agg([pl.col("ss_ext_sales_price").sum().alias("ext_price")])
-        .select(
-            [
-                pl.col("i_brand_id").alias("brand_id"),
-                pl.col("i_brand").alias("brand"),
-                "i_manufact_id",
-                "i_manufact",
-                "ext_price",
-            ]
-        )
-        .sort(
-            ["ext_price", "brand", "brand_id", "i_manufact_id", "i_manufact"],
-            descending=[True, False, False, False, False],
-            nulls_last=True,
-        )
-        .limit(100)
+            .join(store, left_on="ss_store_sk", right_on="s_store_sk")
+            .filter(
+                (pl.col("i_manager_id") == manager)
+                & (pl.col("d_moy") == month)
+                & (pl.col("d_year") == year)
+                & (
+                    pl.col("ca_zip").cast(pl.Utf8).str.slice(0, 5)
+                    != pl.col("s_zip").cast(pl.Utf8).str.slice(0, 5)
+                )
+            )
+            .group_by(["i_brand", "i_brand_id", "i_manufact_id", "i_manufact"])
+            .agg([pl.col("ss_ext_sales_price").sum().alias("ext_price")])
+            .select(
+                [
+                    pl.col("i_brand_id").alias("brand_id"),
+                    pl.col("i_brand").alias("brand"),
+                    "i_manufact_id",
+                    "i_manufact",
+                    "ext_price",
+                ]
+            )
+            .sort(
+                ["ext_price", "brand", "brand_id", "i_manufact_id", "i_manufact"],
+                descending=[True, False, False, False, False],
+                nulls_last=True,
+            )
+            .limit(100)
+        ),
+        sort_by=[
+            ("ext_price", True),
+            ("brand", False),
+            ("brand_id", False),
+            ("i_manufact_id", False),
+            ("i_manufact", False),
+        ],
+        limit=100,
     )
