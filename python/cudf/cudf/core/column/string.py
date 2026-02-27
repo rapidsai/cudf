@@ -131,18 +131,6 @@ class StringColumn(ColumnBase, Scannable):
             return result.as_py()
         return result
 
-    def to_arrow(self) -> pa.Array:
-        # All null string columns fail to convert in libcudf, so we must short-circuit
-        # the call to super().to_arrow().
-        # TODO: Investigate if the above is a bug in libcudf and fix it there.
-        if (
-            self.plc_column.num_children() == 0
-            or self.null_count == len(self)
-            and len(self) == 0
-        ):
-            return pa.chunked_array([], type=pa.large_string())  # type: ignore[return-value]
-        return super().to_arrow()
-
     def sum(
         self,
         skipna: bool = True,
