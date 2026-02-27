@@ -2113,14 +2113,14 @@ class StringMethods(BaseAccessor):
         """
         if repl is None:
             repl = ""
-        if not isinstance(repl, str):
-            raise TypeError(
-                f"repl should be a string, but got {type(repl).__name__}"
-            )
-        else:
+        try:
             plc_repl = plc.Scalar.from_py(
                 repl, dtype=plc.DataType(plc.TypeId.STRING)
             )
+        except TypeError as err:
+            raise TypeError(
+                f"repl should be a string, but got {type(repl).__name__}"
+            ) from err
         if keep:
             types_to_remove = (
                 plc.strings.char_types.StringCharacterTypes.ALL_TYPES
@@ -2270,14 +2270,14 @@ class StringMethods(BaseAccessor):
         if repl is None:
             repl = ""
 
-        if not isinstance(repl, str):
-            raise TypeError(
-                f"repl should be a string, but got {type(repl).__name__}"
-            )
-        else:
+        try:
             plc_repl = plc.Scalar.from_py(
                 repl, dtype=plc.DataType(plc.TypeId.STRING)
             )
+        except TypeError as err:
+            raise TypeError(
+                f"repl should be a string, but got {type(repl).__name__}"
+            ) from err
         return self._return_or_inplace(
             self._column.replace_slice(start, stop, plc_repl)
         )
@@ -4550,12 +4550,16 @@ class StringMethods(BaseAccessor):
         """
         if repl is None:
             repl = ""
-        if not isinstance(repl, str):
+        try:
+            plc_repl = plc.Scalar.from_py(
+                repl, dtype=plc.DataType(plc.TypeId.STRING)
+            )
+        except TypeError as err:
             raise TypeError(
                 f"repl should be a string, but got {type(repl).__name__}"
-            )
+            ) from err
         return self._return_or_inplace(
-            self._column.filter_characters(table, keep, repl)
+            self._column.filter_characters(table, keep, plc_repl)
         )
 
     def normalize_spaces(self) -> Series | Index:

@@ -3299,23 +3299,23 @@ class IndexedFrame(Frame):
                 plc.types.NullEquality.EQUAL,
                 plc.types.NanEquality.ALL_EQUAL,
             )
-            plc_result = plc.copying.scatter(
+            source = [
+                plc.Scalar.from_py(False, dtype=plc.DataType(plc.TypeId.BOOL8))
+            ]
+            target = plc.Table(
                 [
-                    plc.Scalar.from_py(
-                        False, dtype=plc.DataType(plc.TypeId.BOOL8)
+                    plc.Column.from_scalar(
+                        plc.Scalar.from_py(
+                            True, dtype=plc.DataType(plc.TypeId.BOOL8)
+                        ),
+                        len(self),
                     )
-                ],
+                ]
+            )
+            plc_result = plc.copying.scatter(
+                source,
                 distinct_indices,
-                plc.Table(
-                    [
-                        plc.Column.from_scalar(
-                            plc.Scalar.from_py(
-                                True, dtype=plc.DataType(plc.TypeId.BOOL8)
-                            ),
-                            len(self),
-                        )
-                    ]
-                ),
+                target,
             ).columns()[0]
             result = ColumnBase.create(
                 plc_result, dtype=dtype_from_pylibcudf_column(plc_result)

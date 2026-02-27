@@ -1876,8 +1876,8 @@ class StringColumn(ColumnBase, Scannable):
     def filter_characters(
         self,
         table: dict,
-        keep: bool = True,
-        repl: str | None = None,
+        keep: bool,
+        repl: plc.Scalar,
     ) -> Self:
         with self.access(mode="read", scope="internal"):
             plc_result = plc.strings.translate.filter_characters(
@@ -1886,9 +1886,7 @@ class StringColumn(ColumnBase, Scannable):
                 plc.strings.translate.FilterType.KEEP
                 if keep
                 else plc.strings.translate.FilterType.REMOVE,
-                plc.Scalar.from_py(
-                    repl, dtype=plc.DataType(plc.TypeId.STRING)
-                ),
+                repl,
             )
             return cast(
                 Self,
