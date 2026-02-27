@@ -315,7 +315,7 @@ TEST_F(JitParseTest, PTXWithUntypedLdParam)
   asm volatile ("  bra RETTGT;");
    /**   ret  */
 
-   
+
 
  asm volatile ("RETTGT:}");}
 )***";
