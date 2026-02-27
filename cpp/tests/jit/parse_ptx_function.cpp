@@ -230,8 +230,7 @@ __device__ __inline__ void LongKernel(){
 // test that an ld.param instruction that doesn't contain the exact semantic type
 // is still parsed correctly. This is important because NVVM IR doesn't always use the exact
 // semantic type in the ld.param instruction. For example, it may use `ld.param.u8` to load a `char`
-// parameter, which is semantically correct but doesn't match the expected `ld.param.s8` or
-// `ld.param.u8`.
+// parameter, which is semantically correct but doesn't match the expected `ld.param.s8`.
 TEST_F(JitParseTest, PTXWithUntypedLdParam)
 {
   //
