@@ -426,6 +426,13 @@ class reader_impl {
   [[nodiscard]] std::optional<std::vector<std::string>> get_column_projection(
     parquet_reader_options const& options, bool ignore_missing_columns) const;
 
+  /**
+   * @brief Cast any fixed-point output columns to the decimal width specified in options.
+   *
+   * @param out_columns Output columns to cast
+   */
+  void apply_decimal_width_cast(std::vector<std::unique_ptr<cudf::column>>& out_columns);
+
   rmm::cuda_stream_view _stream;
   rmm::device_async_resource_ref _mr{cudf::get_current_device_resource_ref()};
 
@@ -433,6 +440,8 @@ class reader_impl {
   struct {
     // timestamp_type
     data_type timestamp_type;
+    // decimal_width
+    type_id decimal_width;
     // User specified reading rows/stripes selection.
     int64_t const skip_rows;
     std::optional<int64_t> num_rows;

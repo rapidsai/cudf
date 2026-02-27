@@ -85,7 +85,8 @@ struct row_group_info {
  */
 [[nodiscard]] type_id to_type_id(SchemaElement const& schema,
                                  bool strings_to_categorical,
-                                 type_id timestamp_type_id);
+                                 type_id timestamp_type_id,
+                                 type_id decimal_type_id);
 
 /**
  * @brief Converts cuDF type enum to column logical type
@@ -579,6 +580,7 @@ class aggregate_reader_metadata {
    * @param strings_to_categorical Type conversion parameter
    * @param ignore_missing_columns Whether to ignore non-existent projected columns
    * @param timestamp_type_id Type conversion parameter
+   * @param decimal_type_id Type conversion parameter
    *
    * @return input column information, output column buffers, list of output column schema
    * indices
@@ -591,7 +593,8 @@ class aggregate_reader_metadata {
                  bool include_index,
                  bool strings_to_categorical,
                  bool ignore_missing_columns,
-                 type_id timestamp_type_id);
+                 type_id timestamp_type_id,
+                 type_id decimal_type_id);
 };
 
 }  // namespace cudf::io::parquet::detail
