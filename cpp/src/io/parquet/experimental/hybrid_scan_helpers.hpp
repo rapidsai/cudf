@@ -143,6 +143,7 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
    * @param strings_to_categorical Type conversion parameter
    * @param ignore_missing_columns Whether to ignore non-existent columns
    * @param timestamp_type_id Type conversion parameter
+   * @param decimal_type_id Type conversion parameter
    *
    * @return input column information, output column buffers, list of output column schema
    * indices
@@ -154,7 +155,8 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
                            bool include_index,
                            bool strings_to_categorical,
                            bool ignore_missing_columns,
-                           type_id timestamp_type_id);
+                           type_id timestamp_type_id,
+                           type_id decimal_type_id);
 
   /**
    * @brief Filters row groups such that only the row groups that start within the byte range
