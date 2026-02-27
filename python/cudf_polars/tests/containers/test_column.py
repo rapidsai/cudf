@@ -5,9 +5,9 @@ from __future__ import annotations
 
 import datetime
 from typing import TYPE_CHECKING
+from unittest.mock import MagicMock
 
 import pytest
-from unittest.mock import MagicMock
 
 import polars as pl
 
@@ -85,9 +85,10 @@ def test_check_sorted():
 
 def test_check_sorted_caches_kernel_result(monkeypatch):
     stream = get_cuda_stream()
+    dtype = DataType(pl.Int8())
     column = Column(
         plc.Column.from_iterable_of_py([0, 1, 2], dtype.plc_type),
-        dtype=DataType(pl.Int8()),
+        dtype=dtype,
     )
 
     real_is_sorted = plc.sorting.is_sorted
