@@ -290,6 +290,12 @@ def _(
             msg=f"Join({maintain_order=}) not supported for multiple partitions.",
         )
 
+    # Check for dynamic planning - defer broadcast vs shuffle decision to runtime
+    if dynamic_planning:
+        new_node = ir.reconstruct(children)
+        partition_info[new_node] = PartitionInfo(count=output_count)
+        return new_node, partition_info
+
     if _should_bcast_join(
         ir,
         left,

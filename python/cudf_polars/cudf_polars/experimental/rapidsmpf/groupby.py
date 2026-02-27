@@ -34,12 +34,12 @@ from cudf_polars.experimental.rapidsmpf.dispatch import (
 )
 from cudf_polars.experimental.rapidsmpf.utils import (
     ChannelManager,
+    NormalizedPartitioning,
     allgather_reduce,
     chunkwise_evaluate,
     empty_table_chunk,
     evaluate_batch,
     evaluate_chunk,
-    get_partitioning_moduli,
     process_children,
     recv_metadata,
     send_metadata,
@@ -643,13 +643,16 @@ async def groupby_actor(
         metadata_in = await recv_metadata(ch_in, context)
 
         nranks = context.comm().nranks
-        key_indices = _key_indices(ir, ir.children[0].schema)
-        require_tree = _require_tree(ir)
-        inter_rank_modulus, local_modulus = get_partitioning_moduli(
-            metadata_in, key_indices, nranks, allow_subset=True
+        partitioning = NormalizedPartitioning.from_indices(
+            metadata_in.partitioning,
+            nranks,
+            indices=_key_indices(ir, ir.children[0].schema),
         )
-        partitioned_inter_rank = bool(inter_rank_modulus)
-        partitioned_local = local_modulus is None or bool(local_modulus)
+        require_tree = _require_tree(ir)
+        partitioned_inter_rank = bool(partitioning.inter_rank_modulus)
+        partitioned_local = partitioning.local_modulus is None or bool(
+            partitioning.local_modulus
+        )
         fully_partitioned = partitioned_inter_rank and partitioned_local
         fallback_case = (
             # NOTE: This criteria means that we fell back
