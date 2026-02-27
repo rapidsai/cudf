@@ -2711,7 +2711,7 @@ struct ParquetMetadataReaderTest : public cudf::test::BaseFixture {
   }
 };
 
-TEST_F(ParquetMetadataReaderTest, TestBasic)
+TEST_F(ParquetMetadataReaderTest, Basics)
 {
   auto const num_rows = 1200;
 
@@ -2769,7 +2769,7 @@ TEST_F(ParquetMetadataReaderTest, TestBasic)
   test_parquet_metadata(3);
 }
 
-TEST_F(ParquetMetadataReaderTest, TestPreMaterializedMetadata)
+TEST_F(ParquetMetadataReaderTest, PreMaterializedMetadata)
 {
   auto const num_rows = 1200;
 
@@ -2808,7 +2808,7 @@ TEST_F(ParquetMetadataReaderTest, TestPreMaterializedMetadata)
   test_parquet_metadata(3);
 }
 
-TEST_F(ParquetMetadataReaderTest, TestNested)
+TEST_F(ParquetMetadataReaderTest, Nested)
 {
   auto const num_rows       = 1200;
   auto const lists_per_row  = 4;
@@ -2914,7 +2914,7 @@ TEST_F(ParquetMetadataReaderTest, TestNested)
   EXPECT_EQ(out_float_col.name(), "float_field");
   EXPECT_EQ(out_float_col.type(), cudf::io::parquet::Type::FLOAT);
 }
-TEST_F(ParquetMetadataReaderTest, TestCudfTypes)
+TEST_F(ParquetMetadataReaderTest, CudfTypes)
 {
   auto const num_rows = 4;
 

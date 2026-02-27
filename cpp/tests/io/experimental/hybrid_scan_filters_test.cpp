@@ -82,7 +82,7 @@ auto filter_row_groups_with_dictionaries(
 // Base test fixture for tests
 struct HybridScanFiltersTest : public cudf::test::BaseFixture {};
 
-TEST_F(HybridScanFiltersTest, TestMetadata)
+TEST_F(HybridScanFiltersTest, Metadata)
 {
   srand(0xf00d);
   using T = uint32_t;
@@ -156,7 +156,7 @@ TEST_F(HybridScanFiltersTest, TestMetadata)
   EXPECT_EQ(reader->total_rows_in_row_groups(input_row_group_indices), 2 * rows_per_row_group);
 }
 
-TEST_F(HybridScanFiltersTest, TestExternalMetadata)
+TEST_F(HybridScanFiltersTest, ExternalMetadata)
 {
   srand(0xcaffe);
 
