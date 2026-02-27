@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -125,11 +125,11 @@ std::unique_ptr<column> replace_nulls(dictionary_column_view const& input,
 
   // now build the new indices by doing replace-null on the updated indices
   auto const input_indices = input_view.get_indices_annotated();
-  auto new_indices =
-    replace_indices(input_indices,
-                    cudf::detail::indexalator_factory::make_input_optional_iterator(*scalar_index),
-                    stream,
-                    mr);
+  auto new_indices         = replace_indices(
+    input_indices,
+    cudf::detail::indexalator_factory::make_input_optional_iterator(*scalar_index, stream),
+    stream,
+    mr);
   new_indices->set_null_mask(rmm::device_buffer{0, stream, mr}, 0);
 
   return make_dictionary_column(

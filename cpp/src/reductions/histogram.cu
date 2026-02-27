@@ -88,7 +88,7 @@ std::unique_ptr<column> make_empty_histogram_like(column_view const& values)
 {
   std::vector<std::unique_ptr<column>> struct_children;
   struct_children.emplace_back(empty_like(values));
-  struct_children.emplace_back(make_numeric_column(data_type{type_id::INT64}, 0));
+  struct_children.emplace_back(make_empty_column(type_id::INT64));
   return std::make_unique<column>(data_type{type_id::STRUCT},
                                   0,
                                   rmm::device_buffer{},

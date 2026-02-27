@@ -524,9 +524,13 @@ std::unique_ptr<column> transform(std::vector<column_view> const& columns,
   CUDF_FUNC_RANGE();
   // legacy behavior was to detect which column were scalars based on their sizes
   std::vector<std::variant<column_view, scalar_column_view>> inputs;
+
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
   auto base_column = jit::get_transform_base_column(columns);
   for (auto const& col : columns) {
     if (jit::is_scalar(base_column->size(), col.size())) {
+#pragma GCC diagnostic pop
       inputs.emplace_back(scalar_column_view{col});
     } else {
       inputs.emplace_back(col);
