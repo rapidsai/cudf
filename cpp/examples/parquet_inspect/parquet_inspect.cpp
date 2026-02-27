@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -75,7 +75,7 @@ int main(int argc, char const** argv)
   auto const stream           = cudf::get_default_stream();
   auto constexpr is_pool_used = false;
   auto const mr               = create_memory_resource(is_pool_used);
-  cudf::set_current_device_resource(mr.get());
+  cudf::set_current_device_resource_ref(mr.get());
 
   // Read parquet footer metadata
   auto [metadata, has_page_index] = read_parquet_file_metadata(input_filepath);

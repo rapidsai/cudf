@@ -10,6 +10,8 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/export.hpp>
 
+#include <cuda/memory_resource>
+
 #include <queue>
 
 namespace CUDF_EXPORT cudf {
@@ -146,8 +148,8 @@ class chunked_parquet_reader {
   size_t _start_row;
   bool _is_unspecified_row_group_data;
   rmm::cuda_stream_view _stream;
-  rmm::device_async_resource_ref _mr;
-  rmm::device_async_resource_ref _table_mr;
+  cuda::mr::any_resource<cuda::mr::device_accessible> _mr;
+  cuda::mr::any_resource<cuda::mr::device_accessible> _table_mr;
 };
 
 /**

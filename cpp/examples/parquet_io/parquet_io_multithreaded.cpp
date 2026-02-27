@@ -360,7 +360,7 @@ int32_t main(int argc, char const** argv)
   auto stream_pool = rmm::cuda_stream_pool(thread_count, rmm::cuda_stream::flags::non_blocking);
   auto stats_mr =
     rmm::mr::statistics_resource_adaptor<rmm::mr::device_memory_resource>(resource.get());
-  rmm::mr::set_current_device_resource(&stats_mr);
+  cudf::set_current_device_resource_ref(&stats_mr);
 
   // List of input sources from the input_paths string.
   auto const input_sources = extract_input_sources(
