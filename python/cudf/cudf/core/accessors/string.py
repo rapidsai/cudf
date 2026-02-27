@@ -9,7 +9,6 @@ from typing import TYPE_CHECKING, Literal, cast, overload
 
 import numpy as np
 import pandas as pd
-import pyarrow as pa
 
 import pylibcudf as plc
 
@@ -28,7 +27,6 @@ from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
     can_convert_to_column,
 )
-from cudf.utils.scalar import pa_scalar_to_plc_scalar
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
@@ -50,7 +48,7 @@ def _massage_string_arg(
     value, name, allow_col: bool = False
 ) -> StringColumn | plc.Scalar:
     if isinstance(value, str):
-        return pa_scalar_to_plc_scalar(pa.scalar(value, type=pa.string()))
+        return plc.Scalar.from_py(value, dtype=plc.DataType(plc.TypeId.STRING))
 
     allowed_types = ["Scalar"]
 
@@ -1029,21 +1027,20 @@ class StringMethods(BaseAccessor):
         if regex and isinstance(pat, re.Pattern):
             pat = pat.pattern
 
-        pa_repl = pa.scalar(repl)
-        if not pa.types.is_string(pa_repl.type):
+        if not isinstance(repl, str):
             raise TypeError(f"repl must be a str, not {type(repl).__name__}.")
 
         # Pandas forces non-regex replace when pat is a single-character
         if regex is True and len(pat) > 0:
             result = self._column.replace_re(
                 pat,  # type: ignore[arg-type]
-                pa_repl,
+                repl,
                 n,
             )
         else:
             result = self._column.replace_str(
                 pat,  # type: ignore[arg-type]
-                pa_repl,
+                repl,
                 n,
             )
         return self._return_or_inplace(result)
@@ -2116,6 +2113,14 @@ class StringMethods(BaseAccessor):
         """
         if repl is None:
             repl = ""
+        if not isinstance(repl, str):
+            raise TypeError(
+                f"repl should be a string, but got {type(repl).__name__}"
+            )
+        else:
+            plc_repl = plc.Scalar.from_py(
+                repl, dtype=plc.DataType(plc.TypeId.STRING)
+            )
         if keep:
             types_to_remove = (
                 plc.strings.char_types.StringCharacterTypes.ALL_TYPES
@@ -2134,7 +2139,7 @@ class StringMethods(BaseAccessor):
         return self._return_or_inplace(
             self._column.filter_characters_of_type(
                 types_to_remove,
-                repl,
+                plc_repl,
                 types_to_keep,
             )
         )
@@ -2265,8 +2270,16 @@ class StringMethods(BaseAccessor):
         if repl is None:
             repl = ""
 
+        if not isinstance(repl, str):
+            raise TypeError(
+                f"repl should be a string, but got {type(repl).__name__}"
+            )
+        else:
+            plc_repl = plc.Scalar.from_py(
+                repl, dtype=plc.DataType(plc.TypeId.STRING)
+            )
         return self._return_or_inplace(
-            self._column.replace_slice(start, stop, repl)
+            self._column.replace_slice(start, stop, plc_repl)
         )
 
     def insert(
@@ -2591,8 +2604,8 @@ class StringMethods(BaseAccessor):
                     data = self._column.split_re(pat, n)
                 else:
                     data = self._column.split(
-                        pa_scalar_to_plc_scalar(
-                            pa.scalar(pat, type=pa.string())
+                        plc.Scalar.from_py(
+                            pat, dtype=plc.DataType(plc.TypeId.STRING)
                         ),
                         n,
                     )
@@ -2605,7 +2618,9 @@ class StringMethods(BaseAccessor):
                 result_table = self._column.split_record_re(pat, n)
             else:
                 result_table = self._column.split_record(
-                    pa_scalar_to_plc_scalar(pa.scalar(pat, type=pa.string())),
+                    plc.Scalar.from_py(
+                        pat, dtype=plc.DataType(plc.TypeId.STRING)
+                    ),
                     n,
                 )
 
@@ -2768,8 +2783,8 @@ class StringMethods(BaseAccessor):
                     data = self._column.rsplit_re(pat, n)
                 else:
                     data = self._column.rsplit(
-                        pa_scalar_to_plc_scalar(
-                            pa.scalar(pat, type=pa.string())
+                        plc.Scalar.from_py(
+                            pat, dtype=plc.DataType(plc.TypeId.STRING)
                         ),
                         n,
                     )
@@ -2782,7 +2797,9 @@ class StringMethods(BaseAccessor):
                 result_table = self._column.rsplit_record_re(pat, n)
             else:
                 result_table = self._column.rsplit_record(
-                    pa_scalar_to_plc_scalar(pa.scalar(pat, type=pa.string())),
+                    plc.Scalar.from_py(
+                        pat, dtype=plc.DataType(plc.TypeId.STRING)
+                    ),
                     n,
                 )
 
@@ -2901,10 +2918,13 @@ class StringMethods(BaseAccessor):
 
         if sep is None:
             sep = " "
-
+        if not isinstance(sep, str):
+            raise TypeError(
+                f"sep should be a string, but got {type(sep).__name__}"
+            )
         return self._return_or_inplace(
             self._column.partition(
-                pa_scalar_to_plc_scalar(pa.scalar(sep, type=pa.string()))
+                plc.Scalar.from_py(sep, dtype=plc.DataType(plc.TypeId.STRING)),
             ),
             expand=expand,
         )
@@ -2970,10 +2990,13 @@ class StringMethods(BaseAccessor):
 
         if sep is None:
             sep = " "
-
+        if not isinstance(sep, str):
+            raise TypeError(
+                f"sep should be a string, but got {type(sep).__name__}"
+            )
         return self._return_or_inplace(
             self._column.rpartition(
-                pa_scalar_to_plc_scalar(pa.scalar(sep, type=pa.string()))
+                plc.Scalar.from_py(sep, dtype=plc.DataType(plc.TypeId.STRING)),
             ),
             expand=expand,
         )
@@ -3320,6 +3343,10 @@ class StringMethods(BaseAccessor):
         3    None
         dtype: object
         """
+        if not (isinstance(to_strip, str) or to_strip is None):
+            raise TypeError(
+                f"to_strip should be a string or None, but got {type(to_strip).__name__}"
+            )
         return self._return_or_inplace(
             self._column.strip(plc.strings.side_type.SideType.BOTH, to_strip)
         )
@@ -3364,6 +3391,10 @@ class StringMethods(BaseAccessor):
         3       None
         dtype: object
         """
+        if not (isinstance(to_strip, str) or to_strip is None):
+            raise TypeError(
+                f"to_strip should be a string or None, but got {type(to_strip).__name__}"
+            )
         return self._return_or_inplace(
             self._column.strip(plc.strings.side_type.SideType.LEFT, to_strip)
         )
@@ -3416,6 +3447,10 @@ class StringMethods(BaseAccessor):
         3      None
         dtype: object
         """
+        if not (isinstance(to_strip, str) or to_strip is None):
+            raise TypeError(
+                f"to_strip should be a string or None, but got {type(to_strip).__name__}"
+            )
         return self._return_or_inplace(
             self._column.strip(plc.strings.side_type.SideType.RIGHT, to_strip)
         )
@@ -4515,6 +4550,10 @@ class StringMethods(BaseAccessor):
         """
         if repl is None:
             repl = ""
+        if not isinstance(repl, str):
+            raise TypeError(
+                f"repl should be a string, but got {type(repl).__name__}"
+            )
         return self._return_or_inplace(
             self._column.filter_characters(table, keep, repl)
         )
@@ -4979,8 +5018,8 @@ class StringMethods(BaseAccessor):
             self._column.replace_tokens(
                 targets_column,  # type: ignore[arg-type]
                 replacements_column,  # type: ignore[arg-type]
-                pa_scalar_to_plc_scalar(
-                    pa.scalar(delimiter, type=pa.string())
+                plc.Scalar.from_py(
+                    delimiter, dtype=plc.DataType(plc.TypeId.STRING)
                 ),
             ),
         )
@@ -5050,11 +5089,11 @@ class StringMethods(BaseAccessor):
         return self._return_or_inplace(
             self._column.filter_tokens(
                 min_token_length,
-                pa_scalar_to_plc_scalar(
-                    pa.scalar(replacement, type=pa.string())
+                plc.Scalar.from_py(
+                    replacement, dtype=plc.DataType(plc.TypeId.STRING)
                 ),
-                pa_scalar_to_plc_scalar(
-                    pa.scalar(delimiter, type=pa.string())
+                plc.Scalar.from_py(
+                    delimiter, dtype=plc.DataType(plc.TypeId.STRING)
                 ),
             ),
         )

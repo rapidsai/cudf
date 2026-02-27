@@ -31,8 +31,8 @@ from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
     _get_base_dtype,
     cudf_dtype_from_pa_type,
-    cudf_dtype_to_pa_type,
     dtype_from_pylibcudf_column,
+    dtype_to_pylibcudf_type,
     get_dtype_of_same_kind,
 )
 from cudf.utils.scalar import pa_scalar_to_plc_scalar
@@ -829,8 +829,8 @@ class DatetimeColumn(TemporalBaseColumn):
         )
         localized = self._scatter_by_column(
             self.isnull() | (ambiguous_col | nonexistent_col),
-            pa_scalar_to_plc_scalar(
-                pa.scalar(None, type=cudf_dtype_to_pa_type(self.dtype))
+            plc.Scalar.from_py(
+                None, dtype=dtype_to_pylibcudf_type(self.dtype)
             ),
         )
 
