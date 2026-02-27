@@ -150,12 +150,6 @@ class PylibcudfFunction:
         return ColumnBase.create(plc_result, dtype=output_dtype)
 
 
-def np_bool_dtype_policy(
-    result: plc.Column, dtypes: "list[DtypeObj]"
-) -> "DtypeObj":
-    return np.dtype(np.bool_)
-
-
 def same_dtype_policy(
     result: plc.Column, dtypes: "list[DtypeObj]"
 ) -> "DtypeObj":
@@ -167,6 +161,9 @@ def fixed_dtype_policy(dtype: "DtypeObj") -> "DtypePolicy":
         return dtype
 
     return policy
+
+
+np_bool_dtype_policy = fixed_dtype_policy(np.dtype(np.bool_))
 
 
 def same_kind_dtype_policy(target_dtype: "DtypeObj") -> "DtypePolicy":
