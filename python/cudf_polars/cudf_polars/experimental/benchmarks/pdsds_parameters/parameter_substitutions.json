@@ -1,5 +1,4 @@
 {
-  "rng_seed": 42,
   "scale_factors": {
     "1": {
       "1": {
@@ -524,6 +523,56 @@
           "Williamson County"
         ]
       },
+      "17": {
+        "year": 2002
+      },
+      "18": {
+        "year": 1999,
+        "month": [
+          8,
+          9,
+          3,
+          5,
+          7,
+          2
+        ],
+        "state": [
+          "MT",
+          "NM",
+          "NY",
+          "GA",
+          "CO",
+          "LA",
+          "SD"
+        ],
+        "es": "Unknown",
+        "gen": "M"
+      },
+      "19": {
+        "year": 2001,
+        "month": 12,
+        "manager": 94
+      },
+      "20": {
+        "sdate": "2001-01-08",
+        "year": 2001,
+        "category": [
+          "Books",
+          "Women",
+          "Electronics"
+        ]
+      },
+      "21": {
+        "sales_date": "2002-03-20",
+        "year": 2002
+      },
+      "22": {
+        "dms": 1176
+      },
+      "23": {
+        "year": 2000,
+        "month": 3
+      },
       "24": {
         "market": 8,
         "color": [
@@ -701,6 +750,114 @@
         "year": 2002,
         "bp": "--",
         "ms": "U"
+      },
+      "73": {
+        "dom": [
+          1,
+          2
+        ],
+        "bp": [
+          "501-1000",
+          "5001-10000"
+        ],
+        "year": 1999,
+        "counties": [
+          "Williamson County",
+          "Williamson County",
+          "Williamson County",
+          "Williamson County"
+        ]
+      },
+      "74": {
+        "year": 2000
+      },
+      "75": {
+        "category": "Shoes",
+        "year": 2001
+      },
+      "76": {
+        "nullcol_ss": "ss_cdemo_sk",
+        "nullcol_ws": "ws_ship_addr_sk",
+        "nullcol_cs": "cs_promo_sk"
+      },
+      "77": {
+        "sdate": "2002-08-09"
+      },
+      "78": {
+        "year": 2001
+      },
+      "79": {
+        "dep_cnt": 9,
+        "dow": 1,
+        "year": 1999,
+        "emp_min": 200,
+        "emp_max": 295
+      },
+      "80": {
+        "sdate": "2002-08-09"
+      },
+      "81": {
+        "state": "NH"
+      },
+      "82": {
+        "price": 37,
+        "sdate": "2002-01-22",
+        "manufact": [
+          63,
+          225,
+          11,
+          345
+        ],
+        "inv_min": 100,
+        "inv_max": 500
+      },
+      "83": {
+        "dates": [
+          "2002-02-01",
+          "2002-10-01",
+          "2002-11-05"
+        ]
+      },
+      "84": {
+        "city": "Cedar Grove",
+        "income": 5884
+      },
+      "85": {
+        "year": 2002,
+        "ms": [
+          "M",
+          "U",
+          "S"
+        ],
+        "es": [
+          "4 yr Degree",
+          "College",
+          "2 yr Degree"
+        ],
+        "price_ranges": [
+          [
+            100.0,
+            150.0
+          ],
+          [
+            50.0,
+            100.0
+          ],
+          [
+            150.0,
+            200.0
+          ]
+        ],
+        "states": [
+          "NH",
+          "OK",
+          "NC",
+          "MS",
+          "TX",
+          "TN"
+        ],
+        "np_min": 100,
+        "np_max": 200
       }
     },
     "10": {
@@ -1226,6 +1383,56 @@
           "Ziebach County"
         ]
       },
+      "17": {
+        "year": 2002
+      },
+      "18": {
+        "year": 1999,
+        "month": [
+          8,
+          9,
+          3,
+          5,
+          7,
+          2
+        ],
+        "state": [
+          "MT",
+          "NM",
+          "NY",
+          "GA",
+          "CO",
+          "LA",
+          "SD"
+        ],
+        "es": "Unknown",
+        "gen": "M"
+      },
+      "19": {
+        "year": 2001,
+        "month": 12,
+        "manager": 94
+      },
+      "20": {
+        "sdate": "2001-01-08",
+        "year": 2001,
+        "category": [
+          "Books",
+          "Women",
+          "Electronics"
+        ]
+      },
+      "21": {
+        "sales_date": "2002-03-20",
+        "year": 2002
+      },
+      "22": {
+        "dms": 1176
+      },
+      "23": {
+        "year": 2000,
+        "month": 3
+      },
       "24": {
         "market": 8,
         "color": [
@@ -1403,6 +1610,114 @@
         "year": 2002,
         "bp": "--",
         "ms": "U"
+      },
+      "73": {
+        "dom": [
+          1,
+          2
+        ],
+        "bp": [
+          "1001-5000",
+          "5001-10000"
+        ],
+        "year": 2000,
+        "counties": [
+          "Ziebach County",
+          "Walker County",
+          "Williamson County",
+          "Ziebach County"
+        ]
+      },
+      "74": {
+        "year": 2000
+      },
+      "75": {
+        "category": "Shoes",
+        "year": 2001
+      },
+      "76": {
+        "nullcol_ss": "ss_cdemo_sk",
+        "nullcol_ws": "ws_ship_addr_sk",
+        "nullcol_cs": "cs_promo_sk"
+      },
+      "77": {
+        "sdate": "2002-08-09"
+      },
+      "78": {
+        "year": 2001
+      },
+      "79": {
+        "dep_cnt": 9,
+        "dow": 1,
+        "year": 1999,
+        "emp_min": 200,
+        "emp_max": 295
+      },
+      "80": {
+        "sdate": "2002-08-09"
+      },
+      "81": {
+        "state": "NH"
+      },
+      "82": {
+        "price": 37,
+        "sdate": "2002-01-22",
+        "manufact": [
+          63,
+          225,
+          11,
+          345
+        ],
+        "inv_min": 100,
+        "inv_max": 500
+      },
+      "83": {
+        "dates": [
+          "2002-02-01",
+          "2002-10-01",
+          "2002-11-05"
+        ]
+      },
+      "84": {
+        "city": "Cedar Grove",
+        "income": 5884
+      },
+      "85": {
+        "year": 2002,
+        "ms": [
+          "M",
+          "U",
+          "S"
+        ],
+        "es": [
+          "4 yr Degree",
+          "College",
+          "2 yr Degree"
+        ],
+        "price_ranges": [
+          [
+            100.0,
+            150.0
+          ],
+          [
+            50.0,
+            100.0
+          ],
+          [
+            150.0,
+            200.0
+          ]
+        ],
+        "states": [
+          "NH",
+          "OK",
+          "NC",
+          "MS",
+          "TX",
+          "TN"
+        ],
+        "np_min": 100,
+        "np_max": 200
       }
     },
     "50": {
@@ -1928,6 +2243,56 @@
           "Ziebach County"
         ]
       },
+      "17": {
+        "year": 2002
+      },
+      "18": {
+        "year": 1999,
+        "month": [
+          8,
+          9,
+          3,
+          5,
+          7,
+          2
+        ],
+        "state": [
+          "MT",
+          "NM",
+          "NY",
+          "GA",
+          "CO",
+          "LA",
+          "SD"
+        ],
+        "es": "Unknown",
+        "gen": "M"
+      },
+      "19": {
+        "year": 2001,
+        "month": 12,
+        "manager": 94
+      },
+      "20": {
+        "sdate": "2001-01-08",
+        "year": 2001,
+        "category": [
+          "Books",
+          "Women",
+          "Electronics"
+        ]
+      },
+      "21": {
+        "sales_date": "2002-03-20",
+        "year": 2002
+      },
+      "22": {
+        "dms": 1176
+      },
+      "23": {
+        "year": 2000,
+        "month": 3
+      },
       "24": {
         "market": 8,
         "color": [
@@ -2105,6 +2470,114 @@
         "year": 2002,
         "bp": "--",
         "ms": "U"
+      },
+      "73": {
+        "dom": [
+          1,
+          2
+        ],
+        "bp": [
+          "1001-5000",
+          "5001-10000"
+        ],
+        "year": 2000,
+        "counties": [
+          "Ziebach County",
+          "Walker County",
+          "Williamson County",
+          "Ziebach County"
+        ]
+      },
+      "74": {
+        "year": 2000
+      },
+      "75": {
+        "category": "Shoes",
+        "year": 2001
+      },
+      "76": {
+        "nullcol_ss": "ss_cdemo_sk",
+        "nullcol_ws": "ws_ship_addr_sk",
+        "nullcol_cs": "cs_promo_sk"
+      },
+      "77": {
+        "sdate": "2002-08-09"
+      },
+      "78": {
+        "year": 2001
+      },
+      "79": {
+        "dep_cnt": 9,
+        "dow": 1,
+        "year": 1999,
+        "emp_min": 200,
+        "emp_max": 295
+      },
+      "80": {
+        "sdate": "2002-08-09"
+      },
+      "81": {
+        "state": "NH"
+      },
+      "82": {
+        "price": 37,
+        "sdate": "2002-01-22",
+        "manufact": [
+          63,
+          225,
+          11,
+          345
+        ],
+        "inv_min": 100,
+        "inv_max": 500
+      },
+      "83": {
+        "dates": [
+          "2002-02-01",
+          "2002-10-01",
+          "2002-11-05"
+        ]
+      },
+      "84": {
+        "city": "Cedar Grove",
+        "income": 5884
+      },
+      "85": {
+        "year": 2002,
+        "ms": [
+          "M",
+          "U",
+          "S"
+        ],
+        "es": [
+          "4 yr Degree",
+          "College",
+          "2 yr Degree"
+        ],
+        "price_ranges": [
+          [
+            100.0,
+            150.0
+          ],
+          [
+            50.0,
+            100.0
+          ],
+          [
+            150.0,
+            200.0
+          ]
+        ],
+        "states": [
+          "NH",
+          "OK",
+          "NC",
+          "MS",
+          "TX",
+          "TN"
+        ],
+        "np_min": 100,
+        "np_max": 200
       }
     },
     "100": {
@@ -2630,6 +3103,56 @@
           "Richland County"
         ]
       },
+      "17": {
+        "year": 2002
+      },
+      "18": {
+        "year": 1999,
+        "month": [
+          8,
+          9,
+          3,
+          5,
+          7,
+          2
+        ],
+        "state": [
+          "MT",
+          "NM",
+          "NY",
+          "GA",
+          "CO",
+          "LA",
+          "SD"
+        ],
+        "es": "Unknown",
+        "gen": "M"
+      },
+      "19": {
+        "year": 2001,
+        "month": 12,
+        "manager": 94
+      },
+      "20": {
+        "sdate": "2001-01-08",
+        "year": 2001,
+        "category": [
+          "Books",
+          "Women",
+          "Electronics"
+        ]
+      },
+      "21": {
+        "sales_date": "2002-03-20",
+        "year": 2002
+      },
+      "22": {
+        "dms": 1176
+      },
+      "23": {
+        "year": 2000,
+        "month": 3
+      },
       "24": {
         "market": 8,
         "color": [
@@ -2807,6 +3330,114 @@
         "year": 2002,
         "bp": "--",
         "ms": "U"
+      },
+      "73": {
+        "dom": [
+          1,
+          2
+        ],
+        "bp": [
+          "1001-5000",
+          "5001-10000"
+        ],
+        "year": 1998,
+        "counties": [
+          "Barrow County",
+          "Walker County",
+          "Ziebach County",
+          "Daviess County"
+        ]
+      },
+      "74": {
+        "year": 2000
+      },
+      "75": {
+        "category": "Shoes",
+        "year": 2001
+      },
+      "76": {
+        "nullcol_ss": "ss_cdemo_sk",
+        "nullcol_ws": "ws_ship_addr_sk",
+        "nullcol_cs": "cs_promo_sk"
+      },
+      "77": {
+        "sdate": "2002-08-09"
+      },
+      "78": {
+        "year": 2001
+      },
+      "79": {
+        "dep_cnt": 9,
+        "dow": 1,
+        "year": 1999,
+        "emp_min": 200,
+        "emp_max": 295
+      },
+      "80": {
+        "sdate": "2002-08-09"
+      },
+      "81": {
+        "state": "NH"
+      },
+      "82": {
+        "price": 37,
+        "sdate": "2002-01-22",
+        "manufact": [
+          63,
+          225,
+          11,
+          345
+        ],
+        "inv_min": 100,
+        "inv_max": 500
+      },
+      "83": {
+        "dates": [
+          "2002-02-01",
+          "2002-10-01",
+          "2002-11-05"
+        ]
+      },
+      "84": {
+        "city": "Cedar Grove",
+        "income": 5884
+      },
+      "85": {
+        "year": 2002,
+        "ms": [
+          "M",
+          "U",
+          "S"
+        ],
+        "es": [
+          "4 yr Degree",
+          "College",
+          "2 yr Degree"
+        ],
+        "price_ranges": [
+          [
+            100.0,
+            150.0
+          ],
+          [
+            50.0,
+            100.0
+          ],
+          [
+            150.0,
+            200.0
+          ]
+        ],
+        "states": [
+          "NH",
+          "OK",
+          "NC",
+          "MS",
+          "TX",
+          "TN"
+        ],
+        "np_min": 100,
+        "np_max": 200
       }
     },
     "200": {
@@ -3332,6 +3963,56 @@
           "Ziebach County"
         ]
       },
+      "17": {
+        "year": 2002
+      },
+      "18": {
+        "year": 1999,
+        "month": [
+          8,
+          9,
+          3,
+          5,
+          7,
+          2
+        ],
+        "state": [
+          "MT",
+          "NM",
+          "NY",
+          "GA",
+          "CO",
+          "LA",
+          "SD"
+        ],
+        "es": "Unknown",
+        "gen": "M"
+      },
+      "19": {
+        "year": 2001,
+        "month": 12,
+        "manager": 94
+      },
+      "20": {
+        "sdate": "2001-01-08",
+        "year": 2001,
+        "category": [
+          "Books",
+          "Women",
+          "Electronics"
+        ]
+      },
+      "21": {
+        "sales_date": "2002-03-20",
+        "year": 2002
+      },
+      "22": {
+        "dms": 1176
+      },
+      "23": {
+        "year": 2000,
+        "month": 3
+      },
       "24": {
         "market": 8,
         "color": [
@@ -3509,6 +4190,114 @@
         "year": 2002,
         "bp": "--",
         "ms": "U"
+      },
+      "73": {
+        "dom": [
+          1,
+          2
+        ],
+        "bp": [
+          "501-1000",
+          "0-500"
+        ],
+        "year": 2000,
+        "counties": [
+          "Fairfield County",
+          "Ziebach County",
+          "Williamson County",
+          "Walker County"
+        ]
+      },
+      "74": {
+        "year": 2000
+      },
+      "75": {
+        "category": "Shoes",
+        "year": 2001
+      },
+      "76": {
+        "nullcol_ss": "ss_cdemo_sk",
+        "nullcol_ws": "ws_ship_addr_sk",
+        "nullcol_cs": "cs_promo_sk"
+      },
+      "77": {
+        "sdate": "2002-08-09"
+      },
+      "78": {
+        "year": 2001
+      },
+      "79": {
+        "dep_cnt": 9,
+        "dow": 1,
+        "year": 1999,
+        "emp_min": 200,
+        "emp_max": 295
+      },
+      "80": {
+        "sdate": "2002-08-09"
+      },
+      "81": {
+        "state": "NH"
+      },
+      "82": {
+        "price": 37,
+        "sdate": "2002-01-22",
+        "manufact": [
+          63,
+          225,
+          11,
+          345
+        ],
+        "inv_min": 100,
+        "inv_max": 500
+      },
+      "83": {
+        "dates": [
+          "2002-02-01",
+          "2002-10-01",
+          "2002-11-05"
+        ]
+      },
+      "84": {
+        "city": "Cedar Grove",
+        "income": 5884
+      },
+      "85": {
+        "year": 2002,
+        "ms": [
+          "M",
+          "U",
+          "S"
+        ],
+        "es": [
+          "4 yr Degree",
+          "College",
+          "2 yr Degree"
+        ],
+        "price_ranges": [
+          [
+            100.0,
+            150.0
+          ],
+          [
+            50.0,
+            100.0
+          ],
+          [
+            150.0,
+            200.0
+          ]
+        ],
+        "states": [
+          "NH",
+          "OK",
+          "NC",
+          "MS",
+          "TX",
+          "TN"
+        ],
+        "np_min": 100,
+        "np_max": 200
       }
     },
     "400": {
@@ -4034,6 +4823,56 @@
           "Ziebach County"
         ]
       },
+      "17": {
+        "year": 2002
+      },
+      "18": {
+        "year": 1999,
+        "month": [
+          8,
+          9,
+          3,
+          5,
+          7,
+          2
+        ],
+        "state": [
+          "MT",
+          "NM",
+          "NY",
+          "GA",
+          "CO",
+          "LA",
+          "SD"
+        ],
+        "es": "Unknown",
+        "gen": "M"
+      },
+      "19": {
+        "year": 2001,
+        "month": 12,
+        "manager": 94
+      },
+      "20": {
+        "sdate": "2001-01-08",
+        "year": 2001,
+        "category": [
+          "Books",
+          "Women",
+          "Electronics"
+        ]
+      },
+      "21": {
+        "sales_date": "2002-03-20",
+        "year": 2002
+      },
+      "22": {
+        "dms": 1176
+      },
+      "23": {
+        "year": 2000,
+        "month": 3
+      },
       "24": {
         "market": 8,
         "color": [
@@ -4211,6 +5050,114 @@
         "year": 2002,
         "bp": "--",
         "ms": "U"
+      },
+      "73": {
+        "dom": [
+          1,
+          2
+        ],
+        "bp": [
+          "501-1000",
+          "5001-10000"
+        ],
+        "year": 2000,
+        "counties": [
+          "Ziebach County",
+          "Williamson County",
+          "Ziebach County",
+          "Williamson County"
+        ]
+      },
+      "74": {
+        "year": 2000
+      },
+      "75": {
+        "category": "Shoes",
+        "year": 2001
+      },
+      "76": {
+        "nullcol_ss": "ss_cdemo_sk",
+        "nullcol_ws": "ws_ship_addr_sk",
+        "nullcol_cs": "cs_promo_sk"
+      },
+      "77": {
+        "sdate": "2002-08-09"
+      },
+      "78": {
+        "year": 2001
+      },
+      "79": {
+        "dep_cnt": 9,
+        "dow": 1,
+        "year": 1999,
+        "emp_min": 200,
+        "emp_max": 295
+      },
+      "80": {
+        "sdate": "2002-08-09"
+      },
+      "81": {
+        "state": "NH"
+      },
+      "82": {
+        "price": 37,
+        "sdate": "2002-01-22",
+        "manufact": [
+          63,
+          225,
+          11,
+          345
+        ],
+        "inv_min": 100,
+        "inv_max": 500
+      },
+      "83": {
+        "dates": [
+          "2002-02-01",
+          "2002-10-01",
+          "2002-11-05"
+        ]
+      },
+      "84": {
+        "city": "Cedar Grove",
+        "income": 5884
+      },
+      "85": {
+        "year": 2002,
+        "ms": [
+          "M",
+          "U",
+          "S"
+        ],
+        "es": [
+          "4 yr Degree",
+          "College",
+          "2 yr Degree"
+        ],
+        "price_ranges": [
+          [
+            100.0,
+            150.0
+          ],
+          [
+            50.0,
+            100.0
+          ],
+          [
+            150.0,
+            200.0
+          ]
+        ],
+        "states": [
+          "NH",
+          "OK",
+          "NC",
+          "MS",
+          "TX",
+          "TN"
+        ],
+        "np_min": 100,
+        "np_max": 200
       }
     },
     "1000": {
@@ -4736,6 +5683,56 @@
           "Oglethorpe County"
         ]
       },
+      "17": {
+        "year": 2002
+      },
+      "18": {
+        "year": 1999,
+        "month": [
+          8,
+          9,
+          3,
+          5,
+          7,
+          2
+        ],
+        "state": [
+          "MT",
+          "NM",
+          "NY",
+          "GA",
+          "CO",
+          "LA",
+          "SD"
+        ],
+        "es": "Unknown",
+        "gen": "M"
+      },
+      "19": {
+        "year": 2001,
+        "month": 12,
+        "manager": 94
+      },
+      "20": {
+        "sdate": "2001-01-08",
+        "year": 2001,
+        "category": [
+          "Books",
+          "Women",
+          "Electronics"
+        ]
+      },
+      "21": {
+        "sales_date": "2002-03-20",
+        "year": 2002
+      },
+      "22": {
+        "dms": 1176
+      },
+      "23": {
+        "year": 2000,
+        "month": 3
+      },
       "24": {
         "market": 8,
         "color": [
@@ -4913,6 +5910,114 @@
         "year": 2002,
         "bp": "--",
         "ms": "U"
+      },
+      "73": {
+        "dom": [
+          1,
+          2
+        ],
+        "bp": [
+          ">10000",
+          "Unknown"
+        ],
+        "year": 1998,
+        "counties": [
+          "Barrow County",
+          "Bronx County",
+          "Kittitas County",
+          "Levy County"
+        ]
+      },
+      "74": {
+        "year": 2000
+      },
+      "75": {
+        "category": "Shoes",
+        "year": 2001
+      },
+      "76": {
+        "nullcol_ss": "ss_cdemo_sk",
+        "nullcol_ws": "ws_ship_addr_sk",
+        "nullcol_cs": "cs_promo_sk"
+      },
+      "77": {
+        "sdate": "2002-08-09"
+      },
+      "78": {
+        "year": 2001
+      },
+      "79": {
+        "dep_cnt": 9,
+        "dow": 1,
+        "year": 1999,
+        "emp_min": 200,
+        "emp_max": 295
+      },
+      "80": {
+        "sdate": "2002-08-09"
+      },
+      "81": {
+        "state": "NH"
+      },
+      "82": {
+        "price": 37,
+        "sdate": "2002-01-22",
+        "manufact": [
+          63,
+          225,
+          11,
+          345
+        ],
+        "inv_min": 100,
+        "inv_max": 500
+      },
+      "83": {
+        "dates": [
+          "2002-02-01",
+          "2002-10-01",
+          "2002-11-05"
+        ]
+      },
+      "84": {
+        "city": "Cedar Grove",
+        "income": 5884
+      },
+      "85": {
+        "year": 2002,
+        "ms": [
+          "M",
+          "U",
+          "S"
+        ],
+        "es": [
+          "4 yr Degree",
+          "College",
+          "2 yr Degree"
+        ],
+        "price_ranges": [
+          [
+            100.0,
+            150.0
+          ],
+          [
+            50.0,
+            100.0
+          ],
+          [
+            150.0,
+            200.0
+          ]
+        ],
+        "states": [
+          "NH",
+          "OK",
+          "NC",
+          "MS",
+          "TX",
+          "TN"
+        ],
+        "np_min": 100,
+        "np_max": 200
       }
     },
     "3000": {
@@ -5438,6 +6543,56 @@
           "Marshall County"
         ]
       },
+      "17": {
+        "year": 2002
+      },
+      "18": {
+        "year": 1999,
+        "month": [
+          8,
+          9,
+          3,
+          5,
+          7,
+          2
+        ],
+        "state": [
+          "MT",
+          "NM",
+          "NY",
+          "GA",
+          "CO",
+          "LA",
+          "SD"
+        ],
+        "es": "Unknown",
+        "gen": "M"
+      },
+      "19": {
+        "year": 2001,
+        "month": 12,
+        "manager": 94
+      },
+      "20": {
+        "sdate": "2001-01-08",
+        "year": 2001,
+        "category": [
+          "Books",
+          "Women",
+          "Electronics"
+        ]
+      },
+      "21": {
+        "sales_date": "2002-03-20",
+        "year": 2002
+      },
+      "22": {
+        "dms": 1176
+      },
+      "23": {
+        "year": 2000,
+        "month": 3
+      },
       "24": {
         "market": 8,
         "color": [
@@ -5615,6 +6770,114 @@
         "year": 2002,
         "bp": "--",
         "ms": "U"
+      },
+      "73": {
+        "dom": [
+          1,
+          2
+        ],
+        "bp": [
+          "501-1000",
+          "Unknown"
+        ],
+        "year": 1998,
+        "counties": [
+          "Anderson County",
+          "Sierra County",
+          "Kittitas County",
+          "Terrell County"
+        ]
+      },
+      "74": {
+        "year": 2000
+      },
+      "75": {
+        "category": "Shoes",
+        "year": 2001
+      },
+      "76": {
+        "nullcol_ss": "ss_cdemo_sk",
+        "nullcol_ws": "ws_ship_addr_sk",
+        "nullcol_cs": "cs_promo_sk"
+      },
+      "77": {
+        "sdate": "2002-08-09"
+      },
+      "78": {
+        "year": 2001
+      },
+      "79": {
+        "dep_cnt": 9,
+        "dow": 1,
+        "year": 1999,
+        "emp_min": 200,
+        "emp_max": 295
+      },
+      "80": {
+        "sdate": "2002-08-09"
+      },
+      "81": {
+        "state": "NH"
+      },
+      "82": {
+        "price": 37,
+        "sdate": "2002-01-22",
+        "manufact": [
+          63,
+          225,
+          11,
+          345
+        ],
+        "inv_min": 100,
+        "inv_max": 500
+      },
+      "83": {
+        "dates": [
+          "2002-02-01",
+          "2002-10-01",
+          "2002-11-05"
+        ]
+      },
+      "84": {
+        "city": "Cedar Grove",
+        "income": 5884
+      },
+      "85": {
+        "year": 2002,
+        "ms": [
+          "M",
+          "U",
+          "S"
+        ],
+        "es": [
+          "4 yr Degree",
+          "College",
+          "2 yr Degree"
+        ],
+        "price_ranges": [
+          [
+            100.0,
+            150.0
+          ],
+          [
+            50.0,
+            100.0
+          ],
+          [
+            150.0,
+            200.0
+          ]
+        ],
+        "states": [
+          "NH",
+          "OK",
+          "NC",
+          "MS",
+          "TX",
+          "TN"
+        ],
+        "np_min": 100,
+        "np_max": 200
       }
     },
     "10000": {
@@ -6140,6 +7403,56 @@
           "Richland County"
         ]
       },
+      "17": {
+        "year": 2002
+      },
+      "18": {
+        "year": 1999,
+        "month": [
+          8,
+          9,
+          3,
+          5,
+          7,
+          2
+        ],
+        "state": [
+          "MT",
+          "NM",
+          "NY",
+          "GA",
+          "CO",
+          "LA",
+          "SD"
+        ],
+        "es": "Unknown",
+        "gen": "M"
+      },
+      "19": {
+        "year": 2001,
+        "month": 12,
+        "manager": 94
+      },
+      "20": {
+        "sdate": "2001-01-08",
+        "year": 2001,
+        "category": [
+          "Books",
+          "Women",
+          "Electronics"
+        ]
+      },
+      "21": {
+        "sales_date": "2002-03-20",
+        "year": 2002
+      },
+      "22": {
+        "dms": 1176
+      },
+      "23": {
+        "year": 2000,
+        "month": 3
+      },
       "24": {
         "market": 8,
         "color": [
@@ -6317,6 +7630,114 @@
         "year": 2002,
         "bp": "--",
         "ms": "U"
+      },
+      "73": {
+        "dom": [
+          1,
+          2
+        ],
+        "bp": [
+          "501-1000",
+          "0-500"
+        ],
+        "year": 1999,
+        "counties": [
+          "Quay County",
+          "Cocke County",
+          "Franklin Parish",
+          "Daviess County"
+        ]
+      },
+      "74": {
+        "year": 2000
+      },
+      "75": {
+        "category": "Shoes",
+        "year": 2001
+      },
+      "76": {
+        "nullcol_ss": "ss_cdemo_sk",
+        "nullcol_ws": "ws_ship_addr_sk",
+        "nullcol_cs": "cs_promo_sk"
+      },
+      "77": {
+        "sdate": "2002-08-09"
+      },
+      "78": {
+        "year": 2001
+      },
+      "79": {
+        "dep_cnt": 9,
+        "dow": 1,
+        "year": 1999,
+        "emp_min": 200,
+        "emp_max": 295
+      },
+      "80": {
+        "sdate": "2002-08-09"
+      },
+      "81": {
+        "state": "NH"
+      },
+      "82": {
+        "price": 37,
+        "sdate": "2002-01-22",
+        "manufact": [
+          63,
+          225,
+          11,
+          345
+        ],
+        "inv_min": 100,
+        "inv_max": 500
+      },
+      "83": {
+        "dates": [
+          "2002-02-01",
+          "2002-10-01",
+          "2002-11-05"
+        ]
+      },
+      "84": {
+        "city": "Cedar Grove",
+        "income": 5884
+      },
+      "85": {
+        "year": 2002,
+        "ms": [
+          "M",
+          "U",
+          "S"
+        ],
+        "es": [
+          "4 yr Degree",
+          "College",
+          "2 yr Degree"
+        ],
+        "price_ranges": [
+          [
+            100.0,
+            150.0
+          ],
+          [
+            50.0,
+            100.0
+          ],
+          [
+            150.0,
+            200.0
+          ]
+        ],
+        "states": [
+          "NH",
+          "OK",
+          "NC",
+          "MS",
+          "TX",
+          "TN"
+        ],
+        "np_min": 100,
+        "np_max": 200
       }
     },
     "30000": {
@@ -6842,6 +8263,56 @@
           "Perry County"
         ]
       },
+      "17": {
+        "year": 2002
+      },
+      "18": {
+        "year": 1999,
+        "month": [
+          8,
+          9,
+          3,
+          5,
+          7,
+          2
+        ],
+        "state": [
+          "MT",
+          "NM",
+          "NY",
+          "GA",
+          "CO",
+          "LA",
+          "SD"
+        ],
+        "es": "Unknown",
+        "gen": "M"
+      },
+      "19": {
+        "year": 2001,
+        "month": 12,
+        "manager": 94
+      },
+      "20": {
+        "sdate": "2001-01-08",
+        "year": 2001,
+        "category": [
+          "Books",
+          "Women",
+          "Electronics"
+        ]
+      },
+      "21": {
+        "sales_date": "2002-03-20",
+        "year": 2002
+      },
+      "22": {
+        "dms": 1176
+      },
+      "23": {
+        "year": 2000,
+        "month": 3
+      },
       "24": {
         "market": 8,
         "color": [
@@ -7019,6 +8490,114 @@
         "year": 2002,
         "bp": "--",
         "ms": "U"
+      },
+      "73": {
+        "dom": [
+          1,
+          2
+        ],
+        "bp": [
+          "1001-5000",
+          "Unknown"
+        ],
+        "year": 2000,
+        "counties": [
+          "Schley County",
+          "Sierra County",
+          "Kittitas County",
+          "La Crosse County"
+        ]
+      },
+      "74": {
+        "year": 2000
+      },
+      "75": {
+        "category": "Shoes",
+        "year": 2001
+      },
+      "76": {
+        "nullcol_ss": "ss_cdemo_sk",
+        "nullcol_ws": "ws_ship_addr_sk",
+        "nullcol_cs": "cs_promo_sk"
+      },
+      "77": {
+        "sdate": "2002-08-09"
+      },
+      "78": {
+        "year": 2001
+      },
+      "79": {
+        "dep_cnt": 9,
+        "dow": 1,
+        "year": 1999,
+        "emp_min": 200,
+        "emp_max": 295
+      },
+      "80": {
+        "sdate": "2002-08-09"
+      },
+      "81": {
+        "state": "NH"
+      },
+      "82": {
+        "price": 37,
+        "sdate": "2002-01-22",
+        "manufact": [
+          63,
+          225,
+          11,
+          345
+        ],
+        "inv_min": 100,
+        "inv_max": 500
+      },
+      "83": {
+        "dates": [
+          "2002-02-01",
+          "2002-10-01",
+          "2002-11-05"
+        ]
+      },
+      "84": {
+        "city": "Cedar Grove",
+        "income": 5884
+      },
+      "85": {
+        "year": 2002,
+        "ms": [
+          "M",
+          "U",
+          "S"
+        ],
+        "es": [
+          "4 yr Degree",
+          "College",
+          "2 yr Degree"
+        ],
+        "price_ranges": [
+          [
+            100.0,
+            150.0
+          ],
+          [
+            50.0,
+            100.0
+          ],
+          [
+            150.0,
+            200.0
+          ]
+        ],
+        "states": [
+          "NH",
+          "OK",
+          "NC",
+          "MS",
+          "TX",
+          "TN"
+        ],
+        "np_min": 100,
+        "np_max": 200
       }
     },
     "100000": {
@@ -7544,6 +9123,56 @@
           "Perry County"
         ]
       },
+      "17": {
+        "year": 2002
+      },
+      "18": {
+        "year": 1999,
+        "month": [
+          8,
+          9,
+          3,
+          5,
+          7,
+          2
+        ],
+        "state": [
+          "MT",
+          "NM",
+          "NY",
+          "GA",
+          "CO",
+          "LA",
+          "SD"
+        ],
+        "es": "Unknown",
+        "gen": "M"
+      },
+      "19": {
+        "year": 2001,
+        "month": 12,
+        "manager": 94
+      },
+      "20": {
+        "sdate": "2001-01-08",
+        "year": 2001,
+        "category": [
+          "Books",
+          "Women",
+          "Electronics"
+        ]
+      },
+      "21": {
+        "sales_date": "2002-03-20",
+        "year": 2002
+      },
+      "22": {
+        "dms": 1176
+      },
+      "23": {
+        "year": 2000,
+        "month": 3
+      },
       "24": {
         "market": 8,
         "color": [
@@ -7721,6 +9350,114 @@
         "year": 2002,
         "bp": "--",
         "ms": "U"
+      },
+      "73": {
+        "dom": [
+          1,
+          2
+        ],
+        "bp": [
+          "1001-5000",
+          "Unknown"
+        ],
+        "year": 1999,
+        "counties": [
+          "Stillwater County",
+          "Montgomery County",
+          "Blair County",
+          "Gage County"
+        ]
+      },
+      "74": {
+        "year": 2000
+      },
+      "75": {
+        "category": "Shoes",
+        "year": 2001
+      },
+      "76": {
+        "nullcol_ss": "ss_cdemo_sk",
+        "nullcol_ws": "ws_ship_addr_sk",
+        "nullcol_cs": "cs_promo_sk"
+      },
+      "77": {
+        "sdate": "2002-08-09"
+      },
+      "78": {
+        "year": 2001
+      },
+      "79": {
+        "dep_cnt": 9,
+        "dow": 1,
+        "year": 1999,
+        "emp_min": 200,
+        "emp_max": 295
+      },
+      "80": {
+        "sdate": "2002-08-09"
+      },
+      "81": {
+        "state": "NH"
+      },
+      "82": {
+        "price": 37,
+        "sdate": "2002-01-22",
+        "manufact": [
+          63,
+          225,
+          11,
+          345
+        ],
+        "inv_min": 100,
+        "inv_max": 500
+      },
+      "83": {
+        "dates": [
+          "2002-02-01",
+          "2002-10-01",
+          "2002-11-05"
+        ]
+      },
+      "84": {
+        "city": "Cedar Grove",
+        "income": 5884
+      },
+      "85": {
+        "year": 2002,
+        "ms": [
+          "M",
+          "U",
+          "S"
+        ],
+        "es": [
+          "4 yr Degree",
+          "College",
+          "2 yr Degree"
+        ],
+        "price_ranges": [
+          [
+            100.0,
+            150.0
+          ],
+          [
+            50.0,
+            100.0
+          ],
+          [
+            150.0,
+            200.0
+          ]
+        ],
+        "states": [
+          "NH",
+          "OK",
+          "NC",
+          "MS",
+          "TX",
+          "TN"
+        ],
+        "np_min": 100,
+        "np_max": 200
       }
     },
     "qualification": {
@@ -8240,6 +9977,56 @@
           "Williamson County"
         ]
       },
+      "17": {
+        "year": 2001
+      },
+      "18": {
+        "year": 1998,
+        "month": [
+          1,
+          6,
+          8,
+          9,
+          12,
+          2
+        ],
+        "state": [
+          "MS",
+          "IN",
+          "ND",
+          "OK",
+          "NM",
+          "VA",
+          "MS"
+        ],
+        "es": "Unknown",
+        "gen": "F"
+      },
+      "19": {
+        "year": 1998,
+        "month": 11,
+        "manager": 8
+      },
+      "20": {
+        "year": 1999,
+        "sdate": "1999-02-22",
+        "category": [
+          "Sports",
+          "Books",
+          "Home"
+        ]
+      },
+      "21": {
+        "year": 2000,
+        "sales_date": "2000-03-11"
+      },
+      "22": {
+        "dms": 1200
+      },
+      "23": {
+        "year": 1998,
+        "month": 2
+      },
       "24": {
         "market": 8,
         "color": [
@@ -8355,6 +10142,114 @@
           "TN"
         ],
         "year": 2000
+      },
+      "73": {
+        "dom": [
+          1,
+          2
+        ],
+        "bp": [
+          ">10000",
+          "Unknown"
+        ],
+        "year": 1999,
+        "counties": [
+          "Williamson County",
+          "Franklin Parish",
+          "Bronx County",
+          "Orange County"
+        ]
+      },
+      "74": {
+        "year": 2001
+      },
+      "75": {
+        "category": "Books",
+        "year": 2002
+      },
+      "76": {
+        "nullcol_ss": "ss_store_sk",
+        "nullcol_ws": "ws_ship_customer_sk",
+        "nullcol_cs": "cs_ship_addr_sk"
+      },
+      "77": {
+        "sdate": "2000-08-23"
+      },
+      "78": {
+        "year": 2000
+      },
+      "79": {
+        "dep_cnt": 6,
+        "dow": 1,
+        "year": 1999,
+        "emp_min": 200,
+        "emp_max": 295
+      },
+      "80": {
+        "sdate": "2000-08-23"
+      },
+      "81": {
+        "state": "GA"
+      },
+      "82": {
+        "price": 62,
+        "sdate": "2000-05-25",
+        "manufact": [
+          129,
+          270,
+          821,
+          423
+        ],
+        "inv_min": 100,
+        "inv_max": 500
+      },
+      "83": {
+        "dates": [
+          "2000-06-30",
+          "2000-09-27",
+          "2000-11-17"
+        ]
+      },
+      "84": {
+        "city": "Edgewood",
+        "income": 38128
+      },
+      "85": {
+        "year": 2000,
+        "ms": [
+          "M",
+          "U",
+          "S"
+        ],
+        "es": [
+          "4 yr Degree",
+          "College",
+          "2 yr Degree"
+        ],
+        "price_ranges": [
+          [
+            100.0,
+            150.0
+          ],
+          [
+            50.0,
+            100.0
+          ],
+          [
+            150.0,
+            200.0
+          ]
+        ],
+        "states": [
+          "IN",
+          "OH",
+          "NJ",
+          "WI",
+          "CT",
+          "KY"
+        ],
+        "np_min": 100,
+        "np_max": 200
       }
     }
   }
