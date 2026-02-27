@@ -15,8 +15,15 @@ from rapidsmpf.streaming.cudf.channel_metadata import (
 import polars as pl
 
 from cudf_polars import Translator
+from cudf_polars.containers import DataType
+from cudf_polars.dsl import expr
+from cudf_polars.dsl.ir import Select
 from cudf_polars.experimental.rapidsmpf.core import evaluate_logical_plan
-from cudf_polars.experimental.rapidsmpf.utils import get_partitioning_moduli
+from cudf_polars.experimental.rapidsmpf.utils import (
+    get_partitioning_moduli,
+    remap_partitioning,
+    remap_partitioning_select,
+)
 from cudf_polars.testing.asserts import (
     DEFAULT_CLUSTER,
     DEFAULT_RUNTIME,
@@ -263,3 +270,78 @@ def test_get_partitioning_moduli_allow_subset(
         get_partitioning_moduli(metadata, key_indices, nranks, allow_subset=True)
         == expected
     )
+
+
+def _make_select_ir(engine: pl.GPUEngine, output_columns: tuple[str, ...]):
+    q = pl.LazyFrame({"a": [1], "b": [2], "c": [3]})
+    child = Translator(q._ldf.visit(), engine).translate_ir()
+    out_schema = {k: child.schema[k] for k in output_columns}
+    exprs = tuple(
+        expr.NamedExpr(name, expr.Col(child.schema[name], name))
+        for name in output_columns
+    )
+    return Select(out_schema, exprs, should_broadcast=False, df=child)
+
+
+def test_remap_partitioning_select_none_input() -> None:
+    engine = pl.GPUEngine(executor="streaming")
+    assert remap_partitioning_select(_make_select_ir(engine, ("a", "b")), None) is None
+
+
+def test_remap_partitioning_select_preserves_keys() -> None:
+    engine = pl.GPUEngine(executor="streaming")
+    part = Partitioning(inter_rank=HashScheme((0, 1), 8), local="inherit")
+    result = remap_partitioning_select(_make_select_ir(engine, ("a", "b")), part)
+    assert result is not None
+    assert result.inter_rank is not None
+    assert result.inter_rank.column_indices == (0, 1)
+    assert result.inter_rank.modulus == 8
+    assert result.local == "inherit"
+
+
+def test_remap_partitioning_select_drops_key() -> None:
+    engine = pl.GPUEngine(executor="streaming")
+    part = Partitioning(inter_rank=HashScheme((0, 1), 8), local="inherit")
+    result = remap_partitioning_select(_make_select_ir(engine, ("a",)), part)
+    assert result is not None
+    assert result.inter_rank is None
+    assert result.local == "inherit"
+
+
+def test_remap_partitioning_select_renamed_key() -> None:
+    """Partitioning is preserved when a key column is renamed in the Select."""
+    engine = pl.GPUEngine(executor="streaming")
+    q = pl.LazyFrame({"a": [1], "b": [2], "c": [3]})
+    child = Translator(q._ldf.visit(), engine).translate_ir()
+    # Output (a_renamed, b) where a_renamed is Col("a")
+    out_schema = {"a_renamed": child.schema["a"], "b": child.schema["b"]}
+    exprs = (
+        expr.NamedExpr("a_renamed", expr.Col(child.schema["a"], "a")),
+        expr.NamedExpr("b", expr.Col(child.schema["b"], "b")),
+    )
+    select = Select(out_schema, exprs, should_broadcast=False, df=child)
+    part = Partitioning(inter_rank=HashScheme((0, 1), 8), local="inherit")
+    result = remap_partitioning_select(select, part)
+    assert result is not None
+    assert result.inter_rank is not None
+    assert result.inter_rank.column_indices == (0, 1)  # a_renamed, b in output
+    assert result.inter_rank.modulus == 8
+    assert result.local == "inherit"
+
+
+def test_remap_partitioning_reorder_columns() -> None:
+    old_schema = {
+        "a": DataType(pl.Int64),
+        "b": DataType(pl.Int64),
+        "c": DataType(pl.Int64),
+    }
+    new_schema = {"b": DataType(pl.Int64), "a": DataType(pl.Int64)}
+    result = remap_partitioning(
+        Partitioning(inter_rank=HashScheme((0, 1), 8), local="inherit"),
+        old_schema,
+        new_schema,
+    )
+    assert result is not None
+    assert result.inter_rank is not None
+    assert result.inter_rank.column_indices == (1, 0)
+    assert result.inter_rank.modulus == 8
