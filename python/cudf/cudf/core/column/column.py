@@ -442,10 +442,16 @@ def _handle_nulls(arrow_array: pa.Array) -> pa.Array:
     # types nullable in the schema even if the columns contain no nulls
     array_type = arrow_array.type
 
-    # Empty nested or string types should become pyarrow null arrays instead of the
+    # Empty nested (except interval types) or string types should become pyarrow null arrays instead of the
     # normal array classes to match how pyarrow ingests such pandas objects.
+    is_interval_type = (
+        pa.types.is_struct(array_type)
+        and len(array_type) == 2
+        and array_type[0].name == "left"
+        and array_type[1].name == "right"
+    )
     if (
-        pa.types.is_nested(array_type)
+        (pa.types.is_nested(array_type) and not is_interval_type)
         or pa.types.is_string(array_type)
         or pa.types.is_large_string(array_type)
     ) and arrow_array.null_count == len(arrow_array):
