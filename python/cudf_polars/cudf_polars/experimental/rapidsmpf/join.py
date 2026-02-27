@@ -64,7 +64,7 @@ MAX_BROADCAST_ROWS = 1_500_000_000
 
 
 @dataclass(frozen=True)
-class ChildSample:
+class JoinChunkSample:
     """Sampled chunks and aggregate size/row stats for one side of a join."""
 
     chunks: list[TableChunk]
@@ -83,9 +83,9 @@ class JoinStrategy:
     """The side to broadcast. If None, the strategy is not a broadcast join."""
     min_shuffle_modulus: int
     """The minimum shuffle modulus."""
-    left_sample: ChildSample
+    left_sample: JoinChunkSample
     """Left-side sample information."""
-    right_sample: ChildSample
+    right_sample: JoinChunkSample
     """Right-side sample information."""
 
 
@@ -730,8 +730,8 @@ async def _choose_strategy(
     ir: Join,
     left_metadata: ChannelMetadata,
     right_metadata: ChannelMetadata,
-    left_sample: ChildSample,
-    right_sample: ChildSample,
+    left_sample: JoinChunkSample,
+    right_sample: JoinChunkSample,
     collective_ids: list[int],
     broadcast_threshold: int,
     target_partition_size: int,
@@ -884,7 +884,7 @@ async def _sample_chunks(
     context: Context,
     ch: Channel[TableChunk],
     sample_chunk_count: int,
-) -> ChildSample:
+) -> JoinChunkSample:
     """Sample up to sample_chunk_count chunks from a channel; return chunks and stats."""
     chunks: list[TableChunk] = []
     total_size = 0
@@ -899,7 +899,7 @@ async def _sample_chunks(
         chunks.append(chunk)
         total_size += chunk.data_alloc_size(MemoryType.DEVICE)
         total_rows += chunk.table_view().num_rows()
-    return ChildSample(chunks=chunks, total_size=total_size, total_rows=total_rows)
+    return JoinChunkSample(chunks=chunks, total_size=total_size, total_rows=total_rows)
 
 
 async def _sample_and_choose_strategy(
