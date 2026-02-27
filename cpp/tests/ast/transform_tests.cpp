@@ -234,6 +234,41 @@ TYPED_TEST(TransformTest, BasicEquality)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
 }
 
+TYPED_TEST(TransformTest, ScalarBroadcast)
+{
+  using Executor = TypeParam;
+
+  auto c_0 = column_wrapper<int32_t>{{3, 20, 1, 50, 60}, {0, 0, 1, 0, 1}};
+  auto c_1 = column_wrapper<int32_t>{{3, 20, 1, 50, 60}, {0, 0, 0, 0, 0}};
+  auto c_2 = column_wrapper<int32_t>{{3, 20, 1, 50, 60}, {1, 1, 1, 1, 1}};
+  auto c_3 = column_wrapper<int32_t>{3, 20, 1, 50, 60};
+
+  auto t0 = cudf::table_view{{c_0}};
+
+  auto col_ref_0 = cudf::ast::column_reference(0);
+  auto scalar    = cudf::numeric_scalar<int32_t>(42);
+  auto literal   = cudf::ast::literal(scalar);
+
+  auto expected = column_wrapper<int32_t>{{42, 42, 42, 42, 42}};
+
+  auto result = Executor::compute_column(t0, literal);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
+
+  auto t1 = cudf::table_view{{c_1}};
+  result  = Executor::compute_column(t1, literal);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
+
+  auto t2 = cudf::table_view{{c_2}};
+  result  = Executor::compute_column(t2, literal);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
+
+  auto t3 = cudf::table_view{{c_3}};
+  result  = Executor::compute_column(t3, literal);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
+}
+
 TYPED_TEST(TransformTest, BasicAdditionLarge)
 {
   using Executor = TypeParam;

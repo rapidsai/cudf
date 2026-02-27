@@ -102,11 +102,12 @@ def test_ucx_seriesgroupby():
 
 @pytest.mark.usefixtures("dask_client")
 def test_str_series_roundtrip():
-    expected = cudf.Series(["hi", "hello", None])
-    dask_series = dask_cudf.from_cudf(expected, npartitions=2)
+    with dask.config.set({"dataframe.convert-string": False}):
+        expected = cudf.Series(["hi", "hello", None])
+        dask_series = dask_cudf.from_cudf(expected, npartitions=2)
 
-    actual = dask_series.compute()
-    assert_eq(actual, expected)
+        actual = dask_series.compute()
+        assert_eq(actual, expected)
 
 
 @pytest.mark.usefixtures("dask_client")

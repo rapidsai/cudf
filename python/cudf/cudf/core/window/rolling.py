@@ -304,7 +304,7 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
                 # that instead (perhaps), or implement an equivalent
                 # to make_range_windows that takes integer window
                 # bounds and group keys.
-                orderby_obj = as_column(range(len(self.obj)))
+                orderby_obj = ColumnBase.from_range(range(len(self.obj)))
             if self._group_keys is not None:
                 group_cols: list[plc.Column] = [
                     col.plc_column for col in self._group_keys._columns
@@ -331,7 +331,7 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
             start = as_column(start, dtype=SIZE_TYPE_DTYPE)
             end = as_column(end, dtype=SIZE_TYPE_DTYPE)
 
-            idx = as_column(range(len(start)))
+            idx = ColumnBase.from_range(range(len(start)))
             preceding_window = (idx - start + np.int32(1)).astype(
                 SIZE_TYPE_DTYPE
             )

@@ -25,7 +25,7 @@ dependencies = [
     "fsspec>=0.6.0",
     "libcudf==26.4.*,>=0.0.0a0",
     "numba-cuda>=0.22.2",
-    "numba>=0.60.0,<0.62.0",
+    "numba>=0.60.0,<0.65.0",
     "numpy>=1.23,<3.0",
     "nvtx>=0.2.1",
     "packaging",
@@ -142,6 +142,7 @@ ninja.make-fallback = false
 sdist.exclude = ["*tests*"]
 sdist.reproducible = true
 wheel.packages = ["cudf"]
+wheel.py-api = "cp311" # overridden in CI builds by arguments from `ci/build_wheel_*.sh` scripts.
 
 [tool.scikit-build.metadata.version]
 provider = "scikit_build_core.metadata.regex"

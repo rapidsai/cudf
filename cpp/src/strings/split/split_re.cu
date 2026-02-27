@@ -23,7 +23,6 @@
 #include <cuda/functional>
 #include <cuda/std/iterator>
 #include <cuda/std/tuple>
-#include <thrust/functional.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform_reduce.h>
 
@@ -280,9 +279,7 @@ std::unique_ptr<column> split_record_re(strings_column_view const& input,
                            std::move(offsets),
                            std::move(strings_output),
                            input.null_count(),
-                           cudf::detail::copy_bitmask(input.parent(), stream, mr),
-                           stream,
-                           mr);
+                           cudf::detail::copy_bitmask(input.parent(), stream, mr));
 }
 
 }  // namespace

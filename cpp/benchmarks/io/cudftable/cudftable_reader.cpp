@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -25,7 +25,7 @@ void cudftable_read_common(cudf::size_type num_rows_to_read,
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
   state.exec(
     nvbench::exec_tag::sync | nvbench::exec_tag::timer, [&](nvbench::launch&, auto& timer) {
-      try_drop_l3_cache();
+      drop_page_cache_if_enabled(source_info.filepaths());
 
       timer.start();
       auto result = cudf::io::experimental::read_cudftable(

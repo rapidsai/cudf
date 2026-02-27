@@ -88,7 +88,7 @@ std::unique_ptr<column> make_empty_histogram_like(column_view const& values)
 {
   std::vector<std::unique_ptr<column>> struct_children;
   struct_children.emplace_back(empty_like(values));
-  struct_children.emplace_back(make_numeric_column(data_type{type_id::INT64}, 0));
+  struct_children.emplace_back(make_empty_column(type_id::INT64));
   return std::make_unique<column>(data_type{type_id::STRUCT},
                                   0,
                                   rmm::device_buffer{},
@@ -186,7 +186,7 @@ compute_row_frequencies(table_view const& input,
 
   // Reduction results above are either group sizes of equal rows, or `0`.
   // The final output is non-zero group sizes only.
-  cudf::detail::copy_if(input_it, input_it + num_rows, output_it, is_not_zero{}, stream);
+  cudf::detail::copy_if_async(input_it, input_it + num_rows, output_it, is_not_zero{}, stream);
 
   return {std::move(distinct_indices), std::move(distinct_counts)};
 }

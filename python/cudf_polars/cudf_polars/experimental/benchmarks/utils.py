@@ -13,6 +13,7 @@ import itertools
 import json
 import logging
 import os
+import pprint
 import statistics
 import sys
 import textwrap
@@ -28,8 +29,14 @@ from typing import TYPE_CHECKING, Any, Literal, assert_never
 import nvtx
 
 import polars as pl
+import polars.testing
 
 import rmm.statistics
+
+# The dtype for count() aggregations depends on the presence
+# of the polars-runtime-64 package (`polars[rt64]`).
+HAS_POLARS_RT_64 = pl.config.plr.RUNTIME_REPR == "rt64"
+COUNT_DTYPE = pl.UInt64() if HAS_POLARS_RT_64 else pl.UInt32()
 
 try:
     import duckdb
@@ -48,9 +55,12 @@ try:
     from cudf_polars.dsl.ir import IRExecutionContext
     from cudf_polars.dsl.tracing import Scope
     from cudf_polars.dsl.translate import Translator
+    from cudf_polars.experimental.benchmarks.asserts import (
+        ValidationError,
+        assert_tpch_result_equal,
+    )
     from cudf_polars.experimental.explain import explain_query
     from cudf_polars.experimental.parallel import evaluate_streaming
-    from cudf_polars.testing.asserts import assert_gpu_result_equal
     from cudf_polars.utils.config import ConfigOptions
 
     CUDF_POLARS_AVAILABLE = True
@@ -61,6 +71,24 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
 
     from cudf_polars.experimental.explain import SerializablePlan
+
+
+POLARS_VALIDATION_OPTIONS = {
+    "check_row_order": True,
+    "check_column_order": True,
+    "check_dtypes": True,
+    "check_exact": False,
+    "rel_tol": 1e-5,
+    "abs_tol": 1e-2,
+}
+
+
+def get_validation_options(args: Any) -> dict[str, Any]:
+    """Get validation options dict from parsed arguments."""
+    return {
+        **POLARS_VALIDATION_OPTIONS,
+        "abs_tol": args.validation_abs_tol,
+    }
 
 
 try:
@@ -78,7 +106,90 @@ ExecutorType = Literal["in-memory", "streaming", "cpu"]
 
 
 @dataclasses.dataclass
-class Record:
+class ValidationResult:
+    """
+    Result of a validation run.
+
+    Parameters
+    ----------
+    status
+        The status of the validation. Either 'Passed' or 'Failed'.
+    message
+        The message from the validation. This should be ``None`` if
+        the validation passed, and a string describing the failure otherwise.
+    details
+        Additional details about the validation failure.
+    """
+
+    status: Literal["Passed", "Failed"]
+    message: str | None
+    details: dict[str, Any] | None = None
+
+    @classmethod
+    def from_error(cls, error: Exception) -> ValidationResult:
+        """
+        Create a ValidationResult from some exception.
+
+        Parameters
+        ----------
+        error : Exception
+            The error to create a ValidationResult from.
+
+            This will correctly propagate "message" and "details" from
+            ``cudf_polars.testing.asserts.ValidationError``.
+
+        Returns
+        -------
+        ValidationResult
+            The ValidationResult created from the error.
+        """
+        match error:
+            case ValidationError(message=message, details=details):
+                return cls(status="Failed", message=message, details=details)
+            case _:
+                return cls(status="Failed", message=str(error))
+
+
+@dataclasses.dataclass
+class ValidationMethod:
+    """
+    Information about how the validation was performed.
+
+    Parameters
+    ----------
+    expected_source
+        A name indicating the source of the expected results.
+
+        - 'polars-cpu': Run polars against the same data
+        - 'duckdb': Compare against pre-computed DuckDB results
+
+    comparison_method
+        How the comparison was performed. Currently, only
+        'polars' is supported, which indicates that ``polars.testing.assert_frame_equal``
+        was used.
+
+    comparison_options
+        Additional options passed to the comparison method, controlling
+        things like the tolerance for floating point comparisons.
+    """
+
+    expected_source: Literal["polars-cpu", "duckdb"]
+    comparison_method: Literal["polars"]
+    comparison_options: dict[str, Any]
+
+
+@dataclasses.dataclass(kw_only=True)
+class FailedRecord:
+    """Records a failed query iteration."""
+
+    query: int
+    iteration: int
+    status: Literal["error"] = "error"
+    traceback: str
+
+
+@dataclasses.dataclass(kw_only=True)
+class SuccessRecord:
     """Results for a single run of a single PDS-H query."""
 
     query: int
@@ -86,6 +197,8 @@ class Record:
     duration: float
     shuffle_stats: dict[str, dict[str, int | float]] | None = None
     traces: list[dict[str, Any]] | None = None
+    validation_result: ValidationResult | None = None
+    status: Literal["success"] = "success"
 
     @classmethod
     def new(
@@ -95,7 +208,7 @@ class Record:
         duration: float,
         shuffle_stats: dict[str, dict[str, int | float]] | None = None,
         traces: list[dict[str, Any]] | None = None,
-    ) -> Record:
+    ) -> SuccessRecord:
         """Create a Record from plain data."""
         return cls(
             query=query,
@@ -104,6 +217,16 @@ class Record:
             shuffle_stats=shuffle_stats,
             traces=traces,
         )
+
+
+@dataclasses.dataclass
+class QueryRunResult:
+    """Result of running a single query (all iterations)."""
+
+    query_records: list[SuccessRecord | FailedRecord]
+    plan: SerializablePlan | None
+    iteration_failures: list[tuple[int, int]]
+    validation_failed: bool
 
 
 @dataclasses.dataclass
@@ -239,7 +362,9 @@ class RunConfig:
     versions: PackageVersions = dataclasses.field(
         default_factory=PackageVersions.collect
     )
-    records: dict[int, list[Record]] = dataclasses.field(default_factory=dict)
+    records: dict[int, list[SuccessRecord | FailedRecord]] = dataclasses.field(
+        default_factory=dict
+    )
     plans: dict[int, SerializablePlan] = dataclasses.field(default_factory=dict)
     dataset_path: Path
     scale_factor: int | float
@@ -269,6 +394,7 @@ class RunConfig:
     spill_to_pinned_memory: bool
     extra_info: dict[str, Any] = dataclasses.field(default_factory=dict)
     fallback_mode: str | None = None
+    validation_method: ValidationMethod | None = None
 
     def __post_init__(self) -> None:  # noqa: D105
         if self.gather_shuffle_stats and self.shuffle != "rapidsmpf":
@@ -362,6 +488,21 @@ class RunConfig:
                     f"but the inferred scale factor is {sf_inf}."
                 )
 
+        if args.validate_directory:
+            validation_method = ValidationMethod(
+                expected_source="duckdb",
+                comparison_method="polars",
+                comparison_options=get_validation_options(args),
+            )
+        elif args.validate:
+            validation_method = ValidationMethod(
+                expected_source="polars-cpu" if args.baseline == "cpu" else "duckdb",
+                comparison_method="polars",
+                comparison_options=get_validation_options(args),
+            )
+        else:
+            validation_method = None
+
         return cls(
             queries=args.query,
             executor=executor,
@@ -394,6 +535,7 @@ class RunConfig:
             extra_info=args.extra_info,
             spill_to_pinned_memory=args.spill_to_pinned_memory,
             fallback_mode=args.fallback_mode,
+            validation_method=validation_method,
         )
 
     def serialize(self, engine: pl.GPUEngine | None) -> dict:
@@ -434,17 +576,20 @@ class RunConfig:
                     print(f"rapidsmpf_oom_protection: {self.rapidsmpf_oom_protection}")
                     print(f"spill_device: {self.spill_device}")
                     print(f"rapidsmpf_spill: {self.rapidsmpf_spill}")
-            if len(records) > 0:
+            valid_durations = [
+                record.duration for record in records if record.status == "success"
+            ]
+            if len(valid_durations) > 0:
                 print(f"iterations: {self.iterations}")
                 print("---------------------------------------")
-                print(f"min time : {min(record.duration for record in records):0.4f}")
-                print(f"max time : {max(record.duration for record in records):0.4f}")
-                print(
-                    f"mean time: {statistics.mean(record.duration for record in records):0.4f}"
-                )
+                print(f"min time : {min(valid_durations):0.4f}")
+                print(f"max time : {max(valid_durations):0.4f}")
+                print(f"mean time: {statistics.mean(valid_durations):0.4f}")
                 print("=======================================")
         total_mean_time = sum(
-            statistics.mean(record.duration for record in records)
+            statistics.mean(
+                record.duration for record in records if record.status == "success"
+            )
             for records in self.records.values()
             if records
         )
@@ -652,7 +797,7 @@ def execute_query(
     run_config: RunConfig,
     args: argparse.Namespace,
     engine: None | pl.GPUEngine = None,
-) -> pl.DataFrame:
+) -> tuple[pl.DataFrame, float]:
     """Execute a query with NVTX annotation."""
     with nvtx.annotate(
         message=f"Query {q_id} - Iteration {i}",
@@ -660,7 +805,9 @@ def execute_query(
         color="green",
     ):
         if run_config.executor == "cpu":
-            return q.collect(engine="streaming")
+            t0 = time.monotonic()
+            result = q.collect(engine="streaming")
+            t1 = time.monotonic()
 
         elif CUDF_POLARS_AVAILABLE:
             assert isinstance(engine, pl.GPUEngine)
@@ -671,20 +818,29 @@ def execute_query(
                     translator.config_options
                 )
                 if run_config.executor == "in-memory":
-                    return ir.evaluate(
+                    t0 = time.monotonic()
+                    result = ir.evaluate(
                         cache={}, timer=None, context=context
                     ).to_polars()
+                    t1 = time.monotonic()
                 elif run_config.executor == "streaming":
-                    return evaluate_streaming(
+                    t0 = time.monotonic()
+                    result = evaluate_streaming(
                         ir,
                         translator.config_options,
                     )
-                assert_never(run_config.executor)
+                    t1 = time.monotonic()
+                else:
+                    assert_never(run_config.executor)
             else:
-                return q.collect(engine=engine)
+                t0 = time.monotonic()
+                result = q.collect(engine=engine)
+                t1 = time.monotonic()
 
         else:
             raise RuntimeError("The requested engine is not supported.")
+
+        return result, t1 - t0
 
 
 def _query_type(num_queries: int) -> Callable[[str | int], list[int]]:
@@ -706,10 +862,8 @@ def _query_type(num_queries: int) -> Callable[[str | int], list[int]]:
     return parse
 
 
-def parse_args(
-    args: Sequence[str] | None = None, num_queries: int = 22
-) -> argparse.Namespace:
-    """Parse command line arguments."""
+def build_parser(num_queries: int = 22) -> argparse.ArgumentParser:
+    """Build the argument parser for PDS-H/PDS-DS benchmarks."""
     parser = argparse.ArgumentParser(
         prog="Cudf-Polars PDS-H Benchmarks",
         description="Experimental streaming-executor benchmarks.",
@@ -901,8 +1055,8 @@ def parse_args(
         default=None,
         type=float,
         help=textwrap.dedent("""\
-            Passed to dask_cuda.LocalCUDACluster to control the release
-            threshold for RMM pool memory.
+            Passed to dask_cuda.LocalCUDACluster or CudaAsyncMemoryResource
+            to control the release threshold for RMM pool memory.
             Default: None (no release threshold)"""),
     )
     parser.add_argument(
@@ -982,7 +1136,13 @@ def parse_args(
         "--validate",
         action=argparse.BooleanOptionalAction,
         default=False,
-        help="Validate the result against CPU execution.",
+        help=(
+            "Validate the result against CPU execution. This will "
+            "run the query with both GPU and baseline engine (CPU polars or DuckDB), collect the "
+            "results in memory, and compare them using polars'. "
+            "At larger scale factors, computing the expected result can be slow so "
+            "--validate-directory should be used instead."
+        ),
     )
     parser.add_argument(
         "--baseline",
@@ -1029,6 +1189,28 @@ def parse_args(
         help="Optional directory to write query results as parquet files.",
     )
     parser.add_argument(
+        "--output-expected-directory",
+        type=Path,
+        default=None,
+        help="Optional directory to write expected results as parquet files, when computed from CPU-polars or DuckDB.",
+    )
+    parser.add_argument(
+        "--validate-directory",
+        type=Path,
+        default=None,
+        help=(
+            "Validate the results against a directory with a pre-computed set of 'golden' results. "
+            "The directory should contain one parquet file per query, named 'qDD.parquet', where DD is the "
+            "zero-padded query number. The JSON output will include the validation results for each record."
+        ),
+    )
+    parser.add_argument(
+        "--validation-abs-tol",
+        type=float,
+        default=0.01,
+        help="Absolute tolerance for assert_frame_equal validation. Default: 0.01",
+    )
+    parser.add_argument(
         "--spill-to-pinned-memory",
         action=argparse.BooleanOptionalAction,
         default=False,
@@ -1054,22 +1236,332 @@ def parse_args(
             - silent : Silently fall back to single partition"""),
     )
 
+    return parser
+
+
+def parse_args(
+    args: Sequence[str] | None = None,
+    num_queries: int = 22,
+    parser: argparse.ArgumentParser | None = None,
+) -> argparse.Namespace:
+    """Parse command line arguments."""
+    if parser is None:
+        parser = build_parser(num_queries)
     parsed_args = parser.parse_args(args)
 
     if parsed_args.rmm_pool_size is None and not parsed_args.rmm_async:
         # The default rmm pool size depends on the rmm_async flag
         parsed_args.rmm_pool_size = 0.5
 
+    if parsed_args.validate_directory and parsed_args.validate:
+        raise ValueError("Specify either --validate-directory or --validate, not both.")
+    if (
+        parsed_args.validate_directory is not None
+        and not parsed_args.validate_directory.exists()
+    ):
+        raise FileNotFoundError(
+            f"--validate-directory: {parsed_args.validate_directory} does not exist."
+        )
+    if parsed_args.validate_directory:
+        validation_files = list_validation_files(parsed_args.validate_directory)
+        missing_files = [
+            str(x) for x in set(parsed_args.query) - set(validation_files.keys())
+        ]
+
+        if missing_files:
+            raise ValueError(f"Missing files for queries: {','.join(missing_files)}")
+
+    if parsed_args.output_expected_directory and not parsed_args.validate:
+        raise ValueError("Must specify --validate to use --output-expected-directory.")
+
+    if parsed_args.suffix and not parsed_args.suffix.startswith("."):
+        parsed_args.suffix = f".{parsed_args.suffix}"
+
     return parsed_args
+
+
+def list_validation_files(
+    validate_directory: Path,
+) -> dict[int, Path]:
+    """List the validation files in the given directory."""
+    validation_files: dict[int, Path] = {}
+    for q_path in validate_directory.glob("q*.parquet"):
+        q_id = int(q_path.stem.lstrip("q").lstrip("_"))
+        validation_files[q_id] = q_path
+    return validation_files
+
+
+def validate_result(
+    result: pl.DataFrame,
+    expected: pl.DataFrame,
+    sort_by: list[tuple[str, bool]],
+    limit: int | None = None,
+    **kwargs: Any,
+) -> ValidationResult:
+    """
+    Validate the computed result against the expected answer.
+
+    This takes care of special handling for validating TPC-H queries,
+    where multiple results might be considered correct.
+
+    See Also
+    --------
+    cudf_polars.testing.asserts.assert_tpch_result_equal
+    """
+    try:
+        assert_tpch_result_equal(
+            result, expected, sort_by=sort_by, limit=limit, **kwargs
+        )
+    except Exception as e:
+        return ValidationResult.from_error(e)
+    else:
+        return ValidationResult(status="Passed", message=None)
+
+
+@dataclasses.dataclass
+class QueryResult:
+    """
+    Representation of a query's result.
+
+    Parameters
+    ----------
+    frame: pl.LazyFrame
+        The result of the query.
+    sort_by: list[tuple[str, bool]]
+        The columns that the query sorts by. Each tuple contains (column_name, descending_flag).
+    limit: int | None
+        The limit of the query, if any.
+
+    """
+
+    frame: pl.LazyFrame
+    sort_by: list[tuple[str, bool]]
+    limit: int | None = None
+
+
+def check_input_data_type(
+    run_config: RunConfig,
+) -> tuple[Literal["decimal", "float"], Literal["date", "timestamp"]]:
+    """
+    Check the input data types columns with variable data types.
+
+    Our queries might be run on datasets that use different data types for different
+    types of columns. Our validation supports:
+
+    1. 'decimal' or 'float' for non-integer numeric columns (e.g. 'c_acctbal')
+    2. 'date' or 'timestamp' for date type columns (e.g. 'o_orderdate')
+
+    For PDS-H, this is determined by the ``c_acctbal`` column in the
+    customer table.  For PDS-DS, we use ``i_current_price`` from the item table.
+    """
+    if run_config.query_set == "pdsds":
+        table, col = "item", "i_current_price"
+    else:
+        table, col = "customer", "c_acctbal"
+    path = (Path(run_config.dataset_path) / table).with_suffix(run_config.suffix)
+    t = pl.scan_parquet(path).select(pl.col(col)).collect_schema()[col]
+
+    num_type: Literal["decimal", "float"]
+    date_type: Literal["date", "timestamp"]
+    if t.is_decimal():
+        num_type = "decimal"
+    else:
+        num_type = "float"
+
+    if run_config.query_set == "pdsds":
+        date_type = "date"
+    else:
+        path = (Path(run_config.dataset_path) / "orders").with_suffix(run_config.suffix)
+        t = (
+            pl.scan_parquet(path)
+            .select(pl.col("o_orderdate"))
+            .collect_schema()["o_orderdate"]
+        )
+
+        if t.to_python() is datetime.date:
+            date_type = "date"
+        else:
+            date_type = "timestamp"
+
+    return num_type, date_type
+
+
+def run_polars_query_iteration(
+    q_id: int,
+    iteration: int,
+    q: pl.LazyFrame,
+    run_config: RunConfig,
+    args: argparse.Namespace,
+    engine: pl.GPUEngine | None,
+    expected: pl.DataFrame | None,
+    query_result: Any,
+    client: Any,
+) -> SuccessRecord:
+    """Run a single query iteration. Caller must wrap in try/except."""
+    result, duration = execute_query(q_id, iteration, q, run_config, args, engine)
+
+    if run_config.shuffle == "rapidsmpf" and run_config.gather_shuffle_stats:
+        from rapidsmpf.integrations.dask.shuffler import (
+            clear_shuffle_statistics,
+            gather_shuffle_statistics,
+        )
+
+        shuffle_stats = gather_shuffle_statistics(client)
+        clear_shuffle_statistics(client)
+    else:
+        shuffle_stats = None
+
+    if expected is not None:
+        validation_result = validate_result(
+            result,
+            expected,
+            query_result.sort_by,
+            limit=query_result.limit,
+            **get_validation_options(args),
+        )
+    else:
+        validation_result = None
+
+    if args.print_results:
+        print(result)
+
+    if args.results_directory is not None and iteration == 0:
+        results_dir = Path(args.results_directory)
+        results_dir.mkdir(parents=True, exist_ok=True)
+        output_path = results_dir / f"q_{q_id:02d}.parquet"
+        result.write_parquet(output_path)
+
+    return SuccessRecord(
+        query=q_id,
+        iteration=iteration,
+        duration=duration,
+        shuffle_stats=shuffle_stats,
+        validation_result=validation_result,
+    )
+
+
+def run_polars_query(
+    q_id: int,
+    benchmark: Any,
+    run_config: RunConfig,
+    args: argparse.Namespace,
+    engine: pl.GPUEngine | None,
+    client: Any,
+    numeric_type: str,
+    date_type: str,
+    validation_files: dict[int, Path] | None,
+) -> QueryRunResult:
+    """Run all iterations for a single query. Caller must wrap in try/except."""
+    query_result = getattr(benchmark, f"q{q_id}")(run_config)
+    q = query_result.frame
+
+    print_query_plan(q_id, q, args, run_config, engine, print_plans=args.print_plans)
+    plan = None
+    if (args.explain or args.explain_logical) and engine is not None:
+        from cudf_polars.experimental.explain import serialize_query
+
+        plan = serialize_query(q, engine)
+
+    casts = benchmark.EXPECTED_CASTS.get(q_id, [])
+    if numeric_type == "decimal":
+        casts.extend(benchmark.EXPECTED_CASTS_DECIMAL.get(q_id, []))
+    if date_type == "timestamp":
+        casts.extend(benchmark.EXPECTED_CASTS_TIMESTAMP.get(q_id, []))
+
+    expected: pl.DataFrame | None = None
+    if args.validate:
+        if args.baseline == "cpu":
+            expected = q.collect()
+        elif args.baseline == "duckdb":
+            duckdb_queries_cls = benchmark().duckdb_queries
+            get_ddb = getattr(duckdb_queries_cls, f"q{q_id}")
+            base_sql = get_ddb(run_config)
+            expected = execute_duckdb_query(
+                base_sql,
+                run_config.dataset_path,
+                query_set=duckdb_queries_cls.name,
+                suffix=run_config.suffix,
+            ).with_columns(*casts)
+        else:
+            raise ValueError(f"Invalid baseline: {args.baseline}")
+    elif validation_files is not None:
+        expected = pl.read_parquet(validation_files[q_id]).with_columns(*casts)
+    else:
+        expected = None
+
+    if args.output_expected_directory is not None:
+        assert expected is not None, (
+            "Expected result must be computed before writing to disk."
+        )
+        expected_dir = Path(args.output_expected_directory)
+        expected_dir.mkdir(parents=True, exist_ok=True)
+        expected.write_parquet(expected_dir / f"q_{q_id:02d}.parquet")
+
+    query_records: list[SuccessRecord | FailedRecord] = []
+    iteration_failures: list[tuple[int, int]] = []
+    validation_failed = False
+    record: SuccessRecord | FailedRecord
+
+    for i in range(args.iterations):
+        if _HAS_STRUCTLOG and run_config.collect_traces:
+            setup_logging(q_id, i)
+            if client is not None:
+                client.run(setup_logging, q_id, i)
+
+        try:
+            record = run_polars_query_iteration(
+                q_id=q_id,
+                iteration=i,
+                q=q,
+                run_config=run_config,
+                args=args,
+                engine=engine,
+                expected=expected,
+                query_result=query_result,
+                client=client,
+            )
+        except Exception:
+            print(f"❌ query={q_id} iteration={i} failed!")
+            print(traceback.format_exc())
+            iteration_failures.append((q_id, i))
+            record = FailedRecord(
+                query=q_id,
+                iteration=i,
+                status="error",
+                traceback=traceback.format_exc(),
+            )
+
+        else:
+            if record.validation_result and record.validation_result.status == "Failed":
+                validation_failed = True
+                print(
+                    f"❌ Query {q_id} failed validation!\n{record.validation_result.message}"
+                )
+                if record.validation_result.details:
+                    pprint.pprint(record.validation_result.details)
+            else:
+                prefix = "✅ " if record.validation_result else ""
+                print(
+                    f"{prefix}Query {q_id} - Iteration {i} finished in {record.duration:0.4f}s",
+                    flush=True,
+                )
+
+        query_records.append(record)
+
+    return QueryRunResult(
+        query_records=query_records,
+        plan=plan,
+        iteration_failures=iteration_failures,
+        validation_failed=validation_failed,
+    )
 
 
 def run_polars(
     benchmark: Any,
-    options: Sequence[str] | None = None,
+    args: argparse.Namespace,
     num_queries: int = 22,
 ) -> None:
     """Run the queries using the given benchmark and executor options."""
-    args = parse_args(options, num_queries=num_queries)
     vars(args).update({"query_set": benchmark.name})
     run_config = RunConfig.from_args(args)
     validation_failures: list[int] = []
@@ -1082,9 +1574,15 @@ def run_polars(
         actual_n_workers = client.scheduler_info()["n_workers"]
         run_config = dataclasses.replace(run_config, n_workers=actual_n_workers)
 
-    records: defaultdict[int, list[Record]] = defaultdict(list)
+    records: defaultdict[int, list[SuccessRecord | FailedRecord]] = defaultdict(list)
     plans: dict[int, SerializablePlan] = {}
     engine: pl.GPUEngine | None = None
+    numeric_type, date_type = check_input_data_type(run_config)
+
+    if args.validate_directory is not None:
+        validation_files = list_validation_files(args.validate_directory)
+    else:
+        validation_files = None
 
     if run_config.executor != "cpu":
         executor_options = get_executor_options(run_config, benchmark=benchmark)
@@ -1096,7 +1594,9 @@ def run_polars(
             parquet_options = {}
         engine = pl.GPUEngine(
             raise_on_fail=True,
-            memory_resource=rmm.mr.CudaAsyncMemoryResource()
+            memory_resource=rmm.mr.CudaAsyncMemoryResource(
+                release_threshold=args.rmm_release_threshold
+            )
             if run_config.rmm_async
             else None,
             cuda_stream_policy=run_config.stream_policy,
@@ -1107,76 +1607,39 @@ def run_polars(
 
     for q_id in run_config.queries:
         try:
-            q = getattr(benchmark, f"q{q_id}")(run_config)
-        except AttributeError as err:
-            raise NotImplementedError(f"Query {q_id} not implemented.") from err
-
-        print_query_plan(
-            q_id, q, args, run_config, engine, print_plans=args.print_plans
-        )
-        if (args.explain or args.explain_logical) and engine is not None:
-            from cudf_polars.experimental.explain import serialize_query
-
-            plans[q_id] = serialize_query(q, engine)
-
-        records[q_id] = []
-        for i in range(args.iterations):
-            if _HAS_STRUCTLOG and run_config.collect_traces:
-                setup_logging(q_id, i)
-                if client is not None:
-                    client.run(setup_logging, q_id, i)
-
-            t0 = time.monotonic()
-
-            try:
-                result = execute_query(q_id, i, q, run_config, args, engine)
-            except Exception:
-                print(f"❌ query={q_id} iteration={i} failed!")
-                print(traceback.format_exc())
-                query_failures.append((q_id, i))
-                continue
-            if run_config.shuffle == "rapidsmpf" and run_config.gather_shuffle_stats:
-                from rapidsmpf.integrations.dask.shuffler import (
-                    clear_shuffle_statistics,
-                    gather_shuffle_statistics,
-                )
-
-                shuffle_stats = gather_shuffle_statistics(client)
-                clear_shuffle_statistics(client)
-            else:
-                shuffle_stats = None
-
-            if args.validate and run_config.executor != "cpu":
-                try:
-                    assert_gpu_result_equal(
-                        q,
-                        engine=engine,
-                        executor=run_config.executor,
-                        check_exact=False,
-                    )
-                    print(f"✅ Query {q_id} passed validation!")
-                except AssertionError as e:
-                    validation_failures.append(q_id)
-                    print(f"❌ Query {q_id} failed validation!\n{e}")
-
-            t1 = time.monotonic()
-            record = Record(
-                query=q_id, iteration=i, duration=t1 - t0, shuffle_stats=shuffle_stats
+            result = run_polars_query(
+                q_id=q_id,
+                benchmark=benchmark,
+                run_config=run_config,
+                args=args,
+                engine=engine,
+                client=client,
+                numeric_type=numeric_type,
+                date_type=date_type,
+                validation_files=validation_files,
             )
-            if args.print_results:
-                print(result)
-
-            if args.results_directory is not None and i == 0:
-                results_dir = Path(args.results_directory)
-                results_dir.mkdir(parents=True, exist_ok=True)
-                output_path = results_dir / f"q_{q_id:02d}.parquet"
-                result.write_parquet(output_path)
-
-            print(
-                f"Query {q_id} - Iteration {i} finished in {record.duration:0.4f}s",
-                flush=True,
+        except Exception:
+            print(f"❌ query={q_id} failed (setup or execution)!")
+            print(traceback.format_exc())
+            query_failures.append((q_id, -1))
+            record = FailedRecord(
+                query=q_id,
+                iteration=-1,
+                traceback=traceback.format_exc(),
             )
-            records[q_id].append(record)
+            result = QueryRunResult(
+                query_records=[record],
+                plan=None,
+                iteration_failures=[],
+                validation_failed=False,
+            )
+
+        records[q_id] = result.query_records
+        if result.plan is not None:
+            plans[q_id] = result.plan
+        query_failures.extend(result.iteration_failures)
+        if result.validation_failed:
+            validation_failures.append(q_id)
 
     run_config = dataclasses.replace(run_config, records=dict(records), plans=plans)
 
@@ -1222,10 +1685,12 @@ def run_polars(
             assert len(by_iteration) == len(run_records)  # same number of iterations
             all_traces = [list(iteration) for iteration in by_iteration]
 
-            new_records = [
-                dataclasses.replace(record, traces=traces)
-                for record, traces in zip(run_records, all_traces, strict=True)
-            ]
+            new_records: list[SuccessRecord | FailedRecord] = []
+            for rec, traces in zip(run_records, all_traces, strict=True):
+                if rec.status == "success":
+                    new_records.append(dataclasses.replace(rec, traces=traces))
+                else:
+                    new_records.append(rec)
 
             run_config.records[query_id] = new_records
 
@@ -1243,13 +1708,13 @@ def run_polars(
                 f"{len(validation_failures)} queries failed validation: {sorted(set(validation_failures))}"
             )
         else:
-            print("All validated queries passed.")
+            print("✅ All validated queries passed.")
 
     args.output.write(json.dumps(run_config.serialize(engine=engine)))
     args.output.write("\n")
 
-    if query_failures or validation_failures:
-        sys.exit(1)
+    exit_code = 1 if (query_failures or validation_failures) else 0
+    sys.exit(exit_code)
 
 
 def setup_logging(query_id: int, iteration: int) -> None:  # noqa: D103
@@ -1430,13 +1895,12 @@ def execute_duckdb_query(
 
 
 def run_duckdb(
-    duckdb_queries_cls: Any, options: Sequence[str] | None = None, *, num_queries: int
+    duckdb_queries_cls: Any, args: argparse.Namespace, *, num_queries: int
 ) -> None:
     """Run the benchmark with DuckDB."""
-    args = parse_args(options, num_queries=num_queries)
     vars(args).update({"query_set": duckdb_queries_cls.name})
     run_config = RunConfig.from_args(args)
-    records: defaultdict[int, list[Record]] = defaultdict(list)
+    records: defaultdict[int, list[SuccessRecord | FailedRecord]] = defaultdict(list)
 
     for q_id in run_config.queries:
         try:
@@ -1468,7 +1932,7 @@ def run_duckdb(
                 query_set=duckdb_queries_cls.name,
             )
             t1 = time.time()
-            record = Record(query=q_id, iteration=i, duration=t1 - t0)
+            record = SuccessRecord(query=q_id, iteration=i, duration=t1 - t0)
             if args.print_results:
                 print(result)
             print(f"Query {q_id} - Iteration {i} finished in {record.duration:0.4f}s")
@@ -1480,85 +1944,3 @@ def run_duckdb(
 
     args.output.write(json.dumps(run_config.serialize(engine=None)))
     args.output.write("\n")
-
-
-def run_validate(
-    polars_queries_cls: Any,
-    duckdb_queries_cls: Any,
-    options: Sequence[str] | None = None,
-    *,
-    num_queries: int,
-    check_dtypes: bool,
-    check_column_order: bool,
-) -> None:
-    """Validate Polars CPU/GPU vs DuckDB."""
-    from polars.testing import assert_frame_equal
-
-    args = parse_args(options, num_queries=num_queries)
-    vars(args).update({"query_set": polars_queries_cls.name})
-    run_config = RunConfig.from_args(args)
-
-    baseline = args.baseline
-    if baseline not in {"duckdb", "cpu"}:
-        raise ValueError("Baseline must be one of: 'duckdb', 'cpu'")
-
-    failures: list[int] = []
-
-    engine: pl.GPUEngine | None = None
-    if run_config.executor != "cpu":
-        engine = pl.GPUEngine(
-            raise_on_fail=True,
-            executor=run_config.executor,
-            executor_options=get_executor_options(run_config, polars_queries_cls),
-        )
-
-    for q_id in run_config.queries:
-        print(f"\nValidating Query {q_id}")
-        try:
-            get_pl = getattr(polars_queries_cls, f"q{q_id}")
-            get_ddb = getattr(duckdb_queries_cls, f"q{q_id}")
-        except AttributeError as err:
-            raise NotImplementedError(f"Query {q_id} not implemented.") from err
-
-        polars_query = get_pl(run_config)
-        if baseline == "duckdb":
-            base_sql = get_ddb(run_config)
-            base_result = execute_duckdb_query(
-                base_sql,
-                run_config.dataset_path,
-                query_set=duckdb_queries_cls.name,
-            )
-        else:
-            base_result = polars_query.collect(engine="streaming")
-
-        if run_config.executor == "cpu":
-            test_result = polars_query.collect(engine="streaming")
-        else:
-            try:
-                test_result = polars_query.collect(engine=engine)
-            except Exception as e:
-                failures.append(q_id)
-                print(f"❌ Query {q_id} failed validation: GPU execution failed.\n{e}")
-                continue
-
-        try:
-            assert_frame_equal(
-                base_result,
-                test_result,
-                check_dtypes=check_dtypes,
-                check_column_order=check_column_order,
-            )
-            print(f"✅ Query {q_id} passed validation.")
-        except AssertionError as e:
-            failures.append(q_id)
-            print(f"❌ Query {q_id} failed validation:\n{e}")
-            if args.print_results:
-                print("Baseline Result:\n", base_result)
-                print("Test Result:\n", test_result)
-
-    if failures:
-        print("\nValidation Summary:")
-        print("===================")
-        print(f"{len(failures)} query(s) failed: {failures}")
-    else:
-        print("\nAll queries passed validation.")
