@@ -1,10 +1,10 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
 
-#include <cudf/column/column_device_view.cuh>
+#include <cudf/column/column_child_offsets.h>
 #include <cudf/column/column_view.hpp>
 
 /**
@@ -53,10 +53,9 @@ class dictionary_column_view : private column_view {
   dictionary_column_view& operator=(dictionary_column_view&&) = default;
 
   /// Index of the indices column of the dictionary column
-  static constexpr size_type indices_column_index =
-    column_device_view::dictionary_indices_column_index;
+  static constexpr size_type indices_column_index = cudf::dictionary_indices_column_index;
   /// Index of the keys column of the dictionary column
-  static constexpr size_type keys_column_index = column_device_view::dictionary_keys_column_index;
+  static constexpr size_type keys_column_index = cudf::dictionary_keys_column_index;
 
   using column_view::has_nulls;
   using column_view::is_empty;

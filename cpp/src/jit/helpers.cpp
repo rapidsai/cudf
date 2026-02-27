@@ -133,9 +133,8 @@ struct jit_element_type_name_fn {
   {
     return std::format(
       "cudf::dictionary_element<{}, {}>",
-      get_jit_element_type_name_impl(
-        view.child(column_device_view::dictionary_indices_column_index)),
-      get_jit_element_type_name_impl(view.child(column_device_view::dictionary_keys_column_index)));
+      get_jit_element_type_name_impl(view.child(cudf::dictionary_indices_column_index)),
+      get_jit_element_type_name_impl(view.child(cudf::dictionary_keys_column_index)));
   }
 
   template <typename T>

@@ -4,6 +4,7 @@
  */
 #pragma once
 
+#include <cudf/column/column_child_offsets.h>
 #include <cudf/detail/offsets_iterator.cuh>
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/strings/string_view.cuh>
@@ -66,12 +67,12 @@ struct nullate {
 /**
  * @brief A type tag to specify that a column should be treated as a dictionary column.
  * @brief A type tag to specify that a column should be treated as a dictionary column
- * 
+ *
  * @tparam IndexType The type of the dictionary indices
  * @tparam KeyType The type of the dictionary keys
  */
 template <typename IndexType, typename KeyType>
-  requires(is_index_type<IndexType>())
+  requires(is_index_type<IndexType>() && is_relationally_comparable<KeyType, KeyType>())
 struct dictionary_element {
   using index_type = IndexType;  ///< The type of the dictionary indices
   using key_type   = KeyType;    ///< The type of the dictionary keys
@@ -108,11 +109,8 @@ namespace detail {
  */
 class alignas(16) column_device_view_base {
  public:
-  static constexpr size_type offsets_column_index{0};  ///< Child index of the offsets column
-  static constexpr size_type dictionary_indices_column_index =
-    0;  ///< Child index of the dictionary offsets column
-  static constexpr size_type dictionary_keys_column_index =
-    1;  ///< Child index of the dictionary key column
+  static constexpr size_type offsets_column_index =
+    cudf::offsets_column_index;  ///< Child index of the offsets column
 
   column_device_view_base()                               = delete;
   ~column_device_view_base()                              = default;
