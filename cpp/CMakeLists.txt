@@ -119,11 +119,6 @@ set(CUDF_CUDA_FLAGS "")
 set(CUDF_CXX_DEFINITIONS "")
 set(CUDF_CUDA_DEFINITIONS "")
 
-# For now, disable CMake's automatic module scanning for C++ files. There is an sccache bug in the
-# version RAPIDS uses in CI that causes it to handle the resulting -M* flags incorrectly with
-# gcc>=14. We can remove this once we upgrade to a newer sccache version.
-set(CMAKE_CXX_SCAN_FOR_MODULES OFF)
-
 # Set logging level
 set(LIBCUDF_LOGGING_LEVEL
     "INFO"

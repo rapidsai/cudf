@@ -21,11 +21,6 @@ include(../fetch_dependencies.cmake)
 include(rapids-cmake)
 rapids_cmake_build_type("Release")
 
-# For now, disable CMake's automatic module scanning for C++ files. There is an sccache bug in the
-# version RAPIDS uses in CI that causes it to handle the resulting -M* flags incorrectly with
-# gcc>=14. We can remove this once we upgrade to a newer sccache version.
-set(CMAKE_CXX_SCAN_FOR_MODULES OFF)
-
 add_library(
   hybrid_scan_utils OBJECT common_utils.cpp io_source.cpp io_utils.cpp hybrid_scan_composer.cpp
 )
