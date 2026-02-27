@@ -107,6 +107,36 @@ def assert_tpch_result_equal(
     2. For the "ties", we make sure that the lengths of the two dataframes match,
        but we *don't* compare the values since, aside from the columns in ``sort_by``,
        the values may differ, and that's OK.
+
+    Sorting by float columns introduces some additional fuzziness we need to account for.
+    Here are a few examples of ``(key, value)`` records that ought to be considered equal,
+    with an abs_tol of 0.01:
+
+    First, a ``sort(by=["value"])``, but for some reason the ``value`` associated
+    with the keys "a" and "b" are different, but within the tolerance::
+
+       result: [(a, 0.99), (b, 1.00), (c, 1.01)]
+       expected: [(b, 0.99), (a, 1.00), (c, 1.01)]
+
+    Consider the first row of ``result``: ``(a, 0.99)``. We'd consider it equal
+    to any row in ``expected`` where the ``value`` is within 0.01 of 0.99 (and
+    where the keys match, i.e. ``key=="a"``). Searching through ``expected``, we
+    see a match in the second row: ``(b, 0.99)``. Repeating that process for
+    the other rows shows that the two ought to be considered equal.
+
+    Here's an example where they are different:
+
+
+       result  : [(a, 0.99), (b, 1.00), (c, 1.01)]
+       expected: [(c, 0.99), (b, 1.00), (a, 1.01)]
+
+    Now when we consider matches for the first row of ``result`` we see that
+    the only rows from ``expected`` that are within tolerance are the second and third rows::
+
+       candidates: [(b, 1.00), (a, 1.01)]
+
+    None of these rows could be considered equal to ``(a, 0.99)``; the first
+    has the wrong key, and the second's value is outside the tolerance.
     """
     detail: dict[str, Any]
 
@@ -169,22 +199,30 @@ def assert_tpch_result_equal(
 
     if sort_by:
         sort_by_cols, sort_by_descending = zip(*sort_by, strict=True)
+        sort_by_cols_list = list(sort_by_cols)
+        has_float_sort = any(
+            left.schema[col] in (pl.Float32, pl.Float64) for col in sort_by_cols_list
+        )
 
-        # Before we do any sorting, we want to verify that the `sort_by` columns match exactly.
-        try:
-            polars.testing.assert_frame_equal(
-                left.select(sort_by_cols),
-                right.select(sort_by_cols),
-                **polars_kwargs,  # type: ignore[arg-type]
-            )
-        except AssertionError as e:
-            raise ValidationError(
-                message="sort_by columns mismatch", details={"error": str(e)}
-            ) from e
+        # When sort includes float columns, row order can differ within tolerance,
+        # so we skip the exact sort_by match here and rely on the full comparison.
+        if not has_float_sort:
+            try:
+                polars.testing.assert_frame_equal(
+                    left.select(sort_by_cols),
+                    right.select(sort_by_cols),
+                    **polars_kwargs,  # type: ignore[arg-type]
+                )
+            except AssertionError as e:
+                raise ValidationError(
+                    message="sort_by columns mismatch", details={"error": str(e)}
+                ) from e
 
     else:
         sort_by_cols = ()
         sort_by_descending = ()
+        sort_by_cols_list = []
+        has_float_sort = False
 
     if sort_by and limit and len(left) > 0:
         # Handle the .sort_by(...).head(n) case; First, split the data into two parts
@@ -250,11 +288,6 @@ def assert_tpch_result_equal(
         result_first = result_first.sort(by=by, descending=descending)
         expected_first = expected_first.sort(by=by, descending=descending)
 
-        sort_by_cols_list = list(sort_by_cols)
-        has_float_sort = any(
-            left.schema[col] in (pl.Float32, pl.Float64) for col in sort_by_cols_list
-        )
-
         if not has_float_sort:
             try:
                 polars.testing.assert_frame_equal(
@@ -272,7 +305,7 @@ def assert_tpch_result_equal(
                 ) from e
         else:
             try:
-                _compare_sorted_frames_by_float_bands(
+                _compare_sorted_frames_with_float_sort(
                     result_first,
                     expected_first,
                     sort_by_cols_list=sort_by_cols_list,
@@ -320,12 +353,6 @@ def assert_tpch_result_equal(
         left_sorted = left.sort(by=by, descending=descending)
         right_sorted = right.sort(by=by, descending=descending)
 
-        sort_by_cols_list = list(sort_by_cols)
-        has_float_sort = any(
-            left_sorted.schema[col] in (pl.Float32, pl.Float64)
-            for col in sort_by_cols_list
-        )
-
         if not has_float_sort:
             try:
                 polars.testing.assert_frame_equal(
@@ -338,7 +365,7 @@ def assert_tpch_result_equal(
                     message="Result mismatch", details={"error": str(e)}
                 ) from e
         else:
-            _compare_sorted_frames_by_float_bands(
+            _compare_sorted_frames_with_float_sort(
                 left_sorted,
                 right_sorted,
                 sort_by_cols_list=sort_by_cols_list,
@@ -412,3 +439,80 @@ def _compare_sorted_frames_by_float_bands(
                 message="Result mismatch",
                 details={"error": str(e), "band_id": band_id},
             ) from e
+
+
+def _compare_sorted_frames_with_float_sort(
+    left: pl.DataFrame,
+    right: pl.DataFrame,
+    *,
+    sort_by_cols_list: list[str],
+    abs_tol: float,
+    polars_kwargs: dict[str, bool | float],
+) -> None:
+    """
+    Compare two dataframes which are already sorted with a float sort column.
+
+    Uses row-iteration and 1:1 matching: for each row in left, find a unique row
+    in right where sort columns match (within abs_tol for float cols) and the
+    full row matches under assert_frame_equal.
+
+    Parameters
+    ----------
+    left, right
+        The two dataframes to compare.
+    sort_by_cols_list
+        The columns used for sorting. At least one is expected to be float.
+    abs_tol
+        The absolute tolerance for float comparison.
+    polars_kwargs
+        Keyword arguments to pass to polars.testing.assert_frame_equal.
+    """
+    if len(left) != len(right):
+        raise ValidationError(
+            message="Row count mismatch",
+            details={"left_rows": len(left), "right_rows": len(right)},
+        )
+
+    available: set[int] = set(range(len(right)))
+    right_with_idx = right.with_row_index("_idx")
+
+    for i in range(len(left)):
+        # Predicate on right: index must be available, and each sort column
+        # must match (float: within abs_tol, else exact).
+        pred = pl.col("_idx").is_in(list(available))
+        for col in sort_by_cols_list:
+            left_val = left[col][i]
+            if left.schema[col] in (pl.Float32, pl.Float64):
+                pred = (
+                    pred
+                    & (pl.col(col) >= left_val - abs_tol)
+                    & (pl.col(col) <= left_val + abs_tol)
+                )
+            else:
+                pred = pred & (pl.col(col) == left_val)
+
+        candidates = right_with_idx.filter(pred)["_idx"].to_list()
+        left_row = left.slice(i, 1)
+        matched = False
+        for j in candidates:
+            try:
+                polars.testing.assert_frame_equal(
+                    left_row,
+                    right.slice(j, 1),
+                    **polars_kwargs,  # type: ignore[arg-type]
+                )
+                available.discard(j)
+                matched = True
+                break
+            except AssertionError:
+                continue
+
+        if not matched:
+            raise ValidationError(
+                message="Result mismatch",
+                details={
+                    "left_row_index": i,
+                    "left_row": left_row.to_dicts()[0],
+                    "num_candidates_in_band": len(candidates),
+                },
+            ) from None

@@ -312,8 +312,6 @@ def test_assert_tpch_result_equal_q11_ties():
 
 
 def test_assert_tpch_result_equal_float_sort_mixed_sort_columns() -> None:
-    """Float + non-float sort_by: exercises canonical key else branch (non-float col)."""
-    # Same row order so sort_by columns check passes; one value differs within tol.
     left = pl.DataFrame(
         {
             "ps_partkey": [1, 2, 3],
@@ -336,7 +334,6 @@ def test_assert_tpch_result_equal_float_sort_mixed_sort_columns() -> None:
 
 
 def test_assert_tpch_result_equal_float_sort_raises_value_mismatch_in_band() -> None:
-    """Float sort, same bands but wrong value in a band -> ValidationError."""
     left = pl.DataFrame(
         {
             "ps_partkey": [124439984, 69940887, 118230270],
@@ -359,7 +356,14 @@ def test_assert_tpch_result_equal_float_sort_raises_value_mismatch_in_band() -> 
         )
 
 
-def test_assert_tpch_result_equal_float_sort():
+@pytest.mark.parametrize(
+    "sort_by",
+    [
+        [("value", False)],
+        [("value", False), ("key", False)],
+    ],
+)
+def test_assert_tpch_result_equal_float_sort(sort_by: list[tuple[str, bool]]):
     left = pl.DataFrame(
         {
             "key": ["a", "b", "c", "d", "e"],
@@ -377,5 +381,26 @@ def test_assert_tpch_result_equal_float_sort():
         }
     )
     assert_tpch_result_equal(
-        left, right, sort_by=[("value", False)], abs_tol=0.02, check_exact=False
+        left, right, sort_by=sort_by, abs_tol=0.011, check_exact=False
     )
+
+
+def test_assert_tpch_result_float_not_actually_sorted() -> None:
+    # this test verifies that we correctly raise if the
+    # result isn't sorted when `sort_by` claims it ought to be.
+    left = pl.DataFrame(
+        {
+            "key": ["a", "b", "c", "d"],
+            "value": [1.0, 1.1, 1.21, 1.20],
+        }
+    )
+    right = pl.DataFrame(
+        {
+            "key": ["a", "b", "c", "d"],
+            "value": [1.0, 1.1, 1.20, 1.20],
+        }
+    )
+    with pytest.raises(ValidationError, match="Result mismatch"):
+        assert_tpch_result_equal(
+            left, right, sort_by=[("value", False)], abs_tol=0.01, check_exact=False
+        )
