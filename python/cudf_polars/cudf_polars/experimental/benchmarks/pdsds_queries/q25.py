@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
-from cudf_polars.experimental.benchmarks.utils import get_data
+from cudf_polars.experimental.benchmarks.utils import QueryResult, get_data
 
 if TYPE_CHECKING:
     from cudf_polars.experimental.benchmarks.utils import RunConfig
@@ -71,7 +71,7 @@ def duckdb_impl(run_config: RunConfig) -> str:
     """
 
 
-def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
+def polars_impl(run_config: RunConfig) -> QueryResult:
     """Query 25."""
     params = load_parameters(
         int(run_config.scale_factor),
@@ -107,44 +107,53 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         for p in ("d1", "d2", "d3")
     ]
 
-    return (
-        store_sales.join(d1, left_on="ss_sold_date_sk", right_on="d1_date_sk")
-        .join(item, left_on="ss_item_sk", right_on="i_item_sk")
-        .join(store, left_on="ss_store_sk", right_on="s_store_sk")
-        .join(
-            store_returns,
-            left_on=["ss_customer_sk", "ss_item_sk", "ss_ticket_number"],
-            right_on=["sr_customer_sk", "sr_item_sk", "sr_ticket_number"],
-        )
-        .join(d2, left_on="sr_returned_date_sk", right_on="d2_date_sk")
-        .join(
-            catalog_sales,
-            left_on=["ss_customer_sk", "ss_item_sk"],
-            right_on=["cs_bill_customer_sk", "cs_item_sk"],
-        )
-        .join(d3, left_on="cs_sold_date_sk", right_on="d3_date_sk")
-        .filter(
-            (pl.col("d1_moy") == 4)
-            & (pl.col("d1_year") == year)
-            & (pl.col("d2_moy").is_between(4, 10))
-            & (pl.col("d2_year") == year)
-            & (pl.col("d3_moy").is_between(4, 10))
-            & (pl.col("d3_year") == year)
-        )
-        .group_by(["i_item_id", "i_item_desc", "s_store_id", "s_store_name"])
-        .agg(
-            [
-                getattr(pl.col("ss_net_profit"), polars_agg)().alias(
-                    "store_sales_profit"
-                ),
-                getattr(pl.col("sr_net_loss"), polars_agg)().alias(
-                    "store_returns_loss"
-                ),
-                getattr(pl.col("cs_net_profit"), polars_agg)().alias(
-                    "catalog_sales_profit"
-                ),
-            ]
-        )
-        .sort(["i_item_id", "i_item_desc", "s_store_id", "s_store_name"])
-        .limit(100)
+    return QueryResult(
+        frame=(
+            store_sales.join(d1, left_on="ss_sold_date_sk", right_on="d1_date_sk")
+            .join(item, left_on="ss_item_sk", right_on="i_item_sk")
+            .join(store, left_on="ss_store_sk", right_on="s_store_sk")
+            .join(
+                store_returns,
+                left_on=["ss_customer_sk", "ss_item_sk", "ss_ticket_number"],
+                right_on=["sr_customer_sk", "sr_item_sk", "sr_ticket_number"],
+            )
+            .join(d2, left_on="sr_returned_date_sk", right_on="d2_date_sk")
+            .join(
+                catalog_sales,
+                left_on=["ss_customer_sk", "ss_item_sk"],
+                right_on=["cs_bill_customer_sk", "cs_item_sk"],
+            )
+            .join(d3, left_on="cs_sold_date_sk", right_on="d3_date_sk")
+            .filter(
+                (pl.col("d1_moy") == 4)
+                & (pl.col("d1_year") == year)
+                & (pl.col("d2_moy").is_between(4, 10))
+                & (pl.col("d2_year") == year)
+                & (pl.col("d3_moy").is_between(4, 10))
+                & (pl.col("d3_year") == year)
+            )
+            .group_by(["i_item_id", "i_item_desc", "s_store_id", "s_store_name"])
+            .agg(
+                [
+                    getattr(pl.col("ss_net_profit"), polars_agg)().alias(
+                        "store_sales_profit"
+                    ),
+                    getattr(pl.col("sr_net_loss"), polars_agg)().alias(
+                        "store_returns_loss"
+                    ),
+                    getattr(pl.col("cs_net_profit"), polars_agg)().alias(
+                        "catalog_sales_profit"
+                    ),
+                ]
+            )
+            .sort(["i_item_id", "i_item_desc", "s_store_id", "s_store_name"])
+            .limit(100)
+        ),
+        sort_by=[
+            ("i_item_id", False),
+            ("i_item_desc", False),
+            ("s_store_id", False),
+            ("s_store_name", False),
+        ],
+        limit=100,
     )

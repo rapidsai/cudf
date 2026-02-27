@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
-from cudf_polars.experimental.benchmarks.utils import get_data
+from cudf_polars.experimental.benchmarks.utils import QueryResult, get_data
 
 if TYPE_CHECKING:
     from cudf_polars.experimental.benchmarks.utils import RunConfig
@@ -119,7 +119,7 @@ def make_block(
     )
 
 
-def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
+def polars_impl(run_config: RunConfig) -> QueryResult:
     """Query 28."""
     params = load_parameters(
         int(run_config.scale_factor),
@@ -206,11 +206,15 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         "B6",
     )
 
-    return (
-        b1.join(b2, how="cross")
-        .join(b3, how="cross")
-        .join(b4, how="cross")
-        .join(b5, how="cross")
-        .join(b6, how="cross")
-        .limit(100)
+    return QueryResult(
+        frame=(
+            b1.join(b2, how="cross")
+            .join(b3, how="cross")
+            .join(b4, how="cross")
+            .join(b5, how="cross")
+            .join(b6, how="cross")
+            .limit(100)
+        ),
+        sort_by=[],
+        limit=None,
     )
