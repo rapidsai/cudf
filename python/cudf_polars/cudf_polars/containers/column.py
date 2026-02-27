@@ -266,9 +266,11 @@ class Column:
         if plc.sorting.is_sorted(
             plc.Table([self.obj]), [order], [null_order], stream=stream
         ):
-            self.is_sorted = plc.types.Sorted.YES
-            self.order = order
-            self.null_order = null_order
+            self.set_sorted(
+                is_sorted=plc.types.Sorted.YES,
+                order=order,
+                null_order=null_order,
+            )
             return True
         return False
 
