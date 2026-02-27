@@ -137,6 +137,8 @@ class PylibcudfFunction:
                     )
                     dtypes.append(accessed.dtype)
                     plc_args.append(accessed.plc_column)
+                else:
+                    plc_args.append(arg)
             plc_kwargs = {}
             for k, v in kwargs.items():
                 if isinstance(v, ColumnBase):
@@ -145,6 +147,8 @@ class PylibcudfFunction:
                     )
                     dtypes.append(accessed.dtype)
                     plc_kwargs[k] = accessed.plc_column
+                else:
+                    plc_kwargs[k] = v
             plc_result = self._pylibcudf_function(*plc_args, **plc_kwargs)
         output_dtype = self._dtype_policy(plc_result, dtypes)
         return ColumnBase.create(plc_result, dtype=output_dtype)
@@ -1277,15 +1281,12 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             pa.scalar(hi, type=cudf_dtype_to_pa_type(self.dtype))
         )
 
-        def _clamp(plc_column: plc.Column) -> plc.Column:
-            return plc.replace.clamp(plc_column, lo_scalar, hi_scalar)
-
         return cast(
             "Self",
             PylibcudfFunction(
-                _clamp,
+                plc.replace.clamp,
                 same_dtype_policy,
-            ).execute_with_args(self),
+            ).execute_with_args(self, lo_scalar, hi_scalar),
         )
 
     def equals(self, other: ColumnBase, check_dtypes: bool = False) -> bool:
@@ -2256,13 +2257,10 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     def cast(self, dtype: DtypeObj) -> ColumnBase:
         cast_dtype = dtype_to_pylibcudf_type(dtype)
 
-        def _cast(plc_column: plc.Column) -> plc.Column:
-            return plc.unary.cast(plc_column, cast_dtype)
-
         return PylibcudfFunction(
-            _cast,
+            plc.unary.cast,
             fixed_dtype_policy(dtype),
-        ).execute_with_args(self)
+        ).execute_with_args(self, cast_dtype)
 
     def astype(self, dtype: DtypeObj, copy: bool | None = False) -> ColumnBase:
         if self.dtype == dtype:
@@ -2868,14 +2866,11 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         )
         agg = aggregation.make_aggregation(op, kwargs).plc_obj
 
-        def _scan(plc_column: plc.Column) -> plc.Column:
-            return plc.reduce.scan(plc_column, agg, scan_type)
-
         return cast(
             "Self",
-            PylibcudfFunction(_scan, same_dtype_policy).execute_with_args(
-                self
-            ),
+            PylibcudfFunction(
+                plc.reduce.scan, same_dtype_policy
+            ).execute_with_args(self, agg, scan_type),
         )
 
     def _reduce(
@@ -2964,22 +2959,14 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         null_precedence: plc.types.NullOrder,
         pct: bool,
     ) -> Self:
-        def _rank(plc_column: plc.Column) -> plc.Column:
-            return plc.sorting.rank(
-                plc_column,
-                method,
-                column_order,
-                null_handling,
-                null_precedence,
-                pct,
-            )
-
         return cast(
             "Self",
             PylibcudfFunction(
-                _rank,
+                plc.sorting.rank,
                 pylibcudf_result_dtype_policy,
-            ).execute_with_args(self),
+            ).execute_with_args(
+                self, method, column_order, null_handling, null_precedence, pct
+            ),
         )
 
     def label_bins(

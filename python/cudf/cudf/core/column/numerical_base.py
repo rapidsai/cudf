@@ -164,23 +164,14 @@ class NumericalBaseColumn(ColumnBase, Scannable):
             )
             interpolation_type = plc.types.Interpolation[interpolation.upper()]
 
-            def _quantile(
-                plc_column: plc.Column, plc_indices: plc.Column
-            ) -> plc.Column:
-                return plc.quantiles.quantile(
-                    plc_column,
-                    q,
-                    interpolation_type,
-                    plc_indices,
-                    exact,
-                )
-
             result = cast(
                 cudf.core.column.numerical_base.NumericalBaseColumn,
                 PylibcudfFunction(
-                    _quantile,
+                    plc.quantiles.quantile,
                     pylibcudf_result_dtype_policy,
-                ).execute_with_args(no_nans, indices),
+                ).execute_with_args(
+                    no_nans, q, interpolation_type, indices, exact
+                ),
             )
         if return_scalar:
             scalar_result = result.element_indexing(0)
@@ -257,15 +248,12 @@ class NumericalBaseColumn(ColumnBase, Scannable):
             raise ValueError(f"{how=} must be either 'half_even' or 'half_up'")
         plc_how = plc.round.RoundingMethod[how.upper()]
 
-        def _round(plc_column: plc.Column) -> plc.Column:
-            return plc.round.round(plc_column, decimals, plc_how)
-
         return cast(
             cudf.core.column.numerical_base.NumericalBaseColumn,
             PylibcudfFunction(
-                _round,
+                plc.round.round,
                 pylibcudf_result_dtype_policy,
-            ).execute_with_args(self),
+            ).execute_with_args(self, decimals, plc_how),
         )
 
     def unary_operator(self, unaryop: str) -> ColumnBase:
@@ -273,10 +261,7 @@ class NumericalBaseColumn(ColumnBase, Scannable):
         unaryop_str = _unaryop_map.get(unaryop_str, unaryop_str)
         unaryop_enum = plc.unary.UnaryOperator[unaryop_str]
 
-        def _unary(plc_column: plc.Column) -> plc.Column:
-            return plc.unary.unary_operation(plc_column, unaryop_enum)
-
         return PylibcudfFunction(
-            _unary,
+            plc.unary.unary_operation,
             same_dtype_policy,
-        ).execute_with_args(self)
+        ).execute_with_args(self, unaryop_enum)

@@ -472,12 +472,9 @@ class DatetimeColumn(TemporalBaseColumn):
         if (plc_freq := rounding_fequency_map.get(freq)) is None:
             raise ValueError(f"Invalid resolution: '{freq}'")
 
-        def _round_fn(plc_column: plc.Column) -> plc.Column:
-            return round_func(plc_column, plc_freq)
-
         return PylibcudfFunction(
-            _round_fn, same_dtype_policy
-        ).execute_with_args(self)
+            round_func, same_dtype_policy
+        ).execute_with_args(self, plc_freq)
 
     def ceil(self, freq: str) -> ColumnBase:
         return self._round_dt(plc.datetime.ceil_datetimes, freq)

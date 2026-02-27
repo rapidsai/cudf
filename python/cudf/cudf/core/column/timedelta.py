@@ -236,18 +236,12 @@ class TimeDeltaColumn(TemporalBaseColumn):
     ) -> StringColumn:
         if len(self) == 0:
             return super().strftime(format)
-        dtype_policy = fixed_dtype_policy(dtype)
-
-        def _from_durations(plc_column: plc.Column) -> plc.Column:
-            return plc.strings.convert.convert_durations.from_durations(
-                plc_column, format
-            )
-
         return cast(
             cudf.core.column.string.StringColumn,
-            PylibcudfFunction(_from_durations, dtype_policy).execute_with_args(
-                self
-            ),
+            PylibcudfFunction(
+                plc.strings.convert.convert_durations.from_durations,
+                fixed_dtype_policy(dtype),
+            ).execute_with_args(self, format),
         )
 
     def as_string_column(self, dtype: DtypeObj) -> StringColumn:
