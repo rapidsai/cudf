@@ -100,6 +100,8 @@ def dtype(arbitrary: Any) -> DtypeObj:
     pd_dtype = pd.api.types.pandas_dtype(arbitrary)  # noqa: TID251
     if isinstance(pd_dtype, PANDAS_NUMPY_DTYPE):
         return dtype(pd_dtype.numpy_dtype)
+    elif isinstance(pd_dtype, pd.CategoricalDtype):
+        return CategoricalDtype(pd_dtype.categories, pd_dtype.ordered)
     elif isinstance(pd_dtype, pd.IntervalDtype):
         return IntervalDtype(pd_dtype.subtype, pd_dtype.closed)
     elif (
