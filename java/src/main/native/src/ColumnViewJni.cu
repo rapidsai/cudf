@@ -192,8 +192,7 @@ std::unique_ptr<cudf::column> lists_distinct_by_key(cudf::lists_column_view cons
     std::move(out_offsets),
     std::move(out_structs),
     input.null_count(),
-    cudf::copy_bitmask(input.parent(), stream, cudf::get_current_device_resource_ref()),
-    stream);
+    cudf::copy_bitmask(input.parent(), stream, cudf::get_current_device_resource_ref()));
 }
 
 }  // namespace cudf::jni
