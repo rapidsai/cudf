@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -147,15 +147,18 @@ struct q9_data {
   }
   )***";
 
-  return cudf::transform({discount, extendedprice, supplycost, quantity},
-                         udf,
-                         cudf::data_type{cudf::type_id::FLOAT64},
-                         false,
-                         std::nullopt,
-                         cudf::null_aware::NO,
-                         cudf::output_nullability::PRESERVE,
-                         stream,
-                         mr);
+  cudf::transform_input transform_inputs[] = {discount, extendedprice, supplycost, quantity};
+
+  return cudf::transform_extended(transform_inputs,
+                                  udf,
+                                  cudf::data_type{cudf::type_id::FLOAT64},
+                                  false,
+                                  std::nullopt,
+                                  cudf::null_aware::NO,
+                                  std::nullopt,
+                                  cudf::output_nullability::PRESERVE,
+                                  stream,
+                                  mr);
 }
 
 [[nodiscard]] std::unique_ptr<cudf::column> compute_amount_ast(

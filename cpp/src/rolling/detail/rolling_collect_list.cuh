@@ -198,9 +198,7 @@ std::unique_ptr<column> rolling_collect_list(column_view const& input,
                            std::move(offsets),
                            std::move(gather_output->release()[0]),
                            null_count,
-                           std::move(null_mask),
-                           stream,
-                           mr);
+                           std::move(null_mask));
 }
 
 }  // namespace detail

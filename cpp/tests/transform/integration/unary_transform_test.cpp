@@ -1,7 +1,7 @@
 /*
  * SPDX-FileCopyrightText: Copyright 2018-2019 BlazingDB, Inc.
  * SPDX-FileCopyrightText: Copyright 2018 Christian Noboa Mardini <christian@blazingdb.com>
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 /*
@@ -60,49 +60,56 @@ struct AssertsTest : public RuntimeSupportTest {};
 
 TEST_F(AssertsTest, TypeSupport)
 {
-  EXPECT_NO_THROW(cudf::transform({a, b, t},
-                                  udf,
-                                  cudf::data_type{cudf::type_id::FLOAT32},
-                                  false,
-                                  std::nullopt,
-                                  cudf::null_aware::NO));
+  cudf::transform_input inputs[] = {a, b, cudf::scalar_column_view(t)};
 
-  EXPECT_THROW(cudf::transform({a, b, t},
-                               udf,
-                               cudf::data_type{cudf::type_id::STRUCT},
-                               false,
-                               std::nullopt,
-                               cudf::null_aware::NO),
+  EXPECT_NO_THROW(cudf::transform_extended(inputs,
+                                           udf,
+                                           cudf::data_type{cudf::type_id::FLOAT32},
+                                           false,
+                                           std::nullopt,
+                                           cudf::null_aware::NO));
+
+  EXPECT_THROW(cudf::transform_extended(inputs,
+                                        udf,
+                                        cudf::data_type{cudf::type_id::STRUCT},
+                                        false,
+                                        std::nullopt,
+                                        cudf::null_aware::NO),
                std::invalid_argument);
 
-  EXPECT_THROW(cudf::transform({struct_col, t},
-                               udf,
-                               cudf::data_type{cudf::type_id::FLOAT32},
-                               false,
-                               std::nullopt,
-                               cudf::null_aware::NO),
+  cudf::transform_input struct_inputs[] = {struct_col, cudf::scalar_column_view(t)};
+
+  EXPECT_THROW(cudf::transform_extended(struct_inputs,
+                                        udf,
+                                        cudf::data_type{cudf::type_id::FLOAT32},
+                                        false,
+                                        std::nullopt,
+                                        cudf::null_aware::NO),
                std::invalid_argument);
 }
 
 TEST_F(AssertsTest, UnequalRowCount)
 {
-  EXPECT_THROW(cudf::transform({a, b, bad_col},
-                               udf,
-                               cudf::data_type{cudf::type_id::FLOAT32},
-                               false,
-                               std::nullopt,
-                               cudf::null_aware::NO),
+  cudf::transform_input inputs[] = {a, b, bad_col};
+
+  EXPECT_THROW(cudf::transform_extended(inputs,
+                                        udf,
+                                        cudf::data_type{cudf::type_id::FLOAT32},
+                                        false,
+                                        std::nullopt,
+                                        cudf::null_aware::NO),
                std::invalid_argument);
 }
 
 TEST_F(AssertsTest, NullSupport)
 {
-  EXPECT_NO_THROW(cudf::transform({a, b_nulls, t},
-                                  udf,
-                                  cudf::data_type{cudf::type_id::FLOAT32},
-                                  false,
-                                  std::nullopt,
-                                  cudf::null_aware::NO));
+  cudf::transform_input inputs[] = {a, b_nulls, cudf::scalar_column_view(t)};
+  EXPECT_NO_THROW(cudf::transform_extended(inputs,
+                                           udf,
+                                           cudf::data_type{cudf::type_id::FLOAT32},
+                                           false,
+                                           std::nullopt,
+                                           cudf::null_aware::NO));
 }
 
 struct UnaryOperationIntegrationTest : public cudf::test::BaseFixture {};
@@ -116,8 +123,9 @@ void test_udf(char const* udf, Op op, Data data_init, cudf::size_type size, bool
   cudf::test::fixed_width_column_wrapper<dtype, typename decltype(data_iter)::value_type> in(
     data_iter, data_iter + size, all_valid);
 
+  cudf::transform_input inputs[] = {in};
   std::unique_ptr<cudf::column> out =
-    cudf::transform({in}, udf, cudf::data_type(cudf::type_to_id<dtype>()), is_ptx);
+    cudf::transform_extended(inputs, udf, cudf::data_type(cudf::type_to_id<dtype>()), is_ptx);
 
   ASSERT_UNARY<dtype, dtype>(out->view(), in, op);
 }
@@ -405,13 +413,15 @@ __device__ inline void transform(
   cudf::test::fixed_width_column_wrapper<T> c(c_host.begin(), c_host.end());
   cudf::test::fixed_width_column_wrapper<T> expected(expected_host.begin(), expected_host.end());
 
+  cudf::transform_input cuda_inputs[] = {a, b, cudf::scalar_column_view(c)};
   std::unique_ptr<cudf::column> cuda_result =
-    cudf::transform({a, b, c}, cuda, cudf::data_type(cudf::type_to_id<T>()), false);
+    cudf::transform_extended(cuda_inputs, cuda, cudf::data_type(cudf::type_to_id<T>()), false);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*cuda_result, expected);
 
+  cudf::transform_input ptx_inputs[] = {a, b, cudf::scalar_column_view(c)};
   std::unique_ptr<cudf::column> ptx_result =
-    cudf::transform({a, b, c}, ptx, cudf::data_type(cudf::type_to_id<T>()), true);
+    cudf::transform_extended(ptx_inputs, ptx, cudf::data_type(cudf::type_to_id<T>()), true);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*ptx_result, expected);
 }
@@ -457,8 +467,9 @@ TYPED_TEST(TernaryDecimalOperationTest, TransformDecimalsAndScalar)
   cudf::test::fixed_point_column_wrapper<typename T::rep> expected(
     expected_host.begin(), expected_host.end(), RES.scale());
 
-  std::unique_ptr<cudf::column> cuda_result =
-    cudf::transform({a, b, c}, cuda, cudf::data_type(cudf::type_to_id<T>(), RES.scale()), false);
+  cudf::transform_input inputs[]            = {a, b, cudf::scalar_column_view(c)};
+  std::unique_ptr<cudf::column> cuda_result = cudf::transform_extended(
+    inputs, cuda, cudf::data_type(cudf::type_to_id<T>(), RES.scale()), false);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*cuda_result, expected);
 }
@@ -478,7 +489,9 @@ TEST_F(StringOperationTest, StringComparison)
   )***";
 
   auto expected = cudf::test::fixed_width_column_wrapper<bool>{true, true, false, false, true};
-  auto result   = cudf::transform({a, b, c}, cuda, cudf::data_type(cudf::type_id::BOOL8), false);
+  cudf::transform_input inputs[] = {a, b, c};
+  auto result =
+    cudf::transform_extended(inputs, cuda, cudf::data_type(cudf::type_id::BOOL8), false);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
@@ -496,7 +509,9 @@ TEST_F(StringOperationTest, StringContains)
 
   auto expected =
     cudf::test::fixed_width_column_wrapper<bool>{false, true, false, false, true, false};
-  auto result = cudf::transform({a, b}, cuda, cudf::data_type(cudf::type_id::BOOL8), false);
+  cudf::transform_input inputs[] = {a, b};
+  auto result =
+    cudf::transform_extended(inputs, cuda, cudf::data_type(cudf::type_id::BOOL8), false);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
@@ -513,7 +528,9 @@ TEST_F(StringOperationTest, StringFind)
   )***";
 
   auto expected = cudf::test::fixed_width_column_wrapper<cudf::size_type>{0, 1, 2, 1};
-  auto result   = cudf::transform({a, b}, cuda, cudf::data_type(cudf::type_id::INT32), false);
+  cudf::transform_input inputs[] = {a, b};
+  auto result =
+    cudf::transform_extended(inputs, cuda, cudf::data_type(cudf::type_id::INT32), false);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
@@ -533,7 +550,9 @@ TEST_F(StringOperationTest, MixedTypes)
 
   auto expected =
     cudf::test::fixed_width_column_wrapper<bool>{true, true, false, false, false, false};
-  auto result = cudf::transform({a, b, c, d}, cuda, cudf::data_type(cudf::type_id::BOOL8), false);
+  cudf::transform_input inputs[] = {a, b, c, d};
+  auto result =
+    cudf::transform_extended(inputs, cuda, cudf::data_type(cudf::type_id::BOOL8), false);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
@@ -554,13 +573,16 @@ TEST_F(StringOperationTest, Output)
 
   auto expected =
     cudf::test::strings_column_wrapper{"this", "is", "the", "largest", "lexicographical", "test"};
-  auto result = cudf::transform({a, b, c, d}, cuda, cudf::data_type(cudf::type_id::STRING), false);
+  cudf::transform_input inputs[] = {a, b, c, d};
+  auto result =
+    cudf::transform_extended(inputs, cuda, cudf::data_type(cudf::type_id::STRING), false);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 
-  auto expected_empty = cudf::test::strings_column_wrapper{};
-  auto result_empty   = cudf::transform(
-    {empty, empty, empty, empty}, cuda, cudf::data_type(cudf::type_id::STRING), false);
+  auto expected_empty                  = cudf::test::strings_column_wrapper{};
+  cudf::transform_input empty_inputs[] = {empty, empty, empty, empty};
+  auto result_empty =
+    cudf::transform_extended(empty_inputs, cuda, cudf::data_type(cudf::type_id::STRING), false);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_empty, result_empty->view());
 }
@@ -598,7 +620,7 @@ __device__ void transform(void* user_data, cudf::size_type row,
 }
     )***";
 
-  auto expected = cudf::test::strings_column_wrapper{"John Doe",
+  auto expected                  = cudf::test::strings_column_wrapper{"John Doe",
                                                      "Mia Folk",
                                                      "Abd Louis",
                                                      "Mendes Xi",
@@ -608,12 +630,13 @@ __device__ void transform(void* user_data, cudf::size_type row,
                                                      "José Łukasz",
                                                      "Søren Zoë",
                                                      "张 伟"};
-  auto result   = cudf::transform({first_name, last_name, scratch_sizes},
-                                cuda,
-                                cudf::data_type(cudf::type_id::STRING),
-                                false,
-                                scratch.data(),
-                                cudf::null_aware::NO);
+  cudf::transform_input inputs[] = {first_name, last_name, cudf::scalar_column_view(scratch_sizes)};
+  auto result                    = cudf::transform_extended(inputs,
+                                         cuda,
+                                         cudf::data_type(cudf::type_id::STRING),
+                                         false,
+                                         scratch.data(),
+                                         cudf::null_aware::NO);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
@@ -626,17 +649,20 @@ TEST_F(StringOperationTest, EmptyInput)
   }
   )***";
 
-  auto empty = cudf::test::strings_column_wrapper();
+  auto empty                          = cudf::test::strings_column_wrapper();
+  cudf::transform_input bool_inputs[] = {empty, empty};
   auto result =
-    cudf::transform({empty, empty}, rtn_bool, cudf::data_type(cudf::type_id::BOOL8), false);
+    cudf::transform_extended(bool_inputs, rtn_bool, cudf::data_type(cudf::type_id::BOOL8), false);
   EXPECT_EQ(0, result->size());
 
-  std::string rtn_str = R"***(
+  std::string rtn_str                = R"***(
   __device__ void transform(cudf::string_view * out, cudf::string_view a, cudf::string_view b){
     *out =  (a==b ? a : cudf::string_view{});
   }
   )***";
-  result = cudf::transform({empty, empty}, rtn_str, cudf::data_type(cudf::type_id::STRING), false);
+  cudf::transform_input str_inputs[] = {empty, empty};
+  result =
+    cudf::transform_extended(str_inputs, rtn_str, cudf::data_type(cudf::type_id::STRING), false);
   EXPECT_EQ(0, result->size());
 }
 
@@ -756,13 +782,15 @@ TEST_F(NullTest, ColumnNulls)
 
   expected->set_null_mask(std::move(expected_mask), expect_null_count);
 
+  cudf::transform_input cuda_inputs[] = {*low, *high, *t};
   auto cuda_result =
-    cudf::transform({*low, *high, *t}, cuda, cudf::data_type(cudf::type_id::FLOAT32), false);
+    cudf::transform_extended(cuda_inputs, cuda, cudf::data_type(cudf::type_id::FLOAT32), false);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*cuda_result, *expected);
 
+  cudf::transform_input ptx_inputs[] = {*low, *high, *t};
   auto ptx_result =
-    cudf::transform({*low, *high, *t}, ptx, cudf::data_type(cudf::type_id::FLOAT32), true);
+    cudf::transform_extended(ptx_inputs, ptx, cudf::data_type(cudf::type_id::FLOAT32), true);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*ptx_result, *expected);
 }
@@ -786,13 +814,15 @@ TEST_F(NullTest, ColumnNulls_And_Scalar)
 
   expected->set_null_mask(std::move(expected_mask), expect_null_count);
 
+  cudf::transform_input cuda_inputs[] = {*low, *high, cudf::scalar_column_view(*t_scalar)};
   auto cuda_result =
-    cudf::transform({*low, *high, *t_scalar}, cuda, cudf::data_type(cudf::type_id::FLOAT32), false);
+    cudf::transform_extended(cuda_inputs, cuda, cudf::data_type(cudf::type_id::FLOAT32), false);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*cuda_result, *expected);
 
+  cudf::transform_input ptx_inputs[] = {*low, *high, cudf::scalar_column_view(*t_scalar)};
   auto ptx_result =
-    cudf::transform({*low, *high, *t_scalar}, ptx, cudf::data_type(cudf::type_id::FLOAT32), true);
+    cudf::transform_extended(ptx_inputs, ptx, cudf::data_type(cudf::type_id::FLOAT32), true);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*ptx_result, *expected);
 }
@@ -815,13 +845,15 @@ TEST_F(NullTest, ColumnNulls_And_ScalarNull)
   expected->set_null_mask(cudf::create_null_mask(low_host.size(), cudf::mask_state::ALL_NULL),
                           low->size());
 
+  cudf::transform_input cuda_inputs[] = {*low, *high, cudf::scalar_column_view(*t_scalar)};
   auto cuda_result =
-    cudf::transform({*low, *high, *t_scalar}, cuda, cudf::data_type(cudf::type_id::FLOAT32), false);
+    cudf::transform_extended(cuda_inputs, cuda, cudf::data_type(cudf::type_id::FLOAT32), false);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*cuda_result, *expected);
 
+  cudf::transform_input ptx_inputs[] = {*low, *high, cudf::scalar_column_view(*t_scalar)};
   auto ptx_result =
-    cudf::transform({*low, *high, *t_scalar}, ptx, cudf::data_type(cudf::type_id::FLOAT32), true);
+    cudf::transform_extended(ptx_inputs, ptx, cudf::data_type(cudf::type_id::FLOAT32), true);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*ptx_result, *expected);
 }
@@ -841,13 +873,15 @@ TEST_F(NullTest, IsNull)
 
   auto expected = cudf::test::fixed_width_column_wrapper<bool>({true, true, false, true, false});
 
-  auto result = cudf::transform({*value},
-                                udf,
-                                cudf::data_type(cudf::type_id::BOOL8),
-                                false,
-                                std::nullopt,
-                                cudf::null_aware::YES,
-                                cudf::output_nullability::ALL_VALID);
+  cudf::transform_input inputs[] = {*value};
+  auto result                    = cudf::transform_extended(inputs,
+                                         udf,
+                                         cudf::data_type(cudf::type_id::BOOL8),
+                                         false,
+                                         std::nullopt,
+                                         cudf::null_aware::YES,
+                                         std::nullopt,
+                                         cudf::output_nullability::ALL_VALID);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected);
 }
@@ -886,13 +920,15 @@ return l - t * l + t * h;
     cudf::test::fixed_width_column_wrapper<float>(expected_iter, expected_iter + low_host.size())
       .release();
 
-  auto cuda_result = cudf::transform({*low, *high, *t},
-                                     udf,
-                                     cudf::data_type(cudf::type_id::FLOAT32),
-                                     false,
-                                     std::nullopt,
-                                     cudf::null_aware::YES,
-                                     cudf::output_nullability::ALL_VALID);
+  cudf::transform_input inputs[] = {*low, *high, *t};
+  auto cuda_result               = cudf::transform_extended(inputs,
+                                              udf,
+                                              cudf::data_type(cudf::type_id::FLOAT32),
+                                              false,
+                                              std::nullopt,
+                                              cudf::null_aware::YES,
+                                              std::nullopt,
+                                              cudf::output_nullability::ALL_VALID);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*cuda_result, *expected);
 }
