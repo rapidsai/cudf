@@ -5,7 +5,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING
 
 import polars as pl
 import polars.testing
@@ -124,10 +124,9 @@ def assert_tpch_result_equal(
     see a match in the second row: ``(b, 0.99)``. Repeating that process for
     the other rows shows that the two ought to be considered equal.
 
-    Here's an example where they are different:
+    Here's an example where they are different::
 
-
-       result  : [(a, 0.99), (b, 1.00), (c, 1.01)]
+       result: [(a, 0.99), (b, 1.00), (c, 1.01)]
        expected: [(c, 0.99), (b, 1.00), (a, 1.01)]
 
     Now when we consider matches for the first row of ``result`` we see that
@@ -341,8 +340,7 @@ def assert_tpch_result_equal(
                 },
             )
     else:
-        # No limit: sort then compare. If any sort column is float, use
-        # band-based comparison so row order within float ties is not required.
+        # No limit: sort then compare.
         by = list(sort_by_cols) + [
             col for col in left.columns if col not in sort_by_cols
         ]
@@ -374,71 +372,6 @@ def assert_tpch_result_equal(
             )
 
     return None
-
-
-def _compare_sorted_frames_by_float_bands(
-    left: pl.DataFrame,
-    right: pl.DataFrame,
-    *,
-    sort_by_cols_list: list[str],
-    abs_tol: float,
-    polars_kwargs: dict[str, bool | float],
-) -> None:
-    """
-    Compare two already-sorted frames by partitioning into bands on sort key.
-
-    Float sort columns are bucketed by (x / abs_tol).round() * abs_tol so that
-    values within tolerance get the same band. Bands are compared in order;
-    within each band, rows are sorted by non-sort columns then compared.
-    """
-    assert len(left) == len(right), "Row count mismatch"
-
-    canonical_exprs: list[pl.Expr] = []
-    canonical_col_names: list[str] = []
-    for col in sort_by_cols_list:
-        name = f"_band_canonical_{col}"
-        canonical_col_names.append(name)
-        if left.schema[col] in (pl.Float32, pl.Float64):
-            canonical_exprs.append(
-                ((pl.col(col) / abs_tol).round() * abs_tol).alias(name)
-            )
-        else:
-            canonical_exprs.append(pl.col(col).alias(name))
-
-    def add_band_id(df: pl.DataFrame) -> pl.DataFrame:
-        return df.with_columns(canonical_exprs).with_columns(
-            pl.struct(canonical_col_names).rle_id().alias("_band_id")
-        )
-
-    left_banded = add_band_id(left)
-    right_banded = add_band_id(right)
-
-    # max() can be time or int, but we know it's int.
-    n_bands_left = cast(int, left_banded["_band_id"].max()) + 1
-    n_bands_right = cast(int, right_banded["_band_id"].max()) + 1
-    assert n_bands_left == n_bands_right, "Band count mismatch"
-
-    other_cols = [c for c in left.columns if c not in sort_by_cols_list]
-    drop_cols = ["_band_id", *canonical_col_names]
-
-    for band_id in range(n_bands_left):
-        left_band = left_banded.filter(pl.col("_band_id") == band_id).drop(drop_cols)
-        right_band = right_banded.filter(pl.col("_band_id") == band_id).drop(drop_cols)
-        if other_cols:
-            left_band = left_band.sort(by=other_cols)
-            right_band = right_band.sort(by=other_cols)
-        assert len(left_band) == len(right_band), "Band length mismatch"
-        try:
-            polars.testing.assert_frame_equal(
-                left_band,
-                right_band,
-                **polars_kwargs,  # type: ignore[arg-type]
-            )
-        except AssertionError as e:
-            raise ValidationError(
-                message="Result mismatch",
-                details={"error": str(e), "band_id": band_id},
-            ) from e
 
 
 def _compare_sorted_frames_with_float_sort(
