@@ -29,6 +29,7 @@
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/detail/iterator.cuh>
+#include <cudf/dictionary/encode.hpp>
 #include <cudf/transform.hpp>
 
 namespace transformation {
@@ -307,6 +308,89 @@ __device__ inline void f(cudf::timestamp_us* output, cudf::timestamp_us input)
   auto data_init  = [&random_eng](cudf::size_type row) { return random_eng.generate(); };
 
   test_udf<dtype>(cuda.c_str(), op, data_init, 500, false);
+}
+
+TEST_F(UnaryOperationIntegrationTest, Transform_DictionaryString)
+{
+  std::string const cuda =
+    R"***(
+__device__ inline void decode(cudf::string_view * output, cudf::string_view input){
+  *output = input;
+})***";
+
+  // non-nullable
+  {
+    auto a =
+      cudf::test::strings_column_wrapper{
+        "eee", "aaa", "ddd", "bbb", "ccc", "ccc", "ccc", "eee", "aaa"}
+        .release();
+
+    auto a_encoded = cudf::dictionary::encode(a->view());
+
+    cudf::transform_input inputs[] = {*a_encoded};
+
+    auto out =
+      cudf::transform_extended(inputs, cuda, cudf::data_type{cudf::type_id::STRING}, false);
+
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(out->view(), a->view());
+  }
+
+  // nullable
+  {
+    auto a =
+      cudf::test::strings_column_wrapper{
+        {"eee", "aaa", "ddd", "bbb", "ccc", "ccc", "ccc", "eee", "aaa"},
+        {true, true, true, false, true, true, true, true, true}}
+        .release();
+
+    auto a_encoded = cudf::dictionary::encode(a->view());
+
+    cudf::transform_input inputs[] = {*a_encoded};
+
+    auto out =
+      cudf::transform_extended(inputs, cuda, cudf::data_type{cudf::type_id::STRING}, false);
+
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(out->view(), a->view());
+  }
+}
+
+TEST_F(UnaryOperationIntegrationTest, Transform_DictionaryFloat)
+{
+  std::string const cuda =
+    R"***(
+__device__ inline void decode(float * output, float input){
+  *output = input;
+})***";
+
+  // non-nullable
+  {
+    auto a = cudf::test::fixed_width_column_wrapper<float>(
+               {1.0F, 2.0F, 3.0F, 4.0F, 5.0F, 5.0F, 5.0F, 1.0F, 2.0F})
+               .release();
+    auto a_encoded                 = cudf::dictionary::encode(a->view());
+    cudf::transform_input inputs[] = {*a_encoded};
+
+    auto out =
+      cudf::transform_extended(inputs, cuda, cudf::data_type{cudf::type_id::FLOAT32}, false);
+
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(out->view(), a->view());
+  }
+
+  // nullable
+  {
+    auto a = cudf::test::fixed_width_column_wrapper<float>(
+               {{1.0F, 2.0F, 3.0F, 4.0F, 5.0F, 5.0F, 5.0F, 1.0F, 2.0F},
+                {true, true, true, true, true, false, true, true, true}})
+               .release();
+
+    auto a_encoded                 = cudf::dictionary::encode(a->view());
+    cudf::transform_input inputs[] = {*a_encoded};
+
+    auto out =
+      cudf::transform_extended(inputs, cuda, cudf::data_type{cudf::type_id::FLOAT32}, false);
+
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(out->view(), a->view());
+  }
 }
 
 struct TernaryOperationTest : public cudf::test::BaseFixture {};
