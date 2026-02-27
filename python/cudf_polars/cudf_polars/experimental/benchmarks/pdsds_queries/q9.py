@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
-from cudf_polars.experimental.benchmarks.utils import get_data
+from cudf_polars.experimental.benchmarks.utils import QueryResult, get_data
 
 if TYPE_CHECKING:
     from cudf_polars.experimental.benchmarks.utils import RunConfig
@@ -92,7 +92,7 @@ def duckdb_impl(run_config: RunConfig) -> str:
     """
 
 
-def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
+def polars_impl(run_config: RunConfig) -> QueryResult:
     """Query 9."""
     params = load_parameters(
         int(run_config.scale_factor), query_id=9, qualification=run_config.qualification
@@ -145,9 +145,13 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         bucket_values.append(bucket)
 
     # Create result DataFrame with one row (using reason table as in SQL)
-    return (
-        reason.filter(pl.col("r_reason_sk") == 1)
-        .join(combined_stats, how="cross")
-        .select(bucket_values)
-        .limit(1)
+    return QueryResult(
+        frame=(
+            reason.filter(pl.col("r_reason_sk") == 1)
+            .join(combined_stats, how="cross")
+            .select(bucket_values)
+            .limit(1)
+        ),
+        sort_by=[],
+        limit=1,
     )
