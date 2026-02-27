@@ -865,7 +865,6 @@ dependencies:
           - &fastavro fastavro>=0.22.9
           - mmh3
           - nanoarrow
-          - hypothesis>=6.131.7
           - *numba
           - *pandas
       - output_types: conda

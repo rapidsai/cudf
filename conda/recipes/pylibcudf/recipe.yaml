@@ -90,7 +90,6 @@ requirements:
     - pandas >=2.0,<2.4.0
     - libcudf =${{ version }}
     - ${{ pin_compatible("rmm", upper_bound="x.x") }}
-    - fsspec >=0.6.0
     - if: cuda_major == "12"
       then: cuda-python >=12.9.2,<13.0
       else: cuda-python >=13.0.1,<14.0
