@@ -742,8 +742,13 @@ dependencies:
           - &nvidia_ml_py nvidia-ml-py>=12
           - packaging
           - polars>=1.30,<1.39
-          # Can remove in Python 3.13+ (for CapsuleType)
           - typing_extensions>=4.0.0
+    specific:
+      - output_types: [requirements, pyproject]
+        matrices:
+          - matrix: null
+            packages:
+              - typing-extensions>=4.0.0
   run_cudf_polars_experimental:
     common:
       - output_types: [conda, requirements, pyproject]
