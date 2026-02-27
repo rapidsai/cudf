@@ -23,7 +23,6 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pyarrow.compute as pc
-from pandas.core.arrays.arrow.extension_types import ArrowIntervalType
 
 import pylibcudf as plc
 from rmm.pylibrmm.stream import DEFAULT_STREAM
@@ -1359,8 +1358,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 "yet supported in pyarrow, see: "
                 "https://github.com/apache/arrow/issues/20213"
             )
-        elif isinstance(array.type, ArrowIntervalType):
-            return cudf.core.column.IntervalColumn.from_arrow(array)
         elif pa.types.is_null(array.type):
             # default "empty" type
             array = array.cast(pa.string())
