@@ -168,6 +168,7 @@ def fixed_dtype_policy(dtype: "DtypeObj") -> "DtypePolicy":
 
 
 np_bool_dtype_policy = fixed_dtype_policy(np.dtype(np.bool_))
+cudf_string_dtype_policy = fixed_dtype_policy(CUDF_STRING_DTYPE)
 
 
 def same_kind_dtype_policy(target_dtype: "DtypeObj") -> "DtypePolicy":
@@ -175,6 +176,12 @@ def same_kind_dtype_policy(target_dtype: "DtypeObj") -> "DtypePolicy":
         return get_dtype_of_same_kind(dtypes[0], target_dtype)
 
     return policy
+
+
+bool_same_kind_policy = same_kind_dtype_policy(np.dtype(np.bool_))
+int16_same_kind_policy = same_kind_dtype_policy(np.dtype(np.int16))
+int32_same_kind_policy = same_kind_dtype_policy(np.dtype(np.int32))
+uint32_same_kind_policy = same_kind_dtype_policy(np.dtype(np.uint32))
 
 
 def list_dtype_policy(
@@ -210,11 +217,6 @@ def pandas_compatible_string_dtype_policy(
     return policy
 
 
-bool_same_kind_policy = same_kind_dtype_policy(np.dtype(np.bool_))
-int16_same_kind_policy = same_kind_dtype_policy(np.dtype(np.int16))
-int32_same_kind_policy = same_kind_dtype_policy(np.dtype(np.int32))
-uint32_same_kind_policy = same_kind_dtype_policy(np.dtype(np.uint32))
-cudf_string_dtype_policy = fixed_dtype_policy(CUDF_STRING_DTYPE)
 pandas_string_int32_policy = pandas_compatible_string_dtype_policy(
     np.dtype(np.int32)
 )
