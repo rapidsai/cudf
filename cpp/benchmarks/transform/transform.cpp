@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -73,26 +73,29 @@ static void BM_transform(nvbench::state& state)
   std::string code =
     "void transform(" + type_name + "* out, " + params + " ) {  *out = " + expression + "; }";
 
-  std::vector<cudf::column_view> inputs;
+  std::vector<cudf::transform_input> inputs;
 
   std::transform(thrust::make_counting_iterator(0),
                  thrust::make_counting_iterator(source_table->num_columns()),
                  std::back_inserter(inputs),
-                 [&source_table](int col) { return source_table->get_column(col).view(); });
+                 [&source_table](int col) {
+                   return cudf::transform_input{source_table->get_column(col).view()};
+                 });
 
   // Use the number of bytes read from global memory
   state.add_global_memory_reads<key_type>(static_cast<size_t>(num_rows) * (tree_levels + 1));
   state.add_global_memory_writes<key_type>(num_rows);
 
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
-    cudf::transform(inputs,
-                    code,
-                    cudf::data_type{cudf::type_to_id<key_type>()},
-                    false,
-                    std::nullopt,
-                    cudf::null_aware::NO,
-                    cudf::output_nullability::PRESERVE,
-                    launch.get_stream().get_stream());
+    cudf::transform_extended(inputs,
+                             code,
+                             cudf::data_type{cudf::type_to_id<key_type>()},
+                             false,
+                             std::nullopt,
+                             cudf::null_aware::NO,
+                             std::nullopt,
+                             cudf::output_nullability::PRESERVE,
+                             launch.get_stream().get_stream());
   });
 }
 

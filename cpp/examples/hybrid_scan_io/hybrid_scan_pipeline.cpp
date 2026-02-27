@@ -10,6 +10,7 @@
 #include "timer.hpp"
 
 #include <cudf/column/column_factories.hpp>
+#include <cudf/concatenate.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/io/experimental/hybrid_scan.hpp>
 #include <cudf/io/types.hpp>
@@ -59,6 +60,28 @@ enum class split_strategy : uint8_t {
   throw std::invalid_argument("Invalid split strategy");
 }
 
+/**
+ * @brief Concatenate a vector of tables and return the resultant table
+ *
+ * @param tables Vector of tables to concatenate
+ * @param stream CUDA stream to use
+ *
+ * @return Unique pointer to the resultant concatenated table.
+ */
+std::unique_ptr<cudf::table> concatenate_tables(std::vector<std::unique_ptr<cudf::table>> tables,
+                                                rmm::cuda_stream_view stream)
+{
+  if (tables.size() == 1) { return std::move(tables[0]); }
+
+  std::vector<cudf::table_view> table_views;
+  table_views.reserve(tables.size());
+  std::transform(
+    tables.begin(), tables.end(), std::back_inserter(table_views), [&](auto const& tbl) {
+      return tbl->view();
+    });
+  // Construct the final table
+  return cudf::concatenate(table_views, stream);
+}
 /**
  * @brief Read parquet input using the main parquet reader from io source
  *
@@ -279,7 +302,7 @@ void inline print_usage()
   std::cout
     << std::endl
     << "Usage: hybrid_scan_pipeline <input parquet file> <number of partitions> <io source "
-       "type> <split strategy> <iterations> <verbose>\n\n"
+       "type> <split strategy> <iterations> <verbose:Y/N>\n\n"
     << "Available IO source types: FILEPATH, HOST_BUFFER (Default), PINNED_BUFFER, "
        "DEVICE_BUFFER \n\n"
     << "Available split strategies: ROW_GROUPS (Default), BYTE_RANGES \n\n"
@@ -289,18 +312,18 @@ void inline print_usage()
 }  // namespace
 
 /**
- * @brief Main for hybrid scan example
+ * @brief Main for hybrid scan pipelined example
  *
  * Command line parameters:
  * 1. parquet input file name/path (default: "example.parquet")
  * 2. number of read partitions (default: 2)
  * 3. io source type (default: "HOST_BUFFER")
  * 4. split strategy (default: "ROW_GROUPS")
- * 5. iterations (default: 4)
+ * 5. iterations (default: 2)
  * 6. verbose (default: false)
  *
  * Example invocation from directory `cudf/cpp/examples/hybrid_scan`:
- * ./build/hybrid_scan_pipeline example.parquet 2 FILEPATH HOST_BUFFER 4 true
+ * ./build/hybrid_scan_pipeline example.parquet 2 HOST_BUFFER ROW_GROUPS 2 NO
  *
  */
 int main(int argc, char const** argv)
@@ -309,7 +332,7 @@ int main(int argc, char const** argv)
   auto num_partitions = 2;
   auto io_source_type = io_source_type::FILEPATH;
   auto split_strategy = split_strategy::ROW_GROUPS;
-  auto iterations     = 4;
+  auto iterations     = 2;
   auto verbose        = false;
 
   switch (argc) {

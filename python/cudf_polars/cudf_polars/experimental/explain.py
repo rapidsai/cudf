@@ -5,13 +5,15 @@
 from __future__ import annotations
 
 import dataclasses
+import datetime
 import functools
 from collections.abc import Mapping, Sequence
 from itertools import groupby
-from typing import TYPE_CHECKING, Self, TypeAlias
+from typing import TYPE_CHECKING, Any, Self, TypeAlias
 
 import cudf_polars.dsl.expressions.binaryop
 import cudf_polars.dsl.expressions.literal
+from cudf_polars.dsl.expressions.base import NamedExpr
 from cudf_polars.dsl.ir import (
     Filter,
     GroupBy,
@@ -25,6 +27,7 @@ from cudf_polars.dsl.translate import Translator
 from cudf_polars.dsl.traversal import traversal
 from cudf_polars.experimental.base import ColumnStat
 from cudf_polars.experimental.parallel import lower_ir_graph
+from cudf_polars.experimental.shuffle import Shuffle
 from cudf_polars.experimental.statistics import (
     collect_statistics,
 )
@@ -276,6 +279,7 @@ def _(ir: Scan) -> dict[str, Serializable]:
     return {
         "typ": ir.typ,
         "paths": [str(path) for path in ir.paths],
+        "predicate": _serialize_expr(ir.predicate) if ir.predicate else None,
     }
 
 
@@ -296,6 +300,15 @@ def _(ir: GroupBy) -> dict[str, Serializable]:
 
 
 @_serialize_properties.register
+def _(ir: Shuffle) -> dict[str, Serializable]:
+    return {
+        "keys": [ne.name for ne in ir.keys],
+        "shuffle_method": ir.shuffle_method.value,
+        "shuffler_insertion_method": ir.shuffler_insertion_method.value,
+    }
+
+
+@_serialize_properties.register
 def _(ir: Sort) -> dict[str, Serializable]:
     return {
         "by": [ne.name for ne in ir.by],
@@ -303,12 +316,24 @@ def _(ir: Sort) -> dict[str, Serializable]:
     }
 
 
-def _serialize_expr(expr: Expr) -> dict[str, Serializable]:
+def _serialize_literal(value: Any) -> Serializable:
+    match value:
+        case datetime.datetime() | datetime.date():
+            return {"type": type(value).__name__, "value": value.isoformat()}
+        case int() | float() | bool():
+            return {"type": type(value).__name__, "value": value}
+        case _:
+            return {"type": type(value).__name__, "value": str(value)}
+
+
+def _serialize_expr(expr: Expr | NamedExpr) -> dict[str, Serializable]:
     match expr:
+        case NamedExpr(name=name, value=value):
+            return {"type": "NamedExpr", "name": name, "value": _serialize_expr(value)}
         case cudf_polars.dsl.expressions.base.Col(name=name):
             return {"type": "Col", "name": name}
         case cudf_polars.dsl.expressions.literal.Literal(value=value):
-            return {"type": "Literal", "value": value}
+            return {"type": "Literal", "value": _serialize_literal(value)}
         case cudf_polars.dsl.expressions.binaryop.BinOp():
             return {
                 "op": expr.op.name,

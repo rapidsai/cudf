@@ -22,7 +22,6 @@
 #include <cub/device/device_radix_sort.cuh>
 #include <cuda/iterator>
 #include <thrust/binary_search.h>
-#include <thrust/iterator/discard_iterator.h>
 #include <thrust/sequence.h>
 #include <thrust/transform_scan.h>
 #include <thrust/unique.h>
@@ -220,11 +219,11 @@ int64_t find_next_split(int64_t cur_pos,
   return split_pos;
 }
 
-[[nodiscard]] std::tuple<int32_t, std::optional<LogicalType>> conversion_info(
+[[nodiscard]] std::tuple<int32_t, cuda::std::optional<LogicalType>> conversion_info(
   type_id column_type_id,
   type_id timestamp_type_id,
   Type physical,
-  std::optional<LogicalType> logical_type)
+  cuda::std::optional<LogicalType> logical_type)
 {
   int32_t const clock_rate =
     is_chrono(data_type{column_type_id}) ? to_clockrate(timestamp_type_id) : 0;
@@ -235,7 +234,7 @@ int64_t find_next_split(int64_t cur_pos,
     // if decimal but not outputting as float or decimal, then convert to no logical type
     if (column_type_id != type_id::FLOAT64 and
         not cudf::is_fixed_point(data_type{column_type_id})) {
-      return {clock_rate, std::nullopt};
+      return {clock_rate, cuda::std::nullopt};
     }
   }
 
@@ -320,7 +319,7 @@ adjust_cumulative_sizes(device_span<cumulative_page_info const> c_info,
   auto const key_offsets_end = cudf::detail::reduce_by_key(page_keys,
                                                            page_keys + pages.size(),
                                                            cuda::make_constant_iterator(1),
-                                                           thrust::make_discard_iterator(),
+                                                           cuda::make_discard_iterator(),
                                                            key_offsets.begin(),
                                                            cuda::std::plus<>{},
                                                            stream)
@@ -656,7 +655,7 @@ void detect_malformed_pages(device_span<PageInfo const> pages,
   auto const row_counts_end   = cudf::detail::reduce_by_key(page_keys,
                                                           page_keys + pages.size(),
                                                           size_iter,
-                                                          thrust::make_discard_iterator(),
+                                                          cuda::make_discard_iterator(),
                                                           row_counts_begin,
                                                           cuda::std::plus<>{},
                                                           stream)

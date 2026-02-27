@@ -61,19 +61,25 @@ __device__ cuda::std::pair<int, int> page_bounds(
   int const max_depth = s->col.max_nesting_depth;
   int const max_def   = s->nesting_info[max_depth - 1].max_def_level;
 
+  auto const pp = &s->page;
+  // Clamp to decoded level count; for chunked reads we may have decoded fewer values than
+  // num_input_values (skip_rows/num_rows), and the level buffers are only that large.
+  int const actual_num_values =
+    (pp->num_decoded_level_values > 0)
+      ? cuda::std::min(pp->num_input_values, pp->num_decoded_level_values)
+      : pp->num_input_values;
+
   // can skip all this if we know there are no nulls
   if (max_def == 0 && !is_bounds_pg) {
     if (t == 0) {
-      s->page.num_valids = s->num_input_values;
+      s->page.num_valids = actual_num_values;
       s->page.num_nulls  = 0;
     }
-    return {0, s->num_input_values};
+    return {0, actual_num_values};
   }
 
   int start_value = 0;
-  int end_value   = s->page.num_input_values;
-  auto const pp   = &s->page;
-  auto const col  = &s->col;
+  int end_value   = actual_num_values;
 
   // get the level data
   bool const process_nulls = should_process_nulls(s);
@@ -88,7 +94,7 @@ __device__ cuda::std::pair<int, int> page_bounds(
     __shared__ int end_val_idx;
 
     // need these for skip_rows case
-    auto const page_start_row = col->start_row + pp->chunk_row;
+    auto const page_start_row = s->col.start_row + pp->chunk_row;
     auto const max_row        = min_row + num_rows;
     auto const begin_row      = page_start_row >= min_row ? 0 : min_row - page_start_row;
     auto const max_page_rows  = pp->num_rows - begin_row;
@@ -132,7 +138,7 @@ __device__ cuda::std::pair<int, int> page_bounds(
     }
 
     int processed = 0;
-    while (processed < s->page.num_input_values) {
+    while (processed < actual_num_values) {
       if (has_repetition && (processed == 0) && (rep_decode[0] != 0)) {
         // special case where page does not begin at a row boundary
         end_row++;  // need to finish off the previous row
@@ -142,7 +148,7 @@ __device__ cuda::std::pair<int, int> page_bounds(
       // get absolute thread row index
       int const idx_t = processed + t;
       int const is_new_row =
-        idx_t < s->page.num_input_values && (!has_repetition || rep_decode[idx_t] == 0);
+        idx_t < actual_num_values && (!has_repetition || rep_decode[idx_t] == 0);
       int thread_row_count, block_row_count;
       block_scan(temp_storage.scan_storage)
         .InclusiveSum(is_new_row, thread_row_count, block_row_count);
@@ -150,8 +156,8 @@ __device__ cuda::std::pair<int, int> page_bounds(
 
       // get absolute thread leaf index
       int const is_new_leaf = process_nulls
-                                ? idx_t < s->page.num_input_values && (def_decode[idx_t] >= max_def)
-                                : idx_t < s->page.num_input_values;
+                                ? idx_t < actual_num_values && (def_decode[idx_t] >= max_def)
+                                : idx_t < actual_num_values;
       int thread_leaf_count, block_leaf_count;
       block_scan(temp_storage.scan_storage)
         .InclusiveSum(is_new_leaf, thread_leaf_count, block_leaf_count);
@@ -162,7 +168,7 @@ __device__ cuda::std::pair<int, int> page_bounds(
         // if this thread is in row bounds
         int const row_index = thread_row_count + row_count - 1;
         int const in_row_bounds =
-          idx_t < s->page.num_input_values && (row_index >= begin_row) && (row_index < end_row);
+          idx_t < actual_num_values && (row_index >= begin_row) && (row_index < end_row);
 
         int local_count, global_count;
         block_scan(temp_storage.scan_storage)
@@ -218,7 +224,7 @@ __device__ cuda::std::pair<int, int> page_bounds(
 
     if (t == 0) {
       int const v0                = skipped_values_set ? skipped_values : 0;
-      int const vn                = end_value_set ? last_input_value : s->num_input_values;
+      int const vn                = end_value_set ? last_input_value : actual_num_values;
       int const total_values      = vn - v0;
       int const total_leaf_values = end_value - start_value;
       int const num_nulls         = total_values - total_leaf_values;
@@ -230,7 +236,7 @@ __device__ cuda::std::pair<int, int> page_bounds(
   else if (process_nulls) {
     int num_nulls = 0;
     int idx_t     = t;
-    while (idx_t < s->page.num_input_values) {
+    while (idx_t < actual_num_values) {
       if (def_decode[idx_t] < max_def) { num_nulls++; }
       idx_t += preprocess_block_size;
     }
@@ -240,13 +246,13 @@ __device__ cuda::std::pair<int, int> page_bounds(
 
     if (t == 0) {
       pp->num_nulls  = null_count;
-      pp->num_valids = pp->num_input_values - null_count;
+      pp->num_valids = actual_num_values - null_count;
     }
     end_value -= null_count;
   } else {
     if (t == 0) {
       pp->num_nulls  = 0;
-      pp->num_valids = pp->num_input_values;
+      pp->num_valids = actual_num_values;
     }
   }
 

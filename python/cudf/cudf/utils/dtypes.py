@@ -159,7 +159,10 @@ def cudf_dtype_from_pa_type(typ: pa.DataType) -> DtypeObj:
     elif isinstance(typ, ArrowIntervalType):
         return cudf.IntervalDtype.from_arrow(typ)
     else:
-        return cudf.api.types.pandas_dtype(typ.to_pandas_dtype())
+        try:
+            return cudf.api.types.pandas_dtype(typ.to_pandas_dtype())
+        except NotImplementedError as err:
+            raise TypeError(f"Unsupported type: {typ}") from err
 
 
 def is_column_like(obj):
@@ -454,7 +457,7 @@ def is_pandas_nullable_extension_dtype(
     return False
 
 
-def dtype_to_pylibcudf_type(dtype) -> plc.DataType:
+def dtype_to_pylibcudf_type(dtype: DtypeObj) -> plc.DataType:
     if isinstance(dtype, pd.ArrowDtype):
         dtype = pyarrow_dtype_to_cudf_dtype(dtype)
     if isinstance(dtype, cudf.ListDtype):
@@ -479,33 +482,28 @@ def dtype_to_pylibcudf_type(dtype) -> plc.DataType:
         dtype = _get_base_dtype(dtype)
     elif isinstance(dtype, pd.StringDtype):
         dtype = CUDF_STRING_DTYPE
-    else:
-        dtype = pandas_dtypes_to_np_dtypes.get(dtype, dtype)
-        try:
-            dtype = np.dtype(dtype)
-        except TypeError:
-            dtype = cudf.dtype(dtype)
+    elif is_pandas_nullable_numpy_dtype(dtype):
+        dtype = dtype.numpy_dtype  # type: ignore[union-attr]
     return plc.DataType(SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES[dtype])
 
 
-def dtype_to_pandas_arrowdtype(dtype) -> pd.ArrowDtype:
+def dtype_to_pandas_arrowdtype(dtype: DtypeObj) -> pd.ArrowDtype:
     if isinstance(dtype, pd.ArrowDtype):
         return dtype
-    if isinstance(
+    elif isinstance(
         dtype,
         (cudf.ListDtype, cudf.StructDtype, cudf.core.dtypes.DecimalDtype),
     ):
         return pd.ArrowDtype(dtype.to_arrow())
     # libcudf types don't support timezones so convert to the base type
     elif isinstance(dtype, pd.DatetimeTZDtype):
-        dtype = _get_base_dtype(dtype)
-    else:
-        dtype = pandas_dtypes_to_np_dtypes.get(dtype, dtype)
-        try:
-            dtype = np.dtype(dtype)
-        except TypeError:
-            dtype = cudf.dtype(dtype)
-    if dtype is CUDF_STRING_DTYPE:
+        return pd.ArrowDtype(pa.timestamp(dtype.unit, str(dtype.tz)))
+    elif isinstance(dtype, pd.StringDtype):
+        return pd.ArrowDtype(pa.string())
+    elif is_pandas_nullable_numpy_dtype(dtype):
+        dtype = dtype.numpy_dtype  # type: ignore[union-attr]
+    elif dtype == np.dtype("object"):
+        # pa.from_numpy_dtype doesn't map object to string
         dtype = np.dtype("str")
     return pd.ArrowDtype(pa.from_numpy_dtype(dtype))
 

@@ -24,7 +24,6 @@
 #include <thrust/gather.h>
 #include <thrust/host_vector.h>
 #include <thrust/iterator/counting_iterator.h>
-#include <thrust/iterator/discard_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
 
 #include <functional>
@@ -324,7 +323,7 @@ dremel_data get_encoding(column_view h_col,
                                      thrust::make_counting_iterator(column_ends[level + 1]),
                                      input_parent_zip_it,
                                      input_child_zip_it,
-                                     thrust::make_discard_iterator(),
+                                     cuda::make_discard_iterator(),
                                      output_zip_it);
 
     curr_rep_values_size = ends.second - output_zip_it;
@@ -411,7 +410,7 @@ dremel_data get_encoding(column_view h_col,
                                      thrust::make_counting_iterator(curr_rep_values_size),
                                      input_parent_zip_it,
                                      input_child_zip_it,
-                                     thrust::make_discard_iterator(),
+                                     cuda::make_discard_iterator(),
                                      output_zip_it);
 
     curr_rep_values_size = ends.second - output_zip_it;

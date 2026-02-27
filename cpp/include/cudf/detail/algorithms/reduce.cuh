@@ -13,9 +13,9 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cub/device/device_reduce.cuh>
+#include <cuda/iterator>
 #include <cuda/std/functional>
 #include <cuda/stream_ref>
-#include <thrust/iterator/discard_iterator.h>
 
 namespace cudf::detail {
 
@@ -171,7 +171,7 @@ void reduce_by_key_async(KeysInputIterator keys_begin,
                                                keys_output,
                                                values_begin,
                                                values_output,
-                                               thrust::make_discard_iterator(),
+                                               cuda::make_discard_iterator(),
                                                op,
                                                num_items,
                                                stream.value()));
@@ -185,7 +185,7 @@ void reduce_by_key_async(KeysInputIterator keys_begin,
                                                keys_output,
                                                values_begin,
                                                values_output,
-                                               thrust::make_discard_iterator(),
+                                               cuda::make_discard_iterator(),
                                                op,
                                                num_items,
                                                stream.value()));

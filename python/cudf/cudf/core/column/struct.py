@@ -104,7 +104,9 @@ class StructColumn(ColumnBase):
         result = super().element_indexing(index)
         if isinstance(result, pa.Scalar):
             py_element = maybe_nested_pa_scalar_to_py(result)
-            return self.dtype._recursively_replace_fields(py_element)  # type: ignore[union-attr]
+            return StructDtype.from_struct_dtype(
+                self.dtype
+            )._recursively_replace_fields(py_element)
         return result
 
     def _cast_setitem_value(self, value: Any) -> plc.Scalar:

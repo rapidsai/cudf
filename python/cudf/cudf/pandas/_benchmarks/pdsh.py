@@ -87,7 +87,9 @@ class PDSHQueries:
             count_order=pd.NamedAgg(column="l_orderkey", aggfunc="size"),
         )
 
-        return agg.sort_values(["l_returnflag", "l_linestatus"])
+        return agg.sort_values(
+            ["l_returnflag", "l_linestatus"], ignore_index=True
+        )
 
     @staticmethod
     def q2(run_config: RunConfig) -> pd.DataFrame:
@@ -157,6 +159,7 @@ class PDSHQueries:
         sort = sel.sort_values(
             by=["s_acctbal", "n_name", "s_name", "p_partkey"],
             ascending=[False, True, True, True],
+            ignore_index=True,
         )
         return sort.head(100)
 
@@ -216,7 +219,9 @@ class PDSHQueries:
         sel = sel.rename(columns={"o_orderkey": "l_orderkey"})
 
         sorted_df = sel.sort_values(
-            by=["revenue", "o_orderdate"], ascending=[False, True]
+            by=["revenue", "o_orderdate"],
+            ascending=[False, True],
+            ignore_index=True,
         )
         return sorted_df.head(10)
 
@@ -257,7 +262,7 @@ class PDSHQueries:
             order_count=pd.NamedAgg(column="o_orderkey", aggfunc="count")
         )
 
-        return agg.sort_values(["o_orderpriority"])
+        return agg.sort_values(["o_orderpriority"], ignore_index=True)
 
     @staticmethod
     def q5(run_config: RunConfig) -> pd.DataFrame:
@@ -330,7 +335,7 @@ class PDSHQueries:
         jn5["revenue"] = jn5.l_extendedprice * (1.0 - jn5.l_discount)
 
         gb = jn5.groupby("n_name", as_index=False)["revenue"].sum()
-        return gb.sort_values("revenue", ascending=False)
+        return gb.sort_values("revenue", ascending=False, ignore_index=True)
 
     @staticmethod
     def q6(run_config: RunConfig) -> pd.DataFrame:
@@ -447,7 +452,9 @@ class PDSHQueries:
         )
         agg = gb.agg(revenue=pd.NamedAgg(column="volume", aggfunc="sum"))
 
-        return agg.sort_values(by=["supp_nation", "cust_nation", "l_year"])
+        return agg.sort_values(
+            by=["supp_nation", "cust_nation", "l_year"], ignore_index=True
+        )
 
     @staticmethod
     def q8(run_config: RunConfig) -> pd.DataFrame:
@@ -529,7 +536,7 @@ class PDSHQueries:
         gb = jn7.groupby("o_year", as_index=False)
         agg = gb.apply(udf, include_groups=False)
         agg.columns = ["o_year", "mkt_share"]
-        return agg.sort_values("o_year")
+        return agg.sort_values("o_year", ignore_index=True)
 
     @staticmethod
     def q9(run_config: RunConfig) -> pd.DataFrame:
@@ -600,10 +607,9 @@ class PDSHQueries:
 
         gb = jn5.groupby(["nation", "o_year"], as_index=False, sort=False)
         agg = gb.agg(sum_profit=pd.NamedAgg(column="amount", aggfunc="sum"))
-        sorted_df = agg.sort_values(
-            by=["nation", "o_year"], ascending=[True, False]
+        return agg.sort_values(
+            by=["nation", "o_year"], ascending=[True, False], ignore_index=True
         )
-        return sorted_df.reset_index(drop=True)
 
     @staticmethod
     def q10(run_config: RunConfig) -> pd.DataFrame:
@@ -688,7 +694,9 @@ class PDSHQueries:
             ],
         ]
 
-        return sel.sort_values("revenue", ascending=False).head(20)
+        return sel.sort_values(
+            "revenue", ascending=False, ignore_index=True
+        ).head(20)
 
     @staticmethod
     def q11(run_config: RunConfig) -> pd.DataFrame:
@@ -735,7 +743,7 @@ class PDSHQueries:
         agg = gb.agg(value=pd.NamedAgg(column="value", aggfunc="sum"))
 
         result = agg[agg["value"] > threshold]
-        return result.sort_values("value", ascending=False)
+        return result.sort_values("value", ascending=False, ignore_index=True)
 
     @staticmethod
     def q12(run_config: RunConfig) -> pd.DataFrame:
@@ -793,7 +801,7 @@ class PDSHQueries:
             low_line_count=pd.NamedAgg(column="low_line_count", aggfunc="sum"),
         )
 
-        return agg.sort_values("l_shipmode")
+        return agg.sort_values("l_shipmode", ignore_index=True)
 
     @staticmethod
     def q13(run_config: RunConfig) -> pd.DataFrame:
@@ -837,7 +845,9 @@ class PDSHQueries:
         agg2.columns = ["c_count", "custdist"]
 
         return agg2.sort_values(
-            by=["custdist", "c_count"], ascending=[False, False]
+            by=["custdist", "c_count"],
+            ascending=[False, False],
+            ignore_index=True,
         )
 
     @staticmethod
@@ -929,7 +939,7 @@ class PDSHQueries:
             :, ["s_suppkey", "s_name", "s_address", "s_phone", "total_revenue"]
         ]
 
-        return result.sort_values("s_suppkey")
+        return result.sort_values("s_suppkey", ignore_index=True)
 
     @staticmethod
     def q16(run_config: RunConfig) -> pd.DataFrame:
@@ -985,6 +995,7 @@ class PDSHQueries:
         return agg.sort_values(
             by=["supplier_cnt", "p_brand", "p_type", "p_size"],
             ascending=[False, True, True, True],
+            ignore_index=True,
         )
 
     @staticmethod
@@ -1101,7 +1112,9 @@ class PDSHQueries:
         )
 
         return result.sort_values(
-            by=["o_totalprice", "o_orderdat"], ascending=[False, True]
+            by=["o_totalprice", "o_orderdat"],
+            ascending=[False, True],
+            ignore_index=True,
         ).head(100)
 
     @staticmethod
@@ -1258,7 +1271,7 @@ class PDSHQueries:
 
         result = jn4.loc[:, ["s_name", "s_address"]]
 
-        return result.sort_values("s_name")
+        return result.sort_values("s_name", ignore_index=True)
 
     @staticmethod
     def q21(run_config: RunConfig) -> pd.DataFrame:
@@ -1336,7 +1349,9 @@ class PDSHQueries:
         agg.columns = ["s_name", "numwait"]
 
         return agg.sort_values(
-            by=["numwait", "s_name"], ascending=[False, True]
+            by=["numwait", "s_name"],
+            ascending=[False, True],
+            ignore_index=True,
         ).head(100)
 
     @staticmethod
@@ -1395,7 +1410,7 @@ class PDSHQueries:
             totacctbal=pd.NamedAgg(column="c_acctbal", aggfunc="sum"),
         )
 
-        return agg.sort_values("cntrycode")
+        return agg.sort_values("cntrycode", ignore_index=True)
 
 
 if __name__ == "__main__":

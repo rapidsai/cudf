@@ -35,7 +35,7 @@ follow_imports = "normal"
 skip = "./.git,./.github,./cpp/build,.*egg-info.*,./.mypy_cache,./cpp/tests,./python/cudf/cudf/tests,./java/src/test,./cpp/include/cudf_test/cxxopts.hpp"
 # ignore short words, and typename parameters like OffsetT
 ignore-regex = "\\b(.{1,4}|[A-Z]\\w*T)\\b"
-ignore-words-list = "inout,unparseable,falsy,couldn,Couldn,thirdparty"
+ignore-words-list = "inout,unparseable,falsy,couldn,Couldn,thirdparty,womens"
 builtin = "clear"
 quiet-level = 3
 

@@ -51,8 +51,7 @@ from cudf.core.column.column import concat_columns
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.common import pipe
 from cudf.core.copy_types import BooleanMask, GatherMap
-from cudf.core.dtype.validators import is_dtype_obj_numeric
-from cudf.core.dtypes import ListDtype
+from cudf.core.dtype.validators import is_dtype_obj_list, is_dtype_obj_numeric
 from cudf.core.frame import Frame
 from cudf.core.groupby.groupby import GroupBy
 from cudf.core.index import Index, RangeIndex, _index_from_data, ensure_index
@@ -103,6 +102,7 @@ if TYPE_CHECKING:
         DtypeObj,
         ScalarLike,
     )
+    from cudf.core.column.lists import ListColumn
     from cudf.core.series import Series
 
 
@@ -206,9 +206,11 @@ def _indices_from_labels(obj, labels):
     # so we will sort it with its initial ordering which is stored
     # in column "__"
     lhs = cudf.DataFrame(
-        {"__": as_column(range(len(idx_labels)))}, index=idx_labels
+        {"__": ColumnBase.from_range(range(len(idx_labels)))}, index=idx_labels
     )
-    rhs = cudf.DataFrame({"_": as_column(range(len(obj)))}, index=obj.index)
+    rhs = cudf.DataFrame(
+        {"_": ColumnBase.from_range(range(len(obj)))}, index=obj.index
+    )
     return lhs.join(rhs).sort_values(by=["__", "_"])["_"]
 
 
@@ -2968,7 +2970,7 @@ class IndexedFrame(Frame):
                 len(gather_map.column) == len(self)
                 and len(self) > 0
                 and gather_map.column.equals(
-                    as_column(cp.arange(start=0, stop=len(self)))
+                    ColumnBase.from_range(range(len(self)))
                 )
             )
         except (AttributeError, TypeError):
@@ -3066,10 +3068,9 @@ class IndexedFrame(Frame):
                 GatherMap.from_column_unchecked(
                     cast(
                         cudf.core.column.numerical.NumericalColumn,
-                        as_column(
-                            range(start, stop, stride),
-                            dtype=SIZE_TYPE_DTYPE,
-                        ),
+                        ColumnBase.from_range(
+                            range(start, stop, stride)
+                        ).astype(SIZE_TYPE_DTYPE),
                     ),
                     len(self),
                     nullify=False,
@@ -3302,9 +3303,7 @@ class IndexedFrame(Frame):
             distinct = ColumnBase.create(
                 plc_column, dtype=dtype_from_pylibcudf_column(plc_column)
             )
-        result = as_column(
-            True, length=len(self), dtype=bool
-        )._scatter_by_column(
+        result = as_column(True, length=len(self))._scatter_by_column(
             cast(cudf.core.column.NumericalColumn, distinct),
             pa_scalar_to_plc_scalar(pa.scalar(False)),
             bounds_check=False,
@@ -3848,9 +3847,9 @@ class IndexedFrame(Frame):
         # to recover ordering after index alignment.
         sort_col_id = str(uuid4())
         if how == "left":
-            lhs[sort_col_id] = as_column(range(len(lhs)))
+            lhs[sort_col_id] = ColumnBase.from_range(range(len(lhs)))
         elif how == "right":
-            rhs[sort_col_id] = as_column(range(len(rhs)))
+            rhs[sort_col_id] = ColumnBase.from_range(range(len(rhs)))
 
         result = lhs.join(rhs, how=how, sort=sort)
         if how in ("left", "right"):
@@ -5490,30 +5489,24 @@ class IndexedFrame(Frame):
         return None
 
     @_performance_tracking
-    def _explode(self, explode_column: Any, ignore_index: bool):
+    def _explode(self, explode_label: Hashable, ignore_index: bool):
         # Helper function for `explode` in `Series` and `Dataframe`, explodes a
         # specified nested column. Other columns' corresponding rows are
         # duplicated. If ignore_index is set, the original index is not
         # exploded and will be replaced with a `RangeIndex`.
-        dtype = self._data[explode_column].dtype
-        is_list_dtype = isinstance(dtype, ListDtype) or (
-            isinstance(dtype, pd.ArrowDtype)
-            and isinstance(dtype.pyarrow_dtype, pa.ListType)
-        )
-        if not is_list_dtype:
+        explode_column = self._data[explode_label]
+        if not is_dtype_obj_list(explode_column.dtype):
             result = self.copy()
             if ignore_index:
                 result.index = RangeIndex(len(result))
             return result
 
-        column_index = self._column_names.index(explode_column)
+        column_index = self._column_names.index(explode_label)
         idx_cols = self.index._columns if not ignore_index else ()
 
         # Build result dtypes: for the exploded column, use its element type
         # to preserve struct dtype key names; for all others, preserve original dtype
-        element_type = cast(
-            ListDtype, self._columns[column_index].dtype
-        ).element_type
+        element_type = cast("ListColumn", explode_column).element_type
         explode_column_idx = column_index + len(idx_cols)
         result_dtypes = [
             element_type if i == explode_column_idx else col.dtype

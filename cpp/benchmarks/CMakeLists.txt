@@ -62,7 +62,7 @@ add_library(
 )
 target_link_libraries(
   cudf_benchmark_common PRIVATE cudf_datagen $<TARGET_NAME_IF_EXISTS:conda_env> GTest::gmock
-                                GTest::gtest
+                                GTest::gtest kvikio::kvikio
 )
 
 add_custom_command(
@@ -99,8 +99,8 @@ endfunction()
 # ##################################################################################################
 # * copying benchmarks ----------------------------------------------------------------------------
 ConfigureNVBench(
-  COPYING_NVBENCH copying/concatenate.cpp copying/copy_if_else.cpp copying/gather.cu
-  copying/scatter.cu copying/shift.cpp
+  COPYING_NVBENCH copying/concatenate.cpp copying/copy_if_else.cpp copying/gather.cpp
+  copying/scatter.cpp copying/shift.cpp
 )
 
 # ##################################################################################################
@@ -153,6 +153,7 @@ ConfigureNVBench(
   join/distinct_join.cu
   join/filter_join_indices.cu
   join/generate_input_tables.cu
+  join/jit_filter_join_indices.cu
   join/multiplicity_join.cu
   join/sort_merge_join.cu
   join/join_heuristics.cu

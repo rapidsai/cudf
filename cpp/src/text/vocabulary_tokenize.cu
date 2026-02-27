@@ -381,9 +381,7 @@ std::unique_ptr<cudf::column> tokenize_with_vocabulary(cudf::strings_column_view
                                    std::move(token_offsets),
                                    std::move(tokens),
                                    input.null_count(),
-                                   cudf::detail::copy_bitmask(input.parent(), stream, mr),
-                                   stream,
-                                   mr);
+                                   cudf::detail::copy_bitmask(input.parent(), stream, mr));
   }
 
   // longer strings perform better with warp-parallel approach
@@ -418,7 +416,7 @@ std::unique_ptr<cudf::column> tokenize_with_vocabulary(cudf::strings_column_view
 
   auto d_tmp_offsets = rmm::device_uvector<int64_t>(total_count + 1, stream);
   d_tmp_offsets.set_element(total_count, chars_size, stream);
-  cudf::detail::copy_if(
+  cudf::detail::copy_if_async(
     thrust::counting_iterator<int64_t>(0),
     thrust::counting_iterator<int64_t>(chars_size),
     d_tmp_offsets.begin(),
@@ -450,9 +448,7 @@ std::unique_ptr<cudf::column> tokenize_with_vocabulary(cudf::strings_column_view
                                  std::move(token_offsets),
                                  std::move(tokens),
                                  input.null_count(),
-                                 cudf::detail::copy_bitmask(input.parent(), stream, mr),
-                                 stream,
-                                 mr);
+                                 cudf::detail::copy_bitmask(input.parent(), stream, mr));
 }
 
 }  // namespace detail

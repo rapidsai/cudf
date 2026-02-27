@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 import collections
@@ -1962,3 +1962,19 @@ def test_df_constructor_dtype(all_supported_types_as_str):
     )
 
     assert_eq(expect, got)
+
+
+def test_build_df_from_nullable_pandas_dtype(
+    all_supported_pandas_nullable_extension_dtypes,
+):
+    scalar, dtype = all_supported_pandas_nullable_extension_dtypes
+
+    expected = pd.DataFrame({"a": [scalar, pd.NA]}, dtype=dtype)
+    result = cudf.DataFrame(expected)
+
+    assert result["a"].dtype == expected["a"].dtype
+
+    expect_mask = expected["a"].isna()
+    got_mask = result["a"].isna().to_numpy()
+
+    np.testing.assert_array_equal(expect_mask, got_mask)
