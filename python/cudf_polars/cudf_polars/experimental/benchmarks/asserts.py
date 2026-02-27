@@ -400,11 +400,8 @@ def _compare_sorted_frames_with_float_sort(
     polars_kwargs
         Keyword arguments to pass to polars.testing.assert_frame_equal.
     """
-    if len(left) != len(right):
-        raise ValidationError(
-            message="Row count mismatch",
-            details={"left_rows": len(left), "right_rows": len(right)},
-        )
+    # this is validated earlier in assert_tpch_result_equal, but double-check.
+    assert len(left) == len(right), "Row count mismatch"
 
     available: set[int] = set(range(len(right)))
     right_with_idx = right.with_row_index("_idx")
