@@ -266,7 +266,7 @@ class Column:
         if plc.sorting.is_sorted(
             plc.Table([self.obj]), [order], [null_order], stream=stream
         ):
-            self.sorted = plc.types.Sorted.YES
+            self.is_sorted = plc.types.Sorted.YES
             self.order = order
             self.null_order = null_order
             return True
