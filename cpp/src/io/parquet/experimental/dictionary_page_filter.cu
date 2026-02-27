@@ -1456,6 +1456,7 @@ class dictionary_expression_converter : public equality_literals_collector {
       }  // For all other expressions, push the `_always_true` expression
       else {
         _dictionary_expr.push(ast::operation{ast_operator::IDENTITY, *_always_true});
+        return *_always_true;
       }
     }  // Visit operands and push expression for `expr op expr` form
     else if (lhs_kind == operand_kind::EXPRESSION and rhs_kind == operand_kind::EXPRESSION) {

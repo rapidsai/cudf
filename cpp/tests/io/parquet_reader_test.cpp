@@ -1659,6 +1659,74 @@ TEST_F(ParquetReaderTest, ExtendedFilterExpressions)
     auto result = cudf::io::read_parquet(read_opts);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *expected);
   }
+
+  // Filter: NOT(col_a NULL_EQUAL 10)
+  {
+    auto literal_10_value = cudf::numeric_scalar<int32_t>(10);
+    auto literal_10       = cudf::ast::literal(literal_10_value);
+    auto inner  = cudf::ast::operation(cudf::ast::ast_operator::NULL_EQUAL, col_ref_a, literal_10);
+    auto filter = cudf::ast::operation(cudf::ast::ast_operator::NOT, inner);
+
+    auto predicate = cudf::compute_column(written_table, filter);
+    auto expected  = cudf::apply_boolean_mask(written_table, *predicate);
+
+    cudf::io::parquet_reader_options read_opts =
+      cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath}).filter(filter);
+    auto result = cudf::io::read_parquet(read_opts);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *expected);
+  }
+
+  // Filter: col_a NULL_EQUAL 10
+  {
+    auto literal_10_value = cudf::numeric_scalar<int32_t>(10);
+    auto literal_10       = cudf::ast::literal(literal_10_value);
+    auto filter = cudf::ast::operation(cudf::ast::ast_operator::NULL_EQUAL, col_ref_a, literal_10);
+
+    auto predicate = cudf::compute_column(written_table, filter);
+    auto expected  = cudf::apply_boolean_mask(written_table, *predicate);
+
+    cudf::io::parquet_reader_options read_opts =
+      cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath}).filter(filter);
+    auto result = cudf::io::read_parquet(read_opts);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *expected);
+  }
+
+  // Filter: NOT(col_a NULL_EQUAL 10) AND (col_a < 50). The NOT(NULL_EQUAL) is always_true
+  // for stats (unsupported op), so the AND reduces to just the stats filter for col_a < 50.
+  {
+    auto literal_50_value = cudf::numeric_scalar<int32_t>(50);
+    auto literal_50       = cudf::ast::literal(literal_50_value);
+    auto literal_10_value = cudf::numeric_scalar<int32_t>(10);
+    auto literal_10       = cudf::ast::literal(literal_10_value);
+    auto null_eq = cudf::ast::operation(cudf::ast::ast_operator::NULL_EQUAL, col_ref_a, literal_10);
+    auto lhs     = cudf::ast::operation(cudf::ast::ast_operator::NOT, null_eq);
+    auto rhs     = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref_a, literal_50);
+    auto filter  = cudf::ast::operation(cudf::ast::ast_operator::LOGICAL_AND, lhs, rhs);
+
+    auto predicate = cudf::compute_column(written_table, filter);
+    auto expected  = cudf::apply_boolean_mask(written_table, *predicate);
+
+    cudf::io::parquet_reader_options read_opts =
+      cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath}).filter(filter);
+    auto result = cudf::io::read_parquet(read_opts);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *expected);
+  }
+
+  // Filter: NOT(col_a < col_b). NOT wrapping a col-op-col comparison. The inner
+  // col_a < col_b is unsupported for stats, so it becomes always_true. NOT(always_true)
+  // is also always_true. All rows returned, then row-level filtering applies.
+  {
+    auto inner  = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref_a, col_ref_b);
+    auto filter = cudf::ast::operation(cudf::ast::ast_operator::NOT, inner);
+
+    auto predicate = cudf::compute_column(written_table, filter);
+    auto expected  = cudf::apply_boolean_mask(written_table, *predicate);
+
+    cudf::io::parquet_reader_options read_opts =
+      cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath}).filter(filter);
+    auto result = cudf::io::read_parquet(read_opts);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *expected);
+  }
 }
 
 TEST_F(ParquetReaderTest, FilterNamedExpression)

@@ -143,7 +143,7 @@ std::reference_wrapper<ast::expression const> stats_expression_converter::visit(
         return *_always_true;
       }
     } else {
-      // For all other unary operators, visit operand and push expression
+      // For all other expression forms, visit operand and push expression
       auto new_operands = visit_operands(expr.get_operands());
       if (&new_operands.front().get() == _always_true.get()) {
         // Pass through the _always_true child operand as is
@@ -211,7 +211,10 @@ std::reference_wrapper<ast::expression const> stats_expression_converter::visit(
         _stats_expr.push(ast::operation{op, vmax, literal});
         break;
       }
-      default: CUDF_FAIL("Unsupported binary operation in Statistics AST");
+      default: {
+        _stats_expr.push(ast::operation{ast_operator::IDENTITY, *_always_true});
+        return *_always_true;
+      }
     };
   }  // Visit operands and push expression for `expr op expr` form
   else if (lhs_kind == operand_kind::EXPRESSION and rhs_kind == operand_kind::EXPRESSION) {

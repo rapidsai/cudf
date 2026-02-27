@@ -1054,15 +1054,63 @@ TEST_F(HybridScanFiltersTest, FilterRowGroupsWithDictionary)
 
   // Filtering - (50 == table[0]) AND (table[0] != table[2])
   {
-    auto literal_50_value = cudf::numeric_scalar<T>(50);
-    auto literal_50       = cudf::ast::literal(literal_50_value);
-    auto lhs = cudf::ast::operation(cudf::ast::ast_operator::EQUAL, col0_ref, literal_50);
+    auto uint_literal_value = cudf::numeric_scalar<T>(50);
+    auto uint_literal       = cudf::ast::literal(uint_literal_value);
+    auto lhs = cudf::ast::operation(cudf::ast::ast_operator::EQUAL, col0_ref, uint_literal);
     auto rhs = cudf::ast::operation(cudf::ast::ast_operator::NOT_EQUAL, col0_ref, col2_ref);
     auto const filter_expression =
       cudf::ast::operation(cudf::ast::ast_operator::LOGICAL_AND, lhs, rhs);
     auto const result = filter_row_groups_with_dictionaries(
       datasource_ref, reader_ref, filter_expression, stream, mr);
     auto const expected = std::vector<cudf::size_type>{1};
+    EXPECT_EQ(result, expected);
+  }
+
+  // Filtering - NOT(table[0] == 50)
+  {
+    auto uint_literal_value = cudf::numeric_scalar<T>(50);
+    auto uint_literal       = cudf::ast::literal(uint_literal_value);
+    auto inner = cudf::ast::operation(cudf::ast::ast_operator::EQUAL, col0_ref, uint_literal);
+    auto const filter_expression = cudf::ast::operation(cudf::ast::ast_operator::NOT, inner);
+    auto const result            = filter_row_groups_with_dictionaries(
+      datasource_ref, reader_ref, filter_expression, stream, mr);
+    auto const expected = std::vector<cudf::size_type>{0, 2, 3};
+    EXPECT_EQ(result, expected);
+  }
+
+  // Filtering - NOT(table[0] == 50) AND (table[0] NULL_EQUAL 100)
+  {
+    auto literal_50_value  = cudf::numeric_scalar<T>(50);
+    auto literal_50        = cudf::ast::literal(literal_50_value);
+    auto literal_100_value = cudf::numeric_scalar<T>(100);
+    auto literal_100       = cudf::ast::literal(literal_100_value);
+    auto eq_50     = cudf::ast::operation(cudf::ast::ast_operator::EQUAL, col0_ref, literal_50);
+    auto not_eq_50 = cudf::ast::operation(cudf::ast::ast_operator::NOT, eq_50);
+    auto null_eq_100 =
+      cudf::ast::operation(cudf::ast::ast_operator::NULL_EQUAL, col0_ref, literal_100);
+    auto const filter_expression =
+      cudf::ast::operation(cudf::ast::ast_operator::LOGICAL_AND, not_eq_50, null_eq_100);
+    auto const result = filter_row_groups_with_dictionaries(
+      datasource_ref, reader_ref, filter_expression, stream, mr);
+    auto const expected = std::vector<cudf::size_type>{0, 2, 3};
+    EXPECT_EQ(result, expected);
+  }
+
+  // Filtering - NOT(table[0] == 50) OR NOT(table[2] == "0100")
+  {
+    auto literal_50_value  = cudf::numeric_scalar<T>(50);
+    auto literal_50        = cudf::ast::literal(literal_50_value);
+    auto str_literal_value = cudf::string_scalar("0100");
+    auto str_literal       = cudf::ast::literal(str_literal_value);
+    auto eq_50      = cudf::ast::operation(cudf::ast::ast_operator::EQUAL, col0_ref, literal_50);
+    auto not_eq_50  = cudf::ast::operation(cudf::ast::ast_operator::NOT, eq_50);
+    auto eq_str     = cudf::ast::operation(cudf::ast::ast_operator::EQUAL, col2_ref, str_literal);
+    auto not_eq_str = cudf::ast::operation(cudf::ast::ast_operator::NOT, eq_str);
+    auto const filter_expression =
+      cudf::ast::operation(cudf::ast::ast_operator::LOGICAL_OR, not_eq_50, not_eq_str);
+    auto const result = filter_row_groups_with_dictionaries(
+      datasource_ref, reader_ref, filter_expression, stream, mr);
+    auto const expected = std::vector<cudf::size_type>{0, 2, 3};
     EXPECT_EQ(result, expected);
   }
 }
