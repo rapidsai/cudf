@@ -95,7 +95,6 @@ requirements:
       then: cuda-python >=12.9.2,<13.0
       else: cuda-python >=13.0.1,<14.0
     - nvtx >=0.2.1
-    - packaging
   run_constraints:
     - numpy >=1.23,<3.0
     - pyarrow>=19.0.0

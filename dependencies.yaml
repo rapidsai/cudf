@@ -690,7 +690,6 @@ dependencies:
       - output_types: [conda, requirements, pyproject]
         packages:
           - nvtx>=0.2.1
-          - packaging
     specific:
       - output_types: [conda, requirements, pyproject]
         matrices:
