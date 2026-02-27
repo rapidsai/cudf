@@ -801,7 +801,7 @@ class DatetimeColumn(TemporalBaseColumn):
         tz: str | None,
         ambiguous: Literal["NaT"] = "NaT",
         nonexistent: Literal["NaT"] = "NaT",
-    ) -> DatetimeColumn:
+    ) -> DatetimeColumn | DatetimeTZColumn:
         if tz is None:
             return self.copy()
         ambiguous, nonexistent = _check_ambiguous_and_nonexistent(
@@ -828,9 +828,12 @@ class DatetimeColumn(TemporalBaseColumn):
         )
         offsets_to_utc = offsets.take(indices, nullify=True)
         gmt_data = localized - offsets_to_utc
-        return cast(
-            DatetimeColumn, ColumnBase.create(gmt_data.plc_column, dtype)
+        result = cast(
+            DatetimeTZColumn, ColumnBase.create(gmt_data.plc_column, dtype)
         )
+        # Avoid re-computing local times from UTC times
+        result._local_time = localized
+        return result
 
     def tz_convert(self, tz: str | None) -> DatetimeColumn:
         raise TypeError(
@@ -845,9 +848,16 @@ class DatetimeTZColumn(DatetimeColumn):
         nullable: bool = False,
         arrow_type: bool = False,
     ) -> pd.Index:
-        if arrow_type or nullable or isinstance(self.dtype, pd.ArrowDtype):
+        if arrow_type or isinstance(self.dtype, pd.ArrowDtype):
             return super().to_pandas(nullable=nullable, arrow_type=arrow_type)
+        elif nullable and not arrow_type:
+            raise NotImplementedError(
+                "There is no nullable pandas type for datetime with timezone."
+            )
         else:
+            # TODO: Using self._utc_time.to_pandas().tz_localize("UTC").tz_convert(self.tz)
+            # would be the more definitive conversion, but test_localize_nonexistent
+            # and test_localize_ambiguous fail (off by ~1 hour) for some obscure timezones
             return self._local_time.to_pandas().tz_localize(
                 self.tz,
                 ambiguous="NaT",
@@ -855,9 +865,10 @@ class DatetimeTZColumn(DatetimeColumn):
             )
 
     def to_arrow(self) -> pa.Array:
-        # Cast to expected timestamp array type for assume_timezone
-        local_array = cast(pa.TimestampArray, self._local_time.to_arrow())
-        return pa.compute.assume_timezone(local_array, str(self.tz))
+        pa_array = super().to_arrow()
+        return pa_array.cast(pa.timestamp(self.time_unit, "UTC")).cast(
+            pa.timestamp(self.time_unit, str(self.tz))
+        )
 
     @functools.cached_property
     def time_unit(self) -> str:
@@ -882,7 +893,7 @@ class DatetimeTZColumn(DatetimeColumn):
         base_dtype = _get_base_dtype(self.dtype)
         indices = (
             transition_times.astype(base_dtype).searchsorted(
-                self.astype(base_dtype), side="right"
+                self._utc_time.astype(base_dtype), side="right"
             )
             - 1
         )
@@ -893,9 +904,9 @@ class DatetimeTZColumn(DatetimeColumn):
         return self._local_time.as_string_column(dtype)
 
     def as_datetime_column(
-        self, dtype: np.dtype | pd.DatetimeTZDtype
+        self, dtype: pd.ArrowDtype | pd.DatetimeTZDtype
     ) -> DatetimeColumn:
-        if isinstance(dtype, pd.DatetimeTZDtype) and dtype != self.dtype:
+        if isinstance(dtype, pd.DatetimeTZDtype):
             if dtype.unit != self.time_unit:
                 casted_plc = (
                     super()
@@ -908,7 +919,27 @@ class DatetimeTZColumn(DatetimeColumn):
             else:
                 casted = self
             return casted.tz_convert(str(dtype.tz))
-        return super().as_datetime_column(dtype)
+        elif isinstance(dtype, pd.ArrowDtype):
+            if dtype.pyarrow_dtype.unit != self.time_unit:
+                casted_plc = (
+                    super()
+                    .as_datetime_column(_get_base_dtype(dtype))
+                    .plc_column
+                )
+                casted = cast(
+                    DatetimeTZColumn, ColumnBase.create(casted_plc, dtype)
+                )
+            else:
+                casted = self
+            if dtype.pyarrow_dtype.tz != self.tz:
+                raise NotImplementedError(
+                    "Casting to a different timezone with ArrowDtype is not supported."
+                )
+            return casted
+        raise TypeError(
+            "Cannot use .astype to convert from timezone-aware dtype to timezone-naive dtype. "
+            "Use tz_localize(None) instead."
+        )
 
     def _get_dt_field(
         self, field: plc.datetime.DatetimeComponent
@@ -924,7 +955,9 @@ class DatetimeTZColumn(DatetimeColumn):
                 plc_result, dtype_from_pylibcudf_column(plc_result)
             )
             # cast to int32 for pandas compatibility (no-op if already int32)
-            result = result.astype(np.dtype("int32"))
+            result = result.astype(
+                get_dtype_of_same_kind(self.dtype, np.dtype("int32"))
+            )
             return result
 
     def __repr__(self) -> str:
@@ -953,16 +986,18 @@ class DatetimeTZColumn(DatetimeColumn):
             "Use `tz_convert` to convert between time zones."
         )
 
-    def tz_convert(self, tz: str | None) -> DatetimeColumn:
+    def tz_convert(self, tz: str | None) -> DatetimeColumn | DatetimeTZColumn:
         if tz is None:
             return self._utc_time
         elif tz == str(self.tz):
             return self.copy()
 
-        utc_time = self._utc_time
         return cast(
-            DatetimeColumn,
+            DatetimeTZColumn,
             ColumnBase.create(
-                utc_time.plc_column, pd.DatetimeTZDtype(utc_time.time_unit, tz)
+                self.plc_column,
+                get_compatible_timezone(
+                    pd.DatetimeTZDtype(self.time_unit, tz)
+                ),
             ),
         )
