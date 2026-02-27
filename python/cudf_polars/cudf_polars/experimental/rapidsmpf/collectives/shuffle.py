@@ -8,9 +8,10 @@ from typing import TYPE_CHECKING, Any
 
 from rapidsmpf.integrations.cudf.partition import (
     partition_and_pack as py_partition_and_pack,
+    split_and_pack as py_split_and_pack,
     unpack_and_concat as py_unpack_and_concat,
 )
-from rapidsmpf.streaming.coll.shuffler import ShufflerAsync
+from rapidsmpf.streaming.coll.shuffler import PartitionAssignment, ShufflerAsync
 from rapidsmpf.streaming.core.actor import define_actor
 from rapidsmpf.streaming.core.message import Message
 from rapidsmpf.streaming.cudf.channel_metadata import (
@@ -57,6 +58,10 @@ class ShuffleManager:
         The columns to hash.
     collective_id: int
         The collective ID.
+    partition_assignment: PartitionAssignment, optional
+        How to assign partition IDs to ranks: ROUND_ROBIN (default) or
+        CONTIGUOUS. Use CONTIGUOUS for sort so each rank gets adjacent
+        partition IDs and concatenation order matches global order.
     """
 
     def __init__(
@@ -65,6 +70,8 @@ class ShuffleManager:
         num_partitions: int,
         columns_to_hash: tuple[int, ...],
         collective_id: int,
+        *,
+        partition_assignment: PartitionAssignment = PartitionAssignment.ROUND_ROBIN,
     ):
         self.context = context
         self.num_partitions = num_partitions
@@ -73,6 +80,7 @@ class ShuffleManager:
             context,
             collective_id,
             num_partitions,
+            partition_assignment=partition_assignment,
         )
 
     def local_partitions(self) -> list[int]:
@@ -98,6 +106,15 @@ class ShuffleManager:
         )
 
         # Insert into shuffler
+        self.shuffler.insert(partitioned_chunks)
+
+    def insert_chunk_sorted(self, chunk: TableChunk, splits: list[int]) -> None:
+        partitioned_chunks = py_split_and_pack(
+            table=chunk.table_view(),
+            splits=splits,
+            stream=chunk.stream,
+            br=self.context.br(),
+        )
         self.shuffler.insert(partitioned_chunks)
 
     async def insert_finished(self) -> None:

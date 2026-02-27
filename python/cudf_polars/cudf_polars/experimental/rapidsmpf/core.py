@@ -14,6 +14,7 @@ from rapidsmpf.config import Options, get_environment_variables
 from rapidsmpf.memory.buffer import MemoryType
 from rapidsmpf.memory.buffer_resource import BufferResource, LimitAvailableMemory
 from rapidsmpf.memory.pinned_memory_resource import PinnedMemoryResource
+from rapidsmpf.progress_thread import ProgressThread
 from rapidsmpf.rmm_resource_adaptor import RmmResourceAdaptor
 from rapidsmpf.streaming.core.actor import (
     run_actor_network,
@@ -25,13 +26,21 @@ from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 import rmm
 
 import cudf_polars.experimental.rapidsmpf.collectives.shuffle
+import cudf_polars.experimental.rapidsmpf.collectives.sort
 import cudf_polars.experimental.rapidsmpf.groupby
 import cudf_polars.experimental.rapidsmpf.io
 import cudf_polars.experimental.rapidsmpf.join
 import cudf_polars.experimental.rapidsmpf.repartition
 import cudf_polars.experimental.rapidsmpf.union  # noqa: F401
 from cudf_polars.containers import DataFrame
-from cudf_polars.dsl.ir import DataFrameScan, IRExecutionContext, Join, Scan, Union
+from cudf_polars.dsl.ir import (
+    DataFrameScan,
+    IRExecutionContext,
+    Join,
+    Scan,
+    Slice,
+    Union,
+)
 from cudf_polars.dsl.traversal import CachingVisitor, traversal
 from cudf_polars.experimental.dispatch import lower_ir_node
 from cudf_polars.experimental.rapidsmpf.collectives import ReserveOpIDs
@@ -215,7 +224,7 @@ def evaluate_pipeline(
         )
         if isinstance(config_options.cuda_stream_policy, CUDAStreamPoolConfig):
             stream_pool = config_options.cuda_stream_policy.build()
-        local_comm = new_communicator(options)
+        local_comm = new_communicator(options, ProgressThread())
         br = BufferResource(
             mr,
             pinned_mr=pinned_mr,
@@ -260,6 +269,9 @@ def evaluate_pipeline(
         # Keep chunks alive until after concatenation to prevent
         # use-after-free with stream-ordered allocations
         messages = output.release()
+        # Sort by sequence_number so partition-ordered output (e.g. sort with
+        # contiguous assignment) is concatenated in correct global order.
+        messages.sort(key=lambda m: int(m.sequence_number))
         chunks = [
             TableChunk.from_message(msg).make_available_and_spill(
                 br, allow_overbooking=True
@@ -294,6 +306,11 @@ def evaluate_pipeline(
         stream = df.stream
         result = df.to_polars()
         stream.synchronize()
+
+        # Apply root Slice (e.g. head/tail) if present; in-pipeline Slice may not
+        # see a single concatenated chunk, so apply here to ensure correct row count.
+        if isinstance(ir, Slice):
+            result = result.slice(ir.offset, ir.length)
 
         # Now we need to drop *all* GPU data. This ensures that no cudaFreeAsync runs
         # before the Context, which ultimately contains the rmm MR, goes out of scope.

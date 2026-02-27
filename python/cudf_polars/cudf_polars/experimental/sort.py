@@ -21,7 +21,12 @@ from cudf_polars.experimental.base import PartitionInfo, get_key_name
 from cudf_polars.experimental.dispatch import generate_ir_tasks, lower_ir_node
 from cudf_polars.experimental.repartition import Repartition
 from cudf_polars.experimental.shuffle import _simple_shuffle_graph
-from cudf_polars.experimental.utils import _concat, _fallback_inform, _lower_ir_fallback
+from cudf_polars.experimental.utils import (
+    _concat,
+    _dynamic_planning_on,
+    _fallback_inform,
+    _lower_ir_fallback,
+)
 from cudf_polars.utils.config import ShuffleMethod
 from cudf_polars.utils.cuda_stream import (
     get_dask_cuda_stream,
@@ -47,6 +52,8 @@ def find_sort_splits(
     column_order: Sequence[plc.types.Order],
     null_order: Sequence[plc.types.NullOrder],
     stream: Stream,
+    *,
+    chunk_relative: bool = False,
 ) -> list[int]:
     """
     Find local sort splits given all (global) split candidates.
@@ -73,6 +80,11 @@ def find_sort_splits(
         CUDA stream used for device memory operations and kernel launches.
         The values in both ``tbl`` and ``sort_boundaries`` must be valid on
         ``stream``.
+    chunk_relative
+        If True, when the boundary belongs to this partition (part_id == my_part_id)
+        use the position of the boundary value in ``tbl`` (``first``) instead of
+        ``local_row``. Use True when ``tbl`` is a chunk of the partition (e.g.
+        multiple chunks per rank); False when ``tbl`` is the full partition.
 
     Returns
     -------
@@ -129,8 +141,10 @@ def find_sort_splits(
             # Local data is globally earlier so split after last valid row.
             split_points.append(last)
         else:
-            # The split point is within our chunk, so use original local row
-            split_points.append(local_row)
+            # The split point is within our partition. Use local_row when tbl is
+            # the full partition; use first (position in this chunk) when tbl is
+            # a chunk of the partition to keep splits in [0, tbl.num_rows()].
+            split_points.append(first if chunk_relative else local_row)
 
     return split_points
 
@@ -571,22 +585,7 @@ def _(
             config_options,
         )
 
-    # RapidsMPF runtime: ShuffleSorted not supported, fall back to single partition.
-    # We always use fallback for rapidsmpf because dynamic planning may produce
-    # more partitions than expected at planning time.
-    if (
-        config_options.executor.runtime == "rapidsmpf"
-    ):  # pragma: no cover; Requires rapidsmpf runtime
-        return _lower_ir_fallback(
-            ir,
-            rec,
-            msg="Sort does not support multiple partitions with rapidsmpf runtime."
-            if partition_info[child].count > 1
-            else None,  # Don't warn if we expect single partition
-        )
-
-    # Handle single-partition case
-    elif partition_info[child].count == 1:
+    if partition_info[child].count == 1 and not _dynamic_planning_on(config_options):
         single_part_node = ir.reconstruct([child])
         partition_info[single_part_node] = partition_info[child]
         return single_part_node, partition_info
@@ -615,23 +614,9 @@ def _(
 @lower_ir_node.register(ShuffleSorted)
 def _(
     ir: ShuffleSorted, rec: LowerIRTransformer
-) -> tuple[
-    IR, MutableMapping[IR, PartitionInfo]
-]:  # pragma: no cover; Requires rapidsmpf runtime
+) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
     from cudf_polars.experimental.parallel import _lower_ir_pwise
 
-    config_options = rec.state["config_options"]
-
-    # RapidsMPF runtime: ShuffleSorted not supported, fall back to single partition
-    if (
-        config_options.executor.name == "streaming"
-        and config_options.executor.runtime == "rapidsmpf"
-    ):
-        return _lower_ir_fallback(
-            ir, rec, msg=f"Class {type(ir)} does not support multiple partitions."
-        )
-
-    # Default: partition-wise lowering
     return _lower_ir_pwise(ir, rec)
 
 
