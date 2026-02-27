@@ -7,6 +7,7 @@ import datetime
 from typing import TYPE_CHECKING
 
 import pytest
+from unittest.mock import MagicMock
 
 import polars as pl
 
@@ -79,6 +80,37 @@ def test_check_sorted():
         order=plc.types.Order.ASCENDING,
         null_order=plc.types.NullOrder.AFTER,
         stream=stream,
+    )
+
+
+def test_check_sorted_caches_kernel_result(monkeypatch):
+    stream = get_cuda_stream()
+    column = Column(
+        plc.Column.from_iterable_of_py([0, 1, 2], dtype.plc_type),
+        dtype=DataType(pl.Int8()),
+    )
+
+    real_is_sorted = plc.sorting.is_sorted
+    spy = MagicMock(side_effect=real_is_sorted)
+    monkeypatch.setattr(plc.sorting, "is_sorted", spy)
+
+    # First call: kernel should fire and detect sorted
+    assert column.check_sorted(
+        order=plc.types.Order.ASCENDING,
+        null_order=plc.types.NullOrder.AFTER,
+        stream=stream,
+    )
+    assert spy.call_count == 1, "Kernel should be called on first check"
+
+    # Second call with same order: should use cached metadata, no kernel
+    assert column.check_sorted(
+        order=plc.types.Order.ASCENDING,
+        null_order=plc.types.NullOrder.AFTER,
+        stream=stream,
+    )
+    assert spy.call_count == 1, (
+        "Kernel should NOT be called again — "
+        "is_sorted metadata should have been cached from the first call"
     )
 
 
