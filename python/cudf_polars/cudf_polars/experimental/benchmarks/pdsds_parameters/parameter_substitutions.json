@@ -1,5 +1,4 @@
 {
-  "rng_seed": 42,
   "scale_factors": {
     "1": {
       "1": {
@@ -524,6 +523,56 @@
           "Williamson County"
         ]
       },
+      "17": {
+        "year": 2002
+      },
+      "18": {
+        "year": 1999,
+        "month": [
+          8,
+          9,
+          3,
+          5,
+          7,
+          2
+        ],
+        "state": [
+          "MT",
+          "NM",
+          "NY",
+          "GA",
+          "CO",
+          "LA",
+          "SD"
+        ],
+        "es": "Unknown",
+        "gen": "M"
+      },
+      "19": {
+        "year": 2001,
+        "month": 12,
+        "manager": 94
+      },
+      "20": {
+        "sdate": "2001-01-08",
+        "year": 2001,
+        "category": [
+          "Books",
+          "Women",
+          "Electronics"
+        ]
+      },
+      "21": {
+        "sales_date": "2002-03-20",
+        "year": 2002
+      },
+      "22": {
+        "dms": 1176
+      },
+      "23": {
+        "year": 2000,
+        "month": 3
+      },
       "24": {
         "market": 8,
         "color": [
@@ -640,6 +689,160 @@
           "TN"
         ]
       },
+      "37": {
+        "price": 12,
+        "manufact": [
+          971,
+          695,
+          854,
+          709
+        ],
+        "invdate": "2001-04-23"
+      },
+      "38": {
+        "dms": 1176
+      },
+      "39": {
+        "year": 2002,
+        "month": 4
+      },
+      "40": {
+        "sales_date": "2002-03-20",
+        "year": 2002
+      },
+      "41": {
+        "manufact": 819,
+        "rules": [
+          {
+            "category": "Women",
+            "colors": [
+              "midnight",
+              "pale"
+            ],
+            "units": [
+              "Bundle",
+              "Case"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          },
+          {
+            "category": "Women",
+            "colors": [
+              "navy",
+              "navajo"
+            ],
+            "units": [
+              "Gross",
+              "Tsp"
+            ],
+            "sizes": [
+              "petite",
+              "N/A"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "sandy",
+              "cornsilk"
+            ],
+            "units": [
+              "Cup",
+              "Oz"
+            ],
+            "sizes": [
+              "economy",
+              "large"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "beige",
+              "bisque"
+            ],
+            "units": [
+              "Gram",
+              "Tbl"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          },
+          {
+            "category": "Women",
+            "colors": [
+              "thistle",
+              "brown"
+            ],
+            "units": [
+              "Unknown",
+              "Each"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          },
+          {
+            "category": "Women",
+            "colors": [
+              "almond",
+              "dodger"
+            ],
+            "units": [
+              "N/A",
+              "Carton"
+            ],
+            "sizes": [
+              "petite",
+              "N/A"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "lime",
+              "burlywood"
+            ],
+            "units": [
+              "Bunch",
+              "Pallet"
+            ],
+            "sizes": [
+              "economy",
+              "large"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "light",
+              "plum"
+            ],
+            "units": [
+              "Dram",
+              "Lb"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          }
+        ]
+      },
+      "42": {
+        "year": 2002,
+        "month": 12
+      },
+      "43": {
+        "year": 2002,
+        "gmt": -5.0
+      },
       "63": {
         "dms": 1176
       },
@@ -701,6 +904,203 @@
         "year": 2002,
         "bp": "--",
         "ms": "U"
+      },
+      "73": {
+        "dom": [
+          1,
+          2
+        ],
+        "bp": [
+          "501-1000",
+          "5001-10000"
+        ],
+        "year": 1999,
+        "counties": [
+          "Williamson County",
+          "Williamson County",
+          "Williamson County",
+          "Williamson County"
+        ]
+      },
+      "74": {
+        "year": 2000
+      },
+      "75": {
+        "category": "Shoes",
+        "year": 2001
+      },
+      "76": {
+        "nullcol_ss": "ss_cdemo_sk",
+        "nullcol_ws": "ws_ship_addr_sk",
+        "nullcol_cs": "cs_promo_sk"
+      },
+      "77": {
+        "sdate": "2002-08-09"
+      },
+      "78": {
+        "year": 2001
+      },
+      "79": {
+        "dep_cnt": 9,
+        "dow": 1,
+        "year": 1999,
+        "emp_min": 200,
+        "emp_max": 295
+      },
+      "80": {
+        "sdate": "2002-08-09"
+      },
+      "81": {
+        "state": "NH"
+      },
+      "82": {
+        "price": 37,
+        "sdate": "2002-01-22",
+        "manufact": [
+          63,
+          225,
+          11,
+          345
+        ],
+        "inv_min": 100,
+        "inv_max": 500
+      },
+      "83": {
+        "dates": [
+          "2002-02-01",
+          "2002-10-01",
+          "2002-11-05"
+        ]
+      },
+      "84": {
+        "city": "Cedar Grove",
+        "income": 5884
+      },
+      "85": {
+        "year": 2002,
+        "ms": [
+          "M",
+          "U",
+          "S"
+        ],
+        "es": [
+          "4 yr Degree",
+          "College",
+          "2 yr Degree"
+        ],
+        "price_ranges": [
+          [
+            100.0,
+            150.0
+          ],
+          [
+            50.0,
+            100.0
+          ],
+          [
+            150.0,
+            200.0
+          ]
+        ],
+        "states": [
+          "NH",
+          "OK",
+          "NC",
+          "MS",
+          "TX",
+          "TN"
+        ],
+        "np_min": 100,
+        "np_max": 200
+      },
+      "86": {
+        "d_month_seq": 1176
+      },
+      "87": {
+        "d_month_seq": 1176
+      },
+      "88": {
+        "s_store_name": "ese",
+        "hd_dep_count1": 1,
+        "hd_dep_count2": -1,
+        "hd_dep_count3": 3
+      },
+      "89": {
+        "year": 2001,
+        "category1": [
+          "Electronics",
+          "Men",
+          "Women"
+        ],
+        "class1": [
+          "stereo",
+          "accessories",
+          "fragrances"
+        ],
+        "category2": [
+          "Children",
+          "Sports",
+          "Shoes"
+        ],
+        "class2": [
+          "toddlers",
+          "outdoor",
+          "womens"
+        ]
+      },
+      "90": {
+        "am_hour": 8,
+        "pm_hour": 19,
+        "hd_dep_count": 9,
+        "wp_char_count_min": 5000,
+        "wp_char_count_max": 5200
+      },
+      "91": {
+        "year": 2001,
+        "month": 12,
+        "marital_status1": "M",
+        "education_status1": "Unknown",
+        "marital_status2": "W",
+        "education_status2": "Advanced Degree",
+        "hd_buy_potential": ">10000%",
+        "ca_gmt_offset": -6
+      },
+      "92": {
+        "manufact_id": 10,
+        "date": "2002-01-05"
+      },
+      "93": {
+        "reason_desc": "reason 70"
+      },
+      "94": {
+        "date": "2000-5-01",
+        "state": "IA",
+        "web_company_name": "pri"
+      },
+      "95": {
+        "date": "2000-5-01",
+        "state": "IA",
+        "web_company_name": "pri"
+      },
+      "96": {
+        "t_hour": 8,
+        "t_minute": 30,
+        "hd_dep_count": 4,
+        "s_store_name": "ese"
+      },
+      "97": {
+        "d_month_seq": 1176
+      },
+      "98": {
+        "categories": [
+          "Books",
+          "Women",
+          "Electronics"
+        ],
+        "date": "2001-01-08"
+      },
+      "99": {
+        "d_month_seq": 1176
       }
     },
     "10": {
@@ -1226,6 +1626,56 @@
           "Ziebach County"
         ]
       },
+      "17": {
+        "year": 2002
+      },
+      "18": {
+        "year": 1999,
+        "month": [
+          8,
+          9,
+          3,
+          5,
+          7,
+          2
+        ],
+        "state": [
+          "MT",
+          "NM",
+          "NY",
+          "GA",
+          "CO",
+          "LA",
+          "SD"
+        ],
+        "es": "Unknown",
+        "gen": "M"
+      },
+      "19": {
+        "year": 2001,
+        "month": 12,
+        "manager": 94
+      },
+      "20": {
+        "sdate": "2001-01-08",
+        "year": 2001,
+        "category": [
+          "Books",
+          "Women",
+          "Electronics"
+        ]
+      },
+      "21": {
+        "sales_date": "2002-03-20",
+        "year": 2002
+      },
+      "22": {
+        "dms": 1176
+      },
+      "23": {
+        "year": 2000,
+        "month": 3
+      },
       "24": {
         "market": 8,
         "color": [
@@ -1342,6 +1792,160 @@
           "SD"
         ]
       },
+      "37": {
+        "price": 12,
+        "manufact": [
+          971,
+          695,
+          854,
+          709
+        ],
+        "invdate": "2001-04-23"
+      },
+      "38": {
+        "dms": 1176
+      },
+      "39": {
+        "year": 2002,
+        "month": 4
+      },
+      "40": {
+        "sales_date": "2002-03-20",
+        "year": 2002
+      },
+      "41": {
+        "manufact": 819,
+        "rules": [
+          {
+            "category": "Women",
+            "colors": [
+              "midnight",
+              "pale"
+            ],
+            "units": [
+              "Bundle",
+              "Case"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          },
+          {
+            "category": "Women",
+            "colors": [
+              "navy",
+              "navajo"
+            ],
+            "units": [
+              "Gross",
+              "Tsp"
+            ],
+            "sizes": [
+              "petite",
+              "N/A"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "sandy",
+              "cornsilk"
+            ],
+            "units": [
+              "Cup",
+              "Oz"
+            ],
+            "sizes": [
+              "economy",
+              "large"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "beige",
+              "bisque"
+            ],
+            "units": [
+              "Gram",
+              "Tbl"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          },
+          {
+            "category": "Women",
+            "colors": [
+              "thistle",
+              "brown"
+            ],
+            "units": [
+              "Unknown",
+              "Each"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          },
+          {
+            "category": "Women",
+            "colors": [
+              "almond",
+              "dodger"
+            ],
+            "units": [
+              "N/A",
+              "Carton"
+            ],
+            "sizes": [
+              "petite",
+              "N/A"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "lime",
+              "burlywood"
+            ],
+            "units": [
+              "Bunch",
+              "Pallet"
+            ],
+            "sizes": [
+              "economy",
+              "large"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "light",
+              "plum"
+            ],
+            "units": [
+              "Dram",
+              "Lb"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          }
+        ]
+      },
+      "42": {
+        "year": 2002,
+        "month": 12
+      },
+      "43": {
+        "year": 2002,
+        "gmt": -6.0
+      },
       "63": {
         "dms": 1176
       },
@@ -1403,6 +2007,203 @@
         "year": 2002,
         "bp": "--",
         "ms": "U"
+      },
+      "73": {
+        "dom": [
+          1,
+          2
+        ],
+        "bp": [
+          "1001-5000",
+          "5001-10000"
+        ],
+        "year": 2000,
+        "counties": [
+          "Ziebach County",
+          "Walker County",
+          "Williamson County",
+          "Ziebach County"
+        ]
+      },
+      "74": {
+        "year": 2000
+      },
+      "75": {
+        "category": "Shoes",
+        "year": 2001
+      },
+      "76": {
+        "nullcol_ss": "ss_cdemo_sk",
+        "nullcol_ws": "ws_ship_addr_sk",
+        "nullcol_cs": "cs_promo_sk"
+      },
+      "77": {
+        "sdate": "2002-08-09"
+      },
+      "78": {
+        "year": 2001
+      },
+      "79": {
+        "dep_cnt": 9,
+        "dow": 1,
+        "year": 1999,
+        "emp_min": 200,
+        "emp_max": 295
+      },
+      "80": {
+        "sdate": "2002-08-09"
+      },
+      "81": {
+        "state": "NH"
+      },
+      "82": {
+        "price": 37,
+        "sdate": "2002-01-22",
+        "manufact": [
+          63,
+          225,
+          11,
+          345
+        ],
+        "inv_min": 100,
+        "inv_max": 500
+      },
+      "83": {
+        "dates": [
+          "2002-02-01",
+          "2002-10-01",
+          "2002-11-05"
+        ]
+      },
+      "84": {
+        "city": "Cedar Grove",
+        "income": 5884
+      },
+      "85": {
+        "year": 2002,
+        "ms": [
+          "M",
+          "U",
+          "S"
+        ],
+        "es": [
+          "4 yr Degree",
+          "College",
+          "2 yr Degree"
+        ],
+        "price_ranges": [
+          [
+            100.0,
+            150.0
+          ],
+          [
+            50.0,
+            100.0
+          ],
+          [
+            150.0,
+            200.0
+          ]
+        ],
+        "states": [
+          "NH",
+          "OK",
+          "NC",
+          "MS",
+          "TX",
+          "TN"
+        ],
+        "np_min": 100,
+        "np_max": 200
+      },
+      "86": {
+        "d_month_seq": 1176
+      },
+      "87": {
+        "d_month_seq": 1176
+      },
+      "88": {
+        "s_store_name": "ese",
+        "hd_dep_count1": 1,
+        "hd_dep_count2": -1,
+        "hd_dep_count3": 3
+      },
+      "89": {
+        "year": 2001,
+        "category1": [
+          "Electronics",
+          "Men",
+          "Women"
+        ],
+        "class1": [
+          "stereo",
+          "accessories",
+          "fragrances"
+        ],
+        "category2": [
+          "Children",
+          "Sports",
+          "Shoes"
+        ],
+        "class2": [
+          "toddlers",
+          "outdoor",
+          "womens"
+        ]
+      },
+      "90": {
+        "am_hour": 8,
+        "pm_hour": 19,
+        "hd_dep_count": 9,
+        "wp_char_count_min": 5000,
+        "wp_char_count_max": 5200
+      },
+      "91": {
+        "year": 2001,
+        "month": 12,
+        "marital_status1": "M",
+        "education_status1": "Unknown",
+        "marital_status2": "W",
+        "education_status2": "Advanced Degree",
+        "hd_buy_potential": ">10000%",
+        "ca_gmt_offset": -6
+      },
+      "92": {
+        "manufact_id": 10,
+        "date": "2002-01-05"
+      },
+      "93": {
+        "reason_desc": "reason 70"
+      },
+      "94": {
+        "date": "2000-5-01",
+        "state": "IA",
+        "web_company_name": "pri"
+      },
+      "95": {
+        "date": "2000-5-01",
+        "state": "IA",
+        "web_company_name": "pri"
+      },
+      "96": {
+        "t_hour": 8,
+        "t_minute": 30,
+        "hd_dep_count": 4,
+        "s_store_name": "ese"
+      },
+      "97": {
+        "d_month_seq": 1176
+      },
+      "98": {
+        "categories": [
+          "Books",
+          "Women",
+          "Electronics"
+        ],
+        "date": "2001-01-08"
+      },
+      "99": {
+        "d_month_seq": 1176
       }
     },
     "50": {
@@ -1928,6 +2729,56 @@
           "Ziebach County"
         ]
       },
+      "17": {
+        "year": 2002
+      },
+      "18": {
+        "year": 1999,
+        "month": [
+          8,
+          9,
+          3,
+          5,
+          7,
+          2
+        ],
+        "state": [
+          "MT",
+          "NM",
+          "NY",
+          "GA",
+          "CO",
+          "LA",
+          "SD"
+        ],
+        "es": "Unknown",
+        "gen": "M"
+      },
+      "19": {
+        "year": 2001,
+        "month": 12,
+        "manager": 94
+      },
+      "20": {
+        "sdate": "2001-01-08",
+        "year": 2001,
+        "category": [
+          "Books",
+          "Women",
+          "Electronics"
+        ]
+      },
+      "21": {
+        "sales_date": "2002-03-20",
+        "year": 2002
+      },
+      "22": {
+        "dms": 1176
+      },
+      "23": {
+        "year": 2000,
+        "month": 3
+      },
       "24": {
         "market": 8,
         "color": [
@@ -2044,6 +2895,160 @@
           "SD"
         ]
       },
+      "37": {
+        "price": 12,
+        "manufact": [
+          971,
+          695,
+          854,
+          709
+        ],
+        "invdate": "2001-04-23"
+      },
+      "38": {
+        "dms": 1176
+      },
+      "39": {
+        "year": 2002,
+        "month": 4
+      },
+      "40": {
+        "sales_date": "2002-03-20",
+        "year": 2002
+      },
+      "41": {
+        "manufact": 819,
+        "rules": [
+          {
+            "category": "Women",
+            "colors": [
+              "midnight",
+              "pale"
+            ],
+            "units": [
+              "Bundle",
+              "Case"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          },
+          {
+            "category": "Women",
+            "colors": [
+              "navy",
+              "navajo"
+            ],
+            "units": [
+              "Gross",
+              "Tsp"
+            ],
+            "sizes": [
+              "petite",
+              "N/A"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "sandy",
+              "cornsilk"
+            ],
+            "units": [
+              "Cup",
+              "Oz"
+            ],
+            "sizes": [
+              "economy",
+              "large"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "beige",
+              "bisque"
+            ],
+            "units": [
+              "Gram",
+              "Tbl"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          },
+          {
+            "category": "Women",
+            "colors": [
+              "thistle",
+              "brown"
+            ],
+            "units": [
+              "Unknown",
+              "Each"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          },
+          {
+            "category": "Women",
+            "colors": [
+              "almond",
+              "dodger"
+            ],
+            "units": [
+              "N/A",
+              "Carton"
+            ],
+            "sizes": [
+              "petite",
+              "N/A"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "lime",
+              "burlywood"
+            ],
+            "units": [
+              "Bunch",
+              "Pallet"
+            ],
+            "sizes": [
+              "economy",
+              "large"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "light",
+              "plum"
+            ],
+            "units": [
+              "Dram",
+              "Lb"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          }
+        ]
+      },
+      "42": {
+        "year": 2002,
+        "month": 12
+      },
+      "43": {
+        "year": 2002,
+        "gmt": -6.0
+      },
       "63": {
         "dms": 1176
       },
@@ -2105,6 +3110,203 @@
         "year": 2002,
         "bp": "--",
         "ms": "U"
+      },
+      "73": {
+        "dom": [
+          1,
+          2
+        ],
+        "bp": [
+          "1001-5000",
+          "5001-10000"
+        ],
+        "year": 2000,
+        "counties": [
+          "Ziebach County",
+          "Walker County",
+          "Williamson County",
+          "Ziebach County"
+        ]
+      },
+      "74": {
+        "year": 2000
+      },
+      "75": {
+        "category": "Shoes",
+        "year": 2001
+      },
+      "76": {
+        "nullcol_ss": "ss_cdemo_sk",
+        "nullcol_ws": "ws_ship_addr_sk",
+        "nullcol_cs": "cs_promo_sk"
+      },
+      "77": {
+        "sdate": "2002-08-09"
+      },
+      "78": {
+        "year": 2001
+      },
+      "79": {
+        "dep_cnt": 9,
+        "dow": 1,
+        "year": 1999,
+        "emp_min": 200,
+        "emp_max": 295
+      },
+      "80": {
+        "sdate": "2002-08-09"
+      },
+      "81": {
+        "state": "NH"
+      },
+      "82": {
+        "price": 37,
+        "sdate": "2002-01-22",
+        "manufact": [
+          63,
+          225,
+          11,
+          345
+        ],
+        "inv_min": 100,
+        "inv_max": 500
+      },
+      "83": {
+        "dates": [
+          "2002-02-01",
+          "2002-10-01",
+          "2002-11-05"
+        ]
+      },
+      "84": {
+        "city": "Cedar Grove",
+        "income": 5884
+      },
+      "85": {
+        "year": 2002,
+        "ms": [
+          "M",
+          "U",
+          "S"
+        ],
+        "es": [
+          "4 yr Degree",
+          "College",
+          "2 yr Degree"
+        ],
+        "price_ranges": [
+          [
+            100.0,
+            150.0
+          ],
+          [
+            50.0,
+            100.0
+          ],
+          [
+            150.0,
+            200.0
+          ]
+        ],
+        "states": [
+          "NH",
+          "OK",
+          "NC",
+          "MS",
+          "TX",
+          "TN"
+        ],
+        "np_min": 100,
+        "np_max": 200
+      },
+      "86": {
+        "d_month_seq": 1176
+      },
+      "87": {
+        "d_month_seq": 1176
+      },
+      "88": {
+        "s_store_name": "ese",
+        "hd_dep_count1": 1,
+        "hd_dep_count2": -1,
+        "hd_dep_count3": 3
+      },
+      "89": {
+        "year": 2001,
+        "category1": [
+          "Electronics",
+          "Men",
+          "Women"
+        ],
+        "class1": [
+          "stereo",
+          "accessories",
+          "fragrances"
+        ],
+        "category2": [
+          "Children",
+          "Sports",
+          "Shoes"
+        ],
+        "class2": [
+          "toddlers",
+          "outdoor",
+          "womens"
+        ]
+      },
+      "90": {
+        "am_hour": 8,
+        "pm_hour": 19,
+        "hd_dep_count": 9,
+        "wp_char_count_min": 5000,
+        "wp_char_count_max": 5200
+      },
+      "91": {
+        "year": 2001,
+        "month": 12,
+        "marital_status1": "M",
+        "education_status1": "Unknown",
+        "marital_status2": "W",
+        "education_status2": "Advanced Degree",
+        "hd_buy_potential": ">10000%",
+        "ca_gmt_offset": -6
+      },
+      "92": {
+        "manufact_id": 10,
+        "date": "2002-01-05"
+      },
+      "93": {
+        "reason_desc": "reason 70"
+      },
+      "94": {
+        "date": "2000-5-01",
+        "state": "IA",
+        "web_company_name": "pri"
+      },
+      "95": {
+        "date": "2000-5-01",
+        "state": "IA",
+        "web_company_name": "pri"
+      },
+      "96": {
+        "t_hour": 8,
+        "t_minute": 30,
+        "hd_dep_count": 4,
+        "s_store_name": "ese"
+      },
+      "97": {
+        "d_month_seq": 1176
+      },
+      "98": {
+        "categories": [
+          "Books",
+          "Women",
+          "Electronics"
+        ],
+        "date": "2001-01-08"
+      },
+      "99": {
+        "d_month_seq": 1176
       }
     },
     "100": {
@@ -2630,6 +3832,56 @@
           "Richland County"
         ]
       },
+      "17": {
+        "year": 2002
+      },
+      "18": {
+        "year": 1999,
+        "month": [
+          8,
+          9,
+          3,
+          5,
+          7,
+          2
+        ],
+        "state": [
+          "MT",
+          "NM",
+          "NY",
+          "GA",
+          "CO",
+          "LA",
+          "SD"
+        ],
+        "es": "Unknown",
+        "gen": "M"
+      },
+      "19": {
+        "year": 2001,
+        "month": 12,
+        "manager": 94
+      },
+      "20": {
+        "sdate": "2001-01-08",
+        "year": 2001,
+        "category": [
+          "Books",
+          "Women",
+          "Electronics"
+        ]
+      },
+      "21": {
+        "sales_date": "2002-03-20",
+        "year": 2002
+      },
+      "22": {
+        "dms": 1176
+      },
+      "23": {
+        "year": 2000,
+        "month": 3
+      },
       "24": {
         "market": 8,
         "color": [
@@ -2746,6 +3998,160 @@
           "LA"
         ]
       },
+      "37": {
+        "price": 12,
+        "manufact": [
+          971,
+          695,
+          854,
+          709
+        ],
+        "invdate": "2001-04-23"
+      },
+      "38": {
+        "dms": 1176
+      },
+      "39": {
+        "year": 2002,
+        "month": 4
+      },
+      "40": {
+        "sales_date": "2002-03-20",
+        "year": 2002
+      },
+      "41": {
+        "manufact": 819,
+        "rules": [
+          {
+            "category": "Women",
+            "colors": [
+              "midnight",
+              "pale"
+            ],
+            "units": [
+              "Bundle",
+              "Case"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          },
+          {
+            "category": "Women",
+            "colors": [
+              "navy",
+              "navajo"
+            ],
+            "units": [
+              "Gross",
+              "Tsp"
+            ],
+            "sizes": [
+              "petite",
+              "N/A"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "sandy",
+              "cornsilk"
+            ],
+            "units": [
+              "Cup",
+              "Oz"
+            ],
+            "sizes": [
+              "economy",
+              "large"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "beige",
+              "bisque"
+            ],
+            "units": [
+              "Gram",
+              "Tbl"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          },
+          {
+            "category": "Women",
+            "colors": [
+              "thistle",
+              "brown"
+            ],
+            "units": [
+              "Unknown",
+              "Each"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          },
+          {
+            "category": "Women",
+            "colors": [
+              "almond",
+              "dodger"
+            ],
+            "units": [
+              "N/A",
+              "Carton"
+            ],
+            "sizes": [
+              "petite",
+              "N/A"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "lime",
+              "burlywood"
+            ],
+            "units": [
+              "Bunch",
+              "Pallet"
+            ],
+            "sizes": [
+              "economy",
+              "large"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "light",
+              "plum"
+            ],
+            "units": [
+              "Dram",
+              "Lb"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          }
+        ]
+      },
+      "42": {
+        "year": 2002,
+        "month": 12
+      },
+      "43": {
+        "year": 2002,
+        "gmt": -6.0
+      },
       "63": {
         "dms": 1176
       },
@@ -2807,6 +4213,203 @@
         "year": 2002,
         "bp": "--",
         "ms": "U"
+      },
+      "73": {
+        "dom": [
+          1,
+          2
+        ],
+        "bp": [
+          "1001-5000",
+          "5001-10000"
+        ],
+        "year": 1998,
+        "counties": [
+          "Barrow County",
+          "Walker County",
+          "Ziebach County",
+          "Daviess County"
+        ]
+      },
+      "74": {
+        "year": 2000
+      },
+      "75": {
+        "category": "Shoes",
+        "year": 2001
+      },
+      "76": {
+        "nullcol_ss": "ss_cdemo_sk",
+        "nullcol_ws": "ws_ship_addr_sk",
+        "nullcol_cs": "cs_promo_sk"
+      },
+      "77": {
+        "sdate": "2002-08-09"
+      },
+      "78": {
+        "year": 2001
+      },
+      "79": {
+        "dep_cnt": 9,
+        "dow": 1,
+        "year": 1999,
+        "emp_min": 200,
+        "emp_max": 295
+      },
+      "80": {
+        "sdate": "2002-08-09"
+      },
+      "81": {
+        "state": "NH"
+      },
+      "82": {
+        "price": 37,
+        "sdate": "2002-01-22",
+        "manufact": [
+          63,
+          225,
+          11,
+          345
+        ],
+        "inv_min": 100,
+        "inv_max": 500
+      },
+      "83": {
+        "dates": [
+          "2002-02-01",
+          "2002-10-01",
+          "2002-11-05"
+        ]
+      },
+      "84": {
+        "city": "Cedar Grove",
+        "income": 5884
+      },
+      "85": {
+        "year": 2002,
+        "ms": [
+          "M",
+          "U",
+          "S"
+        ],
+        "es": [
+          "4 yr Degree",
+          "College",
+          "2 yr Degree"
+        ],
+        "price_ranges": [
+          [
+            100.0,
+            150.0
+          ],
+          [
+            50.0,
+            100.0
+          ],
+          [
+            150.0,
+            200.0
+          ]
+        ],
+        "states": [
+          "NH",
+          "OK",
+          "NC",
+          "MS",
+          "TX",
+          "TN"
+        ],
+        "np_min": 100,
+        "np_max": 200
+      },
+      "86": {
+        "d_month_seq": 1176
+      },
+      "87": {
+        "d_month_seq": 1176
+      },
+      "88": {
+        "s_store_name": "ese",
+        "hd_dep_count1": 1,
+        "hd_dep_count2": -1,
+        "hd_dep_count3": 3
+      },
+      "89": {
+        "year": 2001,
+        "category1": [
+          "Electronics",
+          "Men",
+          "Women"
+        ],
+        "class1": [
+          "stereo",
+          "accessories",
+          "fragrances"
+        ],
+        "category2": [
+          "Children",
+          "Sports",
+          "Shoes"
+        ],
+        "class2": [
+          "toddlers",
+          "outdoor",
+          "womens"
+        ]
+      },
+      "90": {
+        "am_hour": 8,
+        "pm_hour": 19,
+        "hd_dep_count": 9,
+        "wp_char_count_min": 5000,
+        "wp_char_count_max": 5200
+      },
+      "91": {
+        "year": 2001,
+        "month": 12,
+        "marital_status1": "M",
+        "education_status1": "Unknown",
+        "marital_status2": "W",
+        "education_status2": "Advanced Degree",
+        "hd_buy_potential": ">10000%",
+        "ca_gmt_offset": -6
+      },
+      "92": {
+        "manufact_id": 10,
+        "date": "2002-01-05"
+      },
+      "93": {
+        "reason_desc": "reason 70"
+      },
+      "94": {
+        "date": "2000-5-01",
+        "state": "IA",
+        "web_company_name": "pri"
+      },
+      "95": {
+        "date": "2000-5-01",
+        "state": "IA",
+        "web_company_name": "pri"
+      },
+      "96": {
+        "t_hour": 8,
+        "t_minute": 30,
+        "hd_dep_count": 4,
+        "s_store_name": "ese"
+      },
+      "97": {
+        "d_month_seq": 1176
+      },
+      "98": {
+        "categories": [
+          "Books",
+          "Women",
+          "Electronics"
+        ],
+        "date": "2001-01-08"
+      },
+      "99": {
+        "d_month_seq": 1176
       }
     },
     "200": {
@@ -3332,6 +4935,56 @@
           "Ziebach County"
         ]
       },
+      "17": {
+        "year": 2002
+      },
+      "18": {
+        "year": 1999,
+        "month": [
+          8,
+          9,
+          3,
+          5,
+          7,
+          2
+        ],
+        "state": [
+          "MT",
+          "NM",
+          "NY",
+          "GA",
+          "CO",
+          "LA",
+          "SD"
+        ],
+        "es": "Unknown",
+        "gen": "M"
+      },
+      "19": {
+        "year": 2001,
+        "month": 12,
+        "manager": 94
+      },
+      "20": {
+        "sdate": "2001-01-08",
+        "year": 2001,
+        "category": [
+          "Books",
+          "Women",
+          "Electronics"
+        ]
+      },
+      "21": {
+        "sales_date": "2002-03-20",
+        "year": 2002
+      },
+      "22": {
+        "dms": 1176
+      },
+      "23": {
+        "year": 2000,
+        "month": 3
+      },
       "24": {
         "market": 8,
         "color": [
@@ -3448,6 +5101,160 @@
           "SD"
         ]
       },
+      "37": {
+        "price": 12,
+        "manufact": [
+          971,
+          695,
+          854,
+          709
+        ],
+        "invdate": "2001-04-23"
+      },
+      "38": {
+        "dms": 1176
+      },
+      "39": {
+        "year": 2002,
+        "month": 4
+      },
+      "40": {
+        "sales_date": "2002-03-20",
+        "year": 2002
+      },
+      "41": {
+        "manufact": 819,
+        "rules": [
+          {
+            "category": "Women",
+            "colors": [
+              "midnight",
+              "pale"
+            ],
+            "units": [
+              "Bundle",
+              "Case"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          },
+          {
+            "category": "Women",
+            "colors": [
+              "navy",
+              "navajo"
+            ],
+            "units": [
+              "Gross",
+              "Tsp"
+            ],
+            "sizes": [
+              "petite",
+              "N/A"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "sandy",
+              "cornsilk"
+            ],
+            "units": [
+              "Cup",
+              "Oz"
+            ],
+            "sizes": [
+              "economy",
+              "large"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "beige",
+              "bisque"
+            ],
+            "units": [
+              "Gram",
+              "Tbl"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          },
+          {
+            "category": "Women",
+            "colors": [
+              "thistle",
+              "brown"
+            ],
+            "units": [
+              "Unknown",
+              "Each"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          },
+          {
+            "category": "Women",
+            "colors": [
+              "almond",
+              "dodger"
+            ],
+            "units": [
+              "N/A",
+              "Carton"
+            ],
+            "sizes": [
+              "petite",
+              "N/A"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "lime",
+              "burlywood"
+            ],
+            "units": [
+              "Bunch",
+              "Pallet"
+            ],
+            "sizes": [
+              "economy",
+              "large"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "light",
+              "plum"
+            ],
+            "units": [
+              "Dram",
+              "Lb"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          }
+        ]
+      },
+      "42": {
+        "year": 2002,
+        "month": 12
+      },
+      "43": {
+        "year": 2002,
+        "gmt": -5.0
+      },
       "63": {
         "dms": 1176
       },
@@ -3509,6 +5316,203 @@
         "year": 2002,
         "bp": "--",
         "ms": "U"
+      },
+      "73": {
+        "dom": [
+          1,
+          2
+        ],
+        "bp": [
+          "501-1000",
+          "0-500"
+        ],
+        "year": 2000,
+        "counties": [
+          "Fairfield County",
+          "Ziebach County",
+          "Williamson County",
+          "Walker County"
+        ]
+      },
+      "74": {
+        "year": 2000
+      },
+      "75": {
+        "category": "Shoes",
+        "year": 2001
+      },
+      "76": {
+        "nullcol_ss": "ss_cdemo_sk",
+        "nullcol_ws": "ws_ship_addr_sk",
+        "nullcol_cs": "cs_promo_sk"
+      },
+      "77": {
+        "sdate": "2002-08-09"
+      },
+      "78": {
+        "year": 2001
+      },
+      "79": {
+        "dep_cnt": 9,
+        "dow": 1,
+        "year": 1999,
+        "emp_min": 200,
+        "emp_max": 295
+      },
+      "80": {
+        "sdate": "2002-08-09"
+      },
+      "81": {
+        "state": "NH"
+      },
+      "82": {
+        "price": 37,
+        "sdate": "2002-01-22",
+        "manufact": [
+          63,
+          225,
+          11,
+          345
+        ],
+        "inv_min": 100,
+        "inv_max": 500
+      },
+      "83": {
+        "dates": [
+          "2002-02-01",
+          "2002-10-01",
+          "2002-11-05"
+        ]
+      },
+      "84": {
+        "city": "Cedar Grove",
+        "income": 5884
+      },
+      "85": {
+        "year": 2002,
+        "ms": [
+          "M",
+          "U",
+          "S"
+        ],
+        "es": [
+          "4 yr Degree",
+          "College",
+          "2 yr Degree"
+        ],
+        "price_ranges": [
+          [
+            100.0,
+            150.0
+          ],
+          [
+            50.0,
+            100.0
+          ],
+          [
+            150.0,
+            200.0
+          ]
+        ],
+        "states": [
+          "NH",
+          "OK",
+          "NC",
+          "MS",
+          "TX",
+          "TN"
+        ],
+        "np_min": 100,
+        "np_max": 200
+      },
+      "86": {
+        "d_month_seq": 1176
+      },
+      "87": {
+        "d_month_seq": 1176
+      },
+      "88": {
+        "s_store_name": "ese",
+        "hd_dep_count1": 1,
+        "hd_dep_count2": -1,
+        "hd_dep_count3": 3
+      },
+      "89": {
+        "year": 2001,
+        "category1": [
+          "Electronics",
+          "Men",
+          "Women"
+        ],
+        "class1": [
+          "stereo",
+          "accessories",
+          "fragrances"
+        ],
+        "category2": [
+          "Children",
+          "Sports",
+          "Shoes"
+        ],
+        "class2": [
+          "toddlers",
+          "outdoor",
+          "womens"
+        ]
+      },
+      "90": {
+        "am_hour": 8,
+        "pm_hour": 19,
+        "hd_dep_count": 9,
+        "wp_char_count_min": 5000,
+        "wp_char_count_max": 5200
+      },
+      "91": {
+        "year": 2001,
+        "month": 12,
+        "marital_status1": "M",
+        "education_status1": "Unknown",
+        "marital_status2": "W",
+        "education_status2": "Advanced Degree",
+        "hd_buy_potential": ">10000%",
+        "ca_gmt_offset": -6
+      },
+      "92": {
+        "manufact_id": 10,
+        "date": "2002-01-05"
+      },
+      "93": {
+        "reason_desc": "reason 70"
+      },
+      "94": {
+        "date": "2000-5-01",
+        "state": "IA",
+        "web_company_name": "pri"
+      },
+      "95": {
+        "date": "2000-5-01",
+        "state": "IA",
+        "web_company_name": "pri"
+      },
+      "96": {
+        "t_hour": 8,
+        "t_minute": 30,
+        "hd_dep_count": 4,
+        "s_store_name": "ese"
+      },
+      "97": {
+        "d_month_seq": 1176
+      },
+      "98": {
+        "categories": [
+          "Books",
+          "Women",
+          "Electronics"
+        ],
+        "date": "2001-01-08"
+      },
+      "99": {
+        "d_month_seq": 1176
       }
     },
     "400": {
@@ -4034,6 +6038,56 @@
           "Ziebach County"
         ]
       },
+      "17": {
+        "year": 2002
+      },
+      "18": {
+        "year": 1999,
+        "month": [
+          8,
+          9,
+          3,
+          5,
+          7,
+          2
+        ],
+        "state": [
+          "MT",
+          "NM",
+          "NY",
+          "GA",
+          "CO",
+          "LA",
+          "SD"
+        ],
+        "es": "Unknown",
+        "gen": "M"
+      },
+      "19": {
+        "year": 2001,
+        "month": 12,
+        "manager": 94
+      },
+      "20": {
+        "sdate": "2001-01-08",
+        "year": 2001,
+        "category": [
+          "Books",
+          "Women",
+          "Electronics"
+        ]
+      },
+      "21": {
+        "sales_date": "2002-03-20",
+        "year": 2002
+      },
+      "22": {
+        "dms": 1176
+      },
+      "23": {
+        "year": 2000,
+        "month": 3
+      },
       "24": {
         "market": 8,
         "color": [
@@ -4150,6 +6204,160 @@
           "SD"
         ]
       },
+      "37": {
+        "price": 12,
+        "manufact": [
+          971,
+          695,
+          854,
+          709
+        ],
+        "invdate": "2001-04-23"
+      },
+      "38": {
+        "dms": 1176
+      },
+      "39": {
+        "year": 2002,
+        "month": 4
+      },
+      "40": {
+        "sales_date": "2002-03-20",
+        "year": 2002
+      },
+      "41": {
+        "manufact": 819,
+        "rules": [
+          {
+            "category": "Women",
+            "colors": [
+              "midnight",
+              "pale"
+            ],
+            "units": [
+              "Bundle",
+              "Case"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          },
+          {
+            "category": "Women",
+            "colors": [
+              "navy",
+              "navajo"
+            ],
+            "units": [
+              "Gross",
+              "Tsp"
+            ],
+            "sizes": [
+              "petite",
+              "N/A"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "sandy",
+              "cornsilk"
+            ],
+            "units": [
+              "Cup",
+              "Oz"
+            ],
+            "sizes": [
+              "economy",
+              "large"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "beige",
+              "bisque"
+            ],
+            "units": [
+              "Gram",
+              "Tbl"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          },
+          {
+            "category": "Women",
+            "colors": [
+              "thistle",
+              "brown"
+            ],
+            "units": [
+              "Unknown",
+              "Each"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          },
+          {
+            "category": "Women",
+            "colors": [
+              "almond",
+              "dodger"
+            ],
+            "units": [
+              "N/A",
+              "Carton"
+            ],
+            "sizes": [
+              "petite",
+              "N/A"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "lime",
+              "burlywood"
+            ],
+            "units": [
+              "Bunch",
+              "Pallet"
+            ],
+            "sizes": [
+              "economy",
+              "large"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "light",
+              "plum"
+            ],
+            "units": [
+              "Dram",
+              "Lb"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          }
+        ]
+      },
+      "42": {
+        "year": 2002,
+        "month": 12
+      },
+      "43": {
+        "year": 2002,
+        "gmt": -6.0
+      },
       "63": {
         "dms": 1176
       },
@@ -4211,6 +6419,203 @@
         "year": 2002,
         "bp": "--",
         "ms": "U"
+      },
+      "73": {
+        "dom": [
+          1,
+          2
+        ],
+        "bp": [
+          "501-1000",
+          "5001-10000"
+        ],
+        "year": 2000,
+        "counties": [
+          "Ziebach County",
+          "Williamson County",
+          "Ziebach County",
+          "Williamson County"
+        ]
+      },
+      "74": {
+        "year": 2000
+      },
+      "75": {
+        "category": "Shoes",
+        "year": 2001
+      },
+      "76": {
+        "nullcol_ss": "ss_cdemo_sk",
+        "nullcol_ws": "ws_ship_addr_sk",
+        "nullcol_cs": "cs_promo_sk"
+      },
+      "77": {
+        "sdate": "2002-08-09"
+      },
+      "78": {
+        "year": 2001
+      },
+      "79": {
+        "dep_cnt": 9,
+        "dow": 1,
+        "year": 1999,
+        "emp_min": 200,
+        "emp_max": 295
+      },
+      "80": {
+        "sdate": "2002-08-09"
+      },
+      "81": {
+        "state": "NH"
+      },
+      "82": {
+        "price": 37,
+        "sdate": "2002-01-22",
+        "manufact": [
+          63,
+          225,
+          11,
+          345
+        ],
+        "inv_min": 100,
+        "inv_max": 500
+      },
+      "83": {
+        "dates": [
+          "2002-02-01",
+          "2002-10-01",
+          "2002-11-05"
+        ]
+      },
+      "84": {
+        "city": "Cedar Grove",
+        "income": 5884
+      },
+      "85": {
+        "year": 2002,
+        "ms": [
+          "M",
+          "U",
+          "S"
+        ],
+        "es": [
+          "4 yr Degree",
+          "College",
+          "2 yr Degree"
+        ],
+        "price_ranges": [
+          [
+            100.0,
+            150.0
+          ],
+          [
+            50.0,
+            100.0
+          ],
+          [
+            150.0,
+            200.0
+          ]
+        ],
+        "states": [
+          "NH",
+          "OK",
+          "NC",
+          "MS",
+          "TX",
+          "TN"
+        ],
+        "np_min": 100,
+        "np_max": 200
+      },
+      "86": {
+        "d_month_seq": 1176
+      },
+      "87": {
+        "d_month_seq": 1176
+      },
+      "88": {
+        "s_store_name": "ese",
+        "hd_dep_count1": 1,
+        "hd_dep_count2": -1,
+        "hd_dep_count3": 3
+      },
+      "89": {
+        "year": 2001,
+        "category1": [
+          "Electronics",
+          "Men",
+          "Women"
+        ],
+        "class1": [
+          "stereo",
+          "accessories",
+          "fragrances"
+        ],
+        "category2": [
+          "Children",
+          "Sports",
+          "Shoes"
+        ],
+        "class2": [
+          "toddlers",
+          "outdoor",
+          "womens"
+        ]
+      },
+      "90": {
+        "am_hour": 8,
+        "pm_hour": 19,
+        "hd_dep_count": 9,
+        "wp_char_count_min": 5000,
+        "wp_char_count_max": 5200
+      },
+      "91": {
+        "year": 2001,
+        "month": 12,
+        "marital_status1": "M",
+        "education_status1": "Unknown",
+        "marital_status2": "W",
+        "education_status2": "Advanced Degree",
+        "hd_buy_potential": ">10000%",
+        "ca_gmt_offset": -6
+      },
+      "92": {
+        "manufact_id": 10,
+        "date": "2002-01-05"
+      },
+      "93": {
+        "reason_desc": "reason 70"
+      },
+      "94": {
+        "date": "2000-5-01",
+        "state": "IA",
+        "web_company_name": "pri"
+      },
+      "95": {
+        "date": "2000-5-01",
+        "state": "IA",
+        "web_company_name": "pri"
+      },
+      "96": {
+        "t_hour": 8,
+        "t_minute": 30,
+        "hd_dep_count": 4,
+        "s_store_name": "ese"
+      },
+      "97": {
+        "d_month_seq": 1176
+      },
+      "98": {
+        "categories": [
+          "Books",
+          "Women",
+          "Electronics"
+        ],
+        "date": "2001-01-08"
+      },
+      "99": {
+        "d_month_seq": 1176
       }
     },
     "1000": {
@@ -4736,6 +7141,56 @@
           "Oglethorpe County"
         ]
       },
+      "17": {
+        "year": 2002
+      },
+      "18": {
+        "year": 1999,
+        "month": [
+          8,
+          9,
+          3,
+          5,
+          7,
+          2
+        ],
+        "state": [
+          "MT",
+          "NM",
+          "NY",
+          "GA",
+          "CO",
+          "LA",
+          "SD"
+        ],
+        "es": "Unknown",
+        "gen": "M"
+      },
+      "19": {
+        "year": 2001,
+        "month": 12,
+        "manager": 94
+      },
+      "20": {
+        "sdate": "2001-01-08",
+        "year": 2001,
+        "category": [
+          "Books",
+          "Women",
+          "Electronics"
+        ]
+      },
+      "21": {
+        "sales_date": "2002-03-20",
+        "year": 2002
+      },
+      "22": {
+        "dms": 1176
+      },
+      "23": {
+        "year": 2000,
+        "month": 3
+      },
       "24": {
         "market": 8,
         "color": [
@@ -4852,6 +7307,160 @@
           "AL"
         ]
       },
+      "37": {
+        "price": 12,
+        "manufact": [
+          971,
+          695,
+          854,
+          709
+        ],
+        "invdate": "2001-04-23"
+      },
+      "38": {
+        "dms": 1176
+      },
+      "39": {
+        "year": 2002,
+        "month": 4
+      },
+      "40": {
+        "sales_date": "2002-03-20",
+        "year": 2002
+      },
+      "41": {
+        "manufact": 819,
+        "rules": [
+          {
+            "category": "Women",
+            "colors": [
+              "midnight",
+              "pale"
+            ],
+            "units": [
+              "Bundle",
+              "Case"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          },
+          {
+            "category": "Women",
+            "colors": [
+              "navy",
+              "navajo"
+            ],
+            "units": [
+              "Gross",
+              "Tsp"
+            ],
+            "sizes": [
+              "petite",
+              "N/A"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "sandy",
+              "cornsilk"
+            ],
+            "units": [
+              "Cup",
+              "Oz"
+            ],
+            "sizes": [
+              "economy",
+              "large"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "beige",
+              "bisque"
+            ],
+            "units": [
+              "Gram",
+              "Tbl"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          },
+          {
+            "category": "Women",
+            "colors": [
+              "thistle",
+              "brown"
+            ],
+            "units": [
+              "Unknown",
+              "Each"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          },
+          {
+            "category": "Women",
+            "colors": [
+              "almond",
+              "dodger"
+            ],
+            "units": [
+              "N/A",
+              "Carton"
+            ],
+            "sizes": [
+              "petite",
+              "N/A"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "lime",
+              "burlywood"
+            ],
+            "units": [
+              "Bunch",
+              "Pallet"
+            ],
+            "sizes": [
+              "economy",
+              "large"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "light",
+              "plum"
+            ],
+            "units": [
+              "Dram",
+              "Lb"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          }
+        ]
+      },
+      "42": {
+        "year": 2002,
+        "month": 12
+      },
+      "43": {
+        "year": 2002,
+        "gmt": -6.0
+      },
       "63": {
         "dms": 1176
       },
@@ -4913,6 +7522,203 @@
         "year": 2002,
         "bp": "--",
         "ms": "U"
+      },
+      "73": {
+        "dom": [
+          1,
+          2
+        ],
+        "bp": [
+          ">10000",
+          "Unknown"
+        ],
+        "year": 1998,
+        "counties": [
+          "Barrow County",
+          "Bronx County",
+          "Kittitas County",
+          "Levy County"
+        ]
+      },
+      "74": {
+        "year": 2000
+      },
+      "75": {
+        "category": "Shoes",
+        "year": 2001
+      },
+      "76": {
+        "nullcol_ss": "ss_cdemo_sk",
+        "nullcol_ws": "ws_ship_addr_sk",
+        "nullcol_cs": "cs_promo_sk"
+      },
+      "77": {
+        "sdate": "2002-08-09"
+      },
+      "78": {
+        "year": 2001
+      },
+      "79": {
+        "dep_cnt": 9,
+        "dow": 1,
+        "year": 1999,
+        "emp_min": 200,
+        "emp_max": 295
+      },
+      "80": {
+        "sdate": "2002-08-09"
+      },
+      "81": {
+        "state": "NH"
+      },
+      "82": {
+        "price": 37,
+        "sdate": "2002-01-22",
+        "manufact": [
+          63,
+          225,
+          11,
+          345
+        ],
+        "inv_min": 100,
+        "inv_max": 500
+      },
+      "83": {
+        "dates": [
+          "2002-02-01",
+          "2002-10-01",
+          "2002-11-05"
+        ]
+      },
+      "84": {
+        "city": "Cedar Grove",
+        "income": 5884
+      },
+      "85": {
+        "year": 2002,
+        "ms": [
+          "M",
+          "U",
+          "S"
+        ],
+        "es": [
+          "4 yr Degree",
+          "College",
+          "2 yr Degree"
+        ],
+        "price_ranges": [
+          [
+            100.0,
+            150.0
+          ],
+          [
+            50.0,
+            100.0
+          ],
+          [
+            150.0,
+            200.0
+          ]
+        ],
+        "states": [
+          "NH",
+          "OK",
+          "NC",
+          "MS",
+          "TX",
+          "TN"
+        ],
+        "np_min": 100,
+        "np_max": 200
+      },
+      "86": {
+        "d_month_seq": 1176
+      },
+      "87": {
+        "d_month_seq": 1176
+      },
+      "88": {
+        "s_store_name": "ese",
+        "hd_dep_count1": 1,
+        "hd_dep_count2": -1,
+        "hd_dep_count3": 3
+      },
+      "89": {
+        "year": 2001,
+        "category1": [
+          "Electronics",
+          "Men",
+          "Women"
+        ],
+        "class1": [
+          "stereo",
+          "accessories",
+          "fragrances"
+        ],
+        "category2": [
+          "Children",
+          "Sports",
+          "Shoes"
+        ],
+        "class2": [
+          "toddlers",
+          "outdoor",
+          "womens"
+        ]
+      },
+      "90": {
+        "am_hour": 8,
+        "pm_hour": 19,
+        "hd_dep_count": 9,
+        "wp_char_count_min": 5000,
+        "wp_char_count_max": 5200
+      },
+      "91": {
+        "year": 2001,
+        "month": 12,
+        "marital_status1": "M",
+        "education_status1": "Unknown",
+        "marital_status2": "W",
+        "education_status2": "Advanced Degree",
+        "hd_buy_potential": ">10000%",
+        "ca_gmt_offset": -6
+      },
+      "92": {
+        "manufact_id": 10,
+        "date": "2002-01-05"
+      },
+      "93": {
+        "reason_desc": "reason 70"
+      },
+      "94": {
+        "date": "2000-5-01",
+        "state": "IA",
+        "web_company_name": "pri"
+      },
+      "95": {
+        "date": "2000-5-01",
+        "state": "IA",
+        "web_company_name": "pri"
+      },
+      "96": {
+        "t_hour": 8,
+        "t_minute": 30,
+        "hd_dep_count": 4,
+        "s_store_name": "ese"
+      },
+      "97": {
+        "d_month_seq": 1176
+      },
+      "98": {
+        "categories": [
+          "Books",
+          "Women",
+          "Electronics"
+        ],
+        "date": "2001-01-08"
+      },
+      "99": {
+        "d_month_seq": 1176
       }
     },
     "3000": {
@@ -5438,6 +8244,56 @@
           "Marshall County"
         ]
       },
+      "17": {
+        "year": 2002
+      },
+      "18": {
+        "year": 1999,
+        "month": [
+          8,
+          9,
+          3,
+          5,
+          7,
+          2
+        ],
+        "state": [
+          "MT",
+          "NM",
+          "NY",
+          "GA",
+          "CO",
+          "LA",
+          "SD"
+        ],
+        "es": "Unknown",
+        "gen": "M"
+      },
+      "19": {
+        "year": 2001,
+        "month": 12,
+        "manager": 94
+      },
+      "20": {
+        "sdate": "2001-01-08",
+        "year": 2001,
+        "category": [
+          "Books",
+          "Women",
+          "Electronics"
+        ]
+      },
+      "21": {
+        "sales_date": "2002-03-20",
+        "year": 2002
+      },
+      "22": {
+        "dms": 1176
+      },
+      "23": {
+        "year": 2000,
+        "month": 3
+      },
       "24": {
         "market": 8,
         "color": [
@@ -5554,6 +8410,160 @@
           "LA"
         ]
       },
+      "37": {
+        "price": 12,
+        "manufact": [
+          971,
+          695,
+          854,
+          709
+        ],
+        "invdate": "2001-04-23"
+      },
+      "38": {
+        "dms": 1176
+      },
+      "39": {
+        "year": 2002,
+        "month": 4
+      },
+      "40": {
+        "sales_date": "2002-03-20",
+        "year": 2002
+      },
+      "41": {
+        "manufact": 819,
+        "rules": [
+          {
+            "category": "Women",
+            "colors": [
+              "midnight",
+              "pale"
+            ],
+            "units": [
+              "Bundle",
+              "Case"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          },
+          {
+            "category": "Women",
+            "colors": [
+              "navy",
+              "navajo"
+            ],
+            "units": [
+              "Gross",
+              "Tsp"
+            ],
+            "sizes": [
+              "petite",
+              "N/A"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "sandy",
+              "cornsilk"
+            ],
+            "units": [
+              "Cup",
+              "Oz"
+            ],
+            "sizes": [
+              "economy",
+              "large"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "beige",
+              "bisque"
+            ],
+            "units": [
+              "Gram",
+              "Tbl"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          },
+          {
+            "category": "Women",
+            "colors": [
+              "thistle",
+              "brown"
+            ],
+            "units": [
+              "Unknown",
+              "Each"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          },
+          {
+            "category": "Women",
+            "colors": [
+              "almond",
+              "dodger"
+            ],
+            "units": [
+              "N/A",
+              "Carton"
+            ],
+            "sizes": [
+              "petite",
+              "N/A"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "lime",
+              "burlywood"
+            ],
+            "units": [
+              "Bunch",
+              "Pallet"
+            ],
+            "sizes": [
+              "economy",
+              "large"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "light",
+              "plum"
+            ],
+            "units": [
+              "Dram",
+              "Lb"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          }
+        ]
+      },
+      "42": {
+        "year": 2002,
+        "month": 12
+      },
+      "43": {
+        "year": 2002,
+        "gmt": -6.0
+      },
       "63": {
         "dms": 1176
       },
@@ -5615,6 +8625,203 @@
         "year": 2002,
         "bp": "--",
         "ms": "U"
+      },
+      "73": {
+        "dom": [
+          1,
+          2
+        ],
+        "bp": [
+          "501-1000",
+          "Unknown"
+        ],
+        "year": 1998,
+        "counties": [
+          "Anderson County",
+          "Sierra County",
+          "Kittitas County",
+          "Terrell County"
+        ]
+      },
+      "74": {
+        "year": 2000
+      },
+      "75": {
+        "category": "Shoes",
+        "year": 2001
+      },
+      "76": {
+        "nullcol_ss": "ss_cdemo_sk",
+        "nullcol_ws": "ws_ship_addr_sk",
+        "nullcol_cs": "cs_promo_sk"
+      },
+      "77": {
+        "sdate": "2002-08-09"
+      },
+      "78": {
+        "year": 2001
+      },
+      "79": {
+        "dep_cnt": 9,
+        "dow": 1,
+        "year": 1999,
+        "emp_min": 200,
+        "emp_max": 295
+      },
+      "80": {
+        "sdate": "2002-08-09"
+      },
+      "81": {
+        "state": "NH"
+      },
+      "82": {
+        "price": 37,
+        "sdate": "2002-01-22",
+        "manufact": [
+          63,
+          225,
+          11,
+          345
+        ],
+        "inv_min": 100,
+        "inv_max": 500
+      },
+      "83": {
+        "dates": [
+          "2002-02-01",
+          "2002-10-01",
+          "2002-11-05"
+        ]
+      },
+      "84": {
+        "city": "Cedar Grove",
+        "income": 5884
+      },
+      "85": {
+        "year": 2002,
+        "ms": [
+          "M",
+          "U",
+          "S"
+        ],
+        "es": [
+          "4 yr Degree",
+          "College",
+          "2 yr Degree"
+        ],
+        "price_ranges": [
+          [
+            100.0,
+            150.0
+          ],
+          [
+            50.0,
+            100.0
+          ],
+          [
+            150.0,
+            200.0
+          ]
+        ],
+        "states": [
+          "NH",
+          "OK",
+          "NC",
+          "MS",
+          "TX",
+          "TN"
+        ],
+        "np_min": 100,
+        "np_max": 200
+      },
+      "86": {
+        "d_month_seq": 1176
+      },
+      "87": {
+        "d_month_seq": 1176
+      },
+      "88": {
+        "s_store_name": "ese",
+        "hd_dep_count1": 1,
+        "hd_dep_count2": -1,
+        "hd_dep_count3": 3
+      },
+      "89": {
+        "year": 2001,
+        "category1": [
+          "Electronics",
+          "Men",
+          "Women"
+        ],
+        "class1": [
+          "stereo",
+          "accessories",
+          "fragrances"
+        ],
+        "category2": [
+          "Children",
+          "Sports",
+          "Shoes"
+        ],
+        "class2": [
+          "toddlers",
+          "outdoor",
+          "womens"
+        ]
+      },
+      "90": {
+        "am_hour": 8,
+        "pm_hour": 19,
+        "hd_dep_count": 9,
+        "wp_char_count_min": 5000,
+        "wp_char_count_max": 5200
+      },
+      "91": {
+        "year": 2001,
+        "month": 12,
+        "marital_status1": "M",
+        "education_status1": "Unknown",
+        "marital_status2": "W",
+        "education_status2": "Advanced Degree",
+        "hd_buy_potential": ">10000%",
+        "ca_gmt_offset": -6
+      },
+      "92": {
+        "manufact_id": 10,
+        "date": "2002-01-05"
+      },
+      "93": {
+        "reason_desc": "reason 70"
+      },
+      "94": {
+        "date": "2000-5-01",
+        "state": "IA",
+        "web_company_name": "pri"
+      },
+      "95": {
+        "date": "2000-5-01",
+        "state": "IA",
+        "web_company_name": "pri"
+      },
+      "96": {
+        "t_hour": 8,
+        "t_minute": 30,
+        "hd_dep_count": 4,
+        "s_store_name": "ese"
+      },
+      "97": {
+        "d_month_seq": 1176
+      },
+      "98": {
+        "categories": [
+          "Books",
+          "Women",
+          "Electronics"
+        ],
+        "date": "2001-01-08"
+      },
+      "99": {
+        "d_month_seq": 1176
       }
     },
     "10000": {
@@ -6140,6 +9347,56 @@
           "Richland County"
         ]
       },
+      "17": {
+        "year": 2002
+      },
+      "18": {
+        "year": 1999,
+        "month": [
+          8,
+          9,
+          3,
+          5,
+          7,
+          2
+        ],
+        "state": [
+          "MT",
+          "NM",
+          "NY",
+          "GA",
+          "CO",
+          "LA",
+          "SD"
+        ],
+        "es": "Unknown",
+        "gen": "M"
+      },
+      "19": {
+        "year": 2001,
+        "month": 12,
+        "manager": 94
+      },
+      "20": {
+        "sdate": "2001-01-08",
+        "year": 2001,
+        "category": [
+          "Books",
+          "Women",
+          "Electronics"
+        ]
+      },
+      "21": {
+        "sales_date": "2002-03-20",
+        "year": 2002
+      },
+      "22": {
+        "dms": 1176
+      },
+      "23": {
+        "year": 2000,
+        "month": 3
+      },
       "24": {
         "market": 8,
         "color": [
@@ -6256,6 +9513,160 @@
           "NM"
         ]
       },
+      "37": {
+        "price": 12,
+        "manufact": [
+          971,
+          695,
+          854,
+          709
+        ],
+        "invdate": "2001-04-23"
+      },
+      "38": {
+        "dms": 1176
+      },
+      "39": {
+        "year": 2002,
+        "month": 4
+      },
+      "40": {
+        "sales_date": "2002-03-20",
+        "year": 2002
+      },
+      "41": {
+        "manufact": 819,
+        "rules": [
+          {
+            "category": "Women",
+            "colors": [
+              "midnight",
+              "pale"
+            ],
+            "units": [
+              "Bundle",
+              "Case"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          },
+          {
+            "category": "Women",
+            "colors": [
+              "navy",
+              "navajo"
+            ],
+            "units": [
+              "Gross",
+              "Tsp"
+            ],
+            "sizes": [
+              "petite",
+              "N/A"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "sandy",
+              "cornsilk"
+            ],
+            "units": [
+              "Cup",
+              "Oz"
+            ],
+            "sizes": [
+              "economy",
+              "large"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "beige",
+              "bisque"
+            ],
+            "units": [
+              "Gram",
+              "Tbl"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          },
+          {
+            "category": "Women",
+            "colors": [
+              "thistle",
+              "brown"
+            ],
+            "units": [
+              "Unknown",
+              "Each"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          },
+          {
+            "category": "Women",
+            "colors": [
+              "almond",
+              "dodger"
+            ],
+            "units": [
+              "N/A",
+              "Carton"
+            ],
+            "sizes": [
+              "petite",
+              "N/A"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "lime",
+              "burlywood"
+            ],
+            "units": [
+              "Bunch",
+              "Pallet"
+            ],
+            "sizes": [
+              "economy",
+              "large"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "light",
+              "plum"
+            ],
+            "units": [
+              "Dram",
+              "Lb"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          }
+        ]
+      },
+      "42": {
+        "year": 2002,
+        "month": 12
+      },
+      "43": {
+        "year": 2002,
+        "gmt": -5.0
+      },
       "63": {
         "dms": 1176
       },
@@ -6317,6 +9728,203 @@
         "year": 2002,
         "bp": "--",
         "ms": "U"
+      },
+      "73": {
+        "dom": [
+          1,
+          2
+        ],
+        "bp": [
+          "501-1000",
+          "0-500"
+        ],
+        "year": 1999,
+        "counties": [
+          "Quay County",
+          "Cocke County",
+          "Franklin Parish",
+          "Daviess County"
+        ]
+      },
+      "74": {
+        "year": 2000
+      },
+      "75": {
+        "category": "Shoes",
+        "year": 2001
+      },
+      "76": {
+        "nullcol_ss": "ss_cdemo_sk",
+        "nullcol_ws": "ws_ship_addr_sk",
+        "nullcol_cs": "cs_promo_sk"
+      },
+      "77": {
+        "sdate": "2002-08-09"
+      },
+      "78": {
+        "year": 2001
+      },
+      "79": {
+        "dep_cnt": 9,
+        "dow": 1,
+        "year": 1999,
+        "emp_min": 200,
+        "emp_max": 295
+      },
+      "80": {
+        "sdate": "2002-08-09"
+      },
+      "81": {
+        "state": "NH"
+      },
+      "82": {
+        "price": 37,
+        "sdate": "2002-01-22",
+        "manufact": [
+          63,
+          225,
+          11,
+          345
+        ],
+        "inv_min": 100,
+        "inv_max": 500
+      },
+      "83": {
+        "dates": [
+          "2002-02-01",
+          "2002-10-01",
+          "2002-11-05"
+        ]
+      },
+      "84": {
+        "city": "Cedar Grove",
+        "income": 5884
+      },
+      "85": {
+        "year": 2002,
+        "ms": [
+          "M",
+          "U",
+          "S"
+        ],
+        "es": [
+          "4 yr Degree",
+          "College",
+          "2 yr Degree"
+        ],
+        "price_ranges": [
+          [
+            100.0,
+            150.0
+          ],
+          [
+            50.0,
+            100.0
+          ],
+          [
+            150.0,
+            200.0
+          ]
+        ],
+        "states": [
+          "NH",
+          "OK",
+          "NC",
+          "MS",
+          "TX",
+          "TN"
+        ],
+        "np_min": 100,
+        "np_max": 200
+      },
+      "86": {
+        "d_month_seq": 1176
+      },
+      "87": {
+        "d_month_seq": 1176
+      },
+      "88": {
+        "s_store_name": "ese",
+        "hd_dep_count1": 1,
+        "hd_dep_count2": -1,
+        "hd_dep_count3": 3
+      },
+      "89": {
+        "year": 2001,
+        "category1": [
+          "Electronics",
+          "Men",
+          "Women"
+        ],
+        "class1": [
+          "stereo",
+          "accessories",
+          "fragrances"
+        ],
+        "category2": [
+          "Children",
+          "Sports",
+          "Shoes"
+        ],
+        "class2": [
+          "toddlers",
+          "outdoor",
+          "womens"
+        ]
+      },
+      "90": {
+        "am_hour": 8,
+        "pm_hour": 19,
+        "hd_dep_count": 9,
+        "wp_char_count_min": 5000,
+        "wp_char_count_max": 5200
+      },
+      "91": {
+        "year": 2001,
+        "month": 12,
+        "marital_status1": "M",
+        "education_status1": "Unknown",
+        "marital_status2": "W",
+        "education_status2": "Advanced Degree",
+        "hd_buy_potential": ">10000%",
+        "ca_gmt_offset": -6
+      },
+      "92": {
+        "manufact_id": 10,
+        "date": "2002-01-05"
+      },
+      "93": {
+        "reason_desc": "reason 70"
+      },
+      "94": {
+        "date": "2000-5-01",
+        "state": "IA",
+        "web_company_name": "pri"
+      },
+      "95": {
+        "date": "2000-5-01",
+        "state": "IA",
+        "web_company_name": "pri"
+      },
+      "96": {
+        "t_hour": 8,
+        "t_minute": 30,
+        "hd_dep_count": 4,
+        "s_store_name": "ese"
+      },
+      "97": {
+        "d_month_seq": 1176
+      },
+      "98": {
+        "categories": [
+          "Books",
+          "Women",
+          "Electronics"
+        ],
+        "date": "2001-01-08"
+      },
+      "99": {
+        "d_month_seq": 1176
       }
     },
     "30000": {
@@ -6842,6 +10450,56 @@
           "Perry County"
         ]
       },
+      "17": {
+        "year": 2002
+      },
+      "18": {
+        "year": 1999,
+        "month": [
+          8,
+          9,
+          3,
+          5,
+          7,
+          2
+        ],
+        "state": [
+          "MT",
+          "NM",
+          "NY",
+          "GA",
+          "CO",
+          "LA",
+          "SD"
+        ],
+        "es": "Unknown",
+        "gen": "M"
+      },
+      "19": {
+        "year": 2001,
+        "month": 12,
+        "manager": 94
+      },
+      "20": {
+        "sdate": "2001-01-08",
+        "year": 2001,
+        "category": [
+          "Books",
+          "Women",
+          "Electronics"
+        ]
+      },
+      "21": {
+        "sales_date": "2002-03-20",
+        "year": 2002
+      },
+      "22": {
+        "dms": 1176
+      },
+      "23": {
+        "year": 2000,
+        "month": 3
+      },
       "24": {
         "market": 8,
         "color": [
@@ -6958,6 +10616,160 @@
           "TX"
         ]
       },
+      "37": {
+        "price": 12,
+        "manufact": [
+          971,
+          695,
+          854,
+          709
+        ],
+        "invdate": "2001-04-23"
+      },
+      "38": {
+        "dms": 1176
+      },
+      "39": {
+        "year": 2002,
+        "month": 4
+      },
+      "40": {
+        "sales_date": "2002-03-20",
+        "year": 2002
+      },
+      "41": {
+        "manufact": 819,
+        "rules": [
+          {
+            "category": "Women",
+            "colors": [
+              "midnight",
+              "pale"
+            ],
+            "units": [
+              "Bundle",
+              "Case"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          },
+          {
+            "category": "Women",
+            "colors": [
+              "navy",
+              "navajo"
+            ],
+            "units": [
+              "Gross",
+              "Tsp"
+            ],
+            "sizes": [
+              "petite",
+              "N/A"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "sandy",
+              "cornsilk"
+            ],
+            "units": [
+              "Cup",
+              "Oz"
+            ],
+            "sizes": [
+              "economy",
+              "large"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "beige",
+              "bisque"
+            ],
+            "units": [
+              "Gram",
+              "Tbl"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          },
+          {
+            "category": "Women",
+            "colors": [
+              "thistle",
+              "brown"
+            ],
+            "units": [
+              "Unknown",
+              "Each"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          },
+          {
+            "category": "Women",
+            "colors": [
+              "almond",
+              "dodger"
+            ],
+            "units": [
+              "N/A",
+              "Carton"
+            ],
+            "sizes": [
+              "petite",
+              "N/A"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "lime",
+              "burlywood"
+            ],
+            "units": [
+              "Bunch",
+              "Pallet"
+            ],
+            "sizes": [
+              "economy",
+              "large"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "light",
+              "plum"
+            ],
+            "units": [
+              "Dram",
+              "Lb"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          }
+        ]
+      },
+      "42": {
+        "year": 2002,
+        "month": 12
+      },
+      "43": {
+        "year": 2002,
+        "gmt": -6.0
+      },
       "63": {
         "dms": 1176
       },
@@ -7019,6 +10831,203 @@
         "year": 2002,
         "bp": "--",
         "ms": "U"
+      },
+      "73": {
+        "dom": [
+          1,
+          2
+        ],
+        "bp": [
+          "1001-5000",
+          "Unknown"
+        ],
+        "year": 2000,
+        "counties": [
+          "Schley County",
+          "Sierra County",
+          "Kittitas County",
+          "La Crosse County"
+        ]
+      },
+      "74": {
+        "year": 2000
+      },
+      "75": {
+        "category": "Shoes",
+        "year": 2001
+      },
+      "76": {
+        "nullcol_ss": "ss_cdemo_sk",
+        "nullcol_ws": "ws_ship_addr_sk",
+        "nullcol_cs": "cs_promo_sk"
+      },
+      "77": {
+        "sdate": "2002-08-09"
+      },
+      "78": {
+        "year": 2001
+      },
+      "79": {
+        "dep_cnt": 9,
+        "dow": 1,
+        "year": 1999,
+        "emp_min": 200,
+        "emp_max": 295
+      },
+      "80": {
+        "sdate": "2002-08-09"
+      },
+      "81": {
+        "state": "NH"
+      },
+      "82": {
+        "price": 37,
+        "sdate": "2002-01-22",
+        "manufact": [
+          63,
+          225,
+          11,
+          345
+        ],
+        "inv_min": 100,
+        "inv_max": 500
+      },
+      "83": {
+        "dates": [
+          "2002-02-01",
+          "2002-10-01",
+          "2002-11-05"
+        ]
+      },
+      "84": {
+        "city": "Cedar Grove",
+        "income": 5884
+      },
+      "85": {
+        "year": 2002,
+        "ms": [
+          "M",
+          "U",
+          "S"
+        ],
+        "es": [
+          "4 yr Degree",
+          "College",
+          "2 yr Degree"
+        ],
+        "price_ranges": [
+          [
+            100.0,
+            150.0
+          ],
+          [
+            50.0,
+            100.0
+          ],
+          [
+            150.0,
+            200.0
+          ]
+        ],
+        "states": [
+          "NH",
+          "OK",
+          "NC",
+          "MS",
+          "TX",
+          "TN"
+        ],
+        "np_min": 100,
+        "np_max": 200
+      },
+      "86": {
+        "d_month_seq": 1176
+      },
+      "87": {
+        "d_month_seq": 1176
+      },
+      "88": {
+        "s_store_name": "ese",
+        "hd_dep_count1": 1,
+        "hd_dep_count2": -1,
+        "hd_dep_count3": 3
+      },
+      "89": {
+        "year": 2001,
+        "category1": [
+          "Electronics",
+          "Men",
+          "Women"
+        ],
+        "class1": [
+          "stereo",
+          "accessories",
+          "fragrances"
+        ],
+        "category2": [
+          "Children",
+          "Sports",
+          "Shoes"
+        ],
+        "class2": [
+          "toddlers",
+          "outdoor",
+          "womens"
+        ]
+      },
+      "90": {
+        "am_hour": 8,
+        "pm_hour": 19,
+        "hd_dep_count": 9,
+        "wp_char_count_min": 5000,
+        "wp_char_count_max": 5200
+      },
+      "91": {
+        "year": 2001,
+        "month": 12,
+        "marital_status1": "M",
+        "education_status1": "Unknown",
+        "marital_status2": "W",
+        "education_status2": "Advanced Degree",
+        "hd_buy_potential": ">10000%",
+        "ca_gmt_offset": -6
+      },
+      "92": {
+        "manufact_id": 10,
+        "date": "2002-01-05"
+      },
+      "93": {
+        "reason_desc": "reason 70"
+      },
+      "94": {
+        "date": "2000-5-01",
+        "state": "IA",
+        "web_company_name": "pri"
+      },
+      "95": {
+        "date": "2000-5-01",
+        "state": "IA",
+        "web_company_name": "pri"
+      },
+      "96": {
+        "t_hour": 8,
+        "t_minute": 30,
+        "hd_dep_count": 4,
+        "s_store_name": "ese"
+      },
+      "97": {
+        "d_month_seq": 1176
+      },
+      "98": {
+        "categories": [
+          "Books",
+          "Women",
+          "Electronics"
+        ],
+        "date": "2001-01-08"
+      },
+      "99": {
+        "d_month_seq": 1176
       }
     },
     "100000": {
@@ -7544,6 +11553,56 @@
           "Perry County"
         ]
       },
+      "17": {
+        "year": 2002
+      },
+      "18": {
+        "year": 1999,
+        "month": [
+          8,
+          9,
+          3,
+          5,
+          7,
+          2
+        ],
+        "state": [
+          "MT",
+          "NM",
+          "NY",
+          "GA",
+          "CO",
+          "LA",
+          "SD"
+        ],
+        "es": "Unknown",
+        "gen": "M"
+      },
+      "19": {
+        "year": 2001,
+        "month": 12,
+        "manager": 94
+      },
+      "20": {
+        "sdate": "2001-01-08",
+        "year": 2001,
+        "category": [
+          "Books",
+          "Women",
+          "Electronics"
+        ]
+      },
+      "21": {
+        "sales_date": "2002-03-20",
+        "year": 2002
+      },
+      "22": {
+        "dms": 1176
+      },
+      "23": {
+        "year": 2000,
+        "month": 3
+      },
       "24": {
         "market": 8,
         "color": [
@@ -7660,6 +11719,160 @@
           "MI"
         ]
       },
+      "37": {
+        "price": 12,
+        "manufact": [
+          971,
+          695,
+          854,
+          709
+        ],
+        "invdate": "2001-04-23"
+      },
+      "38": {
+        "dms": 1176
+      },
+      "39": {
+        "year": 2002,
+        "month": 4
+      },
+      "40": {
+        "sales_date": "2002-03-20",
+        "year": 2002
+      },
+      "41": {
+        "manufact": 819,
+        "rules": [
+          {
+            "category": "Women",
+            "colors": [
+              "midnight",
+              "pale"
+            ],
+            "units": [
+              "Bundle",
+              "Case"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          },
+          {
+            "category": "Women",
+            "colors": [
+              "navy",
+              "navajo"
+            ],
+            "units": [
+              "Gross",
+              "Tsp"
+            ],
+            "sizes": [
+              "petite",
+              "N/A"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "sandy",
+              "cornsilk"
+            ],
+            "units": [
+              "Cup",
+              "Oz"
+            ],
+            "sizes": [
+              "economy",
+              "large"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "beige",
+              "bisque"
+            ],
+            "units": [
+              "Gram",
+              "Tbl"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          },
+          {
+            "category": "Women",
+            "colors": [
+              "thistle",
+              "brown"
+            ],
+            "units": [
+              "Unknown",
+              "Each"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          },
+          {
+            "category": "Women",
+            "colors": [
+              "almond",
+              "dodger"
+            ],
+            "units": [
+              "N/A",
+              "Carton"
+            ],
+            "sizes": [
+              "petite",
+              "N/A"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "lime",
+              "burlywood"
+            ],
+            "units": [
+              "Bunch",
+              "Pallet"
+            ],
+            "sizes": [
+              "economy",
+              "large"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "light",
+              "plum"
+            ],
+            "units": [
+              "Dram",
+              "Lb"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          }
+        ]
+      },
+      "42": {
+        "year": 2002,
+        "month": 12
+      },
+      "43": {
+        "year": 2002,
+        "gmt": -5.0
+      },
       "63": {
         "dms": 1176
       },
@@ -7721,6 +11934,203 @@
         "year": 2002,
         "bp": "--",
         "ms": "U"
+      },
+      "73": {
+        "dom": [
+          1,
+          2
+        ],
+        "bp": [
+          "1001-5000",
+          "Unknown"
+        ],
+        "year": 1999,
+        "counties": [
+          "Stillwater County",
+          "Montgomery County",
+          "Blair County",
+          "Gage County"
+        ]
+      },
+      "74": {
+        "year": 2000
+      },
+      "75": {
+        "category": "Shoes",
+        "year": 2001
+      },
+      "76": {
+        "nullcol_ss": "ss_cdemo_sk",
+        "nullcol_ws": "ws_ship_addr_sk",
+        "nullcol_cs": "cs_promo_sk"
+      },
+      "77": {
+        "sdate": "2002-08-09"
+      },
+      "78": {
+        "year": 2001
+      },
+      "79": {
+        "dep_cnt": 9,
+        "dow": 1,
+        "year": 1999,
+        "emp_min": 200,
+        "emp_max": 295
+      },
+      "80": {
+        "sdate": "2002-08-09"
+      },
+      "81": {
+        "state": "NH"
+      },
+      "82": {
+        "price": 37,
+        "sdate": "2002-01-22",
+        "manufact": [
+          63,
+          225,
+          11,
+          345
+        ],
+        "inv_min": 100,
+        "inv_max": 500
+      },
+      "83": {
+        "dates": [
+          "2002-02-01",
+          "2002-10-01",
+          "2002-11-05"
+        ]
+      },
+      "84": {
+        "city": "Cedar Grove",
+        "income": 5884
+      },
+      "85": {
+        "year": 2002,
+        "ms": [
+          "M",
+          "U",
+          "S"
+        ],
+        "es": [
+          "4 yr Degree",
+          "College",
+          "2 yr Degree"
+        ],
+        "price_ranges": [
+          [
+            100.0,
+            150.0
+          ],
+          [
+            50.0,
+            100.0
+          ],
+          [
+            150.0,
+            200.0
+          ]
+        ],
+        "states": [
+          "NH",
+          "OK",
+          "NC",
+          "MS",
+          "TX",
+          "TN"
+        ],
+        "np_min": 100,
+        "np_max": 200
+      },
+      "86": {
+        "d_month_seq": 1176
+      },
+      "87": {
+        "d_month_seq": 1176
+      },
+      "88": {
+        "s_store_name": "ese",
+        "hd_dep_count1": 1,
+        "hd_dep_count2": -1,
+        "hd_dep_count3": 3
+      },
+      "89": {
+        "year": 2001,
+        "category1": [
+          "Electronics",
+          "Men",
+          "Women"
+        ],
+        "class1": [
+          "stereo",
+          "accessories",
+          "fragrances"
+        ],
+        "category2": [
+          "Children",
+          "Sports",
+          "Shoes"
+        ],
+        "class2": [
+          "toddlers",
+          "outdoor",
+          "womens"
+        ]
+      },
+      "90": {
+        "am_hour": 8,
+        "pm_hour": 19,
+        "hd_dep_count": 9,
+        "wp_char_count_min": 5000,
+        "wp_char_count_max": 5200
+      },
+      "91": {
+        "year": 2001,
+        "month": 12,
+        "marital_status1": "M",
+        "education_status1": "Unknown",
+        "marital_status2": "W",
+        "education_status2": "Advanced Degree",
+        "hd_buy_potential": ">10000%",
+        "ca_gmt_offset": -6
+      },
+      "92": {
+        "manufact_id": 10,
+        "date": "2002-01-05"
+      },
+      "93": {
+        "reason_desc": "reason 70"
+      },
+      "94": {
+        "date": "2000-5-01",
+        "state": "IA",
+        "web_company_name": "pri"
+      },
+      "95": {
+        "date": "2000-5-01",
+        "state": "IA",
+        "web_company_name": "pri"
+      },
+      "96": {
+        "t_hour": 8,
+        "t_minute": 30,
+        "hd_dep_count": 4,
+        "s_store_name": "ese"
+      },
+      "97": {
+        "d_month_seq": 1176
+      },
+      "98": {
+        "categories": [
+          "Books",
+          "Women",
+          "Electronics"
+        ],
+        "date": "2001-01-08"
+      },
+      "99": {
+        "d_month_seq": 1176
       }
     },
     "qualification": {
@@ -8240,6 +12650,56 @@
           "Williamson County"
         ]
       },
+      "17": {
+        "year": 2001
+      },
+      "18": {
+        "year": 1998,
+        "month": [
+          1,
+          6,
+          8,
+          9,
+          12,
+          2
+        ],
+        "state": [
+          "MS",
+          "IN",
+          "ND",
+          "OK",
+          "NM",
+          "VA",
+          "MS"
+        ],
+        "es": "Unknown",
+        "gen": "F"
+      },
+      "19": {
+        "year": 1998,
+        "month": 11,
+        "manager": 8
+      },
+      "20": {
+        "year": 1999,
+        "sdate": "1999-02-22",
+        "category": [
+          "Sports",
+          "Books",
+          "Home"
+        ]
+      },
+      "21": {
+        "year": 2000,
+        "sales_date": "2000-03-11"
+      },
+      "22": {
+        "dms": 1200
+      },
+      "23": {
+        "year": 1998,
+        "month": 2
+      },
       "24": {
         "market": 8,
         "color": [
@@ -8355,6 +12815,268 @@
           "TN"
         ],
         "year": 2000
+      },
+      "37": {
+        "price": 68,
+        "manufact": [
+          677,
+          940,
+          694,
+          808
+        ],
+        "invdate": "2000-02-01"
+      },
+      "38": {
+        "dms": 1200
+      },
+      "39": {
+        "year": 2001,
+        "month": 1
+      },
+      "40": {
+        "sales_date": "2000-03-11",
+        "year": 2000
+      },
+      "41": {
+        "manufact": 738,
+        "rules": [
+          {
+            "category": "Women",
+            "colors": [
+              "powder",
+              "khaki"
+            ],
+            "units": [
+              "Ounce",
+              "Oz"
+            ],
+            "sizes": [
+              "medium",
+              "extra large"
+            ]
+          },
+          {
+            "category": "Women",
+            "colors": [
+              "brown",
+              "honeydew"
+            ],
+            "units": [
+              "Bunch",
+              "Ton"
+            ],
+            "sizes": [
+              "N/A",
+              "small"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "floral",
+              "deep"
+            ],
+            "units": [
+              "N/A",
+              "Dozen"
+            ],
+            "sizes": [
+              "petite",
+              "large"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "light",
+              "cornflower"
+            ],
+            "units": [
+              "Box",
+              "Pound"
+            ],
+            "sizes": [
+              "medium",
+              "extra large"
+            ]
+          },
+          {
+            "category": "Women",
+            "colors": [
+              "midnight",
+              "snow"
+            ],
+            "units": [
+              "Pallet",
+              "Gross"
+            ],
+            "sizes": [
+              "medium",
+              "extra large"
+            ]
+          },
+          {
+            "category": "Women",
+            "colors": [
+              "cyan",
+              "papaya"
+            ],
+            "units": [
+              "Cup",
+              "Dram"
+            ],
+            "sizes": [
+              "N/A",
+              "small"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "orange",
+              "frosted"
+            ],
+            "units": [
+              "Each",
+              "Tbl"
+            ],
+            "sizes": [
+              "petite",
+              "large"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "forest",
+              "ghost"
+            ],
+            "units": [
+              "Lb",
+              "Bundle"
+            ],
+            "sizes": [
+              "medium",
+              "extra large"
+            ]
+          }
+        ]
+      },
+      "42": {
+        "month": 11,
+        "year": 2000
+      },
+      "43": {
+        "year": 2000,
+        "gmt": -5.0
+      },
+      "73": {
+        "dom": [
+          1,
+          2
+        ],
+        "bp": [
+          ">10000",
+          "Unknown"
+        ],
+        "year": 1999,
+        "counties": [
+          "Williamson County",
+          "Franklin Parish",
+          "Bronx County",
+          "Orange County"
+        ]
+      },
+      "74": {
+        "year": 2001
+      },
+      "75": {
+        "category": "Books",
+        "year": 2002
+      },
+      "76": {
+        "nullcol_ss": "ss_store_sk",
+        "nullcol_ws": "ws_ship_customer_sk",
+        "nullcol_cs": "cs_ship_addr_sk"
+      },
+      "77": {
+        "sdate": "2000-08-23"
+      },
+      "78": {
+        "year": 2000
+      },
+      "79": {
+        "dep_cnt": 6,
+        "dow": 1,
+        "year": 1999,
+        "emp_min": 200,
+        "emp_max": 295
+      },
+      "80": {
+        "sdate": "2000-08-23"
+      },
+      "81": {
+        "state": "GA"
+      },
+      "82": {
+        "price": 62,
+        "sdate": "2000-05-25",
+        "manufact": [
+          129,
+          270,
+          821,
+          423
+        ],
+        "inv_min": 100,
+        "inv_max": 500
+      },
+      "83": {
+        "dates": [
+          "2000-06-30",
+          "2000-09-27",
+          "2000-11-17"
+        ]
+      },
+      "84": {
+        "city": "Edgewood",
+        "income": 38128
+      },
+      "85": {
+        "year": 2000,
+        "ms": [
+          "M",
+          "U",
+          "S"
+        ],
+        "es": [
+          "4 yr Degree",
+          "College",
+          "2 yr Degree"
+        ],
+        "price_ranges": [
+          [
+            100.0,
+            150.0
+          ],
+          [
+            50.0,
+            100.0
+          ],
+          [
+            150.0,
+            200.0
+          ]
+        ],
+        "states": [
+          "IN",
+          "OH",
+          "NJ",
+          "WI",
+          "CT",
+          "KY"
+        ],
+        "np_min": 100,
+        "np_max": 200
       }
     }
   }
