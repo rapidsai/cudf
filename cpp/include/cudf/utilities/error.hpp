@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -189,7 +189,7 @@ struct data_type_error : std::invalid_argument {
 
 #define CUDF_FAIL_2(_what, _exception_type)      \
   /*NOLINTNEXTLINE(bugprone-macro-parentheses)*/ \
-  throw _exception_type { "CUDF failure at:" __FILE__ ":" CUDF_STRINGIFY(__LINE__) ": " _what }
+  throw _exception_type { "CUDF failure at: " __FILE__ ":" CUDF_STRINGIFY(__LINE__) ": " _what }
 
 #define CUDF_FAIL_1(_what) CUDF_FAIL_2(_what, cudf::logic_error)
 

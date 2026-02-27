@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -10,12 +10,15 @@
 #include <cuda/std/limits>
 #include <cuda/std/type_traits>
 
+#if (!defined(__CUDACC_RTC__)) && !defined(CUDF_RUNTIME_JIT)
 #include <algorithm>
 #include <string>
+#endif
 
 namespace CUDF_EXPORT numeric {
 namespace detail {
 
+#if (!defined(__CUDACC_RTC__)) && !defined(CUDF_RUNTIME_JIT)
 template <typename T>
 auto to_string(T value) -> std::string
 {
@@ -41,6 +44,7 @@ auto to_string(T value) -> std::string
   }
   return std::string{};  // won't ever hit here, need to suppress warning though
 }
+#endif
 
 template <typename T>
 CUDF_HOST_DEVICE constexpr auto abs(T value)

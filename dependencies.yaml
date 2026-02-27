@@ -480,6 +480,7 @@ dependencies:
           - cxx-compiler
           - dlpack>=0.8,<1.0
           - zlib>=1.2.13
+          - python-zstd>=1.5.7.2
     specific:
       - output_types: conda
         matrices:

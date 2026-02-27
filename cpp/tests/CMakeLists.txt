@@ -713,6 +713,7 @@ ConfigureTest(JIT_PARSER_TEST jit/parse_ptx_function.cpp)
 target_include_directories(JIT_PARSER_TEST PRIVATE "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/src>")
 
 ConfigureTest(ROW_IR_TEST jit/row_ir.cpp)
+ConfigureTest(RTC_TEST jit/rtc.cpp)
 
 # ##################################################################################################
 # * stream testing ---------------------------------------------------------------------------------
