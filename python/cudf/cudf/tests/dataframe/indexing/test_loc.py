@@ -10,7 +10,6 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.core._compat import PANDAS_GE_210
 from cudf.testing import assert_eq
 from cudf.testing._utils import assert_exceptions_equal, expect_warning_if
 
@@ -818,13 +817,7 @@ def test_loc_datetime_index(sli, is_dataframe):
         slice(None, "2009"),
     ],
 )
-def test_loc_datetime_index_string_slice_non_monotonic(request, sli):
-    request.applymarker(
-        pytest.mark.xfail(
-            condition=not PANDAS_GE_210,
-            reason="See https://github.com/pandas-dev/pandas/issues/53983",
-        )
-    )
+def test_loc_datetime_index_string_slice_non_monotonic(sli):
     pdf = pd.DataFrame(
         {"a": [1, 2, 3]},
         index=pd.Series(["2001", "2009", "2002"], dtype="datetime64[ns]"),

@@ -602,21 +602,13 @@ class StructDtype(_BaseDtype):
     >>> import cudf
     >>> struct_dtype = cudf.StructDtype({"a": "int64", "b": "float64"})
     >>> struct_dtype
-    <<<<<<< HEAD
-    StructDtype({'a': dtype('int64'), 'b': <StringDtype(na_value=<NA>)>})
-    =======
     StructDtype({'a': dtype('int64'), 'b': dtype('float64')})
-    >>>>>>> upstream/main
 
     A nested ``StructDtype`` can also be constructed in the following way:
 
     >>> nested_struct_dtype = cudf.StructDtype({"dict_data": struct_dtype, "c": "uint8"})
     >>> nested_struct_dtype
-    <<<<<<< HEAD
-    StructDtype({'dict_data': StructDtype({'a': dtype('int64'), 'b': <StringDtype(na_value=<NA>)>}), 'c': dtype('uint8')})
-    =======
     StructDtype({'dict_data': StructDtype({'a': dtype('int64'), 'b': dtype('float64')}), 'c': dtype('uint8')})
-    >>>>>>> upstream/main
     """
 
     name = "struct"
@@ -634,15 +626,9 @@ class StructDtype(_BaseDtype):
         >>> import cudf
         >>> struct_dtype = cudf.StructDtype({"a": "int64", "b": "float64"})
         >>> struct_dtype
-        <<<<<<< HEAD
-        StructDtype({'a': dtype('int64'), 'b': <StringDtype(na_value=<NA>)>})
-        >>> struct_dtype.fields
-        {'a': dtype('int64'), 'b': <StringDtype(na_value=<NA>)>}
-        =======
         StructDtype({'a': dtype('int64'), 'b': dtype('float64')})
         >>> struct_dtype.fields
         {'a': dtype('int64'), 'b': dtype('float64')}
-        >>>>>>> upstream/main
         """
         return self._fields
 
@@ -680,11 +666,7 @@ class StructDtype(_BaseDtype):
         >>> import cudf
         >>> struct_type = cudf.StructDtype({"x": "int32", "y": "float64"})
         >>> struct_type
-        <<<<<<< HEAD
-        StructDtype({'x': dtype('int32'), 'y': <StringDtype(na_value=<NA>)>})
-        =======
         StructDtype({'x': dtype('int32'), 'y': dtype('float64')})
-        >>>>>>> upstream/main
         >>> struct_type.to_arrow()
         StructType(struct<x: int32, y: double>)
         """
