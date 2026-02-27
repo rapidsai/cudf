@@ -254,12 +254,15 @@ def _wrap_and_validate(
     dtype_kind = dtype.kind
     valid_types: set[plc.TypeId] = set()
     wrapped: plc.Column | None = None
+    is_arrow_dtype = isinstance(dtype, pd.ArrowDtype)
     if is_dtype_obj_list(dtype):
         valid_types = {plc.TypeId.LIST}
         child_dtype = (
-            pd.ArrowDtype(dtype.pyarrow_dtype.value_type)
-            if isinstance(dtype, pd.ArrowDtype)
-            else cast("StructDtype", dtype).element_type
+            pd.ArrowDtype(
+                cast("pd.ArrowDtype", dtype).pyarrow_dtype.value_type
+            )
+            if is_arrow_dtype
+            else cast("ListDtype", dtype).element_type
         )
         values, values_dtype = _wrap_and_validate(
             col.list_view().child(), child_dtype
@@ -282,8 +285,8 @@ def _wrap_and_validate(
                 "plc_column must have two children (left edges, right edges)."
             )
         interval_subtype = (
-            pd.ArrowDtype(dtype.pyarrow_dtype.subtype)
-            if isinstance(dtype, pd.ArrowDtype)
+            pd.ArrowDtype(cast("pd.ArrowDtype", dtype).pyarrow_dtype.subtype)
+            if is_arrow_dtype
             else cast("IntervalDtype", dtype).subtype
         )
         assert interval_subtype is not None
@@ -306,9 +309,9 @@ def _wrap_and_validate(
         struct_fields = (
             (
                 (field.name, pd.ArrowDtype(field.type))
-                for field in dtype.pyarrow_dtype
+                for field in cast("pd.ArrowDtype", dtype).pyarrow_dtype
             )
-            if isinstance(dtype, pd.ArrowDtype)
+            if is_arrow_dtype
             else cast("StructDtype", dtype).fields.items()
         )
         for child, (field_name, field_dtype) in zip(
