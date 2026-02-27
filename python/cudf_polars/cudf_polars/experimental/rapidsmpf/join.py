@@ -792,15 +792,14 @@ async def _choose_strategy(
     # - Full: cannot broadcast (must shuffle both to preserve both sides)
 
     # Determine which sides may be broadcasted
-    join_type = ir.options[0]
     left_size_ok = left_total < broadcast_threshold and (
         left_total_rows < MAX_BROADCAST_ROWS or left_metadata.duplicated
     )
     right_size_ok = right_total < broadcast_threshold and (
         right_total_rows < MAX_BROADCAST_ROWS or right_metadata.duplicated
     )
-    can_broadcast_left = left_size_ok and join_type in ("Inner", "Right")
-    can_broadcast_right = right_size_ok and join_type in (
+    can_broadcast_left = left_size_ok and ir.options[0] in ("Inner", "Right")
+    can_broadcast_right = right_size_ok and ir.options[0] in (
         "Inner",
         "Left",
         "Semi",
