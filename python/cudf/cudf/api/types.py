@@ -20,6 +20,10 @@ from pandas.api import types as pd_types  # noqa: TID251
 import pylibcudf as plc
 
 import cudf
+from cudf.core.dtype.validators import (
+    is_dtype_obj_numeric,
+    is_dtype_obj_string,
+)
 from cudf.core.dtypes import (  # noqa: F401
     _BaseDtype,
     _is_categorical_dtype,
@@ -33,10 +37,6 @@ from cudf.core.dtypes import (  # noqa: F401
     is_interval_dtype,
     is_list_dtype,
     is_struct_dtype,
-)
-from cudf.core.dtypes.validators import (
-    is_dtype_obj_numeric,
-    is_dtype_obj_string,
 )
 
 if TYPE_CHECKING:

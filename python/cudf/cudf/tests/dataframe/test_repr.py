@@ -239,7 +239,7 @@ def test_dataframe_sliced(gdf, slc, max_seq_items, max_rows):
         ).set_index(["a", "v"]),
     ],
 )
-def test_dataframe_null_index_repr(df, pandas_special_case):
+def test_dataframe_null_index_repr(df):
     with cudf.option_context("mode.pandas_compatible", True):
         pdf = df
         gdf = cudf.from_pandas(pdf)
