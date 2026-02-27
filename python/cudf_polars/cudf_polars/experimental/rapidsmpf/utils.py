@@ -48,11 +48,10 @@ if TYPE_CHECKING:
 
     from rmm.pylibrmm.stream import Stream
 
-    from cudf_polars.dsl.expr import NamedExpr
     from cudf_polars.dsl.ir import IR, IRExecutionContext
     from cudf_polars.experimental.rapidsmpf.dispatch import SubNetGenerator
     from cudf_polars.experimental.rapidsmpf.tracing import ActorTracer
-    from cudf_polars.typing import DataType, Schema
+    from cudf_polars.typing import DataType
 
 
 @asynccontextmanager
@@ -444,58 +443,23 @@ async def chunkwise_evaluate(
     await ch_out.drain(context)
 
 
-def _get_partitioning_moduli(
-    metadata: ChannelMetadata,
-    key_indices: tuple[int, ...],
-    nranks: int,
-    *,
-    allow_subset: bool = False,
-) -> tuple[int, int | None]:
-    """Return (inter_rank_modulus, local_modulus) for hash partitioning on key_indices. Internal to NormalizedPartitioning."""
-    # NOTE: This function will need to be updated when we support
-    # order-based partitioning. For ordered data, we can return a
-    # "boundaries" TableChunk instead of a single integer (modulus).
+def names_to_indices(exprs: tuple[Any, ...], schema: Any) -> tuple[int, ...]:
+    """
+    Return column indices for each expr's name in schema order.
 
-    trivial_inter_rank_modulus = 1 if nranks == 1 else 0
-    if metadata.partitioning is None:
-        return trivial_inter_rank_modulus, 0
+    Parameters
+    ----------
+    exprs
+        The expressions to get indices for.
+    schema
+        The schema to get indices from.
 
-    def _keys_match(
-        scheme: HashScheme | None | str, key_indices: tuple[int, ...]
-    ) -> bool:
-        if isinstance(scheme, HashScheme):
-            target_key_indices = key_indices
-            current_key_indices = scheme.column_indices
-            if allow_subset:
-                target_key_indices = target_key_indices[: len(current_key_indices)]
-            return target_key_indices == current_key_indices
-        else:
-            return False
-
-    inter_rank = metadata.partitioning.inter_rank
-    strict_inter_rank_modulus = (
-        inter_rank.modulus if _keys_match(inter_rank, key_indices) else 0
-    )
-    inter_rank_modulus = strict_inter_rank_modulus or trivial_inter_rank_modulus
-    if not inter_rank_modulus:
-        # Local partitioning is meaningless without inter-rank partitioning
-        return 0, 0
-
-    local = metadata.partitioning.local
-    local_modulus = local.modulus if _keys_match(local, key_indices) else 0
-    if local_modulus != metadata.local_count:
-        local_modulus = 0  # Local count is out of sync - Better to be safe
-
-    local_modulus = local_modulus or (None if local == "inherit" else 0)
-
-    if local_modulus and not strict_inter_rank_modulus and trivial_inter_rank_modulus:
-        # Trivial inter-rank partitioning with local partitioning
-        # is the same as inter-rank partitioning with local="inherit".
-        # Use the latter representation for consistency.
-        inter_rank_modulus = local_modulus
-        local_modulus = None
-
-    return inter_rank_modulus, local_modulus
+    Returns
+    -------
+    The column indices for each expr in schema order.
+    """
+    schema_keys = list(schema.keys())
+    return tuple(schema_keys.index(expr.name) for expr in exprs)
 
 
 @dataclass(frozen=True)
@@ -529,9 +493,9 @@ class NormalizedPartitioning:
         )
 
     @classmethod
-    def resolve_from_indices(
+    def from_indices(
         cls,
-        metadata: ChannelMetadata,
+        partitioning_metadata: Partitioning | None,
         nranks: int,
         *,
         indices: tuple[int, ...],
@@ -542,8 +506,8 @@ class NormalizedPartitioning:
 
         Parameters
         ----------
-        metadata
-            The channel metadata.
+        partitioning_metadata
+            The partitioning channel metadata.
         nranks
             The number of ranks.
         indices
@@ -558,22 +522,22 @@ class NormalizedPartitioning:
         NormalizedPartitioning
             The resolved inter-rank and local moduli and column indices.
         """
-        inter_rank_modulus, local_modulus = _get_partitioning_moduli(
-            metadata, indices, nranks, allow_subset=allow_subset
+        inter_rank_modulus, local_modulus = NormalizedPartitioning._get_moduli(
+            partitioning_metadata, indices, nranks, allow_subset=allow_subset
         )
 
         local_indices_val: tuple[int, ...] = ()
         inter_rank_indices: tuple[int, ...] = indices
-        if inter_rank_modulus and metadata.partitioning is not None:
-            inter_rank_hashed = isinstance(metadata.partitioning.inter_rank, HashScheme)
-            local_hashed = isinstance(metadata.partitioning.local, HashScheme)
+        if inter_rank_modulus and partitioning_metadata is not None:
+            inter_rank_hashed = isinstance(partitioning_metadata.inter_rank, HashScheme)
+            local_hashed = isinstance(partitioning_metadata.local, HashScheme)
             if local_hashed and inter_rank_hashed:
-                inter_rank_indices = metadata.partitioning.inter_rank.column_indices
-                local_indices_val = metadata.partitioning.local.column_indices
+                inter_rank_indices = partitioning_metadata.inter_rank.column_indices
+                local_indices_val = partitioning_metadata.local.column_indices
             elif inter_rank_hashed:
-                inter_rank_indices = metadata.partitioning.inter_rank.column_indices
+                inter_rank_indices = partitioning_metadata.inter_rank.column_indices
             elif local_hashed:
-                inter_rank_indices = metadata.partitioning.local.column_indices
+                inter_rank_indices = partitioning_metadata.local.column_indices
 
         return cls(
             inter_rank_modulus=inter_rank_modulus,
@@ -582,45 +546,59 @@ class NormalizedPartitioning:
             local_indices=local_indices_val,
         )
 
-    @classmethod
-    def resolve_from_exprs(
-        cls,
-        metadata: ChannelMetadata,
+    @staticmethod
+    def _get_moduli(
+        partitioning_metadata: Partitioning | None,
+        key_indices: tuple[int, ...],
         nranks: int,
         *,
-        exprs: tuple[NamedExpr, ...],
-        schema: Schema,
-        allow_subset: bool = True,
-    ) -> NormalizedPartitioning:
-        """
-        Resolve partitioning from metadata and key expressions.
+        allow_subset: bool = False,
+    ) -> tuple[int, int | None]:
+        # NOTE: This function will need to be updated when we support
+        # order-based partitioning. For ordered data, we can return a
+        # "boundaries" TableChunk instead of a single integer (modulus).
 
-        Parameters
-        ----------
-        metadata
-            The channel metadata.
-        nranks
-            The number of ranks.
-        exprs
-            The key expressions (e.g. join keys). Each expr's name is used to
-            look up the column index in schema.
-        schema
-            The schema of the data. Used to map expr names to column indices.
-        allow_subset
-            If True, treat partitioning as matching when the partitioning key
-            indices are a prefix of the resolved indices. If False, they must
-            match exactly.
+        trivial_inter_rank_modulus = 1 if nranks == 1 else 0
+        if partitioning_metadata is None:
+            return trivial_inter_rank_modulus, 0
 
-        Returns
-        -------
-        NormalizedPartitioning
-            The resolved inter-rank and local moduli and column indices.
-        """
-        schema_keys = list(schema.keys())
-        key_indices = tuple(schema_keys.index(expr.name) for expr in exprs)
-        return cls.resolve_from_indices(
-            metadata, nranks, indices=key_indices, allow_subset=allow_subset
+        def _keys_match(
+            scheme: HashScheme | None | str, key_indices: tuple[int, ...]
+        ) -> bool:
+            if isinstance(scheme, HashScheme):
+                target_key_indices = key_indices
+                current_key_indices = scheme.column_indices
+                if allow_subset:
+                    target_key_indices = target_key_indices[: len(current_key_indices)]
+                return target_key_indices == current_key_indices
+            else:
+                return False
+
+        inter_rank = partitioning_metadata.inter_rank
+        strict_inter_rank_modulus = (
+            inter_rank.modulus if _keys_match(inter_rank, key_indices) else 0
         )
+        inter_rank_modulus = strict_inter_rank_modulus or trivial_inter_rank_modulus
+        if not inter_rank_modulus:
+            # Local partitioning is meaningless without inter-rank partitioning
+            return 0, 0
+
+        local = partitioning_metadata.local
+        local_modulus = local.modulus if _keys_match(local, key_indices) else 0
+        local_modulus = local_modulus or (None if local == "inherit" else 0)
+
+        if (
+            local_modulus
+            and not strict_inter_rank_modulus
+            and trivial_inter_rank_modulus
+        ):
+            # Trivial inter-rank partitioning with local partitioning
+            # is the same as inter-rank partitioning with local="inherit".
+            # Use the latter representation for consistency.
+            inter_rank_modulus = local_modulus
+            local_modulus = None
+
+        return inter_rank_modulus, local_modulus
 
 
 class ChannelManager:

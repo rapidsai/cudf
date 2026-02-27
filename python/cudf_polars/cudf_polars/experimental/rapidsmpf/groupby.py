@@ -643,8 +643,10 @@ async def groupby_actor(
         metadata_in = await recv_metadata(ch_in, context)
 
         nranks = context.comm().nranks
-        partitioning = NormalizedPartitioning.resolve_from_indices(
-            metadata_in, nranks, indices=_key_indices(ir, ir.children[0].schema)
+        partitioning = NormalizedPartitioning.from_indices(
+            metadata_in.partitioning,
+            nranks,
+            indices=_key_indices(ir, ir.children[0].schema),
         )
         require_tree = _require_tree(ir)
         partitioned_inter_rank = bool(partitioning.inter_rank_modulus)

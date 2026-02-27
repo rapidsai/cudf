@@ -39,6 +39,7 @@ from cudf_polars.experimental.rapidsmpf.utils import (
     allgather_reduce,
     chunk_to_frame,
     empty_table_chunk,
+    names_to_indices,
     process_children,
     recv_metadata,
     remap_partitioning,
@@ -421,20 +422,17 @@ def _get_key_indices(
     n_partitioned_keys: int | None,
 ) -> tuple[tuple[int, ...], tuple[int, ...], tuple[int, ...]]:
     left, right = ir.children
-    left_schema_keys = list(left.schema.keys())
-    right_schema_keys = list(right.schema.keys())
-    left_key_indices = tuple(left_schema_keys.index(expr.name) for expr in ir.left_on)
-    right_key_indices = tuple(
-        right_schema_keys.index(expr.name) for expr in ir.right_on
-    )
+    left_key_indices = names_to_indices(ir.left_on, left.schema)
+    right_key_indices = names_to_indices(ir.right_on, right.schema)
+
     n_keys = (
         n_partitioned_keys if n_partitioned_keys is not None else len(left_key_indices)
     )
     output_schema_keys = list(ir.schema.keys())
-    if ir.options[0] in ("Inner", "Left", "Full", "Semi", "Anti"):
-        join_keys_for_output = ir.left_on
-    else:
+    if ir.options == "Right":
         join_keys_for_output = ir.right_on
+    else:
+        join_keys_for_output = ir.left_on
     output_key_indices = tuple(
         output_schema_keys.index(expr.name)
         for expr in join_keys_for_output
@@ -793,70 +791,37 @@ async def _choose_strategy(
     # - Right: must broadcast left (stream right to preserve all right rows)
     # - Full: cannot broadcast (must shuffle both to preserve both sides)
 
+    # Determine which sides may be broadcasted
     join_type = ir.options[0]
-    can_broadcast_left = join_type in ("Inner", "Right")
-    can_broadcast_right = join_type in ("Inner", "Left", "Semi", "Anti")
-
-    # Check if one side is already duplicated
-    left_duplicated = left_metadata.duplicated
-    right_duplicated = right_metadata.duplicated
-
-    # Check row counts - can't broadcast if concatenated rows exceed cuDF limit
-    left_rows_ok = left_total_rows < MAX_BROADCAST_ROWS
-    right_rows_ok = right_total_rows < MAX_BROADCAST_ROWS
+    left_size_ok = left_total < broadcast_threshold and (
+        left_total_rows < MAX_BROADCAST_ROWS or left_metadata.duplicated
+    )
+    right_size_ok = right_total < broadcast_threshold and (
+        right_total_rows < MAX_BROADCAST_ROWS or right_metadata.duplicated
+    )
+    can_broadcast_left = left_size_ok and join_type in ("Inner", "Right")
+    can_broadcast_right = right_size_ok and join_type in (
+        "Inner",
+        "Left",
+        "Semi",
+        "Anti",
+    )
 
     # Determine strategy
     broadcast_side: Literal["left", "right"] | None = None
-
-    if nranks == 1:
-        # Single rank - no network cost, but still prefer smaller side for
-        # hash table efficiency. Also check broadcast threshold.
-        left_ok = (
-            left_total < broadcast_threshold and left_rows_ok and can_broadcast_left
-        )
-        right_ok = right_total < broadcast_threshold and right_rows_ok
-
-        if left_ok and right_ok:
-            # Both sides OK - broadcast the side with fewer rows
-            # Row count is a better indicator of hash table size than byte size
-            broadcast_side = (
-                "left"
-                if (not can_broadcast_right or left_total_rows <= right_total_rows)
-                else "right"
-            )
-        elif right_ok and can_broadcast_right:
-            broadcast_side = "right"
-        elif left_ok:
+    if can_broadcast_left and can_broadcast_right:
+        # Choose side that is already duplicated.
+        # If both or neither are duplicated, choose the side with fewer rows.
+        if left_metadata.duplicated == right_metadata.duplicated:
+            broadcast_side = "right" if right_total_rows <= left_total_rows else "left"
+        elif left_metadata.duplicated:
             broadcast_side = "left"
-        # else: fall through to shuffle
-    elif right_duplicated and right_rows_ok and can_broadcast_right:
-        # Right already duplicated - broadcast right (no allgather needed)
-        broadcast_side = "right"
-    elif left_duplicated and can_broadcast_left and left_rows_ok:
-        # Left already duplicated - broadcast left (only for Inner)
+        else:
+            broadcast_side = "right"
+    elif can_broadcast_left:
         broadcast_side = "left"
-    else:
-        # Decide based on size estimates - broadcast the smaller side if possible
-        # Must also check row counts to avoid exceeding cuDF column size limit
-        left_small_enough = (
-            left_total < broadcast_threshold and can_broadcast_left and left_rows_ok
-        )
-        right_small_enough = right_total < broadcast_threshold and right_rows_ok
-
-        if left_small_enough and right_small_enough:
-            # Both are small enough - broadcast the smaller one (if both allowed)
-            broadcast_side = (
-                "left"
-                if (not can_broadcast_right or left_total <= right_total)
-                else "right"
-            )
-        elif right_small_enough and can_broadcast_right:
-            # Only right is small enough
-            broadcast_side = "right"
-        elif left_small_enough:
-            # Only left is small enough (Inner or Right join)
-            broadcast_side = "left"
-        # else: shuffle both sides
+    elif can_broadcast_right:
+        broadcast_side = "right"
 
     estimated_output_size = max(left_total, right_total)
     ideal_output_count = max(1, estimated_output_size // target_partition_size)
@@ -874,35 +839,33 @@ def _choose_shuffle_modulus(
     min_shuffle_modulus: int,
 ) -> int:
     """Choose an appropriate modulus for a shuffle join."""
-    left_existing_modulus = (
-        left_partitioning.inter_rank_modulus if left_partitioning else None
-    )
-    right_existing_modulus = (
+    left_modulus = left_partitioning.inter_rank_modulus if left_partitioning else None
+    right_modulus = (
         right_partitioning.inter_rank_modulus if right_partitioning else None
     )
 
     # Determine which modulus to use, preferring existing partitioning
     # if it provides at least the minimum needed partitions
-    if left_existing_modulus and right_existing_modulus:
+    if left_modulus and right_modulus:
         # Both sides partitioned - use the larger modulus if compatible
         # (one must be a multiple of the other for compatibility)
-        if left_existing_modulus >= right_existing_modulus:
-            if left_existing_modulus % right_existing_modulus == 0:
-                modulus = left_existing_modulus
+        if left_modulus >= right_modulus:
+            if left_modulus % right_modulus == 0:
+                modulus = left_modulus
             else:
                 # Incompatible - use whichever is larger
-                modulus = max(left_existing_modulus, right_existing_modulus)
+                modulus = max(left_modulus, right_modulus)
         else:
-            if right_existing_modulus % left_existing_modulus == 0:
-                modulus = right_existing_modulus
+            if right_modulus % left_modulus == 0:
+                modulus = right_modulus
             else:
-                modulus = max(left_existing_modulus, right_existing_modulus)
-    elif left_existing_modulus is not None:
+                modulus = max(left_modulus, right_modulus)
+    elif left_modulus is not None:
         # Only left is partitioned - use its modulus if sufficient
-        modulus = left_existing_modulus
-    elif right_existing_modulus is not None:
+        modulus = left_modulus
+    elif right_modulus is not None:
         # Only right is partitioned - use its modulus if sufficient
-        modulus = right_existing_modulus
+        modulus = right_modulus
     else:
         # Neither side partitioned - can choose freely
         # Use at least nranks for distributed efficiency
@@ -1020,11 +983,15 @@ async def join_actor(
         )
 
         nranks = context.comm().nranks
-        left_partitioning = NormalizedPartitioning.resolve_from_exprs(
-            left_metadata, nranks, exprs=ir.left_on, schema=ir.children[0].schema
+        left_partitioning = NormalizedPartitioning.from_indices(
+            left_metadata.partitioning,
+            nranks,
+            indices=names_to_indices(ir.left_on, ir.children[0].schema),
         )
-        right_partitioning = NormalizedPartitioning.resolve_from_exprs(
-            right_metadata, nranks, exprs=ir.right_on, schema=ir.children[1].schema
+        right_partitioning = NormalizedPartitioning.from_indices(
+            right_metadata.partitioning,
+            nranks,
+            indices=names_to_indices(ir.right_on, ir.children[1].schema),
         )
 
         # Skip sampling when both sides have aligned partitioning
