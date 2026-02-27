@@ -51,7 +51,10 @@ from cudf.core.dtype.validators import (
     is_dtype_obj_numeric,
     is_dtype_obj_string,
 )
-from cudf.core.dtypes import IntervalDtype, CategoricalDtype, dtype as cudf_dtype
+from cudf.core.dtypes import (
+    CategoricalDtype,
+    IntervalDtype,
+)
 from cudf.core.frame import Frame
 from cudf.core.join._join_helpers import _match_join_keys
 from cudf.core.single_column_frame import SingleColumnFrame

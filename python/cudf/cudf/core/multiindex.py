@@ -786,17 +786,17 @@ class MultiIndex(Index):
         )
 
         data_table = cudf.concat(
-                [
-                    frame,
-                    cudf.DataFrame._from_data(
-                        ColumnAccessor(
-                            {"idx": ColumnBase.from_range(range(len(frame)))},
-                            verify=False,
-                        )
-                    ),
-                ],
-                axis=1,
-            )
+            [
+                frame,
+                cudf.DataFrame._from_data(
+                    ColumnAccessor(
+                        {"idx": ColumnBase.from_range(range(len(frame)))},
+                        verify=False,
+                    )
+                ),
+            ],
+            axis=1,
+        )
         # Sort indices in pandas compatible mode
         # because we want the indices to be fetched
         # in a deterministic order.
