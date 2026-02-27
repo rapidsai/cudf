@@ -65,7 +65,6 @@ struct nullate {
 };
 
 /**
- * @brief A type tag to specify that a column should be treated as a dictionary column.
  * @brief A type tag to specify that a column should be treated as a dictionary column
  *
  * @tparam IndexType The type of the dictionary indices
