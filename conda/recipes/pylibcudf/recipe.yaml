@@ -87,7 +87,6 @@ requirements:
   run:
     - ${{ pin_compatible("cuda-version", upper_bound="x", lower_bound="x") }}
     - python
-    - pandas >=2.0,<2.4.0
     - libcudf =${{ version }}
     - ${{ pin_compatible("rmm", upper_bound="x.x") }}
     - if: cuda_major == "12"
