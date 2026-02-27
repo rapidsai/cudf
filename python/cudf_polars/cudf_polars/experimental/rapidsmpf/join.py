@@ -842,34 +842,42 @@ def _choose_shuffle_modulus(
     right_modulus = (
         right_partitioning.inter_rank_modulus if right_partitioning else None
     )
-
-    # Determine which modulus to use, preferring existing partitioning
-    # if it provides at least the minimum needed partitions
-    if left_modulus and right_modulus:
-        # Both sides partitioned - use the larger modulus if compatible
-        # (one must be a multiple of the other for compatibility)
-        if left_modulus >= right_modulus:
-            if left_modulus % right_modulus == 0:
-                modulus = left_modulus
-            else:
-                # Incompatible - use whichever is larger
-                modulus = max(left_modulus, right_modulus)
-        else:
-            if right_modulus % left_modulus == 0:
-                modulus = right_modulus
-            else:
-                modulus = max(left_modulus, right_modulus)
-    elif left_modulus is not None:
-        # Only left is partitioned - use its modulus if sufficient
-        modulus = left_modulus
-    elif right_modulus is not None:
-        # Only right is partitioned - use its modulus if sufficient
-        modulus = right_modulus
+    default_modulus = max(context.comm().nranks, min_shuffle_modulus)
+    small, large = sorted(
+        [left_modulus or default_modulus, right_modulus or default_modulus]
+    )
+    if large % small == 0:
+        return small
     else:
-        # Neither side partitioned - can choose freely
-        # Use at least nranks for distributed efficiency
-        modulus = context.comm().nranks
-    return max(modulus, min_shuffle_modulus)
+        return large
+
+    # # Determine which modulus to use, preferring existing partitioning
+    # # if it provides at least the minimum needed partitions
+    # if left_modulus and right_modulus:
+    #     # Both sides partitioned - use the larger modulus if compatible
+    #     # (one must be a multiple of the other for compatibility)
+    #     if left_modulus >= right_modulus:
+    #         if left_modulus % right_modulus == 0:
+    #             modulus = left_modulus
+    #         else:
+    #             # Incompatible - use whichever is larger
+    #             modulus = max(left_modulus, right_modulus)
+    #     else:
+    #         if right_modulus % left_modulus == 0:
+    #             modulus = right_modulus
+    #         else:
+    #             modulus = max(left_modulus, right_modulus)
+    # elif left_modulus is not None:
+    #     # Only left is partitioned - use its modulus if sufficient
+    #     modulus = left_modulus
+    # elif right_modulus is not None:
+    #     # Only right is partitioned - use its modulus if sufficient
+    #     modulus = right_modulus
+    # else:
+    #     # Neither side partitioned - can choose freely
+    #     # Use at least nranks for distributed efficiency
+    #     modulus = context.comm().nranks
+    # return max(modulus, min_shuffle_modulus)
 
 
 async def _sample_chunks(
