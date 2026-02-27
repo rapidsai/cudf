@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 """Configuration for rapidsmpf tests."""
@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import pytest
+from rapidsmpf.progress_thread import ProgressThread
 
 # Skip all tests in this directory if rapidsmpf is not available
 pytest.importorskip("rapidsmpf")
@@ -23,7 +24,7 @@ import rmm.mr
 def local_context() -> Context:
     """Fixture to create a single-GPU streaming context for testing."""
     options = Options(get_environment_variables())
-    comm = single_process_comm(options)
+    comm = single_process_comm(options, ProgressThread())
     mr = RmmResourceAdaptor(rmm.mr.CudaMemoryResource())
     br = BufferResource(mr)
     return Context(comm, br, options)
