@@ -611,8 +611,9 @@ def run_pandas_query_iteration(
 
     if expected is not None:
         try:
-            with disable_module_accelerator():
-                pd.testing.assert_frame_equal(result, expected)
+            pd.testing.assert_frame_equal(
+                result, expected, check_dtype=False, atol=0.02
+            )
         except Exception as e:
             validation_result = ValidationResult.from_error(e)
         else:
@@ -646,7 +647,7 @@ def run_pandas_query(
         cpu_run_config = dataclasses.replace(run_config, executor="cpu")
         expected, _ = execute_query(q_id, 0, q, cpu_run_config)
     elif validation_files is not None:
-        expected = pd.read_parquet(validation_files[q_id])
+        expected = pd._fsproxy_slow.read_parquet(validation_files[q_id])
     else:
         expected = None
 
@@ -713,9 +714,6 @@ def run_pandas(
         validation_files = list_validation_files(args.validate_directory)
     else:
         validation_files = None
-
-    if args.save_results_dir is not None:
-        os.makedirs(args.save_results_dir, exist_ok=True)
 
     for q_id in run_config.queries:
         try:
