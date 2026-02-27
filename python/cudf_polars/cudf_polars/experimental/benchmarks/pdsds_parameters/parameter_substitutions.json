@@ -858,6 +858,95 @@
         ],
         "np_min": 100,
         "np_max": 200
+      },
+      "86": {
+        "d_month_seq": 1176
+      },
+      "87": {
+        "d_month_seq": 1176
+      },
+      "88": {
+        "s_store_name": "ese",
+        "hd_dep_count1": 1,
+        "hd_dep_count2": -1,
+        "hd_dep_count3": 3
+      },
+      "89": {
+        "year": 2001,
+        "category1": [
+          "Electronics",
+          "Men",
+          "Women"
+        ],
+        "class1": [
+          "stereo",
+          "accessories",
+          "fragrances"
+        ],
+        "category2": [
+          "Children",
+          "Sports",
+          "Shoes"
+        ],
+        "class2": [
+          "toddlers",
+          "outdoor",
+          "womens"
+        ]
+      },
+      "90": {
+        "am_hour": 8,
+        "pm_hour": 19,
+        "hd_dep_count": 9,
+        "wp_char_count_min": 5000,
+        "wp_char_count_max": 5200
+      },
+      "91": {
+        "year": 2001,
+        "month": 12,
+        "marital_status1": "M",
+        "education_status1": "Unknown",
+        "marital_status2": "W",
+        "education_status2": "Advanced Degree",
+        "hd_buy_potential": ">10000%",
+        "ca_gmt_offset": -6
+      },
+      "92": {
+        "manufact_id": 10,
+        "date": "2002-01-05"
+      },
+      "93": {
+        "reason_desc": "reason 70"
+      },
+      "94": {
+        "date": "2000-5-01",
+        "state": "IA",
+        "web_company_name": "pri"
+      },
+      "95": {
+        "date": "2000-5-01",
+        "state": "IA",
+        "web_company_name": "pri"
+      },
+      "96": {
+        "t_hour": 8,
+        "t_minute": 30,
+        "hd_dep_count": 4,
+        "s_store_name": "ese"
+      },
+      "97": {
+        "d_month_seq": 1176
+      },
+      "98": {
+        "categories": [
+          "Books",
+          "Women",
+          "Electronics"
+        ],
+        "date": "2001-01-08"
+      },
+      "99": {
+        "d_month_seq": 1176
       }
     },
     "10": {
@@ -1718,6 +1807,95 @@
         ],
         "np_min": 100,
         "np_max": 200
+      },
+      "86": {
+        "d_month_seq": 1176
+      },
+      "87": {
+        "d_month_seq": 1176
+      },
+      "88": {
+        "s_store_name": "ese",
+        "hd_dep_count1": 1,
+        "hd_dep_count2": -1,
+        "hd_dep_count3": 3
+      },
+      "89": {
+        "year": 2001,
+        "category1": [
+          "Electronics",
+          "Men",
+          "Women"
+        ],
+        "class1": [
+          "stereo",
+          "accessories",
+          "fragrances"
+        ],
+        "category2": [
+          "Children",
+          "Sports",
+          "Shoes"
+        ],
+        "class2": [
+          "toddlers",
+          "outdoor",
+          "womens"
+        ]
+      },
+      "90": {
+        "am_hour": 8,
+        "pm_hour": 19,
+        "hd_dep_count": 9,
+        "wp_char_count_min": 5000,
+        "wp_char_count_max": 5200
+      },
+      "91": {
+        "year": 2001,
+        "month": 12,
+        "marital_status1": "M",
+        "education_status1": "Unknown",
+        "marital_status2": "W",
+        "education_status2": "Advanced Degree",
+        "hd_buy_potential": ">10000%",
+        "ca_gmt_offset": -6
+      },
+      "92": {
+        "manufact_id": 10,
+        "date": "2002-01-05"
+      },
+      "93": {
+        "reason_desc": "reason 70"
+      },
+      "94": {
+        "date": "2000-5-01",
+        "state": "IA",
+        "web_company_name": "pri"
+      },
+      "95": {
+        "date": "2000-5-01",
+        "state": "IA",
+        "web_company_name": "pri"
+      },
+      "96": {
+        "t_hour": 8,
+        "t_minute": 30,
+        "hd_dep_count": 4,
+        "s_store_name": "ese"
+      },
+      "97": {
+        "d_month_seq": 1176
+      },
+      "98": {
+        "categories": [
+          "Books",
+          "Women",
+          "Electronics"
+        ],
+        "date": "2001-01-08"
+      },
+      "99": {
+        "d_month_seq": 1176
       }
     },
     "50": {
@@ -2578,6 +2756,95 @@
         ],
         "np_min": 100,
         "np_max": 200
+      },
+      "86": {
+        "d_month_seq": 1176
+      },
+      "87": {
+        "d_month_seq": 1176
+      },
+      "88": {
+        "s_store_name": "ese",
+        "hd_dep_count1": 1,
+        "hd_dep_count2": -1,
+        "hd_dep_count3": 3
+      },
+      "89": {
+        "year": 2001,
+        "category1": [
+          "Electronics",
+          "Men",
+          "Women"
+        ],
+        "class1": [
+          "stereo",
+          "accessories",
+          "fragrances"
+        ],
+        "category2": [
+          "Children",
+          "Sports",
+          "Shoes"
+        ],
+        "class2": [
+          "toddlers",
+          "outdoor",
+          "womens"
+        ]
+      },
+      "90": {
+        "am_hour": 8,
+        "pm_hour": 19,
+        "hd_dep_count": 9,
+        "wp_char_count_min": 5000,
+        "wp_char_count_max": 5200
+      },
+      "91": {
+        "year": 2001,
+        "month": 12,
+        "marital_status1": "M",
+        "education_status1": "Unknown",
+        "marital_status2": "W",
+        "education_status2": "Advanced Degree",
+        "hd_buy_potential": ">10000%",
+        "ca_gmt_offset": -6
+      },
+      "92": {
+        "manufact_id": 10,
+        "date": "2002-01-05"
+      },
+      "93": {
+        "reason_desc": "reason 70"
+      },
+      "94": {
+        "date": "2000-5-01",
+        "state": "IA",
+        "web_company_name": "pri"
+      },
+      "95": {
+        "date": "2000-5-01",
+        "state": "IA",
+        "web_company_name": "pri"
+      },
+      "96": {
+        "t_hour": 8,
+        "t_minute": 30,
+        "hd_dep_count": 4,
+        "s_store_name": "ese"
+      },
+      "97": {
+        "d_month_seq": 1176
+      },
+      "98": {
+        "categories": [
+          "Books",
+          "Women",
+          "Electronics"
+        ],
+        "date": "2001-01-08"
+      },
+      "99": {
+        "d_month_seq": 1176
       }
     },
     "100": {
@@ -3438,6 +3705,95 @@
         ],
         "np_min": 100,
         "np_max": 200
+      },
+      "86": {
+        "d_month_seq": 1176
+      },
+      "87": {
+        "d_month_seq": 1176
+      },
+      "88": {
+        "s_store_name": "ese",
+        "hd_dep_count1": 1,
+        "hd_dep_count2": -1,
+        "hd_dep_count3": 3
+      },
+      "89": {
+        "year": 2001,
+        "category1": [
+          "Electronics",
+          "Men",
+          "Women"
+        ],
+        "class1": [
+          "stereo",
+          "accessories",
+          "fragrances"
+        ],
+        "category2": [
+          "Children",
+          "Sports",
+          "Shoes"
+        ],
+        "class2": [
+          "toddlers",
+          "outdoor",
+          "womens"
+        ]
+      },
+      "90": {
+        "am_hour": 8,
+        "pm_hour": 19,
+        "hd_dep_count": 9,
+        "wp_char_count_min": 5000,
+        "wp_char_count_max": 5200
+      },
+      "91": {
+        "year": 2001,
+        "month": 12,
+        "marital_status1": "M",
+        "education_status1": "Unknown",
+        "marital_status2": "W",
+        "education_status2": "Advanced Degree",
+        "hd_buy_potential": ">10000%",
+        "ca_gmt_offset": -6
+      },
+      "92": {
+        "manufact_id": 10,
+        "date": "2002-01-05"
+      },
+      "93": {
+        "reason_desc": "reason 70"
+      },
+      "94": {
+        "date": "2000-5-01",
+        "state": "IA",
+        "web_company_name": "pri"
+      },
+      "95": {
+        "date": "2000-5-01",
+        "state": "IA",
+        "web_company_name": "pri"
+      },
+      "96": {
+        "t_hour": 8,
+        "t_minute": 30,
+        "hd_dep_count": 4,
+        "s_store_name": "ese"
+      },
+      "97": {
+        "d_month_seq": 1176
+      },
+      "98": {
+        "categories": [
+          "Books",
+          "Women",
+          "Electronics"
+        ],
+        "date": "2001-01-08"
+      },
+      "99": {
+        "d_month_seq": 1176
       }
     },
     "200": {
@@ -4298,6 +4654,95 @@
         ],
         "np_min": 100,
         "np_max": 200
+      },
+      "86": {
+        "d_month_seq": 1176
+      },
+      "87": {
+        "d_month_seq": 1176
+      },
+      "88": {
+        "s_store_name": "ese",
+        "hd_dep_count1": 1,
+        "hd_dep_count2": -1,
+        "hd_dep_count3": 3
+      },
+      "89": {
+        "year": 2001,
+        "category1": [
+          "Electronics",
+          "Men",
+          "Women"
+        ],
+        "class1": [
+          "stereo",
+          "accessories",
+          "fragrances"
+        ],
+        "category2": [
+          "Children",
+          "Sports",
+          "Shoes"
+        ],
+        "class2": [
+          "toddlers",
+          "outdoor",
+          "womens"
+        ]
+      },
+      "90": {
+        "am_hour": 8,
+        "pm_hour": 19,
+        "hd_dep_count": 9,
+        "wp_char_count_min": 5000,
+        "wp_char_count_max": 5200
+      },
+      "91": {
+        "year": 2001,
+        "month": 12,
+        "marital_status1": "M",
+        "education_status1": "Unknown",
+        "marital_status2": "W",
+        "education_status2": "Advanced Degree",
+        "hd_buy_potential": ">10000%",
+        "ca_gmt_offset": -6
+      },
+      "92": {
+        "manufact_id": 10,
+        "date": "2002-01-05"
+      },
+      "93": {
+        "reason_desc": "reason 70"
+      },
+      "94": {
+        "date": "2000-5-01",
+        "state": "IA",
+        "web_company_name": "pri"
+      },
+      "95": {
+        "date": "2000-5-01",
+        "state": "IA",
+        "web_company_name": "pri"
+      },
+      "96": {
+        "t_hour": 8,
+        "t_minute": 30,
+        "hd_dep_count": 4,
+        "s_store_name": "ese"
+      },
+      "97": {
+        "d_month_seq": 1176
+      },
+      "98": {
+        "categories": [
+          "Books",
+          "Women",
+          "Electronics"
+        ],
+        "date": "2001-01-08"
+      },
+      "99": {
+        "d_month_seq": 1176
       }
     },
     "400": {
@@ -5158,6 +5603,95 @@
         ],
         "np_min": 100,
         "np_max": 200
+      },
+      "86": {
+        "d_month_seq": 1176
+      },
+      "87": {
+        "d_month_seq": 1176
+      },
+      "88": {
+        "s_store_name": "ese",
+        "hd_dep_count1": 1,
+        "hd_dep_count2": -1,
+        "hd_dep_count3": 3
+      },
+      "89": {
+        "year": 2001,
+        "category1": [
+          "Electronics",
+          "Men",
+          "Women"
+        ],
+        "class1": [
+          "stereo",
+          "accessories",
+          "fragrances"
+        ],
+        "category2": [
+          "Children",
+          "Sports",
+          "Shoes"
+        ],
+        "class2": [
+          "toddlers",
+          "outdoor",
+          "womens"
+        ]
+      },
+      "90": {
+        "am_hour": 8,
+        "pm_hour": 19,
+        "hd_dep_count": 9,
+        "wp_char_count_min": 5000,
+        "wp_char_count_max": 5200
+      },
+      "91": {
+        "year": 2001,
+        "month": 12,
+        "marital_status1": "M",
+        "education_status1": "Unknown",
+        "marital_status2": "W",
+        "education_status2": "Advanced Degree",
+        "hd_buy_potential": ">10000%",
+        "ca_gmt_offset": -6
+      },
+      "92": {
+        "manufact_id": 10,
+        "date": "2002-01-05"
+      },
+      "93": {
+        "reason_desc": "reason 70"
+      },
+      "94": {
+        "date": "2000-5-01",
+        "state": "IA",
+        "web_company_name": "pri"
+      },
+      "95": {
+        "date": "2000-5-01",
+        "state": "IA",
+        "web_company_name": "pri"
+      },
+      "96": {
+        "t_hour": 8,
+        "t_minute": 30,
+        "hd_dep_count": 4,
+        "s_store_name": "ese"
+      },
+      "97": {
+        "d_month_seq": 1176
+      },
+      "98": {
+        "categories": [
+          "Books",
+          "Women",
+          "Electronics"
+        ],
+        "date": "2001-01-08"
+      },
+      "99": {
+        "d_month_seq": 1176
       }
     },
     "1000": {
@@ -6018,6 +6552,95 @@
         ],
         "np_min": 100,
         "np_max": 200
+      },
+      "86": {
+        "d_month_seq": 1176
+      },
+      "87": {
+        "d_month_seq": 1176
+      },
+      "88": {
+        "s_store_name": "ese",
+        "hd_dep_count1": 1,
+        "hd_dep_count2": -1,
+        "hd_dep_count3": 3
+      },
+      "89": {
+        "year": 2001,
+        "category1": [
+          "Electronics",
+          "Men",
+          "Women"
+        ],
+        "class1": [
+          "stereo",
+          "accessories",
+          "fragrances"
+        ],
+        "category2": [
+          "Children",
+          "Sports",
+          "Shoes"
+        ],
+        "class2": [
+          "toddlers",
+          "outdoor",
+          "womens"
+        ]
+      },
+      "90": {
+        "am_hour": 8,
+        "pm_hour": 19,
+        "hd_dep_count": 9,
+        "wp_char_count_min": 5000,
+        "wp_char_count_max": 5200
+      },
+      "91": {
+        "year": 2001,
+        "month": 12,
+        "marital_status1": "M",
+        "education_status1": "Unknown",
+        "marital_status2": "W",
+        "education_status2": "Advanced Degree",
+        "hd_buy_potential": ">10000%",
+        "ca_gmt_offset": -6
+      },
+      "92": {
+        "manufact_id": 10,
+        "date": "2002-01-05"
+      },
+      "93": {
+        "reason_desc": "reason 70"
+      },
+      "94": {
+        "date": "2000-5-01",
+        "state": "IA",
+        "web_company_name": "pri"
+      },
+      "95": {
+        "date": "2000-5-01",
+        "state": "IA",
+        "web_company_name": "pri"
+      },
+      "96": {
+        "t_hour": 8,
+        "t_minute": 30,
+        "hd_dep_count": 4,
+        "s_store_name": "ese"
+      },
+      "97": {
+        "d_month_seq": 1176
+      },
+      "98": {
+        "categories": [
+          "Books",
+          "Women",
+          "Electronics"
+        ],
+        "date": "2001-01-08"
+      },
+      "99": {
+        "d_month_seq": 1176
       }
     },
     "3000": {
@@ -6878,6 +7501,95 @@
         ],
         "np_min": 100,
         "np_max": 200
+      },
+      "86": {
+        "d_month_seq": 1176
+      },
+      "87": {
+        "d_month_seq": 1176
+      },
+      "88": {
+        "s_store_name": "ese",
+        "hd_dep_count1": 1,
+        "hd_dep_count2": -1,
+        "hd_dep_count3": 3
+      },
+      "89": {
+        "year": 2001,
+        "category1": [
+          "Electronics",
+          "Men",
+          "Women"
+        ],
+        "class1": [
+          "stereo",
+          "accessories",
+          "fragrances"
+        ],
+        "category2": [
+          "Children",
+          "Sports",
+          "Shoes"
+        ],
+        "class2": [
+          "toddlers",
+          "outdoor",
+          "womens"
+        ]
+      },
+      "90": {
+        "am_hour": 8,
+        "pm_hour": 19,
+        "hd_dep_count": 9,
+        "wp_char_count_min": 5000,
+        "wp_char_count_max": 5200
+      },
+      "91": {
+        "year": 2001,
+        "month": 12,
+        "marital_status1": "M",
+        "education_status1": "Unknown",
+        "marital_status2": "W",
+        "education_status2": "Advanced Degree",
+        "hd_buy_potential": ">10000%",
+        "ca_gmt_offset": -6
+      },
+      "92": {
+        "manufact_id": 10,
+        "date": "2002-01-05"
+      },
+      "93": {
+        "reason_desc": "reason 70"
+      },
+      "94": {
+        "date": "2000-5-01",
+        "state": "IA",
+        "web_company_name": "pri"
+      },
+      "95": {
+        "date": "2000-5-01",
+        "state": "IA",
+        "web_company_name": "pri"
+      },
+      "96": {
+        "t_hour": 8,
+        "t_minute": 30,
+        "hd_dep_count": 4,
+        "s_store_name": "ese"
+      },
+      "97": {
+        "d_month_seq": 1176
+      },
+      "98": {
+        "categories": [
+          "Books",
+          "Women",
+          "Electronics"
+        ],
+        "date": "2001-01-08"
+      },
+      "99": {
+        "d_month_seq": 1176
       }
     },
     "10000": {
@@ -7738,6 +8450,95 @@
         ],
         "np_min": 100,
         "np_max": 200
+      },
+      "86": {
+        "d_month_seq": 1176
+      },
+      "87": {
+        "d_month_seq": 1176
+      },
+      "88": {
+        "s_store_name": "ese",
+        "hd_dep_count1": 1,
+        "hd_dep_count2": -1,
+        "hd_dep_count3": 3
+      },
+      "89": {
+        "year": 2001,
+        "category1": [
+          "Electronics",
+          "Men",
+          "Women"
+        ],
+        "class1": [
+          "stereo",
+          "accessories",
+          "fragrances"
+        ],
+        "category2": [
+          "Children",
+          "Sports",
+          "Shoes"
+        ],
+        "class2": [
+          "toddlers",
+          "outdoor",
+          "womens"
+        ]
+      },
+      "90": {
+        "am_hour": 8,
+        "pm_hour": 19,
+        "hd_dep_count": 9,
+        "wp_char_count_min": 5000,
+        "wp_char_count_max": 5200
+      },
+      "91": {
+        "year": 2001,
+        "month": 12,
+        "marital_status1": "M",
+        "education_status1": "Unknown",
+        "marital_status2": "W",
+        "education_status2": "Advanced Degree",
+        "hd_buy_potential": ">10000%",
+        "ca_gmt_offset": -6
+      },
+      "92": {
+        "manufact_id": 10,
+        "date": "2002-01-05"
+      },
+      "93": {
+        "reason_desc": "reason 70"
+      },
+      "94": {
+        "date": "2000-5-01",
+        "state": "IA",
+        "web_company_name": "pri"
+      },
+      "95": {
+        "date": "2000-5-01",
+        "state": "IA",
+        "web_company_name": "pri"
+      },
+      "96": {
+        "t_hour": 8,
+        "t_minute": 30,
+        "hd_dep_count": 4,
+        "s_store_name": "ese"
+      },
+      "97": {
+        "d_month_seq": 1176
+      },
+      "98": {
+        "categories": [
+          "Books",
+          "Women",
+          "Electronics"
+        ],
+        "date": "2001-01-08"
+      },
+      "99": {
+        "d_month_seq": 1176
       }
     },
     "30000": {
@@ -8598,6 +9399,95 @@
         ],
         "np_min": 100,
         "np_max": 200
+      },
+      "86": {
+        "d_month_seq": 1176
+      },
+      "87": {
+        "d_month_seq": 1176
+      },
+      "88": {
+        "s_store_name": "ese",
+        "hd_dep_count1": 1,
+        "hd_dep_count2": -1,
+        "hd_dep_count3": 3
+      },
+      "89": {
+        "year": 2001,
+        "category1": [
+          "Electronics",
+          "Men",
+          "Women"
+        ],
+        "class1": [
+          "stereo",
+          "accessories",
+          "fragrances"
+        ],
+        "category2": [
+          "Children",
+          "Sports",
+          "Shoes"
+        ],
+        "class2": [
+          "toddlers",
+          "outdoor",
+          "womens"
+        ]
+      },
+      "90": {
+        "am_hour": 8,
+        "pm_hour": 19,
+        "hd_dep_count": 9,
+        "wp_char_count_min": 5000,
+        "wp_char_count_max": 5200
+      },
+      "91": {
+        "year": 2001,
+        "month": 12,
+        "marital_status1": "M",
+        "education_status1": "Unknown",
+        "marital_status2": "W",
+        "education_status2": "Advanced Degree",
+        "hd_buy_potential": ">10000%",
+        "ca_gmt_offset": -6
+      },
+      "92": {
+        "manufact_id": 10,
+        "date": "2002-01-05"
+      },
+      "93": {
+        "reason_desc": "reason 70"
+      },
+      "94": {
+        "date": "2000-5-01",
+        "state": "IA",
+        "web_company_name": "pri"
+      },
+      "95": {
+        "date": "2000-5-01",
+        "state": "IA",
+        "web_company_name": "pri"
+      },
+      "96": {
+        "t_hour": 8,
+        "t_minute": 30,
+        "hd_dep_count": 4,
+        "s_store_name": "ese"
+      },
+      "97": {
+        "d_month_seq": 1176
+      },
+      "98": {
+        "categories": [
+          "Books",
+          "Women",
+          "Electronics"
+        ],
+        "date": "2001-01-08"
+      },
+      "99": {
+        "d_month_seq": 1176
       }
     },
     "100000": {
@@ -9458,6 +10348,95 @@
         ],
         "np_min": 100,
         "np_max": 200
+      },
+      "86": {
+        "d_month_seq": 1176
+      },
+      "87": {
+        "d_month_seq": 1176
+      },
+      "88": {
+        "s_store_name": "ese",
+        "hd_dep_count1": 1,
+        "hd_dep_count2": -1,
+        "hd_dep_count3": 3
+      },
+      "89": {
+        "year": 2001,
+        "category1": [
+          "Electronics",
+          "Men",
+          "Women"
+        ],
+        "class1": [
+          "stereo",
+          "accessories",
+          "fragrances"
+        ],
+        "category2": [
+          "Children",
+          "Sports",
+          "Shoes"
+        ],
+        "class2": [
+          "toddlers",
+          "outdoor",
+          "womens"
+        ]
+      },
+      "90": {
+        "am_hour": 8,
+        "pm_hour": 19,
+        "hd_dep_count": 9,
+        "wp_char_count_min": 5000,
+        "wp_char_count_max": 5200
+      },
+      "91": {
+        "year": 2001,
+        "month": 12,
+        "marital_status1": "M",
+        "education_status1": "Unknown",
+        "marital_status2": "W",
+        "education_status2": "Advanced Degree",
+        "hd_buy_potential": ">10000%",
+        "ca_gmt_offset": -6
+      },
+      "92": {
+        "manufact_id": 10,
+        "date": "2002-01-05"
+      },
+      "93": {
+        "reason_desc": "reason 70"
+      },
+      "94": {
+        "date": "2000-5-01",
+        "state": "IA",
+        "web_company_name": "pri"
+      },
+      "95": {
+        "date": "2000-5-01",
+        "state": "IA",
+        "web_company_name": "pri"
+      },
+      "96": {
+        "t_hour": 8,
+        "t_minute": 30,
+        "hd_dep_count": 4,
+        "s_store_name": "ese"
+      },
+      "97": {
+        "d_month_seq": 1176
+      },
+      "98": {
+        "categories": [
+          "Books",
+          "Women",
+          "Electronics"
+        ],
+        "date": "2001-01-08"
+      },
+      "99": {
+        "d_month_seq": 1176
       }
     },
     "qualification": {
