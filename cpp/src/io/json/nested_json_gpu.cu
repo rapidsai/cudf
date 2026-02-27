@@ -27,9 +27,9 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/iterator>
 #include <cuda/std/iterator>
 #include <cuda/std/tuple>
-#include <thrust/iterator/discard_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/transform.h>
@@ -1456,8 +1456,8 @@ void get_stack_context(device_span<SymbolT const> json_in,
   // Run FST to estimate the sizes of translated buffers
   json_to_stack_ops_fst.Transduce(json_in.begin(),
                                   static_cast<SymbolOffsetT>(json_in.size()),
-                                  thrust::make_discard_iterator(),
-                                  thrust::make_discard_iterator(),
+                                  cuda::make_discard_iterator(),
+                                  cuda::make_discard_iterator(),
                                   d_num_stack_ops.data(),
                                   to_stack_op::start_state,
                                   stream);
@@ -1473,7 +1473,7 @@ void get_stack_context(device_span<SymbolT const> json_in,
                                   static_cast<SymbolOffsetT>(json_in.size()),
                                   stack_ops.data(),
                                   stack_op_indices.data(),
-                                  thrust::make_discard_iterator(),
+                                  cuda::make_discard_iterator(),
                                   to_stack_op::start_state,
                                   stream);
 
@@ -1535,7 +1535,7 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> pr
     cuda::std::make_reverse_iterator(
       thrust::make_zip_iterator(filtered_tokens_out.data(), filtered_token_indices_out.data()) +
       tokens.size()),
-    thrust::make_discard_iterator(),
+    cuda::make_discard_iterator(),
     d_num_selected_tokens.data(),
     token_filter::start_state,
     stream);
@@ -1608,8 +1608,8 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> ge
     fix_stack_of_excess_chars.Transduce(zip_in,
                                         static_cast<SymbolOffsetT>(json_in.size()),
                                         stack_symbols.data(),
-                                        thrust::make_discard_iterator(),
-                                        thrust::make_discard_iterator(),
+                                        cuda::make_discard_iterator(),
+                                        cuda::make_discard_iterator(),
                                         fix_stack_of_excess_chars::start_state,
                                         stream);
 
@@ -1646,8 +1646,8 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> ge
   // Run FST to estimate the size of output buffers
   json_to_tokens_fst.Transduce(zip_in,
                                static_cast<SymbolOffsetT>(json_in.size()),
-                               thrust::make_discard_iterator(),
-                               thrust::make_discard_iterator(),
+                               cuda::make_discard_iterator(),
+                               cuda::make_discard_iterator(),
                                num_written_tokens.data(),
                                tokenizer_pda::start_state,
                                stream);
@@ -1661,7 +1661,7 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> ge
                                static_cast<SymbolOffsetT>(json_in.size()),
                                tokens.data() + delimiter_offset,
                                tokens_indices.data() + delimiter_offset,
-                               thrust::make_discard_iterator(),
+                               cuda::make_discard_iterator(),
                                tokenizer_pda::start_state,
                                stream);
 
@@ -2247,9 +2247,7 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
                                 std::move(offsets_column),
                                 std::move(child_column),
                                 null_count,
-                                std::move(result_bitmask),
-                                stream,
-                                mr),
+                                std::move(result_bitmask)),
               std::move(column_names)};
       break;
     }

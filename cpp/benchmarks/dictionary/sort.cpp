@@ -42,4 +42,4 @@ static void bench_dictionary_sort(nvbench::state& state)
 NVBENCH_BENCH(bench_dictionary_sort)
   .set_name("sort")
   .add_int64_axis("num_rows", {262144, 2097152, 16777216, 67108864})
-  .add_int64_axis("cardinality", {10});
+  .add_int64_axis("cardinality", {10, 50, 80});
