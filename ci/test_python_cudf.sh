@@ -1,5 +1,5 @@
 #!/bin/bash
-# SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 set -euo pipefail
@@ -27,8 +27,12 @@ timeout 40m ./ci/run_pylibcudf_pytests.sh \
   --cov-report=xml:"${RAPIDS_COVERAGE_DIR}/pylibcudf-coverage.xml" \
   --cov-report=term
 
+version_gte() {
+  [ "$2" = "$(echo -e "$2\n$1" | sort -V | head -n1)" ]
+}
+
 # If the RAPIDS_PY_VERSION is 3.13, set CUDF_TEST_COPY_ON_WRITE to '1' to enable copy-on-write tests.
-if [[ "${RAPIDS_PY_VERSION}" == "3.13" ]]; then
+if version_gte "${RAPIDS_PY_VERSION}" "3.13"; then
   echo "Running tests with CUDF_TEST_COPY_ON_WRITE enabled"
   export CUDF_TEST_COPY_ON_WRITE='1'
 else
