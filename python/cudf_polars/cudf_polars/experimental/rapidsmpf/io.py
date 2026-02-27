@@ -579,9 +579,11 @@ def make_rapidsmpf_read_parquet_node(
     # Build ParquetReaderOptions
     try:
         stream = context.get_stream_from_pool()
-        parquet_reader_options = plc.io.parquet.ParquetReaderOptions.builder(
-            plc.io.SourceInfo(ir.paths)
-        ).build()
+        parquet_reader_options = (
+            plc.io.parquet.ParquetReaderOptions.builder(plc.io.SourceInfo(ir.paths))
+            .decimal_width(plc.TypeId.DECIMAL128)
+            .build()
+        )
 
         if ir.with_columns is not None:
             parquet_reader_options.set_column_names(ir.with_columns)
