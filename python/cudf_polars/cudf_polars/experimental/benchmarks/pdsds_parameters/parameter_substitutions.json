@@ -524,6 +524,56 @@
           "Williamson County"
         ]
       },
+      "17": {
+        "year": 2002
+      },
+      "18": {
+        "year": 1999,
+        "month": [
+          8,
+          9,
+          3,
+          5,
+          7,
+          2
+        ],
+        "state": [
+          "MT",
+          "NM",
+          "NY",
+          "GA",
+          "CO",
+          "LA",
+          "SD"
+        ],
+        "es": "Unknown",
+        "gen": "M"
+      },
+      "19": {
+        "year": 2001,
+        "month": 12,
+        "manager": 94
+      },
+      "20": {
+        "sdate": "2001-01-08",
+        "year": 2001,
+        "category": [
+          "Books",
+          "Women",
+          "Electronics"
+        ]
+      },
+      "21": {
+        "sales_date": "2002-03-20",
+        "year": 2002
+      },
+      "22": {
+        "dms": 1176
+      },
+      "23": {
+        "year": 2000,
+        "month": 3
+      },
       "24": {
         "market": 8,
         "color": [
@@ -1225,6 +1275,56 @@
           "Walker County",
           "Ziebach County"
         ]
+      },
+      "17": {
+        "year": 2002
+      },
+      "18": {
+        "year": 1999,
+        "month": [
+          8,
+          9,
+          3,
+          5,
+          7,
+          2
+        ],
+        "state": [
+          "MT",
+          "NM",
+          "NY",
+          "GA",
+          "CO",
+          "LA",
+          "SD"
+        ],
+        "es": "Unknown",
+        "gen": "M"
+      },
+      "19": {
+        "year": 2001,
+        "month": 12,
+        "manager": 94
+      },
+      "20": {
+        "sdate": "2001-01-08",
+        "year": 2001,
+        "category": [
+          "Books",
+          "Women",
+          "Electronics"
+        ]
+      },
+      "21": {
+        "sales_date": "2002-03-20",
+        "year": 2002
+      },
+      "22": {
+        "dms": 1176
+      },
+      "23": {
+        "year": 2000,
+        "month": 3
       },
       "24": {
         "market": 8,
@@ -1928,6 +2028,56 @@
           "Ziebach County"
         ]
       },
+      "17": {
+        "year": 2002
+      },
+      "18": {
+        "year": 1999,
+        "month": [
+          8,
+          9,
+          3,
+          5,
+          7,
+          2
+        ],
+        "state": [
+          "MT",
+          "NM",
+          "NY",
+          "GA",
+          "CO",
+          "LA",
+          "SD"
+        ],
+        "es": "Unknown",
+        "gen": "M"
+      },
+      "19": {
+        "year": 2001,
+        "month": 12,
+        "manager": 94
+      },
+      "20": {
+        "sdate": "2001-01-08",
+        "year": 2001,
+        "category": [
+          "Books",
+          "Women",
+          "Electronics"
+        ]
+      },
+      "21": {
+        "sales_date": "2002-03-20",
+        "year": 2002
+      },
+      "22": {
+        "dms": 1176
+      },
+      "23": {
+        "year": 2000,
+        "month": 3
+      },
       "24": {
         "market": 8,
         "color": [
@@ -2629,6 +2779,56 @@
           "Daviess County",
           "Richland County"
         ]
+      },
+      "17": {
+        "year": 2002
+      },
+      "18": {
+        "year": 1999,
+        "month": [
+          8,
+          9,
+          3,
+          5,
+          7,
+          2
+        ],
+        "state": [
+          "MT",
+          "NM",
+          "NY",
+          "GA",
+          "CO",
+          "LA",
+          "SD"
+        ],
+        "es": "Unknown",
+        "gen": "M"
+      },
+      "19": {
+        "year": 2001,
+        "month": 12,
+        "manager": 94
+      },
+      "20": {
+        "sdate": "2001-01-08",
+        "year": 2001,
+        "category": [
+          "Books",
+          "Women",
+          "Electronics"
+        ]
+      },
+      "21": {
+        "sales_date": "2002-03-20",
+        "year": 2002
+      },
+      "22": {
+        "dms": 1176
+      },
+      "23": {
+        "year": 2000,
+        "month": 3
       },
       "24": {
         "market": 8,
@@ -3332,6 +3532,56 @@
           "Ziebach County"
         ]
       },
+      "17": {
+        "year": 2002
+      },
+      "18": {
+        "year": 1999,
+        "month": [
+          8,
+          9,
+          3,
+          5,
+          7,
+          2
+        ],
+        "state": [
+          "MT",
+          "NM",
+          "NY",
+          "GA",
+          "CO",
+          "LA",
+          "SD"
+        ],
+        "es": "Unknown",
+        "gen": "M"
+      },
+      "19": {
+        "year": 2001,
+        "month": 12,
+        "manager": 94
+      },
+      "20": {
+        "sdate": "2001-01-08",
+        "year": 2001,
+        "category": [
+          "Books",
+          "Women",
+          "Electronics"
+        ]
+      },
+      "21": {
+        "sales_date": "2002-03-20",
+        "year": 2002
+      },
+      "22": {
+        "dms": 1176
+      },
+      "23": {
+        "year": 2000,
+        "month": 3
+      },
       "24": {
         "market": 8,
         "color": [
@@ -4033,6 +4283,56 @@
           "Williamson County",
           "Ziebach County"
         ]
+      },
+      "17": {
+        "year": 2002
+      },
+      "18": {
+        "year": 1999,
+        "month": [
+          8,
+          9,
+          3,
+          5,
+          7,
+          2
+        ],
+        "state": [
+          "MT",
+          "NM",
+          "NY",
+          "GA",
+          "CO",
+          "LA",
+          "SD"
+        ],
+        "es": "Unknown",
+        "gen": "M"
+      },
+      "19": {
+        "year": 2001,
+        "month": 12,
+        "manager": 94
+      },
+      "20": {
+        "sdate": "2001-01-08",
+        "year": 2001,
+        "category": [
+          "Books",
+          "Women",
+          "Electronics"
+        ]
+      },
+      "21": {
+        "sales_date": "2002-03-20",
+        "year": 2002
+      },
+      "22": {
+        "dms": 1176
+      },
+      "23": {
+        "year": 2000,
+        "month": 3
       },
       "24": {
         "market": 8,
@@ -4736,6 +5036,56 @@
           "Oglethorpe County"
         ]
       },
+      "17": {
+        "year": 2002
+      },
+      "18": {
+        "year": 1999,
+        "month": [
+          8,
+          9,
+          3,
+          5,
+          7,
+          2
+        ],
+        "state": [
+          "MT",
+          "NM",
+          "NY",
+          "GA",
+          "CO",
+          "LA",
+          "SD"
+        ],
+        "es": "Unknown",
+        "gen": "M"
+      },
+      "19": {
+        "year": 2001,
+        "month": 12,
+        "manager": 94
+      },
+      "20": {
+        "sdate": "2001-01-08",
+        "year": 2001,
+        "category": [
+          "Books",
+          "Women",
+          "Electronics"
+        ]
+      },
+      "21": {
+        "sales_date": "2002-03-20",
+        "year": 2002
+      },
+      "22": {
+        "dms": 1176
+      },
+      "23": {
+        "year": 2000,
+        "month": 3
+      },
       "24": {
         "market": 8,
         "color": [
@@ -5437,6 +5787,56 @@
           "Williamson County",
           "Marshall County"
         ]
+      },
+      "17": {
+        "year": 2002
+      },
+      "18": {
+        "year": 1999,
+        "month": [
+          8,
+          9,
+          3,
+          5,
+          7,
+          2
+        ],
+        "state": [
+          "MT",
+          "NM",
+          "NY",
+          "GA",
+          "CO",
+          "LA",
+          "SD"
+        ],
+        "es": "Unknown",
+        "gen": "M"
+      },
+      "19": {
+        "year": 2001,
+        "month": 12,
+        "manager": 94
+      },
+      "20": {
+        "sdate": "2001-01-08",
+        "year": 2001,
+        "category": [
+          "Books",
+          "Women",
+          "Electronics"
+        ]
+      },
+      "21": {
+        "sales_date": "2002-03-20",
+        "year": 2002
+      },
+      "22": {
+        "dms": 1176
+      },
+      "23": {
+        "year": 2000,
+        "month": 3
       },
       "24": {
         "market": 8,
@@ -6140,6 +6540,56 @@
           "Richland County"
         ]
       },
+      "17": {
+        "year": 2002
+      },
+      "18": {
+        "year": 1999,
+        "month": [
+          8,
+          9,
+          3,
+          5,
+          7,
+          2
+        ],
+        "state": [
+          "MT",
+          "NM",
+          "NY",
+          "GA",
+          "CO",
+          "LA",
+          "SD"
+        ],
+        "es": "Unknown",
+        "gen": "M"
+      },
+      "19": {
+        "year": 2001,
+        "month": 12,
+        "manager": 94
+      },
+      "20": {
+        "sdate": "2001-01-08",
+        "year": 2001,
+        "category": [
+          "Books",
+          "Women",
+          "Electronics"
+        ]
+      },
+      "21": {
+        "sales_date": "2002-03-20",
+        "year": 2002
+      },
+      "22": {
+        "dms": 1176
+      },
+      "23": {
+        "year": 2000,
+        "month": 3
+      },
       "24": {
         "market": 8,
         "color": [
@@ -6841,6 +7291,56 @@
           "Barrow County",
           "Perry County"
         ]
+      },
+      "17": {
+        "year": 2002
+      },
+      "18": {
+        "year": 1999,
+        "month": [
+          8,
+          9,
+          3,
+          5,
+          7,
+          2
+        ],
+        "state": [
+          "MT",
+          "NM",
+          "NY",
+          "GA",
+          "CO",
+          "LA",
+          "SD"
+        ],
+        "es": "Unknown",
+        "gen": "M"
+      },
+      "19": {
+        "year": 2001,
+        "month": 12,
+        "manager": 94
+      },
+      "20": {
+        "sdate": "2001-01-08",
+        "year": 2001,
+        "category": [
+          "Books",
+          "Women",
+          "Electronics"
+        ]
+      },
+      "21": {
+        "sales_date": "2002-03-20",
+        "year": 2002
+      },
+      "22": {
+        "dms": 1176
+      },
+      "23": {
+        "year": 2000,
+        "month": 3
       },
       "24": {
         "market": 8,
@@ -7544,6 +8044,56 @@
           "Perry County"
         ]
       },
+      "17": {
+        "year": 2002
+      },
+      "18": {
+        "year": 1999,
+        "month": [
+          8,
+          9,
+          3,
+          5,
+          7,
+          2
+        ],
+        "state": [
+          "MT",
+          "NM",
+          "NY",
+          "GA",
+          "CO",
+          "LA",
+          "SD"
+        ],
+        "es": "Unknown",
+        "gen": "M"
+      },
+      "19": {
+        "year": 2001,
+        "month": 12,
+        "manager": 94
+      },
+      "20": {
+        "sdate": "2001-01-08",
+        "year": 2001,
+        "category": [
+          "Books",
+          "Women",
+          "Electronics"
+        ]
+      },
+      "21": {
+        "sales_date": "2002-03-20",
+        "year": 2002
+      },
+      "22": {
+        "dms": 1176
+      },
+      "23": {
+        "year": 2000,
+        "month": 3
+      },
       "24": {
         "market": 8,
         "color": [
@@ -8239,6 +8789,56 @@
           "Williamson County",
           "Williamson County"
         ]
+      },
+      "17": {
+        "year": 2001
+      },
+      "18": {
+        "year": 1998,
+        "month": [
+          1,
+          6,
+          8,
+          9,
+          12,
+          2
+        ],
+        "state": [
+          "MS",
+          "IN",
+          "ND",
+          "OK",
+          "NM",
+          "VA",
+          "MS"
+        ],
+        "es": "Unknown",
+        "gen": "F"
+      },
+      "19": {
+        "year": 1998,
+        "month": 11,
+        "manager": 8
+      },
+      "20": {
+        "year": 1999,
+        "sdate": "1999-02-22",
+        "category": [
+          "Sports",
+          "Books",
+          "Home"
+        ]
+      },
+      "21": {
+        "year": 2000,
+        "sales_date": "2000-03-11"
+      },
+      "22": {
+        "dms": 1200
+      },
+      "23": {
+        "year": 1998,
+        "month": 2
       },
       "24": {
         "market": 8,
