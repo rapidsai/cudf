@@ -80,7 +80,7 @@ class JoinStrategy:
     """Summary of sampling and strategy selection for a dynamic join."""
 
     broadcast_side: Literal["left", "right"] | None = None
-    """The side to broadcast. If None, the strategy is not a broadcast join."""
+    """The side to broadcast. If None, the strategy is a shuffle join."""
     min_shuffle_modulus: int = 0
     """The minimum shuffle modulus."""
     left_sample: JoinChunkSample = field(
@@ -967,36 +967,25 @@ async def join_actor(
             indices=names_to_indices(ir.right_on, ir.children[1].schema),
         )
 
-        # Skip sampling when both sides have aligned partitioning
         if left_partitioning and left_partitioning == right_partitioning:
-            return await _shuffle_join(
+            # Both sides already partitioned - skip sampling
+            strategy = JoinStrategy(
+                min_shuffle_modulus=left_partitioning.inter_rank_modulus
+            )
+        else:
+            strategy = await _sample_and_choose_strategy(
                 context,
                 ir,
-                ir_context,
-                ch_out,
                 ch_left,
                 ch_right,
-                left_partitioning,
-                right_partitioning,
-                JoinStrategy(min_shuffle_modulus=left_partitioning.inter_rank_modulus),
+                left_metadata,
+                right_metadata,
+                executor,
                 collective_ids,
-                n_partitioned_keys=len(left_partitioning.inter_rank_indices),
-                tracer=tracer,
             )
 
-        strategy = await _sample_and_choose_strategy(
-            context,
-            ir,
-            ch_left,
-            ch_right,
-            left_metadata,
-            right_metadata,
-            executor,
-            collective_ids,
-        )
-
         if strategy.broadcast_side is not None:
-            await _broadcast_join(
+            return await _broadcast_join(
                 context,
                 ir,
                 ir_context,
@@ -1010,21 +999,20 @@ async def join_actor(
                 executor.target_partition_size,
                 tracer=tracer,
             )
-            return None
-        await _shuffle_join(
-            context,
-            ir,
-            ir_context,
-            ch_out,
-            ch_left,
-            ch_right,
-            left_partitioning,
-            right_partitioning,
-            strategy,
-            collective_ids,
-            tracer=tracer,
-        )
-        return None
+        else:
+            return await _shuffle_join(
+                context,
+                ir,
+                ir_context,
+                ch_out,
+                ch_left,
+                ch_right,
+                left_partitioning,
+                right_partitioning,
+                strategy,
+                collective_ids,
+                tracer=tracer,
+            )
 
 
 @generate_ir_sub_network.register(Join)
