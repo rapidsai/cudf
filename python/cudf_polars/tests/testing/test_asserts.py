@@ -333,7 +333,7 @@ def test_assert_tpch_result_equal_float_sort_mixed_sort_columns() -> None:
     )
 
 
-def test_assert_tpch_result_equal_float_sort_raises_value_mismatch_in_band() -> None:
+def test_assert_tpch_result_equal_float_sort_raises_key_mismatch() -> None:
     left = pl.DataFrame(
         {
             "ps_partkey": [124439984, 69940887, 118230270],
@@ -342,7 +342,11 @@ def test_assert_tpch_result_equal_float_sort_raises_value_mismatch_in_band() -> 
     )
     right = pl.DataFrame(
         {
-            "ps_partkey": [124439984, 69940887, 999999999],  # wrong in tie band
+            "ps_partkey": [
+                124439984,
+                69940887,
+                999999999,
+            ],  # value matches, but not key
             "value": [8005096.8, 8005095.75, 8005095.749999999],
         }
     )
