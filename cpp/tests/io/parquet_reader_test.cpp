@@ -1692,8 +1692,7 @@ TEST_F(ParquetReaderTest, ExtendedFilterExpressions)
     CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *expected);
   }
 
-  // Filter: NOT(col_a NULL_EQUAL 10) AND (col_a < 50). The NOT(NULL_EQUAL) is always_true
-  // for stats (unsupported op), so the AND reduces to just the stats filter for col_a < 50.
+  // Filter: NOT(col_a NULL_EQUAL 10) AND (col_a < 50)
   {
     auto literal_50_value = cudf::numeric_scalar<int32_t>(50);
     auto literal_50       = cudf::ast::literal(literal_50_value);
@@ -1713,9 +1712,7 @@ TEST_F(ParquetReaderTest, ExtendedFilterExpressions)
     CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *expected);
   }
 
-  // Filter: NOT(col_a < col_b). NOT wrapping a col-op-col comparison. The inner
-  // col_a < col_b is unsupported for stats, so it becomes always_true. NOT(always_true)
-  // is also always_true. All rows returned, then row-level filtering applies.
+  // Filter: NOT(col_a < col_b)
   {
     auto inner  = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref_a, col_ref_b);
     auto filter = cudf::ast::operation(cudf::ast::ast_operator::NOT, inner);
