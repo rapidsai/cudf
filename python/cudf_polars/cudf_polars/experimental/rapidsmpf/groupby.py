@@ -391,9 +391,6 @@ async def _shuffle_reduce(
     if local and context.comm().nranks > 1:
         options = Options(get_environment_variables())
         local_comm = single_comm(
-            nranks=1,
-            ucx_worker=None,
-            root_ucxx_address=None,
             options=options,
             progress_thread=ProgressThread(),
         )
