@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import functools
-from typing import TYPE_CHECKING, Any, Literal, Self
+from typing import TYPE_CHECKING, Any, Literal, Self, cast
 
 import pandas as pd
 import pyarrow as pa
+from pandas.core.arrays.arrow.extension_types import ArrowIntervalType
 
 import pylibcudf as plc
 
@@ -14,9 +15,9 @@ from cudf.core._internals import binaryop
 from cudf.core.column.column import (
     ColumnBase,
     _handle_nulls,
-    as_column,
     dtype_from_pylibcudf_column,
 )
+from cudf.core.dtype.validators import is_dtype_obj_interval
 from cudf.core.dtypes import IntervalDtype, _dtype_to_metadata
 from cudf.utils.dtypes import get_dtype_of_same_kind
 from cudf.utils.scalar import maybe_nested_pa_scalar_to_py
@@ -27,14 +28,21 @@ if TYPE_CHECKING:
 
 
 class IntervalColumn(ColumnBase):
-    @classmethod
-    def from_arrow(cls, array: pa.Array | pa.ChunkedArray) -> Self:
-        if not isinstance(array, pa.ExtensionArray):
-            raise ValueError("Expected ExtensionArray for interval data")
-        new_col = super().from_arrow(array.storage)
-        return ColumnBase.create(
-            new_col.plc_column, IntervalDtype.from_arrow(array.type)
-        )  # type: ignore[return-value]
+    @functools.cached_property
+    def subtype(self) -> DtypeObj:
+        if isinstance(self.dtype, IntervalDtype):
+            return self.dtype.subtype
+        else:
+            return pd.ArrowDtype(
+                cast("pd.ArrowDtype", self.dtype).pyarrow_dtype.subtype
+            )
+
+    @functools.cached_property
+    def closed(self) -> Literal["left", "right", "neither", "both"]:
+        if isinstance(self.dtype, IntervalDtype):
+            return self.dtype.closed
+        else:
+            return cast("pd.ArrowDtype", self.dtype).pyarrow_dtype.closed
 
     def to_arrow(self) -> pa.Array:
         typ = self.dtype.to_arrow()  # type: ignore[union-attr]
@@ -94,9 +102,12 @@ class IntervalColumn(ColumnBase):
     @functools.cached_property
     def is_empty(self) -> ColumnBase:
         left_equals_right = (self.right == self.left).fillna(False)
-        not_closed_both = as_column(
-            self.dtype.closed != "both",  # type: ignore[union-attr]
-            length=len(self),
+        not_closed_both = ColumnBase.create(
+            plc.Column.from_scalar(
+                plc.Scalar.from_py(self.closed != "both"),
+                len(self),
+            ),
+            left_equals_right.dtype,
         )
         return left_equals_right & not_closed_both
 
@@ -116,11 +127,11 @@ class IntervalColumn(ColumnBase):
     def length(self) -> ColumnBase:
         return self.right - self.left
 
-    @property
+    @functools.cached_property
     def left(self) -> ColumnBase:
         return ColumnBase.create(
             self.plc_column.children()[0],
-            self.dtype.subtype,  # type: ignore[union-attr]
+            self.subtype,
         )
 
     @functools.cached_property
@@ -131,11 +142,11 @@ class IntervalColumn(ColumnBase):
             # datetime safe version
             return self.left + 0.5 * self.length
 
-    @property
+    @functools.cached_property
     def right(self) -> ColumnBase:
         return ColumnBase.create(
             self.plc_column.children()[1],
-            self.dtype.subtype,  # type: ignore[union-attr]
+            self.subtype,
         )
 
     @property
@@ -150,9 +161,22 @@ class IntervalColumn(ColumnBase):
     def set_closed(
         self, closed: Literal["left", "right", "both", "neither"]
     ) -> Self:
-        return ColumnBase.create(  # type: ignore[return-value]
-            self.plc_column,
-            IntervalDtype(self.dtype.subtype, closed),  # type: ignore[union-attr]
+        new_dtype = (
+            IntervalDtype(self.subtype, closed)
+            if isinstance(self.dtype, IntervalDtype)
+            else pd.ArrowDtype(
+                ArrowIntervalType(
+                    cast("pd.ArrowDtype", self.dtype).pyarrow_dtype.subtype,
+                    closed,
+                )
+            )
+        )
+        return cast(
+            "Self",
+            ColumnBase.create(
+                self.plc_column,
+                new_dtype,
+            ),
         )
 
     def _binaryop(self, other: ColumnBinaryOperand, op: str) -> ColumnBase:
@@ -172,8 +196,10 @@ class IntervalColumn(ColumnBase):
             raise TypeError(f"{op} not supported with {type(other).__name__}")
 
     def as_interval_column(self, dtype: IntervalDtype) -> Self:
-        if not isinstance(dtype, IntervalDtype):
-            raise ValueError("dtype must be IntervalDtype")
+        if not is_dtype_obj_interval(dtype):
+            raise ValueError(
+                f"dtype must be IntervalDtype or interval-type pd.ArrowDtype, got {dtype}"
+            )
 
         # If subtype is changing, cast children to match new subtype
         if dtype.subtype != self.dtype.subtype:  # type: ignore[union-attr]
@@ -204,17 +230,13 @@ class IntervalColumn(ColumnBase):
         nullable: bool = False,
         arrow_type: bool = False,
     ) -> pd.Index:
-        # Note: This does not handle null values in the interval column.
-        # However, this exact sequence (calling __from_arrow__ on the output of
-        # self.to_arrow) is currently the best known way to convert interval
-        # types into pandas (trying to convert the underlying numerical columns
-        # directly is problematic), so we're stuck with this for now.
-        if nullable or isinstance(self.dtype, pd.ArrowDtype):
+        if arrow_type or isinstance(self.dtype, pd.ArrowDtype):
             return super().to_pandas(nullable=nullable, arrow_type=arrow_type)
-        elif arrow_type:
-            raise NotImplementedError(f"{arrow_type=} is not implemented.")
-
-        pd_type = self.dtype.to_pandas()  # type: ignore[union-attr]
+        elif nullable and not arrow_type:
+            raise NotImplementedError(
+                f"pandas does not have a native nullable type for {self.dtype}."
+            )
+        pd_type = cast("IntervalDtype", self.dtype).to_pandas()
         return pd.Index(pd_type.__from_arrow__(self.to_arrow()), dtype=pd_type)
 
     def element_indexing(
