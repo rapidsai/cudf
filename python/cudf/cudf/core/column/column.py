@@ -206,12 +206,12 @@ def pandas_compatible_string_dtype_policy(
     return policy
 
 
-BOOL_SAME_KIND_POLICY = same_kind_dtype_policy(np.dtype(np.bool_))
-INT16_SAME_KIND_POLICY = same_kind_dtype_policy(np.dtype(np.int16))
-INT32_SAME_KIND_POLICY = same_kind_dtype_policy(np.dtype(np.int32))
-UINT32_SAME_KIND_POLICY = same_kind_dtype_policy(np.dtype(np.uint32))
-CUDF_STRING_DTYPE_POLICY = fixed_dtype_policy(CUDF_STRING_DTYPE)
-PANDAS_STRING_INT32_POLICY = pandas_compatible_string_dtype_policy(
+bool_same_kind_policy = same_kind_dtype_policy(np.dtype(np.bool_))
+int16_same_kind_policy = same_kind_dtype_policy(np.dtype(np.int16))
+int32_same_kind_policy = same_kind_dtype_policy(np.dtype(np.int32))
+uint32_same_kind_policy = same_kind_dtype_policy(np.dtype(np.uint32))
+cudf_string_dtype_policy = fixed_dtype_policy(CUDF_STRING_DTYPE)
+pandas_string_int32_policy = pandas_compatible_string_dtype_policy(
     np.dtype(np.int32)
 )
 
@@ -2861,15 +2861,22 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     def _scan(self, op: str, inclusive: bool = True, **kwargs: Any) -> Self:
         """Private method for scan operations. Called by mixin-generated methods."""
         # `inclusive` controls scan type, not passed to aggregation
-        with self.access(mode="read", scope="internal"):
-            plc_result = plc.reduce.scan(
-                self.plc_column,
-                aggregation.make_aggregation(op, kwargs).plc_obj,
-                plc.reduce.ScanType.INCLUSIVE
-                if inclusive
-                else plc.reduce.ScanType.EXCLUSIVE,
-            )
-        return cast("Self", ColumnBase.create(plc_result, self.dtype))
+        scan_type = (
+            plc.reduce.ScanType.INCLUSIVE
+            if inclusive
+            else plc.reduce.ScanType.EXCLUSIVE
+        )
+        agg = aggregation.make_aggregation(op, kwargs).plc_obj
+
+        def _scan(plc_column: plc.Column) -> plc.Column:
+            return plc.reduce.scan(plc_column, agg, scan_type)
+
+        return cast(
+            "Self",
+            PylibcudfFunction(_scan, same_dtype_policy).execute_with_args(
+                self
+            ),
+        )
 
     def _reduce(
         self,
@@ -2957,21 +2964,23 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         null_precedence: plc.types.NullOrder,
         pct: bool,
     ) -> Self:
-        with self.access(mode="read", scope="internal"):
-            plc_column = plc.sorting.rank(
-                self.plc_column,
+        def _rank(plc_column: plc.Column) -> plc.Column:
+            return plc.sorting.rank(
+                plc_column,
                 method,
                 column_order,
                 null_handling,
                 null_precedence,
                 pct,
             )
-            return cast(
-                "Self",
-                ColumnBase.create(
-                    plc_column, dtype_from_pylibcudf_column(plc_column)
-                ),
-            )
+
+        return cast(
+            "Self",
+            PylibcudfFunction(
+                _rank,
+                pylibcudf_result_dtype_policy,
+            ).execute_with_args(self),
+        )
 
     def label_bins(
         self,

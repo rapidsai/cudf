@@ -15,11 +15,11 @@ import pylibcudf as plc
 
 import cudf
 from cudf.core.column.column import (
-    INT32_SAME_KIND_POLICY,
     ColumnBase,
     PylibcudfFunction,
     as_column,
     column_empty,
+    int32_same_kind_policy,
 )
 from cudf.core.dtypes import ListDtype
 from cudf.core.missing import NA
@@ -257,7 +257,7 @@ class ListColumn(ColumnBase):
     def count_elements(self) -> ColumnBase:
         return PylibcudfFunction(
             plc.lists.count_elements,
-            INT32_SAME_KIND_POLICY,
+            int32_same_kind_policy,
         ).execute_with_args(self)
 
     def distinct(self, nulls_equal: bool, nans_all_equal: bool) -> ColumnBase:

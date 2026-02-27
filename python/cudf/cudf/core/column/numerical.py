@@ -17,11 +17,11 @@ import cudf
 from cudf.api.types import is_scalar
 from cudf.core._internals import binaryop
 from cudf.core.column.column import (
-    CUDF_STRING_DTYPE_POLICY,
     ColumnBase,
     PylibcudfFunction,
     as_column,
     column_empty,
+    cudf_string_dtype_policy,
     np_bool_dtype_policy,
     same_dtype_policy,
 )
@@ -595,7 +595,7 @@ class NumericalColumn(NumericalBaseColumn):
             cudf.core.column.string.StringColumn,
             PylibcudfFunction(
                 plc.strings.convert.convert_ipv4.integers_to_ipv4,
-                CUDF_STRING_DTYPE_POLICY,
+                cudf_string_dtype_policy,
             ).execute_with_args(self),
         )
 

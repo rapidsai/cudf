@@ -15,7 +15,12 @@ import pylibcudf as plc
 
 import cudf
 from cudf.core._internals import binaryop
-from cudf.core.column.column import ColumnBase, as_column
+from cudf.core.column.column import (
+    ColumnBase,
+    PylibcudfFunction,
+    as_column,
+    fixed_dtype_policy,
+)
 from cudf.core.column.temporal_base import TemporalBaseColumn
 from cudf.errors import MixedTypeError
 from cudf.utils.dtypes import (
@@ -231,16 +236,19 @@ class TimeDeltaColumn(TemporalBaseColumn):
     ) -> StringColumn:
         if len(self) == 0:
             return super().strftime(format)
-        with self.access(mode="read", scope="internal"):
-            return cast(
-                cudf.core.column.string.StringColumn,
-                ColumnBase.create(
-                    plc.strings.convert.convert_durations.from_durations(
-                        self.plc_column, format
-                    ),
-                    dtype,
-                ),
+        dtype_policy = fixed_dtype_policy(dtype)
+
+        def _from_durations(plc_column: plc.Column) -> plc.Column:
+            return plc.strings.convert.convert_durations.from_durations(
+                plc_column, format
             )
+
+        return cast(
+            cudf.core.column.string.StringColumn,
+            PylibcudfFunction(_from_durations, dtype_policy).execute_with_args(
+                self
+            ),
+        )
 
     def as_string_column(self, dtype: DtypeObj) -> StringColumn:
         if cudf.get_option("mode.pandas_compatible"):

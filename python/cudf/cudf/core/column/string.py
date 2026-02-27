@@ -20,16 +20,16 @@ from cudf.api.types import is_scalar
 from cudf.core._compat import PANDAS_GE_220
 from cudf.core._internals import binaryop
 from cudf.core.column.column import (
-    BOOL_SAME_KIND_POLICY,
-    INT32_SAME_KIND_POLICY,
-    PANDAS_STRING_INT32_POLICY,
-    UINT32_SAME_KIND_POLICY,
     ColumnBase,
     PylibcudfFunction,
     as_column,
+    bool_same_kind_policy,
     column_empty,
+    int32_same_kind_policy,
     list_dtype_policy,
+    pandas_string_int32_policy,
     same_dtype_policy,
+    uint32_same_kind_policy,
 )
 from cudf.core.mixins import Scannable
 from cudf.errors import MixedTypeError
@@ -798,7 +798,7 @@ class StringColumn(ColumnBase, Scannable):
             "cudf.core.column.numerical.NumericalColumn",
             PylibcudfFunction(
                 plc.nvtext.stemmer.porter_stemmer_measure,
-                INT32_SAME_KIND_POLICY,
+                int32_same_kind_policy,
             ).execute_with_args(self),
         )
 
@@ -858,7 +858,7 @@ class StringColumn(ColumnBase, Scannable):
             "cudf.core.column.numerical.NumericalColumn",
             PylibcudfFunction(
                 plc.nvtext.tokenize.count_tokens_column,
-                INT32_SAME_KIND_POLICY,
+                int32_same_kind_policy,
             ).execute_with_args(self, delimiters),
         )
 
@@ -995,7 +995,7 @@ class StringColumn(ColumnBase, Scannable):
             Self,
             PylibcudfFunction(
                 plc.strings.capitalize.is_title,
-                BOOL_SAME_KIND_POLICY,
+                bool_same_kind_policy,
             ).execute_with_args(self),
         )
 
@@ -1016,7 +1016,7 @@ class StringColumn(ColumnBase, Scannable):
             "cudf.core.column.numerical.NumericalColumn",
             PylibcudfFunction(
                 plc.strings.convert.convert_integers.is_hex,
-                BOOL_SAME_KIND_POLICY,
+                bool_same_kind_policy,
             ).execute_with_args(self),
         )
 
@@ -1038,7 +1038,7 @@ class StringColumn(ColumnBase, Scannable):
             "cudf.core.column.numerical.NumericalColumn",
             PylibcudfFunction(
                 plc.strings.convert.convert_ipv4.is_ipv4,
-                BOOL_SAME_KIND_POLICY,
+                bool_same_kind_policy,
             ).execute_with_args(self),
         )
 
@@ -1047,7 +1047,7 @@ class StringColumn(ColumnBase, Scannable):
             "cudf.core.column.numerical.NumericalColumn",
             PylibcudfFunction(
                 plc.strings.convert.convert_ipv4.ipv4_to_integers,
-                UINT32_SAME_KIND_POLICY,
+                uint32_same_kind_policy,
             ).execute_with_args(self),
         )
 
@@ -1261,7 +1261,7 @@ class StringColumn(ColumnBase, Scannable):
             cudf.core.column.numerical.NumericalColumn,
             PylibcudfFunction(
                 plc.strings.convert.convert_integers.is_integer,
-                BOOL_SAME_KIND_POLICY,
+                bool_same_kind_policy,
             ).execute_with_args(self),
         )
 
@@ -1270,7 +1270,7 @@ class StringColumn(ColumnBase, Scannable):
             cudf.core.column.numerical.NumericalColumn,
             PylibcudfFunction(
                 plc.strings.convert.convert_floats.is_float,
-                BOOL_SAME_KIND_POLICY,
+                bool_same_kind_policy,
             ).execute_with_args(self),
         )
 
@@ -1325,7 +1325,7 @@ class StringColumn(ColumnBase, Scannable):
             cudf.core.column.numerical.NumericalColumn,
             PylibcudfFunction(
                 plc.strings.attributes.count_characters,
-                PANDAS_STRING_INT32_POLICY,
+                pandas_string_int32_policy,
             ).execute_with_args(self),
         )
 
@@ -1334,7 +1334,7 @@ class StringColumn(ColumnBase, Scannable):
             cudf.core.column.numerical.NumericalColumn,
             PylibcudfFunction(
                 plc.strings.attributes.count_bytes,
-                INT32_SAME_KIND_POLICY,
+                int32_same_kind_policy,
             ).execute_with_args(self),
         )
 

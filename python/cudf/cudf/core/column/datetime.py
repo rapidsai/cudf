@@ -26,10 +26,11 @@ from cudf.core._internals.timezones import (
 )
 from cudf.core.column import as_column, column_empty
 from cudf.core.column.column import (
-    BOOL_SAME_KIND_POLICY,
-    INT16_SAME_KIND_POLICY,
     ColumnBase,
     PylibcudfFunction,
+    bool_same_kind_policy,
+    int16_same_kind_policy,
+    same_dtype_policy,
 )
 from cudf.core.column.temporal_base import TemporalBaseColumn
 from cudf.utils.dtypes import (
@@ -232,7 +233,7 @@ class DatetimeColumn(TemporalBaseColumn):
     def quarter(self) -> ColumnBase:
         return PylibcudfFunction(
             plc.datetime.extract_quarter,
-            INT16_SAME_KIND_POLICY,
+            int16_same_kind_policy,
         ).execute_with_args(self)
 
     @functools.cached_property
@@ -282,7 +283,7 @@ class DatetimeColumn(TemporalBaseColumn):
     def day_of_year(self) -> ColumnBase:
         return PylibcudfFunction(
             plc.datetime.day_of_year,
-            INT16_SAME_KIND_POLICY,
+            int16_same_kind_policy,
         ).execute_with_args(self)
 
     @functools.cached_property
@@ -325,7 +326,7 @@ class DatetimeColumn(TemporalBaseColumn):
     def is_leap_year(self) -> ColumnBase:
         return PylibcudfFunction(
             plc.datetime.is_leap_year,
-            BOOL_SAME_KIND_POLICY,
+            bool_same_kind_policy,
         ).execute_with_args(self)
 
     @functools.cached_property
@@ -336,7 +337,7 @@ class DatetimeColumn(TemporalBaseColumn):
     def days_in_month(self) -> ColumnBase:
         return PylibcudfFunction(
             plc.datetime.days_in_month,
-            INT16_SAME_KIND_POLICY,
+            int16_same_kind_policy,
         ).execute_with_args(self)
 
     @functools.cached_property
@@ -471,14 +472,12 @@ class DatetimeColumn(TemporalBaseColumn):
         if (plc_freq := rounding_fequency_map.get(freq)) is None:
             raise ValueError(f"Invalid resolution: '{freq}'")
 
-        with self.access(mode="read", scope="internal"):
-            return ColumnBase.create(
-                round_func(
-                    self.plc_column,
-                    plc_freq,
-                ),
-                self.dtype,
-            )
+        def _round_fn(plc_column: plc.Column) -> plc.Column:
+            return round_func(plc_column, plc_freq)
+
+        return PylibcudfFunction(
+            _round_fn, same_dtype_policy
+        ).execute_with_args(self)
 
     def ceil(self, freq: str) -> ColumnBase:
         return self._round_dt(plc.datetime.ceil_datetimes, freq)
