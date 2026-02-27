@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -11,6 +11,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <cuda/std/iterator>
 #include <thrust/iterator/transform_iterator.h>
 
 #include <type_traits>
@@ -53,7 +54,7 @@ struct ToTaggedType {
 template <typename InItT>
 auto hex(InItT it)
 {
-  using value_t  = typename std::iterator_traits<InItT>::value_type;
+  using value_t  = typename cuda::std::iterator_traits<InItT>::value_type;
   using tagged_t = hex_t<value_t>;
   return thrust::make_transform_iterator(it, ToTaggedType<tagged_t>{});
 }

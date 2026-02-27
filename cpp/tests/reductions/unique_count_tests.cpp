@@ -12,6 +12,8 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 
+#include <cuda/std/iterator>
+
 #include <algorithm>
 #include <cmath>
 
@@ -44,7 +46,7 @@ TYPED_TEST(TypedUniqueCount, NoNull)
   // explicit instantiation to one particular type (`double`) to reduce build time
   std::vector<double> input_data(input.begin(), input.end());
   auto const new_end = std::unique(input_data.begin(), input_data.end());
-  auto const gold    = std::distance(input_data.begin(), new_end);
+  auto const gold    = cuda::std::distance(input_data.begin(), new_end);
   EXPECT_EQ(gold, cudf::unique_count(input_col, null_policy::INCLUDE, nan_policy::NAN_IS_VALID));
 }
 
@@ -68,7 +70,7 @@ TYPED_TEST(TypedUniqueCount, TableNoNull)
   cudf::table_view input_table({input_col1, input_col2});
 
   auto const new_end = std::unique(pair_input.begin(), pair_input.end());
-  auto const gold    = std::distance(pair_input.begin(), new_end);
+  auto const gold    = cuda::std::distance(pair_input.begin(), new_end);
   EXPECT_EQ(gold, cudf::unique_count(input_table, null_equality::EQUAL));
 }
 
@@ -86,7 +88,7 @@ TEST_F(UniqueCount, WithNull)
   cudf::test::fixed_width_column_wrapper<T> input_col(input.begin(), input.end(), valid.begin());
 
   auto const new_end = std::unique(input.begin(), input.end());
-  auto const gold    = std::distance(input.begin(), new_end) - 3;
+  auto const gold    = cuda::std::distance(input.begin(), new_end) - 3;
   EXPECT_EQ(gold, cudf::unique_count(input_col, null_policy::EXCLUDE, nan_policy::NAN_IS_VALID));
 }
 
@@ -103,7 +105,7 @@ TEST_F(UniqueCount, IgnoringNull)
 
   auto const new_end = std::unique(input.begin(), input.end());
   // -1 since `YYY, YYY, XXX` is in the same group of equivalent rows
-  auto const gold = std::distance(input.begin(), new_end) - 1;
+  auto const gold = cuda::std::distance(input.begin(), new_end) - 1;
   EXPECT_EQ(gold, cudf::unique_count(input_col, null_policy::INCLUDE, nan_policy::NAN_IS_VALID));
 }
 
@@ -119,7 +121,7 @@ TEST_F(UniqueCount, WithNansAndNull)
   cudf::test::fixed_width_column_wrapper<T> input_col{input.begin(), input.end(), valid.begin()};
 
   auto const new_end = std::unique(input.begin(), input.end());
-  auto const gold    = std::distance(input.begin(), new_end);
+  auto const gold    = cuda::std::distance(input.begin(), new_end);
   EXPECT_EQ(gold, cudf::unique_count(input_col, null_policy::INCLUDE, nan_policy::NAN_IS_VALID));
 
   input     = {NAN, NAN, XXX};

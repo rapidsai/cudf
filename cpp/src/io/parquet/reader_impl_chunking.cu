@@ -14,6 +14,7 @@
 
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/std/iterator>
 #include <thrust/gather.h>
 #include <thrust/transform_scan.h>
 
@@ -438,7 +439,7 @@ void reader_impl::create_global_chunk_info()
                                                                         rg.source_index);
                                    });
             it != columns.end()) {
-          return std::distance(columns.begin(), it);
+          return cuda::std::distance(columns.begin(), it);
         }
         CUDF_FAIL("cannot find column mapping");
       });

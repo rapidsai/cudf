@@ -20,6 +20,7 @@
 #include <cudf/unary.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
+#include <cuda/std/iterator>
 #include <cuda/std/tuple>
 #include <thrust/iterator/counting_iterator.h>
 
@@ -794,8 +795,8 @@ std::vector<size_t> reader_impl::calculate_output_num_rows_per_source(size_t con
   auto const end_iter = std::lower_bound(start_iter, partial_sum_nrows_source.cend(), end_row);
 
   // Compute the array offset index for both iterators
-  auto const start_idx   = std::distance(partial_sum_nrows_source.cbegin(), start_iter);
-  auto const end_idx     = std::distance(partial_sum_nrows_source.cbegin(), end_iter);
+  auto const start_idx   = cuda::std::distance(partial_sum_nrows_source.cbegin(), start_iter);
+  auto const end_idx     = cuda::std::distance(partial_sum_nrows_source.cbegin(), end_iter);
   auto const num_sources = static_cast<cudf::size_type>(partial_sum_nrows_source.size());
   CUDF_EXPECTS(start_idx <= end_idx and start_idx < num_sources and end_idx < num_sources,
                "Encountered out of range output table chunk row bounds");

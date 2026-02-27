@@ -388,7 +388,7 @@ template <typename AgentDFAPolicy, typename SymbolItT, typename OffsetT>
 struct AgentDFA {
   using SymbolIndexT = uint32_t;
   using AliasedLoadT = uint32_t;
-  using CharT        = typename std::iterator_traits<SymbolItT>::value_type;
+  using CharT        = typename cuda::std::iterator_traits<SymbolItT>::value_type;
 
   //------------------------------------------------------------------------------
   // DERIVED CONFIGS

@@ -464,13 +464,14 @@ OutputIterator remove_copy_safe(InputIterator first,
                                 T const& value,
                                 rmm::cuda_stream_view stream)
 {
-  auto const copy_size = std::min(static_cast<std::size_t>(std::distance(first, last)),
+  auto const copy_size = std::min(static_cast<std::size_t>(cuda::std::distance(first, last)),
                                   static_cast<std::size_t>(std::numeric_limits<int>::max()));
 
   auto itr = first;
   while (itr != last) {
-    auto const copy_end =
-      static_cast<std::size_t>(std::distance(itr, last)) <= copy_size ? last : itr + copy_size;
+    auto const copy_end = static_cast<std::size_t>(cuda::std::distance(itr, last)) <= copy_size
+                            ? last
+                            : itr + copy_size;
     result = thrust::remove_copy(rmm::exec_policy_nosync(stream), itr, copy_end, result, value);
     itr    = copy_end;
   }
@@ -481,13 +482,13 @@ OutputIterator remove_copy_safe(InputIterator first,
 template <typename Iterator, typename T>
 Iterator remove_safe(Iterator first, Iterator last, T const& value, rmm::cuda_stream_view stream)
 {
-  auto const size = std::min(static_cast<std::size_t>(std::distance(first, last)),
+  auto const size = std::min(static_cast<std::size_t>(cuda::std::distance(first, last)),
                              static_cast<std::size_t>(std::numeric_limits<int>::max()));
 
   auto result = first;
   auto itr    = first;
   while (itr != last) {
-    auto end = static_cast<std::size_t>(std::distance(itr, last)) <= size ? last : itr + size;
+    auto end = static_cast<std::size_t>(cuda::std::distance(itr, last)) <= size ? last : itr + size;
     result   = thrust::remove(rmm::exec_policy_nosync(stream), itr, end, value);
     itr      = end;
   }

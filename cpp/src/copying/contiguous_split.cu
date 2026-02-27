@@ -448,7 +448,7 @@ size_type count_src_bufs(InputIter begin, InputIter end)
     auto const children_counts = count_src_bufs(col.child_begin(), col.child_end());
     return 1 + (col.nullable() ? 1 : 0) + children_counts;
   });
-  return std::accumulate(buf_iter, buf_iter + std::distance(begin, end), 0);
+  return std::accumulate(buf_iter, buf_iter + cuda::std::distance(begin, end), 0);
 }
 
 /**
@@ -1047,7 +1047,7 @@ struct packed_split_indices_and_src_buf_info {
     // these are row numbers per split
     h_indices[0]              = 0;
     h_indices[num_partitions] = input.column(0).size();
-    std::copy(splits.begin(), splits.end(), std::next(h_indices));
+    std::copy(splits.begin(), splits.end(), cuda::std::next(h_indices));
 
     // setup source buf info
     setup_source_buf_info(input.begin(), input.end(), h_src_buf_info, h_src_buf_info, stream);
@@ -1619,7 +1619,7 @@ std::unique_ptr<chunk_iteration_state> chunk_iteration_state::create(
 
         // we subtract 1 from the number of batch here because next_iteration_it points
         // to the batch that didn't fit, so it's one off.
-        auto batches_in_iter = std::distance(current_offset_it, next_iteration_it) - 1;
+        auto batches_in_iter = cuda::std::distance(current_offset_it, next_iteration_it) - 1;
 
         // to get the amount of bytes in this iteration we get the prefix scan size
         // and subtract the cumulative size so far, leaving the bytes belonging to this

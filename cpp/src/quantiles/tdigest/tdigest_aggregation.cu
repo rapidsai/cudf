@@ -1043,7 +1043,7 @@ std::unique_ptr<column> compute_tdigests(int delta,
   auto output = thrust::make_zip_iterator(cuda::std::make_tuple(
     mean_col.begin<double>(), weight_col.begin<double>(), cuda::make_discard_iterator()));
 
-  auto const num_values = std::distance(centroids_begin, centroids_end);
+  auto const num_values = cuda::std::distance(centroids_begin, centroids_end);
   thrust::reduce_by_key(rmm::exec_policy_nosync(stream),
                         keys,
                         keys + num_values,              // keys

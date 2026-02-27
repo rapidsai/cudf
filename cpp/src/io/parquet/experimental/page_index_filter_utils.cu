@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -14,6 +14,7 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/std/iterator>
 #include <thrust/gather.h>
 
 #include <algorithm>
@@ -32,7 +33,7 @@ size_type find_colchunk_iter_offset(RowGroup const& row_group, size_type schema_
     colchunk_iter != row_group.columns.end(),
     "Column chunk with schema index " + std::to_string(schema_idx) + " not found in row group",
     std::invalid_argument);
-  return std::distance(row_group.columns.begin(), colchunk_iter);
+  return cuda::std::distance(row_group.columns.begin(), colchunk_iter);
 }
 
 bool compute_has_page_index(cudf::host_span<metadata_base const> file_metadatas,

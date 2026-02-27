@@ -18,6 +18,7 @@
 
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/std/iterator>
 #include <thrust/equal.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/sort.h>
@@ -34,7 +35,7 @@
 
 namespace {
 using PairJoinReturn   = std::pair<std::unique_ptr<rmm::device_uvector<cudf::size_type>>,
-                                   std::unique_ptr<rmm::device_uvector<cudf::size_type>>>;
+                                 std::unique_ptr<rmm::device_uvector<cudf::size_type>>>;
 using SingleJoinReturn = std::unique_ptr<rmm::device_uvector<cudf::size_type>>;
 using NullMaskVector   = std::vector<bool>;
 
@@ -70,13 +71,13 @@ std::pair<std::vector<T>, std::vector<T>> gen_random_repeated_columns(
   std::vector<T> right(N_right);
 
   for (unsigned int i = 0; i < num_repeats_left; ++i) {
-    std::iota(std::next(left.begin(), num_unique_left * i),
-              std::next(left.begin(), num_unique_left * (i + 1)),
+    std::iota(cuda::std::next(left.begin(), num_unique_left * i),
+              cuda::std::next(left.begin(), num_unique_left * (i + 1)),
               0);
   }
   for (unsigned int i = 0; i < num_repeats_right; ++i) {
-    std::iota(std::next(right.begin(), num_unique_right * i),
-              std::next(right.begin(), num_unique_right * (i + 1)),
+    std::iota(cuda::std::next(right.begin(), num_unique_right * i),
+              cuda::std::next(right.begin(), num_unique_right * (i + 1)),
               0);
   }
 
@@ -123,9 +124,9 @@ gen_random_nullable_repeated_columns(unsigned int N = 10000, unsigned int num_re
 struct index_pair {
   cudf::size_type first{};
   cudf::size_type second{};
-  __device__ index_pair() {};
+  __device__ index_pair(){};
   __device__ index_pair(cudf::size_type const& first, cudf::size_type const& second)
-    : first(first), second(second) {};
+    : first(first), second(second){};
 };
 
 __device__ inline bool operator<(index_pair const& lhs, index_pair const& rhs)
@@ -222,7 +223,9 @@ struct ConditionalJoinPairReturnTest : public ConditionalJoinTest<T> {
                    lhs_result.end(),
                    rhs_result.begin(),
                    result_pairs.begin(),
-                   [](cudf::size_type lhs, cudf::size_type rhs) { return std::pair{lhs, rhs}; });
+                   [](cudf::size_type lhs, cudf::size_type rhs) {
+                     return std::pair{lhs, rhs};
+                   });
     std::sort(result_pairs.begin(), result_pairs.end());
     std::sort(expected_outputs.begin(), expected_outputs.end());
 

@@ -38,6 +38,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/std/iterator>
 #include <thrust/count.h>
 #include <thrust/host_vector.h>
 #include <thrust/iterator/counting_iterator.h>
@@ -488,7 +489,7 @@ std::pair<rmm::device_uvector<char>, selected_rows_offsets> select_data_and_row_
         if (auto first_row_start =
               std::find(buffer_chars.begin(), buffer_chars.end(), parse_opts.terminator);
             first_row_start != buffer_chars.end()) {
-          data_start_offset += std::distance(buffer_chars.begin(), first_row_start) + 1;
+          data_start_offset += cuda::std::distance(buffer_chars.begin(), first_row_start) + 1;
           break;
         }
         data_start_offset += read_size;
@@ -738,7 +739,7 @@ cudf::detail::host_vector<data_type> determine_column_types(
                column_types.cend(),
                std::back_inserter(active_col_types),
                [&column_flags, &types = std::as_const(column_types)](auto& dtype) {
-                 auto const idx = std::distance(types.data(), &dtype);
+                 auto const idx = cuda::std::distance(types.data(), &dtype);
                  return column_flags[idx] & column_parse::enabled;
                });
 
@@ -882,7 +883,7 @@ table_with_metadata read_csv(cudf::io::datasource* source,
     for (auto const& name : unique_use_cols_names) {
       auto const it = std::find(column_names.cbegin(), column_names.cend(), name);
       CUDF_EXPECTS(it != column_names.end(), "Nonexistent column selected");
-      auto const col_idx = std::distance(column_names.cbegin(), it);
+      auto const col_idx = cuda::std::distance(column_names.cbegin(), it);
       if (column_flags[col_idx] == column_parse::disabled) {
         column_flags[col_idx] = column_parse::enabled | column_parse::inferred;
         ++num_active_columns;

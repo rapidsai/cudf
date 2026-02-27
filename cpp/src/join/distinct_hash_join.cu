@@ -26,6 +26,7 @@
 #include <cooperative_groups.h>
 #include <cub/block/block_scan.cuh>
 #include <cuco/static_set.cuh>
+#include <cuda/std/iterator>
 #include <cuda/std/tuple>
 #include <thrust/fill.h>
 #include <thrust/iterator/counting_iterator.h>
@@ -311,7 +312,7 @@ distinct_hash_join::inner_join(cudf::table_view const& probe,
                           cuda::proclaim_return_type<bool>(
                             [] __device__(size_type idx) { return idx != cudf::JoinNoMatch; }),
                           stream);
-  auto const actual_size = std::distance(output_begin, output_end);
+  auto const actual_size = cuda::std::distance(output_begin, output_end);
 
   build_indices->resize(actual_size, stream);
   probe_indices->resize(actual_size, stream);

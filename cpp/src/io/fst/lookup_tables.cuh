@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -609,7 +609,7 @@ class TransducerLookupTable {
       // this state)
       if (MAX_NUM_SYMBOLS > num_added) {
         int32_t count = MAX_NUM_SYMBOLS - num_added;
-        auto begin_it = std::prev(std::end(out_symbol_offsets));
+        auto begin_it = cuda::std::prev(std::end(out_symbol_offsets));
         std::fill_n(begin_it, count, out_symbol_offsets[0]);
       }
     }

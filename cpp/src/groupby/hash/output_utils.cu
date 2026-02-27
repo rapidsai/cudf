@@ -22,6 +22,7 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuco/static_set.cuh>
+#include <cuda/std/iterator>
 #include <thrust/scatter.h>
 #include <thrust/transform.h>
 
@@ -139,7 +140,7 @@ rmm::device_uvector<size_type> extract_populated_keys(SetType const& key_set,
 {
   rmm::device_uvector<size_type> unique_key_indices(num_total_keys, stream, mr);
   auto const keys_end = key_set.retrieve_all(unique_key_indices.begin(), stream.value());
-  unique_key_indices.resize(std::distance(unique_key_indices.begin(), keys_end), stream);
+  unique_key_indices.resize(cuda::std::distance(unique_key_indices.begin(), keys_end), stream);
   return unique_key_indices;
 }
 

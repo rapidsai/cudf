@@ -30,6 +30,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/std/iterator>
 #include <thrust/gather.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/logical.h>
@@ -114,7 +115,7 @@ void gather_helper(InputItr source_itr,
                    bool nullify_out_of_bounds,
                    rmm::cuda_stream_view stream)
 {
-  using map_type = typename std::iterator_traits<MapIterator>::value_type;
+  using map_type = typename cuda::std::iterator_traits<MapIterator>::value_type;
   if (nullify_out_of_bounds) {
     thrust::gather_if(rmm::exec_policy_nosync(stream),
                       gather_map_begin,
@@ -326,7 +327,7 @@ struct column_gatherer_impl<list_view> {
                                      rmm::device_async_resource_ref mr)
   {
     lists_column_view list(column);
-    auto gather_map_size = std::distance(gather_map_begin, gather_map_end);
+    auto gather_map_size = cuda::std::distance(gather_map_begin, gather_map_end);
     // if the gather map is empty, return an empty column
     if (gather_map_size == 0) { return empty_like(column); }
 
@@ -389,7 +390,7 @@ struct column_gatherer_impl<dictionary32> {
                                      rmm::device_async_resource_ref mr)
   {
     dictionary_column_view dictionary(source_column);
-    auto output_count = std::distance(gather_map_begin, gather_map_end);
+    auto output_count = cuda::std::distance(gather_map_begin, gather_map_end);
     if (output_count == 0) return make_empty_column(type_id::DICTIONARY32);
     // The gather could cause some keys to be abandoned -- no indices point to them.
     // In this case, we could do further work to remove the abandoned keys and
@@ -425,7 +426,7 @@ struct column_gatherer_impl<struct_view> {
                                      rmm::cuda_stream_view stream,
                                      rmm::device_async_resource_ref mr)
   {
-    auto const gather_map_size = std::distance(gather_map_begin, gather_map_end);
+    auto const gather_map_size = cuda::std::distance(gather_map_begin, gather_map_end);
     if (gather_map_size == 0) { return empty_like(column); }
 
     // Gathering needs to operate on the sliced children since they need to take into account the

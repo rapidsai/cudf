@@ -44,6 +44,7 @@ Mark Adler    madler@alumni.caltech.edu
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/std/iterator>
 #include <cuda/std/tuple>
 #include <thrust/gather.h>
 #include <thrust/sequence.h>
@@ -300,7 +301,7 @@ __device__ int construct(
     left <<= 1;                 // one more bit, double codes left
     left -= counts[len];        // deduct count from possible codes
     if (left < 0) return left;  // over-subscribed--return negative
-  }  // left > 0 means incomplete
+  }                             // left > 0 means incomplete
 
   // generate offsets into symbol table for each length for sorting
   offs[1] = 0;
@@ -1346,7 +1347,7 @@ sorted_codec_parameters sort_tasks(device_span<device_span<uint8_t const> const>
     // latency.
     auto const optimal_split_it = std::min_element(total_costs.begin(), total_costs.end());
     // Depending on the costs, this may be 0, which means that no tasks should be run on the host.
-    return std::distance(total_costs.begin(), optimal_split_it);
+    return cuda::std::distance(total_costs.begin(), optimal_split_it);
   }
 
   CUDF_FAIL("Invalid host engine state for compression: " +

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -20,6 +20,8 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_uvector.hpp>
+
+#include <cuda/std/iterator>
 
 #include <cstdlib>
 #include <vector>
@@ -87,15 +89,15 @@ static std::pair<OutputItT, IndexOutputItT> fst_baseline(InputItT begin,
       std::find_if(std::cbegin(symbol_group_lut), std::cend(symbol_group_lut), [symbol](auto& sg) {
         return std::find(std::cbegin(sg), std::cend(sg), symbol) != std::cend(sg);
       });
-    auto symbol_group = std::distance(std::cbegin(symbol_group_lut), symbol_group_it);
+    auto symbol_group = cuda::std::distance(std::cbegin(symbol_group_lut), symbol_group_it);
 
     // Output the translated symbols to the output tape
     out_tape = std::copy(std::cbegin(translation_table[state][symbol_group]),
                          std::cend(translation_table[state][symbol_group]),
                          out_tape);
 
-    auto out_size = std::distance(std::cbegin(translation_table[state][symbol_group]),
-                                  std::cend(translation_table[state][symbol_group]));
+    auto out_size = cuda::std::distance(std::cbegin(translation_table[state][symbol_group]),
+                                        std::cend(translation_table[state][symbol_group]));
 
     out_index_tape = std::fill_n(out_index_tape, out_size, in_offset);
 

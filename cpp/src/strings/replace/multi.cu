@@ -346,7 +346,8 @@ std::unique_ptr<column> replace_character_parallel(strings_column_view const& in
     cudf::detail::copy_if(copy_itr, copy_itr + chars_bytes, out_itr, copy_if_fn{}, stream);
 
   // adjust target count since the copy-if may have eliminated some invalid targets
-  target_count = std::min(static_cast<int64_t>(std::distance(out_itr, copy_end)), target_count);
+  target_count =
+    std::min(static_cast<int64_t>(cuda::std::distance(out_itr, copy_end)), target_count);
   targets_positions.resize(target_count, stream);
   targets_indices.resize(target_count, stream);
   auto d_positions       = targets_positions.data();
