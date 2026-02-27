@@ -40,6 +40,7 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
+#include <cuda/std/iterator>
 #include <cuda/std/tuple>
 #include <thrust/for_each.h>
 #include <thrust/gather.h>
@@ -95,7 +96,7 @@ struct escape_strings_fn {
       d_buffer[2] = nibble_to_hex((codepoint >> 12) & 0x0F);
       d_buffer[3] = nibble_to_hex((codepoint >> 8) & 0x0F);
       d_buffer[4] = nibble_to_hex((codepoint >> 4) & 0x0F);
-      d_buffer[5] = nibble_to_hex((codepoint) & 0x0F);
+      d_buffer[5] = nibble_to_hex((codepoint)&0x0F);
       d_buffer += 6;
     } else {
       bytes += 6;
@@ -726,7 +727,7 @@ struct column_to_strings_fn {
                                      size_type num_rows,
                                      cudf::string_view const row_end_wrap_value) const
   {
-    auto const num_columns = std::distance(column_begin, column_end);
+    auto const num_columns = cuda::std::distance(column_begin, column_end);
     auto column_names      = make_column_names_column(children_names, num_columns, stream_);
     auto column_names_view = column_names->view();
     std::vector<std::unique_ptr<cudf::column>> str_column_vec;

@@ -11,6 +11,8 @@
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/span.hpp>
 
+#include <cuda/std/iterator>
+
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
@@ -921,7 +923,7 @@ bool CompactProtocolReader::InitSchema(FileMetaData* md)
           return std::find_if(md->schema.cbegin(), mid, schema);
         }();
         if (it == md->schema.cend()) { return false; }
-        current_schema_index = std::distance(md->schema.cbegin(), it);
+        current_schema_index = cuda::std::distance(md->schema.cbegin(), it);
         column.schema_idx    = current_schema_index;
         parent               = current_schema_index;
       }

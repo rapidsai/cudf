@@ -114,7 +114,7 @@ std::unique_ptr<column> make_strings_column(CharIterator chars_begin,
   size_type strings_count = cuda::std::distance(offsets_begin, offsets_end) - 1;
   if (strings_count == 0) { return make_empty_column(type_id::STRING); }
 
-  int64_t const bytes = std::distance(chars_begin, chars_end) * sizeof(char);
+  int64_t const bytes = cuda::std::distance(chars_begin, chars_end) * sizeof(char);
   CUDF_EXPECTS(bytes >= 0, "invalid offsets data");
 
   // build offsets column -- this is the number of strings + 1

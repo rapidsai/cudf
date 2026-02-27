@@ -24,6 +24,7 @@
 
 #include <cuco/bloom_filter_policies.cuh>
 #include <cuco/bloom_filter_ref.cuh>
+#include <cuda/std/iterator>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/tabulate.h>
 
@@ -227,7 +228,7 @@ class bloom_filter_expression_converter : public equality_literals_collector {
                                             equality_literals.cend(),
                                             dynamic_cast<ast::literal const*>(&operands[1].get()));
         CUDF_EXPECTS(literal_iter != equality_literals.end(), "Could not find the literal ptr");
-        col_literal_offset += std::distance(equality_literals.cbegin(), literal_iter);
+        col_literal_offset += cuda::std::distance(equality_literals.cbegin(), literal_iter);
 
         // Evaluate boolean is_true(value) expression as IDENTITY(value)
         auto const& value = _bloom_filter_expr.push(ast::column_reference{col_literal_offset});
@@ -500,7 +501,7 @@ std::vector<Type> aggregate_reader_metadata::get_parquet_types(
   CUDF_EXPECTS(src_iter != row_group_indices.end(), "");
 
   // Source index
-  auto const src_index = std::distance(row_group_indices.begin(), src_iter);
+  auto const src_index = cuda::std::distance(row_group_indices.begin(), src_iter);
   std::transform(column_schemas.begin(),
                  column_schemas.end(),
                  parquet_types.begin(),

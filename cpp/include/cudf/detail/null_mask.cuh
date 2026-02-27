@@ -23,6 +23,7 @@
 #include <cub/block/block_reduce.cuh>
 #include <cub/device/device_segmented_reduce.cuh>
 #include <cuda/functional>
+#include <cuda/std/iterator>
 #include <cuda/std/tuple>
 #include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
@@ -512,7 +513,7 @@ rmm::device_uvector<size_type> segmented_count_bits(bitmask_type const* bitmask,
                                                     rmm::device_async_resource_ref mr)
 {
   auto const num_ranges =
-    static_cast<size_type>(std::distance(first_bit_indices_begin, first_bit_indices_end));
+    static_cast<size_type>(cuda::std::distance(first_bit_indices_begin, first_bit_indices_end));
   rmm::device_uvector<size_type> d_bit_counts(num_ranges, stream);
 
   auto num_set_bits_in_word = thrust::make_transform_iterator(bitmask, popcount{});
@@ -582,7 +583,7 @@ rmm::device_uvector<size_type> segmented_count_bits(bitmask_type const* bitmask,
  * @brief Given two iterators, validate that the iterators represent valid ranges of
  * indices and return the number of ranges.
  *
- * @throws cudf::logic_error if `std::distance(indices_begin, indices_end) % 2 != 0`
+ * @throws cudf::logic_error if `cuda::std::distance(indices_begin, indices_end) % 2 != 0`
  * @throws cudf::logic_error if `indices_begin[2*i] < 0 or indices_begin[2*i] >
  * indices_begin[(2*i)+1]`
  *
@@ -594,7 +595,7 @@ rmm::device_uvector<size_type> segmented_count_bits(bitmask_type const* bitmask,
 template <typename IndexIterator>
 size_type validate_segmented_indices(IndexIterator indices_begin, IndexIterator indices_end)
 {
-  auto const num_indices = static_cast<size_type>(std::distance(indices_begin, indices_end));
+  auto const num_indices = static_cast<size_type>(cuda::std::distance(indices_begin, indices_end));
   CUDF_EXPECTS(num_indices % 2 == 0,
                "Array of indices needs to have an even number of elements.",
                std::invalid_argument);
@@ -621,14 +622,14 @@ struct index_alternator {
 
 /**
  * @brief Given a bitmask, counts the number of set (1) or unset (0) bits in every range
- * `[indices_begin[2*i], indices_begin[(2*i)+1])` (where 0 <= i < std::distance(indices_begin,
+ * `[indices_begin[2*i], indices_begin[(2*i)+1])` (where 0 <= i < cuda::std::distance(indices_begin,
  * indices_end) / 2).
  *
  * If `bitmask == nullptr`, this function returns a vector containing the
  * segment lengths, or a vector of zeros if counting unset bits.
  *
  * @throws cudf::logic_error if `bitmask == nullptr`.
- * @throws cudf::logic_error if `std::distance(indices_begin, indices_end) % 2 != 0`.
+ * @throws cudf::logic_error if `cuda::std::distance(indices_begin, indices_end) % 2 != 0`.
  * @throws cudf::logic_error if `indices_begin[2*i] < 0 or indices_begin[2*i] >
  * indices_begin[(2*i)+1]`.
  *
@@ -656,8 +657,9 @@ std::vector<size_type> segmented_count_bits(bitmask_type const* bitmask,
   if (num_segments == 0) { return std::vector<size_type>{}; }
 
   // Construct a contiguous host buffer of indices and copy to device.
-  auto h_indices = make_empty_host_vector<typename std::iterator_traits<IndexIterator>::value_type>(
-    std::distance(indices_begin, indices_end), stream);
+  auto h_indices =
+    make_empty_host_vector<typename cuda::std::iterator_traits<IndexIterator>::value_type>(
+      cuda::std::distance(indices_begin, indices_end), stream);
   std::copy(indices_begin, indices_end, std::back_inserter(h_indices));
   auto const d_indices =
     make_device_uvector_async(h_indices, stream, cudf::get_current_device_resource_ref());
@@ -782,7 +784,7 @@ std::pair<rmm::device_buffer, size_type> segmented_null_mask_reduction(
     }));
 
   auto const num_segments =
-    static_cast<size_type>(std::distance(first_bit_indices_begin, first_bit_indices_end));
+    static_cast<size_type>(cuda::std::distance(first_bit_indices_begin, first_bit_indices_end));
 
   if (bitmask == nullptr) {
     return cudf::detail::valid_if(

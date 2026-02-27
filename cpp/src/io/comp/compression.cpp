@@ -21,6 +21,7 @@
 #include <cudf/utilities/span.hpp>
 
 #include <cuda/std/bit>
+#include <cuda/std/iterator>
 
 #include <BS_thread_pool.hpp>
 #include <zlib.h>  // GZIP compression
@@ -60,7 +61,7 @@ std::vector<std::uint8_t> compress_gzip(host_span<uint8_t const> src)
 
   ret = deflate(&zs, Z_FINISH);
   CUDF_EXPECTS(ret == Z_STREAM_END, "GZIP DEFLATE compression failed due to insufficient space!");
-  dst.resize(std::distance(dst.data(), zs.next_out));
+  dst.resize(cuda::std::distance(dst.data(), zs.next_out));
 
   ret = deflateEnd(&zs);
   CUDF_EXPECTS(ret == Z_OK, "GZIP DEFLATE compression failed at deallocation");

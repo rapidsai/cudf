@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -14,6 +14,7 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
+#include <cuda/std/iterator>
 #include <cuda/std/optional>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform.h>
@@ -51,7 +52,7 @@ std::unique_ptr<cudf::column> copy_if_else(StringIterLeft lhs_begin,
                                            rmm::cuda_stream_view stream,
                                            rmm::device_async_resource_ref mr)
 {
-  auto strings_count = std::distance(lhs_begin, lhs_end);
+  auto strings_count = cuda::std::distance(lhs_begin, lhs_end);
   if (strings_count == 0) { return make_empty_column(type_id::STRING); }
 
   // create null mask

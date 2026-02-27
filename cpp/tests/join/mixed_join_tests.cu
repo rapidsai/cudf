@@ -18,6 +18,7 @@
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
+#include <cuda/std/iterator>
 #include <thrust/device_vector.h>
 #include <thrust/execution_policy.h>
 #include <thrust/host_vector.h>
@@ -34,7 +35,7 @@
 
 namespace {
 using PairJoinReturn   = std::pair<std::unique_ptr<rmm::device_uvector<cudf::size_type>>,
-                                   std::unique_ptr<rmm::device_uvector<cudf::size_type>>>;
+                                 std::unique_ptr<rmm::device_uvector<cudf::size_type>>>;
 using SingleJoinReturn = std::unique_ptr<rmm::device_uvector<cudf::size_type>>;
 using NullMaskVector   = std::vector<bool>;
 
@@ -89,13 +90,13 @@ std::pair<std::vector<T>, std::vector<T>> gen_random_repeated_columns(
   std::vector<T> right(N_right);
 
   for (unsigned int i = 0; i < num_repeats_left; ++i) {
-    std::iota(std::next(left.begin(), num_unique_left * i),
-              std::next(left.begin(), num_unique_left * (i + 1)),
+    std::iota(cuda::std::next(left.begin(), num_unique_left * i),
+              cuda::std::next(left.begin(), num_unique_left * (i + 1)),
               0);
   }
   for (unsigned int i = 0; i < num_repeats_right; ++i) {
-    std::iota(std::next(right.begin(), num_unique_right * i),
-              std::next(right.begin(), num_unique_right * (i + 1)),
+    std::iota(cuda::std::next(right.begin(), num_unique_right * i),
+              cuda::std::next(right.begin(), num_unique_right * (i + 1)),
               0);
   }
 

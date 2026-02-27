@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -11,6 +11,8 @@
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/utilities/memory_resource.hpp>
+
+#include <cuda/std/iterator>
 
 #include <nvbench/nvbench.cuh>
 
@@ -104,7 +106,7 @@ void run_ndsh_q1(nvbench::state& state, cudf::io::source_info const& source)
                                                   "l_shipdate",
                                                   "l_orderkey",
                                                   "l_tax"};
-  auto const shipdate_ref                      = cudf::ast::column_reference(std::distance(
+  auto const shipdate_ref                      = cudf::ast::column_reference(cuda::std::distance(
     lineitem_cols.begin(), std::find(lineitem_cols.begin(), lineitem_cols.end(), "l_shipdate")));
   auto shipdate_upper =
     cudf::timestamp_scalar<cudf::timestamp_D>(days_since_epoch(1998, 9, 2), true);

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -22,6 +22,7 @@
 
 #include <cub/device/device_memcpy.cuh>
 #include <cuda/functional>
+#include <cuda/std/iterator>
 #include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
 
@@ -126,7 +127,7 @@ std::pair<std::unique_ptr<column>, int64_t> make_offsets_child_column(
   rmm::device_async_resource_ref mr)
 {
   auto constexpr size_type_max = static_cast<int64_t>(std::numeric_limits<size_type>::max());
-  auto const lcount            = static_cast<int64_t>(std::distance(begin, end));
+  auto const lcount            = static_cast<int64_t>(cuda::std::distance(begin, end));
   CUDF_EXPECTS(
     lcount <= size_type_max, "Size of output exceeds the column size limit", std::overflow_error);
   auto const strings_count = static_cast<size_type>(lcount);

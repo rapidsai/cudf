@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -7,6 +7,7 @@
 
 #include <cudf/utilities/error.hpp>
 
+#include <cuda/std/iterator>
 #include <thrust/iterator/counting_iterator.h>
 
 #include <algorithm>
@@ -28,15 +29,15 @@ std::string remove_comments(std::string const& src)
   auto f = src.cbegin();
   while (f < src.cend()) {
     auto l = std::find(f, src.cend(), '/');
-    output.append(f, l);  // push chunk instead of 1 char at a time
-    f = std::next(l);     // skip over '/'
+    output.append(f, l);     // push chunk instead of 1 char at a time
+    f = cuda::std::next(l);  // skip over '/'
     if (l < src.cend()) {
       char const n = f < src.cend() ? *f : '?';
       if (n == '/') {                        // found "//"
         f = std::find(f, src.cend(), '\n');  // skip to end of line
       } else if (n == '*') {                 // found "/*"
         auto term = std::string("*/");       // skip to end of next "*/"
-        f         = std::search(std::next(f), src.cend(), term.cbegin(), term.cend()) + term.size();
+        f = std::search(cuda::std::next(f), src.cend(), term.cbegin(), term.cend()) + term.size();
       } else {
         output.push_back('/');  // lone '/' should be pushed into output
       }
@@ -55,7 +56,7 @@ std::string ptx_parser::escape_percent(std::string const& src)
   auto f = std::find_if_not(src.begin(), src.end(), [](auto c) { return is_white(c) || c == '['; });
   if (f != src.end() && *f == '%') {
     std::string output = src;
-    output.replace(std::distance(src.begin(), f), 1, percent_escape);
+    output.replace(cuda::std::distance(src.begin(), f), 1, percent_escape);
     return output;
   }
   return src;
@@ -66,7 +67,8 @@ std::string ptx_parser::remove_nonalphanumeric(std::string const& src)
   std::string out = src;
   auto f = std::find_if_not(out.begin(), out.end(), [](auto c) { return is_white(c) || c == '['; });
   auto l = std::find_if(f, out.end(), [](auto c) { return is_white(c) || c == ']'; });
-  std::replace_if(f, l, [](auto c) { return !isalnum(c) && c != '_'; }, '_');
+  std::replace_if(
+    f, l, [](auto c) { return !isalnum(c) && c != '_'; }, '_');
   return std::string(f, l);
 }
 
@@ -304,11 +306,12 @@ std::string ptx_parser::parse_function_header(std::string const& src)
     auto i = std::find_if_not(src.cbegin(), src.cend(), [](auto c) { return is_white(c); });
     if (i != src.cend() && *i == '(')  // This function has a return type
       // First Pass: output param list
-      i = std::find_if_not(std::next(i), src.cend(), [](auto c) { return c == ')'; });
+      i = std::find_if_not(cuda::std::next(i), src.cend(), [](auto c) { return c == ')'; });
     // The function name
-    i = std::find_if_not(std::next(i), src.cend(), [](auto c) { return is_white(c) || c == '('; });
+    i = std::find_if_not(
+      cuda::std::next(i), src.cend(), [](auto c) { return is_white(c) || c == '('; });
     // Second Pass: input param list
-    return std::next(std::find(i, src.cend(), '('));
+    return cuda::std::next(std::find(i, src.cend(), '('));
   }();
 
   auto l = std::find(f, src.cend(), ')');
@@ -338,7 +341,7 @@ std::string ptx_parser::parse_function_header(std::string const& src)
 
   std::string const param_list =
     param_decls.empty() ? ""
-                        : std::accumulate(std::next(param_decls.begin()),
+                        : std::accumulate(cuda::std::next(param_decls.begin()),
                                           param_decls.end(),
                                           param_decls.front(),
                                           [](std::string const& p0, std::string const& p1) {
@@ -361,7 +364,7 @@ std::string ptx_parser::parse()
 
   auto l = std::find(f, no_comments.cend(), '{');
 
-  auto f2 = std::next(l);
+  auto f2 = cuda::std::next(l);
   auto l2 = std::find_if(f2, no_comments.cend(), [brace_count = 0](auto c) mutable {
     if (c == '{') ++brace_count;
     if (c == '}') {

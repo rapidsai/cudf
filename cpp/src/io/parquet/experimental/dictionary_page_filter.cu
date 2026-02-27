@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -27,6 +27,7 @@
 
 #include <cuco/extent.cuh>
 #include <cuco/static_set.cuh>
+#include <cuda/std/iterator>
 #include <thrust/iterator/counting_iterator.h>
 
 #include <optional>
@@ -83,9 +84,9 @@ using hasher_type = cudf::hashing::detail::MurmurHash3_x86_32<T>;
 
 /// cuco::static_set_ref storage type
 using storage_type     = cuco::bucket_storage<slot_type,
-                                              BUCKET_SIZE,
-                                              cuco::extent<std::size_t>,
-                                              rmm::mr::polymorphic_allocator<char>>;
+                                          BUCKET_SIZE,
+                                          cuco::extent<std::size_t>,
+                                          rmm::mr::polymorphic_allocator<char>>;
 using storage_ref_type = typename storage_type::ref_type;
 
 /**
@@ -1422,7 +1423,7 @@ class dictionary_expression_converter : public equality_literals_collector {
                                             equality_literals.cend(),
                                             dynamic_cast<ast::literal const*>(&operands[1].get()));
         CUDF_EXPECTS(literal_iter != equality_literals.end(), "Could not find the literal ptr");
-        col_literal_offset += std::distance(equality_literals.cbegin(), literal_iter);
+        col_literal_offset += cuda::std::distance(equality_literals.cbegin(), literal_iter);
 
         auto const& value = _dictionary_expr.push(ast::column_reference{col_literal_offset});
 

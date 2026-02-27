@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -12,6 +12,8 @@
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
+
+#include <cuda/std/iterator>
 
 #include <algorithm>
 #include <numeric>
@@ -99,7 +101,7 @@ TEST_F(DropNullsTest, LargeColumn)
   std::vector<T> expected_data(column_size);
   // zeros are the null elements, remove them
   auto end           = std::remove_copy(data.begin(), data.end(), expected_data.begin(), 0);
-  auto expected_size = std::distance(expected_data.begin(), end);
+  auto expected_size = cuda::std::distance(expected_data.begin(), end);
   expected_data.resize(expected_size);
 
   std::vector<index_T> expected_index(expected_size);

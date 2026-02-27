@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -14,6 +14,7 @@
 #include <rmm/exec_policy.hpp>
 #include <rmm/mr/device_memory_resource.hpp>
 
+#include <cuda/std/iterator>
 #include <thrust/copy.h>
 
 #include <iterator>
@@ -85,7 +86,7 @@ class split_device_span_iterator {
   using value_type        = T;
   using pointer           = value_type*;
   using reference         = value_type&;
-  using iterator_category = std::random_access_iterator_tag;
+  using iterator_category = cuda::std::random_access_iterator_tag;
 
   split_device_span_iterator() = default;
 

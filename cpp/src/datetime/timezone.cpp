@@ -1,11 +1,13 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2018-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/timezone.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/table/table.hpp>
+
+#include <cuda/std/iterator>
 
 #include <algorithm>
 #include <filesystem>
@@ -232,7 +234,7 @@ void posix_parser<Container>::skip_name()
     return std::isdigit(c) || c == '-' || c == ',' || c == '+' || c == '<';
   });
 
-  if (*cur == '<') cur = std::next(std::find(cur, end, '>'));
+  if (*cur == '<') cur = cuda::std::next(std::find(cur, end, '>'));
 }
 
 template <class Container>

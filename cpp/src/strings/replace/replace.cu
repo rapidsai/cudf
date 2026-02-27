@@ -298,7 +298,7 @@ std::unique_ptr<column> replace_character_parallel(strings_column_view const& in
     stream);
 
   // adjust target count since the copy-if may have eliminated some invalid targets
-  target_count = std::min(std::distance(targets_positions.begin(), copy_end), target_count);
+  target_count = std::min(cuda::std::distance(targets_positions.begin(), copy_end), target_count);
   targets_positions.resize(target_count, stream);
   auto d_positions = targets_positions.data();
 

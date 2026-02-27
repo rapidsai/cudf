@@ -752,7 +752,7 @@ class strings_column_wrapper : public detail::column_wrapper {
   template <typename StringsIterator>
   strings_column_wrapper(StringsIterator begin, StringsIterator end) : column_wrapper{}
   {
-    size_type num_strings = std::distance(begin, end);
+    size_type num_strings = cuda::std::distance(begin, end);
     if (num_strings == 0) {
       wrapped = cudf::make_empty_column(cudf::type_id::STRING);
       return;
@@ -802,7 +802,7 @@ class strings_column_wrapper : public detail::column_wrapper {
   strings_column_wrapper(StringsIterator begin, StringsIterator end, ValidityIterator v)
     : column_wrapper{}
   {
-    size_type num_strings = std::distance(begin, end);
+    size_type num_strings = cuda::std::distance(begin, end);
     if (num_strings == 0) {
       wrapped = cudf::make_empty_column(cudf::type_id::STRING);
       return;

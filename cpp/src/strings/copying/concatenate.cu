@@ -71,7 +71,7 @@ auto create_strings_device_views(host_span<column_view const> views, rmm::cuda_s
   // Compute the partition offsets and size of offset column
   // Note: Using 64-bit size_t so we can detect overflow of 32-bit size_type
   auto input_offsets = cudf::detail::make_host_vector<size_t>(views.size() + 1, stream);
-  auto offset_it     = std::next(input_offsets.begin());
+  auto offset_it     = cuda::std::next(input_offsets.begin());
   thrust::transform(
     thrust::host, views.begin(), views.end(), offset_it, [](auto const& col) -> size_t {
       return static_cast<size_t>(col.size());
@@ -89,7 +89,7 @@ auto create_strings_device_views(host_span<column_view const> views, rmm::cuda_s
   thrust::transform_inclusive_scan(rmm::exec_policy_nosync(stream),
                                    device_views_ptr,
                                    device_views_ptr + views.size(),
-                                   std::next(d_partition_offsets.begin()),
+                                   cuda::std::next(d_partition_offsets.begin()),
                                    chars_size_transform{},
                                    cuda::std::plus{});
   auto const output_chars_size = d_partition_offsets.back_element(stream);

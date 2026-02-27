@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2024, NVIDIA CORPORATION.  All rights reserved.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.  All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -8,6 +8,7 @@
 #include <cudf/strings/detail/utf8.hpp>
 #include <cudf/utilities/error.hpp>
 
+#include <cuda/std/iterator>
 #include <thrust/iterator/counting_iterator.h>
 
 #include <algorithm>
@@ -389,7 +390,7 @@ class regex_parser {
     // remove any duplicates
     auto const end = std::unique(
       ranges.rbegin(), ranges.rend(), [](auto l, auto r) { return l.first == r.first; });
-    ranges.erase(ranges.begin(), ranges.begin() + std::distance(end, ranges.rend()));
+    ranges.erase(ranges.begin(), ranges.begin() + cuda::std::distance(end, ranges.rend()));
 
     _cclass_id = _prog.add_class(reclass{builtins, std::move(ranges)});
     return type;
@@ -1083,7 +1084,7 @@ void reprog::collapse_nops()
 
   // remove the NOP instructions
   auto end = std::remove_if(_insts.begin(), _insts.end(), [](auto i) { return i.type == NOP; });
-  _insts.resize(std::distance(_insts.begin(), end));
+  _insts.resize(cuda::std::distance(_insts.begin(), end));
 
   // fix up the ids on the remaining instructions using the id_map
   std::transform(_insts.begin(), _insts.end(), _insts.begin(), [id_map](auto inst) {

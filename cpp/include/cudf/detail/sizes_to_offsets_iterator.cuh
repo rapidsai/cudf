@@ -37,7 +37,7 @@ struct sizes_to_offsets_iterator {
   using value_type        = LastType;
   using pointer           = LastType*;
   using reference         = sizes_to_offsets_iterator const&;
-  using iterator_category = std::random_access_iterator_tag;
+  using iterator_category = cuda::std::random_access_iterator_tag;
 
   using ScanType = cuda::std::iter_value_t<ScanIterator>;
 
@@ -191,7 +191,7 @@ struct sizes_to_offsets_iterator {
  * @code{.pseudo}
  *  auto begin = // begin input iterator
  *  auto end = // end input iterator
- *  auto result = rmm::device_uvector(std::distance(begin,end), stream);
+ *  auto result = rmm::device_uvector(cuda::std::distance(begin,end), stream);
  *  auto last = cudf::detail::device_scalar<int64_t>(0, stream);
  *  auto itr = make_sizes_to_offsets_iterator(result.begin(),
  *                                            result.end(),
@@ -260,8 +260,8 @@ auto sizes_to_offsets(SizesIterator begin,
 
   using LastType    = std::conditional_t<std::is_signed_v<SizeType>, int64_t, uint64_t>;
   auto last_element = cudf::detail::device_scalar<LastType>(0, stream);
-  auto output_itr =
-    make_sizes_to_offsets_iterator(result, result + std::distance(begin, end), last_element.data());
+  auto output_itr   = make_sizes_to_offsets_iterator(
+    result, result + cuda::std::distance(begin, end), last_element.data());
   // This function uses the type of the initialization parameter as the accumulator type
   // when computing the individual scan output elements.
   thrust::exclusive_scan(
@@ -295,7 +295,7 @@ std::pair<std::unique_ptr<column>, size_type> make_offsets_child_column(
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
-  auto count          = static_cast<size_type>(std::distance(begin, end));
+  auto count          = static_cast<size_type>(cuda::std::distance(begin, end));
   auto offsets_column = make_numeric_column(
     data_type{type_to_id<size_type>()}, count + 1, mask_state::UNALLOCATED, stream, mr);
   auto offsets_view = offsets_column->mutable_view();

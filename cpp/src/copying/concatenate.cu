@@ -80,7 +80,7 @@ auto create_device_views(host_span<column_view const> views, rmm::cuda_stream_vi
     thrust::host,
     device_views.cbegin(),
     device_views.cend(),
-    std::next(offsets.begin()),
+    cuda::std::next(offsets.begin()),
     [](auto const& col) { return col.size(); },
     cuda::std::plus{});
   auto d_offsets =
