@@ -14,7 +14,13 @@ import pyarrow as pa
 import pylibcudf as plc
 
 import cudf
-from cudf.core.column.column import ColumnBase, as_column, column_empty
+from cudf.core.column.column import (
+    INT32_SAME_KIND_POLICY,
+    ColumnBase,
+    PylibcudfFunction,
+    as_column,
+    column_empty,
+)
 from cudf.core.dtypes import ListDtype
 from cudf.core.missing import NA
 from cudf.utils.dtypes import get_dtype_of_same_kind
@@ -249,11 +255,10 @@ class ListColumn(ColumnBase):
             return pd.Index(self.to_arrow().tolist(), dtype="object")
 
     def count_elements(self) -> ColumnBase:
-        with self.access(mode="read", scope="internal"):
-            return ColumnBase.create(
-                plc.lists.count_elements(self.plc_column),
-                get_dtype_of_same_kind(self.dtype, np.dtype(np.int32)),
-            )
+        return PylibcudfFunction(
+            plc.lists.count_elements,
+            INT32_SAME_KIND_POLICY,
+        ).execute_with_args(self)
 
     def distinct(self, nulls_equal: bool, nans_all_equal: bool) -> ColumnBase:
         with self.access(mode="read", scope="internal"):

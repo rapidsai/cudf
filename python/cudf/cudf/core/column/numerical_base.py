@@ -12,11 +12,15 @@ import pylibcudf as plc
 
 import cudf
 from cudf.core.column import column_empty
-from cudf.core.column.column import ColumnBase
-from cudf.core.column.utils import access_columns
+from cudf.core.column.column import (
+    ColumnBase,
+    PylibcudfFunction,
+    pylibcudf_result_dtype_policy,
+    same_dtype_policy,
+)
 from cudf.core.missing import NA
 from cudf.core.mixins import Scannable
-from cudf.utils.dtypes import _get_nan_for_dtype, dtype_from_pylibcudf_column
+from cudf.utils.dtypes import _get_nan_for_dtype
 
 if TYPE_CHECKING:
     from cudf._typing import ScalarLike
@@ -158,22 +162,26 @@ class NumericalBaseColumn(ColumnBase, Scannable):
                 .slice(no_nans.null_count, len(no_nans))
                 .astype(np.dtype(np.int32))
             )
-            with access_columns(
-                no_nans, indices, mode="read", scope="internal"
-            ) as (no_nans, indices):
-                plc_column = plc.quantiles.quantile(
-                    no_nans.plc_column,
+            interpolation_type = plc.types.Interpolation[interpolation.upper()]
+
+            def _quantile(
+                plc_column: plc.Column, plc_indices: plc.Column
+            ) -> plc.Column:
+                return plc.quantiles.quantile(
+                    plc_column,
                     q,
-                    plc.types.Interpolation[interpolation.upper()],
-                    indices.plc_column,
+                    interpolation_type,
+                    plc_indices,
                     exact,
                 )
-                result = cast(
-                    cudf.core.column.numerical_base.NumericalBaseColumn,
-                    ColumnBase.create(
-                        plc_column, dtype_from_pylibcudf_column(plc_column)
-                    ),
-                )
+
+            result = cast(
+                cudf.core.column.numerical_base.NumericalBaseColumn,
+                PylibcudfFunction(
+                    _quantile,
+                    pylibcudf_result_dtype_policy,
+                ).execute_with_args(no_nans, indices),
+            )
         if return_scalar:
             scalar_result = result.element_indexing(0)
             if interpolation in {"lower", "higher", "nearest"}:
@@ -248,22 +256,27 @@ class NumericalBaseColumn(ColumnBase, Scannable):
         if how not in {"half_even", "half_up"}:
             raise ValueError(f"{how=} must be either 'half_even' or 'half_up'")
         plc_how = plc.round.RoundingMethod[how.upper()]
-        with self.access(mode="read", scope="internal"):
-            plc_result = plc.round.round(self.plc_column, decimals, plc_how)
-            return cast(
-                cudf.core.column.numerical_base.NumericalBaseColumn,
-                ColumnBase.create(
-                    plc_result,
-                    dtype_from_pylibcudf_column(plc_result),
-                ),
-            )
+
+        def _round(plc_column: plc.Column) -> plc.Column:
+            return plc.round.round(plc_column, decimals, plc_how)
+
+        return cast(
+            cudf.core.column.numerical_base.NumericalBaseColumn,
+            PylibcudfFunction(
+                _round,
+                pylibcudf_result_dtype_policy,
+            ).execute_with_args(self),
+        )
 
     def unary_operator(self, unaryop: str) -> ColumnBase:
         unaryop_str = unaryop.upper()
         unaryop_str = _unaryop_map.get(unaryop_str, unaryop_str)
         unaryop_enum = plc.unary.UnaryOperator[unaryop_str]
-        with self.access(mode="read", scope="internal"):
-            return ColumnBase.create(
-                plc.unary.unary_operation(self.plc_column, unaryop_enum),
-                self.dtype,
-            )
+
+        def _unary(plc_column: plc.Column) -> plc.Column:
+            return plc.unary.unary_operation(plc_column, unaryop_enum)
+
+        return PylibcudfFunction(
+            _unary,
+            same_dtype_policy,
+        ).execute_with_args(self)
