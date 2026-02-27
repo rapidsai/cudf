@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 import asyncio
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Literal
 
 from rapidsmpf.memory.buffer import MemoryType
@@ -79,13 +79,17 @@ class JoinChunkSample:
 class JoinStrategy:
     """Summary of sampling and strategy selection for a dynamic join."""
 
-    broadcast_side: Literal["left", "right"] | None
+    broadcast_side: Literal["left", "right"] | None = None
     """The side to broadcast. If None, the strategy is not a broadcast join."""
-    min_shuffle_modulus: int
+    min_shuffle_modulus: int = 0
     """The minimum shuffle modulus."""
-    left_sample: JoinChunkSample
+    left_sample: JoinChunkSample = field(
+        default_factory=lambda: JoinChunkSample(chunks=[], total_size=0, total_rows=0)
+    )
     """Left-side sample information."""
-    right_sample: JoinChunkSample
+    right_sample: JoinChunkSample = field(
+        default_factory=lambda: JoinChunkSample(chunks=[], total_size=0, total_rows=0)
+    )
     """Right-side sample information."""
 
 
@@ -141,9 +145,7 @@ async def broadcast_join_actor(
             ch_right,
             left_metadata,
             right_metadata,
-            [],  # No sampled chunks
-            [],  # No sampled chunks
-            broadcast_side,
+            JoinStrategy(broadcast_side=broadcast_side),
             [collective_id],
             target_partition_size,
             tracer=tracer,
@@ -282,9 +284,7 @@ async def _broadcast_join(
     ch_right: Channel[TableChunk],
     left_metadata: ChannelMetadata,
     right_metadata: ChannelMetadata,
-    left_sample_chunks: list[TableChunk],
-    right_sample_chunks: list[TableChunk],
-    broadcast_side: Literal["left", "right"],
+    strategy: JoinStrategy,
     collective_ids: list[int],
     target_partition_size: int,
     *,
@@ -298,6 +298,8 @@ async def _broadcast_join(
     Pops one collective ID from collective_ids for allgather when needed.
     """
     collective_id = collective_ids.pop(0) if collective_ids else 0
+    broadcast_side = strategy.broadcast_side
+    assert broadcast_side is not None
     left, right = ir.children
     if tracer is not None:
         tracer.decision = f"broadcast_{broadcast_side}"
@@ -306,8 +308,8 @@ async def _broadcast_join(
         small_ch, large_ch = ch_right, ch_left
         small_child, large_child = right, left
         small_metadata, large_metadata = right_metadata, left_metadata
-        small_initial_chunks = right_sample_chunks
-        large_initial_chunks = left_sample_chunks
+        small_initial_chunks = strategy.right_sample.chunks
+        large_initial_chunks = strategy.left_sample.chunks
         local_count = left_metadata.local_count
         partitioning: Partitioning | None = remap_partitioning(
             left_metadata.partitioning, large_child.schema, ir.schema
@@ -316,8 +318,8 @@ async def _broadcast_join(
         small_ch, large_ch = ch_left, ch_right
         small_child, large_child = left, right
         small_metadata, large_metadata = left_metadata, right_metadata
-        small_initial_chunks = left_sample_chunks
-        large_initial_chunks = right_sample_chunks
+        small_initial_chunks = strategy.left_sample.chunks
+        large_initial_chunks = strategy.right_sample.chunks
         local_count = right_metadata.local_count
         partitioning = (
             remap_partitioning(
@@ -650,20 +652,18 @@ async def _shuffle_join(
     ch_right: Channel[TableChunk],
     left_partitioning: NormalizedPartitioning,
     right_partitioning: NormalizedPartitioning,
-    min_shuffle_modulus: int,
+    strategy: JoinStrategy,
     collective_ids: list[int],
     *,
     tracer: ActorTracer | None,
     n_partitioned_keys: int | None = None,
-    left_sample_chunks: list[TableChunk] | None = None,
-    right_sample_chunks: list[TableChunk] | None = None,
 ) -> None:
     """Execute a shuffle (hash) join."""
     modulus = _choose_shuffle_modulus(
         context,
         left_partitioning,
         right_partitioning,
-        min_shuffle_modulus,
+        strategy.min_shuffle_modulus,
     )  # Global modulus
 
     left_key_indices, right_key_indices, output_key_indices = _get_key_indices(
@@ -693,9 +693,11 @@ async def _shuffle_join(
         collective_ids,
         tracer,
     )
+    left_sample_chunks: list[TableChunk] = strategy.left_sample.chunks or []
+    right_sample_chunks: list[TableChunk] = strategy.right_sample.chunks or []
     await asyncio.gather(
-        drain_into_shuffle(context, ch_left, left_shuffle, left_sample_chunks or []),
-        drain_into_shuffle(context, ch_right, right_shuffle, right_sample_chunks or []),
+        drain_into_shuffle(context, ch_left, left_shuffle, left_sample_chunks),
+        drain_into_shuffle(context, ch_right, right_shuffle, right_sample_chunks),
     )
 
     partition_ids: list[int]
@@ -713,8 +715,8 @@ async def _shuffle_join(
             ch_out,
             ch_left,
             ch_right,
-            left_sample_chunks or [],
-            right_sample_chunks or [],
+            left_sample_chunks,
+            right_sample_chunks,
             left_shuffle,
             right_shuffle,
             partition_id=partition_id,
@@ -732,10 +734,9 @@ async def _choose_strategy(
     right_metadata: ChannelMetadata,
     left_sample: JoinChunkSample,
     right_sample: JoinChunkSample,
+    executor: StreamingExecutor,
     collective_ids: list[int],
-    broadcast_threshold: int,
-    target_partition_size: int,
-) -> tuple[Literal["left", "right"] | None, int]:
+) -> JoinStrategy:
     """Choose potential broadcast side and minimum shuffle modulus."""
     left_local_count = left_metadata.local_count
     right_local_count = right_metadata.local_count
@@ -792,6 +793,7 @@ async def _choose_strategy(
     # - Full: cannot broadcast (must shuffle both to preserve both sides)
 
     # Determine which sides may be broadcasted
+    broadcast_threshold = executor.target_partition_size * executor.broadcast_join_limit
     left_size_ok = left_total < broadcast_threshold and (
         left_total_rows < MAX_BROADCAST_ROWS or left_metadata.duplicated
     )
@@ -823,12 +825,17 @@ async def _choose_strategy(
         broadcast_side = "right"
 
     estimated_output_size = max(left_total, right_total)
-    ideal_output_count = max(1, estimated_output_size // target_partition_size)
+    ideal_output_count = max(1, estimated_output_size // executor.target_partition_size)
     # Limit the output count to 10x the larger input side
     max_output_chunks = 10 * max(left_total_chunks, right_total_chunks)
     min_shuffle_modulus = min(ideal_output_count, max_output_chunks)
 
-    return broadcast_side, min_shuffle_modulus
+    return JoinStrategy(
+        broadcast_side=broadcast_side,
+        min_shuffle_modulus=min_shuffle_modulus,
+        left_sample=left_sample,
+        right_sample=right_sample,
+    )
 
 
 def _choose_shuffle_modulus(
@@ -850,34 +857,6 @@ def _choose_shuffle_modulus(
         return small
     else:
         return large
-
-    # # Determine which modulus to use, preferring existing partitioning
-    # # if it provides at least the minimum needed partitions
-    # if left_modulus and right_modulus:
-    #     # Both sides partitioned - use the larger modulus if compatible
-    #     # (one must be a multiple of the other for compatibility)
-    #     if left_modulus >= right_modulus:
-    #         if left_modulus % right_modulus == 0:
-    #             modulus = left_modulus
-    #         else:
-    #             # Incompatible - use whichever is larger
-    #             modulus = max(left_modulus, right_modulus)
-    #     else:
-    #         if right_modulus % left_modulus == 0:
-    #             modulus = right_modulus
-    #         else:
-    #             modulus = max(left_modulus, right_modulus)
-    # elif left_modulus is not None:
-    #     # Only left is partitioned - use its modulus if sufficient
-    #     modulus = left_modulus
-    # elif right_modulus is not None:
-    #     # Only right is partitioned - use its modulus if sufficient
-    #     modulus = right_modulus
-    # else:
-    #     # Neither side partitioned - can choose freely
-    #     # Use at least nranks for distributed efficiency
-    #     modulus = context.comm().nranks
-    # return max(modulus, min_shuffle_modulus)
 
 
 async def _sample_chunks(
@@ -909,32 +888,25 @@ async def _sample_and_choose_strategy(
     ch_right: Channel[TableChunk],
     left_metadata: ChannelMetadata,
     right_metadata: ChannelMetadata,
-    sample_chunk_count: int,
-    broadcast_threshold: int,
-    target_partition_size: int,
+    executor: StreamingExecutor,
     collective_ids: list[int],
 ) -> JoinStrategy:
     """Sample both sides, allgather estimates, and choose broadcast vs shuffle."""
+    assert executor.dynamic_planning is not None
+    sample_chunk_count = executor.dynamic_planning.sample_chunk_count
     left_sample, right_sample = await asyncio.gather(
         _sample_chunks(context, ch_left, sample_chunk_count),
         _sample_chunks(context, ch_right, sample_chunk_count),
     )
-    broadcast_side, min_shuffle_modulus = await _choose_strategy(
+    return await _choose_strategy(
         context,
         ir,
         left_metadata,
         right_metadata,
         left_sample,
         right_sample,
+        executor,
         collective_ids,
-        broadcast_threshold,
-        target_partition_size,
-    )
-    return JoinStrategy(
-        broadcast_side=broadcast_side,
-        min_shuffle_modulus=min_shuffle_modulus,
-        left_sample=left_sample,
-        right_sample=right_sample,
     )
 
 
@@ -946,9 +918,7 @@ async def join_actor(
     ch_out: Channel[TableChunk],
     ch_left: Channel[TableChunk],
     ch_right: Channel[TableChunk],
-    sample_chunk_count: int,
-    broadcast_threshold: int,
-    target_partition_size: int,
+    executor: StreamingExecutor,
     collective_ids: list[int],
 ) -> None:
     """
@@ -972,12 +942,8 @@ async def join_actor(
         Input channel for the left side.
     ch_right
         Input channel for the right side.
-    sample_chunk_count
-        Number of chunks to sample per side for strategy selection.
-    broadcast_threshold
-        Max rows on one side to allow broadcast join (small side sent to all ranks).
-    target_partition_size
-        Target partition size used when choosing shuffle modulus.
+    executor
+        Streaming executor configuration.
     collective_ids
         List of collective IDs for shuffle/broadcast; consumed as needed.
     """
@@ -1003,7 +969,7 @@ async def join_actor(
 
         # Skip sampling when both sides have aligned partitioning
         if left_partitioning and left_partitioning == right_partitioning:
-            await _shuffle_join(
+            return await _shuffle_join(
                 context,
                 ir,
                 ir_context,
@@ -1012,12 +978,11 @@ async def join_actor(
                 ch_right,
                 left_partitioning,
                 right_partitioning,
-                left_partitioning.inter_rank_modulus,
+                JoinStrategy(min_shuffle_modulus=left_partitioning.inter_rank_modulus),
                 collective_ids,
                 n_partitioned_keys=len(left_partitioning.inter_rank_indices),
                 tracer=tracer,
             )
-            return
 
         strategy = await _sample_and_choose_strategy(
             context,
@@ -1026,9 +991,7 @@ async def join_actor(
             ch_right,
             left_metadata,
             right_metadata,
-            sample_chunk_count,
-            broadcast_threshold,
-            target_partition_size,
+            executor,
             collective_ids,
         )
 
@@ -1042,29 +1005,26 @@ async def join_actor(
                 ch_right,
                 left_metadata,
                 right_metadata,
-                strategy.left_sample.chunks,
-                strategy.right_sample.chunks,
-                strategy.broadcast_side,
+                strategy,
                 collective_ids,
-                target_partition_size,
+                executor.target_partition_size,
                 tracer=tracer,
             )
-        else:
-            await _shuffle_join(
-                context,
-                ir,
-                ir_context,
-                ch_out,
-                ch_left,
-                ch_right,
-                left_partitioning,
-                right_partitioning,
-                strategy.min_shuffle_modulus,
-                collective_ids,
-                left_sample_chunks=strategy.left_sample.chunks,
-                right_sample_chunks=strategy.right_sample.chunks,
-                tracer=tracer,
-            )
+            return None
+        await _shuffle_join(
+            context,
+            ir,
+            ir_context,
+            ch_out,
+            ch_left,
+            ch_right,
+            left_partitioning,
+            right_partitioning,
+            strategy,
+            collective_ids,
+            tracer=tracer,
+        )
+        return None
 
 
 @generate_ir_sub_network.register(Join)
@@ -1133,9 +1093,6 @@ def _(
                 f"{len(collective_ids)} for this Join. "
                 "Ensure ReserveOpIDs is run with dynamic_planning enabled."
             )
-        broadcast_threshold = (
-            executor.target_partition_size * executor.broadcast_join_limit
-        )
         actors[ir] = [
             join_actor(
                 rec.state["context"],
@@ -1144,9 +1101,7 @@ def _(
                 channels[ir].reserve_input_slot(),
                 channels[left].reserve_output_slot(),
                 channels[right].reserve_output_slot(),
-                executor.dynamic_planning.sample_chunk_count,
-                broadcast_threshold,
-                executor.target_partition_size,
+                executor,
                 collective_ids,
             )
         ]
