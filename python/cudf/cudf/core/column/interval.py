@@ -42,10 +42,6 @@ class IntervalColumn(ColumnBase):
             if isinstance(self.dtype, IntervalDtype)
             else cast("pd.ArrowDtype", self.dtype).pyarrow_dtype
         )
-        if pa.types.is_null(pa_array.type):
-            # from _handle_nulls
-            # pa.ExtensionArray.from_storage cannot handle null arrays
-            pa_array = pa.array([], type=pa_type.storage_type)
         return pa.ExtensionArray.from_storage(pa_type, pa_array)
 
     @classmethod
