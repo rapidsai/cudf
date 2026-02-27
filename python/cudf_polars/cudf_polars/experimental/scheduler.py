@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 """Synchronous task scheduler."""
 
@@ -7,9 +7,7 @@ from __future__ import annotations
 from collections import Counter
 from collections.abc import MutableMapping
 from itertools import chain
-from typing import TYPE_CHECKING, Any, TypeVar
-
-from typing_extensions import Unpack
+from typing import TYPE_CHECKING, Any, TypeVar, Unpack
 
 if TYPE_CHECKING:
     from collections.abc import Mapping

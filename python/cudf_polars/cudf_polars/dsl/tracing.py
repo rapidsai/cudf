@@ -9,11 +9,10 @@ import enum
 import functools
 import os
 import time
-from typing import TYPE_CHECKING, Any, Concatenate, Literal
+from typing import TYPE_CHECKING, Any, Concatenate, Literal, ParamSpec
 
 import nvtx
 import pynvml
-from typing_extensions import ParamSpec
 
 import rmm
 import rmm.statistics
