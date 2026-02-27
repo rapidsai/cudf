@@ -32,7 +32,7 @@ from pylibcudf.libcudf.io.parquet cimport (
     chunked_parquet_writer_options_builder,
 )
 
-from pylibcudf.libcudf.types cimport size_type
+from pylibcudf.libcudf.types cimport size_type, type_id
 
 from pylibcudf.table cimport Table
 
@@ -66,6 +66,7 @@ cdef class ParquetReaderOptionsBuilder:
     cpdef ParquetReaderOptionsBuilder column_names(self, list col_names)
     cpdef ParquetReaderOptionsBuilder column_indices(self, list col_indices)
     cpdef ParquetReaderOptionsBuilder use_jit_filter(self, bool use_jit_filter)
+    cpdef ParquetReaderOptionsBuilder decimal_width(self, type_id width)
     cpdef build(self)
 
 

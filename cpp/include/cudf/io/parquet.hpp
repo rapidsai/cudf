@@ -99,6 +99,8 @@ class parquet_reader_options {
   bool _ignore_missing_columns = true;
   // Cast timestamp columns to a specific type
   data_type _timestamp_type{type_id::EMPTY};
+  // Cast decimal columns to a specific width
+  type_id _decimal_width{type_id::EMPTY};
   // Whether to use JIT compilation for filtering
   bool _use_jit_filter = false;
 
@@ -268,6 +270,13 @@ class parquet_reader_options {
    * @return Timestamp type used to cast timestamp columns
    */
   [[nodiscard]] data_type get_timestamp_type() const { return _timestamp_type; }
+
+  /**
+   * @brief Returns decimal width used to cast decimal columns.
+   *
+   * @return Decimal type_id used to cast decimal columns
+   */
+  [[nodiscard]] type_id get_decimal_width() const { return _decimal_width; }
 
   /**
    * @brief Returns whether to use JIT compilation for filtering.
@@ -493,6 +502,14 @@ class parquet_reader_options {
    * @param type The timestamp data_type to which all timestamp columns need to be cast
    */
   void set_timestamp_type(data_type type) { _timestamp_type = type; }
+
+  /**
+   * @brief Sets decimal width used to cast decimal columns.
+   *
+   * @param width The decimal type_id (DECIMAL32, DECIMAL64, or DECIMAL128) to which all decimal
+   * columns need to be cast. The scale of each column is preserved from the file.
+   */
+  void set_decimal_width(type_id width) { _decimal_width = width; }
 };
 
 /**
@@ -713,6 +730,19 @@ class parquet_reader_options_builder {
   parquet_reader_options_builder& timestamp_type(data_type type)
   {
     options._timestamp_type = type;
+    return *this;
+  }
+
+  /**
+   * @brief Sets the decimal width used to cast decimal columns.
+   *
+   * @param width The decimal type_id (DECIMAL32, DECIMAL64, or DECIMAL128) to which all decimal
+   * columns need to be cast. The scale of each column is preserved from the file.
+   * @return this for chaining
+   */
+  parquet_reader_options_builder& decimal_width(type_id width)
+  {
+    options._decimal_width = width;
     return *this;
   }
 
