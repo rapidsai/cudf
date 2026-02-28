@@ -1,5 +1,5 @@
 #!/bin/bash
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 set -euo pipefail
@@ -18,8 +18,22 @@ python -m pytest --cache-clear "$@" tests --executor streaming
 # Test the "streaming" executor with small blocksize
 python -m pytest --cache-clear "$@" tests --executor streaming --blocksize-mode small
 
+# Test the "streaming" executor with "rapidsmpf" runtime and the "single" cluster mode with dynamic planning
+# TODO: Enable dynamic planning
+CUDF_POLARS__PARQUET_OPTIONS__USE_RAPIDSMPF_NATIVE=1 CUDF_POLARS__EXECUTOR__SHUFFLE_METHOD=rapidsmpf python -m pytest --cache-clear "$@" tests \
+    --executor streaming \
+    --blocksize-mode small \
+    --cluster single \
+    --runtime rapidsmpf
+
 # Run experimental tests with Distributed cluster
 python -m pytest --cache-clear "$@" "tests/experimental" \
     --executor streaming \
     --cluster distributed \
     --cov-fail-under=0  # No code-coverage requirement for these tests.
+
+# Run experimental tests with the "distributed" cluster mode and the "rapidsmpf" runtime
+python -m pytest --cache-clear "$@" "tests/experimental" \
+    --executor streaming \
+    --cluster distributed \
+    --runtime rapidsmpf
