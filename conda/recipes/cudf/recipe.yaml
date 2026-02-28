@@ -88,7 +88,6 @@ requirements:
     - cuda-version =${{ cuda_version }}
   run:
     - python
-    - typing_extensions >=4.0.0
     - pandas >=2.0,<2.4.0
     - cupy >=13.6.0,!=14.0.0
     - numba-cuda >=0.22.2
