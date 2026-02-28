@@ -4,7 +4,6 @@ import abc
 import copyreg
 import datetime
 import functools
-import importlib
 import inspect
 import os
 import pickle
@@ -36,7 +35,6 @@ from pandas.tseries.holiday import (
 )
 
 import cudf
-import cudf.core._compat
 
 from ..annotation import nvtx
 from ..fast_slow_proxy import (
@@ -68,48 +66,12 @@ from pandas.io.sas.sas_xport import (  # isort: skip
     XportReader as pd_XportReader,
 )
 
-# TODO(pandas2.1): Can import from pandas.api.typing
-from pandas.core.resample import (  # isort: skip
-    Resampler as pd_Resampler,
-    TimeGrouper as pd_TimeGrouper,
-    DatetimeIndexResampler as pd_DatetimeIndexResampler,
-)
-
 try:
     from IPython import get_ipython
 
     ipython_shell = get_ipython()
 except ImportError:
     ipython_shell = None
-
-
-def _pandas_util_dir():
-    # In pandas 2.0, pandas.util contains public APIs under
-    # __getattr__ but no __dir__ to find them
-    # https://github.com/pandas-dev/pandas/blob/2.2.x/pandas/util/__init__.py
-    res = list(
-        set(
-            [
-                *list(importlib.import_module("pandas.util").__dict__.keys()),
-                "Appender",
-                "Substitution",
-                "capitalize_first_letter",
-                "_exceptions",
-                "_print_versions",
-                "cache_readonly",
-                "hash_array",
-                "hash_pandas_object",
-                "version",
-                "_tester",
-                "_validators",
-                "_decorators",
-            ]
-        )
-    )
-    return res
-
-
-pd.util.__dir__ = _pandas_util_dir
 
 
 def make_final_proxy_type(
@@ -134,20 +96,6 @@ def make_intermediate_proxy_type(
     return _make_intermediate_proxy_type(
         name, fast_type, slow_type, module=slow_type.__module__, **kwargs
     )
-
-
-try:
-    # List Accessor in pandas was introduced in 2.2.0 only
-    pd_ListAccessor = pd.core.arrays.arrow.accessors.ListAccessor
-except AttributeError:
-    pd_ListAccessor = _Unusable
-
-
-try:
-    # Struct Accessor in pandas was introduced in 2.2.0 only
-    pd_StructAccessor = pd.core.arrays.arrow.accessors.StructAccessor
-except AttributeError:
-    pd_StructAccessor = _Unusable
 
 
 class _AccessorAttr:
@@ -248,7 +196,7 @@ StringMethods = make_intermediate_proxy_type(
 ListMethods = make_intermediate_proxy_type(
     "ListMethods",
     cudf.core.accessors.lists.ListMethods,
-    pd_ListAccessor,
+    pd.core.arrays.arrow.accessors.ListAccessor,
 )
 
 SparseAccessor = make_intermediate_proxy_type(
@@ -260,7 +208,7 @@ SparseAccessor = make_intermediate_proxy_type(
 StructAccessor = make_intermediate_proxy_type(
     "StructAccessor",
     cudf.core.accessors.struct.StructMethods,
-    pd_StructAccessor,
+    pd.core.arrays.arrow.accessors.StructAccessor,
 )
 _CategoricalAccessor = make_intermediate_proxy_type(
     "CategoricalAccessor",
@@ -800,7 +748,7 @@ MultiIndex = make_final_proxy_type(
 TimeGrouper = make_intermediate_proxy_type(
     "TimeGrouper",
     _Unusable,
-    pd_TimeGrouper,
+    pd.api.typing.TimeGrouper,
 )
 
 Grouper = make_final_proxy_type(
@@ -837,27 +785,6 @@ StringArray = make_final_proxy_type(
         "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
         "__arrow_array__": _FastSlowAttribute("__arrow_array__"),
     },
-)
-
-ArrowStringArrayNumpySemantics = make_final_proxy_type(
-    "ArrowStringArrayNumpySemantics",
-    _Unusable,
-    pd.core.arrays.string_arrow.ArrowStringArrayNumpySemantics,
-    fast_to_slow=_Unusable(),
-    slow_to_fast=_Unusable(),
-    additional_attributes={
-        "_pa_array": _FastSlowAttribute("_pa_array", private=True),
-        "__array__": _FastSlowAttribute("__array__", private=True),
-    },
-)
-
-StringArrayNumpySemantics = make_final_proxy_type(
-    "StringArrayNumpySemantics",
-    _Unusable,
-    pd.core.arrays.string_.StringArrayNumpySemantics,
-    bases=(StringArray,),
-    fast_to_slow=_Unusable(),
-    slow_to_fast=_Unusable(),
 )
 
 
@@ -1244,19 +1171,25 @@ ExpandingGroupby = make_intermediate_proxy_type(
 )
 
 Resampler = make_intermediate_proxy_type(
-    "Resampler", cudf.core.resample._Resampler, pd_Resampler
+    "Resampler", cudf.core.resample._Resampler, pd.api.typing.Resampler
 )
 
 DataFrameResampler = make_intermediate_proxy_type(
-    "DataFrameResampler", cudf.core.resample.DataFrameResampler, pd_Resampler
+    "DataFrameResampler",
+    cudf.core.resample.DataFrameResampler,
+    pd.api.typing.Resampler,
 )
 
 SeriesResampler = make_intermediate_proxy_type(
-    "SeriesResampler", cudf.core.resample.SeriesResampler, pd_Resampler
+    "SeriesResampler",
+    cudf.core.resample.SeriesResampler,
+    pd.api.typing.Resampler,
 )
 
 DatetimeIndexResampler = make_intermediate_proxy_type(
-    "DatetimeIndexResampler", _Unusable, pd_DatetimeIndexResampler
+    "DatetimeIndexResampler",
+    _Unusable,
+    pd.core.resample.DatetimeIndexResampler,
 )
 
 StataReader = make_intermediate_proxy_type(
@@ -2469,7 +2402,7 @@ def _unpickle_offset_obj(pickled_args):
         data = pickle.loads(pickled_args)
         data.pop("_offset")
         data.pop("_use_relativedelta")
-    obj = pd._libs.tslibs.offsets.DateOffset(**data)
+    obj = pd.DateOffset(**data)
     return obj
 
 
@@ -2508,4 +2441,4 @@ copyreg.dispatch_table[pd.MultiIndex] = lambda obj: _generic_reduce_obj(
     obj, _index_unpickle_obj
 )
 
-copyreg.dispatch_table[pd._libs.tslibs.offsets.DateOffset] = _reduce_offset_obj
+copyreg.dispatch_table[pd.DateOffset] = _reduce_offset_obj
