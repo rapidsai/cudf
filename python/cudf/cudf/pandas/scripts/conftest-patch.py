@@ -1553,7 +1553,6 @@ NODEIDS_THAT_FAIL_WITH_CUDF_PANDAS = {
     "tests/extension/test_arrow.py::test_round",
     "tests/extension/test_arrow.py::test_str_extract_non_symbolic",
     "tests/extension/test_arrow.py::test_str_find[ab-0-None-exp0-exp_typ0]",
-    "tests/extension/test_arrow.py::test_str_join_string_type",
     "tests/extension/test_arrow.py::test_str_repeat_unsupported",
     "tests/extension/test_arrow.py::test_str_replace_unsupported[pat-b]",
     "tests/extension/test_arrow.py::test_str_starts_ends_with_all_nulls_empty_tuple[endswith]",
