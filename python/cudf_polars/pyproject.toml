@@ -40,7 +40,7 @@ classifiers = [
 [project.optional-dependencies]
 test = [
     "dask-cuda==26.4.*,>=0.0.0a0",
-    "numpy>=1.23,<3.0",
+    "numpy>=1.26,<3.0",
     "pytest",
     "pytest-cov",
     "pytest-httpserver",
