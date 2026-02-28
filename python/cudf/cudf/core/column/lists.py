@@ -158,7 +158,9 @@ class ListColumn(ColumnBase):
         with self.access(mode="read", scope="internal"):
             plc_column = plc.strings.convert.convert_lists.format_list_column(
                 lc.plc_column,
-                pa_scalar_to_plc_scalar(pa.scalar("None")),
+                plc.Scalar.from_py(
+                    "None", dtype=plc.DataType(plc.TypeId.STRING)
+                ),
                 self._string_separators,
             )
             return cast(
@@ -379,16 +381,20 @@ class ListColumn(ColumnBase):
     ) -> StringColumn:
         with self.access(mode="read", scope="internal"):
             if isinstance(separator, str):
-                sep: plc.Scalar | plc.Column = pa_scalar_to_plc_scalar(
-                    pa.scalar(separator)
+                sep: plc.Scalar | plc.Column = plc.Scalar.from_py(
+                    separator, dtype=plc.DataType(plc.TypeId.STRING)
                 )
             else:
                 sep = separator.plc_column
             plc_column = plc.strings.combine.join_list_elements(
                 self.plc_column,
                 sep,
-                pa_scalar_to_plc_scalar(pa.scalar(sep_na_rep)),
-                pa_scalar_to_plc_scalar(pa.scalar(string_na_rep)),
+                plc.Scalar.from_py(
+                    sep_na_rep, dtype=plc.DataType(plc.TypeId.STRING)
+                ),
+                plc.Scalar.from_py(
+                    string_na_rep, dtype=plc.DataType(plc.TypeId.STRING)
+                ),
                 plc.strings.combine.SeparatorOnNulls.YES,
                 plc.strings.combine.OutputIfEmptyList.NULL_ELEMENT,
             )
