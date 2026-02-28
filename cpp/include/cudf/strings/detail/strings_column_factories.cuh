@@ -133,6 +133,72 @@ std::unique_ptr<column> make_strings_column(CharIterator chars_begin,
                              std::move(null_mask));
 }
 
+namespace {
+__device__ size_type masked_size(size_type idx,
+                                 string_view const* string_views,
+                                 bitmask_type const* null_mask,
+                                 size_type alt)
+{
+  if (null_mask != nullptr) {
+    return bit_is_set(null_mask, idx) ? string_views[idx].size_bytes() : alt;
+  } else {
+    return string_views[idx].size_bytes();
+  }
+}
+}  // namespace
+
+/**
+ * @brief Create a strings-type column from string_views and a null mask.
+ *
+ * @param string_views The string_views representing the string data
+ * @param null_mask The validity bitmask in Arrow format
+ * @param null_count Number of null rows
+ * @param stream CUDA stream used for device memory operations
+ * @param mr  Device memory resource used to allocate the returned column's device memory
+ * @return New strings column
+ */
+inline std::unique_ptr<column> make_strings_column_with_null_mask(
+  device_span<string_view const> string_views,
+  rmm::device_buffer null_mask,
+  size_type null_count,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
+{
+  if (string_views.empty()) { return make_empty_column(type_id::STRING); }
+
+  // construct offsets column from the string sizes, using the null mask to set null string sizes to
+  // 0
+  auto string_views_ptr = string_views.data();
+  auto null_mask_ptr =
+    null_mask.is_empty() ? nullptr : static_cast<bitmask_type const*>(null_mask.data());
+
+  auto size_transformer = [string_views_ptr, null_mask_ptr] __device__(size_type idx) -> size_type {
+    return masked_size(idx, string_views_ptr, null_mask_ptr, 0);
+  };
+
+  auto offsets_iter =
+    cudf::detail::make_counting_transform_iterator(size_type{0}, size_transformer);
+
+  auto [offsets_column, total_bytes] =
+    make_offsets_child_column(offsets_iter, offsets_iter + string_views.size(), stream, mr);
+
+  // build chars column, using the null mask to set null string sizes to 0
+  auto chars_iter = cudf::detail::make_counting_transform_iterator(
+    size_type{0}, [string_views_ptr, null_mask_ptr] __device__(size_type idx) -> string_index_pair {
+      return string_index_pair{string_views_ptr[idx].data(),
+                               masked_size(idx, string_views_ptr, null_mask_ptr, 0)};
+    });
+
+  auto chars_data = make_chars_buffer(
+    offsets_column->view(), total_bytes, chars_iter, string_views.size(), stream, mr);
+
+  return make_strings_column(string_views.size(),
+                             std::move(offsets_column),
+                             chars_data.release(),
+                             null_count,
+                             std::move(null_mask));
+}
+
 }  // namespace detail
 }  // namespace strings
 }  // namespace cudf
