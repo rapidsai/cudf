@@ -354,6 +354,10 @@ class _SeriesLocIndexer(_FrameIndexer):
                 raise NotImplementedError(
                     "Interval indexing is not supported."
                 )
+            if isinstance(
+                self._frame.index, cudf.DatetimeIndex
+            ) and isinstance(arg, str):
+                return self._frame.index.get_loc(arg)
             if not is_dtype_obj_numeric(
                 index_dtype, include_decimal=False
             ) and not (
@@ -554,6 +558,19 @@ class Series(SingleColumnFrame, IndexedFrame):
             data = {}
         if dtype is not None:
             dtype = cudf.dtype(dtype)
+        if (
+            cudf.get_option("mode.pandas_compatible")
+            and dtype is not None
+            and getattr(dtype, "kind", None) == "f"
+            and data is not None
+            and hasattr(data, "dtype")
+            and (
+                getattr(data.dtype, "kind", None) in ("m", "M")
+                or isinstance(data.dtype, pd.PeriodDtype)
+            )
+        ):
+            type_name = type(data).__name__.rstrip("Index")
+            raise TypeError(f"Cannot cast {type_name} to {dtype}")
         attrs = None
         if isinstance(data, (pd.Series, pd.Index, Index, Series)):
             attrs = deepcopy(getattr(data, "attrs", None))
@@ -1418,6 +1435,12 @@ class Series(SingleColumnFrame, IndexedFrame):
                 if len(self) > len(preprocess):
                     lines[-1] = lines[-1] + ", Length: %d" % len(self)
                 lines[-1] = lines[-1] + ", "
+            elif lines[-1].startswith("Freq: "):
+                freq_line = lines[-1].split(", dtype:", 1)[0]
+                if len(self) > len(preprocess) and "Length:" not in freq_line:
+                    freq_line = freq_line + ", Length: %d" % len(self)
+                lines = lines[:-1]
+                lines.append(freq_line + ", ")
             elif lines[-1].startswith("Length: "):
                 lines = lines[:-1]
                 lines.append("Length: %d" % len(self))

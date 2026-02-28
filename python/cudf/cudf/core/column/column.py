@@ -3228,13 +3228,24 @@ def as_column(
     elif isinstance(
         arbitrary, (pd.Series, pd.Index, pd.api.extensions.ExtensionArray)
     ):
+        if (
+            cudf.get_option("mode.pandas_compatible")
+            and dtype is not None
+            and getattr(dtype, "kind", None) == "f"
+            and isinstance(
+                arbitrary,
+                (pd.DatetimeIndex, pd.TimedeltaIndex, pd.PeriodIndex),
+            )
+        ):
+            type_name = type(arbitrary).__name__.rstrip("Index")
+            raise TypeError(f"Cannot cast {type_name} to {dtype}")
         if isinstance(arbitrary.dtype, (pd.SparseDtype, pd.PeriodDtype)):
             raise NotImplementedError(
                 f"cuDF does not yet support {type(arbitrary.dtype).__name__}"
             )
         elif (
             cudf.get_option("mode.pandas_compatible")
-            and isinstance(arbitrary, (pd.DatetimeIndex, pd.TimedeltaIndex))
+            and isinstance(arbitrary, pd.TimedeltaIndex)
             and arbitrary.freq is not None
         ):
             raise NotImplementedError("freq is not implemented yet")

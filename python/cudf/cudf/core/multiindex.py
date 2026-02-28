@@ -2035,11 +2035,44 @@ class MultiIndex(Index):
 
     @_performance_tracking
     def get_loc(self, key):
+        key = (key,) if not isinstance(key, tuple) else key
+        if cudf.get_option("mode.pandas_compatible"):
+            for level, part in enumerate(key):
+                if (
+                    isinstance(part, str)
+                    and self.get_level_values(level).dtype.kind == "M"
+                ):
+
+                    def _loc_to_mask(loc):
+                        if isinstance(loc, slice):
+                            mask = np.zeros(len(self), dtype=bool)
+                            mask[loc] = True
+                            return mask
+                        if isinstance(loc, cp.ndarray):
+                            loc = cp.asnumpy(loc)
+                        if isinstance(loc, np.ndarray):
+                            if loc.dtype == bool:
+                                return loc
+                            mask = np.zeros(len(self), dtype=bool)
+                            mask[loc] = True
+                            return mask
+                        if np.isscalar(loc):
+                            mask = np.zeros(len(self), dtype=bool)
+                            mask[loc] = True
+                            return mask
+                        return loc
+
+                    mask = np.ones(len(self), dtype=bool)
+                    for level_idx, level_part in enumerate(key):
+                        level_index = self.get_level_values(level_idx)
+                        level_loc = level_index.get_loc(level_part)
+                        mask &= _loc_to_mask(level_loc)
+                    return mask
+
         is_sorted = (
             self.is_monotonic_increasing or self.is_monotonic_decreasing
         )
         is_unique = self.is_unique
-        key = (key,) if not isinstance(key, tuple) else key
 
         # Handle partial key search. If length of `key` is less than `nlevels`,
         # Only search levels up to `len(key)` level.

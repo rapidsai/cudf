@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import calendar
+import datetime
 import functools
 import locale
 import os
@@ -39,7 +40,6 @@ from cudf.utils.scalar import pa_scalar_to_plc_scalar
 from cudf.utils.utils import _EQUALITY_OPS, is_na_like
 
 if TYPE_CHECKING:
-    import datetime
     from collections.abc import Callable
     from typing import Self
 
@@ -627,6 +627,23 @@ class DatetimeColumn(TemporalBaseColumn):
 
     def _binaryop(self, other: ColumnBinaryOperand, op: str) -> ColumnBase:
         reflect, op = self._check_reflected_op(op)
+
+        if cudf.get_option("mode.pandas_compatible") and op in {
+            "__lt__",
+            "__gt__",
+            "__le__",
+            "__ge__",
+        }:
+            if other is None or (isinstance(other, float) and np.isnan(other)):
+                raise TypeError(
+                    f"Invalid comparison between {self.dtype} and NoneType"
+                )
+            if isinstance(other, datetime.date) and not isinstance(
+                other, datetime.datetime
+            ):
+                raise TypeError(
+                    f"Invalid comparison between {self.dtype} and date"
+                )
 
         if isinstance(other, cudf.DateOffset):
             return other._datetime_binop(self, op, reflect=reflect)
