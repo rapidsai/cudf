@@ -87,11 +87,6 @@ class ListColumn(ColumnBase):
             "Lists are not yet supported via `__cuda_array_interface__`"
         )
 
-    def copy(self, deep: bool = True) -> Self:
-        # Since list columns are immutable, both deep and shallow copies share
-        # the underlying device data and mask.
-        return super().copy(deep=False)
-
     def leaves(self) -> ColumnBase:
         if isinstance(self.elements, ListColumn):
             return self.elements.leaves()
