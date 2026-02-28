@@ -3234,7 +3234,7 @@ def as_column(
             )
         elif (
             cudf.get_option("mode.pandas_compatible")
-            and isinstance(arbitrary, (pd.DatetimeIndex, pd.TimedeltaIndex))
+            and isinstance(arbitrary, pd.TimedeltaIndex)
             and arbitrary.freq is not None
         ):
             raise NotImplementedError("freq is not implemented yet")
