@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -11,7 +11,7 @@
 #include <cudf_test/testing_main.hpp>
 
 #include <cudf/detail/iterator.cuh>
-#include <cudf/detail/null_mask.hpp>
+#include <cudf/null_mask.hpp>
 #include <cudf/stream_compaction.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
@@ -257,10 +257,9 @@ TEST_F(ApplyBooleanMask, CorrectNullCount)
     cudf::detail::make_counting_transform_iterator(0, [](auto i) { return (i % 277) == 0; });
   cudf::test::fixed_width_column_wrapper<bool> boolean_mask(seq3, seq3 + inputRows);
 
-  auto got     = cudf::apply_boolean_mask(input, boolean_mask);
-  auto out_col = got->get_column(0).view();
-  auto expected_null_count =
-    cudf::detail::null_count(out_col.null_mask(), 0, out_col.size(), cudf::get_default_stream());
+  auto got                 = cudf::apply_boolean_mask(input, boolean_mask);
+  auto out_col             = got->get_column(0).view();
+  auto expected_null_count = cudf::null_count(out_col.null_mask(), 0, out_col.size());
 
   ASSERT_EQ(out_col.null_count(), expected_null_count);
 }
