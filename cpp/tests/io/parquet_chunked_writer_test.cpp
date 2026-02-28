@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -69,7 +69,7 @@ TEST_F(ParquetChunkedWriterTest, LargeTables)
   cudf::io::chunked_parquet_writer_options args =
     cudf::io::chunked_parquet_writer_options::builder(cudf::io::sink_info{filepath});
   auto md = cudf::io::chunked_parquet_writer(args).write(*table1).write(*table2).close();
-  ASSERT_EQ(md, nullptr);
+  EXPECT_NE(md, nullptr);
 
   cudf::io::parquet_reader_options read_opts =
     cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath});

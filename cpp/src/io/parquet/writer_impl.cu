@@ -2639,28 +2639,28 @@ std::unique_ptr<std::vector<uint8_t>> writer::impl::close(
     _out_sink[p]->flush();
   }
 
-  // Optionally output raw file metadata with the specified column chunk file path
-  if (column_chunks_file_path.size() > 0) {
-    CUDF_EXPECTS(column_chunks_file_path.size() == _agg_meta->num_files(),
-                 "Expected one column chunk path per output file");
-    _agg_meta->set_file_paths(column_chunks_file_path);
-    file_header_s fhdr = {parquet_magic};
-    std::vector<uint8_t> buffer;
-    CompactProtocolWriter cpw(&buffer);
-    buffer.insert(buffer.end(),
-                  reinterpret_cast<uint8_t const*>(&fhdr),
-                  reinterpret_cast<uint8_t const*>(&fhdr) + sizeof(fhdr));
-    file_ender_s fendr;
-    fendr.magic      = parquet_magic;
-    fendr.footer_len = static_cast<uint32_t>(cpw.write(_agg_meta->get_merged_metadata()));
-    buffer.insert(buffer.end(),
-                  reinterpret_cast<uint8_t const*>(&fendr),
-                  reinterpret_cast<uint8_t const*>(&fendr) + sizeof(fendr));
-    return std::make_unique<std::vector<uint8_t>>(std::move(buffer));
-  } else {
-    return {nullptr};
-  }
-  return nullptr;
+  // Output raw file metadata
+  file_header_s fhdr = {parquet_magic};
+  std::vector<uint8_t> buffer;
+  CompactProtocolWriter cpw(&buffer);
+  buffer.insert(buffer.end(),
+                reinterpret_cast<uint8_t const*>(&fhdr),
+                reinterpret_cast<uint8_t const*>(&fhdr) + sizeof(fhdr));
+  file_ender_s fendr;
+  fendr.magic = parquet_magic;
+
+  CUDF_EXPECTS(
+    column_chunks_file_path.empty() or column_chunks_file_path.size() == _agg_meta->num_files(),
+    "Expected one column chunk path per output file");
+
+  // Only set file paths if column_chunks_file_path is provided
+  if (column_chunks_file_path.size() > 0) { _agg_meta->set_file_paths(column_chunks_file_path); }
+
+  fendr.footer_len = static_cast<uint32_t>(cpw.write(_agg_meta->get_merged_metadata()));
+  buffer.insert(buffer.end(),
+                reinterpret_cast<uint8_t const*>(&fendr),
+                reinterpret_cast<uint8_t const*>(&fendr) + sizeof(fendr));
+  return std::make_unique<std::vector<uint8_t>>(std::move(buffer));
 }
 
 // Forward to implementation
