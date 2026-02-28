@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
-from cudf_polars.experimental.benchmarks.utils import get_data
+from cudf_polars.experimental.benchmarks.utils import QueryResult, get_data
 
 if TYPE_CHECKING:
     from cudf_polars.experimental.benchmarks.utils import RunConfig
@@ -68,7 +68,7 @@ def duckdb_impl(run_config: RunConfig) -> str:
     """
 
 
-def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
+def polars_impl(run_config: RunConfig) -> QueryResult:
     """Query 21."""
     params = load_parameters(
         int(run_config.scale_factor),
@@ -89,45 +89,50 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     start_date = sales_date_obj - timedelta(days=30)
     end_date = sales_date_obj + timedelta(days=30)
 
-    # Convert to string literals (d_date is String in parquet)
-    sales_date_lit = pl.lit(sales_date_str)
-    start_date_str = pl.lit(start_date.isoformat())
-    end_date_str = pl.lit(end_date.isoformat())
+    # Use date literals so comparisons work for both Date and String d_date columns
+    sales_date_lit = pl.lit(sales_date_obj)
+    start_date_lit = pl.lit(start_date)
+    end_date_lit = pl.lit(end_date)
+    d_date = pl.col("d_date")
 
-    return (
-        inventory.join(item, left_on="inv_item_sk", right_on="i_item_sk")
-        .join(warehouse, left_on="inv_warehouse_sk", right_on="w_warehouse_sk")
-        .join(date_dim, left_on="inv_date_sk", right_on="d_date_sk")
-        .filter(
-            (pl.col("i_current_price").is_between(0.99, 1.49))
-            & pl.col("d_date").is_between(start_date_str, end_date_str, closed="both")
-        )
-        .with_columns(
-            [
-                pl.when(pl.col("d_date") < sales_date_lit)
-                .then(pl.col("inv_quantity_on_hand"))
-                .otherwise(0)
-                .alias("inv_before_amount"),
-                pl.when(pl.col("d_date") >= sales_date_lit)
-                .then(pl.col("inv_quantity_on_hand"))
-                .otherwise(0)
-                .alias("inv_after_amount"),
-            ]
-        )
-        .group_by(["w_warehouse_name", "i_item_id"])
-        .agg(
-            [
-                pl.col("inv_before_amount").sum().alias("inv_before"),
-                pl.col("inv_after_amount").sum().alias("inv_after"),
-            ]
-        )
-        .filter(
-            pl.when(pl.col("inv_before") > 0)
-            .then(pl.col("inv_after") / pl.col("inv_before"))
-            .otherwise(None)
-            .is_between(2.0 / 3.0, 3.0 / 2.0)
-        )
-        .filter(pl.col("w_warehouse_name").is_not_null())
-        .sort(["w_warehouse_name", "i_item_id"])
-        .limit(100)
+    return QueryResult(
+        frame=(
+            inventory.join(item, left_on="inv_item_sk", right_on="i_item_sk")
+            .join(warehouse, left_on="inv_warehouse_sk", right_on="w_warehouse_sk")
+            .join(date_dim, left_on="inv_date_sk", right_on="d_date_sk")
+            .filter(
+                (pl.col("i_current_price").is_between(0.99, 1.49))
+                & d_date.is_between(start_date_lit, end_date_lit, closed="both")
+            )
+            .with_columns(
+                [
+                    pl.when(d_date < sales_date_lit)
+                    .then(pl.col("inv_quantity_on_hand"))
+                    .otherwise(0)
+                    .alias("inv_before_amount"),
+                    pl.when(d_date >= sales_date_lit)
+                    .then(pl.col("inv_quantity_on_hand"))
+                    .otherwise(0)
+                    .alias("inv_after_amount"),
+                ]
+            )
+            .group_by(["w_warehouse_name", "i_item_id"])
+            .agg(
+                [
+                    pl.col("inv_before_amount").sum().alias("inv_before"),
+                    pl.col("inv_after_amount").sum().alias("inv_after"),
+                ]
+            )
+            .filter(
+                pl.when(pl.col("inv_before") > 0)
+                .then(pl.col("inv_after") / pl.col("inv_before"))
+                .otherwise(None)
+                .is_between(2.0 / 3.0, 3.0 / 2.0)
+            )
+            .filter(pl.col("w_warehouse_name").is_not_null())
+            .sort(["w_warehouse_name", "i_item_id"])
+            .limit(100)
+        ),
+        sort_by=[("w_warehouse_name", False), ("i_item_id", False)],
+        limit=100,
     )

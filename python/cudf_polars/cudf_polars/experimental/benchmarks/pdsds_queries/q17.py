@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
-from cudf_polars.experimental.benchmarks.utils import get_data
+from cudf_polars.experimental.benchmarks.utils import QueryResult, get_data
 
 if TYPE_CHECKING:
     from cudf_polars.experimental.benchmarks.utils import RunConfig
@@ -85,7 +85,7 @@ def duckdb_impl(run_config: RunConfig) -> str:
     """
 
 
-def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
+def polars_impl(run_config: RunConfig) -> QueryResult:
     """Query 17."""
     params = load_parameters(
         int(run_config.scale_factor),
@@ -129,57 +129,55 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     ).filter(pl.col("d_quarter_name").is_in([f"{year}Q1", f"{year}Q2", f"{year}Q3"]))
 
     # Now create the full combination following the SQL logic
-    return (
-        store_sales_base.join(
-            store_returns_base,
-            left_on=["ss_customer_sk", "ss_item_sk", "ss_ticket_number"],
-            right_on=["sr_customer_sk", "sr_item_sk", "sr_ticket_number"],
-            how="inner",
-            suffix="_sr",
-        )  # This relationship must exist per SQL
-        .join(
-            catalog_sales_base,
-            left_on=["ss_customer_sk", "ss_item_sk"],
-            right_on=["cs_bill_customer_sk", "cs_item_sk"],
-            how="inner",
-            suffix="_cs",
-        )  # This relationship must exist per SQL
-        .group_by(["i_item_id", "i_item_desc", "s_state"])
-        .agg(
-            [
-                # Cast -> Int64 to match DuckDB
-                pl.col("ss_quantity")
-                .count()
-                .cast(pl.Int64)
-                .alias("store_sales_quantitycount"),
-                pl.col("ss_quantity").mean().alias("store_sales_quantityave"),
-                pl.col("ss_quantity").std().alias("store_sales_quantitystdev"),
-                (pl.col("ss_quantity").std() / pl.col("ss_quantity").mean()).alias(
-                    "store_sales_quantitycov"
-                ),
-                # Cast -> Int64 to match DuckDB
-                pl.col("sr_return_quantity")
-                .count()
-                .cast(pl.Int64)
-                .alias("store_returns_quantitycount"),
-                pl.col("sr_return_quantity").mean().alias("store_returns_quantityave"),
-                pl.col("sr_return_quantity").std().alias("store_returns_quantitystdev"),
-                (
-                    pl.col("sr_return_quantity").std()
-                    / pl.col("sr_return_quantity").mean()
-                ).alias("store_returns_quantitycov"),
-                # Cast -> Int64 to match DuckDB
-                pl.col("cs_quantity")
-                .count()
-                .cast(pl.Int64)
-                .alias("catalog_sales_quantitycount"),
-                pl.col("cs_quantity").mean().alias("catalog_sales_quantityave"),
-                pl.col("cs_quantity").std().alias("catalog_sales_quantitystdev"),
-                (pl.col("cs_quantity").std() / pl.col("cs_quantity").mean()).alias(
-                    "catalog_sales_quantitycov"
-                ),
-            ]
-        )
-        .sort(["i_item_id", "i_item_desc", "s_state"], nulls_last=True)
-        .limit(100)
+    return QueryResult(
+        frame=(
+            store_sales_base.join(
+                store_returns_base,
+                left_on=["ss_customer_sk", "ss_item_sk", "ss_ticket_number"],
+                right_on=["sr_customer_sk", "sr_item_sk", "sr_ticket_number"],
+                how="inner",
+                suffix="_sr",
+            )
+            .join(
+                catalog_sales_base,
+                left_on=["ss_customer_sk", "ss_item_sk"],
+                right_on=["cs_bill_customer_sk", "cs_item_sk"],
+                how="inner",
+                suffix="_cs",
+            )
+            .group_by(["i_item_id", "i_item_desc", "s_state"])
+            .agg(
+                [
+                    pl.col("ss_quantity").count().alias("store_sales_quantitycount"),
+                    pl.col("ss_quantity").mean().alias("store_sales_quantityave"),
+                    pl.col("ss_quantity").std().alias("store_sales_quantitystdev"),
+                    (pl.col("ss_quantity").std() / pl.col("ss_quantity").mean()).alias(
+                        "store_sales_quantitycov"
+                    ),
+                    pl.col("sr_return_quantity")
+                    .count()
+                    .alias("store_returns_quantitycount"),
+                    pl.col("sr_return_quantity")
+                    .mean()
+                    .alias("store_returns_quantityave"),
+                    pl.col("sr_return_quantity")
+                    .std()
+                    .alias("store_returns_quantitystdev"),
+                    (
+                        pl.col("sr_return_quantity").std()
+                        / pl.col("sr_return_quantity").mean()
+                    ).alias("store_returns_quantitycov"),
+                    pl.col("cs_quantity").count().alias("catalog_sales_quantitycount"),
+                    pl.col("cs_quantity").mean().alias("catalog_sales_quantityave"),
+                    pl.col("cs_quantity").std().alias("catalog_sales_quantitystdev"),
+                    (pl.col("cs_quantity").std() / pl.col("cs_quantity").mean()).alias(
+                        "catalog_sales_quantitycov"
+                    ),
+                ]
+            )
+            .sort(["i_item_id", "i_item_desc", "s_state"], nulls_last=True)
+            .limit(100)
+        ),
+        sort_by=[("i_item_id", False), ("i_item_desc", False), ("s_state", False)],
+        limit=100,
     )

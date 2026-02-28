@@ -104,9 +104,23 @@ class PDSDSPolarsQueries(PDSDSQueries):
             pl.col("total shipping cost").cast(pl.Decimal(18, 2)),
             pl.col("total net profit").cast(pl.Decimal(18, 2)),
         ],
+        19: [pl.col("ext_price").cast(pl.Decimal(18, 2))],
+        20: [
+            pl.col("itemrevenue").cast(pl.Decimal(18, 2)),
+            pl.col("revenueratio").cast(pl.Decimal(38, 2)),
+        ],
     }
     EXPECTED_CASTS: ClassVar[dict] = {
         6: [pl.col("cnt").cast(COUNT_DTYPE)],
+        17: [
+            pl.col("store_sales_quantitycount").cast(COUNT_DTYPE),
+            pl.col("store_returns_quantitycount").cast(COUNT_DTYPE),
+            pl.col("catalog_sales_quantitycount").cast(COUNT_DTYPE),
+        ],
+        21: [
+            pl.col("inv_before").cast(pl.Int32),
+            pl.col("inv_after").cast(pl.Int32),
+        ],
         10: [
             pl.col("cnt1").cast(COUNT_DTYPE),
             pl.col("cnt2").cast(COUNT_DTYPE),

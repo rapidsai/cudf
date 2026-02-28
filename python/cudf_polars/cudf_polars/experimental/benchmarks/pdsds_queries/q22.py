@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
-from cudf_polars.experimental.benchmarks.utils import get_data
+from cudf_polars.experimental.benchmarks.utils import QueryResult, get_data
 
 if TYPE_CHECKING:
     from cudf_polars.experimental.benchmarks.utils import RunConfig
@@ -75,7 +75,7 @@ def level(  # noqa: D103
     )
 
 
-def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
+def polars_impl(run_config: RunConfig) -> QueryResult:
     """Query 22."""
     params = load_parameters(
         int(run_config.scale_factor),
@@ -105,11 +105,21 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     level4 = level(base_data, agg_exprs, ["i_product_name"])
     level5 = level(base_data, agg_exprs, [])
 
-    return (
-        pl.concat([level1, level2, level3, level4, level5])
-        .sort(
-            ["qoh", "i_product_name", "i_brand", "i_class", "i_category"],
-            nulls_last=True,
-        )
-        .limit(100)
+    return QueryResult(
+        frame=(
+            pl.concat([level1, level2, level3, level4, level5])
+            .sort(
+                ["qoh", "i_product_name", "i_brand", "i_class", "i_category"],
+                nulls_last=True,
+            )
+            .limit(100)
+        ),
+        sort_by=[
+            ("qoh", False),
+            ("i_product_name", False),
+            ("i_brand", False),
+            ("i_class", False),
+            ("i_category", False),
+        ],
+        limit=100,
     )
