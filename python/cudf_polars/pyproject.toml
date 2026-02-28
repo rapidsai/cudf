@@ -66,6 +66,9 @@ Homepage = "https://github.com/rapidsai/cudf"
 [tool.setuptools.dynamic]
 version = {file = "cudf_polars/VERSION"}
 
+[tool.setuptools.package-data]
+cudf_polars = ["experimental/benchmarks/pdsds_parameters/parameter_substitutions.json"]
+
 [tool.pydistcheck]
 select = [
     "distro-too-large-compressed",
