@@ -130,7 +130,7 @@ struct dispatch_compute_indices {
                                      size_type const* d_map_to_keys,
                                      rmm::cuda_stream_view stream,
                                      rmm::device_async_resource_ref mr)
-    requires(cudf::is_relationally_comparable<Element, Element>())
+    requires(cudf::is_dictionary_key<Element>())
   {
     auto keys_view     = column_device_view::create(all_keys, stream);
     auto indices_view  = column_device_view::create(all_indices, stream);
@@ -171,7 +171,7 @@ struct dispatch_compute_indices {
 
   template <typename Element, typename... Args>
   std::unique_ptr<column> operator()(Args&&...)
-    requires(!cudf::is_relationally_comparable<Element, Element>())
+    requires(not cudf::is_dictionary_key<Element>())
   {
     CUDF_FAIL("dictionary concatenate not supported for this column type");
   }
