@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
-from cudf_polars.experimental.benchmarks.utils import get_data
+from cudf_polars.experimental.benchmarks.utils import QueryResult, get_data
 
 if TYPE_CHECKING:
     from cudf_polars.experimental.benchmarks.utils import RunConfig
@@ -56,7 +56,7 @@ def duckdb_impl(run_config: RunConfig) -> str:
     """
 
 
-def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
+def polars_impl(run_config: RunConfig) -> QueryResult:
     """Query 26."""
     params = load_parameters(
         int(run_config.scale_factor),
@@ -79,27 +79,38 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
     item = get_data(run_config.dataset_path, "item", run_config.suffix)
     promotion = get_data(run_config.dataset_path, "promotion", run_config.suffix)
-    return (
-        catalog_sales.join(date_dim, left_on="cs_sold_date_sk", right_on="d_date_sk")
-        .join(item, left_on="cs_item_sk", right_on="i_item_sk")
-        .join(customer_demographics, left_on="cs_bill_cdemo_sk", right_on="cd_demo_sk")
-        .join(promotion, left_on="cs_promo_sk", right_on="p_promo_sk")
-        .filter(
-            (pl.col("cd_gender") == gen)
-            & (pl.col("cd_marital_status") == ms)
-            & (pl.col("cd_education_status") == es)
-            & ((pl.col("p_channel_email") == "N") | (pl.col("p_channel_event") == "N"))
-            & (pl.col("d_year") == year)
-        )
-        .group_by("i_item_id")
-        .agg(
-            [
-                pl.col("cs_quantity").mean().alias("agg1"),
-                pl.col("cs_list_price").mean().alias("agg2"),
-                pl.col("cs_coupon_amt").mean().alias("agg3"),
-                pl.col("cs_sales_price").mean().alias("agg4"),
-            ]
-        )
-        .sort("i_item_id")
-        .limit(100)
+    return QueryResult(
+        frame=(
+            catalog_sales.join(
+                date_dim, left_on="cs_sold_date_sk", right_on="d_date_sk"
+            )
+            .join(item, left_on="cs_item_sk", right_on="i_item_sk")
+            .join(
+                customer_demographics, left_on="cs_bill_cdemo_sk", right_on="cd_demo_sk"
+            )
+            .join(promotion, left_on="cs_promo_sk", right_on="p_promo_sk")
+            .filter(
+                (pl.col("cd_gender") == gen)
+                & (pl.col("cd_marital_status") == ms)
+                & (pl.col("cd_education_status") == es)
+                & (
+                    (pl.col("p_channel_email") == "N")
+                    | (pl.col("p_channel_event") == "N")
+                )
+                & (pl.col("d_year") == year)
+            )
+            .group_by("i_item_id")
+            .agg(
+                [
+                    pl.col("cs_quantity").mean().alias("agg1"),
+                    pl.col("cs_list_price").mean().alias("agg2"),
+                    pl.col("cs_coupon_amt").mean().alias("agg3"),
+                    pl.col("cs_sales_price").mean().alias("agg4"),
+                ]
+            )
+            .sort("i_item_id")
+            .limit(100)
+        ),
+        sort_by=[("i_item_id", False)],
+        limit=100,
     )

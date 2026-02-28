@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
-from cudf_polars.experimental.benchmarks.utils import get_data
+from cudf_polars.experimental.benchmarks.utils import QueryResult, get_data
 
 if TYPE_CHECKING:
     from cudf_polars.experimental.benchmarks.utils import RunConfig
@@ -94,7 +94,7 @@ def level(  # noqa: D103
         )
 
 
-def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
+def polars_impl(run_config: RunConfig) -> QueryResult:
     """Query 27."""
     params = load_parameters(
         int(run_config.scale_factor),
@@ -140,8 +140,12 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     level1 = level(base_data, agg_exprs, ["i_item_id", "s_state"], 0)
     level2 = level(base_data, agg_exprs, ["i_item_id"], 1)
 
-    return (
-        pl.concat([level1, level2])
-        .sort(["i_item_id", "s_state"], nulls_last=True)
-        .limit(100)
+    return QueryResult(
+        frame=(
+            pl.concat([level1, level2])
+            .sort(["i_item_id", "s_state"], nulls_last=True)
+            .limit(100)
+        ),
+        sort_by=[("i_item_id", False), ("s_state", False)],
+        limit=100,
     )

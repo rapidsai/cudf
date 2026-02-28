@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
-from cudf_polars.experimental.benchmarks.utils import get_data
+from cudf_polars.experimental.benchmarks.utils import QueryResult, get_data
 
 if TYPE_CHECKING:
     from cudf_polars.experimental.benchmarks.utils import RunConfig
@@ -85,7 +85,7 @@ def duckdb_impl(run_config: RunConfig) -> str:
     """
 
 
-def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
+def polars_impl(run_config: RunConfig) -> QueryResult:
     """Query 24."""
     params = load_parameters(
         int(run_config.scale_factor),
@@ -144,12 +144,20 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         (pl.col("netpaid").mean() * 0.05).alias("threshold")
     )
 
-    return (
-        ssales.filter(pl.col("i_color") == color)
-        .group_by(["c_last_name", "c_first_name", "s_store_name"])
-        .agg(pl.col("netpaid").sum().alias("paid"))
-        .join(threshold_table, how="cross")
-        .filter(pl.col("paid") > pl.col("threshold"))
-        .select(["c_last_name", "c_first_name", "s_store_name", "paid"])
-        .sort(["c_last_name", "c_first_name", "s_store_name"], nulls_last=True)
+    return QueryResult(
+        frame=(
+            ssales.filter(pl.col("i_color") == color)
+            .group_by(["c_last_name", "c_first_name", "s_store_name"])
+            .agg(pl.col("netpaid").sum().alias("paid"))
+            .join(threshold_table, how="cross")
+            .filter(pl.col("paid") > pl.col("threshold"))
+            .select(["c_last_name", "c_first_name", "s_store_name", "paid"])
+            .sort(["c_last_name", "c_first_name", "s_store_name"], nulls_last=True)
+        ),
+        sort_by=[
+            ("c_last_name", False),
+            ("c_first_name", False),
+            ("s_store_name", False),
+        ],
+        limit=None,
     )
