@@ -25,7 +25,13 @@ from cudf.core._internals.timezones import (
     get_compatible_timezone,
 )
 from cudf.core.column import as_column, column_empty
-from cudf.core.column.column import ColumnBase
+from cudf.core.column.column import (
+    ColumnBase,
+    PylibcudfFunction,
+    bool_same_kind_policy,
+    int16_same_kind_policy,
+    same_dtype_policy,
+)
 from cudf.core.column.temporal_base import TemporalBaseColumn
 from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
@@ -225,11 +231,10 @@ class DatetimeColumn(TemporalBaseColumn):
 
     @functools.cached_property
     def quarter(self) -> ColumnBase:
-        with self.access(mode="read", scope="internal"):
-            return ColumnBase.create(
-                plc.datetime.extract_quarter(self.plc_column),
-                get_dtype_of_same_kind(self.dtype, np.dtype(np.int16)),
-            )
+        return PylibcudfFunction(
+            plc.datetime.extract_quarter,
+            int16_same_kind_policy,
+        ).execute_with_args(self)
 
     @functools.cached_property
     def year(self) -> ColumnBase:
@@ -276,11 +281,10 @@ class DatetimeColumn(TemporalBaseColumn):
 
     @functools.cached_property
     def day_of_year(self) -> ColumnBase:
-        with self.access(mode="read", scope="internal"):
-            return ColumnBase.create(
-                plc.datetime.day_of_year(self.plc_column),
-                get_dtype_of_same_kind(self.dtype, np.dtype(np.int16)),
-            )
+        return PylibcudfFunction(
+            plc.datetime.day_of_year,
+            int16_same_kind_policy,
+        ).execute_with_args(self)
 
     @functools.cached_property
     def is_month_start(self) -> ColumnBase:
@@ -320,11 +324,10 @@ class DatetimeColumn(TemporalBaseColumn):
 
     @functools.cached_property
     def is_leap_year(self) -> ColumnBase:
-        with self.access(mode="read", scope="internal"):
-            return ColumnBase.create(
-                plc.datetime.is_leap_year(self.plc_column),
-                get_dtype_of_same_kind(self.dtype, np.dtype(np.bool_)),
-            )
+        return PylibcudfFunction(
+            plc.datetime.is_leap_year,
+            bool_same_kind_policy,
+        ).execute_with_args(self)
 
     @functools.cached_property
     def is_year_start(self) -> ColumnBase:
@@ -332,11 +335,10 @@ class DatetimeColumn(TemporalBaseColumn):
 
     @functools.cached_property
     def days_in_month(self) -> ColumnBase:
-        with self.access(mode="read", scope="internal"):
-            return ColumnBase.create(
-                plc.datetime.days_in_month(self.plc_column),
-                get_dtype_of_same_kind(self.dtype, np.dtype(np.int16)),
-            )
+        return PylibcudfFunction(
+            plc.datetime.days_in_month,
+            int16_same_kind_policy,
+        ).execute_with_args(self)
 
     @functools.cached_property
     def day_of_week(self) -> ColumnBase:
@@ -470,14 +472,9 @@ class DatetimeColumn(TemporalBaseColumn):
         if (plc_freq := rounding_fequency_map.get(freq)) is None:
             raise ValueError(f"Invalid resolution: '{freq}'")
 
-        with self.access(mode="read", scope="internal"):
-            return ColumnBase.create(
-                round_func(
-                    self.plc_column,
-                    plc_freq,
-                ),
-                self.dtype,
-            )
+        return PylibcudfFunction(
+            round_func, same_dtype_policy
+        ).execute_with_args(self, plc_freq)
 
     def ceil(self, freq: str) -> ColumnBase:
         return self._round_dt(plc.datetime.ceil_datetimes, freq)
