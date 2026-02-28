@@ -42,13 +42,6 @@ class IntervalColumn(ColumnBase):
         else:
             return cast("pd.ArrowDtype", self.dtype).pyarrow_dtype.closed
 
-    @functools.cached_property
-    def closed(self) -> Literal["left", "right", "neither", "both"]:
-        if isinstance(self.dtype, IntervalDtype):
-            return self.dtype.closed
-        else:
-            return cast("pd.ArrowDtype", self.dtype).pyarrow_dtype.closed
-
     def to_arrow(self) -> pa.Array:
         pa_array = super().to_arrow()
         pa_type = (
