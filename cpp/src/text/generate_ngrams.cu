@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -32,7 +32,6 @@
 #include <cuda/functional>
 #include <cuda/std/iterator>
 #include <thrust/copy.h>
-#include <thrust/functional.h>
 #include <thrust/iterator/counting_iterator.h>
 
 #include <stdexcept>
@@ -258,8 +257,7 @@ std::unique_ptr<cudf::column> generate_character_ngrams(cudf::strings_column_vie
                std::invalid_argument);
 
   if (input.is_empty()) {  // if no strings, return an empty column
-    return cudf::lists::detail::make_empty_lists_column(
-      cudf::data_type{cudf::type_id::STRING}, stream, mr);
+    return cudf::lists::detail::make_empty_lists_column(cudf::data_type{cudf::type_id::STRING});
   }
   if (input.size() == input.null_count()) {
     return cudf::lists::detail::make_all_nulls_lists_column(
@@ -293,7 +291,7 @@ std::unique_ptr<cudf::column> generate_character_ngrams(cudf::strings_column_vie
     total_ngrams, std::move(offsets_column), chars.release(), 0, rmm::device_buffer{});
 
   return make_lists_column(
-    input.size(), std::move(offsets), std::move(output), 0, rmm::device_buffer{}, stream, mr);
+    input.size(), std::move(offsets), std::move(output), 0, rmm::device_buffer{});
 }
 
 namespace {
@@ -394,7 +392,7 @@ std::unique_ptr<cudf::column> hash_character_ngrams(cudf::strings_column_view co
     *d_strings, ngrams, seed, d_offsets, d_hashes);
 
   return make_lists_column(
-    input.size(), std::move(offsets), std::move(hashes), 0, rmm::device_buffer{}, stream, mr);
+    input.size(), std::move(offsets), std::move(hashes), 0, rmm::device_buffer{});
 }
 
 }  // namespace detail

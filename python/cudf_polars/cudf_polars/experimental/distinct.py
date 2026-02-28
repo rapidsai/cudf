@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 """Multi-partition Distinct logic."""
 
@@ -13,7 +13,10 @@ from cudf_polars.dsl.expressions.base import Col, NamedExpr
 from cudf_polars.dsl.ir import Distinct
 from cudf_polars.experimental.base import PartitionInfo
 from cudf_polars.experimental.dispatch import lower_ir_node
+from cudf_polars.experimental.repartition import Repartition
+from cudf_polars.experimental.shuffle import Shuffle
 from cudf_polars.experimental.utils import (
+    _dynamic_planning_on,
     _fallback_inform,
     _get_unique_fractions,
     _lower_ir_fallback,
@@ -24,27 +27,30 @@ if TYPE_CHECKING:
 
     from cudf_polars.dsl.ir import IR
     from cudf_polars.experimental.dispatch import LowerIRTransformer
-    from cudf_polars.utils.config import ConfigOptions
+    from cudf_polars.utils.config import ConfigOptions, StreamingExecutor
 
 
 def lower_distinct(
     ir: Distinct,
     child: IR,
     partition_info: MutableMapping[IR, PartitionInfo],
-    config_options: ConfigOptions,
+    config_options: ConfigOptions[StreamingExecutor],
     *,
     unique_fraction: float | None = None,
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
     """
     Lower a Distinct IR into partition-wise stages.
 
+    Note: Edge cases (KEEP_NONE + ordering, complex slice, pre-shuffle)
+    must be handled by the caller before calling this function.
+
     Parameters
     ----------
     ir
         The Distinct IR node to lower.
     child
-        The reconstructed child of ``ir``. May differ
-        from ``ir.children[0]``.
+        The reconstructed child of ``ir``. May differ from ``ir.children[0]``.
+        If KEEP_NONE, caller must ensure child is already shuffled on keys.
     partition_info
         A mapping from all unique IR nodes to the
         associated partitioning information.
@@ -62,62 +68,26 @@ def lower_distinct(
         A mapping from unique nodes in the new graph to associated
         partitioning information.
     """
-    from cudf_polars.experimental.repartition import Repartition
-    from cudf_polars.experimental.shuffle import Shuffle
-
-    # Extract child partitioning
-    child_count = partition_info[child].count
-    assert config_options.executor.name == "streaming", (
-        "'in-memory' executor not supported in 'lower_distinct'"
+    subset: frozenset[str] = ir.subset or frozenset(ir.schema)
+    distinct_keys = tuple(
+        NamedExpr(name, Col(ir.schema[name], name)) for name in subset
     )
 
-    # Assume shuffle is not stable for now. Therefore, we
-    # require a tree reduction if row order matters.
+    child_count = partition_info[child].count
+    shuffled = partition_info[child].partitioned_on == distinct_keys
+
+    # Check for ordering requirements (shuffle is not stable)
     require_tree_reduction = ir.stable or ir.keep in (
         plc.stream_compaction.DuplicateKeepOption.KEEP_FIRST,
         plc.stream_compaction.DuplicateKeepOption.KEEP_LAST,
     )
 
-    subset: frozenset = ir.subset or frozenset(ir.schema)
-    shuffle_keys = tuple(NamedExpr(name, Col(ir.schema[name], name)) for name in subset)
-    shuffled = partition_info[child].partitioned_on == shuffle_keys
-    if ir.keep == plc.stream_compaction.DuplicateKeepOption.KEEP_NONE:
-        # Need to shuffle the original data for keep == "none"
-        if require_tree_reduction:
-            # TODO: We cannot drop all duplicates without
-            # shuffling the data up front, and we assume
-            # shuffling is unstable for now. Note that the
-            # task-based shuffle should be stable, but it
-            # its performance is very poor.
-            raise NotImplementedError(
-                "Unsupported unique options for multiple partitions."
-            )
-        if not shuffled:
-            child = Shuffle(
-                child.schema,
-                shuffle_keys,
-                config_options.executor.shuffle_method,
-                config_options.executor.shuffler_insertion_method,
-                child,
-            )
-            partition_info[child] = PartitionInfo(
-                count=child_count,
-                partitioned_on=shuffle_keys,
-            )
-            shuffled = True
-
     output_count = 1
     n_ary = 32  # Arbitrary default (for now)
-    if ir.zlice is not None:
+    if ir.zlice is not None and ir.zlice[1] is not None:
         # Head/tail slice operation has been pushed into Distinct
-        if ir.zlice[0] < 1 and ir.zlice[1] is not None:
-            # Use rough 1m-row heuristic to set n_ary
-            n_ary = max(int(1_000_000 / ir.zlice[1]), 2)
-        else:  # pragma: no cover
-            # TODO: General slicing is not supported for multiple
-            # partitions. For now, we raise an error to fall back
-            # to one partition.
-            raise NotImplementedError("Unsupported slice for multiple partitions.")
+        # (caller ensures only simple slices reach here)
+        n_ary = max(1_000_000 // ir.zlice[1], 2)
     elif unique_fraction is not None:
         # Use unique_fraction to determine partitioning
         n_ary = min(max(int(1.0 / unique_fraction), 2), child_count)
@@ -149,7 +119,7 @@ def lower_distinct(
         # Shuffle
         new_node = Shuffle(
             new_node.schema,
-            shuffle_keys,
+            distinct_keys,
             config_options.executor.shuffle_method,
             config_options.executor.shuffler_insertion_method,
             new_node,
@@ -158,7 +128,7 @@ def lower_distinct(
         new_node = ir.reconstruct([new_node])
         partition_info[new_node] = PartitionInfo(
             count=output_count,
-            partitioned_on=shuffle_keys,
+            partitioned_on=distinct_keys,
         )
 
     return new_node, partition_info
@@ -171,12 +141,67 @@ def _(
     # Extract child partitioning
     original_child = ir.children[0]
     child, partition_info = rec(ir.children[0])
-    config_options = rec.state["config_options"]
-    assert config_options.executor.name == "streaming", (
-        "'in-memory' executor not supported in 'lower_ir_node'"
+    child_count = partition_info[child].count
+    subset: frozenset[str] = ir.subset or frozenset(ir.schema)
+    distinct_keys = tuple(
+        NamedExpr(name, Col(ir.schema[name], name)) for name in subset
     )
 
-    subset: frozenset[str] = ir.subset or frozenset(ir.schema)
+    config_options = rec.state["config_options"]
+
+    # Check for ordering requirements (shuffle is not stable)
+    require_tree = ir.stable or ir.keep in (
+        plc.stream_compaction.DuplicateKeepOption.KEEP_FIRST,
+        plc.stream_compaction.DuplicateKeepOption.KEEP_LAST,
+    )
+
+    # Handle edge cases upfront
+    # KEEP_NONE + ordering = unsupported (need shuffle but shuffle is unstable)
+    if ir.keep == plc.stream_compaction.DuplicateKeepOption.KEEP_NONE:
+        if require_tree:
+            return _lower_ir_fallback(
+                ir,
+                rec,
+                msg="Unsupported unique options for multiple partitions.",
+            )
+
+        # KEEP_NONE needs pre-shuffle (must see all duplicates to drop them)
+        if partition_info[child].partitioned_on != distinct_keys:
+            child = Shuffle(
+                child.schema,
+                distinct_keys,
+                config_options.executor.shuffle_method,
+                config_options.executor.shuffler_insertion_method,
+                child,
+            )
+            partition_info[child] = PartitionInfo(
+                count=child_count,
+                partitioned_on=distinct_keys,
+            )
+
+    # Complex slice = unsupported (offset >= 1 or no length)
+    if ir.zlice is not None and (ir.zlice[0] >= 1 or ir.zlice[1] is None):
+        return _lower_ir_fallback(
+            ir,
+            rec,
+            msg="Complex slice not supported for multiple partitions.",
+        )
+
+    # Branch based on dynamic planning
+    if _dynamic_planning_on(
+        config_options
+    ):  # pragma: no cover; Requires rapidsmpf runtime
+        # Dynamic planning: Reconstruct the Distinct.
+        # The runtime distinct_node will handle strategy selection,
+        # respecting ir.stable, ir.keep, and ir.zlice attributes.
+        dynamic_node = ir.reconstruct([child])
+        partition_info[dynamic_node] = PartitionInfo(
+            count=child_count,
+            partitioned_on=distinct_keys,
+        )
+        return dynamic_node, partition_info
+
+    # Non-dynamic planning: use unique_fraction heuristics
     unique_fraction_dict = _get_unique_fractions(
         tuple(subset),
         config_options.executor.unique_fraction,
@@ -187,13 +212,10 @@ def _(
         max(unique_fraction_dict.values()) if unique_fraction_dict else None
     )
 
-    try:
-        return lower_distinct(
-            ir,
-            child,
-            partition_info,
-            config_options,
-            unique_fraction=unique_fraction,
-        )
-    except NotImplementedError as err:
-        return _lower_ir_fallback(ir, rec, msg=str(err))
+    return lower_distinct(
+        ir,
+        child,
+        partition_info,
+        config_options,
+        unique_fraction=unique_fraction,
+    )

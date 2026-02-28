@@ -11,8 +11,8 @@ from rapidsmpf.integrations.cudf.partition import (
     unpack_and_concat as py_unpack_and_concat,
 )
 from rapidsmpf.streaming.coll.shuffler import ShufflerAsync
+from rapidsmpf.streaming.core.actor import define_actor
 from rapidsmpf.streaming.core.message import Message
-from rapidsmpf.streaming.core.node import define_py_node
 from rapidsmpf.streaming.cudf.channel_metadata import (
     ChannelMetadata,
     HashScheme,
@@ -75,6 +75,10 @@ class ShuffleManager:
             num_partitions,
         )
 
+    def local_partitions(self) -> list[int]:
+        """Get the local partition IDs for this rank."""
+        return self.shuffler.local_partitions()
+
     def insert_chunk(self, chunk: TableChunk) -> None:
         """
         Insert a chunk into the ShuffleContext.
@@ -114,10 +118,17 @@ class ShuffleManager:
         Returns
         -------
         The extracted table.
+
+        Raises
+        ------
+        KeyError
+            If the requested sequence number has already been extracted.
         """
         partition_chunks = await self.shuffler.extract_async(
             self.context, sequence_number
         )
+        if partition_chunks is None:
+            raise KeyError(f"Partition {sequence_number} has already been extracted")
         return py_unpack_and_concat(
             partitions=partition_chunks,
             stream=stream,
@@ -150,7 +161,7 @@ def _is_already_partitioned(
     )
 
 
-@define_py_node()
+@define_actor()
 async def shuffle_node(
     context: Context,
     ir: Shuffle,
@@ -214,12 +225,10 @@ async def shuffle_node(
         shuffle = ShuffleManager(
             context, num_partitions, columns_to_hash, collective_id
         )
-
         # When input is duplicated, only rank 0 should contribute data.
         # Other ranks still participate in the shuffle protocol.
         skip_insert = metadata_in.duplicated and context.comm().rank != 0
 
-        # Process input chunks
         while (msg := await ch_in.recv(context)) is not None:
             if not skip_insert:
                 # Extract TableChunk from message and insert into shuffler
@@ -230,18 +239,10 @@ async def shuffle_node(
                 )
             del msg
 
-        # Insert finished
         await shuffle.insert_finished()
 
-        # Extract shuffled partitions and send them out
-        stream = ir_context.get_cuda_stream()
-        for partition_id in range(
-            # Round-robin partition assignment
-            context.comm().rank,
-            num_partitions,
-            context.comm().nranks,
-        ):
-            # Extract and send the output chunk
+        for partition_id in shuffle.shuffler.local_partitions():
+            stream = ir_context.get_cuda_stream()
             await ch_out.send(
                 context,
                 Message(

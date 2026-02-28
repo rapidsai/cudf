@@ -9,8 +9,8 @@ from typing import TYPE_CHECKING, Any, cast
 
 from rapidsmpf.memory.buffer import MemoryType
 from rapidsmpf.memory.memory_reservation import opaque_memory_usage
+from rapidsmpf.streaming.core.actor import define_actor
 from rapidsmpf.streaming.core.message import Message
-from rapidsmpf.streaming.core.node import define_py_node
 from rapidsmpf.streaming.core.spillable_messages import SpillableMessages
 from rapidsmpf.streaming.cudf.channel_metadata import ChannelMetadata
 from rapidsmpf.streaming.cudf.table_chunk import (
@@ -25,6 +25,7 @@ from cudf_polars.experimental.rapidsmpf.dispatch import (
 )
 from cudf_polars.experimental.rapidsmpf.utils import (
     ChannelManager,
+    chunkwise_evaluate,
     empty_table_chunk,
     make_spill_function,
     process_children,
@@ -42,7 +43,7 @@ if TYPE_CHECKING:
     from cudf_polars.experimental.rapidsmpf.dispatch import SubNetGenerator
 
 
-@define_py_node()
+@define_actor()
 async def default_node_single(
     context: Context,
     ir: IR,
@@ -75,7 +76,7 @@ async def default_node_single(
     Chunks are processed in the order they are received.
     """
     async with shutdown_on_error(context, ch_in, ch_out, trace_ir=ir) as tracer:
-        # Recv/send metadata.
+        # Recv metadata and prepare output metadata
         metadata_in = await recv_metadata(ch_in, context)
         partitioning = None
         if preserve_partitioning:
@@ -88,66 +89,21 @@ async def default_node_single(
             partitioning=partitioning,
             duplicated=metadata_in.duplicated,
         )
-        await send_metadata(ch_out, context, metadata_out)
-        if tracer is not None and metadata_in.duplicated:
-            tracer.set_duplicated()
 
-        # Recv/send data.
-        seq_num = 0
-        receiving = True
-        received_any = False
-        while receiving:
-            msg = await ch_in.recv(context)
-            if msg is None:
-                receiving = False
-                if received_any:
-                    break
-                else:
-                    # Make sure we have an empty chunk in case do_evaluate
-                    # always produces rows (e.g. aggregation)
-                    chunk = empty_table_chunk(
-                        ir.children[0], context, ir_context.get_cuda_stream()
-                    )
-            else:
-                received_any = True
-                chunk = TableChunk.from_message(msg)
-                seq_num = msg.sequence_number
-
-            chunk, extra = await make_table_chunks_available_or_wait(
-                context,
-                chunk,
-                reserve_extra=chunk.data_alloc_size(),
-                net_memory_delta=0,
-            )
-            with opaque_memory_usage(extra):
-                df = await asyncio.to_thread(
-                    ir.do_evaluate,
-                    *ir._non_child_args,
-                    DataFrame.from_table(
-                        chunk.table_view(),
-                        list(ir.children[0].schema.keys()),
-                        list(ir.children[0].schema.values()),
-                        chunk.stream,
-                    ),
-                    context=ir_context,
-                )
-            if tracer is not None:
-                tracer.add_chunk(table=df.table)
-            await ch_out.send(
-                context,
-                Message(
-                    seq_num,
-                    TableChunk.from_pylibcudf_table(
-                        df.table, chunk.stream, exclusive_view=True
-                    ),
-                ),
-            )
-            del df, chunk
-
-        await ch_out.drain(context)
+        # Process chunks (handle empty input for aggregation-like operations)
+        await chunkwise_evaluate(
+            context,
+            ir,
+            ir_context,
+            ch_out,
+            ch_in,
+            metadata_out,
+            handle_empty_input=True,
+            tracer=tracer,
+        )
 
 
-@define_py_node()
+@define_actor()
 async def default_node_multi(
     context: Context,
     ir: IR,
@@ -181,8 +137,9 @@ async def default_node_multi(
         local_count = 1
         duplicated = True
         partitioning = None
-        for idx, ch_in in enumerate(chs_in):
-            md_child = await recv_metadata(ch_in, context)
+        for idx, md_child in enumerate(
+            await asyncio.gather(*(recv_metadata(ch, context) for ch in chs_in))
+        ):
             # Use simple "max" rule to determine counts.
             local_count = max(md_child.local_count, local_count)
             # Set "duplicated" to False as soon as we
@@ -287,7 +244,7 @@ async def default_node_multi(
         await ch_out.drain(context)
 
 
-@define_py_node()
+@define_actor()
 async def fanout_node_bounded(
     context: Context,
     ch_in: Channel[TableChunk],
@@ -338,7 +295,7 @@ async def fanout_node_bounded(
         await asyncio.gather(*(ch.drain(context) for ch in chs_out))
 
 
-@define_py_node()
+@define_actor()
 async def fanout_node_unbounded(
     context: Context,
     ch_in: Channel[TableChunk],
@@ -581,7 +538,7 @@ def _(
     return nodes, channels
 
 
-@define_py_node()
+@define_actor()
 async def empty_node(
     context: Context,
     ir: Empty,
@@ -682,7 +639,7 @@ def generate_ir_sub_network_wrapper(
     return nodes, channels
 
 
-@define_py_node()
+@define_actor()
 async def metadata_feeder_node(
     context: Context,
     ir: IR,
@@ -717,7 +674,7 @@ async def metadata_feeder_node(
         await ch_out.drain(context)
 
 
-@define_py_node()
+@define_actor()
 async def metadata_drain_node(
     context: Context,
     ir: IR,
