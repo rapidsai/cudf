@@ -2117,7 +2117,7 @@ class StringMethods(BaseAccessor):
             plc_repl = plc.Scalar.from_py(
                 repl, dtype=plc.DataType(plc.TypeId.STRING)
             )
-        except TypeError as err:
+        except (NotImplementedError, TypeError) as err:
             raise TypeError(
                 f"repl should be a string, but got {type(repl).__name__}"
             ) from err
@@ -2274,7 +2274,7 @@ class StringMethods(BaseAccessor):
             plc_repl = plc.Scalar.from_py(
                 repl, dtype=plc.DataType(plc.TypeId.STRING)
             )
-        except TypeError as err:
+        except (NotImplementedError, TypeError) as err:
             raise TypeError(
                 f"repl should be a string, but got {type(repl).__name__}"
             ) from err
@@ -4554,7 +4554,7 @@ class StringMethods(BaseAccessor):
             plc_repl = plc.Scalar.from_py(
                 repl, dtype=plc.DataType(plc.TypeId.STRING)
             )
-        except TypeError as err:
+        except (NotImplementedError, TypeError) as err:
             raise TypeError(
                 f"repl should be a string, but got {type(repl).__name__}"
             ) from err
