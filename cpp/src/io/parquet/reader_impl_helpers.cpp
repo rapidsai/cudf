@@ -1982,4 +1982,31 @@ aggregate_reader_metadata::select_columns(
     std::move(input_columns), std::move(output_columns), std::move(output_column_schemas));
 }
 
+std::vector<Type> aggregate_reader_metadata::get_parquet_types(
+  host_span<std::vector<size_type> const> row_group_indices,
+  host_span<int const> column_schemas) const
+{
+  std::vector<Type> parquet_types(column_schemas.size());
+  // Find a source with at least one row group
+  auto const src_iter = std::find_if(row_group_indices.begin(),
+                                     row_group_indices.end(),
+                                     [](auto const& rg) { return rg.size() > 0; });
+  CUDF_EXPECTS(src_iter != row_group_indices.end(),
+               "Cannot determine Parquet types as no source has any selected row groups.",
+               std::invalid_argument);
+
+  // Source index
+  auto const src_index = std::distance(row_group_indices.begin(), src_iter);
+  std::transform(column_schemas.begin(),
+                 column_schemas.end(),
+                 parquet_types.begin(),
+                 [&](auto const schema_idx) {
+                   // Use the first row group in this source
+                   auto constexpr row_group_index = 0;
+                   return get_column_metadata(row_group_index, src_index, schema_idx).type;
+                 });
+
+  return parquet_types;
+}
+
 }  // namespace cudf::io::parquet::detail

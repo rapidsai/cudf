@@ -1403,10 +1403,11 @@ TEST_F(ParquetReaderTest, FilterSimple)
   cudf::io::write_parquet(args);
 
   // Filtering AST - table[0] < RAND_MAX/2
-  auto literal_value     = cudf::numeric_scalar<decltype(RAND_MAX)>(RAND_MAX / 2);
-  auto literal           = cudf::ast::literal(literal_value);
-  auto col_ref_0         = cudf::ast::column_reference(0);
-  auto filter_expression = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref_0, literal);
+  auto literal_value = cudf::numeric_scalar<decltype(RAND_MAX)>(RAND_MAX / 2);
+  auto literal       = cudf::ast::literal(literal_value);
+  auto col_ref_0     = cudf::ast::column_reference(0);
+  auto filter_expression =
+    cudf::ast::operation(cudf::ast::ast_operator::GREATER, literal, col_ref_0);
 
   auto predicate = cudf::compute_column(*written_table, filter_expression);
   EXPECT_EQ(predicate->view().type().id(), cudf::type_id::BOOL8)
@@ -1481,12 +1482,12 @@ TEST_F(ParquetReaderTest, FilterWithColumnProjection)
   auto lit             = cudf::ast::literal{val};
   auto col_ref         = cudf::ast::column_name_reference{"col_uint32"};
   auto col_index       = cudf::ast::column_reference{0};
-  auto filter_expr     = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_index, lit);
+  auto filter_expr     = cudf::ast::operation(cudf::ast::ast_operator::GREATER, lit, col_index);
 
   auto predicate = cudf::compute_column(src, filter_expr);
 
   {  // column_name_reference in parquet filter (not present in column projection)
-    auto read_expr       = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref, lit);
+    auto read_expr       = cudf::ast::operation(cudf::ast::ast_operator::GREATER, lit, col_ref);
     auto projected_table = cudf::table_view{{src.get_column(2)}};
     auto expected        = cudf::apply_boolean_mask(projected_table, *predicate);
 
@@ -1545,11 +1546,12 @@ TEST_F(ParquetReaderTest, FilterWithColumnProjection)
 TEST_F(ParquetReaderTest, FilterReferenceExpression)
 {
   auto [src, filepath] = create_parquet_with_stats("FilterReferenceExpression.parquet");
-  // Filtering AST - table[0] < 150
-  auto literal_value     = cudf::numeric_scalar<uint32_t>(150);
-  auto literal           = cudf::ast::literal(literal_value);
-  auto col_ref_0         = cudf::ast::column_reference(0);
-  auto filter_expression = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref_0, literal);
+  // Filtering AST - 150 > table[0]
+  auto literal_value = cudf::numeric_scalar<uint32_t>(150);
+  auto literal       = cudf::ast::literal(literal_value);
+  auto col_ref_0     = cudf::ast::column_reference(0);
+  auto filter_expression =
+    cudf::ast::operation(cudf::ast::ast_operator::GREATER, literal, col_ref_0);
 
   // Expected result
   auto predicate = cudf::compute_column(src, filter_expression);
@@ -1560,6 +1562,169 @@ TEST_F(ParquetReaderTest, FilterReferenceExpression)
       .filter(filter_expression);
   auto result = cudf::io::read_parquet(read_opts);
   CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *expected);
+}
+
+TEST_F(ParquetReaderTest, ExtendedFilterExpressions)
+{
+  // Create a parquet file with 3 int32 columns for col-to-col comparison testing
+  auto constexpr num_rows = 20'000;
+  auto col_a = cudf::test::fixed_width_column_wrapper<int32_t>(thrust::counting_iterator(0),
+                                                               thrust::counting_iterator(num_rows));
+  auto col_b = cudf::test::fixed_width_column_wrapper<int32_t>(
+    thrust::counting_iterator(num_rows), thrust::counting_iterator(2 * num_rows));
+  auto col_c = cudf::test::fixed_width_column_wrapper<int32_t>(
+    thrust::counting_iterator(2 * num_rows), thrust::counting_iterator(3 * num_rows));
+
+  auto const written_table = cudf::table_view{{col_a, col_b, col_c}};
+
+  auto const filepath = temp_env->get_temp_filepath("ExtendedFilterExpressions.parquet");
+  cudf::io::parquet_writer_options const out_opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, written_table)
+      .row_group_size_rows(5'000)
+      .stats_level(cudf::io::statistics_freq::STATISTICS_ROWGROUP);
+  cudf::io::write_parquet(out_opts);
+
+  auto col_ref_a = cudf::ast::column_reference(0);
+  auto col_ref_b = cudf::ast::column_reference(1);
+
+  // Filter: col_a < col_b
+  {
+    auto filter = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref_a, col_ref_b);
+
+    auto predicate = cudf::compute_column(written_table, filter);
+    auto expected  = cudf::apply_boolean_mask(written_table, *predicate);
+
+    cudf::io::parquet_reader_options read_opts =
+      cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath}).filter(filter);
+    auto result = cudf::io::read_parquet(read_opts);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *expected);
+  }
+
+  // Filter: (col_a < 150) or (col_a < col_b)
+  {
+    auto literal_150_value = cudf::numeric_scalar<int32_t>(150);
+    auto literal_150       = cudf::ast::literal(literal_150_value);
+    auto lhs    = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref_a, literal_150);
+    auto rhs    = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref_a, col_ref_b);
+    auto filter = cudf::ast::operation(cudf::ast::ast_operator::LOGICAL_OR, lhs, rhs);
+
+    auto predicate = cudf::compute_column(written_table, filter);
+    auto expected  = cudf::apply_boolean_mask(written_table, *predicate);
+
+    cudf::io::parquet_reader_options read_opts =
+      cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath}).filter(filter);
+    auto result = cudf::io::read_parquet(read_opts);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *expected);
+  }
+
+  // Filter: (col_a < 10) or ((col_a + col_b < col_c) and (col_b < 1))
+  {
+    auto literal_10_value = cudf::numeric_scalar<int32_t>(10);
+    auto literal_10       = cudf::ast::literal(literal_10_value);
+    auto literal_1_value  = cudf::numeric_scalar<int32_t>(1);
+    auto literal_1        = cudf::ast::literal(literal_1_value);
+
+    auto col_ref_c = cudf::ast::column_reference(2);
+
+    auto a_lt_10       = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref_a, literal_10);
+    auto a_plus_b      = cudf::ast::operation(cudf::ast::ast_operator::ADD, col_ref_a, col_ref_b);
+    auto a_plus_b_lt_c = cudf::ast::operation(cudf::ast::ast_operator::LESS, a_plus_b, col_ref_c);
+    auto b_lt_1        = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref_b, literal_1);
+    auto and_expr =
+      cudf::ast::operation(cudf::ast::ast_operator::LOGICAL_AND, a_plus_b_lt_c, b_lt_1);
+    auto filter = cudf::ast::operation(cudf::ast::ast_operator::LOGICAL_OR, a_lt_10, and_expr);
+
+    auto predicate = cudf::compute_column(written_table, filter);
+    auto expected  = cudf::apply_boolean_mask(written_table, *predicate);
+
+    cudf::io::parquet_reader_options read_opts =
+      cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath}).filter(filter);
+    auto result = cudf::io::read_parquet(read_opts);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *expected);
+  }
+
+  // Filter: false AND (50 > col_a)
+  {
+    auto literal_50_value = cudf::numeric_scalar<int32_t>(50);
+    auto literal_50       = cudf::ast::literal(literal_50_value);
+    auto literal_0_value  = cudf::numeric_scalar<bool>(false);
+    auto literal_0        = cudf::ast::literal(literal_0_value);
+    auto a_lt_50 = cudf::ast::operation(cudf::ast::ast_operator::GREATER, literal_50, col_ref_a);
+    auto filter  = cudf::ast::operation(cudf::ast::ast_operator::LOGICAL_AND, literal_0, a_lt_50);
+
+    auto predicate = cudf::compute_column(written_table, filter);
+    auto expected  = cudf::apply_boolean_mask(written_table, *predicate);
+
+    cudf::io::parquet_reader_options read_opts =
+      cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath}).filter(filter);
+    auto result = cudf::io::read_parquet(read_opts);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *expected);
+  }
+
+  // Filter: NOT(col_a NULL_EQUAL 10)
+  {
+    auto literal_10_value = cudf::numeric_scalar<int32_t>(10);
+    auto literal_10       = cudf::ast::literal(literal_10_value);
+    auto inner  = cudf::ast::operation(cudf::ast::ast_operator::NULL_EQUAL, col_ref_a, literal_10);
+    auto filter = cudf::ast::operation(cudf::ast::ast_operator::NOT, inner);
+
+    auto predicate = cudf::compute_column(written_table, filter);
+    auto expected  = cudf::apply_boolean_mask(written_table, *predicate);
+
+    cudf::io::parquet_reader_options read_opts =
+      cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath}).filter(filter);
+    auto result = cudf::io::read_parquet(read_opts);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *expected);
+  }
+
+  // Filter: col_a NULL_EQUAL 10
+  {
+    auto literal_10_value = cudf::numeric_scalar<int32_t>(10);
+    auto literal_10       = cudf::ast::literal(literal_10_value);
+    auto filter = cudf::ast::operation(cudf::ast::ast_operator::NULL_EQUAL, col_ref_a, literal_10);
+
+    auto predicate = cudf::compute_column(written_table, filter);
+    auto expected  = cudf::apply_boolean_mask(written_table, *predicate);
+
+    cudf::io::parquet_reader_options read_opts =
+      cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath}).filter(filter);
+    auto result = cudf::io::read_parquet(read_opts);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *expected);
+  }
+
+  // Filter: NOT(col_a NULL_EQUAL 10) AND (col_a < 50)
+  {
+    auto literal_50_value = cudf::numeric_scalar<int32_t>(50);
+    auto literal_50       = cudf::ast::literal(literal_50_value);
+    auto literal_10_value = cudf::numeric_scalar<int32_t>(10);
+    auto literal_10       = cudf::ast::literal(literal_10_value);
+    auto null_eq = cudf::ast::operation(cudf::ast::ast_operator::NULL_EQUAL, col_ref_a, literal_10);
+    auto lhs     = cudf::ast::operation(cudf::ast::ast_operator::NOT, null_eq);
+    auto rhs     = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref_a, literal_50);
+    auto filter  = cudf::ast::operation(cudf::ast::ast_operator::LOGICAL_AND, lhs, rhs);
+
+    auto predicate = cudf::compute_column(written_table, filter);
+    auto expected  = cudf::apply_boolean_mask(written_table, *predicate);
+
+    cudf::io::parquet_reader_options read_opts =
+      cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath}).filter(filter);
+    auto result = cudf::io::read_parquet(read_opts);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *expected);
+  }
+
+  // Filter: NOT(col_a < col_b)
+  {
+    auto inner  = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref_a, col_ref_b);
+    auto filter = cudf::ast::operation(cudf::ast::ast_operator::NOT, inner);
+
+    auto predicate = cudf::compute_column(written_table, filter);
+    auto expected  = cudf::apply_boolean_mask(written_table, *predicate);
+
+    cudf::io::parquet_reader_options read_opts =
+      cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath}).filter(filter);
+    auto result = cudf::io::read_parquet(read_opts);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *expected);
+  }
 }
 
 TEST_F(ParquetReaderTest, FilterNamedExpression)
@@ -1602,7 +1767,7 @@ TEST_F(ParquetReaderTest, FilterMultiple1)
   auto lo_lit            = cudf::ast::literal(lov);
   auto hi_lit            = cudf::ast::literal(hiv);
   auto expr_1 = cudf::ast::operation(cudf::ast::ast_operator::GREATER_EQUAL, filter_col, lo_lit);
-  auto expr_2 = cudf::ast::operation(cudf::ast::ast_operator::LESS, filter_col, hi_lit);
+  auto expr_2 = cudf::ast::operation(cudf::ast::ast_operator::GREATER, hi_lit, filter_col);
   auto expr_3 = cudf::ast::operation(cudf::ast::ast_operator::LOGICAL_AND, expr_1, expr_2);
 
   // Expected result
@@ -1638,7 +1803,7 @@ TEST_F(ParquetReaderTest, FilterMultiple2)
   auto lo_lit             = cudf::ast::literal(lov);
   auto hi_lit             = cudf::ast::literal(hiv);
   auto expr_1 = cudf::ast::operation(cudf::ast::ast_operator::GREATER_EQUAL, filter_col, lo_lit);
-  auto expr_2 = cudf::ast::operation(cudf::ast::ast_operator::LESS, filter_col, hi_lit);
+  auto expr_2 = cudf::ast::operation(cudf::ast::ast_operator::GREATER, hi_lit, filter_col);
   auto expr_3 = cudf::ast::operation(cudf::ast::ast_operator::LOGICAL_AND, expr_1, expr_2);
   std::string const low2  = "000017000";
   std::string const high2 = "000019000";
@@ -1818,10 +1983,10 @@ TEST_F(ParquetReaderTest, FilterSupported2)
 
   // Filtering AST -   table[i] == 1
   {
-    auto expr0 = cudf::ast::operation(cudf::ast::ast_operator::EQUAL, filter_col0, lit_value);
+    auto expr0 = cudf::ast::operation(cudf::ast::ast_operator::EQUAL, lit_value, filter_col0);
     test_expr(expr0);
 
-    auto expr1 = cudf::ast::operation(cudf::ast::ast_operator::EQUAL, filter_col1, lit_value);
+    auto expr1 = cudf::ast::operation(cudf::ast::ast_operator::EQUAL, lit_value, filter_col1);
     test_expr(expr1);
 
     auto expr2 = cudf::ast::operation(cudf::ast::ast_operator::EQUAL, filter_col2, lit_value);
@@ -2544,7 +2709,7 @@ struct ParquetMetadataReaderTest : public cudf::test::BaseFixture {
   }
 };
 
-TEST_F(ParquetMetadataReaderTest, TestBasic)
+TEST_F(ParquetMetadataReaderTest, Basics)
 {
   auto const num_rows = 1200;
 
@@ -2602,7 +2767,7 @@ TEST_F(ParquetMetadataReaderTest, TestBasic)
   test_parquet_metadata(3);
 }
 
-TEST_F(ParquetMetadataReaderTest, TestPreMaterializedMetadata)
+TEST_F(ParquetMetadataReaderTest, PreMaterializedMetadata)
 {
   auto const num_rows = 1200;
 
@@ -2641,7 +2806,7 @@ TEST_F(ParquetMetadataReaderTest, TestPreMaterializedMetadata)
   test_parquet_metadata(3);
 }
 
-TEST_F(ParquetMetadataReaderTest, TestNested)
+TEST_F(ParquetMetadataReaderTest, Nested)
 {
   auto const num_rows       = 1200;
   auto const lists_per_row  = 4;
@@ -2747,7 +2912,7 @@ TEST_F(ParquetMetadataReaderTest, TestNested)
   EXPECT_EQ(out_float_col.name(), "float_field");
   EXPECT_EQ(out_float_col.type(), cudf::io::parquet::Type::FLOAT);
 }
-TEST_F(ParquetMetadataReaderTest, TestCudfTypes)
+TEST_F(ParquetMetadataReaderTest, CudfTypes)
 {
   auto const num_rows = 4;
 
@@ -3379,7 +3544,7 @@ void row_bounds_and_filter_test()
     auto literal       = cudf::ast::literal(literal_value);
     auto col_ref_0     = cudf::ast::column_reference(0);
     auto filter_expression =
-      cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref_0, literal);
+      cudf::ast::operation(cudf::ast::ast_operator::GREATER, literal, col_ref_0);
 
     auto const [table_with_metadata, expected] =
       read_parquet_table(filter_expression, rows_to_skip, rows_to_read);
