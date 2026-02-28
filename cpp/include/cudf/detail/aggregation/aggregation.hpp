@@ -136,7 +136,8 @@ class count_aggregation final
   : public clonable<count_aggregation>::derived_from<rolling_aggregation,
                                                      groupby_aggregation,
                                                      groupby_scan_aggregation,
-                                                     reduce_aggregation> {
+                                                     reduce_aggregation,
+                                                     scan_aggregation> {
  public:
   count_aggregation(aggregation::Kind kind) : aggregation(kind) {}
 };
