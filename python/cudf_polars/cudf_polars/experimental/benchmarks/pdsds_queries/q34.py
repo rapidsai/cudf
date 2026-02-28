@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
-from cudf_polars.experimental.benchmarks.utils import get_data
+from cudf_polars.experimental.benchmarks.utils import QueryResult, get_data
 
 if TYPE_CHECKING:
     from cudf_polars.experimental.benchmarks.utils import RunConfig
@@ -74,7 +74,7 @@ def duckdb_impl(run_config: RunConfig) -> str:
     """
 
 
-def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
+def polars_impl(run_config: RunConfig) -> QueryResult:
     """Query 34."""
     params = load_parameters(
         int(run_config.scale_factor),
@@ -118,28 +118,36 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         .group_by(["ss_ticket_number", "ss_customer_sk"])
         .agg([pl.len().alias("cnt")])
     )
-    return (
-        dn.join(customer, left_on="ss_customer_sk", right_on="c_customer_sk")
-        .filter(pl.col("cnt").is_between(15, 20))
-        .select(
-            [
-                "c_last_name",
-                "c_first_name",
-                "c_salutation",
-                "c_preferred_cust_flag",
-                "ss_ticket_number",
-                pl.col("cnt").cast(pl.Int64),
-            ]
-        )
-        # When validating, need to pass check_row_order=False
-        .sort(
-            by=[
-                "c_last_name",
-                "c_first_name",
-                "c_salutation",
-                "c_preferred_cust_flag",
-            ],
-            descending=[False, False, False, True],
-            nulls_last=True,
-        )
+    return QueryResult(
+        frame=(
+            dn.join(customer, left_on="ss_customer_sk", right_on="c_customer_sk")
+            .filter(pl.col("cnt").is_between(15, 20))
+            .select(
+                [
+                    "c_last_name",
+                    "c_first_name",
+                    "c_salutation",
+                    "c_preferred_cust_flag",
+                    "ss_ticket_number",
+                    "cnt",
+                ]
+            )
+            .sort(
+                by=[
+                    "c_last_name",
+                    "c_first_name",
+                    "c_salutation",
+                    "c_preferred_cust_flag",
+                ],
+                descending=[False, False, False, True],
+                nulls_last=True,
+            )
+        ),
+        sort_by=[
+            ("c_last_name", False),
+            ("c_first_name", False),
+            ("c_salutation", False),
+            ("c_preferred_cust_flag", True),
+        ],
+        limit=None,
     )

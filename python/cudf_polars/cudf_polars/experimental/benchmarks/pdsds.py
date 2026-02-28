@@ -94,6 +94,15 @@ class PDSDSPolarsQueries(PDSDSQueries):
             pl.col("returns1").cast(pl.Decimal(18, 2)),
         ],
         8: [pl.col("sum(ss_net_profit)").cast(pl.Decimal(18, 2))],
+        30: [pl.col("ctr_total_return").cast(pl.Decimal(18, 2))],
+        32: [pl.col("excess discount amount").cast(pl.Decimal(18, 2))],
+        31: [
+            pl.col("web_q1_q2_increase").cast(pl.Decimal(38, 2)),
+            pl.col("store_q1_q2_increase").cast(pl.Decimal(38, 2)),
+            pl.col("web_q2_q3_increase").cast(pl.Decimal(38, 2)),
+            pl.col("store_q2_q3_increase").cast(pl.Decimal(38, 2)),
+        ],
+        33: [pl.col("total_sales").cast(pl.Decimal(18, 2))],
         12: [
             pl.col("itemrevenue").cast(pl.Decimal(18, 2)),
             pl.col("revenueratio").cast(pl.Decimal(38, 2)),
@@ -117,6 +126,12 @@ class PDSDSPolarsQueries(PDSDSQueries):
         ],
         14: [pl.col("sum_number_sales").cast(COUNT_DTYPE)],
         16: [pl.col("order count").cast(COUNT_DTYPE)],
+        34: [pl.col("cnt").cast(COUNT_DTYPE)],
+        35: [
+            pl.col("cnt1").cast(COUNT_DTYPE),
+            pl.col("cnt2").cast(COUNT_DTYPE),
+            pl.col("cnt3").cast(COUNT_DTYPE),
+        ],
     }
 
     @property

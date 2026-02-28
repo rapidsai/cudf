@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
-from cudf_polars.experimental.benchmarks.utils import get_data
+from cudf_polars.experimental.benchmarks.utils import QueryResult, get_data
 
 if TYPE_CHECKING:
     from cudf_polars.experimental.benchmarks.utils import RunConfig
@@ -107,7 +107,7 @@ def _get_agg_expr(col_name: str, agg_func: str, alias: str) -> pl.Expr:
         raise ValueError(msg)
 
 
-def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
+def polars_impl(run_config: RunConfig) -> QueryResult:
     """Query 35."""
     params = load_parameters(
         int(run_config.scale_factor),
@@ -120,7 +120,6 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     aggtwo = params["aggtwo"]
     aggthree = params["aggthree"]
 
-    # Load tables
     customer = get_data(run_config.dataset_path, "customer", run_config.suffix)
     customer_address = get_data(
         run_config.dataset_path, "customer_address", run_config.suffix
@@ -134,45 +133,39 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     catalog_sales = get_data(
         run_config.dataset_path, "catalog_sales", run_config.suffix
     )
-    # Main customer data
-    main_customers = customer.join(
-        customer_address, left_on="c_current_addr_sk", right_on="ca_address_sk"
-    ).join(customer_demographics, left_on="c_current_cdemo_sk", right_on="cd_demo_sk")
-    # Store sales existence check
-    ss_customers = (
+
+    store_exists = (
         store_sales.join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
         .filter((pl.col("d_year") == year) & (pl.col("d_qoy") < 4))
         .select("ss_customer_sk")
-        .unique()
     )
-    # Web sales existence check
-    ws_customers = (
+    web_exists = (
         web_sales.join(date_dim, left_on="ws_sold_date_sk", right_on="d_date_sk")
         .filter((pl.col("d_year") == year) & (pl.col("d_qoy") < 4))
-        .select("ws_bill_customer_sk")
-        .unique()
+        .select(pl.col("ws_bill_customer_sk").alias("customer_sk"))
     )
-    # Catalog sales existence check
-    cs_customers = (
+    catalog_exists = (
         catalog_sales.join(date_dim, left_on="cs_sold_date_sk", right_on="d_date_sk")
         .filter((pl.col("d_year") == year) & (pl.col("d_qoy") < 4))
-        .select("cs_ship_customer_sk")
-        .unique()
+        .select(pl.col("cs_ship_customer_sk").alias("customer_sk"))
     )
-    # Apply EXISTS conditions
-    return (
-        main_customers.join(
-            ss_customers, left_on="c_customer_sk", right_on="ss_customer_sk"
+    web_or_catalog = pl.concat([web_exists, catalog_exists]).unique()
+
+    result = (
+        customer.join(
+            customer_address, left_on="c_current_addr_sk", right_on="ca_address_sk"
         )
         .join(
-            pl.concat(
-                [
-                    ws_customers.rename({"ws_bill_customer_sk": "customer_sk"}),
-                    cs_customers.rename({"cs_ship_customer_sk": "customer_sk"}),
-                ]
-            ).unique(),
-            left_on="c_customer_sk",
-            right_on="customer_sk",
+            customer_demographics, left_on="c_current_cdemo_sk", right_on="cd_demo_sk"
+        )
+        # Note: Inner join duplicates rows when a customer has multiple sales.
+        # Semi join just filters to customers that have at least one match,
+        # which is what we need to match the SQL (for `EXISTS`).
+        .join(
+            store_exists, left_on="c_customer_sk", right_on="ss_customer_sk", how="semi"
+        )
+        .join(
+            web_or_catalog, left_on="c_customer_sk", right_on="customer_sk", how="semi"
         )
         .group_by(
             [
@@ -184,12 +177,15 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
                 "cd_dep_college_count",
             ]
         )
+        # TODO: The aliases below are used to match DuckDB's column names to pass
+        # validation. We should move this to pdsds.py and handle via a rename
+        # (similar to EXPECTED_CASTS / EXPECTED_CASTS_DECIMAL).
         .agg(
             [
                 pl.len().alias("cnt1"),
                 _get_agg_expr("cd_dep_count", aggone, f"{aggone}(cd_dep_count)"),
                 _get_agg_expr("cd_dep_count", aggtwo, f"{aggtwo}(cd_dep_count)"),
-                _get_agg_expr("cd_dep_count", aggthree, f"{aggthree}(cd_dep_count)"),
+                _get_agg_expr("cd_dep_count", aggthree, f"{aggthree}(cd_dep_count)_1"),
                 pl.len().alias("cnt2"),
                 _get_agg_expr(
                     "cd_dep_employed_count", aggone, f"{aggone}(cd_dep_employed_count)"
@@ -200,7 +196,7 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
                 _get_agg_expr(
                     "cd_dep_employed_count",
                     aggthree,
-                    f"{aggthree}(cd_dep_employed_count)",
+                    f"{aggthree}(cd_dep_employed_count)_1",
                 ),
                 pl.len().alias("cnt3"),
                 _get_agg_expr(
@@ -212,7 +208,7 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
                 _get_agg_expr(
                     "cd_dep_college_count",
                     aggthree,
-                    f"{aggthree}(cd_dep_college_count)",
+                    f"{aggthree}(cd_dep_college_count)_1",
                 ),
             ]
         )
@@ -225,17 +221,17 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
                 "cnt1",
                 f"{aggone}(cd_dep_count)",
                 f"{aggtwo}(cd_dep_count)",
-                f"{aggthree}(cd_dep_count)",
+                f"{aggthree}(cd_dep_count)_1",
                 "cd_dep_employed_count",
                 "cnt2",
                 f"{aggone}(cd_dep_employed_count)",
                 f"{aggtwo}(cd_dep_employed_count)",
-                f"{aggthree}(cd_dep_employed_count)",
+                f"{aggthree}(cd_dep_employed_count)_1",
                 "cd_dep_college_count",
                 "cnt3",
                 f"{aggone}(cd_dep_college_count)",
                 f"{aggtwo}(cd_dep_college_count)",
-                f"{aggthree}(cd_dep_college_count)",
+                f"{aggthree}(cd_dep_college_count)_1",
             ]
         )
         .sort(
@@ -250,4 +246,16 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
             nulls_last=True,
         )
         .limit(100)
+    )
+    return QueryResult(
+        frame=result,
+        sort_by=[
+            ("ca_state", False),
+            ("cd_gender", False),
+            ("cd_marital_status", False),
+            ("cd_dep_count", False),
+            ("cd_dep_employed_count", False),
+            ("cd_dep_college_count", False),
+        ],
+        limit=100,
     )

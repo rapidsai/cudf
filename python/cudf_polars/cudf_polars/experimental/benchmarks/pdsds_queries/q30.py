@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
-from cudf_polars.experimental.benchmarks.utils import get_data
+from cudf_polars.experimental.benchmarks.utils import QueryResult, get_data
 
 if TYPE_CHECKING:
     from cudf_polars.experimental.benchmarks.utils import RunConfig
@@ -79,7 +79,7 @@ def duckdb_impl(run_config: RunConfig) -> str:
     """
 
 
-def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
+def polars_impl(run_config: RunConfig) -> QueryResult:
     """Query 30."""
     params = load_parameters(
         int(run_config.scale_factor),
@@ -124,45 +124,65 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     ).filter(pl.col("ctr_total_return") > pl.col("avg_return"))
     # Join customer with customer_address first (avoiding cartesian product)
     # Then join with qualified customers
-    return (
-        customer.join(
-            customer_address, left_on="c_current_addr_sk", right_on="ca_address_sk"
-        )
-        .filter(pl.col("ca_state") == state)
-        .join(qualified_customers, left_on="c_customer_sk", right_on="ctr_customer_sk")
-        .select(
-            [
-                "c_customer_id",
-                "c_salutation",
-                "c_first_name",
-                "c_last_name",
-                "c_preferred_cust_flag",
-                "c_birth_day",
-                "c_birth_month",
-                "c_birth_year",
-                "c_birth_country",
-                "c_login",
-                "c_email_address",
-                "c_last_review_date_sk",
-                "ctr_total_return",
-            ]
-        )
-        .sort(
-            [
-                "c_customer_id",
-                "c_salutation",
-                "c_first_name",
-                "c_last_name",
-                "c_preferred_cust_flag",
-                "c_birth_day",
-                "c_birth_month",
-                "c_birth_year",
-                "c_birth_country",
-                "c_login",
-                "c_email_address",
-                "c_last_review_date_sk",
-                "ctr_total_return",
-            ]
-        )
-        .limit(100)
+    return QueryResult(
+        frame=(
+            customer.join(
+                customer_address, left_on="c_current_addr_sk", right_on="ca_address_sk"
+            )
+            .filter(pl.col("ca_state") == state)
+            .join(
+                qualified_customers, left_on="c_customer_sk", right_on="ctr_customer_sk"
+            )
+            .select(
+                [
+                    "c_customer_id",
+                    "c_salutation",
+                    "c_first_name",
+                    "c_last_name",
+                    "c_preferred_cust_flag",
+                    "c_birth_day",
+                    "c_birth_month",
+                    "c_birth_year",
+                    "c_birth_country",
+                    "c_login",
+                    "c_email_address",
+                    "c_last_review_date_sk",
+                    "ctr_total_return",
+                ]
+            )
+            .sort(
+                [
+                    "c_customer_id",
+                    "c_salutation",
+                    "c_first_name",
+                    "c_last_name",
+                    "c_preferred_cust_flag",
+                    "c_birth_day",
+                    "c_birth_month",
+                    "c_birth_year",
+                    "c_birth_country",
+                    "c_login",
+                    "c_email_address",
+                    "c_last_review_date_sk",
+                    "ctr_total_return",
+                ]
+            )
+            .limit(100)
+        ),
+        sort_by=[
+            ("c_customer_id", False),
+            ("c_salutation", False),
+            ("c_first_name", False),
+            ("c_last_name", False),
+            ("c_preferred_cust_flag", False),
+            ("c_birth_day", False),
+            ("c_birth_month", False),
+            ("c_birth_year", False),
+            ("c_birth_country", False),
+            ("c_login", False),
+            ("c_email_address", False),
+            ("c_last_review_date_sk", False),
+            ("ctr_total_return", False),
+        ],
+        limit=100,
     )

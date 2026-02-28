@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
-from cudf_polars.experimental.benchmarks.utils import get_data
+from cudf_polars.experimental.benchmarks.utils import QueryResult, get_data
 
 if TYPE_CHECKING:
     from cudf_polars.experimental.benchmarks.utils import RunConfig
@@ -88,15 +88,18 @@ def level(  # noqa: D103
         lf = lf.with_columns([pl.lit(null_sentinel).alias(c) for c in missing])
     return lf.with_columns(
         [
-            (pl.col("total_net_profit") / pl.col("total_ext_sales_price")).alias(
-                "gross_margin"
-            ),
+            # Cast to Float64 before dividing to match DuckDB's Float64 output. Without this,
+            # Polars computes Decimal(18,2) / Decimal(18,2) = Decimal(38,2) (output scale is only 2)
+            (
+                pl.col("total_net_profit").cast(pl.Float64)
+                / pl.col("total_ext_sales_price").cast(pl.Float64)
+            ).alias("gross_margin"),
             pl.lit(lochierarchy, dtype=pl.Int64).alias("lochierarchy"),
         ]
     ).select(["gross_margin", "i_category", "i_class", "lochierarchy"])
 
 
-def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
+def polars_impl(run_config: RunConfig) -> QueryResult:
     """Query 36."""
     params = load_parameters(
         int(run_config.scale_factor),
@@ -126,58 +129,66 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
 
     combined = pl.concat([level0, level1, level2])
 
-    return (
-        combined.with_columns(
-            [
-                pl.when(pl.col("lochierarchy") == 0)
-                .then(pl.concat_str([pl.lit("0_"), pl.col("i_category")], separator=""))
-                .when(pl.col("lochierarchy") == 1)
-                .then(pl.lit("1"))
-                .when(pl.col("lochierarchy") == 2)
-                .then(pl.lit("2"))
-                .alias("partition_key")
-            ]
-        )
-        .with_columns(
-            [
-                pl.col("gross_margin")
-                .rank("ordinal")
-                .over("partition_key")
-                .cast(pl.Int64)
-                .alias("rank_within_parent")
-            ]
-        )
-        .select(
-            [
-                "gross_margin",
-                "i_category",
-                "i_class",
-                "lochierarchy",
-                "rank_within_parent",
-            ]
-        )
-        .sort(
-            [
-                pl.col("lochierarchy"),
-                pl.when(pl.col("lochierarchy") == 0)
-                .then(pl.col("i_category"))
-                .otherwise(pl.lit(null_sentinel)),
-                pl.col("rank_within_parent"),
-            ],
-            descending=[True, False, False],
-            nulls_last=True,
-        )
-        .limit(100)
-        .with_columns(
-            [
-                pl.when(pl.col("i_category") == null_sentinel)
-                .then(None)
-                .otherwise(pl.col("i_category"))
-                .alias("i_category"),
-                pl.when(pl.col("i_class") == null_sentinel)
-                .then(None)
-                .otherwise(pl.col("i_class"))
-                .alias("i_class"),
-            ]
-        )
+    return QueryResult(
+        frame=(
+            combined.with_columns(
+                [
+                    pl.when(pl.col("lochierarchy") == 0)
+                    .then(
+                        pl.concat_str(
+                            [pl.lit("0_"), pl.col("i_category")], separator=""
+                        )
+                    )
+                    .when(pl.col("lochierarchy") == 1)
+                    .then(pl.lit("1"))
+                    .when(pl.col("lochierarchy") == 2)
+                    .then(pl.lit("2"))
+                    .alias("partition_key")
+                ]
+            )
+            .with_columns(
+                [
+                    pl.col("gross_margin")
+                    .rank("ordinal")
+                    .over("partition_key")
+                    .cast(pl.Int64)
+                    .alias("rank_within_parent")
+                ]
+            )
+            .select(
+                [
+                    "gross_margin",
+                    "i_category",
+                    "i_class",
+                    "lochierarchy",
+                    "rank_within_parent",
+                ]
+            )
+            .sort(
+                [
+                    pl.col("lochierarchy"),
+                    pl.when(pl.col("lochierarchy") == 0)
+                    .then(pl.col("i_category"))
+                    .otherwise(pl.lit(null_sentinel)),
+                    pl.col("rank_within_parent"),
+                ],
+                descending=[True, False, False],
+                nulls_last=True,
+            )
+            .limit(100)
+            .with_columns(
+                [
+                    pl.when(pl.col("i_category") == null_sentinel)
+                    .then(None)
+                    .otherwise(pl.col("i_category"))
+                    .alias("i_category"),
+                    pl.when(pl.col("i_class") == null_sentinel)
+                    .then(None)
+                    .otherwise(pl.col("i_class"))
+                    .alias("i_class"),
+                ]
+            )
+        ),
+        sort_by=[("lochierarchy", True), ("rank_within_parent", False)],
+        limit=100,
     )
