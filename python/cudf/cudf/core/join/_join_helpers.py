@@ -9,7 +9,10 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 
 from cudf.api.types import is_dtype_equal
-from cudf.core.dtype.validators import is_dtype_obj_numeric
+from cudf.core.dtype.validators import (
+    is_dtype_obj_numeric,
+    is_dtype_obj_string,
+)
 from cudf.core.dtypes import (
     CategoricalDtype,
     Decimal32Dtype,
@@ -131,7 +134,10 @@ def _match_join_keys(
     if how == "left" and rcol.fillna(0).can_cast_safely(ltype):
         return lcol, rcol.astype(ltype)
     if common_type is None:
-        common_type = np.dtype(np.float64)
+        if is_dtype_obj_string(ltype) and is_dtype_obj_string(rtype):
+            common_type = find_common_type((ltype, rtype))
+        else:
+            common_type = np.dtype(np.float64)
     return lcol.astype(common_type), rcol.astype(common_type)
 
 

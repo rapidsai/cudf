@@ -147,7 +147,7 @@ def cudf_dtype_from_pa_type(typ: pa.DataType) -> DtypeObj:
     elif pa.types.is_timestamp(typ) and typ.tz is not None:
         return get_compatible_timezone(pd.DatetimeTZDtype(typ.unit, typ.tz))
     elif pa.types.is_large_string(typ) or pa.types.is_string(typ):
-        return CUDF_STRING_DTYPE
+        return DEFAULT_STRING_DTYPE
     elif pa.types.is_date(typ):
         # typ.to_pandas_dtype() produces np.dtype("datetime64[ms]").
         # Conversely pylibcudf will produce TIMESTAMP_DAYS for date types - the most
@@ -484,7 +484,7 @@ def dtype_to_pylibcudf_type(dtype: DtypeObj) -> plc.DataType:
     elif isinstance(dtype, pd.DatetimeTZDtype):
         dtype = _get_base_dtype(dtype)
     elif isinstance(dtype, pd.StringDtype):
-        dtype = CUDF_STRING_DTYPE
+        dtype = np.dtype("object")
     elif is_pandas_nullable_numpy_dtype(dtype):
         dtype = dtype.numpy_dtype  # type: ignore[union-attr]
     return plc.DataType(SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES[dtype])
@@ -640,4 +640,3 @@ PYLIBCUDF_TO_SUPPORTED_NUMPY_TYPES[plc.types.TypeId.STRING] = np.dtype(
 )
 
 SIZE_TYPE_DTYPE = PYLIBCUDF_TO_SUPPORTED_NUMPY_TYPES[plc.types.SIZE_TYPE_ID]
-CUDF_STRING_DTYPE = PYLIBCUDF_TO_SUPPORTED_NUMPY_TYPES[plc.types.TypeId.STRING]

@@ -66,7 +66,6 @@ from cudf.core.dtypes import (
 from cudf.core.mixins import BinaryOperand, Reducible
 from cudf.errors import MixedTypeError
 from cudf.utils.dtypes import (
-    CUDF_STRING_DTYPE,
     DEFAULT_STRING_DTYPE,
     SIZE_TYPE_DTYPE,
     _get_nan_for_dtype,
@@ -159,6 +158,10 @@ def _can_values_be_equal(left: DtypeObj, right: DtypeObj) -> bool:
         return _can_values_be_equal(left.categories.dtype, right)
     elif isinstance(right, CategoricalDtype):
         return _can_values_be_equal(left, right.categories.dtype)
+    elif isinstance(left, pd.StringDtype) and is_dtype_obj_string(right):
+        return True
+    elif isinstance(right, pd.StringDtype) and is_dtype_obj_string(left):
+        return True
     elif is_dtype_obj_numeric(left) and is_dtype_obj_numeric(right):
         return True
     elif left.kind == right.kind and left.kind in "mM":
@@ -1017,7 +1020,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         if self.has_nulls():
             return cast(
                 "cudf.core.column.StringColumn",
-                self.astype(CUDF_STRING_DTYPE).fillna(
+                self.astype(np.dtype("object")).fillna(
                     "NaN"
                     if self._PANDAS_NA_VALUE is np.nan
                     else str(self._PANDAS_NA_VALUE)
@@ -3368,6 +3371,8 @@ def as_column(
                 )
             ):
                 raise MixedTypeError("Cannot create column with mixed types")
+            if inferred_dtype == "string" and dtype is None:
+                dtype = arbitrary.dtype
             return as_column(
                 pyarrow_array,
                 dtype=dtype,
@@ -3597,9 +3602,6 @@ def as_column(
                     ser = ser.cat.set_categories(
                         dtype.categories, ordered=dtype.ordered
                     )
-        elif dtype == object and not cudf.get_option("mode.pandas_compatible"):
-            # Unlike pandas, interpret object as "str" instead of "python object"
-            ser = pd.Series(arbitrary, dtype="str")
         else:
             ser = pd.Series(arbitrary, dtype=dtype)
         return as_column(ser, nan_as_null=nan_as_null)

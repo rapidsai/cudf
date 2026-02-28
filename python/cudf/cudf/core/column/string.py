@@ -1791,7 +1791,10 @@ class StringColumn(ColumnBase, Scannable):
                     f"expected a str or tuple[str, ...], not {type(pat).__name__}"
                 )
             dtype = self._get_pandas_compatible_dtype(np.dtype(np.bool_))
-            return cast(Self, ColumnBase.create(plc_result, dtype))
+            result = cast(Self, ColumnBase.create(plc_result, dtype))
+        if self._PANDAS_NA_VALUE in {np.nan, None}:
+            result = result.fillna(False)
+        return result
 
     def find(
         self,

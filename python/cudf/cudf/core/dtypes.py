@@ -83,10 +83,7 @@ def dtype(arbitrary: Any) -> DtypeObj:
     except TypeError:
         pass
     else:
-        if np_dtype.kind == "O":
-            return DEFAULT_STRING_DTYPE
-        elif np_dtype.kind == "U":
-            return pd.StringDtype(na_value=np.nan)
+        if np_dtype.kind == "U":
             if cudf.get_option("mode.pandas_compatible"):
                 # Like pandas, allow users to pass this object to signal "string"
                 # but the dtype metadata should result in np.dtype(object)

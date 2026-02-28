@@ -6831,6 +6831,8 @@ def _is_same_dtype(lhs_dtype, rhs_dtype):
         and rhs_dtype.categories.dtype == lhs_dtype
     ):
         return True
+    elif is_dtype_obj_string(lhs_dtype) and is_dtype_obj_string(rhs_dtype):
+        return True
     else:
         return False
 
