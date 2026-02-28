@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
-from cudf_polars.experimental.benchmarks.utils import get_data
+from cudf_polars.experimental.benchmarks.utils import QueryResult, get_data
 
 if TYPE_CHECKING:
     from cudf_polars.experimental.benchmarks.utils import RunConfig
@@ -199,7 +199,7 @@ rollup_specs: list[tuple[list[str], dict[str, pl.DataType]]] = [
 ]
 
 
-def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
+def polars_impl(run_config: RunConfig) -> QueryResult:
     """Query 67."""
     params = load_parameters(
         int(run_config.scale_factor),
@@ -246,23 +246,38 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         .alias("rk")
     )
 
-    return (
-        ranked.filter(pl.col("rk") <= 100)
-        .sort(
-            [
-                "i_category",
-                "i_class",
-                "i_brand",
-                "i_product_name",
-                "d_year",
-                "d_qoy",
-                "d_moy",
-                "s_store_id",
-                "sumsales",
-                "rk",
-            ],
-            nulls_last=True,
-            descending=[False] * 10,
-        )
-        .limit(100)
+    return QueryResult(
+        frame=(
+            ranked.filter(pl.col("rk") <= 100)
+            .sort(
+                [
+                    "i_category",
+                    "i_class",
+                    "i_brand",
+                    "i_product_name",
+                    "d_year",
+                    "d_qoy",
+                    "d_moy",
+                    "s_store_id",
+                    "sumsales",
+                    "rk",
+                ],
+                nulls_last=True,
+                descending=[False] * 10,
+            )
+            .limit(100)
+        ),
+        sort_by=[
+            ("i_category", False),
+            ("i_class", False),
+            ("i_brand", False),
+            ("i_product_name", False),
+            ("d_year", False),
+            ("d_qoy", False),
+            ("d_moy", False),
+            ("s_store_id", False),
+            ("sumsales", False),
+            ("rk", False),
+        ],
+        limit=100,
     )

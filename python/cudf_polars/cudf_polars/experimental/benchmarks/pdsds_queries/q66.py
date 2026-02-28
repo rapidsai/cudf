@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
-from cudf_polars.experimental.benchmarks.utils import get_data
+from cudf_polars.experimental.benchmarks.utils import QueryResult, get_data
 
 if TYPE_CHECKING:
     from cudf_polars.experimental.benchmarks.utils import RunConfig
@@ -344,7 +344,7 @@ def duckdb_impl(run_config: RunConfig) -> str:
     """
 
 
-def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
+def polars_impl(run_config: RunConfig) -> QueryResult:
     """Query 66."""
     params = load_parameters(
         int(run_config.scale_factor),
@@ -485,31 +485,50 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     )
 
     per_sqft_exprs = [
-        (pl.col(f"{m}_sales") / pl.col("w_warehouse_sq_ft")).alias(
+        (pl.col(f"{m}_sales").cast(pl.Float64()) / pl.col("w_warehouse_sq_ft")).alias(
             f"{m}_sales_per_sq_foot"
         )
         for m in month_names
     ]
 
-    return (
-        pl.concat([web_sales_monthly, catalog_sales_monthly])
-        .group_by(
-            [
-                "w_warehouse_name",
-                "w_warehouse_sq_ft",
-                "w_city",
-                "w_county",
-                "w_state",
-                "w_country",
-                "ship_carriers",
-                "year1",
-            ]
-        )
-        .agg(
-            [pl.col(f"{m}_sales").sum().alias(f"{m}_sales") for m in month_names]
-            + [pl.col(f"{m}_net").sum().alias(f"{m}_net") for m in month_names]
-        )
-        .with_columns(per_sqft_exprs)
-        .sort(["w_warehouse_name"], nulls_last=True, descending=[False])
-        .limit(100)
+    return QueryResult(
+        frame=(
+            pl.concat([web_sales_monthly, catalog_sales_monthly])
+            .group_by(
+                [
+                    "w_warehouse_name",
+                    "w_warehouse_sq_ft",
+                    "w_city",
+                    "w_county",
+                    "w_state",
+                    "w_country",
+                    "ship_carriers",
+                    "year1",
+                ]
+            )
+            .agg(
+                [pl.col(f"{m}_sales").sum().alias(f"{m}_sales") for m in month_names]
+                + [pl.col(f"{m}_net").sum().alias(f"{m}_net") for m in month_names]
+            )
+            .with_columns(per_sqft_exprs)
+            .select(
+                [
+                    "w_warehouse_name",
+                    "w_warehouse_sq_ft",
+                    "w_city",
+                    "w_county",
+                    "w_state",
+                    "w_country",
+                    "ship_carriers",
+                    "year1",
+                ]
+                + [f"{m}_sales" for m in month_names]
+                + [f"{m}_sales_per_sq_foot" for m in month_names]
+                + [f"{m}_net" for m in month_names]
+            )
+            .sort(["w_warehouse_name"], nulls_last=True, descending=[False])
+            .limit(100)
+        ),
+        sort_by=[("w_warehouse_name", False)],
+        limit=100,
     )
