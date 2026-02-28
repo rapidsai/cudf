@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 cimport pylibcudf.libcudf.io.types as cudf_io_types
 cimport pylibcudf.libcudf.table.table_view as cudf_table_view
@@ -331,6 +331,9 @@ cdef extern from "cudf/io/csv.hpp" \
         ) except +libcudf_exception_handler
         csv_writer_options_builder& false_value(
             string val
+        ) except +libcudf_exception_handler
+        csv_writer_options_builder& compression(
+            cudf_io_types.compression_type comp
         ) except +libcudf_exception_handler
 
         csv_writer_options build() except +libcudf_exception_handler
