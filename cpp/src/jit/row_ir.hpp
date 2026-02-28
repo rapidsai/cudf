@@ -478,13 +478,13 @@ struct [[nodiscard]] transform_args {
   std::vector<std::unique_ptr<column>> scalar_columns =
     {};  ///< The scalar columns created during the expression conversion
   std::vector<std::variant<column_view, scalar_column_view>> inputs =
-    {};                                 ///< The input columns to the transform UDF
-  std::string udf                = {};  ///< The user-defined function to apply
-  data_type output_type          = data_type{type_id::EMPTY};  ///< The output type of the transform
-  bool is_ptx                    = false;           ///< Whether the transform is a PTX kernel
-  std::optional<void*> user_data = std::nullopt;    ///< User data to pass to the transform
-  null_aware is_null_aware       = null_aware::NO;  ///< Whether the transform is null-aware
-  output_nullability null_policy = output_nullability::PRESERVE;  ///< Null-transformation policy
+    {};                                               ///< The input columns to the transform UDF
+  std::string udf       = {};                         ///< The user-defined function to apply
+  data_type output_type = data_type{type_id::EMPTY};  ///< The output type of the transform
+  cudf::udf_source_type source_type = cudf::udf_source_type::CUDA;  ///< The source type of the UDF
+  std::optional<void*> user_data    = std::nullopt;    ///< User data to pass to the transform
+  null_aware is_null_aware          = null_aware::NO;  ///< Whether the transform is null-aware
+  output_nullability null_policy    = output_nullability::PRESERVE;  ///< Null-transformation policy
   std::optional<size_type> row_size = std::nullopt;  ///< The row size of the transform operation
   std::vector<ast_input_spec> input_specs = {};      ///< The input specs (table ref + column index)
 };
@@ -498,10 +498,10 @@ struct [[nodiscard]] filter_args {
   std::vector<std::variant<column_view, scalar_column_view>> inputs =
     {};                                          ///< The input columns to the transform UDF
   std::vector<column_view> filter_columns = {};  ///< The input columns to the filter
-  std::string udf                = {};     ///< The user-defined function to apply as a predicate
-  bool is_ptx                    = false;  ///< Whether the filter is a PTX device function
-  std::optional<void*> user_data = std::nullopt;    ///< User data to pass to the filter
-  null_aware is_null_aware       = null_aware::NO;  ///< Whether the filter is null-aware
+  std::string udf                   = {};  ///< The user-defined function to apply as a predicate
+  cudf::udf_source_type source_type = cudf::udf_source_type::CUDA;  ///< The source type of the UDF
+  std::optional<void*> user_data    = std::nullopt;    ///< User data to pass to the filter
+  null_aware is_null_aware          = null_aware::NO;  ///< Whether the filter is null-aware
   output_nullability predicate_nullability =
     output_nullability::PRESERVE;  ///< Null-transformation policy for the predicate output
   std::vector<ast_input_spec> input_specs = {};  ///< The input specs (table ref + column index)

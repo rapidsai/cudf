@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -194,7 +194,7 @@ class GroupedRollingTest : public cudf::test::BaseFixture {
     // >>> test UDFs <<<
     if (input.type() == cudf::data_type{cudf::type_id::INT32} && !input.has_nulls()) {
       auto cuda_udf_agg = cudf::make_udf_aggregation<cudf::rolling_aggregation>(
-        cudf::udf_type::CUDA, cuda_func, cudf::data_type{cudf::type_id::INT64});
+        cudf::udf_source_type::CUDA, cuda_func, cudf::data_type{cudf::type_id::INT64});
       run_test_col(keys,
                    input,
                    expected_grouping,
@@ -204,7 +204,7 @@ class GroupedRollingTest : public cudf::test::BaseFixture {
                    *cuda_udf_agg);
 
       auto ptx_udf_agg = cudf::make_udf_aggregation<cudf::rolling_aggregation>(
-        cudf::udf_type::PTX, ptx_func, cudf::data_type{cudf::type_id::INT64});
+        cudf::udf_source_type::PTX, ptx_func, cudf::data_type{cudf::type_id::INT64});
       run_test_col(keys,
                    input,
                    expected_grouping,
