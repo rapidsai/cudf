@@ -7240,6 +7240,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         index=True,
         encoding=None,
         compression=None,
+        quoting=None,
         lineterminator=None,
         chunksize=None,
         storage_options=None,
@@ -7262,6 +7263,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             encoding=encoding,
             compression=compression,
             storage_options=storage_options,
+            quoting=quoting,
         )
 
     @ioutils.doc_to_orc()

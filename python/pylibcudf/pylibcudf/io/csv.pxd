@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 from libcpp cimport bool
 from libcpp.string cimport string
@@ -95,6 +95,7 @@ cdef class CsvWriterOptionsBuilder:
     cpdef CsvWriterOptionsBuilder inter_column_delimiter(self, str delim)
     cpdef CsvWriterOptionsBuilder true_value(self, str val)
     cpdef CsvWriterOptionsBuilder false_value(self, str val)
+    cpdef CsvWriterOptionsBuilder quoting(self, quote_style style)
     cpdef CsvWriterOptions build(self)
 
 
