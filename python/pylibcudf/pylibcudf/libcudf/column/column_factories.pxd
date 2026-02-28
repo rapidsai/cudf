@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 from libcpp.memory cimport unique_ptr
 from pylibcudf.exception_handler cimport libcudf_exception_handler
@@ -109,15 +109,20 @@ cdef extern from "cudf/column/column_factories.hpp" namespace "cudf" nogil:
         device_memory_resource* mr
     ) except +libcudf_exception_handler
 
-    cdef unique_ptr[column] make_empty_column(
-        type_id id
-    ) except +libcudf_exception_handler
-    cdef unique_ptr[column] make_empty_column(
-        data_type type_
-    ) except +libcudf_exception_handler
-
     cdef unique_ptr[column] make_dictionary_column(
         unique_ptr[column] keys_column,
         unique_ptr[column] indices_column,
         cuda_stream_view stream,
         device_memory_resource* mr) except +libcudf_exception_handler
+
+    cdef unique_ptr[column] make_empty_column(
+        type_id id
+    ) except +libcudf_exception_handler
+
+    cdef unique_ptr[column] make_empty_column(
+        data_type type_
+    ) except +libcudf_exception_handler
+
+    cdef unique_ptr[column] make_empty_lists_column(
+        data_type child_type_
+    ) except +libcudf_exception_handler
