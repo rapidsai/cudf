@@ -1094,7 +1094,9 @@ class PDSHQueries:
             ],
             as_index=False,
         )
-        agg = gb.agg(col6=pd.NamedAgg(column="l_quantity", aggfunc="sum"))
+        agg = gb.agg(
+            l_quantity=pd.NamedAgg(column="l_quantity", aggfunc="sum")
+        )
 
         result = agg.loc[
             :,
@@ -1104,15 +1106,18 @@ class PDSHQueries:
                 "o_orderkey",
                 "o_orderdate",
                 "o_totalprice",
-                "col6",
+                "l_quantity",
             ],
         ]
         result = result.rename(
-            columns={"o_custkey": "c_custkey", "o_orderdate": "o_orderdat"}
+            columns={
+                "o_custkey": "c_custkey",
+                "l_quantity": "sum(l_quantity)",
+            },
         )
 
         return result.sort_values(
-            by=["o_totalprice", "o_orderdat"],
+            by=["o_totalprice", "o_orderdate"],
             ascending=[False, True],
             ignore_index=True,
         ).head(100)
