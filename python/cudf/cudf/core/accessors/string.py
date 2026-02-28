@@ -800,8 +800,6 @@ class StringMethods(BaseAccessor):
                     input_column = self._column
                     pat_normed = pat
                 result_col = input_column.str_contains(pat_normed)
-            if self._column.has_nulls():
-                result_col = result_col.fillna(False)
         else:
             # TODO: we silently ignore the `regex=` flag here
             col_pat = as_column(pat, dtype=DEFAULT_STRING_DTYPE)
@@ -811,6 +809,12 @@ class StringMethods(BaseAccessor):
             else:
                 input_column = self._column
             result_col = input_column.str_contains(col_pat)  # type: ignore[arg-type]
+        if (
+            na is no_default
+            and self._column._PANDAS_NA_VALUE in {np.nan, None}
+            and self._column.has_nulls()
+        ):
+            result_col = result_col.fillna(False)
         if na is not no_default:
             result_col = result_col.fillna(na)
         return self._return_or_inplace(result_col)
@@ -4332,6 +4336,8 @@ class StringMethods(BaseAccessor):
         result = self._column.matches_re(pat, flags)
         if na is not no_default:
             result = result.fillna(na)
+        elif self._column._PANDAS_NA_VALUE in {np.nan, None}:
+            result = result.fillna(False)
         return self._return_or_inplace(result)
 
     def url_decode(self) -> Series | Index:

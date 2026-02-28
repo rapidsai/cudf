@@ -27,7 +27,6 @@ from cudf.core.column import as_column, column_empty
 from cudf.core.column.column import ColumnBase
 from cudf.core.column.temporal_base import TemporalBaseColumn
 from cudf.utils.dtypes import (
-    CUDF_STRING_DTYPE,
     _get_base_dtype,
     cudf_dtype_from_pa_type,
     cudf_dtype_to_pa_type,
@@ -474,7 +473,7 @@ class DatetimeColumn(TemporalBaseColumn):
     def isocalendar(self) -> dict[str, ColumnBase]:
         return {
             field: self.strftime(
-                format=directive, dtype=CUDF_STRING_DTYPE
+                format=directive, dtype=np.dtype("object")
             ).astype(np.dtype(np.uint32))
             for field, directive in zip(
                 ["year", "week", "day"], ["%G", "%V", "%u"], strict=True
