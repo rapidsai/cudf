@@ -879,12 +879,6 @@ class DatetimeTZColumn(DatetimeColumn):
                 nonexistent="NaT",
             )
 
-    def to_arrow(self) -> pa.Array:
-        pa_array = super().to_arrow()
-        return pa_array.cast(pa.timestamp(self.time_unit, "UTC")).cast(
-            pa.timestamp(self.time_unit, str(self.tz))
-        )
-
     @functools.cached_property
     def time_unit(self) -> str:
         if isinstance(self.dtype, pd.DatetimeTZDtype):

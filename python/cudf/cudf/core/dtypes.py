@@ -1454,6 +1454,8 @@ def _dtype_to_metadata(dtype: DtypeObj) -> plc.interop.ColumnMetadata:
         cm.children_meta.append(_dtype_to_metadata(dtype.element_type))
     elif isinstance(dtype, DecimalDtype):
         cm.precision = dtype.precision
+    elif isinstance(dtype, pd.DatetimeTZDtype):
+        cm.timezone = str(dtype.tz)
     elif isinstance(dtype, pd.ArrowDtype):
         if pa.types.is_struct(dtype.pyarrow_dtype):
             for field in dtype.pyarrow_dtype:
@@ -1461,6 +1463,21 @@ def _dtype_to_metadata(dtype: DtypeObj) -> plc.interop.ColumnMetadata:
                     _dtype_to_metadata(pd.ArrowDtype(field.type))
                 )
                 cm.children_meta[-1].name = field.name
+        elif isinstance(dtype.pyarrow_dtype, ArrowIntervalType):
+            left_meta = _dtype_to_metadata(
+                pd.ArrowDtype(dtype.pyarrow_dtype.subtype)
+            )
+            left_meta.name = "left"
+            right_meta = left_meta.replace(name="right")  # type: ignore[attr-defined]
+            cm.children_meta.append(left_meta)
+            cm.children_meta.append(right_meta)
+        elif pa.types.is_decimal(dtype.pyarrow_dtype):
+            cm.precision = dtype.pyarrow_dtype.precision
+        elif (
+            pa.types.is_timestamp(dtype.pyarrow_dtype)
+            and (tz := dtype.pyarrow_dtype.tz) is not None
+        ):
+            cm.timezone = str(tz)
         elif pa.types.is_list(dtype.pyarrow_dtype) or pa.types.is_large_list(
             dtype.pyarrow_dtype
         ):
@@ -1471,5 +1488,4 @@ def _dtype_to_metadata(dtype: DtypeObj) -> plc.interop.ColumnMetadata:
                     pd.ArrowDtype(dtype.pyarrow_dtype.value_type)
                 )
             )
-    # TODO: Support timezone metadata
     return cm
