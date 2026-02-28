@@ -154,11 +154,11 @@ rmm::device_uvector<std::remove_cv_t<T>> make_device_uvector_async(
 {
   using value_type = std::remove_cv_t<T>;
   rmm::device_uvector<value_type> ret(source_data.size(), stream, mr);
-  CUDF_CUDA_TRY(cudaMemcpyAsync(ret.data(),
-                                source_data.data(),
-                                source_data.size() * sizeof(value_type),
-                                cudaMemcpyDefault,
-                                stream.value()));
+  CUDF_CUDA_TRY(cudf::detail::memcpy_async(ret.data(),
+                                           source_data.data(),
+                                           source_data.size() * sizeof(value_type),
+                                           cudaMemcpyDefault,
+                                           stream.value()));
   return ret;
 }
 
