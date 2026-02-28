@@ -24,7 +24,7 @@ dependencies = [
     "cudf==26.4.*,>=0.0.0a0",
     "cupy-cuda13x>=13.6.0,!=14.0.0",
     "fsspec>=0.6.0",
-    "numpy>=1.23,<3.0",
+    "numpy>=1.26,<3.0",
     "nvidia-ml-py>=12",
     "pandas>=2.0,<2.4.0",
     "rapids-dask-dependency==26.4.*,>=0.0.0a0",

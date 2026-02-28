@@ -152,7 +152,7 @@ struct q9_data {
   return cudf::transform_extended(transform_inputs,
                                   udf,
                                   cudf::data_type{cudf::type_id::FLOAT64},
-                                  false,
+                                  cudf::udf_source_type::CUDA,
                                   std::nullopt,
                                   cudf::null_aware::NO,
                                   std::nullopt,

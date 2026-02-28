@@ -98,7 +98,7 @@ requirements:
     - nvtx >=0.2.1
     - packaging
   run_constraints:
-    - numpy >=1.23,<3.0
+    - numpy >=1.26,<3.0
     - pyarrow>=19.0.0
   ignore_run_exports:
     from_package:

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 from libc.stddef cimport size_t
 from libc.stdint cimport int32_t
@@ -16,6 +16,7 @@ from pylibcudf.libcudf.types cimport (
     null_policy,
     order,
     size_type,
+    udf_source_type,
 )
 
 
@@ -84,10 +85,6 @@ cdef extern from "cudf/aggregation.hpp" namespace "cudf" nogil:
 
     cdef cppclass scan_aggregation(aggregation):
         pass
-
-    cpdef enum class udf_type(bool):
-        CUDA
-        PTX
 
     cpdef enum class correlation_type(int32_t):
         PEARSON
@@ -170,7 +167,7 @@ cdef extern from "cudf/aggregation.hpp" namespace "cudf" nogil:
     ) except +libcudf_exception_handler
 
     cdef unique_ptr[T] make_udf_aggregation[T](
-        udf_type type,
+        udf_source_type type,
         string user_defined_aggregator,
         data_type output_type) except +libcudf_exception_handler
 
