@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from cython.operator cimport dereference
@@ -77,7 +77,8 @@ from pylibcudf.libcudf.aggregation import \
     rank_method as RankMethod  # no-cython-lint
 from pylibcudf.libcudf.aggregation import \
     rank_percentage as RankPercentage  # no-cython-lint
-from pylibcudf.libcudf.aggregation import udf_type as UdfType  # no-cython-lint
+from pylibcudf.libcudf.types import \
+    udf_source_type as UdfSourceType  # no-cython-lint
 
 from .types cimport DataType
 
@@ -90,7 +91,7 @@ __all__ = [
     "Kind",
     "RankMethod",
     "RankPercentage",
-    "UdfType",
+    "UdfSourceType",
     "all",
     "any",
     "argmax",
@@ -589,7 +590,7 @@ cpdef Aggregation udf(str operation, DataType output_type):
     return Aggregation.from_libcudf(
         move(
             make_udf_aggregation[aggregation](
-                UdfType.PTX,
+                UdfSourceType.PTX,
                 operation.encode("utf-8"),
                 output_type.c_obj,
             )
@@ -926,4 +927,4 @@ CorrelationType.__str__ = CorrelationType.__repr__
 EWMHistory.__str__ = EWMHistory.__repr__
 RankMethod.__str__ = RankMethod.__repr__
 RankPercentage.__str__ = RankPercentage.__repr__
-UdfType.__str__ = UdfType.__repr__
+UdfSourceType.__str__ = UdfSourceType.__repr__
