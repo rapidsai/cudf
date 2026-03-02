@@ -1560,14 +1560,32 @@ def run_polars_query(
     )
 
 
-def run_polars(
+def run_polars_dask(
     benchmark: Any,
     args: argparse.Namespace,
-    num_queries: int = 22,
+    run_config: RunConfig,
 ) -> None:
-    """Run the queries using the given benchmark and executor options."""
-    vars(args).update({"query_set": benchmark.name})
-    run_config = RunConfig.from_args(args)
+    """
+    Run benchmark queries using Dask as the execution backend.
+
+    Supports:
+
+    - ``--cluster single``: single-process execution.
+    - ``--cluster distributed``: multi-GPU Dask execution.
+
+    Does not support:
+
+    - ``--cluster spmd``.
+
+    Parameters
+    ----------
+    benchmark
+        Benchmark definition providing the query workload.
+    args
+        Parsed command-line arguments.
+    run_config
+        Resolved run configuration for this benchmark invocation.
+    """
     validation_failures: list[int] = []
     query_failures: list[tuple[int, int]] = []
 
@@ -1719,6 +1737,17 @@ def run_polars(
 
     exit_code = 1 if (query_failures or validation_failures) else 0
     sys.exit(exit_code)
+
+
+def run_polars(
+    benchmark: Any,
+    args: argparse.Namespace,
+    num_queries: int = 22,
+) -> None:
+    """Run the queries using the given benchmark and executor options."""
+    vars(args).update({"query_set": benchmark.name})
+    run_config = RunConfig.from_args(args)
+    run_polars_dask(benchmark, args, run_config)
 
 
 def setup_logging(query_id: int, iteration: int) -> None:  # noqa: D103
