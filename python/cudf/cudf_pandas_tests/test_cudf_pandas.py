@@ -1761,9 +1761,12 @@ def test_numpy_ndarray_numba_ufunc(array):
     assert_eq(add_one_ufunc(arr1), add_one_ufunc(arr2))
 
 
-@pytest.mark.filterwarnings(
-    "ignore:Grid size:numba.core.errors.NumbaPerformanceWarning"
-)
+# @pytest.mark.filterwarnings(
+#     "ignore:Grid size:numba.core.errors.NumbaPerformanceWarning"
+# )
+# numba-cuda 0.28 changed NumbaPerformanceWarning to a not-exposed numba_cuda object
+# https://github.com/NVIDIA/numba-cuda/issues/822
+@pytest.mark.filterwarnings("ignore")
 def test_numpy_ndarray_numba_cuda_ufunc(array):
     arr1, arr2 = array
 

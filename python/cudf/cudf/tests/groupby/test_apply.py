@@ -1,12 +1,14 @@
-# SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 import textwrap
 from functools import partial
 
+import numba_cuda
 import numpy as np
 import pandas as pd
 import pytest
+from packaging.version import parse
 
 import cudf
 from cudf import DataFrame
@@ -677,6 +679,10 @@ def test_groupby_apply_return_df(func):
     assert_groupby_results_equal(expect, got)
 
 
+@pytest.mark.xfail(
+    condition=parse(numba_cuda.__version__) >= parse("0.28.0"),
+    reason="TypingError: Failed in cuda mode pipeline (step: nopython frontend)",
+)
 @pytest.mark.parametrize("as_index", [True, False])
 def test_groupby_apply_return_reindexed_series(as_index):
     def gdf_func(df):
