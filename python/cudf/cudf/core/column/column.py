@@ -2287,14 +2287,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                     result = ColumnBase.create(self.plc_column, dtype)
                 else:
                     result = self
-            elif isinstance(dtype, pd.ArrowDtype):
-                equiv_dtype = pyarrow_dtype_to_cudf_dtype(dtype)
-                if self.dtype == equiv_dtype:
-                    result = ColumnBase.create(self.plc_column, dtype)
-                else:
-                    result = ColumnBase.create(
-                        self.astype(equiv_dtype).plc_column, dtype
-                    )
             elif is_dtype_obj_decimal(dtype):
                 result = self.as_decimal_column(dtype)  # type: ignore[arg-type]
             elif dtype.kind == "M":
