@@ -1,6 +1,7 @@
-# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
+import numpy as np
 import pandas as pd
 from packaging import version
 
@@ -13,3 +14,6 @@ PANDAS_GT_214 = PANDAS_VERSION > version.parse("2.1.4")
 PANDAS_GE_220 = PANDAS_VERSION >= version.parse("2.2.0")
 PANDAS_GE_230 = PANDAS_VERSION >= version.parse("2.3.0")
 PANDAS_LT_300 = PANDAS_VERSION < version.parse("3.0.0")
+
+NUMPY_VERSION = version.parse(np.__version__)
+NUMPY_LT_200 = NUMPY_VERSION < version.parse("2.0.0")
