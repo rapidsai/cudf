@@ -1865,14 +1865,14 @@ class chunked_parquet_writer {
   /**
    * @brief Finishes the chunked/streamed write process.
    *
-   * @param[in] column_chunks_file_paths Column chunks file path to be set in the raw output
+   * @param[in] column_chunks_file_path Column chunks file path to be set in the raw output
    * metadata
    * @return A parquet-compatible blob that contains the file header and footer metadata. If
    * `column_chunks_file_path` is non-empty, the output metadata blob will also have row group file
    * paths set.
    */
   std::unique_ptr<std::vector<uint8_t>> close(
-    std::vector<std::string> const& column_chunks_file_paths = {});
+    std::vector<std::string> const& column_chunks_file_path = {});
 
   /// Unique pointer to impl writer class
   std::unique_ptr<parquet::detail::writer> writer;

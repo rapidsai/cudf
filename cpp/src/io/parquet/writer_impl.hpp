@@ -104,7 +104,8 @@ class writer::impl {
   /**
    * @brief Finishes the chunked/streamed write process.
    *
-   * @param[in] column_chunks_file_path Column chunks file path to be set in the raw output metadata
+   * @param[in] column_chunks_file_path Column chunks file path to be set in the raw output
+   * metadata
    * @return A parquet-compatible blob that contains the file header and footer metadata. If
    * `column_chunks_file_path` is non-empty, the output metadata blob will also have row group file
    * paths set.

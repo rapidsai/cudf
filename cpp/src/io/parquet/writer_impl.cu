@@ -2631,9 +2631,8 @@ std::unique_ptr<std::vector<uint8_t>> writer::impl::close(
       });
     }
     buffer.resize(0);
-    file_ender_s fendr{.footer_len = static_cast<uint32_t>(
-                         static_cast<uint32_t>(cpw.write(_agg_meta->get_metadata(p)))),
-                       .magic = parquet_magic};
+    file_ender_s fendr{.footer_len = static_cast<uint32_t>(cpw.write(_agg_meta->get_metadata(p))),
+                       .magic      = parquet_magic};
     _out_sink[p]->host_write(buffer.data(), buffer.size());
     _out_sink[p]->host_write(&fendr, sizeof(fendr));
     _out_sink[p]->flush();
