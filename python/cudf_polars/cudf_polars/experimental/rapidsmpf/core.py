@@ -33,6 +33,7 @@ import cudf_polars.experimental.rapidsmpf.repartition
 import cudf_polars.experimental.rapidsmpf.union  # noqa: F401
 from cudf_polars.containers import DataFrame
 from cudf_polars.dsl.ir import DataFrameScan, IRExecutionContext, Join, Scan, Union
+from cudf_polars.dsl.tracing import log_pipeline_complete
 from cudf_polars.dsl.traversal import CachingVisitor, traversal
 from cudf_polars.experimental.dispatch import lower_ir_node
 from cudf_polars.experimental.rapidsmpf.collectives import ReserveOpIDs
@@ -308,6 +309,7 @@ def evaluate_pipeline(
         if _initial_mr is not None:
             rmm.mr.set_current_device_resource(_original_mr)
 
+        log_pipeline_complete()
         return result, metadata_collector
 
 

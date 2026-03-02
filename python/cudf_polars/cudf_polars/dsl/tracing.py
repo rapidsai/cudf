@@ -32,10 +32,13 @@ LOG_TRACES = _HAS_STRUCTLOG and _bool_converter(
     os.environ.get("CUDF_POLARS_LOG_TRACES", "0")
 )
 LOG_MEMORY = LOG_TRACES and _bool_converter(
-    os.environ.get("CUDF_POLARS_LOG_TRACES_MEMORY", "1")
+    os.environ.get("CUDF_POLARS_LOG_TRACES_MEMORY", "0")
 )
 LOG_DATAFRAMES = LOG_TRACES and _bool_converter(
     os.environ.get("CUDF_POLARS_LOG_TRACES_DATAFRAMES", "1")
+)
+LOG_COMPLETION_MEMORY = LOG_TRACES and _bool_converter(
+    os.environ.get("CUDF_POLARS_LOG_TRACES_COMPLETION_MEMORY", "1")
 )
 
 CUDF_POLARS_NVTX_DOMAIN = "cudf_polars"
@@ -218,3 +221,43 @@ def log_do_evaluate(
             return result
 
         return wrapper
+
+
+def log_pipeline_complete() -> None:
+    """
+    Log information about the pipeline completion.
+
+    Notes
+    -----
+    LOG_TRACES must be enabled. This logs at the ``Scope.PLAN`` level.
+    If RMM statistics are enabled, then the current allocation statistics are logged.
+    """
+    if not LOG_TRACES:
+        return
+    else:  # pragma: no cover; requires CUDF_POLARS_LOG_TRACES=1
+        mr = rmm.mr.get_current_device_resource()
+        if isinstance(mr, rmm.mr.StatisticsResourceAdaptor):
+            stats = mr.allocation_counts
+        elif isinstance(mr, rmm.mr.UpstreamResourceAdaptor) and isinstance(
+            upstream_mr := mr.get_upstream(), rmm.mr.StatisticsResourceAdaptor
+        ):
+            stats = upstream_mr.allocation_counts
+        else:
+            stats = None
+
+        log = structlog.get_logger()
+        kwargs: dict[str, Any] = {}
+        if stats:
+            kwargs.update(
+                rmm_current_bytes=stats.current_bytes,
+                rmm_current_count=stats.current_count,
+                rmm_peak_bytes=stats.peak_bytes,
+                rmm_peak_count=stats.peak_count,
+                rmm_total_bytes=stats.total_bytes,
+                rmm_total_count=stats.total_count,
+            )
+        log.info(
+            "Pipeline complete",
+            **kwargs,
+            scope=Scope.PLAN.value,
+        )

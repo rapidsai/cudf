@@ -13,6 +13,7 @@ from rapidsmpf.streaming.core.context import Context
 
 import polars as pl
 
+from cudf_polars.dsl.tracing import log_pipeline_complete
 from cudf_polars.experimental.dask_registers import DaskRegisterManager
 
 if TYPE_CHECKING:
@@ -165,7 +166,7 @@ def _evaluate_pipeline_dask(
     dask_context = get_worker_context(dask_worker)
     with Context(dask_context.comm, dask_context.br, options) as rmpf_context:
         # IDs are already reserved by the caller, just pass them through
-        return callback(
+        result = callback(
             ir,
             partition_info,
             config_options,
@@ -174,3 +175,6 @@ def _evaluate_pipeline_dask(
             rmpf_context,
             collect_metadata=collect_metadata,
         )
+
+    log_pipeline_complete()
+    return result
