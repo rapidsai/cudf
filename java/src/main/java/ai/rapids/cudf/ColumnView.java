@@ -908,6 +908,14 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   /**
    * Extract a particular date time component from a timestamp.
+   *
+   * Example:
+   * <pre>{@code
+   * // timestamps = ['2018-07-04 12:00:00', '2023-01-25 07:32:12'], DType = TIMESTAMP_SECONDS
+   * ColumnVector result = timestamps.extractDateTimeComponent(DateTimeComponent.MONTH);
+   * // result     = [7, 1],                                        DType = INT16
+   * }</pre>
+   *
    * @param component what should be extracted
    * @return a column with the extracted information in it.
    */
@@ -918,10 +926,15 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   /**
    * Get year from a timestamp.
-   * <p>
-   * Postconditions - A new vector is allocated with the result. The caller owns the vector and
-   * is responsible for its lifecycle.
-   * @return - A new INT16 vector allocated on the GPU.
+   *
+   * Example:
+   * <pre>{@code
+   * // timestamps = ['1965-10-26', '2018-07-04', '2023-01-25'], DType = TIMESTAMP_DAYS
+   * ColumnVector result = timestamps.year();
+   * // result     = [1965, 2018, 2023],                         DType = INT16
+   * }</pre>
+   *
+   * @return A new INT16 vector allocated on the GPU.
    */
   public final ColumnVector year() {
     return extractDateTimeComponent(DateTimeComponent.YEAR);
@@ -929,10 +942,15 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   /**
    * Get month from a timestamp.
-   * <p>
-   * Postconditions - A new vector is allocated with the result. The caller owns the vector and
-   * is responsible for its lifecycle.
-   * @return - A new INT16 vector allocated on the GPU.
+   *
+   * Example:
+   * <pre>{@code
+   * // timestamps = ['1965-10-26', '2018-07-04', '2023-01-25'], DType = TIMESTAMP_DAYS
+   * ColumnVector result = timestamps.month();
+   * // result     = [10, 7, 1],                                 DType = INT16
+   * }</pre>
+   *
+   * @return A new INT16 vector allocated on the GPU.
    */
   public final ColumnVector month() {
     return extractDateTimeComponent(DateTimeComponent.MONTH);
@@ -940,10 +958,15 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   /**
    * Get day from a timestamp.
-   * <p>
-   * Postconditions - A new vector is allocated with the result. The caller owns the vector and
-   * is responsible for its lifecycle.
-   * @return - A new INT16 vector allocated on the GPU.
+   *
+   * Example:
+   * <pre>{@code
+   * // timestamps = ['1965-10-26', '2018-07-04', '2023-01-25'], DType = TIMESTAMP_DAYS
+   * ColumnVector result = timestamps.day();
+   * // result     = [26, 4, 25],                                DType = INT16
+   * }</pre>
+   *
+   * @return A new INT16 vector allocated on the GPU.
    */
   public final ColumnVector day() {
     return extractDateTimeComponent(DateTimeComponent.DAY);
@@ -951,10 +974,15 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   /**
    * Get hour from a timestamp with time resolution.
-   * <p>
-   * Postconditions - A new vector is allocated with the result. The caller owns the vector and
-   * is responsible for its lifecycle.
-   * @return - A new INT16 vector allocated on the GPU.
+   *
+   * Example:
+   * <pre>{@code
+   * // timestamps = ['1965-10-26 14:01:12', '2018-07-04 12:00:00', '2023-01-25 07:32:12'], DType = TIMESTAMP_SECONDS
+   * ColumnVector result = timestamps.hour();
+   * // result     = [14, 12, 7],                                                           DType = INT16
+   * }</pre>
+   *
+   * @return A new INT16 vector allocated on the GPU.
    */
   public final ColumnVector hour() {
     return extractDateTimeComponent(DateTimeComponent.HOUR);
@@ -962,10 +990,15 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   /**
    * Get minute from a timestamp with time resolution.
-   * <p>
-   * Postconditions - A new vector is allocated with the result. The caller owns the vector and
-   * is responsible for its lifecycle.
-   * @return - A new INT16 vector allocated on the GPU.
+   *
+   * Example:
+   * <pre>{@code
+   * // timestamps = ['1965-10-26 14:01:12', '2018-07-04 12:00:00', '2023-01-25 07:32:12'], DType = TIMESTAMP_SECONDS
+   * ColumnVector result = timestamps.minute();
+   * // result     = [1, 0, 32],                                                            DType = INT16
+   * }</pre>
+   *
+   * @return A new INT16 vector allocated on the GPU.
    */
   public final ColumnVector minute() {
     return extractDateTimeComponent(DateTimeComponent.MINUTE);
@@ -973,9 +1006,14 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   /**
    * Get second from a timestamp with time resolution.
-   * <p>
-   * Postconditions - A new vector is allocated with the result. The caller owns the vector and
-   * is responsible for its lifecycle.
+   *
+   * Example:
+   * <pre>{@code
+   * // timestamps = ['1965-10-26 14:01:12', '2018-07-04 12:00:00', '2023-01-25 07:32:12'], DType = TIMESTAMP_SECONDS
+   * ColumnVector result = timestamps.second();
+   * // result     = [12, 0, 12],                                                           DType = INT16
+   * }</pre>
+   *
    * @return A new INT16 vector allocated on the GPU.
    */
   public final ColumnVector second() {
@@ -984,9 +1022,15 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   /**
    * Get the day of the week from a timestamp.
-   * <p>
-   * Postconditions - A new vector is allocated with the result. The caller owns the vector and
-   * is responsible for its lifecycle.
+   *
+   * Example:
+   * <pre>{@code
+   * // timestamps = ['2018-07-01', '2018-07-02', '2018-07-03', '2018-07-04'], DType = TIMESTAMP_DAYS
+   * //               (Sunday)      (Monday)      (Tuesday)     (Wednesday)
+   * ColumnVector result = timestamps.weekDay();
+   * // result     = [7, 1, 2, 3],                                             DType = INT16
+   * }</pre>
+   *
    * @return A new INT16 vector allocated on the GPU. Monday=1, ..., Sunday=7
    */
   public final ColumnVector weekDay() {
@@ -995,9 +1039,14 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   /**
    * Get the date that is the last day of the month for this timestamp.
-   * <p>
-   * Postconditions - A new vector is allocated with the result. The caller owns the vector and
-   * is responsible for its lifecycle.
+   *
+   * Example:
+   * <pre>{@code
+   * // timestamps = ['1965-10-26', '2018-07-04', '2023-01-25'], DType = TIMESTAMP_DAYS
+   * ColumnVector result = timestamps.lastDayOfMonth();
+   * // result     = ['1965-10-31', '2018-07-31', '2023-01-31'], DType = TIMESTAMP_DAYS
+   * }</pre>
+   *
    * @return A new TIMESTAMP_DAYS vector allocated on the GPU.
    */
   public final ColumnVector lastDayOfMonth() {
@@ -1007,9 +1056,14 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   /**
    * Get the day of the year from a timestamp.
-   * <p>
-   * Postconditions - A new vector is allocated with the result. The caller owns the vector and
-   * is responsible for its lifecycle.
+   *
+   * Example:
+   * <pre>{@code
+   * // timestamps = ['1965-10-26', '2018-07-04', '2023-01-25'], DType = TIMESTAMP_DAYS
+   * ColumnVector result = timestamps.dayOfYear();
+   * // result     = [299, 185, 25],                             DType = INT16
+   * }</pre>
+   *
    * @return A new INT16 vector allocated on the GPU. The value is between [1, {365-366}]
    */
   public final ColumnVector dayOfYear() {
@@ -1019,6 +1073,14 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   /**
    * Get the quarter of the year from a timestamp.
+   *
+   * Example:
+   * <pre>{@code
+   * // timestamps = ['1965-10-26', '2018-07-04', '2023-01-25'], DType = TIMESTAMP_DAYS
+   * ColumnVector result = timestamps.quarterOfYear();
+   * // result     = [4, 3, 1],                                  DType = INT16
+   * }</pre>
+   *
    * @return A new INT16 vector allocated on the GPU. It will be a value from {1, 2, 3, 4}
    * corresponding to the quarter of the year.
    */
@@ -1029,6 +1091,15 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   /**
    * Add the specified number of months to the timestamp.
+   *
+   * Example:
+   * <pre>{@code
+   * // timestamps = ['2018-01-31', '2018-02-28', '2018-03-31'], DType = TIMESTAMP_DAYS
+   * // months     = [1, 1, -1],                                 DType = INT16
+   * ColumnVector result = timestamps.addCalendricalMonths(months);
+   * // result     = ['2018-02-28', '2018-03-28', '2018-02-28'], DType = TIMESTAMP_DAYS
+   * }</pre>
+   *
    * @param months must be a INT16 column indicating the number of months to add. A negative number
    *               of months works too.
    * @return the updated timestamp
@@ -1039,6 +1110,15 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   /**
    * Add the specified number of months to the timestamp.
+   *
+   * Example:
+   * <pre>{@code
+   * // timestamps = ['2018-01-31', '2018-02-28', '2018-03-31'], DType = TIMESTAMP_DAYS
+   * // months     = 1,                                          DType = INT16
+   * ColumnVector result = timestamps.addCalendricalMonths(months);
+   * // result     = ['2018-02-28', '2018-03-28', '2018-04-30'], DType = TIMESTAMP_DAYS
+   * }</pre>
+   *
    * @param months must be a INT16 scalar indicating the number of months to add. A negative number
    *               of months works too.
    * @return the updated timestamp
@@ -1049,6 +1129,14 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   /**
    * Check to see if the year for this timestamp is a leap year or not.
+   *
+   * Example:
+   * <pre>{@code
+   * // timestamps = ['2000-01-01', '2004-01-01', '1900-01-01', '2023-01-01'], DType = TIMESTAMP_DAYS
+   * ColumnVector result = timestamps.isLeapYear();
+   * // result     = [true, true, false, false],                               DType = BOOL8
+   * }</pre>
+   *
    * @return BOOL8 vector of results
    */
   public final ColumnVector isLeapYear() {
@@ -1056,7 +1144,15 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   }
 
   /**
-   * Extract the number of days in the month
+   * Extract the number of days in the month.
+   *
+   * Example:
+   * <pre>{@code
+   * // timestamps = ['1970-01-01', '1970-02-01', '1970-04-01'], DType = TIMESTAMP_DAYS
+   * ColumnVector result = timestamps.daysInMonth();
+   * // result     = [31, 28, 30],                               DType = INT16
+   * }</pre>
+   *
    * @return INT16 column of the number of days in the corresponding month
    */
   public final ColumnVector daysInMonth() {
@@ -1066,6 +1162,14 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   /**
    * Round the timestamp up to the given frequency keeping the type the same.
+   *
+   * Example:
+   * <pre>{@code
+   * // timestamps = ['2018-07-04 12:30:00', '2023-01-25 07:32:12'], DType = TIMESTAMP_SECONDS
+   * ColumnVector result = timestamps.dateTimeCeil(DateTimeRoundingFrequency.DAY);
+   * // result     = ['2018-07-05 00:00:00', '2023-01-26 00:00:00'], DType = TIMESTAMP_SECONDS
+   * }</pre>
+   *
    * @param freq what part of the timestamp to round.
    * @return a timestamp with the same type, but rounded up.
    */
@@ -1076,6 +1180,14 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   /**
    * Round the timestamp down to the given frequency keeping the type the same.
+   *
+   * Example:
+   * <pre>{@code
+   * // timestamps = ['2018-07-04 12:30:00', '2023-01-25 07:32:12'], DType = TIMESTAMP_SECONDS
+   * ColumnVector result = timestamps.dateTimeFloor(DateTimeRoundingFrequency.DAY);
+   * // result     = ['2018-07-04 00:00:00', '2023-01-25 00:00:00'], DType = TIMESTAMP_SECONDS
+   * }</pre>
+   *
    * @param freq what part of the timestamp to round.
    * @return a timestamp with the same type, but rounded down.
    */
@@ -1086,6 +1198,14 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   /**
    * Round the timestamp (half up) to the given frequency keeping the type the same.
+   *
+   * Example:
+   * <pre>{@code
+   * // timestamps = ['2018-07-04 11:59:59', '2018-07-04 12:00:01'], DType = TIMESTAMP_SECONDS
+   * ColumnVector result = timestamps.dateTimeRound(DateTimeRoundingFrequency.DAY);
+   * // result     = ['2018-07-04 00:00:00', '2018-07-05 00:00:00'], DType = TIMESTAMP_SECONDS
+   * }</pre>
+   *
    * @param freq what part of the timestamp to round.
    * @return a timestamp with the same type, but rounded (half up).
    */
@@ -2173,16 +2293,15 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   /**
    * Find if the `needle` is present in this col
    *
-   * example:
+   * Example:
+   * <pre>{@code
+   * // col    = [10, 20, 20, 30, 50], DType = INT32
+   * // needle = 20,                   DType = INT32
+   * boolean result = col.contains(needle);
+   * // result = true
+   * }</pre>
    *
-   *  Single Column:
-   *      idx      0   1   2   3   4
-   *      col = { 10, 20, 20, 30, 50 }
-   *  Scalar:
-   *   value = { 20 }
-   *   result = true
-   *
-   * @param needle
+   * @param needle the scalar value to search for in this column.
    * @return true if needle is present else false
    */
   public boolean contains(Scalar needle) {
@@ -2195,14 +2314,15 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * given searchSpace column and false if it is not.
    * The caller will be responsible for the lifecycle of the new vector.
    *
-   * example:
+   * Example:
+   * <pre>{@code
+   * // col         = [10, 20, 30, 40, 50], DType = INT32
+   * // searchSpace = [20, 40, 60, 80],     DType = INT32
+   * ColumnVector result = col.contains(searchSpace);
+   * // result      = [false, true, false, true, false], DType = BOOL8
+   * }</pre>
    *
-   *   col         = { 10, 20, 30, 40, 50 }
-   *   searchSpace = { 20, 40, 60, 80 }
-   *
-   *   result = { false, true, false, true, false }
-   *
-   * @param searchSpace
+   * @param searchSpace the column of values to check membership against.
    * @return A new ColumnVector of type {@link DType#BOOL8}
    */
   public final ColumnVector contains(ColumnView searchSpace) {
@@ -2806,6 +2926,14 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   /**
    * For each list in this column pull out the entry at the given index. If the entry would
    * go off the end of the list a NULL is returned instead.
+   *
+   * <p>Example:
+   * <pre>{@code
+   * // col    = [[1, 2, 3], [4, 5], [6, 7, 8, 9]], DType = LIST of INT32
+   * ColumnVector result = col.extractListElement(1);
+   * // result = [2,         5,      7],            DType = INT32
+   * }</pre>
+   *
    * @param index 0 based offset into the list. Negative values go backwards from the end of the
    *              list.
    * @return a new column of the values at those indexes.
@@ -2820,6 +2948,14 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * the index column. If the entry goes off the end of the list a NULL is returned instead.
    *
    * The index column should have the same row count with the list column.
+   *
+   * <p>Example:
+   * <pre>{@code
+   * // col     = [[1, 2, 3], [4, 5], [6, 7, 8, 9]], DType = LIST of INT32
+   * // indices = [2,         0,      3],            DType = INT32
+   * ColumnVector result = col.extractListElement(indices);
+   * // result  = [3,         4,      9],            DType = INT32
+   * }</pre>
    *
    * @param indices a column of 0 based offsets into the list. Negative values go backwards from
    *                the end of the list.
@@ -2841,6 +2977,13 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Relative ordering elements will be kept the same, by default can keep any of the duplicates
    * Example: [0,3,4,0] may produce either [0,3,4] or [3,4,0], both of which are valid here
    *
+   * <p>Example:
+   * <pre>{@code
+   * // col    = [[1, 2, 1, 3], [4, 4, 5], [6]], DType = LIST of INT32
+   * ColumnVector result = col.dropListDuplicates();
+   * // result = [[1, 2, 3],    [4, 5],    [6]], DType = LIST of INT32
+   * }</pre>
+   *
    * @return A new LIST column having unique list elements.
    */
   public final ColumnVector dropListDuplicates() {
@@ -2853,7 +2996,14 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    *
    * Order of the output elements within each list will be preserved as in the input
    *
-   * @param keep_option Flag to specify which element to keep (first, last, any)
+   * <p>Example:
+   * <pre>{@code
+   * // col    = [[1, 2, 1, 3], [4, 4, 5]], DType = LIST of INT32
+   * ColumnVector result = col.dropListDuplicates(DuplicateKeepOption.KEEP_LAST);
+   * // result = [[2, 1, 3],    [4, 5]],    DType = LIST of INT32
+   * }</pre>
+   *
+   * @param keepOption Flag to specify which element to keep (first, last, any)
    * @return A new LIST column having unique list elements.
    */
   public final ColumnVector dropListDuplicates(DuplicateKeepOption keepOption) {
@@ -2861,9 +3011,20 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   }
 
   /**
-   * Given a LIST column in which each element is a struct containing a <key, value> pair. An output
+   * Given a LIST column in which each element is a struct containing a {@code <key, value>} pair. An output
    * LIST column is generated by copying elements of the current column in a way such that if a list
    * contains multiple elements having the same key then only the last element will be copied.
+   *
+   * <p>Example:
+   * <pre>{@code
+   * // col (LIST of STRUCT<key: INT32, value: STRING>):
+   * //   row0 = [{1, "a"}, {2, "b"}, {1, "c"}]
+   * //   row1 = [{3, "x"}, {3, "y"}]
+   * ColumnVector result = col.dropListDuplicatesWithKeysValues();
+   * // result:
+   * //   row0 = [{2, "b"}, {1, "c"}]
+   * //   row1 = [{3, "y"}]
+   * }</pre>
    *
    * @return A new LIST column having list elements with unique keys.
    */
@@ -2877,6 +3038,13 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * The column must have rows that are lists of lists.
    * Any row containing null list elements will result in a null output row.
    *
+   * <p>Example:
+   * <pre>{@code
+   * // col    = [[[1, 2], [3]], [[4, 5, 6]], [[7], [8, 9]]], DType = LIST of LIST of INT32
+   * ColumnVector result = col.flattenLists();
+   * // result = [[1, 2, 3],     [4, 5, 6],   [7, 8, 9]],     DType = LIST of INT32
+   * }</pre>
+   *
    * @return A new column vector containing the flattened result
    */
   public ColumnVector flattenLists() {
@@ -2887,6 +3055,13 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Flatten each list of lists into a single list.
    *
    * The column must have rows that are lists of lists.
+   *
+   * <p>Example:
+   * <pre>{@code
+   * // col    = [[[1, 2], null, [3]], [[4, 5]]], DType = LIST of LIST of INT32
+   * ColumnVector result = col.flattenLists(true);
+   * // result = [[1, 2, 3],           [4, 5]],   DType = LIST of INT32
+   * }</pre>
    *
    * @param ignoreNull Whether to ignore null list elements in the input column from the operation,
    *                   or any row containing null list elements will result in a null output row
@@ -4186,6 +4361,15 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Output `column[i]` is set to null if one or more of the following are true:
    * 1. The key is null
    * 2. The column vector list value is null
+   *
+   * <p>Example:
+   * <pre>{@code
+   * // col    = [[1, 2, 3], [4, 5], [6, 2, 8]], DType = LIST of INT32
+   * // key    = 2,                              DType = INT32
+   * ColumnVector result = col.listContains(key);
+   * // result = [true,      false,  true],      DType = BOOL8
+   * }</pre>
+   *
    * @param key the scalar to look up
    * @return a Boolean ColumnVector with the result of the lookup
    */
@@ -4200,6 +4384,15 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Output `column[i]` is set to null if one or more of the following are true:
    * 1. The key value is null
    * 2. The column vector list value is null
+   *
+   * <p>Example:
+   * <pre>{@code
+   * // col    = [[1, 2, 3], [4, 5], [6, 7, 8]], DType = LIST of INT32
+   * // keys   = [2,         6,      7],         DType = INT32
+   * ColumnVector result = col.listContainsColumn(keys);
+   * // result = [true,      false,  true],      DType = BOOL8
+   * }</pre>
+   *
    * @param key the ColumnVector with look up values
    * @return a Boolean ColumnVector with the result of the lookup
    */
@@ -4212,6 +4405,14 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Create a column of bool values indicating whether the list rows of the specified
    * column contain null elements.
    * Output `column[i]` is set to null iff the input list row is null.
+   *
+   * <p>Example:
+   * <pre>{@code
+   * // col    = [[1, null, 3], [4, 5], [null]], DType = LIST of INT32
+   * ColumnVector result = col.listContainsNulls();
+   * // result = [true,         false,  true],   DType = BOOL8
+   * }</pre>
+   *
    * @return a Boolean ColumnVector with the result of the lookup
    */
   public final ColumnVector listContainsNulls() {
@@ -4233,6 +4434,15 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * The index is set to null if one of the following is true:
    * 1. The search key is null.
    * 2. The list row is null.
+   *
+   * <p>Example:
+   * <pre>{@code
+   * // col    = [[1, 2, 3], [4, 2, 5], [6, 7, 8]], DType = LIST of INT32
+   * // key    = 2,                                 DType = INT32
+   * ColumnVector result = col.listIndexOf(key, FindOptions.FIND_FIRST);
+   * // result = [1,         1,         -1],        DType = INT32
+   * }</pre>
+   *
    * @param key The scalar search key
    * @param findOption Whether to find the first index of the key, or the last.
    * @return The resultant column of int32 indices
@@ -4250,6 +4460,15 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * The index is set to null if one of the following is true:
    * 1. The search key row is null.
    * 2. The list row is null.
+   *
+   * <p>Example:
+   * <pre>{@code
+   * // col    = [[1, 2, 3], [4, 5, 6], [7, 8, 9]], DType = LIST of INT32
+   * // keys   = [3,         5,         1],         DType = INT32
+   * ColumnVector result = col.listIndexOf(keys, FindOptions.FIND_FIRST);
+   * // result = [2,         1,         -1],        DType = INT32
+   * }</pre>
+   *
    * @param keys ColumnView of search keys.
    * @param findOption Whether to find the first index of the key, or the last.
    * @return The resultant column of int32 indices
@@ -4263,6 +4482,13 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   /**
    * Segmented sort of the elements within a list in each row of a list column.
    * NOTICE: list columns with nested child are NOT supported yet.
+   *
+   * <p>Example:
+   * <pre>{@code
+   * // col    = [[3, 1, 2], [6, 4, 5], [9, 7, 8]], DType = LIST of INT32
+   * ColumnVector result = col.listSortRows(false, true);
+   * // result = [[1, 2, 3], [4, 5, 6], [7, 8, 9]], DType = LIST of INT32
+   * }</pre>
    *
    * @param isDescending   whether sorting each row with descending order (or ascending order)
    * @param isNullSmallest whether to regard the null value as the min value (or the max value)
@@ -4282,6 +4508,14 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * floating-point NaN values are considered as equal.
    *
    * The input lists columns must have the same size and same data type.
+   *
+   * <p>Example:
+   * <pre>{@code
+   * // lhs    = [[1, 2], [3, 4], [5, 6]], DType = LIST of INT32
+   * // rhs    = [[2, 3], [5, 6], [5, 7]], DType = LIST of INT32
+   * ColumnVector result = ColumnView.listsHaveOverlap(lhs, rhs);
+   * // result = [true,   false,  true],   DType = BOOL8
+   * }</pre>
    *
    * @param lhs The input lists column for one side
    * @param rhs The input lists column for the other side
@@ -4303,6 +4537,14 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    *
    * The input lists columns must have the same size and same data type.
    *
+   * <p>Example:
+   * <pre>{@code
+   * // lhs    = [[1, 2, 3], [4, 5], [6, 7]], DType = LIST of INT32
+   * // rhs    = [[2, 3, 4], [6, 7], [6, 8]], DType = LIST of INT32
+   * ColumnVector result = ColumnView.listsIntersectDistinct(lhs, rhs);
+   * // result = [[2, 3],    [],     [6]],    DType = LIST of INT32
+   * }</pre>
+   *
    * @param lhs The input lists column for one side
    * @param rhs The input lists column for the other side
    * @return A lists column containing the intersection result
@@ -4322,6 +4564,14 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * equal values.
    *
    * The input lists columns must have the same size and same data type.
+   *
+   * <p>Example:
+   * <pre>{@code
+   * // lhs    = [[1, 2], [3, 4], [5]],      DType = LIST of INT32
+   * // rhs    = [[2, 3], [4, 5], [5, 6]],   DType = LIST of INT32
+   * ColumnVector result = ColumnView.listsUnionDistinct(lhs, rhs);
+   * // result = [[1, 2, 3], [3, 4, 5], [5, 6]], DType = LIST of INT32
+   * }</pre>
    *
    * @param lhs The input lists column for one side
    * @param rhs The input lists column for the other side
@@ -4344,6 +4594,14 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    *
    * The input lists columns must have the same size and same data type.
    *
+   * <p>Example:
+   * <pre>{@code
+   * // lhs    = [[1, 2, 3], [4, 5], [6, 7, 8]], DType = LIST of INT32
+   * // rhs    = [[1, 3],    [5, 6], [9]],       DType = LIST of INT32
+   * ColumnVector result = ColumnView.listsDifferenceDistinct(lhs, rhs);
+   * // result = [[2],       [4],    [6, 7, 8]], DType = LIST of INT32
+   * }</pre>
+   *
    * @param lhs The input lists column for one side
    * @param rhs The input lists column for the other side
    * @return A lists column containing the difference result
@@ -4358,6 +4616,13 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   /**
    * Generate list offsets from sizes of each list.
    * NOTICE: This API only works for INT32. Otherwise, the behavior is undefined. And no null and negative value is allowed.
+   *
+   * <p>Example:
+   * <pre>{@code
+   * // col (list sizes) = [3, 2, 4],    DType = INT32
+   * ColumnVector result = col.generateListOffsets();
+   * // result           = [0, 3, 5, 9], DType = INT32
+   * }</pre>
    *
    * @return a column of list offsets whose size is N + 1
    */
