@@ -50,8 +50,6 @@ async def default_node_single(
     ir_context: IRExecutionContext,
     ch_out: Channel[TableChunk],
     ch_in: Channel[TableChunk],
-    *,
-    preserve_partitioning: bool = False,
 ) -> None:
     """
     Single-channel default node for rapidsmpf.
@@ -68,8 +66,6 @@ async def default_node_single(
         The output Channel[TableChunk].
     ch_in
         The input Channel[TableChunk].
-    preserve_partitioning
-        Whether to preserve the partitioning metadata of the input chunks.
 
     Notes
     -----
