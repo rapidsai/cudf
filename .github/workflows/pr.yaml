@@ -527,6 +527,7 @@ jobs:
       arch: '["amd64", "arm64"]'
       cuda: '["13.1"]'
       node_type: "cpu8"
+      timeout-minutes: 45
       env: |
         SCCACHE_DIST_MAX_RETRIES=inf
         SCCACHE_SERVER_LOG=sccache=debug
