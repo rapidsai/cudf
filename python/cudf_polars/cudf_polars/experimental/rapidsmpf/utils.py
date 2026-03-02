@@ -48,10 +48,11 @@ if TYPE_CHECKING:
 
     from rmm.pylibrmm.stream import Stream
 
+    from cudf_polars.dsl.expr import NamedExpr
     from cudf_polars.dsl.ir import IR, IRExecutionContext
     from cudf_polars.experimental.rapidsmpf.dispatch import SubNetGenerator
     from cudf_polars.experimental.rapidsmpf.tracing import ActorTracer
-    from cudf_polars.typing import DataType
+    from cudf_polars.typing import DataType, Schema
 
 
 @asynccontextmanager
@@ -443,7 +444,7 @@ async def chunkwise_evaluate(
     await ch_out.drain(context)
 
 
-def names_to_indices(exprs: tuple[Any, ...], schema: Any) -> tuple[int, ...]:
+def names_to_indices(exprs: tuple[NamedExpr, ...], schema: Schema) -> tuple[int, ...]:
     """
     Return column indices for each expr's name in schema order.
 

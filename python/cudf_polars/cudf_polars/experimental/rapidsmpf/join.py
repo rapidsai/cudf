@@ -50,6 +50,8 @@ from cudf_polars.experimental.utils import _concat
 from cudf_polars.utils.config import StreamingExecutor
 
 if TYPE_CHECKING:
+    from collections.abc import AsyncIterator
+
     from rapidsmpf.streaming.core.channel import Channel
     from rapidsmpf.streaming.core.context import Context
 
@@ -168,7 +170,7 @@ async def _collect_small_side_for_broadcast(
 
     Returns (list of DataFrames to join against, total byte size of small side).
     """
-    small_chunks: list[TableChunk] = initial_chunks
+    small_chunks = initial_chunks
     small_size = sum(c.data_alloc_size(MemoryType.DEVICE) for c in small_chunks)
     small_row_count = sum(c.table_view().num_rows() for c in small_chunks)
     while (msg := await small_ch.recv(context)) is not None:
@@ -216,7 +218,6 @@ async def _collect_small_side_for_broadcast(
                 ]
         else:
             small_dfs = [chunk_to_frame(c, small_child) for c in small_chunks]
-        small_chunks.clear()
 
     return small_dfs, small_size
 
@@ -273,6 +274,37 @@ async def _broadcast_join_large_chunk(
         ),
     )
     del df, large_df
+
+
+async def iterate_over_buffered_channel(
+    context: Context,
+    ch: Channel[TableChunk],
+    buffered_chunks: list[TableChunk],
+) -> AsyncIterator[tuple[int, TableChunk]]:
+    """
+    Yield TableChunks from a buffered list then from a channel.
+
+    Parameters
+    ----------
+    context
+        The context.
+    ch
+        The channel to pull from.
+    buffered_chunks
+        The buffered chunks to yield first.
+
+    Returns
+    -------
+    AsyncIterator[tuple[int, TableChunk]]
+        (sequence_number, chunk) pairs.
+    """
+    for i, buffered_chunk in enumerate(buffered_chunks):
+        yield (i, buffered_chunk)
+    while (msg := await ch.recv(context)) is not None:
+        chunk = TableChunk.from_message(msg).make_available_and_spill(
+            context.br(), allow_overbooking=True
+        )
+        yield (msg.sequence_number, chunk)
 
 
 async def _broadcast_join(
@@ -353,11 +385,9 @@ async def _broadcast_join(
         concat_size_limit=(target_partition_size if ir.options[0] == "Inner" else None),
     )
 
-    # Stream through large side
-    large_chunk_processed = False
-
-    for seq_num, chunk in enumerate(large_initial_chunks):
-        large_chunk_processed = True
+    async for seq_num, chunk in iterate_over_buffered_channel(
+        context, large_ch, large_initial_chunks
+    ):
         await _broadcast_join_large_chunk(
             context,
             ir,
@@ -373,49 +403,6 @@ async def _broadcast_join(
             tracer=tracer,
         )
 
-    while (msg := await large_ch.recv(context)) is not None:
-        large_chunk_processed = True
-        large_chunk = TableChunk.from_message(msg).make_available_and_spill(
-            context.br(), allow_overbooking=True
-        )
-        msg_seq = msg.sequence_number
-
-        await _broadcast_join_large_chunk(
-            context,
-            ir,
-            ir_context,
-            ch_out,
-            small_dfs,
-            small_child,
-            large_chunk,
-            large_child,
-            msg_seq,
-            small_size,
-            broadcast_side,
-            tracer=tracer,
-        )
-        del large_chunk
-
-    if not large_chunk_processed and small_dfs:
-        stream = ir_context.get_cuda_stream()
-        large_chunk = empty_table_chunk(large_child, context, stream)
-        await _broadcast_join_large_chunk(
-            context,
-            ir,
-            ir_context,
-            ch_out,
-            small_dfs,
-            small_child,
-            large_chunk,
-            large_child,
-            0,
-            small_size,
-            broadcast_side,
-            tracer=tracer,
-        )
-        del large_chunk
-
-    del small_dfs
     await ch_out.drain(context)
 
 
@@ -430,16 +417,11 @@ def _get_key_indices(
     n_keys = (
         n_partitioned_keys if n_partitioned_keys is not None else len(left_key_indices)
     )
-    output_schema_keys = list(ir.schema.keys())
     if ir.options == "Right":
         join_keys_for_output = ir.right_on
     else:
         join_keys_for_output = ir.left_on
-    output_key_indices = tuple(
-        output_schema_keys.index(expr.name)
-        for expr in join_keys_for_output
-        if expr.name in output_schema_keys
-    )
+    output_key_indices = names_to_indices(join_keys_for_output, ir.schema)
     return (
         left_key_indices[:n_keys],
         right_key_indices[:n_keys],
@@ -515,24 +497,23 @@ def _create_shuffle_managers(
 async def drain_into_shuffle(
     context: Context,
     ch: Channel[TableChunk],
-    shuffle: ShuffleManager | None,
+    shuffle: ShuffleManager,
     sample_chunks: list[TableChunk],
 ) -> None:
     """Drain sample chunks and channel into a shuffle manager, then mark finished."""
-    if shuffle is not None:
-        while sample_chunks:
-            shuffle.insert_chunk(
-                sample_chunks.pop(0).make_available_and_spill(
-                    context.br(), allow_overbooking=True
-                )
+    while sample_chunks:
+        shuffle.insert_chunk(
+            sample_chunks.pop(0).make_available_and_spill(
+                context.br(), allow_overbooking=True
             )
-        while (msg := await ch.recv(context)) is not None:
-            shuffle.insert_chunk(
-                TableChunk.from_message(msg).make_available_and_spill(
-                    context.br(), allow_overbooking=True
-                )
+        )
+    while (msg := await ch.recv(context)) is not None:
+        shuffle.insert_chunk(
+            TableChunk.from_message(msg).make_available_and_spill(
+                context.br(), allow_overbooking=True
             )
-        await shuffle.insert_finished()
+        )
+    await shuffle.insert_finished()
 
 
 async def get_unshuffled_chunk(
@@ -695,10 +676,17 @@ async def _shuffle_join(
     )
     left_sample_chunks: list[TableChunk] = strategy.left_sample.chunks or []
     right_sample_chunks: list[TableChunk] = strategy.right_sample.chunks or []
-    await asyncio.gather(
-        drain_into_shuffle(context, ch_left, left_shuffle, left_sample_chunks),
-        drain_into_shuffle(context, ch_right, right_shuffle, right_sample_chunks),
-    )
+
+    drain_tasks = [
+        drain_into_shuffle(context, ch, shuffle, samples)
+        for ch, shuffle, samples in (
+            (ch_left, left_shuffle, left_sample_chunks),
+            (ch_right, right_shuffle, right_sample_chunks),
+        )
+        if shuffle is not None
+    ]
+    if drain_tasks:
+        await asyncio.gather(*drain_tasks)
 
     partition_ids: list[int]
     if left_shuffle is not None:
