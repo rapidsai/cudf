@@ -31,7 +31,7 @@
 #define RTCX_EXPECTS(_condition, _reason, _exception_type)                               \
   do {                                                                                   \
     if (!(_condition)) {                                                                 \
-      throw _exception_type{::std::format("RTC failure at: {}:{}: {}",                   \
+      throw _exception_type{::std::format("RTCX failure at: {}:{}: {}",                  \
                                           ::std::source_location::current().file_name(), \
                                           ::std::source_location::current().line(),      \
                                           (_reason))};                                   \
@@ -40,7 +40,7 @@
 
 #define RTCX_FAIL(_reason, _exception_type)                                            \
   do {                                                                                 \
-    throw _exception_type{::std::format("RTC failure at: {}:{}: {}",                   \
+    throw _exception_type{::std::format("RTCX failure at: {}:{}: {}",                  \
                                         ::std::source_location::current().file_name(), \
                                         ::std::source_location::current().line(),      \
                                         (_reason))};                                   \
@@ -55,6 +55,7 @@ typedef struct CUstream_st* CUstream;
 }
 
 namespace RTCX_EXPORT rtcx {
+
 using u8    = std::uint8_t;
 using u16   = std::uint16_t;
 using u32   = std::uint32_t;

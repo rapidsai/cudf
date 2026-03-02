@@ -80,8 +80,8 @@ dependencies:
 - pytest-xdist
 - python-confluent-kafka
 - python-xxhash
+- python-zstd>=1.5.7.2
 - python>=3.11
-- python-zstd
 - pytorch>=2.4.0
 - rapids-build-backend>=0.4.0,<0.5.0
 - rapids-dask-dependency==26.4.*,>=0.0.0a0

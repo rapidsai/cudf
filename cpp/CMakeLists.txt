@@ -334,29 +334,8 @@ if(NOT BUILD_SHARED_LIBS)
   endif()
 endif()
 
-if(CMAKE_BUILD_TYPE STREQUAL "Debug")
-  set(CUDF_JIT_CUDA_FLAGS "-G")
-else()
-  if(CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo")
-    set(CUDF_JIT_CUDA_FLAGS "-O2;-DNDEBUG")
-  else()
-    if(CMAKE_BUILD_TYPE STREQUAL "Release")
-      set(CUDF_JIT_CUDA_FLAGS "-O3;-DNDEBUG")
-    endif()
-  endif()
-endif()
-
-if(CUDA_ENABLE_LINEINFO)
-  list(APPEND CUDF_JIT_CUDA_FLAGS "${CUDF_JIT_CUDA_FLAGS};-lineinfo")
-endif()
-
 set(CUDF_CXX_STANDARD 20)
 set(CUDF_CUDA_STANDARD ${CUDF_CXX_STANDARD})
-
-list(APPEND CUDF_JIT_DEFINITIONS -DCUDF_RUNTIME_JIT -D__CUDACC_RTC__)
-list(APPEND CUDF_JIT_COMPILE_FLAGS -std=c++${CUDF_CUDA_STANDARD} --device-int128
-     ${CUDF_JIT_DEFINITIONS}
-)
 
 jit_add_include_directory(
   cudf_jit_embed COPY_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include DEST_DIRECTORY cudf/include
