@@ -202,8 +202,6 @@ class scan_aggregation : public virtual aggregation {};
  */
 class segmented_reduce_aggregation : public virtual aggregation {};
 
-/// Type of code in the user defined function string.
-enum class udf_type : bool { CUDA, PTX };
 /// Type of correlation method.
 enum class correlation_type : int32_t { PEARSON, KENDALL, SPEARMAN };
 /// Type of treatment of EWM input values' first value
@@ -547,14 +545,14 @@ std::unique_ptr<Base> make_lead_aggregation(size_type offset);
 /**
  * @brief Factory to create an aggregation base on UDF for PTX or CUDA
  *
- * @param[in] type: either udf_type::PTX or udf_type::CUDA
+ * @param[in] type The source type of the UDF aggregation
  * @param[in] user_defined_aggregator A string containing the aggregator code
  * @param[in] output_type expected output type
  *
  * @return An aggregation containing a user-defined aggregator string
  */
 template <typename Base = aggregation>
-std::unique_ptr<Base> make_udf_aggregation(udf_type type,
+std::unique_ptr<Base> make_udf_aggregation(udf_source_type type,
                                            std::string const& user_defined_aggregator,
                                            data_type output_type);
 

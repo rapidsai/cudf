@@ -547,7 +547,7 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          - numpy>=1.23,<3.0
+          - numpy>=1.26,<3.0
   pyarrow_run:
     common:
       - output_types: [conda]
@@ -862,7 +862,7 @@ dependencies:
             packages:
               # this is sometimes different from the floor in cudf because
               # dask imposes its own constraints on 'numpy' (e.g. for 'dask.array')
-              - numpy==1.24.*
+              - numpy==1.26.*
           - matrix:
             packages:
   test_python_pylibcudf:
@@ -919,7 +919,7 @@ dependencies:
         matrices:
           - matrix: {dependencies: "oldest"}
             packages:
-              - numpy==1.23.*
+              - numpy==1.26.*
               - pyarrow==19.*
           - matrix:
             packages:

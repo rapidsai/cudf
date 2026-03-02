@@ -389,7 +389,7 @@ async def _shuffle_reduce(
     shuffle_context = context
     if local and context.comm().nranks > 1:
         options = Options(get_environment_variables())
-        local_comm = single_comm(options)
+        local_comm = single_comm(options, context.comm().progress_thread)
         shuffle_context = Context(local_comm, context.br(), options)
     shuf_nranks = shuffle_context.comm().nranks
     shuf_rank = shuffle_context.comm().rank
