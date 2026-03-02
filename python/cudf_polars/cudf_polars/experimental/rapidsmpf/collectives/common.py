@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import threading
+from contextlib import contextmanager
 from typing import TYPE_CHECKING, Literal
 
 from rapidsmpf.shuffler import Shuffler
@@ -17,6 +18,7 @@ from cudf_polars.experimental.repartition import Repartition
 from cudf_polars.experimental.shuffle import Shuffle
 
 if TYPE_CHECKING:
+    from collections.abc import Iterator
     from types import TracebackType
 
     from cudf_polars.dsl.ir import IR
@@ -139,3 +141,20 @@ class ReserveOpIDs:
             for collective_id in collective_ids:
                 _release_collective_id(collective_id)
         return False
+
+
+@contextmanager
+def reserve_op_id() -> Iterator[int]:
+    """
+    Reserve a single collective operation ID.
+
+    Yields
+    ------
+    collective_id : int
+        A vacant collective ID reserved from the global vacancy pool.
+    """
+    collective_id = _get_new_collective_id()
+    try:
+        yield collective_id
+    finally:
+        _release_collective_id(collective_id)
