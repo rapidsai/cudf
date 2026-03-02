@@ -1415,6 +1415,11 @@ def run_polars_query_iteration(
     else:
         shuffle_stats = None
 
+    if client is not None:
+        client.run(rmm.statistics.push_statistics)
+    else:
+        rmm.statistics.push_statistics()
+
     if expected is not None:
         validation_result = validate_result(
             result,
