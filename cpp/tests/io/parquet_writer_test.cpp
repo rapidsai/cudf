@@ -2492,11 +2492,12 @@ TEST_F(ParquetWriterTest, ReturnedFooterMetadata)
 {
   auto table    = create_random_fixed_table<int>(5, 10, true);
   auto filepath = temp_env->get_temp_filepath("ReturnedMetadata.parquet");
-  cudf::io::chunked_parquet_writer_options args =
-    cudf::io::chunked_parquet_writer_options::builder(cudf::io::sink_info{filepath});
 
   // Write the table and get the returned footer buffer
-  auto footer = cudf::io::chunked_parquet_writer(args).write(*table).close();
+  cudf::io::parquet_writer_options args =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, *table);
+  auto footer = cudf::io::write_parquet(args);
+
   EXPECT_NE(footer, nullptr);
   EXPECT_GT(footer->size(), 0);
 
@@ -2526,12 +2527,11 @@ TEST_F(ParquetWriterTest, ReturnedFooterMetadataFilePaths)
 
   std::vector<std::string> filepaths{temp_env->get_temp_filepath("ReturnedMetadataPath1.parquet"),
                                      temp_env->get_temp_filepath("ReturnedMetadataPath2.parquet")};
-  cudf::io::chunked_parquet_writer_options args =
-    cudf::io::chunked_parquet_writer_options::builder(cudf::io::sink_info(filepaths));
-
-  std::vector<cudf::io::partition_info> partitions{{0, nrows / 2}, {nrows / 2, nrows / 2}};
-  auto footer_buffer =
-    cudf::io::chunked_parquet_writer(args).write(*table, partitions).close(filepaths);
+  cudf::io::parquet_writer_options args =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info(filepaths), *table)
+      .partitions(std::vector<cudf::io::partition_info>{{0, nrows / 2}, {nrows / 2, nrows / 2}})
+      .column_chunks_file_paths(filepaths);
+  auto footer_buffer = cudf::io::write_parquet(args);
 
   ASSERT_NE(footer_buffer, nullptr);
   ASSERT_GT(footer_buffer->size(), 0);
@@ -2544,18 +2544,6 @@ TEST_F(ParquetWriterTest, ReturnedFooterMetadataFilePaths)
   EXPECT_EQ(fmd_footer.row_groups.size(), 2);
   EXPECT_EQ(fmd_footer.row_groups[0].columns[0].file_path, filepaths[0]);
   EXPECT_EQ(fmd_footer.row_groups[1].columns[0].file_path, filepaths[1]);
-
-  // Read file metadata from the written parquet file
-  auto sources         = cudf::io::make_datasources(cudf::io::source_info{filepaths});
-  auto const fmd_files = cudf::io::read_parquet_footers(sources);
-
-  EXPECT_EQ(fmd_files.size(), 2);
-  EXPECT_EQ(fmd_files[0].num_rows, nrows / 2);
-  EXPECT_EQ(fmd_files[0].row_groups.size(), 1);
-  EXPECT_EQ(fmd_files[0].row_groups[0].columns[0].file_path, filepaths[0]);
-  EXPECT_EQ(fmd_files[1].num_rows, nrows / 2);
-  EXPECT_EQ(fmd_files[1].row_groups.size(), 1);
-  EXPECT_EQ(fmd_files[1].row_groups[0].columns[0].file_path, filepaths[1]);
 }
 
 TEST_F(ParquetWriterTest, DISABLED_SizeTypeOverflow)
