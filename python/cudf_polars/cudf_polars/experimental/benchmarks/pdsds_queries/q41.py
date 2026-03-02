@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
-from cudf_polars.experimental.benchmarks.utils import get_data
+from cudf_polars.experimental.benchmarks.utils import QueryResult, get_data
 
 if TYPE_CHECKING:
     from cudf_polars.experimental.benchmarks.utils import RunConfig
@@ -63,7 +63,7 @@ def duckdb_impl(run_config: RunConfig) -> str:
     """
 
 
-def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
+def polars_impl(run_config: RunConfig) -> QueryResult:
     """Query 41."""
     params = load_parameters(
         int(run_config.scale_factor),
@@ -92,11 +92,15 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         item.filter(subquery_conditions).select("i_manufact").unique()
     )
 
-    return (
-        item.filter(pl.col("i_manufact_id").is_between(manufact, manufact + 40))
-        .join(manufacturers_with_criteria, on="i_manufact", how="inner")
-        .select("i_product_name")
-        .unique()
-        .sort("i_product_name")
-        .limit(100)
+    return QueryResult(
+        frame=(
+            item.filter(pl.col("i_manufact_id").is_between(manufact, manufact + 40))
+            .join(manufacturers_with_criteria, on="i_manufact", how="inner")
+            .select("i_product_name")
+            .unique()
+            .sort("i_product_name")
+            .limit(100)
+        ),
+        sort_by=[("i_product_name", False)],
+        limit=100,
     )

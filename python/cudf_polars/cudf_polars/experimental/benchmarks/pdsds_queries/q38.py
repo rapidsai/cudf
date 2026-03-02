@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
-from cudf_polars.experimental.benchmarks.utils import get_data
+from cudf_polars.experimental.benchmarks.utils import QueryResult, get_data
 
 if TYPE_CHECKING:
     from cudf_polars.experimental.benchmarks.utils import RunConfig
@@ -61,7 +61,7 @@ def duckdb_impl(run_config: RunConfig) -> str:
     """
 
 
-def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
+def polars_impl(run_config: RunConfig) -> QueryResult:
     """Query 38."""
     params = load_parameters(
         int(run_config.scale_factor),
@@ -119,8 +119,12 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         .select(["c_last_name", "c_first_name", "d_date"])
     )
     # Count the final result
-    return (
-        intersect_final
-        # Cast -> Int64 to match DuckDB
-        .select([pl.len().cast(pl.Int64).alias("count_star()")]).limit(100)
+    return QueryResult(
+        frame=(
+            intersect_final
+            # Cast -> Int64 to match DuckDB
+            .select([pl.len().cast(pl.Int64).alias("count_star()")]).limit(100)
+        ),
+        sort_by=[],
+        limit=100,
     )
