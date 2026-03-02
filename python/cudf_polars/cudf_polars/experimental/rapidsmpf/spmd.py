@@ -213,10 +213,39 @@ def spmd_execution(
     """
     Context manager that bootstraps a RapidsMPF SPMD context and a matching GPUEngine.
 
-    Sets up a UCXX communicator, a RapidsMPF
-    :class:`~rapidsmpf.streaming.core.context.Context`, and a
-    :class:`~polars.lazyframe.engine_config.GPUEngine` configured for SPMD
-    execution.  All resources are released on exit.
+    **SPMD execution model**
+
+    SPMD (Single Program, Multiple Data) is a parallel programming style where
+    every process runs the *same* Python script independently on its own slice of
+    data.  When you launch with ``rrun -np N pytest`` (or any ``rrun`` invocation),
+    ``N`` identical processes are started.  Each process owns a rank-local
+    :class:`~polars.LazyFrame` that represents its fragment of the distributed
+    dataset.  Collective operations — shuffles, all-gathers, joins — coordinate
+    across ranks so that the result is globally consistent.
+
+    This context manager is the primary entry point for SPMD execution. It:
+
+    - Bootstraps a UCXX communicator connecting all ``N`` ranks.
+    - Creates a RapidsMPF :class:`~rapidsmpf.streaming.core.context.Context`
+      that owns GPU memory and a CUDA-stream pool.
+    - Returns a :class:`~polars.lazyframe.engine_config.GPUEngine` wired to that
+      context so that ``LazyFrame.collect(engine=engine)`` dispatches through the
+      RapidsMPF streaming executor.
+
+    All resources (communicator, stream pool, thread-pool) are released on exit.
+
+    **Query symmetry requirement**
+
+    Every rank must issue the *same* sequence of Polars queries in the *same*
+    order.  Collective operations (shuffles, all-gathers, joins) are matched
+    across ranks by a monotonically increasing operation ID — if one rank calls
+    a collective that another rank does not, all ranks will deadlock.  This means
+    your driver script must be fully deterministic: avoid rank-conditional
+    ``collect`` calls, early exits, or any branching that would cause different
+    ranks to execute different query graphs.
+
+    Must be invoked under the ``rrun`` launcher.  Use
+    :func:`rapidsmpf.bootstrap.is_running_with_rrun` to test this at runtime.
 
     Parameters
     ----------
@@ -241,6 +270,16 @@ def spmd_execution(
         A Polars GPU engine wired to ``ctx``. Pass it to
         ``LazyFrame.collect(engine=engine)`` on each rank.
 
+    Raises
+    ------
+    RuntimeError
+        If not running under the ``rrun`` launcher (i.e.
+        :func:`rapidsmpf.bootstrap.is_running_with_rrun` returns ``False``).
+        Launch with ``rrun -np <nproc> python -m pytest ...`` to fix this.
+    ValueError
+        If ``executor_options`` contains any of the reserved keys
+        ``"runtime"``, ``"cluster"``, or ``"spmd"``.
+
     Examples
     --------
     >>> with spmd_execution() as (ctx, engine):  # doctest: +SKIP
@@ -249,6 +288,12 @@ def spmd_execution(
     ...     )
     ...     full = allgather_polars_dataframe(ctx=ctx, local_df=result, op_id=0)
     """
+    if not bootstrap.is_running_with_rrun():
+        raise RuntimeError(
+            "spmd_execution() requires the rrun launcher. "
+            "Use `rrun -np <nproc> python -m pytest ...` to run SPMD tests."
+        )
+
     reserved = {"runtime", "cluster", "spmd"}
     if executor_options and reserved & executor_options.keys():
         raise ValueError(
