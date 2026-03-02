@@ -291,7 +291,7 @@ def _(
         )
 
     # Check for dynamic planning - defer broadcast vs shuffle decision to runtime
-    if dynamic_planning:
+    if dynamic_planning:  # pragma: no cover; Requires rapidsmpf runtime
         new_node = ir.reconstruct(children)
         partition_info[new_node] = PartitionInfo(count=output_count)
         return new_node, partition_info
