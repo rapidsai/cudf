@@ -4910,7 +4910,12 @@ class DatetimeProperties(BaseDatelikeProperties):
                     f"for tracking purposes."
                 )
         return self._return_result_like_self(
-            self.series._column.strftime(format=date_format)
+            self.series._column.strftime(
+                format=date_format,
+                dtype=get_dtype_of_same_kind(
+                    self.series.dtype, DEFAULT_STRING_DTYPE
+                ),
+            )
         )
 
     @copy_docstring(DatetimeIndex.tz_localize)

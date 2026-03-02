@@ -69,6 +69,7 @@ from cudf.utils.dtypes import (
     dtype_from_pylibcudf_column,
     dtype_to_pylibcudf_type,
     find_common_type,
+    get_dtype_of_same_kind,
     is_mixed_with_object_dtype,
 )
 from cudf.utils.performance_tracking import _performance_tracking
@@ -3333,7 +3334,11 @@ class DatetimeIndex(Index):
             Date format string (e.g. "%Y-%m-%d").
         """
         return Index._from_column(
-            self._column.strftime(date_format), name=self.name
+            self._column.strftime(
+                date_format,
+                dtype=get_dtype_of_same_kind(self.dtype, DEFAULT_STRING_DTYPE),
+            ),
+            name=self.name,
         )
 
     @cached_property
