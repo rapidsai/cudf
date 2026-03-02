@@ -35,12 +35,13 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
 ]
 
 [project.optional-dependencies]
 test = [
     "dask-cuda==26.4.*,>=0.0.0a0",
-    "numpy>=1.23,<3.0",
+    "numpy>=1.26,<3.0",
     "pytest",
     "pytest-cov",
     "pytest-httpserver",

@@ -137,7 +137,7 @@ void BM_filter_min_max(nvbench::state& state)
         auto result = cudf::filter_extended(predicate_inputs,
                                             udf,
                                             filter_column_views,
-                                            false,
+                                            cudf::udf_source_type::CUDA,
                                             std::nullopt,
                                             cudf::null_aware::NO,
                                             cudf::output_nullability::PRESERVE,
