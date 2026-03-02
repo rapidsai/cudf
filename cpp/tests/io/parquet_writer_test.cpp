@@ -2520,16 +2520,16 @@ TEST_F(ParquetWriterTest, ReturnedFooterMetadata)
 
 TEST_F(ParquetWriterTest, ReturnedFooterMetadataFilePaths)
 {
-  auto constexpr num_rows = 10;
-  auto constexpr num_cols = 5;
-  auto table              = create_random_fixed_table<int>(num_cols, num_rows, true);
+  auto constexpr nrows = 10;
+  auto constexpr ncols = 5;
+  auto table           = create_random_fixed_table<int>(ncols, nrows, true);
 
   std::vector<std::string> filepaths{temp_env->get_temp_filepath("ReturnedMetadataPath1.parquet"),
                                      temp_env->get_temp_filepath("ReturnedMetadataPath2.parquet")};
   cudf::io::chunked_parquet_writer_options args =
     cudf::io::chunked_parquet_writer_options::builder(cudf::io::sink_info(filepaths));
 
-  std::vector<cudf::io::partition_info> partitions{{0, num_rows / 2}, {num_rows / 2, num_rows}};
+  std::vector<cudf::io::partition_info> partitions{{0, nrows / 2}, {nrows / 2, nrows / 2}};
   auto footer_buffer =
     cudf::io::chunked_parquet_writer(args).write(*table, partitions).close(filepaths);
 
@@ -2540,7 +2540,7 @@ TEST_F(ParquetWriterTest, ReturnedFooterMetadataFilePaths)
     reinterpret_cast<std::byte const*>(footer_buffer->data()), footer_buffer->size()});
   read_footer(footer_source, &fmd_footer);
 
-  EXPECT_EQ(fmd_footer.num_rows, num_rows);
+  EXPECT_EQ(fmd_footer.num_rows, nrows);
   EXPECT_EQ(fmd_footer.row_groups.size(), 2);
   EXPECT_EQ(fmd_footer.row_groups[0].columns[0].file_path, filepaths[0]);
   EXPECT_EQ(fmd_footer.row_groups[1].columns[0].file_path, filepaths[1]);
@@ -2550,10 +2550,10 @@ TEST_F(ParquetWriterTest, ReturnedFooterMetadataFilePaths)
   auto const fmd_files = cudf::io::read_parquet_footers(sources);
 
   EXPECT_EQ(fmd_files.size(), 2);
-  EXPECT_EQ(fmd_files[0].num_rows, num_rows / 2);
+  EXPECT_EQ(fmd_files[0].num_rows, nrows / 2);
   EXPECT_EQ(fmd_files[0].row_groups.size(), 1);
   EXPECT_EQ(fmd_files[0].row_groups[0].columns[0].file_path, filepaths[0]);
-  EXPECT_EQ(fmd_files[1].num_rows, num_rows / 2);
+  EXPECT_EQ(fmd_files[1].num_rows, nrows / 2);
   EXPECT_EQ(fmd_files[1].row_groups.size(), 1);
   EXPECT_EQ(fmd_files[1].row_groups[0].columns[0].file_path, filepaths[1]);
 }
