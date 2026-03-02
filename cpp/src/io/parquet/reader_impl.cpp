@@ -17,6 +17,7 @@
 #include <cudf/null_mask.hpp>
 #include <cudf/stream_compaction.hpp>
 #include <cudf/strings/detail/utilities.hpp>
+#include <cudf/unary.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <cuda/std/tuple>
@@ -509,6 +510,7 @@ reader_impl::reader_impl(std::size_t chunk_read_limit,
   : _stream{std::move(stream)},
     _mr{std::move(mr)},
     _options{options.get_timestamp_type(),
+             options.get_decimal_width(),
              options.get_skip_rows(),
              options.get_num_rows(),
              options.get_skip_bytes(),
@@ -562,7 +564,8 @@ reader_impl::reader_impl(std::size_t chunk_read_limit,
                               options.is_enabled_use_pandas_metadata(),
                               _strings_to_categorical,
                               options.is_enabled_ignore_missing_columns(),
-                              _options.timestamp_type.id());
+                              _options.timestamp_type.id(),
+                              _options.decimal_width);
 
   // Save the states of the output buffers for reuse in `chunk_read()`.
   std::transform(
@@ -845,6 +848,20 @@ std::optional<std::vector<std::string>> reader_impl::get_column_projection(
   }
 }
 
+void reader_impl::apply_decimal_width_cast(std::vector<std::unique_ptr<column>>& out_columns)
+{
+  // TODO: Instead of casting the columns after the read is done, we should
+  // be able to decode data directly into the target decimal type buffer.
+  if (_options.decimal_width == type_id::EMPTY) { return; }
+  for (auto& col : out_columns) {
+    auto const col_type = col->type();
+    if (cudf::is_fixed_point(col_type) && col_type.id() != _options.decimal_width) {
+      col =
+        cudf::cast(col->view(), data_type{_options.decimal_width, col_type.scale()}, _stream, _mr);
+    }
+  }
+}
+
 table_with_metadata reader_impl::finalize_output(read_mode mode,
                                                  table_metadata& out_metadata,
                                                  std::vector<std::unique_ptr<column>>& out_columns)
@@ -860,6 +877,8 @@ table_with_metadata reader_impl::finalize_output(read_mode mode,
       out_columns.emplace_back(io::detail::empty_like(_output_buffers[i], nullptr, _stream, _mr));
     }
   }
+
+  apply_decimal_width_cast(out_columns);
 
   if (!_output_metadata) {
     populate_metadata(out_metadata);
@@ -1072,7 +1091,12 @@ parquet_column_schema walk_schema(aggregate_reader_metadata const* mt, int idx)
   for (auto const& child_idx : sch.children_idx) {
     children.push_back(walk_schema(mt, child_idx));
   }
-  return parquet_column_schema{sch.name, static_cast<parquet::Type>(sch.type), std::move(children)};
+
+  auto const type_id   = to_type_id(sch, false, type_id::EMPTY, type_id::EMPTY);
+  auto const cudf_type = to_data_type(type_id, sch);
+
+  return parquet_column_schema{
+    sch.name, static_cast<parquet::Type>(sch.type), std::move(children), cudf_type};
 }
 }  // namespace
 

@@ -77,21 +77,6 @@ class TimeDeltaColumn(TemporalBaseColumn):
         "__rtruediv__",
         "__rfloordiv__",
     }
-    _VALID_PLC_TYPES = {
-        plc.TypeId.DURATION_SECONDS,
-        plc.TypeId.DURATION_MILLISECONDS,
-        plc.TypeId.DURATION_MICROSECONDS,
-        plc.TypeId.DURATION_NANOSECONDS,
-    }
-
-    @classmethod
-    def _validate_args(
-        cls, plc_column: plc.Column, dtype: DtypeObj
-    ) -> tuple[plc.Column, DtypeObj]:
-        plc_column, dtype = super()._validate_args(plc_column, dtype)
-        if dtype.kind != "m":
-            raise ValueError("dtype must be a timedelta dtype.")
-        return plc_column, dtype
 
     def _reduce(
         self,
@@ -141,6 +126,11 @@ class TimeDeltaColumn(TemporalBaseColumn):
             else other.dtype
         )
         other_is_null_scalar = is_na_like(other)
+        if (
+            isinstance(self.dtype, pd.ArrowDtype)
+            or isinstance(other_cudf_dtype, pd.ArrowDtype)
+        ) and op == "__mod__":
+            raise NotImplementedError("ArrowDtype does not support modulo")
 
         if other_cudf_dtype.kind == "m":
             # TODO: pandas will allow these operators to work but return false

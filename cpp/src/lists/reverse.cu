@@ -69,9 +69,7 @@ std::unique_ptr<column> reverse(lists_column_view const& input,
                                  std::move(out_offsets),
                                  std::move(child_segmented_reversed->release().front()),
                                  input.null_count(),
-                                 cudf::detail::copy_bitmask(input.parent(), stream, mr),
-                                 stream,
-                                 mr);
+                                 cudf::detail::copy_bitmask(input.parent(), stream, mr));
 }
 
 }  // namespace detail

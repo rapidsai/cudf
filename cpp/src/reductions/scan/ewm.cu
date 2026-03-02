@@ -134,7 +134,7 @@ rmm::device_uvector<cudf::size_type> null_roll_up(column_view const& input,
 {
   rmm::device_uvector<cudf::size_type> output(input.size(), stream);
 
-  auto device_view = column_device_view::create(input);
+  auto device_view = column_device_view::create(input, stream);
   auto invalid_it  = thrust::make_transform_iterator(
     cudf::detail::make_validity_iterator(*device_view),
     cuda::proclaim_return_type<int>([] __device__(int valid) -> int { return 1 - valid; }));
@@ -159,7 +159,7 @@ rmm::device_uvector<T> compute_ewma_adjust(column_view const& input,
 
   if (input.has_nulls()) {
     rmm::device_uvector<cudf::size_type> nullcnt = null_roll_up(input, stream);
-    auto device_view                             = column_device_view::create(input);
+    auto device_view                             = column_device_view::create(input, stream);
     auto valid_it = cudf::detail::make_validity_iterator(*device_view);
     auto data =
       thrust::make_zip_iterator(cuda::std::make_tuple(valid_it, nullcnt.begin(), input.begin<T>()));
@@ -246,7 +246,7 @@ rmm::device_uvector<T> compute_ewma_noadjust(column_view const& input,
                                      recurrence_functor<T>{});
 
   } else {
-    auto device_view = column_device_view::create(input);
+    auto device_view = column_device_view::create(input, stream);
     auto valid_it    = detail::make_validity_iterator(*device_view);
 
     auto data = thrust::make_zip_iterator(cuda::std::make_tuple(

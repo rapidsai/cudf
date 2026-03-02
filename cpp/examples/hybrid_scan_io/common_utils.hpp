@@ -5,6 +5,8 @@
 
 #pragma once
 
+#include "io_source.hpp"
+
 #include <cudf/ast/expressions.hpp>
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/text/byte_range_info.hpp>
@@ -12,12 +14,14 @@
 #include <cudf/table/table_view.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/mr/device_memory_resource.hpp>
 
 #include <string>
+#include <vector>
 
 /**
  * @file common_utils.hpp
- * @brief Utilities for `hybrid_scan_io` example
+ * @brief Common utilities for hybrid_scan examples
  */
 
 /**
@@ -69,12 +73,24 @@ void check_tables_equal(cudf::table_view const& lhs_table,
                         rmm::cuda_stream_view stream = cudf::get_default_stream());
 
 /**
- * @brief Concatenate a vector of tables and return the resultant table
+ * @brief Function to process comma delimited input paths string to parquet files and/or dirs
+ *        and convert them to specified io sources.
  *
- * @param tables Vector of tables to concatenate
+ * Process the input path string containing directories (of parquet files) and/or individual
+ * parquet files into a list of input parquet files, multiple the list by `input_multiplier`,
+ * make sure to have at least `thread_count` files to satisfy at least file per parallel thread,
+ * and convert the final list of files to a list of `io_source` and return.
+ *
+ * @param paths Comma delimited input paths string
+ * @param input_multiplier Multiplier for the input files list
+ * @param thread_count Number of threads being used in the example
+ * @param io_source_type Specified IO source type to convert input files to
  * @param stream CUDA stream to use
  *
- * @return Unique pointer to the resultant concatenated table.
+ * @return Vector of input sources for the given paths
  */
-std::unique_ptr<cudf::table> concatenate_tables(std::vector<std::unique_ptr<cudf::table>> tables,
-                                                rmm::cuda_stream_view stream);
+[[nodiscard]] std::vector<io_source> extract_input_sources(std::string const& paths,
+                                                           int32_t input_multiplier,
+                                                           int32_t thread_count,
+                                                           io_source_type io_source_type,
+                                                           rmm::cuda_stream_view stream);

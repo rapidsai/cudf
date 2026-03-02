@@ -228,28 +228,6 @@ TEST(SpanTest, CanUseStdSpan)
   EXPECT_EQ(std_span.size(), message_span.size());
 }
 
-// This test is the only place in libcudf's test suite where using a
-// thrust::device_vector (and therefore the CUDA default stream) is acceptable
-// since we are explicitly testing conversions from thrust::device_vector.
-TEST(SpanTest, CanConstructFromDeviceContainers)
-{
-  auto d_thrust_vector = thrust::device_vector<int>(1);
-  auto d_vector        = rmm::device_vector<int>(1);
-  auto d_uvector       = rmm::device_uvector<int>(1, cudf::get_default_stream());
-
-  (void)device_span<int>(d_thrust_vector.data().get(), d_thrust_vector.size());
-  (void)device_span<int>(d_vector.data().get(), d_vector.size());
-  (void)device_span<int>(d_uvector);
-
-  auto const& d_thrust_vector_c = d_thrust_vector;
-  auto const& d_vector_c        = d_vector;
-  auto const& d_uvector_c       = d_uvector;
-
-  (void)device_span<int const>(d_thrust_vector_c.data().get(), d_thrust_vector_c.size());
-  (void)device_span<int const>(d_vector_c.data().get(), d_vector_c.size());
-  (void)device_span<int const>(d_uvector_c);
-}
-
 CUDF_KERNEL void simple_device_kernel(device_span<bool> result) { result[0] = true; }
 
 TEST(SpanTest, CanUseDeviceSpan)

@@ -11,6 +11,7 @@ from rapidsmpf.shuffler import Shuffler
 
 from cudf_polars.dsl.ir import Distinct, GroupBy
 from cudf_polars.dsl.traversal import traversal
+from cudf_polars.experimental.io import StreamingSink
 from cudf_polars.experimental.join import Join
 from cudf_polars.experimental.repartition import Repartition
 from cudf_polars.experimental.shuffle import Shuffle
@@ -19,7 +20,7 @@ if TYPE_CHECKING:
     from types import TracebackType
 
     from cudf_polars.dsl.ir import IR
-    from cudf_polars.utils.config import ConfigOptions
+    from cudf_polars.utils.config import ConfigOptions, StreamingExecutor
 
 
 # Set of available collective IDs
@@ -67,21 +68,29 @@ class ReserveOpIDs:
     (e.g., for metadata gathering, shuffling multiple sides of a join).
     """
 
-    def __init__(self, ir: IR, config_options: ConfigOptions | None = None):
+    def __init__(
+        self, ir: IR, config_options: ConfigOptions[StreamingExecutor] | None = None
+    ):
         self.config_options = config_options
 
         # Check if dynamic planning is enabled
         self.dynamic_planning_enabled = (
             config_options is not None
-            and config_options.executor.name == "streaming"
             and config_options.executor.dynamic_planning is not None
         )
 
         # Find all collective IR nodes.
-        collective_types: tuple[type, ...] = (Shuffle, Join, Repartition)
+        collective_types: tuple[type, ...] = (Shuffle, Join, Repartition, StreamingSink)
         if self.dynamic_planning_enabled:
             # Include GroupBy and Distinct when dynamic planning is enabled
-            collective_types = (Shuffle, Join, Repartition, GroupBy, Distinct)
+            collective_types = (
+                Shuffle,
+                Join,
+                Repartition,
+                StreamingSink,
+                GroupBy,
+                Distinct,
+            )
 
         self.collective_nodes: list[IR] = [
             node for node in traversal([ir]) if isinstance(node, collective_types)

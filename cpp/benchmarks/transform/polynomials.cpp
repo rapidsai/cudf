@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -47,11 +47,11 @@ static void BM_transform_polynomials(nvbench::state& state)
   state.add_global_memory_reads<key_type>(num_rows);
   state.add_global_memory_writes<key_type>(num_rows);
 
-  std::vector<cudf::column_view> inputs{*column};
+  std::vector<cudf::transform_input> inputs{cudf::transform_input{*column}};
   std::transform(constants.begin(),
                  constants.end(),
                  std::back_inserter(inputs),
-                 [](auto& col) -> cudf::column_view { return *col; });
+                 [](auto& col) -> cudf::transform_input { return cudf::scalar_column_view(*col); });
 
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
     // computes polynomials: (((ax + b)x + c)x + d)x + e... = ax**4 + bx**3 + cx**2 + dx + e....
@@ -79,14 +79,15 @@ static void BM_transform_polynomials(nvbench::state& state)
 
     // clang-format on
 
-    cudf::transform(inputs,
-                    udf,
-                    cudf::data_type{cudf::type_to_id<key_type>()},
-                    false,
-                    std::nullopt,
-                    cudf::null_aware::NO,
-                    cudf::output_nullability::PRESERVE,
-                    launch.get_stream().get_stream());
+    cudf::transform_extended(inputs,
+                             udf,
+                             cudf::data_type{cudf::type_to_id<key_type>()},
+                             false,
+                             std::nullopt,
+                             cudf::null_aware::NO,
+                             std::nullopt,
+                             cudf::output_nullability::PRESERVE,
+                             launch.get_stream().get_stream());
   });
 }
 

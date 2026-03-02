@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -130,15 +130,19 @@ void BM_filter_min_max(nvbench::state& state)
           cudf::apply_boolean_mask(filter_table, filter_boolean->view(), stream, mr);
       } break;
       case engine_type::JIT: {
-        auto result = cudf::filter(
-          {predicate_column->view(), min_scalar_column->view(), max_scalar_column->view()},
-          udf,
-          filter_column_views,
-          false,
-          std::nullopt,
-          cudf::null_aware::NO,
-          stream,
-          mr);
+        cudf::filter_input predicate_inputs[] = {
+          predicate_column->view(),
+          cudf::scalar_column_view(min_scalar_column->view()),
+          cudf::scalar_column_view(max_scalar_column->view())};
+        auto result = cudf::filter_extended(predicate_inputs,
+                                            udf,
+                                            filter_column_views,
+                                            false,
+                                            std::nullopt,
+                                            cudf::null_aware::NO,
+                                            cudf::output_nullability::PRESERVE,
+                                            stream,
+                                            mr);
       } break;
       default: CUDF_UNREACHABLE("Unrecognised engine type requested");
     }

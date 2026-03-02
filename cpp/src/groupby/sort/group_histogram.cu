@@ -69,8 +69,7 @@ std::unique_ptr<column> build_histogram(column_view const& values,
                                          stream,
                                          mr);
 
-  return make_lists_column(
-    num_groups, std::move(out_offsets), std::move(out_structs), 0, {}, stream, mr);
+  return make_lists_column(num_groups, std::move(out_offsets), std::move(out_structs), 0, {});
 }
 
 }  // namespace

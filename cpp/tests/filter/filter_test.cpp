@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -46,8 +46,10 @@ TYPED_TEST(FilterNumericTest, NoAssertions)
 
   std::vector<std::unique_ptr<cudf::column>> results;
 
-  EXPECT_NO_THROW(
-    results = cudf::filter({a, b}, this->udf, {a}, false, std::nullopt, cudf::null_aware::NO));
+  cudf::filter_input inputs[] = {a, b};
+
+  EXPECT_NO_THROW(results = cudf::filter_extended(
+                    inputs, this->udf, {a}, false, std::nullopt, cudf::null_aware::NO));
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, results[0]->view());
 }
 
@@ -69,8 +71,9 @@ TYPED_TEST(FilterChronoTest, NoAssertions)
     cudf::test::fixed_width_column_wrapper<T>{{T{}, T{}, T{}, T{}, T{}, T{}}, {1, 1, 1, 1, 1, 1}};
 
   std::vector<std::unique_ptr<cudf::column>> results;
-  EXPECT_NO_THROW(
-    results = cudf::filter({a, b}, this->udf, {a}, false, std::nullopt, cudf::null_aware::NO));
+  cudf::filter_input inputs[] = {a, b};
+  EXPECT_NO_THROW(results = cudf::filter_extended(
+                    inputs, this->udf, {a}, false, std::nullopt, cudf::null_aware::NO));
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, results[0]->view());
 }
 
@@ -92,9 +95,10 @@ TYPED_TEST(FilterFixedPointTest, NoAssertions)
     {2, 3, 5, 6, 7}, {1, 1, 1, 1, 1}, numeric::scale_type{0}};
 
   std::vector<std::unique_ptr<cudf::column>> results;
+  cudf::filter_input inputs[] = {a, b};
 
-  EXPECT_NO_THROW(
-    results = cudf::filter({a, b}, this->udf, {a}, false, std::nullopt, cudf::null_aware::NO));
+  EXPECT_NO_THROW(results = cudf::filter_extended(
+                    inputs, this->udf, {a}, false, std::nullopt, cudf::null_aware::NO));
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, results[0]->view());
 }
@@ -109,9 +113,9 @@ TEST_F(FilterTestFixture, StringNoAssertions)
   auto expected = cudf::test::strings_column_wrapper{{"2", "3", "5", "6", "7"}, {1, 1, 1, 1, 1}};
 
   std::vector<std::unique_ptr<cudf::column>> results;
-
-  EXPECT_NO_THROW(
-    results = cudf::filter({a, b}, this->udf, {a}, false, std::nullopt, cudf::null_aware::NO));
+  cudf::filter_input inputs[] = {a, b};
+  EXPECT_NO_THROW(results = cudf::filter_extended(
+                    inputs, this->udf, {a}, false, std::nullopt, cudf::null_aware::NO));
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, results[0]->view());
 }
 
@@ -127,7 +131,9 @@ TEST_F(FilterTest, Basic)
 __device__ void is_even(bool* out, int32_t a) { *out = (a % 2 == 0); }
   )***";
 
-  auto result   = cudf::filter({a}, cuda, {a}, false, std::nullopt, cudf::null_aware::NO);
+  cudf::filter_input inputs[] = {a};
+
+  auto result = cudf::filter_extended(inputs, cuda, {a}, false, std::nullopt, cudf::null_aware::NO);
   auto expected = cudf::test::fixed_width_column_wrapper<int32_t>{{2, 4, 6}, {1, 1, 1}};
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result[0]->view());
@@ -136,7 +142,8 @@ __device__ void is_even(bool* out, int32_t a) { *out = (a % 2 == 0); }
 __device__ void is_even(cuda::std::optional<bool>* out, cuda::std::optional<int32_t> a) { *out = a.has_value() && (*a % 2 == 0); }
   )***";
 
-  auto null_result = cudf::filter({a}, null_cuda, {a}, false, std::nullopt, cudf::null_aware::YES);
+  auto null_result =
+    cudf::filter_extended(inputs, null_cuda, {a}, false, std::nullopt, cudf::null_aware::YES);
   auto null_expected = cudf::test::fixed_width_column_wrapper<int32_t>{{2, 4, 6}, {1, 1, 1}};
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(null_expected, null_result[0]->view());
@@ -150,8 +157,11 @@ TEST_F(FilterTest, ScalarFilter)
 __device__ void is_divisible(bool* out, int32_t a, int32_t b) { *out = ((a % b) == 0); }
   )***";
 
-  EXPECT_THROW(cudf::filter({a, b}, cuda, {a, b}, false, std::nullopt, cudf::null_aware::NO),
-               std::invalid_argument);
+  cudf::filter_input inputs[] = {a, cudf::scalar_column_view(b)};
+
+  EXPECT_THROW(
+    cudf::filter_extended(inputs, cuda, {a, b}, false, std::nullopt, cudf::null_aware::NO),
+    std::invalid_argument);
 }
 
 TEST_F(FilterTest, MixedTypes)
@@ -188,21 +198,19 @@ __device__ void filter(bool* out,
   auto timezone1 = cudf::test::strings_column_wrapper{"CET"};
   auto timezone2 = cudf::test::strings_column_wrapper{"EST"};
 
-  auto result = cudf::filter({countries,
-                              timezones,
-                              average_tmp,
-                              average_humidity,
-                              min_tmp,
-                              max_tmp,
-                              min_hum,
-                              max_hum,
-                              timezone1,
-                              timezone2},
-                             cuda,
-                             {countries, timezones},
-                             false,
-                             std::nullopt,
-                             cudf::null_aware::NO);
+  cudf::filter_input inputs[] = {countries,
+                                 timezones,
+                                 average_tmp,
+                                 average_humidity,
+                                 cudf::scalar_column_view(min_tmp),
+                                 cudf::scalar_column_view(max_tmp),
+                                 cudf::scalar_column_view(min_hum),
+                                 cudf::scalar_column_view(max_hum),
+                                 cudf::scalar_column_view(timezone1),
+                                 cudf::scalar_column_view(timezone2)};
+
+  auto result = cudf::filter_extended(
+    inputs, cuda, {countries, timezones}, false, std::nullopt, cudf::null_aware::NO);
 
   EXPECT_EQ(result.size(), 2);
 
@@ -250,21 +258,19 @@ __device__ void filter(bool* out,
   auto timezone1 = cudf::test::strings_column_wrapper{"CET"};
   auto timezone2 = cudf::test::strings_column_wrapper{"EST"};
 
-  auto result = cudf::filter({countries,
-                              timezones,
-                              average_tmp,
-                              average_humidity,
-                              min_tmp,
-                              max_tmp,
-                              min_hum,
-                              max_hum,
-                              timezone1,
-                              timezone2},
-                             cuda,
-                             {countries, timezones},
-                             false,
-                             std::nullopt,
-                             cudf::null_aware::NO);
+  cudf::filter_input inputs[] = {countries,
+                                 timezones,
+                                 average_tmp,
+                                 average_humidity,
+                                 cudf::scalar_column_view(min_tmp),
+                                 cudf::scalar_column_view(max_tmp),
+                                 cudf::scalar_column_view(min_hum),
+                                 cudf::scalar_column_view(max_hum),
+                                 cudf::scalar_column_view(timezone1),
+                                 cudf::scalar_column_view(timezone2)};
+
+  auto result = cudf::filter_extended(
+    inputs, cuda, {countries, timezones}, false, std::nullopt, cudf::null_aware::NO);
 
   auto expected_countries = cudf::test::strings_column_wrapper({"Germany", "Spain"}, {true, true});
 

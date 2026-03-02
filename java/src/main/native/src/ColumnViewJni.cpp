@@ -1560,8 +1560,9 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_transform(
     cudf::column_view* column = reinterpret_cast<cudf::column_view*>(handle);
     cudf::jni::native_jstring n_j_udf(env, j_udf);
     std::string n_udf(n_j_udf.get());
+    cudf::transform_input inputs[] = {*column};
     return release_as_jlong(
-      cudf::transform({*column}, n_udf, cudf::data_type(cudf::type_id::INT32), j_is_ptx));
+      cudf::transform_extended(inputs, n_udf, cudf::data_type(cudf::type_id::INT32), j_is_ptx));
   }
   JNI_CATCH(env, 0);
 }
@@ -1684,8 +1685,10 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_like(
     auto const column_view    = reinterpret_cast<cudf::column_view const*>(j_view_handle);
     auto const strings_column = cudf::strings_column_view{*column_view};
     auto const pattern_scalar = reinterpret_cast<cudf::string_scalar const*>(pattern);
+    auto const pattern_str    = pattern_scalar->to_string();
     auto const escape_scalar  = reinterpret_cast<cudf::string_scalar const*>(escapeChar);
-    return release_as_jlong(cudf::strings::like(strings_column, *pattern_scalar, *escape_scalar));
+    auto const escape_str     = escape_scalar->to_string();
+    return release_as_jlong(cudf::strings::like(strings_column, pattern_str, escape_str));
   }
   JNI_CATCH(env, 0);
 }
@@ -2698,22 +2701,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_nansToNulls(JNIEnv* env,
   {
     cudf::jni::auto_set_device(env);
     auto const input = *reinterpret_cast<cudf::column_view*>(handle);
-    // get a new null mask by setting all the nans to null
-    auto [new_nullmask, new_null_count] = cudf::nans_to_nulls(input);
-    // create a column_view which is a no-copy wrapper around the original column without the null
-    // mask
-    auto const input_without_nullmask =
-      cudf::column_view(input.type(),
-                        input.size(),
-                        input.head<void>(),
-                        nullptr,
-                        0,
-                        input.offset(),
-                        std::vector<cudf::column_view>{input.child_begin(), input.child_end()});
-    // create a column by deep copying `input_without_nullmask`.
-    auto deep_copy = std::make_unique<cudf::column>(input_without_nullmask);
-    deep_copy->set_null_mask(std::move(*new_nullmask), new_null_count);
-    return release_as_jlong(deep_copy);
+    auto result      = cudf::column_nans_to_nulls(input);
+    return release_as_jlong(result);
   }
   JNI_CATCH(env, 0);
 }

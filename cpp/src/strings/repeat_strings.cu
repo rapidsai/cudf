@@ -21,7 +21,6 @@
 #include <rmm/cuda_stream_view.hpp>
 
 #include <thrust/for_each.h>
-#include <thrust/functional.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/scan.h>
 #include <thrust/transform.h>

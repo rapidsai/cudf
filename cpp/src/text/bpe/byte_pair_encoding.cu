@@ -30,9 +30,7 @@
 #include <cuda/iterator>
 #include <thrust/copy.h>
 #include <thrust/execution_policy.h>
-#include <thrust/functional.h>
 #include <thrust/iterator/counting_iterator.h>
-#include <thrust/iterator/discard_iterator.h>
 #include <thrust/merge.h>
 #include <thrust/remove.h>
 #include <thrust/unique.h>
@@ -436,7 +434,7 @@ std::unique_ptr<cudf::column> byte_pair_encoding(cudf::strings_column_view const
                        chars_end,      //
                        sep_char,       // byte to insert
                        d_input_chars,  // original data
-                       thrust::make_discard_iterator(),
+                       cuda::make_discard_iterator(),
                        d_chars);  // result
 
   return cudf::make_strings_column(input.size(),

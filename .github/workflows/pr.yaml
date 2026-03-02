@@ -58,15 +58,22 @@ jobs:
         uses: rapidsai/shared-actions/telemetry-dispatch-stash-base-env-vars@main
   check-nightly-ci:
     runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      id-token: write
     env:
-      RAPIDS_GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_TOKEN: ${{ github.token }}
     steps:
+      - name: Get PR Info
+        id: get-pr-info
+        uses: nv-gha-runners/get-pr-info@main
       - name: Check if nightly CI is passing
         uses: rapidsai/shared-actions/check_nightly_success/dispatch@main
         with:
-          repo: cudf
+          repo: ${{ github.repository }}
+          target-branch: ${{ fromJSON(steps.get-pr-info.outputs.pr-info).base.ref }}
           # TODO: Fix nightly CI and remove this line
-          max_days_without_success: 30
+          max-days-without-success: 30
   changed-files:
     secrets: inherit
     needs: telemetry-setup
@@ -286,6 +293,14 @@ jobs:
           - '!img/**'
           - '!java/**'
           - '!notebooks/**'
+        cpp_only:
+          - 'cpp/**'
+        cudf_only:
+          - 'python/cudf/**'
+        cudf_polars_only:
+          - 'python/cudf_polars/**'
+        dask_cudf_only:
+          - 'python/dask_cudf/**'
   checks:
     secrets: inherit
     needs: telemetry-setup
@@ -343,7 +358,7 @@ jobs:
     needs: [conda-python-build, conda-python-build-noarch, changed-files]
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/conda-python-tests.yaml@main
-    if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_conda
+    if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_conda && !fromJSON(needs.changed-files.outputs.changed_file_groups).cudf_polars_only && !fromJSON(needs.changed-files.outputs.changed_file_groups).dask_cudf_only
     with:
       build_type: pull-request
       script: "ci/test_python_cudf.sh"
@@ -431,7 +446,7 @@ jobs:
     needs: [wheel-build-cudf, changed-files]
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@main
-    if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_wheels
+    if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_wheels && !fromJSON(needs.changed-files.outputs.changed_file_groups).cudf_polars_only && !fromJSON(needs.changed-files.outputs.changed_file_groups).dask_cudf_only
     with:
       build_type: pull-request
       script: ci/test_wheel_cudf.sh
@@ -454,7 +469,7 @@ jobs:
     needs: [wheel-build-cudf-polars, changed-files]
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@main
-    if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_wheels
+    if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_wheels && !fromJSON(needs.changed-files.outputs.changed_file_groups).cudf_only && !fromJSON(needs.changed-files.outputs.changed_file_groups).dask_cudf_only
     with:
       # This selects "ARCH=amd64 + the latest supported Python + CUDA".
       matrix_filter: map(select(.ARCH == "amd64")) | group_by(.CUDA_VER|split(".")|map(tonumber)|.[0]) | map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))]))
@@ -464,7 +479,7 @@ jobs:
     needs: [wheel-build-cudf-polars, changed-files]
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@main
-    if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_wheels
+    if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_wheels && !fromJSON(needs.changed-files.outputs.changed_file_groups).cudf_only && !fromJSON(needs.changed-files.outputs.changed_file_groups).dask_cudf_only
     with:
       # This selects "ARCH=amd64 + the latest supported Python + CUDA" to minimize CI usage.
       # (rapidsmpf compatibility already validated in rapidsmpf CI)
@@ -475,7 +490,7 @@ jobs:
     needs: [wheel-build-cudf-polars, changed-files]
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@main
-    if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_wheels
+    if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_wheels && !fromJSON(needs.changed-files.outputs.changed_file_groups).cudf_only && !fromJSON(needs.changed-files.outputs.changed_file_groups).dask_cudf_only
     with:
       # This selects "ARCH=amd64 + the latest supported Python + CUDA".
       matrix_filter: map(select(.ARCH == "amd64")) | group_by(.CUDA_VER|split(".")|map(tonumber)|.[0]) | map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))]))
@@ -498,7 +513,7 @@ jobs:
     needs: [wheel-build-dask-cudf, changed-files]
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@main
-    if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_wheels
+    if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_wheels && !fromJSON(needs.changed-files.outputs.changed_file_groups).cudf_polars_only
     with:
       # This selects "ARCH=amd64 + the latest supported Python + CUDA".
       matrix_filter: map(select(.ARCH == "amd64")) | group_by(.CUDA_VER|split(".")|map(tonumber)|.[0]) | map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))]))
@@ -524,7 +539,7 @@ jobs:
     needs: [wheel-build-cudf, changed-files]
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@main
-    if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_wheels || fromJSON(needs.changed-files.outputs.changed_file_groups).test_cudf_pandas
+    if: (fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_wheels || fromJSON(needs.changed-files.outputs.changed_file_groups).test_cudf_pandas) && !fromJSON(needs.changed-files.outputs.changed_file_groups).cudf_polars_only && !fromJSON(needs.changed-files.outputs.changed_file_groups).dask_cudf_only
     with:
       # This selects the latest supported Python + CUDA minor versions for each ARCH/CUDA major version combo
       matrix_filter: group_by([(.ARCH), (.CUDA_VER|split(".")|map(tonumber)|.[0])]) | map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))]))
@@ -534,7 +549,7 @@ jobs:
     needs: [conda-python-build, conda-python-build-noarch, changed-files]
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@main
-    if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_conda || fromJSON(needs.changed-files.outputs.changed_file_groups).test_cudf_pandas
+    if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_conda && !fromJSON(needs.changed-files.outputs.changed_file_groups).cpp_only && !fromJSON(needs.changed-files.outputs.changed_file_groups).cudf_polars_only && !fromJSON(needs.changed-files.outputs.changed_file_groups).dask_cudf_only
     with:
       build_type: pull-request
       branch: ${{ inputs.branch }}
@@ -550,7 +565,7 @@ jobs:
     needs: [wheel-build-cudf, changed-files]
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@main
-    if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_wheels || fromJSON(needs.changed-files.outputs.changed_file_groups).test_cudf_pandas
+    if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_wheels && !fromJSON(needs.changed-files.outputs.changed_file_groups).cpp_only && !fromJSON(needs.changed-files.outputs.changed_file_groups).cudf_polars_only && !fromJSON(needs.changed-files.outputs.changed_file_groups).dask_cudf_only
     with:
       build_type: pull-request
       branch: ${{ inputs.branch }}
@@ -563,7 +578,7 @@ jobs:
     needs: [conda-python-build, conda-python-build-noarch, changed-files]
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@main
-    if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_conda
+    if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_conda && !fromJSON(needs.changed-files.outputs.changed_file_groups).cpp_only && !fromJSON(needs.changed-files.outputs.changed_file_groups).cudf_polars_only && !fromJSON(needs.changed-files.outputs.changed_file_groups).dask_cudf_only
     with:
       build_type: pull-request
       branch: ${{ inputs.branch }}

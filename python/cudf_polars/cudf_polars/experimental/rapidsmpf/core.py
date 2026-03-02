@@ -9,22 +9,24 @@ from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING, Any
 
+import rapidsmpf.progress_thread
 from rapidsmpf.communicator.single import new_communicator
 from rapidsmpf.config import Options, get_environment_variables
 from rapidsmpf.memory.buffer import MemoryType
 from rapidsmpf.memory.buffer_resource import BufferResource, LimitAvailableMemory
 from rapidsmpf.memory.pinned_memory_resource import PinnedMemoryResource
 from rapidsmpf.rmm_resource_adaptor import RmmResourceAdaptor
-from rapidsmpf.streaming.core.context import Context
-from rapidsmpf.streaming.core.leaf_node import pull_from_channel
-from rapidsmpf.streaming.core.node import (
-    run_streaming_pipeline,
+from rapidsmpf.streaming.core.actor import (
+    run_actor_network,
 )
+from rapidsmpf.streaming.core.context import Context
+from rapidsmpf.streaming.core.leaf_actor import pull_from_channel
 from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 
 import rmm
 
 import cudf_polars.experimental.rapidsmpf.collectives.shuffle
+import cudf_polars.experimental.rapidsmpf.groupby
 import cudf_polars.experimental.rapidsmpf.io
 import cudf_polars.experimental.rapidsmpf.join
 import cudf_polars.experimental.rapidsmpf.repartition
@@ -49,12 +51,10 @@ if TYPE_CHECKING:
     from collections.abc import MutableMapping
 
     from rapidsmpf.streaming.core.channel import Channel
-    from rapidsmpf.streaming.core.leaf_node import DeferredMessages
+    from rapidsmpf.streaming.core.leaf_actor import DeferredMessages
     from rapidsmpf.streaming.cudf.channel_metadata import ChannelMetadata
 
     import polars as pl
-
-    from rmm.pylibrmm.cuda_stream_pool import CudaStreamPool
 
     from cudf_polars.dsl.ir import IR
     from cudf_polars.experimental.base import PartitionInfo, StatsCollector
@@ -67,11 +67,12 @@ if TYPE_CHECKING:
         GenState,
         SubNetGenerator,
     )
+    from cudf_polars.utils.config import StreamingExecutor
 
 
 def evaluate_logical_plan(
     ir: IR,
-    config_options: ConfigOptions,
+    config_options: ConfigOptions[StreamingExecutor],
     *,
     collect_metadata: bool = False,
 ) -> tuple[pl.DataFrame, list[ChannelMetadata] | None]:
@@ -91,7 +92,6 @@ def evaluate_logical_plan(
     -------
     The output DataFrame and metadata collector.
     """
-    assert config_options.executor.name == "streaming", "Executor must be streaming"
     assert config_options.executor.runtime == "rapidsmpf", "Runtime must be rapidsmpf"
 
     # Lower the IR graph on the client process (for now).
@@ -139,7 +139,7 @@ def evaluate_logical_plan(
 def evaluate_pipeline(
     ir: IR,
     partition_info: MutableMapping[IR, PartitionInfo],
-    config_options: ConfigOptions,
+    config_options: ConfigOptions[StreamingExecutor],
     stats: StatsCollector,
     collective_id_map: dict[IR, list[int]],
     rmpf_context: Context | None = None,
@@ -170,16 +170,15 @@ def evaluate_pipeline(
     -------
     The output DataFrame and metadata collector.
     """
-    assert config_options.executor.name == "streaming", "Executor must be streaming"
     assert config_options.executor.runtime == "rapidsmpf", "Runtime must be rapidsmpf"
 
     _initial_mr: Any = None
-    stream_pool: CudaStreamPool | bool = False
+    use_stream_pool = False
     if rmpf_context is not None:
         # Using "distributed" mode.
         # Always use the RapidsMPF stream pool for now.
         br = rmpf_context.br()
-        stream_pool = True
+        use_stream_pool = True
         rmpf_context_manager = contextlib.nullcontext(rmpf_context)
     else:
         # Using "single" mode.
@@ -213,9 +212,15 @@ def evaluate_pipeline(
             if config_options.executor.spill_to_pinned_memory
             else None
         )
-        if isinstance(config_options.cuda_stream_policy, CUDAStreamPoolConfig):
-            stream_pool = config_options.cuda_stream_policy.build()
-        local_comm = new_communicator(options)
+        stream_pool = (
+            config_options.cuda_stream_policy.build()
+            if isinstance(config_options.cuda_stream_policy, CUDAStreamPoolConfig)
+            else None
+        )
+        use_stream_pool = stream_pool is not None
+        local_comm = new_communicator(
+            options, rapidsmpf.progress_thread.ProgressThread()
+        )
         br = BufferResource(
             mr,
             pinned_mr=pinned_mr,
@@ -226,7 +231,7 @@ def evaluate_pipeline(
 
     with rmpf_context_manager as rmpf_context:
         # Create the IR execution context
-        if stream_pool:
+        if use_stream_pool:
             ir_context = IRExecutionContext(
                 get_cuda_stream=rmpf_context.get_stream_from_pool
             )
@@ -254,7 +259,7 @@ def evaluate_pipeline(
             max_workers=config_options.executor.rapidsmpf_py_executor_max_workers,
             thread_name_prefix="cpse",
         )
-        run_streaming_pipeline(nodes=nodes, py_executor=executor)
+        run_actor_network(actors=nodes, py_executor=executor)
 
         # Extract/return the concatenated result.
         # Keep chunks alive until after concatenation to prevent
@@ -308,7 +313,7 @@ def evaluate_pipeline(
 
 def lower_ir_graph(
     ir: IR,
-    config_options: ConfigOptions,
+    config_options: ConfigOptions[StreamingExecutor],
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo], StatsCollector]:
     """
     Rewrite an IR graph and extract partitioning information.
@@ -467,7 +472,6 @@ def generate_network(
     fanout_nodes = determine_fanout_nodes(ir, partition_info, ir_dep_count)
 
     # Get max_io_threads from config (default: 2)
-    assert config_options.executor.name == "streaming", "Executor must be streaming"
     max_io_threads_global = config_options.executor.max_io_threads
     max_io_threads_local = max(1, max_io_threads_global // max(1, num_io_nodes))
 
@@ -503,7 +507,7 @@ def generate_network(
     # Add final node to pull from the output data channel
     output_node, output = pull_from_channel(context, ch_in=ch_final_data)
 
-    # Flatten the nodes dictionary into a list for run_streaming_pipeline
+    # Flatten the nodes dictionary into a list for run_actor_network
     nodes: list[Any] = [node for node_list in nodes_dict.values() for node in node_list]
     nodes.extend([drain_node, output_node])
 
