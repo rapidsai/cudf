@@ -32,9 +32,9 @@ from cudf_polars.experimental.rapidsmpf.utils import (
     ChannelManager,
     chunk_to_frame,
     empty_table_chunk,
+    maybe_remap_partitioning,
     process_children,
     recv_metadata,
-    remap_partitioning,
     send_metadata,
 )
 from cudf_polars.experimental.utils import _concat
@@ -103,8 +103,10 @@ async def broadcast_join_actor(
             # Preserve left-side partitioning metadata
             local_count = left_metadata.local_count
             # Remap partitioning from child schema to output schema
-            partitioning = remap_partitioning(
-                left_metadata.partitioning, large_child.schema, ir.schema
+            partitioning = maybe_remap_partitioning(
+                ir,
+                left_metadata.partitioning,
+                child_index=0,
             )
             # Check if the right-side is already broadcasted
             small_duplicated = right_metadata.duplicated
@@ -118,8 +120,10 @@ async def broadcast_join_actor(
             local_count = right_metadata.local_count
             if ir.options[0] == "Right":
                 # Remap partitioning from child schema to output schema
-                partitioning = remap_partitioning(
-                    right_metadata.partitioning, large_child.schema, ir.schema
+                partitioning = maybe_remap_partitioning(
+                    ir,
+                    right_metadata.partitioning,
+                    child_index=1,
                 )
             # Check if the right-side is already broadcasted
             small_duplicated = left_metadata.duplicated

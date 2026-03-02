@@ -19,7 +19,7 @@ from rapidsmpf.streaming.cudf.table_chunk import (
 )
 
 from cudf_polars.containers import DataFrame
-from cudf_polars.dsl.ir import IR, Cache, Empty, Filter, Projection, Select
+from cudf_polars.dsl.ir import IR, Empty
 from cudf_polars.experimental.rapidsmpf.dispatch import (
     generate_ir_sub_network,
 )
@@ -28,10 +28,9 @@ from cudf_polars.experimental.rapidsmpf.utils import (
     chunkwise_evaluate,
     empty_table_chunk,
     make_spill_function,
+    maybe_remap_partitioning,
     process_children,
     recv_metadata,
-    remap_partitioning,
-    remap_partitioning_select,
     send_metadata,
     shutdown_on_error,
 )
@@ -79,18 +78,9 @@ async def default_node_single(
     async with shutdown_on_error(context, ch_in, ch_out, trace_ir=ir) as tracer:
         # Recv metadata and prepare output metadata
         metadata_in = await recv_metadata(ch_in, context)
-        partitioning = None
-        if preserve_partitioning:
-            # Remap partitioning if schema has changed
-            partitioning = remap_partitioning(
-                metadata_in.partitioning, ir.children[0].schema, ir.schema
-            )
-        elif isinstance(ir, Select):
-            # Always try to remap partitioning for Select nodes
-            partitioning = remap_partitioning_select(ir, metadata_in.partitioning)
         metadata_out = ChannelMetadata(
             local_count=metadata_in.local_count,
-            partitioning=partitioning,
+            partitioning=maybe_remap_partitioning(ir, metadata_in.partitioning),
             duplicated=metadata_in.duplicated,
         )
 
@@ -151,8 +141,8 @@ async def default_node_multi(
             duplicated = duplicated and md_child.duplicated
             if idx == partitioning_index:
                 # Remap partitioning from child schema to output schema
-                partitioning = remap_partitioning(
-                    md_child.partitioning, ir.children[idx].schema, ir.schema
+                partitioning = maybe_remap_partitioning(
+                    ir, md_child.partitioning, child_index=idx
                 )
         metadata = ChannelMetadata(
             local_count=local_count,
@@ -509,14 +499,6 @@ def _(
 
     if len(ir.children) == 1:
         # Single-channel default node
-        preserve_partitioning = isinstance(
-            # TODO: We don't need to worry about
-            # non-pointwise Filter operations here,
-            # because the lowering stage would have
-            # collapsed to one partition anyway.
-            ir,
-            (Cache, Projection, Filter),
-        )
         nodes[ir] = [
             default_node_single(
                 rec.state["context"],
@@ -524,7 +506,6 @@ def _(
                 rec.state["ir_context"],
                 channels[ir].reserve_input_slot(),
                 channels[ir.children[0]].reserve_output_slot(),
-                preserve_partitioning=preserve_partitioning,
             )
         ]
     else:

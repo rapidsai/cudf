@@ -15,14 +15,12 @@ from rapidsmpf.streaming.cudf.channel_metadata import (
 import polars as pl
 
 from cudf_polars import Translator
-from cudf_polars.containers import DataType
 from cudf_polars.dsl import expr
-from cudf_polars.dsl.ir import Select
+from cudf_polars.dsl.ir import Projection, Select
 from cudf_polars.experimental.rapidsmpf.core import evaluate_logical_plan
 from cudf_polars.experimental.rapidsmpf.utils import (
     get_partitioning_moduli,
-    remap_partitioning,
-    remap_partitioning_select,
+    maybe_remap_partitioning,
 )
 from cudf_polars.testing.asserts import (
     DEFAULT_CLUSTER,
@@ -285,13 +283,13 @@ def _make_select_ir(engine: pl.GPUEngine, output_columns: tuple[str, ...]):
 
 def test_remap_partitioning_select_none_input() -> None:
     engine = pl.GPUEngine(executor="streaming")
-    assert remap_partitioning_select(_make_select_ir(engine, ("a", "b")), None) is None
+    assert maybe_remap_partitioning(_make_select_ir(engine, ("a", "b")), None) is None
 
 
 def test_remap_partitioning_select_preserves_keys() -> None:
     engine = pl.GPUEngine(executor="streaming")
     part = Partitioning(inter_rank=HashScheme((0, 1), 8), local="inherit")
-    result = remap_partitioning_select(_make_select_ir(engine, ("a", "b")), part)
+    result = maybe_remap_partitioning(_make_select_ir(engine, ("a", "b")), part)
     assert result is not None
     assert result.inter_rank is not None
     assert result.inter_rank.column_indices == (0, 1)
@@ -302,14 +300,13 @@ def test_remap_partitioning_select_preserves_keys() -> None:
 def test_remap_partitioning_select_drops_key() -> None:
     engine = pl.GPUEngine(executor="streaming")
     part = Partitioning(inter_rank=HashScheme((0, 1), 8), local="inherit")
-    result = remap_partitioning_select(_make_select_ir(engine, ("a",)), part)
+    result = maybe_remap_partitioning(_make_select_ir(engine, ("a",)), part)
     assert result is not None
     assert result.inter_rank is None
     assert result.local == "inherit"
 
 
 def test_remap_partitioning_select_renamed_key() -> None:
-    """Partitioning is preserved when a key column is renamed in the Select."""
     engine = pl.GPUEngine(executor="streaming")
     q = pl.LazyFrame({"a": [1], "b": [2], "c": [3]})
     child = Translator(q._ldf.visit(), engine).translate_ir()
@@ -321,7 +318,7 @@ def test_remap_partitioning_select_renamed_key() -> None:
     )
     select = Select(out_schema, exprs, should_broadcast=False, df=child)
     part = Partitioning(inter_rank=HashScheme((0, 1), 8), local="inherit")
-    result = remap_partitioning_select(select, part)
+    result = maybe_remap_partitioning(select, part)
     assert result is not None
     assert result.inter_rank is not None
     assert result.inter_rank.column_indices == (0, 1)  # a_renamed, b in output
@@ -330,17 +327,26 @@ def test_remap_partitioning_select_renamed_key() -> None:
 
 
 def test_remap_partitioning_reorder_columns() -> None:
-    old_schema = {
-        "a": DataType(pl.Int64),
-        "b": DataType(pl.Int64),
-        "c": DataType(pl.Int64),
-    }
-    new_schema = {"b": DataType(pl.Int64), "a": DataType(pl.Int64)}
-    result = remap_partitioning(
-        Partitioning(inter_rank=HashScheme((0, 1), 8), local="inherit"),
-        old_schema,
-        new_schema,
-    )
+    engine = pl.GPUEngine(executor="streaming")
+    # Select (b, a) from (a, b, c) -> partition keys (a,b) become indices (1, 0) in output
+    select = _make_select_ir(engine, ("b", "a"))
+    part = Partitioning(inter_rank=HashScheme((0, 1), 8), local="inherit")
+    result = maybe_remap_partitioning(select, part)
+    assert result is not None
+    assert result.inter_rank is not None
+    assert result.inter_rank.column_indices == (1, 0)
+    assert result.inter_rank.modulus == 8
+
+
+def test_remap_partitioning_reorder_columns_projection() -> None:
+    engine = pl.GPUEngine(executor="streaming")
+    q = pl.LazyFrame({"a": [1], "b": [2], "c": [3]})
+    child = Translator(q._ldf.visit(), engine).translate_ir()
+    # Projection output (b, a) -> child has (a, b, c); partition keys (a,b) -> indices (1, 0)
+    out_schema = {k: child.schema[k] for k in ("b", "a")}
+    proj = Projection(out_schema, child)
+    part = Partitioning(inter_rank=HashScheme((0, 1), 8), local="inherit")
+    result = maybe_remap_partitioning(proj, part, child_index=0)
     assert result is not None
     assert result.inter_rank is not None
     assert result.inter_rank.column_indices == (1, 0)

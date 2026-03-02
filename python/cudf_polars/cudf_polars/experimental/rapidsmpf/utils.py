@@ -37,6 +37,7 @@ import pylibcudf as plc
 
 from cudf_polars.containers import DataFrame
 from cudf_polars.dsl.expr import Col
+from cudf_polars.dsl.ir import Cache, Filter, Join, Projection, Select
 from cudf_polars.experimental.utils import _concat
 
 if TYPE_CHECKING:
@@ -48,7 +49,7 @@ if TYPE_CHECKING:
 
     from rmm.pylibrmm.stream import Stream
 
-    from cudf_polars.dsl.ir import IR, IRExecutionContext, Select
+    from cudf_polars.dsl.ir import IR, IRExecutionContext
     from cudf_polars.experimental.rapidsmpf.dispatch import SubNetGenerator
     from cudf_polars.experimental.rapidsmpf.tracing import ActorTracer
     from cudf_polars.typing import DataType
@@ -118,72 +119,71 @@ async def shutdown_on_error(
             structlog.contextvars.unbind_contextvars("actor_ir_id", "actor_ir_type")
 
 
-def remap_partitioning(
-    partitioning: Partitioning | None,
-    old_schema: Mapping[str, DataType],
-    new_schema: Mapping[str, DataType],
+def _remap_scheme_select(
+    select: Select, scheme: HashScheme | None | str
+) -> HashScheme | None | str:
+    # We must check if this Select node preserves partitioning
+    # before we return a remapped scheme.
+    if isinstance(scheme, HashScheme):
+        old_names = list(select.children[0].schema.keys())
+        partition_key_names = {old_names[i] for i in scheme.column_indices}
+        # Map old key name -> output name
+        old_to_new: dict[str, str] = {}
+        for ne in select.exprs:
+            # Can preserve Col expressions - Even if the name changes
+            if isinstance(ne.value, Col) and ne.value.name in partition_key_names:
+                old_to_new[ne.value.name] = ne.name
+        if set(old_to_new) != partition_key_names:
+            return None
+        output_names = list(select.schema.keys())
+        ordered_old = [old_names[i] for i in scheme.column_indices]
+        new_indices = tuple(output_names.index(old_to_new[old]) for old in ordered_old)
+        return HashScheme(new_indices, scheme.modulus)
+    elif scheme not in (None, "inherit"):  # pragma: no cover
+        return None  # Guard against new/unsupported scheme types
+    else:
+        return scheme
+
+
+def _remap_scheme_simple(
+    ir: IR, scheme: HashScheme | None | str, child_index: int
+) -> HashScheme | None | str:
+    # Called when we know the IR node preserves partitioning.
+    # Just remap to the new schema if possible.
+    if isinstance(scheme, HashScheme):
+        old_names = list(ir.children[child_index].schema.keys())
+        new_name_to_idx = {name: i for i, name in enumerate(ir.schema.keys())}
+        try:
+            new_indices = tuple(
+                new_name_to_idx[old_names[i]] for i in scheme.column_indices
+            )
+        except (IndexError, KeyError):
+            return None  # Column missing in old or new schema
+        return HashScheme(new_indices, scheme.modulus)
+    else:
+        return scheme  # None or "inherit" passes through unchanged
+
+
+def maybe_remap_partitioning(
+    ir: IR, partitioning: Partitioning | None, *, child_index: int = 0
 ) -> Partitioning | None:
     """
-    Remap partitioning column indices from old schema to new schema.
-
-    Since HashScheme uses column indices rather than names, we need to
-    remap indices when propagating partitioning through operations that
-    may change the schema (column order or presence).
+    Remap partitioning for simple IR nodes.
 
     Parameters
     ----------
-    partitioning
-        The partitioning to remap.
-    old_schema
-        The schema where the partitioning was established.
-    new_schema
-        The new schema to remap to.
-
-    Returns
-    -------
-    The remapped partitioning, or None if the inter-rank partitioning
-    columns are not present in the new schema.
-    """
-    if partitioning is None:
-        return None
-
-    old_names = list(old_schema.keys())
-    new_name_to_idx = {name: i for i, name in enumerate(new_schema.keys())}
-
-    def remap_hash_scheme(hs: HashScheme | None | str) -> HashScheme | None | str:
-        if isinstance(hs, HashScheme):
-            try:
-                new_indices = tuple(
-                    new_name_to_idx[old_names[i]] for i in hs.column_indices
-                )
-            except (IndexError, KeyError):
-                return None  # Column missing in old or new schema
-            return HashScheme(new_indices, hs.modulus)
-        else:
-            return hs  # None or "inherit" passes through unchanged
-
-    new_inter_rank = remap_hash_scheme(partitioning.inter_rank)
-    new_local = remap_hash_scheme(partitioning.local)
-    return Partitioning(inter_rank=new_inter_rank, local=new_local)
-
-
-def remap_partitioning_select(
-    select: Select, partitioning: Partitioning | None
-) -> Partitioning | None:
-    """
-    Remap partitioning for simple Select nodes.
-
-    Parameters
-    ----------
-    select
-        The select node.
+    ir
+        The IR node.
     partitioning
         The input partitioning.
+    child_index
+        The index of the child IR node. Default is 0.
 
     Returns
     -------
     The remapped partitioning. When partition keys are not preserved,
-    inter_rank (and optionally local) will be None.
+    the corresponding scheme will be set to None. When the original
+    partitioning is None, the output will also be None.
 
     Notes
     -----
@@ -193,38 +193,18 @@ def remap_partitioning_select(
     """
     if partitioning is None:
         return None  # Nothing to preserve
-
-    old_schema = select.children[0].schema
-
-    def _process_scheme(scheme: HashScheme | None | str) -> HashScheme | None | str:
-        if isinstance(scheme, HashScheme):
-            try:
-                old_names = list(old_schema.keys())
-                partition_key_names = {old_names[i] for i in scheme.column_indices}
-            except IndexError:
-                return None
-            # Map old key name -> output name
-            old_to_new: dict[str, str] = {}
-            for ne in select.exprs:
-                # Can preserve Col expressions - Even if the name changes
-                if isinstance(ne.value, Col) and ne.value.name in partition_key_names:
-                    old_to_new[ne.value.name] = ne.name
-            if set(old_to_new) != partition_key_names:
-                return None
-            output_names = list(select.schema.keys())
-            ordered_old = [old_names[i] for i in scheme.column_indices]
-            new_indices = tuple(
-                output_names.index(old_to_new[old]) for old in ordered_old
-            )
-            return HashScheme(new_indices, scheme.modulus)
-        if scheme not in (None, "inherit"):  # pragma: no cover
-            return None
-        return scheme
-
-    return Partitioning(
-        inter_rank=_process_scheme(partitioning.inter_rank),
-        local=_process_scheme(partitioning.local),
-    )
+    elif isinstance(ir, Select):
+        return Partitioning(
+            inter_rank=_remap_scheme_select(ir, partitioning.inter_rank),
+            local=_remap_scheme_select(ir, partitioning.local),
+        )
+    elif isinstance(ir, (Cache, Join, Projection, Filter)):
+        return Partitioning(
+            inter_rank=_remap_scheme_simple(ir, partitioning.inter_rank, child_index),
+            local=_remap_scheme_simple(ir, partitioning.local, child_index),
+        )
+    else:
+        return None
 
 
 async def send_metadata(
