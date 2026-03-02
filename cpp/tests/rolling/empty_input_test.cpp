@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -43,7 +43,7 @@ auto collect_list() { return cudf::make_collect_list_aggregation<cudf::rolling_a
 auto udf()
 {
   return cudf::make_udf_aggregation<cudf::rolling_aggregation>(
-    cudf::udf_type::CUDA, "", cudf::data_type{cudf::type_id::INT32});
+    cudf::udf_source_type::CUDA, "", cudf::data_type{cudf::type_id::INT32});
 }
 
 // Constants for rolling_window.

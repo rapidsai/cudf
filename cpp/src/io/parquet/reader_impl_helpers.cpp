@@ -96,7 +96,8 @@ cuda::std::optional<LogicalType> converted_to_logical_type(SchemaElement const& 
  */
 type_id to_type_id(SchemaElement const& schema,
                    bool strings_to_categorical,
-                   type_id timestamp_type_id)
+                   type_id timestamp_type_id,
+                   type_id decimal_type_id)
 {
   auto const physical_type = schema.type;
   auto const arrow_type    = schema.arrow_type;
@@ -1611,7 +1612,8 @@ aggregate_reader_metadata::select_columns(
   bool include_index,
   bool strings_to_categorical,
   bool ignore_missing_columns,
-  type_id timestamp_type_id)
+  type_id timestamp_type_id,
+  type_id decimal_type_id)
 {
   auto const find_schema_child =
     [&](SchemaElement const& schema_elem, std::string_view name, int const pfm_idx = 0) {
@@ -1653,10 +1655,11 @@ aggregate_reader_metadata::select_columns(
       auto const one_level_list = schema_elem.is_one_level_list(get_schema(schema_elem.parent_idx));
 
       // if we're at the root, this is a new output column
-      auto const col_type = one_level_list
-                              ? type_id::LIST
-                              : to_type_id(schema_elem, strings_to_categorical, timestamp_type_id);
-      auto const dtype    = to_data_type(col_type, schema_elem);
+      auto const col_type =
+        one_level_list
+          ? type_id::LIST
+          : to_type_id(schema_elem, strings_to_categorical, timestamp_type_id, decimal_type_id);
+      auto const dtype = to_data_type(col_type, schema_elem);
 
       cudf::io::detail::inline_column_buffer output_col(
         dtype, schema_elem.repetition_type == FieldRepetitionType::OPTIONAL);
@@ -1695,7 +1698,7 @@ aggregate_reader_metadata::select_columns(
         if (one_level_list) {
           // determine the element data type
           auto const element_type =
-            to_type_id(schema_elem, strings_to_categorical, timestamp_type_id);
+            to_type_id(schema_elem, strings_to_categorical, timestamp_type_id, decimal_type_id);
           auto const element_dtype = to_data_type(element_type, schema_elem);
 
           cudf::io::detail::inline_column_buffer element_col(

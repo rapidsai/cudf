@@ -1327,3 +1327,13 @@ def test_series_astype_no_copy(copy):
     result = gsr.astype("int64", copy=copy)
     assert_eq(result, gsr)
     assert (result is gsr) is (not copy)
+
+
+def test_astype_aware_to_naive_raises():
+    data = [datetime.datetime(2020, 1, 1, tzinfo=datetime.timezone.utc)]
+    pd_ser = pd.Series(data)
+    cudf_ser = cudf.Series(data)
+    with pytest.raises(TypeError):
+        cudf_ser.astype("datetime64[ns]")
+    with pytest.raises(TypeError):
+        pd_ser.astype("datetime64[ns]")
