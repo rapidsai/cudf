@@ -14,11 +14,10 @@ import pylibcudf as plc
 from cudf.core._internals import binaryop
 from cudf.core.column.column import (
     ColumnBase,
-    _handle_nulls,
     dtype_from_pylibcudf_column,
 )
 from cudf.core.dtype.validators import is_dtype_obj_interval
-from cudf.core.dtypes import IntervalDtype, _dtype_to_metadata
+from cudf.core.dtypes import IntervalDtype
 from cudf.utils.dtypes import get_dtype_of_same_kind
 from cudf.utils.scalar import maybe_nested_pa_scalar_to_py
 
@@ -45,23 +44,13 @@ class IntervalColumn(ColumnBase):
             return cast("pd.ArrowDtype", self.dtype).pyarrow_dtype.closed
 
     def to_arrow(self) -> pa.Array:
-        typ = self.dtype.to_arrow()  # type: ignore[union-attr]
-        struct_arrow = self.plc_column.to_arrow(
-            metadata=_dtype_to_metadata(self.dtype)
+        pa_array = super().to_arrow()
+        pa_type = (
+            self.dtype.to_arrow()
+            if isinstance(self.dtype, IntervalDtype)
+            else cast("pd.ArrowDtype", self.dtype).pyarrow_dtype
         )
-        possibly_null_struct_arrow = _handle_nulls(struct_arrow)
-
-        # Disable null handling for all null arrays because those cannot be
-        # passed to from_storage below, in that case we leave the struct
-        # structure in place.
-        if not isinstance(possibly_null_struct_arrow, pa.lib.NullArray):
-            struct_arrow = possibly_null_struct_arrow
-
-        if len(struct_arrow) == 0:
-            # struct arrow is pa.struct array with null children types
-            # we need to make sure its children have non-null type
-            struct_arrow = pa.array([], typ.storage_type)
-        return pa.ExtensionArray.from_storage(typ, struct_arrow)
+        return pa.ExtensionArray.from_storage(pa_type, pa_array)
 
     @classmethod
     def _deserialize_plc_column(

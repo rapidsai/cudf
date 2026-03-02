@@ -124,31 +124,38 @@ output=$(python ci/cudf_pandas_scripts/fetch_pandas_versions.py "$pandas_version
 # Convert the comma-separated list into an array
 IFS=',' read -r -a versions <<< "$output"
 
-for version in "${versions[@]}"; do
-    echo "Installing pandas version: ${version}"
-    # This loop tests cudf.pandas compatibility with older pandas-numpy versions,
-    # requiring numpy<2. cupy>=14 dropped support for numpy<2, so we explicitly
-    # downgrade cupy here to avoid an import failure when cupy tries
-    # to load against the older numpy.
-    python -m pip install "numpy>=1.23,<2.0a0" "pandas==${version}.*" "cupy-cuda${RAPIDS_CUDA_VERSION%%.*}x<14"
-    python -m pytest -p cudf.pandas \
-        --ignore=./python/cudf/cudf_pandas_tests/third_party_integration_tests/ \
-        --numprocesses=8 \
-        --dist=worksteal \
-        -k "not profiler" \
-        -m "not serial" \
-        --cov-config=./python/cudf/.coveragerc \
-        --cov=cudf \
-        --cov-report=xml:"${RAPIDS_COVERAGE_DIR}/cudf-pandas-coverage.xml" \
-        --cov-report=term \
-        ./python/cudf/cudf_pandas_tests/
 
-    # NOTE: We don't currently run serial tests (only 1 as of 2025-07-25)
-    # with multiple versions of pandas.
+version_lte() {
+  [ "$1" = "$(echo -e "$1\n$2" | sort -V | head -n1)" ]
+}
 
-    python -m pytest -p cudf.pandas \
-        --ignore=./python/cudf/cudf_pandas_tests/third_party_integration_tests/ \
-        --numprocesses=0 \
-        -k "profiler" \
-        ./python/cudf/cudf_pandas_tests/
-done
+if version_lte "${RAPIDS_PY_VERSION}" "3.13"; then
+    for version in "${versions[@]}"; do
+        echo "Installing pandas version: ${version}"
+        # This loop tests cudf.pandas compatibility with older pandas-numpy versions,
+        # requiring numpy<2. cupy>=14 dropped support for numpy<2, so we explicitly
+        # downgrade cupy here to avoid an import failure when cupy tries
+        # to load against the older numpy.
+        python -m pip install "numpy>=1.23,<2.0a0" "pandas==${version}.*" "cupy-cuda${RAPIDS_CUDA_VERSION%%.*}x<14"
+        python -m pytest -p cudf.pandas \
+            --ignore=./python/cudf/cudf_pandas_tests/third_party_integration_tests/ \
+            --numprocesses=8 \
+            --dist=worksteal \
+            -k "not profiler" \
+            -m "not serial" \
+            --cov-config=./python/cudf/.coveragerc \
+            --cov=cudf \
+            --cov-report=xml:"${RAPIDS_COVERAGE_DIR}/cudf-pandas-coverage.xml" \
+            --cov-report=term \
+            ./python/cudf/cudf_pandas_tests/
+
+        # NOTE: We don't currently run serial tests (only 1 as of 2025-07-25)
+        # with multiple versions of pandas.
+
+        python -m pytest -p cudf.pandas \
+            --ignore=./python/cudf/cudf_pandas_tests/third_party_integration_tests/ \
+            --numprocesses=0 \
+            -k "profiler" \
+            ./python/cudf/cudf_pandas_tests/
+    done
+fi
