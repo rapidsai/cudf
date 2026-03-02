@@ -167,7 +167,7 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
                 & (pl.col("ca_gmt_offset") == gmt_offset)
             )
             .group_by("i_item_id")
-            .agg(pl.col(ch["ext_col"]).sum().alias("total_sales"))
+            .agg(pl.col(str(ch["ext_col"])).sum().alias("total_sales"))
             .select(["i_item_id", "total_sales"])
         )
         for ch in channels

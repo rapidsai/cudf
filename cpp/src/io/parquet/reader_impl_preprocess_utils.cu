@@ -20,7 +20,6 @@
 #include <cuda/iterator>
 #include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
-#include <thrust/iterator/discard_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/scan.h>
 #include <thrust/sequence.h>
@@ -571,7 +570,7 @@ void decode_page_headers(pass_intermediate_data& pass,
   auto const page_counts_end = cudf::detail::reduce_by_key(page_keys,
                                                            page_keys + pass.pages.size(),
                                                            cuda::make_constant_iterator(1),
-                                                           thrust::make_discard_iterator(),
+                                                           cuda::make_discard_iterator(),
                                                            page_counts.begin(),
                                                            cuda::std::plus<>{},
                                                            stream)

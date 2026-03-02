@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from pylibcudf.io.types cimport SourceInfo
@@ -7,6 +7,7 @@ from pylibcudf.libcudf.io.parquet_metadata cimport(
     parquet_schema,
     parquet_column_schema,
 )
+from pylibcudf.types cimport DataType
 
 cdef class ParquetColumnSchema:
     cdef parquet_column_schema column_schema
@@ -22,6 +23,8 @@ cdef class ParquetColumnSchema:
 
     cpdef list children(self)
 
+    cpdef DataType cudf_type(self)
+
 
 cdef class ParquetSchema:
     cdef parquet_schema schema
@@ -30,6 +33,8 @@ cdef class ParquetSchema:
     cdef from_schema(parquet_schema schema)
 
     cpdef ParquetColumnSchema root(self)
+
+    cpdef dict column_types(self)
 
 
 cdef class ParquetMetadata:

@@ -471,6 +471,22 @@ def test_groupby_quantile(request, interpolation, q):
     assert_groupby_results_equal(pdresult, gdresult)
 
 
+def test_groupby_quantile_array_multiple_levels():
+    pdf = pd.DataFrame(
+        {
+            "A": [0, 1, 2],
+            "B": [3, 4, 5],
+            "c": ["a", "a", "a"],
+            "d": ["a", "a", "b"],
+        }
+    )
+    gdf = cudf.DataFrame(pdf)
+
+    expected = pdf.groupby(["c", "d"]).quantile([0.25, 0.75])
+    result = gdf.groupby(["c", "d"]).quantile([0.25, 0.75])
+    assert_groupby_results_equal(expected, result)
+
+
 def test_groupby_std():
     raw_data = {
         "x": [1, 2, 3, 1, 2, 2, 1, None, 3, 2],

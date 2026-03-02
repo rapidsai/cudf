@@ -84,11 +84,11 @@ int64_t find_next_split(int64_t cur_pos,
  *
  * @return A tuple of Parquet clock rate and Parquet decimal type.
  */
-[[nodiscard]] std::tuple<int32_t, std::optional<LogicalType>> conversion_info(
+[[nodiscard]] std::tuple<int32_t, cuda::std::optional<LogicalType>> conversion_info(
   type_id column_type_id,
   type_id timestamp_type_id,
   Type physical,
-  std::optional<LogicalType> logical_type);
+  cuda::std::optional<LogicalType> logical_type);
 
 /**
  * @brief return compressed and total size of the data in a row group

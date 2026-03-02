@@ -25,13 +25,13 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
+#include <cuda/iterator>
 #include <cuda/std/functional>
 #include <cuda/std/utility>
 #include <thrust/binary_search.h>
 #include <thrust/execution_policy.h>
 #include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
-#include <thrust/iterator/discard_iterator.h>
 #include <thrust/iterator/iterator_categories.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/reduce.h>
@@ -1351,7 +1351,7 @@ std::unique_ptr<packed_partition_buf_size_and_dst_buf_info> compute_splits(
                           keys,
                           keys + num_bufs,
                           values,
-                          thrust::make_discard_iterator(),
+                          cuda::make_discard_iterator(),
                           d_buf_sizes);
   }
 
@@ -1888,7 +1888,7 @@ struct contiguous_split_state {
                           keys,
                           keys + num_batches_total,
                           values,
-                          thrust::make_discard_iterator(),
+                          cuda::make_discard_iterator(),
                           dst_valid_count_output_iterator{d_orig_dst_buf_info.data()});
 
     detail::cuda_memcpy<dst_buf_info>(h_orig_dst_buf_info, d_orig_dst_buf_info, stream);
