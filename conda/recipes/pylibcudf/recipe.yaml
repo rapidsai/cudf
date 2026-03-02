@@ -11,7 +11,7 @@ context:
   head_rev: '${{ git.head_rev(".")[:8] }}'
   py_abi_min: ${{ env.get("RAPIDS_PY_VERSION") }}
   py_buildstring : ${{ py_abi_min | version_to_buildstring }}
-  py_runtime_latest: "3.13"
+  py_runtime_latest: "3.14"
 
 package:
   name: pylibcudf
