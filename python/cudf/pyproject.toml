@@ -26,7 +26,7 @@ dependencies = [
     "libcudf==26.4.*,>=0.0.0a0",
     "numba-cuda>=0.22.2",
     "numba>=0.60.0,<0.65.0",
-    "numpy>=1.23,<3.0",
+    "numpy>=1.26,<3.0",
     "nvtx>=0.2.1",
     "packaging",
     "pandas>=2.0,<2.4.0",
