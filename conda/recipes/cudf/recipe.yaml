@@ -69,7 +69,7 @@ requirements:
     - cuda-version =${{ cuda_version }}
     - ${{ stdlib("c") }}
   host:
-    - cython >=3.0.3,<3.2.0
+    - cython >=3.2.2
     - pip
     - python =${{ py_abi_min }}
     - python-abi3 ${{ py_abi_min }}.*
@@ -93,7 +93,7 @@ requirements:
     - cupy >=13.6.0,!=14.0.0
     - numba-cuda >=0.22.2
     - numba >=0.60.0,<0.65.0
-    - numpy >=1.23,<3.0
+    - numpy >=1.26,<3.0
     - pyarrow>=19.0.0
     - libcudf =${{ version }}
     - pylibcudf =${{ version }}
