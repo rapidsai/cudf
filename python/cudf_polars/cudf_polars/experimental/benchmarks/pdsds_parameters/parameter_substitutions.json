@@ -689,6 +689,160 @@
           "TN"
         ]
       },
+      "37": {
+        "price": 12,
+        "manufact": [
+          971,
+          695,
+          854,
+          709
+        ],
+        "invdate": "2001-04-23"
+      },
+      "38": {
+        "dms": 1176
+      },
+      "39": {
+        "year": 2002,
+        "month": 4
+      },
+      "40": {
+        "sales_date": "2002-03-20",
+        "year": 2002
+      },
+      "41": {
+        "manufact": 819,
+        "rules": [
+          {
+            "category": "Women",
+            "colors": [
+              "midnight",
+              "pale"
+            ],
+            "units": [
+              "Bundle",
+              "Case"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          },
+          {
+            "category": "Women",
+            "colors": [
+              "navy",
+              "navajo"
+            ],
+            "units": [
+              "Gross",
+              "Tsp"
+            ],
+            "sizes": [
+              "petite",
+              "N/A"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "sandy",
+              "cornsilk"
+            ],
+            "units": [
+              "Cup",
+              "Oz"
+            ],
+            "sizes": [
+              "economy",
+              "large"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "beige",
+              "bisque"
+            ],
+            "units": [
+              "Gram",
+              "Tbl"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          },
+          {
+            "category": "Women",
+            "colors": [
+              "thistle",
+              "brown"
+            ],
+            "units": [
+              "Unknown",
+              "Each"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          },
+          {
+            "category": "Women",
+            "colors": [
+              "almond",
+              "dodger"
+            ],
+            "units": [
+              "N/A",
+              "Carton"
+            ],
+            "sizes": [
+              "petite",
+              "N/A"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "lime",
+              "burlywood"
+            ],
+            "units": [
+              "Bunch",
+              "Pallet"
+            ],
+            "sizes": [
+              "economy",
+              "large"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "light",
+              "plum"
+            ],
+            "units": [
+              "Dram",
+              "Lb"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          }
+        ]
+      },
+      "42": {
+        "year": 2002,
+        "month": 12
+      },
+      "43": {
+        "year": 2002,
+        "gmt": -5.0
+      },
       "63": {
         "dms": 1176
       },
@@ -858,6 +1012,95 @@
         ],
         "np_min": 100,
         "np_max": 200
+      },
+      "86": {
+        "d_month_seq": 1176
+      },
+      "87": {
+        "d_month_seq": 1176
+      },
+      "88": {
+        "s_store_name": "ese",
+        "hd_dep_count1": 1,
+        "hd_dep_count2": -1,
+        "hd_dep_count3": 3
+      },
+      "89": {
+        "year": 2001,
+        "category1": [
+          "Electronics",
+          "Men",
+          "Women"
+        ],
+        "class1": [
+          "stereo",
+          "accessories",
+          "fragrances"
+        ],
+        "category2": [
+          "Children",
+          "Sports",
+          "Shoes"
+        ],
+        "class2": [
+          "toddlers",
+          "outdoor",
+          "womens"
+        ]
+      },
+      "90": {
+        "am_hour": 8,
+        "pm_hour": 19,
+        "hd_dep_count": 9,
+        "wp_char_count_min": 5000,
+        "wp_char_count_max": 5200
+      },
+      "91": {
+        "year": 2001,
+        "month": 12,
+        "marital_status1": "M",
+        "education_status1": "Unknown",
+        "marital_status2": "W",
+        "education_status2": "Advanced Degree",
+        "hd_buy_potential": ">10000%",
+        "ca_gmt_offset": -6
+      },
+      "92": {
+        "manufact_id": 10,
+        "date": "2002-01-05"
+      },
+      "93": {
+        "reason_desc": "reason 70"
+      },
+      "94": {
+        "date": "2000-5-01",
+        "state": "IA",
+        "web_company_name": "pri"
+      },
+      "95": {
+        "date": "2000-5-01",
+        "state": "IA",
+        "web_company_name": "pri"
+      },
+      "96": {
+        "t_hour": 8,
+        "t_minute": 30,
+        "hd_dep_count": 4,
+        "s_store_name": "ese"
+      },
+      "97": {
+        "d_month_seq": 1176
+      },
+      "98": {
+        "categories": [
+          "Books",
+          "Women",
+          "Electronics"
+        ],
+        "date": "2001-01-08"
+      },
+      "99": {
+        "d_month_seq": 1176
       }
     },
     "10": {
@@ -1549,6 +1792,160 @@
           "SD"
         ]
       },
+      "37": {
+        "price": 12,
+        "manufact": [
+          971,
+          695,
+          854,
+          709
+        ],
+        "invdate": "2001-04-23"
+      },
+      "38": {
+        "dms": 1176
+      },
+      "39": {
+        "year": 2002,
+        "month": 4
+      },
+      "40": {
+        "sales_date": "2002-03-20",
+        "year": 2002
+      },
+      "41": {
+        "manufact": 819,
+        "rules": [
+          {
+            "category": "Women",
+            "colors": [
+              "midnight",
+              "pale"
+            ],
+            "units": [
+              "Bundle",
+              "Case"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          },
+          {
+            "category": "Women",
+            "colors": [
+              "navy",
+              "navajo"
+            ],
+            "units": [
+              "Gross",
+              "Tsp"
+            ],
+            "sizes": [
+              "petite",
+              "N/A"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "sandy",
+              "cornsilk"
+            ],
+            "units": [
+              "Cup",
+              "Oz"
+            ],
+            "sizes": [
+              "economy",
+              "large"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "beige",
+              "bisque"
+            ],
+            "units": [
+              "Gram",
+              "Tbl"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          },
+          {
+            "category": "Women",
+            "colors": [
+              "thistle",
+              "brown"
+            ],
+            "units": [
+              "Unknown",
+              "Each"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          },
+          {
+            "category": "Women",
+            "colors": [
+              "almond",
+              "dodger"
+            ],
+            "units": [
+              "N/A",
+              "Carton"
+            ],
+            "sizes": [
+              "petite",
+              "N/A"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "lime",
+              "burlywood"
+            ],
+            "units": [
+              "Bunch",
+              "Pallet"
+            ],
+            "sizes": [
+              "economy",
+              "large"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "light",
+              "plum"
+            ],
+            "units": [
+              "Dram",
+              "Lb"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          }
+        ]
+      },
+      "42": {
+        "year": 2002,
+        "month": 12
+      },
+      "43": {
+        "year": 2002,
+        "gmt": -6.0
+      },
       "63": {
         "dms": 1176
       },
@@ -1718,6 +2115,95 @@
         ],
         "np_min": 100,
         "np_max": 200
+      },
+      "86": {
+        "d_month_seq": 1176
+      },
+      "87": {
+        "d_month_seq": 1176
+      },
+      "88": {
+        "s_store_name": "ese",
+        "hd_dep_count1": 1,
+        "hd_dep_count2": -1,
+        "hd_dep_count3": 3
+      },
+      "89": {
+        "year": 2001,
+        "category1": [
+          "Electronics",
+          "Men",
+          "Women"
+        ],
+        "class1": [
+          "stereo",
+          "accessories",
+          "fragrances"
+        ],
+        "category2": [
+          "Children",
+          "Sports",
+          "Shoes"
+        ],
+        "class2": [
+          "toddlers",
+          "outdoor",
+          "womens"
+        ]
+      },
+      "90": {
+        "am_hour": 8,
+        "pm_hour": 19,
+        "hd_dep_count": 9,
+        "wp_char_count_min": 5000,
+        "wp_char_count_max": 5200
+      },
+      "91": {
+        "year": 2001,
+        "month": 12,
+        "marital_status1": "M",
+        "education_status1": "Unknown",
+        "marital_status2": "W",
+        "education_status2": "Advanced Degree",
+        "hd_buy_potential": ">10000%",
+        "ca_gmt_offset": -6
+      },
+      "92": {
+        "manufact_id": 10,
+        "date": "2002-01-05"
+      },
+      "93": {
+        "reason_desc": "reason 70"
+      },
+      "94": {
+        "date": "2000-5-01",
+        "state": "IA",
+        "web_company_name": "pri"
+      },
+      "95": {
+        "date": "2000-5-01",
+        "state": "IA",
+        "web_company_name": "pri"
+      },
+      "96": {
+        "t_hour": 8,
+        "t_minute": 30,
+        "hd_dep_count": 4,
+        "s_store_name": "ese"
+      },
+      "97": {
+        "d_month_seq": 1176
+      },
+      "98": {
+        "categories": [
+          "Books",
+          "Women",
+          "Electronics"
+        ],
+        "date": "2001-01-08"
+      },
+      "99": {
+        "d_month_seq": 1176
       }
     },
     "50": {
@@ -2409,6 +2895,160 @@
           "SD"
         ]
       },
+      "37": {
+        "price": 12,
+        "manufact": [
+          971,
+          695,
+          854,
+          709
+        ],
+        "invdate": "2001-04-23"
+      },
+      "38": {
+        "dms": 1176
+      },
+      "39": {
+        "year": 2002,
+        "month": 4
+      },
+      "40": {
+        "sales_date": "2002-03-20",
+        "year": 2002
+      },
+      "41": {
+        "manufact": 819,
+        "rules": [
+          {
+            "category": "Women",
+            "colors": [
+              "midnight",
+              "pale"
+            ],
+            "units": [
+              "Bundle",
+              "Case"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          },
+          {
+            "category": "Women",
+            "colors": [
+              "navy",
+              "navajo"
+            ],
+            "units": [
+              "Gross",
+              "Tsp"
+            ],
+            "sizes": [
+              "petite",
+              "N/A"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "sandy",
+              "cornsilk"
+            ],
+            "units": [
+              "Cup",
+              "Oz"
+            ],
+            "sizes": [
+              "economy",
+              "large"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "beige",
+              "bisque"
+            ],
+            "units": [
+              "Gram",
+              "Tbl"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          },
+          {
+            "category": "Women",
+            "colors": [
+              "thistle",
+              "brown"
+            ],
+            "units": [
+              "Unknown",
+              "Each"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          },
+          {
+            "category": "Women",
+            "colors": [
+              "almond",
+              "dodger"
+            ],
+            "units": [
+              "N/A",
+              "Carton"
+            ],
+            "sizes": [
+              "petite",
+              "N/A"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "lime",
+              "burlywood"
+            ],
+            "units": [
+              "Bunch",
+              "Pallet"
+            ],
+            "sizes": [
+              "economy",
+              "large"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "light",
+              "plum"
+            ],
+            "units": [
+              "Dram",
+              "Lb"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          }
+        ]
+      },
+      "42": {
+        "year": 2002,
+        "month": 12
+      },
+      "43": {
+        "year": 2002,
+        "gmt": -6.0
+      },
       "63": {
         "dms": 1176
       },
@@ -2578,6 +3218,95 @@
         ],
         "np_min": 100,
         "np_max": 200
+      },
+      "86": {
+        "d_month_seq": 1176
+      },
+      "87": {
+        "d_month_seq": 1176
+      },
+      "88": {
+        "s_store_name": "ese",
+        "hd_dep_count1": 1,
+        "hd_dep_count2": -1,
+        "hd_dep_count3": 3
+      },
+      "89": {
+        "year": 2001,
+        "category1": [
+          "Electronics",
+          "Men",
+          "Women"
+        ],
+        "class1": [
+          "stereo",
+          "accessories",
+          "fragrances"
+        ],
+        "category2": [
+          "Children",
+          "Sports",
+          "Shoes"
+        ],
+        "class2": [
+          "toddlers",
+          "outdoor",
+          "womens"
+        ]
+      },
+      "90": {
+        "am_hour": 8,
+        "pm_hour": 19,
+        "hd_dep_count": 9,
+        "wp_char_count_min": 5000,
+        "wp_char_count_max": 5200
+      },
+      "91": {
+        "year": 2001,
+        "month": 12,
+        "marital_status1": "M",
+        "education_status1": "Unknown",
+        "marital_status2": "W",
+        "education_status2": "Advanced Degree",
+        "hd_buy_potential": ">10000%",
+        "ca_gmt_offset": -6
+      },
+      "92": {
+        "manufact_id": 10,
+        "date": "2002-01-05"
+      },
+      "93": {
+        "reason_desc": "reason 70"
+      },
+      "94": {
+        "date": "2000-5-01",
+        "state": "IA",
+        "web_company_name": "pri"
+      },
+      "95": {
+        "date": "2000-5-01",
+        "state": "IA",
+        "web_company_name": "pri"
+      },
+      "96": {
+        "t_hour": 8,
+        "t_minute": 30,
+        "hd_dep_count": 4,
+        "s_store_name": "ese"
+      },
+      "97": {
+        "d_month_seq": 1176
+      },
+      "98": {
+        "categories": [
+          "Books",
+          "Women",
+          "Electronics"
+        ],
+        "date": "2001-01-08"
+      },
+      "99": {
+        "d_month_seq": 1176
       }
     },
     "100": {
@@ -3269,6 +3998,160 @@
           "LA"
         ]
       },
+      "37": {
+        "price": 12,
+        "manufact": [
+          971,
+          695,
+          854,
+          709
+        ],
+        "invdate": "2001-04-23"
+      },
+      "38": {
+        "dms": 1176
+      },
+      "39": {
+        "year": 2002,
+        "month": 4
+      },
+      "40": {
+        "sales_date": "2002-03-20",
+        "year": 2002
+      },
+      "41": {
+        "manufact": 819,
+        "rules": [
+          {
+            "category": "Women",
+            "colors": [
+              "midnight",
+              "pale"
+            ],
+            "units": [
+              "Bundle",
+              "Case"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          },
+          {
+            "category": "Women",
+            "colors": [
+              "navy",
+              "navajo"
+            ],
+            "units": [
+              "Gross",
+              "Tsp"
+            ],
+            "sizes": [
+              "petite",
+              "N/A"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "sandy",
+              "cornsilk"
+            ],
+            "units": [
+              "Cup",
+              "Oz"
+            ],
+            "sizes": [
+              "economy",
+              "large"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "beige",
+              "bisque"
+            ],
+            "units": [
+              "Gram",
+              "Tbl"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          },
+          {
+            "category": "Women",
+            "colors": [
+              "thistle",
+              "brown"
+            ],
+            "units": [
+              "Unknown",
+              "Each"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          },
+          {
+            "category": "Women",
+            "colors": [
+              "almond",
+              "dodger"
+            ],
+            "units": [
+              "N/A",
+              "Carton"
+            ],
+            "sizes": [
+              "petite",
+              "N/A"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "lime",
+              "burlywood"
+            ],
+            "units": [
+              "Bunch",
+              "Pallet"
+            ],
+            "sizes": [
+              "economy",
+              "large"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "light",
+              "plum"
+            ],
+            "units": [
+              "Dram",
+              "Lb"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          }
+        ]
+      },
+      "42": {
+        "year": 2002,
+        "month": 12
+      },
+      "43": {
+        "year": 2002,
+        "gmt": -6.0
+      },
       "63": {
         "dms": 1176
       },
@@ -3438,6 +4321,95 @@
         ],
         "np_min": 100,
         "np_max": 200
+      },
+      "86": {
+        "d_month_seq": 1176
+      },
+      "87": {
+        "d_month_seq": 1176
+      },
+      "88": {
+        "s_store_name": "ese",
+        "hd_dep_count1": 1,
+        "hd_dep_count2": -1,
+        "hd_dep_count3": 3
+      },
+      "89": {
+        "year": 2001,
+        "category1": [
+          "Electronics",
+          "Men",
+          "Women"
+        ],
+        "class1": [
+          "stereo",
+          "accessories",
+          "fragrances"
+        ],
+        "category2": [
+          "Children",
+          "Sports",
+          "Shoes"
+        ],
+        "class2": [
+          "toddlers",
+          "outdoor",
+          "womens"
+        ]
+      },
+      "90": {
+        "am_hour": 8,
+        "pm_hour": 19,
+        "hd_dep_count": 9,
+        "wp_char_count_min": 5000,
+        "wp_char_count_max": 5200
+      },
+      "91": {
+        "year": 2001,
+        "month": 12,
+        "marital_status1": "M",
+        "education_status1": "Unknown",
+        "marital_status2": "W",
+        "education_status2": "Advanced Degree",
+        "hd_buy_potential": ">10000%",
+        "ca_gmt_offset": -6
+      },
+      "92": {
+        "manufact_id": 10,
+        "date": "2002-01-05"
+      },
+      "93": {
+        "reason_desc": "reason 70"
+      },
+      "94": {
+        "date": "2000-5-01",
+        "state": "IA",
+        "web_company_name": "pri"
+      },
+      "95": {
+        "date": "2000-5-01",
+        "state": "IA",
+        "web_company_name": "pri"
+      },
+      "96": {
+        "t_hour": 8,
+        "t_minute": 30,
+        "hd_dep_count": 4,
+        "s_store_name": "ese"
+      },
+      "97": {
+        "d_month_seq": 1176
+      },
+      "98": {
+        "categories": [
+          "Books",
+          "Women",
+          "Electronics"
+        ],
+        "date": "2001-01-08"
+      },
+      "99": {
+        "d_month_seq": 1176
       }
     },
     "200": {
@@ -4129,6 +5101,160 @@
           "SD"
         ]
       },
+      "37": {
+        "price": 12,
+        "manufact": [
+          971,
+          695,
+          854,
+          709
+        ],
+        "invdate": "2001-04-23"
+      },
+      "38": {
+        "dms": 1176
+      },
+      "39": {
+        "year": 2002,
+        "month": 4
+      },
+      "40": {
+        "sales_date": "2002-03-20",
+        "year": 2002
+      },
+      "41": {
+        "manufact": 819,
+        "rules": [
+          {
+            "category": "Women",
+            "colors": [
+              "midnight",
+              "pale"
+            ],
+            "units": [
+              "Bundle",
+              "Case"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          },
+          {
+            "category": "Women",
+            "colors": [
+              "navy",
+              "navajo"
+            ],
+            "units": [
+              "Gross",
+              "Tsp"
+            ],
+            "sizes": [
+              "petite",
+              "N/A"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "sandy",
+              "cornsilk"
+            ],
+            "units": [
+              "Cup",
+              "Oz"
+            ],
+            "sizes": [
+              "economy",
+              "large"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "beige",
+              "bisque"
+            ],
+            "units": [
+              "Gram",
+              "Tbl"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          },
+          {
+            "category": "Women",
+            "colors": [
+              "thistle",
+              "brown"
+            ],
+            "units": [
+              "Unknown",
+              "Each"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          },
+          {
+            "category": "Women",
+            "colors": [
+              "almond",
+              "dodger"
+            ],
+            "units": [
+              "N/A",
+              "Carton"
+            ],
+            "sizes": [
+              "petite",
+              "N/A"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "lime",
+              "burlywood"
+            ],
+            "units": [
+              "Bunch",
+              "Pallet"
+            ],
+            "sizes": [
+              "economy",
+              "large"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "light",
+              "plum"
+            ],
+            "units": [
+              "Dram",
+              "Lb"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          }
+        ]
+      },
+      "42": {
+        "year": 2002,
+        "month": 12
+      },
+      "43": {
+        "year": 2002,
+        "gmt": -5.0
+      },
       "63": {
         "dms": 1176
       },
@@ -4298,6 +5424,95 @@
         ],
         "np_min": 100,
         "np_max": 200
+      },
+      "86": {
+        "d_month_seq": 1176
+      },
+      "87": {
+        "d_month_seq": 1176
+      },
+      "88": {
+        "s_store_name": "ese",
+        "hd_dep_count1": 1,
+        "hd_dep_count2": -1,
+        "hd_dep_count3": 3
+      },
+      "89": {
+        "year": 2001,
+        "category1": [
+          "Electronics",
+          "Men",
+          "Women"
+        ],
+        "class1": [
+          "stereo",
+          "accessories",
+          "fragrances"
+        ],
+        "category2": [
+          "Children",
+          "Sports",
+          "Shoes"
+        ],
+        "class2": [
+          "toddlers",
+          "outdoor",
+          "womens"
+        ]
+      },
+      "90": {
+        "am_hour": 8,
+        "pm_hour": 19,
+        "hd_dep_count": 9,
+        "wp_char_count_min": 5000,
+        "wp_char_count_max": 5200
+      },
+      "91": {
+        "year": 2001,
+        "month": 12,
+        "marital_status1": "M",
+        "education_status1": "Unknown",
+        "marital_status2": "W",
+        "education_status2": "Advanced Degree",
+        "hd_buy_potential": ">10000%",
+        "ca_gmt_offset": -6
+      },
+      "92": {
+        "manufact_id": 10,
+        "date": "2002-01-05"
+      },
+      "93": {
+        "reason_desc": "reason 70"
+      },
+      "94": {
+        "date": "2000-5-01",
+        "state": "IA",
+        "web_company_name": "pri"
+      },
+      "95": {
+        "date": "2000-5-01",
+        "state": "IA",
+        "web_company_name": "pri"
+      },
+      "96": {
+        "t_hour": 8,
+        "t_minute": 30,
+        "hd_dep_count": 4,
+        "s_store_name": "ese"
+      },
+      "97": {
+        "d_month_seq": 1176
+      },
+      "98": {
+        "categories": [
+          "Books",
+          "Women",
+          "Electronics"
+        ],
+        "date": "2001-01-08"
+      },
+      "99": {
+        "d_month_seq": 1176
       }
     },
     "400": {
@@ -4989,6 +6204,160 @@
           "SD"
         ]
       },
+      "37": {
+        "price": 12,
+        "manufact": [
+          971,
+          695,
+          854,
+          709
+        ],
+        "invdate": "2001-04-23"
+      },
+      "38": {
+        "dms": 1176
+      },
+      "39": {
+        "year": 2002,
+        "month": 4
+      },
+      "40": {
+        "sales_date": "2002-03-20",
+        "year": 2002
+      },
+      "41": {
+        "manufact": 819,
+        "rules": [
+          {
+            "category": "Women",
+            "colors": [
+              "midnight",
+              "pale"
+            ],
+            "units": [
+              "Bundle",
+              "Case"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          },
+          {
+            "category": "Women",
+            "colors": [
+              "navy",
+              "navajo"
+            ],
+            "units": [
+              "Gross",
+              "Tsp"
+            ],
+            "sizes": [
+              "petite",
+              "N/A"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "sandy",
+              "cornsilk"
+            ],
+            "units": [
+              "Cup",
+              "Oz"
+            ],
+            "sizes": [
+              "economy",
+              "large"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "beige",
+              "bisque"
+            ],
+            "units": [
+              "Gram",
+              "Tbl"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          },
+          {
+            "category": "Women",
+            "colors": [
+              "thistle",
+              "brown"
+            ],
+            "units": [
+              "Unknown",
+              "Each"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          },
+          {
+            "category": "Women",
+            "colors": [
+              "almond",
+              "dodger"
+            ],
+            "units": [
+              "N/A",
+              "Carton"
+            ],
+            "sizes": [
+              "petite",
+              "N/A"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "lime",
+              "burlywood"
+            ],
+            "units": [
+              "Bunch",
+              "Pallet"
+            ],
+            "sizes": [
+              "economy",
+              "large"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "light",
+              "plum"
+            ],
+            "units": [
+              "Dram",
+              "Lb"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          }
+        ]
+      },
+      "42": {
+        "year": 2002,
+        "month": 12
+      },
+      "43": {
+        "year": 2002,
+        "gmt": -6.0
+      },
       "63": {
         "dms": 1176
       },
@@ -5158,6 +6527,95 @@
         ],
         "np_min": 100,
         "np_max": 200
+      },
+      "86": {
+        "d_month_seq": 1176
+      },
+      "87": {
+        "d_month_seq": 1176
+      },
+      "88": {
+        "s_store_name": "ese",
+        "hd_dep_count1": 1,
+        "hd_dep_count2": -1,
+        "hd_dep_count3": 3
+      },
+      "89": {
+        "year": 2001,
+        "category1": [
+          "Electronics",
+          "Men",
+          "Women"
+        ],
+        "class1": [
+          "stereo",
+          "accessories",
+          "fragrances"
+        ],
+        "category2": [
+          "Children",
+          "Sports",
+          "Shoes"
+        ],
+        "class2": [
+          "toddlers",
+          "outdoor",
+          "womens"
+        ]
+      },
+      "90": {
+        "am_hour": 8,
+        "pm_hour": 19,
+        "hd_dep_count": 9,
+        "wp_char_count_min": 5000,
+        "wp_char_count_max": 5200
+      },
+      "91": {
+        "year": 2001,
+        "month": 12,
+        "marital_status1": "M",
+        "education_status1": "Unknown",
+        "marital_status2": "W",
+        "education_status2": "Advanced Degree",
+        "hd_buy_potential": ">10000%",
+        "ca_gmt_offset": -6
+      },
+      "92": {
+        "manufact_id": 10,
+        "date": "2002-01-05"
+      },
+      "93": {
+        "reason_desc": "reason 70"
+      },
+      "94": {
+        "date": "2000-5-01",
+        "state": "IA",
+        "web_company_name": "pri"
+      },
+      "95": {
+        "date": "2000-5-01",
+        "state": "IA",
+        "web_company_name": "pri"
+      },
+      "96": {
+        "t_hour": 8,
+        "t_minute": 30,
+        "hd_dep_count": 4,
+        "s_store_name": "ese"
+      },
+      "97": {
+        "d_month_seq": 1176
+      },
+      "98": {
+        "categories": [
+          "Books",
+          "Women",
+          "Electronics"
+        ],
+        "date": "2001-01-08"
+      },
+      "99": {
+        "d_month_seq": 1176
       }
     },
     "1000": {
@@ -5849,6 +7307,160 @@
           "AL"
         ]
       },
+      "37": {
+        "price": 12,
+        "manufact": [
+          971,
+          695,
+          854,
+          709
+        ],
+        "invdate": "2001-04-23"
+      },
+      "38": {
+        "dms": 1176
+      },
+      "39": {
+        "year": 2002,
+        "month": 4
+      },
+      "40": {
+        "sales_date": "2002-03-20",
+        "year": 2002
+      },
+      "41": {
+        "manufact": 819,
+        "rules": [
+          {
+            "category": "Women",
+            "colors": [
+              "midnight",
+              "pale"
+            ],
+            "units": [
+              "Bundle",
+              "Case"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          },
+          {
+            "category": "Women",
+            "colors": [
+              "navy",
+              "navajo"
+            ],
+            "units": [
+              "Gross",
+              "Tsp"
+            ],
+            "sizes": [
+              "petite",
+              "N/A"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "sandy",
+              "cornsilk"
+            ],
+            "units": [
+              "Cup",
+              "Oz"
+            ],
+            "sizes": [
+              "economy",
+              "large"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "beige",
+              "bisque"
+            ],
+            "units": [
+              "Gram",
+              "Tbl"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          },
+          {
+            "category": "Women",
+            "colors": [
+              "thistle",
+              "brown"
+            ],
+            "units": [
+              "Unknown",
+              "Each"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          },
+          {
+            "category": "Women",
+            "colors": [
+              "almond",
+              "dodger"
+            ],
+            "units": [
+              "N/A",
+              "Carton"
+            ],
+            "sizes": [
+              "petite",
+              "N/A"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "lime",
+              "burlywood"
+            ],
+            "units": [
+              "Bunch",
+              "Pallet"
+            ],
+            "sizes": [
+              "economy",
+              "large"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "light",
+              "plum"
+            ],
+            "units": [
+              "Dram",
+              "Lb"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          }
+        ]
+      },
+      "42": {
+        "year": 2002,
+        "month": 12
+      },
+      "43": {
+        "year": 2002,
+        "gmt": -6.0
+      },
       "63": {
         "dms": 1176
       },
@@ -6018,6 +7630,95 @@
         ],
         "np_min": 100,
         "np_max": 200
+      },
+      "86": {
+        "d_month_seq": 1176
+      },
+      "87": {
+        "d_month_seq": 1176
+      },
+      "88": {
+        "s_store_name": "ese",
+        "hd_dep_count1": 1,
+        "hd_dep_count2": -1,
+        "hd_dep_count3": 3
+      },
+      "89": {
+        "year": 2001,
+        "category1": [
+          "Electronics",
+          "Men",
+          "Women"
+        ],
+        "class1": [
+          "stereo",
+          "accessories",
+          "fragrances"
+        ],
+        "category2": [
+          "Children",
+          "Sports",
+          "Shoes"
+        ],
+        "class2": [
+          "toddlers",
+          "outdoor",
+          "womens"
+        ]
+      },
+      "90": {
+        "am_hour": 8,
+        "pm_hour": 19,
+        "hd_dep_count": 9,
+        "wp_char_count_min": 5000,
+        "wp_char_count_max": 5200
+      },
+      "91": {
+        "year": 2001,
+        "month": 12,
+        "marital_status1": "M",
+        "education_status1": "Unknown",
+        "marital_status2": "W",
+        "education_status2": "Advanced Degree",
+        "hd_buy_potential": ">10000%",
+        "ca_gmt_offset": -6
+      },
+      "92": {
+        "manufact_id": 10,
+        "date": "2002-01-05"
+      },
+      "93": {
+        "reason_desc": "reason 70"
+      },
+      "94": {
+        "date": "2000-5-01",
+        "state": "IA",
+        "web_company_name": "pri"
+      },
+      "95": {
+        "date": "2000-5-01",
+        "state": "IA",
+        "web_company_name": "pri"
+      },
+      "96": {
+        "t_hour": 8,
+        "t_minute": 30,
+        "hd_dep_count": 4,
+        "s_store_name": "ese"
+      },
+      "97": {
+        "d_month_seq": 1176
+      },
+      "98": {
+        "categories": [
+          "Books",
+          "Women",
+          "Electronics"
+        ],
+        "date": "2001-01-08"
+      },
+      "99": {
+        "d_month_seq": 1176
       }
     },
     "3000": {
@@ -6709,6 +8410,160 @@
           "LA"
         ]
       },
+      "37": {
+        "price": 12,
+        "manufact": [
+          971,
+          695,
+          854,
+          709
+        ],
+        "invdate": "2001-04-23"
+      },
+      "38": {
+        "dms": 1176
+      },
+      "39": {
+        "year": 2002,
+        "month": 4
+      },
+      "40": {
+        "sales_date": "2002-03-20",
+        "year": 2002
+      },
+      "41": {
+        "manufact": 819,
+        "rules": [
+          {
+            "category": "Women",
+            "colors": [
+              "midnight",
+              "pale"
+            ],
+            "units": [
+              "Bundle",
+              "Case"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          },
+          {
+            "category": "Women",
+            "colors": [
+              "navy",
+              "navajo"
+            ],
+            "units": [
+              "Gross",
+              "Tsp"
+            ],
+            "sizes": [
+              "petite",
+              "N/A"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "sandy",
+              "cornsilk"
+            ],
+            "units": [
+              "Cup",
+              "Oz"
+            ],
+            "sizes": [
+              "economy",
+              "large"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "beige",
+              "bisque"
+            ],
+            "units": [
+              "Gram",
+              "Tbl"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          },
+          {
+            "category": "Women",
+            "colors": [
+              "thistle",
+              "brown"
+            ],
+            "units": [
+              "Unknown",
+              "Each"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          },
+          {
+            "category": "Women",
+            "colors": [
+              "almond",
+              "dodger"
+            ],
+            "units": [
+              "N/A",
+              "Carton"
+            ],
+            "sizes": [
+              "petite",
+              "N/A"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "lime",
+              "burlywood"
+            ],
+            "units": [
+              "Bunch",
+              "Pallet"
+            ],
+            "sizes": [
+              "economy",
+              "large"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "light",
+              "plum"
+            ],
+            "units": [
+              "Dram",
+              "Lb"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          }
+        ]
+      },
+      "42": {
+        "year": 2002,
+        "month": 12
+      },
+      "43": {
+        "year": 2002,
+        "gmt": -6.0
+      },
       "63": {
         "dms": 1176
       },
@@ -6878,6 +8733,95 @@
         ],
         "np_min": 100,
         "np_max": 200
+      },
+      "86": {
+        "d_month_seq": 1176
+      },
+      "87": {
+        "d_month_seq": 1176
+      },
+      "88": {
+        "s_store_name": "ese",
+        "hd_dep_count1": 1,
+        "hd_dep_count2": -1,
+        "hd_dep_count3": 3
+      },
+      "89": {
+        "year": 2001,
+        "category1": [
+          "Electronics",
+          "Men",
+          "Women"
+        ],
+        "class1": [
+          "stereo",
+          "accessories",
+          "fragrances"
+        ],
+        "category2": [
+          "Children",
+          "Sports",
+          "Shoes"
+        ],
+        "class2": [
+          "toddlers",
+          "outdoor",
+          "womens"
+        ]
+      },
+      "90": {
+        "am_hour": 8,
+        "pm_hour": 19,
+        "hd_dep_count": 9,
+        "wp_char_count_min": 5000,
+        "wp_char_count_max": 5200
+      },
+      "91": {
+        "year": 2001,
+        "month": 12,
+        "marital_status1": "M",
+        "education_status1": "Unknown",
+        "marital_status2": "W",
+        "education_status2": "Advanced Degree",
+        "hd_buy_potential": ">10000%",
+        "ca_gmt_offset": -6
+      },
+      "92": {
+        "manufact_id": 10,
+        "date": "2002-01-05"
+      },
+      "93": {
+        "reason_desc": "reason 70"
+      },
+      "94": {
+        "date": "2000-5-01",
+        "state": "IA",
+        "web_company_name": "pri"
+      },
+      "95": {
+        "date": "2000-5-01",
+        "state": "IA",
+        "web_company_name": "pri"
+      },
+      "96": {
+        "t_hour": 8,
+        "t_minute": 30,
+        "hd_dep_count": 4,
+        "s_store_name": "ese"
+      },
+      "97": {
+        "d_month_seq": 1176
+      },
+      "98": {
+        "categories": [
+          "Books",
+          "Women",
+          "Electronics"
+        ],
+        "date": "2001-01-08"
+      },
+      "99": {
+        "d_month_seq": 1176
       }
     },
     "10000": {
@@ -7569,6 +9513,160 @@
           "NM"
         ]
       },
+      "37": {
+        "price": 12,
+        "manufact": [
+          971,
+          695,
+          854,
+          709
+        ],
+        "invdate": "2001-04-23"
+      },
+      "38": {
+        "dms": 1176
+      },
+      "39": {
+        "year": 2002,
+        "month": 4
+      },
+      "40": {
+        "sales_date": "2002-03-20",
+        "year": 2002
+      },
+      "41": {
+        "manufact": 819,
+        "rules": [
+          {
+            "category": "Women",
+            "colors": [
+              "midnight",
+              "pale"
+            ],
+            "units": [
+              "Bundle",
+              "Case"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          },
+          {
+            "category": "Women",
+            "colors": [
+              "navy",
+              "navajo"
+            ],
+            "units": [
+              "Gross",
+              "Tsp"
+            ],
+            "sizes": [
+              "petite",
+              "N/A"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "sandy",
+              "cornsilk"
+            ],
+            "units": [
+              "Cup",
+              "Oz"
+            ],
+            "sizes": [
+              "economy",
+              "large"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "beige",
+              "bisque"
+            ],
+            "units": [
+              "Gram",
+              "Tbl"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          },
+          {
+            "category": "Women",
+            "colors": [
+              "thistle",
+              "brown"
+            ],
+            "units": [
+              "Unknown",
+              "Each"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          },
+          {
+            "category": "Women",
+            "colors": [
+              "almond",
+              "dodger"
+            ],
+            "units": [
+              "N/A",
+              "Carton"
+            ],
+            "sizes": [
+              "petite",
+              "N/A"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "lime",
+              "burlywood"
+            ],
+            "units": [
+              "Bunch",
+              "Pallet"
+            ],
+            "sizes": [
+              "economy",
+              "large"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "light",
+              "plum"
+            ],
+            "units": [
+              "Dram",
+              "Lb"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          }
+        ]
+      },
+      "42": {
+        "year": 2002,
+        "month": 12
+      },
+      "43": {
+        "year": 2002,
+        "gmt": -5.0
+      },
       "63": {
         "dms": 1176
       },
@@ -7738,6 +9836,95 @@
         ],
         "np_min": 100,
         "np_max": 200
+      },
+      "86": {
+        "d_month_seq": 1176
+      },
+      "87": {
+        "d_month_seq": 1176
+      },
+      "88": {
+        "s_store_name": "ese",
+        "hd_dep_count1": 1,
+        "hd_dep_count2": -1,
+        "hd_dep_count3": 3
+      },
+      "89": {
+        "year": 2001,
+        "category1": [
+          "Electronics",
+          "Men",
+          "Women"
+        ],
+        "class1": [
+          "stereo",
+          "accessories",
+          "fragrances"
+        ],
+        "category2": [
+          "Children",
+          "Sports",
+          "Shoes"
+        ],
+        "class2": [
+          "toddlers",
+          "outdoor",
+          "womens"
+        ]
+      },
+      "90": {
+        "am_hour": 8,
+        "pm_hour": 19,
+        "hd_dep_count": 9,
+        "wp_char_count_min": 5000,
+        "wp_char_count_max": 5200
+      },
+      "91": {
+        "year": 2001,
+        "month": 12,
+        "marital_status1": "M",
+        "education_status1": "Unknown",
+        "marital_status2": "W",
+        "education_status2": "Advanced Degree",
+        "hd_buy_potential": ">10000%",
+        "ca_gmt_offset": -6
+      },
+      "92": {
+        "manufact_id": 10,
+        "date": "2002-01-05"
+      },
+      "93": {
+        "reason_desc": "reason 70"
+      },
+      "94": {
+        "date": "2000-5-01",
+        "state": "IA",
+        "web_company_name": "pri"
+      },
+      "95": {
+        "date": "2000-5-01",
+        "state": "IA",
+        "web_company_name": "pri"
+      },
+      "96": {
+        "t_hour": 8,
+        "t_minute": 30,
+        "hd_dep_count": 4,
+        "s_store_name": "ese"
+      },
+      "97": {
+        "d_month_seq": 1176
+      },
+      "98": {
+        "categories": [
+          "Books",
+          "Women",
+          "Electronics"
+        ],
+        "date": "2001-01-08"
+      },
+      "99": {
+        "d_month_seq": 1176
       }
     },
     "30000": {
@@ -8429,6 +10616,160 @@
           "TX"
         ]
       },
+      "37": {
+        "price": 12,
+        "manufact": [
+          971,
+          695,
+          854,
+          709
+        ],
+        "invdate": "2001-04-23"
+      },
+      "38": {
+        "dms": 1176
+      },
+      "39": {
+        "year": 2002,
+        "month": 4
+      },
+      "40": {
+        "sales_date": "2002-03-20",
+        "year": 2002
+      },
+      "41": {
+        "manufact": 819,
+        "rules": [
+          {
+            "category": "Women",
+            "colors": [
+              "midnight",
+              "pale"
+            ],
+            "units": [
+              "Bundle",
+              "Case"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          },
+          {
+            "category": "Women",
+            "colors": [
+              "navy",
+              "navajo"
+            ],
+            "units": [
+              "Gross",
+              "Tsp"
+            ],
+            "sizes": [
+              "petite",
+              "N/A"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "sandy",
+              "cornsilk"
+            ],
+            "units": [
+              "Cup",
+              "Oz"
+            ],
+            "sizes": [
+              "economy",
+              "large"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "beige",
+              "bisque"
+            ],
+            "units": [
+              "Gram",
+              "Tbl"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          },
+          {
+            "category": "Women",
+            "colors": [
+              "thistle",
+              "brown"
+            ],
+            "units": [
+              "Unknown",
+              "Each"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          },
+          {
+            "category": "Women",
+            "colors": [
+              "almond",
+              "dodger"
+            ],
+            "units": [
+              "N/A",
+              "Carton"
+            ],
+            "sizes": [
+              "petite",
+              "N/A"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "lime",
+              "burlywood"
+            ],
+            "units": [
+              "Bunch",
+              "Pallet"
+            ],
+            "sizes": [
+              "economy",
+              "large"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "light",
+              "plum"
+            ],
+            "units": [
+              "Dram",
+              "Lb"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          }
+        ]
+      },
+      "42": {
+        "year": 2002,
+        "month": 12
+      },
+      "43": {
+        "year": 2002,
+        "gmt": -6.0
+      },
       "63": {
         "dms": 1176
       },
@@ -8598,6 +10939,95 @@
         ],
         "np_min": 100,
         "np_max": 200
+      },
+      "86": {
+        "d_month_seq": 1176
+      },
+      "87": {
+        "d_month_seq": 1176
+      },
+      "88": {
+        "s_store_name": "ese",
+        "hd_dep_count1": 1,
+        "hd_dep_count2": -1,
+        "hd_dep_count3": 3
+      },
+      "89": {
+        "year": 2001,
+        "category1": [
+          "Electronics",
+          "Men",
+          "Women"
+        ],
+        "class1": [
+          "stereo",
+          "accessories",
+          "fragrances"
+        ],
+        "category2": [
+          "Children",
+          "Sports",
+          "Shoes"
+        ],
+        "class2": [
+          "toddlers",
+          "outdoor",
+          "womens"
+        ]
+      },
+      "90": {
+        "am_hour": 8,
+        "pm_hour": 19,
+        "hd_dep_count": 9,
+        "wp_char_count_min": 5000,
+        "wp_char_count_max": 5200
+      },
+      "91": {
+        "year": 2001,
+        "month": 12,
+        "marital_status1": "M",
+        "education_status1": "Unknown",
+        "marital_status2": "W",
+        "education_status2": "Advanced Degree",
+        "hd_buy_potential": ">10000%",
+        "ca_gmt_offset": -6
+      },
+      "92": {
+        "manufact_id": 10,
+        "date": "2002-01-05"
+      },
+      "93": {
+        "reason_desc": "reason 70"
+      },
+      "94": {
+        "date": "2000-5-01",
+        "state": "IA",
+        "web_company_name": "pri"
+      },
+      "95": {
+        "date": "2000-5-01",
+        "state": "IA",
+        "web_company_name": "pri"
+      },
+      "96": {
+        "t_hour": 8,
+        "t_minute": 30,
+        "hd_dep_count": 4,
+        "s_store_name": "ese"
+      },
+      "97": {
+        "d_month_seq": 1176
+      },
+      "98": {
+        "categories": [
+          "Books",
+          "Women",
+          "Electronics"
+        ],
+        "date": "2001-01-08"
+      },
+      "99": {
+        "d_month_seq": 1176
       }
     },
     "100000": {
@@ -9289,6 +11719,160 @@
           "MI"
         ]
       },
+      "37": {
+        "price": 12,
+        "manufact": [
+          971,
+          695,
+          854,
+          709
+        ],
+        "invdate": "2001-04-23"
+      },
+      "38": {
+        "dms": 1176
+      },
+      "39": {
+        "year": 2002,
+        "month": 4
+      },
+      "40": {
+        "sales_date": "2002-03-20",
+        "year": 2002
+      },
+      "41": {
+        "manufact": 819,
+        "rules": [
+          {
+            "category": "Women",
+            "colors": [
+              "midnight",
+              "pale"
+            ],
+            "units": [
+              "Bundle",
+              "Case"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          },
+          {
+            "category": "Women",
+            "colors": [
+              "navy",
+              "navajo"
+            ],
+            "units": [
+              "Gross",
+              "Tsp"
+            ],
+            "sizes": [
+              "petite",
+              "N/A"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "sandy",
+              "cornsilk"
+            ],
+            "units": [
+              "Cup",
+              "Oz"
+            ],
+            "sizes": [
+              "economy",
+              "large"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "beige",
+              "bisque"
+            ],
+            "units": [
+              "Gram",
+              "Tbl"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          },
+          {
+            "category": "Women",
+            "colors": [
+              "thistle",
+              "brown"
+            ],
+            "units": [
+              "Unknown",
+              "Each"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          },
+          {
+            "category": "Women",
+            "colors": [
+              "almond",
+              "dodger"
+            ],
+            "units": [
+              "N/A",
+              "Carton"
+            ],
+            "sizes": [
+              "petite",
+              "N/A"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "lime",
+              "burlywood"
+            ],
+            "units": [
+              "Bunch",
+              "Pallet"
+            ],
+            "sizes": [
+              "economy",
+              "large"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "light",
+              "plum"
+            ],
+            "units": [
+              "Dram",
+              "Lb"
+            ],
+            "sizes": [
+              "small",
+              "extra large"
+            ]
+          }
+        ]
+      },
+      "42": {
+        "year": 2002,
+        "month": 12
+      },
+      "43": {
+        "year": 2002,
+        "gmt": -5.0
+      },
       "63": {
         "dms": 1176
       },
@@ -9458,6 +12042,95 @@
         ],
         "np_min": 100,
         "np_max": 200
+      },
+      "86": {
+        "d_month_seq": 1176
+      },
+      "87": {
+        "d_month_seq": 1176
+      },
+      "88": {
+        "s_store_name": "ese",
+        "hd_dep_count1": 1,
+        "hd_dep_count2": -1,
+        "hd_dep_count3": 3
+      },
+      "89": {
+        "year": 2001,
+        "category1": [
+          "Electronics",
+          "Men",
+          "Women"
+        ],
+        "class1": [
+          "stereo",
+          "accessories",
+          "fragrances"
+        ],
+        "category2": [
+          "Children",
+          "Sports",
+          "Shoes"
+        ],
+        "class2": [
+          "toddlers",
+          "outdoor",
+          "womens"
+        ]
+      },
+      "90": {
+        "am_hour": 8,
+        "pm_hour": 19,
+        "hd_dep_count": 9,
+        "wp_char_count_min": 5000,
+        "wp_char_count_max": 5200
+      },
+      "91": {
+        "year": 2001,
+        "month": 12,
+        "marital_status1": "M",
+        "education_status1": "Unknown",
+        "marital_status2": "W",
+        "education_status2": "Advanced Degree",
+        "hd_buy_potential": ">10000%",
+        "ca_gmt_offset": -6
+      },
+      "92": {
+        "manufact_id": 10,
+        "date": "2002-01-05"
+      },
+      "93": {
+        "reason_desc": "reason 70"
+      },
+      "94": {
+        "date": "2000-5-01",
+        "state": "IA",
+        "web_company_name": "pri"
+      },
+      "95": {
+        "date": "2000-5-01",
+        "state": "IA",
+        "web_company_name": "pri"
+      },
+      "96": {
+        "t_hour": 8,
+        "t_minute": 30,
+        "hd_dep_count": 4,
+        "s_store_name": "ese"
+      },
+      "97": {
+        "d_month_seq": 1176
+      },
+      "98": {
+        "categories": [
+          "Books",
+          "Women",
+          "Electronics"
+        ],
+        "date": "2001-01-08"
+      },
+      "99": {
+        "d_month_seq": 1176
       }
     },
     "qualification": {
@@ -10142,6 +12815,160 @@
           "TN"
         ],
         "year": 2000
+      },
+      "37": {
+        "price": 68,
+        "manufact": [
+          677,
+          940,
+          694,
+          808
+        ],
+        "invdate": "2000-02-01"
+      },
+      "38": {
+        "dms": 1200
+      },
+      "39": {
+        "year": 2001,
+        "month": 1
+      },
+      "40": {
+        "sales_date": "2000-03-11",
+        "year": 2000
+      },
+      "41": {
+        "manufact": 738,
+        "rules": [
+          {
+            "category": "Women",
+            "colors": [
+              "powder",
+              "khaki"
+            ],
+            "units": [
+              "Ounce",
+              "Oz"
+            ],
+            "sizes": [
+              "medium",
+              "extra large"
+            ]
+          },
+          {
+            "category": "Women",
+            "colors": [
+              "brown",
+              "honeydew"
+            ],
+            "units": [
+              "Bunch",
+              "Ton"
+            ],
+            "sizes": [
+              "N/A",
+              "small"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "floral",
+              "deep"
+            ],
+            "units": [
+              "N/A",
+              "Dozen"
+            ],
+            "sizes": [
+              "petite",
+              "large"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "light",
+              "cornflower"
+            ],
+            "units": [
+              "Box",
+              "Pound"
+            ],
+            "sizes": [
+              "medium",
+              "extra large"
+            ]
+          },
+          {
+            "category": "Women",
+            "colors": [
+              "midnight",
+              "snow"
+            ],
+            "units": [
+              "Pallet",
+              "Gross"
+            ],
+            "sizes": [
+              "medium",
+              "extra large"
+            ]
+          },
+          {
+            "category": "Women",
+            "colors": [
+              "cyan",
+              "papaya"
+            ],
+            "units": [
+              "Cup",
+              "Dram"
+            ],
+            "sizes": [
+              "N/A",
+              "small"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "orange",
+              "frosted"
+            ],
+            "units": [
+              "Each",
+              "Tbl"
+            ],
+            "sizes": [
+              "petite",
+              "large"
+            ]
+          },
+          {
+            "category": "Men",
+            "colors": [
+              "forest",
+              "ghost"
+            ],
+            "units": [
+              "Lb",
+              "Bundle"
+            ],
+            "sizes": [
+              "medium",
+              "extra large"
+            ]
+          }
+        ]
+      },
+      "42": {
+        "month": 11,
+        "year": 2000
+      },
+      "43": {
+        "year": 2000,
+        "gmt": -5.0
       },
       "73": {
         "dom": [
