@@ -4,19 +4,25 @@
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
 from typing import TYPE_CHECKING
 
+from rapidsmpf import bootstrap
 from rapidsmpf.coll import AllGather
+from rapidsmpf.config import Options, get_environment_variables
 from rapidsmpf.integrations.cudf.partition import unpack_and_concat
 from rapidsmpf.memory.packed_data import PackedData
-from rapidsmpf.streaming.core.actor import (
-    run_actor_network,
-)
+from rapidsmpf.progress_thread import ProgressThread
+from rapidsmpf.rmm_resource_adaptor import RmmResourceAdaptor
+from rapidsmpf.streaming.core.actor import run_actor_network
+from rapidsmpf.streaming.core.context import Context
 from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 
 import polars as pl
 
 import pylibcudf as plc
+import rmm.mr
 from pylibcudf.contiguous_split import pack
 
 from cudf_polars.containers import DataFrame
@@ -24,11 +30,11 @@ from cudf_polars.dsl.ir import IRExecutionContext
 from cudf_polars.experimental.rapidsmpf.core import generate_network
 from cudf_polars.experimental.rapidsmpf.utils import empty_table_chunk
 from cudf_polars.experimental.utils import _concat
+from cudf_polars.utils.config import ContextSPMD
 
 if TYPE_CHECKING:
-    from collections.abc import MutableMapping
+    from collections.abc import Iterator, MutableMapping
 
-    from rapidsmpf.streaming.core.context import Context
     from rapidsmpf.streaming.cudf.channel_metadata import ChannelMetadata
 
     from cudf_polars.dsl.ir import IR
@@ -195,3 +201,81 @@ def allgather_polars_dataframe(
     ret = pl.from_arrow(plc_result.to_arrow(col_names))
     assert isinstance(ret, pl.DataFrame)
     return ret
+
+
+@contextmanager
+def spmd_execution(
+    *,
+    executor_options: dict[str, object] | None = None,
+    mr: rmm.mr.DeviceMemoryResource | None = None,
+    options: Options | None = None,
+) -> Iterator[tuple[Context, pl.GPUEngine]]:
+    """
+    Context manager that bootstraps a RapidsMPF SPMD context and a matching GPUEngine.
+
+    Sets up a UCXX communicator, a RapidsMPF
+    :class:`~rapidsmpf.streaming.core.context.Context`, and a
+    :class:`~polars.lazyframe.engine_config.GPUEngine` configured for SPMD
+    execution.  All resources are released on exit.
+
+    Parameters
+    ----------
+    executor_options
+        Extra keyword arguments forwarded to the ``executor_options`` dict of
+        :class:`~polars.lazyframe.engine_config.GPUEngine`.  The keys
+        ``"runtime"``, ``"cluster"``, and ``"spmd"`` are reserved and may not
+        be overridden.
+    mr
+        RMM device memory resource to use. Defaults to
+        ``rmm.mr.CudaAsyncMemoryResource()`` when ``None``.
+    options
+        RapidsMPF options. Defaults to ``Options(get_environment_variables())``
+        when ``None``.
+
+    Yields
+    ------
+    ctx : Context
+        The active RapidsMPF context. Pass it to collective operations such as
+        :func:`allgather_polars_dataframe`.
+    engine : pl.GPUEngine
+        A Polars GPU engine wired to ``ctx``. Pass it to
+        ``LazyFrame.collect(engine=engine)`` on each rank.
+
+    Examples
+    --------
+    >>> with spmd_execution() as (ctx, engine):  # doctest: +SKIP
+    ...     result = (
+    ...         df.lazy().group_by("a").agg(pl.col("b").sum()).collect(engine=engine)
+    ...     )
+    ...     full = allgather_polars_dataframe(ctx=ctx, local_df=result, op_id=0)
+    """
+    reserved = {"runtime", "cluster", "spmd"}
+    if executor_options and reserved & executor_options.keys():
+        raise ValueError(
+            f"executor_options may not contain reserved keys: {reserved & executor_options.keys()}"
+        )
+
+    options = options if options is not None else Options(get_environment_variables())
+    mr = RmmResourceAdaptor(mr if mr is not None else rmm.mr.CudaAsyncMemoryResource())
+    comm = bootstrap.create_ucxx_comm(
+        progress_thread=ProgressThread(),
+        type=bootstrap.BackendType.AUTO,
+        options=options,
+    )
+    py_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="cpse")
+    try:
+        with Context.from_options(comm, mr, options) as ctx:
+            engine = pl.GPUEngine(
+                raise_on_fail=True,
+                memory_resource=ctx.br().device_mr,
+                executor="streaming",
+                executor_options={
+                    **(executor_options or {}),
+                    "runtime": "rapidsmpf",
+                    "cluster": "spmd",
+                    "spmd": ContextSPMD(context=ctx, py_executor=py_executor),
+                },
+            )
+            yield ctx, engine
+    finally:
+        py_executor.shutdown(wait=False)
