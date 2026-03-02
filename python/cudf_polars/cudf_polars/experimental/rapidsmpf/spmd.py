@@ -6,17 +6,20 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from rapidsmpf.coll import AllGather
+from rapidsmpf.integrations.cudf.partition import unpack_and_concat
+from rapidsmpf.memory.packed_data import PackedData
 from rapidsmpf.streaming.core.actor import (
     run_actor_network,
 )
+from rapidsmpf.streaming.core.context import Context
 from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 
-import cudf_polars.experimental.rapidsmpf.collectives.shuffle
-import cudf_polars.experimental.rapidsmpf.groupby
-import cudf_polars.experimental.rapidsmpf.io
-import cudf_polars.experimental.rapidsmpf.join
-import cudf_polars.experimental.rapidsmpf.repartition
-import cudf_polars.experimental.rapidsmpf.union  # noqa: F401
+import polars as pl
+
+import pylibcudf as plc
+from pylibcudf.contiguous_split import pack
+
 from cudf_polars.containers import DataFrame
 from cudf_polars.dsl.ir import IRExecutionContext
 from cudf_polars.experimental.rapidsmpf.core import generate_network
@@ -29,8 +32,6 @@ if TYPE_CHECKING:
 
     from rapidsmpf.streaming.core.context import Context
     from rapidsmpf.streaming.cudf.channel_metadata import ChannelMetadata
-
-    import polars as pl
 
     from cudf_polars.dsl.ir import IR
     from cudf_polars.experimental.base import PartitionInfo, StatsCollector
@@ -139,3 +140,61 @@ def evaluate_pipeline_spmd_style(
     result = df.to_polars()
     df.stream.synchronize()
     return result, metadata_collector
+
+
+def allgather_polars_dataframe(
+    *,
+    ctx: Context,
+    local_df: pl.DataFrame,
+    op_id: int,
+) -> pl.DataFrame:
+    """
+    AllGather a rank-local DataFrame so every rank receives the full result.
+
+    Each rank contributes its local ``local_df`` fragment and receives the
+    concatenation of all ranks' fragments in rank order. This is the SPMD
+    equivalent of a distributed ``collect``: after the call, every rank holds
+    the same complete dataset.
+
+    Parameters
+    ----------
+    ctx
+        The RapidsMPF context.
+    local_df
+        Rank-local DataFrame to contribute.
+    op_id
+        Operation ID for this AllGather collective. Must be identical on every
+        rank.
+
+    Returns
+    -------
+    DataFrame containing rows from all ranks, ordered by rank.
+    """
+    comm = ctx.comm()
+    br = ctx.br()
+    stream = ctx.get_stream_from_pool()
+    col_names = local_df.columns
+
+    # pl.DataFrame -> pylibcudf Table (via Arrow, GPU transfer)
+    plc_table = plc.Table.from_arrow(local_df.to_arrow())
+
+    # Serialize for network transport
+    packed_data = PackedData.from_cudf_packed_columns(
+        pack(plc_table, stream),
+        stream,
+        br,
+    )
+
+    # Bulk AllGather: each rank contributes once (sequence_number=0)
+    allgather = AllGather(comm, comm.progress_thread, op_id, br)
+    allgather.insert(0, packed_data)
+    allgather.insert_finished()
+    results = allgather.wait_and_extract(ordered=True)
+
+    # Deserialize and concatenate all ranks' contributions
+    plc_result = unpack_and_concat(results, stream, br)
+
+    # pylibcudf Table -> pl.DataFrame (restore column names)
+    ret = pl.from_arrow(plc_result.to_arrow(col_names))
+    assert isinstance(ret, pl.DataFrame)
+    return ret
