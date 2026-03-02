@@ -286,20 +286,13 @@ std::tuple<rtcx::library, rtcx::blob> compile_library_uncached(char const* name,
 
   options.emplace_back(std::format("--gpu-architecture=sm_{}", sm));
   options.emplace_back("--minimal");
-
-  auto pch_file = std::format("/home/coder/cudf/jit.pch");
-
-  static int can_use = 0;
+  options.emplace_back("-D__CUDACC_RTC__");
+  options.emplace_back("-DCUDF_RUNTIME_JIT");
+  options.emplace_back("--diag-suppress=47");
+  options.emplace_back("--device-int128");
 
   if (use_pch) {
-    // options.emplace_back("--pch");
-    options.emplace_back(std::format("--pch-dir={}", pch_dir));
-    if (can_use) {
-      options.emplace_back(std::format("--use-pch={}", pch_file));
-    } else {
-      options.emplace_back(std::format("--create-pch={}", pch_file));
-    }
-    can_use = 1;
+    options.emplace_back("--pch");
 
     if (log_pch) {
       options.emplace_back("--pch-verbose=true");
