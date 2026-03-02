@@ -90,7 +90,7 @@ static void BM_transform(nvbench::state& state)
     cudf::transform_extended(inputs,
                              code,
                              cudf::data_type{cudf::type_to_id<key_type>()},
-                             false,
+                             cudf::udf_source_type::CUDA,
                              std::nullopt,
                              cudf::null_aware::NO,
                              std::nullopt,
