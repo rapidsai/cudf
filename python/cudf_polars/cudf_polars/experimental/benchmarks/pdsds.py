@@ -142,7 +142,7 @@ if __name__ == "__main__":
     args = parse_args(parser=parser)
 
     if args.engine == "polars":
-        run_polars(PDSDSPolarsQueries, args, num_queries=99)
+        run_polars(PDSDSPolarsQueries, args)
     elif args.engine == "duckdb":
         run_duckdb(PDSDSDuckDBQueries, args, num_queries=99)
     else:

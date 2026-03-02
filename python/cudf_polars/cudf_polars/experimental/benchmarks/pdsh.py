@@ -1796,7 +1796,7 @@ if __name__ == "__main__":
     args = parse_args(parser=parser)
 
     if args.engine == "polars":
-        run_polars(PDSHQueries, args, num_queries=22)
+        run_polars(PDSHQueries, args)
     elif args.engine == "duckdb":
         run_duckdb(PDSHDuckDBQueries, args, num_queries=22)
     else:
