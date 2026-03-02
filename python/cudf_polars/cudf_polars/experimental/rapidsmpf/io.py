@@ -191,7 +191,7 @@ async def dataframescan_node(
         nrows = ir.df.shape()[0]
         global_count = math.ceil(nrows / rows_per_partition) if nrows > 0 else 0
 
-        # For single rank or when execute in SPMD mode, each rank gets the full
+        # For single rank or when executing in SPMD mode, each rank gets the full
         # dataframe.
         if spmd or context.comm().nranks == 1:
             local_count = global_count

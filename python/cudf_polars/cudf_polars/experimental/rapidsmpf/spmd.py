@@ -84,8 +84,10 @@ def evaluate_pipeline_spmd_mode(
     The concatenated output DataFrame and, if ``collect_metadata`` is
     True, the list of channel metadata objects; otherwise ``None``.
     """
-    assert config_options.executor.runtime == "rapidsmpf", "Runtime must be rapidsmpf"
-    assert config_options.executor.spmd is not None, "spmd must be set for SPMD mode"
+    if config_options.executor.runtime != "rapidsmpf":
+        raise RuntimeError("Runtime must be rapidsmpf")
+    if config_options.executor.spmd is None:
+        raise RuntimeError("spmd must be set for SPMD mode")
     context = config_options.executor.spmd.context
     py_executor = config_options.executor.spmd.py_executor
 
@@ -119,7 +121,7 @@ def evaluate_pipeline_spmd_mode(
         )
         for msg in messages
     ]
-    dfs: list[DataFrame] = []
+    dfs: list[DataFrame]
     if chunks:
         dfs = [
             DataFrame.from_table(
@@ -307,7 +309,7 @@ def spmd_execution(
         type=bootstrap.BackendType.AUTO,
         options=options,
     )
-    py_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="cpse")
+    py_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="spmd-executor")
     try:
         with Context.from_options(comm, mr, options) as ctx:
             engine = pl.GPUEngine(
@@ -323,4 +325,6 @@ def spmd_execution(
             )
             yield ctx, engine
     finally:
+        # The Context has already been exited above, so no work can be
+        # pending in py_executor at this point; wait=False is safe.
         py_executor.shutdown(wait=False)
