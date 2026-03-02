@@ -55,8 +55,6 @@ if TYPE_CHECKING:
     from rapidsmpf.streaming.core.channel import Channel
     from rapidsmpf.streaming.core.context import Context
 
-    from rmm.pylibrmm.stream import Stream
-
     from cudf_polars.dsl.ir import IR, IRExecutionContext
     from cudf_polars.experimental.rapidsmpf.dispatch import SubNetGenerator
     from cudf_polars.experimental.rapidsmpf.tracing import ActorTracer
@@ -516,112 +514,69 @@ async def drain_into_shuffle(
     await shuffle.insert_finished()
 
 
-async def get_unshuffled_chunk(
-    context: Context,
-    ch: Channel[TableChunk],
-    sample_chunks: list[TableChunk],
-) -> TableChunk | None:
-    """Return next chunk from sample list or channel."""
-    if sample_chunks:
-        return sample_chunks.pop(0)
-    if (msg := await ch.recv(context)) is not None:
-        return TableChunk.from_message(msg).make_available_and_spill(
-            context.br(), allow_overbooking=True
-        )
-    return None
+class HashJoinChannel:
+    """
+    Logical channel for a hash join.
 
+    Parameters
+    ----------
+    context: Context
+        The rapidsmpf context.
+    child: IR
+        The child IR.
+    ch: Channel[TableChunk]
+        The physical TableChunk channel.
+    shuffle: ShuffleManager | None
+        The shuffle manager.
+    buffered_chunks: list[TableChunk]
+        The buffered chunks (previously used for sampling).
+    """
 
-async def get_dataframe_to_join(
-    context: Context,
-    ch: Channel[TableChunk],
-    sample_chunks: list[TableChunk],
-    *,
-    shuffle: ShuffleManager | None,
-    partition_id: int,
-    stream: Stream,
-    child: IR,
-) -> DataFrame:
-    """Get the next DataFrame (from shuffle or channel) for one side of the join."""
-    if shuffle is not None:
-        table = await shuffle.extract_chunk(partition_id, stream)
-        if table.num_rows() == 0 and len(table.columns()) == 0:
-            table = empty_table_chunk(child, context, stream).table_view()
-    else:
-        chunk = await get_unshuffled_chunk(context, ch, sample_chunks)
-        if chunk is None:
-            chunk = empty_table_chunk(child, context, stream)
-        else:
-            stream = chunk.stream
-        table = chunk.table_view()
-
-    return DataFrame.from_table(
-        table, list(child.schema.keys()), list(child.schema.values()), stream
-    )
-
-
-async def _join_chunks(
-    context: Context,
-    ir: Join,
-    ir_context: Any,
-    ch_out: Channel[TableChunk],
-    ch_left: Channel[TableChunk],
-    ch_right: Channel[TableChunk],
-    left_sample_chunks: list[TableChunk],
-    right_sample_chunks: list[TableChunk],
-    left_shuffle: ShuffleManager | None,
-    right_shuffle: ShuffleManager | None,
-    *,
-    partition_id: int,
-    tracer: ActorTracer | None,
-) -> None:
-    left, right = ir.children
-    stream = ir_context.get_cuda_stream()
-    left_df, right_df = await asyncio.gather(
-        get_dataframe_to_join(
-            context,
-            ch_left,
-            left_sample_chunks,
-            shuffle=left_shuffle,
-            partition_id=partition_id,
-            stream=stream,
-            child=left,
-        ),
-        get_dataframe_to_join(
-            context,
-            ch_right,
-            right_sample_chunks,
-            shuffle=right_shuffle,
-            partition_id=partition_id,
-            stream=stream,
-            child=right,
-        ),
-    )
-
-    input_bytes = sum(
-        col.device_buffer_size()
-        for col in (*left_df.table.columns(), *right_df.table.columns())
-    )
-    with opaque_memory_usage(
-        await reserve_memory(context, size=input_bytes, net_memory_delta=0)
+    def __init__(
+        self,
+        context: Context,
+        child: IR,
+        ch: Channel[TableChunk],
+        shuffle: ShuffleManager | None,
+        buffered_chunks: list[TableChunk],
     ):
-        df = await asyncio.to_thread(
-            ir.do_evaluate,
-            *ir._non_child_args,
-            left_df,
-            right_df,
-            context=ir_context,
-        )
-        del left_df, right_df
-    if tracer is not None:
-        tracer.add_chunk(table=df.table)
-    await ch_out.send(
-        context,
-        Message(
-            partition_id,
-            TableChunk.from_pylibcudf_table(df.table, df.stream, exclusive_view=True),
-        ),
-    )
-    del df
+        self.context = context
+        self.child = child
+        self.ch = ch
+        self.shuffle = shuffle
+        self.buffered_chunks = buffered_chunks
+        if shuffle is not None:
+            self.partition_ids = iter(shuffle.local_partitions())
+        else:
+            self.partition_ids = iter(())
+
+    async def recv(self) -> TableChunk | None:
+        """Receive a chunk from the logical channel."""
+        if self.buffered_chunks:
+            # Always return buffered chunks first
+            return self.buffered_chunks.pop(0)
+
+        if self.shuffle is not None:
+            # Return shuffled chunks if we have a shuffle manager
+            try:
+                partition_id = next(self.partition_ids)
+            except StopIteration:
+                return None
+            stream = self.context.get_stream_from_pool()
+            table = await self.shuffle.extract_chunk(partition_id, stream)
+            if table.num_rows() == 0 and len(table.columns()) == 0:
+                return empty_table_chunk(self.child, self.context, stream)
+            else:
+                return TableChunk.from_pylibcudf_table(
+                    table, stream, exclusive_view=True
+                )
+
+        if (msg := await self.ch.recv(self.context)) is not None:
+            # Otherwise, return a chunk directly from the channel
+            return TableChunk.from_message(msg).make_available_and_spill(
+                self.context.br(), allow_overbooking=True
+            )
+        return None
 
 
 async def _shuffle_join(
@@ -688,30 +643,54 @@ async def _shuffle_join(
     if drain_tasks:
         await asyncio.gather(*drain_tasks)
 
-    partition_ids: list[int]
-    if left_shuffle is not None:
-        partition_ids = left_shuffle.local_partitions()
-    elif right_shuffle is not None:
-        partition_ids = right_shuffle.local_partitions()
-    else:
-        partition_ids = list(range(local_count))
-    for partition_id in partition_ids:
-        await _join_chunks(
-            context,
-            ir,
-            ir_context,
-            ch_out,
-            ch_left,
-            ch_right,
-            left_sample_chunks,
-            right_sample_chunks,
-            left_shuffle,
-            right_shuffle,
-            partition_id=partition_id,
-            tracer=tracer,
-        )
+    seq_num = 0
+    left, right = ir.children
+    ch_left_logical = HashJoinChannel(
+        context, left, ch_left, left_shuffle, left_sample_chunks
+    )
+    ch_right_logical = HashJoinChannel(
+        context, right, ch_right, right_shuffle, right_sample_chunks
+    )
 
-    del left_shuffle, right_shuffle
+    while True:
+        left_chunk, right_chunk = await asyncio.gather(
+            ch_left_logical.recv(), ch_right_logical.recv()
+        )
+        if left_chunk is None or right_chunk is None:
+            break
+
+        input_bytes = sum(
+            col.device_buffer_size()
+            for col in (
+                *left_chunk.table_view().columns(),
+                *right_chunk.table_view().columns(),
+            )
+        )
+        with opaque_memory_usage(
+            await reserve_memory(context, size=input_bytes, net_memory_delta=0)
+        ):
+            df = await asyncio.to_thread(
+                ir.do_evaluate,
+                *ir._non_child_args,
+                chunk_to_frame(left_chunk, left),
+                chunk_to_frame(right_chunk, right),
+                context=ir_context,
+            )
+            del left_chunk, right_chunk
+        if tracer is not None:
+            tracer.add_chunk(table=df.table)
+        await ch_out.send(
+            context,
+            Message(
+                seq_num,
+                TableChunk.from_pylibcudf_table(
+                    df.table, df.stream, exclusive_view=True
+                ),
+            ),
+        )
+        seq_num += 1
+        del df
+
     await ch_out.drain(context)
 
 
