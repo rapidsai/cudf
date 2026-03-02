@@ -147,7 +147,7 @@ std::unique_ptr<column> sequences(column_view const& starts,
   }
 
   auto const n_lists = starts.size();
-  if (n_lists == 0) { return cudf::make_empty_lists_column(starts.type(), stream, mr); }
+  if (n_lists == 0) { return cudf::make_empty_lists_column(starts.type()); }
 
   auto const sizes_input_it = cudf::detail::indexalator_factory::make_input_iterator(sizes);
   // Generate list offsets for the output.
@@ -165,13 +165,8 @@ std::unique_ptr<column> sequences(column_view const& starts,
                                stream,
                                mr);
 
-  return make_lists_column(n_lists,
-                           std::move(list_offsets),
-                           std::move(child),
-                           0,
-                           rmm::device_buffer(0, stream, mr),
-                           stream,
-                           mr);
+  return make_lists_column(
+    n_lists, std::move(list_offsets), std::move(child), 0, rmm::device_buffer(0, stream, mr));
 }
 
 }  // anonymous namespace

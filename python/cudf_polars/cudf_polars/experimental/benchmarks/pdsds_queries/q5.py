@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
-from cudf_polars.experimental.benchmarks.utils import get_data
+from cudf_polars.experimental.benchmarks.utils import QueryResult, get_data
 
 if TYPE_CHECKING:
     from cudf_polars.experimental.benchmarks.utils import RunConfig
@@ -155,7 +155,62 @@ def duckdb_impl(run_config: RunConfig) -> str:
     """
 
 
-def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
+def _channel_agg(
+    sales: pl.LazyFrame,
+    returns: pl.LazyFrame,
+    date_dim: pl.LazyFrame,
+    entity: pl.LazyFrame,
+    *,
+    sales_date_key: str,
+    returns_date_key: str,
+    sales_entity_key: str,
+    returns_entity_key: str,
+    entity_id_col: str,
+    entity_join_key: str,
+    sales_price_col: str,
+    profit_col: str,
+    return_amt_col: str,
+    net_loss_col: str,
+    start_date: date,
+    end_date: date,
+) -> pl.LazyFrame:
+    """Aggregate sales and returns for one channel via UNION ALL, producing (entity_id, sales, profit, returns1, profit_loss)."""
+    target_dates = date_dim.filter(
+        pl.col("d_date").is_between(pl.lit(start_date), pl.lit(end_date), closed="both")
+    ).select("d_date_sk")
+
+    sales_leg = sales.select(
+        pl.col(sales_entity_key).alias("entity_sk"),
+        pl.col(sales_date_key).alias("date_sk"),
+        pl.col(sales_price_col).alias("sales_price"),
+        pl.col(profit_col).alias("profit"),
+        pl.lit(0).alias("return_amt"),
+        pl.lit(0).alias("net_loss"),
+    )
+    returns_leg = returns.select(
+        pl.col(returns_entity_key).alias("entity_sk"),
+        pl.col(returns_date_key).alias("date_sk"),
+        pl.lit(0).alias("sales_price"),
+        pl.lit(0).alias("profit"),
+        pl.col(return_amt_col).alias("return_amt"),
+        pl.col(net_loss_col).alias("net_loss"),
+    )
+
+    return (
+        pl.concat([sales_leg, returns_leg], how="vertical_relaxed")
+        .join(target_dates, left_on="date_sk", right_on="d_date_sk")
+        .join(entity, left_on="entity_sk", right_on=entity_join_key)
+        .group_by(entity_id_col)
+        .agg(
+            pl.col("sales_price").sum().alias("sales"),
+            pl.col("profit").sum().alias("profit"),
+            pl.col("return_amt").sum().alias("returns1"),
+            pl.col("net_loss").sum().alias("profit_loss"),
+        )
+    )
+
+
+def polars_impl(run_config: RunConfig) -> QueryResult:
     """Query 5."""
     params = load_parameters(
         int(run_config.scale_factor), query_id=5, qualification=run_config.qualification
@@ -181,311 +236,107 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     catalog_page = get_data(run_config.dataset_path, "catalog_page", run_config.suffix)
     web_site = get_data(run_config.dataset_path, "web_site", run_config.suffix)
 
-    # Date range filter - use actual date values
     start_date = date(year, month, day)
     end_date = start_date + timedelta(days=14)
 
-    # Convert to string literals for comparison (d_date is String in parquet)
-    start_date_str = pl.lit(start_date.strftime("%Y-%m-%d"))
-    end_date_str = pl.lit(end_date.strftime("%Y-%m-%d"))
-
-    # Step 1: Create ssr CTE (Store Sales and Returns)
-    # Filter sales and returns by date first, then transform
-    store_sales_data = (
-        store_sales.join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
-        .filter(
-            pl.col("d_date").is_between(start_date_str, end_date_str, closed="both")
-        )
-        .select(
-            [
-                pl.col("ss_store_sk").alias("store_sk"),
-                pl.col("ss_sold_date_sk").alias("date_sk"),
-                pl.col("ss_ext_sales_price").alias("sales_price"),
-                pl.col("ss_net_profit").alias("profit"),
-                pl.lit(0.0).alias("return_amt"),
-                pl.lit(0.0).alias("net_loss"),
-            ]
-        )
-    )
-    store_returns_data = (
-        store_returns.join(
-            date_dim, left_on="sr_returned_date_sk", right_on="d_date_sk"
-        )
-        .filter(
-            pl.col("d_date").is_between(start_date_str, end_date_str, closed="both")
-        )
-        .select(
-            [
-                pl.col("sr_store_sk").alias("store_sk"),
-                pl.col("sr_returned_date_sk").alias("date_sk"),
-                pl.lit(0.0).alias("sales_price"),
-                pl.lit(0.0).alias("profit"),
-                pl.col("sr_return_amt").alias("return_amt"),
-                pl.col("sr_net_loss").alias("net_loss"),
-            ]
-        )
-    )
-    store_salesreturns = pl.concat([store_sales_data, store_returns_data])
-    ssr = (
-        store_salesreturns.join(store, left_on="store_sk", right_on="s_store_sk")
-        .group_by("s_store_id")
-        .agg(
-            [
-                pl.col("sales_price").sum().alias("sales"),
-                pl.col("sales_price").count().alias("sales_count"),
-                pl.col("profit").sum().alias("profit"),
-                pl.col("profit").count().alias("profit_count"),
-                pl.col("return_amt").sum().alias("returns1"),
-                pl.col("return_amt").count().alias("returns1_count"),
-                pl.col("net_loss").sum().alias("profit_loss"),
-                pl.col("net_loss").count().alias("profit_loss_count"),
-            ]
-        )
-        .with_columns(
-            [
-                pl.when(pl.col("sales_count") > 0)
-                .then(pl.col("sales"))
-                .otherwise(None)
-                .alias("sales"),
-                pl.when(pl.col("profit_count") > 0)
-                .then(pl.col("profit"))
-                .otherwise(None)
-                .alias("profit"),
-                pl.when(pl.col("returns1_count") > 0)
-                .then(pl.col("returns1"))
-                .otherwise(None)
-                .alias("returns1"),
-                pl.when(pl.col("profit_loss_count") > 0)
-                .then(pl.col("profit_loss"))
-                .otherwise(None)
-                .alias("profit_loss"),
-            ]
-        )
-        .drop(["sales_count", "profit_count", "returns1_count", "profit_loss_count"])
+    # For web returns the entity key (ws_web_site_sk) comes from a LEFT JOIN
+    # with web_sales (web_returns doesn't carry web_site_sk directly).
+    web_returns_with_site = web_returns.join(
+        web_sales.select(["ws_item_sk", "ws_order_number", "ws_web_site_sk"]),
+        left_on=["wr_item_sk", "wr_order_number"],
+        right_on=["ws_item_sk", "ws_order_number"],
+        how="left",
     )
 
-    # Step 2: Create csr CTE (Catalog Sales and Returns)
-    # Filter sales and returns by date first, then transform
-    catalog_sales_data = (
-        catalog_sales.join(date_dim, left_on="cs_sold_date_sk", right_on="d_date_sk")
-        .filter(
-            pl.col("d_date").is_between(start_date_str, end_date_str, closed="both")
-        )
-        .select(
-            [
-                pl.col("cs_catalog_page_sk").alias("page_sk"),
-                pl.col("cs_sold_date_sk").alias("date_sk"),
-                pl.col("cs_ext_sales_price").alias("sales_price"),
-                pl.col("cs_net_profit").alias("profit"),
-                pl.lit(0.0).alias("return_amt"),
-                pl.lit(0.0).alias("net_loss"),
-            ]
-        )
+    ssr = _channel_agg(
+        store_sales,
+        store_returns,
+        date_dim,
+        store,
+        sales_date_key="ss_sold_date_sk",
+        returns_date_key="sr_returned_date_sk",
+        sales_entity_key="ss_store_sk",
+        returns_entity_key="sr_store_sk",
+        entity_id_col="s_store_id",
+        entity_join_key="s_store_sk",
+        sales_price_col="ss_ext_sales_price",
+        profit_col="ss_net_profit",
+        return_amt_col="sr_return_amt",
+        net_loss_col="sr_net_loss",
+        start_date=start_date,
+        end_date=end_date,
     )
-    catalog_returns_data = (
-        catalog_returns.join(
-            date_dim, left_on="cr_returned_date_sk", right_on="d_date_sk"
-        )
-        .filter(
-            pl.col("d_date").is_between(start_date_str, end_date_str, closed="both")
-        )
-        .select(
-            [
-                pl.col("cr_catalog_page_sk").alias("page_sk"),
-                pl.col("cr_returned_date_sk").alias("date_sk"),
-                pl.lit(0.0).alias("sales_price"),
-                pl.lit(0.0).alias("profit"),
-                pl.col("cr_return_amount").alias("return_amt"),
-                pl.col("cr_net_loss").alias("net_loss"),
-            ]
-        )
+    csr = _channel_agg(
+        catalog_sales,
+        catalog_returns,
+        date_dim,
+        catalog_page,
+        sales_date_key="cs_sold_date_sk",
+        returns_date_key="cr_returned_date_sk",
+        sales_entity_key="cs_catalog_page_sk",
+        returns_entity_key="cr_catalog_page_sk",
+        entity_id_col="cp_catalog_page_id",
+        entity_join_key="cp_catalog_page_sk",
+        sales_price_col="cs_ext_sales_price",
+        profit_col="cs_net_profit",
+        return_amt_col="cr_return_amount",
+        net_loss_col="cr_net_loss",
+        start_date=start_date,
+        end_date=end_date,
     )
-    catalog_salesreturns = pl.concat([catalog_sales_data, catalog_returns_data])
-    csr = (
-        catalog_salesreturns.join(
-            catalog_page, left_on="page_sk", right_on="cp_catalog_page_sk"
-        )
-        .group_by("cp_catalog_page_id")
-        .agg(
-            [
-                pl.col("sales_price").sum().alias("sales"),
-                pl.col("sales_price").count().alias("sales_count"),
-                pl.col("profit").sum().alias("profit"),
-                pl.col("profit").count().alias("profit_count"),
-                pl.col("return_amt").sum().alias("returns1"),
-                pl.col("return_amt").count().alias("returns1_count"),
-                pl.col("net_loss").sum().alias("profit_loss"),
-                pl.col("net_loss").count().alias("profit_loss_count"),
-            ]
-        )
-        .with_columns(
-            [
-                pl.when(pl.col("sales_count") > 0)
-                .then(pl.col("sales"))
-                .otherwise(None)
-                .alias("sales"),
-                pl.when(pl.col("profit_count") > 0)
-                .then(pl.col("profit"))
-                .otherwise(None)
-                .alias("profit"),
-                pl.when(pl.col("returns1_count") > 0)
-                .then(pl.col("returns1"))
-                .otherwise(None)
-                .alias("returns1"),
-                pl.when(pl.col("profit_loss_count") > 0)
-                .then(pl.col("profit_loss"))
-                .otherwise(None)
-                .alias("profit_loss"),
-            ]
-        )
-        .drop(["sales_count", "profit_count", "returns1_count", "profit_loss_count"])
+    wsr = _channel_agg(
+        web_sales,
+        web_returns_with_site,
+        date_dim,
+        web_site,
+        sales_date_key="ws_sold_date_sk",
+        returns_date_key="wr_returned_date_sk",
+        sales_entity_key="ws_web_site_sk",
+        returns_entity_key="ws_web_site_sk",
+        entity_id_col="web_site_id",
+        entity_join_key="web_site_sk",
+        sales_price_col="ws_ext_sales_price",
+        profit_col="ws_net_profit",
+        return_amt_col="wr_return_amt",
+        net_loss_col="wr_net_loss",
+        start_date=start_date,
+        end_date=end_date,
     )
 
-    # Step 3: Create wsr CTE (Web Sales and Returns)
-    # Filter sales and returns by date first, then transform
-    web_sales_data = (
-        web_sales.join(date_dim, left_on="ws_sold_date_sk", right_on="d_date_sk")
-        .filter(
-            pl.col("d_date").is_between(start_date_str, end_date_str, closed="both")
-        )
-        .select(
-            [
-                pl.col("ws_web_site_sk").alias("wsr_web_site_sk"),
-                pl.col("ws_sold_date_sk").alias("date_sk"),
-                pl.col("ws_ext_sales_price").alias("sales_price"),
-                pl.col("ws_net_profit").alias("profit"),
-                pl.lit(0.0).alias("return_amt"),
-                pl.lit(0.0).alias("net_loss"),
-            ]
-        )
-    )
-    # For web returns, we need the LEFT OUTER JOIN with web_sales, then filter by date
-    web_returns_data = (
-        web_returns.join(date_dim, left_on="wr_returned_date_sk", right_on="d_date_sk")
-        .filter(
-            pl.col("d_date").is_between(start_date_str, end_date_str, closed="both")
-        )
-        .join(
-            web_sales.select(["ws_item_sk", "ws_order_number", "ws_web_site_sk"]),
-            left_on=["wr_item_sk", "wr_order_number"],
-            right_on=["ws_item_sk", "ws_order_number"],
-            how="left",
-        )
-        .select(
-            [
-                pl.col("ws_web_site_sk").alias("wsr_web_site_sk"),
-                pl.col("wr_returned_date_sk").alias("date_sk"),
-                pl.lit(0.0).alias("sales_price"),
-                pl.lit(0.0).alias("profit"),
-                pl.col("wr_return_amt").cast(pl.Float64).alias("return_amt"),
-                pl.col("wr_net_loss").alias("net_loss"),
-            ]
-        )
-    )
-    web_salesreturns = pl.concat([web_sales_data, web_returns_data])
-    wsr = (
-        web_salesreturns.join(
-            web_site, left_on="wsr_web_site_sk", right_on="web_site_sk"
-        )
-        .group_by("web_site_id")
-        .agg(
-            [
-                pl.col("sales_price").sum().alias("sales"),
-                pl.col("sales_price").count().alias("sales_count"),
-                pl.col("profit").sum().alias("profit"),
-                pl.col("profit").count().alias("profit_count"),
-                pl.col("return_amt").sum().alias("returns1"),
-                pl.col("return_amt").count().alias("returns1_count"),
-                pl.col("net_loss").sum().alias("profit_loss"),
-                pl.col("net_loss").count().alias("profit_loss_count"),
-            ]
-        )
-        .with_columns(
-            [
-                pl.when(pl.col("sales_count") > 0)
-                .then(pl.col("sales"))
-                .otherwise(None)
-                .alias("sales"),
-                pl.when(pl.col("profit_count") > 0)
-                .then(pl.col("profit"))
-                .otherwise(None)
-                .alias("profit"),
-                pl.when(pl.col("returns1_count") > 0)
-                .then(pl.col("returns1"))
-                .otherwise(None)
-                .alias("returns1"),
-                pl.when(pl.col("profit_loss_count") > 0)
-                .then(pl.col("profit_loss"))
-                .otherwise(None)
-                .alias("profit_loss"),
-            ]
-        )
-        .drop(["sales_count", "profit_count", "returns1_count", "profit_loss_count"])
-    )
-
-    # Step 4: Create the union of all channels
     store_channel = ssr.select(
-        [
-            pl.lit("store channel").alias("channel"),
-            (pl.lit("store") + pl.col("s_store_id").cast(pl.Utf8)).alias("id"),
-            pl.col("sales"),
-            pl.col("returns1"),
-            (pl.col("profit") - pl.col("profit_loss")).alias("profit"),
-        ]
+        pl.lit("store channel").alias("channel"),
+        (pl.lit("store") + pl.col("s_store_id")).alias("id"),
+        pl.col("sales"),
+        pl.col("returns1"),
+        (pl.col("profit") - pl.col("profit_loss")).alias("profit"),
     )
     catalog_channel = csr.select(
-        [
-            pl.lit("catalog channel").alias("channel"),
-            (pl.lit("catalog_page") + pl.col("cp_catalog_page_id").cast(pl.Utf8)).alias(
-                "id"
-            ),
-            pl.col("sales"),
-            pl.col("returns1"),
-            (pl.col("profit") - pl.col("profit_loss")).alias("profit"),
-        ]
+        pl.lit("catalog channel").alias("channel"),
+        (pl.lit("catalog_page") + pl.col("cp_catalog_page_id")).alias("id"),
+        pl.col("sales"),
+        pl.col("returns1"),
+        (pl.col("profit") - pl.col("profit_loss")).alias("profit"),
     )
     web_channel = wsr.select(
-        [
-            pl.lit("web channel").alias("channel"),
-            (pl.lit("web_site") + pl.col("web_site_id").cast(pl.Utf8)).alias("id"),
-            pl.col("sales"),
-            pl.col("returns1"),
-            (pl.col("profit") - pl.col("profit_loss")).alias("profit"),
-        ]
+        pl.lit("web channel").alias("channel"),
+        (pl.lit("web_site") + pl.col("web_site_id")).alias("id"),
+        pl.col("sales"),
+        pl.col("returns1"),
+        (pl.col("profit") - pl.col("profit_loss")).alias("profit"),
     )
     all_channels = pl.concat([store_channel, catalog_channel, web_channel])
 
-    # Step 5: Group by channel and id (filter out NULL rollup rows)
-    return (
-        all_channels.group_by(["channel", "id"])
-        .agg(
-            [
+    return QueryResult(
+        frame=(
+            all_channels.group_by(["channel", "id"])
+            .agg(
                 pl.col("sales").sum().alias("sales"),
-                pl.col("sales").count().alias("sales_count"),
                 pl.col("returns1").sum().alias("returns1"),
-                pl.col("returns1").count().alias("returns1_count"),
                 pl.col("profit").sum().alias("profit"),
-                pl.col("profit").count().alias("profit_count"),
-            ]
-        )
-        .with_columns(
-            [
-                pl.when(pl.col("sales_count") > 0)
-                .then(pl.col("sales"))
-                .otherwise(None)
-                .alias("sales"),
-                pl.when(pl.col("returns1_count") > 0)
-                .then(pl.col("returns1"))
-                .otherwise(None)
-                .alias("returns1"),
-                pl.when(pl.col("profit_count") > 0)
-                .then(pl.col("profit"))
-                .otherwise(None)
-                .alias("profit"),
-            ]
-        )
-        .drop(["sales_count", "returns1_count", "profit_count"])
-        .filter(pl.col("channel").is_not_null() & pl.col("id").is_not_null())
-        .sort(["channel", "id"])
-        .limit(100)
+            )
+            .sort(["channel", "id"])
+            .limit(100)
+        ),
+        sort_by=[("channel", False), ("id", False)],
+        limit=100,
     )

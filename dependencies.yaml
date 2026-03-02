@@ -541,13 +541,13 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          # Pin Cython to <3.2 to avoid https://github.com/rapidsai/rmm/issues/2134
-          - cython>=3.0.3,<3.2.0
+
+          - cython>=3.2.2
   numpy_run:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          - numpy>=1.23,<3.0
+          - numpy>=1.26,<3.0
   pyarrow_run:
     common:
       - output_types: [conda]
@@ -677,8 +677,12 @@ dependencies:
             packages:
               - python=3.13
           - matrix:
+              py: "3.14"
             packages:
-              - python>=3.11,<3.14
+              - python=3.14
+          - matrix:
+            packages:
+              - python>=3.11
   run_common:
     common:
       - output_types: [conda, requirements, pyproject]
@@ -708,7 +712,7 @@ dependencies:
       - output_types: [conda, requirements, pyproject]
         packages:
           - cachetools
-          - &numba numba>=0.60.0,<0.62.0
+          - &numba numba>=0.60.0,<0.65.0
           - nvtx>=0.2.1
           - packaging
           - rich
@@ -767,13 +771,13 @@ dependencies:
     common:
       - output_types: conda
         packages:
-          - python-confluent-kafka>=2.8.0,<2.9.0
+          - python-confluent-kafka
       - output_types: [conda, requirements, pyproject]
         packages:
           - streamz
       - output_types: [requirements, pyproject]
         packages:
-          - confluent-kafka>=2.8.0,<2.9.0
+          - confluent-kafka
   test_cpp:
     common:
       - output_types: conda
@@ -862,7 +866,7 @@ dependencies:
             packages:
               # this is sometimes different from the floor in cudf because
               # dask imposes its own constraints on 'numpy' (e.g. for 'dask.array')
-              - numpy==1.24.*
+              - numpy==1.26.*
           - matrix:
             packages:
   test_python_pylibcudf:
@@ -919,7 +923,7 @@ dependencies:
         matrices:
           - matrix: {dependencies: "oldest"}
             packages:
-              - numpy==1.23.*
+              - numpy==1.26.*
               - pyarrow==19.*
           - matrix:
             packages:

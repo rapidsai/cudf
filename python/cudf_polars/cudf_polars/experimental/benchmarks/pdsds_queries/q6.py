@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
-from cudf_polars.experimental.benchmarks.utils import get_data
+from cudf_polars.experimental.benchmarks.utils import QueryResult, get_data
 
 if TYPE_CHECKING:
     from cudf_polars.experimental.benchmarks.utils import RunConfig
@@ -52,7 +52,7 @@ def duckdb_impl(run_config: RunConfig) -> str:
     """
 
 
-def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
+def polars_impl(run_config: RunConfig) -> QueryResult:
     """Query 6."""
     params = load_parameters(
         int(run_config.scale_factor), query_id=6, qualification=run_config.qualification
@@ -81,26 +81,29 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         pl.col("i_current_price").mean().alias("avg_price")
     )
 
-    return (
-        customer_address.join(
-            customer, left_on="ca_address_sk", right_on="c_current_addr_sk"
-        )
-        .join(store_sales, left_on="c_customer_sk", right_on="ss_customer_sk")
-        .join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
-        .join(item, left_on="ss_item_sk", right_on="i_item_sk")
-        .join(avg_price_per_category, on="i_category")
-        .join(target_month_seq_table, on="d_month_seq", how="semi")
-        .filter(pl.col("i_current_price") > 1.2 * pl.col("avg_price"))
-        .group_by("ca_state")
-        .agg(pl.len().alias("cnt"))
-        .filter(pl.col("cnt") >= 10)
-        .sort(["cnt", "ca_state"], nulls_last=True)
-        .limit(100)
-        .select(
-            [
-                pl.col("ca_state").alias("state"),
-                # Cast -> Int64 to match DuckDB
-                pl.col("cnt").cast(pl.Int64),
-            ]
-        )
+    return QueryResult(
+        frame=(
+            customer_address.join(
+                customer, left_on="ca_address_sk", right_on="c_current_addr_sk"
+            )
+            .join(store_sales, left_on="c_customer_sk", right_on="ss_customer_sk")
+            .join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
+            .join(item, left_on="ss_item_sk", right_on="i_item_sk")
+            .join(avg_price_per_category, on="i_category")
+            .join(target_month_seq_table, on="d_month_seq", how="semi")
+            .filter(pl.col("i_current_price") > 1.2 * pl.col("avg_price"))
+            .group_by("ca_state")
+            .agg(pl.len().alias("cnt"))
+            .filter(pl.col("cnt") >= 10)
+            .sort(["cnt", "ca_state"], nulls_last=True)
+            .limit(100)
+            .select(
+                [
+                    pl.col("ca_state").alias("state"),
+                    pl.col("cnt"),
+                ]
+            )
+        ),
+        sort_by=[("cnt", False), ("state", False)],
+        limit=100,
     )

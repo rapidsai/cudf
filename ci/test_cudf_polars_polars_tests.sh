@@ -37,7 +37,7 @@ sed -i 's/^deltalake>=1.1.4/deltalake>=1.1.4,<1.2.0/' polars/py-polars/requireme
 # Additionally, Iceberg tests attempt to filter a Pydantic warning that does not exist
 # in versions < 2.12, and trigger a pyparsing DeprecationWarning during collection.
 # See https://github.com/pola-rs/polars/pull/25854
-sed -i 's/^pydantic>=2.0.0.*/pydantic>=2.0.0,<2.12.0/' polars/py-polars/requirements-dev.txt
+sed -i 's/^pydantic>=2.0.0.*/pydantic>=2.0.0,<2.13.0/' polars/py-polars/requirements-dev.txt
 # Iceberg tests include a call to a deprecated in 0.10.0
 # See https://github.com/pola-rs/polars/pull/25854
 # Ignore the warning for now, but update the minimum

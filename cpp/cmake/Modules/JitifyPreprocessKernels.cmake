@@ -57,7 +57,7 @@ endif()
 
 jit_preprocess_files(
   SOURCE_DIRECTORY ${CUDF_SOURCE_DIR}/src FILES binaryop/jit/kernel.cu rolling/jit/kernel.cu
-  transform/jit/kernel.cu
+  transform/jit/kernel.cu join/jit/filter_join_kernel.cu
 )
 
 add_custom_target(

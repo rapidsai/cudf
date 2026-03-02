@@ -26,7 +26,6 @@ from cudf.utils.dtypes import (
     cudf_dtype_to_pa_type,
     dtype_to_pylibcudf_type,
     find_common_type,
-    is_pandas_nullable_extension_dtype,
 )
 from cudf.utils.utils import is_na_like
 
@@ -167,7 +166,7 @@ class TemporalBaseColumn(ColumnBase, Scannable):
                         to_unit = self.time_unit
                     if np.isnat(other):
                         # Workaround for https://github.com/numpy/numpy/issues/28496
-                        # Once fixed, can always use the astype below
+                        # Can always use the astype below once minimum numpy version is 2.4
                         # call-overload must be ignored because numpy stubs only accept literal strings
                         # for time units (e.g., "ns", "us") to allow compile-time validation,
                         # but we're passing a variable string (to_unit) with a time unit that
@@ -214,8 +213,8 @@ class TemporalBaseColumn(ColumnBase, Scannable):
         """
         Return a CuPy representation of the TemporalBaseColumn.
         """
-        if is_pandas_nullable_extension_dtype(self.dtype):
-            dtype = getattr(self.dtype, "numpy_dtype", self.dtype)
+        if isinstance(self.dtype, pd.ArrowDtype):
+            dtype = self.dtype.numpy_dtype
         else:
             dtype = self.dtype
 

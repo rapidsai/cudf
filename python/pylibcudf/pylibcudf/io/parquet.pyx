@@ -43,7 +43,7 @@ from pylibcudf.libcudf.io.types cimport (
     statistics_freq,
     table_with_metadata,
 )
-from pylibcudf.libcudf.types cimport size_type
+from pylibcudf.libcudf.types cimport size_type, type_id
 from pylibcudf.table cimport Table
 from pylibcudf.utils cimport _get_stream, _get_memory_resource
 
@@ -416,6 +416,23 @@ cdef class ParquetReaderOptionsBuilder:
         ParquetReaderOptionsBuilder
         """
         self.c_obj.use_jit_filter(use_jit_filter)
+        return self
+
+    cpdef ParquetReaderOptionsBuilder decimal_width(self, type_id width):
+        """
+        Sets the decimal width used to cast all decimal columns.
+
+        Parameters
+        ----------
+        width : TypeId
+            The decimal type_id (DECIMAL32, DECIMAL64, or DECIMAL128) to which
+            all decimal columns should be cast.
+
+        Returns
+        -------
+        ParquetReaderOptionsBuilder
+        """
+        self.c_obj.decimal_width(width)
         return self
 
     cpdef build(self):
