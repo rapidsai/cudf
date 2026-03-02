@@ -1284,7 +1284,12 @@ def test_categorical_typecast(data, categories):
     gd_data = cudf.from_pandas(data)
     cat_type = pd.CategoricalDtype(categories)
 
-    assert_eq(pd_data.astype(cat_type), gd_data.astype(cat_type))
+    actual = gd_data.astype(cat_type)
+    warns = actual.null_count != gd_data.null_count
+    with expect_warning_if(warns, pd.errors.Pandas4Warning):
+        expected = pd_data.astype(cat_type)
+
+    assert_eq(expected, actual)
 
 
 @pytest.mark.parametrize(

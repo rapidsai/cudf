@@ -277,7 +277,7 @@ class CategoricalDtype(_BaseDtype):
             getattr(categories, "dtype", None),
             (IntervalDtype, pd.IntervalDtype),
         ):
-            dtype = DEFAULT_STRING_DTYPE
+            dtype = getattr(categories, "dtype", DEFAULT_STRING_DTYPE)
         else:
             dtype = None
 

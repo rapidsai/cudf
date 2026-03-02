@@ -2264,6 +2264,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     def as_categorical_column(
         self, dtype: CategoricalDtype
     ) -> CategoricalColumn:
+        na_sentinel = -1
         if dtype._categories is not None:
             # Re-label self w.r.t. the provided categories
             codes = self._label_encoding(cats=dtype._categories)
@@ -2276,6 +2277,10 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 cats = cats.dropna()
             dtype = CategoricalDtype(categories=cats, ordered=dtype.ordered)
         codes_with_mask = codes.set_mask(self.mask, self.null_count)
+        codes_with_mask = codes_with_mask.copy_if_else(
+            plc.Scalar.from_py(None, dtype_to_pylibcudf_type(codes.dtype)),
+            codes_with_mask != na_sentinel,
+        )
         codes_typed = cast(
             "cudf.core.column.numerical.NumericalColumn", codes_with_mask
         ).astype(dtype._codes_dtype)
