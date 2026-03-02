@@ -176,7 +176,6 @@ jit_bundle_t::jit_bundle_t(std::string install_dir, rtcx::cache_t& cache)
   : install_dir_{std::move(install_dir)}, cache_{&cache}
 {
   ensure_installed();
-  // TODO: fix cmake tracking of the scripts and embedded files
 }
 
 void jit_bundle_t::ensure_installed() const
