@@ -121,7 +121,7 @@ def assert_tpch_result_equal(
     Consider the first row of ``result``: ``(a, 0.99)``. We'd consider it equal
     to any row in ``expected`` where the ``value`` is within 0.01 of 0.99 (and
     where the keys match, i.e. ``key=="a"``). Searching through ``expected``, we
-    see a match in the second row: ``(b, 0.99)``. Repeating that process for
+    see a match in the second row: ``(a, 0.99)``. Repeating that process for
     the other rows shows that the two ought to be considered equal.
 
     Here's an example where they are different::
