@@ -60,6 +60,8 @@ jit_preprocess_files(
   transform/jit/kernel.cu join/jit/filter_join_kernel.cu
 )
 
+jit_preprocess_files(SOURCE_DIRECTORY ${CUDF_SOURCE_DIR}/include/cudf FILES jit/lto/library.cuh)
+
 add_custom_target(
   jitify_preprocess_run
   DEPENDS ${JIT_PREPROCESSED_FILES}
