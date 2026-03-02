@@ -2498,8 +2498,8 @@ TEST_F(ParquetWriterTest, ReturnedFooterMetadata)
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, *table);
   auto footer = cudf::io::write_parquet(args);
 
-  EXPECT_NE(footer, nullptr);
-  EXPECT_GT(footer->size(), 0);
+  ASSERT_NE(footer, nullptr);
+  EXPECT_FALSE(footer->empty());
 
   // Read file metadata from the returned buffer from the writer
   cudf::io::parquet::FileMetaData fmd_footer;
