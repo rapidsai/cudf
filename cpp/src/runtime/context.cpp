@@ -79,13 +79,14 @@ std::string const& context::get_jit_pch_dir() const { return _config.jit_pch_dir
 
 void context::initialize_components(init_flags flags)
 {
-  if (has_flag(flags, init_flags::INIT_JIT_CACHE)) { ensure_jit_cache_initialized(); }
+  if (has_flag(flags, init_flags::INIT_JIT_CACHE)) {
+    rtcx::initialize();
+    ensure_jit_cache_initialized();
+    ensure_rtc_cache_initialized();
+    ensure_jit_bundle_initialized();
+  }
 
   if (has_flag(flags, init_flags::LOAD_NVCOMP)) { io::detail::nvcomp::load_nvcomp_library(); }
-
-  if (has_flag(flags, init_flags::INIT_RTC_CACHE)) { ensure_rtc_cache_initialized(); }
-
-  if (has_flag(flags, init_flags::INIT_JIT_BUNDLE)) { ensure_jit_bundle_initialized(); }
 }
 
 static std::optional<context> _context{std::nullopt};

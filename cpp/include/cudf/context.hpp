@@ -20,14 +20,9 @@ enum class init_flags : std::uint32_t {
   LOAD_NVCOMP = 1 << 0,
   /// @brief Initialize the JIT program cache during initialization
   INIT_JIT_CACHE = 1 << 1,
-  /// @brief Initialize the RTC cache during initialization
-  INIT_RTC_CACHE = 1 << 2,
-  /// @brief Initialize the JIT bundle during initialization
-  INIT_JIT_BUNDLE = 1 << 3,
-  /// @brief The default initialization steps performed by `initialize()` if no flags are provided
-  DEFAULT = INIT_JIT_CACHE | INIT_RTC_CACHE | INIT_JIT_BUNDLE,
+  DEFAULT        = INIT_JIT_CACHE,
   /// @brief All initialization steps
-  ALL = LOAD_NVCOMP | INIT_JIT_CACHE | INIT_RTC_CACHE | INIT_JIT_BUNDLE
+  ALL = LOAD_NVCOMP | INIT_JIT_CACHE
 };
 
 /// @brief Bitwise OR operator for init_flags
