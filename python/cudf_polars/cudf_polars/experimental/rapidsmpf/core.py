@@ -122,6 +122,19 @@ def evaluate_logical_plan(
                 collective_id_map,
                 collect_metadata=collect_metadata,
             )
+        elif config_options.executor.cluster == "spmd":
+            from cudf_polars.experimental.rapidsmpf.spmd import (
+                evaluate_pipeline_spmd_style,
+            )
+
+            result, metadata_collector = evaluate_pipeline_spmd_style(
+                ir,
+                partition_info,
+                config_options,
+                stats,
+                collective_id_map,
+                collect_metadata=collect_metadata,
+            )
         else:
             # Single-process execution: Run locally
             result, metadata_collector = evaluate_pipeline(

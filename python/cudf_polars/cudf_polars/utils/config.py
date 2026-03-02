@@ -166,6 +166,7 @@ class Cluster(enum.StrEnum):
 
     SINGLE = "single"
     DISTRIBUTED = "distributed"
+    SPMD = "spmd"
 
 
 class Scheduler(enum.StrEnum):
@@ -816,6 +817,7 @@ class StreamingExecutor:
             f"{_env_prefix}__RAPIDSMPF_PY_EXECUTOR_MAX_WORKERS", int, default=None
         )
     )
+    spmd: dict = dataclasses.field(default_factory=dict)
 
     def __post_init__(self) -> None:  # noqa: D105
         # Check for rapidsmpf runtime
