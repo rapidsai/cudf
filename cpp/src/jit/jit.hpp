@@ -6,55 +6,32 @@
 #pragma once
 #include <cudf/utilities/export.hpp>
 
-#include <jit/rtc/cache.hpp>
-#include <jit/rtc/rtc.hpp>
+#include <librtcx/rtcx.hpp>
 
 namespace CUDF_EXPORT cudf {
 
 struct [[nodiscard]] jit_bundle_t {
  private:
   std::string install_dir_;
-  rtc::fragment lto_library_;
-  rtc::cache_t* cache_;
+  rtcx::cache_t* cache_;
 
   void ensure_installed() const;
 
-  void preload_lto_library();
-
  public:
-  jit_bundle_t(std::string install_dir, rtc::cache_t& cache);
+  jit_bundle_t(std::string install_dir, rtcx::cache_t& cache);
 
   [[nodiscard]] std::string get_hash() const;
 
-  [[nodiscard]]
-  std::string get_directory() const;
-
-  [[nodiscard]] rtc::fragment get_lto_library() const;
+  [[nodiscard]] std::string get_directory() const;
 
   [[nodiscard]] std::vector<std::string> get_include_directories() const;
-
-  [[nodiscard]] std::vector<std::string> get_compile_options() const;
 };
 
-[[nodiscard]] rtc::library compile_lto_kernel(std::string const& name,
-                                              std::string const& key,
-                                              std::string const& cuda_udf,
-                                              std::string const& kernel_symbol,
-                                              bool use_cache = true,
-                                              bool use_pch   = true,
-                                              bool log_pch   = false);
-
-[[nodiscard]] rtc::library compile_cuda_kernel(std::string const& name,
-                                               std::string const& key,
-                                               std::string const& cuda_udf,
-                                               bool use_cache = true,
-                                               bool use_pch   = true,
-                                               bool log_pch   = false);
-
-[[nodiscard]] rtc::library compile_and_link_lto_ir_kernel(std::string const& name,
-                                                          std::string const& key,
-                                                          std::span<uint8_t const> lto_ir_binary,
-                                                          std::string const& kernel_symbol,
-                                                          bool use_cache = true);
+[[nodiscard]] rtcx::library get_library(std::string const& name,
+                                        std::string const& key,
+                                        std::string const& cuda_udf,
+                                        bool use_cache = true,
+                                        bool use_pch   = true,
+                                        bool log_pch   = false);
 
 }  // namespace CUDF_EXPORT cudf

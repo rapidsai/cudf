@@ -14,7 +14,7 @@ function(find_and_configure_lz4)
     GLOBAL_TARGETS lz4
     CPM_ARGS
     GIT_REPOSITORY https://github.com/lz4/lz4.git
-    GIT_TAG 1519f46a3a11f312be8f5796e8fa4779140277f0
+    GIT_TAG 130f457aea830ab80e2e7b438408384fe8eefe07
     GIT_SHALLOW TRUE
   )
 

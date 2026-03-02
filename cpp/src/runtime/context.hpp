@@ -11,15 +11,15 @@
 #include <memory>
 #include <mutex>
 
+namespace rtcx {
+class cache_t;
+}  // namespace rtcx
+
 namespace cudf {
 
 namespace jit {
 class program_cache;
 }
-
-namespace rtc {
-class cache_t;
-}  // namespace rtc
 
 class jit_bundle_t;
 
@@ -40,7 +40,7 @@ class context {
   std::once_flag _program_cache_init_flag;
   std::unique_ptr<jit::program_cache> _program_cache;
   std::once_flag _rtc_cache_init_flag;
-  std::unique_ptr<rtc::cache_t> _rtc_cache;
+  std::unique_ptr<rtcx::cache_t> _rtc_cache;
   std::once_flag _jit_bundle_init_flag;
   std::unique_ptr<jit_bundle_t> _jit_bundle;
 
@@ -63,7 +63,7 @@ class context {
 
   jit::program_cache& program_cache();
 
-  rtc::cache_t& rtc_cache();
+  rtcx::cache_t& rtc_cache();
 
   jit_bundle_t& jit_bundle();
 

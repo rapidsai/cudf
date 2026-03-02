@@ -9,7 +9,7 @@
 #include "io/utilities/getenv_or.hpp"
 #include "jit/cache.hpp"
 #include "jit/jit.hpp"
-#include "jit/rtc/cache.hpp"
+#include "librtcx/rtcx.hpp"
 
 #include <cudf/context.hpp>
 #include <cudf/utilities/error.hpp>
@@ -37,8 +37,7 @@ void context::ensure_rtc_cache_initialized()
   std::call_once(_rtc_cache_init_flag, [&]() {
     // make sure the rtc cache directory exists
     std::filesystem::create_directories(_config.rtc_cache_dir);
-    _rtc_cache =
-      std::make_unique<rtc::cache_t>(_config.rtc_cache_dir, rtc::cache_limits::default_limits());
+    _rtc_cache = std::make_unique<rtcx::cache_t>(_config.rtc_cache_dir, rtcx::cache_limits{});
   });
 }
 
@@ -60,7 +59,7 @@ jit::program_cache& context::program_cache()
   return *_program_cache;
 }
 
-rtc::cache_t& context::rtc_cache()
+rtcx::cache_t& context::rtc_cache()
 {
   ensure_rtc_cache_initialized();
   return *_rtc_cache;
