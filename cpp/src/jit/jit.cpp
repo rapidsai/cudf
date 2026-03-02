@@ -317,7 +317,7 @@ std::tuple<rtcx::library, rtcx::blob> compile_library_uncached(char const* name,
   auto duration = end - begin;
 
   CUDF_LOG_INFO(
-    "Compiled fragment `%s` in %f ms",
+    "Compiled CUDA library `%s` in %f ms",
     name,
     std::chrono::duration_cast<std::chrono::duration<double, std::milli>>(duration).count());
 
