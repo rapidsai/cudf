@@ -12,7 +12,6 @@ from rapidsmpf.memory.packed_data import PackedData
 from rapidsmpf.streaming.core.actor import (
     run_actor_network,
 )
-from rapidsmpf.streaming.core.context import Context
 from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 
 import polars as pl
@@ -28,7 +27,6 @@ from cudf_polars.experimental.utils import _concat
 
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
-    from concurrent.futures import ThreadPoolExecutor
 
     from rapidsmpf.streaming.core.context import Context
     from rapidsmpf.streaming.cudf.channel_metadata import ChannelMetadata
@@ -81,8 +79,9 @@ def evaluate_pipeline_spmd_style(
     True, the list of channel metadata objects; otherwise ``None``.
     """
     assert config_options.executor.runtime == "rapidsmpf", "Runtime must be rapidsmpf"
-    context: Context = config_options.executor.spmd["context"]
-    py_executor: ThreadPoolExecutor = config_options.executor.spmd["py_executor"]
+    assert config_options.executor.spmd is not None, "spmd must be set for SPMD mode"
+    context = config_options.executor.spmd.context
+    py_executor = config_options.executor.spmd.py_executor
 
     # Create the IR execution context
     ir_context = IRExecutionContext(get_cuda_stream=context.get_stream_from_pool)
@@ -170,8 +169,6 @@ def allgather_polars_dataframe(
     -------
     DataFrame containing rows from all ranks, ordered by rank.
     """
-    comm = ctx.comm()
-    br = ctx.br()
     stream = ctx.get_stream_from_pool()
     col_names = local_df.columns
 
@@ -182,17 +179,17 @@ def allgather_polars_dataframe(
     packed_data = PackedData.from_cudf_packed_columns(
         pack(plc_table, stream),
         stream,
-        br,
+        ctx.br(),
     )
 
     # Bulk AllGather: each rank contributes once (sequence_number=0)
-    allgather = AllGather(comm, comm.progress_thread, op_id, br)
+    allgather = AllGather(ctx.comm(), ctx.comm().progress_thread, op_id, ctx.br())
     allgather.insert(0, packed_data)
     allgather.insert_finished()
     results = allgather.wait_and_extract(ordered=True)
 
     # Deserialize and concatenate all ranks' contributions
-    plc_result = unpack_and_concat(results, stream, br)
+    plc_result = unpack_and_concat(results, stream, ctx.br())
 
     # pylibcudf Table -> pl.DataFrame (restore column names)
     ret = pl.from_arrow(plc_result.to_arrow(col_names))

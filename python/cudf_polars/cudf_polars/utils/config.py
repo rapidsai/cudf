@@ -34,6 +34,9 @@ from rmm.pylibrmm import CudaStreamFlags, CudaStreamPool
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+    from concurrent.futures import ThreadPoolExecutor
+
+    from rapidsmpf.streaming.core.context import Context
 
     import polars.lazyframe.engine_config
 
@@ -43,6 +46,7 @@ if TYPE_CHECKING:
 __all__ = [
     "Cluster",
     "ConfigOptions",
+    "ContextSPMD",
     "DynamicPlanningOptions",
     "InMemoryExecutor",
     "ParquetOptions",
@@ -585,6 +589,23 @@ class MemoryResourceConfig:
         return hash((self.qualname, json.dumps(self.options, sort_keys=True)))
 
 
+@dataclasses.dataclass(frozen=True)
+class ContextSPMD:
+    """
+    Configuration for SPMD (Single Program Multiple Data) execution.
+
+    Parameters
+    ----------
+    context
+        The RapidsMPF context shared across all ranks.
+    py_executor
+        Thread-pool executor used to drive the actor network on each rank.
+    """
+
+    context: Context
+    py_executor: ThreadPoolExecutor
+
+
 @dataclasses.dataclass(frozen=True, eq=True)
 class StreamingExecutor:
     """
@@ -817,7 +838,7 @@ class StreamingExecutor:
             f"{_env_prefix}__RAPIDSMPF_PY_EXECUTOR_MAX_WORKERS", int, default=None
         )
     )
-    spmd: dict = dataclasses.field(default_factory=dict)
+    spmd: ContextSPMD | None = None
 
     def __post_init__(self) -> None:  # noqa: D105
         # Check for rapidsmpf runtime
