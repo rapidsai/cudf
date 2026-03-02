@@ -43,7 +43,7 @@ if TYPE_CHECKING:
     from cudf_polars.utils.config import StreamingExecutor
 
 
-def evaluate_pipeline_spmd_style(
+def evaluate_pipeline_spmd_mode(
     ir: IR,
     partition_info: MutableMapping[IR, PartitionInfo],
     config_options: ConfigOptions[StreamingExecutor],

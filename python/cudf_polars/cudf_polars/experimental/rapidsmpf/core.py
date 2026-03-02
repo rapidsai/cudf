@@ -124,10 +124,10 @@ def evaluate_logical_plan(
             )
         elif config_options.executor.cluster == "spmd":
             from cudf_polars.experimental.rapidsmpf.spmd import (
-                evaluate_pipeline_spmd_style,
+                evaluate_pipeline_spmd_mode,
             )
 
-            result, metadata_collector = evaluate_pipeline_spmd_style(
+            result, metadata_collector = evaluate_pipeline_spmd_mode(
                 ir,
                 partition_info,
                 config_options,
