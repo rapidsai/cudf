@@ -2499,7 +2499,7 @@ TEST_F(ParquetWriterTest, ReturnedFooterMetadata)
   auto footer = cudf::io::write_parquet(args);
 
   ASSERT_NE(footer, nullptr);
-  EXPECT_FALSE(footer->empty());
+  ASSERT_FALSE(footer->empty());
 
   // Read file metadata from the returned buffer from the writer
   cudf::io::parquet::FileMetaData fmd_footer;
@@ -2534,7 +2534,7 @@ TEST_F(ParquetWriterTest, ReturnedFooterMetadataFilePaths)
   auto footer_buffer = cudf::io::write_parquet(args);
 
   ASSERT_NE(footer_buffer, nullptr);
-  EXPECT_FALSE(footer_buffer->empty());
+  ASSERT_FALSE(footer_buffer->empty());
   cudf::io::parquet::FileMetaData fmd_footer;
   auto footer_source = cudf::io::datasource::create(cudf::host_span<std::byte const>{
     reinterpret_cast<std::byte const*>(footer_buffer->data()), footer_buffer->size()});
