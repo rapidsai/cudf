@@ -434,10 +434,8 @@ std::vector<column_buffer> decode_data(metadata& meta,
   // Copy valid bits that are shared between columns
   for (size_t i = 0; i < out_buffers.size(); i++) {
     if (valid_alias[i] != nullptr) {
-      CUDF_CUDA_TRY(cudf::detail::memcpy_async(out_buffers[i].null_mask(),
-                                               valid_alias[i],
-                                               out_buffers[i].null_mask_size(),
-                                               cudaMemcpyDefault,
+      CUDF_CUDA_TRY(cudf::detail::memcpy_async(
+        out_buffers[i].null_mask(), valid_alias[i], out_buffers[i].null_mask_size(), stream));
                                                stream));
     }
   }

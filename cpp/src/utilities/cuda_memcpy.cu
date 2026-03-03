@@ -41,7 +41,7 @@ void copy_pinned(void* dst, void const* src, std::size_t size, rmm::cuda_stream_
     copy_kernel<<<grid_size, block_size, 0, stream.value()>>>(
       static_cast<char const*>(src), static_cast<char*>(dst), size);
   } else {
-    CUDF_CUDA_TRY(cudf::detail::memcpy_async(dst, src, size, cudaMemcpyDefault, stream));
+    CUDF_CUDA_TRY(cudf::detail::memcpy_async(dst, src, size, stream));
   }
 }
 
@@ -107,8 +107,7 @@ cudaError_t memcpy_batch_async(
   return cudaSuccess;
 }
 
-cudaError_t memcpy_async(
-  void* dst, void const* src, size_t count, cudaMemcpyKind kind, rmm::cuda_stream_view stream)
+cudaError_t memcpy_async(void* dst, void const* src, size_t count, rmm::cuda_stream_view stream)
 {
   if (count == 0) { return cudaSuccess; }
 

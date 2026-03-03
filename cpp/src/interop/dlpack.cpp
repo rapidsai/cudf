@@ -196,11 +196,8 @@ std::unique_ptr<table> from_dlpack(DLManagedTensor const* managed_tensor,
   for (auto& col : columns) {
     col = make_numeric_column(dtype, num_rows, mask_state::UNALLOCATED, stream, mr);
 
-    CUDF_CUDA_TRY(cudf::detail::memcpy_async(col->mutable_view().head<void>(),
-                                             reinterpret_cast<void*>(tensor_data),
-                                             bytes,
-                                             cudaMemcpyDefault,
-                                             stream));
+    CUDF_CUDA_TRY(cudf::detail::memcpy_async(
+      col->mutable_view().head<void>(), reinterpret_cast<void*>(tensor_data), bytes, stream));
 
     tensor_data += col_stride;
   }
@@ -266,11 +263,8 @@ DLManagedTensor* to_dlpack(table_view const& input,
 
   auto tensor_data = reinterpret_cast<uintptr_t>(tensor.data);
   for (auto const& col : input) {
-    CUDF_CUDA_TRY(cudf::detail::memcpy_async(reinterpret_cast<void*>(tensor_data),
-                                             get_column_data(col),
-                                             stride_bytes,
-                                             cudaMemcpyDefault,
-                                             stream));
+    CUDF_CUDA_TRY(cudf::detail::memcpy_async(
+      reinterpret_cast<void*>(tensor_data), get_column_data(col), stride_bytes, stream));
     tensor_data += stride_bytes;
   }
 

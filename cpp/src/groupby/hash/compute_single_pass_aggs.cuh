@@ -113,7 +113,6 @@ std::pair<rmm::device_uvector<size_type>, bool> compute_single_pass_aggs(
     CUDF_CUDA_TRY(cudf::detail::memcpy_async(&h_needs_fallback,
                                              needs_global_memory_fallback.data(),
                                              sizeof(cuda::std::atomic_flag),
-                                             cudaMemcpyDefault,
                                              stream));
     stream.synchronize();
     return h_needs_fallback.test(cuda::std::memory_order_relaxed);

@@ -50,16 +50,18 @@ void cuda_memcpy_async_impl(
  *
  * Prefer `cudf::detail::cuda_memcpy_async` for host/device copies involving typed spans.
  * Use this function for device-to-device copies or when a raw `void*` interface is required.
+ * The copy direction is inferred from the pointer types (`cudaMemcpyDefault`).
  *
  * @param dst Destination memory address
  * @param src Source memory address
  * @param count Size in bytes to copy
- * @param kind Type of memory copy
  * @param stream CUDA stream on which the copy is enqueued
  * @return cudaError_t CUDA error code
  */
-[[nodiscard]] cudaError_t memcpy_async(
-  void* dst, void const* src, size_t count, cudaMemcpyKind kind, rmm::cuda_stream_view stream);
+[[nodiscard]] cudaError_t memcpy_async(void* dst,
+                                       void const* src,
+                                       size_t count,
+                                       rmm::cuda_stream_view stream);
 
 /**
  * @brief Asynchronously copies data from host to device memory.

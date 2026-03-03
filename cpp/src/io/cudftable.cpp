@@ -103,11 +103,8 @@ packed_table read_cudftable(datasource* source,
       data_offset, header.data_length, static_cast<uint8_t*>(packed.gpu_data->data()), stream);
   } else {
     auto host_buffer = source->host_read(data_offset, header.data_length);
-    CUDF_CUDA_TRY(cudf::detail::memcpy_async(packed.gpu_data->data(),
-                                             host_buffer->data(),
-                                             header.data_length,
-                                             cudaMemcpyHostToDevice,
-                                             stream));
+    CUDF_CUDA_TRY(cudf::detail::memcpy_async(
+      packed.gpu_data->data(), host_buffer->data(), header.data_length, stream));
     stream.synchronize();
   }
 

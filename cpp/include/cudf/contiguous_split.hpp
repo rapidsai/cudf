@@ -129,7 +129,6 @@ struct contiguous_split_state;
  *     host_buffer.data() + host_offset,
  *     user_buffer.data(),
  *     bytes_copied,
- *     cudaMemcpyDefault,
  *     stream);
  *
  *   host_offset += bytes_copied;
