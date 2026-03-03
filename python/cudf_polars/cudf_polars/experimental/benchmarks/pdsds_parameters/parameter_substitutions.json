@@ -843,6 +843,88 @@
         "year": 2002,
         "gmt": -5.0
       },
+      "53": {
+        "dms": 1176,
+        "categories1": [
+          "Books",
+          "Children",
+          "Electronics"
+        ],
+        "classes1": [
+          "personal",
+          "portable",
+          "reference",
+          "self-help"
+        ],
+        "brands1": [
+          "scholaramalgamalg #14",
+          "scholaramalgamalg #7",
+          "exportiunivamalg #9",
+          "scholaramalgamalg #9"
+        ],
+        "categories2": [
+          "Women",
+          "Music",
+          "Men"
+        ],
+        "classes2": [
+          "accessories",
+          "classical",
+          "fragrances",
+          "pants"
+        ],
+        "brands2": [
+          "amalgimporto #1",
+          "edu packscholar #1",
+          "exportiimporto #1",
+          "importoamalg #1"
+        ]
+      },
+      "54": {
+        "category": "Music",
+        "class": "classical",
+        "month": 5,
+        "year": 2001
+      },
+      "55": {
+        "manager_id": 95,
+        "month": 12,
+        "year": 2002
+      },
+      "56": {
+        "colors": [
+          "rose",
+          "wheat",
+          "chartreuse"
+        ],
+        "year": 1999,
+        "month": 1,
+        "gmt_offset": -6.0
+      },
+      "57": {
+        "year": 2001
+      },
+      "58": {
+        "sales_date": "2002-03-11"
+      },
+      "59": {
+        "dms": 1184
+      },
+      "60": {
+        "category": "Shoes",
+        "year": 2001,
+        "month": 10,
+        "gmt_offset": -5.0
+      },
+      "61": {
+        "gmt_offset": -7.0,
+        "category": "Sports",
+        "year": 2001,
+        "month": 12
+      },
+      "62": {
+        "dms": 1176
+      },
       "63": {
         "dms": 1176
       },
@@ -1945,6 +2027,88 @@
       "43": {
         "year": 2002,
         "gmt": -6.0
+      },
+      "53": {
+        "dms": 1176,
+        "categories1": [
+          "Books",
+          "Children",
+          "Electronics"
+        ],
+        "classes1": [
+          "personal",
+          "portable",
+          "reference",
+          "self-help"
+        ],
+        "brands1": [
+          "scholaramalgamalg #14",
+          "scholaramalgamalg #7",
+          "exportiunivamalg #9",
+          "scholaramalgamalg #9"
+        ],
+        "categories2": [
+          "Women",
+          "Music",
+          "Men"
+        ],
+        "classes2": [
+          "accessories",
+          "classical",
+          "fragrances",
+          "pants"
+        ],
+        "brands2": [
+          "amalgimporto #1",
+          "edu packscholar #1",
+          "exportiimporto #1",
+          "importoamalg #1"
+        ]
+      },
+      "54": {
+        "category": "Music",
+        "class": "classical",
+        "month": 5,
+        "year": 2001
+      },
+      "55": {
+        "manager_id": 95,
+        "month": 12,
+        "year": 2002
+      },
+      "56": {
+        "colors": [
+          "rose",
+          "wheat",
+          "chartreuse"
+        ],
+        "year": 1999,
+        "month": 1,
+        "gmt_offset": -6.0
+      },
+      "57": {
+        "year": 2001
+      },
+      "58": {
+        "sales_date": "2002-03-11"
+      },
+      "59": {
+        "dms": 1184
+      },
+      "60": {
+        "category": "Shoes",
+        "year": 2001,
+        "month": 10,
+        "gmt_offset": -5.0
+      },
+      "61": {
+        "gmt_offset": -7.0,
+        "category": "Sports",
+        "year": 2001,
+        "month": 12
+      },
+      "62": {
+        "dms": 1176
       },
       "63": {
         "dms": 1176
@@ -3049,6 +3213,88 @@
         "year": 2002,
         "gmt": -6.0
       },
+      "53": {
+        "dms": 1176,
+        "categories1": [
+          "Books",
+          "Children",
+          "Electronics"
+        ],
+        "classes1": [
+          "personal",
+          "portable",
+          "reference",
+          "self-help"
+        ],
+        "brands1": [
+          "scholaramalgamalg #14",
+          "scholaramalgamalg #7",
+          "exportiunivamalg #9",
+          "scholaramalgamalg #9"
+        ],
+        "categories2": [
+          "Women",
+          "Music",
+          "Men"
+        ],
+        "classes2": [
+          "accessories",
+          "classical",
+          "fragrances",
+          "pants"
+        ],
+        "brands2": [
+          "amalgimporto #1",
+          "edu packscholar #1",
+          "exportiimporto #1",
+          "importoamalg #1"
+        ]
+      },
+      "54": {
+        "category": "Music",
+        "class": "classical",
+        "month": 5,
+        "year": 2001
+      },
+      "55": {
+        "manager_id": 95,
+        "month": 12,
+        "year": 2002
+      },
+      "56": {
+        "colors": [
+          "rose",
+          "wheat",
+          "chartreuse"
+        ],
+        "year": 1999,
+        "month": 1,
+        "gmt_offset": -6.0
+      },
+      "57": {
+        "year": 2001
+      },
+      "58": {
+        "sales_date": "2002-03-11"
+      },
+      "59": {
+        "dms": 1184
+      },
+      "60": {
+        "category": "Shoes",
+        "year": 2001,
+        "month": 10,
+        "gmt_offset": -5.0
+      },
+      "61": {
+        "gmt_offset": -7.0,
+        "category": "Sports",
+        "year": 2001,
+        "month": 12
+      },
+      "62": {
+        "dms": 1176
+      },
       "63": {
         "dms": 1176
       },
@@ -4151,6 +4397,88 @@
       "43": {
         "year": 2002,
         "gmt": -6.0
+      },
+      "53": {
+        "dms": 1176,
+        "categories1": [
+          "Books",
+          "Children",
+          "Electronics"
+        ],
+        "classes1": [
+          "personal",
+          "portable",
+          "reference",
+          "self-help"
+        ],
+        "brands1": [
+          "scholaramalgamalg #14",
+          "scholaramalgamalg #7",
+          "exportiunivamalg #9",
+          "scholaramalgamalg #9"
+        ],
+        "categories2": [
+          "Women",
+          "Music",
+          "Men"
+        ],
+        "classes2": [
+          "accessories",
+          "classical",
+          "fragrances",
+          "pants"
+        ],
+        "brands2": [
+          "amalgimporto #1",
+          "edu packscholar #1",
+          "exportiimporto #1",
+          "importoamalg #1"
+        ]
+      },
+      "54": {
+        "category": "Music",
+        "class": "classical",
+        "month": 5,
+        "year": 2001
+      },
+      "55": {
+        "manager_id": 95,
+        "month": 12,
+        "year": 2002
+      },
+      "56": {
+        "colors": [
+          "rose",
+          "wheat",
+          "chartreuse"
+        ],
+        "year": 1999,
+        "month": 1,
+        "gmt_offset": -6.0
+      },
+      "57": {
+        "year": 2001
+      },
+      "58": {
+        "sales_date": "2002-03-11"
+      },
+      "59": {
+        "dms": 1184
+      },
+      "60": {
+        "category": "Shoes",
+        "year": 2001,
+        "month": 10,
+        "gmt_offset": -5.0
+      },
+      "61": {
+        "gmt_offset": -7.0,
+        "category": "Sports",
+        "year": 2001,
+        "month": 12
+      },
+      "62": {
+        "dms": 1176
       },
       "63": {
         "dms": 1176
@@ -5255,6 +5583,88 @@
         "year": 2002,
         "gmt": -5.0
       },
+      "53": {
+        "dms": 1176,
+        "categories1": [
+          "Books",
+          "Children",
+          "Electronics"
+        ],
+        "classes1": [
+          "personal",
+          "portable",
+          "reference",
+          "self-help"
+        ],
+        "brands1": [
+          "scholaramalgamalg #14",
+          "scholaramalgamalg #7",
+          "exportiunivamalg #9",
+          "scholaramalgamalg #9"
+        ],
+        "categories2": [
+          "Women",
+          "Music",
+          "Men"
+        ],
+        "classes2": [
+          "accessories",
+          "classical",
+          "fragrances",
+          "pants"
+        ],
+        "brands2": [
+          "amalgimporto #1",
+          "edu packscholar #1",
+          "exportiimporto #1",
+          "importoamalg #1"
+        ]
+      },
+      "54": {
+        "category": "Music",
+        "class": "classical",
+        "month": 5,
+        "year": 2001
+      },
+      "55": {
+        "manager_id": 95,
+        "month": 12,
+        "year": 2002
+      },
+      "56": {
+        "colors": [
+          "rose",
+          "wheat",
+          "chartreuse"
+        ],
+        "year": 1999,
+        "month": 1,
+        "gmt_offset": -6.0
+      },
+      "57": {
+        "year": 2001
+      },
+      "58": {
+        "sales_date": "2002-03-11"
+      },
+      "59": {
+        "dms": 1184
+      },
+      "60": {
+        "category": "Shoes",
+        "year": 2001,
+        "month": 10,
+        "gmt_offset": -5.0
+      },
+      "61": {
+        "gmt_offset": -7.0,
+        "category": "Sports",
+        "year": 2001,
+        "month": 12
+      },
+      "62": {
+        "dms": 1176
+      },
       "63": {
         "dms": 1176
       },
@@ -6357,6 +6767,88 @@
       "43": {
         "year": 2002,
         "gmt": -6.0
+      },
+      "53": {
+        "dms": 1176,
+        "categories1": [
+          "Books",
+          "Children",
+          "Electronics"
+        ],
+        "classes1": [
+          "personal",
+          "portable",
+          "reference",
+          "self-help"
+        ],
+        "brands1": [
+          "scholaramalgamalg #14",
+          "scholaramalgamalg #7",
+          "exportiunivamalg #9",
+          "scholaramalgamalg #9"
+        ],
+        "categories2": [
+          "Women",
+          "Music",
+          "Men"
+        ],
+        "classes2": [
+          "accessories",
+          "classical",
+          "fragrances",
+          "pants"
+        ],
+        "brands2": [
+          "amalgimporto #1",
+          "edu packscholar #1",
+          "exportiimporto #1",
+          "importoamalg #1"
+        ]
+      },
+      "54": {
+        "category": "Music",
+        "class": "classical",
+        "month": 5,
+        "year": 2001
+      },
+      "55": {
+        "manager_id": 95,
+        "month": 12,
+        "year": 2002
+      },
+      "56": {
+        "colors": [
+          "rose",
+          "wheat",
+          "chartreuse"
+        ],
+        "year": 1999,
+        "month": 1,
+        "gmt_offset": -6.0
+      },
+      "57": {
+        "year": 2001
+      },
+      "58": {
+        "sales_date": "2002-03-11"
+      },
+      "59": {
+        "dms": 1184
+      },
+      "60": {
+        "category": "Shoes",
+        "year": 2001,
+        "month": 10,
+        "gmt_offset": -5.0
+      },
+      "61": {
+        "gmt_offset": -7.0,
+        "category": "Sports",
+        "year": 2001,
+        "month": 12
+      },
+      "62": {
+        "dms": 1176
       },
       "63": {
         "dms": 1176
@@ -7461,6 +7953,88 @@
         "year": 2002,
         "gmt": -6.0
       },
+      "53": {
+        "dms": 1176,
+        "categories1": [
+          "Books",
+          "Children",
+          "Electronics"
+        ],
+        "classes1": [
+          "personal",
+          "portable",
+          "reference",
+          "self-help"
+        ],
+        "brands1": [
+          "scholaramalgamalg #14",
+          "scholaramalgamalg #7",
+          "exportiunivamalg #9",
+          "scholaramalgamalg #9"
+        ],
+        "categories2": [
+          "Women",
+          "Music",
+          "Men"
+        ],
+        "classes2": [
+          "accessories",
+          "classical",
+          "fragrances",
+          "pants"
+        ],
+        "brands2": [
+          "amalgimporto #1",
+          "edu packscholar #1",
+          "exportiimporto #1",
+          "importoamalg #1"
+        ]
+      },
+      "54": {
+        "category": "Music",
+        "class": "classical",
+        "month": 5,
+        "year": 2001
+      },
+      "55": {
+        "manager_id": 95,
+        "month": 12,
+        "year": 2002
+      },
+      "56": {
+        "colors": [
+          "rose",
+          "wheat",
+          "chartreuse"
+        ],
+        "year": 1999,
+        "month": 1,
+        "gmt_offset": -6.0
+      },
+      "57": {
+        "year": 2001
+      },
+      "58": {
+        "sales_date": "2002-03-11"
+      },
+      "59": {
+        "dms": 1184
+      },
+      "60": {
+        "category": "Shoes",
+        "year": 2001,
+        "month": 10,
+        "gmt_offset": -5.0
+      },
+      "61": {
+        "gmt_offset": -7.0,
+        "category": "Sports",
+        "year": 2001,
+        "month": 12
+      },
+      "62": {
+        "dms": 1176
+      },
       "63": {
         "dms": 1176
       },
@@ -8563,6 +9137,88 @@
       "43": {
         "year": 2002,
         "gmt": -6.0
+      },
+      "53": {
+        "dms": 1176,
+        "categories1": [
+          "Books",
+          "Children",
+          "Electronics"
+        ],
+        "classes1": [
+          "personal",
+          "portable",
+          "reference",
+          "self-help"
+        ],
+        "brands1": [
+          "scholaramalgamalg #14",
+          "scholaramalgamalg #7",
+          "exportiunivamalg #9",
+          "scholaramalgamalg #9"
+        ],
+        "categories2": [
+          "Women",
+          "Music",
+          "Men"
+        ],
+        "classes2": [
+          "accessories",
+          "classical",
+          "fragrances",
+          "pants"
+        ],
+        "brands2": [
+          "amalgimporto #1",
+          "edu packscholar #1",
+          "exportiimporto #1",
+          "importoamalg #1"
+        ]
+      },
+      "54": {
+        "category": "Music",
+        "class": "classical",
+        "month": 5,
+        "year": 2001
+      },
+      "55": {
+        "manager_id": 95,
+        "month": 12,
+        "year": 2002
+      },
+      "56": {
+        "colors": [
+          "rose",
+          "wheat",
+          "chartreuse"
+        ],
+        "year": 1999,
+        "month": 1,
+        "gmt_offset": -6.0
+      },
+      "57": {
+        "year": 2001
+      },
+      "58": {
+        "sales_date": "2002-03-11"
+      },
+      "59": {
+        "dms": 1184
+      },
+      "60": {
+        "category": "Shoes",
+        "year": 2001,
+        "month": 10,
+        "gmt_offset": -5.0
+      },
+      "61": {
+        "gmt_offset": -7.0,
+        "category": "Sports",
+        "year": 2001,
+        "month": 12
+      },
+      "62": {
+        "dms": 1176
       },
       "63": {
         "dms": 1176
@@ -9667,6 +10323,88 @@
         "year": 2002,
         "gmt": -5.0
       },
+      "53": {
+        "dms": 1176,
+        "categories1": [
+          "Books",
+          "Children",
+          "Electronics"
+        ],
+        "classes1": [
+          "personal",
+          "portable",
+          "reference",
+          "self-help"
+        ],
+        "brands1": [
+          "scholaramalgamalg #14",
+          "scholaramalgamalg #7",
+          "exportiunivamalg #9",
+          "scholaramalgamalg #9"
+        ],
+        "categories2": [
+          "Women",
+          "Music",
+          "Men"
+        ],
+        "classes2": [
+          "accessories",
+          "classical",
+          "fragrances",
+          "pants"
+        ],
+        "brands2": [
+          "amalgimporto #1",
+          "edu packscholar #1",
+          "exportiimporto #1",
+          "importoamalg #1"
+        ]
+      },
+      "54": {
+        "category": "Music",
+        "class": "classical",
+        "month": 5,
+        "year": 2001
+      },
+      "55": {
+        "manager_id": 95,
+        "month": 12,
+        "year": 2002
+      },
+      "56": {
+        "colors": [
+          "rose",
+          "wheat",
+          "chartreuse"
+        ],
+        "year": 1999,
+        "month": 1,
+        "gmt_offset": -6.0
+      },
+      "57": {
+        "year": 2001
+      },
+      "58": {
+        "sales_date": "2002-03-11"
+      },
+      "59": {
+        "dms": 1184
+      },
+      "60": {
+        "category": "Shoes",
+        "year": 2001,
+        "month": 10,
+        "gmt_offset": -5.0
+      },
+      "61": {
+        "gmt_offset": -7.0,
+        "category": "Sports",
+        "year": 2001,
+        "month": 12
+      },
+      "62": {
+        "dms": 1176
+      },
       "63": {
         "dms": 1176
       },
@@ -10769,6 +11507,88 @@
       "43": {
         "year": 2002,
         "gmt": -6.0
+      },
+      "53": {
+        "dms": 1176,
+        "categories1": [
+          "Books",
+          "Children",
+          "Electronics"
+        ],
+        "classes1": [
+          "personal",
+          "portable",
+          "reference",
+          "self-help"
+        ],
+        "brands1": [
+          "scholaramalgamalg #14",
+          "scholaramalgamalg #7",
+          "exportiunivamalg #9",
+          "scholaramalgamalg #9"
+        ],
+        "categories2": [
+          "Women",
+          "Music",
+          "Men"
+        ],
+        "classes2": [
+          "accessories",
+          "classical",
+          "fragrances",
+          "pants"
+        ],
+        "brands2": [
+          "amalgimporto #1",
+          "edu packscholar #1",
+          "exportiimporto #1",
+          "importoamalg #1"
+        ]
+      },
+      "54": {
+        "category": "Music",
+        "class": "classical",
+        "month": 5,
+        "year": 2001
+      },
+      "55": {
+        "manager_id": 95,
+        "month": 12,
+        "year": 2002
+      },
+      "56": {
+        "colors": [
+          "rose",
+          "wheat",
+          "chartreuse"
+        ],
+        "year": 1999,
+        "month": 1,
+        "gmt_offset": -6.0
+      },
+      "57": {
+        "year": 2001
+      },
+      "58": {
+        "sales_date": "2002-03-11"
+      },
+      "59": {
+        "dms": 1184
+      },
+      "60": {
+        "category": "Shoes",
+        "year": 2001,
+        "month": 10,
+        "gmt_offset": -5.0
+      },
+      "61": {
+        "gmt_offset": -7.0,
+        "category": "Sports",
+        "year": 2001,
+        "month": 12
+      },
+      "62": {
+        "dms": 1176
       },
       "63": {
         "dms": 1176
@@ -11873,6 +12693,88 @@
         "year": 2002,
         "gmt": -5.0
       },
+      "53": {
+        "dms": 1176,
+        "categories1": [
+          "Books",
+          "Children",
+          "Electronics"
+        ],
+        "classes1": [
+          "personal",
+          "portable",
+          "reference",
+          "self-help"
+        ],
+        "brands1": [
+          "scholaramalgamalg #14",
+          "scholaramalgamalg #7",
+          "exportiunivamalg #9",
+          "scholaramalgamalg #9"
+        ],
+        "categories2": [
+          "Women",
+          "Music",
+          "Men"
+        ],
+        "classes2": [
+          "accessories",
+          "classical",
+          "fragrances",
+          "pants"
+        ],
+        "brands2": [
+          "amalgimporto #1",
+          "edu packscholar #1",
+          "exportiimporto #1",
+          "importoamalg #1"
+        ]
+      },
+      "54": {
+        "category": "Music",
+        "class": "classical",
+        "month": 5,
+        "year": 2001
+      },
+      "55": {
+        "manager_id": 95,
+        "month": 12,
+        "year": 2002
+      },
+      "56": {
+        "colors": [
+          "rose",
+          "wheat",
+          "chartreuse"
+        ],
+        "year": 1999,
+        "month": 1,
+        "gmt_offset": -6.0
+      },
+      "57": {
+        "year": 2001
+      },
+      "58": {
+        "sales_date": "2002-03-11"
+      },
+      "59": {
+        "dms": 1184
+      },
+      "60": {
+        "category": "Shoes",
+        "year": 2001,
+        "month": 10,
+        "gmt_offset": -5.0
+      },
+      "61": {
+        "gmt_offset": -7.0,
+        "category": "Sports",
+        "year": 2001,
+        "month": 12
+      },
+      "62": {
+        "dms": 1176
+      },
       "63": {
         "dms": 1176
       },
@@ -12969,6 +13871,88 @@
       "43": {
         "year": 2000,
         "gmt": -5.0
+      },
+      "53": {
+        "dms": 1176,
+        "categories1": [
+          "Books",
+          "Children",
+          "Electronics"
+        ],
+        "classes1": [
+          "personal",
+          "portable",
+          "reference",
+          "self-help"
+        ],
+        "brands1": [
+          "scholaramalgamalg #14",
+          "scholaramalgamalg #7",
+          "exportiunivamalg #9",
+          "scholaramalgamalg #9"
+        ],
+        "categories2": [
+          "Women",
+          "Music",
+          "Men"
+        ],
+        "classes2": [
+          "accessories",
+          "classical",
+          "fragrances",
+          "pants"
+        ],
+        "brands2": [
+          "amalgimporto #1",
+          "edu packscholar #1",
+          "exportiimporto #1",
+          "importoamalg #1"
+        ]
+      },
+      "54": {
+        "category": "Music",
+        "class": "classical",
+        "month": 5,
+        "year": 2001
+      },
+      "55": {
+        "year": 2002,
+        "month": 12,
+        "manager_id": 95
+      },
+      "56": {
+        "year": 1999,
+        "month": 1,
+        "colors": [
+          "rose",
+          "wheat",
+          "chartreuse"
+        ],
+        "gmt_offset": -6.0
+      },
+      "57": {
+        "year": 2001
+      },
+      "58": {
+        "sales_date": "2002-03-11"
+      },
+      "59": {
+        "dms": 1184
+      },
+      "60": {
+        "year": 2001,
+        "month": 10,
+        "category": "Shoes",
+        "gmt_offset": -5.0
+      },
+      "61": {
+        "year": 2001,
+        "month": 12,
+        "gmt_offset": -7.0,
+        "category": "Sports"
+      },
+      "62": {
+        "dms": 1176
       },
       "73": {
         "dom": [

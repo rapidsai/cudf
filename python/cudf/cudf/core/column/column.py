@@ -437,10 +437,16 @@ def _handle_nulls(arrow_array: pa.Array) -> pa.Array:
     # types nullable in the schema even if the columns contain no nulls
     array_type = arrow_array.type
 
-    # Empty nested or string types should become pyarrow null arrays instead of the
+    # Empty nested (except interval types) or string types should become pyarrow null arrays instead of the
     # normal array classes to match how pyarrow ingests such pandas objects.
+    is_interval_type = (
+        pa.types.is_struct(array_type)
+        and len(array_type) == 2
+        and array_type[0].name == "left"
+        and array_type[1].name == "right"
+    )
     if (
-        pa.types.is_nested(array_type)
+        (pa.types.is_nested(array_type) and not is_interval_type)
         or pa.types.is_string(array_type)
         or pa.types.is_large_string(array_type)
     ) and arrow_array.null_count == len(arrow_array):
@@ -2695,20 +2701,28 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         ]
         dtype: int8
         """
-        na_sentinel = pa.scalar(-1)
+        na_sentinel = -1
 
-        def _return_sentinel_column() -> NumericalColumn:
+        def _return_sentinel_column(dtype: DtypeObj) -> NumericalColumn:
             # TODO: Validate that dtype is numeric type
             return cast(
                 "cudf.core.column.numerical.NumericalColumn",
-                as_column(na_sentinel, dtype=dtype, length=len(self)),
+                ColumnBase.create(
+                    plc.Column.from_scalar(
+                        plc.Scalar.from_py(
+                            na_sentinel, dtype=dtype_to_pylibcudf_type(dtype)
+                        ),
+                        len(self),
+                    ),
+                    dtype,
+                ),
             )
 
         if dtype is None:
-            dtype = min_signed_type(max(len(cats), na_sentinel.as_py()), 8)
+            dtype = min_signed_type(max(len(cats), na_sentinel), 8)
 
         if is_mixed_with_object_dtype(self, cats):
-            return _return_sentinel_column()
+            return _return_sentinel_column(dtype)
 
         try:
             # Where there is a type-cast failure, we have
@@ -2717,7 +2731,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             # encoded values of cats in self.
             cats = cats.astype(self.dtype)
         except ValueError:
-            return _return_sentinel_column()
+            return _return_sentinel_column(dtype)
 
         left_rows, right_rows = plc.join.left_join(
             plc.Table([self.plc_column]),
