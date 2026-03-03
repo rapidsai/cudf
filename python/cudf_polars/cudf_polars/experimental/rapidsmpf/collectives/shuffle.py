@@ -28,7 +28,6 @@ from cudf_polars.experimental.rapidsmpf.nodes import shutdown_on_error
 from cudf_polars.experimental.rapidsmpf.utils import (
     ChannelManager,
     NormalizedPartitioning,
-    iterate_over_buffered_channel,
     recv_metadata,
     send_metadata,
 )
@@ -163,14 +162,11 @@ def _is_already_partitioned(
 async def _global_shuffle(
     context: Context,
     ir_context: IRExecutionContext,
-    ch_in: Channel[TableChunk],
     ch_out: Channel[TableChunk],
+    ch_in: Channel[TableChunk],
     columns_to_hash: tuple[int, ...],
     num_partitions: int,
     collective_id: int,
-    metadata_in: ChannelMetadata,
-    *,
-    buffered_chunks: list[TableChunk] | None = None,
 ) -> None:
     """
     Global shuffle implementation.
@@ -181,32 +177,27 @@ async def _global_shuffle(
         The streaming context.
     ir_context
         The execution context for the IR node.
-    ch_in
-        Input Channel[TableChunk] with metadata and data channels.
     ch_out
         Output Channel[TableChunk] with metadata and data channels.
+    ch_in
+        Input Channel[TableChunk] with metadata and data channels.
     columns_to_hash
         Tuple of column indices to use for hashing.
     num_partitions
         Number of partitions to shuffle into.
     collective_id
         The collective ID.
-    metadata_in
-        The input metadata.
-    buffered_chunks
-        The buffered chunks that have already been pulled
-        from the input channel.
     """
+    metadata_in = await recv_metadata(ch_in, context)
+
     # Check if we can skip the shuffle (already partitioned correctly)
     if _is_already_partitioned(
         metadata_in, columns_to_hash, num_partitions, context.comm().nranks
     ):
         # Forward metadata and data unchanged
         await send_metadata(ch_out, context, metadata_in)
-        async for seq_number, chunk in iterate_over_buffered_channel(
-            context, ch_in, buffered_chunks or []
-        ):
-            await ch_out.send(context, Message(seq_number, chunk))
+        while (msg := await ch_in.recv(context)) is not None:
+            await ch_out.send(context, msg)
         await ch_out.drain(context)
         return
 
@@ -226,11 +217,13 @@ async def _global_shuffle(
     # Other ranks still participate in the shuffle protocol.
     skip_insert = metadata_in.duplicated and context.comm().rank != 0
 
-    async for _, chunk in iterate_over_buffered_channel(
-        context, ch_in, buffered_chunks or []
-    ):
+    while (msg := await ch_in.recv(context)) is not None:
         if not skip_insert:
-            shuffle.insert_chunk(chunk)
+            shuffle.insert_chunk(
+                TableChunk.from_message(msg).make_available_and_spill(
+                    context.br(), allow_overbooking=True
+                )
+            )
 
     await shuffle.insert_finished()
 
@@ -292,12 +285,11 @@ async def shuffle_actor(
         await _global_shuffle(
             context,
             ir_context,
-            ch_in,
             ch_out,
+            ch_in,
             columns_to_hash,
             num_partitions,
             collective_id,
-            await recv_metadata(ch_in, context),
         )
 
 

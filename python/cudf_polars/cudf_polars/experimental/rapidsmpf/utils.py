@@ -463,35 +463,37 @@ def names_to_indices(exprs: tuple[NamedExpr, ...], schema: Schema) -> tuple[int,
     return tuple(schema_keys.index(expr.name) for expr in exprs)
 
 
-async def iterate_over_buffered_channel(
+async def replay_buffered_channel(
     context: Context,
-    ch: Channel[TableChunk],
-    buffered_chunks: list[TableChunk],
-) -> AsyncIterator[tuple[int, TableChunk]]:
+    ch_out: Channel[TableChunk],
+    ch_in: Channel[TableChunk],
+    buffered_chunks: dict[int, TableChunk],
+    metadata: ChannelMetadata,
+) -> None:
     """
-    Yield TableChunks from a buffered list then from a channel.
+    Replay a buffered input channel into an output channel.
 
     Parameters
     ----------
     context
         The context.
-    ch
-        The channel to pull from.
+    ch_out
+        The new output channel.
+    ch_in
+        The buffered input channel.
     buffered_chunks
         The buffered chunks to yield first.
-
-    Returns
-    -------
-    AsyncIterator[tuple[int, TableChunk]]
-        (sequence_number, chunk) pairs.
+    metadata
+        The metadata to send to the output channel.
     """
-    for i, buffered_chunk in enumerate(buffered_chunks):
-        yield (i, buffered_chunk)
-    while (msg := await ch.recv(context)) is not None:
-        chunk = TableChunk.from_message(msg).make_available_and_spill(
-            context.br(), allow_overbooking=True
-        )
-        yield (msg.sequence_number, chunk)
+    async with shutdown_on_error(context, ch_out, ch_in):
+        await send_metadata(ch_out, context, metadata)
+        buffered_keys = list(buffered_chunks.keys())
+        for seq_num in buffered_keys:
+            await ch_out.send(context, Message(seq_num, buffered_chunks.pop(seq_num)))
+        while (msg := await ch_in.recv(context)) is not None:
+            await ch_out.send(context, msg)
+        await ch_out.drain(context)
 
 
 @dataclass(frozen=True)
@@ -896,6 +898,9 @@ async def allgather_reduce(
     tuple[int, ...]
         The sum of each local_value across all ranks.
     """
+    if context.comm().nranks == 1:
+        return tuple(local_values)
+
     n = len(local_values)
     fmt = f"<{'q' * n}"
     data = struct.pack(fmt, *local_values)
