@@ -152,7 +152,7 @@ async def _collect_small_side_for_broadcast(
     *,
     need_allgather: bool,
     collective_id: int,
-    ir_context: Any,
+    ir_context: IRExecutionContext,
     concat_size_limit: int | None,
 ) -> tuple[list[DataFrame], int]:
     """
@@ -215,7 +215,7 @@ async def _collect_small_side_for_broadcast(
 async def _broadcast_join_large_chunk(
     context: Context,
     ir: Join,
-    ir_context: Any,
+    ir_context: IRExecutionContext,
     ch_out: Channel[TableChunk],
     small_dfs: list[DataFrame],
     small_child: IR,
@@ -269,7 +269,7 @@ async def _broadcast_join_large_chunk(
 async def _broadcast_join(
     context: Context,
     ir: Join,
-    ir_context: Any,
+    ir_context: IRExecutionContext,
     ch_out: Channel[TableChunk],
     ch_left: Channel[TableChunk],
     ch_right: Channel[TableChunk],
@@ -389,7 +389,7 @@ def _get_key_indices(
 async def _join_chunks(
     context: Context,
     ir: Join,
-    ir_context: Any,
+    ir_context: IRExecutionContext,
     ch_out: Channel[TableChunk],
     ch_left: Channel[TableChunk],
     ch_right: Channel[TableChunk],
@@ -484,7 +484,7 @@ def _log_shuffle_strategy_decision(
 async def _shuffle_join(
     context: Context,
     ir: Join,
-    ir_context: Any,
+    ir_context: IRExecutionContext,
     ch_out: Channel[TableChunk],
     ch_left: Channel[TableChunk],
     ch_right: Channel[TableChunk],
@@ -847,7 +847,7 @@ async def _choose_strategy(
 async def join_actor(
     context: Context,
     ir: Join,
-    ir_context: Any,
+    ir_context: IRExecutionContext,
     ch_out: Channel[TableChunk],
     ch_left: Channel[TableChunk],
     ch_right: Channel[TableChunk],
