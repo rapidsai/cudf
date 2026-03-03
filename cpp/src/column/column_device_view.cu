@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #include <cudf/column/column_device_view.cuh>
@@ -70,6 +70,7 @@ create_device_view_from_view(ColumnView const& source, rmm::cuda_stream_view str
 
   // copy the CPU memory with all the children into device memory
   detail::cuda_memcpy_async<char>(*descendant_storage, staging_buffer, stream);
+  stream.synchronize();
 
   return result;
 }
