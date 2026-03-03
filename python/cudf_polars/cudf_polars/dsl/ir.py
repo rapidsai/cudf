@@ -1045,8 +1045,8 @@ class Sink(IR):
                 raise NotImplementedError(
                     f"Compression type '{compression}' is not supported."
                 )
-        elif (
-            kind == "Json" if POLARS_VERSION_LT_137 else "NDJson"
+        elif kind == (
+            "Json" if POLARS_VERSION_LT_137 else "NDJson"
         ):  # pragma: no cover; options are validated on the polars side
             if not all(
                 plc.io.json.is_supported_write_json(dtype.plc_type)
@@ -1236,7 +1236,7 @@ class Sink(IR):
             cls._write_csv(target, options, df)
         elif kind == "Parquet":
             cls._write_parquet(target, parquet_options, options, df)
-        elif kind == "Json" if POLARS_VERSION_LT_137 else "NDJson":
+        elif kind == ("Json" if POLARS_VERSION_LT_137 else "NDJson"):
             cls._write_json(target, df)
 
         return DataFrame([], stream=df.stream)

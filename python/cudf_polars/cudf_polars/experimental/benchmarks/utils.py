@@ -1382,7 +1382,7 @@ def check_input_data_type(
             .collect_schema()["o_orderdate"]
         )
 
-        if t.to_python() is datetime.date:
+        if t.to_python().__name__ == "date":
             date_type = "date"
         else:
             date_type = "timestamp"
