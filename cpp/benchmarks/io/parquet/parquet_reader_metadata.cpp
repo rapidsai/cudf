@@ -42,9 +42,11 @@ auto write_file_data(cudf::size_type num_cols,
                  std::to_string(min_row_groups));
 
   // Create a table with the enough rows to cover min_row_groups
-  auto const tbl  = create_random_table(cycle_dtypes(mixed_dtypes, num_cols),
-                                       row_count{table_rows},
-                                       data_profile_builder().cardinality(0).avg_run_length(1));
+  auto const tbl =
+    create_random_table(cycle_dtypes(mixed_dtypes, num_cols),
+                        row_count{table_rows},
+                        data_profile_builder().cardinality(0).avg_run_length(1).distribution(
+                          cudf::type_id::LIST, distribution_id::GEOMETRIC, 0, 4));
   auto const view = tbl->view();
 
   auto const stats_level = write_page_index ? cudf::io::statistics_freq::STATISTICS_COLUMN
@@ -83,8 +85,9 @@ void BM_parquet_read_footer(nvbench::state& state)
 
   state.exec(
     nvbench::exec_tag::sync | nvbench::exec_tag::timer, [&](nvbench::launch& launch, auto& timer) {
-      try_drop_l3_cache();
-      auto sources = cudf::io::make_datasources(source_sink.make_source_info());
+      auto const source_info = source_sink.make_source_info();
+      drop_page_cache_if_enabled(source_info.filepaths());
+      auto sources = cudf::io::make_datasources(source_info);
 
       timer.start();
       auto const metadatas = cudf::io::read_parquet_footers(sources);
@@ -127,7 +130,7 @@ void BM_parquet_reader_construction(nvbench::state& state)
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
   state.exec(
     nvbench::exec_tag::sync | nvbench::exec_tag::timer, [&](nvbench::launch& launch, auto& timer) {
-      try_drop_l3_cache();
+      drop_page_cache_if_enabled(read_opts.get_source().filepaths());
       timer.start();
       auto reader = cudf::io::chunked_parquet_reader(chunk_read_limit, pass_read_limit, read_opts);
       timer.stop();
@@ -167,12 +170,12 @@ void BM_parquet_column_selection(nvbench::state& state)
   auto const read_opts = cudf::io::parquet_reader_options::builder(source_sink.make_source_info())
                            .use_arrow_schema(false)
                            .build();
-
-  try_drop_l3_cache();
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
   state.exec(
     nvbench::exec_tag::sync | nvbench::exec_tag::timer, [&](nvbench::launch& launch, auto& timer) {
-      auto sources   = cudf::io::make_datasources(source_sink.make_source_info());
+      auto const source_info = source_sink.make_source_info();
+      drop_page_cache_if_enabled(source_info.filepaths());
+      auto sources   = cudf::io::make_datasources(source_info);
       auto metadatas = cudf::io::read_parquet_footers(sources);
 
       // Constructing chunked parquet reader with existing datasource and metadata spends almost
