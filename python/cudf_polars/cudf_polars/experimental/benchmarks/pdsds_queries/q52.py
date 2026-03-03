@@ -67,6 +67,8 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
     item = get_data(run_config.dataset_path, "item", run_config.suffix)
 
+    sort_by = {"d_year": False, "ext_price": True, "brand_id": False}
+    limit = 100
     return QueryResult(
         frame=(
             store_sales.join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
@@ -87,12 +89,12 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
                 ]
             )
             .sort(
-                ["d_year", "ext_price", "brand_id"],
-                descending=[False, True, False],
+                list(sort_by.keys()),
+                descending=list(sort_by.values()),
                 nulls_last=True,
             )
-            .limit(100)
+            .limit(limit)
         ),
-        sort_by=[("d_year", False), ("ext_price", True), ("brand_id", False)],
-        limit=100,
+        sort_by=list(sort_by.items()),
+        limit=limit,
     )

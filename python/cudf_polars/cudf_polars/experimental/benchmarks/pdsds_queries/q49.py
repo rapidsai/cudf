@@ -345,17 +345,15 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         .select(["channel", "item", "return_ratio", "return_rank", "currency_rank"])
     )
     # Union all channels and apply final ordering
+    sort_by = {"channel": False, "return_rank": False, "currency_rank": False}
+    limit = 100
     return QueryResult(
         frame=(
             pl.concat([web_data, catalog_data, store_data])
             .select(["channel", "item", "return_ratio", "return_rank", "currency_rank"])
-            .sort(
-                ["channel", "return_rank", "currency_rank"],
-                nulls_last=True,
-                descending=[False, False, False],
-            )
-            .limit(100)
+            .sort(sort_by.keys(), nulls_last=True)
+            .limit(limit)
         ),
-        sort_by=[("channel", False), ("return_rank", False), ("currency_rank", False)],
-        limit=100,
+        sort_by=list(sort_by.items()),
+        limit=limit,
     )

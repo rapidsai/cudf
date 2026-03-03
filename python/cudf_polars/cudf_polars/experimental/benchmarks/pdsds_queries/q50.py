@@ -119,6 +119,19 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     )
     store = get_data(run_config.dataset_path, "store", run_config.suffix)
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
+    sort_by = {
+        "s_store_name": False,
+        "s_company_id": False,
+        "s_street_number": False,
+        "s_street_name": False,
+        "s_street_type": False,
+        "s_suite_number": False,
+        "s_city": False,
+        "s_county": False,
+        "s_state": False,
+        "s_zip": False,
+    }
+    limit = 100
     return QueryResult(
         frame=(
             store_sales
@@ -278,35 +291,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
                     ">120 days",
                 ]
             )
-            .sort(
-                [
-                    "s_store_name",
-                    "s_company_id",
-                    "s_street_number",
-                    "s_street_name",
-                    "s_street_type",
-                    "s_suite_number",
-                    "s_city",
-                    "s_county",
-                    "s_state",
-                    "s_zip",
-                ],
-                nulls_last=True,
-                descending=[False] * 10,
-            )
-            .limit(100)
+            .sort(sort_by.keys(), nulls_last=True)
+            .limit(limit)
         ),
-        sort_by=[
-            ("s_store_name", False),
-            ("s_company_id", False),
-            ("s_street_number", False),
-            ("s_street_name", False),
-            ("s_street_type", False),
-            ("s_suite_number", False),
-            ("s_city", False),
-            ("s_county", False),
-            ("s_state", False),
-            ("s_zip", False),
-        ],
-        limit=100,
+        sort_by=list(sort_by.items()),
+        limit=limit,
     )

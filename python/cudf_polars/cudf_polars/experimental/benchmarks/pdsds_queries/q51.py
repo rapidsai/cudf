@@ -173,6 +173,8 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         .over(partition_by="item_sk", order_by="d_date"),
     )
 
+    sort_by = {"item_sk": False, "d_date": False}
+    limit = 100
     return QueryResult(
         frame=(
             with_ff.filter(pl.col("web_cumulative") > pl.col("store_cumulative"))
@@ -184,9 +186,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
                 "web_cumulative",
                 "store_cumulative",
             )
-            .sort(["item_sk", "d_date"], descending=[False, False], nulls_last=False)
-            .limit(100)
+            .sort(list(sort_by.keys()), nulls_last=False)
+            .limit(limit)
         ),
-        sort_by=[("item_sk", False), ("d_date", False)],
-        limit=100,
+        sort_by=list(sort_by.items()),
+        limit=limit,
     )
