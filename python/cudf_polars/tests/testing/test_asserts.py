@@ -443,3 +443,6 @@ def test_assert_tpch_result_float_not_actually_sorted(epsilon: float) -> None:
         assert_tpch_result_equal(
             left, right, sort_by=[("value", False)], abs_tol=0.01, check_exact=False
         )
+
+
+def test_assert_tpch_result_equal_date_float(): ...
