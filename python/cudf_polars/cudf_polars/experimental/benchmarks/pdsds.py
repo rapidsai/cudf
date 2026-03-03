@@ -104,6 +104,11 @@ class PDSDSPolarsQueries(PDSDSQueries):
             pl.col("total shipping cost").cast(pl.Decimal(18, 2)),
             pl.col("total net profit").cast(pl.Decimal(18, 2)),
         ],
+        42: [pl.col("sum(ss_ext_sales_price)").cast(pl.Decimal(18, 2))],
+        86: [pl.col("total_sum").cast(pl.Decimal(18, 2))],
+        89: [pl.col("sum_sales").cast(pl.Decimal(18, 2))],
+        91: [pl.col("Returns_Loss").cast(pl.Decimal(18, 2))],
+        92: [pl.col("Excess Discount Amount").cast(pl.Decimal(18, 2))],
     }
     EXPECTED_CASTS: ClassVar[dict] = {
         6: [pl.col("cnt").cast(COUNT_DTYPE)],
