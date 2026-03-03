@@ -1297,8 +1297,7 @@ TEST_F(ParquetChunkedReaderInputLimitTest, List)
                             std::move(offset_col),
                             std::move(value_col),
                             0,
-                            cudf::create_null_mask(num_rows, cudf::mask_state::UNALLOCATED),
-                            stream);
+                            cudf::create_null_mask(num_rows, cudf::mask_state::UNALLOCATED));
 
   auto tbl = cudf::table_view{{*col1}};
 
@@ -1449,8 +1448,7 @@ TEST_F(ParquetChunkedReaderInputLimitTest, Mixed)
                             std::move(offset_col),
                             std::move(value_col),
                             0,
-                            cudf::create_null_mask(num_rows, cudf::mask_state::UNALLOCATED),
-                            stream);
+                            cudf::create_null_mask(num_rows, cudf::mask_state::UNALLOCATED));
 
   // strings
   constexpr int num_chars = num_rows * str_size;

@@ -314,9 +314,7 @@ std::unique_ptr<column> dispatch_copy_from_arrow_host::operator()<cudf::list_vie
                            std::move(offsets_column),
                            std::move(child_column),
                            null_count,
-                           std::move(*out_mask),
-                           stream,
-                           mr);
+                           std::move(*out_mask));
 }
 
 /**

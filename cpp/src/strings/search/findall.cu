@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -84,7 +84,7 @@ std::unique_ptr<column> findall(strings_column_view const& input,
                                 rmm::device_async_resource_ref mr)
 {
   if (input.is_empty()) {
-    return cudf::lists::detail::make_empty_lists_column(input.parent().type(), stream, mr);
+    return cudf::lists::detail::make_empty_lists_column(input.parent().type());
   }
 
   auto const d_strings = column_device_view::create(input.parent(), stream);
@@ -106,9 +106,7 @@ std::unique_ptr<column> findall(strings_column_view const& input,
                            std::move(offsets),
                            std::move(strings_output),
                            input.null_count(),
-                           cudf::detail::copy_bitmask(input.parent(), stream, mr),
-                           stream,
-                           mr);
+                           cudf::detail::copy_bitmask(input.parent(), stream, mr));
 }
 
 namespace {

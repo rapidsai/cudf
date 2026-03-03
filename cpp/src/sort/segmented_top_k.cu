@@ -74,9 +74,7 @@ std::unique_ptr<column> segmented_top_k_order(column_view const& col,
   CUDF_EXPECTS(k >= 0, "k must be greater than or equal to 0", std::invalid_argument);
 
   auto const size_data_type = data_type{type_to_id<size_type>()};
-  if (k == 0 || col.is_empty()) {
-    return cudf::make_empty_lists_column(size_data_type, stream, mr);
-  }
+  if (k == 0 || col.is_empty()) { return cudf::make_empty_lists_column(size_data_type); }
 
   CUDF_EXPECTS(segment_offsets.size() > 0,
                "segment_offsets must have at least one element",
@@ -112,7 +110,7 @@ std::unique_ptr<column> segmented_top_k_order(column_view const& col,
 
   auto const num_rows = static_cast<size_type>(offsets->size() - 1);
   return make_lists_column(
-    num_rows, std::move(offsets), std::move(result), 0, rmm::device_buffer{}, stream, mr);
+    num_rows, std::move(offsets), std::move(result), 0, rmm::device_buffer{});
 }
 
 std::unique_ptr<column> segmented_top_k(column_view const& col,
@@ -127,7 +125,7 @@ std::unique_ptr<column> segmented_top_k(column_view const& col,
   auto ordered =
     cudf::detail::segmented_top_k_order(col, segment_offsets, k, topk_order, stream, mr);
   auto lv = cudf::lists_column_view(ordered->view());
-  if (lv.is_empty()) { return cudf::make_empty_lists_column(col.type(), stream, mr); }
+  if (lv.is_empty()) { return cudf::make_empty_lists_column(col.type()); }
 
   auto result         = cudf::detail::gather(cudf::table_view({col}),
                                      lv.child(),
@@ -137,13 +135,8 @@ std::unique_ptr<column> segmented_top_k(column_view const& col,
                                      mr);
   auto offsets        = std::move(ordered->release().children.front());
   auto const num_rows = static_cast<size_type>(offsets->size() - 1);
-  return make_lists_column(num_rows,
-                           std::move(offsets),
-                           std::move(result->release().front()),
-                           0,
-                           rmm::device_buffer{},
-                           stream,
-                           mr);
+  return make_lists_column(
+    num_rows, std::move(offsets), std::move(result->release().front()), 0, rmm::device_buffer{});
 }
 
 }  // namespace detail

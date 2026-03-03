@@ -1164,20 +1164,22 @@ TEST_F(RollingTestStrings, StringsUnsupportedOperators)
   EXPECT_THROW(
     cudf::rolling_window(input, 2, 2, 0, *cudf::make_mean_aggregation<cudf::rolling_aggregation>()),
     cudf::logic_error);
-  EXPECT_THROW(cudf::rolling_window(input,
-                                    2,
-                                    2,
-                                    0,
-                                    *cudf::make_udf_aggregation<cudf::rolling_aggregation>(
-                                      cudf::udf_type::PTX, std::string{}, cudf::data_type{})),
-               cudf::logic_error);
-  EXPECT_THROW(cudf::rolling_window(input,
-                                    2,
-                                    2,
-                                    0,
-                                    *cudf::make_udf_aggregation<cudf::rolling_aggregation>(
-                                      cudf::udf_type::CUDA, std::string{}, cudf::data_type{})),
-               cudf::logic_error);
+  EXPECT_THROW(
+    cudf::rolling_window(input,
+                         2,
+                         2,
+                         0,
+                         *cudf::make_udf_aggregation<cudf::rolling_aggregation>(
+                           cudf::udf_source_type::PTX, std::string{}, cudf::data_type{})),
+    cudf::logic_error);
+  EXPECT_THROW(
+    cudf::rolling_window(input,
+                         2,
+                         2,
+                         0,
+                         *cudf::make_udf_aggregation<cudf::rolling_aggregation>(
+                           cudf::udf_source_type::CUDA, std::string{}, cudf::data_type{})),
+    cudf::logic_error);
 }
 
 /*TEST_F(RollingTestStrings, SimpleStatic)
@@ -1297,7 +1299,7 @@ TEST_F(RollingTestUdf, StaticWindow)
 
   // Test CUDA UDF
   auto cuda_udf_agg = cudf::make_udf_aggregation<cudf::rolling_aggregation>(
-    cudf::udf_type::CUDA, this->cuda_func, cudf::data_type{cudf::type_id::INT64});
+    cudf::udf_source_type::CUDA, this->cuda_func, cudf::data_type{cudf::type_id::INT64});
 
   output = cudf::rolling_window(input, 2, 2, 4, *cuda_udf_agg);
 
@@ -1305,7 +1307,7 @@ TEST_F(RollingTestUdf, StaticWindow)
 
   // Test NUMBA UDF
   auto ptx_udf_agg = cudf::make_udf_aggregation<cudf::rolling_aggregation>(
-    cudf::udf_type::PTX, this->ptx_func, cudf::data_type{cudf::type_id::INT64});
+    cudf::udf_source_type::PTX, this->ptx_func, cudf::data_type{cudf::type_id::INT64});
 
   output = cudf::rolling_window(input, 2, 2, 4, *ptx_udf_agg);
 
@@ -1344,7 +1346,7 @@ TEST_F(RollingTestUdf, DynamicWindow)
 
   // Test CUDA UDF
   auto cuda_udf_agg = cudf::make_udf_aggregation<cudf::rolling_aggregation>(
-    cudf::udf_type::CUDA, this->cuda_func, cudf::data_type{cudf::type_id::INT64});
+    cudf::udf_source_type::CUDA, this->cuda_func, cudf::data_type{cudf::type_id::INT64});
 
   output = cudf::rolling_window(input, preceding, following, 2, *cuda_udf_agg);
 
@@ -1352,7 +1354,7 @@ TEST_F(RollingTestUdf, DynamicWindow)
 
   // Test PTX UDF
   auto ptx_udf_agg = cudf::make_udf_aggregation<cudf::rolling_aggregation>(
-    cudf::udf_type::PTX, this->ptx_func, cudf::data_type{cudf::type_id::INT64});
+    cudf::udf_source_type::PTX, this->ptx_func, cudf::data_type{cudf::type_id::INT64});
 
   output = cudf::rolling_window(input, preceding, following, 2, *ptx_udf_agg);
 
