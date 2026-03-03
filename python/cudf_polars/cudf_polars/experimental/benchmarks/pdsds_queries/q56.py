@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
-from cudf_polars.experimental.benchmarks.utils import get_data
+from cudf_polars.experimental.benchmarks.utils import QueryResult, get_data
 
 if TYPE_CHECKING:
     from cudf_polars.experimental.benchmarks.utils import RunConfig
@@ -102,7 +102,7 @@ def duckdb_impl(run_config: RunConfig) -> str:
     """
 
 
-def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
+def polars_impl(run_config: RunConfig) -> QueryResult:
     """Query 56."""
     params = load_parameters(
         int(run_config.scale_factor),
@@ -126,8 +126,8 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     )
     item = get_data(run_config.dataset_path, "item", run_config.suffix)
 
-    color_item_ids_lf = item.filter(pl.col("i_color").is_in(colors)).select(
-        ["i_item_id"]
+    color_item_ids_lf = (
+        item.filter(pl.col("i_color").is_in(colors)).select(["i_item_id"]).unique()
     )
 
     channels = [
@@ -167,17 +167,35 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
                 & (pl.col("ca_gmt_offset") == gmt_offset)
             )
             .group_by("i_item_id")
-            .agg(pl.col(str(ch["ext_col"])).sum().alias("total_sales"))
+            .agg(
+                # Polars sum() returns 0 for all-null groups; SQL returns NULL.
+                # See https://github.com/rapidsai/cudf/issues/19560.
+                pl.when(pl.col(str(ch["ext_col"])).count() > 0)
+                .then(pl.col(str(ch["ext_col"])).sum())
+                .otherwise(None)
+                .alias("total_sales")
+            )
             .select(["i_item_id", "total_sales"])
         )
         for ch in channels
     ]
 
-    return (
-        pl.concat(per_channel)
-        .group_by("i_item_id")
-        .agg(pl.col("total_sales").sum().alias("total_sales"))
-        .select(["i_item_id", "total_sales"])
-        .sort(["total_sales"], nulls_last=True, descending=[False])
-        .limit(100)
+    return QueryResult(
+        frame=(
+            pl.concat(per_channel)
+            .group_by("i_item_id")
+            .agg(
+                # Polars sum() returns 0 for all-null groups; SQL returns NULL.
+                # See https://github.com/rapidsai/cudf/issues/19560.
+                pl.when(pl.col("total_sales").count() > 0)
+                .then(pl.col("total_sales").sum())
+                .otherwise(None)
+                .alias("total_sales")
+            )
+            .select(["i_item_id", "total_sales"])
+            .sort(["total_sales"], nulls_last=True, descending=[False])
+            .limit(100)
+        ),
+        sort_by=[("total_sales", False)],
+        limit=100,
     )

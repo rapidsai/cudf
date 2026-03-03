@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
-from cudf_polars.experimental.benchmarks.utils import get_data
+from cudf_polars.experimental.benchmarks.utils import QueryResult, get_data
 
 if TYPE_CHECKING:
     from cudf_polars.experimental.benchmarks.utils import RunConfig
@@ -79,7 +79,7 @@ def duckdb_impl(run_config: RunConfig) -> str:
     """
 
 
-def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
+def polars_impl(run_config: RunConfig) -> QueryResult:
     """Query 53."""
     params = load_parameters(
         int(run_config.scale_factor),
@@ -150,22 +150,30 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
             "avg_quarterly_sales",
         ]
     )
-    return (
-        inner_query.filter(
-            # Percentage deviation > 10%
-            pl.when(pl.col("avg_quarterly_sales") > 0)
-            .then(
-                (pl.col("sum_sales") - pl.col("avg_quarterly_sales")).abs()
-                / pl.col("avg_quarterly_sales")
+    return QueryResult(
+        frame=(
+            inner_query.filter(
+                # Percentage deviation > 10%
+                pl.when(pl.col("avg_quarterly_sales") > 0)
+                .then(
+                    (pl.col("sum_sales") - pl.col("avg_quarterly_sales")).abs()
+                    / pl.col("avg_quarterly_sales")
+                )
+                .otherwise(None)
+                > 0.1
             )
-            .otherwise(None)
-            > 0.1
-        )
-        .select(["i_manufact_id", "sum_sales", "avg_quarterly_sales"])
-        .sort(
-            ["avg_quarterly_sales", "sum_sales", "i_manufact_id"],
-            nulls_last=True,
-            descending=[False, False, False],
-        )
-        .limit(100)
+            .select(["i_manufact_id", "sum_sales", "avg_quarterly_sales"])
+            .sort(
+                ["avg_quarterly_sales", "sum_sales", "i_manufact_id"],
+                nulls_last=True,
+                descending=[False, False, False],
+            )
+            .limit(100)
+        ),
+        sort_by=[
+            ("avg_quarterly_sales", False),
+            ("sum_sales", False),
+            ("i_manufact_id", False),
+        ],
+        limit=100,
     )

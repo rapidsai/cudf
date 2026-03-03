@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
-from cudf_polars.experimental.benchmarks.utils import get_data
+from cudf_polars.experimental.benchmarks.utils import QueryResult, get_data
 
 if TYPE_CHECKING:
     from cudf_polars.experimental.benchmarks.utils import RunConfig
@@ -89,7 +89,7 @@ def duckdb_impl(run_config: RunConfig) -> str:
     """
 
 
-def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
+def polars_impl(run_config: RunConfig) -> QueryResult:
     """Query 54."""
     params = load_parameters(
         int(run_config.scale_factor),
@@ -173,24 +173,28 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     )
 
     segments = my_revenue.with_columns(
-        (pl.col("revenue") / 50.0).cast(pl.Int32).alias("segment")
+        (pl.col("revenue") / 50.0).alias("segment")
     ).select("segment")
 
-    return (
-        segments.group_by("segment")
-        .agg([pl.len().alias("num_customers")])
-        .with_columns((pl.col("segment") * 50).alias("segment_base"))
-        .select(
-            [
-                "segment",
-                pl.col("num_customers").cast(pl.Int64),
-                "segment_base",
-            ]
-        )
-        .sort(
-            ["segment", "num_customers"],
-            nulls_last=True,
-            descending=[False, False],
-        )
-        .limit(100)
+    return QueryResult(
+        frame=(
+            segments.group_by("segment")
+            .agg([pl.len().alias("num_customers")])
+            .with_columns((pl.col("segment") * 50.0).alias("segment_base"))
+            .select(
+                [
+                    "segment",
+                    pl.col("num_customers"),
+                    "segment_base",
+                ]
+            )
+            .sort(
+                ["segment", "num_customers"],
+                nulls_last=True,
+                descending=[False, False],
+            )
+            .limit(100)
+        ),
+        sort_by=[("segment", False), ("num_customers", False)],
+        limit=100,
     )
