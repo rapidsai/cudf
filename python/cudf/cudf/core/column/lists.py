@@ -421,22 +421,19 @@ class ListColumn(ColumnBase):
             )
 
     def segmented_gather(self, gather_map: ColumnBase) -> ColumnBase:
-        if not (
-            is_dtype_obj_list(gather_map.dtype)
-            and len(gather_map) == len(self)
-            and gather_map.null_count == 0
-            and cast(ListColumn, gather_map).element_type.kind in "iu"
-        ):
-            raise ValueError(
-                f"input must be list type with length {len(self)} "
-                "and only integer elements"
-            )
         with self.access(mode="read", scope="internal"):
-            return ColumnBase.create(
-                plc.lists.segmented_gather(
+            try:
+                plc_result = plc.lists.segmented_gather(
                     self.plc_column,
                     gather_map.plc_column,
-                ),
+                )
+            except (TypeError, RuntimeError, ValueError) as e:
+                raise ValueError(
+                    f"input must be list type with length {len(self)} "
+                    "and only integer elements"
+                ) from e
+            return ColumnBase.create(
+                plc_result,
                 self.dtype,
             )
 
