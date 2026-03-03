@@ -75,14 +75,14 @@ class StructColumn(ColumnBase):
                     f"Index {loc} out of range for {self.plc_column.num_children()} children"
                 )
             int_loc = loc
-            field_label = list(self.fields.keys())[loc]
+            field_label = list(self.fields)[loc]
             sub_type = self.fields[field_label]
         elif isinstance(loc, str):
             if loc not in self.fields:
                 raise KeyError(
                     f"Field {loc} not found in {self.fields.keys()}"
                 )
-            int_loc = list(self.fields.keys()).index(loc)
+            int_loc = list(self.fields).index(loc)
             field_label = loc
             sub_type = self.fields[loc]
         else:
