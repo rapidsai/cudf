@@ -551,9 +551,20 @@ async def _shuffle_join(
 def _make_shuffle_strategy(
     ir: Join,
     shuffle_modulus: int,
+    left_partitioning: NormalizedPartitioning,
+    right_partitioning: NormalizedPartitioning,
 ) -> JoinStrategy:
     """Make a shuffle strategy."""
-    n_partitioned_keys = None
+    # Use the coarsest prefix so we only shuffle on keys one side may already have
+    n_left = len(left_partitioning.inter_rank_indices)
+    n_right = len(right_partitioning.inter_rank_indices)
+    if n_left and n_right:
+        n_partitioned_keys = min(n_left, n_right)
+    elif n_left or n_right:
+        n_partitioned_keys = max(n_left, n_right)
+    else:
+        n_partitioned_keys = None  # both unpartitioned: shuffle on all join keys
+
     left_key_indices, right_key_indices, output_key_indices = _get_key_indices(
         ir, n_partitioned_keys
     )
@@ -625,7 +636,12 @@ async def _choose_strategy_from_samples(
     if chunkwise:
         if tracer is not None:
             tracer.decision = "chunkwise"
-        return _make_shuffle_strategy(ir, left_partitioning.inter_rank_modulus)
+        return _make_shuffle_strategy(
+            ir,
+            left_partitioning.inter_rank_modulus,
+            left_partitioning,
+            right_partitioning,
+        )
 
     left_total, right_total = left_sample.total_size, right_sample.total_size
     left_total_rows, right_total_rows = left_sample.total_rows, right_sample.total_rows
@@ -689,7 +705,10 @@ async def _choose_strategy_from_samples(
         right_partitioning,
         min_shuffle_modulus,
     )  # Global modulus
-    strategy = _make_shuffle_strategy(ir, shuffle_modulus)
+
+    strategy = _make_shuffle_strategy(
+        ir, shuffle_modulus, left_partitioning, right_partitioning
+    )
 
     if tracer is not None:
         _log_shuffle_strategy_decision(
