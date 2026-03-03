@@ -14,6 +14,7 @@
 #include "output_utils.hpp"
 
 #include <cudf/detail/utilities/cuda.hpp>
+#include <cudf/detail/utilities/cuda_memcpy.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/table/table_device_view.cuh>
 
@@ -109,11 +110,11 @@ std::pair<rmm::device_uvector<size_type>, bool> compute_single_pass_aggs(
     cuda::std::atomic_flag h_needs_fallback;
     // Cannot use `device_scalar::value` as it requires a copy constructor, which
     // `atomic_flag` doesn't have.
-    CUDF_CUDA_TRY(cudaMemcpyAsync(&h_needs_fallback,
-                                  needs_global_memory_fallback.data(),
-                                  sizeof(cuda::std::atomic_flag),
-                                  cudaMemcpyDefault,
-                                  stream.value()));
+    CUDF_CUDA_TRY(cudf::detail::memcpy_async(&h_needs_fallback,
+                                             needs_global_memory_fallback.data(),
+                                             sizeof(cuda::std::atomic_flag),
+                                             cudaMemcpyDefault,
+                                             stream));
     stream.synchronize();
     return h_needs_fallback.test(cuda::std::memory_order_relaxed);
   }();
