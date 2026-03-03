@@ -39,7 +39,7 @@ from cudf.core.column import (
     ColumnBase,
     as_column,
 )
-from cudf.core.column.column import concat_columns
+from cudf.core.column.column import _normalize_types_column, concat_columns
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.dtype.validators import is_dtype_obj_numeric
 from cudf.core.dtypes import CategoricalDtype, IntervalDtype
@@ -489,6 +489,7 @@ class Series(SingleColumnFrame, IndexedFrame):
     _iloc_indexer_type = _SeriesIlocIndexer
     _groupby = SeriesGroupBy
     _resampler = SeriesResampler
+    __array_priority__ = pd.Series.__array_priority__
 
     # The `constructor*` properties are used by `dask` (and `dask_cudf`)
     @property
@@ -1218,7 +1219,10 @@ class Series(SingleColumnFrame, IndexedFrame):
                     "default values in dicts are currently not supported."
                 )
             lhs = cudf.DataFrame(
-                {"x": self, "orig_order": as_column(range(len(self)))}
+                {
+                    "x": self,
+                    "orig_order": ColumnBase.from_range(range(len(self))),
+                }
             )
             rhs = cudf.DataFrame(
                 {
@@ -1239,7 +1243,10 @@ class Series(SingleColumnFrame, IndexedFrame):
                     "Reindexing only valid with uniquely valued Index objects"
                 )
             lhs = cudf.DataFrame(
-                {"x": self, "orig_order": as_column(range(len(self)))}
+                {
+                    "x": self,
+                    "orig_order": ColumnBase.from_range(range(len(self))),
+                }
             )
             rhs = cudf.DataFrame(
                 {
@@ -2642,16 +2649,8 @@ class Series(SingleColumnFrame, IndexedFrame):
         >>> ser = cudf.Series([1, 5, 2, 4, 3])
         >>> ser.count()
         5
-
-        .. pandas-compat::
-            :meth:`pandas.Series.count`
-
-            Parameters currently not supported is `level`.
         """
-        valid_count = self.valid_count
-        if is_pandas_nullable_extension_dtype(self.dtype):
-            return valid_count
-        return valid_count - self._column.nan_count
+        return self._column.count
 
     @_performance_tracking
     def mode(self, dropna=True):
@@ -3863,8 +3862,11 @@ class Series(SingleColumnFrame, IndexedFrame):
                 )
             name = metadata.get("name")
             index = metadata.get("index")
+        normalized = _normalize_types_column(col)
         return cls._from_column(
-            ColumnBase.create(col, dtype=dtype_from_pylibcudf_column(col)),
+            ColumnBase.create(
+                normalized, dtype=dtype_from_pylibcudf_column(normalized)
+            ),
             name=name,
             index=index,
         )

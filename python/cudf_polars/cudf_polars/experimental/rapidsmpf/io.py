@@ -23,8 +23,8 @@ from cudf_polars.dsl.ir import (
     IR,
     DataFrameScan,
     Scan,
-    _cast_literals_to_physical_types,
-    _parquet_physical_types,
+    Sink,
+    _prepare_parquet_predicate,
 )
 from cudf_polars.dsl.to_ast import to_parquet_filter
 from cudf_polars.experimental.base import (
@@ -32,8 +32,16 @@ from cudf_polars.experimental.base import (
     IOPartitionPlan,
     PartitionInfo,
 )
-from cudf_polars.experimental.io import SplitScan, scan_partition_plan
-from cudf_polars.experimental.rapidsmpf.dispatch import generate_ir_sub_network
+from cudf_polars.experimental.io import (
+    SplitScan,
+    StreamingSink,
+    _prepare_sink_directory,
+    _sink_to_file,
+    scan_partition_plan,
+)
+from cudf_polars.experimental.rapidsmpf.dispatch import (
+    generate_ir_sub_network,
+)
 from cudf_polars.experimental.rapidsmpf.nodes import (
     define_actor,
     metadata_feeder_node,
@@ -41,6 +49,10 @@ from cudf_polars.experimental.rapidsmpf.nodes import (
 )
 from cudf_polars.experimental.rapidsmpf.utils import (
     ChannelManager,
+    chunk_to_frame,
+    empty_table_chunk,
+    process_children,
+    recv_metadata,
     send_metadata,
 )
 from cudf_polars.experimental.utils import _dynamic_planning_on
@@ -567,9 +579,11 @@ def make_rapidsmpf_read_parquet_node(
     # Build ParquetReaderOptions
     try:
         stream = context.get_stream_from_pool()
-        parquet_reader_options = plc.io.parquet.ParquetReaderOptions.builder(
-            plc.io.SourceInfo(ir.paths)
-        ).build()
+        parquet_reader_options = (
+            plc.io.parquet.ParquetReaderOptions.builder(plc.io.SourceInfo(ir.paths))
+            .decimal_width(plc.TypeId.DECIMAL128)
+            .build()
+        )
 
         if ir.with_columns is not None:
             parquet_reader_options.set_column_names(ir.with_columns)
@@ -578,14 +592,8 @@ def make_rapidsmpf_read_parquet_node(
         filter_obj = None
         if ir.predicate is not None:
             filter_expr = to_parquet_filter(
-                _cast_literals_to_physical_types(
-                    ir.predicate.value,
-                    _parquet_physical_types(
-                        ir.schema,
-                        ir.paths,
-                        ir.with_columns or list(ir.schema.keys()),
-                        stream,
-                    ),
+                _prepare_parquet_predicate(
+                    ir.predicate.value, ir.paths, ir.schema, ir.with_columns
                 ),
                 stream=stream,
             )
@@ -718,4 +726,128 @@ def _(
                 estimated_chunk_bytes=executor.target_partition_size,
             )
         ]
+    return nodes, channels
+
+
+@define_actor()
+async def sink_node(
+    context: Context,
+    ir: StreamingSink,
+    ir_context: IRExecutionContext,
+    ch_in: Channel[TableChunk],
+    ch_out: Channel[TableChunk],
+    partition_info: PartitionInfo,
+    collective_id: int,
+) -> None:
+    """
+    Sink node for rapidsmpf - writes data chunks to a file.
+
+    Parameters
+    ----------
+    context
+        The rapidsmpf context.
+    ir
+        The StreamingSink node.
+    ir_context
+        The execution context for the IR node.
+    ch_in
+        The input ChannelPair.
+    ch_out
+        The output ChannelPair for returning an empty result DataFrame.
+    partition_info
+        The partition information.
+    collective_id
+        The collective ID for this operation, used for AllGather
+        reduction of the chunk count.
+    """
+    child_ir = ir.children[0]
+
+    suffix = ir.sink.kind.lower()
+    # safety-net, if count is too low, we might get conflicts
+    # with other files.
+
+    async with shutdown_on_error(context, ch_in, ch_out):
+        metadata = await recv_metadata(ch_in, context)
+        await send_metadata(
+            ch_out, context, ChannelMetadata(local_count=1, duplicated=True)
+        )
+
+        path_root = f"{ir.sink.path}/part"
+        if context.comm().nranks > 1:
+            rank_width = math.ceil(math.log10(context.comm().nranks))
+            rank_str = str(context.comm().rank).zfill(rank_width)
+            path_root = f"{path_root}.{rank_str}"
+        count_width = math.ceil(math.log10(metadata.local_count))
+        count_width = max(count_width, 6)
+
+        if ir.executor_options.sink_to_directory:
+            _prepare_sink_directory(ir.sink.path)
+            i = 0
+            while (msg := await ch_in.recv(context)) is not None:
+                chunk = TableChunk.from_message(msg).make_available_and_spill(
+                    context.br(), allow_overbooking=True
+                )
+                df = chunk_to_frame(chunk, child_ir)
+                part_path = f"{path_root}.{str(i).zfill(count_width)}.{suffix}"
+                await asyncio.to_thread(
+                    Sink.do_evaluate,
+                    ir.sink.schema,
+                    ir.sink.kind,
+                    part_path,
+                    ir.sink.parquet_options,
+                    ir.sink.options,
+                    df,
+                    context=ir_context,
+                )
+                i += 1
+        else:
+            # Write chunks to a single file
+            writer_state = None
+            while (msg := await ch_in.recv(context)) is not None:
+                chunk = TableChunk.from_message(msg).make_available_and_spill(
+                    context.br(), allow_overbooking=True
+                )
+                # Multiple chunks - use chunked writer
+                df = chunk_to_frame(chunk, child_ir)
+                writer_state = await asyncio.to_thread(
+                    _sink_to_file,
+                    ir.sink.kind,
+                    ir.sink.path,
+                    ir.sink.options,
+                    writer_state=writer_state,
+                    df=df,
+                )
+
+            # Finalize the writer after all chunks are processed
+            if writer_state and ir.sink.kind == "Parquet":
+                # We know that with ir.sink.kind == "Parquet", writer_state being truthy
+                # means that it's a ChunkedParquetWriter.
+                await asyncio.to_thread(writer_state.close, [])  # type: ignore[attr-defined]
+
+        # Signal completion on the metadata and data channels with empty results
+        stream = ir_context.get_cuda_stream()
+        empty_chunk = empty_table_chunk(ir, context, stream)
+        await ch_out.send(context, Message(0, empty_chunk))
+        await ch_out.drain(context)
+
+
+@generate_ir_sub_network.register(StreamingSink)
+def _(
+    ir: StreamingSink, rec: SubNetGenerator
+) -> tuple[dict[IR, list[Any]], dict[IR, ChannelManager]]:
+    """Generate network for StreamingSink node."""
+    nodes, channels = process_children(ir, rec)
+    channels[ir] = ChannelManager(rec.state["context"])
+    nodes[ir] = [
+        sink_node(
+            rec.state["context"],
+            ir,
+            rec.state["ir_context"],
+            channels[ir.children[0]].reserve_output_slot(),
+            channels[ir].reserve_input_slot(),
+            rec.state["partition_info"][ir],
+            rec.state["collective_id_map"][ir][0],
+        )
+    ]
+
     return nodes, channels

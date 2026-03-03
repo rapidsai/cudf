@@ -104,7 +104,9 @@ class StructColumn(ColumnBase):
         result = super().element_indexing(index)
         if isinstance(result, pa.Scalar):
             py_element = maybe_nested_pa_scalar_to_py(result)
-            return self.dtype._recursively_replace_fields(py_element)  # type: ignore[union-attr]
+            return StructDtype.from_struct_dtype(
+                self.dtype
+            )._recursively_replace_fields(py_element)
         return result
 
     def _cast_setitem_value(self, value: Any) -> plc.Scalar:
@@ -124,11 +126,6 @@ class StructColumn(ColumnBase):
             raise ValueError(
                 f"Can not set {type(value).__name__} into StructColumn"
             )
-
-    def copy(self, deep: bool = True) -> Self:
-        # Since struct columns are immutable, both deep and
-        # shallow copies share the underlying device data and mask.
-        return super().copy(deep=False)
 
     @property
     def __cuda_array_interface__(self) -> Mapping[str, Any]:

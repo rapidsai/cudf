@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -26,7 +26,7 @@
 namespace cudf::groupby::detail::hash {
 namespace {
 /// Shared memory data alignment
-CUDF_HOST_DEVICE cudf::size_type constexpr ALIGNMENT = 8;
+CUDF_HOST_DEVICE cudf::size_type constexpr ALIGNMENT = 16;
 
 // Allocates shared memory required for output columns. Exits if there is insufficient memory to
 // perform shared memory aggregation for the current output column.

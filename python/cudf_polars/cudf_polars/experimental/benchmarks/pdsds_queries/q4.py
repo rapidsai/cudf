@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
-from cudf_polars.experimental.benchmarks.utils import get_data
+from cudf_polars.experimental.benchmarks.utils import QueryResult, get_data
 
 if TYPE_CHECKING:
     from cudf_polars.experimental.benchmarks.utils import RunConfig
@@ -236,7 +236,7 @@ def build_sales_subquery(  # noqa: D103
         )
 
 
-def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
+def polars_impl(run_config: RunConfig) -> QueryResult:
     """Query 4."""
     params = load_parameters(
         int(run_config.scale_factor), query_id=4, qualification=run_config.qualification
@@ -334,39 +334,48 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         "customer_last_name",
         "customer_preferred_cust_flag",
     ]
-    return (
-        t_s_secyear.join(t_s_firstyear, on="customer_id", suffix="_sf", how="inner")
-        .join(t_c_firstyear, on="customer_id", suffix="_cf", how="inner")
-        .join(t_c_secyear, on="customer_id", suffix="_cs", how="inner")
-        .join(t_w_firstyear, on="customer_id", suffix="_wf", how="inner")
-        .join(t_w_secyear, on="customer_id", suffix="_ws", how="inner")
-        .filter(
-            # All first year totals must be > 0
-            (pl.col("year_total_sf") > 0)
-            & (pl.col("year_total_cf") > 0)
-            & (pl.col("year_total_wf") > 0)
-            &
-            # Catalog growth rate > Store growth rate
-            (
-                pl.when(pl.col("year_total_cf") > 0)
-                .then(pl.col("year_total_cs") / pl.col("year_total_cf"))
-                .otherwise(None)
-                > pl.when(pl.col("year_total_sf") > 0)
-                .then(pl.col("year_total") / pl.col("year_total_sf"))
-                .otherwise(None)
+    return QueryResult(
+        frame=(
+            t_s_secyear.join(t_s_firstyear, on="customer_id", suffix="_sf", how="inner")
+            .join(t_c_firstyear, on="customer_id", suffix="_cf", how="inner")
+            .join(t_c_secyear, on="customer_id", suffix="_cs", how="inner")
+            .join(t_w_firstyear, on="customer_id", suffix="_wf", how="inner")
+            .join(t_w_secyear, on="customer_id", suffix="_ws", how="inner")
+            .filter(
+                # All first year totals must be > 0
+                (pl.col("year_total_sf") > 0)
+                & (pl.col("year_total_cf") > 0)
+                & (pl.col("year_total_wf") > 0)
+                &
+                # Catalog growth rate > Store growth rate
+                (
+                    pl.when(pl.col("year_total_cf") > 0)
+                    .then(pl.col("year_total_cs") / pl.col("year_total_cf"))
+                    .otherwise(None)
+                    > pl.when(pl.col("year_total_sf") > 0)
+                    .then(pl.col("year_total") / pl.col("year_total_sf"))
+                    .otherwise(None)
+                )
+                &
+                # Catalog growth rate > Web growth rate
+                (
+                    pl.when(pl.col("year_total_cf") > 0)
+                    .then(pl.col("year_total_cs") / pl.col("year_total_cf"))
+                    .otherwise(None)
+                    > pl.when(pl.col("year_total_wf") > 0)
+                    .then(pl.col("year_total_ws") / pl.col("year_total_wf"))
+                    .otherwise(None)
+                )
             )
-            &
-            # Catalog growth rate > Web growth rate
-            (
-                pl.when(pl.col("year_total_cf") > 0)
-                .then(pl.col("year_total_cs") / pl.col("year_total_cf"))
-                .otherwise(None)
-                > pl.when(pl.col("year_total_wf") > 0)
-                .then(pl.col("year_total_ws") / pl.col("year_total_wf"))
-                .otherwise(None)
-            )
-        )
-        .select(sort_cols)
-        .sort(sort_cols)
-        .limit(100)
+            .select(sort_cols)
+            .sort(sort_cols)
+            .limit(100)
+        ),
+        sort_by=[
+            ("customer_id", False),
+            ("customer_first_name", False),
+            ("customer_last_name", False),
+            ("customer_preferred_cust_flag", False),
+        ],
+        limit=100,
     )
