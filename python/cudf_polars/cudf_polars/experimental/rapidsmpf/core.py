@@ -9,6 +9,7 @@ from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING, Any
 
+import rapidsmpf.progress_thread
 from rapidsmpf.communicator.single import new_communicator
 from rapidsmpf.config import Options, get_environment_variables
 from rapidsmpf.memory.buffer import MemoryType
@@ -25,6 +26,7 @@ from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 import rmm
 
 import cudf_polars.experimental.rapidsmpf.collectives.shuffle
+import cudf_polars.experimental.rapidsmpf.groupby
 import cudf_polars.experimental.rapidsmpf.io
 import cudf_polars.experimental.rapidsmpf.join
 import cudf_polars.experimental.rapidsmpf.repartition
@@ -53,8 +55,6 @@ if TYPE_CHECKING:
     from rapidsmpf.streaming.cudf.channel_metadata import ChannelMetadata
 
     import polars as pl
-
-    from rmm.pylibrmm.cuda_stream_pool import CudaStreamPool
 
     from cudf_polars.dsl.ir import IR
     from cudf_polars.experimental.base import PartitionInfo, StatsCollector
@@ -173,12 +173,12 @@ def evaluate_pipeline(
     assert config_options.executor.runtime == "rapidsmpf", "Runtime must be rapidsmpf"
 
     _initial_mr: Any = None
-    stream_pool: CudaStreamPool | bool = False
+    use_stream_pool = False
     if rmpf_context is not None:
         # Using "distributed" mode.
         # Always use the RapidsMPF stream pool for now.
         br = rmpf_context.br()
-        stream_pool = True
+        use_stream_pool = True
         rmpf_context_manager = contextlib.nullcontext(rmpf_context)
     else:
         # Using "single" mode.
@@ -212,9 +212,15 @@ def evaluate_pipeline(
             if config_options.executor.spill_to_pinned_memory
             else None
         )
-        if isinstance(config_options.cuda_stream_policy, CUDAStreamPoolConfig):
-            stream_pool = config_options.cuda_stream_policy.build()
-        local_comm = new_communicator(options)
+        stream_pool = (
+            config_options.cuda_stream_policy.build()
+            if isinstance(config_options.cuda_stream_policy, CUDAStreamPoolConfig)
+            else None
+        )
+        use_stream_pool = stream_pool is not None
+        local_comm = new_communicator(
+            options, rapidsmpf.progress_thread.ProgressThread()
+        )
         br = BufferResource(
             mr,
             pinned_mr=pinned_mr,
@@ -225,7 +231,7 @@ def evaluate_pipeline(
 
     with rmpf_context_manager as rmpf_context:
         # Create the IR execution context
-        if stream_pool:
+        if use_stream_pool:
             ir_context = IRExecutionContext(
                 get_cuda_stream=rmpf_context.get_stream_from_pool
             )

@@ -234,8 +234,10 @@ void reader_impl::allocate_nesting_info()
           // values indexed by output column index
           nesting_info[cur_depth].max_def_level = actual_cur_schema.max_definition_level;
           pni[cur_depth].size                   = 0;
-          pni[cur_depth].type =
-            to_type_id(actual_cur_schema, _strings_to_categorical, _options.timestamp_type.id());
+          pni[cur_depth].type                   = to_type_id(actual_cur_schema,
+                                           _strings_to_categorical,
+                                           _options.timestamp_type.id(),
+                                           _options.decimal_width);
           pni[cur_depth].nullable = cur_schema.repetition_type == FieldRepetitionType::OPTIONAL;
         }
 
@@ -632,7 +634,8 @@ void reader_impl::preprocess_file(read_mode mode)
   printf("# Input columns: %'lu\n", _input_columns.size());
   for (size_t idx = 0; idx < _input_columns.size(); idx++) {
     auto const& schema = _metadata->get_schema(_input_columns[idx].schema_idx);
-    auto const type_id = to_type_id(schema, _strings_to_categorical, _options.timestamp_type.id());
+    auto const type_id = to_type_id(
+      schema, _strings_to_categorical, _options.timestamp_type.id(), _options.decimal_width);
     printf("\tC(%'lu, %s): %s\n",
            idx,
            _input_columns[idx].name.c_str(),

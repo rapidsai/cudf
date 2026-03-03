@@ -225,7 +225,7 @@ void BM_parquet_deletion_vectors(nvbench::state& state)
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
   state.exec(
     nvbench::exec_tag::sync | nvbench::exec_tag::timer, [&](nvbench::launch& launch, auto& timer) {
-      try_drop_l3_cache();
+      drop_page_cache_if_enabled(read_opts.get_source().filepaths());
 
       timer.start();
       std::ignore = cudf::io::parquet::experimental::read_parquet(read_opts, deletion_vector_info);
@@ -266,7 +266,7 @@ void BM_parquet_chunked_deletion_vectors(nvbench::state& state)
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
   state.exec(nvbench::exec_tag::sync | nvbench::exec_tag::timer,
              [&](nvbench::launch& launch, auto& timer) {
-               try_drop_l3_cache();
+               drop_page_cache_if_enabled(read_opts.get_source().filepaths());
 
                timer.start();
                auto reader = cudf::io::parquet::experimental::chunked_parquet_reader(

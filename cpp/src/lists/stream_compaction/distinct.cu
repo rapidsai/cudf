@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -59,9 +59,7 @@ std::unique_ptr<column> distinct(lists_column_view const& input,
                            std::move(out_offsets),
                            std::move(distinct_table->release().back()),
                            input.null_count(),
-                           cudf::detail::copy_bitmask(input.parent(), stream, mr),
-                           stream,
-                           mr);
+                           cudf::detail::copy_bitmask(input.parent(), stream, mr));
 }
 
 }  // namespace detail

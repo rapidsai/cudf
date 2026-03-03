@@ -5,6 +5,7 @@
 
 #include "hybrid_scan_helpers.hpp"
 #include "hybrid_scan_impl.hpp"
+#include "io/parquet/reader_impl_chunking_utils.cuh"
 #include "io/parquet/reader_impl_preprocess_utils.cuh"
 #include "io/utilities/time_utils.cuh"
 
@@ -223,15 +224,14 @@ hybrid_scan_reader_impl::prepare_dictionaries(
       has_compressed_data |=
         col_meta.codec != Compression::UNCOMPRESSED and col_meta.total_compressed_size > 0;
 
-      // TODO: Use `parquet::detail::conversion_info` instead of directly computing `clock_rate`
-      // when AST support for decimals is available
-      auto const column_type_id =
+      auto const [clock_rate, logical_type] = parquet::detail::conversion_info(
         parquet::detail::to_type_id(schema,
                                     options.is_enabled_convert_strings_to_categories(),
-                                    options.get_timestamp_type().id());
-      auto const clock_rate = is_chrono(data_type{column_type_id})
-                                ? to_clockrate(options.get_timestamp_type().id())
-                                : int32_t{0};
+                                    options.get_timestamp_type().id(),
+                                    options.get_decimal_width()),
+        options.get_timestamp_type().id(),
+        schema.type,
+        schema.logical_type);
 
       // Create a column chunk descriptor - zero/null values for all fields that are not needed
       chunks[chunk_idx] = ColumnChunkDesc(static_cast<int64_t>(dict_page_data.size()),
@@ -247,7 +247,7 @@ hybrid_scan_reader_impl::prepare_dictionaries(
                                           0,  // def_level_bits
                                           0,  // rep_level_bits
                                           col_meta.codec,
-                                          schema.logical_type,
+                                          logical_type,
                                           clock_rate,
                                           0,  // src_col_index
                                           col_schema_idx,
