@@ -2841,8 +2841,8 @@ TEST_F(CsvWriterTest, ZstdCompressionChunked)
 
   // Read back and verify content
   cudf::io::csv_reader_options read_opts =
-    cudf::io::csv_reader_options::builder(
-      cudf::io::source_info(compressed_buffer.data(), compressed_buffer.size()))
+    cudf::io::csv_reader_options::builder(cudf::io::source_info(cudf::host_span<char>(
+                                            compressed_buffer.data(), compressed_buffer.size())))
       .compression(cudf::io::compression_type::ZSTD);
   auto const result = cudf::io::read_csv(read_opts);
 
