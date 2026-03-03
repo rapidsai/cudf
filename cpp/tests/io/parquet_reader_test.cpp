@@ -1618,8 +1618,8 @@ TEST_F(ParquetReaderTest, ExtendedFilterExpressions)
       cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath}).filter(filter);
     auto result = cudf::io::read_parquet(read_opts);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *expected);
-    // Stats filter prunes 1 row group
-    EXPECT_EQ(result.metadata.num_row_groups_after_stats_filter.value(), 3);
+    // Stats filter prunes 3 row groups
+    EXPECT_EQ(result.metadata.num_row_groups_after_stats_filter.value(), 1);
   }
 
   // Filter: (col_a < 150) or (col_a < col_b)
@@ -1666,9 +1666,8 @@ TEST_F(ParquetReaderTest, ExtendedFilterExpressions)
       cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath}).filter(filter);
     auto result = cudf::io::read_parquet(read_opts);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *expected);
-    // Stats filter cannot prune row groups
-    EXPECT_EQ(result.metadata.num_row_groups_after_stats_filter.value(),
-              result.metadata.num_input_row_groups);
+    // Stats filter can prune row groups
+    EXPECT_EQ(result.metadata.num_row_groups_after_stats_filter.value(), 1);
   }
 
   // Filter: false AND (50 > col_a)
@@ -1747,9 +1746,8 @@ TEST_F(ParquetReaderTest, ExtendedFilterExpressions)
       cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath}).filter(filter);
     auto result = cudf::io::read_parquet(read_opts);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *expected);
-    // Stats filter cannot prune row groups
-    EXPECT_EQ(result.metadata.num_row_groups_after_stats_filter.value(),
-              result.metadata.num_input_row_groups);
+    // Stats filter can prune row groups
+    EXPECT_EQ(result.metadata.num_row_groups_after_stats_filter.value(), 1);
   }
 
   // Filter: NOT(col_a < col_b)
