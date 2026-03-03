@@ -323,7 +323,7 @@ class ColumnAccessor(MutableMapping):
             # Avoid pandas returning Index[object]
             dtype = (
                 self.label_dtype
-                if len(self.names) > 0
+                if self.label_dtype is not None or len(self.names) > 0
                 else DEFAULT_STRING_DTYPE
             )
             result = pd.Index(
