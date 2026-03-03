@@ -27,7 +27,7 @@ async def _test_allgather(context: Context, comm: Communicator) -> None:
 
     # Create simple test tables with different sizes
     tables = [
-        plc.Table([plc.Column.from_array(np.full(num_elements, i).astype(np.int32))])  # type: ignore[call-arg]
+        plc.Table([plc.Column.from_array(np.full(num_elements, i).astype(np.int32))])
         for i, num_elements in enumerate([100, 200, 300])
     ]
 
