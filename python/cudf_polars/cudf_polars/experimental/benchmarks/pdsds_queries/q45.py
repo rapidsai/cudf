@@ -107,6 +107,8 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         filtered_items, left_on="i_item_id", right_on="i_item_id", how="semi"
     )
 
+    sort_by = {"ca_zip": False, "ca_state": False}
+    limit = 100
     return QueryResult(
         frame=(
             pl.concat([zip_match, item_match])
@@ -126,10 +128,10 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
                 ]
             )
             .drop(["sales_sum", "sales_count"])
-            .sort(["ca_zip", "ca_state"], nulls_last=True)
+            .sort(sort_by.keys(), nulls_last=True)
             .select(["ca_zip", "ca_state", "sum(ws_sales_price)"])
-            .limit(100)
+            .limit(limit)
         ),
-        sort_by=[("ca_zip", False), ("ca_state", False)],
-        limit=100,
+        sort_by=list(sort_by.items()),
+        limit=limit,
     )

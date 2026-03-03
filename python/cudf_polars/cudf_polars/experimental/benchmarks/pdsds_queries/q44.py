@@ -162,6 +162,8 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         .select(["ss_item_sk", "rnk"])
     )
 
+    sort_by = {"rnk": False}
+    limit = 100
     # Step 5: Join rankings and get product names
     return QueryResult(
         frame=(
@@ -181,9 +183,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
                     pl.col("i_product_name_worst").alias("worst_performing"),
                 ]
             )
-            .sort(["rnk"], nulls_last=True, descending=[False])
-            .limit(100)
+            .sort(sort_by.keys(), nulls_last=True)
+            .limit(limit)
         ),
-        sort_by=[("rnk", False)],
-        limit=100,
+        sort_by=list(sort_by.items()),
+        limit=limit,
     )

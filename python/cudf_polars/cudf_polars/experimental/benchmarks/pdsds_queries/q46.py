@@ -147,6 +147,14 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         .with_columns([pl.col("ca_city").alias("bought_city")])
         .select(["ss_ticket_number", "ss_customer_sk", "bought_city", "amt", "profit"])
     )
+    sort_by = {
+        "c_last_name": False,
+        "c_first_name": False,
+        "ca_city": False,
+        "bought_city": False,
+        "ss_ticket_number": False,
+    }
+    limit = 100
     # Step 2: Join with customer and current address
     return QueryResult(
         frame=(
@@ -174,25 +182,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
                     "profit",
                 ]
             )
-            .sort(
-                [
-                    "c_last_name",
-                    "c_first_name",
-                    "ca_city",
-                    "bought_city",
-                    "ss_ticket_number",
-                ],
-                nulls_last=True,
-                descending=[False, False, False, False, False],
-            )
-            .limit(100)
+            .sort(sort_by.keys(), nulls_last=True)
+            .limit(limit)
         ),
-        sort_by=[
-            ("c_last_name", False),
-            ("c_first_name", False),
-            ("ca_city", False),
-            ("bought_city", False),
-            ("ss_ticket_number", False),
-        ],
-        limit=100,
+        sort_by=list(sort_by.items()),
+        limit=limit,
     )

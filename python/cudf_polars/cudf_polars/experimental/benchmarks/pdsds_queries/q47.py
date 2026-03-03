@@ -237,6 +237,8 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
             ]
         )
     )
+    sort_by = {"d_moy": False}
+    limit = 100
     # Step 3: Final query with filters and calculations
     return QueryResult(
         frame=(
@@ -276,8 +278,8 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
                     "nsum",
                 ]
             )
-            .limit(100)
+            .limit(limit)
         ),
-        sort_by=[("d_moy", False)],
-        limit=100,
+        sort_by=list(sort_by.items()),
+        limit=limit,
     )
