@@ -773,7 +773,7 @@ For device-to-device copies, or when a raw `void*` interface is required, use
 `cudf::detail::memcpy_async` and check errors with `CUDF_CUDA_TRY` at the call site:
 
 ```c++
-CUDF_CUDA_TRY(cudf::detail::memcpy_async(dst, src, size_bytes, cudaMemcpyDefault, stream));
+CUDF_CUDA_TRY(cudf::detail::memcpy_async(dst, src, size_bytes, stream));
 ```
 
 **Important:** `cudf::detail::memcpy_async` uses `cudaMemcpyBatchAsync` with
