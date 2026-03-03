@@ -81,6 +81,15 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     start_date = date.fromisoformat(sdate)
     end_date = start_date + timedelta(days=30)
 
+    sort_by = {
+        "i_category": False,
+        "i_class": False,
+        "i_item_id": False,
+        "i_item_desc": False,
+        "revenueratio": False,
+    }
+    limit = 100
+
     return QueryResult(
         frame=(
             catalog_sales.join(item, left_on="cs_item_sk", right_on="i_item_sk")
@@ -106,18 +115,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
                     .alias("revenueratio")
                 ]
             )
-            .sort(
-                ["i_category", "i_class", "i_item_id", "i_item_desc", "revenueratio"],
-                nulls_last=True,
-            )
-            .limit(100)
+            .sort(sort_by.keys(), nulls_last=True)
+            .limit(limit)
         ),
-        sort_by=[
-            ("i_category", False),
-            ("i_class", False),
-            ("i_item_id", False),
-            ("i_item_desc", False),
-            ("revenueratio", False),
-        ],
-        limit=100,
+        sort_by=list(sort_by.items()),
+        limit=limit,
     )

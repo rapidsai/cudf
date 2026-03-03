@@ -95,6 +95,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     end_date_lit = pl.lit(end_date)
     d_date = pl.col("d_date")
 
+    sort_by = {"w_warehouse_name": False, "i_item_id": False}
+    limit = 100
+
     return QueryResult(
         frame=(
             inventory.join(item, left_on="inv_item_sk", right_on="i_item_sk")
@@ -130,9 +133,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
                 .is_between(2.0 / 3.0, 3.0 / 2.0)
             )
             .filter(pl.col("w_warehouse_name").is_not_null())
-            .sort(["w_warehouse_name", "i_item_id"])
-            .limit(100)
+            .sort(sort_by.keys())
+            .limit(limit)
         ),
-        sort_by=[("w_warehouse_name", False), ("i_item_id", False)],
-        limit=100,
+        sort_by=list(sort_by.items()),
+        limit=limit,
     )

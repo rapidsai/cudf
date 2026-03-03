@@ -177,12 +177,15 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         .agg((pl.col("ws_quantity") * pl.col("ws_list_price")).sum().alias("sales"))
     )
 
+    sort_by = {"c_last_name": False, "c_first_name": False, "sales": False}
+    limit = 100
+
     return QueryResult(
         frame=(
             pl.concat([catalog_part, web_part])
-            .sort(["c_last_name", "c_first_name", "sales"], nulls_last=False)
-            .limit(100)
+            .sort(sort_by.keys(), nulls_last=False)
+            .limit(limit)
         ),
-        sort_by=[("c_last_name", False), ("c_first_name", False), ("sales", False)],
-        limit=100,
+        sort_by=list(sort_by.items()),
+        limit=limit,
     )

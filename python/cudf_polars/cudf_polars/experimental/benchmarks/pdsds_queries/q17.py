@@ -107,10 +107,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     store = get_data(run_config.dataset_path, "store", run_config.suffix)
     item = get_data(run_config.dataset_path, "item", run_config.suffix)
 
-    # The SQL uses comma-separated joins which create a Cartesian product filtered by WHERE
-    # We need to be more careful about preserving all valid combinations
+    sort_by = {"i_item_id": False, "i_item_desc": False, "s_state": False}
+    limit = 100
 
-    # First get the base combinations that satisfy the core relationship constraints
     store_sales_base = (
         store_sales.join(
             date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk", suffix="_d1"
@@ -128,7 +127,6 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         date_dim, left_on="cs_sold_date_sk", right_on="d_date_sk", suffix="_d3"
     ).filter(pl.col("d_quarter_name").is_in([f"{year}Q1", f"{year}Q2", f"{year}Q3"]))
 
-    # Now create the full combination following the SQL logic
     return QueryResult(
         frame=(
             store_sales_base.join(
@@ -175,9 +173,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
                     ),
                 ]
             )
-            .sort(["i_item_id", "i_item_desc", "s_state"], nulls_last=True)
-            .limit(100)
+            .sort(sort_by.keys(), nulls_last=True)
+            .limit(limit)
         ),
-        sort_by=[("i_item_id", False), ("i_item_desc", False), ("s_state", False)],
-        limit=100,
+        sort_by=list(sort_by.items()),
+        limit=limit,
     )
