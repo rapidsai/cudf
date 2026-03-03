@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 
 import polars as pl
+import polars.testing
 
 from cudf_polars.experimental.benchmarks.asserts import (
     ValidationError,
@@ -203,6 +204,26 @@ def test_assert_tpch_result_equal_ties_multi_column_sort_by() -> None:
     )
 
 
+@pytest.mark.parametrize("limit", [None, 5])
+def test_assert_tpch_result_equal_float_sort_raises(limit: int | None) -> None:
+    # Sort on a floating point column with a limit,
+    # but the 'key' column *doesn't* match
+    epsilon = 1e-5
+    left = pl.DataFrame(
+        {"a": [1.0, 2.0, 3.0, 3.0, 3.0 + epsilon], "b": ["a", "b", "c", "c", "c"]}
+    )
+    right = pl.DataFrame(
+        {"a": [1.0, 2.0, 3.0 - epsilon, 3.0, 3.0], "b": ["x", "b", "c", "c", "c"]}
+    )
+    with pytest.raises(ValidationError, match="Result mismatch"):
+        assert_tpch_result_equal(
+            left,
+            right,
+            sort_by=[("a", False)],
+            limit=limit,
+        )
+
+
 def test_assert_tpch_result_equal_split_at_lexicographic_not_per_column_max() -> None:
     # Previously, we used .max() to find the split point. That was incorrect
     # when the largest value per column came from different rows.
@@ -261,7 +282,7 @@ def test_assert_tpch_result_equal_raises_sort_by_columns_mismatch() -> None:
     left = pl.DataFrame({"a": [1, 2, 3], "b": ["x", "y", "z"]})
     right = pl.DataFrame({"a": [1, 2, 99], "b": ["x", "y", "z"]})
 
-    with pytest.raises(ValidationError, match="sort_by columns mismatch"):
+    with pytest.raises(ValidationError, match="Result mismatch in non-ties part"):
         assert_tpch_result_equal(left, right, sort_by=[("a", False)], limit=3)
 
 
@@ -288,19 +309,29 @@ def test_assert_tpch_result_equal_q11_ties():
 
     left = pl.DataFrame(
         {
-            "ps_partkey": [124439984, 69940887, 118230270, 191696233, 158970051],
-            "value": [8005096.8, 8005095.75, 8005095.75, 8005093.11, 8005090.24],
+            "ps_partkey": [124439984, 69940887, 118230270, 191696233, 158970051, 0, 0],
+            "value": [
+                8005096.8,
+                8005095.75,
+                8005095.75,
+                8005093.11,
+                8005090.24,
+                1.0,
+                0.0,
+            ],
         }
     )
     right = pl.DataFrame(
         {
-            "ps_partkey": [124439984, 118230270, 69940887, 191696233, 158970051],
+            "ps_partkey": [124439984, 118230270, 69940887, 191696233, 158970051, 0, 0],
             "value": [
                 8005096.8,
                 8005095.75,
                 8005095.749999999,
                 8005093.109999999,
                 8005090.24,
+                1.0,
+                0.0,
             ],
         }
     )
@@ -404,7 +435,9 @@ def test_assert_tpch_result_float_not_actually_sorted() -> None:
             "value": [1.0, 1.1, 1.20, 1.20],
         }
     )
-    with pytest.raises(ValidationError, match="Result mismatch"):
+    with pytest.raises(
+        ValidationError, match="left dataframe is not sorted by sort_by columns"
+    ):
         assert_tpch_result_equal(
             left, right, sort_by=[("value", False)], abs_tol=0.01, check_exact=False
         )
