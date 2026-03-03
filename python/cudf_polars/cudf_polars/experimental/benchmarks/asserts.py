@@ -203,11 +203,9 @@ def assert_tpch_result_equal(
         # And we don't really need to worry about floating-point columns here.
         for side, df in [("left", left), ("right", right)]:
             try:
-                # TODO: confirm whether this should be *exact*, i.e. don't pass polars_kwargs here.
                 polars.testing.assert_frame_equal(
                     df.select(by),
                     df.select(by).sort(by=by, descending=descending),
-                    **polars_kwargs,  # type: ignore[arg-type]
                 )
             except AssertionError as e:
                 raise ValidationError(

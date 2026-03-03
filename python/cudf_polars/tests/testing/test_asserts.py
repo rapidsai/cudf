@@ -421,13 +421,14 @@ def test_assert_tpch_result_equal_float_sort(sort_by: list[tuple[str, bool]]):
     )
 
 
-def test_assert_tpch_result_float_not_actually_sorted() -> None:
+@pytest.mark.parametrize("epsilon", [0.001, 1.0])
+def test_assert_tpch_result_float_not_actually_sorted(epsilon: float) -> None:
     # this test verifies that we correctly raise if the
     # result isn't sorted when `sort_by` claims it ought to be.
     left = pl.DataFrame(
         {
             "key": ["a", "b", "c", "d"],
-            "value": [1.0, 1.1, 1.21, 1.20],
+            "value": [1.0, 1.1, 1.20 + epsilon, 1.20],
         }
     )
     right = pl.DataFrame(
