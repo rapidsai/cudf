@@ -761,7 +761,6 @@ properties:
 - `cudaMemcpyBatchAsync` can be lower-overhead, it is actually asynchronous in certain cases where
   `cudaMemcpyAsync` cannot be asynchronous
 - `cudaMemcpyBatchAsync` may also reduce multi-thread lock contention compared to `cudaMemcpyAsync`
-  `cudaMemcpyAsync` calls
 
 For host-to-device or device-to-host copies, prefer the typed span-based wrappers:
 
