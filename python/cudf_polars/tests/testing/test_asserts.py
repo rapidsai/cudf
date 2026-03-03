@@ -144,20 +144,21 @@ def test_assert_tpch_result_equal_ties() -> None:
     )
 
 
-def test_assert_tpch_result_equal_ties_non_numeric() -> None:
+@pytest.mark.parametrize("descending", [False, True])
+def test_assert_tpch_result_equal_ties_non_numeric(*, descending: bool) -> None:
     epsilon = 1e-5
+    b = ["a", "b", "c", "c", "c"]
 
-    left = pl.DataFrame(
-        {"a": [1.0, 2.0, 3.0, 3.0, 3.0 + epsilon], "b": ["a", "b", "c", "c", "c"]}
-    )
-    right = pl.DataFrame(
-        {"a": [1.0, 2.0, 3.0 - epsilon, 3.0, 3.0], "b": ["a", "b", "c", "c", "c"]}
-    )
+    if descending:
+        b = list(reversed(b))
+
+    left = pl.DataFrame({"a": [1.0, 2.0, 3.0, 3.0, 3.0 + epsilon], "b": b})
+    right = pl.DataFrame({"a": [1.0, 2.0, 3.0 - epsilon, 3.0, 3.0], "b": b})
 
     assert_tpch_result_equal(
         left,
         right,
-        sort_by=[("b", False)],
+        sort_by=[("b", descending)],
         abs_tol=2 * epsilon,
         check_exact=False,
         limit=5,
@@ -282,7 +283,7 @@ def test_assert_tpch_result_equal_raises_sort_by_columns_mismatch() -> None:
     left = pl.DataFrame({"a": [1, 2, 3], "b": ["x", "y", "z"]})
     right = pl.DataFrame({"a": [1, 2, 99], "b": ["x", "y", "z"]})
 
-    with pytest.raises(ValidationError, match="Result mismatch in non-ties part"):
+    with pytest.raises(ValidationError, match="Result mismatch in ties part"):
         assert_tpch_result_equal(left, right, sort_by=[("a", False)], limit=3)
 
 

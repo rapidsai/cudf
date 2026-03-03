@@ -265,7 +265,7 @@ def assert_tpch_result_equal(
             # of 'd' as well.
 
             exprs = []
-            for (col, val), desc in zip(split_at.items(), by, strict=True):
+            for (col, val), desc in zip(split_at.items(), descending, strict=True):
                 if isinstance(val, float):
                     exprs.append(
                         pl.col(col).lt(val - 2 * abs_tol)
@@ -298,25 +298,24 @@ def assert_tpch_result_equal(
                     details={"error": str(e)},
                 ) from e
 
-            # Now for the ties:
-            # We already know that
-            # 1. the schema matches (checked above)
-            # 2. the values in ``sort_by`` match (else the Expr above would be False)
-            # So all that's left to check is that the lengths match.
-            if len(result_ties) != len(expected_ties):  # pragma: no cover
-                # This *should* be unreachable... We've already checked that the
-                # lengths of the two full dataframes match and that the lengths
-                # of the two "ties" portions match, so the non-ties portion
-                # must match too.
-                # But we'll check just in case.
-                raise ValidationError(
-                    message="Ties length mismatch",
-                    details={
-                        "expected_length": len(expected_ties),
-                        "result_length": len(result_ties),
-                        "split_at": str(split_at),
-                    },
+            # We already know that the lengths match (we've validated that the
+            # *total* lengths match and the non-ties lengths match, so this rump
+            # must match too.). We already know that the schema matches.
+            # We *do* need to validate that that `split_at`, computed just
+            # on `left` above, actually matches. Because it's a potentially
+            # a floating point value, we'll use approximate comparison.
+
+            try:
+                polars.testing.assert_frame_equal(
+                    result_ties.sort(non_float_columns).select(by),
+                    expected_ties.sort(non_float_columns).select(by),
+                    **polars_kwargs,  # type: ignore[arg-type]
                 )
+            except AssertionError as e:
+                raise ValidationError(
+                    message="Result mismatch in ties part",
+                    details={"error": str(e)},
+                ) from e
 
     else:
         # no sort_by, just a straight comparison.
