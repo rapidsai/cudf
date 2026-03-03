@@ -39,7 +39,7 @@ cpdef Column make_empty_column(
 ):
     """Creates an empty column of the specified type.
 
-    For details, see :cpp:func::`make_empty_column`.
+    For details, see :cpp:func:`make_empty_column`.
 
     Parameters
     ----------
@@ -87,7 +87,7 @@ cpdef Column make_numeric_column(
 ):
     """Creates an empty numeric column.
 
-    For details, see :cpp:func::`make_numeric_column`.
+    For details, see :cpp:func:`make_numeric_column`.
 
     """
     cdef unique_ptr[column] result
@@ -263,7 +263,7 @@ cpdef Column make_empty_lists_column(
 ):
     """Creates an empty column of the specified type.
 
-    For details, see :cpp:func::`make_empty_lists_column`.
+    For details, see :cpp:func:`make_empty_lists_column`.
 
     Parameters
     ----------
