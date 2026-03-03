@@ -57,6 +57,15 @@ Pre-generated parameters for PDS-DS queries across a set of scale factors.
 - **Query 41**: `manufact` (manufacturer ID), `size` (list of 6 sizes), `color` (list of 16 colors), `unit` (list of 16 units)
 - **Query 42**: `year`, `month`
 - **Query 43**: `year`, `gmt` (GMT offset)
+- **Query 44**: `store_sk` (store key)
+- **Query 45**: `year`, `qoy` (quarter of year), `zip_codes` (list of 9 zip codes), `item_sks` (list of 10 item keys)
+- **Query 46**: `year`, `hd_dep_count` (household dependent count), `hd_vehicle_count` (household vehicle count), `cities` (list of cities)
+- **Query 47**: `year`
+- **Query 48**: `year`, `demographics` (list of 3 demographic rules with marital_status, education_status, price_min, price_max), `geography` (list of 3 geographic rules with states, profit_min, profit_max)
+- **Query 49**: `year`, `month`
+- **Query 50**: `year`, `month`
+- **Query 51**: `dms` (d_month_seq value)
+- **Query 52**: `year`, `month`, `manager_id`
 - **Query 53**: `dms` (d_month_seq), `categories1` (list of 3), `classes1` (list of 4), `brands1` (list of 4), `categories2` (list of 3), `classes2` (list of 4), `brands2` (list of 4)
 - **Query 54**: `category`, `class`, `month`, `year`
 - **Query 55**: `year`, `month`, `manager_id`
@@ -67,6 +76,43 @@ Pre-generated parameters for PDS-DS queries across a set of scale factors.
 - **Query 60**: `year`, `month`, `category`, `gmt_offset`
 - **Query 61**: `year`, `month`, `gmt_offset`, `category`
 - **Query 62**: `dms` (d_month_seq)
+- **Query 63**: `dms` (d_month_seq)
+- **Query 64**: `year`, `price`, `colors` (list of 6 colors)
+- **Query 65**: `dms` (d_month_seq)
+- **Query 66**: `year`, `time_one`, `smc` (list of 2 ship mode carriers), `sales_one`, `net_one`, `sales_two`, `net_two` (aggregation column names)
+- **Query 67**: `dms` (d_month_seq)
+- **Query 68**: `year`, `dep_cnt` (household dependent count), `veh_cnt` (household vehicle count), `city_a`, `city_b`
+- **Query 69**: `year`, `month`, `states` (list of 3 states)
+- **Query 70**: `dms` (d_month_seq)
+- **Query 71**: `year`, `month`, `manager` (manager ID)
+- **Query 72**: `year`, `bp` (buy potential), `ms` (marital status)
+- **Query 73**: `dom` (list of 2 days of month), `bp` (list of 2 buy potential ranges), `year`, `counties` (list of 4 counties)
+- **Query 74**: `year`
+- **Query 75**: `category`, `year`
+- **Query 76**: `nullcol_ss`, `nullcol_ws`, `nullcol_cs` (null-check column names for store/web/catalog sales)
+- **Query 77**: `sdate` (start date)
+- **Query 78**: `year`
+- **Query 79**: `dep_cnt` (household dependent count), `dow` (day of week), `year`, `emp_min`, `emp_max` (employee count range)
+- **Query 80**: `sdate` (start date)
+- **Query 81**: `state`
+- **Query 82**: `price`, `sdate` (start date), `manufact` (list of 4 manufacturer IDs), `inv_min`, `inv_max` (inventory quantity range)
+- **Query 83**: `dates` (list of 3 dates)
+- **Query 84**: `city`, `income`
+- **Query 85**: `year`, `ms` (list of 3 marital statuses), `es` (list of 3 education statuses), `price_ranges` (list of 3 [min, max] price ranges), `states` (list of 6 states), `np_min`, `np_max` (net profit range)
+- **Query 86**: `d_month_seq`
+- **Query 87**: `d_month_seq`
+- **Query 88**: `s_store_name`, `hd_dep_count1`, `hd_dep_count2`, `hd_dep_count3` (household dependent counts)
+- **Query 89**: `year`, `category1` (list of 3), `class1` (list of 3), `category2` (list of 3), `class2` (list of 3)
+- **Query 90**: `am_hour`, `pm_hour`, `hd_dep_count` (household dependent count), `wp_char_count_min`, `wp_char_count_max` (web page character count range)
+- **Query 91**: `year`, `month`, `marital_status1`, `education_status1`, `marital_status2`, `education_status2`, `hd_buy_potential`, `ca_gmt_offset`
+- **Query 92**: `manufact_id`, `date`
+- **Query 93**: `reason_desc` (return reason description)
+- **Query 94**: `date`, `state`, `web_company_name`
+- **Query 95**: `date`, `state`, `web_company_name`
+- **Query 96**: `t_hour`, `t_minute`, `hd_dep_count` (household dependent count), `s_store_name`
+- **Query 97**: `d_month_seq`
+- **Query 98**: `categories` (list of 3 categories), `date`
+- **Query 99**: `d_month_seq`
 
 ## Usage
 
