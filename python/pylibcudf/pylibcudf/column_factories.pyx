@@ -257,7 +257,7 @@ cpdef Column make_fixed_width_column(
 
 
 cpdef Column make_empty_lists_column(
-    DataType child_type_,
+    DataType child_type,
     Stream stream=None,
     DeviceMemoryResource mr=None,
 ):
@@ -267,7 +267,7 @@ cpdef Column make_empty_lists_column(
 
     Parameters
     ----------
-    child_type_ : DataType
+    child_type : DataType
         The child column data type for the list column.
 
     Returns
@@ -280,6 +280,6 @@ cpdef Column make_empty_lists_column(
     mr = _get_memory_resource(mr)
 
     with nogil:
-        result = cpp_make_empty_lists_column(child_type_.c_obj)
+        result = cpp_make_empty_lists_column(child_type.c_obj)
 
     return Column.from_libcudf(move(result), stream, mr)
