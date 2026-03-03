@@ -28,8 +28,7 @@ from cudf.core.column import as_column, column_empty
 from cudf.core.column.column import (
     ColumnBase,
     PylibcudfFunction,
-    bool_same_kind_policy,
-    int16_same_kind_policy,
+    pylibcudf_result_dtype_policy,
     same_dtype_policy,
 )
 from cudf.core.column.temporal_base import TemporalBaseColumn
@@ -233,7 +232,7 @@ class DatetimeColumn(TemporalBaseColumn):
     def quarter(self) -> ColumnBase:
         return PylibcudfFunction(
             plc.datetime.extract_quarter,
-            int16_same_kind_policy,
+            pylibcudf_result_dtype_policy,
         ).execute_with_args(self)
 
     @functools.cached_property
@@ -283,7 +282,7 @@ class DatetimeColumn(TemporalBaseColumn):
     def day_of_year(self) -> ColumnBase:
         return PylibcudfFunction(
             plc.datetime.day_of_year,
-            int16_same_kind_policy,
+            pylibcudf_result_dtype_policy,
         ).execute_with_args(self)
 
     @functools.cached_property
@@ -326,7 +325,7 @@ class DatetimeColumn(TemporalBaseColumn):
     def is_leap_year(self) -> ColumnBase:
         return PylibcudfFunction(
             plc.datetime.is_leap_year,
-            bool_same_kind_policy,
+            pylibcudf_result_dtype_policy,
         ).execute_with_args(self)
 
     @functools.cached_property
@@ -337,7 +336,7 @@ class DatetimeColumn(TemporalBaseColumn):
     def days_in_month(self) -> ColumnBase:
         return PylibcudfFunction(
             plc.datetime.days_in_month,
-            int16_same_kind_policy,
+            pylibcudf_result_dtype_policy,
         ).execute_with_args(self)
 
     @functools.cached_property

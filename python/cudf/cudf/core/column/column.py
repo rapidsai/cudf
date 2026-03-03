@@ -167,23 +167,6 @@ def fixed_dtype_policy(dtype: "DtypeObj") -> "DtypePolicy":
     return policy
 
 
-np_bool_dtype_policy = fixed_dtype_policy(np.dtype(np.bool_))
-cudf_string_dtype_policy = fixed_dtype_policy(CUDF_STRING_DTYPE)
-
-
-def same_kind_dtype_policy(target_dtype: "DtypeObj") -> "DtypePolicy":
-    def policy(result: plc.Column, dtypes: "list[DtypeObj]") -> "DtypeObj":
-        return get_dtype_of_same_kind(dtypes[0], target_dtype)
-
-    return policy
-
-
-bool_same_kind_policy = same_kind_dtype_policy(np.dtype(np.bool_))
-int16_same_kind_policy = same_kind_dtype_policy(np.dtype(np.int16))
-int32_same_kind_policy = same_kind_dtype_policy(np.dtype(np.int32))
-uint32_same_kind_policy = same_kind_dtype_policy(np.dtype(np.uint32))
-
-
 def list_dtype_policy(
     result: plc.Column, dtypes: "list[DtypeObj]"
 ) -> "DtypeObj":
@@ -1953,7 +1936,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     def is_valid(self) -> ColumnBase:
         """Identify non-null values"""
         return PylibcudfFunction(
-            plc.unary.is_valid, np_bool_dtype_policy
+            plc.unary.is_valid, pylibcudf_result_dtype_policy
         ).execute_with_args(self)
 
     def isnan(self) -> ColumnBase:
@@ -1969,7 +1952,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         if not self.has_nulls(include_nan=False):
             return as_column(False, length=len(self))
         return PylibcudfFunction(
-            plc.unary.is_null, np_bool_dtype_policy
+            plc.unary.is_null, pylibcudf_result_dtype_policy
         ).execute_with_args(self)
 
     def notnull(self) -> ColumnBase:
@@ -1977,7 +1960,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         if not self.has_nulls(include_nan=False):
             return as_column(True, length=len(self))
         return PylibcudfFunction(
-            plc.unary.is_valid, np_bool_dtype_policy
+            plc.unary.is_valid, pylibcudf_result_dtype_policy
         ).execute_with_args(self)
 
     def interpolate(self, index: Index) -> ColumnBase:
@@ -2211,7 +2194,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         """
         return PylibcudfFunction(
             plc.search.contains,
-            np_bool_dtype_policy,
+            pylibcudf_result_dtype_policy,
         ).execute_with_args(self, other)
 
     def sort_values(

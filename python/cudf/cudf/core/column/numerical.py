@@ -21,8 +21,7 @@ from cudf.core.column.column import (
     PylibcudfFunction,
     as_column,
     column_empty,
-    cudf_string_dtype_policy,
-    np_bool_dtype_policy,
+    pylibcudf_result_dtype_policy,
     same_dtype_policy,
 )
 from cudf.core.column.numerical_base import NumericalBaseColumn
@@ -183,7 +182,7 @@ class NumericalColumn(NumericalBaseColumn):
         if self.dtype.kind != "f":
             return as_column(False, length=len(self))
         return PylibcudfFunction(
-            plc.unary.is_nan, np_bool_dtype_policy
+            plc.unary.is_nan, pylibcudf_result_dtype_policy
         ).execute_with_args(self)
 
     def notnan(self) -> ColumnBase:
@@ -196,7 +195,7 @@ class NumericalColumn(NumericalBaseColumn):
             return as_column(True, length=len(self))
         return PylibcudfFunction(
             plc.unary.is_not_nan,
-            np_bool_dtype_policy,
+            pylibcudf_result_dtype_policy,
         ).execute_with_args(self)
 
     def isnull(self) -> ColumnBase:
@@ -209,11 +208,11 @@ class NumericalColumn(NumericalBaseColumn):
         if self.dtype.kind == "f":
             return PylibcudfFunction(
                 _is_null_or_nan_plc,
-                np_bool_dtype_policy,
+                pylibcudf_result_dtype_policy,
             ).execute_with_args(self)
         return PylibcudfFunction(
             plc.unary.is_null,
-            np_bool_dtype_policy,
+            pylibcudf_result_dtype_policy,
         ).execute_with_args(self)
 
     def notnull(self) -> ColumnBase:
@@ -227,12 +226,12 @@ class NumericalColumn(NumericalBaseColumn):
             if self.dtype.kind == "f":
                 result = PylibcudfFunction(
                     _is_valid_and_not_nan_plc,
-                    np_bool_dtype_policy,
+                    pylibcudf_result_dtype_policy,
                 ).execute_with_args(self)
             else:
                 result = PylibcudfFunction(
                     plc.unary.is_valid,
-                    np_bool_dtype_policy,
+                    pylibcudf_result_dtype_policy,
                 ).execute_with_args(self)
 
         return result
@@ -595,7 +594,7 @@ class NumericalColumn(NumericalBaseColumn):
             cudf.core.column.string.StringColumn,
             PylibcudfFunction(
                 plc.strings.convert.convert_ipv4.integers_to_ipv4,
-                cudf_string_dtype_policy,
+                pylibcudf_result_dtype_policy,
             ).execute_with_args(self),
         )
 
