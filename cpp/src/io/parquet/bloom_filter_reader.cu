@@ -222,6 +222,7 @@ class bloom_filter_expression_converter : public equality_literals_collector {
           return *_always_true;
         } else {
           _bloom_filter_expr.push(ast::operation{input_op, new_operands.front()});
+          return _bloom_filter_expr.back();
         }
       }
     }

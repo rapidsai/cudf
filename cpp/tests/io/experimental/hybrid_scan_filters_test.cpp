@@ -407,7 +407,7 @@ TEST_F(HybridScanFiltersTest, FilterRowGroupsWithComplexExpressions)
   }
 
   // Filter: (col0 < 50) and (col0 < col1)
-  // Stats filter will prune based on col0 < 50 but pass throughcol0 < col1
+  // Stats filter will prune based on col0 < 50 but pass through col0 < col1
   {
     auto literal_value = cudf::numeric_scalar<T>(50);
     auto literal       = cudf::ast::literal(literal_value);

@@ -46,8 +46,10 @@ struct binary_operands {
   ast::ast_operator op;  ///< Input or inverted operator to normalize the `lit op col` expressions
   operand_kind lhs_type;
   operand_kind rhs_type;
-  ast::column_reference const* col_ref;  ///< Non-null when exactly one operand is COLUMN_REF
-  ast::literal const* literal;           ///< Non-null when exactly one operand is LITERAL
+  ast::column_reference const*
+    col_ref;  ///< Reliable only when the expression is of the form `col op lit` or `lit op col`
+  ast::literal const*
+    literal;  ///< Reliable only when the expression is of the form `col op lit` or `lit op col`
 };
 
 /**

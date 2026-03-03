@@ -49,6 +49,8 @@ ast::ast_operator invert_non_commutative_operator(ast::ast_operator op)
     return operand_kind::COLUMN_REF;
   } else if (dynamic_cast<ast::literal const*>(&operand) != nullptr) {
     return operand_kind::LITERAL;
+  } else if (dynamic_cast<ast::column_name_reference const*>(&operand) != nullptr) {
+    CUDF_FAIL("Column name references are not supported in Parquet expression transformers");
   } else {
     return operand_kind::EXPRESSION;
   }
@@ -59,8 +61,8 @@ ast::ast_operator invert_non_commutative_operator(ast::ast_operator op)
 unary_operand extract_unary_operand(ast::operation const& expr)
 {
   auto const& operands = expr.get_operands();
-  auto const& operand  = operands[0].get();
   CUDF_EXPECTS(operands.size() == 1, "Expected single operand for a unary operation");
+  auto const& operand = operands[0].get();
 
   return {.operand_type = classify_operand(operand),
           .col_ref      = dynamic_cast<ast::column_reference const*>(&operand)};
@@ -191,7 +193,7 @@ std::reference_wrapper<ast::expression const> names_from_expression::visit(
   ast::column_reference const& expr)
 {
   // Map the column index to its name
-  auto const col_name = _column_indices_to_names[expr.get_column_index()];
+  auto const col_name = _column_indices_to_names.at(expr.get_column_index());
   // If the column name is not in the skip_names, add it to the set
   if (_skip_names.count(col_name) == 0) { _column_names.insert(col_name); }
   return expr;

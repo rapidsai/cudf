@@ -1997,13 +1997,13 @@ std::vector<Type> aggregate_reader_metadata::get_parquet_types(
 
   // Source index
   auto const src_index = std::distance(row_group_indices.begin(), src_iter);
+  // Use the first row group in this source
+  auto const first_row_group_index = row_group_indices[src_index].front();
   std::transform(column_schemas.begin(),
                  column_schemas.end(),
                  parquet_types.begin(),
                  [&](auto const schema_idx) {
-                   // Use the first row group in this source
-                   auto constexpr row_group_index = 0;
-                   return get_column_metadata(row_group_index, src_index, schema_idx).type;
+                   return get_column_metadata(first_row_group_index, src_index, schema_idx).type;
                  });
 
   return parquet_types;

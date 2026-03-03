@@ -137,6 +137,7 @@ std::reference_wrapper<ast::expression const> stats_expression_converter::visit(
         auto const& vnull =
           _stats_expr.push(ast::column_reference{col_index * _stats_cols_per_column + 2});
         _stats_expr.push(ast::operation{ast_operator::IDENTITY, vnull});
+        return _stats_expr.back();
       }  // For all other unary operators, push and return the `_always_true` expression
       else {
         _stats_expr.push(ast::operation{ast_operator::IDENTITY, *_always_true});
@@ -151,8 +152,8 @@ std::reference_wrapper<ast::expression const> stats_expression_converter::visit(
         return *_always_true;
       }
       _stats_expr.push(ast::operation{input_op, new_operands.front()});
+      return _stats_expr.back();
     }
-    return _stats_expr.back();
   }
 
   // Binary operation
