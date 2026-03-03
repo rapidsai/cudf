@@ -210,6 +210,8 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         gmt=gmt,
     )
 
+    sort_by = {"total_sales": False}
+    limit = 100
     return QueryResult(
         frame=(
             pl.concat([ss, cs, ws])
@@ -228,9 +230,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
             )
             .drop("_n")
             .select(["i_manufact_id", "total_sales"])
-            .sort("total_sales", nulls_last=True)
-            .limit(100)
+            .sort(sort_by.keys(), nulls_last=True)
+            .limit(limit)
         ),
-        sort_by=[("total_sales", False)],
-        limit=100,
+        sort_by=list(sort_by.items()),
+        limit=limit,
     )

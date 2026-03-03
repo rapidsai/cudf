@@ -149,6 +149,7 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     ws2 = ws.filter((pl.col("d_qoy") == 2) & (pl.col("d_year") == year))
     ws3 = ws.filter((pl.col("d_qoy") == 3) & (pl.col("d_year") == year))
 
+    sort_by = {polars_agg: False}
     # Join all quarters together by county
     result = (
         ss1.join(ss2, on="ca_county", suffix="_q2")
@@ -208,6 +209,6 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
                 "store_q2_q3_increase",
             ]
         )
-        .sort([polars_agg])
+        .sort(sort_by.keys(), nulls_last=True)
     )
-    return QueryResult(frame=result, sort_by=[(polars_agg, False)], limit=None)
+    return QueryResult(frame=result, sort_by=list(sort_by.items()), limit=None)

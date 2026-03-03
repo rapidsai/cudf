@@ -129,6 +129,8 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
 
     combined = pl.concat([level0, level1, level2])
 
+    sort_by = {"lochierarchy": True, "rank_within_parent": False}
+    limit = 100
     return QueryResult(
         frame=(
             combined.with_columns(
@@ -175,7 +177,7 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
                 descending=[True, False, False],
                 nulls_last=True,
             )
-            .limit(100)
+            .limit(limit)
             .with_columns(
                 [
                     pl.when(pl.col("i_category") == null_sentinel)
@@ -189,6 +191,6 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
                 ]
             )
         ),
-        sort_by=[("lochierarchy", True), ("rank_within_parent", False)],
-        limit=100,
+        sort_by=list(sort_by.items()),
+        limit=limit,
     )

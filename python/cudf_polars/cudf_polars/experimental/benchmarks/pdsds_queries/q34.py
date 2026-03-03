@@ -118,6 +118,12 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         .group_by(["ss_ticket_number", "ss_customer_sk"])
         .agg([pl.len().alias("cnt")])
     )
+    sort_by = {
+        "c_last_name": False,
+        "c_first_name": False,
+        "c_salutation": False,
+        "c_preferred_cust_flag": True,
+    }
     return QueryResult(
         frame=(
             dn.join(customer, left_on="ss_customer_sk", right_on="c_customer_sk")
@@ -133,21 +139,11 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
                 ]
             )
             .sort(
-                by=[
-                    "c_last_name",
-                    "c_first_name",
-                    "c_salutation",
-                    "c_preferred_cust_flag",
-                ],
-                descending=[False, False, False, True],
+                list(sort_by.keys()),
+                descending=list(sort_by.values()),
                 nulls_last=True,
             )
         ),
-        sort_by=[
-            ("c_last_name", False),
-            ("c_first_name", False),
-            ("c_salutation", False),
-            ("c_preferred_cust_flag", True),
-        ],
+        sort_by=list(sort_by.items()),
         limit=None,
     )

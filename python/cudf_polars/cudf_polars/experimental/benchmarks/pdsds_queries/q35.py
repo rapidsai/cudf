@@ -151,6 +151,15 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     )
     web_or_catalog = pl.concat([web_exists, catalog_exists]).unique()
 
+    sort_by = {
+        "ca_state": False,
+        "cd_gender": False,
+        "cd_marital_status": False,
+        "cd_dep_count": False,
+        "cd_dep_employed_count": False,
+        "cd_dep_college_count": False,
+    }
+    limit = 100
     result = (
         customer.join(
             customer_address, left_on="c_current_addr_sk", right_on="ca_address_sk"
@@ -234,28 +243,11 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
                 f"{aggthree}(cd_dep_college_count)_1",
             ]
         )
-        .sort(
-            [
-                "ca_state",
-                "cd_gender",
-                "cd_marital_status",
-                "cd_dep_count",
-                "cd_dep_employed_count",
-                "cd_dep_college_count",
-            ],
-            nulls_last=True,
-        )
-        .limit(100)
+        .sort(sort_by.keys(), nulls_last=True)
+        .limit(limit)
     )
     return QueryResult(
         frame=result,
-        sort_by=[
-            ("ca_state", False),
-            ("cd_gender", False),
-            ("cd_marital_status", False),
-            ("cd_dep_count", False),
-            ("cd_dep_employed_count", False),
-            ("cd_dep_college_count", False),
-        ],
-        limit=100,
+        sort_by=list(sort_by.items()),
+        limit=limit,
     )

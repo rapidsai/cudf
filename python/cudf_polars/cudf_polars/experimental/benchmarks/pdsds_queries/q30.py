@@ -124,6 +124,22 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     ).filter(pl.col("ctr_total_return") > pl.col("avg_return"))
     # Join customer with customer_address first (avoiding cartesian product)
     # Then join with qualified customers
+    sort_by = {
+        "c_customer_id": False,
+        "c_salutation": False,
+        "c_first_name": False,
+        "c_last_name": False,
+        "c_preferred_cust_flag": False,
+        "c_birth_day": False,
+        "c_birth_month": False,
+        "c_birth_year": False,
+        "c_birth_country": False,
+        "c_login": False,
+        "c_email_address": False,
+        "c_last_review_date_sk": False,
+        "ctr_total_return": False,
+    }
+    limit = 100
     return QueryResult(
         frame=(
             customer.join(
@@ -150,39 +166,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
                     "ctr_total_return",
                 ]
             )
-            .sort(
-                [
-                    "c_customer_id",
-                    "c_salutation",
-                    "c_first_name",
-                    "c_last_name",
-                    "c_preferred_cust_flag",
-                    "c_birth_day",
-                    "c_birth_month",
-                    "c_birth_year",
-                    "c_birth_country",
-                    "c_login",
-                    "c_email_address",
-                    "c_last_review_date_sk",
-                    "ctr_total_return",
-                ]
-            )
-            .limit(100)
+            .sort(sort_by.keys(), nulls_last=True)
+            .limit(limit)
         ),
-        sort_by=[
-            ("c_customer_id", False),
-            ("c_salutation", False),
-            ("c_first_name", False),
-            ("c_last_name", False),
-            ("c_preferred_cust_flag", False),
-            ("c_birth_day", False),
-            ("c_birth_month", False),
-            ("c_birth_year", False),
-            ("c_birth_country", False),
-            ("c_login", False),
-            ("c_email_address", False),
-            ("c_last_review_date_sk", False),
-            ("ctr_total_return", False),
-        ],
-        limit=100,
+        sort_by=list(sort_by.items()),
+        limit=limit,
     )
