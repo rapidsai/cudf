@@ -176,6 +176,8 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         (pl.col("revenue") / 50.0).alias("segment")
     ).select("segment")
 
+    sort_by = {"segment": False, "num_customers": False}
+    limit = 100
     return QueryResult(
         frame=(
             segments.group_by("segment")
@@ -188,13 +190,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
                     "segment_base",
                 ]
             )
-            .sort(
-                ["segment", "num_customers"],
-                nulls_last=True,
-                descending=[False, False],
-            )
-            .limit(100)
+            .sort(sort_by.keys(), nulls_last=True)
+            .limit(limit)
         ),
-        sort_by=[("segment", False), ("num_customers", False)],
-        limit=100,
+        sort_by=list(sort_by.items()),
+        limit=limit,
     )

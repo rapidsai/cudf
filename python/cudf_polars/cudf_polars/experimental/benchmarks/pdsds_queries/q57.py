@@ -185,6 +185,8 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         .select(["i_brand", "d_year", "avg_monthly_sales", "sum_sales", "psum", "nsum"])
     )
 
+    sort_by = {"avg_monthly_sales": False}
+    limit = 100
     return QueryResult(
         frame=(
             v2.filter(
@@ -208,8 +210,8 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
                 descending=[False, False],
                 nulls_last=True,
             )
-            .limit(100)
+            .limit(limit)
         ),
-        sort_by=[("avg_monthly_sales", False)],
-        limit=100,
+        sort_by=list(sort_by.items()),
+        limit=limit,
     )

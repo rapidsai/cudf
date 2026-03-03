@@ -150,6 +150,8 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
             "avg_quarterly_sales",
         ]
     )
+    sort_by = {"avg_quarterly_sales": False, "sum_sales": False, "i_manufact_id": False}
+    limit = 100
     return QueryResult(
         frame=(
             inner_query.filter(
@@ -163,17 +165,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
                 > 0.1
             )
             .select(["i_manufact_id", "sum_sales", "avg_quarterly_sales"])
-            .sort(
-                ["avg_quarterly_sales", "sum_sales", "i_manufact_id"],
-                nulls_last=True,
-                descending=[False, False, False],
-            )
-            .limit(100)
+            .sort(sort_by.keys(), nulls_last=True)
+            .limit(limit)
         ),
-        sort_by=[
-            ("avg_quarterly_sales", False),
-            ("sum_sales", False),
-            ("i_manufact_id", False),
-        ],
-        limit=100,
+        sort_by=list(sort_by.items()),
+        limit=limit,
     )

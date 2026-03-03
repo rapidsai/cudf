@@ -180,6 +180,8 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         for ch in channels
     ]
 
+    sort_by = {"total_sales": False}
+    limit = 100
     return QueryResult(
         frame=(
             pl.concat(per_channel)
@@ -193,9 +195,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
                 .alias("total_sales")
             )
             .select(["i_item_id", "total_sales"])
-            .sort(["total_sales"], nulls_last=True, descending=[False])
-            .limit(100)
+            .sort(sort_by.keys(), nulls_last=True)
+            .limit(limit)
         ),
-        sort_by=[("total_sales", False)],
-        limit=100,
+        sort_by=list(sort_by.items()),
+        limit=limit,
     )
