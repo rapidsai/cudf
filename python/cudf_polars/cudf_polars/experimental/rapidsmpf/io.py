@@ -24,8 +24,7 @@ from cudf_polars.dsl.ir import (
     DataFrameScan,
     Scan,
     Sink,
-    _cast_literals_to_physical_types,
-    _parquet_physical_types,
+    _prepare_parquet_predicate,
 )
 from cudf_polars.dsl.to_ast import to_parquet_filter
 from cudf_polars.experimental.base import (
@@ -580,9 +579,11 @@ def make_rapidsmpf_read_parquet_node(
     # Build ParquetReaderOptions
     try:
         stream = context.get_stream_from_pool()
-        parquet_reader_options = plc.io.parquet.ParquetReaderOptions.builder(
-            plc.io.SourceInfo(ir.paths)
-        ).build()
+        parquet_reader_options = (
+            plc.io.parquet.ParquetReaderOptions.builder(plc.io.SourceInfo(ir.paths))
+            .decimal_width(plc.TypeId.DECIMAL128)
+            .build()
+        )
 
         if ir.with_columns is not None:
             parquet_reader_options.set_column_names(ir.with_columns)
@@ -591,12 +592,8 @@ def make_rapidsmpf_read_parquet_node(
         filter_obj = None
         if ir.predicate is not None:
             filter_expr = to_parquet_filter(
-                _cast_literals_to_physical_types(
-                    ir.predicate.value,
-                    _parquet_physical_types(
-                        ir.paths,
-                        ir.with_columns or list(ir.schema.keys()),
-                    ),
+                _prepare_parquet_predicate(
+                    ir.predicate.value, ir.paths, ir.schema, ir.with_columns
                 ),
                 stream=stream,
             )
