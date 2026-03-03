@@ -23,6 +23,7 @@ from cudf.core.column.column import (
     ColumnBase,
     PylibcudfFunction,
     as_column,
+    bool_same_kind_policy,
     column_empty,
     list_dtype_policy,
     pandas_string_int32_policy,
@@ -997,7 +998,7 @@ class StringColumn(ColumnBase, Scannable):
             Self,
             PylibcudfFunction(
                 plc.strings.capitalize.is_title,
-                pylibcudf_result_dtype_policy,
+                bool_same_kind_policy,
             ).execute_with_args(self),
         )
 

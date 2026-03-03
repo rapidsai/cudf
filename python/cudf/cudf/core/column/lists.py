@@ -19,7 +19,7 @@ from cudf.core.column.column import (
     PylibcudfFunction,
     as_column,
     column_empty,
-    pylibcudf_result_dtype_policy,
+    int32_same_kind_policy,
 )
 from cudf.core.dtypes import ListDtype
 from cudf.core.missing import NA
@@ -259,7 +259,7 @@ class ListColumn(ColumnBase):
     def count_elements(self) -> ColumnBase:
         return PylibcudfFunction(
             plc.lists.count_elements,
-            pylibcudf_result_dtype_policy,
+            int32_same_kind_policy,
         ).execute_with_args(self)
 
     def distinct(self, nulls_equal: bool, nans_all_equal: bool) -> ColumnBase:

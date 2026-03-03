@@ -28,6 +28,7 @@ from cudf.core.column import as_column, column_empty
 from cudf.core.column.column import (
     ColumnBase,
     PylibcudfFunction,
+    int16_same_kind_policy,
     pylibcudf_result_dtype_policy,
     same_dtype_policy,
 )
@@ -232,7 +233,7 @@ class DatetimeColumn(TemporalBaseColumn):
     def quarter(self) -> ColumnBase:
         return PylibcudfFunction(
             plc.datetime.extract_quarter,
-            pylibcudf_result_dtype_policy,
+            int16_same_kind_policy,
         ).execute_with_args(self)
 
     @functools.cached_property

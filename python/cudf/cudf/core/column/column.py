@@ -167,6 +167,18 @@ def fixed_dtype_policy(dtype: "DtypeObj") -> "DtypePolicy":
     return policy
 
 
+def same_kind_dtype_policy(target_dtype: "DtypeObj") -> "DtypePolicy":
+    def policy(result: plc.Column, dtypes: "list[DtypeObj]") -> "DtypeObj":
+        return get_dtype_of_same_kind(dtypes[0], target_dtype)
+
+    return policy
+
+
+bool_same_kind_policy = same_kind_dtype_policy(np.dtype(np.bool_))
+int16_same_kind_policy = same_kind_dtype_policy(np.dtype(np.int16))
+int32_same_kind_policy = same_kind_dtype_policy(np.dtype(np.int32))
+
+
 def list_dtype_policy(
     result: plc.Column, dtypes: "list[DtypeObj]"
 ) -> "DtypeObj":
