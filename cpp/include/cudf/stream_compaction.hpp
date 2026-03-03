@@ -420,7 +420,7 @@ using filter_input = std::variant<column_view, scalar_column_view>;
  * @param predicate_inputs Immutable views of the predicate inputs (columns and scalars)
  * @param predicate_udf The PTX/CUDA string of the transform function to apply
  * @param filter_columns Immutable view of the columns to be filtered
- * @param is_ptx true: the UDF is treated as PTX code; false: the UDF is treated as CUDA code
+ * @param source_type The source type of the UDF
  * @param user_data User-defined device data to pass to the UDF.
  * @param is_null_aware Signifies the UDF will receive row inputs as optional values
  * @param predicate_nullability Specifies the nullability of the predicate output
@@ -432,7 +432,7 @@ std::vector<std::unique_ptr<column>> filter_extended(
   std::span<std::variant<column_view, scalar_column_view> const> predicate_inputs,
   std::string const& predicate_udf,
   std::vector<column_view> const& filter_columns,
-  bool is_ptx,
+  cudf::udf_source_type source_type,
   std::optional<void*> user_data           = std::nullopt,
   null_aware is_null_aware                 = null_aware::NO,
   output_nullability predicate_nullability = output_nullability::PRESERVE,
