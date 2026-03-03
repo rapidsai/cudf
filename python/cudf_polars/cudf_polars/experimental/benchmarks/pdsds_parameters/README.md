@@ -50,6 +50,23 @@ Pre-generated parameters for PDS-DS queries across a set of scale factors.
 - **Query 34**: `year`, `bpone` (buy potential 1), `bptwo` (buy potential 2), `county` (list of 8 counties)
 - **Query 35**: `year`, `aggone`, `aggtwo`, `aggthree` (aggregation functions: sum/min/max/avg/stddev_samp)
 - **Query 36**: `year`, `state` (list of 8 states)
+- **Query 37**: `price`, `manufact` (list of 4 manufacturer IDs), `invdate` (inventory date)
+- **Query 38**: `dms` (d_month_seq value)
+- **Query 39**: `year`, `month`
+- **Query 40**: `sales_date`, `year`
+- **Query 41**: `manufact` (manufacturer ID), `size` (list of 6 sizes), `color` (list of 16 colors), `unit` (list of 16 units)
+- **Query 42**: `year`, `month`
+- **Query 43**: `year`, `gmt` (GMT offset)
+- **Query 53**: `dms` (d_month_seq), `categories1` (list of 3), `classes1` (list of 4), `brands1` (list of 4), `categories2` (list of 3), `classes2` (list of 4), `brands2` (list of 4)
+- **Query 54**: `category`, `class`, `month`, `year`
+- **Query 55**: `year`, `month`, `manager_id`
+- **Query 56**: `year`, `month`, `colors` (list of 3), `gmt_offset`
+- **Query 57**: `year`
+- **Query 58**: `sales_date`
+- **Query 59**: `dms` (d_month_seq)
+- **Query 60**: `year`, `month`, `category`, `gmt_offset`
+- **Query 61**: `year`, `month`, `gmt_offset`, `category`
+- **Query 62**: `dms` (d_month_seq)
 
 ## Usage
 
