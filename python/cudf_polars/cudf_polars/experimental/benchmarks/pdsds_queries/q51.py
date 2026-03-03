@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
-from cudf_polars.experimental.benchmarks.utils import get_data
+from cudf_polars.experimental.benchmarks.utils import QueryResult, get_data
 
 if TYPE_CHECKING:
     from cudf_polars.experimental.benchmarks.utils import RunConfig
@@ -82,7 +82,7 @@ def duckdb_impl(run_config: RunConfig) -> str:
     """
 
 
-def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
+def polars_impl(run_config: RunConfig) -> QueryResult:
     """Query 51."""
     params = load_parameters(
         int(run_config.scale_factor),
@@ -173,16 +173,20 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         .over(partition_by="item_sk", order_by="d_date"),
     )
 
-    return (
-        with_ff.filter(pl.col("web_cumulative") > pl.col("store_cumulative"))
-        .select(
-            "item_sk",
-            "d_date",
-            "web_sales",
-            "store_sales",
-            "web_cumulative",
-            "store_cumulative",
-        )
-        .sort(["item_sk", "d_date"], descending=[False, False], nulls_last=False)
-        .limit(100)
+    return QueryResult(
+        frame=(
+            with_ff.filter(pl.col("web_cumulative") > pl.col("store_cumulative"))
+            .select(
+                "item_sk",
+                "d_date",
+                "web_sales",
+                "store_sales",
+                "web_cumulative",
+                "store_cumulative",
+            )
+            .sort(["item_sk", "d_date"], descending=[False, False], nulls_last=False)
+            .limit(100)
+        ),
+        sort_by=[("item_sk", False), ("d_date", False)],
+        limit=100,
     )

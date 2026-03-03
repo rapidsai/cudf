@@ -104,6 +104,13 @@ class PDSDSPolarsQueries(PDSDSQueries):
             pl.col("total shipping cost").cast(pl.Decimal(18, 2)),
             pl.col("total net profit").cast(pl.Decimal(18, 2)),
         ],
+        51: [
+            pl.col("web_sales").cast(pl.Decimal(18, 2)),
+            pl.col("store_sales").cast(pl.Decimal(18, 2)),
+            pl.col("web_cumulative").cast(pl.Decimal(18, 2)),
+            pl.col("store_cumulative").cast(pl.Decimal(18, 2)),
+        ],
+        52: [pl.col("ext_price").cast(pl.Decimal(18, 2))],
     }
     EXPECTED_CASTS: ClassVar[dict] = {
         6: [pl.col("cnt").cast(COUNT_DTYPE)],
@@ -117,6 +124,17 @@ class PDSDSPolarsQueries(PDSDSQueries):
         ],
         14: [pl.col("sum_number_sales").cast(COUNT_DTYPE)],
         16: [pl.col("order count").cast(COUNT_DTYPE)],
+        49: [
+            pl.col("return_rank").cast(COUNT_DTYPE),
+            pl.col("currency_rank").cast(COUNT_DTYPE),
+        ],
+        50: [
+            pl.col("30 days").cast(COUNT_DTYPE),
+            pl.col("31-60 days").cast(COUNT_DTYPE),
+            pl.col("61-90 days").cast(COUNT_DTYPE),
+            pl.col("91-120 days").cast(COUNT_DTYPE),
+            pl.col(">120 days").cast(COUNT_DTYPE),
+        ],
     }
 
     @property
