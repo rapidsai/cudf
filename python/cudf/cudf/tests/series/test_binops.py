@@ -12,6 +12,7 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pytest
+from packaging.version import parse
 
 import cudf
 from cudf.core._compat import (
@@ -1153,7 +1154,8 @@ def test_series_compare_scalar(
                 and comparison_op in {operator.eq, operator.ne}
             )
             and not (
-                not PANDAS_GE_210
+                # TODO: The pandas/numpy verison check could be made more exact
+                (not PANDAS_GE_210 or parse(np.__version__) == parse("1.26"))
                 and numeric_and_temporal_types_as_str == "timedelta64[ns]"
                 and comparison_op in {operator.eq, operator.ne}
             ),
