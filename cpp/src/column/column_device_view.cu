@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #include <cudf/column/column_device_view.cuh>
@@ -23,6 +23,7 @@ column_device_view::column_device_view(column_view source)
   : column_device_view_core{source.type(),
                             source.size(),
                             source.head(),
+                            source.null_count(),
                             source.null_mask(),
                             source.offset(),
                             nullptr,
@@ -82,6 +83,7 @@ column_device_view::column_device_view(column_view source, void* h_ptr, void* d_
   : column_device_view_core{source.type(),
                             source.size(),
                             source.head(),
+                            source.null_count(),
                             source.null_mask(),
                             source.offset(),
                             nullptr,
