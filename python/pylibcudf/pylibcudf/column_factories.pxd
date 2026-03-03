@@ -63,7 +63,7 @@ cpdef Column make_empty_column(
 )
 
 cpdef Column make_empty_lists_column(
-    DataType child_type_,
+    DataType child_type,
     Stream stream = *,
     DeviceMemoryResource mr = *,
 )

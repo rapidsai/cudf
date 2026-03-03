@@ -124,5 +124,5 @@ cdef extern from "cudf/column/column_factories.hpp" namespace "cudf" nogil:
     ) except +libcudf_exception_handler
 
     cdef unique_ptr[column] make_empty_lists_column(
-        data_type child_type_
+        data_type child_type
     ) except +libcudf_exception_handler
