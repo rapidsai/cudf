@@ -89,7 +89,7 @@ void reader_impl::setup_next_pass(read_mode mode)
 
   // always create the pass struct, even if we end up with no work.
   // this will also cause the previous pass information to be deleted
-  _pass_itm_data = std::make_unique<pass_intermediate_data>();
+  _pass_itm_data = std::make_unique<pass_intermediate_data>(_stream);
 
   if (_file_itm_data.global_num_rows > 0 && not _file_itm_data.row_groups.empty() &&
       not _input_columns.empty() && _file_itm_data._current_input_pass < num_passes) {
@@ -211,7 +211,7 @@ void reader_impl::setup_next_pass(read_mode mode)
 void reader_impl::setup_next_subpass(read_mode mode)
 {
   auto& pass    = *_pass_itm_data;
-  pass.subpass  = std::make_unique<subpass_intermediate_data>();
+  pass.subpass  = std::make_unique<subpass_intermediate_data>(_stream);
   auto& subpass = *pass.subpass;
 
   auto const num_columns = _input_columns.size();

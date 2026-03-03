@@ -481,7 +481,7 @@ void reader_impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num_
 
 reader_impl::reader_impl()
   : _options{},
-    _subpass_page_mask{cudf::detail::hostdevice_vector<bool>(0, cudf::get_default_stream())}
+    _subpass_page_mask(0, cudf::get_default_stream())
 {
 }
 
