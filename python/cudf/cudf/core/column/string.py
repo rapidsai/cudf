@@ -702,7 +702,9 @@ class StringColumn(ColumnBase, Scannable):
             plc_column = plc.nvtext.byte_pair_encode.byte_pair_encoding(
                 self.plc_column,
                 merge_pairs,
-                pa_scalar_to_plc_scalar(pa.scalar(separator)),
+                plc.Scalar.from_py(
+                    separator, dtype=plc.DataType(plc.TypeId.STRING)
+                ),
             )
             return cast(
                 Self,
@@ -882,7 +884,9 @@ class StringColumn(ColumnBase, Scannable):
                     plc.nvtext.tokenize.tokenize_with_vocabulary(
                         self.plc_column,
                         vocabulary,
-                        pa_scalar_to_plc_scalar(pa.scalar(delimiter)),
+                        plc.Scalar.from_py(
+                            delimiter, dtype=plc.DataType(plc.TypeId.STRING)
+                        ),
                         default_id,
                     ),
                     cudf.ListDtype(
@@ -1370,8 +1374,12 @@ class StringColumn(ColumnBase, Scannable):
         with self.access(mode="read", scope="internal"):
             plc_column = plc.strings.combine.join_strings(
                 self.plc_column,
-                pa_scalar_to_plc_scalar(pa.scalar(separator)),
-                pa_scalar_to_plc_scalar(pa.scalar(na_rep, type=pa.string())),
+                plc.Scalar.from_py(
+                    separator, dtype=plc.DataType(plc.TypeId.STRING)
+                ),
+                plc.Scalar.from_py(
+                    na_rep, dtype=plc.DataType(plc.TypeId.STRING)
+                ),
             )
             return cast(
                 Self,
@@ -1386,8 +1394,10 @@ class StringColumn(ColumnBase, Scannable):
                 plc.Table(
                     [col.plc_column for col in itertools.chain([self], others)]
                 ),
-                pa_scalar_to_plc_scalar(pa.scalar(sep)),
-                pa_scalar_to_plc_scalar(pa.scalar(na_rep, type=pa.string())),
+                plc.Scalar.from_py(sep, dtype=plc.DataType(plc.TypeId.STRING)),
+                plc.Scalar.from_py(
+                    na_rep, dtype=plc.DataType(plc.TypeId.STRING)
+                ),
             )
             return cast(
                 Self,
@@ -1425,7 +1435,9 @@ class StringColumn(ColumnBase, Scannable):
     def str_contains(self, pattern: str | Self) -> Self:
         with self.access(mode="read", scope="internal"):
             plc_pattern = (
-                pa_scalar_to_plc_scalar(pa.scalar(pattern))
+                plc.Scalar.from_py(
+                    pattern, dtype=plc.DataType(plc.TypeId.STRING)
+                )
                 if isinstance(pattern, str)
                 else pattern.plc_column
             )
@@ -1475,7 +1487,7 @@ class StringColumn(ColumnBase, Scannable):
     def replace_re(
         self,
         pattern: list[str] | str,
-        replacement: Self | pa.Scalar,
+        replacement: Self | str,
         max_replace_count: int = -1,
     ) -> Self:
         with self.access(mode="read", scope="internal"):
@@ -1488,16 +1500,16 @@ class StringColumn(ColumnBase, Scannable):
                     replacement.plc_column,
                     max_replace_count,
                 )
-            elif isinstance(pattern, str) and isinstance(
-                replacement, pa.Scalar
-            ):
+            elif isinstance(pattern, str) and isinstance(replacement, str):
                 plc_column = plc.strings.replace_re.replace_re(
                     self.plc_column,
                     plc.strings.regex_program.RegexProgram.create(
                         pattern,
                         plc.strings.regex_flags.RegexFlags.DEFAULT,
                     ),
-                    pa_scalar_to_plc_scalar(replacement),
+                    plc.Scalar.from_py(
+                        replacement, dtype=plc.DataType(plc.TypeId.STRING)
+                    ),
                     max_replace_count,
                 )
             else:
@@ -1508,13 +1520,17 @@ class StringColumn(ColumnBase, Scannable):
             )
 
     def replace_str(
-        self, pattern: str, replacement: pa.Scalar, max_replace_count: int = -1
+        self, pattern: str, replacement: str, max_replace_count: int = -1
     ) -> Self:
         with self.access(mode="read", scope="internal"):
             plc_result = plc.strings.replace.replace(
                 self.plc_column,
-                pa_scalar_to_plc_scalar(pa.scalar(pattern)),
-                pa_scalar_to_plc_scalar(replacement),
+                plc.Scalar.from_py(
+                    pattern, dtype=plc.DataType(plc.TypeId.STRING)
+                ),
+                plc.Scalar.from_py(
+                    replacement, dtype=plc.DataType(plc.TypeId.STRING)
+                ),
                 max_replace_count,
             )
             return cast(
@@ -1548,15 +1564,14 @@ class StringColumn(ColumnBase, Scannable):
                 plc_stop: plc.Column | plc.Scalar = stop.plc_column
                 plc_step: plc.Scalar | None = None
             elif all(isinstance(x, int) or x is None for x in (start, stop)):
-                param_dtype = pa.int32()
-                plc_start = pa_scalar_to_plc_scalar(
-                    pa.scalar(start, type=param_dtype)
+                plc_start = plc.Scalar.from_py(
+                    start, dtype=plc.DataType(plc.TypeId.INT32)
                 )
-                plc_stop = pa_scalar_to_plc_scalar(
-                    pa.scalar(stop, type=param_dtype)
+                plc_stop = plc.Scalar.from_py(
+                    stop, dtype=plc.DataType(plc.TypeId.INT32)
                 )
-                plc_step = pa_scalar_to_plc_scalar(
-                    pa.scalar(step, type=param_dtype)
+                plc_step = plc.Scalar.from_py(
+                    step, dtype=plc.DataType(plc.TypeId.INT32)
                 )
             else:
                 raise ValueError("Invalid start and stop types")
@@ -1592,16 +1607,14 @@ class StringColumn(ColumnBase, Scannable):
     def filter_characters_of_type(
         self,
         types_to_remove: plc.strings.char_types.StringCharacterTypes,
-        replacement: str,
+        replacement: plc.Scalar,
         types_to_keep: plc.strings.char_types.StringCharacterTypes,
     ) -> Self:
         with self.access(mode="read", scope="internal"):
             plc_column = plc.strings.char_types.filter_characters_of_type(
                 self.plc_column,
                 types_to_remove,
-                pa_scalar_to_plc_scalar(
-                    pa.scalar(replacement, type=pa.string())
-                ),
+                replacement,
                 types_to_keep,
             )
             return cast(
@@ -1609,11 +1622,11 @@ class StringColumn(ColumnBase, Scannable):
                 ColumnBase.create(plc_column, self.dtype),
             )
 
-    def replace_slice(self, start: int, stop: int, repl: str) -> Self:
+    def replace_slice(self, start: int, stop: int, repl: plc.Scalar) -> Self:
         with self.access(mode="read", scope="internal"):
             plc_result = plc.strings.replace.replace_slice(
                 self.plc_column,
-                pa_scalar_to_plc_scalar(pa.scalar(repl, type=pa.string())),
+                repl,
                 start,
                 stop,
             )
@@ -1639,7 +1652,9 @@ class StringColumn(ColumnBase, Scannable):
             )
             plc_result = plc.json.get_json_object(
                 self.plc_column,
-                pa_scalar_to_plc_scalar(pa.scalar(json_path)),
+                plc.Scalar.from_py(
+                    json_path, dtype=plc.DataType(plc.TypeId.STRING)
+                ),
                 options,
             )
             return cast(
@@ -1680,8 +1695,8 @@ class StringColumn(ColumnBase, Scannable):
             plc_result = plc.strings.strip.strip(
                 self.plc_column,
                 side,
-                pa_scalar_to_plc_scalar(
-                    pa.scalar(to_strip or "", type=pa.string())
+                plc.Scalar.from_py(
+                    to_strip or "", dtype=plc.DataType(plc.TypeId.STRING)
                 ),
             )
             return cast(
@@ -1768,21 +1783,21 @@ class StringColumn(ColumnBase, Scannable):
     ) -> Self:
         with self.access(mode="read", scope="internal"):
             if isinstance(pat, str):
-                plc_pat = pa_scalar_to_plc_scalar(
-                    pa.scalar(pat, type=pa.string())
+                plc_pat = plc.Scalar.from_py(
+                    pat, dtype=plc.DataType(plc.TypeId.STRING)
                 )
                 plc_result = method(self.plc_column, plc_pat)
             elif isinstance(pat, tuple) and all(
                 isinstance(p, str) for p in pat
             ):
                 plc_self = self.plc_column
-                plc_pat = pa_scalar_to_plc_scalar(
-                    pa.scalar(pat[0], type=pa.string())
+                plc_pat = plc.Scalar.from_py(
+                    pat[0], dtype=plc.DataType(plc.TypeId.STRING)
                 )
                 plc_result = method(plc_self, plc_pat)
                 for next_pat in pat[1:]:
-                    plc_pat = pa_scalar_to_plc_scalar(
-                        pa.scalar(next_pat, type=pa.string())
+                    plc_pat = plc.Scalar.from_py(
+                        next_pat, dtype=plc.DataType(plc.TypeId.STRING)
                     )
                     plc_next_result = method(plc_self, plc_pat)
                     plc_result = plc.binaryop.binary_operation(
@@ -1808,7 +1823,7 @@ class StringColumn(ColumnBase, Scannable):
         with self.access(mode="read", scope="internal"):
             plc_result = method(
                 self.plc_column,
-                pa_scalar_to_plc_scalar(pa.scalar(sub, type=pa.string())),
+                plc.Scalar.from_py(sub, dtype=plc.DataType(plc.TypeId.STRING)),
                 start,
                 end,
             )
@@ -1861,8 +1876,8 @@ class StringColumn(ColumnBase, Scannable):
     def filter_characters(
         self,
         table: dict,
-        keep: bool = True,
-        repl: str | None = None,
+        keep: bool,
+        repl: plc.Scalar,
     ) -> Self:
         with self.access(mode="read", scope="internal"):
             plc_result = plc.strings.translate.filter_characters(
@@ -1871,7 +1886,7 @@ class StringColumn(ColumnBase, Scannable):
                 plc.strings.translate.FilterType.KEEP
                 if keep
                 else plc.strings.translate.FilterType.REMOVE,
-                pa_scalar_to_plc_scalar(pa.scalar(repl, type=pa.string())),
+                repl,
             )
             return cast(
                 Self,
