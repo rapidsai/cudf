@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -76,7 +76,7 @@ void BM_parquet_read_options(nvbench::state& state,
   cudf::size_type const expected_num_cols = cols_to_read.size();
   cudf::io::parquet_reader_options read_options =
     cudf::io::parquet_reader_options::builder(source_sink.make_source_info())
-      .columns(cols_to_read)
+      .column_names(cols_to_read)
       .convert_strings_to_categories(str_to_categories)
       .use_pandas_metadata(uses_pd_metadata)
       .timestamp_type(ts_type);
@@ -88,7 +88,7 @@ void BM_parquet_read_options(nvbench::state& state,
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
   state.exec(
     nvbench::exec_tag::sync | nvbench::exec_tag::timer, [&](nvbench::launch& launch, auto& timer) {
-      try_drop_l3_cache();
+      drop_page_cache_if_enabled(read_options.get_source().filepaths());
       cudf::size_type num_rows_read = 0;
       timer.start();
       for (int32_t chunk = 0; chunk < num_chunks; ++chunk) {

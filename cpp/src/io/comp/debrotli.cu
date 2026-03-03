@@ -1,7 +1,7 @@
 /*
  * SPDX-FileCopyrightText: Copyright 2013 Google Inc. All Rights Reserved.
  * SPDX-FileCopyrightText: Copyright(c) 2009, 2010, 2013 - 2016 by the Brotli Authors.
- * SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0 AND MIT
  */
 
@@ -189,6 +189,17 @@ struct debrotli_state_s {
 
 inline __device__ uint32_t Log2Floor(uint32_t value) { return 32 - __clz(value); }
 
+/// @brief Safely read up to 4 bytes with bounds checking, handling end-of-buffer cases
+inline __device__ uint32_t safe_load_u32(uint8_t const* p, uint8_t const* end)
+{
+  if (p >= end) { return 0; }
+
+  uint32_t result = 0;
+  cuda::std::memcpy(
+    &result, p, cuda::std::min<size_t>(cuda::std::distance(p, end), sizeof(uint32_t)));
+  return result;
+}
+
 /// @brief initializes the bit reader
 __device__ void initbits(debrotli_state_s* s, uint8_t const* base, size_t len, size_t pos = 0)
 {
@@ -198,9 +209,9 @@ __device__ void initbits(debrotli_state_s* s, uint8_t const* base, size_t len, s
   s->base     = base;
   s->end      = base + len;
   s->cur      = p;
-  s->bitbuf.x = (p < s->end) ? *reinterpret_cast<uint32_t const*>(p) : 0;
+  s->bitbuf.x = safe_load_u32(p, s->end);
   p += 4;
-  s->bitbuf.y = (p < s->end) ? *reinterpret_cast<uint32_t const*>(p) : 0;
+  s->bitbuf.y = safe_load_u32(p, s->end);
   s->bitpos   = prefix_bytes * 8;
 }
 
@@ -223,7 +234,7 @@ inline __device__ void skipbits(debrotli_state_s* s, uint32_t n)
   if (bitpos >= 32) {
     uint8_t const* cur = s->cur + 8;
     s->bitbuf.x        = s->bitbuf.y;
-    s->bitbuf.y        = (cur < s->end) ? *reinterpret_cast<uint32_t const*>(cur) : 0;
+    s->bitbuf.y        = safe_load_u32(cur, s->end);
     s->cur             = cur - 4;
     bitpos &= 0x1f;
   }

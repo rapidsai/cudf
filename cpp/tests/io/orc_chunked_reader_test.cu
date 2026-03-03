@@ -34,6 +34,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/iterator>
 #include <thrust/iterator/counting_iterator.h>
 
 namespace {
@@ -1055,7 +1056,7 @@ struct OrcChunkedReaderInputLimitTest : public cudf::test::BaseFixture {};
 TEST_F(OrcChunkedReaderInputLimitTest, SingleFixedWidthColumn)
 {
   auto constexpr num_rows = 1'000'000;
-  auto const iter1        = thrust::make_constant_iterator(15);
+  auto const iter1        = cuda::make_constant_iterator(15);
   auto const col1         = doubles_col(iter1, iter1 + num_rows);
 
   auto const filename   = std::string{"single_col_fixed_width"};
@@ -1164,7 +1165,7 @@ TEST_F(OrcChunkedReaderInputLimitTest, ListType)
                     value_gen<int>{});
 
   auto const lists_col =
-    cudf::make_lists_column(num_rows, std::move(offset_col), std::move(value_col), 0, {}, stream);
+    cudf::make_lists_column(num_rows, std::move(offset_col), std::move(value_col), 0, {});
 
   auto const filename   = std::string{"list_type"};
   auto const test_files = input_limit_get_test_names(temp_env->get_temp_filepath(filename));
@@ -1223,7 +1224,7 @@ TEST_F(OrcChunkedReaderInputLimitTest, MixedColumnsHavingList)
                     value_gen<int>{});
 
   auto const lists_col =
-    cudf::make_lists_column(num_rows, std::move(offset_col), std::move(value_col), 0, {}, stream);
+    cudf::make_lists_column(num_rows, std::move(offset_col), std::move(value_col), 0, {});
 
   // strings
   int constexpr num_chars = num_rows * str_size;

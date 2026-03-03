@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -13,7 +13,7 @@
 #include <cudf/copying.hpp>
 #include <cudf/detail/iterator.cuh>
 
-#include <thrust/iterator/constant_iterator.h>
+#include <cuda/iterator>
 #include <thrust/iterator/transform_iterator.h>
 
 template <typename T>
@@ -105,7 +105,7 @@ TYPED_TEST(ColumnUtilitiesTest, NullableToHostAllValid)
   auto sequence = cudf::detail::make_counting_transform_iterator(
     0, [](auto i) { return cudf::test::make_type_param_scalar<TypeParam>(i); });
 
-  auto all_valid = thrust::make_constant_iterator<bool>(true);
+  auto all_valid = cuda::make_constant_iterator<bool>(true);
 
   auto size = this->size();
 
@@ -378,7 +378,7 @@ TEST_F(ColumnUtilitiesStructsTest, Properties)
   cudf::test::structs_column_wrapper s0_scol2({s0_sscol0, s0_sscol1, s0_sscol2});
   cudf::test::structs_column_wrapper s_col0({s0_scol0, s0_scol1, s0_scol2});
 
-  auto all_valid = thrust::make_constant_iterator<bool>(true);
+  auto all_valid = cuda::make_constant_iterator<bool>(true);
 
   cudf::test::strings_column_wrapper s1_scol0{"mno", "jkl", "ghi", "def", "abc"};
   cudf::test::fixed_width_column_wrapper<float> s1_scol1{5, 4, 3, 2, 1};
@@ -408,7 +408,7 @@ TEST_F(ColumnUtilitiesStructsTest, Values)
   cudf::test::structs_column_wrapper s0_scol2({s0_sscol0, s0_sscol1, s0_sscol2});
   cudf::test::structs_column_wrapper s_col0({s0_scol0, s0_scol1, s0_scol2});
 
-  auto all_valid = thrust::make_constant_iterator<bool>(true);
+  auto all_valid = cuda::make_constant_iterator<bool>(true);
 
   cudf::test::strings_column_wrapper s1_scol0{"mno", "jkl", "ghi", "def", "abc"};
   cudf::test::fixed_width_column_wrapper<float> s1_scol1{5, 4, 3, 2, 1};

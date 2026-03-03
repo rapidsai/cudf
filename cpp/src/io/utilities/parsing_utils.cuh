@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -26,7 +26,6 @@
 #include <cuda/std/type_traits>
 #include <cuda/std/utility>
 #include <thrust/execution_policy.h>
-#include <thrust/iterator/reverse_iterator.h>
 #include <thrust/mismatch.h>
 
 using cudf::device_span;
@@ -209,13 +208,16 @@ __device__ __inline__ char const* seek_field_end(char const* begin,
   bool quotation   = false;
   auto current     = begin;
   bool escape_next = false;
+
+  auto const field_starts_with_quote = (begin < end && *begin == opts.quotechar);
   while (current < end) {
     // Use simple logic to ignore control chars between any quote seq
     // Handles nominal cases including doublequotes within quotes, but
     // may not output exact failures as PANDAS for malformed fields.
     // Check for instances such as "a2\"bc" and "\\" if `escape_char` is true.
 
-    if (*current == opts.quotechar and not escape_next) {
+    // Only process quotes if field started with a quote
+    if (field_starts_with_quote && *current == opts.quotechar && !escape_next) {
       quotation = !quotation;
     } else if (!quotation) {
       if (*current == opts.delimiter) {
@@ -367,8 +369,8 @@ __inline__ __device__ cuda::std::pair<char const*, char const*> trim_whitespaces
 
   auto const trim_begin = thrust::find_if(thrust::seq, begin, end, not_whitespace);
   auto const trim_end   = thrust::find_if(thrust::seq,
-                                        thrust::make_reverse_iterator(end),
-                                        thrust::make_reverse_iterator(trim_begin),
+                                        cuda::std::make_reverse_iterator(end),
+                                        cuda::std::make_reverse_iterator(trim_begin),
                                         not_whitespace);
 
   return {skip_character(trim_begin, quotechar), skip_character(trim_end, quotechar).base()};
@@ -389,8 +391,8 @@ __inline__ __device__ cuda::std::pair<char const*, char const*> trim_whitespaces
 
   auto const trim_begin = thrust::find_if(thrust::seq, begin, end, not_whitespace);
   auto const trim_end   = thrust::find_if(thrust::seq,
-                                        thrust::make_reverse_iterator(end),
-                                        thrust::make_reverse_iterator(trim_begin),
+                                        cuda::std::make_reverse_iterator(end),
+                                        cuda::std::make_reverse_iterator(trim_begin),
                                         not_whitespace);
 
   return {trim_begin, trim_end.base()};

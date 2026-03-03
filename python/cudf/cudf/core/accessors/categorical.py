@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -419,8 +419,9 @@ class CategoricalAccessor(BaseAccessor):
         dtype: category
         Categories (3, int64): [10, 1, 2]
         >>> s.cat.reorder_categories([10, 1])
-        ValueError: items in new_categories are not the same as in
-        old categories
+        Traceback (most recent call last):
+        ...
+        ValueError: items in new_categories are not the same as in old categories
         """
         return self._return_or_inplace(
             self._column.reorder_categories(new_categories, ordered=ordered),

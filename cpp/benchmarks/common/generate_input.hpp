@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -144,11 +144,14 @@ struct distribution_params<T, std::enable_if_t<cudf::is_chrono<T>()>> {
 };
 
 /**
- * @brief Strings are parameterized by the distribution of their length, as an integral value.
+ * @brief Strings are parameterized by the distribution of their length and character range.
  */
 template <typename T>
 struct distribution_params<T, std::enable_if_t<std::is_same_v<T, cudf::string_view>>> {
   distribution_params<uint32_t> length_params;
+  unsigned char char_lower = 32;   ///< Lower bound of character range (inclusive)
+  unsigned char char_upper = 137;  ///< Upper bound of character range (inclusive), >126 produces
+                                   ///< UTF-8
 };
 
 /**
@@ -429,6 +432,13 @@ class data_profile {
       "Cannot include STRUCT as its own subtype");
     struct_dist_desc.leaf_types.assign(types.begin(), types.end());
   }
+
+  void set_string_char_range(unsigned char lower, unsigned char upper)
+  {
+    CUDF_EXPECTS(lower <= upper, "Lower bound must be <= upper bound");
+    string_dist_desc.char_lower = lower;
+    string_dist_desc.char_upper = upper;
+  }
 };
 
 /**
@@ -598,6 +608,22 @@ class data_profile_builder {
   data_profile_builder& struct_types(cudf::host_span<cudf::type_id const> types)
   {
     profile.set_struct_types(types);
+    return *this;
+  }
+
+  /**
+   * @brief Sets the character range for generated strings.
+   *
+   * Characters are uniformly distributed in the range [lower, upper].
+   * Values > 126 will produce multi-byte UTF-8 characters.
+   *
+   * @param lower Lower bound of character range (inclusive, must be >= 32)
+   * @param upper Upper bound of character range (inclusive)
+   * @return this for chaining
+   */
+  data_profile_builder& string_char_range(unsigned char lower, unsigned char upper)
+  {
+    profile.set_string_char_range(lower, upper);
     return *this;
   }
 

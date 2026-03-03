@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -227,8 +227,7 @@ std::unique_ptr<column> make_column(column_buffer_base<string_policy>& buffer,
             std::move(col_content.children[strings_column_view::offsets_column_index]),
             std::move(uint8_col),
             null_count,
-            std::move(*col_content.null_mask),
-            stream);
+            std::move(*col_content.null_mask));
         }
 
       case type_id::LIST: {
@@ -259,9 +258,7 @@ std::unique_ptr<column> make_column(column_buffer_base<string_policy>& buffer,
                                  std::move(offsets),
                                  std::move(child),
                                  buffer._null_count,
-                                 std::move(buffer._null_mask),
-                                 stream,
-                                 buffer._mr);
+                                 std::move(buffer._null_mask));
       } break;
 
       case type_id::STRUCT: {
@@ -335,7 +332,7 @@ std::unique_ptr<column> empty_like(column_buffer_base<string_policy>& buffer,
 
       // make the final list column
       return make_lists_column(
-        0, std::move(offsets), std::move(child), 0, rmm::device_buffer{0, stream, mr}, stream, mr);
+        0, std::move(offsets), std::move(child), 0, rmm::device_buffer{0, stream, mr});
     } break;
 
     case type_id::STRUCT: {

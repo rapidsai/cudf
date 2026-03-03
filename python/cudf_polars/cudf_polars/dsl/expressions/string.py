@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 # TODO: Document StringFunction to remove noqa
 # ruff: noqa: D101
@@ -21,10 +21,14 @@ from cudf_polars.containers import Column
 from cudf_polars.dsl.expressions.base import ExecutionContext, Expr
 from cudf_polars.dsl.expressions.literal import Literal, LiteralColumn
 from cudf_polars.dsl.utils.reshape import broadcast
-from cudf_polars.utils.versions import POLARS_VERSION_LT_132
+from cudf_polars.utils.versions import (
+    POLARS_VERSION_LT_132,
+    POLARS_VERSION_LT_136,
+    POLARS_VERSION_LT_138,
+)
 
 if TYPE_CHECKING:
-    from typing_extensions import Self
+    from typing import Self
 
     from cudf_polars.containers import DataFrame, DataType
 
@@ -84,6 +88,7 @@ class StringFunction(Expr):
         Split = auto()
         SplitExact = auto()
         SplitN = auto()
+        SplitRegex = auto()
         StartsWith = auto()
         StripChars = auto()
         StripCharsEnd = auto()
@@ -133,6 +138,7 @@ class StringFunction(Expr):
         Name.Slice,
         Name.SplitN,
         Name.SplitExact,
+        Name.SplitRegex,
         Name.Strptime,
         Name.StartsWith,
         Name.StripChars,
@@ -227,7 +233,14 @@ class StringFunction(Expr):
                     "libcudf replace does not support empty strings"
                 )
         elif self.name is StringFunction.Name.ReplaceMany:
-            (ascii_case_insensitive,) = self.options
+            if POLARS_VERSION_LT_136:
+                (ascii_case_insensitive,) = self.options  # pragma: no cover
+            else:
+                ascii_case_insensitive, leftmost = self.options
+                if leftmost:
+                    raise NotImplementedError(
+                        "leftmost=True not implemented for replace_many"
+                    )
             if ascii_case_insensitive:
                 raise NotImplementedError(
                     "ascii_case_insensitive not implemented for replace_many"
@@ -255,6 +268,12 @@ class StringFunction(Expr):
             (_, inclusive) = self.options
             if inclusive:
                 raise NotImplementedError(f"{inclusive=} is not supported for split")
+        elif not POLARS_VERSION_LT_138 and self.name is StringFunction.Name.SplitRegex:
+            # See https://github.com/pola-rs/polars/pull/26060
+            # SplitRegex introduced in polars>=1.38, but we don't support it yet
+            raise NotImplementedError(
+                "String split with regex (literal=False) is not supported."
+            )
         elif self.name is StringFunction.Name.Strptime:
             format, strict, exact, cache = self.options
             if not format and not strict:
@@ -1137,7 +1156,7 @@ def _infer_datetime_format(val: str) -> str | None:
             for fmt in PATTERN_FORMATS[pattern_name]:
                 try:
                     datetime.strptime(val, fmt)
-                except ValueError:  # noqa: PERF203
+                except ValueError:
                     continue
                 else:
                     return fmt

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 [tool.mypy]
@@ -35,13 +35,13 @@ follow_imports = "normal"
 skip = "./.git,./.github,./cpp/build,.*egg-info.*,./.mypy_cache,./cpp/tests,./python/cudf/cudf/tests,./java/src/test,./cpp/include/cudf_test/cxxopts.hpp"
 # ignore short words, and typename parameters like OffsetT
 ignore-regex = "\\b(.{1,4}|[A-Z]\\w*T)\\b"
-ignore-words-list = "inout,unparseable,falsy,couldn,Couldn,thirdparty"
+ignore-words-list = "inout,unparseable,falsy,couldn,Couldn,thirdparty,womens"
 builtin = "clear"
 quiet-level = 3
 
 [tool.ruff]
 line-length = 79
-target-version = "py310"
+target-version = "py311"
 
 [tool.ruff.lint]
 typing-modules = ["cudf._typing"]

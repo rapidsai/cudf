@@ -332,6 +332,7 @@ CUDF_KERNEL void __launch_bounds__(decode_delta_binary_block_size)
 
   // Must be evaluated after setup_local_page_info
   bool const has_repetition = s->col.max_level[level_type::REPETITION] > 0;
+  bool const process_nulls  = should_process_nulls(s);
 
   // Capture initial valid_map_offset before any processing that might modify it
   int const init_valid_map_offset = s->nesting_info[s->col.max_nesting_depth - 1].valid_map_offset;
@@ -350,8 +351,12 @@ CUDF_KERNEL void __launch_bounds__(decode_delta_binary_block_size)
   // copying logic from gpuDecodePageData.
   PageNestingDecodeInfo const* nesting_info_base = s->nesting_info;
 
-  __shared__ level_t rep[delta_rolling_buf_size];  // circular buffer of repetition level values
-  __shared__ level_t def[delta_rolling_buf_size];  // circular buffer of definition level values
+  // Get the level decode buffers for this page
+  PageInfo* pp       = &pages[page_idx];
+  level_t* const def = !process_nulls
+                         ? nullptr
+                         : reinterpret_cast<level_t*>(pp->lvl_decode_buf[level_type::DEFINITION]);
+  auto* const rep    = reinterpret_cast<level_t*>(pp->lvl_decode_buf[level_type::REPETITION]);
 
   // skipped_leaf_values will always be 0 for flat hierarchies.
   uint32_t const skipped_leaf_values = s->page.skipped_leaf_values;
@@ -492,6 +497,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
   }
 
   bool const has_repetition = s->col.max_level[level_type::REPETITION] > 0;
+  bool const process_nulls  = should_process_nulls(s);
 
   // Capture initial valid_map_offset before any processing that might modify it
   int const init_valid_map_offset = s->nesting_info[s->col.max_nesting_depth - 1].valid_map_offset;
@@ -524,8 +530,12 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
   // copying logic from decode_page_data.
   PageNestingDecodeInfo const* nesting_info_base = s->nesting_info;
 
-  __shared__ level_t rep[delta_rolling_buf_size];  // circular buffer of repetition level values
-  __shared__ level_t def[delta_rolling_buf_size];  // circular buffer of definition level values
+  // Get the level decode buffers for this page
+  PageInfo* pp       = &pages[page_idx];
+  level_t* const def = !process_nulls
+                         ? nullptr
+                         : reinterpret_cast<level_t*>(pp->lvl_decode_buf[level_type::DEFINITION]);
+  auto* const rep    = reinterpret_cast<level_t*>(pp->lvl_decode_buf[level_type::REPETITION]);
 
   // skipped_leaf_values will always be 0 for flat hierarchies.
   uint32_t const skipped_leaf_values = s->page.skipped_leaf_values;
@@ -702,6 +712,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
   }
 
   bool const has_repetition = s->col.max_level[level_type::REPETITION] > 0;
+  bool const process_nulls  = should_process_nulls(s);
 
   // Capture initial valid_map_offset before any processing that might modify it
   int const init_valid_map_offset = s->nesting_info[s->col.max_nesting_depth - 1].valid_map_offset;
@@ -731,8 +742,12 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
   // copying logic from gpuDecodePageData.
   PageNestingDecodeInfo const* nesting_info_base = s->nesting_info;
 
-  __shared__ level_t rep[delta_rolling_buf_size];  // circular buffer of repetition level values
-  __shared__ level_t def[delta_rolling_buf_size];  // circular buffer of definition level values
+  // Get the level decode buffers for this page
+  PageInfo* pp       = &pages[page_idx];
+  level_t* const def = !process_nulls
+                         ? nullptr
+                         : reinterpret_cast<level_t*>(pp->lvl_decode_buf[level_type::DEFINITION]);
+  auto* const rep    = reinterpret_cast<level_t*>(pp->lvl_decode_buf[level_type::REPETITION]);
 
   // skipped_leaf_values will always be 0 for flat hierarchies.
   uint32_t const skipped_leaf_values = s->page.skipped_leaf_values;
@@ -752,7 +767,8 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
     set_error(static_cast<int32_t>(decode_error::DELTA_PARAMS_UNSUPPORTED), error_code);
     return;
   }
-
+  // db->init_binary_block below resets db->values_per_mb
+  block.sync();
   // if this is a bounds page, then we need to decode up to the first mini-block
   // that has a value we need, and set string_offset to the position of the first value in the
   // string data block.
@@ -761,6 +777,9 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
     if (warp.meta_group_rank() == 0) {
       // string_off is only valid on thread 0
       auto const string_off = db->skip_values_and_sum(s->page.start_val);
+      // Threads in the warp might diverge and read in skip_values_and_sum
+      // after lane 0 reinits below.
+      warp.sync();
       if (warp.thread_rank() == 0) {
         string_offset = string_off;
 

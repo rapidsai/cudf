@@ -15,7 +15,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <thrust/iterator/constant_iterator.h>
+#include <cuda/iterator>
 #include <thrust/scan.h>
 
 namespace cudf {
@@ -38,7 +38,7 @@ std::unique_ptr<column> count_scan(column_view const& values,
     thrust::inclusive_scan_by_key(rmm::exec_policy_nosync(stream),
                                   group_labels.begin(),
                                   group_labels.end(),
-                                  thrust::make_constant_iterator<size_type>(1),
+                                  cuda::make_constant_iterator<size_type>(1),
                                   resultview.begin<size_type>());
   } else {  // aggregation::COUNT_VALID
     auto d_values = cudf::column_device_view::create(values, stream);

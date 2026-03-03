@@ -12,7 +12,8 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/export.hpp>
 
-#include <thrust/host_vector.h>
+#include <rmm/cuda_stream_view.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <memory>
 #include <utility>
@@ -67,20 +68,24 @@ enum class use_data_page_mask : bool {
  * @code{.cpp}
  * // Example filter expression `A < 100`
  * auto filter_expression = cudf::ast::operation(cudf::ast::ast_operator::LESS,
- *                            column_name_reference{"A"}, literal{100});
+ *                                               column_name_reference{"A"},
+ *                                               literal{100});
  *
  * using namespace cudf::io;
  *
- * // Parquet reader options with empty source info
- * auto options = parquet_reader_options::builder(source_info(nullptr, 0))
- *                  .filter(filter_expression);
+ * // Input datasource
+ * auto const datasource_ptr = datasource::create(parquet_filepath);
+ * auto datasource           = std::ref(*datasource_ptr);
  *
- *  // Fetch parquet file footer bytes from the file
- *  cudf::host_span<uint8_t const> footer_bytes = fetch_parquet_footer_bytes();
+ * // Parquet reader options
+ * auto options = parquet_reader_options::builder().filter(filter_expression).build();
+ *
+ * // Fetch parquet file footer bytes from the file
+ * auto const footer_buffer = parquet::fetch_footer_to_host(datasource);
  *
  * // Create the reader
- *  auto reader =
- *    std::make_unique<parquet::experimental::hybrid_scan_reader>(footer_bytes, options);
+ * auto reader =
+ *   std::make_unique<parquet::experimental::hybrid_scan_reader>(*footer_buffer, options);
  * @endcode
  *
  * Metadata handling (OPTIONAL): Get a materialized parquet file footer metadata struct
@@ -94,18 +99,17 @@ enum class use_data_page_mask : bool {
  * auto nrows = std::accumulate(metadata.row_groups.begin(),
  *                              metadata.row_groups.end(),
  *                              size_type{0},
- *                              [](auto sum, auto const& rg) {
- *                                return sum + rg.num_rows;
- *                              });
+ *                              [](auto sum, auto const& rg) { return sum + rg.num_rows; });
  *
  * // Get the page index byte range from the reader
  * auto page_index_byte_range = reader->page_index_byte_range();
  *
  * // Fetch the page index bytes from the parquet file
- * cudf::host_span<uint8_t const> page_index_bytes = fetch_parquet_bytes(page_index_byte_range);
+ * auto const page_index_buffer =
+ *   parquet::fetch_page_index_to_host(datasource, page_index_byte_range);
  *
  * // Set up the page index
- * reader->setup_page_index(page_index_bytes);
+ * reader->setup_page_index(*page_index_buffer);
  *
  * // A new `FileMetaData` struct with populated page index structs may be obtained
  * // using `parquet_metadata()` at this point. Page index may be set up at any time.
@@ -116,8 +120,8 @@ enum class use_data_page_mask : bool {
  * parquet file and optionally filter it using a byte range and/or the filter expression using
  * column chunk statistics, dictionaries and bloom filters. Byte ranges for column chunk dictionary
  * pages and bloom filters within parquet file may be obtained via `secondary_filters_byte_ranges()`
- * function. The byte ranges may be read into a corresponding vector of device buffers and passed to
- * the corresponding row group filtration function.
+ * function. The byte ranges may be read into device buffers and their device spans may be passed
+ * to the row group filtration functions.
  * @code{.cpp}
  * // Start with a list of all parquet row group indices from the file footer
  * auto all_row_group_indices = reader->all_row_groups(options);
@@ -126,8 +130,8 @@ enum class use_data_page_mask : bool {
  * auto current_row_group_indices = cudf::host_span<size_type>(all_row_group_indices);
  *
  * // Optional: Prune row group indices to the ones that start within the byte range
- * auto byte_range_filtered_row_group_indices = reader->filter_row_groups_with_byte_range(
- *   current_row_group_indices, options);
+ * auto byte_range_filtered_row_group_indices =
+ *   reader->filter_row_groups_with_byte_range(current_row_group_indices, options);
  *
  * // Update current row group indices to byte range filtered row group indices
  * current_row_group_indices = byte_range_filtered_row_group_indices;
@@ -144,30 +148,32 @@ enum class use_data_page_mask : bool {
  *   reader->secondary_filters_byte_ranges(current_row_group_indices, options);
  *
  * // Optional: Prune row groups if we have valid dictionary pages
- * auto dictionary_page_filtered_row_group_indices = std::vector<size_type>{};
+ * auto dict_filtered_row_group_indices = std::vector<size_type>{};
  *
  * if (dict_page_byte_ranges.size()) {
- *   // Fetch dictionary page byte ranges into device buffers
- *   std::vector<rmm::device_buffer> dictionary_page_data =
- *     fetch_device_buffers(dict_page_byte_ranges);
+ *   // Fetch dictionary page byte ranges into device buffers and create spans
+ *   auto [dict_page_buffers, dict_page_data, dict_page_tasks] =
+ *     parquet::fetch_byte_ranges_to_device_async(datasource, dict_page_byte_ranges, stream, mr);
+ *   dict_page_tasks.get();
  *
  *   // Prune row groups using dictionaries
- *   dictionary_page_filtered_row_group_indices = reader->filter_row_groups_with_dictionary_pages(
- *     dictionary_page_data, current_row_group_indices, options, stream);
+ *   dict_filtered_row_group_indices = reader->filter_row_groups_with_dictionary_pages(
+ *     dict_page_data, current_row_group_indices, options, stream);
  *
  *   // Update current row group indices to dictionary page filtered row group indices
- *   current_row_group_indices = dictionary_page_filtered_row_group_indices;
+ *   current_row_group_indices = dict_filtered_row_group_indices;
  * }
  *
  * // Optional: Prune row groups if we have valid bloom filters
  * auto bloom_filtered_row_group_indices = std::vector<size_type>{};
  *
  * if (bloom_filter_byte_ranges.size()) {
- *   // Fetch bloom filter byte ranges into device buffers
- *   std::vector<rmm::device_buffer> bloom_filter_data =
- *     fetch_device_buffers(bloom_filter_byte_ranges);
+ *   // Fetch bloom filter byte ranges into device buffers and create spans
+ *   auto [bloom_filter_buffers, bloom_filter_data, bloom_filter_tasks] =
+ *     parquet::fetch_byte_ranges_to_device_async(datasource, bloom_filter_byte_ranges, stream, mr);
+ *   bloom_filter_tasks.get();
  *
- *  // Prune row groups using bloom filters
+ *   // Prune row groups using bloom filters
  *   bloom_filtered_row_group_indices = reader->filter_row_groups_with_bloom_filters(
  *     bloom_filter_data, current_row_group_indices, options, stream);
  *
@@ -176,62 +182,60 @@ enum class use_data_page_mask : bool {
  * }
  * @endcode
  *
- * Build an initial row mask: Once the row groups are filtered, the next step is to build an
- * initial row mask column to indicate which rows in the current span of row groups will survive in
- * the read table. This initial row mask may be a BOOL8 cudf column of size equal to the
- * total number of rows in the current span of row groups (computed by `total_rows_in_row_groups()`)
- * containing all `true` values. Alternatively, the row mask may be built with
- * the `build_row_mask_with_page_index_stats()` function and contain a `true` value for only the
- * rows that survive the page-level statistics from the page index subject to the same filter as row
- * groups. Note that this step requires the page index to be set up using the `setup_page_index()`
- * function.
+ * Build an initial row mask: Once the row groups are filtered, the next step is to build an initial
+ * BOOL8 row mask column indicating which rows in the current span of row groups survive in the
+ * final table. This row mask column may contain all `true` values built using the
+ * `build_all_true_row_mask()` function or it may contain a `true` value for only the rows that
+ * survive the page-level statistics from the page index subject to the same filter as row groups
+ * (needs page index to be set up using the `setup_page_index()` function). The size of this row
+ * mask column must be equal to the total number of rows in the current span of row groups.
  * @code{.cpp}
  * // If not already done, get the page index byte range
  * auto page_index_byte_range = reader->page_index_byte_range();
  *
  * // If not already done, fetch the page index bytes from the parquet file
- * cudf::host_span<uint8_t const> page_index_bytes = fetch_parquet_bytes(page_index_byte_range);
+ * auto const page_index_buffer =
+ *   parquet::fetch_page_index_to_host(datasource, page_index_byte_range);
  *
- * // If not already done, Set up the page index now
- * reader->setup_page_index(page_index_bytes);
+ * // If not already done, set up the page index now
+ * reader->setup_page_index(*page_index_buffer);
  *
  * // Build a row mask column containing all `true` values
- * auto const num_rows = reader->total_rows_in_row_groups(current_row_group_indices);
- * auto row_mask = cudf::make_numeric_column(
- *     cudf::data_type{cudf::type_id::BOOL8}, num_rows, rmm::device_buffer{}, 0, stream, mr);
+ * auto row_mask = reader->build_all_true_row_mask(current_row_group_indices, stream, mr);
  *
  * // Alternatively, build a row mask column indicating only the rows that survive the page-level
- * statistics in the page index
- * row_mask = reader->build_row_mask_with_page_index_stats(current_row_group_indices, options,
- *                                                         stream, mr);
+ * // statistics in the page index
+ * auto row_mask = reader->build_row_mask_with_page_index_stats(
+ *   current_row_group_indices, options, stream, mr);
  * @endcode
  *
  * Materialize filter columns: Once we are done with pruning row groups and constructing the row
  * mask, the next step is to materialize filter columns into a table (first reader pass). This is
- * done using the `materialize_filter_columns()` function. This function requires a vector of device
- * buffers containing column chunk data for the current list of row groups, and a mutable view of
- * the current row mask. The function optionally builds a mask for the current data pages using the
- * input row mask to skip decompression and decoding of the pruned pages based on the
+ * done using the `materialize_filter_columns()` function. This function requires a span of
+ * device spans of column chunk data for the current list of row groups, and a mutable view
+ * of the current row mask. The function optionally builds a mask for the current data pages using
+ * the input row mask to skip decompression and decoding of the pruned pages based on the
  * `mask_data_pages` argument. The filter columns are then read into a table and filtered based on
  * the filter expression and the row mask is updated to only indicate the rows that survive in the
  * read table. The final table is returned. The byte ranges for the required column chunk data may
- * be obtained using the `filter_column_chunks_byte_ranges()` function and read into a corresponding
- * vector of vectors of device buffers.
+ * be obtained using the `filter_column_chunks_byte_ranges()` function and read into device buffers
+ * with corresponding device spans.
  * @code{.cpp}
  * // Get byte ranges of column chunk byte ranges from the reader
- * auto const filter_column_chunk_byte_ranges =
+ * auto const filter_col_byte_ranges =
  *   reader->filter_column_chunks_byte_ranges(current_row_group_indices, options);
  *
- * // Fetch column chunk device buffers from the input buffer
- * auto filter_column_chunk_buffers =
- *   fetch_device_buffers(filter_column_chunk_byte_ranges);
+ * // Fetch column chunk data into device buffers and create spans
+ * auto [filter_col_buffers, filter_col_data, filter_col_tasks] =
+ *   parquet::fetch_byte_ranges_to_device_async(datasource, filter_col_byte_ranges, stream, mr);
+ * filter_col_tasks.get();
  *
  * // Materialize the table with only the filter columns
  * auto [filter_table, filter_metadata] =
  *   reader->materialize_filter_columns(current_row_group_indices,
- *                                      std::move(filter_column_chunk_buffers),
+ *                                      filter_col_data,
  *                                      row_mask->mutable_view(),
- *                                      use_data_page_mask::YES/NO,
+ *                                      use_data_page_mask::YES,  // or NO
  *                                      options,
  *                                      stream);
  * @endcode
@@ -241,23 +245,24 @@ enum class use_data_page_mask : bool {
  * `materialize_payload_columns()` function which is identical to the `materialize_filter_columns()`
  * in terms of functionality except that it accepts an immutable view of the row mask and uses it to
  * filter the read output table before returning it. The byte ranges for the required column chunk
- * data may be obtained using the `payload_column_chunks_byte_ranges()` function and read into a
- * corresponding vector of vectors of device buffers.
+ * data may be obtained using the `payload_column_chunks_byte_ranges()` function and read into
+ * device buffers with corresponding device spans.
  * @code{.cpp}
  * // Get column chunk byte ranges from the reader
- * auto const payload_column_chunk_byte_ranges =
+ * auto const payload_col_byte_ranges =
  *   reader->payload_column_chunks_byte_ranges(current_row_group_indices, options);
  *
- * // Fetch column chunk device buffers from the input buffer
- * auto payload_column_chunk_buffers =
- *   fetch_device_buffers(payload_column_chunk_byte_ranges);
+ * // Fetch column chunk data into device buffers and create spans
+ * auto [payload_col_buffers, payload_col_data, payload_col_tasks] =
+ *   parquet::fetch_byte_ranges_to_device_async(datasource, payload_col_byte_ranges, stream, mr);
+ * payload_col_tasks.get();
  *
  * // Materialize the table with only the payload columns
  * auto [payload_table, payload_metadata] =
  *   reader->materialize_payload_columns(current_row_group_indices,
- *                                       std::move(payload_column_chunk_buffers),
+ *                                       payload_col_data,
  *                                       row_mask->view(),
- *                                       use_data_page_mask::YES/NO,
+ *                                       use_data_page_mask::YES, // or NO
  *                                       options,
  *                                       stream);
  * @endcode
@@ -343,6 +348,15 @@ class hybrid_scan_reader {
     cudf::host_span<size_type const> row_group_indices) const;
 
   /**
+   * @brief Resets the current column selection
+   *
+   * Resets the current column selection state forcing column re-selection in subsequent filter,
+   * byte range, setup chunking and materialization APIs. This is useful if the filter expression
+   * has been cascaded (and-ed) to include new columns
+   */
+  void reset_column_selection() const;
+
+  /**
    * @brief Filter the row groups using the specified byte range specified by [`bytes_to_skip`,
    * `bytes_to_skip + bytes_to_read`)
    *
@@ -389,15 +403,15 @@ class hybrid_scan_reader {
   /**
    * @brief Filter the row groups using column chunk dictionary pages
    *
-   * @param dictionary_page_data Device buffers containing dictionary page data of column chunks
-   *                             with (in)equality predicate
+   * @param dictionary_page_data Device spans of dictionary page data of column chunks with an
+   *                             (in)equality predicate
    * @param row_group_indices Input row groups indices
    * @param options Parquet reader options
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @return Filtered row group indices
    */
   [[nodiscard]] std::vector<size_type> filter_row_groups_with_dictionary_pages(
-    cudf::host_span<rmm::device_buffer> dictionary_page_data,
+    cudf::host_span<cudf::device_span<uint8_t const> const> dictionary_page_data,
     cudf::host_span<size_type const> row_group_indices,
     parquet_reader_options const& options,
     rmm::cuda_stream_view stream) const;
@@ -405,21 +419,35 @@ class hybrid_scan_reader {
   /**
    * @brief Filter the row groups using column chunk bloom filters
    *
-   * @note The `bloom_filter_data` device buffers must be allocated using a 32
-   *       byte aligned memory resource
+   * @note The `bloom_filter_data` device spans must point to 32-byte aligned addresses
    *
-   * @param bloom_filter_data Device buffers containing bloom filter data of column chunks with
-   *                          an equality predicate
+   * @param bloom_filter_data Device spans of bloom filter data of column chunks with an equality
+   *                          predicate
    * @param row_group_indices Input row groups indices
    * @param options Parquet reader options
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @return Filtered row group indices
    */
   [[nodiscard]] std::vector<size_type> filter_row_groups_with_bloom_filters(
-    cudf::host_span<rmm::device_buffer> bloom_filter_data,
+    cudf::host_span<cudf::device_span<uint8_t const> const> bloom_filter_data,
     cudf::host_span<size_type const> row_group_indices,
     parquet_reader_options const& options,
     rmm::cuda_stream_view stream) const;
+
+  /**
+   * @brief Builds a boolean (survival) column of size equal to the total number of rows in the row
+   * groups containing all `true` values
+   *
+   * @param row_group_indices Input row groups indices
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource used to allocate the returned column's device memory
+   * @return An all-true boolean (survival) column of size equal to the total number of rows in the
+   * row groups
+   */
+  [[nodiscard]] std::unique_ptr<cudf::column> build_all_true_row_mask(
+    cudf::host_span<size_type const> row_group_indices,
+    rmm::cuda_stream_view stream,
+    rmm::device_async_resource_ref mr) const;
 
   /**
    * @brief Builds a boolean column indicating surviving rows using page-level statistics in the
@@ -454,20 +482,22 @@ class hybrid_scan_reader {
    *        that exist in the output table
    *
    * @param row_group_indices Input row groups indices
-   * @param column_chunk_buffers Device buffers containing column chunk data of filter columns
+   * @param column_chunk_data Device spans of column chunk data of filter columns
    * @param[in,out] row_mask Mutable boolean column indicating surviving rows from page pruning
    * @param mask_data_pages Whether to build and use a data page mask using the row mask
    * @param options Parquet reader options
    * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource used to allocate the device memory for the output table
    * @return Table of materialized filter columns and metadata
    */
   [[nodiscard]] table_with_metadata materialize_filter_columns(
     cudf::host_span<size_type const> row_group_indices,
-    std::vector<rmm::device_buffer>&& column_chunk_buffers,
+    cudf::host_span<cudf::device_span<uint8_t const> const> column_chunk_data,
     cudf::mutable_column_view& row_mask,
     use_data_page_mask mask_data_pages,
     parquet_reader_options const& options,
-    rmm::cuda_stream_view stream) const;
+    rmm::cuda_stream_view stream,
+    rmm::device_async_resource_ref mr) const;
 
   /**
    * @brief Get byte ranges of column chunks of payload columns
@@ -484,20 +514,22 @@ class hybrid_scan_reader {
    * @brief Materialize payload columns and applies the row mask to the output table
    *
    * @param row_group_indices Input row groups indices
-   * @param column_chunk_buffers Device buffers containing column chunk data of payload columns
+   * @param column_chunk_data Device spans of column chunk data of payload columns
    * @param row_mask Boolean column indicating which rows need to be read. All rows read if empty
    * @param mask_data_pages Whether to build and use a data page mask using the row mask
    * @param options Parquet reader options
    * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource used to allocate the device memory for the output table
    * @return Table of materialized payload columns and metadata
    */
   [[nodiscard]] table_with_metadata materialize_payload_columns(
     cudf::host_span<size_type const> row_group_indices,
-    std::vector<rmm::device_buffer>&& column_chunk_buffers,
+    cudf::host_span<cudf::device_span<uint8_t const> const> column_chunk_data,
     cudf::column_view const& row_mask,
     use_data_page_mask mask_data_pages,
     parquet_reader_options const& options,
-    rmm::cuda_stream_view stream) const;
+    rmm::cuda_stream_view stream,
+    rmm::device_async_resource_ref mr) const;
 
   /**
    * @brief Get byte ranges of column chunks of all (or selected) columns
@@ -514,16 +546,18 @@ class hybrid_scan_reader {
    * @brief Materializes all (or selected) columns and returns the final output table
    *
    * @param row_group_indices Input row groups indices
-   * @param column_chunk_buffers Device buffers containing column chunk data of all columns
+   * @param column_chunk_data Device spans of column chunk data of all columns
    * @param options Parquet reader options
    * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource used to allocate the device memory for the output table
    * @return Table of all materialized columns and metadata
    */
   [[nodiscard]] table_with_metadata materialize_all_columns(
     cudf::host_span<size_type const> row_group_indices,
-    std::vector<rmm::device_buffer>&& column_chunk_buffers,
+    cudf::host_span<cudf::device_span<uint8_t const> const> column_chunk_data,
     parquet_reader_options const& options,
-    rmm::cuda_stream_view stream) const;
+    rmm::cuda_stream_view stream,
+    rmm::device_async_resource_ref mr) const;
   /**
    * @brief Setup chunking information for filter columns and preprocess the input data pages
    *
@@ -534,30 +568,32 @@ class hybrid_scan_reader {
    * @param row_group_indices Input row groups indices
    * @param row_mask Boolean column indicating which rows need to be read. All rows read if empty
    * @param mask_data_pages Whether to build and use a data page mask using the row mask
-   * @param column_chunk_buffers Device buffers containing column chunk data of filter columns
+   * @param column_chunk_data Device spans of column chunk data of filter columns
    * @param options Parquet reader options
+   * @param mr Device memory resource used to allocate the device memory for the output table chunks
    * @param stream CUDA stream used for device memory operations and kernel launches
    */
-  void setup_chunking_for_filter_columns(std::size_t chunk_read_limit,
-                                         std::size_t pass_read_limit,
-                                         cudf::host_span<size_type const> row_group_indices,
-                                         cudf::column_view const& row_mask,
-                                         use_data_page_mask mask_data_pages,
-                                         std::vector<rmm::device_buffer>&& column_chunk_buffers,
-                                         parquet_reader_options const& options,
-                                         rmm::cuda_stream_view stream) const;
+  void setup_chunking_for_filter_columns(
+    std::size_t chunk_read_limit,
+    std::size_t pass_read_limit,
+    cudf::host_span<size_type const> row_group_indices,
+    cudf::column_view const& row_mask,
+    use_data_page_mask mask_data_pages,
+    cudf::host_span<cudf::device_span<uint8_t const> const> column_chunk_data,
+    parquet_reader_options const& options,
+    rmm::cuda_stream_view stream,
+    rmm::device_async_resource_ref mr) const;
 
   /**
    * @brief Materializes a chunk of filter columns and updates the corresponding range of input row
    * mask to only the rows that exist in the output table
    *
    * @param[in,out] row_mask Mutable boolean column indicating surviving rows from page pruning
-   * @param stream CUDA stream used for device memory operations and kernel launches
    *
    * @return Table chunk of materialized filter columns and metadata
    */
   [[nodiscard]] table_with_metadata materialize_filter_columns_chunk(
-    cudf::mutable_column_view& row_mask, rmm::cuda_stream_view stream) const;
+    cudf::mutable_column_view& row_mask) const;
 
   /**
    * @brief Setup chunking information for payload columns and preprocess the input data pages
@@ -569,30 +605,62 @@ class hybrid_scan_reader {
    * @param row_group_indices Input row groups indices
    * @param row_mask Boolean column indicating which rows need to be read. All rows read if empty
    * @param mask_data_pages Whether to build and use a data page mask using the row mask
-   * @param column_chunk_buffers Device buffers containing column chunk data of payload columns
+   * @param column_chunk_data Device spans of column chunk data of payload columns
    * @param options Parquet reader options
    * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource used to allocate the device memory for the output table chunks
    */
-  void setup_chunking_for_payload_columns(std::size_t chunk_read_limit,
-                                          std::size_t pass_read_limit,
-                                          cudf::host_span<size_type const> row_group_indices,
-                                          cudf::column_view const& row_mask,
-                                          use_data_page_mask mask_data_pages,
-                                          std::vector<rmm::device_buffer>&& column_chunk_buffers,
-                                          parquet_reader_options const& options,
-                                          rmm::cuda_stream_view stream) const;
+  void setup_chunking_for_payload_columns(
+    std::size_t chunk_read_limit,
+    std::size_t pass_read_limit,
+    cudf::host_span<size_type const> row_group_indices,
+    cudf::column_view const& row_mask,
+    use_data_page_mask mask_data_pages,
+    cudf::host_span<cudf::device_span<uint8_t const> const> column_chunk_data,
+    parquet_reader_options const& options,
+    rmm::cuda_stream_view stream,
+    rmm::device_async_resource_ref mr) const;
 
   /**
    * @brief Materializes a chunk of payload columns and applies the corresponding range of input row
    * mask to the output table chunk
    *
    * @param row_mask Boolean column indicating which rows need to be read. All rows read if empty
-   * @param stream CUDA stream used for device memory operations and kernel launches
    *
    * @return Table chunk of materialized filter columns and metadata
    */
   [[nodiscard]] table_with_metadata materialize_payload_columns_chunk(
-    cudf::column_view const& row_mask, rmm::cuda_stream_view stream) const;
+    cudf::column_view const& row_mask) const;
+
+  /**
+   * @brief Setup chunking information for all (or selected) columns and preprocess the input data
+   * pages
+   *
+   * @param chunk_read_limit Limit on total number of bytes to be returned per table chunk. `0` if
+   * there is no limit
+   * @param pass_read_limit Limit on the memory used for reading and decompressing data. `0` if
+   * there is no limit
+   * @param row_group_indices Input row groups indices
+   * @param column_chunk_data Device spans of column chunk data of all columns
+   * @param options Parquet reader options
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource used to allocate the device memory for the output table chunks
+   */
+  void setup_chunking_for_all_columns(
+    std::size_t chunk_read_limit,
+    std::size_t pass_read_limit,
+    cudf::host_span<size_type const> row_group_indices,
+    cudf::host_span<cudf::device_span<uint8_t const> const> column_chunk_data,
+    parquet_reader_options const& options,
+    rmm::cuda_stream_view stream,
+    rmm::device_async_resource_ref mr) const;
+
+  /**
+   * @brief Materializes all (or selected) columns and returns the final output table
+   *
+   * @return Table of materialized all (or selected) columns and metadata
+   */
+  [[nodiscard]] table_with_metadata materialize_all_columns_chunk() const;
 
   /**
    * @brief Check if there is any parquet data left to read for the current setup

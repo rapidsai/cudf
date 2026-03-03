@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 # TODO: remove need for this
 # ruff: noqa: D101
@@ -15,6 +15,7 @@ import pylibcudf as plc
 from cudf_polars.containers import Column
 from cudf_polars.dsl.expressions.base import ExecutionContext, Expr
 from cudf_polars.dsl.expressions.literal import Literal
+from cudf_polars.utils.versions import POLARS_VERSION_LT_136
 
 if TYPE_CHECKING:
     from rmm.pylibrmm.stream import Stream
@@ -52,6 +53,9 @@ class Agg(Expr):
         elif name == "max":
             req = plc.aggregation.max()
         elif name == "median":
+            (child,) = self.children
+            if plc.traits.is_timestamp(child.dtype.plc_type):
+                raise NotImplementedError("Median with temporal data types")
             req = plc.aggregation.median()
         elif name == "n_unique":
             # TODO: datatype of result
@@ -82,6 +86,8 @@ class Agg(Expr):
                 raise NotImplementedError("Quantile with equiprobable interpolation")
             if plc.traits.is_duration(child.dtype.plc_type):
                 raise NotImplementedError("Quantile with duration data type")
+            if plc.traits.is_timestamp(child.dtype.plc_type):
+                raise NotImplementedError("Quantile with temporal data types")
             req = plc.aggregation.quantile(
                 quantiles=[quantile.value], interp=Agg.interp_mapping[options]
             )
@@ -90,10 +96,11 @@ class Agg(Expr):
                 f"Unreachable, {name=} is incorrectly listed in _SUPPORTED"
             )  # pragma: no cover
         if (
-            context == ExecutionContext.FRAME
+            POLARS_VERSION_LT_136
+            and context == ExecutionContext.FRAME
             and req is not None
             and not plc.aggregation.is_valid_aggregation(dtype.plc_type, req)
-        ):
+        ):  # pragma: no cover; polars may raise ahead of time
             # TODO: Check which cases polars raises vs returns all-NULL column.
             # For the all-NULL column cases, we could build it using Column.all_null_like
             # at evaluation time.
@@ -249,16 +256,24 @@ class Agg(Expr):
         return self._reduce(column, request=plc.aggregation.max(), stream=stream)
 
     def _first(self, column: Column, stream: Stream) -> Column:
+        if column.size == 0:
+            plc_result = plc.Column.all_null_like(column.obj, 1, stream=stream)
+        else:
+            plc_result = plc.copying.slice(column.obj, [0, 1], stream=stream)[0]
         return Column(
-            plc.copying.slice(column.obj, [0, 1], stream=stream)[0],
+            plc_result,
             name=column.name,
             dtype=self.dtype,
         )
 
     def _last(self, column: Column, stream: Stream) -> Column:
         n = column.size
+        if n == 0:
+            plc_result = plc.Column.all_null_like(column.obj, 1, stream=stream)
+        else:
+            plc_result = plc.copying.slice(column.obj, [n - 1, n], stream=stream)[0]
         return Column(
-            plc.copying.slice(column.obj, [n - 1, n], stream=stream)[0],
+            plc_result,
             name=column.name,
             dtype=self.dtype,
         )

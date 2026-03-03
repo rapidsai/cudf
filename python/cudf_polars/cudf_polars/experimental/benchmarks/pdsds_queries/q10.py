@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 """Query 10."""
@@ -9,7 +9,8 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
-from cudf_polars.experimental.benchmarks.utils import get_data
+from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
+from cudf_polars.experimental.benchmarks.utils import QueryResult, get_data
 
 if TYPE_CHECKING:
     from cudf_polars.experimental.benchmarks.utils import RunConfig
@@ -17,7 +18,15 @@ if TYPE_CHECKING:
 
 def duckdb_impl(run_config: RunConfig) -> str:
     """Query 10."""
-    return """
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=10,
+        qualification=run_config.qualification,
+    )
+
+    counties = params["county"]
+
+    return f"""
     SELECT cd_gender,
                    cd_marital_status,
                    cd_education_status,
@@ -36,10 +45,7 @@ def duckdb_impl(run_config: RunConfig) -> str:
            customer_address ca,
            customer_demographics
     WHERE  c.c_current_addr_sk = ca.ca_address_sk
-           AND ca_county IN ( 'Lycoming County', 'Sheridan County',
-                              'Kandiyohi County',
-                              'Pike County',
-                                               'Greene County' )
+           AND ca_county IN ( {", ".join(f"'{county}'" for county in counties)} )
            AND cd_demo_sk = c.c_current_cdemo_sk
            AND EXISTS (SELECT *
                        FROM   store_sales,
@@ -82,9 +88,16 @@ def duckdb_impl(run_config: RunConfig) -> str:
     """
 
 
-def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
+def polars_impl(run_config: RunConfig) -> QueryResult:
     """Query 10."""
-    # Load required tables
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=10,
+        qualification=run_config.qualification,
+    )
+
+    counties = params["county"]
+
     customer = get_data(run_config.dataset_path, "customer", run_config.suffix)
     customer_address = get_data(
         run_config.dataset_path, "customer_address", run_config.suffix
@@ -98,15 +111,6 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         run_config.dataset_path, "catalog_sales", run_config.suffix
     )
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
-
-    # Target counties and date range
-    target_counties = [
-        "Lycoming County",
-        "Sheridan County",
-        "Kandiyohi County",
-        "Pike County",
-        "Greene County",
-    ]
 
     # Get customers with store sales in the target period (EXISTS condition 1)
     store_customers = (
@@ -145,81 +149,94 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     web_or_catalog_customers = pl.concat([web_customers, catalog_customers]).unique()
 
     # Main query: join customer tables and apply filters
-    return (
-        customer.join(
-            customer_address, left_on="c_current_addr_sk", right_on="ca_address_sk"
-        )
-        .join(
-            customer_demographics, left_on="c_current_cdemo_sk", right_on="cd_demo_sk"
-        )
-        .filter(pl.col("ca_county").is_in(target_counties))
-        # Apply EXISTS conditions through joins
-        .join(
-            store_customers,
-            left_on="c_customer_sk",
-            right_on="ss_customer_sk",
-            how="inner",
-        )
-        .join(
-            web_or_catalog_customers,
-            left_on="c_customer_sk",
-            right_on="customer_sk",
-            how="inner",
-        )
-        .group_by(
-            [
-                "cd_gender",
-                "cd_marital_status",
-                "cd_education_status",
-                "cd_purchase_estimate",
-                "cd_credit_rating",
-                "cd_dep_count",
-                "cd_dep_employed_count",
-                "cd_dep_college_count",
-            ]
-        )
-        .agg(
-            [
-                # Cast -> Int64 to match DuckDB
-                # TODO: We should plan to make these optional
-                pl.len().alias("cnt1").cast(pl.Int64),
-                pl.len().alias("cnt2").cast(pl.Int64),
-                pl.len().alias("cnt3").cast(pl.Int64),
-                pl.len().alias("cnt4").cast(pl.Int64),
-                pl.len().alias("cnt5").cast(pl.Int64),
-                pl.len().alias("cnt6").cast(pl.Int64),
-            ]
-        )
-        .sort(
-            [
-                "cd_gender",
-                "cd_marital_status",
-                "cd_education_status",
-                "cd_purchase_estimate",
-                "cd_credit_rating",
-                "cd_dep_count",
-                "cd_dep_employed_count",
-                "cd_dep_college_count",
-            ],
-            nulls_last=True,
-        )
-        .limit(100)
-        .select(
-            [
-                "cd_gender",
-                "cd_marital_status",
-                "cd_education_status",
-                "cnt1",
-                "cd_purchase_estimate",
-                "cnt2",
-                "cd_credit_rating",
-                "cnt3",
-                "cd_dep_count",
-                "cnt4",
-                "cd_dep_employed_count",
-                "cnt5",
-                "cd_dep_college_count",
-                "cnt6",
-            ]
-        )
+    return QueryResult(
+        frame=(
+            customer.join(
+                customer_address, left_on="c_current_addr_sk", right_on="ca_address_sk"
+            )
+            .join(
+                customer_demographics,
+                left_on="c_current_cdemo_sk",
+                right_on="cd_demo_sk",
+            )
+            .filter(pl.col("ca_county").is_in(counties))
+            # Apply EXISTS conditions through joins
+            .join(
+                store_customers,
+                left_on="c_customer_sk",
+                right_on="ss_customer_sk",
+                how="inner",
+            )
+            .join(
+                web_or_catalog_customers,
+                left_on="c_customer_sk",
+                right_on="customer_sk",
+                how="inner",
+            )
+            .group_by(
+                [
+                    "cd_gender",
+                    "cd_marital_status",
+                    "cd_education_status",
+                    "cd_purchase_estimate",
+                    "cd_credit_rating",
+                    "cd_dep_count",
+                    "cd_dep_employed_count",
+                    "cd_dep_college_count",
+                ]
+            )
+            .agg(
+                [
+                    pl.len().alias("cnt1"),
+                    pl.len().alias("cnt2"),
+                    pl.len().alias("cnt3"),
+                    pl.len().alias("cnt4"),
+                    pl.len().alias("cnt5"),
+                    pl.len().alias("cnt6"),
+                ]
+            )
+            .sort(
+                [
+                    "cd_gender",
+                    "cd_marital_status",
+                    "cd_education_status",
+                    "cd_purchase_estimate",
+                    "cd_credit_rating",
+                    "cd_dep_count",
+                    "cd_dep_employed_count",
+                    "cd_dep_college_count",
+                ],
+                nulls_last=True,
+            )
+            .limit(100)
+            .select(
+                [
+                    "cd_gender",
+                    "cd_marital_status",
+                    "cd_education_status",
+                    "cnt1",
+                    "cd_purchase_estimate",
+                    "cnt2",
+                    "cd_credit_rating",
+                    "cnt3",
+                    "cd_dep_count",
+                    "cnt4",
+                    "cd_dep_employed_count",
+                    "cnt5",
+                    "cd_dep_college_count",
+                    "cnt6",
+                ]
+            )
+        ),
+        sort_by=[
+            ("cd_gender", False),
+            ("cd_marital_status", False),
+            ("cd_education_status", False),
+            ("cd_purchase_estimate", False),
+            ("cd_credit_rating", False),
+            ("cd_dep_count", False),
+            ("cd_dep_employed_count", False),
+            ("cd_dep_college_count", False),
+        ],
+        limit=100,
     )

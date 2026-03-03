@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 import pyarrow as pa
@@ -66,3 +66,29 @@ def test_create_null_mask(size, state):
         if state == MaskState.UNALLOCATED
         else plc.null_mask.bitmask_allocation_size_bytes(size)
     )
+
+
+def test_copy_bitmask_from_bitmask_invalid_span():
+    class Foo:
+        pass
+
+    invalid_bitmask = Foo()
+
+    with pytest.raises(
+        TypeError,
+        match="bitmask must satisfy Span protocol \\(have \\.ptr and \\.size\\), got Foo",
+    ):
+        plc.null_mask.copy_bitmask_from_bitmask(invalid_bitmask, 0, 10)
+
+
+def test_null_count_invalid_span():
+    class Foo:
+        pass
+
+    invalid_bitmask = Foo()
+
+    with pytest.raises(
+        TypeError,
+        match="bitmask must satisfy Span protocol \\(have \\.ptr and \\.size\\), got Foo",
+    ):
+        plc.null_mask.null_count(invalid_bitmask, 0, 10)

@@ -78,13 +78,8 @@ std::unique_ptr<cudf::column> copy_slice(lists_column_view const& lists,
   auto null_count = cudf::detail::null_count(
     static_cast<bitmask_type const*>(null_mask.data()), 0, end - start, stream);
 
-  return make_lists_column(lists_count,
-                           std::move(offsets),
-                           std::move(child),
-                           null_count,
-                           std::move(null_mask),
-                           stream,
-                           mr);
+  return make_lists_column(
+    lists_count, std::move(offsets), std::move(child), null_count, std::move(null_mask));
 }
 
 }  // namespace detail

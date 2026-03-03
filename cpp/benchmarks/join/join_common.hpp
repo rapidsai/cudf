@@ -5,7 +5,7 @@
 
 #pragma once
 
-#include "generate_input_tables.cuh"
+#include "generate_input_tables.hpp"
 
 #include <benchmarks/common/generate_input.hpp>
 #include <benchmarks/common/nvbench_utilities.hpp>

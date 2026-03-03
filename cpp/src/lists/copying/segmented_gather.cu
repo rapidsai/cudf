@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #include <cudf/detail/copy.hpp>
@@ -102,9 +102,7 @@ std::unique_ptr<column> segmented_gather(lists_column_view const& value_column,
                            std::move(output_offset),
                            std::move(child),
                            null_count,
-                           std::move(null_mask),
-                           stream,
-                           mr);
+                           std::move(null_mask));
 }
 
 }  // namespace detail

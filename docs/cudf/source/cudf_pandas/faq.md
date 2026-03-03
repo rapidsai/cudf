@@ -195,7 +195,7 @@ This means that automatic conversion between GPU and CPU types and automatic fal
 There are a few known limitations that you should be aware of:
 
 - Because fallback involves copying data from GPU to CPU and back,
-  [value mutability](https://pandas.pydata.org/pandas-docs/stable/getting_started/overview.html#mutability-and-copying-of-data)
+  [value mutability](https://pandas.pydata.org/pandas-docs/version/2.3.3/getting_started/overview.html#mutability-and-copying-of-data)
   of Pandas objects is not always guaranteed. You should follow the
   pandas recommendation to favor immutable operations.
 - For performance reasons, joins and join-based operations are not

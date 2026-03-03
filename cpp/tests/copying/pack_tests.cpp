@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -19,6 +19,9 @@ struct PackUnpackTest : public cudf::test::BaseFixture {
     auto packed   = cudf::pack(t);
     auto unpacked = cudf::unpack(packed);
     CUDF_TEST_EXPECT_TABLES_EQUAL(t, unpacked);
+
+    // verify packed_size returns the correct size
+    EXPECT_EQ(cudf::packed_size(t), packed.gpu_data->size());
 
     // verify pack_metadata itself works
     auto metadata = cudf::pack_metadata(

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -9,6 +9,7 @@
 #include <cudf_test/testing_main.hpp>
 
 #include <cudf/io/experimental/hybrid_scan.hpp>
+#include <cudf/io/parquet_io_utils.hpp>
 #include <cudf/io/parquet_schema.hpp>
 #include <cudf/table/table.hpp>
 
@@ -17,66 +18,8 @@
 
 namespace {
 
-cudf::host_span<uint8_t const> fetch_footer_bytes(cudf::host_span<uint8_t const> buffer)
-{
-  using namespace cudf::io::parquet;
-
-  constexpr auto header_len = sizeof(file_header_s);
-  constexpr auto ender_len  = sizeof(file_ender_s);
-  size_t const len          = buffer.size();
-
-  auto const header_buffer = cudf::host_span<uint8_t const>(buffer.data(), header_len);
-  auto const header        = reinterpret_cast<file_header_s const*>(header_buffer.data());
-  auto const ender_buffer =
-    cudf::host_span<uint8_t const>(buffer.data() + len - ender_len, ender_len);
-  auto const ender = reinterpret_cast<file_ender_s const*>(ender_buffer.data());
-  CUDF_EXPECTS(len > header_len + ender_len, "Incorrect data source");
-  constexpr uint32_t parquet_magic = (('P' << 0) | ('A' << 8) | ('R' << 16) | ('1' << 24));
-  CUDF_EXPECTS(header->magic == parquet_magic && ender->magic == parquet_magic,
-               "Corrupted header or footer");
-  CUDF_EXPECTS(ender->footer_len != 0 && ender->footer_len <= (len - header_len - ender_len),
-               "Incorrect footer length");
-
-  return cudf::host_span<uint8_t const>(buffer.data() + len - ender->footer_len - ender_len,
-                                        ender->footer_len);
-}
-
-cudf::host_span<uint8_t const> fetch_page_index_bytes(
-  cudf::host_span<uint8_t const> buffer, cudf::io::text::byte_range_info const page_index_bytes)
-{
-  return cudf::host_span<uint8_t const>(
-    reinterpret_cast<uint8_t const*>(buffer.data()) + page_index_bytes.offset(),
-    page_index_bytes.size());
-}
-
-std::vector<rmm::device_buffer> fetch_byte_ranges(
-  cudf::host_span<uint8_t const> host_buffer,
-  cudf::host_span<cudf::io::text::byte_range_info const> byte_ranges,
-  rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
-{
-  std::vector<rmm::device_buffer> buffers{};
-  buffers.reserve(byte_ranges.size());
-
-  std::transform(
-    byte_ranges.begin(),
-    byte_ranges.end(),
-    std::back_inserter(buffers),
-    [&](auto const& byte_range) {
-      auto const chunk_offset = host_buffer.data() + byte_range.offset();
-      auto const chunk_size   = byte_range.size();
-      auto buffer             = rmm::device_buffer(chunk_size, stream, mr);
-      CUDF_CUDA_TRY(cudaMemcpyAsync(
-        buffer.data(), chunk_offset, chunk_size, cudaMemcpyHostToDevice, stream.value()));
-      return buffer;
-    });
-
-  stream.synchronize_no_throw();
-  return buffers;
-}
-
 template <typename... UniqPtrs>
-std::vector<std::unique_ptr<cudf::column>> make_uniqueptrs_vector(UniqPtrs&&... uniqptrs)
+std::vector<std::unique_ptr<cudf::column>> make_unique_ptrs_vector(UniqPtrs&&... uniqptrs)
 {
   std::vector<std::unique_ptr<cudf::column>> ptrsvec;
   (ptrsvec.push_back(std::forward<UniqPtrs>(uniqptrs)), ...);
@@ -114,17 +57,17 @@ cudf::table construct_table()
     return cudf::test::strings_column_wrapper(col10_data.begin(), col10_data.end());
   }();
 
-  auto colsptr = make_uniqueptrs_vector(col0.release(),
-                                        col1.release(),
-                                        col2.release(),
-                                        col3.release(),
-                                        col4.release(),
-                                        col5.release(),
-                                        col6.release(),
-                                        col7.release(),
-                                        col8.release(),
-                                        col9.release(),
-                                        col10.release());
+  auto colsptr = make_unique_ptrs_vector(col0.release(),
+                                         col1.release(),
+                                         col2.release(),
+                                         col3.release(),
+                                         col4.release(),
+                                         col5.release(),
+                                         col6.release(),
+                                         col7.release(),
+                                         col8.release(),
+                                         col9.release(),
+                                         col10.release());
   return cudf::table(std::move(colsptr));
 }
 }  // namespace
@@ -133,13 +76,13 @@ class HybridScanTest : public cudf::test::BaseFixture {};
 
 TEST_F(HybridScanTest, DictionaryPageFiltering)
 {
-  auto tab    = construct_table();
+  auto table  = construct_table();
   auto buffer = std::vector<char>();
-  cudf::io::table_input_metadata out_metadata(tab);
+  cudf::io::table_input_metadata out_metadata(table);
   out_metadata.column_metadata[0].set_name("col0");
   out_metadata.column_metadata[3].set_name("col3");
   cudf::io::parquet_writer_options out_opts =
-    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{&buffer}, tab)
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{&buffer}, table)
       .metadata(out_metadata)
       .stats_level(cudf::io::statistics_freq::STATISTICS_COLUMN)
       .dictionary_policy(cudf::io::dictionary_policy::ALWAYS);
@@ -158,29 +101,32 @@ TEST_F(HybridScanTest, DictionaryPageFiltering)
   cudf::io::parquet_reader_options in_opts =
     cudf::io::parquet_reader_options::builder(cudf::io::source_info{}).filter(filter_expr);
 
-  auto const file_buffer_span =
-    cudf::host_span<uint8_t const>(reinterpret_cast<uint8_t const*>(buffer.data()), buffer.size());
-  auto const footer_buffer = fetch_footer_bytes(file_buffer_span);
+  auto const datasource    = cudf::io::datasource::create(cudf::host_span<std::byte const>(
+    reinterpret_cast<std::byte const*>(buffer.data()), buffer.size()));
+  auto datasource_ref      = std::ref(*datasource);
+  auto const footer_buffer = cudf::io::parquet::fetch_footer_to_host(datasource_ref);
 
   auto const reader =
-    std::make_unique<cudf::io::parquet::experimental::hybrid_scan_reader>(footer_buffer, in_opts);
+    std::make_unique<cudf::io::parquet::experimental::hybrid_scan_reader>(*footer_buffer, in_opts);
 
   auto const page_index_byte_range = reader->page_index_byte_range();
-  auto const page_index_buffer = fetch_page_index_bytes(file_buffer_span, page_index_byte_range);
-  reader->setup_page_index(page_index_buffer);
+  auto const page_index_buffer =
+    cudf::io::parquet::fetch_page_index_to_host(datasource_ref, page_index_byte_range);
+  reader->setup_page_index(*page_index_buffer);
 
   auto input_row_group_indices = reader->all_row_groups(in_opts);
 
   auto const dict_byte_ranges =
     std::get<1>(reader->secondary_filters_byte_ranges(input_row_group_indices, in_opts));
-  std::vector<rmm::device_buffer> dictionary_page_buffers =
-    fetch_byte_ranges(file_buffer_span,
-                      dict_byte_ranges,
-                      cudf::test::get_default_stream(),
-                      cudf::get_current_device_resource_ref());
+  auto [dict_page_buffers, dict_page_data, dict_page_tasks] =
+    cudf::io::parquet::fetch_byte_ranges_to_device_async(datasource_ref,
+                                                         dict_byte_ranges,
+                                                         cudf::test::get_default_stream(),
+                                                         cudf::get_current_device_resource_ref());
+  dict_page_tasks.get();
 
   auto result = reader->filter_row_groups_with_dictionary_pages(
-    dictionary_page_buffers, input_row_group_indices, in_opts, cudf::test::get_default_stream());
+    dict_page_data, input_row_group_indices, in_opts, cudf::test::get_default_stream());
 }
 
 CUDF_TEST_PROGRAM_MAIN()

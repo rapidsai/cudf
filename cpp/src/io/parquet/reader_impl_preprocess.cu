@@ -6,11 +6,12 @@
 #include "error.hpp"
 #include "io/comp/common.hpp"
 #include "reader_impl.hpp"
+#include "reader_impl_chunking_utils.cuh"
 #include "reader_impl_preprocess_utils.cuh"
 
+#include <cudf/detail/algorithms/reduce.cuh>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/detail/utilities/batched_memset.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
@@ -18,15 +19,16 @@
 
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/iterator>
 #include <thrust/fill.h>
-#include <thrust/functional.h>
-#include <thrust/iterator/discard_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/scan.h>
 #include <thrust/transform.h>
 
+#include <algorithm>
 #include <limits>
 #include <numeric>
+#include <vector>
 
 namespace cudf::io::parquet::detail {
 
@@ -35,7 +37,7 @@ namespace {
 // be treated as a string. Currently the only logical type that has special handling is DECIMAL.
 // Other valid types in the future would be UUID (still treated as string) and FLOAT16 (which
 // for now would also be treated as a string).
-inline bool is_treat_fixed_length_as_string(std::optional<LogicalType> const& logical_type)
+inline bool is_treat_fixed_length_as_string(cuda::std::optional<LogicalType> const& logical_type)
 {
   if (!logical_type.has_value()) { return true; }
   return logical_type->type != LogicalType::DECIMAL;
@@ -232,8 +234,10 @@ void reader_impl::allocate_nesting_info()
           // values indexed by output column index
           nesting_info[cur_depth].max_def_level = actual_cur_schema.max_definition_level;
           pni[cur_depth].size                   = 0;
-          pni[cur_depth].type =
-            to_type_id(actual_cur_schema, _strings_to_categorical, _options.timestamp_type.id());
+          pni[cur_depth].type                   = to_type_id(actual_cur_schema,
+                                           _strings_to_categorical,
+                                           _options.timestamp_type.id(),
+                                           _options.decimal_width);
           pni[cur_depth].nullable = cur_schema.repetition_type == FieldRepetitionType::OPTIONAL;
         }
 
@@ -260,25 +264,67 @@ void reader_impl::allocate_level_decode_space()
 {
   auto& pass    = *_pass_itm_data;
   auto& subpass = *pass.subpass;
+  auto& pages   = subpass.pages;
 
-  auto& pages = subpass.pages;
+  auto const num_pages = pages.size();
+  if (num_pages == 0) { return; }
 
-  // TODO: this could be made smaller if we ignored dictionary pages and pages with no
-  // repetition data.
-  size_t const per_page_decode_buf_size = LEVEL_DECODE_BUF_SIZE * 2 * pass.level_type_size;
-  auto const decode_buf_size            = per_page_decode_buf_size * pages.size();
+  std::vector<size_t> def_level_sizes(num_pages);
+  std::vector<size_t> rep_level_sizes(num_pages);
+
+  // Loop over pages to compute sizes
+  size_t total_memory_size = 0;
+  for (size_t idx = 0; idx < num_pages; idx++) {
+    // Skip pages that are masked out - no need to allocate level decode space for them
+    if (!_subpass_page_mask.empty() && !_subpass_page_mask[idx]) {
+      def_level_sizes[idx] = 0;
+      rep_level_sizes[idx] = 0;
+      continue;
+    }
+
+    auto const& p     = pages[idx];
+    auto const& chunk = pass.chunks[p.chunk_idx];
+
+    compute_page_level_decode_sizes(p,
+                                    chunk,
+                                    pass.level_type_size,
+                                    pass.skip_rows,
+                                    pass.num_rows,
+                                    def_level_sizes[idx],
+                                    rep_level_sizes[idx]);
+
+    total_memory_size += def_level_sizes[idx] + rep_level_sizes[idx];
+  }
+
+  // Allocate the total buffer
   subpass.level_decode_data =
-    rmm::device_buffer(decode_buf_size, _stream, cudf::get_current_device_resource_ref());
+    rmm::device_buffer(total_memory_size, _stream, cudf::get_current_device_resource_ref());
 
-  // distribute the buffers
-  auto* buf = static_cast<uint8_t*>(subpass.level_decode_data.data());
-  for (size_t idx = 0; idx < pages.size(); idx++) {
-    auto& p = pages[idx];
+  // Set buffer pointers and decoded count for each page using running offsets
+  auto* current_ptr = static_cast<uint8_t*>(subpass.level_decode_data.data());
+  for (size_t idx = 0; idx < num_pages; idx++) {
+    if (def_level_sizes[idx] == 0) {
+      pages[idx].lvl_decode_buf[level_type::DEFINITION] = nullptr;
+    } else {
+      pages[idx].lvl_decode_buf[level_type::DEFINITION] = current_ptr;
+      current_ptr += def_level_sizes[idx];
+    }
 
-    p.lvl_decode_buf[level_type::DEFINITION] = buf;
-    buf += (LEVEL_DECODE_BUF_SIZE * pass.level_type_size);
-    p.lvl_decode_buf[level_type::REPETITION] = buf;
-    buf += (LEVEL_DECODE_BUF_SIZE * pass.level_type_size);
+    if (rep_level_sizes[idx] == 0) {
+      pages[idx].lvl_decode_buf[level_type::REPETITION] = nullptr;
+    } else {
+      pages[idx].lvl_decode_buf[level_type::REPETITION] = current_ptr;
+      current_ptr += rep_level_sizes[idx];
+    }
+
+    // Clamp kernel level reads to the actual decoded count (may be less than num_input_values
+    // for flat columns with skip_rows/num_rows).
+    CUDF_EXPECTS(def_level_sizes[idx] % pass.level_type_size == 0,
+                 "Definition level size is not a multiple of the level type size");
+    CUDF_EXPECTS(rep_level_sizes[idx] % pass.level_type_size == 0,
+                 "Repetition level size is not a multiple of the level type size");
+    pages[idx].num_decoded_level_values =
+      std::max(def_level_sizes[idx], rep_level_sizes[idx]) / pass.level_type_size;
   }
 }
 
@@ -438,7 +484,7 @@ std::pair<bool, std::future<void>> reader_impl::read_column_chunks()
   std::vector<size_type> chunk_source_map(num_chunks);
 
   // Tracker for eventually deallocating compressed and uncompressed data
-  raw_page_data = std::vector<rmm::device_buffer>(num_chunks);
+  raw_page_data = std::vector<rmm::device_buffer>(_num_sources);
 
   // Keep track of column chunk file offsets
   std::vector<size_t> column_chunk_offsets(num_chunks);
@@ -588,7 +634,8 @@ void reader_impl::preprocess_file(read_mode mode)
   printf("# Input columns: %'lu\n", _input_columns.size());
   for (size_t idx = 0; idx < _input_columns.size(); idx++) {
     auto const& schema = _metadata->get_schema(_input_columns[idx].schema_idx);
-    auto const type_id = to_type_id(schema, _strings_to_categorical, _options.timestamp_type.id());
+    auto const type_id = to_type_id(
+      schema, _strings_to_categorical, _options.timestamp_type.id(), _options.decimal_width);
     printf("\tC(%'lu, %s): %s\n",
            idx,
            _input_columns[idx].name.c_str(),
@@ -657,6 +704,17 @@ void reader_impl::preprocess_subpass_pages(read_mode mode, size_t chunk_read_lim
 
   // figure out which kernels to run
   subpass.kernel_mask = get_aggregated_decode_kernel_mask(subpass.pages, _stream);
+
+  // Decode definition and repetition levels for all subpass pages
+  // so they're available to compute_page_sizes and decode kernels.
+  // We can't determine subpass skip_rows & num_rows yet, so we use the pass values.
+  detail::preprocess_levels(subpass.pages,
+                            pass.chunks,
+                            _subpass_page_mask,
+                            pass.skip_rows,
+                            pass.num_rows,
+                            pass.level_type_size,
+                            _stream);
 
   // iterate over all input columns and determine if they contain lists.
   // TODO: we could do this once at the file level instead of every time we get in here. the set of
@@ -952,7 +1010,7 @@ void reader_impl::allocate_columns(read_mode mode, size_t skip_rows, size_t num_
       cudf::detail::reduce_by_key(reduction_keys,
                                   reduction_keys + num_keys_this_iter,
                                   size_input.cbegin(),
-                                  thrust::make_discard_iterator(),
+                                  cuda::make_discard_iterator(),
                                   sizes.d_begin() + (key_start / subpass.pages.size()),
                                   cuda::std::plus<>{},
                                   _stream);
@@ -1008,10 +1066,8 @@ void reader_impl::allocate_columns(read_mode mode, size_t skip_rows, size_t num_
   }
 
   // Need to set null mask bufs to all high bits
-  auto pinned_nullmask_bufs =
-    cudf::detail::make_pinned_vector_async<cudf::device_span<cudf::bitmask_type>>(
-      nullmask_bufs.size(), _stream);
-  std::move(nullmask_bufs.begin(), nullmask_bufs.end(), pinned_nullmask_bufs.begin());
+  auto pinned_nullmask_bufs = cudf::detail::make_pinned_vector(
+    cudf::host_span<cudf::device_span<cudf::bitmask_type> const>{nullmask_bufs}, _stream);
   cudf::detail::batched_memset<cudf::bitmask_type>(
     pinned_nullmask_bufs, std::numeric_limits<cudf::bitmask_type>::max(), _stream);
 }
@@ -1046,12 +1102,7 @@ cudf::detail::host_vector<size_t> reader_impl::calculate_page_string_offsets()
                               cuda::std::plus<>{},
                               _stream);
 
-  auto col_string_sizes =
-    cudf::detail::make_pinned_vector_async<size_t>(d_col_sizes.size(), _stream);
-  cudf::detail::cuda_memcpy(cudf::host_span<size_t>{col_string_sizes},
-                            cudf::device_span<size_t const>{d_col_sizes.data(), d_col_sizes.size()},
-                            _stream);
-  return col_string_sizes;
+  return cudf::detail::make_pinned_vector(d_col_sizes, _stream);
 }
 
 }  // namespace cudf::io::parquet::detail

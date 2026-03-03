@@ -1,7 +1,21 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
+
+// clang-format off
+// Forward declaring this type with hidden visibility supersedes the upstream
+// declaration and therefore hides instantiations in this file. This prevents
+// the specific symbol conflict observed in
+// https://github.com/rapidsai/rmm/issues/2219 between nvcomp's instantiation
+// of pool_memory_resource<pinned_host_memory_resource> and libcudf's, but it
+// does not fix the broader issues around rmm's symbol visibility that are
+// raised in that issue. Those will be fixed upstream at a later date.
+namespace rmm::mr {
+template <typename Upstream>
+class pool_memory_resource;
+}
+// clang-format on
 
 #include "io/utilities/getenv_or.hpp"
 

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from cython.operator cimport dereference
@@ -7,6 +7,8 @@ from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
 from libcpp.optional cimport optional, nullopt
 from libcpp.utility cimport move, pair
+from pylibcudf.libcudf cimport distinct_count as cpp_distinct_count
+from pylibcudf.libcudf cimport unique_count as cpp_unique_count
 from pylibcudf.libcudf.aggregation cimport reduce_aggregation, scan_aggregation
 from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.reduce cimport (
@@ -18,7 +20,7 @@ from pylibcudf.libcudf.reduce cimport (
     is_valid_aggregation as cpp_is_valid_aggregation,
 )
 from pylibcudf.libcudf.scalar.scalar cimport scalar
-from pylibcudf.libcudf.types cimport null_policy
+from pylibcudf.libcudf.types cimport nan_policy, null_policy, size_type
 from rmm.pylibrmm.stream cimport Stream
 from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 
@@ -30,7 +32,15 @@ from .utils cimport _get_stream, _get_memory_resource
 
 from pylibcudf.libcudf.reduce import scan_type as ScanType  # no-cython-lint
 
-__all__ = ["ScanType", "minmax", "reduce", "scan", "is_valid_reduce_aggregation"]
+__all__ = [
+    "ScanType",
+    "distinct_count",
+    "is_valid_reduce_aggregation",
+    "minmax",
+    "reduce",
+    "scan",
+    "unique_count",
+]
 
 cpdef Scalar reduce(
     Column col,
@@ -190,6 +200,73 @@ cpdef bool is_valid_reduce_aggregation(DataType source, Aggregation agg):
     True if the aggregation is supported.
     """
     return cpp_is_valid_aggregation(source.c_obj, agg.kind())
+
+
+cpdef size_type unique_count(
+    Column source,
+    null_policy null_handling,
+    nan_policy nan_handling,
+    Stream stream=None
+):
+    """Returns the number of unique consecutive elements in the input column.
+
+    For details, see :cpp:func:`cudf::unique_count`.
+
+    Parameters
+    ----------
+    source : Column
+        The input column to count the unique elements of.
+    null_handling : null_policy
+        Flag to include or exclude nulls from the count.
+    nan_handling : nan_policy
+        Flag to include or exclude NaNs from the count.
+
+    Returns
+    -------
+    size_type
+        The number of unique consecutive elements in the input column.
+
+    Notes
+    -----
+    If the input column is sorted, then unique_count can produce the
+    same result as distinct_count, but faster.
+    """
+    stream = _get_stream(stream)
+
+    return cpp_unique_count.unique_count(
+        source.view(), null_handling, nan_handling, stream.view()
+    )
+
+
+cpdef size_type distinct_count(
+    Column source,
+    null_policy null_handling,
+    nan_policy nan_handling,
+    Stream stream=None
+):
+    """Returns the number of distinct elements in the input column.
+
+    For details, see :cpp:func:`cudf::distinct_count`.
+
+    Parameters
+    ----------
+    source : Column
+        The input column to count the unique elements of.
+    null_handling : null_policy
+        Flag to include or exclude nulls from the count.
+    nan_handling : nan_policy
+        Flag to include or exclude NaNs from the count.
+
+    Returns
+    -------
+    size_type
+        The number of distinct elements in the input column.
+    """
+    stream = _get_stream(stream)
+
+    return cpp_distinct_count.distinct_count(
+        source.view(), null_handling, nan_handling, stream.view()
+    )
 
 
 ScanType.__str__ = ScanType.__repr__
