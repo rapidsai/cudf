@@ -33,6 +33,8 @@ import polars.testing
 
 import rmm.statistics
 
+from cudf_polars.experimental.rapidsmpf.spmd import spmd_execution
+
 # The dtype for count() aggregations depends on the presence
 # of the polars-runtime-64 package (`polars[rt64]`).
 HAS_POLARS_RT_64 = pl.config.plr.RUNTIME_REPR == "rt64"
@@ -434,7 +436,13 @@ class RunConfig:
                 )
             cluster = "single" if scheduler == "synchronous" else "distributed"
         elif cluster is not None:
-            scheduler = "synchronous" if cluster == "single" else "distributed"
+            match cluster:
+                case "single":
+                    scheduler = "synchronous"
+                case "distributed":
+                    scheduler = "distributed"
+                case "spmd":  # launched via rrun, not Dask
+                    scheduler = None
         else:
             cluster = "single"
             scheduler = "synchronous"
@@ -929,11 +937,12 @@ def build_parser(num_queries: int = 22) -> argparse.ArgumentParser:
         "--cluster",
         default=None,
         type=str,
-        choices=["single", "distributed"],
+        choices=["single", "distributed", "spmd"],
         help=textwrap.dedent("""\
             Cluster type to use with the 'streaming' executor.
                 - single      : Run locally in a single process
-                - distributed : Use Dask for multi-GPU execution"""),
+                - distributed : Use Dask for multi-GPU execution
+                - spmd        : SPMD execution via rrun launcher"""),
     )
     parser.add_argument(
         "-s",
@@ -1560,72 +1569,26 @@ def run_polars_query(
     )
 
 
-def run_polars_dask(
+def _run_query_loop(
     benchmark: Any,
     args: argparse.Namespace,
     run_config: RunConfig,
-) -> None:
-    """
-    Run benchmark queries using Dask as the execution backend.
-
-    Supports:
-
-    - ``--cluster single``: single-process execution.
-    - ``--cluster distributed``: multi-GPU Dask execution.
-
-    Does not support:
-
-    - ``--cluster spmd``.
-
-    Parameters
-    ----------
-    benchmark
-        Benchmark definition providing the query workload.
-    args
-        Parsed command-line arguments.
-    run_config
-        Resolved run configuration for this benchmark invocation.
-    """
-    validation_failures: list[int] = []
-    query_failures: list[tuple[int, int]] = []
-
-    client = initialize_dask_cluster(run_config, args)
-
-    # Update n_workers from the actual cluster when using scheduler file/address
-    if client is not None:
-        actual_n_workers = client.scheduler_info()["n_workers"]
-        run_config = dataclasses.replace(run_config, n_workers=actual_n_workers)
-
+    engine: pl.GPUEngine | None,
+    client: Any,
+    numeric_type: str,
+    date_type: str,
+    validation_files: dict[int, Path] | None,
+) -> tuple[
+    defaultdict[int, list[SuccessRecord | FailedRecord]],
+    dict[int, Any],
+    list[int],
+    list[tuple[int, int]],
+]:
+    """Execute all queries in ``run_config`` and return accumulated results."""
     records: defaultdict[int, list[SuccessRecord | FailedRecord]] = defaultdict(list)
     plans: dict[int, SerializablePlan] = {}
-    engine: pl.GPUEngine | None = None
-    numeric_type, date_type = check_input_data_type(run_config)
-
-    if args.validate_directory is not None:
-        validation_files = list_validation_files(args.validate_directory)
-    else:
-        validation_files = None
-
-    if run_config.executor != "cpu":
-        executor_options = get_executor_options(run_config, benchmark=benchmark)
-        if run_config.runtime == "rapidsmpf":
-            parquet_options = {
-                "use_rapidsmpf_native": run_config.native_parquet,
-            }
-        else:
-            parquet_options = {}
-        engine = pl.GPUEngine(
-            raise_on_fail=True,
-            memory_resource=rmm.mr.CudaAsyncMemoryResource(
-                release_threshold=args.rmm_release_threshold
-            )
-            if run_config.rmm_async
-            else None,
-            cuda_stream_policy=run_config.stream_policy,
-            executor=run_config.executor,
-            executor_options=executor_options,
-            parquet_options=parquet_options,
-        )
+    validation_failures: list[int] = []
+    query_failures: list[tuple[int, int]] = []
 
     for q_id in run_config.queries:
         try:
@@ -1663,80 +1626,63 @@ def run_polars_dask(
         if result.validation_failed:
             validation_failures.append(q_id)
 
-    run_config = dataclasses.replace(run_config, records=dict(records), plans=plans)
+    return records, plans, validation_failures, query_failures
 
-    # consolidate logs
-    if _HAS_STRUCTLOG and run_config.collect_traces:
 
-        def gather_logs() -> str:
-            logger = logging.getLogger()
-            return logger.handlers[0].stream.getvalue()  # type: ignore[attr-defined]
+def _consolidate_logs(run_config: RunConfig, client: Any) -> RunConfig:
+    """Merge structlog traces from the local process and Dask workers into run_config."""
+    if not (_HAS_STRUCTLOG and run_config.collect_traces):
+        return run_config
 
-        if client is not None:
-            # Gather logs from both client (for Query Plan) and workers
-            worker_logs = "\n".join(client.run(gather_logs).values())
-            client_logs = gather_logs()
-            all_logs = client_logs + "\n" + worker_logs
-        else:
-            all_logs = gather_logs()
-
-        parsed_logs = [json.loads(log) for log in all_logs.splitlines() if log]
-        # Some other log records can end up in here. Filter those out.
-        scope_values = {s.value for s in Scope}
-        parsed_logs = [log for log in parsed_logs if log.get("scope") in scope_values]
-        # Now we want to augment the existing Records with the trace data.
-
-        def group_key(x: dict) -> int:
-            return x["query_id"]
-
-        def sort_key(x: dict) -> tuple[int, int]:
-            return x["query_id"], x["iteration"]
-
-        grouped = itertools.groupby(
-            sorted(parsed_logs, key=sort_key),
-            key=group_key,
-        )
-
-        for query_id, run_logs_group in grouped:
-            run_logs = list(run_logs_group)
-            by_iteration = [
-                list(x)
-                for _, x in itertools.groupby(run_logs, key=lambda x: x["iteration"])
-            ]
-            run_records = run_config.records[query_id]
-            assert len(by_iteration) == len(run_records)  # same number of iterations
-            all_traces = [list(iteration) for iteration in by_iteration]
-
-            new_records: list[SuccessRecord | FailedRecord] = []
-            for rec, traces in zip(run_records, all_traces, strict=True):
-                if rec.status == "success":
-                    new_records.append(dataclasses.replace(rec, traces=traces))
-                else:
-                    new_records.append(rec)
-
-            run_config.records[query_id] = new_records
-
-    if args.summarize:
-        run_config.summarize()
+    def gather_logs() -> str:
+        logger = logging.getLogger()
+        return logger.handlers[0].stream.getvalue()  # type: ignore[attr-defined]
 
     if client is not None:
-        client.close(timeout=60)
+        # Gather logs from both client (for Query Plan) and workers
+        worker_logs = "\n".join(client.run(gather_logs).values())
+        client_logs = gather_logs()
+        all_logs = client_logs + "\n" + worker_logs
+    else:
+        all_logs = gather_logs()
 
-    if args.validate and run_config.executor != "cpu":
-        print("\nValidation Summary")
-        print("==================")
-        if validation_failures:
-            print(
-                f"{len(validation_failures)} queries failed validation: {sorted(set(validation_failures))}"
-            )
-        else:
-            print("✅ All validated queries passed.")
+    parsed_logs = [json.loads(log) for log in all_logs.splitlines() if log]
+    # Some other log records can end up in here. Filter those out.
+    scope_values = {s.value for s in Scope}
+    parsed_logs = [log for log in parsed_logs if log.get("scope") in scope_values]
+    # Now we want to augment the existing Records with the trace data.
 
-    args.output.write(json.dumps(run_config.serialize(engine=engine)))
-    args.output.write("\n")
+    def group_key(x: dict) -> int:
+        return x["query_id"]
 
-    exit_code = 1 if (query_failures or validation_failures) else 0
-    sys.exit(exit_code)
+    def sort_key(x: dict) -> tuple[int, int]:
+        return x["query_id"], x["iteration"]
+
+    grouped = itertools.groupby(
+        sorted(parsed_logs, key=sort_key),
+        key=group_key,
+    )
+
+    for query_id, run_logs_group in grouped:
+        run_logs = list(run_logs_group)
+        by_iteration = [
+            list(x)
+            for _, x in itertools.groupby(run_logs, key=lambda x: x["iteration"])
+        ]
+        run_records = run_config.records[query_id]
+        assert len(by_iteration) == len(run_records)  # same number of iterations
+        all_traces = [list(iteration) for iteration in by_iteration]
+
+        new_records: list[SuccessRecord | FailedRecord] = []
+        for rec, traces in zip(run_records, all_traces, strict=True):
+            if rec.status == "success":
+                new_records.append(dataclasses.replace(rec, traces=traces))
+            else:
+                new_records.append(rec)
+
+        run_config.records[query_id] = new_records
+
+    return run_config
 
 
 def run_polars(
@@ -1746,7 +1692,75 @@ def run_polars(
     """Run the queries using the given benchmark and executor options."""
     vars(args).update({"query_set": benchmark.name})
     run_config = RunConfig.from_args(args)
-    run_polars_dask(benchmark, args, run_config)
+
+    if run_config.cluster == "spmd":
+        run_polars_spmd(benchmark, args, run_config)
+        return  # run_polars_spmd calls sys.exit; return keeps mypy happy
+
+    numeric_type, date_type = check_input_data_type(run_config)
+    validation_files = (
+        list_validation_files(args.validate_directory)
+        if args.validate_directory is not None
+        else None
+    )
+
+    client = initialize_dask_cluster(run_config, args)
+    if client is not None:
+        run_config = dataclasses.replace(
+            run_config, n_workers=client.scheduler_info()["n_workers"]
+        )
+
+    engine = None
+    if run_config.executor != "cpu":
+        executor_options = get_executor_options(run_config, benchmark=benchmark)
+        parquet_options = (
+            {"use_rapidsmpf_native": True} if run_config.runtime == "rapidsmpf" else {}
+        )
+        engine = pl.GPUEngine(
+            raise_on_fail=True,
+            memory_resource=rmm.mr.CudaAsyncMemoryResource(
+                release_threshold=args.rmm_release_threshold
+            )
+            if run_config.rmm_async
+            else None,
+            cuda_stream_policy=run_config.stream_policy,
+            executor=run_config.executor,
+            executor_options=executor_options,
+            parquet_options=parquet_options,
+        )
+
+    records, plans, validation_failures, query_failures = _run_query_loop(
+        benchmark,
+        args,
+        run_config,
+        engine,
+        client,
+        numeric_type,
+        date_type,
+        validation_files,
+    )
+    run_config = dataclasses.replace(run_config, records=dict(records), plans=plans)
+    run_config = _consolidate_logs(run_config, client=client)
+    if client is not None:
+        client.close(timeout=60)
+
+    if args.summarize:
+        run_config.summarize()
+
+    if args.validate and run_config.executor != "cpu":
+        print("\nValidation Summary")
+        print("==================")
+        if validation_failures:
+            print(
+                f"{len(validation_failures)} queries failed validation: "
+                f"{sorted(set(validation_failures))}"
+            )
+        else:
+            print("✅ All validated queries passed.")
+
+    args.output.write(json.dumps(run_config.serialize(engine=engine)))
+    args.output.write("\n")
+    sys.exit(1 if (query_failures or validation_failures) else 0)
 
 
 def setup_logging(query_id: int, iteration: int) -> None:  # noqa: D103
@@ -1980,3 +1994,43 @@ def run_duckdb(
 
     args.output.write(json.dumps(run_config.serialize(engine=None)))
     args.output.write("\n")
+
+
+def run_polars_spmd(
+    benchmark: Any,
+    args: argparse.Namespace,
+    run_config: RunConfig,
+) -> None:
+    """Run benchmark queries using SPMD execution via the ``rrun`` launcher."""
+    executor_options = get_executor_options(run_config, benchmark=benchmark)
+    # "runtime" and "cluster" are reserved — spmd_execution sets them
+    executor_options.pop("runtime", None)
+    executor_options.pop("cluster", None)
+    parquet_options = (
+        {"use_rapidsmpf_native": True} if run_config.native_parquet else {}
+    )
+    numeric_type, date_type = check_input_data_type(run_config)
+    validation_files = (
+        list_validation_files(args.validate_directory)
+        if args.validate_directory is not None
+        else None
+    )
+    with spmd_execution(
+        executor_options=executor_options,
+        parquet_options=parquet_options,
+    ) as (_, engine):
+        records, plans, validation_failures, query_failures = _run_query_loop(
+            benchmark,
+            args,
+            run_config,
+            engine,
+            None,
+            numeric_type,
+            date_type,
+            validation_files,
+        )
+    run_config = dataclasses.replace(run_config, records=dict(records), plans=plans)
+    # engine is not JSON-serializable (holds the SPMD Cython context)
+    args.output.write(json.dumps(run_config.serialize(engine=None)))
+    args.output.write("\n")
+    sys.exit(1 if (query_failures or validation_failures) else 0)
