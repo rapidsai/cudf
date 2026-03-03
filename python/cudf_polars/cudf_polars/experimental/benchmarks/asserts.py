@@ -198,10 +198,7 @@ def assert_tpch_result_equal(
 
     if sort_by:
         by, descending = list(zip(*sort_by, strict=True))
-    else:
-        by, descending = (), ()
 
-    if sort_by:
         # First, validate the sortedness. We can do this independently for each dataframe.
         # And we don't really need to worry about floating-point columns here.
         for side, df in [("left", left), ("right", right)]:
