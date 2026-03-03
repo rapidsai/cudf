@@ -4,6 +4,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import pytest
 from rapidsmpf.bootstrap import is_running_with_rrun
 
@@ -38,6 +40,23 @@ def test_spmd_execution_reserved_keys() -> None:
             spmd_execution(executor_options={key: "anything"}),
         ):
             pass
+
+
+def test_spmd_execution_engine_kwargs_reserved_keys() -> None:
+    """engine_kwargs rejects keys that are set explicitly by spmd_execution."""
+    for key in ("raise_on_fail", "memory_resource", "executor"):
+        kwargs: dict[str, Any] = {key: "anything"}
+        with (
+            pytest.raises(ValueError, match="reserved"),
+            spmd_execution(**kwargs),
+        ):
+            pass
+
+
+def test_spmd_execution_engine_kwargs_parquet_options() -> None:
+    """engine_kwargs forwards parquet_options to GPUEngine without error."""
+    with spmd_execution(parquet_options={}) as (ctx, engine):
+        assert isinstance(engine, pl.GPUEngine)
 
 
 def test_spmd_execution_custom_mr() -> None:

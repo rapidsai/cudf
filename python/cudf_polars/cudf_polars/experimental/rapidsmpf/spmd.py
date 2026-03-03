@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from rapidsmpf import bootstrap
 from rapidsmpf.coll import AllGather
@@ -211,6 +211,7 @@ def spmd_execution(
     executor_options: dict[str, object] | None = None,
     mr: rmm.mr.DeviceMemoryResource | None = None,
     options: Options | None = None,
+    **engine_kwargs: Any,
 ) -> Iterator[tuple[Context, pl.GPUEngine]]:
     """
     Context manager that bootstraps a RapidsMPF SPMD context and a matching GPUEngine.
@@ -262,6 +263,11 @@ def spmd_execution(
     options
         RapidsMPF options. Defaults to ``Options(get_environment_variables())``
         when ``None``.
+    **engine_kwargs
+        Extra keyword arguments forwarded directly to
+        :class:`~polars.lazyframe.engine_config.GPUEngine`.  For example,
+        pass ``parquet_options={"use_rapidsmpf_native": True}`` to enable
+        native Parquet reads.
 
     Yields
     ------
@@ -281,6 +287,9 @@ def spmd_execution(
     ValueError
         If ``executor_options`` contains any of the reserved keys
         ``"runtime"``, ``"cluster"``, or ``"spmd"``.
+    ValueError
+        If ``engine_kwargs`` contains any of the reserved keys
+        ``"raise_on_fail"``, ``"memory_resource"``, or ``"executor"``.
 
     Examples
     --------
@@ -296,11 +305,15 @@ def spmd_execution(
             "Use `rrun -np <nproc> python -m pytest ...` to run SPMD tests."
         )
 
-    reserved = {"runtime", "cluster", "spmd"}
-    if executor_options and reserved & executor_options.keys():
-        raise ValueError(
-            f"executor_options may not contain reserved keys: {reserved & executor_options.keys()}"
-        )
+    # Check for reserved keys.
+    if executor_options and (
+        bad := {"runtime", "cluster", "spmd"} & executor_options.keys()
+    ):
+        raise ValueError(f"executor_options may not contain reserved keys: {bad}")
+    if engine_kwargs and (
+        bad := {"raise_on_fail", "memory_resource", "executor"} & engine_kwargs.keys()
+    ):
+        raise ValueError(f"engine_kwargs may not contain reserved keys: {bad}")
 
     options = options if options is not None else Options(get_environment_variables())
     mr = RmmResourceAdaptor(mr if mr is not None else rmm.mr.CudaAsyncMemoryResource())
@@ -322,6 +335,7 @@ def spmd_execution(
                     "cluster": "spmd",
                     "spmd": ContextSPMD(context=ctx, py_executor=py_executor),
                 },
+                **engine_kwargs,
             )
             yield ctx, engine
     finally:
