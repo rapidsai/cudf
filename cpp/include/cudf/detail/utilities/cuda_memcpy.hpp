@@ -22,23 +22,35 @@ void cuda_memcpy_async_impl(
 /**
  * @brief Wrapper around cudaMemcpyBatchAsync
  *
- * @param dsts Host pointer to a list of device pointers.
- * @param srcs Host pointer to a list of device pointers.
+ * Uses `cudaMemcpyBatchAsync` on CUDA 13.0+ with `cudaMemcpySrcAccessOrderStream`, which defers
+ * reading the source buffers until the stream reaches each copy. The source buffers must therefore
+ * remain valid until the stream has executed the copies; for device memory this is naturally
+ * satisfied, but for host memory the caller must ensure the source is not freed before the stream
+ * is synchronized.
+ *
+ * @param dsts Host pointer to a list of destination pointers.
+ * @param srcs Host pointer to a list of source pointers.
  * @param sizes Host pointer to a list of sizes.
  * @param count Size of dsts, srcs, sizes arrays
- * @param stream CUDA stream. The wrapper enforces stream order access.
+ * @param stream CUDA stream on which copies are enqueued
  */
 [[nodiscard]] cudaError_t memcpy_batch_async(
   void** dsts, void** srcs, std::size_t* sizes, std::size_t count, rmm::cuda_stream_view stream);
 
 /**
- * @brief Wrapper to call `memcpy_batch_async` for a single source to destination buffer.
+ * @brief Asynchronously copies a single buffer, wrapping `memcpy_batch_async`.
+ *
+ * Carries the same source-lifetime requirement as `memcpy_batch_async`: the source buffer must
+ * remain valid until the stream has executed the copy.
+ *
+ * Prefer `cudf::detail::cuda_memcpy_async` for host/device copies involving typed spans.
+ * Use this function for device-to-device copies or when a raw `void*` interface is required.
  *
  * @param dst Destination memory address
  * @param src Source memory address
  * @param count Size in bytes to copy
  * @param kind Type of memory copy
- * @param stream CUDA stream
+ * @param stream CUDA stream on which the copy is enqueued
  * @return cudaError_t CUDA error code
  */
 [[nodiscard]] cudaError_t memcpy_async(

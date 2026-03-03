@@ -755,16 +755,13 @@ rmm::device_uvector<int32_t> v2{100, s, mr};
 ## Memory Copies
 
 libcudf code should prefer `cudf::detail::cuda_memcpy_async` and `cudf::detail::cuda_memcpy` over
-direct calls to `cudaMemcpyAsync`. The cudf wrappers may use `cudaMemcpyBatchAsync` on supported
-systems (CUDA 13.0+), which reduces driver-side locking overhead compared to individual
-`cudaMemcpyAsync` calls.
-
-For device-to-device copies, use `cudf::detail::memcpy_async` (which wraps `cudaMemcpyBatchAsync`
-when available) and check errors with `CUDF_CUDA_TRY` at the call site:
-
-```c++
-CUDF_CUDA_TRY(cudf::detail::memcpy_async(dst, src, size_bytes, cudaMemcpyDefault, stream));
-```
+direct calls to `cudaMemcpyAsync`. The cudf wrappers for `cuda_memcpy_async` may use
+`cudaMemcpyBatchAsync` on CUDA 13.0+, but not primarily for the "batch"
+properties:
+- `cudaMemcpyBatchAsync` can be lower-overhead, it is actually asynchronous in certain cases where
+  `cudaMemcpyAsync` cannot be asynchronous
+- `cudaMemcpyBatchAsync` may also reduce multi-thread lock contention compared to `cudaMemcpyAsync`
+  `cudaMemcpyAsync` calls
 
 For host-to-device or device-to-host copies, prefer the typed span-based wrappers:
 
@@ -772,6 +769,19 @@ For host-to-device or device-to-host copies, prefer the typed span-based wrapper
 cudf::detail::cuda_memcpy_async<T>(device_span<T>{dst}, host_span<T const>{src}, stream);
 cudf::detail::cuda_memcpy_async<T>(host_span<T>{dst}, device_span<T const>{src}, stream);
 ```
+
+For device-to-device copies, or when a raw `void*` interface is required, use
+`cudf::detail::memcpy_async` and check errors with `CUDF_CUDA_TRY` at the call site:
+
+```c++
+CUDF_CUDA_TRY(cudf::detail::memcpy_async(dst, src, size_bytes, cudaMemcpyDefault, stream));
+```
+
+**Important:** `cudf::detail::memcpy_async` uses `cudaMemcpyBatchAsync` with
+`cudaMemcpySrcAccessOrderStream`, which defers reading the source buffer until the stream reaches
+the copy. The **source buffer must remain valid until the stream has executed the copy**. For
+device memory this is naturally satisfied; for host memory the caller must ensure the source is not
+freed before the stream is synchronized.
 
 ## Default Parameters
 
