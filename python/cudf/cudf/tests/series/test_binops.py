@@ -12,12 +12,10 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pytest
-from packaging.version import parse
 
 import cudf
 from cudf.core._compat import (
     PANDAS_CURRENT_SUPPORTED_VERSION,
-    PANDAS_GE_210,
     PANDAS_GE_220,
     PANDAS_VERSION,
 )
@@ -1147,19 +1145,12 @@ def test_series_compare_scalar(
 ):
     request.applymarker(
         pytest.mark.xfail(
-            numeric_and_temporal_types_as_str
-            in {"datetime64[ns]", "timedelta64[ns]"}
-            and not (
+            numeric_and_temporal_types_as_str == "timedelta64[ns]"
+            or (
                 numeric_and_temporal_types_as_str == "datetime64[ns]"
-                and comparison_op in {operator.eq, operator.ne}
-            )
-            and not (
-                # TODO: The pandas/numpy verison check could be made more exact
-                (not PANDAS_GE_210 or parse(np.__version__) == parse("1.26"))
-                and numeric_and_temporal_types_as_str == "timedelta64[ns]"
-                and comparison_op in {operator.eq, operator.ne}
+                and comparison_op not in {operator.eq, operator.ne}
             ),
-            reason=f"Fails with {numeric_and_temporal_types_as_str}",
+            reason=f"Fails with {numeric_and_temporal_types_as_str} with {comparison_op.__name__}",
         )
     )
 
