@@ -21,7 +21,7 @@ license = "Apache-2.0"
 license-files = ["LICENSE"]
 requires-python = ">=3.11"
 dependencies = [
-    "confluent-kafka>=2.8.0,<2.9.0",
+    "confluent-kafka",
     "cudf==26.4.*,>=0.0.0a0",
     "cudf_kafka==26.4.*,>=0.0.0a0",
     "streamz",
@@ -35,6 +35,7 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
 ]
 
 [project.optional-dependencies]
