@@ -21,7 +21,7 @@ from cudf_polars.experimental.rapidsmpf.spmd import (
 
 pytestmark = pytest.mark.skipif(
     not is_running_with_rrun(),
-    reason="use `rrun -np <nproc> pytest ...` to run SPMD tests",
+    reason="use `rrun -n <nproc> pytest ...` to run SPMD tests",
 )
 
 
@@ -105,6 +105,16 @@ def test_allgather_polars_dataframe() -> None:
     assert result.shape == (nranks, 2)
     assert result["rank"].to_list() == list(range(nranks))
     assert result["val"].to_list() == [r * 2 for r in range(nranks)]
+
+
+def test_spmd_execution_max_workers() -> None:
+    """executor_options forwards rapidsmpf_py_executor_max_workers to the thread pool."""
+    with spmd_execution(executor_options={"rapidsmpf_py_executor_max_workers": 2}) as (
+        ctx,
+        engine,
+    ):
+        result = pl.LazyFrame({"a": [1, 2, 3]}).collect(engine=engine)
+    assert result.shape == (3, 1)
 
 
 def test_allgather_polars_dataframe_multi_column() -> None:

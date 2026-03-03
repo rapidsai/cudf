@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from rapidsmpf import bootstrap
 from rapidsmpf.coll import AllGather
@@ -220,7 +220,7 @@ def spmd_execution(
 
     SPMD (Single Program, Multiple Data) is a parallel programming style where
     every process runs the *same* Python script independently on its own slice of
-    data.  When you launch with ``rrun -np N pytest`` (or any ``rrun`` invocation),
+    data.  When you launch with ``rrun -n N pytest`` (or any ``rrun`` invocation),
     ``N`` identical processes are started.  Each process owns a rank-local
     :class:`~polars.LazyFrame` that represents its fragment of the distributed
     dataset.  Collective operations — shuffles, all-gathers, joins — coordinate
@@ -283,7 +283,7 @@ def spmd_execution(
     RuntimeError
         If not running under the ``rrun`` launcher (i.e.
         :func:`rapidsmpf.bootstrap.is_running_with_rrun` returns ``False``).
-        Launch with ``rrun -np <nproc> python -m pytest ...`` to fix this.
+        Launch with ``rrun -n <nproc> python -m pytest ...`` to fix this.
     ValueError
         If ``executor_options`` contains any of the reserved keys
         ``"runtime"``, ``"cluster"``, or ``"spmd"``.
@@ -302,17 +302,16 @@ def spmd_execution(
     if not bootstrap.is_running_with_rrun():
         raise RuntimeError(
             "spmd_execution() requires the rrun launcher. "
-            "Use `rrun -np <nproc> python -m pytest ...` to run SPMD tests."
+            "Use `rrun -n <nproc> python -m pytest ...` to run SPMD tests."
         )
 
+    executor_options = executor_options or {}
+    engine_kwargs = engine_kwargs or {}
+
     # Check for reserved keys.
-    if executor_options and (
-        bad := {"runtime", "cluster", "spmd"} & executor_options.keys()
-    ):
+    if bad := {"runtime", "cluster", "spmd"} & executor_options.keys():
         raise ValueError(f"executor_options may not contain reserved keys: {bad}")
-    if engine_kwargs and (
-        bad := {"raise_on_fail", "memory_resource", "executor"} & engine_kwargs.keys()
-    ):
+    if bad := {"raise_on_fail", "memory_resource", "executor"} & engine_kwargs.keys():
         raise ValueError(f"engine_kwargs may not contain reserved keys: {bad}")
 
     options = options if options is not None else Options(get_environment_variables())
@@ -322,7 +321,12 @@ def spmd_execution(
         type=bootstrap.BackendType.AUTO,
         options=options,
     )
-    py_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="spmd-executor")
+    py_executor = ThreadPoolExecutor(
+        max_workers=cast(
+            int, executor_options.get("rapidsmpf_py_executor_max_workers", 1)
+        ),
+        thread_name_prefix="spmd-executor",
+    )
     try:
         with Context.from_options(comm, mr, options) as ctx:
             engine = pl.GPUEngine(
@@ -330,7 +334,7 @@ def spmd_execution(
                 memory_resource=ctx.br().device_mr,
                 executor="streaming",
                 executor_options={
-                    **(executor_options or {}),
+                    **executor_options,
                     "runtime": "rapidsmpf",
                     "cluster": "spmd",
                     "spmd": ContextSPMD(context=ctx, py_executor=py_executor),
