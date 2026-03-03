@@ -30,6 +30,13 @@ Pre-generated parameters for PDS-DS queries across a set of scale factors.
 - **Query 14**: `year`, `day` (day of month)
 - **Query 15**: `year`, `qoy` (quarter of year)
 - **Query 16**: `year`, `month`, `state`, `county` (list of 5 counties)
+- **Query 17**: `year`
+- **Query 18**: `year`, `month` (list of 6 months), `state` (list of 7 states), `es` (education status), `gen` (gender)
+- **Query 19**: `year`, `month`, `manager` (manager ID)
+- **Query 20**: `year`, `sdate` (start date), `category` (list of 3 categories)
+- **Query 21**: `year`, `sales_date`
+- **Query 22**: `dms` (d_month_seq start value)
+- **Query 23**: `year`, `month`
 - **Query 24**: `market`, `color` (list of 2 colors), `amountone` (aggregation field)
 - **Query 25**: `year`, `agg` (aggregation function: sum, min, max, avg, stddev_samp)
 - **Query 26**: `year`, `gen` (gender), `ms` (marital status), `es` (education status)
@@ -43,6 +50,23 @@ Pre-generated parameters for PDS-DS queries across a set of scale factors.
 - **Query 34**: `year`, `bpone` (buy potential 1), `bptwo` (buy potential 2), `county` (list of 8 counties)
 - **Query 35**: `year`, `aggone`, `aggtwo`, `aggthree` (aggregation functions: sum/min/max/avg/stddev_samp)
 - **Query 36**: `year`, `state` (list of 8 states)
+- **Query 37**: `price`, `manufact` (list of 4 manufacturer IDs), `invdate` (inventory date)
+- **Query 38**: `dms` (d_month_seq value)
+- **Query 39**: `year`, `month`
+- **Query 40**: `sales_date`, `year`
+- **Query 41**: `manufact` (manufacturer ID), `size` (list of 6 sizes), `color` (list of 16 colors), `unit` (list of 16 units)
+- **Query 42**: `year`, `month`
+- **Query 43**: `year`, `gmt` (GMT offset)
+- **Query 53**: `dms` (d_month_seq), `categories1` (list of 3), `classes1` (list of 4), `brands1` (list of 4), `categories2` (list of 3), `classes2` (list of 4), `brands2` (list of 4)
+- **Query 54**: `category`, `class`, `month`, `year`
+- **Query 55**: `year`, `month`, `manager_id`
+- **Query 56**: `year`, `month`, `colors` (list of 3), `gmt_offset`
+- **Query 57**: `year`
+- **Query 58**: `sales_date`
+- **Query 59**: `dms` (d_month_seq)
+- **Query 60**: `year`, `month`, `category`, `gmt_offset`
+- **Query 61**: `year`, `month`, `gmt_offset`, `category`
+- **Query 62**: `dms` (d_month_seq)
 
 ## Usage
 
@@ -91,8 +115,7 @@ params = load_parameters(scale_factor=1, query_id=8, qualification=True)
       "10": {"county": ["Lake County", "Terrell County", ...], "month": 4, "year": 2001},
       "11": {"year": 2000, "select_one": "t_s_secyear.customer_preferred_cust_flag"}
     },
-    "100": {
-      "1": {"county": 9, "state": "MI", "year": 2001, "agg_field": "SR_RETURN_AMT"},
+    "10": {
       ...
     }
   }

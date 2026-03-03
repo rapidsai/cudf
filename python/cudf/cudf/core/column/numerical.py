@@ -607,8 +607,12 @@ class NumericalColumn(NumericalBaseColumn):
         if self.dtype.kind == "b":
             conv_func = functools.partial(
                 plc.strings.convert.convert_booleans.from_booleans,
-                true_string=pa_scalar_to_plc_scalar(pa.scalar("True")),
-                false_string=pa_scalar_to_plc_scalar(pa.scalar("False")),
+                true_string=plc.Scalar.from_py(
+                    "True", dtype=plc.DataType(plc.TypeId.STRING)
+                ),
+                false_string=plc.Scalar.from_py(
+                    "False", dtype=plc.DataType(plc.TypeId.STRING)
+                ),
             )
         elif self.dtype.kind in {"i", "u"}:
             conv_func = plc.strings.convert.convert_integers.from_integers
