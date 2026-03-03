@@ -22,6 +22,7 @@ from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 
 import pylibcudf as plc
 
+import cudf_polars.dsl.tracing
 from cudf_polars.containers import DataType
 from cudf_polars.dsl.expr import Col, NamedExpr
 from cudf_polars.dsl.ir import IR, Distinct, GroupBy, Select
@@ -215,35 +216,56 @@ async def _local_aggregation(
             break
 
         chunks_received += 1
-        chunk = await evaluate_chunk(
-            context,
-            TableChunk.from_message(msg),
-            decomposed.piecewise_ir,
-            ir_context=ir_context,
-        )
+        cd = msg.get_content_description()
+        with cudf_polars.dsl.tracing.bound_contextvars(
+            content_sizes=cd.content_sizes,
+            spillable=cd.spillable,
+            sequence_number=msg.sequence_number,
+            chunks_received=chunks_received,
+        ):
+            chunk = await evaluate_chunk(
+                context,
+                TableChunk.from_message(msg),
+                decomposed.piecewise_ir,
+                ir_context=ir_context,
+            )
         total_size += chunk.data_alloc_size(MemoryType.DEVICE)
         evaluated_chunks.append(chunk)
         if total_size > target_partition_size and len(evaluated_chunks) > 1:
-            evaluated_chunks = [
-                await evaluate_batch(
-                    evaluated_chunks,
-                    context,
-                    decomposed.reduction_ir,
-                    ir_context=ir_context,
-                )
-            ]
+            # TODO: Some kind of operation type here.
+            with cudf_polars.dsl.tracing.bound_contextvars(
+                sequence_number=msg.sequence_number,
+                total_size=total_size,
+                chunks_received=chunks_received,
+                chunks_evaluated=len(evaluated_chunks),
+                target_partition_size=target_partition_size,
+            ):
+                evaluated_chunks = [
+                    await evaluate_batch(
+                        evaluated_chunks,
+                        context,
+                        decomposed.reduction_ir,
+                        ir_context=ir_context,
+                    )
+                ]
             total_size = evaluated_chunks[0].data_alloc_size(MemoryType.DEVICE)
         if total_size > target_partition_size and allow_early_exit:
             break
 
     aggregated: TableChunk
     if len(evaluated_chunks) > 1:
-        aggregated = await evaluate_batch(
-            evaluated_chunks,
-            context,
-            decomposed.reduction_ir,
-            ir_context=ir_context,
-        )
+        with cudf_polars.dsl.tracing.bound_contextvars(
+            total_size=total_size,
+            chunks_received=chunks_received,
+            chunks_evaluated=len(evaluated_chunks),
+            target_partition_size=target_partition_size,
+        ):
+            aggregated = await evaluate_batch(
+                evaluated_chunks,
+                context,
+                decomposed.reduction_ir,
+                ir_context=ir_context,
+            )
     elif evaluated_chunks:
         aggregated = evaluated_chunks[0]
     else:
@@ -656,7 +678,9 @@ async def groupby_actor(
     collective_ids
         The collective IDs.
     """
-    async with shutdown_on_error(context, ch_in, ch_out, trace_ir=ir) as tracer:
+    async with shutdown_on_error(
+        context, ch_in, ch_out, trace_ir=ir, ir_context=ir_context
+    ) as tracer:
         metadata_in = await recv_metadata(ch_in, context)
 
         nranks = comm.nranks

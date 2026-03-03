@@ -88,17 +88,74 @@ shape: (3, 3)
 
 cudf-polars can optionally trace execution of each node in the query plan.
 To enable tracing, set the environment variable ``CUDF_POLARS_LOG_TRACES`` to a
-true value ("1", "true", "y", "yes") before starting your process. This will
-capture and log information about each node before and after it executes, and includes
-information on timing, memory usage, and the input and output dataframes. The log message
-includes the following fields:
+true value ("1", "true", "y", "yes") before starting your process.
+
+cudf-polars logs traces at four scopes (levels):
+
+1. `plan`: These generally happen once per query. This will include things
+   like the (serialized) query plan.
+2. `actor`: (rapidsmpf runtime only). There will be roughly one `actor`
+   trace per node in the logical plan.
+3. `evaluate_ir_node`: Logs the evaluation of a physical node in the query plan.
+   Note that one logical node might expand to more than one physical nodes.
+4. `table_chunk`: Logs the processing of a *table chunk*, when using the rapidsmpf
+   runtime.
+
+Each trace includes a `scope` key indicating which level that trace belongs to.
+`actor`-scoped nodes will be nested under a `plan`-scoped node. When using the
+rapidsmpf runtime, both `evaluate_ir_node`- and `table_chunk`-scoped nodes will
+be nested under an `actor`-scoped node.
+
+### Schemas
+
+The different scopes have different schemas. Fields in **bold** are required / always present.
+
+#### scope=plan
 
 | Field Name | Type  | Description |
 | ---------- | ----- | ----------- |
-| type       | string | The name of the IR node |
-| start      | int    | A nanosecond-precision counter indicating when this node started executing |
-| stop       | int    | A nanosecond-precision counter indicating when this node finished executing |
-| overhead   | int    | The overhead, in nanoseconds, added by tracing |
+| **scope**  | Literal["plan"] | The string literal `"plan"`. Useful for distinguishing from other types of traces. |
+| **plan**   | `PlanObject` | A serialized representation of the query plan. See #TODO below |
+| **event**  | String | A message lik,e "Query Plan" |
+| **cudf_polars_query_id** | UUID4 | A unique identifier for the polars query being executed. All traces logged as part of this query use this ID. |
+
+#### scope=actor
+
+| Field Name | Type  | Description |
+| ---------- | ----- | ----------- |
+| **scope**      | Literal["actor"] | The string literal `"actor"`. Useful for distinguishing from other types of traces. |
+| **start**      | int   | A nanosecond-resolution counter indicating when the actor started. Note: actors generally start early in the query and suspend waiting for data. |
+| **stop**      | int   | A nanosecond-resolution counter indicating when the actor completed. |
+| **event**      | String | A message like "Streaming Actor". |
+| **actor_ir_type** | String | The type of the actor, like `"Scan"`. |
+| **actor_ir_id**   | int    | A unique identifier for the actor. All traces logged under this actor will include this value. |
+| chunk_count | int | A counter for how many table chunks have been processed by this actor at the time of logging. |
+| duplicated | bool | Whether the output rows are duplicated across ranks (e.g. after an allgather). |
+| row_count       | int  | Total row count produced by this node during execution. |
+
+#### scope=table_chunk
+
+| Field Name | Type  | Description |
+| ---------- | ----- | ----------- |
+| **scope** | `Literal["table_chunk"]` | The string literal `"actor"`. Useful for distinguishing from other types of traces. |
+| chunk_counter | int | An integer counter giving the number of table chunks processed at the time of logging. |
+| sequence_number | int | The sequence counter of the rapidsmpf message. |
+| content_sizes | dict[str, int] | The sizes from the rapidsmpf message's content description. |
+| spillable | bool | Whether the rapidsmpf message is spillable. |
+| start | int | A nanosecond-resolution counter indicating when the processing of that table chunk started. This can include time waiting to send or receive a message. |
+| stop | int | A nanosecond-resolution counter indicating when the processing of that table chunk stopped. This can include time waiting to send or receive a message. |
+| actor_ir_type | String | The type of the parent actor, like `"Scan"`. |
+| actor_ir_id   | int    | A unique identifier for the parent actor. |
+
+#### scope=evaluate_ir_node
+
+| Field Name | Type  | Description |
+| ---------- | ----- | ----------- |
+| **scope** | `Literal["evaluate_ir_node"]` | The string literal `"evaluate_ir_node"`. Useful for distinguishing from other types of traces. |
+| **type**       | string | The name of the IR node |
+| **start**      | int    | A nanosecond-precision counter indicating when this node started executing |
+| **stop**       | int    | A nanosecond-precision counter indicating when this node finished executing |
+| **overhead_duration**   | int    | The overhead, in nanoseconds, added by tracing |
 | `count_frames_{phase}` | int | The number of dataframes for the input / output `phase`. This metric can be disabled by setting `CUDF_POLARS_LOG_TRACES_DATAFRAMES=0`. |
 | `frames_{phase}` | `list[dict]` | A list with dictionaries with "shape" and "size" fields, one per input dataframe, for the input / output `phase`. This metric can be disabled by setting `CUDF_POLARS_LOG_TRACES_DATAFRAMES=0`. |
 | `total_bytes_{phase}` | int | The sum of the size (in bytes) of the dataframes for the input / output `phase`. This metric can be disabled by setting `CUDF_POLARS_LOG_TRACES_MEMORY=0`. |
@@ -145,6 +202,37 @@ shape: (2, 3)
 │ a   ┆ 1   ┆ 2   │
 └─────┴─────┴─────┘
 ```
+
+### Serialized Query Plan
+
+The query plan is serialized with the following schema:
+
+| Field Name | Type | Description |
+| ---------- | ---- | ----------- |
+| roots      | `list<str>` | A list of string node IDs for the root nodes |
+| nodes      | `Mapping<str, IRNode>` | A mapping from string node ID to the Node |
+| partition_info | `Mapping<str, PartitionInfo>` | A mapping from string node ID to the Node |
+
+`nodes` and `partition_info` are flat: they contain every node in the query plan.
+
+`IRNode` objects have the following schema:
+
+| Field Name | Type | Description |
+| ---------- | ---- | ----------- |
+| id         | `str` | The string node ID. This is unique within the query plan |
+| children   | `list<str>` | The node IDs of this node's children nodes. Each child node ID is also available in the plan's `nodes` field. |
+| schema     | `Mapping<str, str>` | A mapping from column name to (string) data type identifier. |
+| properties | `Mapping<str, object>` | Additional properties, unique to each node type. |
+| type       | `str` | The name of the IR node. |
+
+
+`PartitionInfo` objects have hte following schema:
+
+| Field Name | Type | Description |
+| ---------- | ---- | ----------- |
+| count      | int  | The number of partitions for this node |
+| partitioned_on | `list[str]` | The columns this node is partitioned on. |
+
 
 [nvml]: https://developer.nvidia.com/management-library-nvml
 [rmm-stats]: https://docs.rapids.ai/api/rmm/stable/guide/#memory-statistics-and-profiling

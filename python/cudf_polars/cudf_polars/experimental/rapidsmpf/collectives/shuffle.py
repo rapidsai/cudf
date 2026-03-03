@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import time
 from typing import TYPE_CHECKING, Any
 
 from rapidsmpf.integrations.cudf.partition import (
@@ -20,6 +21,7 @@ from rapidsmpf.streaming.cudf.channel_metadata import (
 )
 from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 
+import cudf_polars.dsl.tracing
 from cudf_polars.dsl.expr import Col
 from cudf_polars.experimental.rapidsmpf.dispatch import (
     generate_ir_sub_network,
@@ -227,29 +229,70 @@ async def _global_shuffle(
     # Other ranks still participate in the shuffle protocol.
     skip_insert = metadata_in.duplicated and comm.rank != 0
 
+    chunk_counter = 0
+
+    # TODO: figure out ...
+
+    t0 = time.monotonic_ns()
     while (msg := await ch_in.recv(context)) is not None:
+        t1 = time.monotonic_ns()
+        chunk_counter += 1
         if not skip_insert:
             shuffle.insert_chunk(
                 TableChunk.from_message(msg).make_available_and_spill(
                     context.br(), allow_overbooking=True
                 )
             )
+            t2 = time.monotonic_ns()
+            # TODO: https://github.com/rapidsai/rapidsmpf/pull/905
+            # use table_chunk.shape
+            cd = msg.get_content_description()
+            cudf_polars.dsl.tracing.log(
+                "Inserted chunk",
+                scope=cudf_polars.dsl.tracing.Scope.TABLE_CHUNK.value,
+                chunk_counter=chunk_counter,
+                sequence_number=msg.sequence_number,
+                content_sizes=cd.content_sizes,
+                spillable=cd.spillable,
+                start=t0,
+                stop=t2,
+                insert_duration=t2 - t1,
+            )
+            t0 = time.monotonic_ns()
 
     await shuffle.insert_finished()
 
+    t0 = time.monotonic_ns()
     for partition_id in shuffle.shuffler.local_partitions():
+        chunk_counter += 1
         stream = ir_context.get_cuda_stream()
-        await ch_out.send(
-            context,
-            Message(
-                partition_id,
-                TableChunk.from_pylibcudf_table(
-                    table=await shuffle.extract_chunk(partition_id, stream),
-                    stream=stream,
-                    exclusive_view=True,
-                ),
+        msg = Message(
+            partition_id,
+            TableChunk.from_pylibcudf_table(
+                table=await shuffle.extract_chunk(partition_id, stream),
+                stream=stream,
+                exclusive_view=True,
             ),
         )
+        t1 = time.monotonic_ns()
+
+        await ch_out.send(context, msg)
+        t2 = time.monotonic_ns()
+        cd = msg.get_content_description()
+        cudf_polars.dsl.tracing.log(
+            "Extracted chunk",
+            scope=cudf_polars.dsl.tracing.Scope.TABLE_CHUNK.value,
+            chunk_counter=chunk_counter,
+            sequence_number=msg.sequence_number,
+            content_sizes=cd.content_sizes,
+            spillable=cd.spillable,
+            partition_id=partition_id,
+            start=t0,
+            stop=t2,
+            extract_duration=t1 - t0,
+        )
+        del msg, cd
+        t0 = time.monotonic_ns()
 
     await ch_out.drain(context)
 
@@ -294,7 +337,9 @@ async def shuffle_actor(
     collective_id
         The collective ID.
     """
-    async with shutdown_on_error(context, ch_in, ch_out):
+    async with shutdown_on_error(
+        context, ch_in, ch_out, trace_ir=ir, ir_context=ir_context
+    ):
         await _global_shuffle(
             context,
             comm,

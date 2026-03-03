@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import enum
 import functools
 import os
@@ -44,7 +45,7 @@ nvtx_annotate_cudf_polars = functools.partial(
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Sequence
+    from collections.abc import Callable, Generator, Sequence
 
     import cudf_polars.containers
     from cudf_polars.dsl import ir
@@ -56,6 +57,7 @@ class Scope(str, enum.Enum):
     PLAN = "plan"
     ACTOR = "actor"
     EVALUATE_IR_NODE = "evaluate_ir_node"
+    TABLE_CHUNK = "table_chunk"
 
 
 @functools.cache
@@ -144,6 +146,7 @@ def make_snapshot(
 
 
 P = ParamSpec("P")
+CALLBACK: Callable[[dict[str, Any]], None] | None = None
 
 
 def log_do_evaluate(
@@ -212,8 +215,28 @@ def log_do_evaluate(
                     + (after_end - after_start),
                 }
             )
+            if CALLBACK is not None:
+                CALLBACK(record)
+
             log.info("Execute IR", **record)
 
             return result
 
         return wrapper
+
+
+@contextlib.contextmanager
+def bound_contextvars(**kwargs: Any) -> Generator[None, None, None]:
+    """Wrapper around structlog.contextvars.bound_contextvars."""
+    if _HAS_STRUCTLOG:
+        with structlog.contextvars.bound_contextvars(**kwargs):
+            yield
+    else:
+        yield
+
+
+def log(message: str, **kwargs: Any) -> None:
+    """Wrapper around structlog.get_logger().info."""
+    if _HAS_STRUCTLOG:
+        log = structlog.get_logger()
+        log.info(message, **kwargs)
