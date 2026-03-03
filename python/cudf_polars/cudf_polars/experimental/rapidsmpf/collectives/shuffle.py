@@ -258,9 +258,9 @@ async def shuffle_actor(
     ir_context: IRExecutionContext,
     ch_in: Channel[TableChunk],
     ch_out: Channel[TableChunk],
-    columns_to_hash: tuple[int, ...] | None = None,
-    num_partitions: int | None = None,
-    collective_id: int | None = None,
+    columns_to_hash: tuple[int, ...],
+    num_partitions: int,
+    collective_id: int,
 ) -> None:
     """
     Execute a global shuffle pipeline within a single node.
@@ -288,9 +288,6 @@ async def shuffle_actor(
     collective_id
         The collective ID.
     """
-    assert columns_to_hash is not None
-    assert num_partitions is not None
-    assert collective_id is not None
     async with shutdown_on_error(context, ch_in, ch_out):
         await _global_shuffle(
             context,
