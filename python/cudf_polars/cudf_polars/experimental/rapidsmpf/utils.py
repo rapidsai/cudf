@@ -463,6 +463,37 @@ def names_to_indices(exprs: tuple[NamedExpr, ...], schema: Schema) -> tuple[int,
     return tuple(schema_keys.index(expr.name) for expr in exprs)
 
 
+async def iterate_over_buffered_channel(
+    context: Context,
+    ch: Channel[TableChunk],
+    buffered_chunks: list[TableChunk],
+) -> AsyncIterator[tuple[int, TableChunk]]:
+    """
+    Yield TableChunks from a buffered list then from a channel.
+
+    Parameters
+    ----------
+    context
+        The context.
+    ch
+        The channel to pull from.
+    buffered_chunks
+        The buffered chunks to yield first.
+
+    Returns
+    -------
+    AsyncIterator[tuple[int, TableChunk]]
+        (sequence_number, chunk) pairs.
+    """
+    for i, buffered_chunk in enumerate(buffered_chunks):
+        yield (i, buffered_chunk)
+    while (msg := await ch.recv(context)) is not None:
+        chunk = TableChunk.from_message(msg).make_available_and_spill(
+            context.br(), allow_overbooking=True
+        )
+        yield (msg.sequence_number, chunk)
+
+
 @dataclass(frozen=True)
 class NormalizedPartitioning:
     """Normalized view of partitioning for a set of key column indices."""
@@ -483,10 +514,19 @@ class NormalizedPartitioning:
         )
 
     def __eq__(self, other: object) -> bool:
-        """Equal when moduli and key lengths match."""
+        """Equal when moduli and indices are identical."""
         if not isinstance(other, NormalizedPartitioning):
             return NotImplemented
         return (
+            self.inter_rank_modulus == other.inter_rank_modulus
+            and self.local_modulus == other.local_modulus
+            and self.inter_rank_indices == other.inter_rank_indices
+            and self.local_indices == other.local_indices
+        )
+
+    def is_compatible_with(self, other: NormalizedPartitioning) -> bool:
+        """Compatible when both are partitioned and moduli and key lengths are aligned."""
+        return bool(self) and (
             self.inter_rank_modulus == other.inter_rank_modulus
             and self.local_modulus == other.local_modulus
             and len(self.inter_rank_indices) == len(other.inter_rank_indices)

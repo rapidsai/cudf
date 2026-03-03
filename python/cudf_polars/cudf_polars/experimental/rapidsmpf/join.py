@@ -28,7 +28,7 @@ from rapidsmpf.streaming.cudf.table_chunk import (
 from cudf_polars.containers import DataFrame
 from cudf_polars.dsl.ir import IR, Join
 from cudf_polars.experimental.rapidsmpf.collectives.allgather import AllGatherManager
-from cudf_polars.experimental.rapidsmpf.collectives.shuffle import ShuffleManager
+from cudf_polars.experimental.rapidsmpf.collectives.shuffle import _global_shuffle
 from cudf_polars.experimental.rapidsmpf.dispatch import (
     generate_ir_sub_network,
 )
@@ -39,6 +39,7 @@ from cudf_polars.experimental.rapidsmpf.utils import (
     allgather_reduce,
     chunk_to_frame,
     empty_table_chunk,
+    iterate_over_buffered_channel,
     names_to_indices,
     process_children,
     recv_metadata,
@@ -50,8 +51,6 @@ from cudf_polars.experimental.utils import _concat
 from cudf_polars.utils.config import StreamingExecutor
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator
-
     from rapidsmpf.streaming.core.channel import Channel
     from rapidsmpf.streaming.core.context import Context
 
@@ -274,37 +273,6 @@ async def _broadcast_join_large_chunk(
     del df, large_df
 
 
-async def iterate_over_buffered_channel(
-    context: Context,
-    ch: Channel[TableChunk],
-    buffered_chunks: list[TableChunk],
-) -> AsyncIterator[tuple[int, TableChunk]]:
-    """
-    Yield TableChunks from a buffered list then from a channel.
-
-    Parameters
-    ----------
-    context
-        The context.
-    ch
-        The channel to pull from.
-    buffered_chunks
-        The buffered chunks to yield first.
-
-    Returns
-    -------
-    AsyncIterator[tuple[int, TableChunk]]
-        (sequence_number, chunk) pairs.
-    """
-    for i, buffered_chunk in enumerate(buffered_chunks):
-        yield (i, buffered_chunk)
-    while (msg := await ch.recv(context)) is not None:
-        chunk = TableChunk.from_message(msg).make_available_and_spill(
-            context.br(), allow_overbooking=True
-        )
-        yield (msg.sequence_number, chunk)
-
-
 async def _broadcast_join(
     context: Context,
     ir: Join,
@@ -427,237 +395,35 @@ def _get_key_indices(
     )
 
 
-def _create_shuffle_managers(
-    context: Context,
-    modulus: int,
-    left_key_indices: tuple[int, ...],
-    right_key_indices: tuple[int, ...],
-    left_partitioning: NormalizedPartitioning,
-    right_partitioning: NormalizedPartitioning,
-    collective_ids: list[int],
-    tracer: ActorTracer | None,
-) -> tuple[ShuffleManager | None, ShuffleManager | None]:
-    left_partitioning_desired = NormalizedPartitioning(
-        inter_rank_modulus=modulus,
-        inter_rank_indices=left_key_indices,
-        local_modulus=None,
-        local_indices=(),
-    )
-    right_partitioning_desired = NormalizedPartitioning(
-        inter_rank_modulus=modulus,
-        inter_rank_indices=right_key_indices,
-        local_modulus=None,
-        local_indices=(),
-    )
-
-    shuffle_left = (
-        not left_partitioning or left_partitioning != left_partitioning_desired
-    )
-    shuffle_right = (
-        not right_partitioning or right_partitioning != right_partitioning_desired
-    )
-
-    left_shuffle = (
-        ShuffleManager(
-            context,
-            modulus,
-            left_partitioning_desired.inter_rank_indices,
-            collective_ids.pop(0),
-        )
-        if shuffle_left
-        else None
-    )
-
-    right_shuffle = (
-        ShuffleManager(
-            context,
-            modulus,
-            right_partitioning_desired.inter_rank_indices,
-            collective_ids.pop(0),
-        )
-        if shuffle_right
-        else None
-    )
-
-    if tracer is not None:
-        if shuffle_left and shuffle_right:
-            tracer.decision = "shuffle"
-        elif shuffle_left:
-            tracer.decision = "shuffle_left"
-        elif shuffle_right:
-            tracer.decision = "shuffle_right"
-        else:
-            tracer.decision = "chunkwise"
-
-    return left_shuffle, right_shuffle
-
-
-async def drain_into_shuffle(
-    context: Context,
-    ch: Channel[TableChunk],
-    shuffle: ShuffleManager,
-    sample_chunks: list[TableChunk],
-) -> None:
-    """Drain sample chunks and channel into a shuffle manager, then mark finished."""
-    while sample_chunks:
-        shuffle.insert_chunk(
-            sample_chunks.pop(0).make_available_and_spill(
-                context.br(), allow_overbooking=True
-            )
-        )
-    while (msg := await ch.recv(context)) is not None:
-        shuffle.insert_chunk(
-            TableChunk.from_message(msg).make_available_and_spill(
-                context.br(), allow_overbooking=True
-            )
-        )
-    await shuffle.insert_finished()
-
-
-class HashJoinChannel:
-    """
-    Logical channel for a hash join.
-
-    Parameters
-    ----------
-    context: Context
-        The rapidsmpf context.
-    child: IR
-        The child IR.
-    ch: Channel[TableChunk]
-        The physical TableChunk channel.
-    shuffle: ShuffleManager | None
-        The shuffle manager.
-    buffered_chunks: list[TableChunk]
-        The buffered chunks (previously used for sampling).
-    """
-
-    def __init__(
-        self,
-        context: Context,
-        child: IR,
-        ch: Channel[TableChunk],
-        shuffle: ShuffleManager | None,
-        buffered_chunks: list[TableChunk],
-    ):
-        self.context = context
-        self.child = child
-        self.ch = ch
-        self.shuffle = shuffle
-        self.buffered_chunks = buffered_chunks
-        if shuffle is not None:
-            self.partition_ids = iter(shuffle.local_partitions())
-        else:
-            self.partition_ids = iter(())
-
-    async def recv(self) -> TableChunk | None:
-        """Receive a chunk from the logical channel."""
-        if self.buffered_chunks:
-            # Always return buffered chunks first
-            return self.buffered_chunks.pop(0)
-
-        if self.shuffle is not None:
-            # Return shuffled chunks if we have a shuffle manager
-            try:
-                partition_id = next(self.partition_ids)
-            except StopIteration:
-                return None
-            stream = self.context.get_stream_from_pool()
-            table = await self.shuffle.extract_chunk(partition_id, stream)
-            if table.num_rows() == 0 and len(table.columns()) == 0:
-                return empty_table_chunk(self.child, self.context, stream)
-            else:
-                return TableChunk.from_pylibcudf_table(
-                    table, stream, exclusive_view=True
-                )
-
-        if (msg := await self.ch.recv(self.context)) is not None:
-            # Otherwise, return a chunk directly from the channel
-            return TableChunk.from_message(msg).make_available_and_spill(
-                self.context.br(), allow_overbooking=True
-            )
-        return None
-
-
-async def _shuffle_join(
+async def _join_chunks(
     context: Context,
     ir: Join,
     ir_context: Any,
     ch_out: Channel[TableChunk],
     ch_left: Channel[TableChunk],
     ch_right: Channel[TableChunk],
-    left_partitioning: NormalizedPartitioning,
-    right_partitioning: NormalizedPartitioning,
-    strategy: JoinStrategy,
-    collective_ids: list[int],
-    *,
     tracer: ActorTracer | None,
-    n_partitioned_keys: int | None = None,
 ) -> None:
-    """Execute a shuffle (hash) join."""
-    modulus = _choose_shuffle_modulus(
-        context,
-        left_partitioning,
-        right_partitioning,
-        strategy.min_shuffle_modulus,
-    )  # Global modulus
-
-    left_key_indices, right_key_indices, output_key_indices = _get_key_indices(
-        ir, n_partitioned_keys
+    # Consume metadata from both shuffle outputs before reading data
+    await asyncio.gather(
+        recv_metadata(ch_left, context),
+        recv_metadata(ch_right, context),
     )
-
-    local_count = max(1, modulus // context.comm().nranks)
-    metadata_out = ChannelMetadata(
-        local_count=local_count,
-        partitioning=Partitioning(
-            HashScheme(column_indices=output_key_indices, modulus=modulus),
-            local="inherit",
-        )
-        if output_key_indices
-        else None,
-        duplicated=False,
-    )
-    await send_metadata(ch_out, context, metadata_out)
-
-    left_shuffle, right_shuffle = _create_shuffle_managers(
-        context,
-        modulus,
-        left_key_indices,
-        right_key_indices,
-        left_partitioning,
-        right_partitioning,
-        collective_ids,
-        tracer,
-    )
-    left_sample_chunks: list[TableChunk] = strategy.left_sample.chunks or []
-    right_sample_chunks: list[TableChunk] = strategy.right_sample.chunks or []
-
-    drain_tasks = [
-        drain_into_shuffle(context, ch, shuffle, samples)
-        for ch, shuffle, samples in (
-            (ch_left, left_shuffle, left_sample_chunks),
-            (ch_right, right_shuffle, right_sample_chunks),
-        )
-        if shuffle is not None
-    ]
-    if drain_tasks:
-        await asyncio.gather(*drain_tasks)
-
     seq_num = 0
     left, right = ir.children
-    ch_left_logical = HashJoinChannel(
-        context, left, ch_left, left_shuffle, left_sample_chunks
-    )
-    ch_right_logical = HashJoinChannel(
-        context, right, ch_right, right_shuffle, right_sample_chunks
-    )
-
     while True:
-        left_chunk, right_chunk = await asyncio.gather(
-            ch_left_logical.recv(), ch_right_logical.recv()
+        left_msg, right_msg = await asyncio.gather(
+            ch_left.recv(context), ch_right.recv(context)
         )
-        if left_chunk is None or right_chunk is None:
+        if left_msg is None or right_msg is None:
             break
+
+        left_chunk = TableChunk.from_message(left_msg).make_available_and_spill(
+            context.br(), allow_overbooking=True
+        )
+        right_chunk = TableChunk.from_message(right_msg).make_available_and_spill(
+            context.br(), allow_overbooking=True
+        )
 
         input_bytes = sum(
             col.device_buffer_size()
@@ -692,6 +458,132 @@ async def _shuffle_join(
         del df
 
     await ch_out.drain(context)
+
+
+def _log_strategy_decision(
+    tracer: ActorTracer,
+    partitioning_left: NormalizedPartitioning,
+    partitioning_right: NormalizedPartitioning,
+    indices_left: tuple[int, ...],
+    indices_right: tuple[int, ...],
+    modulus: int,
+) -> None:
+    left_partitioning_desired = NormalizedPartitioning(
+        inter_rank_modulus=modulus,
+        inter_rank_indices=indices_left,
+        local_modulus=None,
+        local_indices=(),
+    )
+    right_partitioning_desired = NormalizedPartitioning(
+        inter_rank_modulus=modulus,
+        inter_rank_indices=indices_right,
+        local_modulus=None,
+        local_indices=(),
+    )
+    left_partitioned = partitioning_left == left_partitioning_desired
+    right_partitioned = partitioning_right == right_partitioning_desired
+    if left_partitioned and right_partitioned:
+        tracer.decision = "chunkwise"
+    elif left_partitioned:
+        tracer.decision = "shuffle_right"
+    elif right_partitioned:
+        tracer.decision = "shuffle_left"
+    else:
+        tracer.decision = "shuffle"
+
+
+async def _shuffle_join(
+    context: Context,
+    ir: Join,
+    ir_context: Any,
+    ch_out: Channel[TableChunk],
+    ch_left: Channel[TableChunk],
+    ch_right: Channel[TableChunk],
+    left_metadata: ChannelMetadata,
+    right_metadata: ChannelMetadata,
+    left_partitioning: NormalizedPartitioning,
+    right_partitioning: NormalizedPartitioning,
+    strategy: JoinStrategy,
+    collective_ids: list[int],
+    *,
+    tracer: ActorTracer | None,
+    n_partitioned_keys: int | None = None,
+) -> None:
+    """Execute a shuffle (hash) join."""
+    modulus = _choose_shuffle_modulus(
+        context,
+        left_partitioning,
+        right_partitioning,
+        strategy.min_shuffle_modulus,
+    )  # Global modulus
+
+    left_key_indices, right_key_indices, output_key_indices = _get_key_indices(
+        ir, n_partitioned_keys
+    )
+
+    local_count = max(1, modulus // context.comm().nranks)
+    metadata_out = ChannelMetadata(
+        local_count=local_count,
+        partitioning=Partitioning(
+            HashScheme(column_indices=output_key_indices, modulus=modulus),
+            local="inherit",
+        )
+        if output_key_indices
+        else None,
+        duplicated=False,
+    )
+    await send_metadata(ch_out, context, metadata_out)
+
+    if tracer is not None:
+        _log_strategy_decision(
+            tracer,
+            left_partitioning,
+            right_partitioning,
+            left_key_indices,
+            right_key_indices,
+            modulus,
+        )
+
+    # Construct a shuffle-shuffle-join pipeline.
+    # The shuffle operations will pass chunks through unchanged
+    # if the data is already partitioned correctly.
+    ch_left_shuffle = context.create_channel()
+    ch_right_shuffle = context.create_channel()
+    async with shutdown_on_error(context, ch_left_shuffle, ch_right_shuffle):
+        tasks = [
+            _global_shuffle(
+                context,
+                ir_context,
+                ch_left,
+                ch_left_shuffle,
+                left_key_indices,
+                modulus,
+                collective_ids.pop(0),
+                left_metadata,
+                buffered_chunks=strategy.left_sample.chunks,
+            ),
+            _global_shuffle(
+                context,
+                ir_context,
+                ch_right,
+                ch_right_shuffle,
+                right_key_indices,
+                modulus,
+                collective_ids.pop(0),
+                right_metadata,
+                buffered_chunks=strategy.right_sample.chunks,
+            ),
+            _join_chunks(
+                context,
+                ir,
+                ir_context,
+                ch_out,
+                ch_left_shuffle,
+                ch_right_shuffle,
+                tracer=tracer,
+            ),
+        ]
+        await asyncio.gather(*tasks)
 
 
 async def _choose_strategy(
@@ -934,7 +826,7 @@ async def join_actor(
             indices=names_to_indices(ir.right_on, ir.children[1].schema),
         )
 
-        if left_partitioning and left_partitioning == right_partitioning:
+        if left_partitioning.is_compatible_with(right_partitioning):
             # Both sides already partitioned - skip sampling
             strategy = JoinStrategy(
                 min_shuffle_modulus=left_partitioning.inter_rank_modulus
@@ -974,6 +866,8 @@ async def join_actor(
                 ch_out,
                 ch_left,
                 ch_right,
+                left_metadata,
+                right_metadata,
                 left_partitioning,
                 right_partitioning,
                 strategy,
