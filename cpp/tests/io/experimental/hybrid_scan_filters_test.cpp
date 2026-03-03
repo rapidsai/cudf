@@ -191,7 +191,7 @@ TEST_F(HybridScanFiltersTest, ExternalMetadata)
     return reader->parquet_metadata();
   }();
 
-  // Filtering AST - table[0] < 100
+  // Filtering AST - 100 > table[0]
   using T            = cudf::timestamp_ms;
   auto literal_value = cudf::timestamp_scalar<T>(T(typename T::duration(100)));
   auto literal       = cudf::ast::literal(literal_value);
