@@ -28,6 +28,11 @@ void cuda_memcpy_async_impl(
  * satisfied, but for host memory the caller must ensure the source is not freed before the stream
  * is synchronized.
  *
+ * All copies share a single attribute entry (`cudaMemcpySrcAccessOrderStream` +
+ * `cudaMemcpyFlagPreferOverlapWithCompute`). Per-copy attributes are not supported by this
+ * wrapper; callers requiring different attributes per copy should call `cudaMemcpyBatchAsync`
+ * directly.
+ *
  * @param dsts Host pointer to a list of destination pointers.
  * @param srcs Host pointer to a list of source pointers.
  * @param sizes Host pointer to a list of sizes.
