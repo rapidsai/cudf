@@ -346,7 +346,7 @@ def test_remap_partitioning_reorder_columns_projection() -> None:
     out_schema = {k: child.schema[k] for k in ("b", "a")}
     proj = Projection(out_schema, child)
     part = Partitioning(inter_rank=HashScheme((0, 1), 8), local="inherit")
-    result = maybe_remap_partitioning(proj, part, child_index=0)
+    result = maybe_remap_partitioning(proj, part, child_ir=proj.children[0])
     assert result is not None
     assert result.inter_rank is not None
     assert result.inter_rank.column_indices == (1, 0)

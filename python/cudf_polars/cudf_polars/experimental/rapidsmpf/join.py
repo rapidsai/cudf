@@ -106,7 +106,7 @@ async def broadcast_join_actor(
             partitioning = maybe_remap_partitioning(
                 ir,
                 left_metadata.partitioning,
-                child_index=0,
+                child_ir=ir.children[0],
             )
             # Check if the right-side is already broadcasted
             small_duplicated = right_metadata.duplicated
@@ -123,7 +123,7 @@ async def broadcast_join_actor(
                 partitioning = maybe_remap_partitioning(
                     ir,
                     right_metadata.partitioning,
-                    child_index=1,
+                    child_ir=ir.children[1],
                 )
             # Check if the right-side is already broadcasted
             small_duplicated = left_metadata.duplicated

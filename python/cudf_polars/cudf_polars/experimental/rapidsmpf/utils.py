@@ -7,6 +7,7 @@ from __future__ import annotations
 import asyncio
 import operator
 import struct
+from collections.abc import Mapping
 from contextlib import asynccontextmanager
 from functools import reduce
 from typing import TYPE_CHECKING, Any
@@ -36,7 +37,7 @@ from rapidsmpf.streaming.cudf.table_chunk import (
 import pylibcudf as plc
 
 from cudf_polars.containers import DataFrame
-from cudf_polars.dsl.expr import Col
+from cudf_polars.dsl.expr import Col, NamedExpr
 from cudf_polars.dsl.ir import Cache, Filter, Join, Projection, Select
 from cudf_polars.experimental.utils import _concat
 
@@ -53,6 +54,52 @@ if TYPE_CHECKING:
     from cudf_polars.experimental.rapidsmpf.dispatch import SubNetGenerator
     from cudf_polars.experimental.rapidsmpf.tracing import ActorTracer
     from cudf_polars.typing import DataType
+
+
+def indices_to_names(
+    indices: tuple[int, ...], schema: Mapping[str, Any]
+) -> tuple[str, ...]:
+    """
+    Return column names for the given column indices in schema order.
+
+    Parameters
+    ----------
+    indices
+        The indices to get names for.
+    schema
+        The schema to get names from.
+
+    Returns
+    -------
+    The column names for each index in schema order.
+    """
+    keys = list(schema.keys())
+    return tuple(keys[i] for i in indices)
+
+
+def names_to_indices(
+    names: tuple[str, ...] | tuple[NamedExpr, ...], schema: Mapping[str, Any]
+) -> tuple[int, ...]:
+    """
+    Return column indices for the given names in schema order.
+
+    Accepts either column names (str) or NamedExpr, so it can be used with
+    e.g. ir.left_on, ir.right_on as well as plain name tuples.
+
+    Parameters
+    ----------
+    names
+        The names to get indices for.
+    schema
+        The schema to get indices from.
+
+    Returns
+    -------
+    The column indices for each name in schema order.
+    """
+    keys = list(schema.keys())
+    str_names = [n.name if isinstance(n, NamedExpr) else n for n in names]
+    return tuple(keys.index(n) for n in str_names)
 
 
 @asynccontextmanager
@@ -125,47 +172,39 @@ def _remap_scheme_select(
     # We must check if this Select node preserves partitioning
     # before we return a remapped scheme.
     if isinstance(scheme, HashScheme):
-        old_names = list(select.children[0].schema.keys())
-        partition_key_names = {old_names[i] for i in scheme.column_indices}
-        # Map old key name -> output name
-        old_to_new: dict[str, str] = {}
-        for ne in select.exprs:
-            # Can preserve Col expressions - Even if the name changes
-            if isinstance(ne.value, Col) and ne.value.name in partition_key_names:
-                old_to_new[ne.value.name] = ne.name
-        if set(old_to_new) != partition_key_names:
-            return None
-        output_names = list(select.schema.keys())
-        ordered_old = [old_names[i] for i in scheme.column_indices]
-        new_indices = tuple(output_names.index(old_to_new[old]) for old in ordered_old)
-        return HashScheme(new_indices, scheme.modulus)
+        # Mapping from old to new names for "col" selection
+        old_to_new_names = {
+            ne.value.name: ne.name for ne in select.exprs if isinstance(ne.value, Col)
+        }
+        old_keys = indices_to_names(scheme.column_indices, select.children[0].schema)
+        if set(old_keys).issubset(set(old_to_new_names)):
+            new_keys = names_to_indices(
+                tuple(old_to_new_names[o] for o in old_keys), select.schema
+            )
+            return HashScheme(new_keys, scheme.modulus)
+        return None
     elif scheme not in (None, "inherit"):  # pragma: no cover
         return None  # Guard against new/unsupported scheme types
-    else:
-        return scheme
+    return scheme
 
 
 def _remap_scheme_simple(
-    ir: IR, scheme: HashScheme | None | str, child_index: int
+    ir: IR, scheme: HashScheme | None | str, child: IR
 ) -> HashScheme | None | str:
     # Called when we know the IR node preserves partitioning.
     # Just remap to the new schema if possible.
     if isinstance(scheme, HashScheme):
-        old_names = list(ir.children[child_index].schema.keys())
-        new_name_to_idx = {name: i for i, name in enumerate(ir.schema.keys())}
+        old_keys = indices_to_names(scheme.column_indices, child.schema)
         try:
-            new_indices = tuple(
-                new_name_to_idx[old_names[i]] for i in scheme.column_indices
-            )
-        except (IndexError, KeyError):
-            return None  # Column missing in old or new schema
+            new_indices = names_to_indices(old_keys, ir.schema)
+        except (ValueError, IndexError):
+            return None  # Column missing in child or output schema
         return HashScheme(new_indices, scheme.modulus)
-    else:
-        return scheme  # None or "inherit" passes through unchanged
+    return scheme  # None or "inherit" passes through unchanged
 
 
 def maybe_remap_partitioning(
-    ir: IR, partitioning: Partitioning | None, *, child_index: int = 0
+    ir: IR, partitioning: Partitioning | None, *, child_ir: IR | None = None
 ) -> Partitioning | None:
     """
     Remap partitioning for simple IR nodes.
@@ -176,8 +215,9 @@ def maybe_remap_partitioning(
         The IR node.
     partitioning
         The input partitioning.
-    child_index
-        The index of the child IR node. Default is 0.
+    child_ir
+        The child IR whose schema the partitioning refers to. When None,
+        the first child (ir.children[0]) is used.
 
     Returns
     -------
@@ -193,18 +233,18 @@ def maybe_remap_partitioning(
     """
     if partitioning is None:
         return None  # Nothing to preserve
-    elif isinstance(ir, Select):
+    if isinstance(ir, Select):
         return Partitioning(
             inter_rank=_remap_scheme_select(ir, partitioning.inter_rank),
             local=_remap_scheme_select(ir, partitioning.local),
         )
-    elif isinstance(ir, (Cache, Join, Projection, Filter)):
+    if isinstance(ir, (Cache, Join, Projection, Filter)):
+        child = child_ir if child_ir is not None else ir.children[0]
         return Partitioning(
-            inter_rank=_remap_scheme_simple(ir, partitioning.inter_rank, child_index),
-            local=_remap_scheme_simple(ir, partitioning.local, child_index),
+            inter_rank=_remap_scheme_simple(ir, partitioning.inter_rank, child),
+            local=_remap_scheme_simple(ir, partitioning.local, child),
         )
-    else:
-        return None
+    return None
 
 
 async def send_metadata(

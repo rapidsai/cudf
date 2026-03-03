@@ -138,7 +138,7 @@ async def default_node_multi(
             if idx == partitioning_index:
                 # Remap partitioning from child schema to output schema
                 partitioning = maybe_remap_partitioning(
-                    ir, md_child.partitioning, child_index=idx
+                    ir, md_child.partitioning, child_ir=ir.children[idx]
                 )
         metadata = ChannelMetadata(
             local_count=local_count,
