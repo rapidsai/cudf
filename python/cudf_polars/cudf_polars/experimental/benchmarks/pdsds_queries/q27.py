@@ -140,12 +140,14 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     level1 = level(base_data, agg_exprs, ["i_item_id", "s_state"], 0)
     level2 = level(base_data, agg_exprs, ["i_item_id"], 1)
 
+    sort_by = {"i_item_id": False, "s_state": False}
+    limit = 100
     return QueryResult(
         frame=(
             pl.concat([level1, level2])
-            .sort(["i_item_id", "s_state"], nulls_last=True)
-            .limit(100)
+            .sort(sort_by.keys(), nulls_last=True)
+            .limit(limit)
         ),
-        sort_by=[("i_item_id", False), ("s_state", False)],
-        limit=100,
+        sort_by=list(sort_by.items()),
+        limit=limit,
     )

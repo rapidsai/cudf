@@ -144,6 +144,8 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         (pl.col("netpaid").mean() * 0.05).alias("threshold")
     )
 
+    sort_by = {"c_last_name": False, "c_first_name": False, "s_store_name": False}
+    limit = None
     return QueryResult(
         frame=(
             ssales.filter(pl.col("i_color") == color)
@@ -152,12 +154,8 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
             .join(threshold_table, how="cross")
             .filter(pl.col("paid") > pl.col("threshold"))
             .select(["c_last_name", "c_first_name", "s_store_name", "paid"])
-            .sort(["c_last_name", "c_first_name", "s_store_name"], nulls_last=True)
+            .sort(sort_by.keys(), nulls_last=True)
         ),
-        sort_by=[
-            ("c_last_name", False),
-            ("c_first_name", False),
-            ("s_store_name", False),
-        ],
-        limit=None,
+        sort_by=list(sort_by.items()),
+        limit=limit,
     )

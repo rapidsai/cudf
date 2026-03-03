@@ -107,6 +107,13 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         for p in ("d1", "d2", "d3")
     ]
 
+    sort_by = {
+        "i_item_id": False,
+        "i_item_desc": False,
+        "s_store_id": False,
+        "s_store_name": False,
+    }
+    limit = 100
     return QueryResult(
         frame=(
             store_sales.join(d1, left_on="ss_sold_date_sk", right_on="d1_date_sk")
@@ -146,14 +153,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
                     ),
                 ]
             )
-            .sort(["i_item_id", "i_item_desc", "s_store_id", "s_store_name"])
-            .limit(100)
+            .sort(sort_by.keys(), nulls_last=True)
+            .limit(limit)
         ),
-        sort_by=[
-            ("i_item_id", False),
-            ("i_item_desc", False),
-            ("s_store_id", False),
-            ("s_store_name", False),
-        ],
-        limit=100,
+        sort_by=list(sort_by.items()),
+        limit=limit,
     )

@@ -205,7 +205,7 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         30,
         "B6",
     )
-
+    limit = 100
     return QueryResult(
         frame=(
             b1.join(b2, how="cross")
@@ -213,8 +213,8 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
             .join(b4, how="cross")
             .join(b5, how="cross")
             .join(b6, how="cross")
-            .limit(100)
+            .limit(limit)
         ),
         sort_by=[],
-        limit=100,
+        limit=limit,
     )
