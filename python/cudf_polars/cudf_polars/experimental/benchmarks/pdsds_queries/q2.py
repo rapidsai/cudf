@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
-from cudf_polars.experimental.benchmarks.utils import get_data
+from cudf_polars.experimental.benchmarks.utils import QueryResult, get_data
 
 if TYPE_CHECKING:
     from cudf_polars.experimental.benchmarks.utils import RunConfig
@@ -106,7 +106,7 @@ def duckdb_impl(run_config: RunConfig) -> str:
     """
 
 
-def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
+def polars_impl(run_config: RunConfig) -> QueryResult:
     """Query 2."""
     params = load_parameters(
         int(run_config.scale_factor), query_id=2, qualification=run_config.qualification
@@ -224,35 +224,41 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         )
     )
     # Step 5: Join the two years and calculate ratios
-    return (
-        y_year.join(
-            z_year_plus_1, left_on="d_week_seq1", right_on=pl.col("d_week_seq2") - 53
-        )
-        .select(
-            [
-                pl.col("d_week_seq1"),
-                (pl.col("sun_sales1") / pl.col("sun_sales2"))
-                .round(2)
-                .alias("round((sun_sales1 / sun_sales2), 2)"),
-                (pl.col("mon_sales1") / pl.col("mon_sales2"))
-                .round(2)
-                .alias("round((mon_sales1 / mon_sales2), 2)"),
-                (pl.col("tue_sales1") / pl.col("tue_sales2"))
-                .round(2)
-                .alias("round((tue_sales1 / tue_sales2), 2)"),
-                (pl.col("wed_sales1") / pl.col("wed_sales2"))
-                .round(2)
-                .alias("round((wed_sales1 / wed_sales2), 2)"),
-                (pl.col("thu_sales1") / pl.col("thu_sales2"))
-                .round(2)
-                .alias("round((thu_sales1 / thu_sales2), 2)"),
-                (pl.col("fri_sales1") / pl.col("fri_sales2"))
-                .round(2)
-                .alias("round((fri_sales1 / fri_sales2), 2)"),
-                (pl.col("sat_sales1") / pl.col("sat_sales2"))
-                .round(2)
-                .alias("round((sat_sales1 / sat_sales2), 2)"),
-            ]
-        )
-        .sort("d_week_seq1")
+    return QueryResult(
+        frame=(
+            y_year.join(
+                z_year_plus_1,
+                left_on="d_week_seq1",
+                right_on=pl.col("d_week_seq2") - 53,
+            )
+            .select(
+                [
+                    pl.col("d_week_seq1"),
+                    (pl.col("sun_sales1") / pl.col("sun_sales2"))
+                    .round(2)
+                    .alias("round((sun_sales1 / sun_sales2), 2)"),
+                    (pl.col("mon_sales1") / pl.col("mon_sales2"))
+                    .round(2)
+                    .alias("round((mon_sales1 / mon_sales2), 2)"),
+                    (pl.col("tue_sales1") / pl.col("tue_sales2"))
+                    .round(2)
+                    .alias("round((tue_sales1 / tue_sales2), 2)"),
+                    (pl.col("wed_sales1") / pl.col("wed_sales2"))
+                    .round(2)
+                    .alias("round((wed_sales1 / wed_sales2), 2)"),
+                    (pl.col("thu_sales1") / pl.col("thu_sales2"))
+                    .round(2)
+                    .alias("round((thu_sales1 / thu_sales2), 2)"),
+                    (pl.col("fri_sales1") / pl.col("fri_sales2"))
+                    .round(2)
+                    .alias("round((fri_sales1 / fri_sales2), 2)"),
+                    (pl.col("sat_sales1") / pl.col("sat_sales2"))
+                    .round(2)
+                    .alias("round((sat_sales1 / sat_sales2), 2)"),
+                ]
+            )
+            .sort("d_week_seq1")
+        ),
+        sort_by=[("d_week_seq1", False)],
+        limit=None,
     )

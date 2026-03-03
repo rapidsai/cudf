@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
-from cudf_polars.experimental.benchmarks.utils import get_data
+from cudf_polars.experimental.benchmarks.utils import QueryResult, get_data
 
 if TYPE_CHECKING:
     from cudf_polars.experimental.benchmarks.utils import RunConfig
@@ -65,7 +65,7 @@ def duckdb_impl(run_config: RunConfig) -> str:
     """
 
 
-def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
+def polars_impl(run_config: RunConfig) -> QueryResult:
     """Query 16."""
     params = load_parameters(
         int(run_config.scale_factor),
@@ -95,16 +95,15 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     start_date_obj = date(year, month, 1)
     end_date_obj = start_date_obj + timedelta(days=60)
 
-    # Convert to string literals (d_date is String in parquet)
-    start_date_str = pl.lit(start_date_obj.isoformat())
-    end_date_str = pl.lit(end_date_obj.isoformat())
+    start_date_lit = pl.lit(start_date_obj)
+    end_date_lit = pl.lit(end_date_obj)
     # First apply basic filters to catalog_sales
     filtered_sales = (
         catalog_sales.join(date_dim, left_on="cs_ship_date_sk", right_on="d_date_sk")
         .join(customer_address, left_on="cs_ship_addr_sk", right_on="ca_address_sk")
         .join(call_center, left_on="cs_call_center_sk", right_on="cc_call_center_sk")
         .filter(
-            pl.col("d_date").is_between(start_date_str, end_date_str, closed="both")
+            pl.col("d_date").is_between(start_date_lit, end_date_lit, closed="both")
             & (pl.col("ca_state") == state)
             & pl.col("cc_county").is_in(county)
         )
@@ -125,22 +124,26 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     )
     # Handle NOT EXISTS condition: orders that don't have returns
     returned_orders = catalog_returns.select("cr_order_number").unique()
-    return (
-        filtered_sales.with_row_index("row_id")
-        .join(exists_condition, on="row_id")
-        .join(
-            returned_orders,
-            left_on="cs_order_number",
-            right_on="cr_order_number",
-            how="anti",
-        )
-        .select(
-            [
-                pl.col("cs_order_number").n_unique().alias("order count"),
-                pl.col("cs_ext_ship_cost").sum().alias("total shipping cost"),
-                pl.col("cs_net_profit").sum().alias("total net profit"),
-            ]
-        )
-        .sort(["order count"])
-        .limit(100)
+    return QueryResult(
+        frame=(
+            filtered_sales.with_row_index("row_id")
+            .join(exists_condition, on="row_id")
+            .join(
+                returned_orders,
+                left_on="cs_order_number",
+                right_on="cr_order_number",
+                how="anti",
+            )
+            .select(
+                [
+                    pl.col("cs_order_number").n_unique().alias("order count"),
+                    pl.col("cs_ext_ship_cost").sum().alias("total shipping cost"),
+                    pl.col("cs_net_profit").sum().alias("total net profit"),
+                ]
+            )
+            .sort(["order count"])
+            .limit(100)
+        ),
+        sort_by=[("order count", False)],
+        limit=100,
     )

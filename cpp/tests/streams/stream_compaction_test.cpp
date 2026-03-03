@@ -381,7 +381,7 @@ __device__ void filter(bool * out, int32_t a){
   *out = a < 10;
 })***",
                                                       {col},
-                                            false,
+                                            cudf::udf_source_type::CUDA,
                                             std::nullopt,
                                             cudf::null_aware::NO,
                                             cudf::output_nullability::PRESERVE,

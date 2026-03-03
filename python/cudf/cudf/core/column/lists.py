@@ -99,11 +99,6 @@ class ListColumn(ColumnBase):
             "Lists are not yet supported via `__cuda_array_interface__`"
         )
 
-    def copy(self, deep: bool = True) -> Self:
-        # Since list columns are immutable, both deep and shallow copies share
-        # the underlying device data and mask.
-        return super().copy(deep=False)
-
     def leaves(self) -> ColumnBase:
         if isinstance(self.elements, ListColumn):
             return self.elements.leaves()
@@ -175,7 +170,9 @@ class ListColumn(ColumnBase):
         with self.access(mode="read", scope="internal"):
             plc_column = plc.strings.convert.convert_lists.format_list_column(
                 lc.plc_column,
-                pa_scalar_to_plc_scalar(pa.scalar("None")),
+                plc.Scalar.from_py(
+                    "None", dtype=plc.DataType(plc.TypeId.STRING)
+                ),
                 self._string_separators,
             )
             return cast(
@@ -228,7 +225,7 @@ class ListColumn(ColumnBase):
             ColumnBase.create(plc_leaf_col, result_dtype),
         )
 
-    @property
+    @cached_property
     def element_type(self) -> DtypeObj:
         """
         Returns the element type of the list column.
@@ -236,9 +233,8 @@ class ListColumn(ColumnBase):
         if isinstance(self.dtype, ListDtype):
             return self.dtype.element_type
         else:
-            return get_dtype_of_same_kind(
-                self.dtype,
-                self.dtype.pyarrow_dtype.value_type.to_pandas_dtype(),  # type: ignore[union-attr]
+            return pd.ArrowDtype(
+                cast("pd.ArrowDtype", self.dtype).pyarrow_dtype.value_type
             )
 
     def to_pandas(
@@ -397,16 +393,20 @@ class ListColumn(ColumnBase):
     ) -> StringColumn:
         with self.access(mode="read", scope="internal"):
             if isinstance(separator, str):
-                sep: plc.Scalar | plc.Column = pa_scalar_to_plc_scalar(
-                    pa.scalar(separator)
+                sep: plc.Scalar | plc.Column = plc.Scalar.from_py(
+                    separator, dtype=plc.DataType(plc.TypeId.STRING)
                 )
             else:
                 sep = separator.plc_column
             plc_column = plc.strings.combine.join_list_elements(
                 self.plc_column,
                 sep,
-                pa_scalar_to_plc_scalar(pa.scalar(sep_na_rep)),
-                pa_scalar_to_plc_scalar(pa.scalar(string_na_rep)),
+                plc.Scalar.from_py(
+                    sep_na_rep, dtype=plc.DataType(plc.TypeId.STRING)
+                ),
+                plc.Scalar.from_py(
+                    string_na_rep, dtype=plc.DataType(plc.TypeId.STRING)
+                ),
                 plc.strings.combine.SeparatorOnNulls.YES,
                 plc.strings.combine.OutputIfEmptyList.NULL_ELEMENT,
             )

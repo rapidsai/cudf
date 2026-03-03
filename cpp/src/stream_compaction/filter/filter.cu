@@ -25,7 +25,7 @@ std::vector<std::unique_ptr<column>> filter(
   std::span<std::variant<column_view, scalar_column_view> const> predicate_inputs,
   std::string const& predicate_udf,
   std::vector<column_view> const& filter_columns,
-  bool is_ptx,
+  cudf::udf_source_type source_type,
   std::optional<void*> user_data,
   null_aware is_null_aware,
   output_nullability predicate_nullability,
@@ -45,7 +45,7 @@ std::vector<std::unique_ptr<column>> filter(
   auto predicate = cudf::transform_extended(predicate_inputs,
                                             predicate_udf,
                                             data_type{type_id::BOOL8},
-                                            is_ptx,
+                                            source_type,
                                             user_data,
                                             is_null_aware,
                                             row_size,
@@ -72,7 +72,7 @@ std::unique_ptr<table> filter(table_view const& predicate_table,
   return std::make_unique<table>(cudf::detail::filter(args.inputs,
                                                       args.udf,
                                                       args.filter_columns,
-                                                      args.is_ptx,
+                                                      args.source_type,
                                                       args.user_data,
                                                       args.is_null_aware,
                                                       args.predicate_nullability,
@@ -84,7 +84,7 @@ std::vector<std::unique_ptr<column>> filter_extended(
   std::span<std::variant<column_view, scalar_column_view> const> predicate_inputs,
   std::string const& predicate_udf,
   std::vector<column_view> const& filter_columns,
-  bool is_ptx,
+  cudf::udf_source_type source_type,
   std::optional<void*> user_data,
   null_aware is_null_aware,
   output_nullability predicate_nullability,
@@ -95,7 +95,7 @@ std::vector<std::unique_ptr<column>> filter_extended(
   return detail::filter(predicate_inputs,
                         predicate_udf,
                         filter_columns,
-                        is_ptx,
+                        source_type,
                         user_data,
                         is_null_aware,
                         predicate_nullability,
@@ -115,9 +115,13 @@ std::vector<std::unique_ptr<column>> filter(std::vector<column_view> const& pred
 {
   // legacy behavior was to detect which column were scalars based on their sizes
   std::vector<std::variant<column_view, scalar_column_view>> inputs;
+
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
   auto base_column = jit::get_transform_base_column(predicate_columns);
   for (auto const& col : predicate_columns) {
     if (jit::is_scalar(base_column->size(), col.size())) {
+#pragma GCC diagnostic pop
       inputs.emplace_back(scalar_column_view{col});
     } else {
       inputs.emplace_back(col);
@@ -127,7 +131,7 @@ std::vector<std::unique_ptr<column>> filter(std::vector<column_view> const& pred
   return detail::filter(inputs,
                         predicate_udf,
                         filter_columns,
-                        is_ptx,
+                        is_ptx ? cudf::udf_source_type::PTX : cudf::udf_source_type::CUDA,
                         user_data,
                         is_null_aware,
                         predicate_nullability,
