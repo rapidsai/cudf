@@ -124,8 +124,9 @@ int32_t get_register_size(std::string_view register_type)
   } else if (register_type == ".b64" || register_type == ".s64" || register_type == ".u64" ||
              register_type == ".f64") {
     return 64;
-  } else
+  } else {
     CUDF_FAIL("Unknown register type: " + std::string(register_type));
+  }
 }
 
 std::string ptx_parser::parse_instruction(std::string const& src)
