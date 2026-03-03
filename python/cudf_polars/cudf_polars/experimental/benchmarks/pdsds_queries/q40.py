@@ -95,6 +95,8 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     warehouse = get_data(run_config.dataset_path, "warehouse", run_config.suffix)
     item = get_data(run_config.dataset_path, "item", run_config.suffix)
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
+    sort_by = {"w_state": False, "i_item_id": False}
+    limit = 100
     # Define the target date and date range
     return QueryResult(
         frame=(
@@ -136,9 +138,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
                     pl.col("sales_after_amount").sum().alias("sales_after"),
                 ]
             )
-            .sort(["w_state", "i_item_id"])
-            .limit(100)
+            .sort(sort_by.keys(), nulls_last=True)
+            .limit(limit)
         ),
-        sort_by=[("w_state", False), ("i_item_id", False)],
-        limit=100,
+        sort_by=list(sort_by.items()),
+        limit=limit,
     )

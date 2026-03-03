@@ -95,6 +95,18 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
     store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
     store = get_data(run_config.dataset_path, "store", run_config.suffix)
+    sort_by = {
+        "s_store_name": False,
+        "s_store_id": False,
+        "sun_sales": False,
+        "mon_sales": False,
+        "tue_sales": False,
+        "wed_sales": False,
+        "thu_sales": False,
+        "fri_sales": False,
+        "sat_sales": False,
+    }
+    limit = 100
     # Main query with joins and conditional aggregations
     return QueryResult(
         frame=(
@@ -159,31 +171,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
                     "sat_sales",
                 ]
             )
-            .sort(
-                [
-                    "s_store_name",
-                    "s_store_id",
-                    "sun_sales",
-                    "mon_sales",
-                    "tue_sales",
-                    "wed_sales",
-                    "thu_sales",
-                    "fri_sales",
-                    "sat_sales",
-                ]
-            )
-            .limit(100)
+            .sort(sort_by.keys(), nulls_last=True)
+            .limit(limit)
         ),
-        sort_by=[
-            ("s_store_name", False),
-            ("s_store_id", False),
-            ("sun_sales", False),
-            ("mon_sales", False),
-            ("tue_sales", False),
-            ("wed_sales", False),
-            ("thu_sales", False),
-            ("fri_sales", False),
-            ("sat_sales", False),
-        ],
-        limit=100,
+        sort_by=list(sort_by.items()),
+        limit=limit,
     )

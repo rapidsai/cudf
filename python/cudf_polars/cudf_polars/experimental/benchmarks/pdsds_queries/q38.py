@@ -118,13 +118,14 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         .filter(pl.col("source_count") == 3)
         .select(["c_last_name", "c_first_name", "d_date"])
     )
+    limit = 100
     # Count the final result
     return QueryResult(
         frame=(
             intersect_final
             # Cast -> Int64 to match DuckDB
-            .select([pl.len().cast(pl.Int64).alias("count_star()")]).limit(100)
+            .select([pl.len().cast(pl.Int64).alias("count_star()")]).limit(limit)
         ),
         sort_by=[],
-        limit=100,
+        limit=limit,
     )

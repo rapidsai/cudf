@@ -84,6 +84,8 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     catalog_sales = get_data(
         run_config.dataset_path, "catalog_sales", run_config.suffix
     )
+    sort_by = {"i_item_id": False}
+    limit = 100
     return QueryResult(
         frame=(
             item.join(inventory, left_on="i_item_sk", right_on="inv_item_sk")
@@ -97,9 +99,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
             )
             .group_by(["i_item_id", "i_item_desc", "i_current_price"])
             .agg([])
-            .sort(["i_item_id"])
-            .limit(100)
+            .sort(sort_by.keys(), nulls_last=True)
+            .limit(limit)
         ),
-        sort_by=[("i_item_id", False)],
-        limit=100,
+        sort_by=list(sort_by.items()),
+        limit=limit,
     )

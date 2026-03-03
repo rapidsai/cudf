@@ -159,6 +159,16 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         )
     )
 
+    sort_by = {
+        "wsk1": False,
+        "isk1": False,
+        "dmoy1": False,
+        "mean1": False,
+        "cov1": False,
+        "d_moy": False,
+        "mean": False,
+        "cov": False,
+    }
     return QueryResult(
         frame=(
             inv1.join(
@@ -181,28 +191,8 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
                     pl.col("cov_2").alias("cov"),
                 ]
             )
-            .sort(
-                [
-                    "wsk1",
-                    "isk1",
-                    "dmoy1",
-                    "mean1",
-                    "cov1",
-                    "d_moy",
-                    "mean",
-                    "cov",
-                ]
-            )
+            .sort(sort_by.keys(), nulls_last=True)
         ),
-        sort_by=[
-            ("wsk1", False),
-            ("isk1", False),
-            ("dmoy1", False),
-            ("mean1", False),
-            ("cov1", False),
-            ("d_moy", False),
-            ("mean", False),
-            ("cov", False),
-        ],
+        sort_by=list(sort_by.items()),
         limit=None,
     )

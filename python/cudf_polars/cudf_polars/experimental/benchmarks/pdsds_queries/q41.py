@@ -92,15 +92,17 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         item.filter(subquery_conditions).select("i_manufact").unique()
     )
 
+    sort_by = {"i_product_name": False}
+    limit = 100
     return QueryResult(
         frame=(
             item.filter(pl.col("i_manufact_id").is_between(manufact, manufact + 40))
             .join(manufacturers_with_criteria, on="i_manufact", how="inner")
             .select("i_product_name")
             .unique()
-            .sort("i_product_name")
-            .limit(100)
+            .sort(sort_by.keys(), nulls_last=True)
+            .limit(limit)
         ),
-        sort_by=[("i_product_name", False)],
-        limit=100,
+        sort_by=list(sort_by.items()),
+        limit=limit,
     )
