@@ -15,6 +15,7 @@ import pylibcudf as plc
 
 import cudf
 from cudf.core.column.column import ColumnBase, as_column, column_empty
+from cudf.core.dtype.conversions import element_type_from_list_dtype
 from cudf.core.dtype.validators import is_dtype_obj_list
 from cudf.core.dtypes import ListDtype
 from cudf.core.missing import NA
@@ -244,12 +245,7 @@ class ListColumn(ColumnBase):
         """
         Returns the element type of the list column.
         """
-        if isinstance(self.dtype, ListDtype):
-            return self.dtype.element_type
-        else:
-            return pd.ArrowDtype(
-                cast("pd.ArrowDtype", self.dtype).pyarrow_dtype.value_type
-            )
+        return element_type_from_list_dtype(self.dtype)
 
     def to_pandas(
         self,

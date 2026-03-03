@@ -10,6 +10,7 @@ import pyarrow as pa
 
 import cudf
 from cudf.core.column.column import ColumnBase
+from cudf.core.dtype.conversions import fields_from_struct_dtype
 from cudf.core.dtypes import StructDtype
 from cudf.utils.scalar import (
     maybe_nested_pa_scalar_to_py,
@@ -46,13 +47,7 @@ class StructColumn(ColumnBase):
 
     @functools.cached_property
     def fields(self) -> dict[str, DtypeObj]:
-        if isinstance(self.dtype, StructDtype):
-            return self.dtype.fields
-        else:
-            return {
-                field.name: pd.ArrowDtype(field.type)
-                for field in cast("pd.ArrowDtype", self.dtype).pyarrow_dtype
-            }
+        return fields_from_struct_dtype(self.dtype)
 
     def _get_sliced_child(self, loc: int | str) -> tuple[ColumnBase, str]:
         """

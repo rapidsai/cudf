@@ -16,6 +16,7 @@ from cudf.core.column.column import (
     ColumnBase,
     dtype_from_pylibcudf_column,
 )
+from cudf.core.dtype.conversions import subtype_from_interval_dtype
 from cudf.core.dtype.validators import is_dtype_obj_interval
 from cudf.core.dtypes import IntervalDtype
 from cudf.utils.dtypes import get_dtype_of_same_kind
@@ -29,12 +30,7 @@ if TYPE_CHECKING:
 class IntervalColumn(ColumnBase):
     @functools.cached_property
     def subtype(self) -> DtypeObj:
-        if isinstance(self.dtype, IntervalDtype):
-            return self.dtype.subtype
-        else:
-            return pd.ArrowDtype(
-                cast("pd.ArrowDtype", self.dtype).pyarrow_dtype.subtype
-            )
+        return subtype_from_interval_dtype(self.dtype)
 
     @functools.cached_property
     def closed(self) -> Literal["left", "right", "neither", "both"]:
