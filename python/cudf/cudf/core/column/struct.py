@@ -76,7 +76,6 @@ class StructColumn(ColumnBase):
                 )
             int_loc = loc
             field_label = list(self.fields)[loc]
-            sub_type = self.fields[field_label]
         elif isinstance(loc, str):
             if loc not in self.fields:
                 raise KeyError(
@@ -84,7 +83,6 @@ class StructColumn(ColumnBase):
                 )
             int_loc = list(self.fields).index(loc)
             field_label = loc
-            sub_type = self.fields[loc]
         else:
             raise ValueError(
                 f"loc must be an integer location or string label, not {loc}"
@@ -93,6 +91,7 @@ class StructColumn(ColumnBase):
         sliced_plc_col = self.plc_column.struct_view().get_sliced_child(
             int_loc
         )
+        sub_type = self.fields[field_label]
         return ColumnBase.create(sliced_plc_col, sub_type), field_label
 
     def _prep_pandas_compat_repr(self) -> StringColumn | Self:
