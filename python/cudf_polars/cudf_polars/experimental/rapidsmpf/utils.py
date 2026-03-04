@@ -41,6 +41,7 @@ from cudf_polars.experimental.utils import _concat
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator, Callable, Mapping
 
+    from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.streaming.core.channel import Channel
     from rapidsmpf.streaming.core.context import Context
     from rapidsmpf.streaming.core.spillable_messages import SpillableMessages
@@ -757,6 +758,7 @@ def make_spill_function(
 
 async def allgather_reduce(
     context: Context,
+    comm: Communicator,
     op_id: int,
     *local_values: int,
 ) -> tuple[int, ...]:
@@ -767,6 +769,8 @@ async def allgather_reduce(
     ----------
     context
         The rapidsmpf context.
+    comm
+        The communicator.
     op_id
         The collective operation ID for this allgather.
     *local_values
@@ -782,7 +786,7 @@ async def allgather_reduce(
     data = struct.pack(fmt, *local_values)
     packed = PackedData.from_host_bytes(data, context.br())
 
-    allgather = AllGather(context, op_id)
+    allgather = AllGather(context, comm, op_id)
     allgather.insert(0, packed)
     allgather.insert_finished()
 
