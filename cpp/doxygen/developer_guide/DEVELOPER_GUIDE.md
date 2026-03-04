@@ -770,17 +770,26 @@ cudf::detail::cuda_memcpy_async<T>(host_span<T>{dst}, device_span<T const>{src},
 ```
 
 For device-to-device copies, or when a raw `void*` interface is required, use
-`cudf::detail::memcpy_async` and check errors with `CUDF_CUDA_TRY` at the call site:
+`cudf::detail::memcpy_async` (single buffer) or `cudf::detail::memcpy_batch_async` (multiple
+buffers) and check errors with `CUDF_CUDA_TRY` at the call site:
 
 ```c++
+// Single buffer copy
 CUDF_CUDA_TRY(cudf::detail::memcpy_async(dst, src, size_bytes, stream));
+
+// Batch copy of multiple buffers
+CUDF_CUDA_TRY(cudf::detail::memcpy_batch_async(dsts, srcs, sizes, count, stream));
 ```
 
-**Important:** `cudf::detail::memcpy_async` uses `cudaMemcpyBatchAsync` with
-`cudaMemcpySrcAccessOrderStream`, which defers reading the source buffer until the stream reaches
-the copy. The **source buffer must remain valid until the stream has executed the copy**. For
-device memory this is naturally satisfied; for host memory the caller must ensure the source is not
-freed before the stream is synchronized.
+`memcpy_async` is a thin wrapper around `memcpy_batch_async` with `count = 1`. Prefer
+`memcpy_batch_async` directly when copying multiple buffers, as it issues all copies in a single
+`cudaMemcpyBatchAsync` call.
+
+**Important:** Both functions use `cudaMemcpyBatchAsync` with `cudaMemcpySrcAccessOrderStream`,
+which defers reading the source buffers until the stream reaches the copies. The **source buffers
+must remain valid until the stream has executed the copies**. For device memory this is naturally
+satisfied; for host memory the caller must ensure the sources are not freed before the stream is
+synchronized.
 
 ## Default Parameters
 
