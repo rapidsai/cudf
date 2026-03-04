@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -25,6 +25,7 @@
 #include <thrust/iterator/transform_iterator.h>
 
 #include <array>
+#include <limits>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -1717,6 +1718,42 @@ TEST_F(ContiguousSplitUntypedTest, DISABLED_VeryLargeColumnTestChunked)
     cudf::data_type{cudf::type_id::INT64}, 400 * 1024 * 1024, cudf::mask_state::UNALLOCATED);
   auto result = do_chunked_pack(cudf::table_view{{*col}});
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*col, result[0].table.column(0));
+}
+
+// This test requires about 7GB of device memory.
+// It verifies that chunked_pack::next() returns the correct byte count
+// when a single call copies more than 2GB (INT32_MAX bytes).
+// See https://github.com/rapidsai/cudf/issues/20876
+TEST_F(ContiguousSplitUntypedTest, DISABLED_ChunkedPackNextReturnValueOver2GB)
+{
+  auto const mr = cudf::get_current_device_resource_ref();
+
+  // 270M INT64 elements = 270 * 1024 * 1024 * 8 = 2,264,924,160 bytes > INT32_MAX
+  constexpr cudf::size_type num_rows = 270 * 1024 * 1024;
+  auto const col                     = cudf::make_fixed_width_column(
+    cudf::data_type{cudf::type_id::INT64}, num_rows, cudf::mask_state::UNALLOCATED);
+
+  auto const expected_total_size = static_cast<std::size_t>(num_rows) * sizeof(int64_t);
+  ASSERT_GT(expected_total_size, static_cast<std::size_t>(std::numeric_limits<int32_t>::max()));
+
+  auto const tv = cudf::table_view{{*col}};
+
+  // Bounce buffer large enough to hold all data in a single next() call.
+  // The bug only manifests when a single next() call returns >2GB.
+  auto const bounce_size = expected_total_size + (1024 * 1024);
+
+  auto chunked_packer = cudf::chunked_pack::create(tv, bounce_size, cudf::get_default_stream(), mr);
+
+  EXPECT_EQ(chunked_packer->get_total_contiguous_size(), expected_total_size);
+  ASSERT_TRUE(chunked_packer->has_next());
+
+  rmm::device_buffer bounce_buff(bounce_size, cudf::get_default_stream(), mr);
+  auto const bounce_span =
+    cudf::device_span<uint8_t>(static_cast<uint8_t*>(bounce_buff.data()), bounce_buff.size());
+
+  auto const bytes_copied = chunked_packer->next(bounce_span);
+  EXPECT_EQ(bytes_copied, expected_total_size);
+  EXPECT_FALSE(chunked_packer->has_next());
 }
 
 TEST_F(ContiguousSplitUntypedTest, OffsetAlignment)
