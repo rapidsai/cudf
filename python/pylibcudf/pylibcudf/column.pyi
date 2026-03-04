@@ -28,13 +28,18 @@ class CudaArrayInterface(ArrayInterfaceBase):
     stream: None | int
     mask: None | "SupportsCudaArrayInterface"
 
+# Numpy doesn't use a typed dict for their type stubs, they just annotate
+# as dict[str, Any]. So do the same here but with a union type so it's
+# clearer.
 class SupportsCudaArrayInterface(Protocol):
     @property
-    def __cuda_array_interface__(self) -> CudaArrayInterface: ...
+    def __cuda_array_interface__(
+        self,
+    ) -> CudaArrayInterface | dict[str, Any]: ...
 
 class SupportsArrayInterface(Protocol):
     @property
-    def __array_interface__(self) -> ArrayInterface: ...
+    def __array_interface__(self) -> ArrayInterface | dict[str, Any]: ...
 
 class Column:
     def __init__(
@@ -115,7 +120,7 @@ class Column:
     def from_array_interface(
         cls, obj: SupportsArrayInterface, stream: Stream | None = None
     ) -> Column: ...
-    @staticmethod
+    @classmethod
     def from_array(
         cls,
         obj: SupportsCudaArrayInterface | SupportsArrayInterface,

@@ -36,6 +36,7 @@ from cudf_polars.experimental.rapidsmpf.utils import (
 )
 
 if TYPE_CHECKING:
+    from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.streaming.core.channel import Channel
     from rapidsmpf.streaming.core.context import Context
 
@@ -677,6 +678,7 @@ async def metadata_feeder_node(
 @define_actor()
 async def metadata_drain_node(
     context: Context,
+    comm: Communicator,
     ir: IR,
     ir_context: IRExecutionContext,
     ch_in: Channel[TableChunk],
@@ -690,6 +692,8 @@ async def metadata_drain_node(
     ----------
     context
         The rapidsmpf context.
+    comm
+        The communicator.
     ir
         The IR node.
     ir_context
@@ -706,7 +710,7 @@ async def metadata_drain_node(
     async with shutdown_on_error(context, ch_in, ch_out):
         # Drain metadata channel (we don't need it after this point)
         metadata = await recv_metadata(ch_in, context)
-        send_empty = metadata.duplicated and context.comm().rank != 0
+        send_empty = metadata.duplicated and comm.rank != 0
         if metadata_collector is not None:
             metadata_collector.append(metadata)
 

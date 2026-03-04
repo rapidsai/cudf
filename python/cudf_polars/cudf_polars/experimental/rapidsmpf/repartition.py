@@ -30,6 +30,7 @@ from cudf_polars.experimental.repartition import Repartition
 from cudf_polars.experimental.utils import _concat
 
 if TYPE_CHECKING:
+    from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.streaming.core.channel import Channel
     from rapidsmpf.streaming.core.context import Context
 
@@ -40,6 +41,7 @@ if TYPE_CHECKING:
 @define_actor()
 async def concatenate_node(
     context: Context,
+    comm: Communicator,
     ir: Repartition,
     ir_context: IRExecutionContext,
     ch_out: Channel[TableChunk],
@@ -65,6 +67,8 @@ async def concatenate_node(
     ----------
     context
         The rapidsmpf context.
+    comm
+        The communicator.
     ir
         The Repartition IR node.
     ir_context
@@ -81,7 +85,7 @@ async def concatenate_node(
     async with shutdown_on_error(context, ch_in, ch_out, trace_ir=ir) as tracer:
         # Receive metadata.
         input_metadata = await recv_metadata(ch_in, context)
-        nranks = context.comm().nranks
+        nranks = comm.nranks
 
         # Interpret output_count as the GLOBAL target chunk count.
         # Calculate local target based on whether data is duplicated.
@@ -137,7 +141,7 @@ async def concatenate_node(
             if tracer is not None and output_duplicated:
                 tracer.set_duplicated()
 
-            allgather = AllGatherManager(context, collective_id)
+            allgather = AllGatherManager(context, comm, collective_id)
             stream = context.get_stream_from_pool()
             seq_num = 0
             while (msg := await ch_in.recv(context)) is not None:
@@ -255,6 +259,7 @@ def _(
     nodes[ir] = [
         concatenate_node(
             rec.state["context"],
+            rec.state["comm"],
             ir,
             rec.state["ir_context"],
             channels[ir].reserve_input_slot(),
