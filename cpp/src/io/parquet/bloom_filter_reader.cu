@@ -120,7 +120,7 @@ struct bloom_filter_caster {
     return std::make_unique<cudf::column>(cudf::data_type{cudf::type_id::BOOL8},
                                           static_cast<cudf::size_type>(total_row_groups),
                                           std::move(results),
-                                          rmm::device_buffer{},
+                                          rmm::device_buffer{0, stream},
                                           0);
   }
 

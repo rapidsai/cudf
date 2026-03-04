@@ -83,19 +83,18 @@ struct subpass_intermediate_data {
       level_decode_data(0, stream),
       page_buf(0, stream),
       page_src_index{0, stream},
-      page_string_offset_indices{0, stream},
-      string_offset_buffer{0, stream},
-      delta_temp_buf{0, stream},
-      column_page_count{},
+      page_string_offset_indices(0, stream),
+      string_offset_buffer(0, stream),
+      delta_temp_buf(0, stream),
       page_nesting_info(0, stream),
-      page_nesting_decode_info(0, stream),
+      page_nesting_decode_info(0, stream)
   {
   }
 
   rmm::device_buffer decomp_page_data;
 
   rmm::device_buffer level_decode_data;
-  cudf::detail::hostdevice_span<PageInfo> pages;
+  cudf::detail::hostdevice_span<PageInfo> pages{};
 
   cudf::detail::hostdevice_vector<PageInfo> page_buf;
 
