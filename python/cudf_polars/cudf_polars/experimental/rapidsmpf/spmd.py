@@ -141,8 +141,9 @@ def evaluate_pipeline_spmd_mode(
             stream,
         )
 
-    result = df.to_polars()
-    df.stream.synchronize()
+    with ir_context.stream_ordered_after(df) as stream:
+        result = df.to_polars()
+    stream.synchronize()
     return result, metadata_collector
 
 
