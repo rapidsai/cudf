@@ -51,6 +51,7 @@ from cudf_polars.experimental.utils import _concat
 from cudf_polars.utils.config import StreamingExecutor
 
 if TYPE_CHECKING:
+    from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.streaming.core.channel import Channel
     from rapidsmpf.streaming.core.context import Context
 
@@ -95,6 +96,7 @@ class JoinStrategy:
 @define_actor()
 async def broadcast_join_actor(
     context: Context,
+    comm: Communicator,
     ir: Join,
     ir_context: IRExecutionContext,
     ch_out: Channel[TableChunk],
@@ -111,6 +113,8 @@ async def broadcast_join_actor(
     ----------
     context
         The rapidsmpf context.
+    comm
+        The communicator.
     ir
         The Join IR node.
     ir_context
@@ -133,6 +137,7 @@ async def broadcast_join_actor(
     ) as tracer:
         await _broadcast_join(
             context,
+            comm,
             ir,
             ir_context,
             ch_out,
@@ -147,6 +152,7 @@ async def broadcast_join_actor(
 
 async def _collect_small_side_for_broadcast(
     context: Context,
+    comm: Communicator,
     ch: Channel[TableChunk],
     ir: IR,
     *,
@@ -181,7 +187,7 @@ async def _collect_small_side_for_broadcast(
 
     dfs: list[DataFrame] = []
     if need_allgather:
-        allgather = AllGatherManager(context, collective_id)
+        allgather = AllGatherManager(context, comm, collective_id)
         for s_id in range(len(chunks)):
             allgather.insert(s_id, chunks.pop(0))
         allgather.insert_finished()
@@ -271,6 +277,7 @@ async def _broadcast_join_large_chunk(
 
 async def _broadcast_join(
     context: Context,
+    comm: Communicator,
     ir: Join,
     ir_context: IRExecutionContext,
     ch_out: Channel[TableChunk],
@@ -323,7 +330,7 @@ async def _broadcast_join(
         )
 
     small_duplicated = small_metadata.duplicated
-    need_allgather = context.comm().nranks > 1 and not small_duplicated
+    need_allgather = comm.nranks > 1 and not small_duplicated
     output_duplicated = (
         small_duplicated or need_allgather
     ) and large_metadata.duplicated
@@ -337,6 +344,7 @@ async def _broadcast_join(
 
     small_dfs, small_size = await _collect_small_side_for_broadcast(
         context,
+        comm,
         small_ch,
         small_child,
         need_allgather=need_allgather,
@@ -498,6 +506,7 @@ def _log_shuffle_strategy_decision(
 
 async def _shuffle_join(
     context: Context,
+    comm: Communicator,
     ir: Join,
     ir_context: IRExecutionContext,
     ch_out: Channel[TableChunk],
@@ -512,7 +521,7 @@ async def _shuffle_join(
     # Send output metadata
     shuffle_modulus = strategy.shuffle_modulus
     output_indices = strategy.output_indices
-    nranks = context.comm().nranks
+    nranks = comm.nranks
     metadata_out = ChannelMetadata(
         local_count=max(1, shuffle_modulus // nranks),
         partitioning=Partitioning(
@@ -534,6 +543,7 @@ async def _shuffle_join(
         actor_tasks = [
             _global_shuffle(
                 context,
+                comm,
                 ir_context,
                 ch_left_shuffle,
                 ch_left,
@@ -543,6 +553,7 @@ async def _shuffle_join(
             ),
             _global_shuffle(
                 context,
+                comm,
                 ir_context,
                 ch_right_shuffle,
                 ch_right,
@@ -594,6 +605,7 @@ def _make_shuffle_strategy(
 
 async def _aggregate_estimates(
     context: Context,
+    comm: Communicator,
     left_sample: JoinSideStats,
     right_sample: JoinSideStats,
     collective_ids: list[int],
@@ -609,6 +621,7 @@ async def _aggregate_estimates(
         right_total_chunks,
     ) = await allgather_reduce(
         context,
+        comm,
         collective_ids.pop(),
         left_sample.total_size,
         right_sample.total_size,
@@ -634,7 +647,7 @@ async def _aggregate_estimates(
 
 
 async def _choose_strategy_from_samples(
-    context: Context,
+    comm: Communicator,
     ir: Join,
     left_metadata: ChannelMetadata,
     right_metadata: ChannelMetadata,
@@ -715,7 +728,7 @@ async def _choose_strategy_from_samples(
     max_output_chunks = 10 * max(left_total_chunks, right_total_chunks)
     min_shuffle_modulus = min(ideal_output_count, max_output_chunks)
     shuffle_modulus = _choose_shuffle_modulus(
-        context,
+        comm,
         left_partitioning,
         right_partitioning,
         min_shuffle_modulus,
@@ -736,7 +749,7 @@ async def _choose_strategy_from_samples(
 
 
 def _choose_shuffle_modulus(
-    context: Context,
+    comm: Communicator,
     left_partitioning: NormalizedPartitioning,
     right_partitioning: NormalizedPartitioning,
     min_shuffle_modulus: int,
@@ -750,7 +763,7 @@ def _choose_shuffle_modulus(
         if right_partitioning is not None
         else None
     )
-    default_modulus = max(context.comm().nranks, min_shuffle_modulus)
+    default_modulus = max(comm.nranks, min_shuffle_modulus)
     small, large = sorted(
         [left_modulus or default_modulus, right_modulus or default_modulus]
     )
@@ -793,6 +806,7 @@ async def _sample_chunks(
 
 async def _choose_strategy(
     context: Context,
+    comm: Communicator,
     ir: Join,
     ch_left: Channel[TableChunk],
     ch_right: Channel[TableChunk],
@@ -804,7 +818,7 @@ async def _choose_strategy(
     tracer: ActorTracer | None,
 ) -> tuple[JoinSideStats, JoinSideStats, JoinStrategy]:
     """Sample both sides, aggregate estimates, and choose broadcast vs shuffle."""
-    nranks = context.comm().nranks
+    nranks = comm.nranks
     left_partitioning = NormalizedPartitioning.from_indices(
         left_metadata.partitioning,
         nranks,
@@ -836,13 +850,14 @@ async def _choose_strategy(
         )
         left_sample, right_sample = await _aggregate_estimates(
             context,
+            comm,
             left_sample,
             right_sample,
             collective_ids,
         )
 
     strategy = await _choose_strategy_from_samples(
-        context,
+        comm,
         ir,
         left_metadata,
         right_metadata,
@@ -861,6 +876,7 @@ async def _choose_strategy(
 @define_actor()
 async def join_actor(
     context: Context,
+    comm: Communicator,
     ir: Join,
     ir_context: IRExecutionContext,
     ch_out: Channel[TableChunk],
@@ -880,6 +896,8 @@ async def join_actor(
     ----------
     context
         RapidsMPF context (communicator, etc.).
+    comm
+        The communicator.
     ir
         The Join IR node.
     ir_context
@@ -905,6 +923,7 @@ async def join_actor(
 
         left_sample, right_sample, strategy = await _choose_strategy(
             context,
+            comm,
             ir,
             ch_left,
             ch_right,
@@ -940,6 +959,7 @@ async def join_actor(
             actor_tasks.append(
                 _broadcast_join(
                     context,
+                    comm,
                     ir,
                     ir_context,
                     ch_out,
@@ -955,6 +975,7 @@ async def join_actor(
             actor_tasks.append(
                 _shuffle_join(
                     context,
+                    comm,
                     ir,
                     ir_context,
                     ch_out,
@@ -1037,6 +1058,7 @@ def _(
         actors[ir] = [
             join_actor(
                 rec.state["context"],
+                rec.state["comm"],
                 ir,
                 rec.state["ir_context"],
                 channels[ir].reserve_input_slot(),
@@ -1059,6 +1081,7 @@ def _(
         actors[ir] = [
             broadcast_join_actor(
                 rec.state["context"],
+                rec.state["comm"],
                 ir,
                 rec.state["ir_context"],
                 channels[ir].reserve_input_slot(),

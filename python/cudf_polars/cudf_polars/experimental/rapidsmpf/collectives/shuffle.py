@@ -34,6 +34,7 @@ from cudf_polars.experimental.rapidsmpf.utils import (
 from cudf_polars.experimental.shuffle import Shuffle
 
 if TYPE_CHECKING:
+    from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.streaming.core.channel import Channel
     from rapidsmpf.streaming.core.context import Context
 
@@ -52,6 +53,8 @@ class ShuffleManager:
     ----------
     context: Context
         The streaming context.
+    comm: Communicator
+        The communicator.
     num_partitions: int
         The number of partitions to shuffle into.
     columns_to_hash: tuple[int, ...]
@@ -63,6 +66,7 @@ class ShuffleManager:
     def __init__(
         self,
         context: Context,
+        comm: Communicator,
         num_partitions: int,
         columns_to_hash: tuple[int, ...],
         collective_id: int,
@@ -72,6 +76,7 @@ class ShuffleManager:
         self.columns_to_hash = columns_to_hash
         self.shuffler = ShufflerAsync(
             context,
+            comm,
             collective_id,
             num_partitions,
         )
@@ -161,6 +166,7 @@ def _is_already_partitioned(
 
 async def _global_shuffle(
     context: Context,
+    comm: Communicator,
     ir_context: IRExecutionContext,
     ch_out: Channel[TableChunk],
     ch_in: Channel[TableChunk],
@@ -175,6 +181,8 @@ async def _global_shuffle(
     ----------
     context
         The streaming context.
+    comm
+        The communicator.
     ir_context
         The execution context for the IR node.
     ch_out
@@ -192,7 +200,7 @@ async def _global_shuffle(
 
     # Check if we can skip the shuffle (already partitioned correctly)
     if _is_already_partitioned(
-        metadata_in, columns_to_hash, num_partitions, context.comm().nranks
+        metadata_in, columns_to_hash, num_partitions, comm.nranks
     ):
         # Forward metadata and data unchanged
         await send_metadata(ch_out, context, metadata_in)
@@ -203,7 +211,7 @@ async def _global_shuffle(
 
     # Normal shuffle path
     output_metadata = ChannelMetadata(
-        local_count=max(1, num_partitions // context.comm().nranks),
+        local_count=max(1, num_partitions // comm.nranks),
         partitioning=Partitioning(
             inter_rank=HashScheme(columns_to_hash, num_partitions),
             local="inherit",
@@ -212,10 +220,12 @@ async def _global_shuffle(
     await send_metadata(ch_out, context, output_metadata)
 
     # Create ShuffleManager instance
-    shuffle = ShuffleManager(context, num_partitions, columns_to_hash, collective_id)
+    shuffle = ShuffleManager(
+        context, comm, num_partitions, columns_to_hash, collective_id
+    )
     # When input is duplicated, only rank 0 should contribute data.
     # Other ranks still participate in the shuffle protocol.
-    skip_insert = metadata_in.duplicated and context.comm().rank != 0
+    skip_insert = metadata_in.duplicated and comm.rank != 0
 
     while (msg := await ch_in.recv(context)) is not None:
         if not skip_insert:
@@ -247,6 +257,7 @@ async def _global_shuffle(
 @define_actor()
 async def shuffle_actor(
     context: Context,
+    comm: Communicator,
     ir: Shuffle,
     ir_context: IRExecutionContext,
     ch_in: Channel[TableChunk],
@@ -266,6 +277,8 @@ async def shuffle_actor(
     ----------
     context
         The rapidsmpf context.
+    comm
+        The communicator.
     ir
         The Shuffle IR node.
     ir_context
@@ -284,6 +297,7 @@ async def shuffle_actor(
     async with shutdown_on_error(context, ch_in, ch_out):
         await _global_shuffle(
             context,
+            comm,
             ir_context,
             ch_out,
             ch_in,
@@ -322,6 +336,7 @@ def _(
     nodes[ir] = [
         shuffle_actor(
             context,
+            rec.state["comm"],
             ir,
             rec.state["ir_context"],
             ch_in=channels[child].reserve_output_slot(),
