@@ -416,6 +416,10 @@ async def _join_chunks(
                 f"Seq num: {right_msg.sequence_number}"
             )
             break
+        assert left_msg.sequence_number == right_msg.sequence_number, (
+            "Mismatched chunk sequence numbers in shuffle join. "
+            f"Left: {left_msg.sequence_number}, Right: {right_msg.sequence_number}"
+        )
 
         left_chunk = TableChunk.from_message(left_msg).make_available_and_spill(
             context.br(), allow_overbooking=True
@@ -445,10 +449,6 @@ async def _join_chunks(
         if tracer is not None:
             tracer.add_chunk(table=df.table)
 
-        assert left_msg.sequence_number == right_msg.sequence_number, (
-            "Mismatched chunk sequence numbers in shuffle join. "
-            f"Left: {left_msg.sequence_number}, Right: {right_msg.sequence_number}"
-        )
         await ch_out.send(
             context,
             Message(
