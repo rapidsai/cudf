@@ -332,6 +332,27 @@ std::vector<size_type> batch_null_count(host_span<bitmask_type const* const> bit
                                         rmm::cuda_stream_view stream = cudf::get_default_stream());
 
 /**
+ * @brief Given a validity bitmask, counts the number of null elements (unset
+ * bits) in every range `[indices[2*i], indices[(2*i)+1])` (where 0 <= i <
+ * indices.size() / 2).
+ *
+ * If `bitmask == nullptr`, all elements are assumed to be valid and a vector of
+ * length `indices.size()` containing all zeros is returned.
+ *
+ * @throws cudf::logic_error if `indices.size() % 2 != 0`
+ * @throws cudf::logic_error if `indices[2*i] < 0 or indices[2*i] > indices[(2*i)+1]`
+ *
+ * @param[in] bitmask Validity bitmask residing in device memory.
+ * @param[in] indices A host_span of indices specifying ranges to count the number of null elements.
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches.
+ * @return A vector storing the number of null elements in each specified range.
+ */
+std::vector<size_type> segmented_null_count(
+  bitmask_type const* bitmask,
+  host_span<size_type const> indices,
+  rmm::cuda_stream_view stream = cudf::get_default_stream());
+
+/**
  * @brief Given a validity bitmask, returns the index of the first set bit
  * in the range `[start, stop)` relative to start
  *
