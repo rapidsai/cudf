@@ -17,21 +17,22 @@ from cudf_polars.experimental.rapidsmpf.collectives.allgather import AllGatherMa
 from cudf_polars.experimental.rapidsmpf.utils import allgather_reduce
 
 if TYPE_CHECKING:
+    from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.streaming.core.context import Context
 
 
-async def _test_allgather(context: Context) -> None:
+async def _test_allgather(context: Context, comm: Communicator) -> None:
     """Very simple test that AllGatherManager can concatenate tables."""
     stream = context.get_stream_from_pool()
 
     # Create simple test tables with different sizes
     tables = [
-        plc.Table([plc.Column.from_array(np.full(num_elements, i).astype(np.int32))])  # type: ignore[call-arg]
+        plc.Table([plc.Column.from_array(np.full(num_elements, i).astype(np.int32))])
         for i, num_elements in enumerate([100, 200, 300])
     ]
 
     # Insert tables into AllGatherManager
-    allgather = AllGatherManager(context, 0)
+    allgather = AllGatherManager(context, comm, 0)
     for i, table in enumerate(tables):
         allgather.insert(
             i, TableChunk.from_pylibcudf_table(table, stream, exclusive_view=True)
@@ -51,20 +52,20 @@ async def _test_allgather(context: Context) -> None:
     assert col.type().id().value == plc.types.TypeId.INT32.value
 
 
-def test_allgather(local_context: Context) -> None:
-    asyncio.run(_test_allgather(local_context))
+def test_allgather(local_context: Context, local_comm: Communicator) -> None:
+    asyncio.run(_test_allgather(local_context, local_comm))
 
 
-async def _test_allgather_reduce(context: Context) -> None:
+async def _test_allgather_reduce(context: Context, comm: Communicator) -> None:
     """Test allgather_reduce with single and multiple values."""
     # Test with a single value
-    (result,) = await allgather_reduce(context, 0, 42)
+    (result,) = await allgather_reduce(context, comm, 0, 42)
     assert result == 42  # Single rank, so sum is just the local value
 
     # Test with multiple values
-    results = await allgather_reduce(context, 1, 10, 20, 30)
+    results = await allgather_reduce(context, comm, 1, 10, 20, 30)
     assert results == (10, 20, 30)  # Single rank, so sums are just the local values
 
 
-def test_allgather_reduce(local_context: Context) -> None:
-    asyncio.run(_test_allgather_reduce(local_context))
+def test_allgather_reduce(local_context: Context, local_comm: Communicator) -> None:
+    asyncio.run(_test_allgather_reduce(local_context, local_comm))

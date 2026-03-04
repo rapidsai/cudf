@@ -19,6 +19,7 @@ if TYPE_CHECKING:
     from collections.abc import MutableMapping
 
     from distributed import Client
+    from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.streaming.cudf.channel_metadata import ChannelMetadata
 
     from cudf_polars.dsl.ir import IR
@@ -36,6 +37,7 @@ class EvaluatePipelineCallback(Protocol):
         config_options: ConfigOptions[StreamingExecutor],
         stats: StatsCollector,
         collective_id_map: dict[IR, list[int]],
+        comm: Communicator,
         rmpf_context: Context | None = None,
         *,
         collect_metadata: bool = False,
@@ -163,7 +165,8 @@ def _evaluate_pipeline_dask(
         | get_environment_variables()
     )
     dask_context = get_worker_context(dask_worker)
-    with Context(dask_context.comm, dask_context.br, options) as rmpf_context:
+    assert dask_context.comm is not None
+    with Context(dask_context.comm.logger, dask_context.br, options) as rmpf_context:
         # IDs are already reserved by the caller, just pass them through
         return callback(
             ir,
@@ -171,6 +174,7 @@ def _evaluate_pipeline_dask(
             config_options,
             stats,
             collective_id_map,
+            dask_context.comm,
             rmpf_context,
             collect_metadata=collect_metadata,
         )
