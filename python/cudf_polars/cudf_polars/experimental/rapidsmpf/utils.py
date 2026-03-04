@@ -7,7 +7,6 @@ from __future__ import annotations
 import asyncio
 import operator
 import struct
-from collections.abc import Mapping
 from contextlib import asynccontextmanager
 from functools import reduce
 from typing import TYPE_CHECKING, Any
@@ -42,7 +41,7 @@ from cudf_polars.dsl.ir import Cache, Filter, Join, Projection, Select
 from cudf_polars.experimental.utils import _concat
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator, Callable, Mapping
+    from collections.abc import AsyncIterator, Callable
 
     from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.streaming.core.channel import Channel
@@ -54,12 +53,10 @@ if TYPE_CHECKING:
     from cudf_polars.dsl.ir import IR, IRExecutionContext
     from cudf_polars.experimental.rapidsmpf.dispatch import SubNetGenerator
     from cudf_polars.experimental.rapidsmpf.tracing import ActorTracer
-    from cudf_polars.typing import DataType
+    from cudf_polars.typing import DataType, Schema
 
 
-def indices_to_names(
-    indices: tuple[int, ...], schema: Mapping[str, Any]
-) -> tuple[str, ...]:
+def indices_to_names(indices: tuple[int, ...], schema: Schema) -> tuple[str, ...]:
     """
     Return column names for the given column indices in schema order.
 
@@ -79,7 +76,7 @@ def indices_to_names(
 
 
 def names_to_indices(
-    names: tuple[str, ...] | tuple[NamedExpr, ...], schema: Mapping[str, Any]
+    names: tuple[str | NamedExpr, ...], schema: Schema
 ) -> tuple[int, ...]:
     """
     Return column indices for the given names in schema order.
@@ -381,7 +378,7 @@ async def evaluate_chunk(
 async def concat_batch(
     batch: list[TableChunk],
     context: Context,
-    schema: Mapping[str, DataType],
+    schema: Schema,
     ir_context: IRExecutionContext,
 ) -> TableChunk:
     """
