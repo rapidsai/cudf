@@ -1743,7 +1743,7 @@ TEST_F(ContiguousSplitUntypedTest, DISABLED_ChunkedPackNextReturnValueOver2GB)
   auto chunked_packer = cudf::chunked_pack::create(tv, bounce_size, cudf::get_default_stream(), mr);
 
   EXPECT_EQ(chunked_packer->get_total_contiguous_size(), expected_total_size);
-  ASSERT_TRUE(chunked_packer->has_next());
+  EXPECT_TRUE(chunked_packer->has_next());
 
   rmm::device_buffer bounce_buff(bounce_size, cudf::get_default_stream(), mr);
   auto const bounce_span =
