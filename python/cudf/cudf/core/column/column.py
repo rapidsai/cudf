@@ -438,6 +438,13 @@ def _wrap_and_validate(
             plc.TypeId.TIMESTAMP_MICROSECONDS,
             plc.TypeId.TIMESTAMP_NANOSECONDS,
         }
+        if isinstance(dtype, pd.DatetimeTZDtype):
+            if dtype != get_compatible_timezone(dtype):
+                raise ValueError(
+                    f"DatetimeTZDtype {dtype} has a non-zoneinfo timezone. "
+                    "Normalize with get_compatible_timezone before calling "
+                    "ColumnBase.create."
+                )
     elif dtype_kind == "m":
         valid_types = {
             plc.TypeId.DURATION_SECONDS,
