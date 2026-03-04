@@ -261,6 +261,9 @@ auto contiguous_copy_column_device_views(HostTableView source_view, rmm::cuda_st
     static_cast<int8_t const*>(h_ptr) - h_buffer.data(), views_size_bytes);
   auto const d_span = device_span<int8_t>{static_cast<int8_t*>(d_ptr), views_size_bytes};
   cudf::detail::cuda_memcpy_async(d_span, h_span, stream);
+  // TODO: h_buffer may be using a pageable allocator (new_delete_memory_resource) whose deallocate
+  // ignores the stream, so the free can race with the async memcpy. Sync here until the pageable
+  // allocator is truly stream-ordered.
   stream.synchronize();
   return std::make_tuple(std::move(descendant_storage), d_columns);
 }

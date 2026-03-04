@@ -71,6 +71,9 @@ create_device_view_from_view(ColumnView const& source, rmm::cuda_stream_view str
 
   // copy the CPU memory with all the children into device memory
   detail::cuda_memcpy_async<char>(*descendant_storage, staging_buffer, stream);
+  // TODO: staging_buffer may be using a pageable allocator (new_delete_memory_resource) whose
+  // deallocate ignores the stream, so the free can race with the async memcpy. Sync here until the
+  // pageable allocator is truly stream-ordered.
   stream.synchronize();
 
   return result;
