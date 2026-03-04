@@ -14,7 +14,13 @@ import pyarrow as pa
 import pylibcudf as plc
 
 import cudf
-from cudf.core.column.column import ColumnBase, as_column, column_empty
+from cudf.core.column.column import (
+    ColumnBase,
+    PylibcudfFunction,
+    as_column,
+    column_empty,
+    int32_same_kind_policy,
+)
 from cudf.core.dtype.conversions import element_type_from_list_dtype
 from cudf.core.dtype.validators import is_dtype_obj_list
 from cudf.core.dtypes import ListDtype
@@ -249,14 +255,10 @@ class ListColumn(ColumnBase):
             return pd.Index(self.to_arrow().tolist(), dtype="object")
 
     def count_elements(self) -> ColumnBase:
-        with self.access(mode="read", scope="internal"):
-            plc_result = plc.lists.count_elements(self.plc_column)
-            return ColumnBase.create(
-                plc_result,
-                get_dtype_of_same_kind(
-                    self.dtype, dtype_from_pylibcudf_column(plc_result)
-                ),
-            )
+        return PylibcudfFunction(
+            plc.lists.count_elements,
+            int32_same_kind_policy,
+        ).execute_with_args(self)
 
     def distinct(self, nulls_equal: bool, nans_all_equal: bool) -> ColumnBase:
         if is_dtype_obj_list(self.element_type):
