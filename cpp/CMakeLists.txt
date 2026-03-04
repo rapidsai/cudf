@@ -590,7 +590,7 @@ add_library(
   src/join/jit_filter_join_indices.cu
   src/join/join.cu
   src/join/join_utils.cu
-  src/join/key_remapping.cu
+  src/join/join_factorizer.cu
   src/join/mixed_join.cu
   src/join/mixed_join_kernel.cu
   src/join/mixed_join_kernel_nulls.cu
