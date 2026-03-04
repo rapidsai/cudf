@@ -48,6 +48,11 @@ from cudf.core.buffer import (
 )
 from cudf.core.column.utils import access_columns
 from cudf.core.copy_types import GatherMap
+from cudf.core.dtype.conversions import (
+    element_type_from_list_dtype,
+    fields_from_struct_dtype,
+    subtype_from_interval_dtype,
+)
 from cudf.core.dtype.validators import (
     is_dtype_obj_datetime_tz,
     is_dtype_obj_decimal,
@@ -137,6 +142,8 @@ class PylibcudfFunction:
                     )
                     dtypes.append(accessed.dtype)
                     plc_args.append(accessed.plc_column)
+                else:
+                    plc_args.append(arg)
             plc_kwargs = {}
             for k, v in kwargs.items():
                 if isinstance(v, ColumnBase):
@@ -145,15 +152,102 @@ class PylibcudfFunction:
                     )
                     dtypes.append(accessed.dtype)
                     plc_kwargs[k] = accessed.plc_column
+                else:
+                    plc_kwargs[k] = v
             plc_result = self._pylibcudf_function(*plc_args, **plc_kwargs)
         output_dtype = self._dtype_policy(plc_result, dtypes)
         return ColumnBase.create(plc_result, dtype=output_dtype)
 
 
-def np_bool_dtype_policy(
+def same_dtype_policy(
     result: plc.Column, dtypes: "list[DtypeObj]"
 ) -> "DtypeObj":
-    return np.dtype(np.bool_)
+    return dtypes[0]
+
+
+def fixed_dtype_policy(dtype: "DtypeObj") -> "DtypePolicy":
+    def policy(result: plc.Column, dtypes: "list[DtypeObj]") -> "DtypeObj":
+        return dtype
+
+    return policy
+
+
+def same_kind_dtype_policy(target_dtype: "DtypeObj") -> "DtypePolicy":
+    def policy(result: plc.Column, dtypes: "list[DtypeObj]") -> "DtypeObj":
+        return get_dtype_of_same_kind(dtypes[0], target_dtype)
+
+    return policy
+
+
+bool_same_kind_policy = same_kind_dtype_policy(np.dtype(np.bool_))
+int16_same_kind_policy = same_kind_dtype_policy(np.dtype(np.int16))
+int32_same_kind_policy = same_kind_dtype_policy(np.dtype(np.int32))
+
+
+def list_dtype_policy(
+    result: plc.Column, dtypes: "list[DtypeObj]"
+) -> "DtypeObj":
+    return cudf.ListDtype(dtypes[0])
+
+
+def pylibcudf_result_dtype_policy(
+    result: plc.Column, dtypes: "list[DtypeObj]"
+) -> "DtypeObj":
+    return dtype_from_pylibcudf_column(result)
+
+
+def pandas_compatible_string_dtype_policy(
+    target_dtype: np.dtype,
+) -> "DtypePolicy":
+    def policy(result: plc.Column, dtypes: "list[DtypeObj]") -> "DtypeObj":
+        source_dtype = dtypes[0]
+        if (
+            isinstance(source_dtype, pd.StringDtype)
+            and source_dtype.na_value is np.nan
+        ):
+            return get_dtype_of_same_kind(source_dtype, target_dtype)
+
+        return get_dtype_of_same_kind(
+            pd.StringDtype()
+            if isinstance(source_dtype, pd.StringDtype)
+            else source_dtype,
+            target_dtype,
+        )
+
+    return policy
+
+
+pandas_string_int32_policy = pandas_compatible_string_dtype_policy(
+    np.dtype(np.int32)
+)
+
+
+def _replace_nested_none_with_NA(py_scalar: Any) -> Any:
+    """
+    Replace the None values from pyarrow.Scalar.as_py() with pd.NA.
+
+    Used in ColumnBase.element_indexing().
+
+    Parameters
+    ----------
+    py_scalar: Any
+
+    Returns
+    -------
+    Any
+        Python scalar
+    """
+    if isinstance(py_scalar, dict):
+        return {
+            key: _replace_nested_none_with_NA(value)
+            for key, value in py_scalar.items()
+        }
+    elif isinstance(py_scalar, list):
+        return [_replace_nested_none_with_NA(value) for value in py_scalar]
+    elif py_scalar is None:
+        return pd.NA
+    else:
+        return py_scalar
 
 
 def _can_values_be_equal(left: DtypeObj, right: DtypeObj) -> bool:
@@ -254,16 +348,9 @@ def _wrap_and_validate(
     dtype_kind = dtype.kind
     valid_types: set[plc.TypeId] = set()
     wrapped: plc.Column | None = None
-    is_arrow_dtype = isinstance(dtype, pd.ArrowDtype)
     if is_dtype_obj_list(dtype):
         valid_types = {plc.TypeId.LIST}
-        child_dtype = (
-            pd.ArrowDtype(
-                cast("pd.ArrowDtype", dtype).pyarrow_dtype.value_type
-            )
-            if is_arrow_dtype
-            else cast("ListDtype", dtype).element_type
-        )
+        child_dtype = element_type_from_list_dtype(dtype)
         values, values_dtype = _wrap_and_validate(
             col.list_view().child(), child_dtype
         )
@@ -284,12 +371,7 @@ def _wrap_and_validate(
             raise ValueError(
                 "plc_column must have two children (left edges, right edges)."
             )
-        interval_subtype = (
-            pd.ArrowDtype(cast("pd.ArrowDtype", dtype).pyarrow_dtype.subtype)
-            if is_arrow_dtype
-            else cast("IntervalDtype", dtype).subtype
-        )
-        assert interval_subtype is not None
+        interval_subtype = subtype_from_interval_dtype(dtype)
         wrapped_children = [
             # Discarding the returned subtype since we assume it cannot have changed
             _wrap_and_validate(child, interval_subtype)[0]
@@ -306,16 +388,9 @@ def _wrap_and_validate(
     elif is_dtype_obj_struct(dtype):
         valid_types = {plc.TypeId.STRUCT}
         wrapped_children = []
-        struct_fields = (
-            (
-                (field.name, pd.ArrowDtype(field.type))
-                for field in cast("pd.ArrowDtype", dtype).pyarrow_dtype
-            )
-            if is_arrow_dtype
-            else cast("StructDtype", dtype).fields.items()
-        )
+        struct_fields = fields_from_struct_dtype(dtype)
         for child, (field_name, field_dtype) in zip(
-            col.children(), struct_fields, strict=True
+            col.children(), struct_fields.items(), strict=True
         ):
             try:
                 wrapped_child, _ = _wrap_and_validate(child, field_dtype)
@@ -1210,20 +1285,20 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         raise NotImplementedError
 
     def clip(self, lo: ScalarLike, hi: ScalarLike) -> Self:
-        with self.access(mode="read", scope="internal"):
-            plc_column = plc.replace.clamp(
-                self.plc_column,
-                pa_scalar_to_plc_scalar(
-                    pa.scalar(lo, type=cudf_dtype_to_pa_type(self.dtype))
-                ),
-                pa_scalar_to_plc_scalar(
-                    pa.scalar(hi, type=cudf_dtype_to_pa_type(self.dtype))
-                ),
-            )
-            return cast(
-                "Self",
-                ColumnBase.create(plc_column, self.dtype),
-            )
+        lo_scalar = pa_scalar_to_plc_scalar(
+            pa.scalar(lo, type=cudf_dtype_to_pa_type(self.dtype))
+        )
+        hi_scalar = pa_scalar_to_plc_scalar(
+            pa.scalar(hi, type=cudf_dtype_to_pa_type(self.dtype))
+        )
+
+        return cast(
+            "Self",
+            PylibcudfFunction(
+                plc.replace.clamp,
+                same_dtype_policy,
+            ).execute_with_args(self, lo_scalar, hi_scalar),
+        )
 
     def equals(self, other: ColumnBase, check_dtypes: bool = False) -> bool:
         if not isinstance(other, ColumnBase) or len(self) != len(other):
@@ -1549,16 +1624,22 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         return cast("Self", ColumnBase.create(plc_col, self.dtype))
 
     def element_indexing(self, index: int) -> ScalarLike:
-        """Default implementation for indexing to an element
+        """
+        Access an element from the column at the given index.
+
+        Parameters
+        ----------
+        index : int
+            The index of the element to access.
+
+        Returns
+        -------
+        ScalarLike
+            The element at the given index.
 
         Raises
         ------
         ``IndexError`` if out-of-bound
-
-        Notes
-        -----
-        Subclass should override this method to not return a pyarrow.Scalar
-        (May not be needed once pylibcudf.Scalar.as_py() exists.)
         """
         if index < 0:
             index = len(self) + index
@@ -1569,13 +1650,13 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 self.plc_column,
                 index,
             )
-        py_element = plc_scalar.to_arrow()
-        if not py_element.is_valid:
+        pa_scalar = plc_scalar.to_arrow(
+            metadata=_dtype_to_metadata(self.dtype),
+        )
+        if not pa_scalar.is_valid:
             return self._PANDAS_NA_VALUE
-        # Calling .as_py() on a pyarrow.StructScalar with duplicate field names
-        # would raise. So we need subclasses to convert handle pyarrow scalars
-        # manually
-        return py_element
+        else:
+            return _replace_nested_none_with_NA(pa_scalar.as_py())
 
     def slice(self, start: int, stop: int, stride: int | None = None) -> Self:
         stride = 1 if stride is None else stride
@@ -1810,18 +1891,13 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     def replace(
         self, values_to_replace: Self, replacement_values: Self
     ) -> Self:
-        with self.access(mode="read", scope="internal"):
-            return cast(
-                "Self",
-                ColumnBase.create(
-                    plc.replace.find_and_replace_all(
-                        self.plc_column,
-                        values_to_replace.plc_column,
-                        replacement_values.plc_column,
-                    ),
-                    self.dtype,
-                ),
-            )
+        return cast(
+            "Self",
+            PylibcudfFunction(
+                plc.replace.find_and_replace_all,
+                same_dtype_policy,
+            ).execute_with_args(self, values_to_replace, replacement_values),
+        )
 
     def repeat(self, repeats: int) -> Self:
         with self.access(mode="read", scope="internal"):
@@ -1892,7 +1968,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     def is_valid(self) -> ColumnBase:
         """Identify non-null values"""
         return PylibcudfFunction(
-            plc.unary.is_valid, np_bool_dtype_policy
+            plc.unary.is_valid, pylibcudf_result_dtype_policy
         ).execute_with_args(self)
 
     def isnan(self) -> ColumnBase:
@@ -1908,7 +1984,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         if not self.has_nulls(include_nan=False):
             return as_column(False, length=len(self))
         return PylibcudfFunction(
-            plc.unary.is_null, np_bool_dtype_policy
+            plc.unary.is_null, pylibcudf_result_dtype_policy
         ).execute_with_args(self)
 
     def notnull(self) -> ColumnBase:
@@ -1916,7 +1992,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         if not self.has_nulls(include_nan=False):
             return as_column(True, length=len(self))
         return PylibcudfFunction(
-            plc.unary.is_valid, np_bool_dtype_policy
+            plc.unary.is_valid, pylibcudf_result_dtype_policy
         ).execute_with_args(self)
 
     def interpolate(self, index: Index) -> ColumnBase:
@@ -2148,17 +2224,10 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         other : Column
             A column of values to search for
         """
-        with access_columns(self, other, mode="read", scope="internal") as (
-            self,
-            other,
-        ):
-            return ColumnBase.create(
-                plc.search.contains(
-                    self.plc_column,
-                    other.plc_column,
-                ),
-                np.dtype(np.bool_),
-            )
+        return PylibcudfFunction(
+            plc.search.contains,
+            pylibcudf_result_dtype_policy,
+        ).execute_with_args(self, other)
 
     def sort_values(
         self: Self,
@@ -2203,11 +2272,12 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         raise NotImplementedError()
 
     def cast(self, dtype: DtypeObj) -> ColumnBase:
-        with self.access(mode="read", scope="internal"):
-            plc_column = plc.unary.cast(
-                self.plc_column, dtype_to_pylibcudf_type(dtype)
-            )
-            return ColumnBase.create(plc_column, dtype)
+        cast_dtype = dtype_to_pylibcudf_type(dtype)
+
+        return PylibcudfFunction(
+            plc.unary.cast,
+            fixed_dtype_policy(dtype),
+        ).execute_with_args(self, cast_dtype)
 
     def astype(self, dtype: DtypeObj, copy: bool | None = False) -> ColumnBase:
         if self.dtype == dtype:
@@ -2806,15 +2876,19 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     def _scan(self, op: str, inclusive: bool = True, **kwargs: Any) -> Self:
         """Private method for scan operations. Called by mixin-generated methods."""
         # `inclusive` controls scan type, not passed to aggregation
-        with self.access(mode="read", scope="internal"):
-            plc_result = plc.reduce.scan(
-                self.plc_column,
-                aggregation.make_aggregation(op, kwargs).plc_obj,
-                plc.reduce.ScanType.INCLUSIVE
-                if inclusive
-                else plc.reduce.ScanType.EXCLUSIVE,
-            )
-        return cast("Self", ColumnBase.create(plc_result, self.dtype))
+        scan_type = (
+            plc.reduce.ScanType.INCLUSIVE
+            if inclusive
+            else plc.reduce.ScanType.EXCLUSIVE
+        )
+        agg = aggregation.make_aggregation(op, kwargs).plc_obj
+
+        return cast(
+            "Self",
+            PylibcudfFunction(
+                plc.reduce.scan, same_dtype_policy
+            ).execute_with_args(self, agg, scan_type),
+        )
 
     def _reduce(
         self,
@@ -2902,21 +2976,15 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         null_precedence: plc.types.NullOrder,
         pct: bool,
     ) -> Self:
-        with self.access(mode="read", scope="internal"):
-            plc_column = plc.sorting.rank(
-                self.plc_column,
-                method,
-                column_order,
-                null_handling,
-                null_precedence,
-                pct,
-            )
-            return cast(
-                "Self",
-                ColumnBase.create(
-                    plc_column, dtype_from_pylibcudf_column(plc_column)
-                ),
-            )
+        return cast(
+            "Self",
+            PylibcudfFunction(
+                plc.sorting.rank,
+                pylibcudf_result_dtype_policy,
+            ).execute_with_args(
+                self, method, column_order, null_handling, null_precedence, pct
+            ),
+        )
 
     def label_bins(
         self,

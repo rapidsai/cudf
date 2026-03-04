@@ -14,6 +14,7 @@ from rapidsmpf.streaming.coll.allgather import AllGather
 from pylibcudf.contiguous_split import pack
 
 if TYPE_CHECKING:
+    from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.streaming.core.context import Context
     from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 
@@ -29,13 +30,15 @@ class AllGatherManager:
     ----------
     context: Context
         The streaming context.
+    comm: Communicator
+        The communicator.
     op_id: int
         Pre-allocated operation ID for this operation.
     """
 
-    def __init__(self, context: Context, op_id: int):
+    def __init__(self, context: Context, comm: Communicator, op_id: int):
         self.context = context
-        self.allgather = AllGather(self.context, op_id)
+        self.allgather = AllGather(self.context, comm, op_id)
 
     def insert(self, sequence_number: int, chunk: TableChunk) -> None:
         """
