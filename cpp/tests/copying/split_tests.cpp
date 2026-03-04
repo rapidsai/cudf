@@ -1720,10 +1720,8 @@ TEST_F(ContiguousSplitUntypedTest, DISABLED_VeryLargeColumnTestChunked)
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*col, result[0].table.column(0));
 }
 
-// This test requires about 7GB of device memory.
-// It verifies that chunked_pack::next() returns the correct byte count
-// when a single call copies more than 2GB (INT32_MAX bytes).
-// See https://github.com/rapidsai/cudf/issues/20876
+// Disabled as this test requires about 7GB of device memory.
+// See https://github.com/rapidsai/cudf/issues/20876 for more info.
 TEST_F(ContiguousSplitUntypedTest, DISABLED_ChunkedPackNextReturnValueOver2GB)
 {
   auto const mr = cudf::get_current_device_resource_ref();
@@ -1734,7 +1732,7 @@ TEST_F(ContiguousSplitUntypedTest, DISABLED_ChunkedPackNextReturnValueOver2GB)
     cudf::data_type{cudf::type_id::INT64}, num_rows, cudf::mask_state::UNALLOCATED);
 
   auto const expected_total_size = static_cast<std::size_t>(num_rows) * sizeof(int64_t);
-  ASSERT_GT(expected_total_size, static_cast<std::size_t>(std::numeric_limits<int32_t>::max()));
+  EXPECT_GT(expected_total_size, static_cast<std::size_t>(std::numeric_limits<int32_t>::max()));
 
   auto const tv = cudf::table_view{{*col}};
 
