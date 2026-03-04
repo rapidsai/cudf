@@ -73,7 +73,7 @@ struct row_range {
  * @brief Passes are broken down into subpasses based on temporary memory constraints.
  */
 struct subpass_intermediate_data {
-  subpass_intermediate_data() = delete;
+  subpass_intermediate_data()                                            = delete;
   subpass_intermediate_data(subpass_intermediate_data const&)            = delete;
   subpass_intermediate_data& operator=(subpass_intermediate_data const&) = delete;
   subpass_intermediate_data(subpass_intermediate_data&&)                 = default;
@@ -143,7 +143,7 @@ struct subpass_intermediate_data {
  * rowgroups may represent less than all of the rowgroups to be read for the file.
  */
 struct pass_intermediate_data {
-  pass_intermediate_data() = delete;
+  pass_intermediate_data()                                         = delete;
   pass_intermediate_data(pass_intermediate_data const&)            = delete;
   pass_intermediate_data& operator=(pass_intermediate_data const&) = delete;
   pass_intermediate_data(pass_intermediate_data&&)                 = default;

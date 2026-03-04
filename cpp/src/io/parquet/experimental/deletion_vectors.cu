@@ -325,8 +325,11 @@ std::unique_ptr<cudf::column> compute_row_mask_column(
     stream.synchronize();
   }
 
-  return std::make_unique<cudf::column>(
-    cudf::data_type{cudf::type_id::BOOL8}, num_rows, std::move(row_mask), rmm::device_buffer{0, stream}, 0);
+  return std::make_unique<cudf::column>(cudf::data_type{cudf::type_id::BOOL8},
+                                        num_rows,
+                                        std::move(row_mask),
+                                        rmm::device_buffer{0, stream},
+                                        0);
 }
 
 /**

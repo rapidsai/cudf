@@ -479,10 +479,7 @@ void reader_impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num_
   _stream.synchronize();
 }
 
-reader_impl::reader_impl()
-  : _options{}
-{
-}
+reader_impl::reader_impl() : _options{} {}
 
 reader_impl::reader_impl(std::vector<std::unique_ptr<datasource>>&& sources,
                          std::vector<FileMetaData>&& parquet_metadatas,

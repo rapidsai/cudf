@@ -343,7 +343,7 @@ void reader_impl::setup_next_subpass(read_mode mode)
   // Set the page mask information for the subpass
   set_subpass_page_mask_span();
   CUDF_EXPECTS(_subpass_page_mask, "Subpass page mask is not set");
-    _subpass_page_mask->host_to_device_async(_stream);
+  _subpass_page_mask->host_to_device_async(_stream);
 
   // decompress the data pages in this subpass; also decompress the dictionary pages in this pass,
   // if this is the first subpass in the pass
@@ -681,7 +681,8 @@ void reader_impl::set_subpass_page_mask_span()
   auto const& subpass = pass->subpass;
 
   // Create a hostdevice vector to store the subpass page mask
-  _subpass_page_mask = std::make_unique<cudf::detail::hostdevice_vector<bool>>(subpass->pages.size(), _stream);
+  _subpass_page_mask =
+    std::make_unique<cudf::detail::hostdevice_vector<bool>>(subpass->pages.size(), _stream);
 
   // Fill with all true if no pass level page mask is available
   if (_pass_page_mask.empty()) {
