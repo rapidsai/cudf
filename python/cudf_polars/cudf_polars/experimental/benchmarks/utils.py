@@ -395,6 +395,7 @@ class RunConfig:
     extra_info: dict[str, Any] = dataclasses.field(default_factory=dict)
     fallback_mode: str | None = None
     validation_method: ValidationMethod | None = None
+    io_mode: Literal["cold", "lukewarm", "hot"] = "lukewarm"
 
     def __post_init__(self) -> None:  # noqa: D105
         if self.gather_shuffle_stats and self.shuffle != "rapidsmpf":
@@ -536,6 +537,7 @@ class RunConfig:
             spill_to_pinned_memory=args.spill_to_pinned_memory,
             fallback_mode=args.fallback_mode,
             validation_method=validation_method,
+            io_mode=args.io_mode,
         )
 
     def serialize(self, engine: pl.GPUEngine | None) -> dict:
@@ -790,6 +792,21 @@ def initialize_dask_cluster(run_config: RunConfig, args: argparse.Namespace):  #
     return client
 
 
+def drop_file_page_cache_recursively(path: os.PathLike | str) -> None:
+    """Drop the Linux page cache for all files under `path`."""
+    try:
+        import kvikio
+    except ImportError as err:
+        raise RuntimeError(
+            "kvikio is required for cold-run page cache dropping. "
+            "Install it or switch to --io-mode lukewarm."
+        ) from err
+    for f in Path(path).rglob("*"):
+        if not f.is_file():
+            continue
+        kvikio.drop_file_page_cache(f)
+
+
 def execute_query(
     q_id: int,
     i: int,
@@ -804,6 +821,9 @@ def execute_query(
         domain="cudf_polars",
         color="green",
     ):
+        if run_config.io_mode == "cold":
+            drop_file_page_cache_recursively(run_config.dataset_path)
+
         if run_config.executor == "cpu":
             t0 = time.monotonic()
             result = q.collect(engine="streaming")
@@ -1008,6 +1028,17 @@ def build_parser(num_queries: int = 22) -> argparse.ArgumentParser:
         default=1,
         type=int,
         help="Number of times to run the same query.",
+    )
+    parser.add_argument(
+        "--io-mode",
+        dest="io_mode",
+        default="lukewarm",
+        choices=["cold", "lukewarm", "hot"],
+        help=textwrap.dedent("""\
+            Cache state control for each timed iteration:
+                - cold     : Drop Linux page cache before each iteration (requires kvikio)
+                - lukewarm : No cache manipulation; OS cache state unchanged (default)
+                - hot      : One untimed warmup iteration to populate cache before measured runs"""),
     )
     parser.add_argument(
         "--debug",
@@ -1506,6 +1537,27 @@ def run_polars_query(
     validation_failed = False
     record: SuccessRecord | FailedRecord
 
+    if run_config.io_mode == "hot":
+        print(f"Query {q_id} - Running warmup iteration (hot run)...", flush=True)
+        try:
+            run_polars_query_iteration(
+                q_id=q_id,
+                iteration=-1,
+                q=q,
+                run_config=run_config,
+                args=args,
+                engine=engine,
+                expected=None,
+                query_result=query_result,
+                client=client,
+            )
+            print(f"Query {q_id} - Warmup complete", flush=True)
+        except Exception:
+            print(
+                f"❌ Query {q_id} - Warmup failed:\n{traceback.format_exc()}",
+                flush=True,
+            )
+
     for i in range(args.iterations):
         if _HAS_STRUCTLOG and run_config.collect_traces:
             setup_logging(q_id, i)
@@ -1927,7 +1979,25 @@ def run_duckdb(
         print(f"DuckDB Executing: {q_id}")
         records[q_id] = []
 
+        if run_config.io_mode == "hot":
+            print(f"Query {q_id} - Running warmup iteration (hot run)...", flush=True)
+            try:
+                execute_duckdb_query(
+                    sql,
+                    run_config.dataset_path,
+                    suffix=run_config.suffix,
+                    query_set=duckdb_queries_cls.name,
+                )
+                print(f"Query {q_id} - Warmup complete", flush=True)
+            except Exception:
+                print(
+                    f"❌ Query {q_id} - Warmup failed:\n{traceback.format_exc()}",
+                    flush=True,
+                )
+
         for i in range(args.iterations):
+            if run_config.io_mode == "cold":
+                drop_file_page_cache_recursively(run_config.dataset_path)
             t0 = time.time()
             result = execute_duckdb_query(
                 sql,
