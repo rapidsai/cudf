@@ -780,14 +780,34 @@ def _choose_shuffle_modulus(
 async def _sample_chunks(
     context: Context,
     ch: Channel[TableChunk],
-    sample_chunk_count: int,
+    max_sample_chunks: int,
+    max_sample_bytes: int,
     local_count: int,
 ) -> JoinSideStats:
-    """Sample up to sample_chunk_count chunks from a channel."""
+    """
+    Sample chunks from a channel.
+
+    Parameters
+    ----------
+    context
+        The context.
+    ch
+        The channel to sample from.
+    max_sample_chunks
+        The maximum number of chunks to sample.
+    max_sample_bytes
+        The maximum number of bytes to sample.
+    local_count
+        The number of local chunks.
+
+    Returns
+    -------
+    The sampled chunks.
+    """
     sampled_chunks: dict[int, TableChunk] = {}
     total_size = 0
     total_rows = 0
-    for _ in range(sample_chunk_count):
+    for _ in range(max_sample_chunks):
         msg = await ch.recv(context)
         if msg is None:
             break
@@ -797,6 +817,8 @@ async def _sample_chunks(
         sampled_chunks[msg.sequence_number] = chunk
         total_size += chunk.data_alloc_size(MemoryType.DEVICE)
         total_rows += chunk.table_view().num_rows()
+        if total_size >= max_sample_bytes:
+            break
     if sampled_chunks:
         total_size = int((total_size / len(sampled_chunks)) * local_count)
         total_rows = int((total_rows / len(sampled_chunks)) * local_count)
@@ -844,12 +866,21 @@ async def _choose_strategy(
         chunkwise = False
         assert executor.dynamic_planning is not None
         sample_chunk_count = executor.dynamic_planning.sample_chunk_count
+        target_partition_size = executor.target_partition_size
         left_sample, right_sample = await asyncio.gather(
             _sample_chunks(
-                context, ch_left, sample_chunk_count, left_metadata.local_count
+                context,
+                ch_left,
+                sample_chunk_count,
+                target_partition_size,
+                left_metadata.local_count,
             ),
             _sample_chunks(
-                context, ch_right, sample_chunk_count, right_metadata.local_count
+                context,
+                ch_right,
+                sample_chunk_count,
+                target_partition_size,
+                right_metadata.local_count,
             ),
         )
         left_sample, right_sample = await _aggregate_estimates(
