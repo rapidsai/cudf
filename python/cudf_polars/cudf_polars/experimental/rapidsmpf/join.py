@@ -147,8 +147,8 @@ async def broadcast_join_actor(
 
 async def _collect_small_side_for_broadcast(
     context: Context,
-    small_ch: Channel[TableChunk],
-    small_child: IR,
+    ch: Channel[TableChunk],
+    ir: IR,
     *,
     need_allgather: bool,
     collective_id: int,
@@ -160,56 +160,56 @@ async def _collect_small_side_for_broadcast(
 
     Returns (list of DataFrames to join against, total byte size of small side).
     """
-    small_chunks: list[TableChunk] = []
-    small_size = sum(c.data_alloc_size(MemoryType.DEVICE) for c in small_chunks)
-    small_row_count = sum(c.table_view().num_rows() for c in small_chunks)
-    while (msg := await small_ch.recv(context)) is not None:
+    chunks: list[TableChunk] = []
+    size = 0
+    row_count = 0
+    while (msg := await ch.recv(context)) is not None:
         chunk = TableChunk.from_message(msg).make_available_and_spill(
             context.br(), allow_overbooking=True
         )
-        small_chunks.append(chunk)
-        small_size += chunk.data_alloc_size(MemoryType.DEVICE)
-        small_row_count += chunk.table_view().num_rows()
+        chunks.append(chunk)
+        size += chunk.data_alloc_size(MemoryType.DEVICE)
+        row_count += chunk.table_view().num_rows()
         del msg
 
     cudf_row_limit = 2**31 - 1
-    if (can_concatenate := small_row_count < cudf_row_limit) and concat_size_limit:
-        can_concatenate = small_size <= concat_size_limit
-    small_dfs: list[DataFrame] = []
+    if (can_concatenate := row_count < cudf_row_limit) and concat_size_limit:
+        can_concatenate = size <= concat_size_limit
 
+    dfs: list[DataFrame] = []
     if need_allgather:
         allgather = AllGatherManager(context, collective_id)
-        for s_id in range(len(small_chunks)):
-            allgather.insert(s_id, small_chunks.pop(0))
+        for s_id in range(len(chunks)):
+            allgather.insert(s_id, chunks.pop(0))
         allgather.insert_finished()
         stream = ir_context.get_cuda_stream()
-        small_dfs = [
+        dfs = [
             DataFrame.from_table(
                 await allgather.extract_concatenated(stream),
-                list(small_child.schema.keys()),
-                list(small_child.schema.values()),
+                list(ir.schema.keys()),
+                list(ir.schema.values()),
                 stream,
             )
         ]
-    elif small_chunks:
+    elif chunks:
         if can_concatenate:
-            small_chunks, extra = await make_table_chunks_available_or_wait(
+            chunks, extra = await make_table_chunks_available_or_wait(
                 context,
-                small_chunks,
-                reserve_extra=small_size,
+                chunks,
+                reserve_extra=size,
                 net_memory_delta=0,
             )
             with opaque_memory_usage(extra):
-                small_dfs = [
+                dfs = [
                     _concat(
-                        *[chunk_to_frame(chunk, small_child) for chunk in small_chunks],
+                        *[chunk_to_frame(chunk, ir) for chunk in chunks],
                         context=ir_context,
                     )
                 ]
         else:
-            small_dfs = [chunk_to_frame(c, small_child) for c in small_chunks]
+            dfs = [chunk_to_frame(c, ir) for c in chunks]
 
-    return small_dfs, small_size
+    return dfs, size
 
 
 async def _broadcast_join_large_chunk(
@@ -400,13 +400,21 @@ async def _join_chunks(
         recv_metadata(ch_left, context),
         recv_metadata(ch_right, context),
     )
-    seq_num = 0
+
     left, right = ir.children
     while True:
         left_msg, right_msg = await asyncio.gather(
             ch_left.recv(context), ch_right.recv(context)
         )
         if left_msg is None or right_msg is None:
+            assert left_msg is None, (
+                "Mismatched chunk counts in shuffle join: left has unmatched chunk. "
+                f"Seq num: {left_msg.sequence_number}"
+            )
+            assert right_msg is None, (
+                "Mismatched chunk counts in shuffle join: right has unmatched chunk. "
+                f"Seq num: {right_msg.sequence_number}"
+            )
             break
 
         left_chunk = TableChunk.from_message(left_msg).make_available_and_spill(
@@ -436,16 +444,20 @@ async def _join_chunks(
             del left_chunk, right_chunk
         if tracer is not None:
             tracer.add_chunk(table=df.table)
+
+        assert left_msg.sequence_number == right_msg.sequence_number, (
+            "Mismatched chunk sequence numbers in shuffle join. "
+            f"Left: {left_msg.sequence_number}, Right: {right_msg.sequence_number}"
+        )
         await ch_out.send(
             context,
             Message(
-                seq_num,
+                left_msg.sequence_number,
                 TableChunk.from_pylibcudf_table(
                     df.table, df.stream, exclusive_view=True
                 ),
             ),
         )
-        seq_num += 1
         del df
 
     await ch_out.drain(context)

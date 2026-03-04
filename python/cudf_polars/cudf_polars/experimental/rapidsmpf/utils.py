@@ -488,9 +488,8 @@ async def replay_buffered_channel(
     """
     async with shutdown_on_error(context, ch_out, ch_in):
         await send_metadata(ch_out, context, metadata)
-        buffered_keys = list(buffered_chunks.keys())
-        for seq_num in buffered_keys:
-            await ch_out.send(context, Message(seq_num, buffered_chunks.pop(seq_num)))
+        for seq_num, chunk in buffered_chunks.items():
+            await ch_out.send(context, Message(seq_num, chunk))
         while (msg := await ch_in.recv(context)) is not None:
             await ch_out.send(context, msg)
         await ch_out.drain(context)
