@@ -490,8 +490,8 @@ class alignas(16) column_device_view_core : public detail::column_device_view_ba
    * This function does not participate in overload resolution if `is_dictionary_encoded<T>` is
    * false.
    *
-   * @tparam T The element type, i.e. `dictionary_element<int32_t, float>` for a dictionary column
-   * with `int32_t` indices and `float` values
+   * @tparam T The element type, e.g., `dictionary_element<int32_t, float>` for a dictionary column
+   * with `int32_t` indices and `float` keys
    * @param element_index Position of the desired element
    * @return The element at the specified index
    */
