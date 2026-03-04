@@ -436,7 +436,6 @@ std::vector<column_buffer> decode_data(metadata& meta,
     if (valid_alias[i] != nullptr) {
       CUDF_CUDA_TRY(cudf::detail::memcpy_async(
         out_buffers[i].null_mask(), valid_alias[i], out_buffers[i].null_mask_size(), stream));
-                                               stream));
     }
   }
   schema_desc.device_to_host(stream);
