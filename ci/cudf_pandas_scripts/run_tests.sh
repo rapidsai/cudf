@@ -4,13 +4,6 @@
 
 set -eoxu pipefail
 
-# TODO(jameslamb): revert before merging
-git clone --branch generate-pip-constraints \
-    https://github.com/rapidsai/gha-tools.git \
-    /tmp/gha-tools
-
-export PATH="/tmp/gha-tools/tools:${PATH}"
-
 source rapids-init-pip
 
 RAPIDS_TESTS_DIR=${RAPIDS_TESTS_DIR:-"${PWD}/test-results"}
@@ -64,16 +57,17 @@ else
     PYLIBCUDF_WHEELHOUSE=$(rapids-download-from-github "$(rapids-package-name "wheel_python" pylibcudf --stable --cuda "$RAPIDS_CUDA_VERSION")")
 
     # generate constraints (possibly pinning to oldest support versions of dependencies)
-    rapids-generate-pip-constraints test_python_cudf_pandas "${PIP_CONSTRAINT}"
+    rapids-generate-pip-constraints test_python_cudf_pandas ./constraints.txt
 
     # notes:
     #
-    #   * echo to expand wildcard before adding `[test]` requires for pip
-    #   * just providing --constraint="${PIP_CONSTRAINT}" to be explicit, and because
-    #     that environment variable is ignored if any other --constraint are passed via the CLI
+    #   * echo to expand wildcard before adding `[test,cudf-pandas-tests]` requires for pip
+    #   * need to provide --constraint="${PIP_CONSTRAINT}" because that environment variable is
+    #     ignored if any other --constraint are passed via the CLI
     #
     python -m pip install \
         -v \
+        --constraint ./constraints.txt \
         --constraint "${PIP_CONSTRAINT}" \
         "$(echo "${CUDF_WHEELHOUSE}"/cudf_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)[test,cudf-pandas-tests]" \
         "$(echo "${LIBCUDF_WHEELHOUSE}"/libcudf_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)" \
