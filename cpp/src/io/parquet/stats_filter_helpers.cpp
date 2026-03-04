@@ -183,7 +183,7 @@ std::reference_wrapper<ast::expression const> stats_expression_converter::visit(
         }
       }
       // For all other unsafe NOT forms such as NOT(expr AND expr) as well as all other unary
-      // operators applied to expressions such as ABS(expr), conservatively degrade to always_true
+      // operators such as ABS(expr), visit operands and push _always_true
       std::ignore = visit_operands(expr.get_operands());
       _stats_expr.push(ast::operation{ast_operator::IDENTITY, *_always_true});
       return *_always_true;
