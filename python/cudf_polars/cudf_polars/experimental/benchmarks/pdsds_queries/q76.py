@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
-from cudf_polars.experimental.benchmarks.utils import get_data
+from cudf_polars.experimental.benchmarks.utils import QueryResult, get_data
 
 if TYPE_CHECKING:
     from cudf_polars.experimental.benchmarks.utils import RunConfig
@@ -87,7 +87,7 @@ def duckdb_impl(run_config: RunConfig) -> str:
     """
 
 
-def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
+def polars_impl(run_config: RunConfig) -> QueryResult:
     """Query 76."""
     params = load_parameters(
         int(run_config.scale_factor),
@@ -151,29 +151,41 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
             ]
         )
     )
-    return (
-        pl.concat([store_component, web_component, catalog_component])
-        .group_by(["channel", "col_name", "d_year", "d_qoy", "i_category"])
-        .agg(
-            [
-                pl.len().cast(pl.Int64).alias("sales_cnt"),
-                pl.when(pl.col("ext_sales_price").count() > 0)
-                .then(pl.col("ext_sales_price").sum())
-                .otherwise(None)
-                .alias("sales_amt"),
-            ]
-        )
-        .select(
-            [
-                "channel",
-                "col_name",
-                "d_year",
-                "d_qoy",
-                "i_category",
-                "sales_cnt",
-                "sales_amt",
-            ]
-        )
-        .sort(["channel", "col_name", "d_year", "d_qoy", "i_category"], nulls_last=True)
-        .limit(100)
+    sort_by = {
+        "channel": False,
+        "col_name": False,
+        "d_year": False,
+        "d_qoy": False,
+        "i_category": False,
+    }
+    limit = 100
+    return QueryResult(
+        frame=(
+            pl.concat([store_component, web_component, catalog_component])
+            .group_by(["channel", "col_name", "d_year", "d_qoy", "i_category"])
+            .agg(
+                [
+                    pl.len().cast(pl.Int64).alias("sales_cnt"),
+                    pl.when(pl.col("ext_sales_price").count() > 0)
+                    .then(pl.col("ext_sales_price").sum())
+                    .otherwise(None)
+                    .alias("sales_amt"),
+                ]
+            )
+            .select(
+                [
+                    "channel",
+                    "col_name",
+                    "d_year",
+                    "d_qoy",
+                    "i_category",
+                    "sales_cnt",
+                    "sales_amt",
+                ]
+            )
+            .sort(sort_by.keys(), nulls_last=True)
+            .limit(limit)
+        ),
+        sort_by=list(sort_by.items()),
+        limit=limit,
     )

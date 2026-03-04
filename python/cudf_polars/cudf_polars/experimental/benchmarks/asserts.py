@@ -206,7 +206,10 @@ def assert_tpch_result_equal(
                 polars.testing.assert_frame_equal(
                     df.select(by),
                     df.select(by).sort(
-                        by=by, descending=descending, maintain_order=True
+                        by=by,
+                        descending=descending,
+                        nulls_last=True,
+                        maintain_order=True,
                     ),
                 )
             except AssertionError as e:
