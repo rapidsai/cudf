@@ -205,26 +205,11 @@ class bloom_filter_expression_converter : public equality_literals_collector {
 
     // Unary operation
     if (operator_arity == 1) {
-      auto const [kind, col_ref] = extract_unary_operand(expr);
-
-      // For `op col` form, push the `_always_true` expression
-      if (kind == operand_kind::COLUMN_REF) {
-        col_ref->accept(*this);
-        _bloom_filter_expr.push(ast::operation{ast_operator::IDENTITY, *_always_true});
-        return *_always_true;
-      }  // For `op expr` form, visit operands and push expression
-      else {
-        auto new_operands = visit_operands(expr.get_operands());
-        if (&new_operands.front().get() == _always_true.get()) {
-          // Pass through the _always_true child operand as is
-          _bloom_filter_expr.push(
-            ast::operation{ast_operator::IDENTITY, _bloom_filter_expr.back()});
-          return *_always_true;
-        } else {
-          _bloom_filter_expr.push(ast::operation{input_op, new_operands.front()});
-          return _bloom_filter_expr.back();
-        }
-      }
+      auto visit_operands_fn = [this](auto const& operands) {
+        return this->visit_operands(operands);
+      };
+      return parquet::detail::apply_unary_membership_transform(
+        expr, _bloom_filter_expr, *_always_true, *this, visit_operands_fn);
     }
 
     // Binary operation

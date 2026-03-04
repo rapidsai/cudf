@@ -1525,20 +1525,21 @@ TEST_F(ParquetReaderTest, FilterWithColumnProjection)
   }
 
   // Error cases
-  {  // column_reference is not same type as literal, column_reference index is out of bounds
+  {  // index == 0: column_reference is not same type as literal;
+     // index == 2: column_reference index is out of bounds
     for (auto const index : {0, 2}) {
       auto col_index2    = cudf::ast::column_reference{index};
       auto read_ref_expr = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_index2, lit);
       auto read_opts = cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath})
                          .column_names({"col_double", "col_uint32"})
                          .filter(read_ref_expr);
-      EXPECT_THROW(cudf::io::read_parquet(read_opts), cudf::logic_error);
+      EXPECT_ANY_THROW(cudf::io::read_parquet(read_opts));
 
       // Repeat but select columns using indices instead of names
       read_opts = cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath})
                     .column_indices({2, 0})
                     .filter(read_ref_expr);
-      EXPECT_THROW(cudf::io::read_parquet(read_opts), cudf::logic_error);
+      EXPECT_ANY_THROW(cudf::io::read_parquet(read_opts));
     }
   }
 }

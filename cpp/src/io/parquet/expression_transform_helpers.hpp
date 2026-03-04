@@ -66,6 +66,52 @@ struct binary_operands {
 [[nodiscard]] binary_operands extract_binary_operands(ast::operation const& expr);
 
 /**
+ * @brief Handle unary operation transform for membership-based row group filters. i.e., bloom
+ * filter and dictionary page filter.
+ *
+ * @tparam VisitorType Type of the AST visitor that implements accept()
+ * @tparam VisitOperandsFn Callable matching `(host_span<reference_wrapper<expr>>) ->
+ * vector<reference_wrapper<expr>>`
+ *
+ * @param expr Unary operation to transform
+ * @param expr_tree The AST tree to push transformed expressions into
+ * @param always_true Reference to the always_true sentinel literal
+ * @param visitor The visitor used to accept column references
+ * @param visit_operands_fn Callable to visit operands and return the transformed operands
+ * @return Transformed expression or _always_true if the operation cannot be evaluated
+ */
+template <typename VisitorType, typename VisitOperandsFn>
+[[nodiscard]] std::reference_wrapper<ast::expression const> apply_unary_membership_transform(
+  ast::operation const& expr,
+  ast::tree& expr_tree,
+  std::reference_wrapper<ast::expression const> const always_true,
+  VisitorType& visitor,
+  VisitOperandsFn&& visit_operands_fn)
+{
+  auto const [kind, col_ref] = extract_unary_operand(expr);
+
+  // For `op col` form, push the `_always_true` expression
+  if (kind == operand_kind::COLUMN_REF) {
+    col_ref->accept(visitor);
+    expr_tree.push(ast::operation{ast::ast_operator::IDENTITY, always_true});
+    return always_true;
+  }
+  // For `op expr` form, visit operands and push expression
+  else {
+    auto new_operands = visit_operands_fn(expr.get_operands());
+    if (&new_operands.front().get() == &always_true.get()) {
+      // Pass through the _always_true child operand as is
+      expr_tree.push(ast::operation{ast::ast_operator::IDENTITY, expr_tree.back()});
+      return always_true;
+    } else {
+      auto const input_op = expr.get_operator();
+      expr_tree.push(ast::operation{input_op, new_operands.front()});
+      return expr_tree.back();
+    }
+  }
+}
+
+/**
  * @brief Collects column names from the expression ignoring the `skip_names`
  */
 class names_from_expression : public ast::detail::expression_transformer {
