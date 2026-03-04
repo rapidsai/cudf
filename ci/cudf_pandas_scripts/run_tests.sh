@@ -164,4 +164,6 @@ if version_lte "${RAPIDS_PY_VERSION}" "3.13"; then
             -k "profiler" \
             ./python/cudf/cudf_pandas_tests/
     done
+else
+    rapids-logger "Python ${RAPIDS_PY_VERSION} detected (>= 3.13). Skipping cudf.pandas compatibility tests with numpy<2"
 fi

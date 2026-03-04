@@ -40,6 +40,7 @@ from cudf_polars.experimental.rapidsmpf.utils import (
 from cudf_polars.experimental.utils import _concat
 
 if TYPE_CHECKING:
+    from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.streaming.core.channel import Channel
     from rapidsmpf.streaming.core.context import Context
     from rapidsmpf.streaming.cudf.channel_metadata import Partitioning
@@ -51,6 +52,7 @@ if TYPE_CHECKING:
 @define_actor()
 async def broadcast_join_actor(
     context: Context,
+    comm: Communicator,
     ir: Join,
     ir_context: IRExecutionContext,
     ch_out: Channel[TableChunk],
@@ -67,6 +69,8 @@ async def broadcast_join_actor(
     ----------
     context
         The rapidsmpf context.
+    comm
+        The communicator.
     ir
         The Join IR node.
     ir_context
@@ -131,7 +135,7 @@ async def broadcast_join_actor(
         large_metadata = left_metadata if broadcast_side == "right" else right_metadata
 
         # Allgather is a collective - all ranks must participate even with no local data
-        need_allgather = context.comm().nranks > 1 and not small_duplicated
+        need_allgather = comm.nranks > 1 and not small_duplicated
 
         # The result is duplicated if:
         # - The small side is/will be duplicated (already duplicated OR will be AllGathered)
@@ -163,7 +167,7 @@ async def broadcast_join_actor(
             small_size += small_chunks[-1].data_alloc_size(MemoryType.DEVICE)
 
         if need_allgather:
-            allgather = AllGatherManager(context, collective_id)
+            allgather = AllGatherManager(context, comm, collective_id)
             for s_id in range(len(small_chunks)):
                 allgather.insert(s_id, small_chunks.pop(0))
             allgather.insert_finished()
@@ -337,6 +341,7 @@ def _(
         actors[ir] = [
             broadcast_join_actor(
                 rec.state["context"],
+                rec.state["comm"],
                 ir,
                 rec.state["ir_context"],
                 channels[ir].reserve_input_slot(),
