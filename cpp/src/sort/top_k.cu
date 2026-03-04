@@ -47,7 +47,8 @@ struct dispatch_topk_fn {
   {
     auto requirements = cuda::execution::require(cuda::execution::determinism::not_guaranteed,
                                                  cuda::execution::output_ordering::unsorted);
-    auto env          = cuda::std::execution::env{stream.value(), requirements};
+    auto stream_ref   = cuda::stream_ref{stream.value()};
+    auto env          = cuda::std::execution::env{stream_ref, requirements};
     auto tmp_size     = std::size_t{0};
     auto const size   = input.size();
 
