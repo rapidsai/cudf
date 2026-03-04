@@ -33,7 +33,7 @@ namespace {
   } else if (dynamic_cast<ast::literal const*>(&operand) != nullptr) {
     return operand_kind::LITERAL;
   } else if (dynamic_cast<ast::column_name_reference const*>(&operand) != nullptr) {
-    CUDF_FAIL("Column name references are not supported in Parquet expression transformers");
+    CUDF_UNREACHABLE("Column name references are not supported in Parquet expression transformers");
   } else {
     return operand_kind::EXPRESSION;
   }
