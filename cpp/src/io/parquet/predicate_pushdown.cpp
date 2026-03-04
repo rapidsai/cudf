@@ -153,20 +153,20 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::ap
       // Placeholder for unsupported types and non-participating columns
       columns.push_back(cudf::make_numeric_column(data_type{cudf::type_id::BOOL8},
                                                   total_row_groups,
-                                                  rmm::device_buffer{0, stream},
+                                                  rmm::device_buffer{0, stream, mr},
                                                   0,
                                                   stream,
                                                   mr));
       columns.push_back(cudf::make_numeric_column(data_type{cudf::type_id::BOOL8},
                                                   total_row_groups,
-                                                  rmm::device_buffer{0, stream},
+                                                  rmm::device_buffer{0, stream, mr},
                                                   0,
                                                   stream,
                                                   mr));
       if (has_is_null_operator) {
         columns.push_back(cudf::make_numeric_column(data_type{cudf::type_id::BOOL8},
                                                     total_row_groups,
-                                                    rmm::device_buffer{0, stream},
+                                                    rmm::device_buffer{0, stream, mr},
                                                     0,
                                                     stream,
                                                     mr));

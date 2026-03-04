@@ -132,7 +132,7 @@ std::unique_ptr<cudf::column> compute_row_index_column(
     return std::make_unique<cudf::column>(cudf::data_type{cudf::type_id::UINT64},
                                           num_rows,
                                           std::move(row_indices),
-                                          rmm::device_buffer{0, stream},
+                                          rmm::device_buffer{0, stream, mr},
                                           0);
   }
 
@@ -187,7 +187,7 @@ std::unique_ptr<cudf::column> compute_row_index_column(
   return std::make_unique<cudf::column>(cudf::data_type{cudf::type_id::UINT64},
                                         num_rows,
                                         std::move(row_indices),
-                                        rmm::device_buffer{0, stream},
+                                        rmm::device_buffer{0, stream, mr},
                                         0);
 }
 
@@ -283,7 +283,7 @@ std::unique_ptr<cudf::column> compute_row_mask_column(
     return std::make_unique<cudf::column>(cudf::data_type{cudf::type_id::BOOL8},
                                           num_rows,
                                           std::move(row_mask),
-                                          rmm::device_buffer{0, stream},
+                                          rmm::device_buffer{0, stream, mr},
                                           0);
   }
 
@@ -328,7 +328,7 @@ std::unique_ptr<cudf::column> compute_row_mask_column(
   return std::make_unique<cudf::column>(cudf::data_type{cudf::type_id::BOOL8},
                                         num_rows,
                                         std::move(row_mask),
-                                        rmm::device_buffer{0, stream},
+                                        rmm::device_buffer{0, stream, mr},
                                         0);
 }
 

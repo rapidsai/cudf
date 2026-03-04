@@ -96,7 +96,7 @@ struct page_stats_caster : public stats_caster_base {
                    reinterpret_cast<T*>(output_data.data()));
 
     // Buffer for output bitmask
-    auto output_nullmask = rmm::device_buffer{0, stream};
+    auto output_nullmask = rmm::device_buffer{0, stream, mr};
     if (input_column.null_count()) {
       // Set all bits in output nullmask to valid
       output_nullmask = cudf::create_null_mask(total_rows, mask_state::ALL_VALID, stream, mr);
@@ -212,7 +212,7 @@ struct page_stats_caster : public stats_caster_base {
     auto const input_nullmask = host_page_nullmask;
 
     // Buffer for row-level strings nullmask (output)
-    auto output_nullmask = rmm::device_buffer{0, stream};
+    auto output_nullmask = rmm::device_buffer{0, stream, mr};
     if (host_null_count) {
       // Set all bits in output nullmask to valid
       output_nullmask = cudf::create_null_mask(total_rows, mask_state::ALL_VALID, stream, mr);
@@ -918,14 +918,14 @@ std::unique_ptr<cudf::column> aggregate_reader_metadata::build_row_mask_with_pag
         page_stats_columns.push_back(
           cudf::make_numeric_column(data_type{cudf::type_id::BOOL8},
                                     total_rows,
-                                    rmm::device_buffer{0, stream},
+                                    rmm::device_buffer{0, stream, cudf::get_current_device_resource_ref()},
                                     0,
                                     stream,
                                     cudf::get_current_device_resource_ref()));
         page_stats_columns.push_back(
           cudf::make_numeric_column(data_type{cudf::type_id::BOOL8},
                                     total_rows,
-                                    rmm::device_buffer{0, stream},
+                                    rmm::device_buffer{0, stream, cudf::get_current_device_resource_ref()},
                                     0,
                                     stream,
                                     cudf::get_current_device_resource_ref()));
@@ -933,7 +933,7 @@ std::unique_ptr<cudf::column> aggregate_reader_metadata::build_row_mask_with_pag
           page_stats_columns.push_back(
             cudf::make_numeric_column(data_type{cudf::type_id::BOOL8},
                                       total_rows,
-                                      rmm::device_buffer{0, stream},
+                                      rmm::device_buffer{0, stream, cudf::get_current_device_resource_ref()},
                                       0,
                                       stream,
                                       cudf::get_current_device_resource_ref()));
