@@ -224,8 +224,8 @@ class NumericalColumn(NumericalBaseColumn):
 
     def element_indexing(self, index: int) -> ScalarLike | None:
         result = super().element_indexing(index)
-        if isinstance(result, pa.Scalar):
-            return self.dtype.type(result.as_py())
+        if isinstance(result, (int, float, bool)):
+            return self.dtype.type(result)
         return result
 
     def _cast_setitem_value(self, value: Any) -> plc.Scalar | ColumnBase:

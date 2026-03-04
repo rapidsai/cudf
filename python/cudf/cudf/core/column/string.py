@@ -126,12 +126,6 @@ class StringColumn(ColumnBase, Scannable):
             raise MixedTypeError("Cannot fill `np.nan` in string column")
         return super()._validate_fillna_value(fill_value)
 
-    def element_indexing(self, index: int) -> str | None:
-        result = super().element_indexing(index)
-        if isinstance(result, pa.Scalar):
-            return result.as_py()
-        return result
-
     def sum(
         self,
         skipna: bool = True,
