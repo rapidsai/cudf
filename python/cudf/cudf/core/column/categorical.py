@@ -277,9 +277,9 @@ class CategoricalColumn(ColumnBase):
 
     def element_indexing(self, index: int) -> ScalarLike:
         val = super().element_indexing(index)
-        if val is self._PANDAS_NA_VALUE:
-            return val
-        return self._decode(val.as_py())
+        if isinstance(val, int):
+            return self._decode(val)
+        return val
 
     @property
     def __cuda_array_interface__(self) -> Mapping[str, Any]:

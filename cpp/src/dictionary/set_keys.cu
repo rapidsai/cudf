@@ -71,7 +71,7 @@ struct set_keys_dispatch_fn {
                                            cudf::column_view const& new_keys,
                                            rmm::cuda_stream_view stream,
                                            rmm::device_async_resource_ref mr)
-    requires(cudf::is_relationally_comparable<T, T>())
+    requires(cudf::is_dictionary_key<T>())
   {
     // compute sorted-order so the new_keys can be searched more quickly
     auto sorted_indices = cudf::detail::sorted_order(
@@ -121,7 +121,7 @@ struct set_keys_dispatch_fn {
                                            cudf::column_view const&,
                                            rmm::cuda_stream_view,
                                            rmm::device_async_resource_ref)
-    requires(not cudf::is_relationally_comparable<T, T>())
+    requires(not cudf::is_dictionary_key<T>())
   {
     CUDF_UNREACHABLE("not a valid dictionary key type");
   }
