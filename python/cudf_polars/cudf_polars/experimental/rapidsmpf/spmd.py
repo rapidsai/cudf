@@ -232,6 +232,35 @@ def spmd_execution(
 
     All resources (communicator, stream pool, thread-pool) are released on exit.
 
+    **DataFrame and LazyFrame semantics**
+
+    Because every rank runs an independent Python process, a :class:`~polars.DataFrame`
+    is always *rank-local* i.e. it contains only that rank's fragment of the distributed
+    dataset.  This is true whether the DataFrame originates from a file reader or from
+    Python literals.
+
+    File-based sources (``scan_parquet``, ``scan_csv``, ...) distribute their work
+    automatically: the engine assigns disjoint file- or row-group ranges to each rank,
+    so different ranks produce different data.
+
+    An in-memory ``DataFrame`` (or one produced by a previous ``collect``) is already
+    rank-local by construction.  Each rank processes its own copy in full; the engine
+    does **not** re-slice it across ranks.  In particular, the two patterns below are
+    equivalent:
+
+    .. code-block:: python
+
+        # One-step: scan and transform in a single pipeline
+        result = pl.scan_parquet(...).pipe(transform).collect(engine=engine)
+
+        # Two-step: collect an intermediate result, then transform
+        intermediate = pl.scan_parquet(...).collect(engine=engine)
+        result = intermediate.lazy().pipe(transform).collect(engine=engine)
+
+    In both cases rank k operates on exactly the data it read from parquet. The
+    intermediate ``collect`` simply materializes the data on the GPU; it does not
+    change which rows belong to which rank.
+
     **Query symmetry requirement**
 
     Every rank must issue the *same* sequence of Polars queries in the *same*

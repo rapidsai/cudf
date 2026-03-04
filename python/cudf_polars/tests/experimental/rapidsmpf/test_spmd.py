@@ -78,6 +78,28 @@ def test_spmd_execution_scan() -> None:
     assert result["b"].to_list() == [rank * 10]
 
 
+def test_spmd_collect_then_lazy_equivalent() -> None:
+    """collect().lazy() preserves SPMD semantics: an intermediate materialize is a no-op.
+
+    In SPMD mode a DataFrame is always rank-local.  When it is wrapped back
+    into a LazyFrame the engine processes that rank's copy in full rather than
+    re-slicing it across ranks.  So ``lf.collect().lazy().op.collect()`` must
+    produce the same result as ``lf.op.collect()``.
+    """
+    with spmd_execution() as (ctx, engine):
+        rank = ctx.comm().rank
+        lf = pl.LazyFrame({"a": [rank, rank + 1, rank + 2], "b": [0, 1, 2]})
+
+        # One-step
+        one_step = lf.filter(pl.col("b") >= 1).collect(engine=engine)
+
+        # Two-step: materialize then re-wrap
+        intermediate = lf.collect(engine=engine)
+        two_step = intermediate.lazy().filter(pl.col("b") >= 1).collect(engine=engine)
+
+    assert one_step.sort("a").equals(two_step.sort("a"))
+
+
 def test_spmd_execution_group_by() -> None:
     """Group-by on rank-local data, then allgather to verify the global result."""
     with spmd_execution() as (ctx, engine):
