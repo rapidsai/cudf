@@ -15,6 +15,7 @@ from threading import Lock
 from typing import TYPE_CHECKING, Literal, assert_never, overload
 
 import nvtx
+from cuda.bindings import runtime
 
 from polars.exceptions import ComputeError, PerformanceWarning
 
@@ -43,6 +44,26 @@ if TYPE_CHECKING:
     from cudf_polars.utils.config import ConfigOptions, MemoryResourceConfig
 
 __all__: list[str] = ["execute_with_cudf"]
+
+
+def _is_concurrent_managed_access_supported() -> bool:
+    """
+    Check the availability of concurrent managed access (UVM).
+
+    Note that WSL2 does not support managed memory.
+    """
+    # Ensure CUDA is initialized before checking cudaDevAttrConcurrentManagedAccess
+    runtime.cudaFree(0)
+
+    device_id = 0
+    err, supports_managed_access = runtime.cudaDeviceGetAttribute(
+        runtime.cudaDeviceAttr.cudaDevAttrConcurrentManagedAccess, device_id
+    )
+    if err != runtime.cudaError_t.cudaSuccess:
+        raise RuntimeError(
+            f"Failed to check cudaDevAttrConcurrentManagedAccess with error {err}"
+        )
+    return supports_managed_access != 0
 
 
 @cache
@@ -75,10 +96,7 @@ def default_memory_resource(
     try:
         if memory_resource_config is not None:
             mr = memory_resource_config.create_memory_resource()
-        elif (
-            cuda_managed_memory
-            and pylibcudf.utils._is_concurrent_managed_access_supported()
-        ):
+        elif cuda_managed_memory and _is_concurrent_managed_access_supported():
             # Allocating 80% of the available memory for the pool.
             # Leaving a 20% headroom to avoid OOM errors.
             free_memory, _ = rmm.mr.available_device_memory()
