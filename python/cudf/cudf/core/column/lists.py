@@ -23,10 +23,7 @@ from cudf.utils.dtypes import (
     dtype_from_pylibcudf_column,
     get_dtype_of_same_kind,
 )
-from cudf.utils.scalar import (
-    maybe_nested_pa_scalar_to_py,
-    pa_scalar_to_plc_scalar,
-)
+from cudf.utils.scalar import pa_scalar_to_plc_scalar
 from cudf.utils.utils import is_na_like
 
 if TYPE_CHECKING:
@@ -54,15 +51,6 @@ class ListColumn(ColumnBase):
         """
         # TODO: handle if self.has_nulls(): case
         return self
-
-    def element_indexing(self, index: int) -> list:
-        result = super().element_indexing(index)
-        if isinstance(result, pa.Scalar):
-            py_element = maybe_nested_pa_scalar_to_py(result)
-            return ListDtype.from_list_dtype(
-                self.dtype
-            )._recursively_replace_fields(py_element)
-        return result
 
     def _cast_setitem_value(self, value: Any) -> plc.Scalar:
         pa_type = (
