@@ -308,6 +308,7 @@ class stats_expression_converter : public stats_columns_collector {
   cudf::size_type _stats_cols_per_column;
   std::unique_ptr<cudf::numeric_scalar<bool>> _always_true_scalar;
   std::unique_ptr<ast::literal> _always_true;
+  bool _parent_op_is_not = false;  ///< Whether the parent operator is a logical NOT operator
 };
 
 }  // namespace cudf::io::parquet::detail

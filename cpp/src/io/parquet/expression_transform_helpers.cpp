@@ -141,9 +141,7 @@ std::reference_wrapper<ast::expression const> named_to_reference_converter::visi
 {
   // check if column name is in metadata
   auto col_index_it = _column_name_to_index.find(expr.get_column_name());
-  if (col_index_it == _column_name_to_index.end()) {
-    CUDF_FAIL("Column name not found in metadata");
-  }
+  CUDF_EXPECTS(col_index_it != _column_name_to_index.end(), "Column name not found in metadata");
   auto col_index = col_index_it->second;
   _col_ref.emplace_back(col_index);
   _converted_expr = std::reference_wrapper<ast::expression const>(_col_ref.back());
