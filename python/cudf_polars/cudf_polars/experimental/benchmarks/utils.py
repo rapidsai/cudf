@@ -1563,7 +1563,6 @@ def run_polars_query(
 def run_polars(
     benchmark: Any,
     args: argparse.Namespace,
-    num_queries: int = 22,
 ) -> None:
     """Run the queries using the given benchmark and executor options."""
     vars(args).update({"query_set": benchmark.name})
