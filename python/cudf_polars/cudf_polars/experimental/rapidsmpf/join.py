@@ -160,17 +160,20 @@ async def _collect_small_side_for_broadcast(
 
     Returns (list of DataFrames to join against, total byte size of small side).
     """
-    chunks: list[TableChunk] = []
     size = 0
-    row_count = 0
+    chunks: list[TableChunk] = []
     while (msg := await ch.recv(context)) is not None:
-        chunk = TableChunk.from_message(msg).make_available_and_spill(
-            context.br(), allow_overbooking=True
-        )
-        chunks.append(chunk)
-        size += chunk.data_alloc_size(MemoryType.DEVICE)
-        row_count += chunk.table_view().num_rows()
-        del msg
+        chunks.append(TableChunk.from_message(msg))
+        size += chunks[-1].data_alloc_size(MemoryType.DEVICE)
+    # TODO: We only need to spill the chunks here, because
+    # we don't track row-count metadata yet.
+    chunks, _ = await make_table_chunks_available_or_wait(
+        context,
+        chunks,
+        reserve_extra=0,
+        net_memory_delta=0,
+    )
+    row_count = sum(c.table_view().num_rows() for c in chunks)
 
     cudf_row_limit = 2**31 - 1
     if (can_concatenate := row_count < cudf_row_limit) and concat_size_limit:
