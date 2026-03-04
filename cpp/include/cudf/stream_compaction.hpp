@@ -1,27 +1,20 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
 
+#include <cudf/column/column_view.hpp>
+#include <cudf/column/scalar_column_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/export.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <memory>
+#include <optional>
+#include <variant>
 #include <vector>
 
 namespace CUDF_EXPORT cudf {
@@ -31,6 +24,10 @@ namespace CUDF_EXPORT cudf {
  * @file
  * @brief Column APIs for filtering rows
  */
+
+namespace ast {
+struct expression;
+}
 
 /**
  * @brief Filters a table to remove null elements with threshold count.
@@ -347,79 +344,127 @@ std::unique_ptr<table> stable_distinct(
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
- * @brief Count the number of consecutive groups of equivalent rows in a column.
+ * @brief Creates a new column by applying a filter function against every
+ * element of the input columns.
  *
- * If `null_handling` is null_policy::EXCLUDE and `nan_handling` is  nan_policy::NAN_IS_NULL, both
- * `NaN` and `null` values are ignored. If `null_handling` is null_policy::EXCLUDE and
- * `nan_handling` is nan_policy::NAN_IS_VALID, only `null` is ignored, `NaN` is considered in count.
+ * Null values in the input columns are considered as not matching the filter.
  *
- * `null`s are handled as equal.
+ * Computes:
+ * `out[i]... = predicate(columns[i]... ) ? (columns[i]...): not-applied`.
  *
- * @param[in] input The column_view whose consecutive groups of equivalent rows will be counted
- * @param[in] null_handling flag to include or ignore `null` while counting
- * @param[in] nan_handling flag to consider `NaN==null` or not
- * @param[in] stream CUDA stream used for device memory operations and kernel launches
+ * Note that for every scalar in `columns` (columns of size 1), `columns[i] ==
+ * input[0]`
  *
- * @return number of consecutive groups of equivalent rows in the column
+ *
+ * @throws std::invalid_argument if any of the input columns have different sizes (except scalars of
+ * size 1)
+ * @throws std::invalid_argument if the output or any of the inputs are not fixed-width or string
+ * types
+ * @throws cudf::logic_error if JIT is not supported by the runtime
+ * @throws std::invalid_argument if the size of `copy_mask` does not match the number of input
+ * columns
+ *
+ * The size of the resulting column is the size of the largest column.
+ *
+ * @param predicate_columns Immutable views of the predicate columns
+ * @param predicate_udf The PTX/CUDA string of the transform function to apply
+ * @param filter_columns Immutable view of the columns to be filtered
+ * @param is_ptx true: the UDF is treated as PTX code; false: the UDF is treated as CUDA code
+ * @param user_data User-defined device data to pass to the UDF.
+ * @param is_null_aware Signifies the UDF will receive row inputs as optional values
+ * @param predicate_nullability Specifies the nullability of the predicate output
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return The filtered target columns
  */
-cudf::size_type unique_count(column_view const& input,
-                             null_policy null_handling,
-                             nan_policy nan_handling,
-                             rmm::cuda_stream_view stream = cudf::get_default_stream());
+[[deprecated("Use filter_extended instead")]] std::vector<std::unique_ptr<column>> filter(
+  std::vector<column_view> const& predicate_columns,
+  std::string const& predicate_udf,
+  std::vector<column_view> const& filter_columns,
+  bool is_ptx,
+  std::optional<void*> user_data           = std::nullopt,
+  null_aware is_null_aware                 = null_aware::NO,
+  output_nullability predicate_nullability = output_nullability::PRESERVE,
+  rmm::cuda_stream_view stream             = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr        = cudf::get_current_device_resource_ref());
 
 /**
- * @brief Count the number of consecutive groups of equivalent rows in a table.
- *
- * @param[in] input Table whose consecutive groups of equivalent rows will be counted
- * @param[in] nulls_equal flag to denote if null elements should be considered equal
- *            nulls are not equal if null_equality::UNEQUAL.
- * @param[in] stream CUDA stream used for device memory operations and kernel launches
- *
- * @return number of consecutive groups of equivalent rows in the column
+ * @brief Typedef for inputs to the filter function. Each input can be either a column or a
+ * scalar column.
  */
-cudf::size_type unique_count(table_view const& input,
-                             null_equality nulls_equal    = null_equality::EQUAL,
-                             rmm::cuda_stream_view stream = cudf::get_default_stream());
+using filter_input = std::variant<column_view, scalar_column_view>;
 
 /**
- * @brief Count the distinct elements in the column_view.
+ * @brief Creates a new column by applying a filter function against every
+ * element of the input columns.
  *
- * If `nulls_equal == nulls_equal::UNEQUAL`, all `null`s are distinct.
+ * Null values in the input columns are considered as not matching the filter.
  *
- * Given an input column_view, number of distinct elements in this column_view is returned.
+ * Computes:
+ * `out[i]... = predicate(columns[i]... ) ? (columns[i]...): not-applied`.
  *
- * If `null_handling` is null_policy::EXCLUDE and `nan_handling` is  nan_policy::NAN_IS_NULL, both
- * `NaN` and `null` values are ignored. If `null_handling` is null_policy::EXCLUDE and
- * `nan_handling` is nan_policy::NAN_IS_VALID, only `null` is ignored, `NaN` is considered in
- * distinct count.
+ * Note that for every scalar in `columns` (columns of size 1), `columns[i] ==
+ * input[0]`
  *
- * `null`s are handled as equal.
  *
- * @param[in] input The column_view whose distinct elements will be counted
- * @param[in] null_handling flag to include or ignore `null` while counting
- * @param[in] nan_handling flag to consider `NaN==null` or not
- * @param[in] stream CUDA stream used for device memory operations and kernel launches
+ * @throws std::invalid_argument if any of the input columns have different sizes (except scalars of
+ * size 1)
+ * @throws std::invalid_argument if the output or any of the inputs are not fixed-width or string
+ * types
+ * @throws cudf::logic_error if JIT is not supported by the runtime
+ * @throws std::invalid_argument if the size of `copy_mask` does not match the number of input
+ * columns
  *
- * @return number of distinct rows in the table
+ * The size of the resulting column is the size of the largest column.
+ *
+ * @param predicate_inputs Immutable views of the predicate inputs (columns and scalars)
+ * @param predicate_udf The PTX/CUDA string of the transform function to apply
+ * @param filter_columns Immutable view of the columns to be filtered
+ * @param source_type The source type of the UDF
+ * @param user_data User-defined device data to pass to the UDF.
+ * @param is_null_aware Signifies the UDF will receive row inputs as optional values
+ * @param predicate_nullability Specifies the nullability of the predicate output
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return The filtered target columns
  */
-cudf::size_type distinct_count(column_view const& input,
-                               null_policy null_handling,
-                               nan_policy nan_handling,
-                               rmm::cuda_stream_view stream = cudf::get_default_stream());
+std::vector<std::unique_ptr<column>> filter_extended(
+  std::span<std::variant<column_view, scalar_column_view> const> predicate_inputs,
+  std::string const& predicate_udf,
+  std::vector<column_view> const& filter_columns,
+  cudf::udf_source_type source_type,
+  std::optional<void*> user_data           = std::nullopt,
+  null_aware is_null_aware                 = null_aware::NO,
+  output_nullability predicate_nullability = output_nullability::PRESERVE,
+  rmm::cuda_stream_view stream             = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr        = cudf::get_current_device_resource_ref());
 
 /**
- * @brief Count the distinct rows in a table.
+ * @brief Creates new table by applying a filter function against every
+ * element of the input columns.
  *
- * @param[in] input Table whose distinct rows will be counted
- * @param[in] nulls_equal flag to denote if null elements should be considered equal.
- *            nulls are not equal if null_equality::UNEQUAL.
- * @param[in] stream CUDA stream used for device memory operations and kernel launches
+ * Null values in the input columns are considered as not matching the filter.
  *
- * @return number of distinct rows in the table
+ * Computes:
+ * `out[i]... = predicate(columns[i]... ) ? (columns[i]...): not-applied`.
+ *
+ * @throws std::invalid_argument if the output or any of the inputs are not fixed-width or string
+ * types
+ * @throws cudf::logic_error if JIT is not supported by the runtime
+ *
+ * @param predicate_table The table used for predicate expression evaluation
+ * @param predicate_expr The predicate filter expression
+ * @param filter_table The table to be filtered
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return The filtered table
  */
-cudf::size_type distinct_count(table_view const& input,
-                               null_equality nulls_equal    = null_equality::EQUAL,
-                               rmm::cuda_stream_view stream = cudf::get_default_stream());
+std::unique_ptr<table> filter(
+  table_view const& predicate_table,
+  ast::expression const& predicate_expr,
+  table_view const& filter_table,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /** @} */
 }  // namespace CUDF_EXPORT cudf

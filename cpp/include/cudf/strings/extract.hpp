@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
 
@@ -97,6 +86,36 @@ std::unique_ptr<table> extract(
 std::unique_ptr<column> extract_all_record(
   strings_column_view const& input,
   regex_program const& prog,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
+/**
+ * @brief Returns a strings column where each column corresponds to the specified
+ * group in the given regex_program object
+ *
+ * Any null string entries return corresponding null output for that row.
+ *
+ * @code{.pseudo}
+ * Example:
+ * s = ["a1", "b2", "c3"]
+ * p = regex_program::create("([ab])(\\d)")
+ * r = extract(s, p, 1)
+ * r is now [ "1", "2", "3" ]
+ * @endcode
+ *
+ * See the @ref md_regex "Regex Features" page for details on patterns supported by this API.
+ *
+ * @param input Strings instance for this operation
+ * @param prog Regex program instance
+ * @param group Index of the group number to extract
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned table's device memory
+ * @return Columns of strings extracted from the input column
+ */
+std::unique_ptr<column> extract_single(
+  strings_column_view const& input,
+  regex_program const& prog,
+  size_type group,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 

@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf/column/column_device_view.cuh>
@@ -27,6 +16,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <cuda/std/bit>
 #include <cuda/std/cmath>
 #include <thrust/transform.h>
 
@@ -188,12 +178,14 @@ struct DeviceFloor {
 
 struct DeviceAbs {
   template <typename T>
-  std::enable_if_t<std::is_signed_v<T>, T> __device__ operator()(T data)
+  T __device__ operator()(T data)
+    requires(std::is_signed_v<T>)
   {
     return cuda::std::abs(data);
   }
   template <typename T>
-  std::enable_if_t<!std::is_signed_v<T>, T> __device__ operator()(T data)
+  T __device__ operator()(T data)
+    requires(!std::is_signed_v<T>)
   {
     return data;
   }
@@ -209,9 +201,20 @@ struct DeviceRInt {
   }
 };
 
-// bitwise op
+struct DeviceBitCount {
+  template <typename T>
+  int32_t __device__ operator()(T data)
+  {
+    if constexpr (cuda::std::is_same_v<T, bool>) {
+      return static_cast<int32_t>(data);
+    } else {
+      using UnsignedT = cuda::std::make_unsigned_t<T>;
+      return cuda::std::popcount(static_cast<UnsignedT>(data));
+    }
+  }
+};
 
-struct DeviceInvert {
+struct DeviceBitInvert {
   template <typename T>
   __device__ T operator()(T data)
   {
@@ -317,7 +320,7 @@ std::unique_ptr<column> unary_op_with(column_view const& input,
     n *= 10;
   }
 
-  thrust::transform(rmm::exec_policy(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream),
                     input.begin<Type>(),
                     input.end<Type>(),
                     out_view.begin<Type>(),
@@ -347,7 +350,8 @@ std::unique_ptr<cudf::column> transform_fn(InputIterator begin,
                             mr);
 
   auto output_view = output->mutable_view();
-  thrust::transform(rmm::exec_policy(stream), begin, end, output_view.begin<OutputType>(), UFN{});
+  thrust::transform(
+    rmm::exec_policy_nosync(stream), begin, end, output_view.begin<OutputType>(), UFN{});
   output->set_null_count(null_count);
   return output;
 }
@@ -415,10 +419,11 @@ struct FloatOnlyOps {
  */
 template <typename UFN, template <typename> typename Supported>
 struct MathOpDispatcher {
-  template <typename T, std::enable_if_t<Supported<T>::is_supported()>* = nullptr>
+  template <typename T>
   std::unique_ptr<cudf::column> operator()(cudf::column_view const& input,
                                            rmm::cuda_stream_view stream,
                                            rmm::device_async_resource_ref mr)
+    requires(Supported<T>::is_supported())
   {
     return (input.type().id() == type_id::DICTIONARY32)
              ? transform_fn<T, UFN>(cudf::dictionary_column_view(input), stream, mr)
@@ -426,10 +431,55 @@ struct MathOpDispatcher {
   }
 
   template <typename T, typename... Args>
-  std::enable_if_t<!Supported<T>::is_supported(), std::unique_ptr<cudf::column>> operator()(
-    Args&&...)
+  std::unique_ptr<cudf::column> operator()(Args&&...)
+    requires(!Supported<T>::is_supported())
   {
     CUDF_FAIL("Unsupported data type for this operation");
+  }
+};
+
+template <typename UFN>
+struct BitwiseCountDispatcher {
+ private:
+  template <typename T>
+  static constexpr bool is_supported()
+  {
+    return std::is_integral_v<T>;
+  }
+
+  // Always use int32_t as output type for bit count.
+  using OutputType = int32_t;
+
+ public:
+  template <typename T>
+  std::unique_ptr<cudf::column> operator()(cudf::column_view const& input,
+                                           rmm::cuda_stream_view stream,
+                                           rmm::device_async_resource_ref mr)
+    requires(is_supported<T>())
+  {
+    if (input.type().id() == type_id::DICTIONARY32) {
+      auto dictionary_view = cudf::column_device_view::create(input, stream);
+      auto dictionary_itr  = dictionary::detail::make_dictionary_iterator<T>(*dictionary_view);
+      return transform_fn<OutputType, UFN>(dictionary_itr,
+                                           dictionary_itr + input.size(),
+                                           cudf::detail::copy_bitmask(input, stream, mr),
+                                           input.null_count(),
+                                           stream,
+                                           mr);
+    }
+    return transform_fn<OutputType, UFN>(input.begin<T>(),
+                                         input.end<T>(),
+                                         cudf::detail::copy_bitmask(input, stream, mr),
+                                         input.null_count(),
+                                         stream,
+                                         mr);
+  }
+
+  template <typename T, typename... Args>
+  std::unique_ptr<cudf::column> operator()(Args&&...)
+    requires(!is_supported<T>())
+  {
+    CUDF_FAIL("Unsupported datatype for operation");
   }
 };
 
@@ -443,10 +493,11 @@ struct LogicalOpDispatcher {
   }
 
  public:
-  template <typename T, std::enable_if_t<is_supported<T>()>* = nullptr>
+  template <typename T>
   std::unique_ptr<cudf::column> operator()(cudf::column_view const& input,
                                            rmm::cuda_stream_view stream,
                                            rmm::device_async_resource_ref mr)
+    requires(is_supported<T>())
   {
     if (input.type().id() == type_id::DICTIONARY32) {
       auto dictionary_view = cudf::column_device_view::create(input, stream);
@@ -467,7 +518,8 @@ struct LogicalOpDispatcher {
   }
 
   template <typename T, typename... Args>
-  std::enable_if_t<!is_supported<T>(), std::unique_ptr<cudf::column>> operator()(Args&&...)
+  std::unique_ptr<cudf::column> operator()(Args&&...)
+    requires(!is_supported<T>())
   {
     CUDF_FAIL("Unsupported datatype for operation");
   }
@@ -475,17 +527,18 @@ struct LogicalOpDispatcher {
 
 struct FixedPointOpDispatcher {
   template <typename T, typename... Args>
-  std::enable_if_t<not cudf::is_fixed_point<T>(), std::unique_ptr<column>> operator()(Args&&...)
+  std::unique_ptr<column> operator()(Args&&...)
+    requires(not cudf::is_fixed_point<T>())
   {
     CUDF_FAIL("FixedPointOpDispatcher only for fixed_point");
   }
 
   template <typename T>
-  std::enable_if_t<cudf::is_fixed_point<T>(), std::unique_ptr<column>> operator()(
-    column_view const& input,
-    cudf::unary_operator op,
-    rmm::cuda_stream_view stream,
-    rmm::device_async_resource_ref mr)
+  std::unique_ptr<column> operator()(column_view const& input,
+                                     cudf::unary_operator op,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::device_async_resource_ref mr)
+    requires(cudf::is_fixed_point<T>())
   {
     // clang-format off
     switch (op) {
@@ -510,7 +563,9 @@ std::unique_ptr<cudf::column> unary_operation(cudf::column_view const& input,
     return type_dispatcher(input.type(), detail::FixedPointOpDispatcher{}, input, op, stream, mr);
 
   if (input.is_empty()) {
-    return op == cudf::unary_operator::NOT ? make_empty_column(type_id::BOOL8) : empty_like(input);
+    if (op == cudf::unary_operator::NOT) { return make_empty_column(type_id::BOOL8); }
+    if (op == cudf::unary_operator::BIT_COUNT) { return make_empty_column(type_id::INT32); }
+    return empty_like(input);
   }
 
   // dispatch on the keys if dictionary saves a 2nd dispatch later
@@ -579,9 +634,12 @@ std::unique_ptr<cudf::column> unary_operation(cudf::column_view const& input,
     case cudf::unary_operator::RINT:
       return cudf::type_dispatcher(
         dispatch_type, MathOpDispatcher<DeviceRInt, FloatOnlyOps>{}, input, stream, mr);
+    case cudf::unary_operator::BIT_COUNT:
+      return cudf::type_dispatcher(
+        dispatch_type, detail::BitwiseCountDispatcher<DeviceBitCount>{}, input, stream, mr);
     case cudf::unary_operator::BIT_INVERT:
       return cudf::type_dispatcher(
-        dispatch_type, MathOpDispatcher<DeviceInvert, BitWiseOps>{}, input, stream, mr);
+        dispatch_type, MathOpDispatcher<DeviceBitInvert, BitWiseOps>{}, input, stream, mr);
     case cudf::unary_operator::NOT:
       return cudf::type_dispatcher(
         dispatch_type, detail::LogicalOpDispatcher<DeviceNot>{}, input, stream, mr);

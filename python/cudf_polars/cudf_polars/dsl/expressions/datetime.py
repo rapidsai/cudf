@@ -1,6 +1,6 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
-# TODO: remove need for this
+# TODO: Document TemporalFunction to remove noqa
 # ruff: noqa: D101
 """DSL nodes for datetime operations."""
 
@@ -9,21 +9,17 @@ from __future__ import annotations
 from enum import IntEnum, auto
 from typing import TYPE_CHECKING, Any, ClassVar
 
-import pyarrow as pa
-
 import pylibcudf as plc
 
 from cudf_polars.containers import Column
 from cudf_polars.dsl.expressions.base import ExecutionContext, Expr
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from typing import Self
 
-    from typing_extensions import Self
+    from polars import polars  # type: ignore[attr-defined]
 
-    from polars.polars import _expr_nodes as pl_expr
-
-    from cudf_polars.containers import DataFrame
+    from cudf_polars.containers import DataFrame, DataType
 
 __all__ = ["TemporalFunction"]
 
@@ -42,6 +38,7 @@ class TemporalFunction(Expr):
         Datetime = auto()
         DatetimeFunction = auto()
         Day = auto()
+        DaysInMonth = auto()
         Duration = auto()
         Hour = auto()
         IsLeapYear = auto()
@@ -78,7 +75,7 @@ class TemporalFunction(Expr):
         Year = auto()
 
         @classmethod
-        def from_polars(cls, obj: pl_expr.TemporalFunction) -> Self:
+        def from_polars(cls, obj: polars._expr_nodes.TemporalFunction) -> Self:
             """Convert from polars' `TemporalFunction`."""
             try:
                 function, name = str(obj).split(".", maxsplit=1)
@@ -108,13 +105,17 @@ class TemporalFunction(Expr):
         *_COMPONENT_MAP.keys(),
         Name.IsLeapYear,
         Name.OrdinalDay,
+        Name.ToString,
+        Name.Week,
+        Name.IsoYear,
         Name.MonthStart,
         Name.MonthEnd,
+        Name.CastTimeUnit,
     }
 
     def __init__(
         self,
-        dtype: plc.DataType,
+        dtype: DataType,
         name: TemporalFunction.Name,
         options: tuple[Any, ...],
         *children: Expr,
@@ -127,108 +128,185 @@ class TemporalFunction(Expr):
         if self.name not in self._valid_ops:
             raise NotImplementedError(f"Temporal function {self.name}")
 
+        if self.name is TemporalFunction.Name.ToString and plc.traits.is_duration(
+            self.children[0].dtype.plc_type
+        ):
+            raise NotImplementedError("ToString is not supported on duration types")
+
     def do_evaluate(
-        self,
-        df: DataFrame,
-        *,
-        context: ExecutionContext = ExecutionContext.FRAME,
-        mapping: Mapping[Expr, Column] | None = None,
+        self, df: DataFrame, *, context: ExecutionContext = ExecutionContext.FRAME
     ) -> Column:
         """Evaluate this expression given a dataframe for context."""
-        columns = [
-            child.evaluate(df, context=context, mapping=mapping)
-            for child in self.children
-        ]
+        columns = [child.evaluate(df, context=context) for child in self.children]
         (column,) = columns
+        if self.name is TemporalFunction.Name.CastTimeUnit:
+            return Column(
+                plc.unary.cast(column.obj, self.dtype.plc_type, stream=df.stream),
+                dtype=self.dtype,
+            )
+        if self.name == TemporalFunction.Name.ToString:
+            (format_string,) = self.options
+            if format_string == "":
+                # libcudf doesn't support empty format strings, but polars
+                # returns empty strings for each row in this case
+                return Column(
+                    plc.Column.from_scalar(
+                        plc.Scalar.from_py("", self.dtype.plc_type, stream=df.stream),
+                        column.size,
+                        stream=df.stream,
+                    ),
+                    dtype=self.dtype,
+                )
+            return Column(
+                plc.strings.convert.convert_datetime.from_timestamps(
+                    column.obj,
+                    format_string,
+                    plc.Column.from_iterable_of_py(
+                        [], dtype=self.dtype.plc_type, stream=df.stream
+                    ),
+                    stream=df.stream,
+                ),
+                dtype=self.dtype,
+            )
+        if self.name is TemporalFunction.Name.Week:
+            result = plc.strings.convert.convert_integers.to_integers(
+                plc.strings.convert.convert_datetime.from_timestamps(
+                    column.obj,
+                    format="%V",
+                    input_strings_names=plc.Column.from_iterable_of_py(
+                        [], dtype=plc.DataType(plc.TypeId.STRING), stream=df.stream
+                    ),
+                    stream=df.stream,
+                ),
+                self.dtype.plc_type,
+                stream=df.stream,
+            )
+            return Column(result, dtype=self.dtype)
+        if self.name is TemporalFunction.Name.IsoYear:
+            result = plc.strings.convert.convert_integers.to_integers(
+                plc.strings.convert.convert_datetime.from_timestamps(
+                    column.obj,
+                    format="%G",
+                    input_strings_names=plc.Column.from_iterable_of_py(
+                        [], dtype=plc.DataType(plc.TypeId.STRING), stream=df.stream
+                    ),
+                    stream=df.stream,
+                ),
+                self.dtype.plc_type,
+                stream=df.stream,
+            )
+            return Column(result, dtype=self.dtype)
         if self.name is TemporalFunction.Name.MonthStart:
-            ends = plc.datetime.last_day_of_month(column.obj)
-            days_to_subtract = plc.datetime.days_in_month(column.obj)
+            ends = plc.datetime.last_day_of_month(column.obj, stream=df.stream)
+            days_to_subtract = plc.datetime.days_in_month(column.obj, stream=df.stream)
             # must subtract 1 to avoid rolling over to the previous month
             days_to_subtract = plc.binaryop.binary_operation(
                 days_to_subtract,
-                plc.interop.from_arrow(pa.scalar(1, type=pa.int32())),
+                plc.Scalar.from_py(1, plc.DataType(plc.TypeId.INT32), stream=df.stream),
                 plc.binaryop.BinaryOperator.SUB,
                 plc.DataType(plc.TypeId.DURATION_DAYS),
+                stream=df.stream,
             )
             result = plc.binaryop.binary_operation(
                 ends,
                 days_to_subtract,
                 plc.binaryop.BinaryOperator.SUB,
-                column.obj.type(),
+                self.dtype.plc_type,
+                stream=df.stream,
             )
 
-            return Column(result)
+            return Column(result, dtype=self.dtype)
         if self.name is TemporalFunction.Name.MonthEnd:
             return Column(
                 plc.unary.cast(
-                    plc.datetime.last_day_of_month(column.obj), column.obj.type()
-                )
+                    plc.datetime.last_day_of_month(column.obj, stream=df.stream),
+                    self.dtype.plc_type,
+                    stream=df.stream,
+                ),
+                dtype=self.dtype,
             )
         if self.name is TemporalFunction.Name.IsLeapYear:
             return Column(
-                plc.datetime.is_leap_year(column.obj),
+                plc.datetime.is_leap_year(column.obj, stream=df.stream),
+                dtype=self.dtype,
             )
         if self.name is TemporalFunction.Name.OrdinalDay:
-            return Column(plc.datetime.day_of_year(column.obj))
+            return Column(
+                plc.datetime.day_of_year(column.obj, stream=df.stream), dtype=self.dtype
+            )
         if self.name is TemporalFunction.Name.Microsecond:
             millis = plc.datetime.extract_datetime_component(
-                column.obj, plc.datetime.DatetimeComponent.MILLISECOND
+                column.obj, plc.datetime.DatetimeComponent.MILLISECOND, stream=df.stream
             )
             micros = plc.datetime.extract_datetime_component(
-                column.obj, plc.datetime.DatetimeComponent.MICROSECOND
+                column.obj, plc.datetime.DatetimeComponent.MICROSECOND, stream=df.stream
             )
             millis_as_micros = plc.binaryop.binary_operation(
                 millis,
-                plc.interop.from_arrow(pa.scalar(1_000, type=pa.int32())),
+                plc.Scalar.from_py(
+                    1_000, plc.DataType(plc.TypeId.INT32), stream=df.stream
+                ),
                 plc.binaryop.BinaryOperator.MUL,
-                plc.DataType(plc.TypeId.INT32),
+                self.dtype.plc_type,
+                stream=df.stream,
             )
             total_micros = plc.binaryop.binary_operation(
                 micros,
                 millis_as_micros,
                 plc.binaryop.BinaryOperator.ADD,
-                plc.types.DataType(plc.types.TypeId.INT32),
+                self.dtype.plc_type,
+                stream=df.stream,
             )
-            return Column(total_micros)
+            return Column(total_micros, dtype=self.dtype)
         elif self.name is TemporalFunction.Name.Nanosecond:
             millis = plc.datetime.extract_datetime_component(
-                column.obj, plc.datetime.DatetimeComponent.MILLISECOND
+                column.obj, plc.datetime.DatetimeComponent.MILLISECOND, stream=df.stream
             )
             micros = plc.datetime.extract_datetime_component(
-                column.obj, plc.datetime.DatetimeComponent.MICROSECOND
+                column.obj, plc.datetime.DatetimeComponent.MICROSECOND, stream=df.stream
             )
             nanos = plc.datetime.extract_datetime_component(
-                column.obj, plc.datetime.DatetimeComponent.NANOSECOND
+                column.obj, plc.datetime.DatetimeComponent.NANOSECOND, stream=df.stream
             )
             millis_as_nanos = plc.binaryop.binary_operation(
                 millis,
-                plc.interop.from_arrow(pa.scalar(1_000_000, type=pa.int32())),
+                plc.Scalar.from_py(
+                    1_000_000, plc.DataType(plc.TypeId.INT32), stream=df.stream
+                ),
                 plc.binaryop.BinaryOperator.MUL,
-                plc.types.DataType(plc.types.TypeId.INT32),
+                self.dtype.plc_type,
+                stream=df.stream,
             )
             micros_as_nanos = plc.binaryop.binary_operation(
                 micros,
-                plc.interop.from_arrow(pa.scalar(1_000, type=pa.int32())),
+                plc.Scalar.from_py(
+                    1_000, plc.DataType(plc.TypeId.INT32), stream=df.stream
+                ),
                 plc.binaryop.BinaryOperator.MUL,
-                plc.types.DataType(plc.types.TypeId.INT32),
+                self.dtype.plc_type,
+                stream=df.stream,
             )
             total_nanos = plc.binaryop.binary_operation(
                 nanos,
                 millis_as_nanos,
                 plc.binaryop.BinaryOperator.ADD,
-                plc.types.DataType(plc.types.TypeId.INT32),
+                self.dtype.plc_type,
+                stream=df.stream,
             )
             total_nanos = plc.binaryop.binary_operation(
                 total_nanos,
                 micros_as_nanos,
                 plc.binaryop.BinaryOperator.ADD,
-                plc.types.DataType(plc.types.TypeId.INT32),
+                self.dtype.plc_type,
+                stream=df.stream,
             )
-            return Column(total_nanos)
+            return Column(total_nanos, dtype=self.dtype)
 
         return Column(
             plc.datetime.extract_datetime_component(
                 column.obj,
                 self._COMPONENT_MAP[self.name],
-            )
+                stream=df.stream,
+            ),
+            dtype=self.dtype,
         )

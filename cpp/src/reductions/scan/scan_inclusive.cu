@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2021-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "reductions/scan/scan.cuh"
@@ -55,10 +44,11 @@ std::pair<rmm::device_buffer, size_type> mask_scan(column_view const& input_view
   auto valid_itr = detail::make_validity_iterator(*d_input);
 
   auto first_null_position = [&] {
-    size_type const first_null =
-      thrust::find_if_not(
-        rmm::exec_policy(stream), valid_itr, valid_itr + input_view.size(), cuda::std::identity{}) -
-      valid_itr;
+    size_type const first_null = thrust::find_if_not(rmm::exec_policy_nosync(stream),
+                                                     valid_itr,
+                                                     valid_itr + input_view.size(),
+                                                     cuda::std::identity{}) -
+                                 valid_itr;
     size_type const exclusive_offset = (inclusive == scan_type::EXCLUSIVE) ? 1 : 0;
     return std::min(input_view.size(), first_null + exclusive_offset);
   }();
@@ -88,8 +78,11 @@ struct scan_functor {
 
     // CUB 2.0.0 requires that the binary operator returns the same type as the identity.
     auto const binary_op = cudf::detail::cast_functor<T>(Op{});
-    thrust::inclusive_scan(
-      rmm::exec_policy(stream), begin, begin + input_view.size(), result.data<T>(), binary_op);
+    thrust::inclusive_scan(rmm::exec_policy_nosync(stream),
+                           begin,
+                           begin + input_view.size(),
+                           result.data<T>(),
+                           binary_op);
 
     CUDF_CHECK_CUDA(stream.value());
     return output_column;
@@ -148,17 +141,19 @@ struct scan_dispatcher {
    *
    * @tparam T type of input column
    */
-  template <typename T, std::enable_if_t<is_supported<T>()>* = nullptr>
+  template <typename T>
   std::unique_ptr<column> operator()(column_view const& input,
                                      bitmask_type const* output_mask,
                                      rmm::cuda_stream_view stream,
                                      rmm::device_async_resource_ref mr)
+    requires(is_supported<T>())
   {
     return scan_functor<Op, T>::invoke(input, output_mask, stream, mr);
   }
 
   template <typename T, typename... Args>
-  std::enable_if_t<!is_supported<T>(), std::unique_ptr<column>> operator()(Args&&...)
+  std::unique_ptr<column> operator()(Args&&...)
+    requires(!is_supported<T>())
   {
     CUDF_FAIL("Unsupported type for inclusive scan operation");
   }
@@ -198,12 +193,12 @@ std::unique_ptr<column> scan_inclusive(column_view const& input,
     std::for_each(content.children.begin(),
                   content.children.end(),
                   [null_mask, null_count, stream, mr](auto& child) {
-                    child = structs::detail::superimpose_nulls(
+                    child = structs::detail::superimpose_and_sanitize_nulls(
                       null_mask, null_count, std::move(child), stream, mr);
                   });
 
     // Replace the children columns.
-    output = cudf::make_structs_column(
+    output = cudf::create_structs_hierarchy(
       num_rows, std::move(content.children), null_count, std::move(*content.null_mask), stream, mr);
   }
 

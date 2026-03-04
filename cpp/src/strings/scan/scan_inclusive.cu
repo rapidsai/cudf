@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2023-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf/column/column_device_view.cuh>
@@ -26,6 +15,7 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/iterator>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/scan.h>
 #include <thrust/scatter.h>
@@ -89,7 +79,7 @@ std::unique_ptr<column> scan_inclusive(column_view const& input,
 
   // build indices of the scan operation results
   rmm::device_uvector<size_type> result_map(input.size(), stream);
-  thrust::inclusive_scan(rmm::exec_policy(stream),
+  thrust::inclusive_scan(rmm::exec_policy_nosync(stream),
                          thrust::counting_iterator<size_type>(0),
                          thrust::counting_iterator<size_type>(input.size()),
                          result_map.begin(),
@@ -99,8 +89,8 @@ std::unique_ptr<column> scan_inclusive(column_view const& input,
     // fill the null rows with out-of-bounds values so gather records them as null;
     // this prevents un-sanitized null entries in the output
     auto null_itr = cudf::detail::make_counting_transform_iterator(0, null_iterator{mask});
-    auto oob_val  = thrust::constant_iterator<size_type>(input.size());
-    thrust::scatter_if(rmm::exec_policy(stream),
+    auto oob_val  = cuda::constant_iterator<size_type>(input.size());
+    thrust::scatter_if(rmm::exec_policy_nosync(stream),
                        oob_val,
                        oob_val + input.size(),
                        thrust::counting_iterator<size_type>(0),

@@ -1,9 +1,9 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 from collections.abc import Mapping
-from typing import TypeAlias
+from typing import Self, TypeAlias
 
-from typing_extensions import Self
-
+from rmm.pylibrmm.memory_resource import DeviceMemoryResource
 from rmm.pylibrmm.stream import Stream
 
 from pylibcudf.column import Column
@@ -14,6 +14,7 @@ from pylibcudf.io.types import (
     SourceInfo,
     TableWithMetadata,
 )
+from pylibcudf.scalar import Scalar
 from pylibcudf.table import Table
 from pylibcudf.types import DataType
 
@@ -43,6 +44,7 @@ class JsonReaderOptions:
     def allow_numeric_leading_zeros(self, val: bool) -> None: ...
     def allow_nonnumeric_numbers(self, val: bool) -> None: ...
     def set_na_values(self, vals: list[str]) -> None: ...
+    def set_source(self, src: SourceInfo) -> None: ...
     @staticmethod
     def builder(source: SourceInfo) -> JsonReaderOptionsBuilder: ...
 
@@ -66,10 +68,23 @@ class JsonReaderOptionsBuilder:
     def recovery_mode(self, recovery_mode: JSONRecoveryMode) -> Self: ...
     def strict_validation(self, val: bool) -> Self: ...
     def unquoted_control_chars(self, val: bool) -> Self: ...
+    def utf8_escaped(self, val: bool) -> Self: ...
     def build(self) -> JsonReaderOptions: ...
 
 def read_json(
-    options: JsonReaderOptions, stream: Stream = None
+    options: JsonReaderOptions,
+    stream: Stream | None = None,
+    mr: DeviceMemoryResource | None = None,
+) -> TableWithMetadata: ...
+def read_json_from_string_column(
+    input: Column,
+    separator: Scalar,
+    narep: Scalar,
+    dtypes: list | None = None,
+    compression: CompressionType = CompressionType.NONE,
+    recovery_mode: JSONRecoveryMode = JSONRecoveryMode.RECOVER_WITH_NULL,
+    stream: Stream | None = None,
+    mr: DeviceMemoryResource | None = None,
 ) -> TableWithMetadata: ...
 
 class JsonWriterOptions:
@@ -86,11 +101,29 @@ class JsonWriterOptionsBuilder:
     def include_nulls(self, val: bool) -> Self: ...
     def lines(self, val: bool) -> Self: ...
     def compression(self, comptype: CompressionType) -> Self: ...
+    def utf8_escaped(self, val: bool) -> Self: ...
     def build(self) -> JsonWriterOptions: ...
 
-def write_json(options: JsonWriterOptions, stream: Stream = None) -> None: ...
+def write_json(
+    options: JsonWriterOptions, stream: Stream | None = None
+) -> None: ...
 def chunked_read_json(
     options: JsonReaderOptions,
     chunk_size: int = 100_000_000,
-    stream: Stream = None,
+    stream: Stream | None = None,
+    mr: DeviceMemoryResource | None = None,
 ) -> tuple[list[Column], list[str], ChildNameToTypeMap]: ...
+def is_supported_write_json(type: DataType) -> bool: ...
+def _setup_json_reader_options(
+    source_info: SourceInfo,
+    dtypes: list | None,
+    compression: CompressionType = CompressionType.AUTO,
+    lines: bool = False,
+    byte_range_offset: int = 0,
+    byte_range_size: int = 0,
+    keep_quotes: bool = False,
+    mixed_types_as_string: bool = False,
+    prune_columns: bool = False,
+    recovery_mode: JSONRecoveryMode = JSONRecoveryMode.FAIL,
+    extra_parameters: dict | None = None,
+) -> JsonReaderOptions: ...

@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2022-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
@@ -25,11 +14,11 @@
 
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/std/iterator>
 #include <thrust/copy.h>
 #include <thrust/execution_policy.h>
 #include <thrust/find.h>
 #include <thrust/iterator/counting_iterator.h>
-#include <thrust/iterator/reverse_iterator.h>
 
 #include <limits>
 
@@ -113,7 +102,7 @@ struct gather_index_calculator {
     auto const window_end = window_start + window_size;
     return n >= 0 ? index_of_nth_non_null(thrust::make_counting_iterator(window_start), window_size)
                   : index_of_nth_non_null(
-                      thrust::make_reverse_iterator(thrust::make_counting_iterator(window_end)),
+                      cuda::std::make_reverse_iterator(thrust::make_counting_iterator(window_end)),
                       window_size);
   }
 };
@@ -160,7 +149,7 @@ std::unique_ptr<column> nth_element(size_type n,
 
   auto gather_map = rmm::device_uvector<size_type>(input.size(), stream);
   thrust::copy(
-    rmm::exec_policy(stream), gather_iter, gather_iter + input.size(), gather_map.begin());
+    rmm::exec_policy_nosync(stream), gather_iter, gather_iter + input.size(), gather_map.begin());
 
   auto gathered = cudf::detail::gather(table_view{{input}},
                                        gather_map,

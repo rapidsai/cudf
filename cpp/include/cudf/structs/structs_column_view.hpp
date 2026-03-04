@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2022-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
 
@@ -39,6 +28,7 @@ namespace CUDF_EXPORT cudf {
  */
 class structs_column_view : public column_view {
  public:
+  structs_column_view() = default;
   // Foundation members:
   structs_column_view(structs_column_view const&) = default;  ///< Copy constructor
   structs_column_view(structs_column_view&&)      = default;  ///< Move constructor
@@ -96,6 +86,6 @@ class structs_column_view : public column_view {
    */
   [[nodiscard]] column_view get_sliced_child(
     int index, rmm::cuda_stream_view stream = cudf::get_default_stream()) const;
-};         // class structs_column_view;
+};  // class structs_column_view;
 /** @} */  // end of group
 }  // namespace CUDF_EXPORT cudf

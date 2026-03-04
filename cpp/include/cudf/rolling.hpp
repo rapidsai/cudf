@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
@@ -51,10 +40,17 @@ struct bounded_closed {
                                ///< behaviour is undefined if not.
 
   /**
+   * @brief Construct a bounded closed rolling window.
+   *
+   * @param delta The scalar delta from the current row. Must be valid, behaviour is undefined if
+   * not.
+   */
+  bounded_closed(cudf::scalar const& delta) : delta_{delta} {}
+  /**
    * @brief Return pointer to the row delta scalar.
    * @return pointer to scalar, not null.
    */
-  cudf::scalar const* delta() const noexcept { return &delta_; }
+  [[nodiscard]] cudf::scalar const* delta() const noexcept { return &delta_; }
 };
 
 /**
@@ -70,14 +66,20 @@ struct bounded_closed {
 struct bounded_open {
   cudf::scalar const& delta_;  ///< Delta from the current row in the window. Must be valid,
                                ///< behaviour is undefined if not.
-  ///< Similarly, if the delta is a floating point type the value must be neither inf nor nan
-  ///< otherwise behaviour is undefined.
+
+  /**
+   * @brief Construct a bounded open rolling window.
+   *
+   * @param delta The scalar delta from the current row. Must be valid, behaviour is undefined if
+   * not.
+   */
+  bounded_open(cudf::scalar const& delta) : delta_{delta} {}
 
   /**
    * @brief Return pointer to the row delta scalar.
    * @return pointer to scalar, not null.
    */
-  cudf::scalar const* delta() const noexcept { return &delta_; }
+  [[nodiscard]] cudf::scalar const* delta() const noexcept { return &delta_; }
 };
 
 /**
@@ -90,7 +92,7 @@ struct unbounded {
    * @brief Return a null row delta
    * @return nullptr
    */
-  constexpr cudf::scalar const* delta() const noexcept { return nullptr; }
+  [[nodiscard]] constexpr cudf::scalar const* delta() const noexcept { return nullptr; }
 };
 /**
  * @brief Strongly typed wrapper for current_row rolling windows.
@@ -102,13 +104,22 @@ struct current_row {
    * @brief Return a null row delta
    * @return nullptr
    */
-  constexpr cudf::scalar const* delta() const noexcept { return nullptr; }
+  [[nodiscard]] constexpr cudf::scalar const* delta() const noexcept { return nullptr; }
 };
 
 /**
  * @brief The type of the range-based rolling window endpoint.
  */
 using range_window_type = std::variant<unbounded, current_row, bounded_closed, bounded_open>;
+
+/**
+ * @brief A request for a rolling aggregation on a column.
+ */
+struct rolling_request {
+  column_view values;     ///< Elements to aggregate
+  size_type min_periods;  ///< Minimum number of observations required for the window to be valid
+  std::unique_ptr<rolling_aggregation> aggregation;  ///< Desired aggregation
+};
 
 /**
  * @brief Constructs preceding and following columns given window range specifications.
@@ -161,8 +172,13 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> make_range_windows(
  * @param[in] input The input column
  * @param[in] preceding_window The static rolling window size in the backward direction
  * @param[in] following_window The static rolling window size in the forward direction
- * @param[in] min_periods Minimum number of observations in window required to have a value,
- *                        otherwise element `i` is null.
+ * @param[in] min_periods Minimum number of valid (non-null) observations in window required to
+ *                        produce a valid result. If the number of valid observations is less than
+ *                        `min_periods`, the result for element `i` is null, except when
+ *                        `min_periods=0`. When `min_periods=0`, aggregations return identity values
+ *                        for windows with insufficient observations: SUM and COUNT return 0, MIN
+ *                        returns the maximum value for the type, MAX returns the minimum value for
+ *                        the type. Note: MEAN behavior is undefined for empty windows.
  * @param[in] agg The rolling window aggregation type (SUM, MAX, MIN, etc.)
  * @param[in] stream CUDA stream used for device memory operations and kernel launches
  * @param[in] mr Device memory resource used to allocate the returned column's device memory
@@ -335,8 +351,9 @@ struct window_bounds {
  * positive values), or forward direction (for negative values)
  * @param[in] following_window The static rolling window size in the forward direction (for positive
  * values), or backward direction (for negative values)
- * @param[in] min_periods Minimum number of observations in window required to have a value,
- *                        otherwise element `i` is null.
+ * @param[in] min_periods Minimum number of valid (non-null) observations in window required to
+ *                        produce a valid result, otherwise element `i` is null. Must be positive
+ *                        (>= 1).
  * @param[in] aggr The rolling window aggregation type (SUM, MAX, MIN, etc.)
  * @param[in] stream CUDA stream used for device memory operations and kernel launches
  * @param[in] mr Device memory resource used to allocate the returned column's device memory
@@ -528,8 +545,9 @@ std::unique_ptr<column> grouped_rolling_window(
  * @param[in] input The input column (to be aggregated)
  * @param[in] preceding The interval value in the backward direction
  * @param[in] following The interval value in the forward direction
- * @param[in] min_periods Minimum number of observations in window required to have a value,
- *                        otherwise element `i` is null.
+ * @param[in] min_periods Minimum number of valid (non-null) observations in window required to
+ *                        produce a valid result, otherwise element `i` is null. Must be positive
+ *                        (>= 1).
  * @param[in] aggr The rolling window aggregation type (SUM, MAX, MIN, etc.)
  * @param[in] stream CUDA stream used for device memory operations and kernel launches
  * @param[in] mr Device memory resource used to allocate the returned column's device memory
@@ -545,6 +563,32 @@ std::unique_ptr<column> grouped_range_rolling_window(
   range_window_bounds const& following,
   size_type min_periods,
   rolling_aggregation const& aggr,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
+/**
+ * @brief Apply a grouping-aware range-based rolling window function to a sequence of columns.
+ *
+ * @param group_keys Possibly empty table of sorted keys defining groups.
+ * @param orderby Column defining window ranges. Must be sorted. If `group_keys` is non-empty, must
+ * be sorted groupwise.
+ * @param order Sort order of the `orderby` column.
+ * @param null_order Null sort order in the sorted `orderby` column.
+ * @param preceding Type of the preceding window.
+ * @param following Type of the following window.
+ * @param requests Columns to aggregate and the aggregation for each column.
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned table's device memory
+ * @return A table of results, one column per input request.
+ */
+std::unique_ptr<table> grouped_range_rolling_window(
+  table_view const& group_keys,
+  column_view const& orderby,
+  order order,
+  null_order null_order,
+  range_window_type preceding,
+  range_window_type following,
+  host_span<rolling_request const> requests,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
@@ -581,8 +625,13 @@ std::unique_ptr<column> grouped_range_rolling_window(
  * @param[in] following_window A non-nullable column of INT32 window sizes in the backward
  *                             direction. `following_window[i]` specifies following window size
  *                             for element `i`.
- * @param[in] min_periods Minimum number of observations in window required to have a value,
- *                        otherwise element `i` is null.
+ * @param[in] min_periods Minimum number of valid (non-null) observations in window required to
+ *                        produce a valid result. If the number of valid observations is less than
+ *                        `min_periods`, the result for element `i` is null, except when
+ *                        `min_periods=0`. When `min_periods=0`, aggregations return identity values
+ *                        for windows with insufficient observations: SUM and COUNT return 0, MIN
+ *                        returns the maximum value for the type, MAX returns the minimum value for
+ *                        the type. Note: MEAN behavior is undefined for empty windows.
  * @param[in] agg The rolling window aggregation type (sum, max, min, etc.)
  * @param[in] stream CUDA stream used for device memory operations and kernel launches
  * @param[in] mr Device memory resource used to allocate the returned column's device memory
@@ -598,5 +647,13 @@ std::unique_ptr<column> rolling_window(
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
+/**
+ * @brief Indicate if a rolling aggregation is supported for a source datatype.
+ *
+ * @param source Type of the column to perform the aggregation on.
+ * @param kind The kind of the aggregation.
+ * @returns true if the aggregation is supported.
+ */
+bool is_valid_rolling_aggregation(data_type source, aggregation::Kind kind);
 /** @} */  // end of group
 }  // namespace CUDF_EXPORT cudf

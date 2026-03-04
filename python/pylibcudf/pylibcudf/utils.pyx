@@ -1,35 +1,41 @@
-# Copyright (c) 2023-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 from cython.operator import dereference
-
-from libc.stdint cimport uintptr_t
 
 from libcpp.functional cimport reference_wrapper
 from libcpp.vector cimport vector
 
-from cuda.bindings import runtime
-
-from rmm.pylibrmm.stream cimport Stream
-from rmm.pylibrmm.stream import DEFAULT_STREAM
-
 from pylibcudf.libcudf.scalar.scalar cimport scalar
-from pylibcudf.libcudf.types cimport bitmask_type
 
 from .scalar cimport Scalar
+
+from rmm.pylibrmm.stream cimport Stream
+from rmm.pylibrmm.memory_resource cimport (
+    DeviceMemoryResource,
+    get_current_device_resource,
+)
+
+from rmm.pylibrmm.stream import DEFAULT_STREAM, PER_THREAD_DEFAULT_STREAM
+
+from cuda.bindings import runtime
+
+import os
+
+
+# Check the environment for the variable CUDF_PER_THREAD_STREAM. If it is set,
+# then set the module-scope CUDF_DEFAULT_STREAM variable here to
+# rmm.pylibrmm.stream.PER_THREAD_DEFAULT_STREAM. Otherwise, it will default to
+# rmm.pylibrmm.stream.DEFAULT_STREAM.
+if os.getenv("CUDF_PER_THREAD_STREAM", "0") == "1":
+    CUDF_DEFAULT_STREAM = PER_THREAD_DEFAULT_STREAM
+else:
+    CUDF_DEFAULT_STREAM = DEFAULT_STREAM
 
 # This is a workaround for
 # https://github.com/cython/cython/issues/4180
 # when creating reference_wrapper[constscalar] in the constructor
 ctypedef const scalar constscalar
-
-
-cdef void * int_to_void_ptr(Py_ssize_t ptr) nogil:
-    return <void*><uintptr_t>(ptr)
-
-
-cdef bitmask_type * int_to_bitmask_ptr(Py_ssize_t ptr) nogil:
-    return <bitmask_type*><uintptr_t>(ptr)
-
 
 cdef vector[reference_wrapper[const scalar]] _as_vector(list source):
     """Make a vector of reference_wrapper[const scalar] from a list of scalars."""
@@ -62,7 +68,13 @@ def _is_concurrent_managed_access_supported():
     return supports_managed_access != 0
 
 
-cdef Stream _get_stream(Stream stream = None):
+cpdef Stream _get_stream(Stream stream = None):
     if stream is None:
-        return DEFAULT_STREAM
+        return CUDF_DEFAULT_STREAM
     return stream
+
+
+cdef DeviceMemoryResource _get_memory_resource(DeviceMemoryResource mr = None):
+    if mr is None:
+        return get_current_device_resource()
+    return mr

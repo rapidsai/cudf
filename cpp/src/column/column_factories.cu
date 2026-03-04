@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf/column/column_factories.hpp>
@@ -23,7 +12,7 @@
 #include <cudf/strings/detail/strings_column_factories.cuh>
 #include <cudf/utilities/memory_resource.hpp>
 
-#include <thrust/iterator/constant_iterator.h>
+#include <cuda/iterator>
 #include <thrust/uninitialized_fill.h>
 
 namespace cudf {
@@ -60,7 +49,7 @@ std::unique_ptr<cudf::column> column_from_scalar_dispatch::operator()<cudf::stri
   if (!value.is_valid(stream)) {
     return make_strings_column(
       size,
-      make_column_from_scalar(numeric_scalar<int32_t>(0), size + 1, stream, mr),
+      make_column_from_scalar(numeric_scalar<int32_t>(0, true, stream), size + 1, stream, mr),
       rmm::device_buffer{},
       size,
       cudf::detail::create_null_mask(size, mask_state::ALL_NULL, stream, mr));
@@ -106,7 +95,7 @@ std::unique_ptr<cudf::column> column_from_scalar_dispatch::operator()<cudf::stru
 {
   if (size == 0) CUDF_FAIL("0-length struct column is unsupported.");
   auto& ss  = static_cast<scalar_type_t<cudf::struct_view> const&>(value);
-  auto iter = thrust::make_constant_iterator(0);
+  auto iter = cuda::make_constant_iterator(0);
 
   auto children =
     detail::gather(ss.view(), iter, iter + size, out_of_bounds_policy::NULLIFY, stream, mr);

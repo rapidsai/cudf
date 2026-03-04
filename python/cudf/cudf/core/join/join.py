@@ -1,28 +1,32 @@
-# Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
 import itertools
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import pylibcudf as plc
 
-import cudf
 from cudf.core._internals import sorting
-from cudf.core.buffer import acquire_spill_lock
-from cudf.core.column import ColumnBase
+from cudf.core.column import ColumnBase, access_columns
 from cudf.core.copy_types import GatherMap
+from cudf.core.dtypes import CategoricalDtype
 from cudf.core.join._join_helpers import (
     _coerce_to_tuple,
     _ColumnIndexer,
     _IndexIndexer,
     _match_join_keys,
 )
+from cudf.options import get_option
 from cudf.utils.dtypes import SIZE_TYPE_DTYPE
+
+if TYPE_CHECKING:
+    from cudf.core.dataframe import DataFrame
+    from cudf.core.index import Index
 
 
 class Merge:
     @staticmethod
-    @acquire_spill_lock()
     def _joiner(
         lhs: list[ColumnBase],
         rhs: list[ColumnBase],
@@ -33,15 +37,22 @@ class Merge:
         if (join_func := getattr(plc.join, f"{how}_join", None)) is None:
             raise ValueError(f"Invalid join type {how}")
 
-        left_rows, right_rows = join_func(
-            plc.Table([col.to_pylibcudf(mode="read") for col in lhs]),
-            plc.Table([col.to_pylibcudf(mode="read") for col in rhs]),
-            plc.types.NullEquality.EQUAL,
-        )
-        return (
-            ColumnBase.from_pylibcudf(left_rows),
-            ColumnBase.from_pylibcudf(right_rows),
-        )
+        with access_columns(
+            *lhs, *rhs, mode="read", scope="internal"
+        ) as accessed:
+            # Split accessed tuple back into lhs and rhs
+            n_lhs = len(lhs)
+            lhs = accessed[:n_lhs]  # type: ignore[assignment]
+            rhs = accessed[n_lhs:]  # type: ignore[assignment]
+            left_rows, right_rows = join_func(
+                plc.Table([col.plc_column for col in lhs]),
+                plc.Table([col.plc_column for col in rhs]),
+                plc.types.NullEquality.EQUAL,
+            )
+            return (
+                ColumnBase.create(left_rows, SIZE_TYPE_DTYPE),
+                ColumnBase.create(right_rows, SIZE_TYPE_DTYPE),
+            )
 
     def __init__(
         self,
@@ -135,9 +146,9 @@ class Merge:
         # situation (for sorting or otherwise), the deciding order is
         # "input table order"
         self.sort = sort or (
-            cudf.get_option("mode.pandas_compatible") and how == "outer"
+            get_option("mode.pandas_compatible") and how == "outer"
         )
-        self.preserve_key_order = cudf.get_option(
+        self.preserve_key_order = get_option(
             "mode.pandas_compatible"
         ) and how in {
             "inner",
@@ -226,7 +237,9 @@ class Merge:
             if on
             else {
                 lkey.name
-                for lkey, rkey in zip(self._left_keys, self._right_keys)
+                for lkey, rkey in zip(
+                    self._left_keys, self._right_keys, strict=True
+                )
                 if lkey.name == rkey.name
                 and not (
                     isinstance(lkey, _IndexIndexer)
@@ -266,28 +279,32 @@ class Merge:
         # tables, we gather from iota on both right and left, and then
         # sort the gather maps with those two columns as key.
         key_order = [
-            cudf.core.column.as_column(range(n), dtype=SIZE_TYPE_DTYPE).take(
-                map_, nullify=null, check_bounds=False
-            )
-            for map_, n, null in zip(maps, lengths, nullify)
+            ColumnBase.from_range(range(n))
+            .astype(SIZE_TYPE_DTYPE)
+            .take(map_, nullify=null, check_bounds=False)
+            for map_, n, null in zip(maps, lengths, nullify, strict=True)
         ]
+        if self.how == "right":
+            # If how is right, right map is primary sort key.
+            key_order = reversed(key_order)
         return [
-            ColumnBase.from_pylibcudf(col)
+            ColumnBase.create(col, SIZE_TYPE_DTYPE)
             for col in sorting.sort_by_key(
-                list(maps),
-                # If how is right, right map is primary sort key.
-                key_order[:: -1 if self.how == "right" else 1],
-                [True] * len(key_order),
-                ["last"] * len(key_order),
+                maps,
+                key_order,
+                itertools.repeat(True, times=len(key_order)),
+                itertools.repeat("last", times=len(key_order)),
                 stable=True,
             )
         ]
 
-    def perform_merge(self) -> cudf.DataFrame:
+    def perform_merge(self) -> DataFrame:
         left_join_cols = []
         right_join_cols = []
 
-        for left_key, right_key in zip(self._left_keys, self._right_keys):
+        for left_key, right_key in zip(
+            self._left_keys, self._right_keys, strict=True
+        ):
             lcol = left_key.get(self.lhs)
             rcol = right_key.get(self.rhs)
             lcol_casted, rcol_casted = _match_join_keys(lcol, rcol, self.how)
@@ -298,8 +315,8 @@ class Merge:
             # type that was returned by _match_join_keys.
             if (
                 self.how == "inner"
-                and isinstance(lcol.dtype, cudf.CategoricalDtype)
-                and isinstance(rcol.dtype, cudf.CategoricalDtype)
+                and isinstance(lcol.dtype, CategoricalDtype)
+                and isinstance(rcol.dtype, CategoricalDtype)
             ):
                 lcol_casted = lcol_casted.astype(lcol.dtype)
                 rcol_casted = rcol_casted.astype(rcol.dtype)
@@ -307,39 +324,32 @@ class Merge:
             left_key.set(self.lhs, lcol_casted)
             right_key.set(self.rhs, rcol_casted)
 
+        from cudf.core.dataframe import DataFrame
+
         if self.how == "cross":
             lib_table = plc.join.cross_join(
-                plc.Table(
-                    [
-                        col.to_pylibcudf(mode="read")
-                        for col in self.lhs._columns
-                    ]
-                ),
-                plc.Table(
-                    [
-                        col.to_pylibcudf(mode="read")
-                        for col in self.rhs._columns
-                    ]
-                ),
+                plc.Table([col.plc_column for col in self.lhs._columns]),
+                plc.Table([col.plc_column for col in self.rhs._columns]),
             )
             columns = lib_table.columns()
-            left_names, right_names = (
-                self.lhs._column_names,
-                self.rhs._column_names,
-            )
-            left_result = cudf.DataFrame._from_data(
+            num_left_cols = len(self.lhs._column_names)
+            left_result = DataFrame._from_data(
                 {
-                    col: ColumnBase.from_pylibcudf(lib_col)
-                    for col, lib_col in zip(
-                        left_names, columns[: len(left_names)], strict=True
+                    col: ColumnBase.create(lib_col, dtype)
+                    for (col, dtype), lib_col in zip(
+                        self.lhs._dtypes,
+                        columns[:num_left_cols],
+                        strict=True,
                     )
                 }
             )
-            right_result = cudf.DataFrame._from_data(
+            right_result = DataFrame._from_data(
                 {
-                    col: ColumnBase.from_pylibcudf(lib_col)
-                    for col, lib_col in zip(
-                        right_names, columns[len(left_names) :], strict=True
+                    col: ColumnBase.create(lib_col, dtype)
+                    for (col, dtype), lib_col in zip(
+                        self.rhs._dtypes,
+                        columns[num_left_cols:],
+                        strict=True,
                     )
                 }
             )
@@ -360,7 +370,7 @@ class Merge:
                     **gather_kwargs,
                 )
                 if left_rows is not None
-                else cudf.DataFrame._from_data({})
+                else DataFrame._from_data({})
             )
             del left_rows
             right_result = (
@@ -371,22 +381,20 @@ class Merge:
                     **gather_kwargs,
                 )
                 if right_rows is not None
-                else cudf.DataFrame._from_data({})
+                else DataFrame._from_data({})
             )
             del right_rows
-        result = cudf.DataFrame._from_data(
+        result = DataFrame._from_data(
             *self._merge_results(left_result, right_result)
         )
 
         if self.sort:
             result = self._sort_result(result)
         if self._return_rangeindex:
-            result.index = cudf.RangeIndex(len(result))
+            result = result.reset_index(drop=True)
         return result
 
-    def _merge_results(
-        self, left_result: cudf.DataFrame, right_result: cudf.DataFrame
-    ):
+    def _merge_results(self, left_result: DataFrame, right_result: DataFrame):
         # Merge the DataFrames `left_result` and `right_result` into a single
         # `DataFrame`, suffixing column names if necessary.
 
@@ -396,7 +404,9 @@ class Merge:
         # combined by filling nulls in the left key column with corresponding
         # values from the right key column:
         if self.how == "outer":
-            for lkey, rkey in zip(self._left_keys, self._right_keys):
+            for lkey, rkey in zip(
+                self._left_keys, self._right_keys, strict=True
+            ):
                 if lkey.name == rkey.name:
                     # fill nulls in lhs from values in the rhs
                     lkey.set(
@@ -450,14 +460,22 @@ class Merge:
             multiindex_columns = (
                 self.lhs._data.multiindex and self.rhs._data.multiindex
             )
+            rangeindex_columns = (
+                self.lhs._data.rangeindex and self.rhs._data.rangeindex
+            )
         elif self.lhs._data:
             multiindex_columns = self.lhs._data.multiindex
+            rangeindex_columns = self.lhs._data.rangeindex
         elif self.rhs._data:
             multiindex_columns = self.rhs._data.multiindex
+            rangeindex_columns = self.rhs._data.rangeindex
         else:
             multiindex_columns = False
+            rangeindex_columns = (
+                self.lhs._data.rangeindex and self.rhs._data.rangeindex
+            )
 
-        index: cudf.BaseIndex | None
+        index: Index | None
         if self._using_right_index:
             # right_index and left_on
             index = left_result.index
@@ -470,12 +488,14 @@ class Merge:
         # Construct result from data and index:
         return (
             left_result._data.__class__(
-                data=data, multiindex=multiindex_columns
+                data=data,
+                multiindex=multiindex_columns,
+                rangeindex=rangeindex_columns,
             ),
             index,
         )
 
-    def _sort_result(self, result: cudf.DataFrame) -> cudf.DataFrame:
+    def _sort_result(self, result: DataFrame) -> DataFrame:
         # Pandas sorts on the key columns in the
         # same order as given in 'on'. If the indices are used as
         # keys, the index will be sorted. If one index is specified,
@@ -495,20 +515,27 @@ class Merge:
         if by:
             keep_index = self._using_left_index or self._using_right_index
             if keep_index:
-                to_sort = [*result.index._columns, *result._columns]
+                to_sort = list(
+                    itertools.chain(result.index._columns, result._columns)
+                )
                 index_names = result.index.names
             else:
-                to_sort = [*result._columns]
+                to_sort = list(result._columns)
                 index_names = None
             result_columns = sorting.sort_by_key(
                 to_sort,
                 by,
-                [True] * len(by),
-                ["last"] * len(by),
+                itertools.repeat(True, times=len(by)),
+                itertools.repeat("last", times=len(by)),
                 stable=True,
             )
             result = result._from_columns_like_self(
-                [ColumnBase.from_pylibcudf(col) for col in result_columns],
+                [
+                    ColumnBase.create(col, original.dtype)
+                    for col, original in zip(
+                        result_columns, to_sort, strict=True
+                    )
+                ],
                 result._column_names,
                 index_names,
             )
@@ -527,7 +554,13 @@ class Merge:
         suffixes,
     ):
         # Error for various invalid combinations of merge input parameters
+        from cudf.core.dataframe import DataFrame
+        from cudf.core.series import Series
 
+        if not isinstance(lhs, (Series, DataFrame)):
+            raise TypeError("left must be a Series or DataFrame")
+        if not isinstance(rhs, (Series, DataFrame)):
+            raise TypeError("right must be a Series or DataFrame")
         # We must actually support the requested merge type
         if how not in {
             "left",
@@ -591,8 +624,8 @@ class Merge:
                     )
 
         # Can't merge on unnamed Series
-        if (isinstance(lhs, cudf.Series) and not lhs.name) or (
-            isinstance(rhs, cudf.Series) and not rhs.name
+        if (isinstance(lhs, Series) and not lhs.name) or (
+            isinstance(rhs, Series) and not rhs.name
         ):
             raise ValueError("Cannot merge on unnamed Series")
 
@@ -622,8 +655,8 @@ class Merge:
                     )
 
         if (
-            isinstance(lhs, cudf.DataFrame)
-            and isinstance(rhs, cudf.DataFrame)
+            isinstance(lhs, DataFrame)
+            and isinstance(rhs, DataFrame)
             # An empty column is considered to have 1 level by pandas (can be
             # seen by using lhs.columns.nlevels, but we don't want to use
             # columns internally because it's expensive).
@@ -640,7 +673,6 @@ class Merge:
 
 class MergeSemi(Merge):
     @staticmethod
-    @acquire_spill_lock()
     def _joiner(  # type: ignore[override]
         lhs: list[ColumnBase],
         rhs: list[ColumnBase],
@@ -653,14 +685,22 @@ class MergeSemi(Merge):
         ) is None:
             raise ValueError(f"Invalid join type {how}")
 
-        return ColumnBase.from_pylibcudf(
-            join_func(
-                plc.Table([col.to_pylibcudf(mode="read") for col in lhs]),
-                plc.Table([col.to_pylibcudf(mode="read") for col in rhs]),
-                plc.types.NullEquality.EQUAL,
-            )
-        ), None
+        with access_columns(
+            *lhs, *rhs, mode="read", scope="internal"
+        ) as accessed:
+            # Split accessed tuple back into lhs and rhs
+            n_lhs = len(lhs)
+            lhs = accessed[:n_lhs]  # type: ignore[assignment]
+            rhs = accessed[n_lhs:]  # type: ignore[assignment]
+            return ColumnBase.create(
+                join_func(
+                    plc.Table([col.plc_column for col in lhs]),
+                    plc.Table([col.plc_column for col in rhs]),
+                    plc.types.NullEquality.EQUAL,
+                ),
+                SIZE_TYPE_DTYPE,
+            ), None
 
-    def _merge_results(self, lhs: cudf.DataFrame, rhs: cudf.DataFrame):
+    def _merge_results(self, lhs: DataFrame, rhs: DataFrame):
         # semi-join result includes only lhs columns
         return lhs._data, lhs.index

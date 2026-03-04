@@ -1,6 +1,10 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
+ * SPDX-FileCopyrightText: Copyright 2018-2019 BlazingDB, Inc.
+ * SPDX-FileCopyrightText: Copyright 2018 Christian Noboa Mardini <christian@blazingdb.com>
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+/*
  * Copyright 2018-2019 BlazingDB, Inc.
  *     Copyright 2018 Christian Noboa Mardini <christian@blazingdb.com>
  *
@@ -21,17 +25,8 @@
 #include <tests/binaryop/binop-fixture.hpp>
 
 #include <cudf/binaryop.hpp>
-#include <cudf/jit/runtime_support.hpp>
 
-struct BinaryOperationGenericPTXTest : public BinaryOperationTest {
- protected:
-  void SetUp() override
-  {
-    if (!cudf::is_runtime_jit_supported()) {
-      GTEST_SKIP() << "Skipping tests that require runtime JIT support";
-    }
-  }
-};
+struct BinaryOperationGenericPTXTest : public BinaryOperationTest {};
 
 TEST_F(BinaryOperationGenericPTXTest, CAdd_Vector_Vector_FP32_FP32_FP32)
 {

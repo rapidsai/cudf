@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2023-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf/column/column.hpp>
@@ -24,7 +13,7 @@
 #include <cudf/detail/offsets_iterator_factory.cuh>
 #include <cudf/detail/sequence.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
-#include <cudf/detail/utilities/functional.hpp>
+#include <cudf/detail/utilities/grid_1d.cuh>
 #include <cudf/hashing/detail/hashing.hpp>
 #include <cudf/hashing/detail/murmurhash3_x64_128.cuh>
 #include <cudf/hashing/detail/murmurhash3_x86_32.cuh>
@@ -42,7 +31,10 @@
 
 #include <cooperative_groups.h>
 #include <cuda/atomic>
+#include <cuda/functional>
+#include <cuda/std/iterator>
 #include <cuda/std/limits>
+#include <cuda/std/tuple>
 #include <thrust/binary_search.h>
 #include <thrust/execution_policy.h>
 #include <thrust/fill.h>
@@ -129,7 +121,7 @@ CUDF_KERNEL void minhash_seed_kernel(cudf::column_device_view const d_strings,
       continue;
     }
     auto const check_str =  // used for counting 'width' characters
-      cudf::string_view(itr, static_cast<cudf::size_type>(thrust::distance(itr, end)));
+      cudf::string_view(itr, static_cast<cudf::size_type>(cuda::std::distance(itr, end)));
     auto const [bytes, left] = cudf::strings::detail::bytes_to_character_position(check_str, width);
     if ((itr != d_str.data()) && (left > 0)) {
       // true itr+width is past the end of the string
@@ -142,7 +134,7 @@ CUDF_KERNEL void minhash_seed_kernel(cudf::column_device_view const d_strings,
     if constexpr (std::is_same_v<hash_value_type, uint32_t>) {
       hv = hasher(hash_str);
     } else {
-      hv = thrust::get<0>(hasher(hash_str));
+      hv = cuda::std::get<0>(hasher(hash_str));
     }
     // disallowing hash to zero case
     *seed_hashes = cuda::std::max(hv, hash_value_type{1});
@@ -229,7 +221,7 @@ CUDF_KERNEL void minhash_ngrams_kernel(cudf::detail::lists_column_device_view co
     auto const last_str  = d_row.element<cudf::string_view>(next_idx);
     // build super-string since adjacent strings are contiguous in memory
     auto const size = static_cast<cudf::size_type>(
-      thrust::distance(first_str.data(), last_str.data()) + last_str.size_bytes());
+      cuda::std::distance(first_str.data(), last_str.data()) + last_str.size_bytes());
     auto const hash_str = cudf::string_view(first_str.data(), size);
     hash_value_type hv;
     if constexpr (std::is_same_v<hash_value_type, uint32_t>) {
@@ -369,7 +361,7 @@ CUDF_KERNEL void minhash_kernel(offsets_type offsets_itr,
       auto const values = block_values + (lane_idx * block_size);
       // cooperative groups does not have a min function and cub::BlockReduce was slower
       auto const minv =
-        thrust::reduce(thrust::seq, values, values + block_size, init, cudf::detail::minimum{});
+        thrust::reduce(thrust::seq, values, values + block_size, init, cuda::minimum{});
       if constexpr (blocks_per_row > 1) {
         // accumulates mins for each block into d_output
         cuda::atomic_ref<hash_value_type, cuda::thread_scope_block> ref{d_output[lane_idx + i]};
@@ -402,7 +394,7 @@ std::pair<cudf::size_type, rmm::device_uvector<cudf::size_type>> partition_input
   rmm::cuda_stream_view stream)
 {
   auto indices = rmm::device_uvector<cudf::size_type>(size, stream);
-  thrust::sequence(rmm::exec_policy(stream), indices.begin(), indices.end());
+  thrust::sequence(rmm::exec_policy_nosync(stream), indices.begin(), indices.end());
   cudf::size_type threshold_index = threshold_count < size ? size : 0;
 
   // if we counted a split of above/below threshold then
@@ -417,7 +409,7 @@ std::pair<cudf::size_type, rmm::device_uvector<cudf::size_type>> partition_input
       rmm::exec_policy_nosync(stream), sizes.begin(), sizes.end(), indices.begin());
     auto const lb = thrust::lower_bound(
       rmm::exec_policy_nosync(stream), sizes.begin(), sizes.end(), wide_row_threshold);
-    threshold_index = static_cast<cudf::size_type>(thrust::distance(sizes.begin(), lb));
+    threshold_index = static_cast<cudf::size_type>(cuda::std::distance(sizes.begin(), lb));
   }
   return {threshold_index, std::move(indices)};
 }
@@ -610,9 +602,7 @@ std::unique_ptr<cudf::column> build_list_result(cudf::column_view const& input,
                                   std::move(offsets),
                                   std::move(hashes),
                                   input.null_count(),
-                                  cudf::detail::copy_bitmask(input, stream, mr),
-                                  stream,
-                                  mr);
+                                  cudf::detail::copy_bitmask(input, stream, mr));
   // expect this condition to be very rare
   if (input.null_count() > 0) {
     result = cudf::detail::purge_nonempty_nulls(result->view(), stream, mr);

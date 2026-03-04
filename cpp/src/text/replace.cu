@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2020-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "text/utilities/tokenize_ops.cuh"
@@ -36,18 +25,18 @@
 
 #include <cuda/atomic>
 #include <cuda/std/functional>
+#include <cuda/std/iterator>
+#include <cuda/std/utility>
 #include <thrust/binary_search.h>
-#include <thrust/distance.h>
 #include <thrust/execution_policy.h>
 #include <thrust/find.h>
-#include <thrust/pair.h>
 #include <thrust/remove.h>
 
 namespace nvtext {
 namespace detail {
 namespace {
 
-using replace_result = thrust::pair<bool, cudf::string_view>;
+using replace_result = cuda::std::pair<bool, cudf::string_view>;
 
 struct base_token_replacer_fn {
   cudf::column_device_view d_strings;          ///< strings to tokenize
@@ -160,7 +149,7 @@ struct replace_tokens_fn : base_token_replacer_fn {
       // retrieve the corresponding replacement string or
       // if only one repl string, use that one for all targets
       auto const d_repl = [&] {
-        auto const repl_idx = thrust::distance(d_targets_begin, found_itr);
+        auto const repl_idx = cuda::std::distance(d_targets_begin, found_itr);
         return d_replacements.size() == 1 ? d_replacements.element<cudf::string_view>(0)
                                           : d_replacements.element<cudf::string_view>(repl_idx);
       }();
@@ -213,7 +202,7 @@ struct sub_offset_fn {
       if (tokenizer.is_delimiter(chr)) { break; }
       itr += chr_size;
     }
-    return (itr < end) ? thrust::distance(d_input_chars, itr) : 0L;
+    return (itr < end) ? cuda::std::distance(d_input_chars, itr) : 0L;
   }
 };
 
@@ -312,7 +301,7 @@ std::unique_ptr<cudf::column> replace_helper(ReplacerFn replacer,
     // remove 0s -- where sub-offset could not be computed
     auto const remove_end =
       thrust::remove(rmm::exec_policy_nosync(stream), sub_offsets.begin(), sub_offsets.end(), 0L);
-    sub_count = thrust::distance(sub_offsets.begin(), remove_end);
+    sub_count = cuda::std::distance(sub_offsets.begin(), remove_end);
 
     // merge them with input offsets
     thrust::merge(rmm::exec_policy_nosync(stream),

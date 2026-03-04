@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
 
@@ -87,7 +76,7 @@ std::vector<std::vector<column_view>> extract_ordered_struct_children(
  * @brief Check whether the specified column is of type LIST, or any LISTs in its descendent
  * columns.
  * @param col column to check for lists.
- * @return true if the column or any of it's children is a list, false otherwise.
+ * @return true if the column or any of its children is a list, false otherwise.
  */
 bool is_or_has_nested_lists(cudf::column_view const& col);
 
@@ -181,12 +170,11 @@ class flattened_table {
 
 /**
  * @brief Superimpose nulls from a given null mask into the input column, using bitwise AND.
+ * Any null strings/lists in the input (if any) will also be sanitized to make sure nulls in the
+ * output always have their sizes equal to 0.
  *
  * This function will recurse through all struct descendants. It is expected that the size of
  * the given null mask in bits is the same as size of the input column.
- *
- * Any null strings/lists in the input (if any) will also be sanitized to make sure nulls in the
- * output always have their sizes equal to 0.
  *
  * @param null_mask Null mask to be applied to the input column
  * @param null_count Null count in the given null mask
@@ -195,11 +183,56 @@ class flattened_table {
  * @param mr Device memory resource used to allocate new device memory
  * @return A new column with potentially new null mask
  */
-[[nodiscard]] std::unique_ptr<cudf::column> superimpose_nulls(bitmask_type const* null_mask,
-                                                              cudf::size_type null_count,
-                                                              std::unique_ptr<cudf::column>&& input,
-                                                              rmm::cuda_stream_view stream,
-                                                              rmm::device_async_resource_ref mr);
+[[nodiscard]] std::unique_ptr<cudf::column> superimpose_and_sanitize_nulls(
+  bitmask_type const* null_mask,
+  cudf::size_type null_count,
+  std::unique_ptr<cudf::column>&& input,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr);
+
+/**
+ * @brief Superimpose nulls from multiple null masks into corresponding input columns
+ *
+ * This function applies each null mask to its corresponding input column using bitwise AND
+ * operations. For each column, nulls are propagated from the mask to the column and its
+ * descendants, and any null strings/lists in the descendant columns are sanitized to ensure nulls
+ * always have their sizes equal to 0.
+ *
+ * The function recursively processes struct descendants in each column. Each null mask is
+ * expected to have the same size in bits as its corresponding input column.
+ *
+ * @param null_masks Vector of null mask pointers to be applied to the input columns
+ * @param inputs Vector of input columns to apply the null masks to
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate new device memory
+ * @return A vector of new columns with the null masks applied and nulls sanitized
+ */
+[[nodiscard]] std::vector<std::unique_ptr<column>> superimpose_and_sanitize_nulls(
+  host_span<bitmask_type const* const> null_masks,
+  std::vector<std::unique_ptr<column>> inputs,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr);
+
+/**
+ * @brief Enforces null consistency in struct columns by propagating nulls from parent to
+ * descendants.
+ *
+ * For each struct column in the input vector, this function ensures that nulls from the root-level
+ * null mask are properly superimposed onto all descendant columns in the struct hierarchy.
+ * The function also sanitizes null strings/lists in the descendant columns to ensure nulls always
+ * have their sizes equal to 0, maintaining consistent null semantics throughout the column
+ * hierarchy.
+ *
+ * @param columns Vector of columns to process, with struct columns getting null consistency
+ * enforcement
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate new device memory
+ * @return A vector of columns with nulls properly propagated from parent structs to all descendants
+ */
+[[nodiscard]] std::vector<std::unique_ptr<column>> enforce_null_consistency(
+  std::vector<std::unique_ptr<column>> columns,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr);
 
 /**
  * @brief Push down nulls from the given input column into its children columns, using bitwise AND.

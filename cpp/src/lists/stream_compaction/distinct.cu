@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2022-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "lists/utilities.hpp"
@@ -23,6 +12,7 @@
 #include <cudf/detail/stream_compaction.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/lists/stream_compaction.hpp>
+#include <cudf/stream_compaction.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/memory_resource.hpp>
@@ -38,6 +28,7 @@ namespace detail {
 std::unique_ptr<column> distinct(lists_column_view const& input,
                                  null_equality nulls_equal,
                                  nan_equality nans_equal,
+                                 duplicate_keep_option keep_option,
                                  rmm::cuda_stream_view stream,
                                  rmm::device_async_resource_ref mr)
 {
@@ -55,7 +46,7 @@ std::unique_ptr<column> distinct(lists_column_view const& input,
   auto const distinct_table =
     cudf::detail::stable_distinct(table_view{{labels->view(), child}},  // input table
                                   std::vector<size_type>{0, 1},         // keys
-                                  duplicate_keep_option::KEEP_ANY,
+                                  keep_option,
                                   nulls_equal,
                                   nans_equal,
                                   stream,
@@ -68,9 +59,7 @@ std::unique_ptr<column> distinct(lists_column_view const& input,
                            std::move(out_offsets),
                            std::move(distinct_table->release().back()),
                            input.null_count(),
-                           cudf::detail::copy_bitmask(input.parent(), stream, mr),
-                           stream,
-                           mr);
+                           cudf::detail::copy_bitmask(input.parent(), stream, mr));
 }
 
 }  // namespace detail
@@ -78,11 +67,12 @@ std::unique_ptr<column> distinct(lists_column_view const& input,
 std::unique_ptr<column> distinct(lists_column_view const& input,
                                  null_equality nulls_equal,
                                  nan_equality nans_equal,
+                                 duplicate_keep_option keep_option,
                                  rmm::cuda_stream_view stream,
                                  rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::distinct(input, nulls_equal, nans_equal, stream, mr);
+  return detail::distinct(input, nulls_equal, nans_equal, keep_option, stream, mr);
 }
 
 }  // namespace cudf::lists

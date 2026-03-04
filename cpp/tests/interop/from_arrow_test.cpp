@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2020-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "arrow_utils.hpp"
@@ -444,7 +433,7 @@ TEST_P(FromArrowTestSlice, SliceTest)
   if (got_cudf_table.value()->num_rows() == 0 and expected_cudf_table.num_rows() == 0) {
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected_cudf_table.view(), got_cudf_table.value()->view());
   } else {
-    CUDF_TEST_EXPECT_TABLES_EQUAL(expected_cudf_table.view(), got_cudf_table.value()->view());
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected_cudf_table.view(), got_cudf_table.value()->view());
   }
 }
 
@@ -514,7 +503,7 @@ TYPED_TEST(FromArrowTestDecimalsTest, FixedPointTableNulls)
     auto const data     = std::vector<T>{1, 2, 3, 4, 5, 6, 0, 0};
     auto const validity = std::vector<uint8_t>{1, 1, 1, 1, 1, 1, 0, 0};
     auto const col      = fp_wrapper<T>({1, 2, 3, 4, 5, 6, 0, 0},
-                                   {true, true, true, true, true, true, false, false},
+                                        {true, true, true, true, true, true, false, false},
                                    scale_type{scale});
     auto const expected = cudf::table_view({col});
 

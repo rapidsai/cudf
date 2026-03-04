@@ -1,21 +1,14 @@
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "gpuinflate.hpp"
 #include "io/utilities/block_utils.cuh"
+
+#include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/detail/utilities/grid_1d.cuh>
+#include <cudf/detail/utilities/integer_utils.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -335,7 +328,7 @@ __device__ void snappy_decode_symbols(unsnap_state_s* s, uint32_t t)
             b[t].offset = ofs;
             ofs += blen;  // for correct out-of-range detection below
           }
-          blen           = WarpReducePos32(blen, t);
+          blen           = warp_reduce_pos<cudf::detail::warp_size>(blen, t);
           bytes_left     = shuffle(bytes_left);
           dst_pos        = shuffle(dst_pos);
           short_sym_mask = __ffs(ballot(blen > bytes_left || ofs > (int32_t)(dst_pos + blen)));
@@ -381,7 +374,7 @@ __device__ void snappy_decode_symbols(unsnap_state_s* s, uint32_t t)
               b[batch_len + t].offset = ofs;
               ofs += blen;  // for correct out-of-range detection below
             }
-            blen           = WarpReducePos32(blen, t);
+            blen           = warp_reduce_pos<cudf::detail::warp_size>(blen, t);
             bytes_left     = shuffle(bytes_left);
             dst_pos        = shuffle(dst_pos);
             short_sym_mask = __ffs(ballot(blen > bytes_left || ofs > (int32_t)(dst_pos + blen)));
@@ -528,7 +521,7 @@ __device__ void snappy_process_symbols(unsnap_state_s* s, int t, Storage& temp_s
     if (shuffle(min((uint32_t)dist_t, (uint32_t)shuffle_xor(dist_t, 1))) > 8) {
       uint32_t n;
       do {
-        uint32_t bofs      = WarpReducePos32(blen_t, t);
+        uint32_t bofs      = warp_reduce_pos<cudf::detail::warp_size>(blen_t, t);
         uint32_t stop_mask = ballot((uint32_t)dist_t < bofs);
         uint32_t start_mask =
           cub::WarpReduce<uint32_t>(temp_storage).Sum((bofs < 32 && t < batch_len) ? 1 << bofs : 0);
@@ -627,9 +620,9 @@ __device__ void snappy_process_symbols(unsnap_state_s* s, int t, Storage& temp_s
  */
 template <int block_size>
 CUDF_KERNEL void __launch_bounds__(block_size)
-  unsnap_kernel(device_span<device_span<uint8_t const> const> inputs,
-                device_span<device_span<uint8_t> const> outputs,
-                device_span<compression_result> results)
+  unsnap_kernel_no_racecheck(device_span<device_span<uint8_t const> const> inputs,
+                             device_span<device_span<uint8_t> const> outputs,
+                             device_span<codec_exec_result> results)
 {
   __shared__ __align__(16) unsnap_state_s state_g;
   __shared__ cub::WarpReduce<uint32_t>::TempStorage temp_storage;
@@ -642,8 +635,8 @@ CUDF_KERNEL void __launch_bounds__(block_size)
   if (!t) {
     s->src         = inputs[strm_id];
     s->dst         = outputs[strm_id];
-    auto cur       = s->src.begin();
-    auto const end = s->src.end();
+    auto cur       = s->src.data();
+    auto const end = s->src.data() + s->src.size();
     s->error       = 0;
     if (cur < end) {
       // Read uncompressed size (varint), limited to 32-bit
@@ -700,20 +693,58 @@ CUDF_KERNEL void __launch_bounds__(block_size)
   }
   if (!t) {
     results[strm_id].bytes_written = s->uncompressed_size - s->bytes_left;
-    results[strm_id].status =
-      (s->error == 0) ? compression_status::SUCCESS : compression_status::FAILURE;
+    results[strm_id].status = (s->error == 0) ? codec_status::SUCCESS : codec_status::FAILURE;
   }
 }
 
 void gpu_unsnap(device_span<device_span<uint8_t const> const> inputs,
                 device_span<device_span<uint8_t> const> outputs,
-                device_span<compression_result> results,
+                device_span<codec_exec_result> results,
                 rmm::cuda_stream_view stream)
 {
   dim3 dim_block(128, 1);           // 4 warps per stream, 1 stream per block
   dim3 dim_grid(inputs.size(), 1);  // TODO: Check max grid dimensions vs max expected count
 
-  unsnap_kernel<128><<<dim_grid, dim_block, 0, stream.value()>>>(inputs, outputs, results);
+  unsnap_kernel_no_racecheck<128>
+    <<<dim_grid, dim_block, 0, stream.value()>>>(inputs, outputs, results);
+}
+
+__global__ void get_snappy_uncompressed_size_kernel(
+  device_span<device_span<uint8_t const> const> inputs, device_span<size_t> uncompressed_sizes)
+{
+  auto const idx = cudf::detail::grid_1d::global_thread_id();
+  if (idx >= inputs.size()) return;
+
+  auto cur       = inputs[idx].data();
+  auto const end = inputs[idx].data() + inputs[idx].size();
+
+  constexpr int payload_bits_per_byte = 7;
+  constexpr size_t payload_mask       = (1 << payload_bits_per_byte) - 1;
+  size_t uncompressed_size            = 0;
+  int shift                           = 0;
+  while (cur < end && shift + payload_bits_per_byte <= 8 * sizeof(size_t)) {
+    size_t const byte = *cur++;
+    uncompressed_size |= (byte & payload_mask) << shift;
+    if ((byte & (1 << payload_bits_per_byte)) == 0) {
+      uncompressed_sizes[idx] = uncompressed_size;
+      return;
+    }
+    shift += payload_bits_per_byte;
+  }
+  // Invalid varint
+  uncompressed_sizes[idx] = 0;
+}
+
+void get_snappy_uncompressed_size(device_span<device_span<uint8_t const> const> inputs,
+                                  device_span<size_t> uncompressed_sizes,
+                                  rmm::cuda_stream_view stream)
+{
+  int threads_per_block = 128;
+  auto const num_blocks =
+    cudf::util::div_rounding_up_safe<size_t>(inputs.size(), threads_per_block);
+
+  get_snappy_uncompressed_size_kernel<<<num_blocks, threads_per_block, 0, stream.value()>>>(
+    inputs, uncompressed_sizes);
 }
 
 }  // namespace cudf::io::detail

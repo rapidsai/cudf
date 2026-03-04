@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2021-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
@@ -239,8 +228,7 @@ struct trie {
 
     auto max_duplicate_tokens = most_common_token->second;
 
-    return trie{max_duplicate_tokens,
-                cudf::detail::make_device_uvector_sync(trie_nodes, stream, mr)};
+    return trie{max_duplicate_tokens, cudf::detail::make_device_uvector(trie_nodes, stream, mr)};
   }
 
   [[nodiscard]] trie_device_view view() const { return trie_device_view{_nodes}; }

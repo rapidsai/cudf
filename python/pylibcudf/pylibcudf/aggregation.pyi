@@ -1,4 +1,5 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 from enum import IntEnum
 
@@ -108,3 +109,4 @@ def rank(
     null_precedence: NullOrder = NullOrder.AFTER,
     percentage: RankPercentage = RankPercentage.NONE,
 ) -> Aggregation: ...
+def is_valid_aggregation(source: DataType, agg: Aggregation) -> bool: ...

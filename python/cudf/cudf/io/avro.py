@@ -1,10 +1,9 @@
-# Copyright (c) 2019-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 import pylibcudf as plc
 
-import cudf
-from cudf.core.column import ColumnBase
-from cudf.core.column_accessor import ColumnAccessor
+from cudf.core.dataframe import DataFrame
 from cudf.utils import ioutils
 
 
@@ -46,14 +45,4 @@ def read_avro(
     if columns is not None and len(columns) > 0:
         options.set_columns(columns)
 
-    plc_result = plc.io.avro.read_avro(options)
-    data = {
-        name: ColumnBase.from_pylibcudf(col)
-        for name, col in zip(
-            plc_result.column_names(include_children=False),
-            plc_result.columns,
-            strict=True,
-        )
-    }
-    ca = ColumnAccessor(data, rangeindex=len(data) == 0)
-    return cudf.DataFrame._from_data(ca)
+    return DataFrame.from_pylibcudf(plc.io.avro.read_avro(options))

@@ -1,22 +1,12 @@
 /*
- * Copyright (c) 2022-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "utilities.hpp"
 
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/algorithms/reduce.cuh>
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/copy_if.cuh>
 #include <cudf/detail/null_mask.hpp>
@@ -35,9 +25,7 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/std/functional>
-#include <thrust/distance.h>
-#include <thrust/functional.h>
-#include <thrust/reduce.h>
+#include <cuda/std/iterator>
 #include <thrust/scatter.h>
 #include <thrust/uninitialized_fill.h>
 
@@ -97,16 +85,16 @@ std::unique_ptr<column> have_overlap(lists_column_view const& lhs,
   // Stores the result of checking overlap for non-empty lists.
   auto overlap_results = rmm::device_uvector<bool>(num_rows, stream);
 
-  auto const labels_begin           = rhs_labels->view().begin<size_type>();
-  auto const end                    = thrust::reduce_by_key(rmm::exec_policy(stream),
-                                         labels_begin,  // keys
-                                         labels_begin + rhs_labels->size(),  // keys
-                                         contained.begin(),  // values to reduce
-                                         list_indices.begin(),     // out keys
-                                         overlap_results.begin(),  // out values
-                                         cuda::std::equal_to{},  // comp for keys
-                                         cuda::std::logical_or{});  // reduction op for values
-  auto const num_non_empty_segments = thrust::distance(overlap_results.begin(), end.second);
+  auto const labels_begin = rhs_labels->view().begin<size_type>();
+  auto const end          = cudf::detail::reduce_by_key(labels_begin,  // keys
+                                               labels_begin + rhs_labels->size(),
+                                               contained.begin(),     // values to reduce
+                                               list_indices.begin(),  // out keys
+                                               overlap_results.begin(),  // out values
+                                               cuda::std::logical_or{},  // reduction op for values
+                                               stream);
+
+  auto const num_non_empty_segments = cuda::std::distance(overlap_results.begin(), end.second);
 
   auto [null_mask, null_count] =
     cudf::detail::bitmask_and(table_view{{lhs.parent(), rhs.parent()}}, stream, mr);
@@ -117,8 +105,8 @@ std::unique_ptr<column> have_overlap(lists_column_view const& lhs,
   // `overlap_results` only stores the results of non-empty lists.
   // We need to initialize `false` for the entire output array then scatter these results over.
   thrust::uninitialized_fill(
-    rmm::exec_policy(stream), result_begin, result_begin + num_rows, false);
-  thrust::scatter(rmm::exec_policy(stream),
+    rmm::exec_policy_nosync(stream), result_begin, result_begin + num_rows, false);
+  thrust::scatter(rmm::exec_policy_nosync(stream),
                   overlap_results.begin(),
                   overlap_results.begin() + num_non_empty_segments,
                   list_indices.begin(),
@@ -181,9 +169,7 @@ std::unique_ptr<column> intersect_distinct(lists_column_view const& lhs,
                                   std::move(out_offsets),
                                   std::move(out_table->release().back()),
                                   null_count,
-                                  std::move(null_mask),
-                                  stream,
-                                  mr);
+                                  std::move(null_mask));
 
   if (auto const output_cv = output->view(); cudf::detail::has_nonempty_nulls(output_cv, stream)) {
     return cudf::detail::purge_nonempty_nulls(output_cv, stream, mr);
@@ -208,8 +194,12 @@ std::unique_ptr<column> union_distinct(lists_column_view const& lhs,
                                     stream,
                                     cudf::get_current_device_resource_ref());
 
-  return cudf::lists::detail::distinct(
-    lists_column_view{union_col->view()}, nulls_equal, nans_equal, stream, mr);
+  return cudf::lists::detail::distinct(lists_column_view{union_col->view()},
+                                       nulls_equal,
+                                       nans_equal,
+                                       duplicate_keep_option::KEEP_ANY,
+                                       stream,
+                                       mr);
 }
 
 std::unique_ptr<column> difference_distinct(lists_column_view const& lhs,
@@ -265,9 +255,7 @@ std::unique_ptr<column> difference_distinct(lists_column_view const& lhs,
                                   std::move(out_offsets),
                                   std::move(out_table->release().back()),
                                   null_count,
-                                  std::move(null_mask),
-                                  stream,
-                                  mr);
+                                  std::move(null_mask));
 
   if (auto const output_cv = output->view(); cudf::detail::has_nonempty_nulls(output_cv, stream)) {
     return cudf::detail::purge_nonempty_nulls(output_cv, stream, mr);

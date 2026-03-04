@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
 
@@ -53,9 +42,9 @@ void set_null_mask(bitmask_type* bitmask,
  * @brief Given a bitmask, counts the number of set (1) bits in the range
  * `[start, stop)`.
  *
- * @throws cudf::logic_error if `bitmask == nullptr`
- * @throws cudf::logic_error if `start > stop`
- * @throws cudf::logic_error if `start < 0`
+ * @throws std::invalid_argument if `bitmask == nullptr`
+ * @throws std::invalid_argument if `start > stop`
+ * @throws std::invalid_argument if `start < 0`
  *
  * @param bitmask Bitmask residing in device memory whose bits will be counted.
  * @param start Index of the first bit to count (inclusive).
@@ -73,9 +62,9 @@ cudf::size_type count_set_bits(bitmask_type const* bitmask,
  * @brief Given a bitmask, counts the number of unset (0) bits in the range
  * `[start, stop)`.
  *
- * @throws cudf::logic_error if `bitmask == nullptr`
- * @throws cudf::logic_error if `start > stop`
- * @throws cudf::logic_error if `start < 0`
+ * @throws std::invalid_argument if `bitmask == nullptr`
+ * @throws std::invalid_argument if `start > stop`
+ * @throws std::invalid_argument if `start < 0`
  *
  * @param bitmask Bitmask residing in device memory whose bits will be counted.
  * @param start Index of the first bit to count (inclusive).
@@ -132,8 +121,8 @@ std::vector<size_type> segmented_count_unset_bits(bitmask_type const* bitmask,
  * If `bitmask == nullptr`, all elements are assumed to be valid and the
  * function returns `stop-start`.
  *
- * @throws cudf::logic_error if `start > stop`
- * @throws cudf::logic_error if `start < 0`
+ * @throws std::invalid_argument if `start > stop`
+ * @throws std::invalid_argument if `start < 0`
  *
  * @param[in] bitmask Validity bitmask residing in device memory.
  * @param[in] start Index of the first bit to count (inclusive).
@@ -242,6 +231,15 @@ std::pair<rmm::device_buffer, size_type> bitmask_and(host_span<bitmask_type cons
 std::pair<rmm::device_buffer, size_type> bitmask_and(table_view const& view,
                                                      rmm::cuda_stream_view stream,
                                                      rmm::device_async_resource_ref mr);
+
+/**
+ * @copydoc cudf::segmented_bitmask_and
+ */
+std::pair<std::vector<std::unique_ptr<rmm::device_buffer>>, std::vector<size_type>>
+segmented_bitmask_and(host_span<column_view const> colviews,
+                      host_span<size_type const> segment_offsets,
+                      rmm::cuda_stream_view stream,
+                      rmm::device_async_resource_ref mr);
 
 /**
  * @copydoc cudf::bitmask_or

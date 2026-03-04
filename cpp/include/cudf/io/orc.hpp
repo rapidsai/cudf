@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2020-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
@@ -41,6 +30,28 @@ namespace io {
 constexpr size_t default_stripe_size_bytes   = 64 * 1024 * 1024;  ///< 64MB default orc stripe size
 constexpr size_type default_stripe_size_rows = 1000000;  ///< 1M rows default orc stripe rows
 constexpr size_type default_row_index_stride = 10000;    ///< 10K rows default orc row index stride
+
+/**
+ * @brief Check if the compression type is supported for reading ORC files.
+ *
+ * @note This is a runtime check. Some compression types may not be supported because of the current
+ * system configuration.
+ *
+ * @param compression Compression type
+ * @return Boolean indicating if the compression type is supported
+ */
+[[nodiscard]] bool is_supported_read_orc(compression_type compression);
+
+/**
+ * @brief Check if the compression type is supported for writing ORC files.
+ *
+ * @note This is a runtime check. Some compression types may not be supported because of the current
+ * system configuration.
+ *
+ * @param compression Compression type
+ * @return Boolean indicating if the compression type is supported
+ */
+[[nodiscard]] bool is_supported_write_orc(compression_type compression);
 
 /**
  * @brief Builds settings to use for `read_orc()`.
@@ -73,6 +84,9 @@ class orc_reader_options {
 
   // Columns that should be read as Decimal128
   std::vector<std::string> _decimal128_columns;
+
+  // Ignore writer timezone in the stripe footer, read as UTC timezone
+  bool _ignore_timezone_in_stripe_footer = false;
 
   friend orc_reader_options_builder;
 
@@ -166,7 +180,24 @@ class orc_reader_options {
     return _decimal128_columns;
   }
 
+  /**
+   * @brief Returns whether to ignore writer timezone in the stripe footer.
+   *
+   * @return `true` if the writer timezone in the stripe footer is ignored.
+   */
+  [[nodiscard]] bool get_ignore_timezone_in_stripe_footer() const
+  {
+    return _ignore_timezone_in_stripe_footer;
+  }
+
   // Setters
+
+  /**
+   * @brief Sets source info.
+   *
+   * @param src The source info.
+   */
+  void set_source(source_info src) { _source = std::move(src); }
 
   /**
    * @brief Sets names of the column to read.
@@ -369,6 +400,18 @@ class orc_reader_options_builder {
   orc_reader_options_builder& decimal128_columns(std::vector<std::string> val)
   {
     options._decimal128_columns = std::move(val);
+    return *this;
+  }
+
+  /**
+   * @brief Set whether to ignore writer timezone in the stripe footer.
+   *
+   * @param ignore Boolean value to enable/disable ignoring writer timezone
+   * @return this for chaining
+   */
+  orc_reader_options_builder& ignore_timezone_in_stripe_footer(bool ignore)
+  {
+    options._ignore_timezone_in_stripe_footer = ignore;
     return *this;
   }
 

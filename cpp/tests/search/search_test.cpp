@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf_test/base_fixture.hpp>
@@ -20,10 +9,15 @@
 #include <cudf_test/testing_main.hpp>
 #include <cudf_test/type_lists.hpp>
 
+#include <cudf/detail/search.hpp>
 #include <cudf/search.hpp>
 
+#include <rmm/device_buffer.hpp>
+
+#include <thrust/host_vector.h>
 #include <thrust/iterator/transform_iterator.h>
 
+#include <limits>
 #include <numeric>
 
 struct SearchTest : public cudf::test::BaseFixture {};
@@ -1817,6 +1811,24 @@ TEST_F(SearchTest, multi_contains_empty_input_set_string)
   auto result = cudf::contains(haystack, needles);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expect);
+}
+
+TEST_F(SearchTest, multi_contains_primitive_nan_unequal)
+{
+  auto nan_val = std::numeric_limits<float>::quiet_NaN();
+
+  fixed_width_column_wrapper<float> haystack{1.0f, nan_val, 3.0f};
+  fixed_width_column_wrapper<float> needles{nan_val};
+
+  auto result = cudf::detail::contains(cudf::table_view{{haystack}},
+                                       cudf::table_view{{needles}},
+                                       cudf::null_equality::EQUAL,
+                                       cudf::nan_equality::UNEQUAL,
+                                       cudf::get_default_stream(),
+                                       cudf::get_current_device_resource_ref());
+
+  // With nan_equality::UNEQUAL, NaN should not match NaN
+  EXPECT_FALSE(result.front_element(cudf::get_default_stream()));
 }
 
 template <typename T>

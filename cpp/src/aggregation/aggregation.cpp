@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf/aggregation.hpp>
@@ -25,408 +14,6 @@ namespace cudf {
 
 namespace detail {
 
-// simple_aggregations_collector ----------------------------------------
-
-std::vector<std::unique_ptr<aggregation>> simple_aggregations_collector::visit(
-  data_type col_type, aggregation const& agg)
-{
-  std::vector<std::unique_ptr<aggregation>> aggs;
-  aggs.push_back(agg.clone());
-  return aggs;
-}
-
-std::vector<std::unique_ptr<aggregation>> simple_aggregations_collector::visit(
-  data_type col_type, sum_aggregation const& agg)
-{
-  return visit(col_type, static_cast<aggregation const&>(agg));
-}
-
-std::vector<std::unique_ptr<aggregation>> simple_aggregations_collector::visit(
-  data_type col_type, product_aggregation const& agg)
-{
-  return visit(col_type, static_cast<aggregation const&>(agg));
-}
-
-std::vector<std::unique_ptr<aggregation>> simple_aggregations_collector::visit(
-  data_type col_type, min_aggregation const& agg)
-{
-  return visit(col_type, static_cast<aggregation const&>(agg));
-}
-
-std::vector<std::unique_ptr<aggregation>> simple_aggregations_collector::visit(
-  data_type col_type, max_aggregation const& agg)
-{
-  return visit(col_type, static_cast<aggregation const&>(agg));
-}
-
-std::vector<std::unique_ptr<aggregation>> simple_aggregations_collector::visit(
-  data_type col_type, count_aggregation const& agg)
-{
-  return visit(col_type, static_cast<aggregation const&>(agg));
-}
-
-std::vector<std::unique_ptr<aggregation>> simple_aggregations_collector::visit(
-  data_type col_type, histogram_aggregation const& agg)
-{
-  return visit(col_type, static_cast<aggregation const&>(agg));
-}
-
-std::vector<std::unique_ptr<aggregation>> simple_aggregations_collector::visit(
-  data_type col_type, any_aggregation const& agg)
-{
-  return visit(col_type, static_cast<aggregation const&>(agg));
-}
-
-std::vector<std::unique_ptr<aggregation>> simple_aggregations_collector::visit(
-  data_type col_type, all_aggregation const& agg)
-{
-  return visit(col_type, static_cast<aggregation const&>(agg));
-}
-
-std::vector<std::unique_ptr<aggregation>> simple_aggregations_collector::visit(
-  data_type col_type, sum_of_squares_aggregation const& agg)
-{
-  return visit(col_type, static_cast<aggregation const&>(agg));
-}
-
-std::vector<std::unique_ptr<aggregation>> simple_aggregations_collector::visit(
-  data_type col_type, mean_aggregation const& agg)
-{
-  return visit(col_type, static_cast<aggregation const&>(agg));
-}
-
-std::vector<std::unique_ptr<aggregation>> simple_aggregations_collector::visit(
-  data_type col_type, m2_aggregation const& agg)
-{
-  return visit(col_type, static_cast<aggregation const&>(agg));
-}
-
-std::vector<std::unique_ptr<aggregation>> simple_aggregations_collector::visit(
-  data_type col_type, var_aggregation const& agg)
-{
-  return visit(col_type, static_cast<aggregation const&>(agg));
-}
-
-std::vector<std::unique_ptr<aggregation>> simple_aggregations_collector::visit(
-  data_type col_type, std_aggregation const& agg)
-{
-  return visit(col_type, static_cast<aggregation const&>(agg));
-}
-
-std::vector<std::unique_ptr<aggregation>> simple_aggregations_collector::visit(
-  data_type col_type, median_aggregation const& agg)
-{
-  return visit(col_type, static_cast<aggregation const&>(agg));
-}
-
-std::vector<std::unique_ptr<aggregation>> simple_aggregations_collector::visit(
-  data_type col_type, quantile_aggregation const& agg)
-{
-  return visit(col_type, static_cast<aggregation const&>(agg));
-}
-
-std::vector<std::unique_ptr<aggregation>> simple_aggregations_collector::visit(
-  data_type col_type, argmax_aggregation const& agg)
-{
-  return visit(col_type, static_cast<aggregation const&>(agg));
-}
-
-std::vector<std::unique_ptr<aggregation>> simple_aggregations_collector::visit(
-  data_type col_type, argmin_aggregation const& agg)
-{
-  return visit(col_type, static_cast<aggregation const&>(agg));
-}
-
-std::vector<std::unique_ptr<aggregation>> simple_aggregations_collector::visit(
-  data_type col_type, nunique_aggregation const& agg)
-{
-  return visit(col_type, static_cast<aggregation const&>(agg));
-}
-
-std::vector<std::unique_ptr<aggregation>> simple_aggregations_collector::visit(
-  data_type col_type, nth_element_aggregation const& agg)
-{
-  return visit(col_type, static_cast<aggregation const&>(agg));
-}
-
-std::vector<std::unique_ptr<aggregation>> simple_aggregations_collector::visit(
-  data_type col_type, row_number_aggregation const& agg)
-{
-  return visit(col_type, static_cast<aggregation const&>(agg));
-}
-
-std::vector<std::unique_ptr<aggregation>> simple_aggregations_collector::visit(
-  data_type col_type, ewma_aggregation const& agg)
-{
-  return visit(col_type, static_cast<aggregation const&>(agg));
-}
-
-std::vector<std::unique_ptr<aggregation>> simple_aggregations_collector::visit(
-  data_type col_type, rank_aggregation const& agg)
-{
-  return visit(col_type, static_cast<aggregation const&>(agg));
-}
-
-std::vector<std::unique_ptr<aggregation>> simple_aggregations_collector::visit(
-  data_type col_type, collect_list_aggregation const& agg)
-{
-  return visit(col_type, static_cast<aggregation const&>(agg));
-}
-
-std::vector<std::unique_ptr<aggregation>> simple_aggregations_collector::visit(
-  data_type col_type, collect_set_aggregation const& agg)
-{
-  return visit(col_type, static_cast<aggregation const&>(agg));
-}
-
-std::vector<std::unique_ptr<aggregation>> simple_aggregations_collector::visit(
-  data_type col_type, lead_lag_aggregation const& agg)
-{
-  return visit(col_type, static_cast<aggregation const&>(agg));
-}
-
-std::vector<std::unique_ptr<aggregation>> simple_aggregations_collector::visit(
-  data_type col_type, udf_aggregation const& agg)
-{
-  return visit(col_type, static_cast<aggregation const&>(agg));
-}
-
-std::vector<std::unique_ptr<aggregation>> simple_aggregations_collector::visit(
-  data_type col_type, merge_lists_aggregation const& agg)
-{
-  return visit(col_type, static_cast<aggregation const&>(agg));
-}
-
-std::vector<std::unique_ptr<aggregation>> simple_aggregations_collector::visit(
-  data_type col_type, merge_sets_aggregation const& agg)
-{
-  return visit(col_type, static_cast<aggregation const&>(agg));
-}
-
-std::vector<std::unique_ptr<aggregation>> simple_aggregations_collector::visit(
-  data_type col_type, merge_m2_aggregation const& agg)
-{
-  return visit(col_type, static_cast<aggregation const&>(agg));
-}
-
-std::vector<std::unique_ptr<aggregation>> simple_aggregations_collector::visit(
-  data_type col_type, merge_histogram_aggregation const& agg)
-{
-  return visit(col_type, static_cast<aggregation const&>(agg));
-}
-
-std::vector<std::unique_ptr<aggregation>> simple_aggregations_collector::visit(
-  data_type col_type, covariance_aggregation const& agg)
-{
-  return visit(col_type, static_cast<aggregation const&>(agg));
-}
-std::vector<std::unique_ptr<aggregation>> simple_aggregations_collector::visit(
-  data_type col_type, correlation_aggregation const& agg)
-{
-  return visit(col_type, static_cast<aggregation const&>(agg));
-}
-std::vector<std::unique_ptr<aggregation>> simple_aggregations_collector::visit(
-  data_type col_type, tdigest_aggregation const& agg)
-{
-  return visit(col_type, static_cast<aggregation const&>(agg));
-}
-
-std::vector<std::unique_ptr<aggregation>> simple_aggregations_collector::visit(
-  data_type col_type, merge_tdigest_aggregation const& agg)
-{
-  return visit(col_type, static_cast<aggregation const&>(agg));
-}
-
-std::vector<std::unique_ptr<aggregation>> simple_aggregations_collector::visit(
-  data_type col_type, host_udf_aggregation const& agg)
-{
-  return visit(col_type, static_cast<aggregation const&>(agg));
-}
-
-// aggregation_finalizer ----------------------------------------
-
-void aggregation_finalizer::visit(aggregation const& agg) {}
-
-void aggregation_finalizer::visit(sum_aggregation const& agg)
-{
-  visit(static_cast<aggregation const&>(agg));
-}
-
-void aggregation_finalizer::visit(product_aggregation const& agg)
-{
-  visit(static_cast<aggregation const&>(agg));
-}
-
-void aggregation_finalizer::visit(min_aggregation const& agg)
-{
-  visit(static_cast<aggregation const&>(agg));
-}
-
-void aggregation_finalizer::visit(max_aggregation const& agg)
-{
-  visit(static_cast<aggregation const&>(agg));
-}
-
-void aggregation_finalizer::visit(count_aggregation const& agg)
-{
-  visit(static_cast<aggregation const&>(agg));
-}
-void aggregation_finalizer::visit(histogram_aggregation const& agg)
-{
-  visit(static_cast<aggregation const&>(agg));
-}
-
-void aggregation_finalizer::visit(any_aggregation const& agg)
-{
-  visit(static_cast<aggregation const&>(agg));
-}
-
-void aggregation_finalizer::visit(all_aggregation const& agg)
-{
-  visit(static_cast<aggregation const&>(agg));
-}
-
-void aggregation_finalizer::visit(sum_of_squares_aggregation const& agg)
-{
-  visit(static_cast<aggregation const&>(agg));
-}
-
-void aggregation_finalizer::visit(mean_aggregation const& agg)
-{
-  visit(static_cast<aggregation const&>(agg));
-}
-
-void aggregation_finalizer::visit(m2_aggregation const& agg)
-{
-  visit(static_cast<aggregation const&>(agg));
-}
-
-void aggregation_finalizer::visit(var_aggregation const& agg)
-{
-  visit(static_cast<aggregation const&>(agg));
-}
-
-void aggregation_finalizer::visit(std_aggregation const& agg)
-{
-  visit(static_cast<aggregation const&>(agg));
-}
-
-void aggregation_finalizer::visit(median_aggregation const& agg)
-{
-  visit(static_cast<aggregation const&>(agg));
-}
-
-void aggregation_finalizer::visit(quantile_aggregation const& agg)
-{
-  visit(static_cast<aggregation const&>(agg));
-}
-
-void aggregation_finalizer::visit(argmax_aggregation const& agg)
-{
-  visit(static_cast<aggregation const&>(agg));
-}
-
-void aggregation_finalizer::visit(argmin_aggregation const& agg)
-{
-  visit(static_cast<aggregation const&>(agg));
-}
-
-void aggregation_finalizer::visit(nunique_aggregation const& agg)
-{
-  visit(static_cast<aggregation const&>(agg));
-}
-
-void aggregation_finalizer::visit(nth_element_aggregation const& agg)
-{
-  visit(static_cast<aggregation const&>(agg));
-}
-
-void aggregation_finalizer::visit(row_number_aggregation const& agg)
-{
-  visit(static_cast<aggregation const&>(agg));
-}
-
-void aggregation_finalizer::visit(ewma_aggregation const& agg)
-{
-  visit(static_cast<aggregation const&>(agg));
-}
-
-void aggregation_finalizer::visit(rank_aggregation const& agg)
-{
-  visit(static_cast<aggregation const&>(agg));
-}
-
-void aggregation_finalizer::visit(collect_list_aggregation const& agg)
-{
-  visit(static_cast<aggregation const&>(agg));
-}
-
-void aggregation_finalizer::visit(collect_set_aggregation const& agg)
-{
-  visit(static_cast<aggregation const&>(agg));
-}
-
-void aggregation_finalizer::visit(lead_lag_aggregation const& agg)
-{
-  visit(static_cast<aggregation const&>(agg));
-}
-
-void aggregation_finalizer::visit(udf_aggregation const& agg)
-{
-  visit(static_cast<aggregation const&>(agg));
-}
-
-void aggregation_finalizer::visit(merge_lists_aggregation const& agg)
-{
-  visit(static_cast<aggregation const&>(agg));
-}
-
-void aggregation_finalizer::visit(merge_sets_aggregation const& agg)
-{
-  visit(static_cast<aggregation const&>(agg));
-}
-
-void aggregation_finalizer::visit(merge_m2_aggregation const& agg)
-{
-  visit(static_cast<aggregation const&>(agg));
-}
-
-void aggregation_finalizer::visit(merge_histogram_aggregation const& agg)
-{
-  visit(static_cast<aggregation const&>(agg));
-}
-
-void aggregation_finalizer::visit(covariance_aggregation const& agg)
-{
-  visit(static_cast<aggregation const&>(agg));
-}
-
-void aggregation_finalizer::visit(correlation_aggregation const& agg)
-{
-  visit(static_cast<aggregation const&>(agg));
-}
-
-void aggregation_finalizer::visit(tdigest_aggregation const& agg)
-{
-  visit(static_cast<aggregation const&>(agg));
-}
-
-void aggregation_finalizer::visit(merge_tdigest_aggregation const& agg)
-{
-  visit(static_cast<aggregation const&>(agg));
-}
-
-void aggregation_finalizer::visit(host_udf_aggregation const& agg)
-{
-  visit(static_cast<aggregation const&>(agg));
-}
-
-}  // namespace detail
-
-std::vector<std::unique_ptr<aggregation>> aggregation::get_simple_aggregations(
-  data_type col_type, cudf::detail::simple_aggregations_collector& collector) const
-{
-  return collector.visit(col_type, *this);
 }
 
 /// Factory to create a SUM aggregation
@@ -446,6 +33,22 @@ template CUDF_EXPORT std::unique_ptr<reduce_aggregation> make_sum_aggregation<re
 template CUDF_EXPORT std::unique_ptr<scan_aggregation> make_sum_aggregation<scan_aggregation>();
 template CUDF_EXPORT std::unique_ptr<segmented_reduce_aggregation>
 make_sum_aggregation<segmented_reduce_aggregation>();
+
+/// Factory to create a SUM_WITH_OVERFLOW aggregation
+template <typename Base>
+std::unique_ptr<Base> make_sum_with_overflow_aggregation()
+{
+  return std::make_unique<detail::sum_with_overflow_aggregation>();
+}
+template CUDF_EXPORT std::unique_ptr<aggregation> make_sum_with_overflow_aggregation<aggregation>();
+template CUDF_EXPORT std::unique_ptr<groupby_aggregation>
+make_sum_with_overflow_aggregation<groupby_aggregation>();
+template CUDF_EXPORT std::unique_ptr<groupby_scan_aggregation>
+make_sum_with_overflow_aggregation<groupby_scan_aggregation>();
+template CUDF_EXPORT std::unique_ptr<reduce_aggregation>
+make_sum_with_overflow_aggregation<reduce_aggregation>();
+template CUDF_EXPORT std::unique_ptr<segmented_reduce_aggregation>
+make_sum_with_overflow_aggregation<segmented_reduce_aggregation>();
 
 /// Factory to create a PRODUCT aggregation
 template <typename Base>
@@ -516,6 +119,8 @@ template CUDF_EXPORT std::unique_ptr<groupby_aggregation>
 make_count_aggregation<groupby_aggregation>(null_policy null_handling);
 template CUDF_EXPORT std::unique_ptr<groupby_scan_aggregation>
 make_count_aggregation<groupby_scan_aggregation>(null_policy null_handling);
+template CUDF_EXPORT std::unique_ptr<reduce_aggregation> make_count_aggregation<reduce_aggregation>(
+  null_policy null_handling);
 
 /// Factory to create a HISTOGRAM aggregation
 template <typename Base>
@@ -663,6 +268,8 @@ template CUDF_EXPORT std::unique_ptr<rolling_aggregation>
 make_argmax_aggregation<rolling_aggregation>();
 template CUDF_EXPORT std::unique_ptr<groupby_aggregation>
 make_argmax_aggregation<groupby_aggregation>();
+template CUDF_EXPORT std::unique_ptr<reduce_aggregation>
+make_argmax_aggregation<reduce_aggregation>();
 
 /// Factory to create an ARGMIN aggregation
 template <typename Base>
@@ -675,6 +282,8 @@ template CUDF_EXPORT std::unique_ptr<rolling_aggregation>
 make_argmin_aggregation<rolling_aggregation>();
 template CUDF_EXPORT std::unique_ptr<groupby_aggregation>
 make_argmin_aggregation<groupby_aggregation>();
+template CUDF_EXPORT std::unique_ptr<reduce_aggregation>
+make_argmin_aggregation<reduce_aggregation>();
 
 /// Factory to create an NUNIQUE aggregation
 template <typename Base>
@@ -819,20 +428,20 @@ make_lead_aggregation<rolling_aggregation>(size_type offset);
 
 /// Factory to create a UDF aggregation
 template <typename Base>
-std::unique_ptr<Base> make_udf_aggregation(udf_type type,
+std::unique_ptr<Base> make_udf_aggregation(udf_source_type type,
                                            std::string const& user_defined_aggregator,
                                            data_type output_type)
 {
   auto* a =
-    new detail::udf_aggregation{type == udf_type::PTX ? aggregation::PTX : aggregation::CUDA,
+    new detail::udf_aggregation{type == udf_source_type::PTX ? aggregation::PTX : aggregation::CUDA,
                                 user_defined_aggregator,
                                 output_type};
   return std::unique_ptr<detail::udf_aggregation>(a);
 }
 template CUDF_EXPORT std::unique_ptr<aggregation> make_udf_aggregation<aggregation>(
-  udf_type type, std::string const& user_defined_aggregator, data_type output_type);
+  udf_source_type type, std::string const& user_defined_aggregator, data_type output_type);
 template CUDF_EXPORT std::unique_ptr<rolling_aggregation> make_udf_aggregation<rolling_aggregation>(
-  udf_type type, std::string const& user_defined_aggregator, data_type output_type);
+  udf_source_type type, std::string const& user_defined_aggregator, data_type output_type);
 
 /// Factory to create a MERGE_LISTS aggregation
 template <typename Base>
@@ -928,6 +537,28 @@ make_merge_tdigest_aggregation<groupby_aggregation>(int max_centroids);
 template CUDF_EXPORT std::unique_ptr<reduce_aggregation>
 make_merge_tdigest_aggregation<reduce_aggregation>(int max_centroids);
 
+template <typename Base>
+std::unique_ptr<Base> make_bitwise_aggregation(bitwise_op bit_op)
+{
+  return std::make_unique<detail::bitwise_aggregation>(bit_op);
+}
+template CUDF_EXPORT std::unique_ptr<aggregation> make_bitwise_aggregation<aggregation>(
+  bitwise_op bit_op);
+template CUDF_EXPORT std::unique_ptr<groupby_aggregation>
+make_bitwise_aggregation<groupby_aggregation>(bitwise_op bit_op);
+template CUDF_EXPORT std::unique_ptr<reduce_aggregation>
+make_bitwise_aggregation<reduce_aggregation>(bitwise_op bit_op);
+
+template <typename Base>
+std::unique_ptr<Base> make_top_k_aggregation(size_type k, order topk_order)
+{
+  return std::make_unique<detail::top_k_aggregation>(k, topk_order);
+}
+template CUDF_EXPORT std::unique_ptr<aggregation> make_top_k_aggregation<aggregation>(
+  size_type k, order topk_order);
+template CUDF_EXPORT std::unique_ptr<groupby_aggregation>
+make_top_k_aggregation<groupby_aggregation>(size_type k, order topk_order);
+
 namespace detail {
 namespace {
 struct target_type_functor {
@@ -962,4 +593,8 @@ bool is_valid_aggregation(data_type source, aggregation::Kind k)
   return dispatch_type_and_aggregation(source, k, is_valid_aggregation_impl{});
 }
 }  // namespace detail
+bool is_valid_aggregation(data_type source, aggregation::Kind k)
+{
+  return detail::is_valid_aggregation(source, k);
+}
 }  // namespace cudf

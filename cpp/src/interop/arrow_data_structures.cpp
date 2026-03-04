@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf/column/column.hpp>
@@ -271,6 +260,17 @@ arrow_column::arrow_column(ArrowSchema&& schema,
   ArrowDeviceArray arr{.array = {}, .device_id = -1, .device_type = ARROW_DEVICE_CPU};
   ArrowArrayMove(&input, &arr.array);
   auto tmp     = arrow_column(std::move(schema), std::move(arr), stream, mr);
+  container    = tmp.container;
+  view_columns = std::move(tmp.view_columns);
+  cached_view  = tmp.cached_view;
+}
+
+arrow_column::arrow_column(ArrowArrayStream&& input,
+                           rmm::cuda_stream_view stream,
+                           rmm::device_async_resource_ref mr)
+{
+  auto col     = from_arrow_stream_column(&input, stream, mr);
+  auto tmp     = arrow_column(std::move(*col), get_column_metadata(col->view()), stream, mr);
   container    = tmp.container;
   view_columns = std::move(tmp.view_columns);
   cached_view  = tmp.cached_view;

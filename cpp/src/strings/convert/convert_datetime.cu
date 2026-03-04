@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf/column/column_device_view.cuh>
@@ -37,11 +26,10 @@
 #include <rmm/device_uvector.hpp>
 
 #include <cuda/std/optional>
+#include <cuda/std/utility>
 #include <thrust/execution_policy.h>
-#include <thrust/functional.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/logical.h>
-#include <thrust/pair.h>
 #include <thrust/transform.h>
 
 #include <map>
@@ -135,7 +123,7 @@ struct format_compiler {
         items.push_back(format_item::new_literal(ch));
         continue;
       }
-      CUDF_EXPECTS(length > 0, "Unfinished specifier in timestamp format");
+      CUDF_EXPECTS(length > 0, "Unfinished specifier in timestamp format", std::invalid_argument);
 
       ch = *str++;
       length--;
@@ -145,7 +133,9 @@ struct format_compiler {
         continue;
       }
       if (ch >= '0' && ch <= '9') {
-        CUDF_EXPECTS(*str == 'f', "precision not supported for specifier: " + std::string(1, *str));
+        CUDF_EXPECTS(*str == 'f',
+                     "precision not supported for specifier: " + std::string(1, *str),
+                     std::invalid_argument);
         specifiers[*str] = static_cast<int8_t>(ch - '0');
         ch               = *str++;
         length--;
@@ -153,7 +143,8 @@ struct format_compiler {
 
       // check if the specifier found is supported
       CUDF_EXPECTS(specifiers.find(ch) != specifiers.end(),
-                   "invalid format specifier: " + std::string(1, ch));
+                   "invalid format specifier: " + std::string(1, ch),
+                   std::invalid_argument);
 
       // create the format item for this specifier
       items.push_back(format_item::new_specifier(ch, specifiers[ch]));
@@ -177,7 +168,7 @@ struct format_compiler {
  * @param bytes Number of bytes in str to read.
  * @return Integer value of valid characters read and how many bytes were not read.
  */
-__device__ thrust::pair<int32_t, size_type> parse_int(char const* str, size_type bytes)
+__device__ cuda::std::pair<int32_t, size_type> parse_int(char const* str, size_type bytes)
 {
   int32_t value = 0;
   while (bytes-- > 0) {
@@ -185,7 +176,7 @@ __device__ thrust::pair<int32_t, size_type> parse_int(char const* str, size_type
     if (chr < '0' || chr > '9') break;
     value = (value * 10) + static_cast<int32_t>(chr - '0');
   }
-  return thrust::make_pair(value, bytes + 1);
+  return cuda::std::make_pair(value, bytes + 1);
 }
 
 /**
@@ -406,27 +397,29 @@ struct parse_datetime {
  * @brief Type-dispatch operator to convert timestamp strings to native fixed-width-type
  */
 struct dispatch_to_timestamps_fn {
-  template <typename T, std::enable_if_t<cudf::is_timestamp<T>()>* = nullptr>
+  template <typename T>
   void operator()(column_device_view const& d_strings,
                   std::string_view format,
                   mutable_column_view& results_view,
                   rmm::cuda_stream_view stream) const
+    requires(cudf::is_timestamp<T>())
   {
     format_compiler compiler(format, stream);
     parse_datetime<T> pfn{d_strings, compiler.format_items(), compiler.subsecond_precision()};
-    thrust::transform(rmm::exec_policy(stream),
+    thrust::transform(rmm::exec_policy_nosync(stream),
                       thrust::make_counting_iterator<size_type>(0),
                       thrust::make_counting_iterator<size_type>(results_view.size()),
                       results_view.data<T>(),
                       pfn);
   }
-  template <typename T, std::enable_if_t<not cudf::is_timestamp<T>()>* = nullptr>
+  template <typename T>
   void operator()(column_device_view const&,
                   std::string_view,
                   mutable_column_view&,
                   rmm::cuda_stream_view) const
+    requires(not cudf::is_timestamp<T>())
   {
-    CUDF_FAIL("Only timestamps type are expected");
+    CUDF_FAIL("Only timestamps type are expected", std::invalid_argument);
   }
 };
 
@@ -439,10 +432,9 @@ std::unique_ptr<cudf::column> to_timestamps(strings_column_view const& input,
                                             rmm::cuda_stream_view stream,
                                             rmm::device_async_resource_ref mr)
 {
-  if (input.is_empty())
-    return make_empty_column(timestamp_type);  // make_timestamp_column(timestamp_type, 0);
+  if (input.is_empty()) { return make_empty_column(timestamp_type); }
 
-  CUDF_EXPECTS(!format.empty(), "Format parameter must not be empty.");
+  CUDF_EXPECTS(!format.empty(), "Format parameter must not be empty.", std::invalid_argument);
 
   auto d_strings = column_device_view::create(input.parent(), stream);
 
@@ -494,12 +486,12 @@ struct check_datetime_format {
    * @param max_value Inclusive maximum value
    * @return If value is valid and number of bytes not successfully processed
    */
-  __device__ thrust::pair<bool, size_type> check_value(char const* str,
-                                                       size_type const bytes,
-                                                       int const min_value,
-                                                       int const max_value)
+  __device__ cuda::std::pair<bool, size_type> check_value(char const* str,
+                                                          size_type const bytes,
+                                                          int const min_value,
+                                                          int const max_value)
   {
-    if (*str < '0' || *str > '9') { return thrust::make_pair(false, bytes); }
+    if (*str < '0' || *str > '9') { return cuda::std::make_pair(false, bytes); }
     int32_t value   = 0;
     size_type count = bytes;
     while (count-- > 0) {
@@ -507,8 +499,8 @@ struct check_datetime_format {
       if (chr < '0' || chr > '9') break;
       value = (value * 10) + static_cast<int32_t>(chr - '0');
     }
-    return (value >= min_value && value <= max_value) ? thrust::make_pair(true, count + 1)
-                                                      : thrust::make_pair(false, bytes);
+    return (value >= min_value && value <= max_value) ? cuda::std::make_pair(true, count + 1)
+                                                      : cuda::std::make_pair(false, bytes);
   }
 
   /**
@@ -545,7 +537,7 @@ struct check_datetime_format {
       switch (item.value) {
         case 'Y': {
           auto const [year, left] = parse_int(ptr, item.length);
-          result                  = (left < item.length);
+          result                  = (left < item.length) && (year <= 9999);
           dateparts.year          = static_cast<int16_t>(year);
           bytes_read -= left;
           break;
@@ -680,7 +672,7 @@ std::unique_ptr<cudf::column> is_timestamp(strings_column_view const& input,
   size_type strings_count = input.size();
   if (strings_count == 0) return make_empty_column(type_id::BOOL8);
 
-  CUDF_EXPECTS(!format.empty(), "Format parameter must not be empty.");
+  CUDF_EXPECTS(!format.empty(), "Format parameter must not be empty.", std::invalid_argument);
 
   auto d_strings = column_device_view::create(input.parent(), stream);
 
@@ -693,7 +685,7 @@ std::unique_ptr<cudf::column> is_timestamp(strings_column_view const& input,
   auto d_results = results->mutable_view().data<bool>();
 
   format_compiler compiler(format, stream);
-  thrust::transform(rmm::exec_policy(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream),
                     thrust::make_counting_iterator<size_type>(0),
                     thrust::make_counting_iterator<size_type>(strings_count),
                     d_results,
@@ -895,7 +887,7 @@ struct datetime_formatter_fn {
   }
 
   // from https://howardhinnant.github.io/date/date.html
-  __device__ thrust::pair<int32_t, int32_t> get_iso_week_year(
+  __device__ cuda::std::pair<int32_t, int32_t> get_iso_week_year(
     cuda::std::chrono::year_month_day const& ymd) const
   {
     auto const days = cuda::std::chrono::sys_days(ymd);
@@ -918,7 +910,7 @@ struct datetime_formatter_fn {
         start = next_start;
       }
     }
-    return thrust::make_pair(
+    return cuda::std::make_pair(
       (cuda::std::chrono::duration_cast<cuda::std::chrono::weeks>(days - start) +
        cuda::std::chrono::weeks{1})  // always [1-53]
         .count(),
@@ -1041,7 +1033,7 @@ struct datetime_formatter_fn {
           copy_value = day_of_week == 0 && item.value == 'u' ? 7 : day_of_week;
           break;
         }
-        // clang-format off
+          // clang-format off
         case 'U': {  // week of year: first week includes the first Sunday of the year
           copy_value = get_week_of_year(days, cuda::std::chrono::sys_days{
             cuda::std::chrono::Sunday[1]/cuda::std::chrono::January/ymd.year()});
@@ -1102,12 +1094,13 @@ struct datetime_formatter_fn {
 //
 using strings_children = std::pair<std::unique_ptr<cudf::column>, rmm::device_uvector<char>>;
 struct dispatch_from_timestamps_fn {
-  template <typename T, std::enable_if_t<cudf::is_timestamp<T>()>* = nullptr>
+  template <typename T>
   strings_children operator()(column_device_view const& d_timestamps,
                               column_device_view const& d_format_names,
                               device_span<format_item const> d_format_items,
                               rmm::cuda_stream_view stream,
                               rmm::device_async_resource_ref mr) const
+    requires(cudf::is_timestamp<T>())
   {
     return make_strings_children(
       datetime_formatter_fn<T>{d_timestamps, d_format_names, d_format_items},
@@ -1117,9 +1110,10 @@ struct dispatch_from_timestamps_fn {
   }
 
   template <typename T, typename... Args>
-  std::enable_if_t<not cudf::is_timestamp<T>(), strings_children> operator()(Args&&...) const
+  strings_children operator()(Args&&...) const
+    requires(not cudf::is_timestamp<T>())
   {
-    CUDF_FAIL("Only timestamps type are expected");
+    CUDF_FAIL("Only timestamps type are expected", std::invalid_argument);
   }
 };
 
@@ -1134,9 +1128,10 @@ std::unique_ptr<column> from_timestamps(column_view const& timestamps,
 {
   if (timestamps.is_empty()) return make_empty_column(type_id::STRING);
 
-  CUDF_EXPECTS(!format.empty(), "Format parameter must not be empty.");
+  CUDF_EXPECTS(!format.empty(), "Format parameter must not be empty.", std::invalid_argument);
   CUDF_EXPECTS(names.is_empty() || names.size() == format_names_size,
-               "Invalid size for format names.");
+               "Invalid size for format names.",
+               std::invalid_argument);
 
   auto const d_names = column_device_view::create(names.parent(), stream);
 

@@ -1,4 +1,5 @@
-# Copyright (c) 2019-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
 import datetime
@@ -12,12 +13,10 @@ from io import BufferedWriter, BytesIO, IOBase, TextIOWrapper
 from threading import Thread
 from typing import TYPE_CHECKING, Any
 
-import fsspec
-import fsspec.implementations.local
+# import fsspec locally for performance
 import numpy as np
 import pandas as pd
 import pyarrow as pa
-from fsspec.core import expand_paths_if_needed, get_fs_token_paths
 
 import cudf
 from cudf.api.types import is_list_like
@@ -25,16 +24,10 @@ from cudf.core._compat import PANDAS_LT_300
 from cudf.utils.docutils import docfmt_partial
 from cudf.utils.dtypes import cudf_dtype_to_pa_type, np_dtypes_to_pandas_dtypes
 
-try:
-    import fsspec.parquet as fsspec_parquet
-except ImportError:
-    fsspec_parquet = None
-
-
 if TYPE_CHECKING:
     from collections.abc import Callable, Hashable
 
-    from cudf.core.column import ColumnBase
+    from cudf.core.dataframe import DataFrame
 
 
 PARQUET_META_TYPE_MAP = {
@@ -84,18 +77,16 @@ Notes
 
 Examples
 --------
->>> import pandavro
->>> import pandas as pd
+>>> import fastavro
 >>> import cudf
->>> pandas_df = pd.DataFrame()
->>> pandas_df['numbers'] = [10, 20, 30]
->>> pandas_df['text'] = ["hello", "rapids", "ai"]
->>> pandas_df
-   numbers    text
-0       10   hello
-1       20  rapids
-2       30      ai
->>> pandavro.to_avro("data.avro", pandas_df)
+>>> schema = {{"type": "record", "name": "test",
+...     "fields": [{{"name": "numbers", "type": "long"}},
+...                {{"name": "text", "type": "string"}}]}}
+>>> records = [{{"numbers": 10, "text": "hello"}},
+...            {{"numbers": 20, "text": "rapids"}},
+...            {{"numbers": 30, "text": "ai"}}]
+>>> with open("data.avro", "wb") as f:
+...     fastavro.writer(f, schema, records)
 >>> cudf.read_avro("data.avro")
    numbers    text
 0       10   hello
@@ -105,17 +96,17 @@ Examples
 doc_read_avro: Callable = docfmt_partial(docstring=_docstring_read_avro)
 
 _docstring_read_parquet_metadata = """
-Read a Parquet file's metadata and schema
+Read metadata and schema of a list of Parquet files
 
 Parameters
 ----------
-path : string or path object
-    Path of file to be read
+paths : List of strings or path objects
+    Path of file(s) to be read
 
 Returns
 -------
 Total number of rows
-Number of row groups
+Total number of row groups
 List of column names
 Number of columns
 List of metadata of row groups
@@ -124,7 +115,7 @@ Examples
 --------
 >>> import cudf
 >>> num_rows, num_row_groups, names, num_columns, row_group_metadata = cudf.io.read_parquet_metadata(filename)
->>> df = [cudf.read_parquet(fname, row_group=i) for i in range(row_groups)]
+>>> df = [cudf.read_parquet(fname, row_group=i) for i in range(num_row_groups)]
 >>> df = cudf.concat(df)
 >>> df
   num1                datetime text
@@ -210,6 +201,8 @@ nrows : int, default None
 allow_mismatched_pq_schemas : boolean, default False
     If True, enables reading (matching) columns specified in `columns` and `filters`
     options from the input files with otherwise mismatched schemas.
+ignore_missing_columns : boolean, default True
+    If True, ignores non-existent projected columns while reading.
 prefetch_options : dict, default None
     WARNING: This is an experimental feature and may be removed at any
     time without warning or deprecation period.
@@ -232,12 +225,13 @@ Notes
 Examples
 --------
 >>> import cudf
->>> df = cudf.read_parquet(filename)
->>> df
-  num1                datetime text
-0  123 2018-11-13T12:00:00.000 5451
-1  456 2018-11-14T12:35:01.000 5784
-2  789 2018-11-15T18:02:59.000 6117
+>>> df = cudf.DataFrame({{'a': [1, 2, 3], 'b': ['x', 'y', 'z']}})
+>>> df.to_parquet('test.parquet')
+>>> cudf.read_parquet('test.parquet')
+   a  b
+0  1  x
+1  2  y
+2  3  z
 
 See Also
 --------
@@ -517,12 +511,13 @@ Notes
 Examples
 --------
 >>> import cudf
->>> df = cudf.read_orc(filename)
->>> df
-  num1                datetime text
-0  123 2018-11-13T12:00:00.000 5451
-1  456 2018-11-14T12:35:01.000 5784
-2  789 2018-11-15T18:02:59.000 6117
+>>> df = cudf.DataFrame({{'a': [1, 2, 3], 'b': ['x', 'y', 'z']}})
+>>> df.to_orc('test.orc')
+>>> cudf.read_orc('test.orc')
+   a  b
+0  1  x
+1  2  y
+2  3  z
 
 See Also
 --------
@@ -717,11 +712,10 @@ chunksize : integer, default None
     for more information on ``chunksize``.
     This can only be passed if `lines=True`.
     If this is None, the file will be read into memory all at once.
-compression : {'infer', 'gzip', 'bz2', 'zip', 'xz', None}, default 'infer'
+compression : {'bz2', 'gzip', 'infer', 'snappy', 'zip', 'zstd'}, default 'infer'
     For on-the-fly decompression of on-disk data. If 'infer', then use
-    gzip, bz2, zip or xz if path_or_buf is a string ending in
-    '.gz', '.bz2', '.zip', or 'xz', respectively, and no decompression
-    otherwise. If using 'zip', the ZIP file must contain only one data
+    bz2, gzip, snappy, zip, or zstd if path_or_buf is a string ending in
+    '.bz2', '.gz', '.sz', '.zip', or '.zstd', respectively. If using 'zip', the ZIP file must contain only one data
     file to be read in. Set to None for no decompression.
 byte_range : list or tuple, default None
 
@@ -809,12 +803,15 @@ cudf.DataFrame.to_json
 Examples
 --------
 >>> import cudf
+>>> import warnings
 >>> df = cudf.DataFrame({'a': ["hello", "rapids"], 'b': ["hello", "worlds"]})
 >>> df
         a       b
 0   hello   hello
 1  rapids  worlds
->>> json_str = df.to_json(orient='records', lines=True)
+>>> with warnings.catch_warnings():
+...     warnings.simplefilter("ignore", UserWarning)
+...     json_str = df.to_json(orient='records', lines=True)
 >>> json_str
 '{"a":"hello","b":"hello"}\n{"a":"rapids","b":"worlds"}\n'
 >>> cudf.read_json(json_str,  engine="cudf", lines=True)
@@ -864,6 +861,8 @@ Parameters
 ----------
 path_or_buf : string or file handle, optional
     File path or object. If not specified, the result is returned as a string.
+compression : {'gzip', 'snappy', 'zstd'}, default None
+    For on-the-fly compression of the output data. Set to None for no compression.
 engine : {{ 'auto', 'cudf', 'pandas' }}, default 'auto'
     Parser engine to use. If 'auto' is passed, the `pandas` engine
     will be selected.
@@ -935,7 +934,7 @@ Parameters
 ----------
 path_or_buf : string, buffer or path object
     Path to the file to open, or an open `HDFStore
-    <https://pandas.pydata.org/pandas-docs/stable/user_guide/io.html#hdf5-pytables>`_.
+    <https://pandas.pydata.org/pandas-docs/version/2.3.3/user_guide/io.html#hdf5-pytables>`_.
     object.
     Supports any object implementing the ``__fspath__`` protocol.
     This includes :class:`pathlib.Path` and py._path.local.LocalPath
@@ -946,7 +945,7 @@ key : object, optional
 mode : {'r', 'r+', 'a'}, optional
     Mode to use when opening the file. Ignored if path_or_buf is a
     `Pandas HDFS
-    <https://pandas.pydata.org/pandas-docs/stable/user_guide/io.html#hdf5-pytables>`_.
+    <https://pandas.pydata.org/pandas-docs/version/2.3.3/user_guide/io.html#hdf5-pytables>`_.
     Default is 'r'.
 where : list, optional
     A list of Term (or convertible) objects.
@@ -990,7 +989,7 @@ In order to add another DataFrame or Series to an existing HDF file
 please use append mode and a different a key.
 
 For more information see the `user guide
-<https://pandas.pydata.org/pandas-docs/stable/user_guide/io.html#hdf5-pytables>`_.
+<https://pandas.pydata.org/pandas-docs/version/2.3.3/user_guide/io.html#hdf5-pytables>`_.
 
 Parameters
 ----------
@@ -1020,7 +1019,7 @@ data_columns :  list of columns or True, optional
     List of columns to create as indexed data columns for on-disk
     queries, or True to use all columns. By default only the axes
     of the object are indexed. See `Query via Data Columns
-    <https://pandas.pydata.org/pandas-docs/stable/user_guide/io.html#io-hdf5-query-data-columns>`_.
+    <https://pandas.pydata.org/pandas-docs/version/2.3.3/user_guide/io.html#io-hdf5-query-data-columns>`_.
     Applicable only to format='table'.
 complevel : {0-9}, optional
     Specifies a compression level for data.
@@ -1067,12 +1066,19 @@ DataFrame
 Examples
 --------
 >>> import cudf
->>> df = cudf.read_feather(filename)
->>> df
-  num1                datetime text
-0  123 2018-11-13T12:00:00.000 5451
-1  456 2018-11-14T12:35:01.000 5784
-2  789 2018-11-15T18:02:59.000 6117
+>>> import warnings
+>>> df = cudf.DataFrame({'a': [1, 2, 3], 'b': ['x', 'y', 'z']})
+>>> with warnings.catch_warnings():
+...     warnings.simplefilter("ignore", UserWarning)
+...     df.to_feather('test.feather')
+>>> with warnings.catch_warnings():
+...     warnings.simplefilter("ignore", UserWarning)
+...     result = cudf.read_feather('test.feather')
+>>> result
+   a  b
+0  1  x
+1  2  y
+2  3  z
 
 See Also
 --------
@@ -1093,28 +1099,6 @@ See Also
 cudf.read_feather
 """
 doc_to_feather = docfmt_partial(docstring=_docstring_to_feather)
-
-_docstring_to_dlpack = """
-Converts a cuDF object into a DLPack tensor.
-
-DLPack is an open-source memory tensor structure:
-`dmlc/dlpack <https://github.com/dmlc/dlpack>`_.
-
-This function takes a cuDF object and converts it to a PyCapsule object
-which contains a pointer to a DLPack tensor. This function deep copies the
-data into the DLPack tensor from the cuDF object.
-
-Parameters
-----------
-cudf_obj : DataFrame, Series, Index, or Column
-
-Returns
--------
-pycapsule_obj : PyCapsule
-    Output DLPack tensor pointer which is encapsulated in a PyCapsule
-    object.
-"""
-doc_to_dlpack = docfmt_partial(docstring=_docstring_to_dlpack)
 
 _docstring_read_csv = """
 Load a comma-separated-values (CSV) dataset into a DataFrame
@@ -1263,15 +1247,15 @@ Create a test csv file
 ...   "789,2018-11-15T18:02:59,ghi"
 ... ]
 >>> with open(filename, 'w') as fp:
-...     fp.write('\\n'.join(lines)+'\\n')
+...     _ = fp.write('\\n'.join(lines)+'\\n')
 
 Read the file with ``cudf.read_csv``
 
 >>> cudf.read_csv(filename)
-  num1                datetime text
-0  123 2018-11-13T12:00:00.000 5451
-1  456 2018-11-14T12:35:01.000 5784
-2  789 2018-11-15T18:02:59.000 6117
+   num1             datetime text
+0   123  2018-11-13T12:00:00  abc
+1   456  2018-11-14T12:35:01  def
+2   789  2018-11-15T18:02:59  ghi
 
 See Also
 --------
@@ -1532,12 +1516,14 @@ def _index_level_name(
         return f"__index_level_{level}__"
 
 
-def generate_pandas_metadata(table: cudf.DataFrame, index: bool | None) -> str:
+def generate_pandas_metadata(table: DataFrame, index: bool | None) -> str:
     col_names: list[Hashable] = []
-    types = []
+    types: list[pa.DataType] = []
     index_levels = []
     index_descriptors = []
-    columns_to_convert = list(table._columns)
+    df_meta = table.head(0)
+    columns_to_convert = list(df_meta._columns)
+
     # Columns
     for name, col in table._column_labels_and_values:
         if cudf.get_option("mode.pandas_compatible"):
@@ -1556,13 +1542,12 @@ def generate_pandas_metadata(table: cudf.DataFrame, index: bool | None) -> str:
             types.append(cudf_dtype_to_pa_type(col.dtype))
 
     # Indexes
-    materialize_index = False
     if index is not False:
         for level, name in enumerate(table.index.names):
-            if isinstance(table.index, cudf.MultiIndex):
-                idx = table.index.get_level_values(level)
+            if isinstance(df_meta.index, cudf.MultiIndex):
+                idx = df_meta.index.get_level_values(level)
             else:
-                idx = table.index
+                idx = df_meta.index
 
             if isinstance(idx, cudf.RangeIndex):
                 if index is None:
@@ -1574,23 +1559,23 @@ def generate_pandas_metadata(table: cudf.DataFrame, index: bool | None) -> str:
                         "step": table.index.step,
                     }
                 else:
-                    materialize_index = True
                     # When `index=True`, RangeIndex needs to be materialized.
-                    materialized_idx = idx._as_int_index()
+                    materialized_idx = df_meta.index._as_int_index()
+                    df_meta.index = materialized_idx
                     descr = _index_level_name(
                         index_name=materialized_idx.name,
                         level=level,
                         column_names=col_names,
                     )
                     index_levels.append(materialized_idx)
-                    columns_to_convert.append(materialized_idx._values)
+                    columns_to_convert.append(materialized_idx)
                     col_names.append(descr)
                     types.append(pa.from_numpy_dtype(materialized_idx.dtype))
             else:
                 descr = _index_level_name(
                     index_name=idx.name, level=level, column_names=col_names
                 )
-                columns_to_convert.append(idx._values)
+                columns_to_convert.append(idx)
                 col_names.append(descr)
                 if idx.dtype.kind == "b":
                     # A boolean element takes 8 bits in cudf and 1 bit in
@@ -1604,12 +1589,9 @@ def generate_pandas_metadata(table: cudf.DataFrame, index: bool | None) -> str:
                 index_levels.append(idx)
             index_descriptors.append(descr)
 
-    df_meta = table.head(0)
-    if materialize_index:
-        df_meta.index = df_meta.index._as_int_index()
-    metadata = pa.pandas_compat.construct_metadata(
+    metadata = pa.pandas_compat.construct_metadata(  # type: ignore[attr-defined]
         columns_to_convert=columns_to_convert,
-        # It is OKAY to do `.head(0).to_pandas()` because
+        # It is OKAY to do `.to_pandas()` because
         # this method will extract `.columns` metadata only
         df=df_meta.to_pandas(),
         column_names=col_names,
@@ -1625,7 +1607,7 @@ def generate_pandas_metadata(table: cudf.DataFrame, index: bool | None) -> str:
 
 
 def _update_pandas_metadata_types_inplace(
-    df: cudf.DataFrame, md_dict: dict
+    df: DataFrame, md_dict: dict
 ) -> None:
     # correct metadata for list and struct and nullable numeric types
     for col_meta in md_dict["columns"]:
@@ -1687,7 +1669,9 @@ def is_file_like(obj):
 
 
 def _is_local_filesystem(fs):
-    return isinstance(fs, fsspec.implementations.local.LocalFileSystem)
+    from fsspec.implementations.local import LocalFileSystem
+
+    return isinstance(fs, LocalFileSystem)
 
 
 def _select_single_source(sources: list, caller: str):
@@ -1705,9 +1689,11 @@ def is_directory(path_or_data, storage_options=None):
     """Returns True if the provided filepath is a directory"""
     path_or_data = stringify_pathlike(path_or_data)
     if isinstance(path_or_data, str):
+        import fsspec
+
         path_or_data = os.path.expanduser(path_or_data)
         try:
-            fs = get_fs_token_paths(
+            fs = fsspec.core.get_fs_token_paths(
                 path_or_data, mode="rb", storage_options=storage_options
             )[0]
         except ValueError as e:
@@ -1749,9 +1735,11 @@ def _get_filesystem_and_paths(
         else:
             path_or_data = [path_or_data]
 
+        import fsspec
+
         if filesystem is None:
             try:
-                fs, _, fs_paths = get_fs_token_paths(
+                fs, _, fs_paths = fsspec.core.get_fs_token_paths(
                     path_or_data, mode="rb", storage_options=storage_options
                 )
                 return_paths = fs_paths
@@ -1775,7 +1763,7 @@ def _get_filesystem_and_paths(
             fs = filesystem
             return_paths = [
                 fs._strip_protocol(u)
-                for u in expand_paths_if_needed(
+                for u in fsspec.core.expand_paths_if_needed(
                     path_or_data, "rb", 1, fs, None
                 )
             ]
@@ -1791,6 +1779,9 @@ def _maybe_expand_directories(paths, glob_pattern, fs):
     expanded_paths = []
     for path in paths:
         if fs.isdir(path):
+            dir_paths = fs.glob(fs.sep.join([path, glob_pattern]))
+            if len(dir_paths) == 0:
+                raise FileNotFoundError(f"No files found in directory: {path}")
             expanded_paths.extend(fs.glob(fs.sep.join([path, glob_pattern])))
         else:
             expanded_paths.append(path)
@@ -1910,7 +1901,10 @@ def get_reader_filepath_or_buffer(
             raw_text_input = True
 
         if raw_text_input:
-            filepaths_or_buffers = input_sources
+            # Assuming _all_ strings are raw data and not a mix of file paths too
+            filepaths_or_buffers = [
+                source.encode() for source in input_sources
+            ]
             if warn_on_raw_text_input:
                 # Do not remove until pandas 3.0 support is added.
                 assert PANDAS_LT_300, (
@@ -1973,8 +1967,10 @@ def get_writer_filepath_or_buffer(path_or_data, mode, storage_options=None):
         storage_options = {}
 
     if isinstance(path_or_data, str):
+        import fsspec
+
         path_or_data = os.path.expanduser(path_or_data)
-        fs = get_fs_token_paths(
+        fs = fsspec.core.get_fs_token_paths(
             path_or_data, mode=mode or "w", storage_options=storage_options
         )[0]
 
@@ -2010,6 +2006,8 @@ def get_IOBase_writer(file_obj):
 
 
 def is_fsspec_open_file(file_obj):
+    import fsspec
+
     if isinstance(file_obj, fsspec.core.OpenFile):
         return True
     return False
@@ -2169,7 +2167,9 @@ def _prepare_filters(filters):
 
 def _ensure_filesystem(passed_filesystem, path, storage_options):
     if passed_filesystem is None:
-        return get_fs_token_paths(
+        import fsspec
+
+        return fsspec.core.get_fs_token_paths(
             path[0] if isinstance(path, list) else path,
             storage_options={} if storage_options is None else storage_options,
         )[0]
@@ -2313,9 +2313,10 @@ def _get_remote_bytes_all(
             zip(
                 *(
                     (r, j, min(j + blocksize, s))
-                    for r, s in zip(remote_paths, sizes)
+                    for r, s in zip(remote_paths, sizes, strict=True)
                     for j in range(0, s, blocksize)
-                )
+                ),
+                strict=True,
             ),
         )
 
@@ -2324,7 +2325,9 @@ def _get_remote_bytes_all(
 
         # Construct local byte buffers
         # (Need to make sure path offsets are ordered correctly)
-        unique_count = dict(zip(*np.unique(paths, return_counts=True)))
+        unique_count = dict(
+            zip(*np.unique(paths, return_counts=True), strict=True)
+        )
         offset = np.cumsum([0] + [unique_count[p] for p in remote_paths])
         buffers = [
             functools.reduce(operator.add, chunks[offset[i] : offset[i + 1]])
@@ -2341,11 +2344,15 @@ def _get_remote_bytes_parquet(
     row_groups=None,
     blocksize=_BYTES_PER_THREAD_DEFAULT,
 ):
-    if fsspec_parquet is None or (columns is None and row_groups is None):
+    if columns is None and row_groups is None:
+        return _get_remote_bytes_all(remote_paths, fs, blocksize=blocksize)
+    try:
+        import fsspec.parquet
+    except ImportError:
         return _get_remote_bytes_all(remote_paths, fs, blocksize=blocksize)
 
     sizes = fs.sizes(remote_paths)
-    data = fsspec_parquet._get_parquet_byte_ranges(
+    data = fsspec.parquet._get_parquet_byte_ranges(
         remote_paths,
         fs,
         columns=columns,
@@ -2354,7 +2361,7 @@ def _get_remote_bytes_parquet(
     )
 
     buffers = []
-    for size, path in zip(sizes, remote_paths):
+    for size, path in zip(sizes, remote_paths, strict=True):
         path_data = data[path]
         buf = np.empty(size, dtype="b")
         for range_offset in path_data.keys():
@@ -2393,28 +2400,3 @@ def _prefetch_remote_buffers(
 
     else:
         return paths
-
-
-def _add_df_col_struct_names(
-    df: cudf.DataFrame, child_names_dict: dict
-) -> None:
-    for name, child_names in child_names_dict.items():
-        col = df._data[name]
-        df._data[name] = _update_col_struct_field_names(col, child_names)
-
-
-def _update_col_struct_field_names(
-    col: ColumnBase, child_names: dict
-) -> ColumnBase:
-    if col.children:
-        children = list(col.children)
-        for i, (child, names) in enumerate(
-            zip(children, child_names.values())
-        ):
-            children[i] = _update_col_struct_field_names(child, names)
-        col.set_base_children(tuple(children))
-
-    if isinstance(col.dtype, cudf.StructDtype):
-        col = col._rename_fields(child_names.keys())  # type: ignore[attr-defined]
-
-    return col

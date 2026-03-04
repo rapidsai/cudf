@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2020-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf/column/column.hpp>
@@ -24,6 +13,7 @@
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/detail/utilities/grid_1d.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/dictionary/detail/concatenate.hpp>
 #include <cudf/lists/detail/concatenate.hpp>
@@ -39,11 +29,10 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <thrust/advance.h>
+#include <cuda/std/iterator>
 #include <thrust/binary_search.h>
 #include <thrust/copy.h>
 #include <thrust/execution_policy.h>
-#include <thrust/functional.h>
 #include <thrust/host_vector.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform_scan.h>
@@ -93,7 +82,7 @@ auto create_device_views(host_span<column_view const> views, rmm::cuda_stream_vi
     device_views.cend(),
     std::next(offsets.begin()),
     [](auto const& col) { return col.size(); },
-    thrust::plus{});
+    cuda::std::plus{});
   auto d_offsets =
     make_device_uvector_async(offsets, stream, cudf::get_current_device_resource_ref());
   auto const output_size = offsets.back();
@@ -209,7 +198,7 @@ CUDF_KERNEL void fused_concatenate_kernel(column_device_view const* input_views,
   if (Nullable) { active_mask = __ballot_sync(0xFFFF'FFFFu, output_index < output_size); }
   while (output_index < output_size) {
     // Lookup input index by searching for output index in offsets
-    auto const offset_it            = thrust::prev(thrust::upper_bound(
+    auto const offset_it            = cuda::std::prev(thrust::upper_bound(
       thrust::seq, input_offsets, input_offsets + num_input_views, output_index));
     size_type const partition_index = offset_it - input_offsets;
 

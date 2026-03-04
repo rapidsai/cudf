@@ -1,21 +1,11 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
 
+#include <cudf/aggregation.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/scalar/scalar.hpp>
@@ -51,11 +41,32 @@ std::unique_ptr<scalar> sum(column_view const& col,
                             rmm::device_async_resource_ref mr);
 
 /**
+ * @brief Computes sum with overflow detection of int64_t elements in input column
+ *
+ * Returns a struct scalar with {sum: int64_t, overflow: bool} fields.
+ * Only supports int64_t input columns.
+ *
+ * @throw std::invalid_argument if input column type is not int64_t
+ *
+ * @param col input column to compute sum with overflow detection (must be int64_t)
+ * @param output_type data type of return type (must be struct)
+ * @param init initial value of the sum
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned scalar's device memory
+ * @return Struct scalar with sum and overflow flag
+ */
+std::unique_ptr<scalar> sum_with_overflow(column_view const& col,
+                                          data_type const output_type,
+                                          std::optional<std::reference_wrapper<scalar const>> init,
+                                          rmm::cuda_stream_view stream,
+                                          rmm::device_async_resource_ref mr);
+
+/**
  * @brief Computes minimum of elements in input column
  *
  * If all elements in input column are null, output scalar is null.
  *
- * @throw cudf::logic_error if input column type is convertible to `output_dtype`
+ * @throw cudf::logic_error if input column type is not the same as `output_dtype`
  *
  * @param col input column to compute minimum
  * @param output_dtype data type of return type and typecast elements of input column
@@ -75,7 +86,7 @@ std::unique_ptr<scalar> min(column_view const& col,
  *
  * If all elements in input column are null, output scalar is null.
  *
- * @throw cudf::logic_error if input column type is convertible to `output_dtype`
+ * @throw cudf::logic_error if input column type is not the same as `output_dtype`
  *
  * @param col input column to compute maximum
  * @param output_dtype data type of return type and typecast elements of input column
@@ -89,6 +100,45 @@ std::unique_ptr<scalar> max(column_view const& col,
                             std::optional<std::reference_wrapper<scalar const>> init,
                             rmm::cuda_stream_view stream,
                             rmm::device_async_resource_ref mr);
+
+/**
+ * @brief Computes index of the minimum element in the input column.
+ *
+ * If all elements in input column are null, output scalar is null.
+ *
+ * @param col input column to compute reduction
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned scalar's device memory
+ * @return Index of the minimum element as scalar of type `output_dtype`
+ */
+std::unique_ptr<scalar> argmin(column_view const& col,
+                               rmm::cuda_stream_view stream,
+                               rmm::device_async_resource_ref mr);
+
+/**
+ * @brief Computes index of the maximum element in the input column.
+ *
+ * If all elements in input column are null, output scalar is null.
+ *
+ * @param col input column to compute reduction
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned scalar's device memory
+ * @return Index of the maximum element as scalar of type `output_dtype`
+ */
+std::unique_ptr<scalar> argmax(column_view const& col,
+                               rmm::cuda_stream_view stream,
+                               rmm::device_async_resource_ref mr);
+
+/**
+ * @brief Computes the minimum and maximum values of the input column
+ *
+ * @param col input column to compute minmax
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return A pair consisting of the minimum value and the maximum value
+ */
+std::pair<std::unique_ptr<scalar>, std::unique_ptr<scalar>> minmax(
+  cudf::column_view const& col, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr);
 
 /**
  * @brief Computes any of elements in input column is true when typecasted to bool
@@ -351,6 +401,77 @@ std::unique_ptr<scalar> merge_sets(lists_column_view const& col,
                                    nan_equality nans_equal,
                                    rmm::cuda_stream_view stream,
                                    rmm::device_async_resource_ref mr);
+
+/**
+ * @brief Performs bitwise reduction on the input column, ignoring nulls.
+ *
+ * @param bit_op Bitwise operation to perform on the input
+ * @param col input column to perform bitwise reduction on
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned scalar's device memory
+ * @return Scalar containing the result of bitwise operation on all elements of the input
+ */
+std::unique_ptr<scalar> bitwise_reduction(bitwise_op bit_op,
+                                          column_view const& col,
+                                          rmm::cuda_stream_view stream,
+                                          rmm::device_async_resource_ref mr);
+
+/**
+ * @brief Computes quantile value of the elements in the input column
+ *
+ * @see cudf::quantile for additional details
+ *
+ * @throw std::invalid_argument if the input column type is not an arithmetic type
+ *
+ * @param col Input column to compute quantile
+ * @param quantile_value Quantile value in range [0,1]
+ * @param interpolation Interpolation method
+ * @param output_type Data type of return type
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned scalar's device memory
+ * @return Quantile as scalar of type `output_type`
+ */
+std::unique_ptr<cudf::scalar> quantile(column_view const& col,
+                                       double quantile_value,
+                                       cudf::interpolation interpolation,
+                                       cudf::data_type const output_type,
+                                       rmm::cuda_stream_view stream,
+                                       rmm::device_async_resource_ref mr);
+
+/**
+ * @brief Computes the number of unique elements in the input column
+ *
+ * @param col Input column to compute the number of unique elements
+ * @param null_handling Indicates if null values will be counted while computing the number of
+ * unique elements
+ * @param output_dtype Data type of return type
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned scalar's device memory
+ * @return Number of unique elements as scalar of type `output_dtype`
+ */
+std::unique_ptr<scalar> nunique(column_view const& col,
+                                null_policy null_handling,
+                                data_type const output_dtype,
+                                rmm::cuda_stream_view stream,
+                                rmm::device_async_resource_ref mr);
+
+/**
+ * @brief Returns the number of elements in the input column
+ *
+ * Returns `col.size()` or `col.size() - col.null_count()` depending on `null_handling`
+ *
+ * @param col Input column to compute the number of elements
+ * @param null_handling Indicates if null values will be included in the count
+ * @param output_type Data type of return type
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned scalar's device memory
+ * @return Number of elements as scalar of type `output_type`
+ */
+std::unique_ptr<scalar> count(column_view const& col,
+                              null_policy null_handling,
+                              data_type const output_type,
+                              rmm::cuda_stream_view stream,
+                              rmm::device_async_resource_ref mr);
 
 }  // namespace reduction::detail
 }  // namespace CUDF_EXPORT cudf

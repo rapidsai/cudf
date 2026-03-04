@@ -1,28 +1,16 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
-
-#include "io/parquet/parquet_common.hpp"
 
 #include <cudf/ast/detail/expression_transformer.hpp>
 #include <cudf/ast/expressions.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/io/parquet_schema.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/memory_resource.hpp>
@@ -34,6 +22,13 @@
 #include <string>
 
 namespace cudf::io::parquet::detail {
+
+namespace {
+
+/// Initial capacity for the chars host vector in host_column
+constexpr size_t initial_chars_capacity = 1024;
+
+}  // namespace
 
 /**
  * @brief Base utilities for converting and casting stats values
@@ -66,7 +61,7 @@ class stats_caster_base {
   template <typename T, CUDF_ENABLE_IF(cudf::is_boolean<T>())>
   static inline T convert(uint8_t const* stats_val, size_t stats_size, Type const type)
   {
-    CUDF_EXPECTS(type == BOOLEAN, "Invalid type and stats combination");
+    CUDF_EXPECTS(type == Type::BOOLEAN, "Invalid type and stats combination");
     return stats_caster_base::targetType<T>(*reinterpret_cast<bool const*>(stats_val));
   }
 
@@ -77,16 +72,16 @@ class stats_caster_base {
   static inline T convert(uint8_t const* stats_val, size_t stats_size, Type const type)
   {
     switch (type) {
-      case INT32:
+      case Type::INT32:
         return stats_caster_base::targetType<T>(*reinterpret_cast<int32_t const*>(stats_val));
-      case INT64:
+      case Type::INT64:
         return stats_caster_base::targetType<T>(*reinterpret_cast<int64_t const*>(stats_val));
-      case INT96:  // Deprecated in parquet specification
+      case Type::INT96:  // Deprecated in parquet specification
         return stats_caster_base::targetType<T>(
           static_cast<__int128_t>(reinterpret_cast<int64_t const*>(stats_val)[0]) << 32 |
           reinterpret_cast<int32_t const*>(stats_val)[2]);
-      case BYTE_ARRAY: [[fallthrough]];
-      case FIXED_LEN_BYTE_ARRAY:
+      case Type::BYTE_ARRAY: [[fallthrough]];
+      case Type::FIXED_LEN_BYTE_ARRAY:
         if (stats_size == sizeof(T)) {
           // if type size == length of stats_val. then typecast and return.
           if constexpr (cudf::is_chrono<T>()) {
@@ -105,9 +100,9 @@ class stats_caster_base {
   static inline T convert(uint8_t const* stats_val, size_t stats_size, Type const type)
   {
     switch (type) {
-      case FLOAT:
+      case Type::FLOAT:
         return stats_caster_base::targetType<T>(*reinterpret_cast<float const*>(stats_val));
-      case DOUBLE:
+      case Type::DOUBLE:
         return stats_caster_base::targetType<T>(*reinterpret_cast<double const*>(stats_val));
       default: CUDF_FAIL("Invalid type and stats combination");
     }
@@ -117,8 +112,8 @@ class stats_caster_base {
   static inline T convert(uint8_t const* stats_val, size_t stats_size, Type const type)
   {
     switch (type) {
-      case BYTE_ARRAY: [[fallthrough]];
-      case FIXED_LEN_BYTE_ARRAY:
+      case Type::BYTE_ARRAY: [[fallthrough]];
+      case Type::FIXED_LEN_BYTE_ARRAY:
         return string_view(reinterpret_cast<char const*>(stats_val), stats_size);
       default: CUDF_FAIL("Invalid type and stats combination");
     }
@@ -133,11 +128,13 @@ class stats_caster_base {
   struct host_column {
     // using thrust::host_vector because std::vector<bool> uses bitmap instead of byte per bool.
     cudf::detail::host_vector<T> val;
+    cudf::detail::host_vector<char> chars;
     std::vector<bitmask_type> null_mask;
     cudf::size_type null_count = 0;
 
     host_column(size_type total_row_groups, rmm::cuda_stream_view stream)
       : val{cudf::detail::make_host_vector<T>(total_row_groups, stream)},
+        chars{cudf::detail::make_empty_host_vector<char>(initial_chars_capacity, stream)},
         null_mask(cudf::util::div_rounding_up_safe<cudf::size_type>(
                     cudf::bitmask_allocation_size_bytes(total_row_groups), sizeof(bitmask_type)),
                   ~bitmask_type{0})
@@ -149,44 +146,59 @@ class stats_caster_base {
                           Type const type)
     {
       if (binary_value.has_value()) {
-        val[index] = stats_caster_base::convert<T>(
-          binary_value.value().data(), binary_value.value().size(), type);
+        // For strings, also insert the characters
+        if constexpr (std::is_same_v<T, string_view>) {
+          // Create a temporary string view from the binary value
+          std::string_view input_value{reinterpret_cast<char const*>(binary_value.value().data()),
+                                       binary_value.value().size()};
+          // Current offset into the chars vector
+          auto const current_chars_offset = chars.size();
+          chars.insert(chars.end(), input_value.begin(), input_value.end());
+          // Convert to the target type
+          val[index] = stats_caster_base::convert<T>(
+            reinterpret_cast<uint8_t const*>(chars.data()) + current_chars_offset,
+            binary_value.value().size(),
+            type);
+        } else {
+          val[index] = stats_caster_base::convert<T>(
+            binary_value.value().data(), binary_value.value().size(), type);
+        }
       }
       if (not binary_value.has_value()) {
         clear_bit_unsafe(null_mask.data(), index);
         null_count++;
       }
     }
-    static inline std::tuple<rmm::device_uvector<char>, rmm::device_uvector<size_type>>
-    make_strings_children(host_span<string_view> host_strings,
+
+    static inline std::tuple<rmm::device_uvector<char>,
+                             rmm::device_uvector<size_type>,
+                             rmm::device_uvector<size_type>>
+    make_strings_children(cudf::host_span<cudf::string_view const> host_strings,
+                          cudf::host_span<char const> host_chars,
                           rmm::cuda_stream_view stream,
                           rmm::device_async_resource_ref mr)
     {
-      auto const total_char_count =
-        std::accumulate(host_strings.begin(), host_strings.end(), 0, [](auto sum, auto const& str) {
-          return sum + str.size_bytes();
-        });
-      auto chars = cudf::detail::make_empty_host_vector<char>(total_char_count, stream);
       auto offsets =
         cudf::detail::make_empty_host_vector<cudf::size_type>(host_strings.size() + 1, stream);
+      auto sizes =
+        cudf::detail::make_empty_host_vector<cudf::size_type>(host_strings.size(), stream);
       offsets.push_back(0);
       for (auto const& str : host_strings) {
-        auto tmp =
-          str.empty() ? std::string_view{} : std::string_view(str.data(), str.size_bytes());
-        chars.insert(chars.end(), std::cbegin(tmp), std::cend(tmp));
-        offsets.push_back(offsets.back() + tmp.length());
+        offsets.push_back(offsets.back() + str.size_bytes());
+        sizes.push_back(str.size_bytes());
       }
-      auto d_chars   = cudf::detail::make_device_uvector_async(chars, stream, mr);
-      auto d_offsets = cudf::detail::make_device_uvector_sync(offsets, stream, mr);
-      return std::tuple{std::move(d_chars), std::move(d_offsets)};
+      auto d_chars   = cudf::detail::make_device_uvector_async(host_chars, stream, mr);
+      auto d_offsets = cudf::detail::make_device_uvector_async(offsets, stream, mr);
+      auto d_sizes   = cudf::detail::make_device_uvector_async(sizes, stream, mr);
+      return {std::move(d_chars), std::move(d_offsets), std::move(d_sizes)};
     }
 
-    std::unique_ptr<column> inline to_device(cudf::data_type dtype,
-                                             rmm::cuda_stream_view stream,
-                                             rmm::device_async_resource_ref mr)
+    [[nodiscard]] std::unique_ptr<column> inline to_device(cudf::data_type dtype,
+                                                           rmm::cuda_stream_view stream,
+                                                           rmm::device_async_resource_ref mr) const
     {
       if constexpr (std::is_same_v<T, string_view>) {
-        auto [d_chars, d_offsets] = make_strings_children(val, stream, mr);
+        auto [d_chars, d_offsets, _] = make_strings_children(val, chars, stream, mr);
         return cudf::make_strings_column(
           val.size(),
           std::make_unique<column>(std::move(d_offsets), rmm::device_buffer{}, 0),
@@ -207,15 +219,14 @@ class stats_caster_base {
 };
 
 /**
- * @brief Converts AST expression to StatsAST for comparing with column statistics
- *
- * This is used in row group filtering based on predicate.
- * statistics min value of a column is referenced by column_index*2
- * statistics max value of a column is referenced by column_index*2+1
+ * @brief Constructs a boolean mask indicating which input columns can participate in statistics
+ * (StatsAST) based filtering
  */
-class stats_expression_converter : public ast::detail::expression_transformer {
+class stats_columns_collector : public ast::detail::expression_transformer {
  public:
-  stats_expression_converter(ast::expression const& expr, size_type num_columns);
+  stats_columns_collector() = default;
+
+  stats_columns_collector(ast::expression const& expr, cudf::size_type num_columns);
 
   /**
    * @copydoc ast::detail::expression_transformer::visit(ast::literal const& )
@@ -239,18 +250,64 @@ class stats_expression_converter : public ast::detail::expression_transformer {
   std::reference_wrapper<ast::expression const> visit(ast::operation const& expr) override;
 
   /**
+   * @brief Return a boolean vector indicating input columns that can participate in stats based
+   * filtering
+   *
+   * @return Boolean vector indicating input columns that can participate in stats based filtering
+   */
+  std::pair<thrust::host_vector<bool>, bool> get_stats_columns_mask() &&;
+
+ protected:
+  std::vector<std::reference_wrapper<ast::expression const>> visit_operands(
+    cudf::host_span<std::reference_wrapper<ast::expression const> const> operands);
+
+  size_type _num_columns;
+
+ private:
+  thrust::host_vector<bool> _columns_mask;
+  bool _has_is_null_operator = false;
+};
+
+/**
+ * @brief Converts AST expression to StatsAST for comparing with column statistics
+ *
+ * This is used in row group filtering based on predicate.
+ * statistics min value of a column is referenced by column_index*3
+ * statistics max value of a column is referenced by column_index*3+1
+ * statistics is_null value of a column is referenced by column_index*3+2
+ */
+class stats_expression_converter : public stats_columns_collector {
+ public:
+  stats_expression_converter(ast::expression const& expr,
+                             size_type num_columns,
+                             bool has_is_null_operator,
+                             rmm::cuda_stream_view stream);
+
+  // Bring all overrides of `visit` from stats_columns_collector into scope
+  using stats_columns_collector::visit;
+
+  /**
+   * @copydoc ast::detail::expression_transformer::visit(ast::operation const& )
+   */
+  std::reference_wrapper<ast::expression const> visit(ast::operation const& expr) override;
+
+  /**
    * @brief Returns the AST to apply on Column chunk statistics.
    *
    * @return AST operation expression
    */
   [[nodiscard]] std::reference_wrapper<ast::expression const> get_stats_expr() const;
 
- private:
-  std::vector<std::reference_wrapper<ast::expression const>> visit_operands(
-    cudf::host_span<std::reference_wrapper<ast::expression const> const> operands);
+  /**
+   * @brief Delete stats columns mask getter as it's not needed in the derived class
+   */
+  thrust::host_vector<bool> get_stats_columns_mask() && = delete;
 
+ private:
   ast::tree _stats_expr;
-  size_type _num_columns;
+  cudf::size_type _stats_cols_per_column;
+  std::unique_ptr<cudf::numeric_scalar<bool>> _always_true_scalar;
+  std::unique_ptr<ast::literal> _always_true;
 };
 
 }  // namespace cudf::io::parquet::detail

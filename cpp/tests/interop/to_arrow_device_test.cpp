@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2024-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf_test/base_fixture.hpp>
@@ -59,7 +48,7 @@ get_nanoarrow_cudf_table(cudf::size_type length)
   auto list_offsets_column = cudf::test::fixed_width_column_wrapper<int32_t>(
     test_data.list_offsets.begin(), test_data.list_offsets.end());
   auto [list_mask, list_nulls] = cudf::bools_to_mask(cudf::test::fixed_width_column_wrapper<bool>(
-    test_data.bool_data_validity.begin(), test_data.bool_data_validity.end()));
+    test_data.list_validity.begin(), test_data.list_validity.end()));
   columns.emplace_back(cudf::make_lists_column(length,
                                                list_offsets_column.release(),
                                                list_child_column.release(),
@@ -259,17 +248,10 @@ struct BaseArrowFixture : public cudf::test::BaseFixture {
                               ArrowArray const* expected,
                               ArrowArray const* actual)
   {
-    std::vector<uint8_t> actual_bytes;
-    std::vector<uint8_t> expected_bytes;
-    expected_bytes.resize(nbytes);
-    actual_bytes.resize(nbytes);
-
-    // synchronous copies so we don't have to worry about async weirdness
-    cudaMemcpy(
-      expected_bytes.data(), expected->buffers[buffer_idx], nbytes, cudaMemcpyDeviceToHost);
-    cudaMemcpy(actual_bytes.data(), actual->buffers[buffer_idx], nbytes, cudaMemcpyDeviceToHost);
-
-    ASSERT_EQ(expected_bytes, actual_bytes);
+    auto const dt       = cudf::data_type{cudf::type_id::UINT8};
+    auto actual_bytes   = cudf::column_view(dt, nbytes, actual->buffers[buffer_idx], nullptr, 0);
+    auto expected_bytes = cudf::column_view(dt, nbytes, expected->buffers[buffer_idx], nullptr, 0);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(actual_bytes, expected_bytes);
   }
 
   void compare_arrays(ArrowSchema const* schema,

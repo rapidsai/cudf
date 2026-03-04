@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 """Conversion of expression nodes to libcudf AST nodes."""
@@ -6,11 +6,14 @@
 from __future__ import annotations
 
 from functools import partial, reduce, singledispatch
-from typing import TYPE_CHECKING, TypeAlias
+from typing import TYPE_CHECKING, TypeAlias, TypedDict, cast
+
+import polars as pl
 
 import pylibcudf as plc
 from pylibcudf import expressions as plc_expr
 
+from cudf_polars.containers import DataType
 from cudf_polars.dsl import expr
 from cudf_polars.dsl.traversal import CachingVisitor, reuse_if_unchanged
 from cudf_polars.typing import GenericTransformer
@@ -18,7 +21,8 @@ from cudf_polars.typing import GenericTransformer
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    from cudf_polars.typing import ExprTransformer
+    from rmm.pylibrmm.stream import Stream
+
 
 # Can't merge these op-mapping dictionaries because scoped enum values
 # are exposed by cython with equality/hash based one their underlying
@@ -91,7 +95,44 @@ REVERSED_COMPARISON = {
 }
 
 
-Transformer: TypeAlias = GenericTransformer[expr.Expr, plc_expr.Expression]
+class ASTState(TypedDict):
+    """
+    State for AST transformations.
+
+    Parameters
+    ----------
+    for_parquet
+        Indicator for whether this transformation should provide an expression
+        suitable for use in parquet filters.
+    """
+
+    for_parquet: bool
+    stream: Stream
+
+
+class ExprTransformerState(TypedDict):
+    """
+    State used for AST transformation when inserting column references.
+
+    Parameters
+    ----------
+    name_to_index
+        Mapping from column names to column indices in the table
+        eventually used for evaluation.
+    table_ref
+        pylibcudf `TableReference` indicating whether column
+        references are coming from the left or right table.
+    """
+
+    name_to_index: Mapping[str, int]
+    table_ref: plc.expressions.TableReference
+
+
+Transformer: TypeAlias = GenericTransformer[expr.Expr, plc_expr.Expression, ASTState]
+ExprTransformer: TypeAlias = GenericTransformer[
+    expr.Expr, expr.Expr, ExprTransformerState
+]
+"""Protocol for transformation of Expr nodes."""
 
 
 @singledispatch
@@ -104,14 +145,8 @@ def _to_ast(node: expr.Expr, self: Transformer) -> plc_expr.Expression:
     node
         Expression to translate.
     self
-        Recursive transformer. The state dictionary should contain a
-       `for_parquet` key indicating if this transformation should
-        provide an expression suitable for use in parquet filters.
-
-        If `for_parquet` is `False`, the dictionary should contain a
-        `name_to_index` mapping that maps column names to their
-        integer index in the table that will be used for evaluation of
-        the expression.
+        Recursive transformer. The state dictionary is an instance of
+        :class:`ASTState`.
 
     Returns
     -------
@@ -140,7 +175,9 @@ def _(node: expr.ColRef, self: Transformer) -> plc_expr.Expression:
 
 @_to_ast.register
 def _(node: expr.Literal, self: Transformer) -> plc_expr.Expression:
-    return plc_expr.Literal(plc.interop.from_arrow(node.value))
+    return plc_expr.Literal(
+        plc.Scalar.from_py(node.value, node.dtype.plc_type, stream=self.state["stream"])
+    )
 
 
 @_to_ast.register
@@ -160,7 +197,7 @@ def _(node: expr.BinOp, self: Transformer) -> plc_expr.Expression:
     if self.state["for_parquet"]:
         op1_col, op2_col = (isinstance(op, expr.Col) for op in node.children)
         if op1_col ^ op2_col:
-            op = node.op
+            op: plc.binaryop.BinaryOperator = node.op
             if op not in SUPPORTED_STATISTICS_BINOPS:
                 raise NotImplementedError(
                     f"Parquet filter binop with column doesn't support {node.op!r}"
@@ -188,9 +225,21 @@ def _(node: expr.BooleanFunction, self: Transformer) -> plc_expr.Expression:
         if isinstance(haystack, expr.LiteralColumn) and len(haystack.value) < 16:
             # 16 is an arbitrary limit
             needle_ref = self(needles)
-            values = [
-                plc_expr.Literal(plc.interop.from_arrow(v)) for v in haystack.value
-            ]
+            if haystack.dtype.id() == plc.TypeId.LIST:
+                # Because we originally translated pl_expr.Literal with a list scalar
+                # to a expr.LiteralColumn, so the actual type is in the inner type
+                # .inner returns DataTypeClass | DataType, need to cast to DataType
+                plc_dtype = DataType(
+                    cast(pl.DataType, cast(pl.List, haystack.dtype.polars_type).inner)
+                ).plc_type
+            else:
+                plc_dtype = haystack.dtype.plc_type  # pragma: no cover
+            values = (
+                plc_expr.Literal(
+                    plc.Scalar.from_py(val, plc_dtype, stream=self.state["stream"])
+                )
+                for val in haystack.value
+            )
             return reduce(
                 partial(plc_expr.Operation, plc_expr.ASTOperator.LOGICAL_OR),
                 (
@@ -225,7 +274,7 @@ def _(node: expr.UnaryFunction, self: Transformer) -> plc_expr.Expression:
     )
 
 
-def to_parquet_filter(node: expr.Expr) -> plc_expr.Expression | None:
+def to_parquet_filter(node: expr.Expr, stream: Stream) -> plc_expr.Expression | None:
     """
     Convert an expression to libcudf AST nodes suitable for parquet filtering.
 
@@ -233,19 +282,34 @@ def to_parquet_filter(node: expr.Expr) -> plc_expr.Expression | None:
     ----------
     node
         Expression to convert.
+    stream
+        CUDA stream used for device memory operations and kernel launches.
 
     Returns
     -------
     pylibcudf Expression if conversion is possible, otherwise None.
     """
-    mapper = CachingVisitor(_to_ast, state={"for_parquet": True})
+    # Converts a boolean column reference (e.g., filter(pl.col("foo")))
+    # to an explicit comparison for parquet filters (e.g., filter(pl.col("foo") == True)).
+    # TODO: Have polars pass us the comparison instead
+    if isinstance(node, expr.Col) and node.dtype.id() == plc.TypeId.BOOL8:
+        node = expr.BinOp(
+            node.dtype,
+            plc.binaryop.BinaryOperator.EQUAL,
+            node,
+            expr.Literal(node.dtype, value=True),
+        )
+
+    mapper: Transformer = CachingVisitor(
+        _to_ast, state={"for_parquet": True, "stream": stream}
+    )
     try:
         return mapper(node)
     except (KeyError, NotImplementedError):
         return None
 
 
-def to_ast(node: expr.Expr) -> plc_expr.Expression | None:
+def to_ast(node: expr.Expr, stream: Stream) -> plc_expr.Expression | None:
     """
     Convert an expression to libcudf AST nodes suitable for compute_column.
 
@@ -253,6 +317,8 @@ def to_ast(node: expr.Expr) -> plc_expr.Expression | None:
     ----------
     node
         Expression to convert.
+    stream
+        CUDA stream used for device memory operations and kernel launches.
 
     Notes
     -----
@@ -264,7 +330,9 @@ def to_ast(node: expr.Expr) -> plc_expr.Expression | None:
     -------
     pylibcudf Expression if conversion is possible, otherwise None.
     """
-    mapper = CachingVisitor(_to_ast, state={"for_parquet": False})
+    mapper: Transformer = CachingVisitor(
+        _to_ast, state={"for_parquet": False, "stream": stream}
+    )
     try:
         return mapper(node)
     except (KeyError, NotImplementedError):
@@ -312,7 +380,8 @@ def insert_colrefs(
     -------
     New expression with column references inserted.
     """
-    mapper = CachingVisitor(
-        _insert_colrefs, state={"table_ref": table_ref, "name_to_index": name_to_index}
+    mapper: ExprTransformer = CachingVisitor(
+        _insert_colrefs,
+        state={"name_to_index": name_to_index, "table_ref": table_ref},
     )
     return mapper(node)

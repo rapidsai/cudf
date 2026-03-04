@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf_test/base_fixture.hpp>
@@ -279,7 +268,7 @@ TYPED_TEST(RepeatStringsTypedTest, StringsColumnNoNullWithColumnRepeatTimes)
 
   // repeat_times column has negative values.
   {
-    auto const repeat_times = ints_col{1, 2, 3, -1, -2};
+    auto const repeat_times  = ints_col{1, 2, 3, -1, -2};
     auto const expected_strs = strs_col{"0a0b0c", "abcxyzabcxyz", "xyzéééxyzéééxyzééé", "", ""};
 
     auto results = cudf::strings::repeat_strings(strs_cv, repeat_times);
@@ -360,7 +349,7 @@ TYPED_TEST(RepeatStringsTypedTest, SlicedStringsColumnNoNullWithColumnRepeatTime
     auto const sliced_strs    = cudf::slice(strs, {2, 5})[0];
     auto const sliced_rtimes  = cudf::slice(repeat_times, {2, 5})[0];
     auto const sliced_strs_cv = cudf::strings_column_view(sliced_strs);
-    auto const expected_strs = strs_col{"xyzéééxyzéééxyzééé", "áááááá", "íííííí"};
+    auto const expected_strs  = strs_col{"xyzéééxyzéééxyzééé", "áááááá", "íííííí"};
 
     auto results = cudf::strings::repeat_strings(sliced_strs_cv, sliced_rtimes);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_strs, *results, verbosity);

@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
@@ -37,11 +26,9 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/iterator>
 #include <thrust/count.h>
-#include <thrust/distance.h>
-#include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
-#include <thrust/iterator/iterator_traits.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/scatter.h>
 #include <thrust/sequence.h>
@@ -74,7 +61,7 @@ auto scatter_to_gather(MapIterator scatter_map_begin,
                        size_type gather_rows,
                        rmm::cuda_stream_view stream)
 {
-  using MapValueType = typename thrust::iterator_traits<MapIterator>::value_type;
+  using MapValueType = cuda::std::iter_value_t<MapIterator>;
 
   // The gather_map is initialized with `numeric_limits::lowest()` value to identify pass-through
   // entries when calling the gather_bitmask() which applies a pass-through whenever it finds a
@@ -120,9 +107,9 @@ auto scatter_to_gather_complement(MapIterator scatter_map_begin,
   thrust::sequence(rmm::exec_policy_nosync(stream), gather_map.begin(), gather_map.end(), 0);
 
   auto const out_of_bounds_begin =
-    thrust::make_constant_iterator(std::numeric_limits<size_type>::lowest());
+    cuda::make_constant_iterator(std::numeric_limits<size_type>::lowest());
   auto const out_of_bounds_end =
-    out_of_bounds_begin + thrust::distance(scatter_map_begin, scatter_map_end);
+    out_of_bounds_begin + cuda::std::distance(scatter_map_begin, scatter_map_end);
   thrust::scatter(rmm::exec_policy_nosync(stream),
                   out_of_bounds_begin,
                   out_of_bounds_end,
@@ -236,25 +223,11 @@ struct column_scatterer_impl<dictionary32> {
                     scatter_map_begin,
                     target_itr);
 
-    // record some data before calling release()
-    auto const indices_type = new_indices->type();
-    auto const output_size  = new_indices->size();
-    auto const null_count   = new_indices->null_count();
-    auto contents           = new_indices->release();
-    auto indices_column     = std::make_unique<column>(indices_type,
-                                                   static_cast<size_type>(output_size),
-                                                   std::move(*(contents.data.release())),
-                                                   rmm::device_buffer{0, stream, mr},
-                                                   0);
-
     // take the keys from the matched column allocated using mr
     std::unique_ptr<column> keys_column(std::move(target_matched->release().children.back()));
 
     // create column with keys_column and indices_column
-    return make_dictionary_column(std::move(keys_column),
-                                  std::move(indices_column),
-                                  std::move(*(contents.null_mask.release())),
-                                  null_count);
+    return make_dictionary_column(std::move(keys_column), std::move(new_indices), stream, mr);
   }
 };
 
@@ -399,7 +372,7 @@ std::unique_ptr<table> scatter(table_view const& source,
 {
   CUDF_FUNC_RANGE();
 
-  using MapType = typename thrust::iterator_traits<MapIterator>::value_type;
+  using MapType = cuda::std::iter_value_t<MapIterator>;
 
   CUDF_EXPECTS(std::distance(scatter_map_begin, scatter_map_end) <= source.num_rows(),
                "scatter map size should be <= to number of rows in source");

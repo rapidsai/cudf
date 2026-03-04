@@ -1,32 +1,22 @@
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
 
+#include <cudf/context.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/pinned_memory.hpp>
 
 #include <rmm/cuda_device.hpp>
-#include <rmm/mr/device/arena_memory_resource.hpp>
-#include <rmm/mr/device/cuda_async_memory_resource.hpp>
-#include <rmm/mr/device/cuda_memory_resource.hpp>
-#include <rmm/mr/device/managed_memory_resource.hpp>
-#include <rmm/mr/device/owning_wrapper.hpp>
-#include <rmm/mr/device/pool_memory_resource.hpp>
+#include <rmm/mr/arena_memory_resource.hpp>
+#include <rmm/mr/cuda_async_memory_resource.hpp>
+#include <rmm/mr/cuda_memory_resource.hpp>
+#include <rmm/mr/managed_memory_resource.hpp>
+#include <rmm/mr/owning_wrapper.hpp>
 #include <rmm/mr/pinned_host_memory_resource.hpp>
+#include <rmm/mr/pool_memory_resource.hpp>
 
 #include <string>
 
@@ -97,6 +87,8 @@ struct nvbench_base_fixture {
 
   nvbench_base_fixture(int argc, char const* const* argv)
   {
+    cudf::initialize(cudf::init_flags::ALL);
+
     for (int i = 1; i < argc - 1; ++i) {
       std::string arg = argv[i];
       if (arg == detail::rmm_mode_param) {

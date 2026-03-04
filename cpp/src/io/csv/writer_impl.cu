@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 /**
@@ -27,9 +16,11 @@
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/fill.hpp>
 #include <cudf/detail/null_mask.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/data_sink.hpp>
 #include <cudf/io/detail/csv.hpp>
+#include <cudf/io/detail/utils.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/detail/combine.hpp>
@@ -122,25 +113,6 @@ struct escape_strings_fn {
 };
 
 struct column_to_strings_fn {
-  // compile-time predicate that defines unsupported column types;
-  // based on the conditions used for instantiations of individual
-  // converters in strings/convert/convert_*.hpp;
-  //(this should have been a `variable template`,
-  // instead of a static function, but nvcc (10.0)
-  // fails to compile var-templs);
-  //
-  template <typename column_type>
-  constexpr static bool is_not_handled()
-  {
-    // Note: the case (not std::is_same_v<column_type, bool>)
-    // is already covered by is_integral)
-    //
-    return not((std::is_same_v<column_type, cudf::string_view>) ||
-               (std::is_integral_v<column_type>) || (std::is_floating_point_v<column_type>) ||
-               (cudf::is_fixed_point<column_type>()) || (cudf::is_timestamp<column_type>()) ||
-               (cudf::is_duration<column_type>()));
-  }
-
   explicit column_to_strings_fn(csv_writer_options const& options,
                                 rmm::cuda_stream_view stream,
                                 rmm::device_async_resource_ref mr)
@@ -160,8 +132,8 @@ struct column_to_strings_fn {
   // bools:
   //
   template <typename column_type>
-  std::enable_if_t<std::is_same_v<column_type, bool>, std::unique_ptr<column>> operator()(
-    column_view const& column) const
+  std::unique_ptr<column> operator()(column_view const& column) const
+    requires(std::is_same_v<column_type, bool>)
   {
     string_scalar true_string{options_.get_true_value(), true, stream_};
     string_scalar false_string{options_.get_false_value(), true, stream_};
@@ -171,8 +143,8 @@ struct column_to_strings_fn {
   // strings:
   //
   template <typename column_type>
-  std::enable_if_t<std::is_same_v<column_type, cudf::string_view>, std::unique_ptr<column>>
-  operator()(column_view const& column_v) const
+  std::unique_ptr<column> operator()(column_view const& column_v) const
+    requires(std::is_same_v<column_type, cudf::string_view>)
   {
     if (options_.get_quoting() == cudf::io::quote_style::NONE) {
       return std::make_unique<column>(column_v, stream_, mr_);
@@ -196,9 +168,8 @@ struct column_to_strings_fn {
   // ints:
   //
   template <typename column_type>
-  std::enable_if_t<std::is_integral_v<column_type> && !std::is_same_v<column_type, bool>,
-                   std::unique_ptr<column>>
-  operator()(column_view const& column) const
+  std::unique_ptr<column> operator()(column_view const& column) const
+    requires(std::is_integral_v<column_type> && !std::is_same_v<column_type, bool>)
   {
     return cudf::strings::detail::from_integers(column, stream_, mr_);
   }
@@ -206,8 +177,8 @@ struct column_to_strings_fn {
   // floats:
   //
   template <typename column_type>
-  std::enable_if_t<std::is_floating_point_v<column_type>, std::unique_ptr<column>> operator()(
-    column_view const& column) const
+  std::unique_ptr<column> operator()(column_view const& column) const
+    requires(std::is_floating_point_v<column_type>)
   {
     return cudf::strings::detail::from_floats(column, stream_, mr_);
   }
@@ -215,8 +186,8 @@ struct column_to_strings_fn {
   // fixed point:
   //
   template <typename column_type>
-  std::enable_if_t<cudf::is_fixed_point<column_type>(), std::unique_ptr<column>> operator()(
-    column_view const& column) const
+  std::unique_ptr<column> operator()(column_view const& column) const
+    requires(cudf::is_fixed_point<column_type>())
   {
     return cudf::strings::detail::from_fixed_point(column, stream_, mr_);
   }
@@ -224,8 +195,8 @@ struct column_to_strings_fn {
   // timestamps:
   //
   template <typename column_type>
-  std::enable_if_t<cudf::is_timestamp<column_type>(), std::unique_ptr<column>> operator()(
-    column_view const& column) const
+  std::unique_ptr<column> operator()(column_view const& column) const
+    requires(cudf::is_timestamp<column_type>())
   {
     std::string format = [&]() {
       if (std::is_same_v<cudf::timestamp_s, column_type>) {
@@ -262,8 +233,8 @@ struct column_to_strings_fn {
   }
 
   template <typename column_type>
-  std::enable_if_t<cudf::is_duration<column_type>(), std::unique_ptr<column>> operator()(
-    column_view const& column) const
+  std::unique_ptr<column> operator()(column_view const& column) const
+    requires(cudf::is_duration<column_type>())
   {
     return cudf::io::detail::csv::pandas_format_durations(column, stream_, mr_);
   }
@@ -271,8 +242,8 @@ struct column_to_strings_fn {
   // unsupported type of column:
   //
   template <typename column_type>
-  std::enable_if_t<is_not_handled<column_type>(), std::unique_ptr<column>> operator()(
-    column_view const&) const
+  std::unique_ptr<column> operator()(column_view const&) const
+    requires(!cudf::io::detail::is_convertible_to_string_column<column_type>())
   {
     CUDF_FAIL("Unsupported column type.");
   }
@@ -406,7 +377,7 @@ void write_chunked(data_sink* out_sink,
     out_sink->device_write(ptr_all_bytes, total_num_bytes, stream);
   } else {
     // copy the bytes to host to write them out
-    auto const h_bytes = cudf::detail::make_host_vector_sync(
+    auto const h_bytes = cudf::detail::make_host_vector(
       device_span<char const>{ptr_all_bytes, total_num_bytes}, stream);
 
     out_sink->host_write(h_bytes.data(), total_num_bytes);
@@ -430,6 +401,8 @@ void write_csv(data_sink* out_sink,
   // write header: column names separated by delimiter:
   // (even for tables with no rows)
   //
+  CUDF_FUNC_RANGE();
+
   write_chunked_begin(
     out_sink, table, user_column_names, options, stream, cudf::get_current_device_resource_ref());
 

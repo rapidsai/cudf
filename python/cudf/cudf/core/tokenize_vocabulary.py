@@ -1,10 +1,11 @@
-# Copyright (c) 2023-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
 
 import pylibcudf as plc
 
-import cudf
+from cudf.core.series import Series
 
 
 class TokenizeVocabulary:
@@ -17,14 +18,14 @@ class TokenizeVocabulary:
         Strings column of vocabulary terms
     """
 
-    def __init__(self, vocabulary: cudf.Series) -> None:
+    def __init__(self, vocabulary: Series) -> None:
         self.vocabulary = plc.nvtext.tokenize.TokenizeVocabulary(
-            vocabulary._column.to_pylibcudf(mode="read")
+            vocabulary._column.plc_column
         )
 
     def tokenize(
-        self, text, delimiter: str = "", default_id: int = -1
-    ) -> cudf.Series:
+        self, text: Series, delimiter: str = "", default_id: int = -1
+    ) -> Series:
         """
         Parameters
         ----------
@@ -46,4 +47,4 @@ class TokenizeVocabulary:
             self.vocabulary, delimiter, default_id
         )
 
-        return cudf.Series._from_column(result)
+        return Series._from_column(result)

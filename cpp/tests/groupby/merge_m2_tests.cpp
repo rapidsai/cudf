@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf_test/base_fixture.hpp>
@@ -24,6 +13,7 @@
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/groupby.hpp>
 #include <cudf/table/table_view.hpp>
+#include <cudf/unary.hpp>
 
 using namespace cudf::test::iterators;
 
@@ -66,7 +56,11 @@ auto compute_partial_results(cudf::column_view const& keys, cudf::column_view co
   auto gb_obj                  = cudf::groupby::groupby(cudf::table_view({keys}));
   auto [out_keys, out_results] = gb_obj.aggregate(requests);
 
-  auto const num_output_rows = out_keys->num_rows();
+  // Cast the `COUNT_VALID` column to `INT64` type.
+  out_results[0].results.front() = cudf::cast(out_results[0].results.front()->view(),
+                                              cudf::data_type(cudf::type_id::INT64),
+                                              cudf::get_default_stream());
+  auto const num_output_rows     = out_keys->num_rows();
   return std::pair(std::move(out_keys->release()[0]),
                    cudf::make_structs_column(
                      num_output_rows, std::move(out_results[0].results), 0, rmm::device_buffer{}));
@@ -123,13 +117,15 @@ TYPED_TEST(GroupbyMergeM2TypedTest, InvalidInput)
     EXPECT_THROW(merge_M2({keys}, {vals}), cudf::logic_error);
   }
 
-  // The input column must be a structs column having types (int32_t, double, double).
+  // The input column must be a structs column having types (int64_t/double, double, double).
   {
-    auto vals1      = keys_col<T>{1, 2, 3};
-    auto vals2      = keys_col<T>{1, 2, 3};
-    auto vals3      = keys_col<T>{1, 2, 3};
-    auto const vals = structs_col{vals1, vals2, vals3};
-    EXPECT_THROW(merge_M2({keys}, {vals}), cudf::logic_error);
+    if constexpr (!std::is_same_v<T, double>) {
+      auto vals1      = keys_col<T>{1, 2, 3};
+      auto vals2      = keys_col<T>{1, 2, 3};
+      auto vals3      = keys_col<T>{1, 2, 3};
+      auto const vals = structs_col{vals1, vals2, vals3};
+      EXPECT_THROW(merge_M2({keys}, {vals}), cudf::logic_error);
+    }
   }
 }
 
@@ -294,7 +290,7 @@ TYPED_TEST(GroupbyMergeM2TypedTest, InputHasNulls)
 
   // The expected results to validate.
   auto const expected_keys = keys_col<T>{1, 2, 3, 4};
-  auto const expected_M2s  = M2s_col<R>{{4.5, 32.0 + 2.0 / 3.0, 18.0, 0.0 /*NULL*/}, null_at(3)};
+  auto const expected_M2s  = M2s_col<R>{4.5, 32.0 + 2.0 / 3.0, 18.0, 0.0};
 
   // Compute partial results (`COUNT_VALID`, `MEAN`, `M2`) of each dataset.
   // The partial results are also assembled into a structs column.

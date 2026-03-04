@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf_test/base_fixture.hpp>
@@ -266,6 +255,18 @@ TEST_F(StringsSliceTest, MaxPositions)
 
   results = cudf::strings::slice_strings(strings_column, -10, -19, -1);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+}
+
+TEST_F(StringsSliceTest, MixedTypePositions)
+{
+  auto input =
+    cudf::test::strings_column_wrapper({"a", "bc", "def", "ghij", "klmno", "pqrstu", "éuvwxyz"});
+  auto sv       = cudf::strings_column_view(input);
+  auto starts   = cudf::test::fixed_width_column_wrapper<int16_t>({0, 1, 2, 3, 4, 5, 6});
+  auto stops    = cudf::test::fixed_width_column_wrapper<int64_t>({1, 2, 3, 4, 5, 6, 7});
+  auto expected = cudf::test::strings_column_wrapper({"a", "c", "f", "j", "o", "u", "z"});
+  auto results  = cudf::strings::slice_strings(sv, starts, stops);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected);
 }
 
 TEST_F(StringsSliceTest, MultiByteChars)

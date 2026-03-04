@@ -1,9 +1,11 @@
-# Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 from libcpp cimport bool
 from libcpp.map cimport map
 from libcpp.vector cimport vector
 
 from rmm.pylibrmm.stream cimport Stream
+from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 
 from pylibcudf.io.types cimport (
     SinkInfo,
@@ -11,6 +13,8 @@ from pylibcudf.io.types cimport (
     TableWithMetadata,
     compression_type,
 )
+from pylibcudf.column cimport Column
+from pylibcudf.scalar cimport Scalar
 
 from pylibcudf.libcudf.io.json cimport (
     json_recovery_mode_t,
@@ -24,6 +28,8 @@ from pylibcudf.libcudf.types cimport size_type
 
 from pylibcudf.table cimport Table
 
+from pylibcudf.types cimport DataType
+
 
 cdef class JsonReaderOptions:
     cdef json_reader_options c_obj
@@ -35,6 +41,7 @@ cdef class JsonReaderOptions:
     cpdef void set_byte_range_offset(self, size_t offset)
     cpdef void set_byte_range_size(self, size_t size)
     cpdef void enable_lines(self, bool val)
+    cpdef void set_source(self, SourceInfo src)
     # These hidden options are subjected to change without deprecation cycle.
     # These are used to test libcudf JSON reader features, not used in cuDF.
     cpdef void set_delimiter(self, str val)
@@ -47,6 +54,7 @@ cdef class JsonReaderOptions:
     cpdef void allow_numeric_leading_zeros(self, bool val)
     cpdef void allow_nonnumeric_numbers(self, bool val)
     cpdef void set_na_values(self, list vals)
+
 
 cdef class JsonReaderOptionsBuilder:
     cdef json_reader_options_builder c_obj
@@ -74,7 +82,19 @@ cdef class JsonReaderOptionsBuilder:
     cpdef JsonReaderOptionsBuilder unquoted_control_chars(self, bool val)
     cpdef build(self)
 
-cpdef TableWithMetadata read_json(JsonReaderOptions options)
+cpdef TableWithMetadata read_json(
+    JsonReaderOptions options, Stream stream = *, DeviceMemoryResource mr = *
+)
+
+cpdef TableWithMetadata read_json_from_string_column(
+    Column input,
+    Scalar separator,
+    Scalar narep,
+    list dtypes = *,
+    compression_type compression = *,
+    json_recovery_mode_t recovery_mode = *,
+    Stream stream = *,
+    DeviceMemoryResource mr = *)
 
 cdef class JsonWriterOptions:
     cdef json_writer_options c_obj
@@ -94,12 +114,16 @@ cdef class JsonWriterOptionsBuilder:
     cpdef JsonWriterOptionsBuilder include_nulls(self, bool val)
     cpdef JsonWriterOptionsBuilder lines(self, bool val)
     cpdef JsonWriterOptionsBuilder compression(self, compression_type comptype)
+    cpdef JsonWriterOptionsBuilder utf8_escaped(self, bool val)
     cpdef JsonWriterOptions build(self)
 
 cpdef void write_json(JsonWriterOptions options, Stream stream = *)
+
+cpdef bool is_supported_write_json(DataType type)
 
 cpdef tuple chunked_read_json(
     JsonReaderOptions options,
     int chunk_size= *,
     Stream stream = *,
+    DeviceMemoryResource mr = *,
 )

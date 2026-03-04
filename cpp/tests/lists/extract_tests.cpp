@@ -1,19 +1,21 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
+// The usage of the lists_column_wrapper `LCW{LCW...` syntax in this file
+// causes gcc14 to throw a maybe-uninitialized warning in the copy constructor
+// of column_view_base. The same usage in every other test file causes no
+// issues, so it seems highly likely to be an incorrect diagnostic.
+// Unfortunately, because the warning is in an included file, neither inserting
+// ignore pragmas around just the includes nor just around the calling code
+// below that uses that syntax (of which there is a decent amount) seems to be
+// sufficient to make the compiler happy, so for now the easiest option is to
+// ignore the warning for the entire file.
+#if defined(__GNUC__) && (__GNUC__ >= 14)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
+#endif
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
@@ -23,7 +25,7 @@
 
 #include <cudf/lists/extract.hpp>
 
-#include <thrust/iterator/constant_iterator.h>
+#include <cuda/iterator>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 
@@ -224,7 +226,7 @@ TEST_F(ListsExtractTest, ExtractElementEmpty)
   cudf::test::strings_column_wrapper expected({""});
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *result);
 
-  LCW null_strings({LCW{"", "", ""}}, thrust::make_constant_iterator<int32_t>(0));
+  LCW null_strings({LCW{"", "", ""}}, cuda::make_constant_iterator<int32_t>(0));
   result = cudf::lists::extract_list_element(cudf::lists_column_view(null_strings), 1);
   cudf::test::strings_column_wrapper expected_null({""}, {0});
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_null, *result);
@@ -423,3 +425,6 @@ TEST_F(ListsExtractColumnIndicesTest, ExtractStrings)
 }
 
 CUDF_TEST_PROGRAM_MAIN()
+#if defined(__GNUC__) && (__GNUC__ >= 14)
+#pragma GCC diagnostic pop
+#endif

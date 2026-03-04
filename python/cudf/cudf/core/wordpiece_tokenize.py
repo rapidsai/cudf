@@ -1,10 +1,11 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
 
 import pylibcudf as plc
 
-import cudf
+from cudf.core.series import Series
 
 
 class WordPieceVocabulary:
@@ -17,17 +18,21 @@ class WordPieceVocabulary:
         Strings column of vocabulary terms
     """
 
-    def __init__(self, vocabulary: cudf.Series) -> None:
+    def __init__(self, vocabulary: Series) -> None:
         self.vocabulary = plc.nvtext.wordpiece_tokenize.WordPieceVocabulary(
-            vocabulary._column.to_pylibcudf(mode="read")
+            vocabulary._column.plc_column
         )
 
-    def tokenize(self, text, max_words_per_row: int = 0) -> cudf.Series:
+    def tokenize(self, text: Series, max_words_per_row: int = 0) -> Series:
         """
+        Produces tokens for the input strings.
+        The input is expected to be the output of NormalizeCharacters or a
+        similar normalizer.
+
         Parameters
         ----------
         text : cudf.Series
-            The strings to be tokenized.
+            Normalized strings to be tokenized.
         max_words_per_row : int
             Maximum number of words to tokenize per row.
             Default 0 tokenizes all words.
@@ -41,4 +46,4 @@ class WordPieceVocabulary:
             self.vocabulary, max_words_per_row
         )
 
-        return cudf.Series._from_column(result)
+        return Series._from_column(result)

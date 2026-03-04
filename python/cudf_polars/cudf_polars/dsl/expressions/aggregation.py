@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 # TODO: remove need for this
 # ruff: noqa: D101
@@ -6,42 +6,43 @@
 
 from __future__ import annotations
 
+from decimal import Decimal
 from functools import partial
 from typing import TYPE_CHECKING, Any, ClassVar
-
-import pyarrow as pa
 
 import pylibcudf as plc
 
 from cudf_polars.containers import Column
-from cudf_polars.dsl.expressions.base import (
-    AggInfo,
-    ExecutionContext,
-    Expr,
-)
+from cudf_polars.dsl.expressions.base import ExecutionContext, Expr
 from cudf_polars.dsl.expressions.literal import Literal
-from cudf_polars.dsl.expressions.unary import UnaryFunction
+from cudf_polars.utils.versions import POLARS_VERSION_LT_136
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from rmm.pylibrmm.stream import Stream
 
-    from cudf_polars.containers import DataFrame
+    from cudf_polars.containers import DataFrame, DataType
 
 __all__ = ["Agg"]
 
 
 class Agg(Expr):
-    __slots__ = ("name", "op", "options", "request")
-    _non_child = ("dtype", "name", "options")
+    __slots__ = ("context", "name", "op", "options", "request")
+    _non_child = ("dtype", "name", "options", "context")
 
     def __init__(
-        self, dtype: plc.DataType, name: str, options: Any, *children: Expr
+        self,
+        dtype: DataType,
+        name: str,
+        options: Any,
+        context: ExecutionContext,
+        *children: Expr,
     ) -> None:
         self.dtype = dtype
         self.name = name
         self.options = options
         self.is_pointwise = False
         self.children = children
+        self.context = context
         if name not in Agg._SUPPORTED:
             raise NotImplementedError(
                 f"Unsupported aggregation {name=}"
@@ -52,6 +53,9 @@ class Agg(Expr):
         elif name == "max":
             req = plc.aggregation.max()
         elif name == "median":
+            (child,) = self.children
+            if plc.traits.is_timestamp(child.dtype.plc_type):
+                raise NotImplementedError("Median with temporal data types")
             req = plc.aggregation.median()
         elif name == "n_unique":
             # TODO: datatype of result
@@ -75,23 +79,42 @@ class Agg(Expr):
                 else plc.types.NullPolicy.INCLUDE
             )
         elif name == "quantile":
-            _, quantile = self.children
+            child, quantile = self.children
             if not isinstance(quantile, Literal):
                 raise NotImplementedError("Only support literal quantile values")
+            if options == "equiprobable":
+                raise NotImplementedError("Quantile with equiprobable interpolation")
+            if plc.traits.is_duration(child.dtype.plc_type):
+                raise NotImplementedError("Quantile with duration data type")
+            if plc.traits.is_timestamp(child.dtype.plc_type):
+                raise NotImplementedError("Quantile with temporal data types")
             req = plc.aggregation.quantile(
-                quantiles=[quantile.value.as_py()], interp=Agg.interp_mapping[options]
+                quantiles=[quantile.value], interp=Agg.interp_mapping[options]
             )
         else:
             raise NotImplementedError(
                 f"Unreachable, {name=} is incorrectly listed in _SUPPORTED"
             )  # pragma: no cover
+        if (
+            POLARS_VERSION_LT_136
+            and context == ExecutionContext.FRAME
+            and req is not None
+            and not plc.aggregation.is_valid_aggregation(dtype.plc_type, req)
+        ):  # pragma: no cover; polars may raise ahead of time
+            # TODO: Check which cases polars raises vs returns all-NULL column.
+            # For the all-NULL column cases, we could build it using Column.all_null_like
+            # at evaluation time.
+            raise NotImplementedError(f"Invalid aggregation {req} with dtype {dtype}")
         self.request = req
         op = getattr(self, f"_{name}", None)
         if op is None:
+            assert req is not None  # Ensure req is not None for _reduce
             op = partial(self._reduce, request=req)
         elif name in {"min", "max"}:
             op = partial(op, propagate_nans=options)
-        elif name in {"count", "sum", "first", "last"}:
+        elif name == "count":
+            op = partial(op, include_nulls=options)
+        elif name in {"sum", "first", "last"}:
             pass
         else:
             raise NotImplementedError(
@@ -124,115 +147,139 @@ class Agg(Expr):
         "linear": plc.types.Interpolation.LINEAR,
     }
 
-    def collect_agg(self, *, depth: int) -> AggInfo:
-        """Collect information about aggregations in groupbys."""
-        if depth >= 1:
-            raise NotImplementedError(
-                "Nested aggregations in groupby"
-            )  # pragma: no cover; check_agg trips first
-        if (isminmax := self.name in {"min", "max"}) and self.options:
-            raise NotImplementedError("Nan propagation in groupby for min/max")
-        (child,) = self.children
-        ((expr, _, _),) = child.collect_agg(depth=depth + 1).requests
-        request = self.request
-        # These are handled specially here because we don't set up the
-        # request for the whole-frame agg because we can avoid a
-        # reduce for these.
+    @property
+    def agg_request(self) -> plc.aggregation.Aggregation:  # noqa: D102
         if self.name == "first":
-            request = plc.aggregation.nth_element(
+            return plc.aggregation.nth_element(
                 0, null_handling=plc.types.NullPolicy.INCLUDE
             )
         elif self.name == "last":
-            request = plc.aggregation.nth_element(
+            return plc.aggregation.nth_element(
                 -1, null_handling=plc.types.NullPolicy.INCLUDE
             )
-        if request is None:
-            raise NotImplementedError(
-                f"Aggregation {self.name} in groupby"
-            )  # pragma: no cover; __init__ trips first
-        if isminmax and plc.traits.is_floating_point(self.dtype):
-            assert expr is not None
-            # Ignore nans in these groupby aggs, do this by masking
-            # nans in the input
-            expr = UnaryFunction(self.dtype, "mask_nans", (), expr)
-        return AggInfo([(expr, request, self)])
+        else:
+            assert self.request is not None, "Init should have raised"
+            return self.request
 
     def _reduce(
-        self, column: Column, *, request: plc.aggregation.Aggregation
+        self, column: Column, *, request: plc.aggregation.Aggregation, stream: Stream
     ) -> Column:
+        if (
+            # For sum, this condition can only pass
+            # after expression decomposition in the streaming
+            # engine
+            self.name in {"sum", "mean", "median"}
+            and plc.traits.is_fixed_point(column.dtype.plc_type)
+            and self.dtype.plc_type.id() in {plc.TypeId.FLOAT32, plc.TypeId.FLOAT64}
+        ):
+            column = column.astype(self.dtype, stream=stream)
         return Column(
             plc.Column.from_scalar(
-                plc.reduce.reduce(column.obj, request, self.dtype),
-                1,
-            )
-        )
-
-    def _count(self, column: Column) -> Column:
-        return Column(
-            plc.Column.from_scalar(
-                plc.interop.from_arrow(
-                    pa.scalar(
-                        column.size - column.null_count,
-                        type=plc.interop.to_arrow(self.dtype),
-                    ),
+                plc.reduce.reduce(
+                    column.obj, request, self.dtype.plc_type, stream=stream
                 ),
                 1,
-            )
+                stream=stream,
+            ),
+            name=column.name,
+            dtype=self.dtype,
         )
 
-    def _sum(self, column: Column) -> Column:
+    def _count(self, column: Column, *, include_nulls: bool, stream: Stream) -> Column:
+        null_count = column.null_count if not include_nulls else 0
+        return Column(
+            plc.Column.from_scalar(
+                plc.Scalar.from_py(
+                    column.size - null_count, self.dtype.plc_type, stream=stream
+                ),
+                1,
+                stream=stream,
+            ),
+            name=column.name,
+            dtype=self.dtype,
+        )
+
+    def _sum(self, column: Column, stream: Stream) -> Column:
         if column.size == 0 or column.null_count == column.size:
+            dtype = self.dtype.plc_type
             return Column(
                 plc.Column.from_scalar(
-                    plc.interop.from_arrow(
-                        pa.scalar(0, type=plc.interop.to_arrow(self.dtype))
+                    plc.Scalar.from_py(
+                        Decimal(0).scaleb(dtype.scale())
+                        if plc.traits.is_fixed_point(dtype)
+                        else 0,
+                        dtype,
+                        stream=stream,
                     ),
                     1,
-                )
+                    stream=stream,
+                ),
+                name=column.name,
+                dtype=self.dtype,
             )
-        return self._reduce(column, request=plc.aggregation.sum())
+        return self._reduce(column, request=plc.aggregation.sum(), stream=stream)
 
-    def _min(self, column: Column, *, propagate_nans: bool) -> Column:
-        if propagate_nans and column.nan_count > 0:
+    def _min(self, column: Column, *, propagate_nans: bool, stream: Stream) -> Column:
+        nan_count = column.nan_count(stream=stream)
+        if propagate_nans and nan_count > 0:
             return Column(
                 plc.Column.from_scalar(
-                    plc.interop.from_arrow(
-                        pa.scalar(float("nan"), type=plc.interop.to_arrow(self.dtype))
+                    plc.Scalar.from_py(
+                        float("nan"), self.dtype.plc_type, stream=stream
                     ),
                     1,
-                )
+                    stream=stream,
+                ),
+                name=column.name,
+                dtype=self.dtype,
             )
-        if column.nan_count > 0:
-            column = column.mask_nans()
-        return self._reduce(column, request=plc.aggregation.min())
+        if nan_count > 0:
+            column = column.mask_nans(stream=stream)
+        return self._reduce(column, request=plc.aggregation.min(), stream=stream)
 
-    def _max(self, column: Column, *, propagate_nans: bool) -> Column:
-        if propagate_nans and column.nan_count > 0:
+    def _max(self, column: Column, *, propagate_nans: bool, stream: Stream) -> Column:
+        nan_count = column.nan_count(stream=stream)
+        if propagate_nans and nan_count > 0:
             return Column(
                 plc.Column.from_scalar(
-                    plc.interop.from_arrow(
-                        pa.scalar(float("nan"), type=plc.interop.to_arrow(self.dtype))
+                    plc.Scalar.from_py(
+                        float("nan"), self.dtype.plc_type, stream=stream
                     ),
                     1,
-                )
+                    stream=stream,
+                ),
+                name=column.name,
+                dtype=self.dtype,
             )
-        if column.nan_count > 0:
-            column = column.mask_nans()
-        return self._reduce(column, request=plc.aggregation.max())
+        if nan_count > 0:
+            column = column.mask_nans(stream=stream)
+        return self._reduce(column, request=plc.aggregation.max(), stream=stream)
 
-    def _first(self, column: Column) -> Column:
-        return Column(plc.copying.slice(column.obj, [0, 1])[0])
+    def _first(self, column: Column, stream: Stream) -> Column:
+        if column.size == 0:
+            plc_result = plc.Column.all_null_like(column.obj, 1, stream=stream)
+        else:
+            plc_result = plc.copying.slice(column.obj, [0, 1], stream=stream)[0]
+        return Column(
+            plc_result,
+            name=column.name,
+            dtype=self.dtype,
+        )
 
-    def _last(self, column: Column) -> Column:
+    def _last(self, column: Column, stream: Stream) -> Column:
         n = column.size
-        return Column(plc.copying.slice(column.obj, [n - 1, n])[0])
+        if n == 0:
+            plc_result = plc.Column.all_null_like(column.obj, 1, stream=stream)
+        else:
+            plc_result = plc.copying.slice(column.obj, [n - 1, n], stream=stream)[0]
+        return Column(
+            plc_result,
+            name=column.name,
+            dtype=self.dtype,
+        )
 
     def do_evaluate(
-        self,
-        df: DataFrame,
-        *,
-        context: ExecutionContext = ExecutionContext.FRAME,
-        mapping: Mapping[Expr, Column] | None = None,
+        self, df: DataFrame, *, context: ExecutionContext = ExecutionContext.FRAME
     ) -> Column:
         """Evaluate this expression given a dataframe for context."""
         if context is not ExecutionContext.FRAME:
@@ -243,4 +290,4 @@ class Agg(Expr):
         # Aggregations like quantiles may have additional children that were
         # preprocessed into pylibcudf requests.
         child = self.children[0]
-        return self.op(child.evaluate(df, context=context, mapping=mapping))
+        return self.op(child.evaluate(df, context=context), stream=df.stream)

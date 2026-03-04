@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
@@ -33,8 +22,7 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
-#include <thrust/distance.h>
-#include <thrust/iterator/constant_iterator.h>
+#include <cuda/iterator>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/scatter.h>
@@ -56,7 +44,7 @@ rmm::device_uvector<unbound_list_view> list_vector_from_column(
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
-  auto n_rows = thrust::distance(index_begin, index_end);
+  auto n_rows = cuda::std::distance(index_begin, index_end);
 
   auto vector = rmm::device_uvector<unbound_list_view>(n_rows, stream, mr);
 
@@ -184,7 +172,7 @@ std::unique_ptr<column> scatter(column_view const& source,
   if (num_rows == 0) { return cudf::empty_like(target); }
 
   auto const source_device_view = column_device_view::create(source, stream);
-  auto const scatter_map_size   = thrust::distance(scatter_map_begin, scatter_map_end);
+  auto const scatter_map_size   = cuda::std::distance(scatter_map_begin, scatter_map_end);
   auto const source_vector =
     list_vector_from_column(unbound_list_view::label_type::SOURCE,
                             cudf::detail::lists_column_device_view(*source_device_view),
@@ -260,12 +248,12 @@ std::unique_ptr<column> scatter(scalar const& slr,
                              {offset_column->view(), lv->view()});
 
   auto const source_device_view = column_device_view::create(wrapped, stream);
-  auto const scatter_map_size   = thrust::distance(scatter_map_begin, scatter_map_end);
+  auto const scatter_map_size   = cuda::std::distance(scatter_map_begin, scatter_map_end);
   auto const source_vector =
     list_vector_from_column(unbound_list_view::label_type::SOURCE,
                             cudf::detail::lists_column_device_view(*source_device_view),
-                            thrust::make_constant_iterator<size_type>(0),
-                            thrust::make_constant_iterator<size_type>(0) + scatter_map_size,
+                            cuda::make_constant_iterator<size_type>(0),
+                            cuda::make_constant_iterator<size_type>(0) + scatter_map_size,
                             stream,
                             mr);
 

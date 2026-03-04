@@ -1,27 +1,20 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <tests/groupby/groupby_test_util.hpp>
 
 #include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
+#include <cudf/copying.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
+#include <cudf/sorting.hpp>
+#include <cudf/table/table_view.hpp>
 
 using namespace cudf::test::iterators;
 
@@ -226,7 +219,48 @@ TYPED_TEST(GroupBySumFixedPointTest, GroupByHashSumDecimalAsValue)
     auto agg5 = cudf::make_sum_aggregation<cudf::groupby_aggregation>();
     test_single_agg(keys, vals, expect_keys, expect_vals_sum, std::move(agg5));
 
+    auto agg6 = cudf::make_sum_aggregation<cudf::groupby_aggregation>();
+    test_single_agg(
+      keys, vals, expect_keys, expect_vals_sum, std::move(agg6), force_use_sort_impl::NO);
+
     auto agg8 = cudf::make_product_aggregation<cudf::groupby_aggregation>();
     EXPECT_THROW(test_single_agg(keys, vals, expect_keys, {}, std::move(agg8)), cudf::logic_error);
   }
+}
+
+struct GroupByDecimal128ShmemAlignmentTest : public cudf::test::BaseFixture {};
+
+TEST_F(GroupByDecimal128ShmemAlignmentTest, Decimal128SumAfterInt32Sum)
+{
+  using namespace numeric;
+  using fp128 = cudf::test::fixed_point_column_wrapper<__int128_t>;
+
+  auto const scale = scale_type{0};
+
+  // 11 unique keys → num_agg_locations = 22, valid_col_size = round_up_safe(22, 8) = 24.
+  // INT32 SUM output is INT64 (8 bytes): data = 176, total = 176 + 24 = 200.
+  // 200 % 16 = 8 → DECIMAL128 slot starts misaligned for 16-byte shared-memory access.
+  // clang-format off
+  auto const keys = cudf::test::fixed_width_column_wrapper<int32_t>{
+    0,1,2,3,4,5,6,7,8,9,10, 0,1,2,3,4,5,6,7,8,9,10};
+  auto const i32  = cudf::test::fixed_width_column_wrapper<int32_t>{
+    1,1,1,1,1,1,1,1,1,1,1,  1,1,1,1,1,1,1,1,1,1,1};
+  auto const d128 = fp128{
+    {1,1,1,1,1,1,1,1,1,1,1, 1,1,1,1,1,1,1,1,1,1,1}, scale};
+  // clang-format on
+
+  std::vector<cudf::groupby::aggregation_request> requests(2);
+  requests[0].values = i32;
+  requests[0].aggregations.push_back(cudf::make_sum_aggregation<cudf::groupby_aggregation>());
+  requests[1].values = d128;
+  requests[1].aggregations.push_back(cudf::make_sum_aggregation<cudf::groupby_aggregation>());
+
+  cudf::groupby::groupby gb(cudf::table_view({keys}));
+  auto [result_keys, results] = gb.aggregate(requests);
+
+  auto const sort_order = cudf::sorted_order(result_keys->view());
+  auto const sorted_result =
+    cudf::gather(cudf::table_view({results[1].results[0]->view()}), *sort_order);
+  auto const expected = fp128{{2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2}, scale};
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, sorted_result->get_column(0));
 }

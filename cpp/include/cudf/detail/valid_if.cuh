@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
@@ -19,6 +8,7 @@
 #include <cudf/detail/device_scalar.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/detail/utilities/grid_1d.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/default_stream.hpp>
@@ -27,7 +17,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
-#include <thrust/distance.h>
+#include <cuda/std/iterator>
 
 namespace cudf {
 namespace detail {
@@ -82,9 +72,8 @@ CUDF_KERNEL void valid_if_kernel(
  * @param begin The beginning of the sequence
  * @param end The end of the sequence
  * @param p The predicate
- * @param stream CUDA stream used for device memory operations and kernel launches.
- * @return A pair containing a `device_buffer` with the new bitmask and it's
- * null count
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @return A pair containing a `device_buffer` with the new bitmask and its null count
  */
 template <typename InputIterator, typename Predicate>
 std::pair<rmm::device_buffer, size_type> valid_if(InputIterator begin,
@@ -95,7 +84,7 @@ std::pair<rmm::device_buffer, size_type> valid_if(InputIterator begin,
 {
   CUDF_EXPECTS(begin <= end, "Invalid range.");
 
-  size_type size = thrust::distance(begin, end);
+  size_type size = cuda::std::distance(begin, end);
 
   auto null_mask = cudf::create_null_mask(size, mask_state::UNINITIALIZED, stream, mr);
 

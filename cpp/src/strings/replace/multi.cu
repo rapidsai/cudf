@@ -1,27 +1,18 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
-#include "strings/split/split.cuh"
+#include "strings/positions.hpp"
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/algorithms/copy_if.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/detail/utilities/grid_1d.cuh>
+#include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/strings/detail/replace.hpp>
 #include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/strings/detail/strings_column_factories.cuh>
@@ -35,9 +26,11 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 
+#include <cuda/atomic>
 #include <cuda/functional>
+#include <cuda/std/iterator>
+#include <cuda/std/tuple>
 #include <thrust/copy.h>
-#include <thrust/distance.h>
 #include <thrust/execution_policy.h>
 #include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
@@ -64,7 +57,7 @@ constexpr size_type AVG_CHAR_BYTES_THRESHOLD = 256;
  * @brief Type used for holding the target position (first) and the
  * target index (second).
  */
-using target_pair = thrust::tuple<int64_t, size_type>;
+using target_pair = cuda::std::tuple<int64_t, size_type>;
 
 /**
  * @brief Helper functions for performing character-parallel replace
@@ -104,7 +97,7 @@ struct replace_multi_parallel_fn {
         if (str_idx < 0) {
           auto const idx_itr =
             thrust::upper_bound(thrust::seq, d_offsets, d_offsets + d_strings.size(), idx);
-          str_idx = thrust::distance(d_offsets, idx_itr) - 1;
+          str_idx = cuda::std::distance(d_offsets, idx_itr) - 1;
           d_str   = get_string(str_idx - d_offsets[0]);
         }
         if ((d_chars + d_tgt.size_bytes()) <= (d_str.data() + d_str.size_bytes())) { return t; }
@@ -159,7 +152,7 @@ struct replace_multi_parallel_fn {
       auto const d_tgt   = d_targets[tgt_idx];
       auto const tgt_ptr = base_ptr + positions[i];
       if (str_ptr <= tgt_ptr && tgt_ptr < d_str_end) {
-        auto const keep_size = static_cast<size_type>(thrust::distance(str_ptr, tgt_ptr));
+        auto const keep_size = static_cast<size_type>(cuda::std::distance(str_ptr, tgt_ptr));
         if (keep_size > 0) { count++; }  // don't bother counting empty strings
 
         auto const d_repl = get_replacement_string(tgt_idx);
@@ -216,7 +209,7 @@ struct replace_multi_parallel_fn {
       auto const d_tgt   = d_targets[tgt_idx];
       auto const tgt_ptr = base_ptr + positions[i];
       if (str_ptr <= tgt_ptr && tgt_ptr < d_str_end) {
-        auto const keep_size = static_cast<size_type>(thrust::distance(str_ptr, tgt_ptr));
+        auto const keep_size = static_cast<size_type>(cuda::std::distance(str_ptr, tgt_ptr));
         if (keep_size > 0) { d_output[output_idx++] = string_index_pair{str_ptr, keep_size}; }
         output_size += keep_size;
 
@@ -231,7 +224,7 @@ struct replace_multi_parallel_fn {
     }
     // include any leftover parts of the string
     if (str_ptr <= d_str_end) {
-      auto const left_size = static_cast<size_type>(thrust::distance(str_ptr, d_str_end));
+      auto const left_size = static_cast<size_type>(cuda::std::distance(str_ptr, d_str_end));
       d_output[output_idx] = string_index_pair{str_ptr, left_size};
       output_size += left_size;
     }
@@ -297,14 +290,14 @@ CUDF_KERNEL void count_targets(replace_multi_parallel_fn fn, int64_t chars_bytes
 struct pair_generator {
   __device__ target_pair operator()(int64_t idx) const
   {
-    return thrust::make_tuple(idx, fn.target_index(idx, chars_bytes));
+    return cuda::std::make_tuple(idx, fn.target_index(idx, chars_bytes));
   }
   replace_multi_parallel_fn fn;
   int64_t chars_bytes;
 };
 
 struct copy_if_fn {
-  __device__ bool operator()(target_pair pos) { return thrust::get<1>(pos) >= 0; }
+  __device__ bool operator()(target_pair pos) { return cuda::std::get<1>(pos) >= 0; }
 };
 
 std::unique_ptr<column> replace_character_parallel(strings_column_view const& input,
@@ -348,9 +341,9 @@ std::unique_ptr<column> replace_character_parallel(strings_column_view const& in
   auto const copy_itr = thrust::make_transform_iterator(thrust::counting_iterator<int64_t>(0),
                                                         pair_generator{fn, chars_bytes});
   auto const out_itr  = thrust::make_zip_iterator(
-    thrust::make_tuple(targets_positions.begin(), targets_indices.begin()));
+    cuda::std::make_tuple(targets_positions.begin(), targets_indices.begin()));
   auto const copy_end =
-    cudf::detail::copy_if_safe(copy_itr, copy_itr + chars_bytes, out_itr, copy_if_fn{}, stream);
+    cudf::detail::copy_if(copy_itr, copy_itr + chars_bytes, out_itr, copy_if_fn{}, stream);
 
   // adjust target count since the copy-if may have eliminated some invalid targets
   target_count = std::min(static_cast<int64_t>(std::distance(out_itr, copy_end)), target_count);

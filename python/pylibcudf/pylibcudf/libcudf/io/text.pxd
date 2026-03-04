@@ -1,10 +1,13 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
-from libc.stdint cimport uint64_t
+# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
+from libc.stdint cimport int64_t, uint64_t
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
 from pylibcudf.exception_handler cimport libcudf_exception_handler
 from pylibcudf.libcudf.column.column cimport column
+from rmm.librmm.cuda_stream_view cimport cuda_stream_view
+from rmm.librmm.memory_resource cimport device_memory_resource
 
 
 cdef extern from "cudf/io/text/byte_range_info.hpp" \
@@ -15,6 +18,9 @@ cdef extern from "cudf/io/text/byte_range_info.hpp" \
         byte_range_info(
             size_t offset, size_t size
         ) except +libcudf_exception_handler
+
+        int64_t offset() except +libcudf_exception_handler
+        int64_t size() except +libcudf_exception_handler
 
 cdef extern from "cudf/io/text/data_chunk_source.hpp" \
         namespace "cudf::io::text" nogil:
@@ -56,5 +62,7 @@ cdef extern from "cudf/io/text/multibyte_split.hpp" \
     unique_ptr[column] multibyte_split(
         data_chunk_source source,
         string delimiter,
-        parse_options options
+        parse_options options,
+        cuda_stream_view stream,
+        device_memory_resource* mr
     ) except +libcudf_exception_handler

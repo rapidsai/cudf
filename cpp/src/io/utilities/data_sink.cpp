@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2020-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf/io/config_utils.hpp>
@@ -73,6 +62,7 @@ class file_sink : public data_sink {
 
     size_t const offset = _bytes_written;
     _bytes_written += size;
+    stream.synchronize();
 
     // KvikIO's `pwrite()` returns a `std::future<size_t>` so we convert it
     // to `std::future<void>`
@@ -105,6 +95,26 @@ class host_buffer_sink : public data_sink {
   {
     auto char_array = static_cast<char const*>(data);
     buffer_->insert(buffer_->end(), char_array, char_array + size);
+  }
+
+  [[nodiscard]] bool supports_device_write() const override { return true; }
+
+  [[nodiscard]] bool is_device_write_preferred(size_t size) const override { return true; }
+
+  void device_write(void const* gpu_data, size_t size, rmm::cuda_stream_view stream) override
+  {
+    device_write_async(gpu_data, size, stream).get();
+  }
+
+  std::future<void> device_write_async(void const* gpu_data,
+                                       size_t size,
+                                       rmm::cuda_stream_view stream) override
+  {
+    auto const current_size = buffer_->size();
+    buffer_->resize(current_size + size);
+    CUDF_CUDA_TRY(cudaMemcpyAsync(
+      buffer_->data() + current_size, gpu_data, size, cudaMemcpyDeviceToHost, stream.value()));
+    return std::async(std::launch::deferred, [stream]() -> void { stream.synchronize(); });
   }
 
   void flush() override {}

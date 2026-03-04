@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf_test/base_fixture.hpp>
@@ -76,7 +65,7 @@ CUDF_KERNEL void dispatch_test_kernel(cudf::type_id id, bool* d_result)
 
 TYPED_TEST(TypedDispatcherTest, DeviceDispatch)
 {
-  auto result = cudf::detail::make_zeroed_device_uvector_sync<bool>(
+  auto result = cudf::detail::make_zeroed_device_uvector<bool>(
     1, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
   dispatch_test_kernel<<<1, 1, 0, cudf::get_default_stream().value()>>>(
     cudf::type_to_id<TypeParam>(), result.data());
@@ -137,7 +126,7 @@ CUDF_KERNEL void double_dispatch_test_kernel(cudf::type_id id1, cudf::type_id id
 
 TYPED_TEST(TypedDoubleDispatcherTest, DeviceDoubleDispatch)
 {
-  auto result = cudf::detail::make_zeroed_device_uvector_sync<bool>(
+  auto result = cudf::detail::make_zeroed_device_uvector<bool>(
     1, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
   double_dispatch_test_kernel<<<1, 1, 0, cudf::get_default_stream().value()>>>(
     cudf::type_to_id<TypeParam>(), cudf::type_to_id<TypeParam>(), result.data());

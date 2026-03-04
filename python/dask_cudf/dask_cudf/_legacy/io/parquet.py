@@ -1,4 +1,6 @@
-# Copyright (c) 2019-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
+import contextlib
 import itertools
 import warnings
 from functools import partial
@@ -19,9 +21,10 @@ except ImportError:
     create_metadata_file_dd = None
 
 import cudf
-from cudf.core.column import CategoricalColumn, as_column
+from cudf.core.column import as_column
 from cudf.io import write_to_dataset
 from cudf.io.parquet import _apply_post_filters, _normalize_filters
+from cudf.utils import ioutils
 from cudf.utils.dtypes import cudf_dtype_from_pa_type
 
 
@@ -159,18 +162,10 @@ class CudfEngine(ArrowDatasetEngine):
                 if len(partitions[i].keys):
                     # Build a categorical column from `codes` directly
                     # (since the category is often a larger dtype)
-                    codes = as_column(
-                        partitions[i].keys.get_loc(index2),
-                        length=len(df),
-                    )
-                    df[name] = CategoricalColumn(
-                        data=None,
-                        size=codes.size,
-                        dtype=cudf.CategoricalDtype(
-                            categories=partitions[i].keys, ordered=False
-                        ),
-                        offset=codes.offset,
-                        children=(codes,),
+                    df[name] = cudf.CategoricalIndex.from_codes(
+                        [partitions[i].keys.get_loc(index2)] * len(df),
+                        categories=partitions[i].keys,
+                        ordered=False,
                     )
                 elif name not in df.columns:
                     # Add non-categorical partition column
@@ -348,8 +343,14 @@ class CudfEngine(ArrowDatasetEngine):
                 storage_options=kwargs.get("storage_options", None),
             )
         else:
-            with fs.open(fs.sep.join([path, filename]), mode="wb") as out_file:
-                if not isinstance(out_file, IOBase):
+            with (
+                contextlib.nullcontext()
+                if ioutils._is_local_filesystem(fs)
+                else fs.open(fs.sep.join([path, filename]), mode="wb")
+            ) as out_file:
+                if out_file is None:
+                    out_file = fs.sep.join([path, filename])
+                elif not isinstance(out_file, IOBase):
                     out_file = BufferedWriter(out_file)
                 md = df.to_parquet(
                     path=out_file,

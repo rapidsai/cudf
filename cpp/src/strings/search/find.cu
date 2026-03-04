@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf/column/column_device_view.cuh>
@@ -20,6 +9,7 @@
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/detail/utilities/grid_1d.cuh>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/find.hpp>
@@ -33,12 +23,13 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cooperative_groups.h>
+#include <cooperative_groups/reduce.h>
 #include <cuda/atomic>
+#include <cuda/iterator>
 #include <cuda/std/utility>
 #include <thrust/binary_search.h>
 #include <thrust/fill.h>
 #include <thrust/for_each.h>
-#include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform.h>
 
@@ -121,17 +112,13 @@ CUDF_KERNEL void finder_warp_parallel_fn(column_device_view const d_strings,
                                          size_type const stop,
                                          size_type* d_results)
 {
-  auto const idx = cudf::detail::grid_1d::global_thread_id();
+  namespace cg        = cooperative_groups;
+  auto const warp     = cg::tiled_partition<cudf::detail::warp_size>(cg::this_thread_block());
+  auto const lane_idx = warp.thread_rank();
 
-  auto const str_idx = idx / cudf::detail::warp_size;
-  if (str_idx >= d_strings.size()) { return; }
-  auto const lane_idx = idx % cudf::detail::warp_size;
-
-  if (d_strings.is_null(str_idx)) { return; }
-
-  // initialize the output for the atomicMin/Max
-  if (lane_idx == 0) { d_results[str_idx] = forward ? std::numeric_limits<size_type>::max() : -1; }
-  __syncwarp();
+  auto const tid     = cudf::detail::grid_1d::global_thread_id();
+  auto const str_idx = tid / cudf::detail::warp_size;
+  if (str_idx >= d_strings.size() or d_strings.is_null(str_idx)) { return; }
 
   auto const d_str    = d_strings.element<string_view>(str_idx);
   auto const d_target = d_targets[str_idx];
@@ -158,16 +145,12 @@ CUDF_KERNEL void finder_warp_parallel_fn(column_device_view const d_strings,
   }
 
   // find stores the minimum position while rfind stores the maximum position
-  // note that this was slightly faster than using cub::WarpReduce
-  cuda::atomic_ref<size_type, cuda::thread_scope_block> ref{*(d_results + str_idx)};
-  forward ? ref.fetch_min(position, cuda::std::memory_order_relaxed)
-          : ref.fetch_max(position, cuda::std::memory_order_relaxed);
-  __syncwarp();
+  auto const result = forward ? cg::reduce(warp, position, cg::less<size_type>())
+                              : cg::reduce(warp, position, cg::greater<size_type>());
 
   if (lane_idx == 0) {
     // the final result needs to be fixed up convert max() to -1
     // and a byte position to a character position
-    auto const result = d_results[str_idx];
     d_results[str_idx] =
       ((result < std::numeric_limits<size_type>::max()) && (result >= begin))
         ? start_char_pos + characters_in_string(d_str.data() + begin, result - begin)
@@ -187,14 +170,15 @@ void find_utility(strings_column_view const& input,
   auto d_results = output.mutable_view().data<size_type>();
   if ((input.chars_size(stream) / (input.size() - input.null_count())) > AVG_CHAR_BYTES_THRESHOLD) {
     // warp-per-string runs faster for longer strings (but not shorter ones)
-    constexpr int block_size = 256;
-    cudf::detail::grid_1d grid{input.size() * cudf::detail::warp_size, block_size};
+    constexpr auto block_size             = 256;
+    constexpr thread_index_type warp_size = cudf::detail::warp_size;
+    cudf::detail::grid_1d grid{input.size() * warp_size, block_size};
     finder_warp_parallel_fn<TargetIterator, forward>
       <<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
         *d_strings, target_itr, start, stop, d_results);
   } else {
     // string-per-thread function
-    thrust::transform(rmm::exec_policy(stream),
+    thrust::transform(rmm::exec_policy_nosync(stream),
                       thrust::make_counting_iterator<size_type>(0),
                       thrust::make_counting_iterator<size_type>(input.size()),
                       d_results,
@@ -230,7 +214,7 @@ std::unique_ptr<column> find_fn(strings_column_view const& input,
   if (d_target.empty()) {
     auto d_strings = column_device_view::create(input.parent(), stream);
     auto d_results = results->mutable_view().data<size_type>();
-    thrust::transform(rmm::exec_policy(stream),
+    thrust::transform(rmm::exec_policy_nosync(stream),
                       thrust::counting_iterator<size_type>(0),
                       thrust::counting_iterator<size_type>(input.size()),
                       d_results,
@@ -239,7 +223,7 @@ std::unique_ptr<column> find_fn(strings_column_view const& input,
   }
 
   // find-utility function fills in the results column
-  auto target_itr      = thrust::make_constant_iterator(d_target);
+  auto target_itr      = cuda::make_constant_iterator(d_target);
   using TargetIterator = decltype(target_itr);
   find_utility<TargetIterator, forward>(input, target_itr, *results, start, stop, stream);
   results->set_null_count(input.null_count());
@@ -404,9 +388,10 @@ std::unique_ptr<column> contains_warp_parallel(strings_column_view const& input,
       rmm::exec_policy_nosync(stream), results_view.begin<bool>(), results_view.end<bool>(), true);
   } else {
     // launch warp per string
-    auto const d_strings     = column_device_view::create(input.parent(), stream);
-    constexpr int block_size = 256;
-    cudf::detail::grid_1d grid{input.size() * cudf::detail::warp_size, block_size};
+    auto const d_strings                   = column_device_view::create(input.parent(), stream);
+    constexpr thread_index_type block_size = 256;
+    constexpr thread_index_type warp_size  = cudf::detail::warp_size;
+    cudf::detail::grid_1d grid{input.size() * warp_size, block_size};
     contains_warp_parallel_fn<<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
       *d_strings, d_target, results_view.data<bool>());
   }
@@ -462,7 +447,7 @@ std::unique_ptr<column> contains_fn(strings_column_view const& strings,
   auto results_view = results->mutable_view();
   auto d_results    = results_view.data<bool>();
   // set the bool values by evaluating the passed function
-  thrust::transform(rmm::exec_policy(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream),
                     thrust::make_counting_iterator<size_type>(0),
                     thrust::make_counting_iterator<size_type>(strings_count),
                     d_results,
@@ -516,7 +501,7 @@ std::unique_ptr<column> contains_fn(strings_column_view const& strings,
   auto d_results    = results_view.data<bool>();
   // set the bool values by evaluating the passed function
   thrust::transform(
-    rmm::exec_policy(stream),
+    rmm::exec_policy_nosync(stream),
     thrust::make_counting_iterator<size_type>(0),
     thrust::make_counting_iterator<size_type>(strings.size()),
     d_results,

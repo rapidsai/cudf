@@ -1,22 +1,11 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
-#include "../utilities/timer.hpp"
 #include "common_utils.hpp"
 #include "io_source.hpp"
+#include "timer.hpp"
 
 #include <cudf/concatenate.hpp>
 #include <cudf/io/parquet.hpp>
@@ -24,8 +13,8 @@
 #include <cudf/table/table_view.hpp>
 
 #include <rmm/cuda_stream_pool.hpp>
-#include <rmm/mr/device/device_memory_resource.hpp>
-#include <rmm/mr/device/statistics_resource_adaptor.hpp>
+#include <rmm/mr/device_memory_resource.hpp>
+#include <rmm/mr/statistics_resource_adaptor.hpp>
 
 #include <filesystem>
 #include <stdexcept>
@@ -309,24 +298,25 @@ std::vector<io_source> extract_input_sources(std::string const& paths,
                                        parquet_files.begin() + initial_size);
                 });
 
-  // Cycle append parquet files from the existing ones if less than the thread_count
-  std::cout << "Warning: Number of input sources < thread count. Cycling from\n"
-               "and appending to current input sources such that the number of\n"
-               "input source == thread count\n";
-  for (size_t idx = 0; thread_count > static_cast<int>(parquet_files.size()); idx++) {
-    parquet_files.emplace_back(parquet_files[idx % initial_size]);
+  if (parquet_files.size() < thread_count) {
+    // Cycle append parquet files from the existing ones if less than the thread_count
+    std::cout << "Warning: Number of input sources < thread count. Cycling from\n"
+                 "and appending to current input sources such that the number of\n"
+                 "input source == thread count\n";
+    for (size_t idx = 0; thread_count > static_cast<int>(parquet_files.size()); idx++) {
+      parquet_files.emplace_back(parquet_files[idx % initial_size]);
+    }
   }
 
   // Vector of io sources
   std::vector<io_source> input_sources;
   input_sources.reserve(parquet_files.size());
   // Transform input files to the specified io sources
-  std::transform(parquet_files.begin(),
-                 parquet_files.end(),
-                 std::back_inserter(input_sources),
-                 [&](auto const& file_name) {
-                   return io_source{file_name, io_source_type, stream};
-                 });
+  std::transform(
+    parquet_files.begin(),
+    parquet_files.end(),
+    std::back_inserter(input_sources),
+    [&](auto const& file_name) { return io_source{file_name, io_source_type, stream}; });
   stream.synchronize();
   return input_sources;
 }
@@ -364,10 +354,10 @@ int32_t main(int argc, char const** argv)
   }
 
   // Initialize mr, default stream and stream pool
-  auto const is_pool_used = true;
-  auto resource           = create_memory_resource(is_pool_used);
-  auto default_stream     = cudf::get_default_stream();
-  auto stream_pool        = rmm::cuda_stream_pool(thread_count);
+  bool constexpr is_pool_used = true;
+  auto resource               = create_memory_resource(is_pool_used);
+  auto default_stream         = cudf::get_default_stream();
+  auto stream_pool = rmm::cuda_stream_pool(thread_count, rmm::cuda_stream::flags::non_blocking);
   auto stats_mr =
     rmm::mr::statistics_resource_adaptor<rmm::mr::device_memory_resource>(resource.get());
   rmm::mr::set_current_device_resource(&stats_mr);
@@ -395,7 +385,7 @@ int32_t main(int argc, char const** argv)
                    "growth.\n\n";
     }
 
-    cudf::examples::timer timer;
+    timer timer;
     std::for_each(thrust::make_counting_iterator(0),
                   thrust::make_counting_iterator(num_reads),
                   [&](auto i) {  // Read parquet files and discard the tables
@@ -431,7 +421,7 @@ int32_t main(int argc, char const** argv)
     std::string output_path =
       std::filesystem::temp_directory_path().string() + "/output_" + current_date_and_time();
     std::filesystem::create_directory({output_path});
-    cudf::examples::timer timer;
+    timer timer;
     write_parquet_multithreaded(output_path, table_views, thread_count, stream_pool);
     default_stream.synchronize();
     timer.print_elapsed_millis();
@@ -453,7 +443,7 @@ int32_t main(int argc, char const** argv)
     default_stream.synchronize();
 
     // Check if the tables are identical
-    check_tables_equal(input_table->view(), transcoded_table->view());
+    check_tables_equal(input_table->view(), transcoded_table->view(), default_stream);
 
     // Remove the created temp directory and parquet data
     std::filesystem::remove_all(output_path);

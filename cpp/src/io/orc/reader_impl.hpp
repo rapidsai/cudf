@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
@@ -79,6 +68,11 @@ class reader_impl {
                        orc_reader_options const& options,
                        rmm::cuda_stream_view stream,
                        rmm::device_async_resource_ref mr);
+
+  reader_impl(reader_impl const&)            = delete;
+  reader_impl& operator=(reader_impl const&) = delete;
+  reader_impl(reader_impl&&)                 = delete;
+  reader_impl& operator=(reader_impl&&)      = delete;
 
   /**
    * @copydoc cudf::io::orc::detail::reader::read
@@ -173,6 +167,7 @@ class reader_impl {
     bool use_index;            // enable or disable attempt to use row index for parsing
     bool use_np_dtypes;        // enable or disable the conversion to numpy-compatible dtypes
     std::vector<std::string> decimal128_columns;  // control decimals conversion
+    bool ignore_timezone_in_stripe_footer;        // ignore writer timezone in strip footer
 
     // User specified reading rows/stripes selection.
     int64_t const skip_rows;

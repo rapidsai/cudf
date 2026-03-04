@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2023-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
 
@@ -76,8 +65,8 @@ MurmurHash3_x64_128<double>::result_type __device__ inline MurmurHash3_x64_128<d
 
 template <>
 MurmurHash3_x64_128<cudf::string_view>::result_type
-  __device__ inline MurmurHash3_x64_128<cudf::string_view>::operator()(
-    cudf::string_view const& key) const
+  __device__ inline MurmurHash3_x64_128<cudf::string_view>::
+  operator()(cudf::string_view const& key) const
 {
   return this->compute_bytes(reinterpret_cast<cuda::std::byte const*>(key.data()),
                              key.size_bytes());
@@ -85,24 +74,24 @@ MurmurHash3_x64_128<cudf::string_view>::result_type
 
 template <>
 MurmurHash3_x64_128<numeric::decimal32>::result_type
-  __device__ inline MurmurHash3_x64_128<numeric::decimal32>::operator()(
-    numeric::decimal32 const& key) const
+  __device__ inline MurmurHash3_x64_128<numeric::decimal32>::
+  operator()(numeric::decimal32 const& key) const
 {
   return this->compute(key.value());
 }
 
 template <>
 MurmurHash3_x64_128<numeric::decimal64>::result_type
-  __device__ inline MurmurHash3_x64_128<numeric::decimal64>::operator()(
-    numeric::decimal64 const& key) const
+  __device__ inline MurmurHash3_x64_128<numeric::decimal64>::
+  operator()(numeric::decimal64 const& key) const
 {
   return this->compute(key.value());
 }
 
 template <>
 MurmurHash3_x64_128<numeric::decimal128>::result_type
-  __device__ inline MurmurHash3_x64_128<numeric::decimal128>::operator()(
-    numeric::decimal128 const& key) const
+  __device__ inline MurmurHash3_x64_128<numeric::decimal128>::
+  operator()(numeric::decimal128 const& key) const
 {
   return this->compute(key.value());
 }

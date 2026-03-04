@@ -1,17 +1,8 @@
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright 2013 Google Inc. All Rights Reserved.
+ * SPDX-FileCopyrightText: Copyright(c) 2009, 2010, 2013 - 2016 by the Brotli Authors.
+ * SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0 AND MIT
  */
 
 /** @file debrotli.cu
@@ -198,6 +189,17 @@ struct debrotli_state_s {
 
 inline __device__ uint32_t Log2Floor(uint32_t value) { return 32 - __clz(value); }
 
+/// @brief Safely read up to 4 bytes with bounds checking, handling end-of-buffer cases
+inline __device__ uint32_t safe_load_u32(uint8_t const* p, uint8_t const* end)
+{
+  if (p >= end) { return 0; }
+
+  uint32_t result = 0;
+  cuda::std::memcpy(
+    &result, p, cuda::std::min<size_t>(cuda::std::distance(p, end), sizeof(uint32_t)));
+  return result;
+}
+
 /// @brief initializes the bit reader
 __device__ void initbits(debrotli_state_s* s, uint8_t const* base, size_t len, size_t pos = 0)
 {
@@ -207,9 +209,9 @@ __device__ void initbits(debrotli_state_s* s, uint8_t const* base, size_t len, s
   s->base     = base;
   s->end      = base + len;
   s->cur      = p;
-  s->bitbuf.x = (p < s->end) ? *reinterpret_cast<uint32_t const*>(p) : 0;
+  s->bitbuf.x = safe_load_u32(p, s->end);
   p += 4;
-  s->bitbuf.y = (p < s->end) ? *reinterpret_cast<uint32_t const*>(p) : 0;
+  s->bitbuf.y = safe_load_u32(p, s->end);
   s->bitpos   = prefix_bytes * 8;
 }
 
@@ -232,7 +234,7 @@ inline __device__ void skipbits(debrotli_state_s* s, uint32_t n)
   if (bitpos >= 32) {
     uint8_t const* cur = s->cur + 8;
     s->bitbuf.x        = s->bitbuf.y;
-    s->bitbuf.y        = (cur < s->end) ? *reinterpret_cast<uint32_t const*>(cur) : 0;
+    s->bitbuf.y        = safe_load_u32(cur, s->end);
     s->cur             = cur - 4;
     bitpos &= 0x1f;
   }
@@ -1914,7 +1916,7 @@ static __device__ void ProcessCommands(debrotli_state_s* s, brotli_dictionary_s 
 CUDF_KERNEL void __launch_bounds__(block_size, 2)
   gpu_debrotli_kernel(device_span<device_span<uint8_t const> const> inputs,
                       device_span<device_span<uint8_t> const> outputs,
-                      device_span<compression_result> results,
+                      device_span<codec_exec_result> results,
                       uint8_t* scratch,
                       uint32_t scratch_size)
 {
@@ -1963,7 +1965,8 @@ CUDF_KERNEL void __launch_bounds__(block_size, 2)
         if (s->is_uncompressed) {
           // Uncompressed block
           uint8_t const* src = s->cur + ((s->bitpos + 7) >> 3);
-          uint8_t* dst       = s->out;
+          __syncthreads();
+          uint8_t* dst = s->out;
           if (!t) {
             if (getbits_bytealign(s) != 0) {
               s->error = -1;
@@ -2017,8 +2020,7 @@ CUDF_KERNEL void __launch_bounds__(block_size, 2)
   // Output decompression status
   if (!t) {
     results[block_id].bytes_written = s->out - s->outbase;
-    results[block_id].status =
-      (s->error == 0) ? compression_status::SUCCESS : compression_status::FAILURE;
+    results[block_id].status = (s->error == 0) ? codec_status::SUCCESS : codec_status::FAILURE;
     // Return ext heap used by last block (statistics)
   }
 }
@@ -2079,7 +2081,7 @@ size_t get_gpu_debrotli_scratch_size(int max_num_inputs)
 
 void gpu_debrotli(device_span<device_span<uint8_t const> const> inputs,
                   device_span<device_span<uint8_t> const> outputs,
-                  device_span<compression_result> results,
+                  device_span<codec_exec_result> results,
                   rmm::cuda_stream_view stream)
 {
   // Scratch memory for decompressing

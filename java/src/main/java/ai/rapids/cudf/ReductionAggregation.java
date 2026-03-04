@@ -1,18 +1,7 @@
 /*
  *
- *  Copyright (c) 2021-2025, NVIDIA CORPORATION.
- *
- *  Licensed under the Apache License, Version 2.0 (the "License");
- *  you may not use this file except in compliance with the License.
- *  You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- *  Unless required by applicable law or agreed to in writing, software
- *  distributed under the License is distributed on an "AS IS" BASIS,
- *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  See the License for the specific language governing permissions and
- *  limitations under the License.
+ *  SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ *  SPDX-License-Identifier: Apache-2.0
  *
  */
 
@@ -68,6 +57,20 @@ public final class ReductionAggregation {
    */
   public static ReductionAggregation product() {
     return new ReductionAggregation(Aggregation.product());
+  }
+
+  /**
+   * ArgMin Aggregation
+   */
+  public static ReductionAggregation argMin() {
+    return new ReductionAggregation(Aggregation.argMin());
+  }
+
+  /**
+   * ArgMax Aggregation
+   */
+  public static ReductionAggregation argMax() {
+    return new ReductionAggregation(Aggregation.argMax());
   }
 
   /**
@@ -312,5 +315,26 @@ public final class ReductionAggregation {
    */
   public static ReductionAggregation mergeHistogram() {
     return new ReductionAggregation(Aggregation.mergeHistogram());
+  }
+
+  /**
+  * Bitwise AND aggregation, computing the bitwise AND of all non-null values.
+  */
+  public static ReductionAggregation bitAnd() {
+    return new ReductionAggregation(Aggregation.bitAnd());
+  }
+
+  /**
+   * Bitwise OR aggregation, computing the bitwise OR of all non-null values.
+   */
+  public static ReductionAggregation bitOr() {
+    return new ReductionAggregation(Aggregation.bitOr());
+  }
+
+  /**
+   * Bitwise XOR aggregation, computing the bitwise XOR of all non-null values.
+   */
+  public static ReductionAggregation bitXor() {
+    return new ReductionAggregation(Aggregation.bitXor());
   }
 }

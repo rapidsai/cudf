@@ -1,4 +1,5 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 from . import (
     attributes,
@@ -18,6 +19,7 @@ from . import (
     repeat,
     replace,
     replace_re,
+    reverse,
     side_type,
     slice,
     split,
@@ -46,6 +48,7 @@ __all__ = [
     "repeat",
     "replace",
     "replace_re",
+    "reverse",
     "slice",
     "split",
     "strip",

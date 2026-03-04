@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf_test/base_fixture.hpp>
@@ -29,16 +18,18 @@
 #include <type_traits>
 
 // fixed_width, dict, string, list, struct
-template <typename T, std::enable_if_t<cudf::is_fixed_width<T>()>* = nullptr>
+template <typename T>
 std::unique_ptr<cudf::column> example_column()
+  requires(cudf::is_fixed_width<T>())
 {
   auto begin = thrust::make_counting_iterator(1);
   auto end   = thrust::make_counting_iterator(16);
   return cudf::test::fixed_width_column_wrapper<T>(begin, end).release();
 }
 
-template <typename T, std::enable_if_t<cudf::is_dictionary<T>()>* = nullptr>
+template <typename T>
 std::unique_ptr<cudf::column> example_column()
+  requires(cudf::is_dictionary<T>())
 {
   return cudf::test::dictionary_column_wrapper<std::string>(
            {"fff", "aaa", "ddd", "bbb", "ccc", "ccc", "ccc", "", ""},
@@ -46,25 +37,26 @@ std::unique_ptr<cudf::column> example_column()
     .release();
 }
 
-template <typename T,
-          std::enable_if_t<std::is_same_v<T, std::string> or
-                           std::is_same_v<T, cudf::string_view>>* = nullptr>
+template <typename T>
 std::unique_ptr<cudf::column> example_column()
 
+  requires(std::is_same_v<T, std::string> or std::is_same_v<T, cudf::string_view>)
 {
   return cudf::test::strings_column_wrapper(
            {"fff", "aaa", "ddd", "bbb", "ccc", "ccc", "ccc", "", ""})
     .release();
 }
 
-template <typename T, std::enable_if_t<std::is_same_v<T, cudf::list_view>>* = nullptr>
+template <typename T>
 std::unique_ptr<cudf::column> example_column()
+  requires(std::is_same_v<T, cudf::list_view>)
 {
   return cudf::test::lists_column_wrapper<int>({{1, 2, 3}, {4, 5}, {}, {6, 7, 8}}).release();
 }
 
-template <typename T, std::enable_if_t<std::is_same_v<T, cudf::struct_view>>* = nullptr>
+template <typename T>
 std::unique_ptr<cudf::column> example_column()
+  requires(std::is_same_v<T, cudf::struct_view>)
 {
   auto begin    = thrust::make_counting_iterator(1);
   auto end      = thrust::make_counting_iterator(16);
@@ -220,8 +212,8 @@ TYPED_TEST(ColumnViewShallowTests, shallow_hash_slice)
   {
     if constexpr (std::is_integral_v<TypeParam> and not std::is_same_v<TypeParam, bool>) {
       using newType    = std::conditional_t<std::is_signed_v<TypeParam>,
-                                         std::make_unsigned_t<TypeParam>,
-                                         std::make_signed_t<TypeParam>>;
+                                            std::make_unsigned_t<TypeParam>,
+                                            std::make_signed_t<TypeParam>>;
       auto new_type    = cudf::data_type(cudf::type_to_id<newType>());
       auto col_bitcast = cudf::bit_cast(col_view, new_type);
       EXPECT_NE(shallow_hash(col_view), shallow_hash(col_bitcast));
@@ -387,8 +379,8 @@ TYPED_TEST(ColumnViewShallowTests, is_shallow_equivalent_slice)
   {
     if constexpr (std::is_integral_v<TypeParam> and not std::is_same_v<TypeParam, bool>) {
       using newType    = std::conditional_t<std::is_signed_v<TypeParam>,
-                                         std::make_unsigned_t<TypeParam>,
-                                         std::make_signed_t<TypeParam>>;
+                                            std::make_unsigned_t<TypeParam>,
+                                            std::make_signed_t<TypeParam>>;
       auto new_type    = cudf::data_type(cudf::type_to_id<newType>());
       auto col_bitcast = cudf::bit_cast(col_view, new_type);
       EXPECT_FALSE(is_shallow_equivalent(col_view, col_bitcast));

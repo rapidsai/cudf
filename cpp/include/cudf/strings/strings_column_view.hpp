@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
 
@@ -43,6 +32,8 @@ class strings_column_view : private column_view {
    * @param strings_column The column view to wrap.
    */
   strings_column_view(column_view strings_column);
+  // So we can use this from cython.
+  strings_column_view()                           = default;
   strings_column_view(strings_column_view&&)      = default;  ///< Move constructor
   strings_column_view(strings_column_view const&) = default;  ///< Copy constructor
   ~strings_column_view() override                 = default;
@@ -95,7 +86,7 @@ class strings_column_view : private column_view {
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @return Number of bytes in the chars child column
    */
-  [[nodiscard]] int64_t chars_size(rmm::cuda_stream_view stream) const noexcept;
+  [[nodiscard]] int64_t chars_size(rmm::cuda_stream_view stream) const;
 
   /**
    * @brief Return an iterator for the chars child column.
@@ -108,7 +99,7 @@ class strings_column_view : private column_view {
    *
    * @return Iterator pointing to the first char byte.
    */
-  [[nodiscard]] chars_iterator chars_begin(rmm::cuda_stream_view) const;
+  [[nodiscard]] chars_iterator chars_begin(rmm::cuda_stream_view) const noexcept;
 
   /**
    * @brief Return an end iterator for the offsets child column.

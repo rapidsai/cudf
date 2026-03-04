@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
@@ -19,6 +8,7 @@
 #include "types.hpp"
 
 #include <cudf/detail/utilities/visitor_overload.hpp>
+#include <cudf/io/detail/utils.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
@@ -377,6 +367,13 @@ class json_reader_options {
    * @return Additional values to recognize as null values
    */
   [[nodiscard]] std::vector<std::string> const& get_na_values() const { return _na_values; }
+
+  /**
+   * @brief Sets source info.
+   *
+   * @param src The source info.
+   */
+  void set_source(source_info src) { _source = std::move(src); }
 
   /**
    * @brief Set data types for columns to be read.
@@ -964,6 +961,8 @@ class json_writer_options {
   std::string _false_value = std::string{"false"};
   // Names of all columns; if empty, writer will generate column names
   std::optional<table_metadata> _metadata;  // Optional column names
+  // Indicates whether to escape UTF-8 characters in JSON output
+  bool _enable_utf8_escaped = true;
 
   /**
    * @brief Constructor from sink and table.
@@ -1044,6 +1043,26 @@ class json_writer_options {
    * @return `true` if JSON lines is used for records format
    */
   [[nodiscard]] bool is_enabled_lines() const { return _lines; }
+
+  /**
+   * @brief Enable or disable writing escaped UTF-8 characters in JSON output.
+   *
+   * Example:
+   * With `enable_utf8_escaped(false)`, the string `"ẅ"` is written as-is instead of:
+   * `"\u1e85"`.
+   *
+   * @note Enabling this is useful for producing more human-readable JSON.
+   *
+   * @param val Boolean value to enable/disable UTF-8 escaped output
+   */
+  void enable_utf8_escaped(bool val) { _enable_utf8_escaped = val; }
+
+  /**
+   * @brief Check whether UTF-8 escaped output is enabled.
+   *
+   * @return true if UTF-8 escaped output is enabled, false otherwise
+   */
+  [[nodiscard]] bool is_enabled_utf8_escaped() const { return _enable_utf8_escaped; }
 
   /**
    * @brief Returns maximum number of rows to process for each file write.
@@ -1218,6 +1237,20 @@ class json_writer_options_builder {
   }
 
   /**
+   * @brief Enables/Disable UTF-8 escaped output for string fields.
+   *
+   * Default is `false`, which escapes all non-ASCII characters.
+   *
+   * @param val Boolean value to enable/disable escaped UTF-8 output
+   * @return this for chaining
+   */
+  json_writer_options_builder& utf8_escaped(bool val)
+  {
+    options._enable_utf8_escaped = val;
+    return *this;
+  }
+
+  /**
    * @brief Enables/Disables JSON lines for records format.
    *
    * @param val Boolean value to enable/disable
@@ -1299,6 +1332,27 @@ class json_writer_options_builder {
  */
 void write_json(json_writer_options const& options,
                 rmm::cuda_stream_view stream = cudf::get_default_stream());
+
+/// @cond
+struct is_supported_json_write_type_fn {
+  template <typename T>
+  constexpr bool operator()() const
+  {
+    return cudf::io::detail::is_convertible_to_string_column<T>();
+  }
+};
+/// @endcond
+
+/**
+ * @brief Checks if a cudf::data_type is supported for JSON writing.
+ *
+ * @param type The data_type to check.
+ * @return true if the type is supported for JSON writing, false otherwise.
+ */
+constexpr bool is_supported_write_json(data_type type)
+{
+  return cudf::type_dispatcher(type, is_supported_json_write_type_fn{});
+}
 
 /** @} */  // end of group
 }  // namespace io

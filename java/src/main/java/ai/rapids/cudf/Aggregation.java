@@ -1,18 +1,7 @@
 /*
  *
- *  Copyright (c) 2020-2025, NVIDIA CORPORATION.
- *
- *  Licensed under the Apache License, Version 2.0 (the "License");
- *  you may not use this file except in compliance with the License.
- *  You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- *  Unless required by applicable law or agreed to in writing, software
- *  distributed under the License is distributed on an "AS IS" BASIS,
- *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  See the License for the specific language governing permissions and
- *  limitations under the License.
+ *  SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ *  SPDX-License-Identifier: Apache-2.0
  *
  */
 
@@ -71,7 +60,8 @@ abstract class Aggregation {
         TDIGEST(32), // This can take a delta argument for accuracy level
         MERGE_TDIGEST(33), // This can take a delta argument for accuracy level
         HISTOGRAM(34),
-        MERGE_HISTOGRAM(35);
+        MERGE_HISTOGRAM(35),
+        BITWISE_AGG(36);
 
         final int nativeId;
 
@@ -424,6 +414,69 @@ abstract class Aggregation {
         }
     }
 
+    static final class BitAndAggregation extends Aggregation {
+        private BitAndAggregation() {
+            super(Kind.BITWISE_AGG);
+        }
+
+        @Override
+        long createNativeInstance() {
+            return Aggregation.createBitAndAgg();
+        }
+
+        @Override
+        public int hashCode() {
+            return 31 * kind.hashCode() + ("AND").hashCode();
+        }
+
+        @Override
+        public boolean equals(Object other) {
+            return other instanceof BitAndAggregation;
+        }
+    }
+
+    static final class BitOrAggregation extends Aggregation {
+        private BitOrAggregation() {
+            super(Kind.BITWISE_AGG);
+        }
+
+        @Override
+        long createNativeInstance() {
+            return Aggregation.createBitOrAgg();
+        }
+
+        @Override
+        public int hashCode() {
+            return 31 * kind.hashCode() + ("OR").hashCode();
+        }
+
+        @Override
+        public boolean equals(Object other) {
+            return other instanceof BitAndAggregation;
+        }
+    }
+
+    static final class BitXorAggregation extends Aggregation {
+        private BitXorAggregation() {
+            super(Kind.BITWISE_AGG);
+        }
+
+        @Override
+        long createNativeInstance() {
+            return Aggregation.createBitXorAgg();
+        }
+
+        @Override
+        public int hashCode() {
+            return 31 * kind.hashCode() + ("XOR").hashCode();
+        }
+
+        @Override
+        public boolean equals(Object other) {
+            return other instanceof BitAndAggregation;
+        }
+    }
+
     protected final Kind kind;
 
     protected Aggregation(Kind kind) {
@@ -689,10 +742,7 @@ abstract class Aggregation {
     }
 
     /**
-     * Index of max element. Please note that when using this aggregation with a group by if the
-     * data is not already sorted by the grouping keys it may be automatically sorted
-     * prior to doing the aggregation. This would result in an index into the sorted data being
-     * returned.
+     * Index of the max element.
      */
     static ArgMaxAggregation argMax() {
         return new ArgMaxAggregation();
@@ -705,10 +755,7 @@ abstract class Aggregation {
     }
 
     /**
-     * Index of min element. Please note that when using this aggregation with a group by if the
-     * data is not already sorted by the grouping keys it may be automatically sorted
-     * prior to doing the aggregation. This would result in an index into the sorted data being
-     * returned.
+     * Index of the min element.
      */
     static ArgMinAggregation argMin() {
         return new ArgMinAggregation();
@@ -988,6 +1035,18 @@ abstract class Aggregation {
         return new MergeHistogramAggregation();
     }
 
+    static BitAndAggregation bitAnd() {
+        return new BitAndAggregation();
+    }
+
+    static BitOrAggregation bitOr() {
+        return new BitOrAggregation();
+    }
+
+    static BitXorAggregation bitXor() {
+        return new BitXorAggregation();
+    }
+
     /**
      * Create one of the aggregations that only needs a kind, no other parameters. This does not
      * work for all types and for code safety reasons each kind is added separately.
@@ -1043,4 +1102,19 @@ abstract class Aggregation {
      * Create a HOST_UDF aggregation.
      */
     private static native long createHostUDFAgg(long udfNativeHandle);
+
+    /**
+     * Create a bitwise AND aggregation.
+     */
+    private static native long createBitAndAgg();
+
+    /**
+     * Create a bitwise OR aggregation.
+     */
+    private static native long createBitOrAgg();
+
+    /**
+     * Create a bitwise XOR aggregation.
+     */
+    private static native long createBitXorAgg();
 }

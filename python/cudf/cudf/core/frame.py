@@ -1,61 +1,67 @@
-# Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
 
+import itertools
 import operator
 import warnings
-from collections import abc
-from typing import TYPE_CHECKING, Any, Literal
+from collections.abc import Mapping
+from typing import TYPE_CHECKING, Any, Literal, Self
 
 import cupy
-import numpy
 import numpy as np
+import pandas as pd
 import pyarrow as pa
-from typing_extensions import Self
 
 import pylibcudf as plc
 
 import cudf
-
-# TODO: The `numpy` import is needed for typing purposes during doc builds
-# only, need to figure out why the `np` alias is insufficient then remove.
-from cudf.api.types import is_dtype_equal, is_scalar
+from cudf.api.extensions import no_default
+from cudf.api.types import is_dtype_equal, is_scalar, is_string_dtype
 from cudf.core._compat import PANDAS_LT_300
-from cudf.core._internals import copying, search, sorting
+from cudf.core._internals import copying, sorting
 from cudf.core.abc import Serializable
-from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column import (
     ColumnBase,
+    access_columns,
     as_column,
-    column_empty,
     deserialize_columns,
     serialize_columns,
 )
-from cudf.core.column.categorical import CategoricalColumn, as_unsigned_codes
 from cudf.core.column_accessor import ColumnAccessor
+from cudf.core.dtype.validators import is_dtype_obj_numeric
 from cudf.core.mixins import BinaryOperand, Scannable
-from cudf.utils import ioutils
-from cudf.utils.dtypes import CUDF_STRING_DTYPE, find_common_type
+from cudf.utils.dtypes import (
+    dtype_from_pylibcudf_column,
+    find_common_type,
+    is_pandas_nullable_extension_dtype,
+)
 from cudf.utils.performance_tracking import _performance_tracking
 from cudf.utils.utils import _array_ufunc, _warn_no_dask_cudf
 
 if TYPE_CHECKING:
-    from collections.abc import MutableMapping
+    from collections.abc import (
+        Callable,
+        Generator,
+        Hashable,
+        Iterable,
+        MutableMapping,
+    )
     from types import ModuleType
 
-    from cudf._typing import Dtype, DtypeObj, ScalarLike
+    from cudf._typing import Axis, Dtype, DtypeObj, ScalarLike
+    from cudf.core.buffer import Buffer
+    from cudf.core.series import Series
 
 
-# TODO: It looks like Frame is missing a declaration of `copy`, need to add
 class Frame(BinaryOperand, Scannable, Serializable):
-    """A collection of Column objects with an optional index.
+    """A collection of Column objects.
 
     Parameters
     ----------
     data : dict
         An dict mapping column names to Columns
-    index : Table
-        A Frame representing the (optional) index columns.
     """
 
     _VALID_BINARY_OPERATIONS = BinaryOperand._SUPPORTED_BINARY_OPERATIONS
@@ -82,17 +88,17 @@ class Frame(BinaryOperand, Scannable, Serializable):
     @property
     def _column_labels_and_values(
         self,
-    ) -> abc.Iterable[tuple[abc.Hashable, ColumnBase]]:
-        return zip(self._column_names, self._columns)
+    ) -> Iterable[tuple[Hashable, ColumnBase]]:
+        return zip(self._column_names, self._columns, strict=True)
 
     @property
-    def _dtypes(self) -> abc.Generator[tuple[abc.Hashable, Dtype], None, None]:
+    def _dtypes(self) -> Generator[tuple[Hashable, DtypeObj], None, None]:
         for label, col in self._column_labels_and_values:
             yield label, col.dtype
 
     @property
     def ndim(self) -> int:
-        raise NotImplementedError()
+        raise NotImplementedError
 
     @_performance_tracking
     def serialize(self):
@@ -119,7 +125,8 @@ class Frame(BinaryOperand, Scannable, Serializable):
                     if isinstance(cname, np.generic)
                     else (cname, "")
                     for cname in self._column_names
-                ]
+                ],
+                strict=True,
             )
             if self._column_names
             else ((), ())
@@ -164,13 +171,27 @@ class Frame(BinaryOperand, Scannable, Serializable):
         column_names = [
             getattr(np, cntype)(cname) if cntype != "" else cname
             for cname, cntype in zip(
-                header["column_names"], header["column_names_numpy_type"]
+                header["column_names"],
+                header["column_names_numpy_type"],
+                strict=True,
             )
         ]
         col_accessor = ColumnAccessor(
-            data=dict(zip(column_names, columns)), **kwargs
+            data=dict(zip(column_names, columns, strict=True)), **kwargs
         )
         return cls._from_data(col_accessor)
+
+    @_performance_tracking
+    def nans_to_nulls(self) -> Self:
+        result = []
+        for col in self._columns:
+            converted = col.nans_to_nulls()
+            if converted is col:
+                converted = converted.copy()
+            result.append(converted)
+        return self._from_data_like_self(
+            self._data._from_columns_like_self(result)
+        )
 
     @classmethod
     @_performance_tracking
@@ -178,7 +199,14 @@ class Frame(BinaryOperand, Scannable, Serializable):
         """
         Construct cls from a ColumnAccessor-like mapping.
         """
-        obj = cls.__new__(cls)
+        from cudf.core.index import Index
+
+        if cls is Index:
+            # Because Index.__new__ is overridden as a constructor,
+            # to copy pandas...
+            obj = object.__new__(cls)
+        else:
+            obj = cls.__new__(cls)
         Frame.__init__(obj, data)
         return obj
 
@@ -194,7 +222,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
     def _from_columns_like_self(
         self,
         columns: list[ColumnBase],
-        column_names: abc.Iterable[str] | None = None,
+        column_names: Iterable[str] | None = None,
     ):
         """Construct a Frame from a list of columns with metadata from self.
 
@@ -202,14 +230,69 @@ class Frame(BinaryOperand, Scannable, Serializable):
         """
         if column_names is None:
             column_names = self._column_names
-        data = dict(zip(column_names, columns))
-        frame = self.__class__._from_data(data)
-        return frame._copy_type_metadata(self)
+        data = dict(zip(column_names, columns, strict=True))
+        return self.__class__._from_data(data)
+
+    def _drop_duplicates_columns(
+        self,
+        columns: list[ColumnBase],
+        keys: list[int],
+        keep: Literal["first", "last", False],
+        nulls_are_equal: bool,
+    ) -> list[plc.Column]:
+        """Core stable_distinct implementation shared by Index and IndexedFrame."""
+        _keep_options = {
+            "first": plc.stream_compaction.DuplicateKeepOption.KEEP_FIRST,
+            "last": plc.stream_compaction.DuplicateKeepOption.KEEP_LAST,
+            False: plc.stream_compaction.DuplicateKeepOption.KEEP_NONE,
+        }
+        if (keep_option := _keep_options.get(keep)) is None:
+            raise ValueError('keep must be either "first", "last" or False')
+
+        with access_columns(*columns, mode="read", scope="internal") as cols:
+            plc_table = plc.stream_compaction.stable_distinct(
+                plc.Table([col.plc_column for col in cols]),
+                keys,
+                keep_option,
+                plc.types.NullEquality.EQUAL
+                if nulls_are_equal
+                else plc.types.NullEquality.UNEQUAL,
+                plc.types.NanEquality.ALL_EQUAL,
+            )
+            return plc_table.columns()
+
+    def _drop_nulls_columns(
+        self,
+        columns: list[ColumnBase],
+        keys: list[int],
+        how: Literal["any", "all"],
+        thresh: int | None = None,
+    ) -> list[plc.Column]:
+        """Core drop_nulls implementation shared by Index and IndexedFrame."""
+        if how not in {"any", "all"}:
+            raise ValueError("how must be 'any' or 'all'")
+
+        if thresh is not None:
+            keep_threshold = thresh
+        elif how == "all":
+            keep_threshold = 1
+        else:
+            keep_threshold = len(keys)
+
+        with access_columns(*columns, mode="read", scope="internal") as cols:
+            plc_table = plc.stream_compaction.drop_nulls(
+                plc.Table([col.plc_column for col in cols]),
+                keys,
+                keep_threshold,
+            )
+            return plc_table.columns()
 
     @_performance_tracking
     def _mimic_inplace(
         self, result: Self, inplace: bool = False
     ) -> Self | None:
+        if not isinstance(inplace, bool):
+            raise TypeError("inplace must be a boolean")
         if inplace:
             for col in self._column_names:
                 if col in result._data:
@@ -299,7 +382,70 @@ class Frame(BinaryOperand, Scannable, Serializable):
         """
         return self._num_columns * self._num_rows
 
-    def memory_usage(self, deep=False):
+    @property
+    @_performance_tracking
+    def empty(self) -> bool:
+        """
+        Indicator whether DataFrame or Series is empty.
+
+        True if DataFrame/Series is entirely empty (no items),
+        meaning any of the axes are of length 0.
+
+        Returns
+        -------
+        out : bool
+            If DataFrame/Series is empty, return True, if not return False.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({'A' : []})
+        >>> df
+        Empty DataFrame
+        Columns: [A]
+        Index: []
+        >>> df.empty
+        True
+
+        If we only have `null` values in our DataFrame, it is
+        not considered empty! We will need to drop
+        the `null`'s to make the DataFrame empty:
+
+        >>> df = cudf.DataFrame({'A' : [None, None]})
+        >>> df
+              A
+        0  <NA>
+        1  <NA>
+        >>> df.empty
+        False
+        >>> df.dropna().empty
+        True
+
+        Non-empty and empty Series example:
+
+        >>> s = cudf.Series([1, 2, None])
+        >>> s
+        0       1
+        1       2
+        2    <NA>
+        dtype: int64
+        >>> s.empty
+        False
+        >>> s = cudf.Series([])
+        >>> s
+        Series([], dtype: float64)
+        >>> s.empty
+        True
+
+        .. pandas-compat::
+            :attr:`pandas.DataFrame.empty`, :attr:`pandas.Series.empty`
+
+            If DataFrame/Series contains only `null` values, it is still not
+            considered empty. See the example above.
+        """
+        return self.size == 0
+
+    def memory_usage(self, deep: bool = False) -> int:
         """Return the memory usage of an object.
 
         Parameters
@@ -314,14 +460,27 @@ class Frame(BinaryOperand, Scannable, Serializable):
         """
         raise NotImplementedError
 
+    def __sizeof__(self):
+        if cudf.get_option("mode.pandas_compatible"):
+            return self.memory_usage(deep=True, index=True)
+        return object.__sizeof__(self)
+
     @_performance_tracking
     def __len__(self) -> int:
         return self._num_rows
 
     @_performance_tracking
     def astype(
-        self, dtype: dict[abc.Hashable, DtypeObj], copy: bool = False
+        self, dtype: dict[Hashable, DtypeObj], copy: bool | None = None
     ) -> Self:
+        if copy is None:
+            copy = True
+        if not copy:
+            if all(
+                dtype.get(col_name, col.dtype) == col.dtype
+                for col_name, col in self._column_labels_and_values
+            ):
+                return self
         casted = (
             col.astype(dtype.get(col_name, col.dtype), copy=copy)
             for col_name, col in self._column_labels_and_values
@@ -388,14 +547,21 @@ class Frame(BinaryOperand, Scannable, Serializable):
         >>> df.equals(different_column_type)
         True
         """
-        if self is other:
+        if not isinstance(other, type(self)):
+            return False
+        elif self is other:
             return True
-        if not isinstance(other, type(self)) or len(self) != len(other):
+        elif (
+            self._num_columns != other._num_columns
+            or self._num_rows != other._num_rows
+        ):
             return False
 
         return all(
             self_col.equals(other_col, check_dtypes=True)
-            for self_col, other_col in zip(self._columns, other._columns)
+            for self_col, other_col in zip(
+                self._columns, other._columns, strict=True
+            )
         )
 
     @_performance_tracking
@@ -405,7 +571,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
 
         Akin to cudf.DataFrame(...).loc[:, labels]
         """
-        return self._from_data_like_self(self._data.select_by_label(labels))
+        return self._from_data(self._data.select_by_label(labels))
 
     @property
     @_performance_tracking
@@ -432,11 +598,21 @@ class Frame(BinaryOperand, Scannable, Serializable):
         Only the values in the DataFrame will be returned, the axes labels will
         be removed.
 
+        .. deprecated:: 26.04
+            `values_host` is deprecated and will be removed in a future version.
+            Use `to_numpy()` instead.
+
         Returns
         -------
         numpy.ndarray
             A host representation of the underlying data.
         """
+        warnings.warn(
+            "values_host is deprecated and will be removed in a future version. "
+            "Use to_numpy() instead.",
+            FutureWarning,
+            stacklevel=2,
+        )
         return self.to_numpy()
 
     @_performance_tracking
@@ -458,24 +634,59 @@ class Frame(BinaryOperand, Scannable, Serializable):
     @_performance_tracking
     def _to_array(
         self,
-        get_array: abc.Callable,
+        get_array: Callable,
         module: ModuleType,
         copy: bool,
         dtype: Dtype | None = None,
-        na_value=None,
-    ) -> cupy.ndarray | numpy.ndarray:
+        na_value=no_default,
+    ) -> cupy.ndarray | np.ndarray:
         # Internal function to implement to_cupy and to_numpy, which are nearly
         # identical except for the attribute they access to generate values.
 
         def to_array(
-            col: ColumnBase, dtype: np.dtype
-        ) -> cupy.ndarray | numpy.ndarray:
-            if na_value is not None:
+            col: ColumnBase, to_dtype: Dtype | None
+        ) -> cupy.ndarray | np.ndarray:
+            if (
+                col.has_nulls()
+                and dtype is not None
+                and not is_string_dtype(dtype)
+                and na_value is no_default
+            ):
+                raise ValueError(
+                    f"cannot convert to '{dtype}'-dtype NumPy array "
+                    "with missing values. Specify an appropriate 'na_value' "
+                    "for this dtype."
+                )
+            if na_value is not no_default:
                 col = col.fillna(na_value)
+
             if isinstance(col.dtype, cudf.CategoricalDtype):
                 col = col._get_decategorized_column()  # type: ignore[attr-defined]
+
             array = get_array(col)
-            casted_array = module.asarray(array, dtype=dtype)
+
+            if (
+                is_pandas_nullable_extension_dtype(col.dtype)
+                and col.dtype.kind in "iuf"
+                and to_dtype is None
+            ):
+                to_dtype = array.dtype
+            if (
+                to_dtype != array.dtype
+                and dtype is None
+                and array.dtype.kind in "f"
+                and col.has_nulls()
+            ):
+                to_dtype = None
+            casted_array = module.asarray(array, dtype=to_dtype)
+            if (
+                col.has_nulls()
+                and dtype is not None
+                and is_string_dtype(dtype)
+            ):
+                casted_array[col.isnull().to_numpy()] = (
+                    cudf.NA if na_value is no_default else na_value
+                )
             if copy and casted_array is array:
                 # Don't double copy after asarray
                 casted_array = casted_array.copy()
@@ -485,43 +696,106 @@ class Frame(BinaryOperand, Scannable, Serializable):
         if ncol == 0:
             return module.empty(
                 shape=(len(self), ncol),
-                dtype=numpy.dtype("float64"),
+                dtype=np.dtype("float64"),
                 order="F",
             )
 
         if dtype is None:
             if ncol == 1:
-                dtype = next(self._dtypes)[1]
+                to_dtype = next(self._dtypes)[1]
             else:
-                dtype = find_common_type([dtype for _, dtype in self._dtypes])
+                to_dtype = find_common_type(
+                    [dtype for _, dtype in self._dtypes]
+                )
+                if to_dtype is not None and any(
+                    col.has_nulls() for col in self._columns
+                ):
+                    if to_dtype.kind == "b" or any(
+                        dtype.kind == "b" for _, dtype in self._dtypes
+                    ):
+                        if module == cupy:
+                            raise ValueError(
+                                "Cannot convert to cupy bool array with nulls."
+                            )
+                        else:
+                            to_dtype = np.dtype("object")
+                    elif to_dtype.kind in "ui":
+                        to_dtype = np.dtype("float64")
 
-            if isinstance(dtype, cudf.CategoricalDtype):
-                dtype = dtype.categories.dtype
+            if is_pandas_nullable_extension_dtype(to_dtype):
+                to_dtype = getattr(to_dtype, "numpy_dtype", to_dtype)
+                if getattr(to_dtype, "kind", None) == "U":
+                    to_dtype = np.dtype(object)
+            if isinstance(to_dtype, cudf.CategoricalDtype):
+                to_dtype = to_dtype.categories.dtype
 
-            if not isinstance(dtype, numpy.dtype):
+            if not isinstance(to_dtype, np.dtype):
                 raise NotImplementedError(
-                    f"{dtype} cannot be exposed as an array"
+                    f"{to_dtype} cannot be exposed as an array"
                 )
 
         if self.ndim == 1:
-            return to_array(self._columns[0], dtype)
+            return to_array(
+                self._columns[0], to_dtype if dtype is None else dtype
+            )
         else:
             matrix = module.empty(
-                shape=(len(self), ncol), dtype=dtype, order="F"
+                shape=(len(self), ncol),
+                dtype=to_dtype if dtype is None else dtype,
+                order="F",
             )
             for i, col in enumerate(self._columns):
                 # TODO: col.values may fail if there is nullable data or an
                 # unsupported dtype. We may want to catch and provide a more
                 # suitable error.
-                matrix[:, i] = to_array(col, dtype)
+                matrix[:, i] = to_array(
+                    col, to_dtype if dtype is None else dtype
+                )
             return matrix
 
-    # TODO: As of now, calling cupy.asarray is _much_ faster than calling
-    # to_cupy. We should investigate the reasons why and whether we can provide
-    # a more efficient method here by exploiting __cuda_array_interface__. In
-    # particular, we need to benchmark how much of the overhead is coming from
-    # (potentially unavoidable) local copies in to_cupy and how much comes from
-    # inefficiencies in the implementation.
+    @_performance_tracking
+    def to_pylibcudf(self) -> tuple[plc.Table, dict[str, Any]]:
+        """
+        Converts Frame to a pylibcudf.Table.
+        Note: This method should not be called directly on a Frame object
+        Instead, it should be called on subclasses like DataFrame/Series.
+        """
+        raise NotImplementedError(f"{type(self)} must implement to_pylibcudf")
+
+    @_performance_tracking
+    def to_pandas(self, *, nullable: bool = False, arrow_type: bool = False):
+        raise NotImplementedError(f"{type(self)} must implement to_pandas")
+
+    @_performance_tracking
+    def to_dlpack(self):
+        """
+        Converts a cuDF object to a DLPack tensor.
+        DLPack is an open-source memory tensor structure:
+        `dmlc/dlpack <https://github.com/dmlc/dlpack>`_.
+
+        Returns
+        -------
+        PyCapsule
+            A DLPack tensor pointer which is encapsulated in a PyCapsule object.
+
+        Notes
+        -----
+        The result is in column-major (Fortran order) format. If the
+        output tensor needs to be row major, transpose the output of this function.
+        """
+        dtypes = []
+        for _, dtype in self._dtypes:
+            if not is_dtype_obj_numeric(dtype, include_decimal=False):
+                raise NotImplementedError(
+                    "non-numeric data is not yet supported"
+                )
+            dtypes.append(dtype)
+        dtype = find_common_type(dtypes)
+        casted = self.astype(dtype)
+        return plc.interop.to_dlpack(
+            plc.Table([col.plc_column for col in casted._columns])
+        )
+
     @_performance_tracking
     def to_cupy(
         self,
@@ -548,6 +822,49 @@ class Frame(BinaryOperand, Scannable, Serializable):
         -------
         cupy.ndarray
         """
+        if (
+            self._num_columns > 1
+            and na_value is None
+            and self._columns[0].dtype.kind in {"i", "u", "f", "b"}
+            and all(
+                not col.nullable and col.dtype == self._columns[0].dtype
+                for col in self._columns
+            )
+        ):
+            if dtype is None:
+                dtype = self._columns[0].dtype
+
+            shape = (len(self), self._num_columns)
+            out = cupy.empty(shape, dtype=dtype, order="F")
+
+            table = plc.Table([col.plc_column for col in self._columns])
+            plc.reshape.table_to_array(
+                table,
+                out.data.ptr,
+                out.nbytes,
+            )
+            return out
+        elif self._num_columns == 1:
+            col = self._columns[0]
+            final_dtype = col.dtype if dtype is None else dtype
+
+            if (
+                not copy
+                and col.dtype.kind in {"i", "u", "f", "b"}
+                and cupy.can_cast(col.dtype, final_dtype)
+            ):
+                if col.has_nulls():
+                    if na_value is not None:
+                        col = col.fillna(na_value)
+                    else:
+                        return self._to_array(
+                            lambda col: col.values,
+                            cupy,
+                            copy,
+                            dtype,
+                            na_value,
+                        )
+                return cupy.asarray(col, dtype=final_dtype).reshape((-1, 1))
         return self._to_array(
             lambda col: col.values,
             cupy,
@@ -561,8 +878,8 @@ class Frame(BinaryOperand, Scannable, Serializable):
         self,
         dtype: Dtype | None = None,
         copy: bool = True,
-        na_value=None,
-    ) -> numpy.ndarray:
+        na_value=no_default,
+    ) -> np.ndarray:
         """Convert the Frame to a NumPy array.
 
         Parameters
@@ -588,7 +905,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
             )
 
         return self._to_array(
-            lambda col: col.values_host, numpy, copy, dtype, na_value
+            lambda col: col.to_numpy(), np, copy, dtype, na_value
         )
 
     @_performance_tracking
@@ -667,11 +984,11 @@ class Frame(BinaryOperand, Scannable, Serializable):
     @_performance_tracking
     def fillna(
         self,
-        value: None | ScalarLike | cudf.Series = None,
+        value: None | ScalarLike | Series = None,
         method: Literal["ffill", "bfill", "pad", "backfill", None] = None,
-        axis=None,
+        axis: Axis | None = None,
         inplace: bool = False,
-        limit=None,
+        limit: int | None = None,
     ) -> Self | None:
         """Fill null values with ``value`` or specified ``method``.
 
@@ -722,7 +1039,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
         >>> ser
         0       a
         1       b
-        2    <NA>
+        2    None
         3       c
         dtype: object
         >>> ser.fillna('z')
@@ -800,7 +1117,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
 
         if is_scalar(value):
             value = {name: value for name in self._column_names}
-        elif not isinstance(value, (abc.Mapping, cudf.Series)):
+        elif not isinstance(value, (Mapping, cudf.Series)):
             raise TypeError(
                 f'"value" parameter must be a scalar, dict '
                 f"or Series, but you passed a "
@@ -828,55 +1145,6 @@ class Frame(BinaryOperand, Scannable, Serializable):
             self._data._from_columns_like_self(columns, verify=False)
         )
 
-    @_performance_tracking
-    def _drop_column(
-        self, name: abc.Hashable, errors: Literal["ignore", "raise"] = "raise"
-    ) -> None:
-        """Drop a column by *name* inplace."""
-        try:
-            del self._data[name]
-        except KeyError as err:
-            if errors != "ignore":
-                raise KeyError(f"column '{name}' does not exist") from err
-
-    @_performance_tracking
-    def _quantile_table(
-        self,
-        q: float,
-        interpolation: Literal[
-            "LINEAR", "LOWER", "HIGHER", "MIDPOINT", "NEAREST"
-        ] = "LINEAR",
-        is_sorted: bool = False,
-        column_order=(),
-        null_precedence=(),
-    ):
-        interpolation = plc.types.Interpolation[interpolation]
-
-        is_sorted = plc.types.Sorted["YES" if is_sorted else "NO"]
-
-        column_order = [plc.types.Order[key] for key in column_order]
-
-        null_precedence = [plc.types.NullOrder[key] for key in null_precedence]
-
-        with acquire_spill_lock():
-            plc_table = plc.quantiles.quantiles(
-                plc.Table(
-                    [c.to_pylibcudf(mode="read") for c in self._columns]
-                ),
-                q,
-                interpolation,
-                is_sorted,
-                column_order,
-                null_precedence,
-            )
-            columns = [
-                ColumnBase.from_pylibcudf(col) for col in plc_table.columns()
-            ]
-        return self._from_columns_like_self(
-            columns,
-            column_names=self._column_names,
-        )
-
     @classmethod
     @_performance_tracking
     def from_arrow(cls, data: pa.Table) -> Self:
@@ -901,150 +1169,20 @@ class Frame(BinaryOperand, Scannable, Serializable):
         1  2  5
         2  3  6
         """
-
-        if not isinstance(data, (pa.Table)):
+        if not isinstance(data, pa.Table):
             raise TypeError(
-                "To create a multicolumn cudf data, "
-                "the data should be an arrow Table"
+                f"data must be a pyarrow.Table, not {type(data).__name__}"
             )
-
-        column_names = data.column_names
-        pandas_dtypes = {}
-        np_dtypes = {}
-        if isinstance(data.schema.pandas_metadata, dict):
-            metadata = data.schema.pandas_metadata
-            pandas_dtypes = {
-                col["field_name"]: col["pandas_type"]
-                for col in metadata["columns"]
-                if "field_name" in col
-            }
-            np_dtypes = {
-                col["field_name"]: col["numpy_type"]
-                for col in metadata["columns"]
-                if "field_name" in col
-            }
-
-        # Currently we don't have support for
-        # pyarrow.DictionaryArray -> cudf Categorical column,
-        # so handling indices and dictionary as two different columns.
-        # This needs be removed once we have hooked libcudf dictionary32
-        # with categorical.
-        if any(
-            isinstance(x.type, pa.DictionaryType)
-            and isinstance(x, pa.ChunkedArray)
-            for x in data
-        ):
-            data = data.combine_chunks()
-
-        dict_indices = {}
-        dict_dictionaries = {}
-        dict_ordered = {}
-        for field in data.schema:
-            if isinstance(field.type, pa.DictionaryType):
-                dict_ordered[field.name] = field.type.ordered
-                dict_indices[field.name] = pa.chunked_array(
-                    [chunk.indices for chunk in data[field.name].chunks],
-                    type=field.type.index_type,
+        ca = ColumnAccessor(
+            {
+                name: ColumnBase.from_arrow(array)
+                for name, array in zip(
+                    data.column_names, data.itercolumns(), strict=True
                 )
-                dict_dictionaries[field.name] = pa.chunked_array(
-                    [chunk.dictionary for chunk in data[field.name].chunks],
-                    type=field.type.value_type,
-                )
-
-        # Handle dict arrays
-        cudf_category_frame = {}
-        if len(dict_indices):
-            dict_indices_table = pa.table(dict_indices)
-            data = data.drop(dict_indices_table.column_names)
-            plc_indices = plc.interop.from_arrow(dict_indices_table)
-            # as dictionary size can vary, it can't be a single table
-            cudf_dictionaries_columns = {
-                name: ColumnBase.from_arrow(dict_dictionaries[name])
-                for name in dict_dictionaries.keys()
-            }
-
-            for name, plc_codes in zip(
-                dict_indices_table.column_names, plc_indices.columns()
-            ):
-                codes = ColumnBase.from_pylibcudf(plc_codes)
-                categories = cudf_dictionaries_columns[name]
-                codes = as_unsigned_codes(len(categories), codes)  # type: ignore[arg-type]
-                cudf_category_frame[name] = CategoricalColumn(
-                    data=None,
-                    size=codes.size,
-                    dtype=cudf.CategoricalDtype(
-                        categories=categories,
-                        ordered=dict_ordered[name],
-                    ),
-                    mask=codes.base_mask,
-                    children=(codes,),
-                )
-
-        # Handle non-dict arrays
-        cudf_non_category_frame = {
-            name: ColumnBase.from_pylibcudf(plc_col)
-            for name, plc_col in zip(
-                data.column_names, plc.interop.from_arrow(data).columns()
-            )
-        }
-
-        result = {**cudf_non_category_frame, **cudf_category_frame}
-
-        # There are some special cases that need to be handled
-        # based on metadata.
-        for name in result:
-            if (
-                len(result[name]) == 0
-                and pandas_dtypes.get(name) == "categorical"
-            ):
-                # When pandas_dtype is a categorical column and the size
-                # of column is 0 (i.e., empty) then we will have an
-                # int8 column in result._data[name] returned by libcudf,
-                # which needs to be type-casted to 'category' dtype.
-                result[name] = result[name].astype(
-                    cudf.CategoricalDtype(
-                        categories=column_empty(0, dtype=result[name].dtype)
-                    )
-                )
-            elif (
-                pandas_dtypes.get(name) == "empty"
-                and np_dtypes.get(name) == "object"
-            ):
-                # When a string column has all null values, pandas_dtype is
-                # is specified as 'empty' and np_dtypes as 'object',
-                # hence handling this special case to type-cast the empty
-                # float column to str column.
-                result[name] = result[name].astype(CUDF_STRING_DTYPE)
-            elif name in data.column_names and isinstance(
-                data[name].type,
-                (
-                    pa.StructType,
-                    pa.ListType,
-                    pa.Decimal128Type,
-                    pa.TimestampType,
-                ),
-            ):
-                # In case of struct column, libcudf is not aware of names of
-                # struct fields, hence renaming the struct fields is
-                # necessary by extracting the field names from arrow
-                # struct types.
-
-                # In case of decimal column, libcudf is not aware of the
-                # decimal precision.
-
-                # In case of list column, there is a possibility of nested
-                # list columns to have struct or decimal columns inside them.
-
-                # Datetimes ("timestamps") may need timezone metadata
-                # attached to them, as libcudf is timezone-unaware
-
-                # All of these cases are handled by calling the
-                # _with_type_metadata method on the column.
-                result[name] = result[name]._with_type_metadata(
-                    cudf.utils.dtypes.cudf_dtype_from_pa_type(data[name].type)
-                )
-
-        return cls._from_data({name: result[name] for name in column_names})
+            },
+            verify=False,
+        )
+        return cls._from_data(ca)
 
     @_performance_tracking
     def to_arrow(self) -> pa.Table:
@@ -1074,22 +1212,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
         )
 
     @_performance_tracking
-    def _copy_type_metadata(self: Self, other: Self) -> Self:
-        """
-        Copy type metadata from each column of `other` to the corresponding
-        column of `self`.
-
-        See `ColumnBase._with_type_metadata` for more information.
-        """
-        for (name, col), (_, dtype) in zip(
-            self._column_labels_and_values, other._dtypes
-        ):
-            self._data.set_by_label(name, col._with_type_metadata(dtype))
-
-        return self
-
-    @_performance_tracking
-    def isna(self):
+    def isna(self) -> Self:
         """
         Identify missing values.
 
@@ -1125,10 +1248,10 @@ class Frame(BinaryOperand, Scannable, Serializable):
         ...                    'name': ['Alfred', 'Batman', ''],
         ...                    'toy': [None, 'Batmobile', 'Joker']})
         >>> df
-            age                        born    name        toy
-        0     5                        <NA>  Alfred       <NA>
-        1     6  1939-05-27 00:00:00.000000  Batman  Batmobile
-        2  <NA>  1940-04-25 00:00:00.000000              Joker
+            age                           born    name        toy
+        0     5                           NaT  Alfred        None
+        1     6  1939-05-27 00:00:00.000000000  Batman  Batmobile
+        2  <NA>  1940-04-25 00:00:00.000000000              Joker
         >>> df.isna()
              age   born   name    toy
         0  False   True  False   True
@@ -1170,7 +1293,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
     isnull = isna
 
     @_performance_tracking
-    def notna(self):
+    def notna(self) -> Self:
         """
         Identify non-missing values.
 
@@ -1206,10 +1329,10 @@ class Frame(BinaryOperand, Scannable, Serializable):
         ...                    'name': ['Alfred', 'Batman', ''],
         ...                    'toy': [None, 'Batmobile', 'Joker']})
         >>> df
-            age                        born    name        toy
-        0     5                        <NA>  Alfred       <NA>
-        1     6  1939-05-27 00:00:00.000000  Batman  Batmobile
-        2  <NA>  1940-04-25 00:00:00.000000              Joker
+            age                           born    name        toy
+        0     5                           NaT  Alfred        None
+        1     6  1939-05-27 00:00:00.000000000  Batman  Batmobile
+        2  <NA>  1940-04-25 00:00:00.000000000              Joker
         >>> df.notna()
              age   born  name    toy
         0   True  False  True  False
@@ -1287,18 +1410,18 @@ class Frame(BinaryOperand, Scannable, Serializable):
         >>> s.searchsorted(4)
         3
         >>> s.searchsorted([0, 4])
-        array([0, 3], dtype=int32)
+        array([0, 3])
         >>> s.searchsorted([1, 3], side='left')
-        array([0, 2], dtype=int32)
+        array([0, 2])
         >>> s.searchsorted([1, 3], side='right')
-        array([1, 3], dtype=int32)
+        array([1, 3])
 
         If the values are not monotonically sorted, wrong
         locations may be returned:
 
         >>> s = cudf.Series([2, 1, 3])
         >>> s.searchsorted(1)
-        0   # wrong result, correct would be 1
+        0
 
         >>> df = cudf.DataFrame({'a': [1, 3, 5, 7], 'b': [10, 12, 14, 16]})
         >>> df
@@ -1312,11 +1435,11 @@ class Frame(BinaryOperand, Scannable, Serializable):
         >>> values_df
            a   b
         0  0  10
-        1  2  17
+        1  2  11
         2  5  13
         3  6  15
         >>> df.searchsorted(values_df, ascending=False)
-        array([4, 4, 4, 0], dtype=int32)
+        array([4, 4, 4, 0])
         """
         # Note: pandas.DataFrame does not support searchsorted
 
@@ -1333,41 +1456,57 @@ class Frame(BinaryOperand, Scannable, Serializable):
             values = [as_column(values)]
         else:
             values = [*values._columns]
-        if len(values) != len(self._data):
+        if len(values) != self._num_columns:
             raise ValueError("Mismatch number of columns to search for.")
 
+        if cudf.get_option("mode.pandas_compatible"):
+            if any(
+                is_pandas_nullable_extension_dtype(col.dtype)
+                and col.has_nulls(include_nan=True)
+                for col in self._columns
+            ):
+                raise ValueError(
+                    "searchsorted requires array to be sorted, which is impossible "
+                    "with NAs present."
+                )
         # TODO: Change behavior based on the decision in
         # https://github.com/pandas-dev/pandas/issues/54668
         common_dtype_list = [
             find_common_type([col.dtype, val.dtype])
-            for col, val in zip(self._columns, values)
+            for col, val in zip(self._columns, values, strict=True)
         ]
         sources = [
             col
             if is_dtype_equal(col.dtype, common_dtype)
             else col.astype(common_dtype)
-            for col, common_dtype in zip(self._columns, common_dtype_list)
+            for col, common_dtype in zip(
+                self._columns, common_dtype_list, strict=True
+            )
         ]
         values = [
             val
             if is_dtype_equal(val.dtype, common_dtype)
             else val.astype(common_dtype)
-            for val, common_dtype in zip(values, common_dtype_list)
+            for val, common_dtype in zip(
+                values, common_dtype_list, strict=True
+            )
         ]
 
-        outcol = ColumnBase.from_pylibcudf(
-            search.search_sorted(
-                sources,
-                values,
-                side,
-                ascending=ascending,
-                na_position=na_position,
-            )
+        plc_outcol = sorting.search_sorted(
+            sources,
+            values,
+            side,
+            ascending=itertools.repeat(ascending, times=len(sources)),
+            na_position=itertools.repeat(na_position, times=len(sources)),
+        )
+        outcol = ColumnBase.create(
+            plc.unary.cast(plc_outcol, plc.DataType(plc.TypeId.INT64)),
+            np.dtype("int64"),
         )
 
         # Return result as cupy array if the values is non-scalar
         # If values is scalar, result is expected to be scalar.
-        result = cupy.asarray(outcol.data_array_view(mode="read"))
+        result = outcol.values
         if scalar_flag:
             return result[0].item()
         else:
@@ -1464,7 +1603,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
     def _get_sorted_inds(
         self,
         by=None,
-        ascending=True,
+        ascending: bool | Iterable[bool] = True,
         na_position: Literal["first", "last"] = "last",
     ) -> ColumnBase:
         """
@@ -1476,56 +1615,74 @@ class Frame(BinaryOperand, Scannable, Serializable):
         else:
             to_sort = self._get_columns_by_label(list(by))._columns
 
-        if is_scalar(ascending):
-            ascending_lst = [ascending] * len(to_sort)
-        else:
-            ascending_lst = list(ascending)
-
-        return ColumnBase.from_pylibcudf(
-            sorting.order_by(
-                list(to_sort),
-                ascending_lst,
-                na_position,
-                stable=True,
+        if isinstance(ascending, bool):
+            ascending_iter: Iterable[bool] = itertools.repeat(
+                ascending, times=len(to_sort)
             )
+        else:
+            ascending_iter = ascending
+        plc_result = sorting.order_by(
+            to_sort,
+            ascending_iter,
+            itertools.repeat(na_position, times=len(to_sort)),
+            stable=True,
+        )
+        return ColumnBase.create(
+            plc_result, dtype_from_pylibcudf_column(plc_result)
         )
 
     @_performance_tracking
     def _split(self, splits: list[int]) -> list[Self]:
-        """Split a frame with split points in ``splits``. Returns a list of
-        Frames of length `len(splits) + 1`.
         """
+        Split a frame with split points in ``splits``.
+
+        Returns
+        -------
+        list[Self]
+            Returns a list of Self of length len(splits) + 1.
+        """
+        if self._num_rows == 0:
+            return []
         return [
             self._from_columns_like_self(
-                [ColumnBase.from_pylibcudf(col) for col in split],
+                [
+                    ColumnBase.create(col, dtype)
+                    for col, (_, dtype) in zip(
+                        split, self._dtypes, strict=True
+                    )
+                ],
                 self._column_names,
             )
             for split in copying.columns_split(self._columns, splits)
         ]
 
     @_performance_tracking
-    def _encode(self):
+    def _encode(self) -> tuple[Self, ColumnBase]:
         plc_table, plc_column = plc.transform.encode(
-            plc.Table([col.to_pylibcudf(mode="read") for col in self._columns])
+            plc.Table([col.plc_column for col in self._columns])
         )
         columns = [
-            ColumnBase.from_pylibcudf(col) for col in plc_table.columns()
+            ColumnBase.create(col, dtype)
+            for col, (_, dtype) in zip(
+                plc_table.columns(), self._dtypes, strict=True
+            )
         ]
-        indices = ColumnBase.from_pylibcudf(plc_column)
+        indices = ColumnBase.create(
+            plc_column, dtype_from_pylibcudf_column(plc_column)
+        )
         keys = self._from_columns_like_self(columns)
         return keys, indices
 
     @_performance_tracking
-    def _unaryop(self, op):
+    def _unaryop(self, op: str) -> Self:
         data_columns = (col.unary_operator(op) for col in self._columns)
         return self._from_data_like_self(
             self._data._from_columns_like_self(data_columns)
         )
 
-    @classmethod
+    @staticmethod
     @_performance_tracking
     def _colwise_binop(
-        cls,
         operands: dict[str | None, tuple[ColumnBase, Any, bool, Any]],
         fn: str,
     ):
@@ -1557,20 +1714,20 @@ class Frame(BinaryOperand, Scannable, Serializable):
             col,
             (left_column, right_column, reflect, fill_value),
         ) in operands.items():
-            output_mask = None
+            output_mask: Buffer | None = None
+            output_null_count: int | None = None
+            left_is_column = isinstance(left_column, ColumnBase)
+            right_is_column = isinstance(right_column, ColumnBase)
             if fill_value is not None:
-                left_is_column = isinstance(left_column, ColumnBase)
-                right_is_column = isinstance(right_column, ColumnBase)
-
                 if left_is_column and right_is_column:
                     # If both columns are nullable, pandas semantics dictate
                     # that nulls that are present in both left_column and
                     # right_column are not filled.
                     if left_column.nullable and right_column.nullable:
-                        with acquire_spill_lock():
-                            lmask = as_column(left_column.nullmask)
-                            rmask = as_column(right_column.nullmask)
-                            output_mask = (lmask | rmask).data
+                        output_mask, output_null_count = (
+                            left_column._get_mask_as_column()
+                            | right_column._get_mask_as_column()
+                        ).as_mask()
                         left_column = left_column.fillna(fill_value)
                         right_column = right_column.fillna(fill_value)
                     elif left_column.nullable:
@@ -1594,9 +1751,20 @@ class Frame(BinaryOperand, Scannable, Serializable):
                 if reflect
                 else getattr(operator, fn)(left_column, right_column)
             )
+            if (
+                isinstance(outcol, bool)
+                and fn in {"__eq__", "__ne__"}
+                and right_column is not pd.NA
+            ):
+                # Both columns returned NotImplemented, Python compared using is/is not
+                # TODO: A better solution is to ensure each Column._binaryop
+                # implementation accounts for this case.
+                outcol = left_column._all_bools_with_nulls(
+                    right_column, fn != "__eq__"
+                )
 
             if output_mask is not None:
-                outcol = outcol.set_mask(output_mask)
+                outcol = outcol.set_mask(output_mask, output_null_count)
 
             output[col] = outcol
 
@@ -1607,7 +1775,6 @@ class Frame(BinaryOperand, Scannable, Serializable):
         return _array_ufunc(self, ufunc, method, inputs, kwargs)
 
     @_performance_tracking
-    @acquire_spill_lock()
     def _apply_cupy_ufunc_to_operands(
         self, ufunc, cupy_func, operands, **kwargs
     ) -> list[dict[Any, ColumnBase]]:
@@ -1620,36 +1787,48 @@ class Frame(BinaryOperand, Scannable, Serializable):
         # dispatch those (or any other) functions that we could implement
         # without cupy.
 
-        mask = None
-        data: list[dict[Any, ColumnBase]] = [{} for _ in range(ufunc.nout)]
-        for name, (left, right, _, _) in operands.items():
-            cupy_inputs = []
-            for inp in (left, right) if ufunc.nin == 2 else (left,):
-                if isinstance(inp, ColumnBase) and inp.has_nulls():
-                    new_mask = as_column(inp.nullmask)
+        with access_columns(
+            *(
+                col
+                for left, right, _, _ in operands.values()
+                for col in (left, right)
+                if isinstance(col, ColumnBase)
+            ),
+            mode="read",
+            scope="internal",
+        ):
+            mask = None
+            data: list[dict[Any, ColumnBase]] = [{} for _ in range(ufunc.nout)]
+            for name, (left, right, _, _) in operands.items():
+                cupy_inputs = []
+                for inp in (left, right) if ufunc.nin == 2 else (left,):
+                    if isinstance(inp, ColumnBase) and inp.has_nulls():
+                        new_mask = inp._get_mask_as_column()
+                        mask = new_mask if mask is None else mask & new_mask
 
-                    # TODO: This is a hackish way to perform a bitwise and
-                    # of bitmasks. Once we expose
-                    # cudf::detail::bitwise_and, then we can use that
-                    # instead.
-                    mask = new_mask if mask is None else (mask & new_mask)
+                        # Arbitrarily fill with zeros. For ufuncs, we assume
+                        # that the end result propagates nulls via a bitwise
+                        # and, so these elements are irrelevant.
+                        inp = inp.fillna(0)
+                    cupy_inputs.append(cupy.asarray(inp))
 
-                    # Arbitrarily fill with zeros. For ufuncs, we assume
-                    # that the end result propagates nulls via a bitwise
-                    # and, so these elements are irrelevant.
-                    inp = inp.fillna(0)
-                cupy_inputs.append(cupy.asarray(inp))
-
-            cp_output = cupy_func(*cupy_inputs, **kwargs)
-            if ufunc.nout == 1:
-                cp_output = (cp_output,)
-            for i, out in enumerate(cp_output):
-                data[i][name] = as_column(out).set_mask(mask)
-        return data
+                cp_output = cupy_func(*cupy_inputs, **kwargs)
+                if ufunc.nout == 1:
+                    cp_output = (cp_output,)
+                if mask is None:
+                    mask_buff = None
+                    null_count = 0
+                else:
+                    mask_buff, null_count = mask.as_mask()
+                for i, out in enumerate(cp_output):
+                    data[i][name] = as_column(out).set_mask(
+                        mask_buff, null_count
+                    )
+            return data
 
     # Unary logical operators
     @_performance_tracking
-    def __neg__(self):
+    def __neg__(self) -> Self:
         """Negate for integral dtypes, logical NOT for bools."""
         return self._from_data_like_self(
             self._data._from_columns_like_self(
@@ -1663,40 +1842,50 @@ class Frame(BinaryOperand, Scannable, Serializable):
         )
 
     @_performance_tracking
-    def __pos__(self):
+    def __pos__(self) -> Self:
         return self.copy(deep=True)
 
     @_performance_tracking
-    def __abs__(self):
+    def __abs__(self) -> Self:
         return self._unaryop("abs")
 
-    def __bool__(self):
+    def __bool__(self) -> None:
         raise ValueError(
             f"The truth value of a {type(self).__name__} is ambiguous. Use "
             "a.empty, a.bool(), a.item(), a.any() or a.all()."
         )
 
-    # Reductions
-    @classmethod
     @_performance_tracking
-    def _get_axis_from_axis_arg(cls, axis):
-        try:
-            return cls._SUPPORT_AXIS_LOOKUP[axis]
-        except KeyError:
-            raise ValueError(f"No axis named {axis} for object type {cls}")
+    def _reduce(
+        self,
+        op: str,
+        axis=no_default,
+        numeric_only: bool = False,
+        **kwargs,
+    ) -> ScalarLike:
+        raise NotImplementedError(
+            f"Reductions are not supported for objects of type {type(self).__name__}."
+        )
 
     @_performance_tracking
-    def _reduce(self, *args, **kwargs):
+    def _scan(
+        self,
+        op: str,
+        axis: Axis | None = None,
+        skipna: bool = True,
+        *args,
+        **kwargs,
+    ) -> Self:
         raise NotImplementedError(
-            f"Reductions are not supported for objects of type {type(self)}."
+            f"Scans are not supported for objects of type {type(self).__name__}."
         )
 
     @_performance_tracking
     def min(
         self,
-        axis=0,
-        skipna=True,
-        numeric_only=False,
+        axis: Axis = 0,
+        skipna: bool = True,
+        numeric_only: bool = False,
         **kwargs,
     ):
         """
@@ -1745,9 +1934,9 @@ class Frame(BinaryOperand, Scannable, Serializable):
     @_performance_tracking
     def max(
         self,
-        axis=0,
-        skipna=True,
-        numeric_only=False,
+        axis: Axis = 0,
+        skipna: bool = True,
+        numeric_only: bool = False,
         **kwargs,
     ):
         """
@@ -1791,7 +1980,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
         )
 
     @_performance_tracking
-    def all(self, axis=0, skipna=True, **kwargs):
+    def all(self, axis: Axis = 0, skipna: bool = True, **kwargs):
         """
         Return whether all elements are True in DataFrame.
 
@@ -1844,7 +2033,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
         )
 
     @_performance_tracking
-    def any(self, axis=0, skipna=True, **kwargs):
+    def any(self, axis: Axis = 0, skipna: bool = True, **kwargs):
         """
         Return whether any elements is True in DataFrame.
 
@@ -1897,49 +2086,25 @@ class Frame(BinaryOperand, Scannable, Serializable):
         )
 
     @_performance_tracking
-    @ioutils.doc_to_dlpack()
-    def to_dlpack(self):
-        """{docstring}"""
-
-        return cudf.io.dlpack.to_dlpack(self)
-
-    @_performance_tracking
-    def __str__(self):
+    def __str__(self) -> str:
         return repr(self)
 
     @_performance_tracking
-    def __deepcopy__(self, memo):
+    def __deepcopy__(self, memo) -> Self:
         return self.copy(deep=True)
 
     @_performance_tracking
-    def __copy__(self):
+    def __copy__(self) -> Self:
         return self.copy(deep=False)
 
+    def copy(self, deep: bool = True) -> Self:
+        raise NotImplementedError
+
     @_performance_tracking
-    def __invert__(self):
+    def __invert__(self) -> Self:
         """Bitwise invert (~) for integral dtypes, logical NOT for bools."""
         return self._from_data_like_self(
             self._data._from_columns_like_self((~col for col in self._columns))
-        )
-
-    @_performance_tracking
-    def nunique(self, dropna: bool = True):
-        """
-        Returns a per column mapping with counts of unique values for
-        each column.
-
-        Parameters
-        ----------
-        dropna : bool, default True
-            Don't include NaN in the counts.
-
-        Returns
-        -------
-        dict
-            Name and unique value counts of each column in frame.
-        """
-        raise NotImplementedError(
-            f"{type(self).__name__} does not implement nunique"
         )
 
     @staticmethod
@@ -1955,15 +2120,21 @@ class Frame(BinaryOperand, Scannable, Serializable):
         if not is_scalar(repeats):
             repeats = as_column(repeats)
 
-        with acquire_spill_lock():
-            plc_table = plc.Table(
-                [col.to_pylibcudf(mode="read") for col in columns]
-            )
+        with access_columns(
+            *columns, repeats, mode="read", scope="internal"
+        ) as (*columns, repeats):
+            plc_table = plc.Table([col.plc_column for col in columns])
             if isinstance(repeats, ColumnBase):
-                repeats = repeats.to_pylibcudf(mode="read")
+                repeats_plc = repeats.plc_column
+            else:
+                repeats_plc = repeats
             return [
-                ColumnBase.from_pylibcudf(col)
-                for col in plc.filling.repeat(plc_table, repeats).columns()
+                ColumnBase.create(col, reference_col.dtype)
+                for col, reference_col in zip(
+                    plc.filling.repeat(plc_table, repeats_plc).columns(),
+                    columns,
+                    strict=True,
+                )
             ]
 
     @_performance_tracking

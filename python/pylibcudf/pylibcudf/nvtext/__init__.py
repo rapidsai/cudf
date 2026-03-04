@@ -1,7 +1,9 @@
-# Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 from . import (
     byte_pair_encode,
+    deduplicate,
     edit_distance,
     generate_ngrams,
     jaccard,
@@ -10,13 +12,13 @@ from . import (
     normalize,
     replace,
     stemmer,
-    subword_tokenize,
     tokenize,
     wordpiece_tokenize,
 )
 
 __all__ = [
     "byte_pair_encode",
+    "deduplicate",
     "edit_distance",
     "generate_ngrams",
     "jaccard",
@@ -25,7 +27,6 @@ __all__ = [
     "normalize",
     "replace",
     "stemmer",
-    "subword_tokenize",
     "tokenize",
     "wordpiece_tokenize",
 ]

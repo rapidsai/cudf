@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
@@ -93,12 +82,16 @@ std::unique_ptr<column> max_scan(column_view const& values,
 /**
  * @brief Internal API to calculate cumulative number of values in each group
  *
+ * @param values Grouped values to get valid rows from
+ * @param nulls Indicates whether nulls should be included in the count or not
  * @param group_labels ID of group that the corresponding value belongs to
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return Column of type INT32 of count values
  */
-std::unique_ptr<column> count_scan(device_span<size_type const> group_labels,
+std::unique_ptr<column> count_scan(column_view const& values,
+                                   null_policy nulls,
+                                   device_span<size_type const> group_labels,
                                    rmm::cuda_stream_view stream,
                                    rmm::device_async_resource_ref mr);
 

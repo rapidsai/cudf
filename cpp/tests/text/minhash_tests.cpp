@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2023-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf_test/base_fixture.hpp>
@@ -23,6 +12,8 @@
 #include <cudf/strings/strings_column_view.hpp>
 
 #include <nvtext/minhash.hpp>
+
+#include <cuda/iterator>
 
 #include <vector>
 
@@ -222,7 +213,7 @@ TEST_F(MinHashTest, ErrorsTest)
   input = cudf::test::strings_column_wrapper(h_input.begin(), h_input.end());
   view  = cudf::strings_column_view(input);
 
-  auto const zeroes = thrust::constant_iterator<uint32_t>(0);
+  auto const zeroes = cuda::constant_iterator<uint32_t>(0);
   auto params       = cudf::test::fixed_width_column_wrapper<uint32_t>(zeroes, zeroes + 50000);
   auto pview        = cudf::column_view(params);
   EXPECT_THROW(nvtext::minhash(view, 0, pview, pview, 4), std::overflow_error);

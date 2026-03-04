@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf/column/column.hpp>
@@ -32,8 +21,8 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/iterator>
 #include <thrust/for_each.h>
-#include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform.h>
 
@@ -114,7 +103,7 @@ std::unique_ptr<cudf::column> is_letter(cudf::strings_column_view const& strings
                                   mr);
   // set values into output column
   auto strings_column = cudf::column_device_view::create(strings.parent(), stream);
-  thrust::transform(rmm::exec_policy(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream),
                     thrust::make_counting_iterator<cudf::size_type>(0),
                     thrust::make_counting_iterator<cudf::size_type>(strings.size()),
                     results->mutable_view().data<bool>(),
@@ -129,12 +118,13 @@ namespace {
  * @brief For dispatching index-type of indices parameter in the nvtext::is_letter API.
  */
 struct dispatch_is_letter_fn {
-  template <typename T, std::enable_if_t<cudf::is_index_type<T>()>* = nullptr>
+  template <typename T>
   std::unique_ptr<cudf::column> operator()(cudf::strings_column_view const& strings,
                                            letter_type ltype,
                                            cudf::column_view const& indices,
                                            rmm::cuda_stream_view stream,
                                            rmm::device_async_resource_ref mr) const
+    requires(cudf::is_index_type<T>())
   {
     CUDF_EXPECTS(strings.size() == indices.size(),
                  "strings column and indices column must be the same size");
@@ -143,8 +133,9 @@ struct dispatch_is_letter_fn {
     return is_letter(strings, ltype, indices.begin<T>(), stream, mr);
   }
 
-  template <typename T, typename... Args, std::enable_if_t<not cudf::is_index_type<T>()>* = nullptr>
+  template <typename T, typename... Args>
   std::unique_ptr<cudf::column> operator()(Args&&...) const
+    requires(not cudf::is_index_type<T>())
   {
     CUDF_FAIL("The is_letter indices parameter must be an integer type.");
   }
@@ -228,7 +219,7 @@ std::unique_ptr<cudf::column> porter_stemmer_measure(cudf::strings_column_view c
                                   mr);
   // compute measures into output column
   auto strings_column = cudf::column_device_view::create(strings.parent(), stream);
-  thrust::transform(rmm::exec_policy(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream),
                     thrust::make_counting_iterator<cudf::size_type>(0),
                     thrust::make_counting_iterator<cudf::size_type>(strings.size()),
                     results->mutable_view().data<cudf::size_type>(),
@@ -259,7 +250,7 @@ std::unique_ptr<cudf::column> is_letter(cudf::strings_column_view const& input,
 {
   CUDF_FUNC_RANGE();
   return detail::is_letter(
-    input, ltype, thrust::make_constant_iterator<cudf::size_type>(character_index), stream, mr);
+    input, ltype, cuda::make_constant_iterator<cudf::size_type>(character_index), stream, mr);
 }
 
 std::unique_ptr<cudf::column> is_letter(cudf::strings_column_view const& input,

@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2024-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 #include "page_data.cuh"
 #include "page_decode.cuh"
@@ -22,6 +11,8 @@
 #include <cudf/detail/utilities/cuda.cuh>
 
 #include <cooperative_groups.h>
+#include <cuda/std/bit>
+#include <cuda/std/iterator>
 
 namespace cudf::io::parquet::detail {
 
@@ -90,8 +81,8 @@ __device__ static void scan_block_exclusive_sum(
   }
 }
 
-template <int block_size, bool has_lists_t, typename state_buf>
-__device__ void gpuDecodeFixedWidthValues(
+template <int block_size, bool has_lists_t, copy_mode copy_mode_t, typename state_buf>
+__device__ void decode_fixed_width_values(
   page_state_s* s, state_buf* const sb, int start, int end, int t)
 {
   constexpr int num_warps      = block_size / cudf::detail::warp_size;
@@ -101,83 +92,86 @@ __device__ void gpuDecodeFixedWidthValues(
   int const leaf_level_index = s->col.max_nesting_depth - 1;
   auto const data_out        = s->nesting_info[leaf_level_index].data_out;
 
-  int const dtype          = s->col.physical_type;
+  Type const dtype         = s->col.physical_type;
   uint32_t const dtype_len = s->dtype_len;
 
   int const skipped_leaf_values = s->page.skipped_leaf_values;
 
   // decode values
-  int pos = start;
-  while (pos < end) {
-    int const batch_size = min(max_batch_size, end - pos);
-    int const target_pos = pos + batch_size;
-    int const thread_pos = pos + t;
-
+  int thread_pos = start + t;
+  while (thread_pos < end) {
     // Index from value buffer (doesn't include nulls) to final array (has gaps for nulls)
     int const dst_pos = [&]() {
-      int dst_pos = sb->nz_idx[rolling_index<state_buf::nz_buf_size>(thread_pos)];
-      if constexpr (!has_lists_t) { dst_pos -= s->first_row; }
-      return dst_pos;
+      if constexpr (copy_mode_t == copy_mode::DIRECT) {
+        return thread_pos - s->first_row;
+      } else {
+        int dst_pos = sb->nz_idx[rolling_index<state_buf::nz_buf_size>(thread_pos)];
+        if constexpr (!has_lists_t) { dst_pos -= s->first_row; }
+        return dst_pos;
+      }
     }();
 
-    // target_pos will always be properly bounded by num_rows, but dst_pos may be negative (values
-    // before first_row) in the flat hierarchy case.
-    if (thread_pos < target_pos && dst_pos >= 0) {
-      // nesting level that is storing actual leaf values
+    // nesting level that is storing actual leaf values
 
-      // src_pos represents the logical row position we want to read from. But in the case of
-      // nested hierarchies (lists), there is no 1:1 mapping of rows to values. So src_pos
-      // has to take into account the # of values we have to skip in the page to get to the
-      // desired logical row.  For flat hierarchies, skipped_leaf_values will always be 0.
-      int const src_pos = [&]() {
-        if constexpr (has_lists_t) { return thread_pos + skipped_leaf_values; }
-        return thread_pos;
-      }();
+    // src_pos represents the logical row position we want to read from. But in the case of
+    // nested hierarchies (lists), there is no 1:1 mapping of rows to values. So src_pos
+    // has to take into account the # of values we have to skip in the page to get to the
+    // desired logical row.  For flat hierarchies, skipped_leaf_values will always be 0.
+    int const src_pos = [&]() {
+      if constexpr (has_lists_t) { return thread_pos + skipped_leaf_values; }
+      return thread_pos;
+    }();
 
-      void* const dst = data_out + (static_cast<size_t>(dst_pos) * dtype_len);
+    void* const dst = data_out + (static_cast<size_t>(dst_pos) * dtype_len);
 
-      if (s->col.logical_type.has_value() && s->col.logical_type->type == LogicalType::DECIMAL) {
-        switch (dtype) {
-          case INT32: gpuOutputFast(s, sb, src_pos, static_cast<uint32_t*>(dst)); break;
-          case INT64: gpuOutputFast(s, sb, src_pos, static_cast<uint2*>(dst)); break;
-          default:
-            if (s->dtype_len_in <= sizeof(int32_t)) {
-              gpuOutputFixedLenByteArrayAsInt(s, sb, src_pos, static_cast<int32_t*>(dst));
-            } else if (s->dtype_len_in <= sizeof(int64_t)) {
-              gpuOutputFixedLenByteArrayAsInt(s, sb, src_pos, static_cast<int64_t*>(dst));
-            } else {
-              gpuOutputFixedLenByteArrayAsInt(s, sb, src_pos, static_cast<__int128_t*>(dst));
-            }
-            break;
-        }
-      } else if (dtype == BOOLEAN) {
-        gpuOutputBoolean(sb, src_pos, static_cast<uint8_t*>(dst));
-      } else if (dtype == INT96) {
-        gpuOutputInt96Timestamp(s, sb, src_pos, static_cast<int64_t*>(dst));
-      } else if (dtype_len == 8) {
-        if (s->dtype_len_in == 4) {
-          // Reading INT32 TIME_MILLIS into 64-bit DURATION_MILLISECONDS
-          // TIME_MILLIS is the only duration type stored as int32:
-          // https://github.com/apache/parquet-format/blob/master/LogicalTypes.md#deprecated-time-convertedtype
-          gpuOutputFast(s, sb, src_pos, static_cast<uint32_t*>(dst));
-        } else if (s->ts_scale) {
-          gpuOutputInt64Timestamp(s, sb, src_pos, static_cast<int64_t*>(dst));
-        } else {
-          gpuOutputFast(s, sb, src_pos, static_cast<uint2*>(dst));
-        }
-      } else if (dtype_len == 4) {
-        gpuOutputFast(s, sb, src_pos, static_cast<uint32_t*>(dst));
-      } else {
-        gpuOutputGeneric(s, sb, src_pos, static_cast<uint8_t*>(dst), dtype_len);
+    if (s->col.logical_type.has_value() && s->col.logical_type->type == LogicalType::DECIMAL) {
+      switch (dtype) {
+        case Type::INT32:
+          read_fixed_width_value_fast(s, sb, src_pos, static_cast<uint32_t*>(dst));
+          break;
+        case Type::INT64:
+          read_fixed_width_value_fast(s, sb, src_pos, static_cast<uint2*>(dst));
+          break;
+        default:
+          if (s->dtype_len_in <= sizeof(int32_t)) {
+            read_fixed_width_byte_array_as_int(s, sb, src_pos, static_cast<int32_t*>(dst));
+          } else if (s->dtype_len_in <= sizeof(int64_t)) {
+            read_fixed_width_byte_array_as_int(s, sb, src_pos, static_cast<int64_t*>(dst));
+          } else {
+            read_fixed_width_byte_array_as_int(s, sb, src_pos, static_cast<__int128_t*>(dst));
+          }
+          break;
       }
+    } else if (dtype == Type::BOOLEAN) {
+      read_boolean(sb, src_pos, static_cast<uint8_t*>(dst));
+    } else if (dtype == Type::INT96) {
+      read_int96_timestamp(s, sb, src_pos, static_cast<int64_t*>(dst));
+    } else if (dtype_len == 8) {
+      if (s->dtype_len_in == 4) {
+        // Reading INT32 TIME_MILLIS into 64-bit DURATION_MILLISECONDS
+        // TIME_MILLIS is the only duration type stored as int32:
+        // https://github.com/apache/parquet-format/blob/master/LogicalTypes.md#deprecated-time-convertedtype
+        auto const dst_ptr = static_cast<uint32_t*>(dst);
+        read_fixed_width_value_fast(s, sb, src_pos, dst_ptr);
+        // zero out most significant bytes
+        cuda::std::memset(dst_ptr + 1, 0, sizeof(int32_t));
+      } else if (s->ts_scale) {
+        read_int64_timestamp(s, sb, src_pos, static_cast<int64_t*>(dst));
+      } else {
+        read_fixed_width_value_fast(s, sb, src_pos, static_cast<uint2*>(dst));
+      }
+    } else if (dtype_len == 4) {
+      read_fixed_width_value_fast(s, sb, src_pos, static_cast<uint32_t*>(dst));
+    } else {
+      read_nbyte_fixed_width_value(s, sb, src_pos, static_cast<uint8_t*>(dst), dtype_len);
     }
 
-    pos += batch_size;
+    thread_pos += max_batch_size;
   }
 }
 
-template <int block_size, bool has_lists_t, typename state_buf>
-__device__ inline void gpuDecodeFixedWidthSplitValues(
+template <int block_size, bool has_lists_t, copy_mode copy_mode_t, typename state_buf>
+__device__ inline void decode_fixed_width_split_values(
   page_state_s* s, state_buf* const sb, int start, int end, int t)
 {
   using cudf::detail::warp_size;
@@ -188,100 +182,150 @@ __device__ inline void gpuDecodeFixedWidthSplitValues(
   int const leaf_level_index = s->col.max_nesting_depth - 1;
   auto const data_out        = s->nesting_info[leaf_level_index].data_out;
 
-  int const dtype       = s->col.physical_type;
-  auto const data_len   = thrust::distance(s->data_start, s->data_end);
+  Type const dtype      = s->col.physical_type;
+  auto const data_len   = cuda::std::distance(s->data_start, s->data_end);
   auto const num_values = data_len / s->dtype_len_in;
 
   int const skipped_leaf_values = s->page.skipped_leaf_values;
 
   // decode values
-  int pos = start;
-  while (pos < end) {
-    int const batch_size = min(max_batch_size, end - pos);
-
-    int const target_pos = pos + batch_size;
-    int const thread_pos = pos + t;
-
-    // the position in the output column/buffer
+  int thread_pos = start + t;
+  while (thread_pos < end) {
     // Index from value buffer (doesn't include nulls) to final array (has gaps for nulls)
     int const dst_pos = [&]() {
-      int dst_pos = sb->nz_idx[rolling_index<state_buf::nz_buf_size>(thread_pos)];
-      if constexpr (!has_lists_t) { dst_pos -= s->first_row; }
-      return dst_pos;
+      if constexpr (copy_mode_t == copy_mode::DIRECT) {
+        return thread_pos - s->first_row;
+      } else {
+        int dst_pos = sb->nz_idx[rolling_index<state_buf::nz_buf_size>(thread_pos)];
+        if constexpr (!has_lists_t) { dst_pos -= s->first_row; }
+        return dst_pos;
+      }
     }();
 
-    // target_pos will always be properly bounded by num_rows, but dst_pos may be negative (values
-    // before first_row) in the flat hierarchy case.
-    if (thread_pos < target_pos && dst_pos >= 0) {
-      // src_pos represents the logical row position we want to read from. But in the case of
-      // nested hierarchies (lists), there is no 1:1 mapping of rows to values. So src_pos
-      // has to take into account the # of values we have to skip in the page to get to the
-      // desired logical row.  For flat hierarchies, skipped_leaf_values will always be 0.
-      int const src_pos = [&]() {
-        if constexpr (has_lists_t) {
-          return thread_pos + skipped_leaf_values;
-        } else {
-          return thread_pos;
-        }
-      }();
-
-      uint32_t const dtype_len = s->dtype_len;
-      uint8_t const* const src = s->data_start + src_pos;
-      uint8_t* const dst       = data_out + static_cast<size_t>(dst_pos) * dtype_len;
-      auto const is_decimal =
-        s->col.logical_type.has_value() and s->col.logical_type->type == LogicalType::DECIMAL;
-
-      // Note: non-decimal FIXED_LEN_BYTE_ARRAY will be handled in the string reader
-      if (is_decimal) {
-        switch (dtype) {
-          case INT32: gpuOutputByteStreamSplit<int32_t>(dst, src, num_values); break;
-          case INT64: gpuOutputByteStreamSplit<int64_t>(dst, src, num_values); break;
-          case FIXED_LEN_BYTE_ARRAY:
-            if (s->dtype_len_in <= sizeof(int32_t)) {
-              gpuOutputSplitFixedLenByteArrayAsInt(
-                reinterpret_cast<int32_t*>(dst), src, num_values, s->dtype_len_in);
-              break;
-            } else if (s->dtype_len_in <= sizeof(int64_t)) {
-              gpuOutputSplitFixedLenByteArrayAsInt(
-                reinterpret_cast<int64_t*>(dst), src, num_values, s->dtype_len_in);
-              break;
-            } else if (s->dtype_len_in <= sizeof(__int128_t)) {
-              gpuOutputSplitFixedLenByteArrayAsInt(
-                reinterpret_cast<__int128_t*>(dst), src, num_values, s->dtype_len_in);
-              break;
-            }
-            // unsupported decimal precision
-            [[fallthrough]];
-
-          default: s->set_error_code(decode_error::UNSUPPORTED_ENCODING);
-        }
-      } else if (dtype_len == 8) {
-        if (s->dtype_len_in == 4) {
-          // Reading INT32 TIME_MILLIS into 64-bit DURATION_MILLISECONDS
-          // TIME_MILLIS is the only duration type stored as int32:
-          // https://github.com/apache/parquet-format/blob/master/LogicalTypes.md#deprecated-time-convertedtype
-          gpuOutputByteStreamSplit<int32_t>(dst, src, num_values);
-          // zero out most significant bytes
-          memset(dst + 4, 0, 4);
-        } else if (s->ts_scale) {
-          gpuOutputSplitInt64Timestamp(
-            reinterpret_cast<int64_t*>(dst), src, num_values, s->ts_scale);
-        } else {
-          gpuOutputByteStreamSplit<int64_t>(dst, src, num_values);
-        }
-      } else if (dtype_len == 4) {
-        gpuOutputByteStreamSplit<int32_t>(dst, src, num_values);
+    // src_pos represents the logical row position we want to read from. But in the case of
+    // nested hierarchies (lists), there is no 1:1 mapping of rows to values. So src_pos
+    // has to take into account the # of values we have to skip in the page to get to the
+    // desired logical row.  For flat hierarchies, skipped_leaf_values will always be 0.
+    int const src_pos = [&]() {
+      if constexpr (has_lists_t) {
+        return thread_pos + skipped_leaf_values;
       } else {
-        s->set_error_code(decode_error::UNSUPPORTED_ENCODING);
+        return thread_pos;
       }
+    }();
+
+    uint32_t const dtype_len = s->dtype_len;
+    uint8_t const* const src = s->data_start + src_pos;
+    uint8_t* const dst       = data_out + static_cast<size_t>(dst_pos) * dtype_len;
+    auto const is_decimal =
+      s->col.logical_type.has_value() and s->col.logical_type->type == LogicalType::DECIMAL;
+
+    // Note: non-decimal FIXED_LEN_BYTE_ARRAY will be handled in the string reader
+    if (is_decimal) {
+      switch (dtype) {
+        case Type::INT32: gpuOutputByteStreamSplit<int32_t>(dst, src, num_values); break;
+        case Type::INT64: gpuOutputByteStreamSplit<int64_t>(dst, src, num_values); break;
+        case Type::FIXED_LEN_BYTE_ARRAY:
+          if (s->dtype_len_in <= sizeof(int32_t)) {
+            gpuOutputSplitFixedLenByteArrayAsInt(
+              reinterpret_cast<int32_t*>(dst), src, num_values, s->dtype_len_in);
+            break;
+          } else if (s->dtype_len_in <= sizeof(int64_t)) {
+            gpuOutputSplitFixedLenByteArrayAsInt(
+              reinterpret_cast<int64_t*>(dst), src, num_values, s->dtype_len_in);
+            break;
+          } else if (s->dtype_len_in <= sizeof(__int128_t)) {
+            gpuOutputSplitFixedLenByteArrayAsInt(
+              reinterpret_cast<__int128_t*>(dst), src, num_values, s->dtype_len_in);
+            break;
+          }
+          // unsupported decimal precision
+          [[fallthrough]];
+
+        default: s->set_error_code(decode_error::UNSUPPORTED_ENCODING);
+      }
+    } else if (dtype_len == 8) {
+      if (s->dtype_len_in == 4) {
+        // Reading INT32 TIME_MILLIS into 64-bit DURATION_MILLISECONDS
+        // TIME_MILLIS is the only duration type stored as int32:
+        // https://github.com/apache/parquet-format/blob/master/LogicalTypes.md#deprecated-time-convertedtype
+        gpuOutputByteStreamSplit<int32_t>(dst, src, num_values);
+        // zero out most significant bytes
+        cuda::std::memset(dst + sizeof(int32_t), 0, sizeof(int32_t));
+      } else if (s->ts_scale) {
+        gpuOutputSplitInt64Timestamp(reinterpret_cast<int64_t*>(dst), src, num_values, s->ts_scale);
+      } else {
+        gpuOutputByteStreamSplit<int64_t>(dst, src, num_values);
+      }
+    } else if (dtype_len == 4) {
+      gpuOutputByteStreamSplit<int32_t>(dst, src, num_values);
+    } else {
+      s->set_error_code(decode_error::UNSUPPORTED_ENCODING);
     }
 
-    pos += batch_size;
+    thread_pos += max_batch_size;
   }
 }
 
+/**
+ * @brief Skip validity and row indices for non-list types
+ *
+ * @tparam decode_block_size Size of the thread block
+ * @tparam level_t Definition level type
+ * @tparam is_nested Whether the type is nested
+ *
+ * @param target_value_count The target value count to process
+ * @param s Pointer to page state
+ * @param def Pointer to the definition levels
+ * @param t Thread index
+ *
+ * @return Maximum depth valid count after skipping
+ */
+template <int decode_block_size, typename level_t>
+__device__ int skip_validity_and_row_indices_nonlist(
+  int32_t target_value_count, page_state_s* s, level_t const* const def, bool is_nested, int t)
+{
+  int const max_def_level =
+    is_nested ? s->nesting_info[s->col.max_nesting_depth - 1].max_def_level : 1;
+
+  int max_depth_valid_count = 0;
+  int value_count           = 0;
+  while (value_count < target_value_count) {
+    int const batch_size = min(decode_block_size, target_value_count - value_count);
+
+    // definition level
+    int const is_valid = (t >= batch_size) ? 0 : ((def[value_count + t] >= max_def_level) ? 1 : 0);
+
+    // thread and block validity count
+    using block_scan = cub::BlockScan<int, decode_block_size>;
+    __shared__ typename block_scan::TempStorage scan_storage;
+    int thread_valid_count = 0, block_valid_count = 0;
+    block_scan(scan_storage).ExclusiveSum(is_valid, thread_valid_count, block_valid_count);
+
+    value_count += batch_size;
+    max_depth_valid_count += block_valid_count;
+  }  // end loop
+
+  return max_depth_valid_count;
+}
+
+/**
+ * @brief Update validity and row indices for nested types
+ *
+ * @tparam decode_block_size Size of the thread block
+ * @tparam level_t Definition level type
+ * @tparam state_buf State buffer type
+ *
+ * @param target_value_count The target value count to process
+ * @param s Pointer to  page state
+ * @param sb Pointer to  state buffer
+ * @param def Pointer to the definition levels
+ * @param t Thread index
+ *
+ * @return Maximum depth valid count after processing
+ */
 template <int decode_block_size, typename level_t, typename state_buf>
-static __device__ int gpuUpdateValidityAndRowIndicesNested(
+__device__ int update_validity_and_row_indices_nested(
   int32_t target_value_count, page_state_s* s, state_buf* sb, level_t const* const def, int t)
 {
   constexpr int num_warps      = decode_block_size / cudf::detail::warp_size;
@@ -295,8 +339,6 @@ static __device__ int gpuUpdateValidityAndRowIndicesNested(
   int const last_row                  = first_row + s->num_rows;
   int const capped_target_value_count = min(target_value_count, last_row);
 
-  int const row_index_lower_bound = s->row_index_lower_bound;
-
   int const max_depth       = s->col.max_nesting_depth - 1;
   auto& max_depth_ni        = s->nesting_info[max_depth];
   int max_depth_valid_count = max_depth_ni.valid_count;
@@ -307,29 +349,26 @@ static __device__ int gpuUpdateValidityAndRowIndicesNested(
     int const batch_size = min(max_batch_size, capped_target_value_count - value_count);
 
     // definition level
-    int const d = [&]() {
-      if (t >= batch_size) {
-        return -1;
-      } else if (def) {
-        return static_cast<int>(def[rolling_index<state_buf::nz_buf_size>(value_count + t)]);
-      }
-      return 1;
-    }();
+    int const def_level = (t >= batch_size) ? -1 : def[value_count + t];
 
     int const thread_value_count = t;
     int const block_value_count  = batch_size;
 
     // compute our row index, whether we're in row bounds, and validity
-    int const row_index           = thread_value_count + value_count;
-    int const in_row_bounds       = (row_index >= row_index_lower_bound) && (row_index < last_row);
-    int const in_write_row_bounds = ballot(row_index >= first_row && row_index < last_row);
-    int const write_start = __ffs(in_write_row_bounds) - 1;  // first bit in the warp to store
+    // This ASSUMES that s->row_index_lower_bound is always -1!
+    // Its purpose is to handle rows than span page boundaries, which only happen for lists.
+    int const row_index                     = thread_value_count + value_count;
+    int const in_row_bounds                 = (row_index < last_row);
+    bool const in_write_row_bounds          = in_row_bounds && (row_index >= first_row);
+    uint32_t const in_write_row_bounds_mask = ballot(in_write_row_bounds);
+    // NOTE: The below CANNOT be std::countr_zero(), because for zero start must be 0 not 32
+    int const write_start = __ffs(in_write_row_bounds_mask) - 1;  // first bit in the warp to store
 
     // iterate by depth
     for (int d_idx = 0; d_idx <= max_depth; d_idx++) {
       auto& ni = s->nesting_info[d_idx];
 
-      int const is_valid = ((d >= ni.max_def_level) && in_row_bounds) ? 1 : 0;
+      int const is_valid = ((def_level >= ni.max_def_level) && in_row_bounds) ? 1 : 0;
 
       // thread and block validity count
       using block_scan = cub::BlockScan<int, decode_block_size>;
@@ -344,7 +383,6 @@ static __device__ int gpuUpdateValidityAndRowIndicesNested(
       // at the first value, even if that is before first_row, because we cannot trivially jump to
       // the correct position to start reading. since we are about to write the validity vector
       // here we need to adjust our computed mask to take into account the write row bounds.
-      int warp_null_count = 0;
       if (ni.valid_map != nullptr) {
         uint32_t const warp_validity_mask = ballot(is_valid);
         // lane 0 from each warp writes out validity
@@ -353,22 +391,15 @@ static __device__ int gpuUpdateValidityAndRowIndicesNested(
           int const vindex     = value_count + thread_value_count;  // absolute input value index
           int const bit_offset = (valid_map_offset + vindex + write_start) -
                                  first_row;  // absolute bit offset into the output validity map
-          int const write_end =
-            cudf::detail::warp_size - __clz(in_write_row_bounds);  // last bit in the warp to store
+          int const write_end = cudf::detail::warp_size -
+                                __clz(in_write_row_bounds_mask);  // last bit in the warp to store
           int const bit_count = write_end - write_start;
-          warp_null_count     = bit_count - __popc(warp_validity_mask >> write_start);
 
           store_validity(bit_offset, ni.valid_map, warp_validity_mask >> write_start, bit_count);
         }
       }
 
-      // sum null counts. we have to do it this way instead of just incrementing by (value_count -
-      // valid_count) because valid_count also includes rows that potentially start before our row
-      // bounds. if we could come up with a way to clean that up, we could remove this and just
-      // compute it directly at the end of the kernel.
-      size_type const block_null_count =
-        cudf::detail::single_lane_block_sum_reduce<decode_block_size, 0>(warp_null_count);
-      if (t == 0) { ni.null_count += block_null_count; }
+      if (t == 0) { ni.null_count += (block_value_count - block_valid_count); }
 
       // if this is valid and we're at the leaf, output dst_pos
       if (d_idx == max_depth) {
@@ -399,8 +430,23 @@ static __device__ int gpuUpdateValidityAndRowIndicesNested(
   return max_depth_valid_count;
 }
 
+/**
+ * @brief Update validity and row indices for flat types
+ *
+ * @tparam decode_block_size Size of the thread block
+ * @tparam level_t Definition level type
+ * @tparam state_buf State buffer type
+ *
+ * @param target_value_count The target value count to process
+ * @param s Pointer to  page state
+ * @param sb Pointer to  state buffer
+ * @param def Pointer to the definition levels
+ * @param t Thread index
+ *
+ * @return Maximum depth valid count after processing
+ */
 template <int decode_block_size, typename level_t, typename state_buf>
-static __device__ int gpuUpdateValidityAndRowIndicesFlat(
+__device__ int update_validity_and_row_indices_flat(
   int32_t target_value_count, page_state_s* s, state_buf* sb, level_t const* const def, int t)
 {
   constexpr int num_warps      = decode_block_size / cudf::detail::warp_size;
@@ -417,8 +463,7 @@ static __device__ int gpuUpdateValidityAndRowIndicesFlat(
   int const last_row                  = first_row + s->num_rows;
   int const capped_target_value_count = min(target_value_count, last_row);
 
-  int const valid_map_offset      = ni.valid_map_offset;
-  int const row_index_lower_bound = s->row_index_lower_bound;
+  int const valid_map_offset = ni.valid_map_offset;
 
   __syncthreads();
 
@@ -429,20 +474,14 @@ static __device__ int gpuUpdateValidityAndRowIndicesFlat(
     int const block_value_count  = batch_size;
 
     // compute our row index, whether we're in row bounds, and validity
+    // This ASSUMES that s->row_index_lower_bound is always -1!
+    // Its purpose is to handle rows than span page boundaries, which only happen for lists.
     int const row_index     = thread_value_count + value_count;
-    int const in_row_bounds = (row_index >= row_index_lower_bound) && (row_index < last_row);
+    int const in_row_bounds = (row_index < last_row);
 
     // use definition level & row bounds to determine if is valid
-    int const is_valid = [&]() {
-      if (t >= batch_size) {
-        return 0;
-      } else if (def) {
-        int const def_level =
-          static_cast<int>(def[rolling_index<state_buf::nz_buf_size>(value_count + t)]);
-        return ((def_level > 0) && in_row_bounds) ? 1 : 0;
-      }
-      return in_row_bounds;
-    }();
+    int const is_valid =
+      ((t >= batch_size) || !in_row_bounds) ? 0 : ((def[value_count + t] > 0) ? 1 : 0);
 
     // thread and block validity count
     using block_scan = cub::BlockScan<int, decode_block_size>;
@@ -458,29 +497,23 @@ static __device__ int gpuUpdateValidityAndRowIndicesFlat(
     // at the first value, even if that is before first_row, because we cannot trivially jump to
     // the correct position to start reading. since we are about to write the validity vector
     // here we need to adjust our computed mask to take into account the write row bounds.
-    int const in_write_row_bounds = ballot(row_index >= first_row && row_index < last_row);
-    int const write_start = __ffs(in_write_row_bounds) - 1;  // first bit in the warp to store
-    int warp_null_count   = 0;
+    bool const in_write_row_bounds     = in_row_bounds && (row_index >= first_row);
+    int const in_write_row_bounds_mask = ballot(in_write_row_bounds);
+    // NOTE: The below CANNOT be std::countr_zero(), because for zero start must be 0 not 32
+    int const write_start = __ffs(in_write_row_bounds_mask) - 1;  // first bit in the warp to store
     // lane 0 from each warp writes out validity
     if ((write_start >= 0) && ((t % cudf::detail::warp_size) == 0)) {
       int const vindex     = value_count + thread_value_count;  // absolute input value index
       int const bit_offset = (valid_map_offset + vindex + write_start) -
                              first_row;  // absolute bit offset into the output validity map
       int const write_end =
-        cudf::detail::warp_size - __clz(in_write_row_bounds);  // last bit in the warp to store
+        cudf::detail::warp_size - __clz(in_write_row_bounds_mask);  // last bit in the warp to store
       int const bit_count = write_end - write_start;
-      warp_null_count     = bit_count - __popc(warp_validity_mask >> write_start);
 
       store_validity(bit_offset, ni.valid_map, warp_validity_mask >> write_start, bit_count);
     }
 
-    // sum null counts. we have to do it this way instead of just incrementing by (value_count -
-    // valid_count) because valid_count also includes rows that potentially start before our row
-    // bounds. if we could come up with a way to clean that up, we could remove this and just
-    // compute it directly at the end of the kernel.
-    size_type const block_null_count =
-      cudf::detail::single_lane_block_sum_reduce<decode_block_size, 0>(warp_null_count);
-    if (t == 0) { ni.null_count += block_null_count; }
+    if (t == 0) { ni.null_count += block_value_count - block_valid_count; }
 
     // output offset
     if (is_valid) {
@@ -507,77 +540,28 @@ static __device__ int gpuUpdateValidityAndRowIndicesFlat(
   return valid_count;
 }
 
-template <int decode_block_size, typename state_buf>
-static __device__ int gpuUpdateValidityAndRowIndicesNonNullable(int32_t target_value_count,
-                                                                page_state_s* s,
-                                                                state_buf* sb,
-                                                                int t)
-{
-  constexpr int num_warps      = decode_block_size / cudf::detail::warp_size;
-  constexpr int max_batch_size = num_warps * cudf::detail::warp_size;
-
-  // cap by last row so that we don't process any rows past what we want to output.
-  int const first_row                 = s->first_row;
-  int const last_row                  = first_row + s->num_rows;
-  int const capped_target_value_count = min(target_value_count, last_row);
-  int const row_index_lower_bound     = s->row_index_lower_bound;
-
-  // how many (input) values we've processed in the page so far
-  int value_count = s->input_value_count;
-
-  int const max_depth = s->col.max_nesting_depth - 1;
-  auto& ni            = s->nesting_info[max_depth];
-  int valid_count     = ni.valid_count;
-
-  __syncthreads();
-
-  while (value_count < capped_target_value_count) {
-    int const batch_size = min(max_batch_size, capped_target_value_count - value_count);
-
-    int const thread_value_count = t;
-    int const block_value_count  = batch_size;
-
-    // compute our row index, whether we're in row bounds, and validity
-    int const row_index     = thread_value_count + value_count;
-    int const in_row_bounds = (row_index >= row_index_lower_bound) && (row_index < last_row);
-
-    int const is_valid           = in_row_bounds;
-    int const thread_valid_count = thread_value_count;
-    int const block_valid_count  = block_value_count;
-
-    // if this is valid and we're at the leaf, output dst_pos
-    if (is_valid) {
-      // for non-list types, the value count is always the same across
-      int const dst_pos = value_count + thread_value_count;
-      int const src_pos = valid_count + thread_valid_count;
-
-      sb->nz_idx[rolling_index<state_buf::nz_buf_size>(src_pos)] = dst_pos;
-    }
-
-    // update stuff
-    value_count += block_value_count;
-    valid_count += block_valid_count;
-  }  // end loop
-
-  if (t == 0) {
-    // update valid value count for decoding and total # of values we've processed
-    ni.valid_count       = valid_count;
-    ni.value_count       = value_count;
-    s->nz_count          = valid_count;
-    s->input_value_count = value_count;
-    s->input_row_count   = value_count;
-  }
-
-  return valid_count;
-}
-
+/**
+ * @brief Update validity and row indices for list types
+ *
+ * @tparam decode_block_size Size of the thread block
+ * @tparam level_t Definition level type
+ * @tparam state_buf State buffer type
+ *
+ * @param target_value_count The target value count to process
+ * @param s Pointer to  page state
+ * @param sb Pointer to  state buffer
+ * @param def Pointer to the definition levels
+ * @param t Thread index
+ *
+ * @return Maximum depth valid count after processing
+ */
 template <int decode_block_size, bool nullable, typename level_t, typename state_buf>
-static __device__ int gpuUpdateValidityAndRowIndicesLists(int32_t target_value_count,
-                                                          page_state_s* s,
-                                                          state_buf* sb,
-                                                          level_t const* const def,
-                                                          level_t const* const rep,
-                                                          int t)
+__device__ int update_validity_and_row_indices_lists(int32_t target_value_count,
+                                                     page_state_s* s,
+                                                     state_buf* sb,
+                                                     level_t const* const def,
+                                                     level_t const* const rep,
+                                                     int t)
 {
   constexpr int num_warps      = decode_block_size / cudf::detail::warp_size;
   constexpr int max_batch_size = num_warps * cudf::detail::warp_size;
@@ -611,20 +595,14 @@ static __device__ int gpuUpdateValidityAndRowIndicesLists(int32_t target_value_c
     auto const [def_level, start_depth, end_depth] = [&]() {
       if (!within_batch) { return cuda::std::make_tuple(-1, -1, -1); }
 
-      int const level_index = rolling_index<state_buf::nz_buf_size>(value_count + t);
-      int const rep_level   = static_cast<int>(rep[level_index]);
+      auto const rep_level  = rep[value_count + t];
       int const start_depth = s->nesting_info[rep_level].start_depth;
 
       if constexpr (!nullable) {
         return cuda::std::make_tuple(-1, start_depth, max_depth);
       } else {
-        if (def != nullptr) {
-          int const def_level = static_cast<int>(def[level_index]);
-          return cuda::std::make_tuple(
-            def_level, start_depth, s->nesting_info[def_level].end_depth);
-        } else {
-          return cuda::std::make_tuple(1, start_depth, max_depth);
-        }
+        int const def_level = def[value_count + t];
+        return cuda::std::make_tuple(def_level, start_depth, s->nesting_info[def_level].end_depth);
       }
     }();
 
@@ -679,8 +657,8 @@ static __device__ int gpuUpdateValidityAndRowIndicesLists(int32_t target_value_c
       // Not all values visited by this block will represent a value at this nesting level.
       // the validity bit for thread t might actually represent output value t-6.
       // the correct position for thread t's bit is thread_value_count.
-      uint32_t const warp_valid_mask =
-        WarpReduceOr32((uint32_t)is_valid << thread_value_count_within_warp);
+      uint32_t const warp_valid_mask = warp_reduce_or<cudf::detail::warp_size>(
+        static_cast<uint32_t>(is_valid) << thread_value_count_within_warp);
       int thread_valid_count, block_valid_count;
       {
         auto thread_mask = (uint32_t(1) << thread_value_count_within_warp) - 1;
@@ -804,59 +782,27 @@ static __device__ int gpuUpdateValidityAndRowIndicesLists(int32_t target_value_c
   return max_depth_valid_count;
 }
 
-// is the page marked nullable or not
-__device__ inline bool is_nullable(page_state_s* s)
+template <typename state_buf, typename thread_group>
+inline __device__ void bool_plain_decode(page_state_s* s,
+                                         state_buf* sb,
+                                         int target_pos,
+                                         thread_group const& group)
 {
-  auto const lvl           = level_type::DEFINITION;
-  auto const max_def_level = s->col.max_level[lvl];
-  return max_def_level > 0;
-}
+  int const pos = s->dict_pos;
+  int const t   = group.thread_rank();
+  // Ensure all threads have the dict_pos
+  group.sync();
 
-// for a nullable page, check to see if it could have nulls
-__device__ inline bool maybe_has_nulls(page_state_s* s)
-{
-  auto const lvl      = level_type::DEFINITION;
-  auto const init_run = s->initial_rle_run[lvl];
-  // literal runs, lets assume they could hold nulls
-  if (is_literal_run(init_run)) { return true; }
+  for (auto bit_pos = pos + t; bit_pos < target_pos; bit_pos += group.size()) {
+    int const byte_offset       = bit_pos >> 3;
+    int const bit_in_byte_index = bit_pos & 7;
 
-  // repeated run with number of items in the run not equal
-  // to the rows in the page, assume that means we could have nulls
-  if (s->page.num_input_values != (init_run >> 1)) { return true; }
+    uint8_t const* const read_from = s->data_start + byte_offset;
+    bool const read_bit            = (*read_from) & (1 << bit_in_byte_index);
 
-  auto const lvl_bits = s->col.level_bits[lvl];
-  auto const run_val  = lvl_bits == 0 ? 0 : s->initial_rle_value[lvl];
-
-  // the encoded repeated value isn't valid, we have (all) nulls
-  return run_val != s->col.max_level[lvl];
-}
-
-template <int decode_block_size_t, typename state_buf>
-inline __device__ void bool_plain_decode(page_state_s* s, state_buf* sb, int t, int to_decode)
-{
-  int pos              = s->dict_pos;
-  int const target_pos = pos + to_decode;
-  __syncthreads();  // Make sure all threads have read dict_pos before it changes at the end.
-
-  while (pos < target_pos) {
-    int const batch_len = min(target_pos - pos, decode_block_size_t);
-
-    if (t < batch_len) {
-      int const bit_pos           = pos + t;
-      int const byte_offset       = bit_pos >> 3;
-      int const bit_in_byte_index = bit_pos & 7;
-
-      uint8_t const* const read_from = s->data_start + byte_offset;
-      bool const read_bit            = (*read_from) & (1 << bit_in_byte_index);
-
-      int const write_to_index     = rolling_index<state_buf::dict_buf_size>(bit_pos);
-      sb->dict_idx[write_to_index] = read_bit;
-    }
-
-    pos += batch_len;
+    int const write_to_index     = rolling_index<state_buf::dict_buf_size>(bit_pos);
+    sb->dict_idx[write_to_index] = read_bit;
   }
-
-  if (t == 0) { s->dict_pos = pos; }
 }
 
 template <int rolling_buf_size, typename stream_type>
@@ -874,6 +820,81 @@ __device__ int skip_decode(stream_type& parquet_stream, int num_to_skip, int t)
   }
 
   return num_skipped;
+}
+
+template <int decode_block_size_t,
+          int rolling_buf_size,
+          bool has_lists_t,
+          bool has_dict_t,
+          bool has_bools_t,
+          bool has_nesting_t,
+          typename level_t,
+          typename dict_stream_t,
+          typename bool_stream_t>
+__device__ void skip_ahead_in_decoding(page_state_s* s,
+                                       dict_stream_t& dict_stream,
+                                       bool_stream_t& bool_stream,
+                                       bool bools_are_rle_stream,
+                                       bool process_nulls,
+                                       level_t const* const def,
+                                       int& processed_count,
+                                       int& valid_count)
+{
+  auto const block = cg::this_thread_block();
+  int const t      = block.thread_rank();
+
+  auto skip_bools = [&](int num_to_skip) {
+    if (bools_are_rle_stream) {
+      skip_decode<rolling_buf_size>(bool_stream, num_to_skip, t);
+    } else {
+      if (t == 0) { s->dict_pos = num_to_skip; }
+      // For non-lists don't sync: we'll sync at the end of the lambda instead
+      if constexpr (has_lists_t) { block.sync(); }
+    }
+  };
+
+  if constexpr (has_lists_t) {
+    auto const skipped_leaf_values = s->page.skipped_leaf_values;
+    if (skipped_leaf_values > 0) {
+      processed_count = skipped_leaf_values;
+      if constexpr (has_dict_t) {
+        skip_decode<rolling_buf_size>(dict_stream, skipped_leaf_values, t);
+      } else if constexpr (has_bools_t) {
+        skip_bools(skipped_leaf_values);
+      }
+    }
+    return;
+  }
+
+  // Non-lists
+  int const first_row = s->first_row;
+  if (first_row <= 0) { return; }  // Nothing to skip
+
+  // Count the number of valids we're skipping.
+  processed_count = first_row;
+  valid_count     = !process_nulls
+                      ? first_row
+                      : skip_validity_and_row_indices_nonlist<decode_block_size_t, level_t>(
+                      first_row, s, def, has_nesting_t, t);
+
+  if constexpr (has_dict_t) {
+    skip_decode<rolling_buf_size>(dict_stream, valid_count, t);
+  } else if constexpr (has_bools_t) {
+    skip_bools(valid_count);
+  }
+
+  if (t == 0) {
+    int const max_depth = s->col.max_nesting_depth - 1;
+    auto& ni            = s->nesting_info[max_depth];
+
+    // update valid value count for decoding and total # of values we've processed
+    ni.valid_count       = valid_count;
+    ni.value_count       = processed_count;
+    s->nz_count          = valid_count;
+    s->input_value_count = processed_count;
+    s->input_row_count   = processed_count;
+  }
+  block.sync();
 }
 
 template <decode_kernel_mask kernel_mask_t>
@@ -942,16 +963,21 @@ constexpr bool is_split_decode()
  * @param chunks List of column chunks
  * @param min_row Row index to start reading at
  * @param num_rows Maximum number of rows to read
+ * @param page_mask Boolean vector indicating which pages need to be decoded
  * @param initial_str_offsets Vector to store the initial offsets for large nested string cols
+ * @param page_string_offset_indices Device span of offsets, indexed per-page, into the column's
+ * string offset buffer
  * @param error_code Error code to set if an error is encountered
  */
 template <typename level_t, int decode_block_size_t, decode_kernel_mask kernel_mask_t>
 CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
-  gpuDecodePageDataGeneric(PageInfo* pages,
+  decode_page_data_generic(PageInfo* pages,
                            device_span<ColumnChunkDesc const> chunks,
                            size_t min_row,
                            size_t num_rows,
+                           cudf::device_span<bool const> page_mask,
                            cudf::device_span<size_t> initial_str_offsets,
+                           cudf::device_span<size_t const> page_string_offset_indices,
                            kernel_error::pointer error_code)
 {
   constexpr bool has_dict_t     = has_dict<kernel_mask_t>();
@@ -966,16 +992,17 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
   constexpr int rle_run_buffer_size = rle_stream_required_run_buffer_size<decode_block_size_t>();
 
   __shared__ __align__(16) page_state_s state_g;
-  constexpr bool use_dict_buffers = has_dict_t || has_bools_t || has_strings_t;
+  constexpr bool use_dict_buffers = has_dict_t || has_bools_t;
   using state_buf_t               = page_state_buffers_s<rolling_buf_size,  // size of nz_idx buffer
                                            use_dict_buffers ? rolling_buf_size : 1,
-                                           has_strings_t ? rolling_buf_size : 1>;
+                                                         1>;
   __shared__ __align__(16) state_buf_t state_buffers;
 
+  auto const block      = cg::this_thread_block();
   page_state_s* const s = &state_g;
   auto* const sb        = &state_buffers;
-  int const page_idx    = blockIdx.x;
-  int const t           = threadIdx.x;
+  int const page_idx    = cg::this_grid().block_rank();
+  int const t           = block.thread_rank();
   PageInfo* pp          = &pages[page_idx];
 
   if (!(BitAnd(pages[page_idx].kernel_mask, kernel_mask_t))) { return; }
@@ -983,60 +1010,65 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
   // must come after the kernel mask check
   [[maybe_unused]] null_count_back_copier _{s, t};
 
-  if (!setupLocalPageInfo(s,
-                          pp,
-                          chunks,
-                          min_row,
-                          num_rows,
-                          mask_filter{kernel_mask_t},
-                          page_processing_stage::DECODE)) {
+  // Exit super early for simple types if the page does not need to be decoded
+  if constexpr (not has_lists_t and not has_strings_t and not has_nesting_t) {
+    if (not page_mask[page_idx]) {
+      pp->num_nulls  = pp->nesting[0].batch_size;
+      pp->num_valids = 0;
+      // Set s->nesting info = nullptr to bypass `null_count_back_copier` at return
+      s->nesting_info = nullptr;
+      return;
+    }
+  }
+
+  // Setup local page info
+  if (!setup_local_page_info(s,
+                             pp,
+                             chunks,
+                             min_row,
+                             num_rows,
+                             mask_filter{kernel_mask_t},
+                             page_processing_stage::DECODE)) {
     return;
   }
 
-  bool const should_process_nulls = is_nullable(s) && maybe_has_nulls(s);
+  // Write list and/or string offsets and exit if the page does not need to be decoded
+  if (not page_mask[page_idx]) {
+    //  Update offsets for all list depth levels
+    if constexpr (has_lists_t) { update_list_offsets_for_pruned_pages<decode_block_size_t>(s); }
+    // Update string offsets or write string sizes for small and large strings respectively
+    if constexpr (has_strings_t) {
+      update_string_offsets_for_pruned_pages<decode_block_size_t, has_lists_t>(
+        s, initial_str_offsets, pages[page_idx]);
+    }
+    // Must be set after computing above list and string offsets
+    pp->num_nulls = pp->nesting[s->col.max_nesting_depth - 1].batch_size;
+    if constexpr (not has_lists_t) { pp->num_nulls -= s->first_row; }
+    pp->num_valids = 0;
+
+    return;
+  }
+
+  bool const process_nulls = should_process_nulls(s);
 
   // shared buffer. all shared memory is suballocated out of here
   constexpr int rle_run_buffer_bytes =
     cudf::util::round_up_unsafe(rle_run_buffer_size * sizeof(rle_run), size_t{16});
-  constexpr int shared_buf_size =
-    rle_run_buffer_bytes * (static_cast<int>(has_dict_t) + static_cast<int>(has_bools_t) +
-                            static_cast<int>(has_lists_t) + 1);
+  constexpr int shared_buf_size = cuda::std::max(
+    1, rle_run_buffer_bytes * (static_cast<int>(has_dict_t) + static_cast<int>(has_bools_t)));
   __shared__ __align__(16) uint8_t shared_buf[shared_buf_size];
 
   // setup all shared memory buffers
   int shared_offset = 0;
 
-  auto rep_runs = reinterpret_cast<rle_run*>(shared_buf + shared_offset);
-  if constexpr (has_lists_t) { shared_offset += rle_run_buffer_bytes; }
-
   auto dict_runs = reinterpret_cast<rle_run*>(shared_buf + shared_offset);
   if constexpr (has_dict_t) { shared_offset += rle_run_buffer_bytes; }
 
   auto bool_runs = reinterpret_cast<rle_run*>(shared_buf + shared_offset);
-  if constexpr (has_bools_t) { shared_offset += rle_run_buffer_bytes; }
 
-  auto def_runs = reinterpret_cast<rle_run*>(shared_buf + shared_offset);
-
-  // initialize the stream decoders (requires values computed in setupLocalPageInfo)
-  rle_stream<level_t, decode_block_size_t, rolling_buf_size> def_decoder{def_runs};
-  level_t* const def = reinterpret_cast<level_t*>(pp->lvl_decode_buf[level_type::DEFINITION]);
-  if (should_process_nulls) {
-    def_decoder.init(s->col.level_bits[level_type::DEFINITION],
-                     s->abs_lvl_start[level_type::DEFINITION],
-                     s->abs_lvl_end[level_type::DEFINITION],
-                     def,
-                     s->page.num_input_values);
-  }
-
-  rle_stream<level_t, decode_block_size_t, rolling_buf_size> rep_decoder{rep_runs};
-  level_t* const rep = reinterpret_cast<level_t*>(pp->lvl_decode_buf[level_type::REPETITION]);
-  if constexpr (has_lists_t) {
-    rep_decoder.init(s->col.level_bits[level_type::REPETITION],
-                     s->abs_lvl_start[level_type::REPETITION],
-                     s->abs_lvl_end[level_type::REPETITION],
-                     rep,
-                     s->page.num_input_values);
-  }
+  // get the level data
+  auto* const def = reinterpret_cast<level_t*>(pp->lvl_decode_buf[level_type::DEFINITION]);
+  auto* const rep = reinterpret_cast<level_t*>(pp->lvl_decode_buf[level_type::REPETITION]);
 
   rle_stream<uint32_t, decode_block_size_t, rolling_buf_size> dict_stream{dict_runs};
   if constexpr (has_dict_t) {
@@ -1052,7 +1084,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
       bool_stream.init(1, s->data_start, s->data_end, sb->dict_idx, s->page.num_input_values);
     }
   }
-  __syncthreads();
+  block.sync();
 
   // We use two counters in the loop below: processed_count and valid_count.
   // - processed_count: number of values out of num_input_values that we have decoded so far.
@@ -1061,120 +1093,157 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
   // - valid_count: number of non-null values we have decoded so far. In each iteration of the
   //   loop below, we look at the number of valid items (which could be all for non-nullable),
   //   and valid_count is that running count.
-  int processed_count         = 0;
-  int valid_count             = 0;
-  size_t string_output_offset = 0;
+  int processed_count             = 0;
+  int valid_count                 = 0;
+  size_t string_output_offset     = 0;
+  int const init_valid_map_offset = s->nesting_info[s->col.max_nesting_depth - 1].valid_map_offset;
 
-  // Skip ahead in the decoding so that we don't repeat work (skipped_leaf_values = 0 for non-lists)
-  auto const skipped_leaf_values = s->page.skipped_leaf_values;
-  if constexpr (has_lists_t) {
-    if (skipped_leaf_values > 0) {
-      if (should_process_nulls) {
-        skip_decode<rolling_buf_size>(def_decoder, skipped_leaf_values, t);
-      }
-      processed_count = skip_decode<rolling_buf_size>(rep_decoder, skipped_leaf_values, t);
-      if constexpr (has_dict_t) {
-        skip_decode<rolling_buf_size>(dict_stream, skipped_leaf_values, t);
-      } else if constexpr (has_strings_t) {
-        gpuInitStringDescriptors<true>(
-          s, sb, skipped_leaf_values, cooperative_groups::this_thread_block());
-        if (t == 0) { s->dict_pos = processed_count; }
-        __syncthreads();
-      }
-    }
-  }
+  // Skip ahead in the decoding so that we don't repeat work
+  skip_ahead_in_decoding<decode_block_size_t,
+                         rolling_buf_size,
+                         has_lists_t,
+                         has_dict_t,
+                         has_bools_t,
+                         has_nesting_t,
+                         level_t>(s,
+                                  dict_stream,
+                                  bool_stream,
+                                  bools_are_rle_stream,
+                                  process_nulls,
+                                  def,
+                                  processed_count,
+                                  valid_count);
 
   // the core loop. decode batches of level stream data using rle_stream objects
-  // and pass the results to gpuDecodeValues
+  // and pass the results to decode_values
   // For chunked reads we may not process all of the rows on the page; if not stop early
-  int const last_row = s->first_row + s->num_rows;
+  int const first_row = s->first_row;
+  int const last_row  = first_row + s->num_rows;
   while ((s->error == 0) && (processed_count < s->page.num_input_values) &&
          (s->input_row_count <= last_row)) {
     int next_valid_count;
+    block.sync();
+    processed_count += min(rolling_buf_size, s->page.num_input_values - processed_count);
 
     // only need to process definition levels if this is a nullable column
-    if (should_process_nulls) {
-      processed_count += def_decoder.decode_next(t);
-      __syncthreads();
-
+    if (process_nulls) {
       if constexpr (has_lists_t) {
-        rep_decoder.decode_next(t);
-        __syncthreads();
-        next_valid_count = gpuUpdateValidityAndRowIndicesLists<decode_block_size_t, true, level_t>(
-          processed_count, s, sb, def, rep, t);
+        next_valid_count =
+          update_validity_and_row_indices_lists<decode_block_size_t, true, level_t>(
+            processed_count, s, sb, def, rep, t);
       } else if constexpr (has_nesting_t) {
-        next_valid_count = gpuUpdateValidityAndRowIndicesNested<decode_block_size_t, level_t>(
+        next_valid_count = update_validity_and_row_indices_nested<decode_block_size_t, level_t>(
           processed_count, s, sb, def, t);
       } else {
-        next_valid_count = gpuUpdateValidityAndRowIndicesFlat<decode_block_size_t, level_t>(
+        next_valid_count = update_validity_and_row_indices_flat<decode_block_size_t, level_t>(
           processed_count, s, sb, def, t);
       }
     }
     // if we wanted to split off the skip_rows/num_rows case into a separate kernel, we could skip
     // this function call entirely since all it will ever generate is a mapping of (i -> i) for
-    // nz_idx.  gpuDecodeFixedWidthValues would be the only work that happens.
+    // nz_idx.  decode_fixed_width_values would be the only work that happens.
     else {
       if constexpr (has_lists_t) {
-        processed_count += rep_decoder.decode_next(t);
-        __syncthreads();
-        next_valid_count = gpuUpdateValidityAndRowIndicesLists<decode_block_size_t, false, level_t>(
-          processed_count, s, sb, nullptr, rep, t);
-      } else {
-        processed_count += min(rolling_buf_size, s->page.num_input_values - processed_count);
         next_valid_count =
-          gpuUpdateValidityAndRowIndicesNonNullable<decode_block_size_t>(processed_count, s, sb, t);
+          update_validity_and_row_indices_lists<decode_block_size_t, false, level_t>(
+            processed_count, s, sb, nullptr, rep, t);
+      } else {
+        // direct copy: no nulls, no lists, no need to update validity or row indices
+        // This ASSUMES that s->row_index_lower_bound is always -1!
+        // Its purpose is to handle rows than span page boundaries, which only happen for lists.
+        int const capped_target_value_count = min(processed_count, last_row);
+        if (t == 0) { s->input_row_count = capped_target_value_count; }
+        next_valid_count = capped_target_value_count;
       }
     }
-    __syncthreads();
+    block.sync();
 
     // We want to limit the number of dictionary/bool/string items we decode,
     // that correspond to the rows we have processed in this iteration that are valid.
     // We know the number of valid rows to process with: next_valid_count - valid_count.
     if constexpr (has_dict_t) {
       dict_stream.decode_next(t, next_valid_count - valid_count);
-      __syncthreads();
-    } else if constexpr (has_strings_t) {
-      auto const target_pos = next_valid_count + skipped_leaf_values;
-      gpuInitStringDescriptors<false>(s, sb, target_pos, cooperative_groups::this_thread_block());
-      if (t == 0) { s->dict_pos = target_pos; }
-      __syncthreads();
+      block.sync();
     } else if constexpr (has_bools_t) {
       if (bools_are_rle_stream) {
         bool_stream.decode_next(t, next_valid_count - valid_count);
       } else {
-        bool_plain_decode<decode_block_size_t>(s, sb, t, next_valid_count - valid_count);
+        auto const target_pos = next_valid_count + s->page.skipped_leaf_values;
+        bool_plain_decode(s, sb, target_pos, block);
+        if (t == 0) { s->dict_pos = target_pos; }
       }
-      __syncthreads();
+      block.sync();
     }
 
-    // decode the values themselves
-    if constexpr (has_strings_t) {
-      string_output_offset = gpuDecodeString<decode_block_size_t, has_lists_t, split_decode_t>(
-        s, sb, valid_count, next_valid_count, t, string_output_offset);
-    } else if constexpr (split_decode_t) {
-      gpuDecodeFixedWidthSplitValues<decode_block_size_t, has_lists_t>(
-        s, sb, valid_count, next_valid_count, t);
+    auto decode_values = [&]<copy_mode copy_mode_t>() {
+      if constexpr (has_strings_t) {
+        uint32_t* const str_offsets =
+          s->col.column_string_offset_base + page_string_offset_indices[page_idx];
+        string_output_offset =
+          decode_strings<decode_block_size_t, has_dict_t, has_lists_t, split_decode_t, copy_mode_t>(
+            s, sb, valid_count, next_valid_count, t, str_offsets, string_output_offset);
+      } else if constexpr (split_decode_t) {
+        decode_fixed_width_split_values<decode_block_size_t, has_lists_t, copy_mode_t>(
+          s, sb, valid_count, next_valid_count, t);
+      } else {
+        decode_fixed_width_values<decode_block_size_t, has_lists_t, copy_mode_t>(
+          s, sb, valid_count, next_valid_count, t);
+      }
+    };
+
+    if constexpr (has_lists_t) {
+      decode_values.template operator()<copy_mode::INDIRECT>();
     } else {
-      gpuDecodeFixedWidthValues<decode_block_size_t, has_lists_t>(
-        s, sb, valid_count, next_valid_count, t);
+      if (process_nulls) {
+        decode_values.template operator()<copy_mode::INDIRECT>();
+      } else {
+        decode_values.template operator()<copy_mode::DIRECT>();
+      }
     }
-    __syncthreads();
 
     valid_count = next_valid_count;
+  }
+
+  // Zero-fill null positions after decoding valid values
+  if constexpr (has_strings_t || has_lists_t) {
+    if (process_nulls) {
+      uint32_t const dtype_len = has_strings_t ? sizeof(cudf::size_type) : s->dtype_len;
+      int const num_values     = [&]() {
+        if constexpr (has_lists_t) {
+          auto const& ni = s->nesting_info[s->col.max_nesting_depth - 1];
+          return ni.valid_map_offset - init_valid_map_offset;
+        } else {
+          return s->num_rows;
+        }
+      }();
+      zero_fill_null_positions_shared<decode_block_size_t>(
+        s, dtype_len, init_valid_map_offset, num_values, t);
+    }
   }
 
   if constexpr (has_strings_t) {
     // For large strings, update the initial string buffer offset to be used during large string
     // column construction. Otherwise, convert string sizes to final offsets.
+
+    if constexpr (!has_lists_t) {
+      if (!process_nulls) {
+        if (t == 0) {
+          s->nesting_info[s->col.max_nesting_depth - 1].value_count = s->input_row_count;
+        }
+        block.sync();
+      }
+    }
+
     if (s->col.is_large_string_col) {
       // page.chunk_idx are ordered by input_col_idx and row_group_idx respectively.
       auto const chunks_per_rowgroup = initial_str_offsets.size();
       auto const input_col_idx       = pages[page_idx].chunk_idx % chunks_per_rowgroup;
-      compute_initial_large_strings_offset(s, initial_str_offsets[input_col_idx], has_lists_t);
+      compute_initial_large_strings_offset<has_lists_t>(s, initial_str_offsets[input_col_idx]);
     } else {
-      convert_small_string_lengths_to_offsets<decode_block_size_t>(s, has_lists_t);
+      convert_small_string_lengths_to_offsets<decode_block_size_t, has_lists_t>(s);
     }
   }
+
   if (t == 0 and s->error != 0) { set_error(s->error, error_code); }
 }
 
@@ -1186,15 +1255,20 @@ using kernel_tag_t = std::integral_constant<decode_kernel_mask, mask>;
 template <int value>
 using int_tag_t = std::integral_constant<int, value>;
 
-void __host__ DecodePageData(cudf::detail::hostdevice_span<PageInfo> pages,
-                             cudf::detail::hostdevice_span<ColumnChunkDesc const> chunks,
-                             size_t num_rows,
-                             size_t min_row,
-                             int level_type_size,
-                             decode_kernel_mask kernel_mask,
-                             cudf::device_span<size_t> initial_str_offsets,
-                             kernel_error::pointer error_code,
-                             rmm::cuda_stream_view stream)
+/**
+ * @copydoc cudf::io::paruquet::detail::decode_page_data
+ */
+void decode_page_data(cudf::detail::hostdevice_span<PageInfo> pages,
+                      cudf::detail::hostdevice_span<ColumnChunkDesc const> chunks,
+                      size_t num_rows,
+                      size_t min_row,
+                      int level_type_size,
+                      decode_kernel_mask kernel_mask,
+                      cudf::device_span<bool const> page_mask,
+                      cudf::device_span<size_t> initial_str_offsets,
+                      cudf::device_span<size_t const> page_string_offset_indices,
+                      kernel_error::pointer error_code,
+                      rmm::cuda_stream_view stream)
 {
   // No template parameters on lambdas until C++20, so use type tags instead
   auto launch_kernel = [&](auto block_size_tag, auto kernel_mask_tag) {
@@ -1205,13 +1279,25 @@ void __host__ DecodePageData(cudf::detail::hostdevice_span<PageInfo> pages,
     dim3 dim_grid(pages.size(), 1);  // 1 threadblock per page
 
     if (level_type_size == 1) {
-      gpuDecodePageDataGeneric<uint8_t, decode_block_size, mask>
-        <<<dim_grid, dim_block, 0, stream.value()>>>(
-          pages.device_ptr(), chunks, min_row, num_rows, initial_str_offsets, error_code);
+      decode_page_data_generic<uint8_t, decode_block_size, mask>
+        <<<dim_grid, dim_block, 0, stream.value()>>>(pages.device_ptr(),
+                                                     chunks,
+                                                     min_row,
+                                                     num_rows,
+                                                     page_mask,
+                                                     initial_str_offsets,
+                                                     page_string_offset_indices,
+                                                     error_code);
     } else {
-      gpuDecodePageDataGeneric<uint16_t, decode_block_size, mask>
-        <<<dim_grid, dim_block, 0, stream.value()>>>(
-          pages.device_ptr(), chunks, min_row, num_rows, initial_str_offsets, error_code);
+      decode_page_data_generic<uint16_t, decode_block_size, mask>
+        <<<dim_grid, dim_block, 0, stream.value()>>>(pages.device_ptr(),
+                                                     chunks,
+                                                     min_row,
+                                                     num_rows,
+                                                     page_mask,
+                                                     initial_str_offsets,
+                                                     page_string_offset_indices,
+                                                     error_code);
     }
   };
 

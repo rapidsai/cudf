@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf_test/base_fixture.hpp>
@@ -29,7 +18,6 @@
 
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
-#include <thrust/tuple.h>
 
 #include <iterator>
 #include <numeric>
@@ -131,7 +119,7 @@ TEST(BatchedMemcpyTest, BasicTest)
 
   // Copy over the result destination buffer to host and synchronize the stream
   auto result_dst_buffer =
-    cudf::detail::make_std_vector_sync<T1>(cudf::device_span<T1>(d_dst_data), stream);
+    cudf::detail::make_std_vector<T1>(cudf::device_span<T1>(d_dst_data), stream);
 
   // Check if both vectors are equal
   EXPECT_TRUE(

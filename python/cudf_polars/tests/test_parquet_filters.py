@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -32,6 +32,7 @@ def pq_file(tmp_path_factory, df):
     "expr",
     [
         pl.col("a").is_in([0, 1]),
+        pl.col("c").is_in(["a", "b"]),
         pl.col("a").is_between(0, 2),
         (pl.col("a") < 2).not_(),
         pl.lit(2) > pl.col("a"),
@@ -57,3 +58,10 @@ def test_scan_by_hand(expr, selection, pq_file, chunked):
     assert_gpu_result_equal(
         q, engine=pl.GPUEngine(raise_on_fail=True, parquet_options={"chunked": chunked})
     )
+
+
+def test_parquet_filter_boolean_column(tmp_path):
+    df = pl.DataFrame({"x": [1, 2, 3], "y": [True, False, True]})
+    df.write_parquet(tmp_path / "df.parquet")
+    q = pl.scan_parquet(tmp_path / "df.parquet").filter(pl.col("y"))
+    assert_gpu_result_equal(q)

@@ -1,22 +1,10 @@
 /*
- * Copyright (c) 2020-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
 
-#include <cudf/detail/utilities/host_vector.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/export.hpp>
 
@@ -24,6 +12,7 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/device_vector.hpp>
 
+#include <cuda/std/span>
 #include <thrust/detail/raw_pointer_cast.h>
 #include <thrust/device_vector.h>
 #include <thrust/host_vector.h>
@@ -31,6 +20,7 @@
 
 #include <cstddef>
 #include <limits>
+#include <span>
 #include <type_traits>
 #include <utility>
 
@@ -200,7 +190,7 @@ struct host_span : public cudf::detail::span_base<T, Extent, host_span<T, Extent
   /**
    * @brief Constructor from pointer and size
    *
-   * @note This needs to be host-device , as it's used by a host-device function in base_2dspan
+   * @note This needs to be host-device, as it's used by a host-device function in base_2dspan
    *
    * @param data Pointer to the first element in the span
    * @param size The number of elements in the span
@@ -234,26 +224,6 @@ struct host_span : public cudf::detail::span_base<T, Extent, host_span<T, Extent
                                  std::declval<C&>().data()))> (*)[],
                                T (*)[]>>* = nullptr>  // NOLINT
   constexpr host_span(C const& in) : base(thrust::raw_pointer_cast(in.data()), in.size())
-  {
-  }
-
-  /// Constructor from a host_vector
-  /// @param in The host_vector to construct the span from
-  template <typename OtherT,
-            // Only supported containers of types convertible to T
-            std::enable_if_t<std::is_convertible_v<OtherT (*)[], T (*)[]>>* = nullptr>  // NOLINT
-  constexpr host_span(cudf::detail::host_vector<OtherT>& in)
-    : base(in.data(), in.size()), _is_device_accessible{in.get_allocator().is_device_accessible()}
-  {
-  }
-
-  /// Constructor from a const host_vector
-  /// @param in The host_vector to construct the span from
-  template <typename OtherT,
-            // Only supported containers of types convertible to T
-            std::enable_if_t<std::is_convertible_v<OtherT (*)[], T (*)[]>>* = nullptr>  // NOLINT
-  constexpr host_span(cudf::detail::host_vector<OtherT> const& in)
-    : base(in.data(), in.size()), _is_device_accessible{in.get_allocator().is_device_accessible()}
   {
   }
 
@@ -326,130 +296,28 @@ struct host_span : public cudf::detail::span_base<T, Extent, host_span<T, Extent
     return host_span{this->data() + offset, count, _is_device_accessible};
   }
 
+  /**
+   * @brief Returns a standard span instance
+   *
+   * @return Standard span instance
+   */
+  [[nodiscard]] constexpr operator std::span<T>() const noexcept
+  {
+    return std::span<T>(this->data(), this->size());
+  }
+
  private:
   bool _is_device_accessible{false};
 };
 
 // ===== device_span ===============================================================================
 
-template <typename T>
-struct is_device_span_supported_container : std::false_type {};
-
-template <typename T, typename Alloc>
-struct is_device_span_supported_container<  //
-  thrust::device_vector<T, Alloc>> : std::true_type {};
-
-template <typename T>
-struct is_device_span_supported_container<  //
-  rmm::device_vector<T>> : std::true_type {};
-
-template <typename T>
-struct is_device_span_supported_container<  //
-  rmm::device_uvector<T>> : std::true_type {};
-
 /**
- * @brief Device version of C++20 std::span with reduced feature set.
+ * @brief Device span is an alias of cuda::std::span.
  *
  */
-template <typename T, std::size_t Extent = cudf::dynamic_extent>
-struct device_span : public cudf::detail::span_base<T, Extent, device_span<T, Extent>> {
-  using base = cudf::detail::span_base<T, Extent, device_span<T, Extent>>;  ///< Base type
-  using base::base;
-
-  CUDF_HOST_DEVICE constexpr device_span() noexcept : base() {}  // required to compile on centos
-
-  /// Constructor from container
-  /// @param in The container to construct the span from
-  template <typename C,
-            // Only supported containers of types convertible to T
-            std::enable_if_t<is_device_span_supported_container<C>::value &&
-                             std::is_convertible_v<
-                               std::remove_pointer_t<decltype(thrust::raw_pointer_cast(  // NOLINT
-                                 std::declval<C&>().data()))> (*)[],
-                               T (*)[]>>* = nullptr>  // NOLINT
-  constexpr device_span(C& in) : base(thrust::raw_pointer_cast(in.data()), in.size())
-  {
-  }
-
-  /// Constructor from const container
-  /// @param in The container to construct the span from
-  template <typename C,
-            // Only supported containers of types convertible to T
-            std::enable_if_t<is_device_span_supported_container<C>::value &&
-                             std::is_convertible_v<
-                               std::remove_pointer_t<decltype(thrust::raw_pointer_cast(  // NOLINT
-                                 std::declval<C&>().data()))> (*)[],
-                               T (*)[]>>* = nullptr>  // NOLINT
-  constexpr device_span(C const& in) : base(thrust::raw_pointer_cast(in.data()), in.size())
-  {
-  }
-
-  // Copy construction to support const conversion
-  /// @param other The span to copy
-  template <typename OtherT,
-            std::size_t OtherExtent,
-            std::enable_if_t<(Extent == OtherExtent || Extent == dynamic_extent) &&
-                               std::is_convertible_v<OtherT (*)[], T (*)[]>,  // NOLINT
-                             void>* = nullptr>
-  CUDF_HOST_DEVICE constexpr device_span(device_span<OtherT, OtherExtent> const& other) noexcept
-    : base(other.data(), other.size())
-  {
-  }
-
-  // not noexcept due to undefined behavior when idx < 0 || idx >= size
-  /**
-   * @brief Returns a reference to the idx-th element of the sequence.
-   *
-   * The behavior is undefined if idx is out of range (i.e., if it is greater than or equal to
-   * size()).
-   *
-   * @param idx the index of the element to access
-   * @return A reference to the idx-th element of the sequence, i.e., `data()[idx]`
-   */
-  __device__ constexpr typename base::reference operator[](typename base::size_type idx) const
-  {
-    static_assert(sizeof(idx) >= sizeof(size_t), "index type must not be smaller than size_t");
-    return this->_data[idx];
-  }
-
-  // not noexcept due to undefined behavior when size = 0
-  /**
-   * @brief Returns a reference to the first element in the span.
-   *
-   * Calling front on an empty span results in undefined behavior.
-   *
-   * @return Reference to the first element in the span
-   */
-  [[nodiscard]] __device__ constexpr typename base::reference front() const
-  {
-    return this->_data[0];
-  }
-  // not noexcept due to undefined behavior when size = 0
-  /**
-   * @brief Returns a reference to the last element in the span.
-   *
-   * Calling last on an empty span results in undefined behavior.
-   *
-   * @return Reference to the last element in the span
-   */
-  [[nodiscard]] __device__ constexpr typename base::reference back() const
-  {
-    return this->_data[this->_size - 1];
-  }
-
-  /**
-   * @brief Obtains a span that is a view over the `count` elements of this span starting at offset
-   *
-   * @param offset The offset of the first element in the subspan
-   * @param count The number of elements in the subspan
-   * @return A subspan of the sequence, of requested count and offset
-   */
-  [[nodiscard]] CUDF_HOST_DEVICE constexpr device_span subspan(
-    typename base::size_type offset, typename base::size_type count) const noexcept
-  {
-    return device_span{this->data() + offset, count};
-  }
-};
+template <typename T, std::size_t Extent = cuda::std::dynamic_extent>
+using device_span = cuda::std::span<T, Extent>;
 /** @} */  // end of group
 
 namespace detail {
@@ -540,8 +408,7 @@ class base_2dspan {
    * @param other The other 2D span
    */
   template <typename OtherT,
-            template <typename, size_t>
-            typename OtherRowType,
+            template <typename, size_t> typename OtherRowType,
             std::enable_if_t<std::is_convertible_v<OtherRowType<OtherT, dynamic_extent>,
                                                    RowType<T, dynamic_extent>>,
                              void>* = nullptr>

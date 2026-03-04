@@ -1,5 +1,6 @@
 #!/bin/bash
-# Copyright (c) 2023-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 # Common setup steps shared by Python test jobs
 
@@ -23,8 +24,8 @@ main() {
 
     if [ "$RAPIDS_BUILD_TYPE" == "pull-request" ]; then
         rapids-logger "Downloading artifacts from this pr jobs"
-        CPP_CHANNEL=$(rapids-download-conda-from-s3 cpp)
-        PYTHON_CHANNEL=$(rapids-download-conda-from-s3 python)
+        CPP_CHANNEL=$(rapids-download-conda-from-github cpp)
+        PYTHON_CHANNEL=$(rapids-download-from-github "$(rapids-package-name conda_python cudf --stable --cuda)")
     fi
 
     ANY_FAILURES=0
@@ -32,7 +33,6 @@ main() {
     for lib in ${LIBS//,/ }; do
         lib=$(echo "$lib" | tr -d '""')
         echo "Running tests for library $lib"
-        CUDA_VERSION=$(if [ "$lib" = "tensorflow" ]; then echo "11.8"; else echo "${RAPIDS_CUDA_VERSION%.*}"; fi)
 
         . /opt/conda/etc/profile.d/conda.sh
         # Check the value of RAPIDS_BUILD_TYPE
@@ -42,7 +42,7 @@ main() {
                 --config "$dependencies_yaml" \
                 --output conda \
                 --file-key "test_${lib}" \
-                --matrix "cuda=${CUDA_VERSION};arch=$(arch);py=${RAPIDS_PY_VERSION}" \
+                --matrix "cuda=${RAPIDS_CUDA_VERSION%.*};arch=$(arch);py=${RAPIDS_PY_VERSION}" \
                 --prepend-channel "${CPP_CHANNEL}" \
                 --prepend-channel "${PYTHON_CHANNEL}" | tee env.yaml
         else
@@ -51,7 +51,7 @@ main() {
                 --config "$dependencies_yaml" \
                 --output conda \
                 --file-key "test_${lib}" \
-                --matrix "cuda=${CUDA_VERSION};arch=$(arch);py=${RAPIDS_PY_VERSION}" | tee env.yaml
+                --matrix "cuda=${RAPIDS_CUDA_VERSION%.*};arch=$(arch);py=${RAPIDS_PY_VERSION}" | tee env.yaml
         fi
 
         rapids-mamba-retry env create --yes -f env.yaml -n test
@@ -85,7 +85,10 @@ main() {
         trap "EXITCODE=1" ERR
         set +e
 
-        TEST_DIR=${TEST_DIR} NUM_PROCESSES=${NUM_PROCESSES} ci/cudf_pandas_scripts/third-party-integration/run-library-tests.sh "${lib}"
+        TEST_DIR=${TEST_DIR} \
+        NUM_PROCESSES=${NUM_PROCESSES} \
+            timeout 45m \
+            ci/cudf_pandas_scripts/third-party-integration/run-library-tests.sh "${lib}"
 
         set -e
         rapids-logger "Test script exiting with value: ${EXITCODE}"

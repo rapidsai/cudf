@@ -1,22 +1,12 @@
 /*
- * Copyright (c) 2023-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/default_stream.hpp>
+#include <cudf_test/testing_main.hpp>
 
 #include <cudf/strings/padding.hpp>
 #include <cudf/strings/slice.hpp>
@@ -44,7 +34,17 @@ TEST_F(StringsTest, Pad)
 
   auto const side = cudf::strings::side_type::BOTH;
   cudf::strings::pad(view, 6, side, " ", cudf::test::get_default_stream());
+}
+
+TEST_F(StringsTest, Zfill)
+{
+  auto input = cudf::test::strings_column_wrapper({"333", "", "4444", "1"});
+  auto view  = cudf::strings_column_view(input);
+
   cudf::strings::zfill(view, 6, cudf::test::get_default_stream());
+
+  auto widths = cudf::test::fixed_width_column_wrapper<cudf::size_type>({6, 7, 8, 8});
+  cudf::strings::zfill_by_widths(view, widths, cudf::test::get_default_stream());
 }
 
 TEST_F(StringsTest, Wrap)
@@ -69,3 +69,5 @@ TEST_F(StringsTest, Slice)
   auto stops  = cudf::test::fixed_width_column_wrapper<cudf::size_type>({4, 5, 6});
   cudf::strings::slice_strings(view, starts, stops, cudf::test::get_default_stream());
 }
+
+CUDF_TEST_PROGRAM_MAIN()

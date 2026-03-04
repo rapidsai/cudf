@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf/column/column_factories.hpp>
@@ -35,14 +24,13 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
+#include <cuda/std/iterator>
+#include <cuda/std/utility>
 #include <thrust/binary_search.h>
-#include <thrust/distance.h>
 #include <thrust/execution_policy.h>
-#include <thrust/functional.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/permutation_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
-#include <thrust/pair.h>
 #include <thrust/transform.h>
 #include <thrust/transform_scan.h>
 
@@ -60,7 +48,7 @@ namespace {
  * The first value is the keys offsets and the second values is the indices offsets.
  * These are offsets to the beginning of each input column after concatenating.
  */
-using offsets_pair = thrust::pair<size_type, size_type>;
+using offsets_pair = cuda::std::pair<size_type, size_type>;
 
 /**
  * @brief Utility for calculating the offsets for the concatenated child columns
@@ -118,7 +106,7 @@ struct compute_children_offsets_fn {
       [](auto lhs, auto rhs) {
         return offsets_pair{lhs.first + rhs.first, lhs.second + rhs.second};
       });
-    return cudf::detail::make_device_uvector_sync(
+    return cudf::detail::make_device_uvector(
       offsets, stream, cudf::get_current_device_resource_ref());
   }
 
@@ -135,14 +123,14 @@ struct compute_children_offsets_fn {
  */
 struct dispatch_compute_indices {
   template <typename Element>
-  std::enable_if_t<cudf::is_relationally_comparable<Element, Element>(), std::unique_ptr<column>>
-  operator()(column_view const& all_keys,
-             column_view const& all_indices,
-             column_view const& new_keys,
-             offsets_pair const* d_offsets,
-             size_type const* d_map_to_keys,
-             rmm::cuda_stream_view stream,
-             rmm::device_async_resource_ref mr)
+  std::unique_ptr<column> operator()(column_view const& all_keys,
+                                     column_view const& all_indices,
+                                     column_view const& new_keys,
+                                     offsets_pair const* d_offsets,
+                                     size_type const* d_map_to_keys,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::device_async_resource_ref mr)
+    requires(cudf::is_relationally_comparable<Element, Element>())
   {
     auto keys_view     = column_device_view::create(all_keys, stream);
     auto indices_view  = column_device_view::create(all_indices, stream);
@@ -171,34 +159,19 @@ struct dispatch_compute_indices {
     auto result_itr =
       cudf::detail::indexalator_factory::make_output_iterator(result->mutable_view());
     // new indices values are computed by matching the concatenated keys to the new key set
-
-#ifdef NDEBUG
-    thrust::lower_bound(rmm::exec_policy(stream),
+    thrust::lower_bound(rmm::exec_policy_nosync(stream),
                         begin,
                         end,
                         all_itr,
                         all_itr + all_indices.size(),
                         result_itr,
-                        thrust::less<Element>());
-#else
-    // There is a problem with thrust::lower_bound and the output_indexalator.
-    // https://github.com/NVIDIA/thrust/issues/1452; thrust team created nvbug 3322776
-    // This is a workaround.
-    thrust::transform(rmm::exec_policy(stream),
-                      all_itr,
-                      all_itr + all_indices.size(),
-                      result_itr,
-                      [begin, end] __device__(auto key) {
-                        auto itr = thrust::lower_bound(thrust::seq, begin, end, key);
-                        return static_cast<size_type>(thrust::distance(begin, itr));
-                      });
-#endif
+                        cuda::std::less<Element>());
     return result;
   }
 
   template <typename Element, typename... Args>
-  std::enable_if_t<!cudf::is_relationally_comparable<Element, Element>(), std::unique_ptr<column>>
-  operator()(Args&&...)
+  std::unique_ptr<column> operator()(Args&&...)
+    requires(!cudf::is_relationally_comparable<Element, Element>())
   {
     CUDF_FAIL("dictionary concatenate not supported for this column type");
   }
@@ -268,7 +241,7 @@ std::unique_ptr<column> concatenate(host_span<column_view const> columns,
     }));
   // the indices offsets (pair.second) are for building the map
   thrust::lower_bound(
-    rmm::exec_policy(stream),
+    rmm::exec_policy_nosync(stream),
     children_offsets.begin() + 1,
     children_offsets.end(),
     indices_itr,

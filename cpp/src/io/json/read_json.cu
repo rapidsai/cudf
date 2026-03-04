@@ -1,20 +1,9 @@
 /*
- * Copyright (c) 2022-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
-#include "io/comp/io_uncomp.hpp"
+#include "io/comp/decompression.hpp"
 #include "io/json/nested_json.hpp"
 #include "io/utilities/getenv_or.hpp"
 #include "read_json.hpp"
@@ -26,6 +15,7 @@
 #include <cudf/detail/utilities/stream_pool.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/datasource.hpp>
+#include <cudf/io/detail/codec.hpp>
 #include <cudf/io/detail/json.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/memory_resource.hpp>
@@ -35,9 +25,8 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <thrust/distance.h>
+#include <cuda/iterator>
 #include <thrust/execution_policy.h>
-#include <thrust/iterator/constant_iterator.h>
 #include <thrust/scatter.h>
 
 #include <BS_thread_pool.hpp>
@@ -104,9 +93,11 @@ class compressed_host_buffer_source final : public datasource {
       auto decompressed_hbuf = cudf::io::detail::decompress(_comptype, ch_buffer);
       auto const count       = std::min(size, decompressed_hbuf.size() - offset);
       bool partial_read      = offset + count < decompressed_hbuf.size();
-      if (!partial_read)
+      if (!partial_read) {
+        auto decompressed_hbuf_data = decompressed_hbuf.data();
         return std::make_unique<owning_buffer<std::vector<uint8_t>>>(
-          std::move(decompressed_hbuf), decompressed_hbuf.data() + offset, count);
+          std::move(decompressed_hbuf), decompressed_hbuf_data + offset, count);
+      }
       _decompressed_buffer = std::move(decompressed_hbuf);
     }
     auto const count = std::min(size, _decompressed_buffer.size() - offset);
@@ -200,9 +191,9 @@ size_type find_first_delimiter(device_span<char const> d_data,
                                rmm::cuda_stream_view stream)
 {
   auto const first_delimiter_position =
-    thrust::find(rmm::exec_policy(stream), d_data.begin(), d_data.end(), delimiter);
+    thrust::find(rmm::exec_policy_nosync(stream), d_data.begin(), d_data.end(), delimiter);
   return first_delimiter_position != d_data.end()
-           ? static_cast<size_type>(thrust::distance(d_data.begin(), first_delimiter_position))
+           ? static_cast<size_type>(cuda::std::distance(d_data.begin(), first_delimiter_position))
            : -1;
 }
 
@@ -335,42 +326,46 @@ get_record_range_raw_input(host_span<std::unique_ptr<datasource>> sources,
       "LIBCUDF_JSON_BATCH_SIZE", static_cast<std::size_t>(std::numeric_limits<int32_t>::max()));
     if (static_cast<std::size_t>(next_delim_pos - first_delim_pos - shift_for_nonzero_offset) <
         batch_size) {
+      auto buffer_data = buffer.data();
       return std::make_pair(
         datasource::owning_buffer<rmm::device_buffer>(
           std::move(buffer),
-          reinterpret_cast<uint8_t*>(buffer.data()) + first_delim_pos + shift_for_nonzero_offset,
+          reinterpret_cast<uint8_t*>(buffer_data) + first_delim_pos + shift_for_nonzero_offset,
           next_delim_pos - first_delim_pos - shift_for_nonzero_offset + 1),
         std::nullopt);
     }
     device_span<char const> bufsubspan =
       bufspan.subspan(first_delim_pos + shift_for_nonzero_offset,
                       requested_size - first_delim_pos - shift_for_nonzero_offset);
-    auto rev_it_begin = thrust::make_reverse_iterator(bufsubspan.end());
-    auto rev_it_end   = thrust::make_reverse_iterator(bufsubspan.begin());
+    auto rev_it_begin = cuda::std::make_reverse_iterator(bufsubspan.end());
+    auto rev_it_end   = cuda::std::make_reverse_iterator(bufsubspan.begin());
     auto const second_last_delimiter_it =
-      thrust::find(rmm::exec_policy(stream), rev_it_begin, rev_it_end, delimiter);
+      thrust::find(rmm::exec_policy_nosync(stream), rev_it_begin, rev_it_end, delimiter);
     CUDF_EXPECTS(second_last_delimiter_it != rev_it_end,
                  "A single JSON line cannot be larger than the batch size limit");
     auto const last_line_size =
       next_delim_pos - requested_size +
-      static_cast<std::size_t>(thrust::distance(rev_it_begin, second_last_delimiter_it));
+      static_cast<std::size_t>(cuda::std::distance(rev_it_begin, second_last_delimiter_it));
     CUDF_EXPECTS(last_line_size < batch_size,
                  "A single JSON line cannot be larger than the batch size limit");
 
-    rmm::device_buffer second_buffer(bufsubspan.data() + static_cast<std::size_t>(thrust::distance(
-                                                           second_last_delimiter_it, rev_it_end)),
-                                     last_line_size + 1,
-                                     stream);
+    rmm::device_buffer second_buffer(
+      bufsubspan.data() +
+        static_cast<std::size_t>(cuda::std::distance(second_last_delimiter_it, rev_it_end)),
+      last_line_size + 1,
+      stream);
 
+    auto buffer_data        = buffer.data();
+    auto second_buffer_data = second_buffer.data();
+    auto second_buffer_size = second_buffer.size();
     return std::make_pair(
       datasource::owning_buffer<rmm::device_buffer>(
         std::move(buffer),
-        reinterpret_cast<uint8_t*>(buffer.data()) + first_delim_pos + shift_for_nonzero_offset,
+        reinterpret_cast<uint8_t*>(buffer_data) + first_delim_pos + shift_for_nonzero_offset,
         next_delim_pos - first_delim_pos - shift_for_nonzero_offset - last_line_size),
-      datasource::owning_buffer<rmm::device_buffer>(
-        std::move(second_buffer),
-        reinterpret_cast<uint8_t*>(second_buffer.data()),
-        second_buffer.size()));
+      datasource::owning_buffer<rmm::device_buffer>(std::move(second_buffer),
+                                                    reinterpret_cast<uint8_t*>(second_buffer_data),
+                                                    second_buffer_size));
   }
 
   // Add delimiter to end of buffer - possibly adding an empty line to the input buffer - iff we are
@@ -383,10 +378,11 @@ get_record_range_raw_input(host_span<std::unique_ptr<datasource>> sources,
     num_chars++;
   }
 
+  auto buffer_data = buffer.data();
   return std::make_pair(
     datasource::owning_buffer<rmm::device_buffer>(
       std::move(buffer),
-      reinterpret_cast<uint8_t*>(buffer.data()) + first_delim_pos + shift_for_nonzero_offset,
+      reinterpret_cast<uint8_t*>(buffer_data) + first_delim_pos + shift_for_nonzero_offset,
       num_chars),
     std::nullopt);
 }
@@ -703,7 +699,7 @@ device_span<char> ingest_raw_input(device_span<char> buffer,
   if (sources.size() > 1 && !delimiter_map.empty()) {
     static_assert(num_delimiter_chars == 1,
                   "Currently only single-character delimiters are supported");
-    auto const delimiter_source = thrust::make_constant_iterator(delimiter);
+    auto const delimiter_source = cuda::make_constant_iterator(delimiter);
     auto const d_delimiter_map  = cudf::detail::make_device_uvector_async(
       delimiter_map, stream, cudf::get_current_device_resource_ref());
     thrust::scatter(rmm::exec_policy_nosync(stream),

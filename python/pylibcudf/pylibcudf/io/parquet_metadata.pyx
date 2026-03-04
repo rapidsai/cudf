@@ -1,7 +1,9 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 from pylibcudf.io.types cimport SourceInfo
 from pylibcudf.libcudf.io cimport parquet_metadata as cpp_parquet_metadata
+from pylibcudf.types cimport DataType
 
 
 __all__ = [
@@ -83,6 +85,20 @@ cdef class ParquetColumnSchema:
             for child in self.column_schema.children()
         ]
 
+    cpdef DataType cudf_type(self):
+        """
+        Returns the cudf data type for this column.
+
+        This is the resolved cudf data type mapped from the parquet
+        physical/logical types.
+
+        Returns
+        -------
+        DataType
+            cudf data type
+        """
+        return DataType.from_libcudf(self.column_schema.cudf_type())
+
 
 cdef class ParquetSchema:
     """
@@ -112,6 +128,21 @@ cdef class ParquetSchema:
             Root column schema
         """
         return ParquetColumnSchema.from_column_schema(self.schema.root())
+
+    cpdef dict column_types(self):
+        """
+        Returns a dictionary mapping column names to their cudf data types.
+
+        Returns
+        -------
+        dict[str, DataType]
+            Dictionary mapping column names to DataType objects
+        """
+        cdef ParquetColumnSchema root_schema = self.root()
+        return {
+            root_schema.child(i).name(): root_schema.child(i).cudf_type()
+            for i in range(root_schema.num_children())
+        }
 
 
 cdef class ParquetMetadata:
@@ -156,7 +187,7 @@ cdef class ParquetMetadata:
 
     cpdef int num_rowgroups(self):
         """
-        Returns the number of rowgroups in the file.
+        Returns the total number of rowgroups in the file.
 
         Returns
         -------
@@ -164,6 +195,12 @@ cdef class ParquetMetadata:
             Number of row groups.
         """
         return self.meta.num_rowgroups()
+
+    cpdef list num_rowgroups_per_file(self):
+        """
+        Returns the number of rowgroups in each file.
+        """
+        return self.meta.num_rowgroups_per_file()
 
     cpdef dict metadata(self):
         """
@@ -189,6 +226,22 @@ cdef class ParquetMetadata:
             {key.decode(): val for key, val in metadata}
             for metadata in self.meta.rowgroup_metadata()
         ]
+
+    cpdef dict columnchunk_metadata(self):
+        """
+        Returns a map of leaf column names to lists of `total_uncompressed_size`
+        metadata from all column chunks in the file footer.
+
+        Returns
+        -------
+        dict[str, list[int]]
+            Map of leaf column names to lists of `total_uncompressed_size` metadata
+            from all their column chunks.
+        """
+        return {
+            col_name.decode(): uncompressed_sizes
+            for col_name, uncompressed_sizes in self.meta.columnchunk_metadata()
+        }
 
 
 cpdef ParquetMetadata read_parquet_metadata(SourceInfo src_info):

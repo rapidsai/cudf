@@ -1,27 +1,39 @@
-# Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 from cpython.buffer cimport PyBUF_READ
 from cpython.memoryview cimport PyMemoryView_FromMemory
+
+from cython.operator cimport dereference
+
+from libc.stdint cimport int32_t, uint8_t, uintptr_t
+
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
+
 from pylibcudf.io.datasource cimport Datasource
+
 from pylibcudf.libcudf.io.data_sink cimport data_sink
 from pylibcudf.libcudf.io.datasource cimport datasource
 from pylibcudf.libcudf.io.types cimport (
+    const_byte,
     column_encoding,
     column_in_metadata,
     column_name_info,
-    host_buffer,
     partition_info,
     source_info,
     table_input_metadata,
     table_with_metadata,
-    column_in_metadata,
-    table_input_metadata,
 )
 from pylibcudf.libcudf.types cimport size_type
+from pylibcudf.libcudf.utilities.span cimport device_span, host_span
+
+from pylibcudf.span import is_span
+
+from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
+from rmm.pylibrmm.stream cimport Stream
 
 import codecs
 import errno
@@ -32,16 +44,12 @@ import re
 from pylibcudf.libcudf.io.json import \
     json_recovery_mode_t as JSONRecoveryMode  # no-cython-lint
 from pylibcudf.libcudf.io.types import (
-    compression_type as CompressionType,  # no-cython-lint
     column_encoding as ColumnEncoding,  # no-cython-lint
+    compression_type as CompressionType,  # no-cython-lint
     dictionary_policy as DictionaryPolicy,  # no-cython-lint
     quote_style as QuoteStyle,  # no-cython-lint
-    statistics_freq as StatisticsFreq, # no-cython-lint
+    statistics_freq as StatisticsFreq,  # no-cython-lint
 )
-from cython.operator cimport dereference
-from pylibcudf.libcudf.types cimport size_type
-from cython.operator cimport dereference
-from pylibcudf.libcudf.types cimport size_type
 
 __all__ = [
     "ColumnEncoding",
@@ -295,6 +303,7 @@ cdef class TableInputMetadata:
             for i in range(self.c_obj.column_metadata.size())
         ]
 
+
 cdef class TableWithMetadata:
     """A container holding a table and its associated metadata
     (e.g. column names)
@@ -370,24 +379,31 @@ cdef class TableWithMetadata:
     def child_names(self):
         """
         Return a dictionary mapping the names of columns with children
-        to the names of their child columns
+        to the names of their child columns. Columns without children
+        get an empty dictionary.
         """
         return TableWithMetadata._parse_col_names(self.metadata.schema_info)
 
     @staticmethod
     cdef dict _parse_col_names(vector[column_name_info] infos):
-        cdef dict child_names = dict()
-        cdef dict names = dict()
+        cdef dict child_names
+        cdef dict names = {}
         for col_info in infos:
             child_names = TableWithMetadata._parse_col_names(col_info.children)
             names[col_info.name.decode()] = child_names
         return names
 
     @staticmethod
-    cdef TableWithMetadata from_libcudf(table_with_metadata& tbl_with_meta):
+    cdef TableWithMetadata from_libcudf(
+        table_with_metadata& tbl_with_meta,
+        Stream stream,
+        DeviceMemoryResource mr
+    ):
         """Create a Python TableWithMetadata from a libcudf table_with_metadata"""
+        assert stream is not None, "stream cannot be None"
+        assert mr is not None, "mr cannot be None"
         cdef TableWithMetadata out = TableWithMetadata.__new__(TableWithMetadata)
-        out.tbl = Table.from_libcudf(move(tbl_with_meta.tbl))
+        out.tbl = Table.from_libcudf(move(tbl_with_meta.tbl), stream, mr)
         out.metadata = tbl_with_meta.metadata
         return out
 
@@ -439,23 +455,30 @@ cdef class TableWithMetadata:
 
 
 cdef class SourceInfo:
-    """A class containing details on a source to read from.
+    """
+    A class containing details on a source to read from.
 
     For details, see :cpp:class:`cudf::io::source_info`.
 
     Parameters
     ----------
-    sources : List[Union[str, os.PathLike, bytes, io.BytesIO, DataSource]]
-        A homogeneous list of sources to read from.
-
-        Mixing different types of sources will raise a `ValueError`.
+    sources : List[Union[
+        str,
+        os.PathLike,
+        bytes,
+        io.BytesIO,
+        DataSource,
+        rmm.DeviceBuffer,
+    ]]
+        A homogeneous list of sources to read from. Mixing
+        different types of sources will raise a `ValueError`.
+        If an empty list, constructs an empty SourceInfo.
     """
-    # Regular expression that match remote file paths supported by libcudf
-    _is_remote_file_pattern = re.compile(r"^s3://", re.IGNORECASE)
 
-    def __init__(self, list sources):
+    def __init__(self, sources):
         if not sources:
-            raise ValueError("Need to pass at least one source")
+            self.c_obj = move(source_info())
+            return
 
         cdef vector[string] c_files
         cdef vector[datasource*] c_datasources
@@ -466,12 +489,13 @@ cdef class SourceInfo:
             for src in sources:
                 if not isinstance(src, (os.PathLike, str)):
                     raise ValueError("All sources must be of the same type!")
-                if not (os.path.isfile(src) or self._is_remote_file_pattern.match(src)):
+                if not (os.path.isfile(src) or SourceInfo._is_remote_uri(src)):
                     raise FileNotFoundError(
                         errno.ENOENT, os.strerror(errno.ENOENT), src
                     )
-                # TODO: Keep the sources alive (self.byte_sources = sources)
-                # for str data (e.g. read_json)?
+                # No need to keep sources alive. The file path strings are copied
+                # into C++, so there's no risk of use-after-free if the original
+                # Python objects are garbage-collected.
                 c_files.push_back(<string> str(src).encode())
 
             self.c_obj = move(source_info(c_files))
@@ -484,44 +508,69 @@ cdef class SourceInfo:
             self.c_obj = move(source_info(c_datasources))
             return
 
-        # TODO: host_buffer is deprecated API, use host_span instead
-        cdef vector[host_buffer] c_host_buffers
-        cdef const unsigned char[::1] c_buffer
-        cdef bint empty_buffer = False
         cdef list new_sources = []
+        cdef vector[host_span[const_byte]] hspans
+        self._hspans = hspans
 
+        cdef device_span[const_byte] d_span
+        cdef vector[device_span[const_byte]] d_spans
         if isinstance(sources[0], io.StringIO):
             for buffer in sources:
                 if not isinstance(buffer, io.StringIO):
                     raise ValueError("All sources must be of the same type!")
+
                 new_sources.append(buffer.read().encode())
             sources = new_sources
             self.byte_sources = sources
         if isinstance(sources[0], bytes):
-            empty_buffer = True
-            for buffer in sources:
-                if not isinstance(buffer, bytes):
-                    raise ValueError("All sources must be of the same type!")
-                if (len(buffer) > 0):
-                    c_buffer = buffer
-                    c_host_buffers.push_back(host_buffer(<char*>&c_buffer[0],
-                                                         c_buffer.shape[0]))
-                    empty_buffer = False
+            self._init_byte_like_sources(sources, bytes)
         elif isinstance(sources[0], io.BytesIO):
-            for bio in sources:
-                if not isinstance(bio, io.BytesIO):
-                    raise ValueError("All sources must be of the same type!")
-                c_buffer = bio.getbuffer()  # check if empty?
-                c_host_buffers.push_back(host_buffer(<char*>&c_buffer[0],
-                                                     c_buffer.shape[0]))
+            self._init_byte_like_sources(sources, io.BytesIO)
+        elif is_span(sources[0]):
+            if not all(is_span(s) for s in sources):
+                raise ValueError("All sources must be of the same type!")
+            self.device_sources = sources
+            for buf in sources:
+                d_span = device_span[const_byte](
+                    <const_byte *><uintptr_t>buf.ptr, <size_t>buf.size
+                )
+                d_spans.push_back(d_span)
+            self.c_obj = move(source_info(host_span[device_span[const_byte]](d_spans)))
+            return
         else:
             raise ValueError("Sources must be a list of str/paths, "
                              "bytes, io.BytesIO, io.StringIO, or a Datasource")
 
-        if empty_buffer is True:
-            c_host_buffers.push_back(host_buffer(<char*>NULL, 0))
+        self.c_obj = source_info(host_span[host_span[const_byte]](self._hspans))
 
-        self.c_obj = source_info(c_host_buffers)
+    @staticmethod
+    def _is_remote_uri(path: str | os.PathLike) -> bool:
+        # Regular expression that match remote file paths supported by libcudf
+        return re.compile(
+            r"^[a-zA-Z][a-zA-Z0-9+.\-]*://", re.IGNORECASE
+        ).match(str(path)) is not None
+
+    def _init_byte_like_sources(self, list sources, type expected_type):
+        cdef const unsigned char[::1] c_buffer
+        cdef bint empty_buffer = True
+
+        for src in sources:
+            if not isinstance(src, expected_type):
+                raise ValueError("All sources must be of the same type!")
+
+            if expected_type is bytes:
+                c_buffer = src
+            else:
+                c_buffer = src.getbuffer()
+
+            if c_buffer.shape[0] > 0:
+                self._hspans.push_back(
+                    host_span[const_byte](<const_byte*>&c_buffer[0], c_buffer.shape[0])
+                )
+                empty_buffer = False
+
+        if empty_buffer:
+            self._hspans.push_back(host_span[const_byte](<const_byte*>NULL, 0))
 
     __hash__ = None
 
@@ -625,3 +674,9 @@ cdef class SinkInfo:
             self.c_obj = sink_info(paths)
 
     __hash__ = None
+
+ColumnEncoding.__str__ = ColumnEncoding.__repr__
+CompressionType.__str__ = CompressionType.__repr__
+DictionaryPolicy.__str__ = DictionaryPolicy.__repr__
+QuoteStyle.__str__ = QuoteStyle.__repr__
+StatisticsFreq.__str__ = StatisticsFreq.__repr__

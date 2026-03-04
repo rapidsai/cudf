@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "parser.hpp"
@@ -77,8 +66,7 @@ std::string ptx_parser::remove_nonalphanumeric(std::string const& src)
   std::string out = src;
   auto f = std::find_if_not(out.begin(), out.end(), [](auto c) { return is_white(c) || c == '['; });
   auto l = std::find_if(f, out.end(), [](auto c) { return is_white(c) || c == ']'; });
-  std::replace_if(
-    f, l, [](auto c) { return !isalnum(c) && c != '_'; }, '_');
+  std::replace_if(f, l, [](auto c) { return !isalnum(c) && c != '_'; }, '_');
   return std::string(f, l);
 }
 

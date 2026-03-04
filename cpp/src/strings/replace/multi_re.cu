@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "strings/regex/regex.cuh"
@@ -33,10 +22,11 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <cuda/std/iterator>
+#include <cuda/std/utility>
 #include <thrust/execution_policy.h>
 #include <thrust/fill.h>
 #include <thrust/find.h>
-#include <thrust/pair.h>
 
 #include <algorithm>
 #include <functional>
@@ -46,7 +36,7 @@ namespace strings {
 namespace detail {
 namespace {
 // this is a [begin,end) pair of character positions when a substring is matched
-using found_range = thrust::pair<size_type, size_type>;
+using found_range = cuda::std::pair<size_type, size_type>;
 
 /**
  * @brief This functor handles replacing strings by applying the compiled regex patterns
@@ -106,7 +96,7 @@ struct replace_multi_regex_fn {
                         [ch_pos = itr.position()](auto range) { return range.first == ch_pos; });
       if (ptn_itr != d_ranges + number_of_patterns) {
         // match found, compute and replace the string in the output
-        auto const ptn_idx = static_cast<size_type>(thrust::distance(d_ranges, ptn_itr));
+        auto const ptn_idx = static_cast<size_type>(cuda::std::distance(d_ranges, ptn_itr));
 
         auto d_repl = d_repls.size() > 1 ? d_repls.element<string_view>(ptn_idx)
                                          : d_repls.element<string_view>(0);

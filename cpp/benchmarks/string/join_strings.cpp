@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2023-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <benchmarks/common/generate_input.hpp>
@@ -33,16 +22,16 @@ static void bench_join(nvbench::state& state)
   auto const table =
     create_random_table({cudf::type_id::STRING}, row_count{num_rows}, table_profile);
   cudf::strings_column_view input(table->view().column(0));
+  std::string_view separator(":");
+  std::string_view narep("null");
 
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
   // gather some throughput statistics as well
-  auto const chars_size = input.chars_size(cudf::get_default_stream());
-  state.add_element_count(chars_size, "chars_size");            // number of bytes;
-  state.add_global_memory_reads<nvbench::int8_t>(chars_size);   // all bytes are read;
-  state.add_global_memory_writes<nvbench::int8_t>(chars_size);  // all bytes are written
+  auto const data_size = table->alloc_size();
+  state.add_global_memory_reads<nvbench::int8_t>(data_size);
+  state.add_global_memory_writes<nvbench::int8_t>(data_size +
+                                                  (num_rows * (separator.size() + narep.size())));
 
-  std::string_view separator(":");
-  std::string_view narep("null");
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
     auto result = cudf::strings::join_strings(input, separator, narep);
   });

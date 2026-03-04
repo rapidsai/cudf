@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "strings/count_matches.hpp"
@@ -34,13 +23,9 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <thrust/pair.h>
-
 namespace cudf {
 namespace strings {
 namespace detail {
-
-using string_index_pair = thrust::pair<char const*, size_type>;
 
 namespace {
 
@@ -99,7 +84,7 @@ std::unique_ptr<column> findall(strings_column_view const& input,
                                 rmm::device_async_resource_ref mr)
 {
   if (input.is_empty()) {
-    return cudf::lists::detail::make_empty_lists_column(input.parent().type(), stream, mr);
+    return cudf::lists::detail::make_empty_lists_column(input.parent().type());
   }
 
   auto const d_strings = column_device_view::create(input.parent(), stream);
@@ -121,9 +106,7 @@ std::unique_ptr<column> findall(strings_column_view const& input,
                            std::move(offsets),
                            std::move(strings_output),
                            input.null_count(),
-                           cudf::detail::copy_bitmask(input.parent(), stream, mr),
-                           stream,
-                           mr);
+                           cudf::detail::copy_bitmask(input.parent(), stream, mr));
 }
 
 namespace {

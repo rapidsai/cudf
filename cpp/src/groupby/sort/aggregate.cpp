@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "groupby/common/utils.hpp"
@@ -470,11 +459,14 @@ void aggregate_result_functor::operator()<aggregation::COLLECT_SET>(aggregation 
     dynamic_cast<cudf::detail::collect_set_aggregation const&>(agg)._nulls_equal;
   auto const nans_equal =
     dynamic_cast<cudf::detail::collect_set_aggregation const&>(agg)._nans_equal;
-  cache.add_result(
-    values,
-    agg,
-    lists::detail::distinct(
-      lists_column_view{collect_result->view()}, nulls_equal, nans_equal, stream, mr));
+  cache.add_result(values,
+                   agg,
+                   lists::detail::distinct(lists_column_view{collect_result->view()},
+                                           nulls_equal,
+                                           nans_equal,
+                                           duplicate_keep_option::KEEP_ANY,
+                                           stream,
+                                           mr));
 }
 
 /**
@@ -544,6 +536,7 @@ void aggregate_result_functor::operator()<aggregation::MERGE_SETS>(aggregation c
                    lists::detail::distinct(lists_column_view{merged_result->view()},
                                            merge_sets_agg._nulls_equal,
                                            merge_sets_agg._nans_equal,
+                                           duplicate_keep_option::KEEP_ANY,
                                            stream,
                                            mr));
 }
@@ -615,8 +608,10 @@ void aggregate_result_functor::operator()<aggregation::COVARIANCE>(aggregation c
     column_view_with_common_nulls(values.child(0), values.child(1), stream);
 
   auto mean_agg = make_mean_aggregation();
-  aggregate_result_functor(values_child0, helper, cache, stream, mr).operator()<aggregation::MEAN>(*mean_agg);
-  aggregate_result_functor(values_child1, helper, cache, stream, mr).operator()<aggregation::MEAN>(*mean_agg);
+  aggregate_result_functor(values_child0, helper, cache, stream, mr)
+    .operator()<aggregation::MEAN>(*mean_agg);
+  aggregate_result_functor(values_child1, helper, cache, stream, mr)
+    .operator()<aggregation::MEAN>(*mean_agg);
 
   auto const mean0 = cache.get_result(values_child0, *mean_agg);
   auto const mean1 = cache.get_result(values_child1, *mean_agg);
@@ -664,8 +659,10 @@ void aggregate_result_functor::operator()<aggregation::CORRELATION>(aggregation 
     column_view_with_common_nulls(values.child(0), values.child(1), stream);
 
   auto std_agg = make_std_aggregation();
-  aggregate_result_functor(values_child0, helper, cache, stream, mr).operator()<aggregation::STD>(*std_agg);
-  aggregate_result_functor(values_child1, helper, cache, stream, mr).operator()<aggregation::STD>(*std_agg);
+  aggregate_result_functor(values_child0, helper, cache, stream, mr)
+    .operator()<aggregation::STD>(*std_agg);
+  aggregate_result_functor(values_child1, helper, cache, stream, mr)
+    .operator()<aggregation::STD>(*std_agg);
 
   // Compute covariance here to avoid repeated computation of mean & count
   auto cov_agg = make_covariance_aggregation(corr_agg._min_periods);
@@ -791,6 +788,37 @@ void aggregate_result_functor::operator()<aggregation::MERGE_TDIGEST>(aggregatio
 }
 
 template <>
+void aggregate_result_functor::operator()<aggregation::BITWISE_AGG>(aggregation const& agg)
+{
+  if (cache.has_result(values, agg)) { return; }
+
+  auto const bit_op = dynamic_cast<cudf::detail::bitwise_aggregation const&>(agg).bit_op;
+  auto result       = detail::group_bitwise(bit_op,
+                                      get_grouped_values(),
+                                      helper.group_labels(stream),
+                                      helper.num_groups(stream),
+                                      stream,
+                                      mr);
+  cache.add_result(values, agg, std::move(result));
+}
+
+template <>
+void aggregate_result_functor::operator()<aggregation::TOP_K>(aggregation const& agg)
+{
+  if (cache.has_result(values, agg)) { return; }
+
+  auto const k          = dynamic_cast<cudf::detail::top_k_aggregation const&>(agg).k;
+  auto const topk_order = dynamic_cast<cudf::detail::top_k_aggregation const&>(agg).topk_order;
+
+  auto result = detail::group_top_k(
+    k, topk_order, get_grouped_values(), helper.group_offsets(stream), stream, mr);
+  cache.add_result(values, agg, std::move(result));
+}
+
+// Note: the definition for HOST_UDF specialization needs to be at last.
+// This is because it calls to `aggregation_dispatcher` which requires to see all other function
+// specializations defined before this.
+template <>
 void aggregate_result_functor::operator()<aggregation::HOST_UDF>(aggregation const& agg)
 {
   if (cache.has_result(values, agg)) { return; }
@@ -849,6 +877,11 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby::sort
     auto store_functor =
       detail::aggregate_result_functor(request.values, helper(), cache, stream, mr);
     for (auto const& agg : request.aggregations) {
+      // SUM_WITH_OVERFLOW is only supported with hash-based groupby, not sort-based
+      CUDF_EXPECTS(agg->kind != aggregation::SUM_WITH_OVERFLOW,
+                   "SUM_WITH_OVERFLOW aggregation is only supported with hash-based groupby, not "
+                   "sort-based groupby");
+
       // TODO (dm): single pass compute all supported reductions
       cudf::detail::aggregation_dispatcher(agg->kind, store_functor, *agg);
     }

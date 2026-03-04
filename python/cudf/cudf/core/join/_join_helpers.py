@@ -1,26 +1,32 @@
-# Copyright (c) 2021-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
 
 import warnings
-from collections import abc
-from typing import TYPE_CHECKING, Any, cast
+from collections.abc import Iterable
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
-import cudf
 from cudf.api.types import is_dtype_equal
-from cudf.core.column import CategoricalColumn
+from cudf.core.dtype.validators import is_dtype_obj_numeric
 from cudf.core.dtypes import (
     CategoricalDtype,
     Decimal32Dtype,
     Decimal64Dtype,
     Decimal128Dtype,
 )
-from cudf.utils.dtypes import find_common_type, is_dtype_obj_numeric
+from cudf.core.reshape import concat
+from cudf.utils.dtypes import (
+    find_common_type,
+    get_dtype_of_same_kind,
+)
 
 if TYPE_CHECKING:
     from cudf.core.column import ColumnBase
+    from cudf.core.column.categorical import CategoricalColumn
+    from cudf.core.dataframe import DataFrame
 
 
 class _Indexer:
@@ -40,19 +46,26 @@ class _Indexer:
 
 
 class _ColumnIndexer(_Indexer):
-    def get(self, obj: cudf.DataFrame) -> ColumnBase:
+    def get(self, obj: DataFrame) -> ColumnBase:
         return obj._data[self.name]
 
-    def set(self, obj: cudf.DataFrame, value: ColumnBase):
+    def set(self, obj: DataFrame, value: ColumnBase):
         obj._data.set_by_label(self.name, value)
 
 
 class _IndexIndexer(_Indexer):
-    def get(self, obj: cudf.DataFrame) -> ColumnBase:
+    def get(self, obj: DataFrame) -> ColumnBase:
         return obj.index._data[self.name]
 
-    def set(self, obj: cudf.DataFrame, value: ColumnBase):
-        obj.index._data.set_by_label(self.name, value)
+    def set(self, obj: DataFrame, value: ColumnBase):
+        if isinstance(obj.index.dtype, CategoricalDtype):
+            # We need to update the categories of the index as well as the
+            # codes when setting a new column on a categorical index. The
+            # categories are stored in the dtype of the index, so we need to
+            # update the dtype of the index to reflect the new categories.
+            obj.index = obj.index._from_data_like_self({self.name: value})
+        else:
+            obj.index._data.set_by_label(self.name, value)
 
 
 def _match_join_keys(
@@ -60,7 +73,6 @@ def _match_join_keys(
 ) -> tuple[ColumnBase, ColumnBase]:
     # Casts lcol and rcol to a common dtype for use as join keys. If no casting
     # is necessary, they are returned as is.
-
     common_type = None
 
     # cast the keys lcol and rcol to a common dtype
@@ -71,16 +83,14 @@ def _match_join_keys(
     left_is_categorical = isinstance(ltype, CategoricalDtype)
     right_is_categorical = isinstance(rtype, CategoricalDtype)
     if left_is_categorical and right_is_categorical:
-        return _match_categorical_dtypes_both(
-            cast(CategoricalColumn, lcol), cast(CategoricalColumn, rcol), how
-        )
+        return _match_categorical_dtypes_both(lcol, rcol, how)  # type: ignore[arg-type]
     elif left_is_categorical or right_is_categorical:
         if left_is_categorical:
             if how in {"left", "leftsemi", "leftanti"}:
                 return lcol, rcol.astype(ltype)
-            common_type = ltype.categories.dtype
+            common_type = get_dtype_of_same_kind(rtype, ltype.categories.dtype)  # type: ignore[union-attr]
         else:
-            common_type = rtype.categories.dtype
+            common_type = get_dtype_of_same_kind(ltype, rtype.categories.dtype)  # type: ignore[union-attr]
         return lcol.astype(common_type), rcol.astype(common_type)
 
     if is_dtype_equal(ltype, rtype):
@@ -121,7 +131,7 @@ def _match_join_keys(
 
     if how == "left" and rcol.fillna(0).can_cast_safely(ltype):
         return lcol, rcol.astype(ltype)
-    elif common_type is None:
+    if common_type is None:
         common_type = np.dtype(np.float64)
     return lcol.astype(common_type), rcol.astype(common_type)
 
@@ -133,7 +143,7 @@ def _match_categorical_dtypes_both(
 
     # when both are ordered and both have the same categories,
     # no casting required:
-    if ltype == rtype:
+    if ltype._internal_eq(rtype):
         return lcol, rcol
 
     # Merging categorical variables when only one side is ordered is
@@ -163,22 +173,24 @@ def _match_categorical_dtypes_both(
         )
     elif how in {"left", "leftanti", "leftsemi"}:
         # always cast to left type
-        return lcol, rcol.astype(ltype)
+        return lcol, rcol._get_decategorized_column().astype(ltype)
     else:
         # merge categories
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", FutureWarning)
-            merged_categories = cudf.concat(
+            merged_categories = concat(
                 [ltype.categories, rtype.categories]
             ).unique()
-        common_type = cudf.CategoricalDtype(
+        common_type = CategoricalDtype(
             categories=merged_categories, ordered=False
         )
-        return lcol.astype(common_type), rcol.astype(common_type)
+        return lcol._get_decategorized_column().astype(
+            common_type
+        ), rcol._get_decategorized_column().astype(common_type)
 
 
 def _coerce_to_tuple(obj):
-    if isinstance(obj, abc.Iterable) and not isinstance(obj, str):
+    if isinstance(obj, Iterable) and not isinstance(obj, str):
         return tuple(obj)
     else:
         return (obj,)

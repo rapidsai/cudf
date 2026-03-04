@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "stream_compaction_common.cuh"
@@ -19,14 +8,15 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
+#include <cudf/detail/algorithms/copy_if.cuh>
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/row_operator/equality.cuh>
 #include <cudf/detail/sorting.hpp>
 #include <cudf/detail/stream_compaction.hpp>
 #include <cudf/stream_compaction.hpp>
-#include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
@@ -38,8 +28,7 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/std/functional>
-#include <thrust/copy.h>
-#include <thrust/distance.h>
+#include <cuda/std/iterator>
 #include <thrust/execution_policy.h>
 #include <thrust/iterator/counting_iterator.h>
 
@@ -66,7 +55,7 @@ std::unique_ptr<table> unique(table_view const& input,
   auto mutable_view = mutable_column_device_view::create(*unique_indices, stream);
   auto keys_view    = input.select(keys);
 
-  auto comp = cudf::experimental::row::equality::self_comparator(keys_view, stream);
+  auto comp = cudf::detail::row::equality::self_comparator(keys_view, stream);
 
   size_type const unique_size = [&] {
     if (cudf::detail::has_nested_columns(keys_view)) {
@@ -78,18 +67,19 @@ std::unique_ptr<table> unique(table_view const& input,
       auto d_results = rmm::device_uvector<bool>(num_rows, stream);
       auto itr       = thrust::make_counting_iterator<size_type>(0);
       thrust::transform(
-        rmm::exec_policy(stream),
+        rmm::exec_policy_nosync(stream),
         itr,
         itr + num_rows,
         d_results.begin(),
         unique_copy_fn<decltype(itr), decltype(row_equal)>{itr, keep, row_equal, num_rows - 1});
-      auto result_end = thrust::copy_if(rmm::exec_policy(stream),
-                                        itr,
-                                        itr + num_rows,
-                                        d_results.begin(),
-                                        mutable_view->begin<size_type>(),
-                                        cuda::std::identity{});
-      return static_cast<size_type>(thrust::distance(mutable_view->begin<size_type>(), result_end));
+      auto result_end = cudf::detail::copy_if(itr,
+                                              itr + num_rows,
+                                              d_results.begin(),
+                                              mutable_view->begin<size_type>(),
+                                              cuda::std::identity{},
+                                              stream);
+      return static_cast<size_type>(
+        cuda::std::distance(mutable_view->begin<size_type>(), result_end));
     } else {
       // Using thrust::unique_copy with the comparator directly will compile more slowly but
       // improves runtime by up to 2x over the transform/copy_if approach above.
@@ -101,7 +91,8 @@ std::unique_ptr<table> unique(table_view const& input,
                                     row_equal,
                                     keep,
                                     stream);
-      return static_cast<size_type>(thrust::distance(mutable_view->begin<size_type>(), result_end));
+      return static_cast<size_type>(
+        cuda::std::distance(mutable_view->begin<size_type>(), result_end));
     }
   }();
   auto indices_view = cudf::detail::slice(column_view(*unique_indices), 0, unique_size, stream);

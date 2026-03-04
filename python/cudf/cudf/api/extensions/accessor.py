@@ -1,10 +1,13 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 import warnings
 
 from pandas.core.accessor import CachedAccessor
 
-import cudf
+from cudf.core.dataframe import DataFrame
+from cudf.core.index import Index
+from cudf.core.series import Series
 from cudf.utils.docutils import docfmt_partial
 
 _docstring_register_accessor = """
@@ -146,16 +149,16 @@ def _register_accessor(name, cls):
 @doc_register_dataframe_accessor()
 def register_dataframe_accessor(name):
     """{docstring}"""
-    return _register_accessor(name, cudf.DataFrame)
+    return _register_accessor(name, DataFrame)
 
 
 @doc_register_index_accessor()
 def register_index_accessor(name):
     """{docstring}"""
-    return _register_accessor(name, cudf.BaseIndex)
+    return _register_accessor(name, Index)
 
 
 @doc_register_series_accessor()
 def register_series_accessor(name):
     """{docstring}"""
-    return _register_accessor(name, cudf.Series)
+    return _register_accessor(name, Series)

@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf/column/column.hpp>
@@ -20,6 +9,7 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/label_bins.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/utilities/dispatchers.hpp>
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/labeling/label_bins.hpp>
 #include <cudf/types.hpp>
@@ -33,14 +23,12 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
-#include <rmm/mr/device/device_memory_resource.hpp>
+#include <rmm/mr/device_memory_resource.hpp>
 
-#include <thrust/advance.h>
+#include <cuda/std/iterator>
+#include <cuda/std/utility>
 #include <thrust/binary_search.h>
-#include <thrust/distance.h>
 #include <thrust/execution_policy.h>
-#include <thrust/functional.h>
-#include <thrust/pair.h>
 #include <thrust/transform.h>
 
 #include <limits>
@@ -48,6 +36,29 @@
 namespace cudf {
 namespace detail {
 namespace {
+
+template <typename, inclusive>
+struct InclusiveToComparator;
+
+template <typename T>
+struct InclusiveToComparator<T, inclusive::YES> {
+  using type = cuda::std::less_equal<T>;
+};
+
+template <typename T>
+struct InclusiveToComparator<T, inclusive::NO> {
+  using type = cuda::std::less<T>;
+};
+
+template <typename T, inclusive i>
+using InclusiveToComparator_t = typename InclusiveToComparator<T, i>::type;
+
+// Helper to have single point of dispatch for inclusive enum
+template <typename Func>
+auto dispatch_inclusive(inclusive i, Func&& func)
+{
+  return dispatch_enum<inclusive::YES, inclusive::NO>(i, std::forward<Func>(func));
+}
 
 // Sentinel used to indicate that an input value should be placed in the null
 // bin.
@@ -77,7 +88,7 @@ struct bin_finder {
   {
   }
 
-  __device__ size_type operator()(thrust::pair<T, bool> input_value) const
+  __device__ size_type operator()(cuda::std::pair<T, bool> input_value) const
   {
     // Immediately return sentinel for null inputs.
     if (!input_value.second) return NULL_VALUE;
@@ -88,7 +99,7 @@ struct bin_finder {
     // Exit early and return sentinel for values that lie below the interval.
     if (bound == m_left_begin) { return NULL_VALUE; }
 
-    auto index = thrust::distance(m_left_begin, thrust::prev(bound));
+    auto index = cuda::std::distance(m_left_begin, cuda::std::prev(bound));
     return (m_right_comp(value, m_right_begin[index])) ? index : NULL_VALUE;
   }
 
@@ -135,21 +146,14 @@ std::unique_ptr<column> label_bins(column_view const& input,
 
   using RandomAccessIterator = decltype(left_edges_device_view->begin<T>());
 
-  if (input.has_nulls()) {
-    thrust::transform(rmm::exec_policy(stream),
-                      input_device_view->pair_begin<T, true>(),
-                      input_device_view->pair_end<T, true>(),
+  dispatch_bool(input.has_nulls(), [&](auto has_nulls) {
+    thrust::transform(rmm::exec_policy_nosync(stream),
+                      input_device_view->pair_begin<T, has_nulls>(),
+                      input_device_view->pair_end<T, has_nulls>(),
                       output_begin,
                       bin_finder<T, RandomAccessIterator, LeftComparator, RightComparator>(
                         left_begin, left_end, right_begin));
-  } else {
-    thrust::transform(rmm::exec_policy(stream),
-                      input_device_view->pair_begin<T, false>(),
-                      input_device_view->pair_end<T, false>(),
-                      output_begin,
-                      bin_finder<T, RandomAccessIterator, LeftComparator, RightComparator>(
-                        left_begin, left_end, right_begin));
-  }
+  });
 
   auto mask_and_count = valid_if(output_begin, output_end, filter_null_sentinel(), stream, mr);
 
@@ -165,36 +169,28 @@ constexpr auto is_supported_bin_type()
 
 struct bin_type_dispatcher {
   template <typename T, typename... Args>
-  std::enable_if_t<not detail::is_supported_bin_type<T>(), std::unique_ptr<column>> operator()(
-    Args&&...)
+  std::unique_ptr<column> operator()(Args&&...)
+    requires(not detail::is_supported_bin_type<T>())
   {
     CUDF_FAIL("Type not support for cudf::bin");
   }
 
   template <typename T>
-  std::enable_if_t<detail::is_supported_bin_type<T>(), std::unique_ptr<column>> operator()(
-    column_view const& input,
-    column_view const& left_edges,
-    inclusive left_inclusive,
-    column_view const& right_edges,
-    inclusive right_inclusive,
-    rmm::cuda_stream_view stream,
-    rmm::device_async_resource_ref mr)
+  std::unique_ptr<column> operator()(column_view const& input,
+                                     column_view const& left_edges,
+                                     inclusive left_inclusive,
+                                     column_view const& right_edges,
+                                     inclusive right_inclusive,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::device_async_resource_ref mr)
+    requires(detail::is_supported_bin_type<T>())
   {
-    if ((left_inclusive == inclusive::YES) && (right_inclusive == inclusive::YES))
-      return label_bins<T, thrust::less_equal<T>, thrust::less_equal<T>>(
-        input, left_edges, right_edges, stream, mr);
-    if ((left_inclusive == inclusive::YES) && (right_inclusive == inclusive::NO))
-      return label_bins<T, thrust::less_equal<T>, thrust::less<T>>(
-        input, left_edges, right_edges, stream, mr);
-    if ((left_inclusive == inclusive::NO) && (right_inclusive == inclusive::YES))
-      return label_bins<T, thrust::less<T>, thrust::less_equal<T>>(
-        input, left_edges, right_edges, stream, mr);
-    if ((left_inclusive == inclusive::NO) && (right_inclusive == inclusive::NO))
-      return label_bins<T, thrust::less<T>, thrust::less<T>>(
-        input, left_edges, right_edges, stream, mr);
-
-    CUDF_FAIL("Undefined inclusive setting.");
+    return dispatch_inclusive(left_inclusive, [&](auto li) {
+      return dispatch_inclusive(right_inclusive, [&](auto ri) {
+        return label_bins<T, InclusiveToComparator_t<T, li>, InclusiveToComparator_t<T, ri>>(
+          input, left_edges, right_edges, stream, mr);
+      });
+    });
   }
 };
 
@@ -209,7 +205,7 @@ std::unique_ptr<column> label_bins(column_view const& input,
                                    rmm::cuda_stream_view stream,
                                    rmm::device_async_resource_ref mr)
 {
-  CUDF_FUNC_RANGE()
+  CUDF_FUNC_RANGE();
   CUDF_EXPECTS(
     cudf::have_same_types(input, left_edges) && cudf::have_same_types(input, right_edges),
     "The input and edge columns must have the same types.",

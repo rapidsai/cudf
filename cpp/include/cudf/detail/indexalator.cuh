@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
@@ -22,10 +11,12 @@
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/utilities/traits.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
+
+#include <cuda/iterator>
 #include <cuda/std/optional>
-#include <thrust/iterator/constant_iterator.h>
+#include <cuda/std/utility>
 #include <thrust/iterator/transform_iterator.h>
-#include <thrust/pair.h>
 
 namespace cudf {
 namespace detail {
@@ -131,13 +122,13 @@ struct input_indexalator : base_normalator<input_indexalator, cudf::size_type> {
  * Example output iterator usage.
  * @code
  *  auto result_itr = indexalator_factory::create_output_iterator(indices->mutable_view());
- *  thrust::lower_bound(rmm::exec_policy(stream),
+ *  thrust::lower_bound(rmm::exec_policy_nosync(stream),
  *                      input->begin<Element>(),
  *                      input->end<Element>(),
  *                      values->begin<Element>(),
  *                      values->end<Element>(),
  *                      result_itr,
- *                      thrust::less<Element>());
+ *                      cuda::std::less<Element>());
  * @endcode
  */
 struct output_indexalator : base_normalator<output_indexalator, cudf::size_type> {
@@ -289,73 +280,6 @@ struct indexalator_factory {
   }
 
   /**
-   * @brief An index accessor that returns a validity flag along with the index value.
-   *
-   * This is suitable as a `pair_iterator` for calling functions like `copy_if_else`.
-   */
-  struct nullable_index_accessor {
-    input_indexalator iter;
-    bitmask_type const* null_mask{};
-    size_type const offset{};
-    bool const has_nulls{};
-
-    /**
-     * @brief Create an accessor from a column_view.
-     */
-    nullable_index_accessor(column_view const& col, bool has_nulls = false)
-      : null_mask{col.null_mask()}, offset{col.offset()}, has_nulls{has_nulls}
-    {
-      if (has_nulls) { CUDF_EXPECTS(col.nullable(), "Unexpected non-nullable column."); }
-      iter = make_input_iterator(col);
-    }
-
-    __device__ thrust::pair<size_type, bool> operator()(size_type i) const
-    {
-      return {iter[i], (has_nulls ? bit_is_set(null_mask, i + offset) : true)};
-    }
-  };
-
-  /**
-   * @brief An index accessor that returns a validity flag along with the index value.
-   *
-   * This is suitable as a `pair_iterator`.
-   */
-  struct scalar_nullable_index_accessor {
-    input_indexalator iter;
-    bool const is_null;
-
-    /**
-     * @brief Create an accessor from a scalar.
-     */
-    scalar_nullable_index_accessor(scalar const& input) : is_null{!input.is_valid()}
-    {
-      iter = indexalator_factory::make_input_iterator(input);
-    }
-
-    __device__ thrust::pair<size_type, bool> operator()(size_type) const
-    {
-      return {*iter, is_null};
-    }
-  };
-
-  /**
-   * @brief Create an index iterator with a nullable index accessor.
-   */
-  static auto make_input_pair_iterator(column_view const& col)
-  {
-    return make_counting_transform_iterator(0, nullable_index_accessor{col, col.has_nulls()});
-  }
-
-  /**
-   * @brief Create an index iterator with a nullable index accessor for a scalar.
-   */
-  static auto make_input_pair_iterator(scalar const& input)
-  {
-    return thrust::make_transform_iterator(thrust::make_constant_iterator<size_type>(0),
-                                           scalar_nullable_index_accessor{input});
-  }
-
-  /**
    * @brief An index accessor that returns an index value if corresponding validity flag is true.
    *
    * This is suitable as an `optional_iterator`.
@@ -395,7 +319,8 @@ struct indexalator_factory {
     /**
      * @brief Create an accessor from a scalar.
      */
-    scalar_optional_index_accessor(scalar const& input) : is_null{!input.is_valid()}
+    scalar_optional_index_accessor(scalar const& input, rmm::cuda_stream_view stream)
+      : is_null{!input.is_valid(stream)}
     {
       iter = indexalator_factory::make_input_iterator(input);
     }
@@ -417,10 +342,10 @@ struct indexalator_factory {
   /**
    * @brief Create an index iterator with an optional index accessor for a scalar.
    */
-  static auto make_input_optional_iterator(scalar const& input)
+  static auto make_input_optional_iterator(scalar const& input, rmm::cuda_stream_view stream)
   {
-    return thrust::make_transform_iterator(thrust::make_constant_iterator<size_type>(0),
-                                           scalar_optional_index_accessor{input});
+    return thrust::make_transform_iterator(cuda::make_constant_iterator<size_type>(0),
+                                           scalar_optional_index_accessor{input, stream});
   }
 };
 

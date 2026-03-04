@@ -1,4 +1,5 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 import confluent_kafka as ck
 from cudf_kafka._lib.kafka import KafkaDatasource
 

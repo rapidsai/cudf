@@ -1,21 +1,9 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <benchmarks/common/generate_input.hpp>
-#include <benchmarks/fixture/benchmark_fixture.hpp>
 
 #include <cudf/column/column_view.hpp>
 #include <cudf/strings/convert/convert_durations.hpp>
@@ -58,7 +46,7 @@ void bench_convert_duration(nvbench::state& state, nvbench::type_list<DataType>)
   } else {
     auto source = cudf::strings::from_durations(input, format);
     auto view   = cudf::strings_column_view(source->view());
-    state.add_global_memory_reads<int8_t>(view.chars_size(stream));
+    state.add_global_memory_reads<int8_t>(source->alloc_size());
     state.add_global_memory_writes<DataType>(num_rows);
     state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
       cudf::strings::to_durations(view, data_type, format);

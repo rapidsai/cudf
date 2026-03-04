@@ -1,4 +1,5 @@
-# Copyright (c) 2019-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 import random
 import string
@@ -7,7 +8,6 @@ import numpy as np
 import pytest
 
 import cudf
-from cudf.core.byte_pair_encoding import BytePairEncoder
 from cudf.core.character_normalizer import CharacterNormalizer
 from cudf.core.tokenize_vocabulary import TokenizeVocabulary
 from cudf.testing import assert_eq
@@ -794,34 +794,6 @@ def test_edit_distance():
     assert_eq(expected, actual)
 
 
-def test_edit_distance_matrix():
-    # normal
-    sr = cudf.Series(["rounded", "bounded", "bounce", "trounce", "ounce"])
-
-    expected = cudf.Series(
-        [
-            [0, 1, 3, 3, 3],
-            [1, 0, 2, 4, 3],
-            [3, 2, 0, 2, 1],
-            [3, 4, 2, 0, 2],
-            [3, 3, 1, 2, 0],
-        ]
-    )
-    got = sr.str.edit_distance_matrix()
-
-    assert_eq(expected, got, check_dtype=False)
-
-    # 1-row series
-    sr2 = cudf.Series(["x"])
-    with pytest.raises(ValueError, match="Require size >= 2"):
-        sr2.str.edit_distance_matrix()
-
-    # null rows
-    sr3 = cudf.Series(["rounded", None, "bounce", "trounce", "ounce"])
-    with pytest.raises(ValueError, match="Cannot compute"):
-        sr3.str.edit_distance_matrix()
-
-
 def test_porter_stemmer_measure():
     strings = cudf.Series(
         [
@@ -985,12 +957,12 @@ def test_jaccard_index():
 
 
 def _make_list_of_strings_of_random_length(
-    num_strings, min_length, max_length
+    num_strings, min_length, max_length, rng
 ):
     return [
         "".join(
-            random.choice(string.ascii_lowercase)
-            for _ in range(random.randint(min_length, max_length))
+            rng.choice(string.ascii_lowercase)
+            for _ in range(rng.randint(min_length, max_length))
         )
         for _ in range(num_strings)
     ]
@@ -998,17 +970,17 @@ def _make_list_of_strings_of_random_length(
 
 def test_jaccard_index_random_strings():
     # Seed the rng before random string generation.
-    random.seed(42)
+    rng = random.Random(42)
     num_strings = 100
     jaccard_width = 5
     common_strings = _make_list_of_strings_of_random_length(
-        num_strings, jaccard_width, 50
+        num_strings, jaccard_width, 50, rng
     )
     uncommon_strings1 = _make_list_of_strings_of_random_length(
-        num_strings, jaccard_width, 10
+        num_strings, jaccard_width, 10, rng
     )
     uncommon_strings2 = _make_list_of_strings_of_random_length(
-        num_strings, jaccard_width, 20
+        num_strings, jaccard_width, 20, rng
     )
     str1 = cudf.Series(uncommon_strings1).str.cat(cudf.Series(common_strings))
     str2 = cudf.Series(uncommon_strings2).str.cat(cudf.Series(common_strings))
@@ -1041,41 +1013,40 @@ def test_jaccard_index_random_strings():
     assert_eq(expected, actual)
 
 
-@pytest.mark.parametrize(
-    "separator, input, results",
-    [
-        (" ", "thetestsentence", "the test sent ence"),
-        ("_", "sentenceistest", "sent_ence_is_test"),
-        ("$", "istestsentencehere", "is$test$sent$ence$he$r$e"),
-    ],
-)
-def test_byte_pair_encoding(separator, input, results):
-    pairs_table = cudf.Series(
-        [
-            "t he",
-            "h e",
-            "e n",
-            "i t",
-            "i s",
-            "e s",
-            "en t",
-            "c e",
-            "es t",
-            "en ce",
-            "t h",
-            "h i",
-            "th is",
-            "t est",
-            "s i",
-            "s ent",
-        ]
+@pytest.fixture
+def duplicate_input():
+    return [
+        " 01234567890123456789 magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation    ",
+        "laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit   ",
+        "voluptate velit esse cillum dolore eu fugiat nulla pariatur. 01234567890123456789         ",
+        "deleniti earum? Qui ipsam ipsum hic ratione mollitia aut nobis laboriosam. Eum aspernatur ",
+        "dolorem sit voluptatum numquam in iure placeat vel laudantium molestiae? Ad reprehenderit ",
+        "quia aut minima deleniti id consequatur sapiente est dolores cupiditate. 012345678901234  ",
+    ]
+
+
+def test_resolve_duplicates(duplicate_input):
+    text = duplicate_input
+    input = cudf.Series(text)
+    sa = input.str.build_suffix_array(0)
+    actual = input.str.resolve_duplicates(sa, 15)
+    expected = cudf.Series(
+        [" 01234567890123456789 ", ". 012345678901234", " reprehenderit "]
     )
-    encoder = BytePairEncoder(pairs_table)
+    assert_eq(expected, actual)
 
-    strings = cudf.Series([input, None, "", input])
 
-    expected = cudf.Series([results, None, "", results])
+def test_resolve_duplicates_pair(duplicate_input):
+    text = duplicate_input
+    text1 = text[0:3]
+    text2 = text[3:]
 
-    actual = encoder(strings, separator)
-    assert type(expected) is type(actual)
+    input1 = cudf.Series(text1)
+    sa1 = input1.str.build_suffix_array(0)
+    input2 = cudf.Series(text2)
+    sa2 = input2.str.build_suffix_array(0)
+    actual = input1.str.resolve_duplicates_pair(sa1, input2, sa2, 15)
+    expected = cudf.Series(
+        [". 012345678901234", " 012345678901234", " reprehenderit "]
+    )
     assert_eq(expected, actual)

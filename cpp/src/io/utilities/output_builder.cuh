@@ -1,18 +1,9 @@
 /*
- * Copyright (c) 2022-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
+
+#pragma once
 
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
@@ -21,7 +12,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
-#include <rmm/mr/device/device_memory_resource.hpp>
+#include <rmm/mr/device_memory_resource.hpp>
 
 #include <thrust/copy.h>
 
@@ -292,8 +283,15 @@ class output_builder {
    */
   [[nodiscard]] T back_element(rmm::cuda_stream_view stream) const
   {
+#if defined(__GNUC__) && (__GNUC__ >= 14)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdangling-reference"
+#endif
     auto const& last_nonempty_chunk =
       _chunks.size() > 1 and _chunks.back().is_empty() ? _chunks.rbegin()[1] : _chunks.back();
+#if defined(__GNUC__) && (__GNUC__ >= 14)
+#pragma GCC diagnostic pop
+#endif
     return last_nonempty_chunk.back_element(stream);
   }
 

@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "common_utils.cuh"
@@ -19,17 +8,18 @@
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/copying.hpp>
+#include <cudf/detail/algorithms/copy_if.cuh>
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/gather.cuh>
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/groupby/sort_helper.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/labeling/label_segments.cuh>
+#include <cudf/detail/row_operator/equality.cuh>
 #include <cudf/detail/scatter.hpp>
 #include <cudf/detail/sequence.hpp>
 #include <cudf/detail/sorting.hpp>
 #include <cudf/strings/string_view.hpp>
-#include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/traits.hpp>
@@ -38,7 +28,7 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
-#include <thrust/distance.h>
+#include <cuda/std/iterator>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/unique.h>
@@ -143,7 +133,7 @@ sort_groupby_helper::index_vector const& sort_groupby_helper::group_offsets(
   // This way, a 2nd (parallel) call to this will not be given a partially created object.
   auto group_offsets = std::make_unique<index_vector>(size + 1, stream);
 
-  auto const comparator = cudf::experimental::row::equality::self_comparator{_keys, stream};
+  auto const comparator = cudf::detail::row::equality::self_comparator{_keys, stream};
 
   auto const sorted_order = key_sort_order(stream).data<size_type>();
   decltype(group_offsets->begin()) result_end;
@@ -159,24 +149,20 @@ sort_groupby_helper::index_vector const& sort_groupby_helper::group_offsets(
     auto const row_eq = permuted_row_equality_comparator(d_key_equal, sorted_order);
     auto const ufn    = cudf::detail::unique_copy_fn<decltype(itr), decltype(row_eq)>{
       itr, duplicate_keep_option::KEEP_FIRST, row_eq, size - 1};
-    thrust::transform(rmm::exec_policy(stream), itr, itr + size, result.begin(), ufn);
-    result_end = thrust::copy_if(rmm::exec_policy(stream),
-                                 itr,
-                                 itr + size,
-                                 result.begin(),
-                                 group_offsets->begin(),
-                                 cuda::std::identity{});
+    thrust::transform(rmm::exec_policy_nosync(stream), itr, itr + size, result.begin(), ufn);
+    result_end = cudf::detail::copy_if(
+      itr, itr + size, result.begin(), group_offsets->begin(), cuda::std::identity{}, stream);
   } else {
     auto const d_key_equal = comparator.equal_to<false>(
       cudf::nullate::DYNAMIC{cudf::has_nested_nulls(_keys)}, null_equality::EQUAL);
-    result_end = thrust::unique_copy(rmm::exec_policy(stream),
+    result_end = thrust::unique_copy(rmm::exec_policy_nosync(stream),
                                      thrust::counting_iterator<size_type>(0),
                                      thrust::counting_iterator<size_type>(size),
                                      group_offsets->begin(),
                                      permuted_row_equality_comparator(d_key_equal, sorted_order));
   }
 
-  auto const num_groups = thrust::distance(group_offsets->begin(), result_end);
+  auto const num_groups = cuda::std::distance(group_offsets->begin(), result_end);
   group_offsets->set_element_async(num_groups, size, stream);
   group_offsets->resize(num_groups + 1, stream);
 

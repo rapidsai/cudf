@@ -1,18 +1,5 @@
-# SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION & AFFILIATES.
-# All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION & AFFILIATES.  All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-# http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
 from __future__ import annotations
 
 import warnings
@@ -21,12 +8,9 @@ from typing import TYPE_CHECKING
 import numpy as np
 import pandas as pd
 
-import pylibcudf as plc
-
 import cudf
 from cudf.core.abc import Serializable
-from cudf.core.buffer import acquire_spill_lock
-from cudf.core.column import ColumnBase
+from cudf.core.column.column import deserialize_columns
 from cudf.core.groupby.groupby import (
     DataFrameGroupBy,
     GroupBy,
@@ -36,6 +20,7 @@ from cudf.core.groupby.groupby import (
 
 if TYPE_CHECKING:
     from cudf._typing import DataFrameOrSeries
+    from cudf.core.index import Index
 
 
 class _Resampler(GroupBy):
@@ -127,7 +112,7 @@ class SeriesResampler(_Resampler, SeriesGroupBy):
 
 
 class _ResampleGrouping(_Grouping):
-    bin_labels: cudf.Index
+    bin_labels: Index
 
     def __init__(self, obj, by=None, level=None):
         self._freq = getattr(by, "freq", None)
@@ -165,7 +150,7 @@ class _ResampleGrouping(_Grouping):
     def deserialize(cls, header, frames):
         names = header["names"]
         _named_columns = header["_named_columns"]
-        key_columns = cudf.core.column.deserialize_columns(
+        key_columns = deserialize_columns(
             header["columns"], frames[: -header["__bin_labels_count"]]
         )
         out = _ResampleGrouping.__new__(_ResampleGrouping)
@@ -219,7 +204,7 @@ class _ResampleGrouping(_Grouping):
 
         key_column = self._key_columns[0]
 
-        if not isinstance(key_column, cudf.core.column.DatetimeColumn):
+        if not key_column.dtype.kind == "M":
             raise TypeError(
                 f"Can only resample on a DatetimeIndex or datetime column, "
                 f"got column of type {key_column.dtype}"
@@ -227,8 +212,8 @@ class _ResampleGrouping(_Grouping):
 
         # get the start and end values that will be used to generate
         # the bin labels
-        min_date = key_column._reduce("min")
-        max_date = key_column._reduce("max")
+        min_date = key_column.min()
+        max_date = key_column.max()
         start, end = _get_timestamp_range_edges(
             pd.Timestamp(min_date),
             pd.Timestamp(max_date),
@@ -272,19 +257,12 @@ class _ResampleGrouping(_Grouping):
         cast_bin_labels = bin_labels.astype(result_type)
 
         # bin the key column:
-        with acquire_spill_lock():
-            plc_column = plc.labeling.label_bins(
-                cast_key_column.to_pylibcudf(mode="read"),
-                cast_bin_labels[:-1]._column.to_pylibcudf(mode="read"),
-                plc.labeling.Inclusive.YES
-                if closed == "left"
-                else plc.labeling.Inclusive.NO,
-                cast_bin_labels[1:]._column.to_pylibcudf(mode="read"),
-                plc.labeling.Inclusive.YES
-                if closed == "right"
-                else plc.labeling.Inclusive.NO,
-            )
-            bin_numbers = ColumnBase.from_pylibcudf(plc_column)
+        bin_numbers = cast_key_column.label_bins(
+            left_edge=cast_bin_labels[:-1]._column,
+            left_inclusive=closed == "left",
+            right_edge=cast_bin_labels[1:]._column,
+            right_inclusive=closed == "right",
+        )
 
         if label == "right":
             cast_bin_labels = cast_bin_labels[1:]
@@ -297,6 +275,12 @@ class _ResampleGrouping(_Grouping):
             cast_bin_labels = cast_bin_labels[:nbins]
 
         cast_bin_labels.name = self.names[0]
+        if isinstance(cast_bin_labels, cudf.DatetimeIndex):
+            cast_bin_labels = cudf.DatetimeIndex._from_data(
+                data=cast_bin_labels._data,
+                name=cast_bin_labels.name,
+                freq=freq,
+            )
         self.bin_labels = cast_bin_labels
 
         # replace self._key_columns with the binned key column:
@@ -375,8 +359,10 @@ def _get_timestamp_range_edges(
             first = first.tz_localize(index_tz)
             last = last.tz_localize(index_tz)
     else:
-        first = first.normalize()
-        last = last.normalize()
+        if first is not pd.NaT:
+            first = first.normalize()
+        if last is not pd.NaT:
+            last = last.normalize()
 
         if closed == "left":
             first = pd.Timestamp(freq.rollback(first))
@@ -397,6 +383,8 @@ def _adjust_dates_anchored(
     # not a multiple of the frequency. See GH 8683
     # To handle frequencies that are not multiple or divisible by a day we let
     # the possibility to define a fixed origin timestamp. See GH 31809
+    if first is pd.NaT and last is pd.NaT:
+        return first, last
     origin_nanos = 0  # origin == "epoch"
     if origin == "start_day":
         origin_nanos = first.normalize().value

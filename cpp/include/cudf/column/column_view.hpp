@@ -1,26 +1,17 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
 
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
-#include <cudf/utilities/prefetch.hpp>
 #include <cudf/utilities/span.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
+
+#include <cuda/std/span>
 
 #include <limits>
 #include <type_traits>
@@ -478,7 +469,7 @@ class column_view : public detail::column_view_base {
 
   std::vector<column_view> _children{};  ///< Based on element type, children
                                          ///< may contain additional data
-};                                       // namespace cudf
+};
 
 /**
  * @brief A non-owning, mutable view of device data as a column of elements,
@@ -504,7 +495,7 @@ class mutable_column_view : public detail::column_view_base {
  public:
   mutable_column_view() = default;
 
-  ~mutable_column_view() override{
+  ~mutable_column_view() override {
     // Needed so that the first instance of the implicit destructor for any TU isn't 'constructed'
     // from a host+device function marking the implicit version also as host+device
   };

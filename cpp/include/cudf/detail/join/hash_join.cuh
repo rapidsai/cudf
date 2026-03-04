@@ -1,23 +1,13 @@
 /*
- * Copyright (c) 2022-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
 
 #include <cudf/column/column.hpp>
 #include <cudf/detail/join/join.hpp>
 #include <cudf/hashing.hpp>
+#include <cudf/join/join.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
@@ -26,15 +16,17 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_uvector.hpp>
+#include <rmm/mr/polymorphic_allocator.hpp>
 
-#include <cuco/static_multimap.cuh>
+#include <cuco/static_multiset.cuh>
+#include <cuda/std/functional>
 
 #include <cstddef>
 #include <memory>
 #include <optional>
 
 // Forward declaration
-namespace cudf::experimental::row::equality {
+namespace cudf::detail::row::equality {
 class preprocessed_table;
 }
 
@@ -51,12 +43,48 @@ namespace detail {
 template <typename Hasher>
 struct hash_join {
  public:
-  using map_type =
-    cuco::static_multimap<hash_value_type,
-                          cudf::size_type,
+  /**
+   * @brief A custom comparator used for the build table insertion
+   */
+  struct always_not_equal {
+    __device__ constexpr bool operator()(
+      cuco::pair<hash_value_type, size_type> const&,
+      cuco::pair<hash_value_type, size_type> const&) const noexcept
+    {
+      // multiset always insert
+      return false;
+    }
+  };
+
+  struct hasher1 {
+    __device__ constexpr hash_value_type operator()(
+      cuco::pair<hash_value_type, size_type> const& key) const noexcept
+    {
+      return key.first;
+    }
+  };
+
+  struct hasher2 {
+    hasher2(hash_value_type seed) : _hash{seed} {}
+
+    __device__ constexpr hash_value_type operator()(
+      cuco::pair<hash_value_type, size_type> const& key) const noexcept
+    {
+      return _hash(key.first);
+    }
+
+   private:
+    Hasher _hash;
+  };
+
+  using hash_table_t =
+    cuco::static_multiset<cuco::pair<cudf::hash_value_type, cudf::size_type>,
+                          cuco::extent<std::size_t>,
                           cuda::thread_scope_device,
-                          cudf::detail::cuco_allocator<char>,
-                          cuco::legacy::double_hashing<DEFAULT_JOIN_CG_SIZE, Hasher, Hasher>>;
+                          always_not_equal,
+                          cuco::double_hashing<DEFAULT_JOIN_CG_SIZE, hasher1, hasher2>,
+                          rmm::mr::polymorphic_allocator<char>,
+                          cuco::storage<2>>;
 
   hash_join()                            = delete;
   ~hash_join()                           = default;
@@ -70,9 +98,9 @@ struct hash_join {
   bool const _has_nulls;  ///< true if nulls are present in either build table or any probe table
   cudf::null_equality const _nulls_equal;  ///< whether to consider nulls as equal
   cudf::table_view _build;                 ///< input table to build the hash map
-  std::shared_ptr<cudf::experimental::row::equality::preprocessed_table>
-    _preprocessed_build;  ///< input table preprocssed for row operators
-  map_type _hash_table;   ///< hash table built on `_build`
+  std::shared_ptr<cudf::detail::row::equality::preprocessed_table>
+    _preprocessed_build;     ///< input table preprocssed for row operators
+  hash_table_t _hash_table;  ///< hash table built on `_build`
 
  public:
   /**
@@ -89,6 +117,17 @@ struct hash_join {
   hash_join(cudf::table_view const& build,
             bool has_nulls,
             cudf::null_equality compare_nulls,
+            rmm::cuda_stream_view stream);
+
+  /**
+   * @copydoc hash_join(cudf::table_view const&, bool, null_equality, rmm::cuda_stream_view)
+   *
+   * @param load_factor The hash table occupancy ratio in (0,1]. A value of 0.5 means 50% occupancy.
+   */
+  hash_join(cudf::table_view const& build,
+            bool has_nulls,
+            cudf::null_equality compare_nulls,
+            double load_factor,
             rmm::cuda_stream_view stream);
 
   /**
@@ -140,7 +179,36 @@ struct hash_join {
                              rmm::cuda_stream_view stream,
                              rmm::device_async_resource_ref mr) const;
 
+  /**
+   * @copydoc cudf::hash_join::inner_join_match_context
+   */
+  [[nodiscard]] cudf::join_match_context inner_join_match_context(
+    cudf::table_view const& probe,
+    rmm::cuda_stream_view stream,
+    rmm::device_async_resource_ref mr) const;
+
+  /**
+   * @copydoc cudf::hash_join::left_join_match_context
+   */
+  [[nodiscard]] cudf::join_match_context left_join_match_context(
+    cudf::table_view const& probe,
+    rmm::cuda_stream_view stream,
+    rmm::device_async_resource_ref mr) const;
+
+  /**
+   * @copydoc cudf::hash_join::full_join_match_context
+   */
+  [[nodiscard]] cudf::join_match_context full_join_match_context(
+    cudf::table_view const& probe,
+    rmm::cuda_stream_view stream,
+    rmm::device_async_resource_ref mr) const;
+
  private:
+  template <typename OutputIterator>
+  void compute_match_counts(cudf::table_view const& probe,
+                            OutputIterator output_iter,
+                            rmm::cuda_stream_view stream) const;
+
   /**
    * @brief Probes the `_hash_table` built from `_build` for tuples in `probe_table`,
    * and returns the output indices of `build_table` and `probe_table` as a combined table,

@@ -1,4 +1,5 @@
-# Copyright (c) 2023-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 # TODO: Verify consistent usage of relative/absolute imports in pylibcudf.
 from . cimport (
@@ -9,13 +10,11 @@ from . cimport (
     contiguous_split,
     copying,
     datetime,
-    experimental,
     expressions,
     filling,
     groupby,
     hashing,
     interop,
-    jit,
     join,
     json,
     labeling,
@@ -24,6 +23,7 @@ from . cimport (
     null_mask,
     nvtext,
     partitioning,
+    prefetch,
     quantiles,
     reduce,
     replace,
@@ -39,6 +39,7 @@ from . cimport (
     transpose,
     types,
     unary,
+    utilities,
 )
 from .column cimport Column
 from .gpumemoryview cimport gpumemoryview
@@ -60,19 +61,18 @@ __all__ = [
     "concatenate",
     "copying",
     "datetime",
-    "experimental",
     "expressions",
     "filling",
     "gpumemoryview",
     "groupby",
     "hashing",
     "interop",
-    "jit",
     "join",
     "json",
     "lists",
     "merge",
     "null_mask",
+    "prefetch",
     "partitioning",
     "quantiles",
     "reduce",
@@ -90,4 +90,5 @@ __all__ = [
     "types",
     "unary",
     "nvtext",
+    "utilities",
 ]

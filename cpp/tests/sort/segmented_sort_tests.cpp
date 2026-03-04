@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2021-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf_test/base_fixture.hpp>
@@ -351,7 +340,7 @@ TEST_F(SegmentedSortInt, UnbalancedOffsets)
   std::sort(h_input.begin(), h_input.end(), std::greater<int64_t>{});
   std::fill_n(h_input.begin(), 4, 0);
   std::fill(h_input.begin() + 3533, h_input.end(), 10000);
-  auto d_input = cudf::detail::make_device_uvector_sync(
+  auto d_input = cudf::detail::make_device_uvector(
     h_input, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
   auto input    = cudf::column_view(cudf::device_span<int64_t const>(d_input));
   auto segments = cudf::test::fixed_width_column_wrapper<int32_t>({0, 4, 3533, 3535});

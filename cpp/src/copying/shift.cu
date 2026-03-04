@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf/column/column_device_view.cuh>
@@ -70,20 +59,19 @@ std::pair<rmm::device_buffer, size_type> create_null_mask(column_device_view con
 
 struct shift_functor {
   template <typename T, typename... Args>
-  std::enable_if_t<not cudf::is_fixed_width<T>() and not std::is_same_v<cudf::string_view, T>,
-                   std::unique_ptr<column>>
-  operator()(Args&&...)
+  std::unique_ptr<column> operator()(Args&&...)
+    requires(not cudf::is_fixed_width<T>() and not std::is_same_v<cudf::string_view, T>)
   {
     CUDF_FAIL("shift only supports fixed-width or string types.", cudf::data_type_error);
   }
 
   template <typename T, typename... Args>
-  std::enable_if_t<std::is_same_v<cudf::string_view, T>, std::unique_ptr<column>> operator()(
-    column_view const& input,
-    size_type offset,
-    scalar const& fill_value,
-    rmm::cuda_stream_view stream,
-    rmm::device_async_resource_ref mr)
+  std::unique_ptr<column> operator()(column_view const& input,
+                                     size_type offset,
+                                     scalar const& fill_value,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::device_async_resource_ref mr)
+    requires(std::is_same_v<cudf::string_view, T>)
   {
     auto output = cudf::strings::detail::shift(
       cudf::strings_column_view(input), offset, fill_value, stream, mr);
@@ -98,12 +86,12 @@ struct shift_functor {
   }
 
   template <typename T>
-  std::enable_if_t<cudf::is_fixed_width<T>(), std::unique_ptr<column>> operator()(
-    column_view const& input,
-    size_type offset,
-    scalar const& fill_value,
-    rmm::cuda_stream_view stream,
-    rmm::device_async_resource_ref mr)
+  std::unique_ptr<column> operator()(column_view const& input,
+                                     size_type offset,
+                                     scalar const& fill_value,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::device_async_resource_ref mr)
+    requires(cudf::is_fixed_width<T>())
   {
     using ScalarType = cudf::scalar_type_t<T>;
     auto& scalar     = static_cast<ScalarType const&>(fill_value);
@@ -143,7 +131,7 @@ struct shift_functor {
         return out_of_bounds(size, src_idx) ? *fill : input.element<T>(src_idx);
       };
 
-    thrust::transform(rmm::exec_policy(stream), index_begin, index_end, data, func_value);
+    thrust::transform(rmm::exec_policy_nosync(stream), index_begin, index_end, data, func_value);
 
     return output;
   }

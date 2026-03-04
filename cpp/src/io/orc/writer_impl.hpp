@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
@@ -40,37 +29,12 @@
 
 namespace cudf::io::orc::detail {
 // Forward internal classes
-class orc_column_view;
+class orc_table_view;
 
 using namespace cudf::io::detail;
 using cudf::detail::device_2dspan;
 using cudf::detail::host_2dspan;
 using cudf::detail::hostdevice_2dvector;
-
-/**
- * Non-owning view of a cuDF table that includes ORC-related information.
- *
- * Columns hierarchy is flattened and stored in pre-order.
- */
-struct orc_table_view {
-  std::vector<orc_column_view> columns;
-  rmm::device_uvector<orc_column_device_view> d_columns;
-  std::vector<uint32_t> string_column_indices;
-  rmm::device_uvector<uint32_t> d_string_column_indices;
-
-  auto num_columns() const noexcept { return columns.size(); }
-  [[nodiscard]] size_type num_rows() const noexcept;
-  auto num_string_columns() const noexcept { return string_column_indices.size(); }
-
-  auto& column(uint32_t idx) { return columns.at(idx); }
-  [[nodiscard]] auto const& column(uint32_t idx) const { return columns.at(idx); }
-
-  auto& string_column(uint32_t idx) { return columns.at(string_column_indices.at(idx)); }
-  [[nodiscard]] auto const& string_column(uint32_t idx) const
-  {
-    return columns.at(string_column_indices.at(idx));
-  }
-};
 
 /**
  * @brief Indices of rowgroups contained in a stripe.
@@ -274,6 +238,11 @@ class writer::impl {
    */
   ~impl();
 
+  impl(impl const&)            = delete;
+  impl& operator=(impl const&) = delete;
+  impl(impl&&)                 = delete;
+  impl& operator=(impl&&)      = delete;
+
   /**
    * @brief Writes a single subtable as part of a larger ORC file/table write.
    *
@@ -308,7 +277,7 @@ class writer::impl {
                               file_segmentation const& segmentation,
                               orc_table_view const& orc_table,
                               device_span<uint8_t const> compressed_data,
-                              host_span<compression_result const> comp_results,
+                              host_span<codec_exec_result const> comp_results,
                               host_2dspan<stripe_stream const> strm_descs,
                               host_span<col_stats_blob const> rg_stats,
                               orc_streams& streams,

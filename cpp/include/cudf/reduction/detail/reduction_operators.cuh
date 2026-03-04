@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
@@ -185,6 +174,30 @@ struct min : public simple_op<min> {
 // operator for `max`
 struct max : public simple_op<max> {
   using op = cudf::DeviceMax;
+
+  template <typename ResultType>
+  using transformer = cudf::detail::cast_fn<ResultType>;
+};
+
+// operator for `bit_and`
+struct bit_and : public simple_op<bit_and> {
+  using op = cudf::DeviceBitAnd;
+
+  template <typename ResultType>
+  using transformer = cudf::detail::cast_fn<ResultType>;
+};
+
+// operator for `bit_or`
+struct bit_or : public simple_op<bit_or> {
+  using op = cudf::DeviceBitOr;
+
+  template <typename ResultType>
+  using transformer = cudf::detail::cast_fn<ResultType>;
+};
+
+// operator for `bit_xor`
+struct bit_xor : public simple_op<bit_xor> {
+  using op = cudf::DeviceBitXor;
 
   template <typename ResultType>
   using transformer = cudf::detail::cast_fn<ResultType>;

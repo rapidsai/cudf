@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf/detail/copy.hpp>
@@ -136,11 +125,11 @@ std::unique_ptr<column> replace_nulls(dictionary_column_view const& input,
 
   // now build the new indices by doing replace-null on the updated indices
   auto const input_indices = input_view.get_indices_annotated();
-  auto new_indices =
-    replace_indices(input_indices,
-                    cudf::detail::indexalator_factory::make_input_optional_iterator(*scalar_index),
-                    stream,
-                    mr);
+  auto new_indices         = replace_indices(
+    input_indices,
+    cudf::detail::indexalator_factory::make_input_optional_iterator(*scalar_index, stream),
+    stream,
+    mr);
   new_indices->set_null_mask(rmm::device_buffer{0, stream, mr}, 0);
 
   return make_dictionary_column(

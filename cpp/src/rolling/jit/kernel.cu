@@ -1,24 +1,39 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
-#include "rolling/detail/rolling_jit.hpp"
-#include "rolling/jit/operation.hpp"
-
+#include <cudf/detail/utilities/grid_1d.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/bit.hpp>
+
+#include <rolling/detail/rolling_jit.hpp>
+
+#pragma nv_hdrstop  // The above headers are used by the kernel below and need to be included before
+                    // it. Each UDF will have a different operation-udf.hpp generated for it, so we
+                    // need to put this pragma before including it to avoid PCH mismatch.
+
+#include <cudf/detail/operation-udf.hpp>
+
+struct rolling_udf_ptx {
+  template <typename OutType, typename InType>
+  static OutType operate(InType const* in_col, cudf::size_type start, cudf::size_type count)
+  {
+    OutType ret;
+    GENERIC_ROLLING_OP(&ret, 0, 0, 0, 0, &in_col[start], count, sizeof(InType));
+    return ret;
+  }
+};
+
+struct rolling_udf_cuda {
+  template <typename OutType, typename InType>
+  static OutType operate(InType const* in_col, cudf::size_type start, cudf::size_type count)
+  {
+    OutType ret;
+    GENERIC_ROLLING_OP(&ret, in_col, start, count);
+    return ret;
+  }
+};
 
 namespace cudf {
 namespace rolling {
@@ -51,8 +66,8 @@ CUDF_KERNEL void gpu_rolling_new(cudf::size_type nrows,
                                  FollowingWindowType following_window_begin,
                                  cudf::size_type min_periods)
 {
-  cudf::thread_index_type i            = blockIdx.x * blockDim.x + threadIdx.x;
-  cudf::thread_index_type const stride = blockDim.x * gridDim.x;
+  auto i            = cudf::detail::grid_1d::global_thread_id();
+  auto const stride = cudf::detail::grid_1d::grid_stride();
 
   cudf::size_type warp_valid_count{0};
 

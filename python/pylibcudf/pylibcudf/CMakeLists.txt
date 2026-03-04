@@ -1,15 +1,8 @@
 # =============================================================================
-# Copyright (c) 2023-2025, NVIDIA CORPORATION.
-#
-# Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
-# in compliance with the License. You may obtain a copy of the License at
-#
-# http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software distributed under the License
-# is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express
-# or implied. See the License for the specific language governing permissions and limitations under
-# the License.
+# cmake-format: off
+# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
+# cmake-format: on
 # =============================================================================
 
 set(cython_sources
@@ -21,14 +14,13 @@ set(cython_sources
     concatenate.pyx
     copying.pyx
     datetime.pyx
-    experimental.pyx
     expressions.pyx
     filling.pyx
     gpumemoryview.pyx
     groupby.pyx
     hashing.pyx
     interop.pyx
-    jit.pyx
+    _interop_helpers.pyx
     join.pyx
     json.pyx
     labeling.pyx
@@ -36,6 +28,7 @@ set(cython_sources
     merge.pyx
     null_mask.pyx
     partitioning.pyx
+    prefetch.pyx
     quantiles.pyx
     reduce.pyx
     replace.pyx
@@ -53,6 +46,7 @@ set(cython_sources
     types.pyx
     unary.pyx
     utils.pyx
+    utilities.pyx
 )
 set(linked_libraries cudf::cudf)
 rapids_cython_create_modules(
@@ -61,13 +55,16 @@ rapids_cython_create_modules(
   LINKED_LIBRARIES "${linked_libraries}" MODULE_PREFIX pylibcudf_ ASSOCIATED_TARGETS cudf
 )
 
-target_include_directories(pylibcudf_interop PUBLIC "$<BUILD_INTERFACE:${DLPACK_INCLUDE_DIR}>")
-
 include(${rapids-cmake-dir}/export/find_package_root.cmake)
 include(../../../cpp/cmake/thirdparty/get_nanoarrow.cmake)
-target_link_libraries(pylibcudf_interop PUBLIC nanoarrow)
+
+foreach(source interop _interop_helpers table column)
+  target_include_directories(pylibcudf_${source} PUBLIC "$<BUILD_INTERFACE:${DLPACK_INCLUDE_DIR}>")
+  target_link_libraries(pylibcudf_${source} PUBLIC nanoarrow::nanoarrow)
+endforeach()
 
 add_subdirectory(libcudf)
 add_subdirectory(strings)
 add_subdirectory(io)
 add_subdirectory(nvtext)
+add_subdirectory(experimental)

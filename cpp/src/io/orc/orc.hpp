@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
@@ -170,52 +159,54 @@ int inline constexpr encode_field_number(int field_number, ProtofType field_type
 }
 
 namespace {
-template <typename base_t,
-          std::enable_if_t<!std::is_arithmetic_v<base_t> and !std::is_enum_v<base_t>>* = nullptr>
+template <typename base_t>
 int static constexpr encode_field_number_base(int field_number) noexcept
+  requires(!std::is_arithmetic_v<base_t> and !std::is_enum_v<base_t>)
 {
   return encode_field_number(field_number, ProtofType::FIXEDLEN);
 }
 
-template <typename base_t,
-          std::enable_if_t<std::is_integral_v<base_t> or std::is_enum_v<base_t>>* = nullptr>
+template <typename base_t>
 int static constexpr encode_field_number_base(int field_number) noexcept
+  requires(std::is_integral_v<base_t> or std::is_enum_v<base_t>)
 {
   return encode_field_number(field_number, ProtofType::VARINT);
 }
 
-template <typename base_t, std::enable_if_t<std::is_same_v<base_t, float>>* = nullptr>
+template <typename base_t>
 int static constexpr encode_field_number_base(int field_number) noexcept
+  requires(std::is_same_v<base_t, float>)
 {
   return encode_field_number(field_number, ProtofType::FIXED32);
 }
 
-template <typename base_t, std::enable_if_t<std::is_same_v<base_t, double>>* = nullptr>
+template <typename base_t>
 int static constexpr encode_field_number_base(int field_number) noexcept
+  requires(std::is_same_v<base_t, double>)
 {
   return encode_field_number(field_number, ProtofType::FIXED64);
 }
 };  // namespace
 
-template <typename T,
-          std::enable_if_t<!std::is_class_v<T> or std::is_same_v<T, std::string>>* = nullptr>
+template <typename T>
 int constexpr encode_field_number(int field_number) noexcept
+  requires(!std::is_class_v<T> or std::is_same_v<T, std::string>)
 {
   return encode_field_number_base<T>(field_number);
 }
 
 // containers change the field number encoding
-template <typename T,
-          std::enable_if_t<std::is_same_v<T, std::vector<typename T::value_type>>>* = nullptr>
+template <typename T>
 int constexpr encode_field_number(int field_number) noexcept
+  requires(std::is_same_v<T, std::vector<typename T::value_type>>)
 {
   return encode_field_number_base<T>(field_number);
 }
 
 // optional fields don't change the field number encoding
-template <typename T,
-          std::enable_if_t<std::is_same_v<T, std::optional<typename T::value_type>>>* = nullptr>
+template <typename T>
 int constexpr encode_field_number(int field_number) noexcept
+  requires(std::is_same_v<T, std::optional<typename T::value_type>>)
 {
   return encode_field_number_base<typename T::value_type>(field_number);
 }
@@ -272,47 +263,51 @@ class protobuf_reader {
 
   uint32_t read_field_size(uint8_t const* end);
 
-  template <typename T, std::enable_if_t<std::is_integral_v<T>>* = nullptr>
+  template <typename T>
   void read_field(T& value, uint8_t const* end)
+    requires(std::is_integral_v<T>)
   {
     value = get<T>();
   }
 
-  template <typename T, std::enable_if_t<std::is_enum_v<T>>* = nullptr>
+  template <typename T>
   void read_field(T& value, uint8_t const* end)
+    requires(std::is_enum_v<T>)
   {
     value = static_cast<T>(get<uint32_t>());
   }
 
-  template <typename T, std::enable_if_t<std::is_same_v<T, std::string>>* = nullptr>
+  template <typename T>
   void read_field(T& value, uint8_t const* end)
+    requires(std::is_same_v<T, std::string>)
   {
     auto const size = read_field_size(end);
     value.assign(reinterpret_cast<char const*>(m_cur), size);
     m_cur += size;
   }
 
-  template <typename T, std::enable_if_t<std::is_same_v<T, std::vector<std::string>>>* = nullptr>
+  template <typename T>
   void read_field(T& value, uint8_t const* end)
+    requires(std::is_same_v<T, std::vector<std::string>>)
   {
     auto const size = read_field_size(end);
     value.emplace_back(reinterpret_cast<char const*>(m_cur), size);
     m_cur += size;
   }
 
-  template <typename T,
-            std::enable_if_t<std::is_same_v<T, std::vector<typename T::value_type>> and
-                             !std::is_same_v<std::string, typename T::value_type>>* = nullptr>
+  template <typename T>
   void read_field(T& value, uint8_t const* end)
+    requires(std::is_same_v<T, std::vector<typename T::value_type>> and
+             !std::is_same_v<std::string, typename T::value_type>)
   {
     auto const size = read_field_size(end);
     value.emplace_back();
     read(value.back(), size);
   }
 
-  template <typename T,
-            std::enable_if_t<std::is_same_v<T, std::optional<typename T::value_type>>>* = nullptr>
+  template <typename T>
   void read_field(T& value, uint8_t const* end)
+    requires(std::is_same_v<T, std::optional<typename T::value_type>>)
   {
     typename T::value_type contained_value;
     read_field(contained_value, end);
@@ -326,8 +321,9 @@ class protobuf_reader {
     read(value, size);
   }
 
-  template <typename T, std::enable_if_t<std::is_floating_point_v<T>>* = nullptr>
+  template <typename T>
   void read_field(T& value, uint8_t const* end)
+    requires(std::is_floating_point_v<T>)
   {
     memcpy(&value, m_cur, sizeof(T));
     m_cur += sizeof(T);
@@ -542,12 +538,10 @@ class orc_decompressor {
    * @brief ORC block decompression
    *
    * @param src compressed data
-   * @param stream CUDA stream used for device memory operations and kernel launches
    *
    * @return decompressed data
    */
-  host_span<uint8_t const> decompress_blocks(host_span<uint8_t const> src,
-                                             rmm::cuda_stream_view stream);
+  host_span<uint8_t const> decompress_blocks(host_span<uint8_t const> src);
   [[nodiscard]] uint32_t GetLog2MaxCompressionRatio() const { return m_log2MaxRatio; }
   [[nodiscard]] uint64_t GetMaxUncompressedBlockSize(uint32_t block_len) const
   {
@@ -609,6 +603,11 @@ class metadata {
  public:
   explicit metadata(datasource* const src, rmm::cuda_stream_view stream);
 
+  metadata(metadata const&)            = delete;
+  metadata& operator=(metadata const&) = delete;
+  metadata(metadata&&)                 = default;
+  metadata& operator=(metadata&&)      = default;
+
   [[nodiscard]] auto get_total_rows() const { return ff.numberOfRows; }
   [[nodiscard]] size_type get_num_stripes() const { return ff.stripes.size(); }
   [[nodiscard]] size_type get_num_columns() const { return ff.types.size(); }
@@ -666,7 +665,7 @@ class metadata {
   Metadata md;
   std::vector<StripeFooter> stripefooters;
   std::unique_ptr<orc_decompressor> decompressor;
-  datasource* const source;
+  datasource* source;
 
  private:
   struct column_parent {

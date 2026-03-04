@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf/detail/gather.cuh>
@@ -20,8 +9,8 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <cuda/std/iterator>
 #include <thrust/binary_search.h>
-#include <thrust/distance.h>
 #include <thrust/execution_policy.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
@@ -79,7 +68,7 @@ struct list_gatherer {
     // "step 1" from above
     auto const bound =
       thrust::upper_bound(thrust::seq, upper_bound_start, upper_bound_start + offset_count, index);
-    size_type offset_index = thrust::distance(upper_bound_start, bound);
+    size_type offset_index = cuda::std::distance(upper_bound_start, bound);
     // "step 2" from above
     size_type offset_subindex = offset_index == 0 ? index : index - offsets[offset_index];
     // "step 3" from above
@@ -162,9 +151,7 @@ std::unique_ptr<column> gather_list_nested(cudf::lists_column_view const& list,
                              std::move(child_gd.offsets),
                              std::move(child),
                              null_count,
-                             std::move(null_mask),
-                             stream,
-                             mr);
+                             std::move(null_mask));
   }
 
   // it's a leaf.  do a regular gather
@@ -175,9 +162,7 @@ std::unique_ptr<column> gather_list_nested(cudf::lists_column_view const& list,
                            std::move(child_gd.offsets),
                            std::move(child),
                            null_count,
-                           std::move(null_mask),
-                           stream,
-                           mr);
+                           std::move(null_mask));
 }
 
 }  // namespace detail

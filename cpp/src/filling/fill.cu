@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf/column/column.hpp>
@@ -38,7 +27,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
-#include <thrust/iterator/constant_iterator.h>
+#include <cuda/iterator>
 
 #include <memory>
 
@@ -54,8 +43,8 @@ void in_place_fill(cudf::mutable_column_view& destination,
   auto p_scalar    = static_cast<ScalarType const*>(&value);
   T fill_value     = p_scalar->value(stream);
   bool is_valid    = p_scalar->is_valid(stream);
-  cudf::detail::copy_range(thrust::make_constant_iterator(fill_value),
-                           thrust::make_constant_iterator(is_valid),
+  cudf::detail::copy_range(cuda::make_constant_iterator(fill_value),
+                           cuda::make_constant_iterator(is_valid),
                            destination,
                            begin,
                            end,
@@ -183,25 +172,11 @@ std::unique_ptr<cudf::column> out_of_place_fill_range_dispatch::operator()<cudf:
                           end,
                           stream,
                           mr);
-  auto const indices_type = new_indices->type();
-  auto const output_size  = new_indices->size();        // record these
-  auto const null_count   = new_indices->null_count();  // before the release()
-  auto contents           = new_indices->release();
-  // create the new indices column from the result
-  auto indices_column = std::make_unique<cudf::column>(indices_type,
-                                                       static_cast<cudf::size_type>(output_size),
-                                                       std::move(*(contents.data.release())),
-                                                       rmm::device_buffer{0, stream, mr},
-                                                       0);
 
   // take the keys from matched column
   std::unique_ptr<cudf::column> keys_column(std::move(target_matched->release().children.back()));
 
-  // create column with keys_column and indices_column
-  return cudf::make_dictionary_column(std::move(keys_column),
-                                      std::move(indices_column),
-                                      std::move(*(contents.null_mask.release())),
-                                      null_count);
+  return cudf::make_dictionary_column(std::move(keys_column), std::move(new_indices), stream, mr);
 }
 
 }  // namespace

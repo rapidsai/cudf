@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf/column/column_factories.hpp>
@@ -26,21 +15,24 @@ namespace cudf {
 namespace {
 struct size_of_helper {
   cudf::data_type type;
-  template <typename T, std::enable_if_t<not is_fixed_width<T>()>* = nullptr>
+  template <typename T>
   constexpr int operator()() const
+    requires(not is_fixed_width<T>())
   {
     CUDF_FAIL("Invalid, non fixed-width element type.");
     return 0;
   }
 
-  template <typename T, std::enable_if_t<is_fixed_width<T>() && not is_fixed_point<T>()>* = nullptr>
+  template <typename T>
   constexpr int operator()() const noexcept
+    requires(is_fixed_width<T>() && not is_fixed_point<T>())
   {
     return sizeof(T);
   }
 
-  template <typename T, std::enable_if_t<is_fixed_point<T>()>* = nullptr>
+  template <typename T>
   constexpr int operator()() const noexcept
+    requires(is_fixed_point<T>())
   {
     // Only want the sizeof fixed_point::Rep as fixed_point::scale is stored in data_type
     return sizeof(typename T::rep);

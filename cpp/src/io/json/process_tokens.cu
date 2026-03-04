@@ -1,23 +1,11 @@
 
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "io/utilities/trie.cuh"
 #include "nested_json.hpp"
-#include "tabulate_output_iterator.cuh"
 
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
@@ -28,6 +16,8 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
+#include <cuda/std/utility>
+#include <thrust/iterator/tabulate_output_iterator.h>
 #include <thrust/transform_scan.h>
 
 namespace cudf::io::json {
@@ -35,7 +25,7 @@ namespace detail {
 
 struct write_if {
   using token_t   = cudf::io::json::token_t;
-  using scan_type = thrust::pair<token_t, bool>;
+  using scan_type = cuda::std::pair<token_t, bool>;
   PdaTokenT* tokens;
   size_t n;
   // Index, value
@@ -287,7 +277,7 @@ void validate_token_stream(device_span<char const> d_input,
   });
 
   auto conditional_invalidout_it =
-    cudf::detail::make_tabulate_output_iterator(cuda::proclaim_return_type<void>(
+    thrust::tabulate_output_iterator(cuda::proclaim_return_type<void>(
       [d_invalid = d_invalid.begin()] __device__(size_type i, bool x) -> void {
         if (x) { d_invalid[i] = true; }
       }));
@@ -298,8 +288,8 @@ void validate_token_stream(device_span<char const> d_input,
                     predicate);
 
   using scan_type            = write_if::scan_type;
-  auto conditional_write     = write_if{tokens.begin(), num_tokens};
-  auto conditional_output_it = cudf::detail::make_tabulate_output_iterator(conditional_write);
+  auto conditional_write     = write_if{tokens.data(), num_tokens};
+  auto conditional_output_it = thrust::tabulate_output_iterator(conditional_write);
   auto binary_op             = cuda::proclaim_return_type<scan_type>(
     [] __device__(scan_type prev, scan_type curr) -> scan_type {
       auto op_result = (prev.first == token_t::ErrorBegin ? prev.first : curr.first);

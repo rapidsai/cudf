@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "reader_impl_helpers.hpp"
@@ -47,8 +36,7 @@ std::unique_ptr<column> create_empty_column(size_type orc_col_id,
                                                    schema_info.children.back(),
                                                    stream),
                                0,
-                               rmm::device_buffer{0, stream},
-                               stream);
+                               rmm::device_buffer{0, stream});
     }
     case MAP: {
       schema_info.children.emplace_back("offsets");
@@ -72,8 +60,7 @@ std::unique_ptr<column> create_empty_column(size_type orc_col_id,
         make_empty_column(type_id::INT32),
         make_structs_column(0, std::move(child_columns), 0, rmm::device_buffer{0, stream}, stream),
         0,
-        rmm::device_buffer{0, stream},
-        stream);
+        rmm::device_buffer{0, stream});
     }
 
     case STRUCT: {

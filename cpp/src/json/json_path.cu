@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "io/utilities/parsing_utils.cuh"
@@ -25,6 +14,7 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/offsets_iterator_factory.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/detail/utilities/grid_1d.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/json/json.hpp>
 #include <cudf/scalar/scalar.hpp>
@@ -42,7 +32,7 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/std/optional>
-#include <thrust/pair.h>
+#include <cuda/std/utility>
 #include <thrust/scan.h>
 #include <thrust/tuple.h>
 
@@ -693,7 +683,7 @@ std::pair<cuda::std::optional<rmm::device_uvector<path_operator>>, int> build_co
 
   auto const is_empty = h_operators.size() == 1 && h_operators[0].type == path_operator_type::END;
   return is_empty ? std::pair(cuda::std::nullopt, 0)
-                  : std::pair(cuda::std::make_optional(cudf::detail::make_device_uvector_sync(
+                  : std::pair(cuda::std::make_optional(cudf::detail::make_device_uvector(
                                 h_operators, stream, cudf::get_current_device_resource_ref())),
                               max_stack_depth);
 }
@@ -885,7 +875,7 @@ constexpr int max_command_stack_depth = 8;
  * @param options Options controlling behavior
  * @returns A pair containing the result code the output buffer.
  */
-__device__ thrust::pair<parse_result, json_output> get_json_object_single(
+__device__ cuda::std::pair<parse_result, json_output> get_json_object_single(
   char const* input,
   size_t input_len,
   path_operator const* const commands,
@@ -991,12 +981,16 @@ std::unique_ptr<cudf::column> get_json_object(cudf::strings_column_view const& c
 
   // if the query is empty, return a string column containing all nulls
   if (!std::get<0>(preprocess).has_value()) {
-    return std::make_unique<column>(
-      data_type{type_id::STRING},
+    // Create a proper all-null strings column with valid structure (offsets + chars children)
+    auto offsets = cudf::make_column_from_scalar(
+      cudf::numeric_scalar<int32_t>(0, true, stream), col.size() + 1, stream, mr);
+
+    return make_strings_column(
       col.size(),
-      rmm::device_buffer{0, stream, mr},  // no data
-      cudf::detail::create_null_mask(col.size(), mask_state::ALL_NULL, stream, mr),
-      col.size());  // null count
+      std::move(offsets),
+      rmm::device_buffer{0, stream, mr},  // empty chars
+      col.size(),                         // null_count
+      cudf::detail::create_null_mask(col.size(), mask_state::ALL_NULL, stream, mr));
   }
 
   // compute output sizes

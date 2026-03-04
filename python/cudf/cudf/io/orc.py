@@ -1,27 +1,32 @@
-# Copyright (c) 2019-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
 import itertools
+import json
 import warnings
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 import pyarrow as pa
 
 import pylibcudf as plc
 
-import cudf
 from cudf.api.types import is_list_like
-from cudf.core.buffer import acquire_spill_lock
-from cudf.core.column import ColumnBase
-from cudf.core.column_accessor import ColumnAccessor
-from cudf.core.index import _index_from_data
+from cudf.core.column import access_columns, column_empty
+from cudf.core.dataframe import DataFrame
+from cudf.core.dtypes import (
+    CategoricalDtype,
+    ListDtype,
+    StructDtype,
+    dtype as cudf_dtype,
+)
+from cudf.core.index import CategoricalIndex, RangeIndex
+from cudf.core.multiindex import MultiIndex
 from cudf.utils import ioutils
 from cudf.utils.dtypes import cudf_dtype_from_pa_type, dtype_to_pylibcudf_type
 
-try:
-    import ujson as json  # type: ignore[import-untyped]
-except ImportError:
-    import json
+if TYPE_CHECKING:
+    from cudf._typing import DtypeObj
 
 
 @ioutils.doc_read_orc_metadata()
@@ -66,7 +71,7 @@ def read_orc_statistics(
         file_statistics = {
             column_name: column_stats
             for column_name, column_stats in zip(
-                column_names, parsed_file_statistics
+                column_names, parsed_file_statistics, strict=True
             )
             if columns is None or column_name in columns
         }
@@ -77,7 +82,7 @@ def read_orc_statistics(
             stripe_statistics = {
                 column_name: column_stats
                 for column_name, column_stats in zip(
-                    column_names, parsed_stripe_statistics
+                    column_names, parsed_stripe_statistics, strict=True
                 )
                 if columns is None or column_name in columns
             }
@@ -213,9 +218,9 @@ def read_orc(
             orc_file = orc.ORCFile(filepaths_or_buffers[0])
             schema = orc_file.schema
             col_names = schema.names if columns is None else columns
-            return cudf.DataFrame._from_data(
+            return DataFrame._from_data(
                 data={
-                    col_name: cudf.core.column.column_empty(
+                    col_name: column_empty(
                         row_count=0,
                         dtype=cudf_dtype_from_pa_type(
                             schema.field(col_name).type
@@ -256,21 +261,18 @@ def read_orc(
             options.set_stripes(stripes)
         if timestamp_type is not None:
             options.set_timestamp_type(
-                dtype_to_pylibcudf_type(cudf.dtype(timestamp_type))
+                dtype_to_pylibcudf_type(cudf_dtype(timestamp_type))
             )
         if columns is not None and len(columns) > 0:
             options.set_columns(columns)
 
         tbl_w_meta = plc.io.orc.read_orc(options)
+        df = DataFrame.from_pylibcudf(tbl_w_meta)
 
         if isinstance(columns, list) and len(columns) == 0:
-            # When `columns=[]`, index needs to be
-            # established, but not the columns.
-            nrows = tbl_w_meta.tbl.num_rows()
-            ca = ColumnAccessor({})
-            index = cudf.RangeIndex(nrows)
+            # Index to deselect all columns
+            df = df.loc[:, columns]
         else:
-            names = tbl_w_meta.column_names(include_children=False)
             index_col = None
             is_range_index = False
             reset_index_name = False
@@ -305,12 +307,10 @@ def read_orc(
                                         if c["name"] is None:
                                             reset_index_name = True
 
-            actual_index_names = None
-            col_names = names
             if index_col is not None and len(index_col) > 0:
                 if is_range_index:
                     range_index_meta = index_col[0]
-                    range_idx = cudf.RangeIndex(
+                    range_idx = RangeIndex(
                         start=range_index_meta["start"],
                         stop=range_index_meta["stop"],
                         step=range_index_meta["step"],
@@ -320,57 +320,13 @@ def read_orc(
                         range_idx = range_idx[skiprows:]
                     if num_rows != -1:
                         range_idx = range_idx[:num_rows]
+                    df.index = range_idx
                 else:
-                    actual_index_names = list(index_col_names.values())
-                    col_names = names[len(actual_index_names) :]
+                    df = df.set_index(list(index_col_names.values()))
 
-            result_col_names = col_names if columns is None else names
-            if actual_index_names is None:
-                index = None
-                data = {
-                    name: ColumnBase.from_pylibcudf(col)
-                    for name, col in zip(
-                        result_col_names, tbl_w_meta.columns, strict=True
-                    )
-                }
-            else:
-                result_columns = [
-                    ColumnBase.from_pylibcudf(col)
-                    for col in tbl_w_meta.columns
-                ]
-                index = _index_from_data(
-                    dict(
-                        zip(
-                            actual_index_names,
-                            result_columns[: len(actual_index_names)],
-                            strict=True,
-                        )
-                    )
-                )
-                data = dict(
-                    zip(
-                        result_col_names,
-                        result_columns[len(actual_index_names) :],
-                        strict=True,
-                    )
-                )
-
-            if is_range_index:
-                index = range_idx
-            elif reset_index_name:
-                index.names = [None] * len(index.names)
-
-            child_name_values = tbl_w_meta.child_names.values()
-
-            data = {
-                name: ioutils._update_col_struct_field_names(col, child_names)
-                for (name, col), child_names in zip(
-                    data.items(), child_name_values
-                )
-            }
-            ca = ColumnAccessor(data, rangeindex=len(data) == 0)
-
-        return cudf.DataFrame._from_data(ca, index=index)
+            if reset_index_name:
+                df.index.names = [None] * df.index.nlevels
+        return df
     else:
         from pyarrow import orc
 
@@ -398,14 +354,14 @@ def read_orc(
                 )
         else:
             pa_table = orc_file.read(columns=columns)
-        df = cudf.DataFrame.from_arrow(pa_table)
+        df = DataFrame.from_arrow(pa_table)
 
     return df
 
 
 @ioutils.doc_to_orc()
 def to_orc(
-    df: cudf.DataFrame,
+    df: DataFrame,
     fname,
     compression: Literal[
         False, None, "SNAPPY", "ZLIB", "ZSTD", "LZ4"
@@ -421,13 +377,13 @@ def to_orc(
     """{docstring}"""
 
     for _, dtype in df._dtypes:
-        if isinstance(dtype, cudf.CategoricalDtype):
+        if isinstance(dtype, CategoricalDtype):
             raise NotImplementedError(
                 "Writing to ORC format is not yet supported with "
                 "Categorical columns."
             )
 
-    if isinstance(df.index, cudf.CategoricalIndex):
+    if isinstance(df.index, CategoricalIndex):
         raise NotImplementedError(
             "Writing to ORC format is not yet supported with "
             "Categorical columns."
@@ -467,9 +423,8 @@ def to_orc(
         )
 
 
-@acquire_spill_lock()
 def _plc_write_orc(
-    table: cudf.DataFrame,
+    table: DataFrame,
     path_or_buf,
     compression: Literal[
         False, None, "SNAPPY", "ZLIB", "ZSTD", "LZ4"
@@ -490,62 +445,75 @@ def _plc_write_orc(
     """
     user_data = {"pandas": ioutils.generate_pandas_metadata(table, index)}
     if index is True or (
-        index is None and not isinstance(table.index, cudf.RangeIndex)
+        index is None and not isinstance(table.index, RangeIndex)
     ):
-        columns = (
+        iter_columns = (
             table._columns
             if table.index is None
             else itertools.chain(table.index._columns, table._columns)
         )
-        plc_table = plc.Table(
-            [col.to_pylibcudf(mode="read") for col in columns]
-        )
-        tbl_meta = plc.io.types.TableInputMetadata(plc_table)
-        for level, idx_name in enumerate(table._index.names):
-            tbl_meta.column_metadata[level].set_name(
-                ioutils._index_level_name(idx_name, level, table._column_names)  # type: ignore[arg-type]
-            )
-        num_index_cols_meta = len(table.index.names)
     else:
-        plc_table = plc.Table(
-            [col.to_pylibcudf(mode="read") for col in table._columns]
+        iter_columns = table._columns
+
+    with access_columns(*iter_columns, mode="read", scope="internal"):
+        if index is True or (
+            index is None and not isinstance(table.index, RangeIndex)
+        ):
+            columns = (
+                table._columns
+                if table.index is None
+                else itertools.chain(table.index._columns, table._columns)
+            )
+            plc_table = plc.Table([col.plc_column for col in columns])
+            tbl_meta = plc.io.types.TableInputMetadata(plc_table)
+            for level, idx_name in enumerate(table._index.names):
+                tbl_meta.column_metadata[level].set_name(
+                    ioutils._index_level_name(
+                        idx_name,
+                        level,
+                        table._column_names,  # type: ignore[arg-type]
+                    )
+                )
+            num_index_cols_meta = table.index.nlevels
+        else:
+            plc_table = plc.Table([col.plc_column for col in table._columns])
+            tbl_meta = plc.io.types.TableInputMetadata(plc_table)
+            num_index_cols_meta = 0
+
+        has_map_type = False
+        if cols_as_map_type is not None:
+            cols_as_map_type = set(cols_as_map_type)
+            has_map_type = True
+
+        for i, (name, col) in enumerate(
+            table._column_labels_and_values, start=num_index_cols_meta
+        ):
+            # generate_pandas_metadata will reject tables with non-string column names
+            tbl_meta.column_metadata[i].set_name(name)  # type: ignore[arg-type]
+            _set_col_children_metadata(
+                col.dtype,
+                tbl_meta.column_metadata[i],
+                has_map_type and name in cols_as_map_type,
+            )
+
+        options = (
+            plc.io.orc.OrcWriterOptions.builder(
+                plc.io.SinkInfo([path_or_buf]), plc_table
+            )
+            .metadata(tbl_meta)
+            .key_value_metadata(user_data)
+            .compression(_get_comp_type(compression))
+            .enable_statistics(_get_orc_stat_freq(statistics))
+            .build()
         )
-        tbl_meta = plc.io.types.TableInputMetadata(plc_table)
-        num_index_cols_meta = 0
+        if stripe_size_bytes is not None:
+            options.set_stripe_size_bytes(stripe_size_bytes)
+        if stripe_size_rows is not None:
+            options.set_stripe_size_rows(stripe_size_rows)
+        if row_index_stride is not None:
+            options.set_row_index_stride(row_index_stride)
 
-    has_map_type = False
-    if cols_as_map_type is not None:
-        cols_as_map_type = set(cols_as_map_type)
-        has_map_type = True
-
-    for i, (name, col) in enumerate(
-        table._column_labels_and_values, start=num_index_cols_meta
-    ):
-        tbl_meta.column_metadata[i].set_name(name)
-        _set_col_children_metadata(
-            col,
-            tbl_meta.column_metadata[i],
-            has_map_type and name in cols_as_map_type,
-        )
-
-    options = (
-        plc.io.orc.OrcWriterOptions.builder(
-            plc.io.SinkInfo([path_or_buf]), plc_table
-        )
-        .metadata(tbl_meta)
-        .key_value_metadata(user_data)
-        .compression(_get_comp_type(compression))
-        .enable_statistics(_get_orc_stat_freq(statistics))
-        .build()
-    )
-    if stripe_size_bytes is not None:
-        options.set_stripe_size_bytes(stripe_size_bytes)
-    if stripe_size_rows is not None:
-        options.set_stripe_size_rows(stripe_size_rows)
-    if row_index_stride is not None:
-        options.set_row_index_stride(row_index_stride)
-
-    plc.io.orc.write_orc(options)
+        plc.io.orc.write_orc(options)
 
 
 class ORCWriter:
@@ -584,6 +552,13 @@ class ORCWriter:
         self.stripe_size_rows = stripe_size_rows
         self.row_index_stride = row_index_stride
         self.initialized = False
+        self.writer = None
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.close()
 
     def write_table(self, table):
         """Writes a single table to the file"""
@@ -591,8 +566,7 @@ class ORCWriter:
             self._initialize_chunked_state(table)
 
         keep_index = self.index is not False and (
-            table.index.name is not None
-            or isinstance(table.index, cudf.MultiIndex)
+            table.index.name is not None or isinstance(table.index, MultiIndex)
         )
         if keep_index:
             cols_to_write = itertools.chain(
@@ -601,9 +575,7 @@ class ORCWriter:
         else:
             cols_to_write = table._columns
 
-        self.writer.write(
-            plc.Table([col.to_pylibcudf(mode="read") for col in cols_to_write])
-        )
+        self.writer.write(plc.Table([col.plc_column for col in cols_to_write]))
 
     def close(self):
         if not self.initialized:
@@ -617,15 +589,13 @@ class ORCWriter:
         """
 
         num_index_cols_meta = 0
-        plc_table = plc.Table(
-            [col.to_pylibcudf(mode="read") for col in table._columns]
-        )
+        plc_table = plc.Table([col.plc_column for col in table._columns])
         self.tbl_meta = plc.io.types.TableInputMetadata(plc_table)
         if self.index is not False:
-            if isinstance(table.index, cudf.MultiIndex):
+            if isinstance(table.index, MultiIndex):
                 plc_table = plc.Table(
                     [
-                        col.to_pylibcudf(mode="read")
+                        col.plc_column
                         for col in itertools.chain(
                             table.index._columns, table._columns
                         )
@@ -634,12 +604,12 @@ class ORCWriter:
                 self.tbl_meta = plc.io.types.TableInputMetadata(plc_table)
                 for level, idx_name in enumerate(table.index.names):
                     self.tbl_meta.column_metadata[level].set_name(idx_name)
-                num_index_cols_meta = len(table.index.names)
+                num_index_cols_meta = table.index.nlevels
             else:
                 if table.index.name is not None:
                     plc_table = plc.Table(
                         [
-                            col.to_pylibcudf(mode="read")
+                            col.plc_column
                             for col in itertools.chain(
                                 table.index._columns, table._columns
                             )
@@ -655,7 +625,7 @@ class ORCWriter:
         ):
             self.tbl_meta.column_metadata[i].set_name(name)
             _set_col_children_metadata(
-                col,
+                col.dtype,
                 self.tbl_meta.column_metadata[i],
                 has_map_type and name in self.cols_as_map_type,
             )
@@ -685,9 +655,9 @@ class ORCWriter:
 
 
 def _get_comp_type(
-    compression: Literal[False, None, "SNAPPY", "ZLIB", "ZSTD", "LZ4"],
+    compression: Literal[False, None, "SNAPPY", "ZLIB", "ZSTD", "LZ4", "NONE"],
 ) -> plc.io.types.CompressionType:
-    if compression is None or compression is False:
+    if compression is None or compression is False or compression == "NONE":
         return plc.io.types.CompressionType.NONE
 
     normed_compression = compression.upper()
@@ -723,23 +693,69 @@ def _get_orc_stat_freq(
 
 
 def _set_col_children_metadata(
-    col: ColumnBase,
+    dtype: DtypeObj,
     col_meta: plc.io.types.ColumnInMetadata,
     list_column_as_map: bool = False,
 ) -> None:
-    if isinstance(col.dtype, cudf.StructDtype):
-        for i, (child_col, name) in enumerate(
-            zip(col.children, list(col.dtype.fields))
-        ):
+    if isinstance(dtype, StructDtype):
+        for i, (name, field_dtype) in enumerate(dtype.fields.items()):
             col_meta.child(i).set_name(name)
             _set_col_children_metadata(
-                child_col, col_meta.child(i), list_column_as_map
+                field_dtype, col_meta.child(i), list_column_as_map
             )
-    elif isinstance(col.dtype, cudf.ListDtype):
+    elif isinstance(dtype, ListDtype):
         if list_column_as_map:
             col_meta.set_list_column_as_map()
         _set_col_children_metadata(
-            col.children[1], col_meta.child(1), list_column_as_map
+            dtype.element_type, col_meta.child(1), list_column_as_map
         )
     else:
         return
+
+
+def is_supported_read_orc(
+    compression: Literal["SNAPPY", "ZLIB", "ZSTD", "LZ4", "NONE"],
+) -> bool:
+    """Check if the compression type is supported for reading ORC files.
+
+    Parameters
+    ----------
+    compression : str
+        The compression type to check (e.g., "SNAPPY", "ZLIB", "LZ4")
+
+    Returns
+    -------
+    bool
+        True if the compression type is supported for reading ORC files
+
+    Examples
+    --------
+    >>> import cudf
+    >>> cudf.io.orc.is_supported_read_orc("LZ4")  # doctest: +SKIP
+    True
+    """
+    return plc.io.orc.is_supported_read_orc(_get_comp_type(compression))
+
+
+def is_supported_write_orc(
+    compression: Literal["SNAPPY", "ZLIB", "ZSTD", "LZ4", "NONE"],
+) -> bool:
+    """Check if the compression type is supported for writing ORC files.
+
+    Parameters
+    ----------
+    compression : str
+        The compression type to check (e.g., "SNAPPY", "ZLIB", "LZ4")
+
+    Returns
+    -------
+    bool
+        True if the compression type is supported for writing ORC files
+
+    Examples
+    --------
+    >>> import cudf
+    >>> cudf.io.orc.is_supported_write_orc("SNAPPY")  # doctest: +SKIP
+    True
+    """
+    return plc.io.orc.is_supported_write_orc(_get_comp_type(compression))

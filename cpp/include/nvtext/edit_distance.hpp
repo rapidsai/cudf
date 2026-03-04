@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
 
@@ -50,8 +39,8 @@ namespace CUDF_EXPORT nvtext {
  * The `targets.size()` must equal `input.size()` unless `targets.size()==1`.
  * In this case, all `input` will be computed against the single `targets[0]` string.
  *
- * @throw cudf::logic_error if `targets.size() != input.size()` and
- *                          if `targets.size() != 1`
+ * @throw std::invalid_argument if `targets.size() != input.size()` and if `targets.size() != 1`
+ * @throw std::invalid_argument if `targets.size() == 1` and `targets[0].is_null()`
  *
  * @param input Strings column of input strings
  * @param targets Strings to compute edit distance against `input`
@@ -67,6 +56,8 @@ std::unique_ptr<cudf::column> edit_distance(
 
 /**
  * @brief Compute the edit distance between all the strings in the input column.
+ *
+ * @deprecated Deprecated since release 26.04
  *
  * This uses the Levenshtein algorithm to calculate the edit distance between
  * two strings as documented here: https://www.cuelogic.com/blog/the-levenshtein-algorithm
@@ -91,14 +82,15 @@ std::unique_ptr<cudf::column> edit_distance(
  * The output is a lists column of size `input.size()` and where each list item
  * is `input.size()` elements.
  *
- * @throw cudf::logic_error if `strings.size() == 1`
+ * @throw std::invalid_argument if `input.size() == 1`
+ * @throw std::overflow_error if `input.size() * input.size()` greater than max size_type
  *
  * @param input Strings column of input strings
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return New lists column of edit distance values
  */
-std::unique_ptr<cudf::column> edit_distance_matrix(
+[[deprecated]] std::unique_ptr<cudf::column> edit_distance_matrix(
   cudf::strings_column_view const& input,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());

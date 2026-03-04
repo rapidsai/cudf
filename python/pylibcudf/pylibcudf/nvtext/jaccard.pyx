@@ -1,4 +1,5 @@
-# Copyright (c) 2023-2024, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
@@ -9,10 +10,19 @@ from pylibcudf.libcudf.nvtext.jaccard cimport (
     jaccard_index as cpp_jaccard_index,
 )
 from pylibcudf.libcudf.types cimport size_type
+from pylibcudf.utils cimport _get_stream, _get_memory_resource
+from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
+from rmm.pylibrmm.stream cimport Stream
 
 __all__ = ["jaccard_index"]
 
-cpdef Column jaccard_index(Column input1, Column input2, size_type width):
+cpdef Column jaccard_index(
+    Column input1,
+    Column input2,
+    size_type width,
+    Stream stream=None,
+    DeviceMemoryResource mr=None,
+):
     """
     Returns the Jaccard similarity between individual rows in two strings columns.
 
@@ -26,6 +36,10 @@ cpdef Column jaccard_index(Column input1, Column input2, size_type width):
         Input strings column
     width : size_type
         The ngram number to generate
+    stream : Stream | None
+        CUDA stream on which to perform the operation.
+    mr : DeviceMemoryResource | None
+        Device memory resource used to allocate the returned column's device memory.
 
     Returns
     -------
@@ -35,12 +49,16 @@ cpdef Column jaccard_index(Column input1, Column input2, size_type width):
     cdef column_view c_input1 = input1.view()
     cdef column_view c_input2 = input2.view()
     cdef unique_ptr[column] c_result
+    stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_jaccard_index(
             c_input1,
             c_input2,
-            width
+            width,
+            stream.view(),
+            mr.get_mr()
         )
 
-    return Column.from_libcudf(move(c_result))
+    return Column.from_libcudf(move(c_result), stream, mr)

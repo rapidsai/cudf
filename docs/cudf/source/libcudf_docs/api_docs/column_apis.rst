@@ -16,6 +16,7 @@ Column APIs
    column_merge
    column_join
    column_quantiles
+   column_reduction
    column_aggregation
    column_transformation
    column_reshape

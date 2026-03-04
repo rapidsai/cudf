@@ -1,31 +1,22 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "random_column_generator.hpp"
+
+#include <benchmarks/common/nvtx_ranges.hpp>
 
 #include <cudf_test/column_wrapper.hpp>
 
 #include <cudf/binaryop.hpp>
 #include <cudf/detail/iterator.cuh>
-#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/filling.hpp>
 #include <cudf/strings/detail/strings_children.cuh>
 
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/std/tuple>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/random.h>
 #include <thrust/transform.h>
@@ -44,10 +35,10 @@ struct random_string_generator {
 
   CUDF_HOST_DEVICE random_string_generator(char* c) : chars(c), char_dist(44, 122) {}
 
-  __device__ void operator()(thrust::tuple<int64_t, int64_t> str_begin_end)
+  __device__ void operator()(cuda::std::tuple<int64_t, int64_t> str_begin_end)
   {
-    auto begin = thrust::get<0>(str_begin_end);
-    auto end   = thrust::get<1>(str_begin_end);
+    auto begin = cuda::std::get<0>(str_begin_end);
+    auto end   = cuda::std::get<1>(str_begin_end);
     engine.discard(begin);
     for (auto i = begin; i < end; ++i) {
       auto ch = char_dist(engine);
@@ -91,7 +82,7 @@ std::unique_ptr<cudf::column> generate_random_string_column(cudf::size_type lowe
                                                             rmm::cuda_stream_view stream,
                                                             rmm::device_async_resource_ref mr)
 {
-  CUDF_FUNC_RANGE();
+  CUDF_BENCHMARK_RANGE();
   auto offsets_begin = cudf::detail::make_counting_transform_iterator(
     0, random_number_generator<cudf::size_type>(lower, upper));
   auto [offsets_column, computed_bytes] = cudf::strings::detail::make_offsets_child_column(
@@ -103,8 +94,8 @@ std::unique_ptr<cudf::column> generate_random_string_column(cudf::size_type lowe
 
   // We generate the strings in parallel into the `chars` vector using the
   // offsets vector generated above.
-  thrust::for_each_n(rmm::exec_policy(stream),
-                     thrust::make_zip_iterator(offset_itr, offset_itr + 1),
+  thrust::for_each_n(rmm::exec_policy_nosync(stream),
+                     thrust::make_zip_iterator(cuda::std::make_tuple(offset_itr, offset_itr + 1)),
                      num_rows,
                      random_string_generator(chars.data()));
 
@@ -119,12 +110,12 @@ std::unique_ptr<cudf::column> generate_random_numeric_column(T lower,
                                                              rmm::cuda_stream_view stream,
                                                              rmm::device_async_resource_ref mr)
 {
-  CUDF_FUNC_RANGE();
+  CUDF_BENCHMARK_RANGE();
   auto col = cudf::make_numeric_column(
     cudf::data_type{cudf::type_to_id<T>()}, num_rows, cudf::mask_state::UNALLOCATED, stream, mr);
   cudf::size_type begin = 0;
   cudf::size_type end   = num_rows;
-  thrust::transform(rmm::exec_policy(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream),
                     thrust::make_counting_iterator(begin),
                     thrust::make_counting_iterator(end),
                     col->mutable_view().begin<T>(),
@@ -165,7 +156,7 @@ std::unique_ptr<cudf::column> generate_primary_key_column(cudf::scalar const& st
                                                           rmm::cuda_stream_view stream,
                                                           rmm::device_async_resource_ref mr)
 {
-  CUDF_FUNC_RANGE();
+  CUDF_BENCHMARK_RANGE();
   return cudf::sequence(num_rows, start, stream, mr);
 }
 
@@ -174,7 +165,7 @@ std::unique_ptr<cudf::column> generate_repeat_string_column(std::string const& v
                                                             rmm::cuda_stream_view stream,
                                                             rmm::device_async_resource_ref mr)
 {
-  CUDF_FUNC_RANGE();
+  CUDF_BENCHMARK_RANGE();
   auto const scalar = cudf::string_scalar(value);
   return cudf::make_column_from_scalar(scalar, num_rows, stream, mr);
 }
@@ -185,7 +176,7 @@ std::unique_ptr<cudf::column> generate_random_string_column_from_set(
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
-  CUDF_FUNC_RANGE();
+  CUDF_BENCHMARK_RANGE();
   // Build a gather map of random strings to choose from
   // The size of the string sets always fits within 16-bit integers
   auto const indices =
@@ -211,7 +202,7 @@ std::unique_ptr<cudf::column> generate_repeat_sequence_column(T seq_length,
                                                               rmm::cuda_stream_view stream,
                                                               rmm::device_async_resource_ref mr)
 {
-  CUDF_FUNC_RANGE();
+  CUDF_BENCHMARK_RANGE();
   auto pkey =
     generate_primary_key_column(cudf::numeric_scalar<cudf::size_type>(0), num_rows, stream, mr);
   auto repeat_seq_zero_indexed = cudf::binary_operation(pkey->view(),

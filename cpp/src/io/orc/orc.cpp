@@ -1,25 +1,15 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "orc.hpp"
 
-#include "io/comp/io_uncomp.hpp"
 #include "orc_field_reader.hpp"
 #include "orc_field_writer.hpp"
 
+#include <cudf/io/detail/codec.hpp>
+#include <cudf/io/orc.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 
 #include <thrust/tabulate.h>
@@ -43,7 +33,7 @@ namespace {
 uint32_t protobuf_reader::read_field_size(uint8_t const* end)
 {
   auto const size = get<uint32_t>();
-  CUDF_EXPECTS(size <= static_cast<uint32_t>(end - m_cur), "Protobuf parsing out of bounds");
+  CUDF_EXPECTS(std::cmp_less_equal(size, end - m_cur), "Protobuf parsing out of bounds");
   return size;
 }
 
@@ -418,10 +408,10 @@ orc_decompressor::orc_decompressor(CompressionKind kind, uint64_t block_size)
       break;
     default: CUDF_FAIL("Invalid compression type");
   }
+  CUDF_EXPECTS(is_supported_read_orc(_compression), "Unsupported compression type for ORC reader");
 }
 
-host_span<uint8_t const> orc_decompressor::decompress_blocks(host_span<uint8_t const> src,
-                                                             rmm::cuda_stream_view stream)
+host_span<uint8_t const> orc_decompressor::decompress_blocks(host_span<uint8_t const> src)
 {
   // If uncompressed, just pass-through the input
   if (src.empty() or _compression == compression_type::NONE) { return src; }
@@ -462,7 +452,7 @@ host_span<uint8_t const> orc_decompressor::decompress_blocks(host_span<uint8_t c
     } else {
       // Compressed block
       dst_length += cudf::io::detail::decompress(
-        _compression, src.subspan(i, block_len), {m_buf.data() + dst_length, m_blockSize}, stream);
+        _compression, src.subspan(i, block_len), {m_buf.data() + dst_length, m_blockSize});
     }
     i += block_len;
   }
@@ -489,14 +479,14 @@ metadata::metadata(datasource* const src, rmm::cuda_stream_view stream) : source
 
   // Read compressed filefooter section
   buffer             = source->host_read(len - ps_length - 1 - ps.footerLength, ps.footerLength);
-  auto const ff_data = decompressor->decompress_blocks({buffer->data(), buffer->size()}, stream);
+  auto const ff_data = decompressor->decompress_blocks({buffer->data(), buffer->size()});
   protobuf_reader(ff_data.data(), ff_data.size()).read(ff);
   CUDF_EXPECTS(get_num_columns() > 0, "No columns found");
 
   // Read compressed metadata section
   buffer =
     source->host_read(len - ps_length - 1 - ps.footerLength - ps.metadataLength, ps.metadataLength);
-  auto const md_data = decompressor->decompress_blocks({buffer->data(), buffer->size()}, stream);
+  auto const md_data = decompressor->decompress_blocks({buffer->data(), buffer->size()});
   protobuf_reader(md_data.data(), md_data.size()).read(md);
 
   init_parent_descriptors();
