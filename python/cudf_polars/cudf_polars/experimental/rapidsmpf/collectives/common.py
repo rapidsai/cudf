@@ -151,7 +151,7 @@ def reserve_op_id() -> Iterator[int]:
     This function and the ID it yields must only be used **outside** of a
     ``run_actor_graph`` call. It is intended for SPMD mode, where operations
     such as gathering results across ranks are performed directly rather than
-    through the actor graph.
+    through the actor graph. The contained block _must_ wait for completion of the collective.
 
     Yields
     ------

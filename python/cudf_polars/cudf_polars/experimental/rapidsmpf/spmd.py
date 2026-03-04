@@ -91,10 +91,8 @@ def evaluate_pipeline_spmd_mode(
     context = config_options.executor.spmd.context
     py_executor = config_options.executor.spmd.py_executor
 
-    # Create the IR execution context
     ir_context = IRExecutionContext(get_cuda_stream=context.get_stream_from_pool)
 
-    # Generate network nodes
     metadata_collector: list[ChannelMetadata] | None = [] if collect_metadata else None
 
     nodes, output = generate_network(
@@ -108,7 +106,6 @@ def evaluate_pipeline_spmd_mode(
         metadata_collector=metadata_collector,
     )
 
-    # Run the network
     run_actor_network(actors=nodes, py_executor=py_executor)
 
     # Extract/return the concatenated result.
@@ -180,10 +177,8 @@ def allgather_polars_dataframe(
     stream = ctx.get_stream_from_pool()
     col_names = local_df.columns
 
-    # pl.DataFrame -> pylibcudf Table (via Arrow, GPU transfer)
     plc_table = plc.Table.from_arrow(local_df.to_arrow())
 
-    # Serialize for network transport
     packed_data = PackedData.from_cudf_packed_columns(
         pack(plc_table, stream),
         stream,
