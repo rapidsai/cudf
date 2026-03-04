@@ -68,7 +68,7 @@ std::reference_wrapper<ast::expression const> stats_columns_collector::visit(
   }
 
   // Binary operation
-  auto const [op, lhs_kind, rhs_kind, col_ref, literal] = extract_binary_operands(expr);
+  auto const [op, lhs_kind, rhs_kind, col_ref, _] = extract_binary_operands(expr);
 
   if (lhs_kind == operand_kind::COLUMN_REF and rhs_kind == operand_kind::LITERAL) {
     col_ref->accept(*this);
@@ -153,7 +153,7 @@ std::reference_wrapper<ast::expression const> stats_expression_converter::visit(
         if (child_operation != nullptr) {
           auto const child_op = child_operation->get_operator();
 
-          // If the child operator is IS_NULL, we can safely NULL it without any modifications
+          // If the child operator is IS_NULL, we can safely negate it without any modifications
           if (child_op == ast_operator::IS_NULL) {
             auto new_operands = visit_operands(expr.get_operands());
             if (&new_operands.front().get() == _always_true.get()) {

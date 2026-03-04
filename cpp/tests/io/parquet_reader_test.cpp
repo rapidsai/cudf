@@ -1402,7 +1402,7 @@ TEST_F(ParquetReaderTest, FilterSimple)
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, *written_table);
   cudf::io::write_parquet(args);
 
-  // Filtering AST - table[0] < RAND_MAX/2
+  // Filtering AST -  RAND_MAX/2 > table[0]
   auto literal_value = cudf::numeric_scalar<decltype(RAND_MAX)>(RAND_MAX / 2);
   auto literal       = cudf::ast::literal(literal_value);
   auto col_ref_0     = cudf::ast::column_reference(0);

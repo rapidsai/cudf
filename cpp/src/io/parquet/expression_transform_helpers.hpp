@@ -78,9 +78,11 @@ enum class operator_transform : uint8_t {
  *
  * INVERT swaps operand order (e.g. LESS => GREATER) for normalizing `lit op col` to `col op lit`.
  * NEGATE returns the logical complement (e.g. LESS => GREATER_EQUAL) for handling NOT(col op lit).
- *
- * Returns std::nullopt if the operator cannot be transformed. For INVERT mode, commutative
- * operators (EQUAL, NOT_EQUAL) are returned unchanged.
+
+ * @param op Operator to transform
+ * @param mode Transformation mode
+ * @return Transformed operator or std::nullopt. For INVERT mode, commutative and
+ * untransformable operators are returned as is (no std::nullopt)
  */
 [[nodiscard]] std::optional<ast::ast_operator> transform_operator(ast::ast_operator op,
                                                                   operator_transform mode);

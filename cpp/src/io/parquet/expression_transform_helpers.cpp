@@ -62,7 +62,7 @@ std::optional<ast::ast_operator> transform_operator(ast::ast_operator op, operat
     case ast::ast_operator::NOT_EQUAL:
       return mode == operator_transform::INVERT ? ast::ast_operator::NOT_EQUAL
                                                 : ast::ast_operator::EQUAL;
-    default: return std::nullopt;
+    default: return mode == operator_transform::INVERT ? std::make_optional(op) : std::nullopt;
   }
 }
 
@@ -90,7 +90,7 @@ binary_operands extract_binary_operands(ast::operation const& expr)
 
   // Normalize `lit op col` to `col op lit` by inverting the operator
   if (lhs_kind == operand_kind::LITERAL and rhs_kind == operand_kind::COLUMN_REF) {
-    return {.op       = transform_operator(op, operator_transform::INVERT).value_or(op),
+    return {.op       = transform_operator(op, operator_transform::INVERT).value(),
             .lhs_type = rhs_kind,
             .rhs_type = lhs_kind,
             .col_ref  = dynamic_cast<ast::column_reference const*>(&rhs),
