@@ -277,9 +277,9 @@ class CategoricalColumn(ColumnBase):
 
     def element_indexing(self, index: int) -> ScalarLike:
         val = super().element_indexing(index)
-        if val is self._PANDAS_NA_VALUE:
-            return val
-        return self._decode(val.as_py())
+        if isinstance(val, int):
+            return self._decode(val)
+        return val
 
     @property
     def __cuda_array_interface__(self) -> Mapping[str, Any]:
@@ -325,8 +325,7 @@ class CategoricalColumn(ColumnBase):
         return pd.Index(data)
 
     def to_arrow(self) -> pa.Array:
-        """Convert to PyArrow Array."""
-        # pyarrow.Table doesn't support unsigned codes
+        # match pandas which uses signed codes
         signed_type = (
             min_signed_type(self.codes.max())
             if self.size > 0

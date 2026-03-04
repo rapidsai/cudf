@@ -14,14 +14,17 @@ import pyarrow as pa
 import pylibcudf as plc
 
 import cudf
-from cudf.core.column.column import ColumnBase, as_column, column_empty
+from cudf.core.column.column import (
+    ColumnBase,
+    PylibcudfFunction,
+    as_column,
+    column_empty,
+    int32_same_kind_policy,
+)
 from cudf.core.dtypes import ListDtype
 from cudf.core.missing import NA
 from cudf.utils.dtypes import get_dtype_of_same_kind
-from cudf.utils.scalar import (
-    maybe_nested_pa_scalar_to_py,
-    pa_scalar_to_plc_scalar,
-)
+from cudf.utils.scalar import pa_scalar_to_plc_scalar
 from cudf.utils.utils import is_na_like
 
 if TYPE_CHECKING:
@@ -50,15 +53,6 @@ class ListColumn(ColumnBase):
         """
         # TODO: handle if self.has_nulls(): case
         return self
-
-    def element_indexing(self, index: int) -> list:
-        result = super().element_indexing(index)
-        if isinstance(result, pa.Scalar):
-            py_element = maybe_nested_pa_scalar_to_py(result)
-            return ListDtype.from_list_dtype(
-                self.dtype
-            )._recursively_replace_fields(py_element)
-        return result
 
     def _cast_setitem_value(self, value: Any) -> plc.Scalar:
         if isinstance(value, list) or value is None:
@@ -98,11 +92,6 @@ class ListColumn(ColumnBase):
         raise NotImplementedError(
             "Lists are not yet supported via `__cuda_array_interface__`"
         )
-
-    def copy(self, deep: bool = True) -> Self:
-        # Since list columns are immutable, both deep and shallow copies share
-        # the underlying device data and mask.
-        return super().copy(deep=False)
 
     def leaves(self) -> ColumnBase:
         if isinstance(self.elements, ListColumn):
@@ -175,7 +164,9 @@ class ListColumn(ColumnBase):
         with self.access(mode="read", scope="internal"):
             plc_column = plc.strings.convert.convert_lists.format_list_column(
                 lc.plc_column,
-                pa_scalar_to_plc_scalar(pa.scalar("None")),
+                plc.Scalar.from_py(
+                    "None", dtype=plc.DataType(plc.TypeId.STRING)
+                ),
                 self._string_separators,
             )
             return cast(
@@ -254,11 +245,10 @@ class ListColumn(ColumnBase):
             return pd.Index(self.to_arrow().tolist(), dtype="object")
 
     def count_elements(self) -> ColumnBase:
-        with self.access(mode="read", scope="internal"):
-            return ColumnBase.create(
-                plc.lists.count_elements(self.plc_column),
-                get_dtype_of_same_kind(self.dtype, np.dtype(np.int32)),
-            )
+        return PylibcudfFunction(
+            plc.lists.count_elements,
+            int32_same_kind_policy,
+        ).execute_with_args(self)
 
     def distinct(self, nulls_equal: bool, nans_all_equal: bool) -> ColumnBase:
         with self.access(mode="read", scope="internal"):
@@ -396,16 +386,20 @@ class ListColumn(ColumnBase):
     ) -> StringColumn:
         with self.access(mode="read", scope="internal"):
             if isinstance(separator, str):
-                sep: plc.Scalar | plc.Column = pa_scalar_to_plc_scalar(
-                    pa.scalar(separator)
+                sep: plc.Scalar | plc.Column = plc.Scalar.from_py(
+                    separator, dtype=plc.DataType(plc.TypeId.STRING)
                 )
             else:
                 sep = separator.plc_column
             plc_column = plc.strings.combine.join_list_elements(
                 self.plc_column,
                 sep,
-                pa_scalar_to_plc_scalar(pa.scalar(sep_na_rep)),
-                pa_scalar_to_plc_scalar(pa.scalar(string_na_rep)),
+                plc.Scalar.from_py(
+                    sep_na_rep, dtype=plc.DataType(plc.TypeId.STRING)
+                ),
+                plc.Scalar.from_py(
+                    string_na_rep, dtype=plc.DataType(plc.TypeId.STRING)
+                ),
                 plc.strings.combine.SeparatorOnNulls.YES,
                 plc.strings.combine.OutputIfEmptyList.NULL_ELEMENT,
             )
