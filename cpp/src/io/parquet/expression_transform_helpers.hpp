@@ -103,7 +103,7 @@ enum class operator_transform : uint8_t {
  * @return Transformed expression or _always_true if the operation cannot be evaluated
  */
 template <typename VisitorType, typename VisitOperandsFn>
-[[nodiscard]] std::reference_wrapper<ast::expression const> apply_unary_membership_transform(
+[[nodiscard]] inline std::reference_wrapper<ast::expression const> apply_unary_membership_transform(
   ast::operation const& expr,
   ast::tree& expr_tree,
   std::reference_wrapper<ast::expression const> const always_true,
