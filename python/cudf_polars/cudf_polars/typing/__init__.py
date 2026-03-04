@@ -6,7 +6,16 @@
 from __future__ import annotations
 
 from collections.abc import Hashable, MutableMapping
-from typing import TYPE_CHECKING, Any, Literal, Protocol, TypeVar, TypedDict, Union
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Literal,
+    NewType,
+    Protocol,
+    TypeVar,
+    TypedDict,
+    Union,
+)
 
 from polars.polars import _expr_nodes as pl_expr, _ir_nodes as pl_ir
 
@@ -22,6 +31,7 @@ if TYPE_CHECKING:
     from cudf_polars.dsl import expr, ir, nodebase
 
 __all__: list[str] = [
+    "ClosedInterval",
     "ColumnHeader",
     "ColumnOptions",
     "DataFrameHeader",
@@ -77,6 +87,10 @@ Schema: TypeAlias = dict[str, plc.DataType]
 Slice: TypeAlias = tuple[int, int | None]
 
 CSECache: TypeAlias = MutableMapping[int, tuple["DataFrame", int]]
+
+ClosedInterval: TypeAlias = Literal["left", "right", "both", "none"]
+
+Duration = NewType("Duration", tuple[int, int, int, int, bool, bool])
 
 
 class NodeTraverser(Protocol):

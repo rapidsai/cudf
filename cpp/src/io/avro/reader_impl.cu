@@ -279,7 +279,7 @@ rmm::device_buffer decompress_data(datasource& source,
                      return device_span<uint8_t const>{
                        static_cast<uint8_t const*>(comp_block_data.data()) +
                          (block.offset - meta.block_list[0].offset),
-                       block.size};
+                       block.size - sizeof(uint32_t)};  // exclude the CRC32 checksum
                    });
     compressed_blocks.host_to_device_async(stream);
 

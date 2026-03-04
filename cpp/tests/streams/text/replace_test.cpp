@@ -55,7 +55,7 @@ TEST_F(TextReplaceTest, NormalizeSpaces)
 TEST_F(TextReplaceTest, NormalizeCharacters)
 {
   auto input = cudf::test::strings_column_wrapper({"abc£def", "éè â îô\taeio", "\tĂĆĖÑ  Ü"});
-  auto sv = cudf::strings_column_view(input);
-  auto cn = nvtext::create_character_normalizer(false, sv, cudf::test::get_default_stream());
+  auto sv    = cudf::strings_column_view(input);
+  auto cn    = nvtext::create_character_normalizer(false, sv, cudf::test::get_default_stream());
   nvtext::normalize_characters(sv, *cn, cudf::test::get_default_stream());
 }

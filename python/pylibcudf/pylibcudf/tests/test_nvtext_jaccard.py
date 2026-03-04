@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
 import pyarrow as pa
 import pytest
@@ -25,14 +25,14 @@ def test_jaccard_index(input_data, width):
         return len(x & y) / len(x | y)
 
     input1, input2 = input_data
-    result = plc.nvtext.jaccard.jaccard_index(
-        plc.interop.from_arrow(input1), plc.interop.from_arrow(input2), width
+    got = plc.nvtext.jaccard.jaccard_index(
+        plc.Column(input1), plc.Column(input2), width
     )
-    expected = pa.array(
+    expect = pa.array(
         [
             jaccard_index(s1.as_py(), s2.as_py(), width)
             for s1, s2 in zip(input1, input2)
         ],
         type=pa.float32(),
     )
-    assert_column_eq(result, expected)
+    assert_column_eq(expect, got)

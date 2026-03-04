@@ -31,6 +31,10 @@ if TYPE_CHECKING:
     from collections.abc import Hashable
 
     from cudf._typing import DtypeObj
+    from cudf.core.dataframe import DataFrame
+    from cudf.core.index import Index
+    from cudf.core.multiindex import MultiIndex
+    from cudf.core.series import Series
 
 _AXIS_MAP = {0: 0, 1: 1, "index": 0, "columns": 1}
 
@@ -114,7 +118,7 @@ def _get_combined_index(indexes, intersect: bool = False, sort=None):
 
 
 def _normalize_series_and_dataframe(
-    objs: list[cudf.Series | cudf.DataFrame], axis: Literal[0, 1]
+    objs: list[Series | DataFrame], axis: Literal[0, 1]
 ) -> None:
     """Convert any cudf.Series objects in objs to DataFrames in place."""
     # Default to naming series by a numerical id if they are not named.
@@ -307,7 +311,7 @@ def concat(
         objs = {k: obj for k, obj in objs.items() if obj is not None}
         keys_objs = list(objs)
         objs = list(objs.values())
-        if any(isinstance(o, cudf.BaseIndex) for o in objs):
+        if any(isinstance(o, cudf.Index) for o in objs):
             raise TypeError(
                 "cannot concatenate a dictionary containing indices"
             )
@@ -324,7 +328,7 @@ def concat(
     allowed_typs = {
         cudf.Series,
         cudf.DataFrame,
-        cudf.BaseIndex,
+        cudf.Index,
     }
     if not all(isinstance(o, tuple(allowed_typs)) for o in objs):
         raise TypeError(
@@ -332,8 +336,8 @@ def concat(
             f"{allowed_typs}, instead received {[type(o) for o in objs]}"
         )
 
-    if any(isinstance(o, cudf.BaseIndex) for o in objs):
-        if not all(isinstance(o, cudf.BaseIndex) for o in objs):
+    if any(isinstance(o, cudf.Index) for o in objs):
+        if not all(isinstance(o, cudf.Index) for o in objs):
             raise TypeError(
                 "when concatenating indices you must provide ONLY indices"
             )
@@ -545,14 +549,14 @@ def concat(
 
 
 def melt(
-    frame: cudf.DataFrame,
+    frame: DataFrame,
     id_vars=None,
     value_vars=None,
     var_name=None,
     value_name: Hashable = "value",
     col_level=None,
     ignore_index: bool = True,
-) -> cudf.DataFrame:
+) -> DataFrame:
     """Unpivots a DataFrame from wide format to long format,
     optionally leaving identifier variables set.
 
@@ -933,7 +937,9 @@ def _merge_sorted(
     if len(objs) < 1:
         raise ValueError("objs must be non-empty")
 
-    if not all(isinstance(table, cudf.core.frame.Frame) for table in objs):
+    if not all(
+        isinstance(table, (cudf.DataFrame, cudf.Series)) for table in objs
+    ):
         raise TypeError("Elements of objs must be Frame-like")
 
     if len(objs) == 1:
@@ -1003,9 +1009,9 @@ def _merge_sorted(
 
 def _pivot(
     col_accessor: ColumnAccessor,
-    index: cudf.Index | cudf.MultiIndex,
-    columns: cudf.Index | cudf.MultiIndex,
-) -> cudf.DataFrame:
+    index: Index | MultiIndex,
+    columns: Index | MultiIndex,
+) -> DataFrame:
     """
     Reorganize the values of the DataFrame according to the given
     index and columns.
@@ -1059,8 +1065,8 @@ def _pivot(
 
 
 def pivot(
-    data: cudf.DataFrame, columns=None, index=no_default, values=no_default
-) -> cudf.DataFrame:
+    data: DataFrame, columns=None, index=no_default, values=no_default
+) -> DataFrame:
     """
     Return reshaped DataFrame organized by the given index and column values.
 

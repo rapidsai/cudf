@@ -205,10 +205,10 @@ def test_rolling_windows(
     if len(groups) == 0:
         keys = plc.Table([])
     else:
-        keys = plc.Table([plc.interop.from_arrow(pa.array(groups))])
+        keys = plc.Table([plc.Column(pa.array(groups))])
 
-    orderby = plc.interop.from_arrow(pa.array(orderby))
-    values = plc.interop.from_arrow(pa.array(values))
+    orderby = plc.Column(pa.array(orderby))
+    values = plc.Column(pa.array(values))
 
     request = plc.rolling.RollingRequest(
         values, 1, plc.aggregation.collect_list()
@@ -222,4 +222,4 @@ def test_rolling_windows(
         following_endpoint,
         [request],
     ).columns()
-    assert_column_eq(got, expect)
+    assert_column_eq(expect, got)

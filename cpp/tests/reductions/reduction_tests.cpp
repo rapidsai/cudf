@@ -941,11 +941,10 @@ TEST_F(ReductionDtypeTest, all_null_output)
 {
   auto sum_agg = cudf::make_sum_aggregation<reduce_aggregation>();
 
-  auto const col = cudf::test::fixed_point_column_wrapper<int32_t>{
-    {0, 0, 0},
-    {false, false, false},
-    numeric::scale_type{
-      -2}}.release();
+  auto const col =
+    cudf::test::fixed_point_column_wrapper<int32_t>{
+      {0, 0, 0}, {false, false, false}, numeric::scale_type{-2}}
+      .release();
 
   std::unique_ptr<cudf::scalar> result = cudf::reduce(*col, *sum_agg, col->type());
   EXPECT_EQ(result->is_valid(), false);

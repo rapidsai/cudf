@@ -38,10 +38,9 @@ static void bench_like(nvbench::state& state)
 
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
   // gather some throughput statistics as well
-  auto chars_size = input.chars_size(cudf::get_default_stream());
-  state.add_element_count(chars_size, "chars_size");           // number of bytes;
-  state.add_global_memory_reads<nvbench::int8_t>(chars_size);  // all bytes are read;
-  state.add_global_memory_writes<nvbench::int8_t>(n_rows);     // writes are BOOL8
+  auto const data_size = col->alloc_size();
+  state.add_global_memory_reads<nvbench::int8_t>(data_size);  // all bytes are read;
+  state.add_global_memory_writes<nvbench::int8_t>(n_rows);    // writes are BOOL8
 
   state.exec(nvbench::exec_tag::sync,
              [&](nvbench::launch& launch) { auto result = cudf::strings::like(input, pattern); });

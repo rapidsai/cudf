@@ -19,6 +19,7 @@
 #include "types.hpp"
 
 #include <cudf/detail/utilities/visitor_overload.hpp>
+#include <cudf/io/detail/utils.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
@@ -1335,6 +1336,27 @@ class json_writer_options_builder {
  */
 void write_json(json_writer_options const& options,
                 rmm::cuda_stream_view stream = cudf::get_default_stream());
+
+/// @cond
+struct is_supported_json_write_type_fn {
+  template <typename T>
+  constexpr bool operator()() const
+  {
+    return cudf::io::detail::is_convertible_to_string_column<T>();
+  }
+};
+/// @endcond
+
+/**
+ * @brief Checks if a cudf::data_type is supported for JSON writing.
+ *
+ * @param type The data_type to check.
+ * @return true if the type is supported for JSON writing, false otherwise.
+ */
+constexpr bool is_supported_write_json(data_type type)
+{
+  return cudf::type_dispatcher(type, is_supported_json_write_type_fn{});
+}
 
 /** @} */  // end of group
 }  // namespace io

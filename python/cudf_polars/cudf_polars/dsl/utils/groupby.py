@@ -80,8 +80,8 @@ def rewrite_groupby(
             ir.Select(schema, keys, True, inp),  # noqa: FBT003
         )
 
-    inp, aggs, group_schema, apply_post_evaluation = apply_pre_evaluation(
-        schema, inp, keys, aggs, unique_names(schema.keys())
+    aggs, group_schema, apply_post_evaluation = apply_pre_evaluation(
+        schema, keys, aggs, unique_names(schema.keys())
     )
     # TODO: use Distinct when the partitioned executor supports it if
     # the requested aggregations are empty

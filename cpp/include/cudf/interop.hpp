@@ -283,6 +283,21 @@ class arrow_column {
                rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
   /**
+   * @brief Construct a new arrow column object
+   *
+   * The stream will be released after the column is created, so it is no longer
+   * suitable for use afterwards. This is done for consistency with other constructors of
+   * arrow_column even though the source data is always host data.
+   *
+   * @param input ArrowArrayStream data for the column
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource used for any allocations during conversion
+   */
+  arrow_column(ArrowArrayStream&& input,
+               rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+               rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
+  /**
    * @brief Convert the column to an ArrowSchema
    *
    * The resulting schema is a deep copy of the arrow_column's schema and is
@@ -741,6 +756,24 @@ std::unique_ptr<table> from_arrow_host(
  * @return cudf table generated from the given Arrow data
  */
 std::unique_ptr<table> from_arrow_stream(
+  ArrowArrayStream* input,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
+/**
+ * @brief Create `cudf::column` from given ArrowArrayStream input
+ *
+ * @throws std::invalid_argument if input is NULL
+ *
+ * The conversion WILL release the input ArrayArrayStream and its constituent
+ * arrays or schema since Arrow streams are not suitable for multiple reads.
+ *
+ * @param input `ArrowArrayStream` pointer to object that will produce ArrowArray data
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to perform cuda allocation
+ * @return cudf column generated from the given Arrow data
+ */
+std::unique_ptr<column> from_arrow_stream_column(
   ArrowArrayStream* input,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());

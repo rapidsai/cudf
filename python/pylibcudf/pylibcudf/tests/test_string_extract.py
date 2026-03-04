@@ -11,7 +11,7 @@ def test_extract():
     pa_pattern = "(?P<letter>[ab])(?P<digit>\\d)"
     arr = pa.array(["a1", "b2", "c3"])
     plc_result = plc.strings.extract.extract(
-        plc.interop.from_arrow(arr),
+        plc.Column(arr),
         plc.strings.regex_program.RegexProgram.create(
             pattern, plc.strings.regex_flags.RegexFlags.DEFAULT
         ),
@@ -27,7 +27,7 @@ def test_extract_all_record():
     pattern = "([ab])(\\d)"
     arr = pa.array(["a1", "b2", "c3"])
     plc_result = plc.strings.extract.extract_all_record(
-        plc.interop.from_arrow(arr),
+        plc.Column(arr),
         plc.strings.regex_program.RegexProgram.create(
             pattern, plc.strings.regex_flags.RegexFlags.DEFAULT
         ),

@@ -51,7 +51,6 @@ from cudf.core.dtypes import (
 )
 from cudf.core.groupby import Grouper, NamedAgg
 from cudf.core.index import (
-    BaseIndex,
     CategoricalIndex,
     DatetimeIndex,
     Index,
@@ -107,7 +106,6 @@ del rmm
 
 __all__ = [
     "NA",
-    "BaseIndex",
     "CategoricalDtype",
     "CategoricalIndex",
     "DataFrame",

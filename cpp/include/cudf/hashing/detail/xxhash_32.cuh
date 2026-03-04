@@ -73,30 +73,30 @@ XXHash_32<double>::result_type __device__ inline XXHash_32<double>::operator()(
 }
 
 template <>
-XXHash_32<cudf::string_view>::result_type
-  __device__ inline XXHash_32<cudf::string_view>::operator()(cudf::string_view const& key) const
+XXHash_32<cudf::string_view>::result_type __device__ inline XXHash_32<cudf::string_view>::
+operator()(cudf::string_view const& key) const
 {
   return this->compute_bytes(reinterpret_cast<cuda::std::byte const*>(key.data()),
                              key.size_bytes());
 }
 
 template <>
-XXHash_32<numeric::decimal32>::result_type
-  __device__ inline XXHash_32<numeric::decimal32>::operator()(numeric::decimal32 const& key) const
+XXHash_32<numeric::decimal32>::result_type __device__ inline XXHash_32<numeric::decimal32>::
+operator()(numeric::decimal32 const& key) const
 {
   return this->compute(key.value());
 }
 
 template <>
-XXHash_32<numeric::decimal64>::result_type
-  __device__ inline XXHash_32<numeric::decimal64>::operator()(numeric::decimal64 const& key) const
+XXHash_32<numeric::decimal64>::result_type __device__ inline XXHash_32<numeric::decimal64>::
+operator()(numeric::decimal64 const& key) const
 {
   return this->compute(key.value());
 }
 
 template <>
-XXHash_32<numeric::decimal128>::result_type
-  __device__ inline XXHash_32<numeric::decimal128>::operator()(numeric::decimal128 const& key) const
+XXHash_32<numeric::decimal128>::result_type __device__ inline XXHash_32<numeric::decimal128>::
+operator()(numeric::decimal128 const& key) const
 {
   return this->compute(key.value());
 }
@@ -109,8 +109,8 @@ XXHash_32<cudf::list_view>::result_type __device__ inline XXHash_32<cudf::list_v
 }
 
 template <>
-XXHash_32<cudf::struct_view>::result_type
-  __device__ inline XXHash_32<cudf::struct_view>::operator()(cudf::struct_view const& key) const
+XXHash_32<cudf::struct_view>::result_type __device__ inline XXHash_32<cudf::struct_view>::
+operator()(cudf::struct_view const& key) const
 {
   CUDF_UNREACHABLE("Direct hashing of struct_view is not supported");
 }

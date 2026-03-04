@@ -48,9 +48,9 @@ auto constexpr bucket_size =
 auto constexpr occupancy_factor = 1.43f;  ///< cuCollections suggests using a hash map of size
                                           ///< N * (1/0.7) = 1.43 to target a 70% occupancy factor.
 using storage_type     = cuco::bucket_storage<slot_type,
-                                          bucket_size,
-                                          cuco::extent<std::size_t>,
-                                          cudf::detail::cuco_allocator<char>>;
+                                              bucket_size,
+                                              cuco::extent<std::size_t>,
+                                              cudf::detail::cuco_allocator<char>>;
 using storage_ref_type = typename storage_type::ref_type;
 using bucket_type      = typename storage_type::bucket_type;
 using slot_type        = cuco::pair<key_type, mapped_type>;

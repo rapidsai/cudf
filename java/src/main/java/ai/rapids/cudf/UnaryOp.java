@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -39,8 +39,9 @@ public enum UnaryOp {
   FLOOR(17),
   ABS(18),
   RINT(19),
-  BIT_INVERT(20),
-  NOT(21);
+  BIT_COUNT(20),
+  BIT_INVERT(21),
+  NOT(22);
 
   private static final UnaryOp[] OPS = UnaryOp.values();
   final int nativeId;

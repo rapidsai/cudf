@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -44,9 +44,9 @@ static void bench_factory(nvbench::state& state)
   auto d_strings = cudf::strings::detail::create_string_vector_from_column(sv, stream, mr);
 
   state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
-  auto chars_size = sv.chars_size(stream);
-  state.add_global_memory_reads<nvbench::int8_t>(chars_size);
-  state.add_global_memory_writes<nvbench::int8_t>(chars_size);
+  auto const data_size = column->alloc_size();
+  state.add_global_memory_reads<nvbench::int8_t>(data_size);
+  state.add_global_memory_writes<nvbench::int8_t>(data_size);
 
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
     cudf::make_strings_column(d_strings, cudf::string_view{nullptr, 0});

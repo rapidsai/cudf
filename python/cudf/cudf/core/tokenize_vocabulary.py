@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pylibcudf as plc
 
-import cudf
+from cudf.core.series import Series
 
 
 class TokenizeVocabulary:
@@ -17,14 +17,14 @@ class TokenizeVocabulary:
         Strings column of vocabulary terms
     """
 
-    def __init__(self, vocabulary: cudf.Series) -> None:
+    def __init__(self, vocabulary: Series) -> None:
         self.vocabulary = plc.nvtext.tokenize.TokenizeVocabulary(
             vocabulary._column.to_pylibcudf(mode="read")
         )
 
     def tokenize(
         self, text, delimiter: str = "", default_id: int = -1
-    ) -> cudf.Series:
+    ) -> Series:
         """
         Parameters
         ----------
@@ -46,4 +46,4 @@ class TokenizeVocabulary:
             self.vocabulary, delimiter, default_id
         )
 
-        return cudf.Series._from_column(result)
+        return Series._from_column(result)

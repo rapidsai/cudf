@@ -68,7 +68,7 @@ struct simple_comparator {
       bool lhs_null{d_column.is_null(lhs)};
       bool rhs_null{d_column.is_null(rhs)};
       if (lhs_null || rhs_null) {
-        if (!ascending) thrust::swap(lhs_null, rhs_null);
+        if (!ascending) { cuda::std::swap(lhs_null, rhs_null); }
         return (null_precedence == cudf::null_order::BEFORE ? !rhs_null : !lhs_null);
       }
     }

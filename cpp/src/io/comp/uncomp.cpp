@@ -228,29 +228,6 @@ bool OpenZipArchive(zip_archive_s* dst, uint8_t const* raw, size_t len)
   return (dst->eocd && dst->cdfh);
 }
 
-int cpu_inflate(uint8_t* uncomp_data, size_t* destLen, uint8_t const* comp_data, size_t comp_len)
-{
-  int zerr = 0;
-  z_stream strm;
-
-  memset(&strm, 0, sizeof(strm));
-  strm.next_in   = const_cast<Bytef*>(reinterpret_cast<Bytef const*>(comp_data));
-  strm.avail_in  = comp_len;
-  strm.total_in  = 0;
-  strm.next_out  = uncomp_data;
-  strm.avail_out = *destLen;
-  strm.total_out = 0;
-  zerr           = inflateInit2(&strm, -15);  // -15 for raw data without GZIP headers
-  if (zerr != 0) {
-    *destLen = 0;
-    return zerr;
-  }
-  zerr     = inflate(&strm, Z_FINISH);
-  *destLen = strm.total_out;
-  inflateEnd(&strm);
-  return (zerr == Z_STREAM_END) ? Z_OK : zerr;
-}
-
 /**
  * @brief Uncompresses a raw DEFLATE stream to a char vector.
  * The vector will be grown to match the uncompressed size
@@ -264,13 +241,11 @@ int cpu_inflate(uint8_t* uncomp_data, size_t* destLen, uint8_t const* comp_data,
 void cpu_inflate_vector(std::vector<uint8_t>& dst, uint8_t const* comp_data, size_t comp_len)
 {
   z_stream strm{};
-  strm.next_in   = const_cast<Bytef*>(reinterpret_cast<Bytef const*>(comp_data));
+  strm.next_in   = const_cast<Bytef*>(comp_data);
   strm.avail_in  = comp_len;
-  strm.total_in  = 0;
   strm.next_out  = dst.data();
   strm.avail_out = dst.size();
-  strm.total_out = 0;
-  auto zerr      = inflateInit2(&strm, -15);  // -15 for raw data without GZIP headers
+  auto zerr      = inflateInit2(&strm, -MAX_WBITS);  // for raw data without GZIP headers
   CUDF_EXPECTS(zerr == 0, "Error in DEFLATE stream: inflateInit2 failed");
   do {
     if (strm.avail_out == 0) {
@@ -291,10 +266,21 @@ void cpu_inflate_vector(std::vector<uint8_t>& dst, uint8_t const* comp_data, siz
  */
 size_t decompress_zlib(host_span<uint8_t const> src, host_span<uint8_t> dst)
 {
-  size_t uncomp_size = dst.size();
-  CUDF_EXPECTS(0 == cpu_inflate(dst.data(), &uncomp_size, src.data(), src.size()),
-               "ZLIB decompression failed");
-  return uncomp_size;
+  if (dst.empty()) { return 0; }
+
+  z_stream strm{};
+  strm.next_in   = const_cast<Bytef*>(src.data());
+  strm.avail_in  = src.size();
+  strm.next_out  = dst.data();
+  strm.avail_out = dst.size();
+  auto zerr      = inflateInit2(&strm, -MAX_WBITS);  // for raw data without GZIP headers
+  CUDF_EXPECTS(zerr == 0, "Error in DEFLATE stream: inflateInit2 failed");
+
+  zerr = inflate(&strm, Z_FINISH);
+  CUDF_EXPECTS(zerr == Z_STREAM_END, "Error in DEFLATE stream: Z_STREAM_END not encountered");
+
+  inflateEnd(&strm);
+  return strm.total_out;
 }
 
 /**
@@ -313,7 +299,8 @@ size_t decompress_gzip(host_span<uint8_t const> src, host_span<uint8_t> dst)
  */
 size_t decompress_snappy(host_span<uint8_t const> src, host_span<uint8_t> dst)
 {
-  CUDF_EXPECTS(not dst.empty() and src.size() >= 1, "invalid Snappy decompress inputs");
+  CUDF_EXPECTS(not src.empty(), "Empty Snappy decompress input", std::length_error);
+
   uint32_t uncompressed_size = 0, bytes_left = 0, dst_pos = 0;
   auto cur       = src.begin();
   auto const end = src.end();
@@ -328,9 +315,17 @@ size_t decompress_snappy(host_span<uint8_t const> src, host_span<uint8_t> dst)
       uncompressed_size |= lo7 << l;
       l += 7;
     } while (c > 0x7f && cur < end);
-    CUDF_EXPECTS(uncompressed_size != 0 and uncompressed_size <= dst.size() and cur < end,
-                 "Destination buffer too small");
   }
+
+  if (uncompressed_size == 0) {
+    CUDF_EXPECTS(cur == end, "Non-empty compressed data for empty output in Snappy decompress");
+    return 0;
+  }
+  // If the uncompressed size is not zero, the input must not be empty
+  CUDF_EXPECTS(cur < end, "Missing data in Snappy decompress input");
+
+  CUDF_EXPECTS(uncompressed_size <= dst.size(), "Output buffer too small for Snappy decompression");
+
   // Decode lz77
   dst_pos    = 0;
   bytes_left = uncompressed_size;

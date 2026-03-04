@@ -1809,8 +1809,8 @@ TEST_P(JsonReaderParamTest, JsonDtypeParsing)
                                   double_ignore,
                                   double_ignore},
                                  make_validity(validity)};
-  auto str_col =
-    cudf::test::strings_column_wrapper{// clang-format off
+  auto str_col   = cudf::test::strings_column_wrapper{
+    // clang-format off
     {"0", "0", " 0", "1", "1", " 1", "a", "z", "", "true", "false", "null", "true", "false", "nan", "nan"},
      cudf::test::iterators::nulls_at(std::vector<int>{8})};
   // clang-format on

@@ -145,7 +145,8 @@ def destructure_dataframe_iloc_indexer(
     rows, cols = destructure_iloc_key(key, frame)
     if cols is Ellipsis:
         cols = slice(None)
-    scalar = is_integer(cols)
+    elif isinstance(cols, (cudf.Series, cudf.Index)):
+        cols = cols.to_pandas()
     try:
         column_names: ColumnLabels = list(
             frame._data.get_labels_by_index(cols)
@@ -154,6 +155,7 @@ def destructure_dataframe_iloc_indexer(
         raise TypeError(
             "Column indices must be integers, slices, or list-like of integers"
         )
+    scalar = is_integer(cols)
     if scalar:
         assert len(column_names) == 1, (
             "Scalar column indexer should not produce more than one column"

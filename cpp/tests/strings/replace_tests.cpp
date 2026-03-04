@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -242,9 +242,9 @@ TEST_F(StringsReplaceTest, ReplaceEndOfString)
 
 TEST_F(StringsReplaceTest, ReplaceAdjacentMultiByteTarget)
 {
-  auto input = cudf::test::strings_column_wrapper({"ééééééééééééééééééééé",
-                                                   "eéeéeéeeéeéeéeeéeéeée",
-                                                   "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"});
+  auto input        = cudf::test::strings_column_wrapper({"ééééééééééééééééééééé",
+                                                          "eéeéeéeeéeéeéeeéeéeée",
+                                                          "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"});
   auto strings_view = cudf::strings_column_view(input);
   // replace all occurrences of 'é' with 'e'
   cudf::test::strings_column_wrapper expected({"eeeeeeeeeeeeeeeeeeeee",

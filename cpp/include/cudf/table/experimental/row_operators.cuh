@@ -56,6 +56,13 @@
 
 namespace CUDF_EXPORT cudf {
 
+namespace row::primitive {
+class row_equality_comparator;  // Forward declaration
+
+template <template <typename> class Hash>
+class row_hasher;  // Forward declaration
+}  // namespace row::primitive
+
 namespace experimental {
 
 /**
@@ -1577,6 +1584,11 @@ struct preprocessed_table {
   friend class self_comparator;       ///< Allow self_comparator to access private members
   friend class two_table_comparator;  ///< Allow two_table_comparator to access private members
   friend class hash::row_hasher;      ///< Allow row_hasher to access private members
+  /// Allow primitive equality comparator to access private members
+  friend class ::cudf::row::primitive::row_equality_comparator;
+
+  template <template <typename> class Hash>
+  friend class ::cudf::row::primitive::row_hasher;
 
   using table_device_view_owner =
     std::invoke_result_t<decltype(table_device_view::create), table_view, rmm::cuda_stream_view>;
@@ -2011,10 +2023,10 @@ class row_hasher {
    * @param seed The seed to use for the hash function
    * @return A hash operator to use on the device
    */
-  template <template <typename> class hash_function = cudf::hashing::detail::default_hash,
-            template <template <typename> class, typename>
-            class DeviceRowHasher = device_row_hasher,
-            typename Nullate>
+  template <
+    template <typename> class hash_function = cudf::hashing::detail::default_hash,
+    template <template <typename> class, typename> class DeviceRowHasher = device_row_hasher,
+    typename Nullate>
   DeviceRowHasher<hash_function, Nullate> device_hasher(Nullate nullate = {},
                                                         uint32_t seed   = DEFAULT_HASH_SEED) const
   {

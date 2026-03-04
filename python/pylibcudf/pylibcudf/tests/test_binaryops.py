@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
 import math
 
@@ -62,29 +62,12 @@ def make_col(dtype, nulls):
 
 
 @pytest.fixture
-def pa_data(request, nulls):
-    ltype, rtype, outtype = request.param
-    values = make_col(ltype, nulls), make_col(rtype, nulls), outtype
-    return values
-
-
-@pytest.fixture
-def plc_data(pa_data):
-    lhs, rhs, outtype = pa_data
-    return (
-        plc.interop.from_arrow(lhs),
-        plc.interop.from_arrow(rhs),
-        plc.interop.from_arrow(pa.from_numpy_dtype(np.dtype(outtype))),
-    )
-
-
-@pytest.fixture
 def tests(request, nulls):
     ltype, rtype, py_outtype, plc_op, py_op = request.param
     pa_lhs, pa_rhs = make_col(ltype, nulls), make_col(rtype, nulls)
     plc_lhs, plc_rhs = (
-        plc.interop.from_arrow(pa_lhs),
-        plc.interop.from_arrow(pa_rhs),
+        plc.Column(pa_lhs),
+        plc.Column(pa_rhs),
     )
     plc_dtype = plc.interop.from_arrow(
         pa.from_numpy_dtype(np.dtype(py_outtype))

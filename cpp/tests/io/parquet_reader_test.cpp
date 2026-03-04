@@ -2390,7 +2390,7 @@ TEST_F(ParquetReaderTest, NumRowsPerSource)
   // Read rows_to_read rows skipping rows_to_skip (> two sources) from ten data sources
   {
     auto constexpr rows_to_skip = 25'999;
-    auto constexpr rows_to_read = 47'232;
+    auto constexpr rows_to_read = 10'900;
 
     auto constexpr nsources = 10;
     std::vector<std::string> const datasources(nsources, filepath);

@@ -227,6 +227,10 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
         cuda_stream_view stream,
     ) except +libcudf_exception_handler
 
+    cdef bool is_supported_write_parquet(
+        compression_type compression
+    ) except +libcudf_exception_handler
+
     cdef cppclass chunked_parquet_writer_options(parquet_writer_options_base):
         chunked_parquet_writer_options() except +libcudf_exception_handler
 

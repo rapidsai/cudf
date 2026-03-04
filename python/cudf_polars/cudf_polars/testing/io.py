@@ -23,6 +23,7 @@ def make_partitioned_source(
     *,
     n_files: int = 1,
     row_group_size: int | None = None,
+    write_kwargs: dict | None = None,
 ) -> None:
     """
     Write the Polars DataFrame to one or more files of the desired format.
@@ -39,19 +40,23 @@ def make_partitioned_source(
         If greater than 1, splits the data into multiple files.
     row_group_size : optional, int
         Only used for Parquet. Specifies the row group size per file.
+    write_kwargs : dict, optional
+        Additional keyword arguments to pass to the write_* functions.
     """
     path = Path(path)
+    write_kwargs = write_kwargs or {}
 
     def write(part: pl.DataFrame, file_path: Path) -> None:
         match fmt:
             case "csv":
-                part.write_csv(file_path)
+                part.write_csv(file_path, **write_kwargs)
             case "ndjson":
-                part.write_ndjson(file_path)
+                part.write_ndjson(file_path, **write_kwargs)
             case "parquet" | "chunked_parquet":
                 part.write_parquet(
                     file_path,
                     row_group_size=row_group_size or (len(part) // 2),
+                    **write_kwargs,
                 )
             case _:
                 raise ValueError(f"Unsupported format: {fmt}")

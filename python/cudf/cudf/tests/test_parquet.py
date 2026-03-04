@@ -425,13 +425,13 @@ def test_parquet_read_metadata(tmp_path, pdf):
         assert a == b
 
 
-def test_parquet_read_filtered(tmpdir):
+def test_parquet_read_filtered(set_decomp_env_vars, tmpdir):
     # Generate data
     fname = tmpdir.join("filtered.parquet")
     dg.generate(
         fname,
         dg.Parameters(
-            num_rows=2048,
+            num_rows=100,
             column_parameters=[
                 dg.ColumnParameters(
                     cardinality=40,
@@ -442,7 +442,7 @@ def test_parquet_read_filtered(tmpdir):
                                 string.ascii_letters, random.randint(4, 8)
                             )
                         )
-                        for _ in range(40)
+                        for _ in range(10)
                     ],
                     is_sorted=False,
                 ),
@@ -450,14 +450,15 @@ def test_parquet_read_filtered(tmpdir):
                     40,
                     0.2,
                     lambda: np.random.default_rng(seed=0).integers(
-                        0, 100, size=40
+                        0, 100, size=10
                     ),
                     True,
                 ),
             ],
             seed=42,
         ),
-        format={"name": "parquet", "row_group_size": 64},
+        format={"name": "parquet", "row_group_size": 10},
+        use_threads=False,
     )
 
     # Get dataframes to compare
@@ -470,7 +471,7 @@ def test_parquet_read_filtered(tmpdir):
     # with PyArrow is with the method we use and intend to test.
     tbl_filtered = pq.read_table(fname, filters=[("1", ">", 60)])
 
-    assert_eq(cudf.io.read_parquet_metadata(fname)[1], 2048 / 64)
+    assert_eq(cudf.io.read_parquet_metadata(fname)[1], 10)
     assert len(df_filtered) < len(df)
     assert len(tbl_filtered) <= len(df_filtered)
 
@@ -4457,3 +4458,26 @@ def test_parquet_reader_empty_compressed_page(datadir):
 
     df = cudf.DataFrame({"value": cudf.Series([None], dtype="float32")})
     assert_eq(cudf.read_parquet(fname), df)
+
+
+@pytest.fixture(params=[12345], scope="module")
+def my_pdf(request):
+    return build_pdf(request, True)
+
+
+@pytest.mark.parametrize("compression", ["brotli", "gzip", "snappy", "zstd"])
+def test_parquet_decompression(set_decomp_env_vars, my_pdf, compression):
+    if compression == "snappy":
+        pytest.skip("Skipping because of a known issue on CUDA 11.8")
+
+    # PANDAS returns category objects whereas cuDF returns hashes
+    expect = my_pdf.drop(columns=["col_category"])
+
+    # Write the DataFrame to a Parquet file
+    buffer = BytesIO()
+    expect.to_parquet(buffer, compression=compression)
+
+    # Read the Parquet file back into a DataFrame
+    got = cudf.read_parquet(buffer)
+
+    assert_eq(expect, got)

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -120,9 +120,7 @@ table_metadata reader_impl::get_meta_with_user_data()
                    std::transform(meta.ff.metadata.cbegin(),
                                   meta.ff.metadata.cend(),
                                   std::inserter(kv_map, kv_map.end()),
-                                  [](auto const& kv) {
-                                    return std::pair{kv.name, kv.value};
-                                  });
+                                  [](auto const& kv) { return std::pair{kv.name, kv.value}; });
                    return kv_map;
                  });
   out_metadata.user_data = {out_metadata.per_file_user_data[0].begin(),

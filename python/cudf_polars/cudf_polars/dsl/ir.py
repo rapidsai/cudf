@@ -30,8 +30,11 @@ import pylibcudf as plc
 
 import cudf_polars.dsl.expr as expr
 from cudf_polars.containers import Column, DataFrame
+from cudf_polars.dsl.expressions import rolling
+from cudf_polars.dsl.expressions.base import ExecutionContext
 from cudf_polars.dsl.nodebase import Node
 from cudf_polars.dsl.to_ast import to_ast, to_parquet_filter
+from cudf_polars.dsl.utils.windows import range_window_bounds
 from cudf_polars.utils import dtypes
 from cudf_polars.utils.versions import POLARS_VERSION_LT_128
 
@@ -43,7 +46,7 @@ if TYPE_CHECKING:
 
     from polars.polars import _expr_nodes as pl_expr
 
-    from cudf_polars.typing import CSECache, Schema, Slice as Zlice
+    from cudf_polars.typing import CSECache, ClosedInterval, Schema, Slice as Zlice
     from cudf_polars.utils.config import ConfigOptions
     from cudf_polars.utils.timer import Timer
 
@@ -62,10 +65,14 @@ __all__ = [
     "HStack",
     "Join",
     "MapFunction",
+    "MergeSorted",
     "Projection",
     "PythonScan",
+    "Reduce",
+    "Rolling",
     "Scan",
     "Select",
+    "Sink",
     "Slice",
     "Sort",
     "Union",
@@ -405,9 +412,18 @@ class Scan(IR):
                     "Multi-character comment prefix not supported for CSV reader"
                 )
             if not self.reader_options["has_header"]:
-                # Need to do some file introspection to get the number
-                # of columns so that column projection works right.
-                raise NotImplementedError("Reading CSV without header")
+                # TODO: To support reading headerless CSV files without requiring new
+                # column names, we would need to do file introspection to infer the number
+                # of columns so column projection works right.
+                reader_schema = self.reader_options.get("schema")
+                if not (
+                    reader_schema
+                    and isinstance(schema, dict)
+                    and "fields" in reader_schema
+                ):
+                    raise NotImplementedError(
+                        "Reading CSV without header requires user-provided column names via new_columns"
+                    )
         elif self.typ == "ndjson":
             # TODO: consider handling the low memory option here
             # (maybe use chunked JSON reader)
@@ -507,8 +523,8 @@ class Scan(IR):
                 # file provides column names
                 column_names = None
             usecols = with_columns
-            # TODO: support has_header=False
-            header = 0
+            has_header = reader_options["has_header"]
+            header = 0 if has_header else -1
 
             # polars defaults to no null recognition
             null_values = [""]
@@ -554,7 +570,7 @@ class Scan(IR):
                     options.set_names([str(name) for name in column_names])
                 else:
                     if (
-                        not POLARS_VERSION_LT_128 and skip_rows > header
+                        not POLARS_VERSION_LT_128 and header > -1 and skip_rows > header
                     ):  # pragma: no cover
                         # We need to read the header otherwise we would skip it
                         column_names = read_csv_header(path, str(sep))
@@ -723,6 +739,193 @@ class Scan(IR):
         else:
             (mask,) = broadcast(predicate.evaluate(df), target_length=df.num_rows)
             return df.filter(mask)
+
+
+class Sink(IR):
+    """Sink a dataframe to a file."""
+
+    __slots__ = ("cloud_options", "kind", "options", "path")
+    _non_child = ("schema", "kind", "path", "options", "cloud_options")
+
+    kind: str
+    path: str
+    options: dict[str, Any]
+
+    def __init__(
+        self,
+        schema: Schema,
+        kind: str,
+        path: str,
+        options: dict[str, Any],
+        cloud_options: dict[str, Any],
+        df: IR,
+    ):
+        self.schema = schema
+        self.kind = kind
+        self.path = path
+        self.options = options
+        self.cloud_options = cloud_options
+        self.children = (df,)
+        self._non_child_args = (schema, kind, path, options)
+        if self.cloud_options is not None and any(
+            self.cloud_options.get(k) is not None
+            for k in ("config", "credential_provider")
+        ):
+            raise NotImplementedError(
+                "Write to cloud storage"
+            )  # pragma: no cover; no test yet
+        sync_on_close = options.get("sync_on_close")
+        if sync_on_close not in {"None", None}:
+            raise NotImplementedError(
+                f"sync_on_close='{sync_on_close}' is not supported."
+            )  # pragma: no cover; no test yet
+        child_schema = df.schema.values()
+        if kind == "Csv":
+            if not all(
+                plc.io.csv.is_supported_write_csv(dtype) for dtype in child_schema
+            ):
+                # Nested types are unsupported in polars and libcudf
+                raise NotImplementedError(
+                    "Contains unsupported types for CSV writing"
+                )  # pragma: no cover
+            serialize = options["serialize_options"]
+            if options["include_bom"]:
+                raise NotImplementedError("include_bom is not supported.")
+            for key in (
+                "date_format",
+                "time_format",
+                "datetime_format",
+                "float_scientific",
+                "float_precision",
+            ):
+                if serialize[key] is not None:
+                    raise NotImplementedError(f"{key} is not supported.")
+            if serialize["quote_style"] != "Necessary":
+                raise NotImplementedError("Only quote_style='Necessary' is supported.")
+            if chr(serialize["quote_char"]) != '"':
+                raise NotImplementedError("Only quote_char='\"' is supported.")
+        elif kind == "Parquet":
+            compression = options["compression"]
+            if isinstance(compression, dict):
+                if len(compression) != 1:
+                    raise NotImplementedError(
+                        "Compression dict with more than one entry."
+                    )  # pragma: no cover
+                compression, compression_level = next(iter(compression.items()))
+                options["compression"] = compression
+                if compression_level is not None:
+                    raise NotImplementedError(
+                        "Setting compression_level is not supported."
+                    )
+            if compression == "Lz4Raw":
+                compression = "Lz4"
+                options["compression"] = compression
+            if (
+                compression != "Uncompressed"
+                and not plc.io.parquet.is_supported_write_parquet(
+                    getattr(plc.io.types.CompressionType, compression.upper())
+                )
+            ):
+                raise NotImplementedError(
+                    f"Compression type '{compression}' is not supported."
+                )
+        elif (
+            kind == "Json"
+        ):  # pragma: no cover; options are validated on the polars side
+            if not all(
+                plc.io.json.is_supported_write_json(dtype) for dtype in child_schema
+            ):
+                # Nested types are unsupported in polars and libcudf
+                raise NotImplementedError(
+                    "Contains unsupported types for JSON writing"
+                )  # pragma: no cover
+            shared_writer_options = {"sync_on_close", "maintain_order", "mkdir"}
+            if set(options) - shared_writer_options:
+                raise NotImplementedError("Unsupported options passed JSON writer.")
+        else:
+            raise NotImplementedError(
+                f"Unhandled sink kind: {kind}"
+            )  # pragma: no cover
+
+    def get_hashable(self) -> Hashable:
+        """
+        Hashable representation of the node.
+
+        The option dictionary is serialised for hashing purposes.
+        """
+        schema_hash = tuple(self.schema.items())  # pragma: no cover
+        return (
+            type(self),
+            schema_hash,
+            self.kind,
+            self.path,
+            json.dumps(self.options),
+            json.dumps(self.cloud_options),
+        )  # pragma: no cover
+
+    @classmethod
+    def do_evaluate(
+        cls,
+        schema: Schema,
+        kind: str,
+        path: str,
+        options: dict[str, Any],
+        df: DataFrame,
+    ) -> DataFrame:
+        """Write the dataframe to a file."""
+        target = plc.io.SinkInfo([path])
+
+        if options.get("mkdir", False):
+            Path(path).parent.mkdir(parents=True, exist_ok=True)
+        if kind == "Csv":
+            serialize = options["serialize_options"]
+            options = (
+                plc.io.csv.CsvWriterOptions.builder(target, df.table)
+                .include_header(options["include_header"])
+                .names(df.column_names if options["include_header"] else [])
+                .na_rep(serialize["null"])
+                .line_terminator(serialize["line_terminator"])
+                .inter_column_delimiter(chr(serialize["separator"]))
+                .build()
+            )
+            plc.io.csv.write_csv(options)
+
+        elif kind == "Parquet":
+            metadata = plc.io.types.TableInputMetadata(df.table)
+            for i, name in enumerate(df.column_names):
+                metadata.column_metadata[i].set_name(name)
+
+            builder = plc.io.parquet.ParquetWriterOptions.builder(target, df.table)
+            compression = options["compression"]
+            if compression != "Uncompressed":
+                builder.compression(
+                    getattr(plc.io.types.CompressionType, compression.upper())
+                )
+
+            writer_options = builder.metadata(metadata).build()
+            if options["data_page_size"] is not None:
+                writer_options.set_max_page_size_bytes(options["data_page_size"])
+            if options["row_group_size"] is not None:
+                writer_options.set_row_group_size_rows(options["row_group_size"])
+
+            plc.io.parquet.write_parquet(writer_options)
+
+        elif kind == "Json":
+            metadata = plc.io.TableWithMetadata(
+                df.table, [(col, []) for col in df.column_names]
+            )
+            options = (
+                plc.io.json.JsonWriterOptions.builder(target, df.table)
+                .lines(val=True)
+                .na_rep("null")
+                .include_nulls(val=True)
+                .metadata(metadata)
+                .utf8_escaped(val=False)
+                .build()
+            )
+            plc.io.json.write_json(options)
+
+        return DataFrame([])
 
 
 class Cache(IR):
@@ -927,6 +1130,159 @@ class Reduce(IR):
         return DataFrame(columns)
 
 
+class Rolling(IR):
+    """Perform a (possibly grouped) rolling aggregation."""
+
+    __slots__ = (
+        "agg_requests",
+        "closed_window",
+        "following",
+        "index",
+        "keys",
+        "preceding",
+        "zlice",
+    )
+    _non_child = (
+        "schema",
+        "index",
+        "preceding",
+        "following",
+        "closed_window",
+        "keys",
+        "agg_requests",
+        "zlice",
+    )
+    index: expr.NamedExpr
+    """Column being rolled over."""
+    preceding: plc.Scalar
+    """Preceding window extent defining start of window."""
+    following: plc.Scalar
+    """Following window extent defining end of window."""
+    closed_window: ClosedInterval
+    """Treatment of window endpoints."""
+    keys: tuple[expr.NamedExpr, ...]
+    """Grouping keys."""
+    agg_requests: tuple[expr.NamedExpr, ...]
+    """Aggregation expressions."""
+    zlice: Zlice | None
+    """Optional slice"""
+
+    def __init__(
+        self,
+        schema: Schema,
+        index: expr.NamedExpr,
+        preceding: plc.Scalar,
+        following: plc.Scalar,
+        closed_window: ClosedInterval,
+        keys: Sequence[expr.NamedExpr],
+        agg_requests: Sequence[expr.NamedExpr],
+        zlice: Zlice | None,
+        df: IR,
+    ):
+        self.schema = schema
+        self.index = index
+        self.preceding = preceding
+        self.following = following
+        self.closed_window = closed_window
+        self.keys = tuple(keys)
+        self.agg_requests = tuple(agg_requests)
+        if not all(
+            plc.rolling.is_valid_rolling_aggregation(
+                agg.value.dtype, agg.value.agg_request
+            )
+            for agg in self.agg_requests
+        ):
+            raise NotImplementedError("Unsupported rolling aggregation")
+        if any(
+            agg.value.agg_request.kind() == plc.aggregation.Kind.COLLECT_LIST
+            for agg in self.agg_requests
+        ):
+            raise NotImplementedError(
+                "Incorrect handling of empty groups for list collection"
+            )
+
+        self.zlice = zlice
+        self.children = (df,)
+        self._non_child_args = (
+            index,
+            preceding,
+            following,
+            closed_window,
+            keys,
+            agg_requests,
+            zlice,
+        )
+
+    @classmethod
+    def do_evaluate(
+        cls,
+        index: expr.NamedExpr,
+        preceding: plc.Scalar,
+        following: plc.Scalar,
+        closed_window: ClosedInterval,
+        keys_in: Sequence[expr.NamedExpr],
+        aggs: Sequence[expr.NamedExpr],
+        zlice: Zlice | None,
+        df: DataFrame,
+    ) -> DataFrame:
+        """Evaluate and return a dataframe."""
+        keys = broadcast(*(k.evaluate(df) for k in keys_in), target_length=df.num_rows)
+        orderby = index.evaluate(df)
+        # Polars casts integral orderby to int64, but only for calculating window bounds
+        if (
+            plc.traits.is_integral(orderby.obj.type())
+            and orderby.obj.type().id() != plc.TypeId.INT64
+        ):
+            orderby_obj = plc.unary.cast(orderby.obj, plc.DataType(plc.TypeId.INT64))
+        else:
+            orderby_obj = orderby.obj
+        preceding_window, following_window = range_window_bounds(
+            preceding, following, closed_window
+        )
+        if orderby.obj.null_count() != 0:
+            raise RuntimeError(
+                f"Index column '{index.name}' in rolling may not contain nulls"
+            )
+        if len(keys_in) > 0:
+            # Must always check sortedness
+            table = plc.Table([*(k.obj for k in keys), orderby_obj])
+            n = table.num_columns()
+            if not plc.sorting.is_sorted(
+                table, [plc.types.Order.ASCENDING] * n, [plc.types.NullOrder.BEFORE] * n
+            ):
+                raise RuntimeError("Input for grouped rolling is not sorted")
+        else:
+            if not orderby.check_sorted(
+                order=plc.types.Order.ASCENDING, null_order=plc.types.NullOrder.BEFORE
+            ):
+                raise RuntimeError(
+                    f"Index column '{index.name}' in rolling is not sorted, please sort first"
+                )
+        values = plc.rolling.grouped_range_rolling_window(
+            plc.Table([k.obj for k in keys]),
+            orderby_obj,
+            plc.types.Order.ASCENDING,  # Polars requires ascending orderby.
+            plc.types.NullOrder.BEFORE,  # Doesn't matter, polars doesn't allow nulls in orderby
+            preceding_window,
+            following_window,
+            [rolling.to_request(request.value, orderby, df) for request in aggs],
+        )
+        return DataFrame(
+            itertools.chain(
+                keys,
+                [orderby],
+                (
+                    Column(col, name=name)
+                    for col, name in zip(
+                        values.columns(),
+                        (request.name for request in aggs),
+                        strict=True,
+                    )
+                ),
+            )
+        ).slice(zlice)
+
+
 class GroupBy(IR):
     """Perform a groupby."""
 
@@ -1016,10 +1372,10 @@ class GroupBy(IR):
                     child = value.children[0]
                 else:
                     (child,) = value.children
-                col = child.evaluate(df).obj
+                col = child.evaluate(df, context=ExecutionContext.GROUPBY).obj
             else:
                 # Anything else, we pre-evaluate
-                col = value.evaluate(df).obj
+                col = value.evaluate(df, context=ExecutionContext.GROUPBY).obj
             requests.append(plc.groupby.GroupByRequest(col, [value.agg_request]))
             names.append(name)
         group_keys, raw_tables = grouper.aggregate(requests)
@@ -1617,12 +1973,6 @@ class Sort(IR):
     ) -> DataFrame:
         """Evaluate and return a dataframe."""
         sort_keys = broadcast(*(k.evaluate(df) for k in by), target_length=df.num_rows)
-        # TODO: More robust identification here.
-        keys_in_result = {
-            k.name: i
-            for i, k in enumerate(sort_keys)
-            if k.name in df.column_map and k.obj is df.column_map[k.name].obj
-        }
         do_sort = plc.sorting.stable_sort_by_key if stable else plc.sorting.sort_by_key
         table = do_sort(
             df.table,
@@ -1630,19 +1980,17 @@ class Sort(IR):
             list(order),
             list(null_order),
         )
-        columns: list[Column] = []
-        for name, c in zip(df.column_map, table.columns(), strict=True):
-            column = Column(c, name=name)
-            # If a sort key is in the result table, set the sortedness property
-            if name in keys_in_result:
-                i = keys_in_result[name]
-                column = column.set_sorted(
-                    is_sorted=plc.types.Sorted.YES,
-                    order=order[i],
-                    null_order=null_order[i],
-                )
-            columns.append(column)
-        return DataFrame(columns).slice(zlice)
+        result = DataFrame.from_table(table, df.column_names)
+        first_key = sort_keys[0]
+        name = by[0].name
+        first_key_in_result = (
+            name in df.column_map and first_key.obj is df.column_map[name].obj
+        )
+        if first_key_in_result:
+            result.column_map[name].set_sorted(
+                is_sorted=plc.types.Sorted.YES, order=order[0], null_order=null_order[0]
+            )
+        return result.slice(zlice)
 
 
 class Slice(IR):
@@ -1730,6 +2078,7 @@ class MergeSorted(IR):
 
     @classmethod
     def do_evaluate(cls, key: str, *dfs: DataFrame) -> DataFrame:
+        """Evaluate and return a dataframe."""
         left, right = dfs
         right = right.discard_columns(right.column_names_set - left.column_names_set)
         on_col_left = left.select_columns({key})[0]

@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2024, NVIDIA CORPORATION.
+# Copyright (c) 2018-2025, NVIDIA CORPORATION.
 
 import cupy as cp
 import numpy as np
@@ -150,12 +150,12 @@ def test_factorize_result_classes():
     labels, cats = cudf.factorize(cudf.Series(data))
 
     assert isinstance(labels, cp.ndarray)
-    assert isinstance(cats, cudf.BaseIndex)
+    assert isinstance(cats, cudf.Index)
 
     labels, cats = cudf.factorize(cudf.Index(data))
 
     assert isinstance(labels, cp.ndarray)
-    assert isinstance(cats, cudf.BaseIndex)
+    assert isinstance(cats, cudf.Index)
 
     labels, cats = cudf.factorize(cp.array(data))
 

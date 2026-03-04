@@ -116,11 +116,21 @@ def test_non_c_contiguous_raises(cp_array):
 
 
 def test_row_limit_exceed_raises():
+    class Foo:
+        def __init__(self, shape):
+            self.shape = shape
+            self.__cuda_array_interface__ = {
+                "shape": shape,
+                "typestr": "<f8",
+                "data": (0, False),
+                "version": 3,
+            }
+
     with pytest.raises(
         ValueError,
         match="Number of rows exceeds size_type limit",
     ):
-        plc.Column.from_array(cp.zeros((SIZE_TYPE_LIMIT, 1)))
+        plc.Column.from_array(Foo((SIZE_TYPE_LIMIT, 1)))
 
 
 def test_flat_size_exceeds_size_type_limit():

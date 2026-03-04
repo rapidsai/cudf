@@ -18,6 +18,8 @@ from pylibcudf.libcudf.io.json cimport (
     read_json as cpp_read_json,
     schema_element,
     write_json as cpp_write_json,
+    is_supported_write_json as cpp_is_supported_write_json,
+
 )
 
 from pylibcudf.libcudf.io.types cimport (
@@ -984,3 +986,10 @@ cpdef void write_json(JsonWriterOptions options, Stream stream = None):
     cdef Stream s = _get_stream(stream)
     with nogil:
         cpp_write_json(options.c_obj, s.view())
+
+cpdef bool is_supported_write_json(DataType type):
+    """Check if the dtype is supported for JSON writing
+
+    For details, see :cpp:func:`is_supported_write_json`.
+    """
+    return cpp_is_supported_write_json(type.c_obj)

@@ -131,6 +131,53 @@ std::unique_ptr<table> from_arrow_stream(ArrowArrayStream* input,
   return cudf::detail::concatenate(chunk_views, stream, mr);
 }
 
+std::unique_ptr<column> from_arrow_stream_column(ArrowArrayStream* input,
+                                                 rmm::cuda_stream_view stream,
+                                                 rmm::device_async_resource_ref mr)
+{
+  CUDF_EXPECTS(input != nullptr, "input ArrowArrayStream must not be NULL", std::invalid_argument);
+
+  // Potential future optimization: Since the from_arrow API accepts an
+  // ArrowSchema we're allocating one here instead of using a view, which we
+  // could avoid with a different underlying implementation.
+  ArrowSchema schema;
+  NANOARROW_THROW_NOT_OK(ArrowArrayStreamGetSchema(input, &schema, nullptr));
+
+  std::vector<std::unique_ptr<cudf::column>> chunks;
+  ArrowArray chunk;
+  while (true) {
+    NANOARROW_THROW_NOT_OK(ArrowArrayStreamGetNext(input, &chunk, nullptr));
+    if (chunk.release == nullptr) { break; }
+    chunks.push_back(from_arrow_column(&schema, &chunk, stream, mr));
+    chunk.release(&chunk);
+  }
+  input->release(input);
+
+  if (chunks.empty()) {
+    if (schema.n_children == 0) {
+      schema.release(&schema);
+      return std::make_unique<cudf::column>();
+    }
+
+    // If there are no chunks but the schema has children, we need to construct a suitable empty
+    // column.
+    auto empty_column = make_empty_column_from_schema(&schema, stream, mr);
+    schema.release(&schema);
+    return empty_column;
+  }
+
+  schema.release(&schema);
+
+  if (chunks.size() == 1) { return std::move(chunks[0]); }
+  auto chunk_views = std::vector<column_view>{};
+  chunk_views.reserve(chunks.size());
+  std::transform(
+    chunks.begin(), chunks.end(), std::back_inserter(chunk_views), [](auto const& chunk) {
+      return chunk->view();
+    });
+  return cudf::detail::concatenate(chunk_views, stream, mr);
+}
+
 }  // namespace detail
 
 std::unique_ptr<table> from_arrow_stream(ArrowArrayStream* input,
@@ -140,4 +187,13 @@ std::unique_ptr<table> from_arrow_stream(ArrowArrayStream* input,
   CUDF_FUNC_RANGE();
   return detail::from_arrow_stream(input, stream, mr);
 }
+
+std::unique_ptr<column> from_arrow_stream_column(ArrowArrayStream* input,
+                                                 rmm::cuda_stream_view stream,
+                                                 rmm::device_async_resource_ref mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::from_arrow_stream_column(input, stream, mr);
+}
+
 }  // namespace cudf

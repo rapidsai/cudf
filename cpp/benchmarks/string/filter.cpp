@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -41,21 +41,20 @@ static void bench_filter(nvbench::state& state)
 
   auto stream = cudf::get_default_stream();
   state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
-  auto chars_size = input.chars_size(stream);
-  state.add_global_memory_reads<nvbench::int8_t>(chars_size);
+  auto data_size = column->alloc_size();
+  state.add_global_memory_reads<nvbench::int8_t>(data_size);
 
   if (api == "filter") {
     auto const types = cudf::strings::string_character_types::SPACE;
     {
       auto result = cudf::strings::filter_characters_of_type(input, types);
-      auto sv     = cudf::strings_column_view(result->view());
-      state.add_global_memory_writes<nvbench::int8_t>(sv.chars_size(stream));
+      state.add_global_memory_writes<nvbench::int8_t>(result->alloc_size());
     }
     state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
       cudf::strings::filter_characters_of_type(input, types);
     });
   } else if (api == "chars") {
-    state.add_global_memory_writes<nvbench::int8_t>(chars_size);
+    state.add_global_memory_writes<nvbench::int8_t>(data_size);
     std::vector<std::pair<cudf::char_utf8, cudf::char_utf8>> filter_table{
       {cudf::char_utf8{'a'}, cudf::char_utf8{'c'}}};
     state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
@@ -64,8 +63,7 @@ static void bench_filter(nvbench::state& state)
   } else if (api == "strip") {
     {
       auto result = cudf::strings::strip(input);
-      auto sv     = cudf::strings_column_view(result->view());
-      state.add_global_memory_writes<nvbench::int8_t>(sv.chars_size(stream));
+      state.add_global_memory_writes<nvbench::int8_t>(result->alloc_size());
     }
     state.exec(nvbench::exec_tag::sync,
                [&](nvbench::launch& launch) { cudf::strings::strip(input); });

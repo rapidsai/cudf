@@ -57,7 +57,7 @@ def convert_to_rmm(frame):
     ],
 )
 def test_dask_serialization_roundtrip(arrow_tbl, protocol, context):
-    plc_tbl = plc.interop.from_arrow(arrow_tbl)
+    plc_tbl = plc.Table(arrow_tbl)
     df = DataFrame.from_table(plc_tbl, names=arrow_tbl.column_names)
 
     cuda_rmm = protocol == "cuda_rmm"
@@ -90,7 +90,7 @@ def test_dask_serialization_roundtrip(arrow_tbl, protocol, context):
 
 def test_dask_serialization_error():
     arrow_tbl = pa.table({"a": [1, 2, 3]})
-    plc_tbl = plc.interop.from_arrow(arrow_tbl)
+    plc_tbl = plc.Table(arrow_tbl)
     df = DataFrame.from_table(plc_tbl, names=arrow_tbl.column_names)
 
     header, frames = serialize(

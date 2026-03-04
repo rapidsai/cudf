@@ -540,8 +540,7 @@ class base_2dspan {
    * @param other The other 2D span
    */
   template <typename OtherT,
-            template <typename, size_t>
-            typename OtherRowType,
+            template <typename, size_t> typename OtherRowType,
             std::enable_if_t<std::is_convertible_v<OtherRowType<OtherT, dynamic_extent>,
                                                    RowType<T, dynamic_extent>>,
                              void>* = nullptr>

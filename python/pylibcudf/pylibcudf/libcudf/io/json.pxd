@@ -247,3 +247,7 @@ cdef extern from "cudf/io/json.hpp" \
         json_writer_options &options,
         cuda_stream_view stream,
     ) except +libcudf_exception_handler
+
+    cdef bool is_supported_write_json(
+        data_type type
+    ) except +libcudf_exception_handler

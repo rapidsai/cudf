@@ -8438,6 +8438,87 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
+  void testGroupByBitAnd() {
+    try (Table t1 = new Table.TestBuilder()
+        .column(0x1F, 0x0F, 0x33, 0x55, 0x3F, 0x2F, 0x0F, 0x42)
+        .column(1, 1, 2, 2, 2, 3, 3, 4).build();
+         Table output = t1.groupBy(1).aggregate(GroupByAggregation.bitAnd().onColumn(0));
+         Table ordered = output.orderBy(OrderByArg.asc(0));
+         Table expected = new Table.TestBuilder()
+             .column(1, 2, 3, 4)
+             .column(0x1F & 0x0F,
+                 0x33 & 0x55 & 0x3F,
+                 0x2F & 0x0F,
+                 0x42)
+             .build()) {
+      assertTablesAreEqual(expected, ordered);
+    }
+  }
+
+  @Test
+  void testGroupByBitOr() {
+    try (Table t1 = new Table.TestBuilder()
+        .column(0x1F, 0x0F, 0x33, 0x55, 0x3F, 0x2F, 0x0F, 0x42)
+        .column(1, 1, 2, 2, 2, 3, 3, 4).build();
+         Table output = t1.groupBy(1).aggregate(GroupByAggregation.bitOr().onColumn(0));
+         Table ordered = output.orderBy(OrderByArg.asc(0));
+         Table expected = new Table.TestBuilder()
+             .column(1, 2, 3, 4)
+             .column(0x1F | 0x0F,
+                 0x33 | 0x55 | 0x3F,
+                 0x2F | 0x0F,
+                 0x42)
+             .build()) {
+      assertTablesAreEqual(expected, ordered);
+    }
+  }
+
+  @Test
+  void testGroupByBitXor() {
+    try (Table t1 = new Table.TestBuilder()
+        .column(0x1F, 0x0F, 0x33, 0x55, 0x3F, 0x2F, 0x0F, 0x42)
+        .column(1, 1, 2, 2, 2, 3, 3, 4).build();
+         Table output = t1.groupBy(1).aggregate(GroupByAggregation.bitXor().onColumn(0));
+         Table ordered = output.orderBy(OrderByArg.asc(0));
+         Table expected = new Table.TestBuilder()
+             .column(1, 2, 3, 4)
+             .column(0x1F ^ 0x0F,
+                 0x33 ^ 0x55 ^ 0x3F,
+                 0x2F ^ 0x0F,
+                 0x42)
+             .build()) {
+      assertTablesAreEqual(expected, ordered);
+    }
+  }
+
+  @Test
+  void testReductionBitAnd() {
+    try (ColumnVector input = ColumnVector.fromInts(0x1F, 0x0F, 0x33, 0xFF, 0x2F, 0x3F);
+         Scalar result = input.reduce(ReductionAggregation.bitAnd())) {
+      int expected = 0x1F & 0x0F & 0x33 & 0xFF & 0x2F & 0x3F;
+      assertEquals(expected, result.getInt());
+    }
+  }
+
+  @Test
+  void testReductionBitOr() {
+    try (ColumnVector input = ColumnVector.fromInts(0x1F, 0x0F, 0x33, 0xFF, 0x2F, 0x3F);
+         Scalar result = input.reduce(ReductionAggregation.bitOr())) {
+      int expected = 0x1F | 0x0F | 0x33 | 0xFF | 0x2F | 0x3F;
+      assertEquals(expected, result.getInt());
+    }
+  }
+
+  @Test
+  void testReductionBitXor() {
+    try (ColumnVector input = ColumnVector.fromInts(0x1F, 0x0F, 0x33, 0xFF, 0x2F, 0x3F);
+         Scalar result = input.reduce(ReductionAggregation.bitXor())) {
+      int expected = 0x1F ^ 0x0F ^ 0x33 ^ 0xFF ^ 0x2F ^ 0x3F;
+      assertEquals(expected, result.getInt());
+    }
+  }
+
+  @Test
   void testRowBitCount() {
     try (Table t = new Table.TestBuilder()
         .column(0, 1, null, 3)                 // 33 bits per row (4 bytes + valid bit)

@@ -5,6 +5,8 @@
 
 set -eoxu pipefail
 
+source rapids-init-pip
+
 RAPIDS_TESTS_DIR=${RAPIDS_TESTS_DIR:-"${PWD}/test-results"}
 RAPIDS_COVERAGE_DIR=${RAPIDS_COVERAGE_DIR:-"${PWD}/coverage-results"}
 mkdir -p "${RAPIDS_TESTS_DIR}" "${RAPIDS_COVERAGE_DIR}"
@@ -56,9 +58,16 @@ else
     # generate constraints (possibly pinning to oldest support versions of dependencies)
     rapids-generate-pip-constraints test_python_cudf_pandas ./constraints.txt
 
+    # notes:
+    #
+    #   * echo to expand wildcard before adding `[test,cudf-pandas-tests]` requires for pip
+    #   * need to provide --constraint="${PIP_CONSTRAINT}" because that environment variable is
+    #     ignored if any other --constraint are passed via the CLI
+    #
     python -m pip install \
         -v \
         --constraint ./constraints.txt \
+        --constraint "${PIP_CONSTRAINT}" \
         "$(echo "${CUDF_WHEELHOUSE}"/cudf_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)[test,cudf-pandas-tests]" \
         "$(echo "${LIBCUDF_WHEELHOUSE}"/libcudf_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)" \
         "$(echo "${PYLIBCUDF_WHEELHOUSE}"/pylibcudf_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)"

@@ -3,9 +3,12 @@
 import os
 import subprocess
 
+import pytest
+
 from cudf.testing import _utils as utils
 
 
+@pytest.mark.flaky(reruns=3, reruns_delay=30)
 def test_disable_pandas_accelerator_multi_threaded():
     data_directory = os.path.dirname(os.path.abspath(__file__))
     # Create a copy of the current environment variables

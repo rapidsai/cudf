@@ -3,6 +3,8 @@
 
 set -euo pipefail
 
+source rapids-init-pip
+
 package_name="libcudf"
 package_dir="python/libcudf"
 

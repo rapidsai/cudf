@@ -3,6 +3,8 @@
 
 set -euo pipefail
 
+source rapids-init-pip
+
 package_dir="python/dask_cudf"
 
 ./ci/build_wheel.sh dask-cudf ${package_dir}

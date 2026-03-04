@@ -571,16 +571,16 @@ TYPED_TEST(TypedCollectListTest, BasicGroupedRollingWindow)
                            min_periods,
                            *cudf::make_collect_list_aggregation<cudf::rolling_aggregation>());
 
-  auto const expected_result = cudf::test::lists_column_wrapper<T, int32_t>{
-    {10, 11},
-    {10, 11, 12},
-    {11, 12, 13},
-    {12, 13, 14},
-    {13, 14},
-    {20, 21},
-    {20, 21, 22},
-    {21, 22, 23},
-    {22, 23}}.release();
+  auto const expected_result = cudf::test::lists_column_wrapper<T, int32_t>{{10, 11},
+                                                                            {10, 11, 12},
+                                                                            {11, 12, 13},
+                                                                            {12, 13, 14},
+                                                                            {13, 14},
+                                                                            {20, 21},
+                                                                            {20, 21, 22},
+                                                                            {21, 22, 23},
+                                                                            {22, 23}}
+                                 .release();
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_result->view(), result->view());
 
@@ -686,16 +686,16 @@ TYPED_TEST(TypedCollectListTest, BasicGroupedTimeRangeRollingWindow)
     min_periods,
     *cudf::make_collect_list_aggregation<cudf::rolling_aggregation>());
 
-  auto const expected_result = cudf::test::lists_column_wrapper<T, int32_t>{
-    {10, 11, 12, 13},
-    {10, 11, 12, 13},
-    {10, 11, 12, 13, 14},
-    {10, 11, 12, 13, 14},
-    {10, 11, 12, 13, 14},
-    {20},
-    {21, 22},
-    {21, 22, 23},
-    {21, 22, 23}}.release();
+  auto const expected_result = cudf::test::lists_column_wrapper<T, int32_t>{{10, 11, 12, 13},
+                                                                            {10, 11, 12, 13},
+                                                                            {10, 11, 12, 13, 14},
+                                                                            {10, 11, 12, 13, 14},
+                                                                            {10, 11, 12, 13, 14},
+                                                                            {20},
+                                                                            {21, 22},
+                                                                            {21, 22, 23},
+                                                                            {21, 22, 23}}
+                                 .release();
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_result->view(), result->view());
 
@@ -764,16 +764,17 @@ TYPED_TEST(TypedCollectListTest, GroupedTimeRangeRollingWindowWithNulls)
     *cudf::make_collect_list_aggregation<cudf::rolling_aggregation>(cudf::null_policy::EXCLUDE));
 
   // After null exclusion, `11`, `21`, and `null` should not appear.
-  auto const expected_result_with_nulls_excluded = cudf::test::lists_column_wrapper<T, int32_t>{
-    {10, 12, 13},
-    {10, 12, 13},
-    {10, 12, 13, 14},
-    {10, 12, 13, 14},
-    {10, 12, 13, 14},
-    {20},
-    {22},
-    {22, 23},
-    {22, 23}}.release();
+  auto const expected_result_with_nulls_excluded =
+    cudf::test::lists_column_wrapper<T, int32_t>{{10, 12, 13},
+                                                 {10, 12, 13},
+                                                 {10, 12, 13, 14},
+                                                 {10, 12, 13, 14},
+                                                 {10, 12, 13, 14},
+                                                 {20},
+                                                 {22},
+                                                 {22, 23},
+                                                 {22, 23}}
+      .release();
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_result_with_nulls_excluded->view(),
                                       result_with_nulls_excluded->view());
@@ -801,16 +802,17 @@ TEST_F(CollectListTest, BasicGroupedTimeRangeRollingWindowOnStrings)
     min_periods,
     *cudf::make_collect_list_aggregation<cudf::rolling_aggregation>());
 
-  auto const expected_result = cudf::test::lists_column_wrapper<cudf::string_view>{
-    {"10", "11", "12", "13"},
-    {"10", "11", "12", "13"},
-    {"10", "11", "12", "13", "14"},
-    {"10", "11", "12", "13", "14"},
-    {"10", "11", "12", "13", "14"},
-    {"20"},
-    {"21", "22"},
-    {"21", "22", "23"},
-    {"21", "22", "23"}}.release();
+  auto const expected_result =
+    cudf::test::lists_column_wrapper<cudf::string_view>{{"10", "11", "12", "13"},
+                                                        {"10", "11", "12", "13"},
+                                                        {"10", "11", "12", "13", "14"},
+                                                        {"10", "11", "12", "13", "14"},
+                                                        {"10", "11", "12", "13", "14"},
+                                                        {"20"},
+                                                        {"21", "22"},
+                                                        {"21", "22", "23"},
+                                                        {"21", "22", "23"}}
+      .release();
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_result->view(), result->view());
 
@@ -1886,16 +1888,16 @@ TYPED_TEST(TypedCollectSetTest, BasicGroupedTimeRangeRollingWindow)
     min_periods,
     *cudf::make_collect_set_aggregation<cudf::rolling_aggregation>());
 
-  auto const expected_result = cudf::test::lists_column_wrapper<T, int32_t>{
-    {10, 11, 12, 13},
-    {10, 11, 12, 13},
-    {10, 11, 12, 13, 14},
-    {10, 11, 12, 13, 14},
-    {10, 11, 12, 13, 14},
-    {20},
-    {21, 22},
-    {21, 22, 23},
-    {21, 22, 23}}.release();
+  auto const expected_result = cudf::test::lists_column_wrapper<T, int32_t>{{10, 11, 12, 13},
+                                                                            {10, 11, 12, 13},
+                                                                            {10, 11, 12, 13, 14},
+                                                                            {10, 11, 12, 13, 14},
+                                                                            {10, 11, 12, 13, 14},
+                                                                            {20},
+                                                                            {21, 22},
+                                                                            {21, 22, 23},
+                                                                            {21, 22, 23}}
+                                 .release();
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_result->view(), result->view());
 
@@ -1965,16 +1967,17 @@ TYPED_TEST(TypedCollectSetTest, GroupedTimeRangeRollingWindowWithNulls)
     *cudf::make_collect_set_aggregation<cudf::rolling_aggregation>(cudf::null_policy::EXCLUDE));
 
   // After null exclusion, `11`, `21`, and `null` should not appear.
-  auto const expected_result_with_nulls_excluded = cudf::test::lists_column_wrapper<T, int32_t>{
-    {10, 12, 13},
-    {10, 12, 13},
-    {10, 12, 13, 14},
-    {10, 12, 13, 14},
-    {10, 12, 13, 14},
-    {20},
-    {22},
-    {22},
-    {22}}.release();
+  auto const expected_result_with_nulls_excluded =
+    cudf::test::lists_column_wrapper<T, int32_t>{{10, 12, 13},
+                                                 {10, 12, 13},
+                                                 {10, 12, 13, 14},
+                                                 {10, 12, 13, 14},
+                                                 {10, 12, 13, 14},
+                                                 {20},
+                                                 {22},
+                                                 {22},
+                                                 {22}}
+      .release();
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_result_with_nulls_excluded->view(),
                                       result_with_nulls_excluded->view());

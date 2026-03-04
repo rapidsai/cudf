@@ -619,8 +619,10 @@ void aggregate_result_functor::operator()<aggregation::COVARIANCE>(aggregation c
     column_view_with_common_nulls(values.child(0), values.child(1), stream);
 
   auto mean_agg = make_mean_aggregation();
-  aggregate_result_functor(values_child0, helper, cache, stream, mr).operator()<aggregation::MEAN>(*mean_agg);
-  aggregate_result_functor(values_child1, helper, cache, stream, mr).operator()<aggregation::MEAN>(*mean_agg);
+  aggregate_result_functor(values_child0, helper, cache, stream, mr)
+    .operator()<aggregation::MEAN>(*mean_agg);
+  aggregate_result_functor(values_child1, helper, cache, stream, mr)
+    .operator()<aggregation::MEAN>(*mean_agg);
 
   auto const mean0 = cache.get_result(values_child0, *mean_agg);
   auto const mean1 = cache.get_result(values_child1, *mean_agg);
@@ -668,8 +670,10 @@ void aggregate_result_functor::operator()<aggregation::CORRELATION>(aggregation 
     column_view_with_common_nulls(values.child(0), values.child(1), stream);
 
   auto std_agg = make_std_aggregation();
-  aggregate_result_functor(values_child0, helper, cache, stream, mr).operator()<aggregation::STD>(*std_agg);
-  aggregate_result_functor(values_child1, helper, cache, stream, mr).operator()<aggregation::STD>(*std_agg);
+  aggregate_result_functor(values_child0, helper, cache, stream, mr)
+    .operator()<aggregation::STD>(*std_agg);
+  aggregate_result_functor(values_child1, helper, cache, stream, mr)
+    .operator()<aggregation::STD>(*std_agg);
 
   // Compute covariance here to avoid repeated computation of mean & count
   auto cov_agg = make_covariance_aggregation(corr_agg._min_periods);
@@ -794,6 +798,24 @@ void aggregate_result_functor::operator()<aggregation::MERGE_TDIGEST>(aggregatio
                                                               mr));
 }
 
+template <>
+void aggregate_result_functor::operator()<aggregation::BITWISE_AGG>(aggregation const& agg)
+{
+  if (cache.has_result(values, agg)) { return; }
+
+  auto const bit_op = dynamic_cast<cudf::detail::bitwise_aggregation const&>(agg).bit_op;
+  auto result       = detail::group_bitwise(bit_op,
+                                      get_grouped_values(),
+                                      helper.group_labels(stream),
+                                      helper.num_groups(stream),
+                                      stream,
+                                      mr);
+  cache.add_result(values, agg, std::move(result));
+}
+
+// Note: the definition for HOST_UDF specialization needs to be at last.
+// This is because it calls to `aggregation_dispatcher` which requires to see all other function
+// specializations defined before this.
 template <>
 void aggregate_result_functor::operator()<aggregation::HOST_UDF>(aggregation const& agg)
 {

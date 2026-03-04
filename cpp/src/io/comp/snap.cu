@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -251,6 +251,8 @@ CUDF_KERNEL void __launch_bounds__(128)
               device_span<compression_result> results)
 {
   __shared__ __align__(16) snap_state_s state_g;
+
+  if (results[blockIdx.x].status == compression_status::SKIPPED) { return; }
 
   snap_state_s* const s = &state_g;
   uint32_t t            = threadIdx.x;

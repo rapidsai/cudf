@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
 import pyarrow as pa
 import pytest
@@ -20,14 +20,14 @@ def test_is_letter(input_col, check_vowels, indices):
         vowels = "aeiouy"
         return (s[i] in vowels) == check
 
-    result = plc.nvtext.stemmer.is_letter(
-        plc.interop.from_arrow(input_col),
+    got = plc.nvtext.stemmer.is_letter(
+        plc.Column(input_col),
         check_vowels,
-        plc.interop.from_arrow(pa.array(indices))
+        plc.Column(pa.array(indices))
         if isinstance(indices, list)
         else indices,
     )
-    expected = pa.array(
+    expect = pa.array(
         [
             is_letter(
                 s,
@@ -37,12 +37,12 @@ def test_is_letter(input_col, check_vowels, indices):
             for i, s in enumerate(input_col.to_pylist())
         ]
     )
-    assert_column_eq(result, expected)
+    assert_column_eq(expect, got)
 
 
 def test_porter_stemmer_measure(input_col):
-    result = plc.nvtext.stemmer.porter_stemmer_measure(
-        plc.interop.from_arrow(input_col),
+    got = plc.nvtext.stemmer.porter_stemmer_measure(
+        plc.Column(input_col),
     )
-    expected = pa.array([1, 1, 2], type=pa.int32())
-    assert_column_eq(result, expected)
+    expect = pa.array([1, 1, 2], type=pa.int32())
+    assert_column_eq(expect, got)

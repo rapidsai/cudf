@@ -17,18 +17,17 @@ from pylibcudf.io.datasource cimport Datasource
 from pylibcudf.libcudf.io.data_sink cimport data_sink
 from pylibcudf.libcudf.io.datasource cimport datasource
 from pylibcudf.libcudf.io.types cimport (
+    const_byte,
     column_encoding,
     column_in_metadata,
     column_name_info,
-    const_byte,
-    host_buffer,
     partition_info,
     source_info,
     table_input_metadata,
     table_with_metadata,
 )
 from pylibcudf.libcudf.types cimport size_type
-from pylibcudf.libcudf.utilities.span cimport device_span, host_span
+from pylibcudf.libcudf.utilities.span cimport host_span, device_span
 
 from pylibcudf.utils cimport _get_stream
 from rmm.pylibrmm.device_buffer cimport DeviceBuffer
@@ -487,8 +486,9 @@ cdef class SourceInfo:
                     raise FileNotFoundError(
                         errno.ENOENT, os.strerror(errno.ENOENT), src
                     )
-                # TODO: Keep the sources alive (self.byte_sources = sources)
-                # for str data (e.g. read_json)?
+                # No need to keep sources alive. The file path strings are copied
+                # into C++, so there's no risk of use-after-free if the original
+                # Python objects are garbage-collected.
                 c_files.push_back(<string> str(src).encode())
 
             self.c_obj = move(source_info(c_files))
@@ -501,11 +501,9 @@ cdef class SourceInfo:
             self.c_obj = move(source_info(c_datasources))
             return
 
-        # TODO: host_buffer is deprecated API, use host_span instead
-        cdef vector[host_buffer] c_host_buffers
-        cdef const unsigned char[::1] c_buffer
-        cdef bint empty_buffer = False
         cdef list new_sources = []
+        cdef vector[host_span[const_byte]] hspans
+        self._hspans = hspans
 
         cdef device_span[const_byte] d_span
         cdef vector[device_span[const_byte]] d_spans
@@ -513,26 +511,14 @@ cdef class SourceInfo:
             for buffer in sources:
                 if not isinstance(buffer, io.StringIO):
                     raise ValueError("All sources must be of the same type!")
+
                 new_sources.append(buffer.read().encode())
             sources = new_sources
             self.byte_sources = sources
         if isinstance(sources[0], bytes):
-            empty_buffer = True
-            for buffer in sources:
-                if not isinstance(buffer, bytes):
-                    raise ValueError("All sources must be of the same type!")
-                if (len(buffer) > 0):
-                    c_buffer = buffer
-                    c_host_buffers.push_back(host_buffer(<char*>&c_buffer[0],
-                                                         c_buffer.shape[0]))
-                    empty_buffer = False
+            self._init_byte_like_sources(sources, bytes)
         elif isinstance(sources[0], io.BytesIO):
-            for bio in sources:
-                if not isinstance(bio, io.BytesIO):
-                    raise ValueError("All sources must be of the same type!")
-                c_buffer = bio.getbuffer()  # check if empty?
-                c_host_buffers.push_back(host_buffer(<char*>&c_buffer[0],
-                                                     c_buffer.shape[0]))
+            self._init_byte_like_sources(sources, io.BytesIO)
         elif isinstance(sources[0], DeviceBuffer):
             if not all(isinstance(s, DeviceBuffer) for s in sources):
                 raise ValueError("All sources must be of the same type!")
@@ -549,10 +535,29 @@ cdef class SourceInfo:
             raise ValueError("Sources must be a list of str/paths, "
                              "bytes, io.BytesIO, io.StringIO, or a Datasource")
 
-        if empty_buffer is True:
-            c_host_buffers.push_back(host_buffer(<char*>NULL, 0))
+        self.c_obj = source_info(host_span[host_span[const_byte]](self._hspans))
 
-        self.c_obj = source_info(c_host_buffers)
+    def _init_byte_like_sources(self, list sources, type expected_type):
+        cdef const unsigned char[::1] c_buffer
+        cdef bint empty_buffer = True
+
+        for src in sources:
+            if not isinstance(src, expected_type):
+                raise ValueError("All sources must be of the same type!")
+
+            if expected_type is bytes:
+                c_buffer = src
+            else:
+                c_buffer = src.getbuffer()
+
+            if c_buffer.shape[0] > 0:
+                self._hspans.push_back(
+                    host_span[const_byte](<const_byte*>&c_buffer[0], c_buffer.shape[0])
+                )
+                empty_buffer = False
+
+        if empty_buffer:
+            self._hspans.push_back(host_span[const_byte](<const_byte*>NULL, 0))
 
     __hash__ = None
 

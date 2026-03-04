@@ -24,6 +24,8 @@ from pylibcudf.libcudf.types cimport size_type
 
 from pylibcudf.table cimport Table
 
+from pylibcudf.types cimport DataType
+
 
 cdef class CsvReaderOptions:
     cdef csv_reader_options c_obj
@@ -91,3 +93,5 @@ cdef class CsvWriterOptionsBuilder:
 
 
 cpdef void write_csv(CsvWriterOptions options, Stream stream = *)
+
+cpdef bool is_supported_write_csv(DataType type)

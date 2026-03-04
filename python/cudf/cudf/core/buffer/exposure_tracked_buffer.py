@@ -1,16 +1,16 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Literal
 
-from typing_extensions import Self
-
-import cudf
 from cudf.core.buffer.buffer import Buffer, BufferOwner
+from cudf.options import get_option
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
+
+    from typing_extensions import Self
 
 
 class ExposureTrackedBuffer(Buffer):
@@ -36,7 +36,7 @@ class ExposureTrackedBuffer(Buffer):
         self.owner._slices.add(self)
 
     def get_ptr(self, *, mode: Literal["read", "write"]) -> int:
-        if mode == "write" and cudf.get_option("copy_on_write"):
+        if mode == "write" and get_option("copy_on_write"):
             self.make_single_owner_inplace()
         return super().get_ptr(mode=mode)
 
@@ -68,13 +68,13 @@ class ExposureTrackedBuffer(Buffer):
             depending on the expose status of the owner and the
             copy-on-write option (see above).
         """
-        if cudf.get_option("copy_on_write"):
+        if get_option("copy_on_write"):
             return super().copy(deep=deep or self.owner.exposed)
         return super().copy(deep=deep)
 
     @property
     def __cuda_array_interface__(self) -> Mapping:
-        if cudf.get_option("copy_on_write"):
+        if get_option("copy_on_write"):
             self.make_single_owner_inplace()
         return super().__cuda_array_interface__
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -55,7 +55,7 @@ void bench_convert_number(nvbench::state& state, nvbench::type_list<NumericType>
 
   if (from_num) {
     state.add_global_memory_reads<NumericType>(num_rows);
-    state.add_global_memory_writes<int8_t>(sv.chars_size(stream));
+    state.add_global_memory_writes<int8_t>(strings_col->alloc_size());
     state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
       if constexpr (std::is_floating_point_v<NumericType>) {
         cudf::strings::to_floats(sv, data_type);
@@ -64,7 +64,7 @@ void bench_convert_number(nvbench::state& state, nvbench::type_list<NumericType>
       }
     });
   } else {
-    state.add_global_memory_reads<int8_t>(sv.chars_size(stream));
+    state.add_global_memory_reads<int8_t>(strings_col->alloc_size());
     state.add_global_memory_writes<NumericType>(num_rows);
     state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
       if constexpr (std::is_floating_point_v<NumericType>)

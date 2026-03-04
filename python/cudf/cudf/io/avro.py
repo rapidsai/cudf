@@ -2,7 +2,7 @@
 
 import pylibcudf as plc
 
-import cudf
+from cudf.core.dataframe import DataFrame
 from cudf.utils import ioutils
 
 
@@ -44,4 +44,4 @@ def read_avro(
     if columns is not None and len(columns) > 0:
         options.set_columns(columns)
 
-    return cudf.DataFrame.from_pylibcudf(plc.io.avro.read_avro(options))
+    return DataFrame.from_pylibcudf(plc.io.avro.read_avro(options))

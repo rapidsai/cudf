@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
 import pyarrow as pa
 import pytest
@@ -27,7 +27,7 @@ def pa_timestamp_col():
 
 @pytest.fixture(scope="module")
 def plc_timestamp_col(pa_timestamp_col):
-    return plc.interop.from_arrow(pa_timestamp_col)
+    return plc.Column(pa_timestamp_col)
 
 
 @pytest.mark.parametrize("format", ["%Y-%m-%d"])

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -43,7 +43,7 @@ namespace reduction {
 namespace simple {
 namespace detail {
 /**
- * @brief Reduction for 'sum', 'product', 'min', 'max', 'sum of squares'
+ * @brief Reduction for 'sum', 'product', 'min', 'max', 'sum of squares', and bitwise AND/OR/XOR
  * which directly compute the reduction by a single step reduction call
  *
  * @tparam ElementType  the input column data-type
@@ -280,7 +280,7 @@ struct same_element_type_dispatcher {
   template <typename ElementType>
   static constexpr bool is_supported()
   {
-    return !cudf::is_dictionary<ElementType>();
+    return !cudf::is_dictionary<ElementType>() && !std::is_same_v<ElementType, void>;
   }
 
   template <typename IndexType, std::enable_if_t<cudf::is_index_type<IndexType>()>* = nullptr>

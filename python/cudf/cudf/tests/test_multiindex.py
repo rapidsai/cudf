@@ -2121,11 +2121,11 @@ def test_multiindex_from_arrays_wrong_arg(arg):
         "a",
         datetime.datetime(2020, 1, 1),
         datetime.timedelta(1),
-        {"1": 2},
+        pd.Interval(1, 2),
     ],
 )
 def test_index_to_pandas_arrow_type_nullable_raises(scalar):
-    pa_array = pa.array([scalar, None])
+    pa_array = [scalar, None]
     midx = cudf.MultiIndex(levels=[pa_array], codes=[[0]])
     with pytest.raises(ValueError):
         midx.to_pandas(nullable=True, arrow_type=True)

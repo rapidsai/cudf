@@ -2397,3 +2397,12 @@ def test_slice_empty_columns(indexer, column_slice):
     result = getattr(df_cudf, indexer)[:, column_slice]
     expected = getattr(df_pd, indexer)[:, column_slice]
     assert_eq(result, expected)
+
+
+@pytest.mark.parametrize("obj", [cudf.Series, cudf.Index])
+def test_iloc_columns_with_cudf_object(obj):
+    data = {"a": [1, 2], "c": [0, 2], "d": ["c", "a"]}
+    col_indexer = obj([0, 2])
+    result = cudf.DataFrame(data).iloc[:, col_indexer]
+    expected = pd.DataFrame(data).iloc[:, col_indexer.to_pandas()]
+    assert_eq(result, expected)

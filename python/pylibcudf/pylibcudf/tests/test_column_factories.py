@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
 import pyarrow as pa
 import pytest
@@ -102,7 +102,7 @@ def mask_state(request):
 def test_make_empty_column_dtype(pa_type):
     pa_col = pa.array([], type=pa_type)
 
-    plc_type = plc.interop.from_arrow(pa_col).type()
+    plc_type = plc.Column(pa_col).type()
 
     if isinstance(pa_type, (pa.ListType, pa.StructType)):
         with pytest.raises(TypeError):
@@ -116,7 +116,7 @@ def test_make_empty_column_dtype(pa_type):
 def test_make_empty_column_typeid(pa_type):
     pa_col = pa.array([], type=pa_type)
 
-    tid = plc.interop.from_arrow(pa_col).type().id()
+    tid = plc.Column(pa_col).type().id()
 
     if isinstance(pa_type, (pa.ListType, pa.StructType)):
         with pytest.raises(TypeError):

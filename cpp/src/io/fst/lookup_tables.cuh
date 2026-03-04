@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -499,11 +499,11 @@ class dfa_device_view {
   static constexpr int32_t MAX_TRANSLATED_OUT = TranslationTableT::MAX_TRANSLATED_OUT;
 
   using SymbolGroupStorageT      = std::conditional_t<is_complex_op<SymbolGroupIdLookupT>::value,
-                                                 typename SymbolGroupIdLookupT::TempStorage,
-                                                 typename cub::NullType>;
+                                                      typename SymbolGroupIdLookupT::TempStorage,
+                                                      typename cub::NullType>;
   using TransitionTableStorageT  = std::conditional_t<is_complex_op<TransitionTableT>::value,
-                                                     typename TransitionTableT::TempStorage,
-                                                     typename cub::NullType>;
+                                                      typename TransitionTableT::TempStorage,
+                                                      typename cub::NullType>;
   using TranslationTableStorageT = std::conditional_t<is_complex_op<TranslationTableT>::value,
                                                       typename TranslationTableT::TempStorage,
                                                       typename cub::NullType>;
