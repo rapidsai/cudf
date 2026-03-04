@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
-from cudf_polars.experimental.benchmarks.utils import get_data
+from cudf_polars.experimental.benchmarks.utils import QueryResult, get_data
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -108,7 +108,7 @@ def _rollup_level(
     )
 
 
-def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
+def polars_impl(run_config: RunConfig) -> QueryResult:
     """Query 70."""
     params = load_parameters(
         int(run_config.scale_factor),
@@ -157,20 +157,30 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         .alias("rank_within_parent")
     )
 
-    return (
-        ranked.select(
-            ["total_sum", "s_state", "s_county", "lochierarchy", "rank_within_parent"]
-        )
-        .sort(
-            [
-                pl.col("lochierarchy"),
-                pl.when(pl.col("lochierarchy") == 0)
-                .then(pl.col("s_state"))
-                .otherwise(None),
-                pl.col("rank_within_parent"),
-            ],
-            descending=[True, False, False],
-            nulls_last=True,
-        )
-        .limit(100)
+    return QueryResult(
+        frame=(
+            ranked.select(
+                [
+                    "total_sum",
+                    "s_state",
+                    "s_county",
+                    "lochierarchy",
+                    "rank_within_parent",
+                ]
+            )
+            .sort(
+                [
+                    pl.col("lochierarchy"),
+                    pl.when(pl.col("lochierarchy") == 0)
+                    .then(pl.col("s_state"))
+                    .otherwise(None),
+                    pl.col("rank_within_parent"),
+                ],
+                descending=[True, False, False],
+                nulls_last=True,
+            )
+            .limit(100)
+        ),
+        sort_by=[("lochierarchy", True), ("rank_within_parent", False)],
+        limit=100,
     )
