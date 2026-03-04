@@ -127,6 +127,71 @@ class _PickleConstructor:
 _DELETE = object()
 
 
+def _make_proxy_getattr():
+    """
+    Create an optimized ``__getattr__`` for proxy types.
+
+    Uses ``_fsproxy_wrapped`` directly instead of the
+    ``_fsproxy_fast``/``_fsproxy_slow`` properties to avoid
+    triggering expensive fast-slow type conversions on every
+    attribute miss.
+
+    The fallback uses ``_fsproxy_fast_to_slow()`` /
+    ``_fsproxy_slow_to_fast()`` directly (not the ``_fsproxy_slow``
+    / ``_fsproxy_fast`` properties) so that the stored
+    ``_fsproxy_wrapped`` is **not** mutated.  This avoids the
+    fast-slow-fast ping-pong that would otherwise occur on
+    consecutive attribute misses.
+
+    A per-instance negative cache (``_fsproxy_missing_attrs``)
+    records attribute names that were not found on either the fast
+    or slow representation.  The first miss for a given name pays
+    the conversion cost, but all subsequent misses are O(1).
+    """
+
+    def __getattr__(self, name):
+        # Fast path: check per-instance negative cache.
+        inst_dict = object.__getattribute__(self, "__dict__")
+        missing = inst_dict.get("_fsproxy_missing_attrs")
+        if missing is not None and name in missing:
+            raise AttributeError(name)
+
+        wrapped = self._fsproxy_wrapped
+        try:
+            result = getattr(wrapped, name)
+        except AttributeError:
+            # The current wrapped object doesn't have this attr.
+            # Try the other representation without storing the
+            # conversion (avoids ping-pong).
+            try:
+                if isinstance(wrapped, self._fsproxy_fast_type):
+                    other = self._fsproxy_fast_to_slow()
+                else:
+                    other = self._fsproxy_slow_to_fast()
+            except Exception:
+                # Conversion failed — treat as missing.
+                raise AttributeError(name) from None
+            try:
+                result = getattr(other, name)
+            except AttributeError:
+                # Neither side has it — cache and re-raise.
+                if missing is None:
+                    missing = set()
+                    inst_dict["_fsproxy_missing_attrs"] = missing
+                missing.add(name)
+                raise
+        except Exception:
+            # Non-AttributeError (e.g., cudf internal error):
+            # fall back to the other representation.
+            if isinstance(wrapped, self._fsproxy_fast_type):
+                result = getattr(self._fsproxy_fast_to_slow(), name)
+            else:
+                result = getattr(self._fsproxy_slow_to_fast(), name)
+        return _maybe_wrap_result(result, getattr, self, name)
+
+    return __getattr__
+
+
 def make_final_proxy_type(
     name: str,
     fast_type: type,
@@ -235,6 +300,7 @@ def make_final_proxy_type(
         "__init__": __init__,
         "__doc__": inspect.getdoc(slow_type),
         "_fsproxy_slow_dir": slow_dir,
+        "_fsproxy_slow_dir_set": frozenset(slow_dir),
         "_fsproxy_fast_type": fast_type,
         "_fsproxy_slow_type": slow_type,
         "_fsproxy_slow_to_fast": _fsproxy_slow_to_fast,
@@ -248,56 +314,11 @@ def make_final_proxy_type(
         additional_attributes = {}
     slow_type_dir = dir(slow_type)
     for method in _SPECIAL_METHODS:
-        if method == "__getattr__":
-            # __getattr__ is handled separately below with an
-            # optimized direct implementation to avoid the overhead
-            # of _FastSlowAttribute + _MethodProxy dispatch.
-            continue
         if method in slow_type_dir and getattr(slow_type, method, False):
             cls_dict[method] = _FastSlowAttribute(method)
 
-    # Add an optimized direct __getattr__ if the slow type has one.
-    # This avoids the expensive _FastSlowAttribute -> _MethodProxy ->
-    # _fast_slow_function_call dispatch chain, which is particularly
-    # costly for hasattr() calls on non-existent attributes.
-    # Critically, it uses _fsproxy_wrapped directly instead of
-    # _fsproxy_fast/_fsproxy_slow to avoid triggering expensive
-    # fast<->slow conversions on every attribute miss.
-    if "__getattr__" in slow_type_dir and getattr(
-        slow_type, "__getattr__", False
-    ):
-
-        def __getattr__(self, name):
-            # Use _fsproxy_wrapped directly to avoid triggering
-            # fast<->slow conversions.  When the fast path fails and
-            # we access _fsproxy_slow, it converts the object from
-            # fast to slow; then on the next call _fsproxy_fast
-            # converts it back.  This back-and-forth is extremely
-            # expensive (~900us per call vs ~4us).
-            wrapped = self._fsproxy_wrapped
-            try:
-                result = getattr(wrapped, name)
-            except AttributeError:
-                # Attribute doesn't exist on the current wrapped
-                # object. Since proxy descriptors already cover all
-                # dir(slow_type) attributes, __getattr__ is only
-                # called for dynamic attrs (e.g. column names) and
-                # truly non-existent attrs. In both cases, if the
-                # current wrapped object doesn't have it, the other
-                # representation won't either (they share the same
-                # data). Re-raise to let hasattr() return False
-                # quickly without expensive type conversion.
-                raise
-            except Exception:
-                # Non-AttributeError (e.g., cudf internal error):
-                # fall back to the other representation.
-                if isinstance(wrapped, self._fsproxy_fast_type):
-                    result = getattr(self._fsproxy_slow, name)
-                else:
-                    result = getattr(self._fsproxy_fast, name)
-            return _maybe_wrap_result(result, None)
-
-        cls_dict["__getattr__"] = __getattr__
+    if hasattr(slow_type, "__getattr__"):
+        cls_dict["__getattr__"] = _make_proxy_getattr()
 
     for k, v in additional_attributes.items():
         if v is _DELETE and k in cls_dict:
@@ -415,6 +436,7 @@ def make_intermediate_proxy_type(
         "__init__": __init__,
         "__doc__": inspect.getdoc(slow_type),
         "_fsproxy_slow_dir": slow_dir,
+        "_fsproxy_slow_dir_set": frozenset(slow_dir),
         "_fsproxy_fast_type": fast_type,
         "_fsproxy_slow_type": slow_type,
         "_fsproxy_slow_to_fast": _fsproxy_slow_to_fast,
@@ -422,27 +444,11 @@ def make_intermediate_proxy_type(
         "_fsproxy_state": _fsproxy_state,
     }
     for method in _SPECIAL_METHODS:
-        if method == "__getattr__":
-            continue
         if method in slow_dir and getattr(slow_type, method, False):
             cls_dict[method] = _FastSlowAttribute(method)
 
-    if "__getattr__" in slow_dir and getattr(slow_type, "__getattr__", False):
-
-        def __getattr__(self, name):
-            wrapped = self._fsproxy_wrapped
-            try:
-                result = getattr(wrapped, name)
-            except AttributeError:
-                raise
-            except Exception:
-                if isinstance(wrapped, self._fsproxy_fast_type):
-                    result = getattr(self._fsproxy_slow, name)
-                else:
-                    result = getattr(self._fsproxy_fast, name)
-            return _maybe_wrap_result(result, None)
-
-        cls_dict["__getattr__"] = __getattr__
+    if hasattr(slow_type, "__getattr__"):
+        cls_dict["__getattr__"] = _make_proxy_getattr()
 
     if additional_attributes is None:
         additional_attributes = {}
@@ -1047,20 +1053,12 @@ class _FastSlowAttribute:
                         getattr(instance._fsproxy_slow, self._name),
                         None,  # type: ignore[arg-type]
                     )
-                try:
-                    return _maybe_wrap_result(
-                        getattr(instance._fsproxy_fast, self._name),
-                        getattr,
-                        instance,
-                        self._name,
-                    )
-                except Exception:
-                    return _maybe_wrap_result(
-                        getattr(instance._fsproxy_slow, self._name),
-                        getattr,
-                        instance,
-                        self._name,
-                    )
+                return _fast_slow_function_call(
+                    getattr,
+                    None,
+                    instance,
+                    self._name,
+                )[0]
 
         return self._attr
 
@@ -1588,7 +1586,6 @@ _SPECIAL_METHODS: set[str] = {
     "__and__",
     "__bool__",
     "__call__",
-    "__getattr__",
     "__complex__",
     "__contains__",
     "__copy__",
