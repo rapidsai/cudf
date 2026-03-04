@@ -39,10 +39,10 @@ from cudf_polars.experimental.rapidsmpf.utils import (
     allgather_reduce,
     chunk_to_frame,
     empty_table_chunk,
+    maybe_remap_partitioning,
     names_to_indices,
     process_children,
     recv_metadata,
-    remap_partitioning,
     replay_buffered_channel,
     send_metadata,
     shutdown_on_error,
@@ -313,8 +313,10 @@ async def _broadcast_join(
         small_child, large_child = right, left
         small_metadata, large_metadata = right_metadata, left_metadata
         local_count = left_metadata.local_count
-        partitioning: Partitioning | None = remap_partitioning(
-            left_metadata.partitioning, large_child.schema, ir.schema
+        partitioning = maybe_remap_partitioning(
+            ir,
+            left_metadata.partitioning,
+            child_ir=ir.children[0],
         )
     else:
         small_ch, large_ch = ch_left, ch_right
@@ -322,8 +324,10 @@ async def _broadcast_join(
         small_metadata, large_metadata = left_metadata, right_metadata
         local_count = right_metadata.local_count
         partitioning = (
-            remap_partitioning(
-                right_metadata.partitioning, large_child.schema, ir.schema
+            maybe_remap_partitioning(
+                ir,
+                right_metadata.partitioning,
+                child_ir=ir.children[1],
             )
             if ir.options[0] == "Right"
             else None
