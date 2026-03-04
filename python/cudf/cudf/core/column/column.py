@@ -438,8 +438,6 @@ def _wrap_and_validate(
             plc.TypeId.TIMESTAMP_MICROSECONDS,
             plc.TypeId.TIMESTAMP_NANOSECONDS,
         }
-        if isinstance(dtype, pd.DatetimeTZDtype):
-            dtype = get_compatible_timezone(dtype)
     elif dtype_kind == "m":
         valid_types = {
             plc.TypeId.DURATION_SECONDS,
