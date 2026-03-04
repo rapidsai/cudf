@@ -10,13 +10,8 @@ import pyarrow as pa
 import cudf
 from cudf.core.column.column import ColumnBase
 from cudf.core.dtypes import StructDtype
-from cudf.utils.dtypes import (
-    get_dtype_of_same_kind,
-)
-from cudf.utils.scalar import (
-    maybe_nested_pa_scalar_to_py,
-    pa_scalar_to_plc_scalar,
-)
+from cudf.utils.dtypes import get_dtype_of_same_kind
+from cudf.utils.scalar import pa_scalar_to_plc_scalar
 from cudf.utils.utils import is_na_like
 
 if TYPE_CHECKING:
@@ -99,15 +94,6 @@ class StructColumn(ColumnBase):
             # We cannot go via Arrow's `to_pandas` because of the following issue:
             # https://github.com/apache/arrow/issues/28428
             return pd.Index(self.to_arrow().tolist(), dtype="object")
-
-    def element_indexing(self, index: int) -> dict[Any, Any] | None:
-        result = super().element_indexing(index)
-        if isinstance(result, pa.Scalar):
-            py_element = maybe_nested_pa_scalar_to_py(result)
-            return StructDtype.from_struct_dtype(
-                self.dtype
-            )._recursively_replace_fields(py_element)
-        return result
 
     def _cast_setitem_value(self, value: Any) -> plc.Scalar:
         if isinstance(value, dict):
