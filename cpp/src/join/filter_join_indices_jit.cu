@@ -3,8 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#include "filter_join_indices_jit_kernel.cuh"
 #include "jit/filter_join_kernel.cuh"
-#include "jit_filter_join_indices_kernel.cuh"
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/detail/algorithms/copy_if.cuh>
@@ -344,7 +344,7 @@ apply_join_semantics(cudf::table_view const& left,
     return std::pair{std::move(filtered_left_indices), std::move(filtered_right_indices)};
 
   } else {
-    CUDF_FAIL("Unsupported join kind for jit_filter_join_indices");
+    CUDF_FAIL("Unsupported join kind for filter_join_indices_jit");
   }
 }
 
@@ -390,7 +390,7 @@ void validate_column_types(cudf::table_view const& table, char const* side)
   for (auto const& col : table) {
     CUDF_EXPECTS(
       cudf::is_fixed_width(col.type()) || col.type().id() == type_id::STRING,
-      "jit_filter_join_indices does not support nested or dictionary column types in the " +
+      "filter_join_indices_jit does not support nested or dictionary column types in the " +
         std::string(side) + " table.",
       std::invalid_argument);
   }
@@ -400,7 +400,7 @@ void validate_column_types(cudf::table_view const& table, char const* side)
 
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
-jit_filter_join_indices(cudf::table_view const& left,
+filter_join_indices_jit(cudf::table_view const& left,
                         cudf::table_view const& right,
                         cudf::device_span<size_type const> left_indices,
                         cudf::device_span<size_type const> right_indices,
@@ -419,7 +419,7 @@ jit_filter_join_indices(cudf::table_view const& left,
 
   CUDF_EXPECTS(join_kind == join_kind::INNER_JOIN || join_kind == join_kind::LEFT_JOIN ||
                  join_kind == join_kind::FULL_JOIN,
-               "jit_filter_join_indices only supports INNER_JOIN, LEFT_JOIN, and FULL_JOIN.",
+               "filter_join_indices_jit only supports INNER_JOIN, LEFT_JOIN, and FULL_JOIN.",
                std::invalid_argument);
 
   validate_column_types(left, "left");
@@ -467,7 +467,7 @@ jit_filter_join_indices(cudf::table_view const& left,
 
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
-jit_filter_join_indices(cudf::table_view const& left,
+filter_join_indices_jit(cudf::table_view const& left,
                         cudf::table_view const& right,
                         cudf::device_span<size_type const> left_indices,
                         cudf::device_span<size_type const> right_indices,
@@ -484,7 +484,7 @@ jit_filter_join_indices(cudf::table_view const& left,
 
   CUDF_EXPECTS(join_kind == join_kind::INNER_JOIN || join_kind == join_kind::LEFT_JOIN ||
                  join_kind == join_kind::FULL_JOIN,
-               "jit_filter_join_indices only supports INNER_JOIN, LEFT_JOIN, and FULL_JOIN.",
+               "filter_join_indices_jit only supports INNER_JOIN, LEFT_JOIN, and FULL_JOIN.",
                std::invalid_argument);
 
   validate_column_types(left, "left");
@@ -542,7 +542,7 @@ jit_filter_join_indices(cudf::table_view const& left,
 // Public API implementations
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
-jit_filter_join_indices(cudf::table_view const& left,
+filter_join_indices_jit(cudf::table_view const& left,
                         cudf::table_view const& right,
                         cudf::device_span<size_type const> left_indices,
                         cudf::device_span<size_type const> right_indices,
@@ -553,13 +553,13 @@ jit_filter_join_indices(cudf::table_view const& left,
                         rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::jit_filter_join_indices(
+  return detail::filter_join_indices_jit(
     left, right, left_indices, right_indices, predicate_code, join_kind, is_ptx, stream, mr);
 }
 
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
-jit_filter_join_indices(cudf::table_view const& left,
+filter_join_indices_jit(cudf::table_view const& left,
                         cudf::table_view const& right,
                         cudf::device_span<size_type const> left_indices,
                         cudf::device_span<size_type const> right_indices,
@@ -569,7 +569,7 @@ jit_filter_join_indices(cudf::table_view const& left,
                         rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::jit_filter_join_indices(
+  return detail::filter_join_indices_jit(
     left, right, left_indices, right_indices, predicate, join_kind, stream, mr);
 }
 
