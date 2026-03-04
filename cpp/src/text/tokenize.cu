@@ -8,8 +8,8 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/algorithms/copy_if.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/strings/detail/attributes.hpp>
 #include <cudf/strings/detail/strings_column_factories.cuh>
 #include <cudf/strings/string_view.cuh>
@@ -202,7 +202,7 @@ std::unique_ptr<cudf::column> character_tokenize(cudf::strings_column_view const
   auto d_new_offsets =
     cudf::detail::offsetalator_factory::make_output_iterator(offsets_column->mutable_view());
   // offsets are at the beginning byte of each character
-  cudf::detail::copy_if(
+  cudf::detail::copy_if_async(
     thrust::counting_iterator<int64_t>(0),
     thrust::counting_iterator<int64_t>(chars_bytes + 1),
     d_new_offsets,

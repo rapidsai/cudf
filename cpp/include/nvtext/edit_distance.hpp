@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -57,6 +57,8 @@ std::unique_ptr<cudf::column> edit_distance(
 /**
  * @brief Compute the edit distance between all the strings in the input column.
  *
+ * @deprecated Deprecated since release 26.04
+ *
  * This uses the Levenshtein algorithm to calculate the edit distance between
  * two strings as documented here: https://www.cuelogic.com/blog/the-levenshtein-algorithm
  *
@@ -88,7 +90,7 @@ std::unique_ptr<cudf::column> edit_distance(
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return New lists column of edit distance values
  */
-std::unique_ptr<cudf::column> edit_distance_matrix(
+[[deprecated]] std::unique_ptr<cudf::column> edit_distance_matrix(
   cudf::strings_column_view const& input,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());

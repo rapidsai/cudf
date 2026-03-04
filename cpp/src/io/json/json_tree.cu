@@ -6,9 +6,10 @@
 #include "io/utilities/parsing_utils.cuh"
 #include "nested_json.hpp"
 
+#include <cudf/detail/algorithms/copy_if.cuh>
+#include <cudf/detail/algorithms/reduce.cuh>
 #include <cudf/detail/cuco_helpers.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/hashing/detail/default_hash.cuh>
 #include <cudf/hashing/detail/hashing.hpp>
@@ -26,16 +27,13 @@
 #include <cuco/static_map.cuh>
 #include <cuco/static_set.cuh>
 #include <cuda/functional>
-#include <cuda/std/iterator>
+#include <cuda/iterator>
 #include <cuda/std/tuple>
 #include <thrust/binary_search.h>
-#include <thrust/copy.h>
 #include <thrust/count.h>
 #include <thrust/fill.h>
-#include <thrust/functional.h>
 #include <thrust/gather.h>
 #include <thrust/iterator/counting_iterator.h>
-#include <thrust/iterator/discard_iterator.h>
 #include <thrust/iterator/permutation_iterator.h>
 #include <thrust/iterator/transform_output_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
@@ -264,8 +262,7 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
   }
 
   auto const num_tokens = tokens.size();
-  auto const num_nodes =
-    thrust::count_if(rmm::exec_policy_nosync(stream), tokens.begin(), tokens.end(), is_node);
+  auto const num_nodes  = cudf::detail::count_if(tokens.begin(), tokens.end(), is_node, stream);
 
   // Node levels: transform_exclusive_scan, copy_if.
   rmm::device_uvector<TreeDepthT> node_levels(num_nodes, stream, mr);
@@ -280,13 +277,14 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
     thrust::exclusive_scan(
       rmm::exec_policy_nosync(stream), push_pop_it, push_pop_it + num_tokens, token_levels.begin());
 
-    auto const node_levels_end = cudf::detail::copy_if_safe(token_levels.begin(),
-                                                            token_levels.end(),
-                                                            tokens.begin(),
-                                                            node_levels.begin(),
-                                                            is_node,
-                                                            stream);
-    CUDF_EXPECTS(cuda::std::distance(node_levels.begin(), node_levels_end) == num_nodes,
+    auto const node_levels_end = cudf::detail::copy_if(token_levels.begin(),
+                                                       token_levels.end(),
+                                                       tokens.begin(),
+                                                       node_levels.begin(),
+                                                       is_node,
+                                                       stream);
+    CUDF_EXPECTS(cuda::std::distance(node_levels.begin(), node_levels_end) ==
+                   static_cast<std::ptrdiff_t>(num_nodes),
                  "node level count mismatch");
   }
 
@@ -296,12 +294,12 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
   rmm::device_uvector<NodeIndexT> node_token_ids(num_nodes, stream);  // needed for SE, LE later
   // This block of code is generalized logical stack algorithm. TODO: make this a separate function.
   {
-    cudf::detail::copy_if_safe(thrust::make_counting_iterator<NodeIndexT>(0),
-                               thrust::make_counting_iterator<NodeIndexT>(0) + num_tokens,
-                               tokens.begin(),
-                               node_token_ids.begin(),
-                               is_node,
-                               stream);
+    cudf::detail::copy_if_async(thrust::make_counting_iterator<NodeIndexT>(0),
+                                thrust::make_counting_iterator<NodeIndexT>(0) + num_tokens,
+                                tokens.begin(),
+                                node_token_ids.begin(),
+                                is_node,
+                                stream);
 
     // previous push node_id
     // if previous node is a push, then i-1
@@ -352,7 +350,8 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
     thrust::make_transform_output_iterator(node_categories.begin(), token_to_node{});
   auto const node_categories_end =
     cudf::detail::copy_if(tokens.begin(), tokens.end(), node_categories_it, is_node, stream);
-  CUDF_EXPECTS(node_categories_end - node_categories_it == num_nodes,
+  CUDF_EXPECTS(cuda::std::distance(node_categories_it, node_categories_end) ==
+                 static_cast<std::ptrdiff_t>(num_nodes),
                "node category count mismatch");
 
   // Node ranges: copy_if with transform.
@@ -374,7 +373,9 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
       return is_node(tokens_gpu[i]);
     },
     stream);
-  CUDF_EXPECTS(node_range_out_end - node_range_out_it == num_nodes, "node range count mismatch");
+  CUDF_EXPECTS(cuda::std::distance(node_range_out_it, node_range_out_end) ==
+                 static_cast<std::ptrdiff_t>(num_nodes),
+               "node range count mismatch");
 
   // Extract Struct, List range_end:
   // 1. Extract Struct, List - begin & end separately, their token ids
@@ -393,8 +394,7 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
         default: return false;
       };
     };
-    auto const num_nested =
-      thrust::count_if(rmm::exec_policy_nosync(stream), tokens.begin(), tokens.end(), is_nested);
+    auto const num_nested = cudf::detail::count_if(tokens.begin(), tokens.end(), is_nested, stream);
     rmm::device_uvector<TreeDepthT> token_levels(num_nested, stream);
     rmm::device_uvector<NodeIndexT> token_id(num_nested, stream);
     rmm::device_uvector<NodeIndexT> parent_node_ids(num_nested, stream);
@@ -413,7 +413,7 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
     auto zipped_in_it =
       thrust::make_zip_iterator(push_pop_it, thrust::make_counting_iterator<NodeIndexT>(0));
     auto zipped_out_it = thrust::make_zip_iterator(token_levels.begin(), token_id.begin());
-    cudf::detail::copy_if_safe(
+    cudf::detail::copy_if_async(
       zipped_in_it, zipped_in_it + num_tokens, tokens.begin(), zipped_out_it, is_nested, stream);
 
     thrust::exclusive_scan(rmm::exec_policy_nosync(stream),
@@ -468,7 +468,7 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
         // add +1 to include end symbol.
         return i + 1;
       });
-    auto stencil = thrust::make_transform_iterator(token_id.begin(), is_nested_end{tokens.begin()});
+    auto stencil = thrust::make_transform_iterator(token_id.begin(), is_nested_end{tokens.data()});
     thrust::scatter_if(rmm::exec_policy_nosync(stream),
                        token_indices_it,
                        token_indices_it + num_nested,
@@ -557,7 +557,7 @@ std::pair<size_t, rmm::device_uvector<size_type>> remapped_field_nodes_after_uni
   key_set.insert_and_find_async(counting_iter,
                                 counting_iter + num_keys,
                                 found_keys.begin(),
-                                thrust::make_discard_iterator(),
+                                cuda::make_discard_iterator(),
                                 stream.value());
   // set.size will synchronize the stream before return.
   return {key_set.size(stream), std::move(found_keys)};
@@ -720,20 +720,19 @@ get_array_children_indices(TreeDepthT row_array_children_level,
                                         row_array_children_level);
   rmm::device_uvector<NodeIndexT> level2_nodes(num_level2_nodes, stream);
   rmm::device_uvector<NodeIndexT> level2_indices(num_level2_nodes, stream);
-  auto const iter = thrust::copy_if(rmm::exec_policy_nosync(stream),
-                                    thrust::counting_iterator<NodeIndexT>(0),
-                                    thrust::counting_iterator<NodeIndexT>(num_nodes),
-                                    node_levels.begin(),
-                                    level2_nodes.begin(),
-                                    [row_array_children_level] __device__(auto level) {
-                                      return level == row_array_children_level;
-                                    });
+  cudf::detail::copy_if_async(
+    thrust::counting_iterator<NodeIndexT>(0),
+    thrust::counting_iterator<NodeIndexT>(num_nodes),
+    node_levels.begin(),
+    level2_nodes.begin(),
+    [row_array_children_level] __device__(auto level) { return level == row_array_children_level; },
+    stream);
   auto level2_parent_nodes =
     thrust::make_permutation_iterator(parent_node_ids.begin(), level2_nodes.cbegin());
   thrust::exclusive_scan_by_key(rmm::exec_policy_nosync(stream),
                                 level2_parent_nodes,
                                 level2_parent_nodes + num_level2_nodes,
-                                thrust::make_constant_iterator(NodeIndexT{1}),
+                                cuda::make_constant_iterator(NodeIndexT{1}),
                                 level2_indices.begin());
   return std::make_pair(std::move(level2_nodes), std::move(level2_indices));
 }
@@ -1017,7 +1016,7 @@ rmm::device_uvector<size_type> compute_row_offsets(rmm::device_uvector<NodeIndex
   thrust::exclusive_scan_by_key(rmm::exec_policy_nosync(stream),
                                 parent_col_id.begin(),
                                 parent_col_id.begin() + num_list_parent,
-                                thrust::make_constant_iterator<size_type>(1),
+                                cuda::make_constant_iterator<size_type>(1),
                                 row_offsets.begin());
 
   // Using scatter instead of sort.

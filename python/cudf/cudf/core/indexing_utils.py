@@ -1,18 +1,20 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Literal, TypeAlias
+from typing import TYPE_CHECKING, Any, Literal, TypeAlias, cast
 
 import numpy as np
 
 import pylibcudf as plc
 
+import cudf
 from cudf.api.types import (
     _is_scalar_or_zero_d_array,
     is_integer,
+    is_list_like,
 )
 from cudf.core.column.column import as_column
 from cudf.core.copy_types import BooleanMask, GatherMap
@@ -20,6 +22,7 @@ from cudf.core.dtypes import CategoricalDtype, IntervalDtype
 from cudf.core.index import Index
 from cudf.core.multiindex import MultiIndex
 from cudf.core.series import Series
+from cudf.utils.dtypes import dtype_from_pylibcudf_column
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -66,6 +69,30 @@ class ScalarIndexer:
 IndexingSpec: TypeAlias = (
     EmptyIndexer | MapIndexer | MaskIndexer | ScalarIndexer | SliceIndexer
 )
+
+
+def validate_scalar_key(key: Any, error_msg: str) -> None:
+    """Validate that key contains only scalar values for .at/.iat indexers.
+
+    Parameters
+    ----------
+    key : Any
+        The key to validate
+    error_msg : str
+        The error message to raise if validation fails
+
+    Raises
+    ------
+    ValueError
+        If the key contains list-like indexers
+    """
+    if not isinstance(key, tuple):
+        if is_list_like(key):
+            raise ValueError(error_msg)
+    else:
+        for k in key:
+            if is_list_like(k):
+                raise ValueError(error_msg)
 
 
 # Helpers for code-sharing between loc and iloc paths
@@ -542,14 +569,20 @@ def ordered_find(needles: ColumnBase, haystack: ColumnBase) -> GatherMap:
         plc.copying.OutOfBoundsPolicy.DONT_CHECK,
     ).columns()[0]
 
-    right_rows = plc.sorting.stable_sort_by_key(
+    plc_right_rows = plc.sorting.stable_sort_by_key(
         plc.Table([right_rows]),
         plc.Table([left_order, right_order]),
         [plc.types.Order.ASCENDING] * 2,
         [plc.types.NullOrder.AFTER] * 2,
     ).columns()[0]
     return GatherMap.from_column_unchecked(
-        type(haystack).from_pylibcudf(right_rows),  # type: ignore[arg-type]
+        cast(
+            cudf.core.column.NumericalColumn,
+            type(haystack).create(
+                plc_right_rows,
+                dtype=dtype_from_pylibcudf_column(plc_right_rows),
+            ),
+        ),
         len(haystack),
         nullify=False,
     )

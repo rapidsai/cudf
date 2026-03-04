@@ -1,10 +1,11 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
 
 #include <cudf/ast/ast_operator.hpp>
+#include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/scalar/scalar_device_view.cuh>
 #include <cudf/table/table_view.hpp>
@@ -139,6 +140,12 @@ class generic_scalar_device_view : public cudf::detail::scalar_device_view_base 
   {
     if constexpr (std::is_same_v<T, cudf::string_view>) {
       return string_view(static_cast<char const*>(_data), _size);
+    }
+    if constexpr (cudf::is_fixed_point<T>()) {
+      using rep_type   = typename T::rep;
+      auto const rep   = *static_cast<rep_type const*>(_data);
+      auto const scale = numeric::scale_type{type().scale()};
+      return T{numeric::scaled_integer<rep_type>{rep, scale}};
     }
     return *static_cast<T const*>(_data);
   }
@@ -504,6 +511,53 @@ class operation : public expression {
   ast_operator op;
   std::vector<std::reference_wrapper<expression const>> operands;
 };
+
+namespace detail {
+
+/// @brief An expression that represents a filter predicate.
+///
+/// This is an internal expression used in filter operations. It is not intended to be used by
+/// external code and is not a part of the public API.
+class filter_predicate : public expression {
+ public:
+  /**
+   * @brief Construct a new filter predicate object
+   * @param source The source expression from which the predicate value is taken
+   */
+  filter_predicate(expression const& source) : source_{source} {}
+
+  /**
+   * @copydoc expression::accept
+   */
+  cudf::size_type accept(detail::expression_parser& visitor) const override;
+
+  /**
+   * @copydoc expression::accept
+   */
+  std::reference_wrapper<expression const> accept(
+    detail::expression_transformer& visitor) const override;
+
+  [[nodiscard]] bool may_evaluate_null(table_view const& left,
+                                       table_view const& right,
+                                       rmm::cuda_stream_view stream) const override;
+
+  /**
+   * @copydoc expression::accept
+   */
+  [[nodiscard]] std::unique_ptr<cudf::detail::row_ir::node> accept(
+    cudf::detail::row_ir::ast_converter& visitor) const override;
+
+  /**
+   * @brief Get the operand expression.
+   * @return The operand expression
+   */
+  [[nodiscard]] expression const& get_operand() const { return source_; }
+
+ private:
+  std::reference_wrapper<expression const> source_;
+};
+
+}  // namespace detail
 
 /**
  * @brief A expression referring to data from a column in a table.

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -14,6 +14,7 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/host_memory.hpp>
 #include <cudf/detail/utilities/host_worker_pool.hpp>
+#include <cudf/io/parquet_io_utils.hpp>
 #include <cudf/io/parquet_schema.hpp>
 #include <cudf/logger.hpp>
 
@@ -54,7 +55,7 @@ namespace {
   return static_cast<size_type>(total_row_groups);
 }
 
-std::optional<LogicalType> converted_to_logical_type(SchemaElement const& schema)
+cuda::std::optional<LogicalType> converted_to_logical_type(SchemaElement const& schema)
 {
   if (schema.converted_type.has_value()) {
     switch (schema.converted_type.value()) {
@@ -85,7 +86,7 @@ std::optional<LogicalType> converted_to_logical_type(SchemaElement const& schema
       default: return LogicalType{LogicalType::UNDEFINED};
     }
   }
-  return std::nullopt;
+  return cuda::std::nullopt;
 }
 
 }  // namespace
@@ -95,7 +96,8 @@ std::optional<LogicalType> converted_to_logical_type(SchemaElement const& schema
  */
 type_id to_type_id(SchemaElement const& schema,
                    bool strings_to_categorical,
-                   type_id timestamp_type_id)
+                   type_id timestamp_type_id,
+                   type_id decimal_type_id)
 {
   auto const physical_type = schema.type;
   auto const arrow_type    = schema.arrow_type;
@@ -305,22 +307,8 @@ metadata::metadata(FileMetaData&& other) : FileMetaData(std::move(other)) {}
 
 metadata::metadata(datasource* source, bool read_page_indexes)
 {
-  constexpr auto header_len = sizeof(file_header_s);
-  constexpr auto ender_len  = sizeof(file_ender_s);
-
-  auto const len           = source->size();
-  auto const header_buffer = source->host_read(0, header_len);
-  auto const header        = reinterpret_cast<file_header_s const*>(header_buffer->data());
-  auto const ender_buffer  = source->host_read(len - ender_len, ender_len);
-  auto const ender         = reinterpret_cast<file_ender_s const*>(ender_buffer->data());
-  CUDF_EXPECTS(len > header_len + ender_len, "Incorrect data source");
-  CUDF_EXPECTS(header->magic == parquet_magic && ender->magic == parquet_magic,
-               "Corrupted header or footer");
-  CUDF_EXPECTS(ender->footer_len != 0 && ender->footer_len <= (len - header_len - ender_len),
-               "Incorrect footer length");
-
-  auto const buffer = source->host_read(len - ender->footer_len - ender_len, ender->footer_len);
-  CompactProtocolReader cp(buffer->data(), ender->footer_len);
+  auto const buffer = cudf::io::parquet::fetch_footer_to_host(*source);
+  CompactProtocolReader cp(buffer->data(), buffer->size());
   cp.read(this);
   CUDF_EXPECTS(cp.InitSchema(this), "Cannot initialize schema");
 
@@ -437,7 +425,7 @@ metadata::~metadata()
   if (row_groups.size() > 0 and
       row_groups.front().columns.size() * row_groups.size() > defer_threshold) {
     // Defer destruction to the worker pool when there are many vectors to destroy
-    cudf::detail::host_worker_pool().detach_task(
+    cudf::detail::host_worker_pool().submit_task(
       [schema_to_destroy        = std::move(schema),
        row_groups_to_destroy    = std::move(row_groups),
        key_value_to_destroy     = std::move(key_value_metadata),
@@ -1624,7 +1612,8 @@ aggregate_reader_metadata::select_columns(
   bool include_index,
   bool strings_to_categorical,
   bool ignore_missing_columns,
-  type_id timestamp_type_id)
+  type_id timestamp_type_id,
+  type_id decimal_type_id)
 {
   auto const find_schema_child =
     [&](SchemaElement const& schema_elem, std::string_view name, int const pfm_idx = 0) {
@@ -1666,10 +1655,11 @@ aggregate_reader_metadata::select_columns(
       auto const one_level_list = schema_elem.is_one_level_list(get_schema(schema_elem.parent_idx));
 
       // if we're at the root, this is a new output column
-      auto const col_type = one_level_list
-                              ? type_id::LIST
-                              : to_type_id(schema_elem, strings_to_categorical, timestamp_type_id);
-      auto const dtype    = to_data_type(col_type, schema_elem);
+      auto const col_type =
+        one_level_list
+          ? type_id::LIST
+          : to_type_id(schema_elem, strings_to_categorical, timestamp_type_id, decimal_type_id);
+      auto const dtype = to_data_type(col_type, schema_elem);
 
       cudf::io::detail::inline_column_buffer output_col(
         dtype, schema_elem.repetition_type == FieldRepetitionType::OPTIONAL);
@@ -1708,7 +1698,7 @@ aggregate_reader_metadata::select_columns(
         if (one_level_list) {
           // determine the element data type
           auto const element_type =
-            to_type_id(schema_elem, strings_to_categorical, timestamp_type_id);
+            to_type_id(schema_elem, strings_to_categorical, timestamp_type_id, decimal_type_id);
           auto const element_dtype = to_data_type(element_type, schema_elem);
 
           cudf::io::detail::inline_column_buffer element_col(

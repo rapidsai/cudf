@@ -6,6 +6,7 @@
 #include "join_common_utils.hpp"
 
 #include <cudf/copying.hpp>
+#include <cudf/detail/algorithms/reduce.cuh>
 #include <cudf/detail/cuco_helpers.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/join/hash_join.cuh>
@@ -27,11 +28,9 @@
 #include <rmm/exec_policy.hpp>
 #include <rmm/mr/polymorphic_allocator.hpp>
 
+#include <cuda/iterator>
 #include <cuda/std/functional>
 #include <cuda/std/iterator>
-#include <thrust/count.h>
-#include <thrust/iterator/constant_iterator.h>
-#include <thrust/iterator/discard_iterator.h>
 #include <thrust/iterator/transform_output_iterator.h>
 #include <thrust/scatter.h>
 #include <thrust/uninitialized_fill.h>
@@ -454,7 +453,7 @@ std::size_t get_full_join_size(
                               iter + probe_table_num_rows,
                               equality,
                               hash_table.hash_function(),
-                              thrust::make_discard_iterator(),
+                              cuda::make_discard_iterator(),
                               out_build_begin,
                               stream.value());
   } else {
@@ -470,7 +469,7 @@ std::size_t get_full_join_size(
                                 iter + probe_table_num_rows,
                                 equality,
                                 hash_table.hash_function(),
-                                thrust::make_discard_iterator(),
+                                cuda::make_discard_iterator(),
                                 out_build_begin,
                                 stream.value());
     };
@@ -507,18 +506,16 @@ std::size_t get_full_join_size(
     // invalid_index_map[index_ptr[i]] = 0 for i = 0 to right_table_row_count
     // Thus specifying that those locations are valid
     thrust::scatter_if(rmm::exec_policy_nosync(stream),
-                       thrust::make_constant_iterator(0),
-                       thrust::make_constant_iterator(0) + right_indices->size(),
+                       cuda::make_constant_iterator(0),
+                       cuda::make_constant_iterator(0) + right_indices->size(),
                        right_indices->begin(),      // Index locations
                        right_indices->begin(),      // Stencil - Check if index location is valid
                        invalid_index_map->begin(),  // Output indices
                        valid);                      // Stencil Predicate
 
     // Create list of indices that have been marked as invalid
-    left_join_complement_size = thrust::count_if(rmm::exec_policy_nosync(stream),
-                                                 invalid_index_map->begin(),
-                                                 invalid_index_map->end(),
-                                                 cuda::std::identity());
+    left_join_complement_size = cudf::detail::count_if(
+      invalid_index_map->begin(), invalid_index_map->end(), cuda::std::identity{}, stream);
   }
   return join_size + left_join_complement_size;
 }

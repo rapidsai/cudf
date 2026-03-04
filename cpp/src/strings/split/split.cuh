@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -10,10 +10,10 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/algorithms/copy_if.cuh>
 #include <cudf/detail/device_scalar.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/sizes_to_offsets_iterator.cuh>
-#include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/detail/utilities/grid_1d.cuh>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/strings/detail/split_utils.cuh>
@@ -530,11 +530,11 @@ std::pair<std::unique_ptr<column>, rmm::device_uvector<string_index_pair>> split
   // These may include overlapping or otherwise out-of-bounds delimiters which
   // will be resolved during token processing.
   auto delimiter_positions = rmm::device_uvector<int64_t>(d_count.value(stream), stream);
-  cudf::detail::copy_if(thrust::counting_iterator<int64_t>(0),
-                        thrust::counting_iterator<int64_t>(chars_bytes),
-                        delimiter_positions.begin(),
-                        delimiter_fn,
-                        stream);
+  cudf::detail::copy_if_async(thrust::counting_iterator<int64_t>(0),
+                              thrust::counting_iterator<int64_t>(chars_bytes),
+                              delimiter_positions.begin(),
+                              delimiter_fn,
+                              stream);
 
   // create a vector of offsets to each string's delimiter set within delimiter_positions
   auto const delimiter_offsets =

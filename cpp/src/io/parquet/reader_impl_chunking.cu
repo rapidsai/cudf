@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -7,9 +7,9 @@
 #include "reader_impl_chunking.hpp"
 #include "reader_impl_chunking_utils.cuh"
 
+#include <cudf/detail/algorithms/reduce.cuh>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/exec_policy.hpp>
@@ -271,10 +271,14 @@ void reader_impl::setup_next_subpass(read_mode mode)
     if (is_first_subpass) {
       pass.decomp_scratch_sizes =
         compute_decompression_scratch_sizes(pass.chunks, pass.pages, _stream);
-      pass.string_offset_sizes = compute_string_offset_sizes(pass.chunks, pass.pages, _stream);
+      pass.string_offset_sizes = compute_string_offset_sizes(
+        pass.chunks, pass.pages, pass.skip_rows, pass.num_rows, _stream, _mr);
+      pass.level_decode_sizes = compute_level_decode_sizes(
+        pass.chunks, pass.pages, pass.level_type_size, pass.skip_rows, pass.num_rows, _stream, _mr);
     }
     include_scratch_size(pass.decomp_scratch_sizes, c_info, _stream);
     include_scratch_size(pass.string_offset_sizes, c_info, _stream);
+    include_scratch_size(pass.level_decode_sizes, c_info, _stream);
 
     auto iter               = thrust::make_counting_iterator(0);
     auto const pass_max_row = pass.skip_rows + pass.num_rows;
@@ -327,7 +331,7 @@ void reader_impl::setup_next_subpass(read_mode mode)
     subpass.pages = subpass.page_buf;
   }
 
-  auto const h_spans = cudf::detail::make_host_vector_async(page_indices, _stream);
+  auto h_spans = cudf::detail::make_pinned_vector_async(page_indices, _stream);
   subpass.pages.device_to_host_async(_stream);
 
   _stream.synchronize();
@@ -459,11 +463,12 @@ void reader_impl::create_global_chunk_info()
       auto& schema   = _metadata->get_schema(
         _metadata->map_schema_index(col.schema_idx, rg.source_index), rg.source_index);
 
-      auto [clock_rate, logical_type] =
-        conversion_info(to_type_id(schema, _strings_to_categorical, _options.timestamp_type.id()),
-                        _options.timestamp_type.id(),
-                        schema.type,
-                        schema.logical_type);
+      auto [clock_rate, logical_type] = conversion_info(
+        to_type_id(
+          schema, _strings_to_categorical, _options.timestamp_type.id(), _options.decimal_width),
+        _options.timestamp_type.id(),
+        schema.type,
+        schema.logical_type);
 
       // for lists, estimate the number of bytes per row. this is used by the subpass reader to
       // determine where to split the decompression boundaries
@@ -690,7 +695,7 @@ void reader_impl::set_subpass_page_mask()
   }
 
   // Use the pass page index mask to gather the subpass page mask from the pass level page mask
-  auto const host_page_src_index = cudf::detail::make_host_vector(subpass->page_src_index, _stream);
+  auto host_page_src_index = cudf::detail::make_pinned_vector(subpass->page_src_index, _stream);
   thrust::gather(thrust::seq,
                  host_page_src_index.begin(),
                  host_page_src_index.end(),

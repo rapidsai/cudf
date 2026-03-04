@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 """Defines pytest fixtures for all benchmarks.
@@ -58,8 +58,8 @@ import pytest_cases
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "common"))
 
 from config import (
-    NUM_COLS,
-    NUM_ROWS,
+    NUM_COLS_FIXTURES,
+    NUM_ROWS_FIXTURES,
     collect_ignore,  # noqa: F401
     cudf,
     pytest_collection_modifyitems,  # noqa: F401
@@ -94,7 +94,7 @@ for dtype, column_generator in column_generators.items():
             }
         )
 
-    for nr in NUM_ROWS:
+    for nr in NUM_ROWS_FIXTURES:
         # TODO: pytest_cases.fixture doesn't appear to support lambdas where
         # pytest does. https://github.com/smarie/python-pytest-cases/issues/278
         # Once that is fixed we could use lambdas here.
@@ -142,7 +142,7 @@ for dtype, column_generator in column_generators.items():
             fixtures,
         )
 
-        for nc in NUM_COLS:
+        for nc in NUM_COLS_FIXTURES:
 
             def dataframe_nulls_false(
                 request, nr=nr, nc=nc, make_dataframe=make_dataframe
@@ -223,6 +223,6 @@ for dtype, column_generator in column_generators.items():
 
 
 # TODO: Decide where to incorporate RangeIndex and MultiIndex fixtures.
-@pytest_cases.fixture(params=NUM_ROWS)
+@pytest_cases.fixture(params=NUM_ROWS_FIXTURES)
 def rangeindex(request):
     return cudf.RangeIndex(request.param)

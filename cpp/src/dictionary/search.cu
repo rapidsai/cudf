@@ -49,7 +49,6 @@ struct dispatch_scalar_index {
  * @brief Find index of a given key within a dictionary's keys column.
  *
  * The index is the position within the keys column where the given key (scalar) is found.
- * The keys column is sorted and unique so only one value is expected.
  * The result is an integer scalar identifying the index value.
  * If the key is not found, the resulting scalar has `is_valid()=false`.
  */
@@ -72,14 +71,13 @@ struct find_index_fn {
     using ScalarType = cudf::scalar_type_t<Element>;
     auto find_key    = static_cast<ScalarType const&>(key).value(stream);
     auto keys_view   = column_device_view::create(input.keys(), stream);
-    auto iter        = thrust::equal_range(rmm::exec_policy_nosync(stream),
-                                    keys_view->begin<Element>(),
-                                    keys_view->end<Element>(),
-                                    find_key);
+    auto const begin = keys_view->begin<Element>();
+    auto const end   = keys_view->end<Element>();
+    auto const iter  = thrust::find(rmm::exec_policy_nosync(stream), begin, end, find_key);
     return type_dispatcher(input.indices().type(),
                            dispatch_scalar_index{},
-                           cuda::std::distance(keys_view->begin<Element>(), iter.first),
-                           (cuda::std::distance(iter.first, iter.second) > 0),
+                           cuda::std::distance(begin, iter),
+                           iter != end,
                            stream,
                            mr);
   }
@@ -116,13 +114,12 @@ struct find_insert_index_fn {
     using ScalarType = cudf::scalar_type_t<Element>;
     auto find_key    = static_cast<ScalarType const&>(key).value(stream);
     auto keys_view   = column_device_view::create(input.keys(), stream);
-    auto iter        = thrust::lower_bound(rmm::exec_policy_nosync(stream),
-                                    keys_view->begin<Element>(),
-                                    keys_view->end<Element>(),
-                                    find_key);
+    auto const begin = keys_view->begin<Element>();
+    auto iter =
+      thrust::find(rmm::exec_policy_nosync(stream), begin, begin + keys_view->size(), find_key);
     return type_dispatcher(input.indices().type(),
                            dispatch_scalar_index{},
-                           cuda::std::distance(keys_view->begin<Element>(), iter),
+                           cuda::std::distance(begin, iter),
                            true,
                            stream,
                            mr);

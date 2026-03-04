@@ -57,3 +57,10 @@ cdef extern from "cudf/null_mask.hpp" namespace "cudf" nogil:
         size_type stop,
         cuda_stream_view stream
     )
+
+    cdef size_type index_of_first_set_bit(
+        const bitmask_type * bitmask,
+        size_type start,
+        size_type stop,
+        cuda_stream_view stream
+    )

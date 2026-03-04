@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -202,11 +202,30 @@ std::pair<rmm::device_buffer, size_type> bitmask_and(
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
- * @brief Performs segmented bitwise AND operations on the null masks  of the input columns based on
- * defined segments. For each segment, it computes the bitwise AND of the bitmasks of all columns
- * within that segment. Returns a pair containing (i) a vector of unique pointers to device buffers,
- * with each buffer containing the resulting bitmask for a segment, and (ii) a vector of integers
- * representing the count of null (unset) bits for each segment
+ * @brief Performs bitwise AND of the bitmasks provided
+ *
+ * Each row bit is true only if the corresponding bits in each bitmask is true.
+ *
+ * @param masks Each mask to perform the bitwise compare
+ * @param begin_bits Offsets to the first bit of each item in masks
+ * @param mask_size The number of bits to process in each mask
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned device_buffer
+ * @return A pair of resulting bitmask of size mask_size and the count of unset bits
+ */
+std::pair<rmm::device_buffer, size_type> bitmask_and(
+  host_span<bitmask_type const* const> masks,
+  host_span<size_type const> begin_bits,
+  size_type mask_size,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
+/**
+ * @brief Performs segmented bitwise AND operations on the null masks  of the input columns based
+ * on defined segments. For each segment, it computes the bitwise AND of the bitmasks of all
+ * columns within that segment. Returns a pair containing (i) a vector of unique pointers to
+ * device buffers, with each buffer containing the resulting bitmask for a segment, and (ii) a
+ * vector of integers representing the count of null (unset) bits for each segment
  *
  * The function assumes all the input columns passed are nullable.
  *
@@ -242,23 +261,62 @@ std::pair<rmm::device_buffer, size_type> bitmask_or(
 
 /**
  * @brief Given a validity bitmask, counts the number of null elements (unset bits)
- * in the range `[start, stop)`
+ * in the range `[start, stop)`.
  *
  * If `bitmask == nullptr`, all elements are assumed to be valid and the
- * function returns ``.
+ * function returns `0`.
  *
- * @throws cudf::logic_error if `start > stop`
- * @throws cudf::logic_error if `start < 0`
+ * @throws std::invalid_argument if `start > stop`
+ * @throws std::invalid_argument if `start < 0`
  *
- * @param bitmask Validity bitmask residing in device memory.
- * @param start Index of the first bit to count (inclusive).
- * @param stop Index of the last bit to count (exclusive).
+ * @param bitmask Validity bitmask residing in device memory
+ * @param start Index of the first bit to count (inclusive)
+ * @param stop Index of the last bit to count (exclusive)
  * @param stream CUDA stream used for device memory operations and kernel launches
- * @return The number of null elements in the specified range.
+ * @return The number of null elements in the specified range
  */
-cudf::size_type null_count(bitmask_type const* bitmask,
-                           size_type start,
-                           size_type stop,
-                           rmm::cuda_stream_view stream = cudf::get_default_stream());
+size_type null_count(bitmask_type const* bitmask,
+                     size_type start,
+                     size_type stop,
+                     rmm::cuda_stream_view stream = cudf::get_default_stream());
+
+/**
+ * @brief Given a list of validity bitmasks, counts the number of null elements (unset bits) in the
+ * range `[start, stop)` for each bitmask.
+ *
+ * The same bit range `[start, stop)` is used for all bitmasks.
+ * If a bitmask pointer is `nullptr`, all elements corresponding to that bitmask are assumed to be
+ * valid and the null count is `0`.
+ *
+ * @throws std::invalid_argument if `start > stop`
+ * @throws std::invalid_argument if `start < 0`
+ *
+ * @param bitmasks Validity bitmasks residing in device memory
+ * @param start Index of the first bit to count (inclusive)
+ * @param stop Index of the last bit to count (exclusive)
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @return A vector of null counts for each bitmask
+ */
+std::vector<size_type> batch_null_count(host_span<bitmask_type const* const> bitmasks,
+                                        size_type start,
+                                        size_type stop,
+                                        rmm::cuda_stream_view stream = cudf::get_default_stream());
+
+/**
+ * @brief Given a validity bitmask, returns the index of the first set bit
+ * in the range `[start, stop)` relative to start
+ *
+ * @param bitmask Validity bitmask residing in device memory
+ * @param start Index of the first bit to check (inclusive)
+ * @param stop Index of the last bit to check (exclusive)
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @return The index of the first set bit in the specified range relative to start,
+ *         or `stop-start` if no set bit is found (all nulls)
+ */
+size_type index_of_first_set_bit(bitmask_type const* bitmask,
+                                 size_type start,
+                                 size_type stop,
+                                 rmm::cuda_stream_view stream = cudf::get_default_stream());
+
 /** @} */  // end of group
 }  // namespace CUDF_EXPORT cudf

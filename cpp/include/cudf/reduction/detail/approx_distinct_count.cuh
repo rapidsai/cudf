@@ -1,0 +1,162 @@
+/*
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+#pragma once
+
+#include <cudf/hashing.hpp>
+#include <cudf/table/table_view.hpp>
+#include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/export.hpp>
+
+#include <rmm/cuda_stream_view.hpp>
+#include <rmm/mr/polymorphic_allocator.hpp>
+
+#include <cuco/hyperloglog.cuh>
+#include <cuda/functional>
+#include <cuda/std/span>
+
+#include <cstddef>
+#include <cstdint>
+
+namespace CUDF_EXPORT cudf {
+namespace detail {
+
+/**
+ * @brief HyperLogLog-based approximate distinct count sketch for use by the public API
+ *
+ * This detail implementation provides the core HyperLogLog functionality used by the
+ * public `cudf::approx_distinct_count` class. It maintains a cuco::hyperloglog sketch
+ * for cardinality estimation.
+ *
+ * @tparam Hasher The hash function template to use for hashing table rows. Must be compatible
+ *                with cudf's row_hasher device_hasher interface (a template taking a Key type).
+ */
+template <template <typename> class Hasher>
+class approx_distinct_count {
+ public:
+  /**
+   * @brief Constructs an approximate distinct count sketch from a table
+   *
+   * @param input Table whose rows will be added to the sketch
+   * @param precision The precision parameter for HyperLogLog (4-18). Higher precision gives
+   *                  better accuracy but uses more memory.
+   * @param null_handling `INCLUDE` or `EXCLUDE` rows with nulls
+   * @param nan_handling `NAN_IS_VALID` or `NAN_IS_NULL`
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   */
+  approx_distinct_count(table_view const& input,
+                        std::int32_t precision,
+                        null_policy null_handling,
+                        nan_policy nan_handling,
+                        rmm::cuda_stream_view stream);
+
+  /**
+   * @brief Constructs an approximate distinct count sketch from serialized sketch bytes
+   *
+   * @param sketch_span The serialized sketch bytes to reconstruct from
+   * @param precision The precision parameter that was used to create the sketch (4-18)
+   * @param null_handling `INCLUDE` or `EXCLUDE` rows with nulls
+   * @param nan_handling `NAN_IS_VALID` or `NAN_IS_NULL`
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   */
+  approx_distinct_count(cuda::std::span<cuda::std::byte> sketch_span,
+                        std::int32_t precision,
+                        null_policy null_handling,
+                        nan_policy nan_handling,
+                        rmm::cuda_stream_view stream);
+
+  approx_distinct_count() = delete;
+  ~approx_distinct_count();
+  approx_distinct_count(approx_distinct_count const&)            = delete;
+  approx_distinct_count& operator=(approx_distinct_count const&) = delete;
+  approx_distinct_count(approx_distinct_count&&) noexcept        = default;
+  approx_distinct_count& operator=(approx_distinct_count&&)      = delete;
+
+  /**
+   * @brief Adds rows from a table to the sketch
+   *
+   * Uses the null and NaN handling policies set at construction time.
+   *
+   * @param input Table whose rows will be added
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   */
+  void add(table_view const& input, rmm::cuda_stream_view stream);
+
+  /**
+   * @brief Merges another sketch into this sketch
+   *
+   * @param other The sketch to merge into this sketch
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   */
+  void merge(approx_distinct_count const& other, rmm::cuda_stream_view stream);
+
+  /**
+   * @brief Merges a sketch from raw bytes into this sketch
+   *
+   * @warning It is the caller's responsibility to ensure that the provided sketch span was created
+   * with the same approx_distinct_count configuration (precision, null/NaN handling, etc.) as this
+   * sketch. Merging incompatible sketches will produce incorrect results.
+   *
+   * @param sketch_span The sketch bytes to merge into this sketch
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   */
+  void merge(cuda::std::span<cuda::std::byte> sketch_span, rmm::cuda_stream_view stream);
+
+  /**
+   * @brief Estimates the approximate number of distinct rows in the sketch
+   *
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @return Approximate number of distinct rows
+   */
+  [[nodiscard]] std::size_t estimate(rmm::cuda_stream_view stream) const;
+
+  /**
+   * @brief Gets the raw sketch bytes
+   *
+   * @return A span view of the sketch bytes
+   */
+  [[nodiscard]] cuda::std::span<cuda::std::byte> sketch() noexcept;
+
+  /**
+   * @brief Gets the raw sketch bytes (const overload)
+   *
+   * @return A span view of the sketch bytes
+   */
+  [[nodiscard]] cuda::std::span<cuda::std::byte const> sketch() const noexcept;
+
+  /**
+   * @brief Gets the null handling policy for this sketch
+   *
+   * @return The null policy set at construction
+   */
+  [[nodiscard]] null_policy null_handling() const noexcept;
+
+  /**
+   * @brief Gets the NaN handling policy for this sketch
+   *
+   * @return The NaN policy set at construction
+   */
+  [[nodiscard]] nan_policy nan_handling() const noexcept;
+
+  /**
+   * @brief Gets the precision parameter for this sketch
+   *
+   * @return The precision value set at construction
+   */
+  [[nodiscard]] std::int32_t precision() const noexcept;
+
+ private:
+  using hll_type = cuco::hyperloglog<uint64_t,
+                                     cuda::thread_scope_device,
+                                     cuda::std::identity,
+                                     rmm::mr::polymorphic_allocator<cuda::std::byte>>;
+  hll_type _impl;
+  null_policy _null_handling;  ///< Immutable null handling policy
+  nan_policy _nan_handling;    ///< Immutable NaN handling policy
+};
+
+}  // namespace detail
+}  // namespace CUDF_EXPORT cudf

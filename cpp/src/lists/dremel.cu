@@ -5,6 +5,7 @@
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/algorithms/copy_if.cuh>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
@@ -16,15 +17,13 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
+#include <cuda/iterator>
 #include <cuda/std/tuple>
-#include <thrust/copy.h>
 #include <thrust/execution_policy.h>
 #include <thrust/for_each.h>
 #include <thrust/gather.h>
 #include <thrust/host_vector.h>
-#include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
-#include <thrust/iterator/discard_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
 
 #include <functional>
@@ -87,12 +86,12 @@ dremel_data get_encoding(column_view h_col,
     rmm::device_uvector<size_type> empties(lcv.size(), stream);
     auto d_off = lcv.offsets().data<size_type>();
 
-    auto empties_idx_end =
-      thrust::copy_if(rmm::exec_policy_nosync(stream),
-                      thrust::make_counting_iterator(start),
-                      thrust::make_counting_iterator(end),
-                      empties_idx.begin(),
-                      [d_off] __device__(auto i) { return d_off[i] == d_off[i + 1]; });
+    auto empties_idx_end = cudf::detail::copy_if(
+      thrust::counting_iterator<size_type>(start),
+      thrust::counting_iterator<size_type>(end),
+      empties_idx.begin(),
+      [d_off] __device__(auto i) { return d_off[i] == d_off[i + 1]; },
+      stream);
     auto empties_end = thrust::gather(rmm::exec_policy_nosync(stream),
                                       empties_idx.begin(),
                                       empties_idx_end,
@@ -288,7 +287,7 @@ dremel_data get_encoding(column_view h_col,
 
     // Merge empty at deepest parent level with the rep, def level vals at leaf level
 
-    auto input_parent_rep_it = thrust::make_constant_iterator(level);
+    auto input_parent_rep_it = cuda::make_constant_iterator(level);
     auto input_parent_def_it =
       thrust::make_transform_iterator(empties_idx.begin(),
                                       def_level_fn{d_nesting_levels + level,
@@ -298,7 +297,7 @@ dremel_data get_encoding(column_view h_col,
                                                    always_nullable});
 
     // `nesting_levels.size()` == no of list levels + leaf. Max repetition level = no of list levels
-    auto input_child_rep_it = thrust::make_constant_iterator(nesting_levels.size() - 1);
+    auto input_child_rep_it = cuda::make_constant_iterator(nesting_levels.size() - 1);
     auto input_child_def_it =
       thrust::make_transform_iterator(thrust::make_counting_iterator(column_offsets[level + 1]),
                                       def_level_fn{d_nesting_levels + level + 1,
@@ -324,7 +323,7 @@ dremel_data get_encoding(column_view h_col,
                                      thrust::make_counting_iterator(column_ends[level + 1]),
                                      input_parent_zip_it,
                                      input_child_zip_it,
-                                     thrust::make_discard_iterator(),
+                                     cuda::make_discard_iterator(),
                                      output_zip_it);
 
     curr_rep_values_size = ends.second - output_zip_it;
@@ -352,7 +351,7 @@ dremel_data get_encoding(column_view h_col,
                        });
 
     // Set rep level values at level starts to appropriate rep level
-    auto scatter_it = thrust::make_constant_iterator(level);
+    auto scatter_it = cuda::make_constant_iterator(level);
     thrust::scatter(rmm::exec_policy_nosync(stream),
                     scatter_it,
                     scatter_it + new_offsets.size() - 1,
@@ -385,7 +384,7 @@ dremel_data get_encoding(column_view h_col,
     // Merge empty at parent level with the rep, def level vals at current level
     auto transformed_empties = thrust::make_transform_iterator(empties.begin(), offset_transformer);
 
-    auto input_parent_rep_it = thrust::make_constant_iterator(level);
+    auto input_parent_rep_it = cuda::make_constant_iterator(level);
     auto input_parent_def_it =
       thrust::make_transform_iterator(empties_idx.begin(),
                                       def_level_fn{d_nesting_levels + level,
@@ -411,7 +410,7 @@ dremel_data get_encoding(column_view h_col,
                                      thrust::make_counting_iterator(curr_rep_values_size),
                                      input_parent_zip_it,
                                      input_child_zip_it,
-                                     thrust::make_discard_iterator(),
+                                     cuda::make_discard_iterator(),
                                      output_zip_it);
 
     curr_rep_values_size = ends.second - output_zip_it;
@@ -442,7 +441,7 @@ dremel_data get_encoding(column_view h_col,
     new_offsets = std::move(temp_new_offsets);
 
     // Set rep level values at level starts to appropriate rep level
-    auto scatter_it = thrust::make_constant_iterator(level);
+    auto scatter_it = cuda::make_constant_iterator(level);
     thrust::scatter(rmm::exec_policy_nosync(stream),
                     scatter_it,
                     scatter_it + new_offsets.size() - 1,

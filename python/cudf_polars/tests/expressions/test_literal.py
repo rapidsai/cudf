@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -11,6 +11,7 @@ import polars as pl
 import pylibcudf as plc
 
 from cudf_polars.containers import DataType
+from cudf_polars.dsl.expressions.literal import Literal
 from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
     assert_ir_translation_raises,
@@ -105,4 +106,23 @@ def test_unsupported_literal_raises(expr):
 
     q = df.select(expr)
 
+    assert_ir_translation_raises(q, NotImplementedError)
+
+
+@pytest.mark.parametrize(
+    "dtype,val",
+    [
+        (pl.Int64(), 42),
+        (pl.Struct({"a": pl.Int64()}), {"a": 1}),
+        (pl.List(pl.Int64()), [1, 2, 3]),
+    ],
+    ids=["int", "dict", "list"],
+)
+def test_literal_hash(dtype, val):
+    assert isinstance(hash(Literal(DataType(dtype), val)), int)
+
+
+def test_struct_literal_not_supported():
+    df = pl.LazyFrame({"a": [1, 2, 3]})
+    q = df.select(pl.lit({"x": 1, "y": "foo"}))
     assert_ir_translation_raises(q, NotImplementedError)

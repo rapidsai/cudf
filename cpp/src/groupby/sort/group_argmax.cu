@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -23,7 +23,10 @@ std::unique_ptr<column> group_argmax(column_view const& values,
                                      rmm::cuda_stream_view stream,
                                      rmm::device_async_resource_ref mr)
 {
-  auto indices = type_dispatcher(values.type(),
+  auto dispatch_type = cudf::is_dictionary(values.type())
+                         ? dictionary_column_view(values).keys().type()
+                         : values.type();
+  auto indices       = type_dispatcher(dispatch_type,
                                  group_reduction_dispatcher<aggregation::ARGMAX>{},
                                  values,
                                  num_groups,

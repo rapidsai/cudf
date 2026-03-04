@@ -13,11 +13,10 @@
 #include <rmm/device_uvector.hpp>
 
 #include <cuda/std/functional>
+#include <cuda/std/iterator>
 #include <cuda/std/tuple>
-#include <thrust/functional.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/discard_iterator.h>
-#include <thrust/iterator/reverse_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/scan.h>
 
@@ -55,9 +54,9 @@ std::unique_ptr<column> group_replace_nulls(cudf::column_view const& grouped_val
                                   eq,
                                   func);
   } else {
-    auto gl_rbegin = thrust::make_reverse_iterator(group_labels.begin() + size);
-    auto in_rbegin = thrust::make_reverse_iterator(in_begin + size);
-    auto gm_rbegin = thrust::make_reverse_iterator(gm_begin + size);
+    auto gl_rbegin = cuda::std::make_reverse_iterator(group_labels.begin() + size);
+    auto in_rbegin = cuda::std::make_reverse_iterator(in_begin + size);
+    auto gm_rbegin = cuda::std::make_reverse_iterator(gm_begin + size);
     thrust::inclusive_scan_by_key(
       rmm::exec_policy_nosync(stream), gl_rbegin, gl_rbegin + size, in_rbegin, gm_rbegin, eq, func);
   }

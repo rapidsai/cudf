@@ -1,9 +1,9 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Literal, cast
 
 import pandas as pd
 import pyarrow as pa
@@ -11,8 +11,8 @@ import pyarrow as pa
 from cudf.api.types import is_scalar
 from cudf.core.accessors.base_accessor import BaseAccessor
 from cudf.core.column.column import as_column
+from cudf.core.dtype.validators import is_dtype_obj_list, is_dtype_obj_numeric
 from cudf.core.dtypes import ListDtype, dtype as cudf_dtype
-from cudf.utils.dtypes import is_dtype_obj_list, is_dtype_obj_numeric
 from cudf.utils.scalar import pa_scalar_to_plc_scalar
 
 if TYPE_CHECKING:
@@ -115,13 +115,6 @@ class ListMethods(BaseAccessor):
                     out_of_bounds_mask,
                     pa_scalar_to_plc_scalar(pa.scalar(default)),
                 )
-
-        if self._column.element_type != out.dtype:
-            # libcudf doesn't maintain struct labels so we must transfer over
-            # manually from the input column if we lost some information
-            # somewhere. Not doing this unilaterally since the cost is
-            # non-zero..
-            out = out._with_type_metadata(self._column.element_type)
         return self._return_or_inplace(out)
 
     def contains(self, search_key: ScalarLike) -> Series | Index:
@@ -142,7 +135,9 @@ class ListMethods(BaseAccessor):
         --------
         >>> s = cudf.Series([[1, 2, 3], [3, 4, 5], [4, 5, 6]])
         >>> s.list.contains(4)
-        Series([False, True, True])
+        0    False
+        1     True
+        2     True
         dtype: bool
         """
         return self._return_or_inplace(
@@ -285,9 +280,9 @@ class ListMethods(BaseAccessor):
             )
         if (
             not is_dtype_obj_numeric(
-                lists_indices_col.children[1].dtype, include_decimal=False
+                lists_indices_col.dtype.element_type, include_decimal=False
             )
-            or lists_indices_col.children[1].dtype.kind not in "iu"
+            or lists_indices_col.dtype.element_type.kind not in "iu"
         ):
             raise TypeError(
                 "lists_indices should be column of values of index types."
@@ -310,19 +305,21 @@ class ListMethods(BaseAccessor):
         --------
         >>> s = cudf.Series([[1, 1, 2, None, None], None, [4, 4], []])
         >>> s
-        0    [1.0, 1.0, 2.0, nan, nan]
-        1                         None
-        2                   [4.0, 4.0]
-        3                           []
+        0    [1, 1, 2, None, None]
+        1                     None
+        2                   [4, 4]
+        3                       []
         dtype: list
         >>> s.list.unique() # Order of list element is not guaranteed
-        0              [1.0, 2.0, nan]
-        1                         None
-        2                        [4.0]
-        3                           []
+        0    [1, 2, None]
+        1            None
+        2             [4]
+        3              []
         dtype: list
         """
-        if isinstance(self._column.children[1].dtype, ListDtype):
+        if isinstance(
+            cast("ListDtype", self._column.dtype).element_type, ListDtype
+        ):
             raise NotImplementedError("Nested lists unique is not supported.")
 
         return self._return_or_inplace(
@@ -359,9 +356,9 @@ class ListMethods(BaseAccessor):
         --------
         >>> s = cudf.Series([[4, 2, None, 9], [8, 8, 2], [2, 1]])
         >>> s.list.sort_values(ascending=True, na_position="last")
-        0    [2.0, 4.0, 9.0, nan]
-        1         [2.0, 8.0, 8.0]
-        2              [1.0, 2.0]
+        0    [2, 4, 9, None]
+        1          [2, 8, 8]
+        2             [1, 2]
         dtype: list
 
         .. pandas-compat::
@@ -383,7 +380,9 @@ class ListMethods(BaseAccessor):
             raise NotImplementedError("`kind` not currently implemented.")
         if na_position not in {"first", "last"}:
             raise ValueError(f"Unknown `na_position` value {na_position}")
-        if isinstance(self._column.children[1].dtype, ListDtype):
+        if isinstance(
+            cast("ListDtype", self._column.dtype).element_type, ListDtype
+        ):
             raise NotImplementedError("Nested lists sort is not supported.")
 
         return self._return_or_inplace(
@@ -409,6 +408,7 @@ class ListMethods(BaseAccessor):
 
         Examples
         --------
+        >>> s1 = cudf.Series([[[1.0, 2.0], [3.0, 4.0, 5.0]], [[6.0, None], [7.0], [8.0, 9.0]]])
         >>> s1
         0      [[1.0, 2.0], [3.0, 4.0, 5.0]]
         1    [[6.0, None], [7.0], [8.0, 9.0]]
@@ -420,6 +420,7 @@ class ListMethods(BaseAccessor):
 
         Null values at the top-level in each row are dropped by default:
 
+        >>> s2 = cudf.Series([[[1.0, 2.0], None, [3.0, 4.0, 5.0]], [[6.0, None], [7.0], [8.0, 9.0]]])
         >>> s2
         0    [[1.0, 2.0], None, [3.0, 4.0, 5.0]]
         1        [[6.0, None], [7.0], [8.0, 9.0]]
@@ -432,8 +433,8 @@ class ListMethods(BaseAccessor):
         Use ``dropna=False`` to produce a null instead:
 
         >>> s2.list.concat(dropna=False)
-        0                         None
-        1    [6.0, nan, 7.0, 8.0, 9.0]
+        0                          None
+        1    [6.0, None, 7.0, 8.0, 9.0]
         dtype: list
         """
         return self._return_or_inplace(

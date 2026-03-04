@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from pylibcudf.column cimport Column
@@ -47,5 +47,10 @@ cpdef Column split_record_re(
 
 cpdef Column rsplit_record_re(
     Column input, RegexProgram prog, size_type maxsplit, Stream stream=*,
+    DeviceMemoryResource mr=*,
+)
+
+cpdef Column split_part(
+    Column input, Scalar delimiter, size_type index, Stream stream=*,
     DeviceMemoryResource mr=*,
 )

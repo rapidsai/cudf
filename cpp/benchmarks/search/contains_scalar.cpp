@@ -1,12 +1,12 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <benchmarks/common/generate_input.hpp>
 
-#include <cudf/detail/search.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
+#include <cudf/search.hpp>
 #include <cudf/types.hpp>
 
 #include <nvbench/nvbench.cuh>
@@ -36,7 +36,7 @@ static void nvbench_contains_scalar(nvbench::state& state)
 
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
     auto const stream_view             = rmm::cuda_stream_view{launch.get_stream()};
-    [[maybe_unused]] auto const result = cudf::detail::contains(*haystack, *needle, stream_view);
+    [[maybe_unused]] auto const result = cudf::contains(*haystack, *needle, stream_view);
   });
 }
 

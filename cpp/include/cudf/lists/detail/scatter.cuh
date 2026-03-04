@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -22,8 +22,7 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
-#include <cuda/std/iterator>
-#include <thrust/iterator/constant_iterator.h>
+#include <cuda/iterator>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/scatter.h>
@@ -253,8 +252,8 @@ std::unique_ptr<column> scatter(scalar const& slr,
   auto const source_vector =
     list_vector_from_column(unbound_list_view::label_type::SOURCE,
                             cudf::detail::lists_column_device_view(*source_device_view),
-                            thrust::make_constant_iterator<size_type>(0),
-                            thrust::make_constant_iterator<size_type>(0) + scatter_map_size,
+                            cuda::make_constant_iterator<size_type>(0),
+                            cuda::make_constant_iterator<size_type>(0) + scatter_map_size,
                             stream,
                             mr);
 

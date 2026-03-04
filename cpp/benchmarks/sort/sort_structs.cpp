@@ -1,11 +1,11 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <benchmarks/common/generate_nested_types.hpp>
 
-#include <cudf/detail/sorting.hpp>
+#include <cudf/sorting.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <nvbench/nvbench.cuh>
@@ -16,8 +16,7 @@ void nvbench_sort_struct(nvbench::state& state)
 
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
     rmm::cuda_stream_view stream_view{launch.get_stream()};
-    cudf::detail::sorted_order(
-      *input, {}, {}, stream_view, cudf::get_current_device_resource_ref());
+    cudf::sorted_order(*input, {}, {}, stream_view, cudf::get_current_device_resource_ref());
   });
 }
 

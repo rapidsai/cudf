@@ -7,7 +7,7 @@
 
 find_package(Threads REQUIRED)
 
-add_library(cudf_datagen STATIC common/generate_input.cu)
+add_library(cudf_datagen STATIC common/generate_input.cu common/generate_nested_types.cpp)
 target_compile_features(cudf_datagen PUBLIC cxx_std_20 cuda_std_20)
 
 target_compile_options(
@@ -62,7 +62,7 @@ add_library(
 )
 target_link_libraries(
   cudf_benchmark_common PRIVATE cudf_datagen $<TARGET_NAME_IF_EXISTS:conda_env> GTest::gmock
-                                GTest::gtest
+                                GTest::gtest kvikio::kvikio
 )
 
 add_custom_command(
@@ -99,8 +99,8 @@ endfunction()
 # ##################################################################################################
 # * copying benchmarks ----------------------------------------------------------------------------
 ConfigureNVBench(
-  COPYING_NVBENCH copying/concatenate.cpp copying/copy_if_else.cpp copying/gather.cu
-  copying/scatter.cu copying/shift.cpp
+  COPYING_NVBENCH copying/concatenate.cpp copying/copy_if_else.cpp copying/gather.cpp
+  copying/scatter.cpp copying/shift.cpp
 )
 
 # ##################################################################################################
@@ -137,11 +137,9 @@ ConfigureNVBench(
   STREAM_COMPACTION_NVBENCH
   stream_compaction/apply_boolean_mask.cpp
   stream_compaction/distinct.cpp
-  stream_compaction/distinct_count.cpp
   stream_compaction/stable_distinct.cpp
   stream_compaction/stream_compaction_common.cpp
   stream_compaction/unique.cpp
-  stream_compaction/unique_count.cpp
 )
 
 # ##################################################################################################
@@ -154,6 +152,8 @@ ConfigureNVBench(
   join/mixed_join.cu
   join/distinct_join.cu
   join/filter_join_indices.cu
+  join/generate_input_tables.cu
+  join/jit_filter_join_indices.cu
   join/multiplicity_join.cu
   join/sort_merge_join.cu
   join/join_heuristics.cu
@@ -212,6 +212,7 @@ ConfigureNVBench(
   REDUCTION_NVBENCH
   reduction/anyall.cpp
   reduction/dictionary.cpp
+  reduction/distinct_count.cpp
   reduction/histogram.cpp
   reduction/minmax.cpp
   reduction/rank.cpp
@@ -219,6 +220,7 @@ ConfigureNVBench(
   reduction/scan.cpp
   reduction/scan_structs.cpp
   reduction/segmented_reduce.cpp
+  reduction/unique_count.cpp
 )
 
 # ##################################################################################################
@@ -252,6 +254,21 @@ ConfigureNVBench(
 # ##################################################################################################
 # * hashing benchmark -----------------------------------------------------------------------------
 ConfigureNVBench(HASHING_NVBENCH hashing/hash.cpp hashing/partition.cpp)
+
+# ##################################################################################################
+# * hybrid scan filters benchmark
+# ----------------------------------------------------------------------
+ConfigureNVBench(
+  HYBRID_SCAN_FILTERS_NVBENCH io/parquet/experimental/hybrid_scan/dict_page_filter.cpp
+)
+
+# ##################################################################################################
+# * hybrid scan multithread benchmark
+# ----------------------------------------------------------------------
+ConfigureNVBench(
+  HYBRID_SCAN_MULTITHREAD_NVBENCH io/parquet/experimental/hybrid_scan/hybrid_scan_multithread.cpp
+  io/parquet/experimental/hybrid_scan/hybrid_scan_composer.cpp
+)
 
 # ##################################################################################################
 # * interop benchmark ------------------------------------------------------------------------------
@@ -291,17 +308,11 @@ ConfigureNVBench(
 ConfigureNVBench(PARQUET_READER_FILTER_NVBENCH io/parquet/parquet_reader_filter.cpp)
 
 # ##################################################################################################
-# * parquet experimental reader benchmark
-# ----------------------------------------------------------------------
-ConfigureNVBench(
-  PARQUET_EXPERIMENTAL_READER_NVBENCH io/parquet/experimental/parquet_dictionary_page_filter.cpp
-)
-
-# ##################################################################################################
 # * parquet deletion vector benchmark
 # ----------------------------------------------------------------------
 ConfigureNVBench(
-  PARQUET_DELETION_VECTORS_NVBENCH io/parquet/experimental/parquet_deletion_vectors.cpp
+  PARQUET_DELETION_VECTORS_NVBENCH
+  io/parquet/experimental/deletion_vectors/parquet_deletion_vectors.cpp
 )
 target_compile_definitions(
   PARQUET_DELETION_VECTORS_NVBENCH
@@ -367,7 +378,6 @@ ConfigureNVBench(
 # * nvtext benchmark -------------------------------------------------------------------
 ConfigureNVBench(
   TEXT_NVBENCH
-  text/byte_pair_encoding.cpp
   text/deduplicate.cpp
   text/edit_distance.cpp
   text/hash_ngrams.cpp
@@ -458,7 +468,9 @@ ConfigureNVBench(
 # ##################################################################################################
 # * dictionary benchmark
 # ---------------------------------------------------------------------------------
-ConfigureNVBench(DICTIONARY_NVBENCH dictionary/encode.cpp)
+ConfigureNVBench(
+  DICTIONARY_NVBENCH dictionary/encode.cpp dictionary/set_keys.cpp dictionary/sort.cpp
+)
 
 add_custom_target(
   run_benchmarks

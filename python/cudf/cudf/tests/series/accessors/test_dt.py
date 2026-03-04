@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 import datetime
 import zoneinfo
@@ -11,6 +11,7 @@ import pytest
 import cudf
 from cudf.core._compat import (
     PANDAS_CURRENT_SUPPORTED_VERSION,
+    PANDAS_GE_220,
     PANDAS_VERSION,
 )
 from cudf.testing import assert_eq
@@ -733,3 +734,36 @@ def test_convert_edge_cases(data, original_timezone, target_timezone):
     expect = ps.dt.tz_convert(target_timezone)
     got = gs.dt.tz_convert(target_timezone)
     assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        pd.date_range("2020-01-01", periods=10, freq="D"),
+        pd.date_range(
+            "1990-01-01", periods=100, freq="ME" if PANDAS_GE_220 else "M"
+        ),
+        pd.to_datetime(["2023-12-25", "2024-01-01", "2024-06-15", None]),
+    ],
+)
+@pytest.mark.parametrize(
+    "component",
+    [
+        "year",
+        "month",
+        "day",
+        "hour",
+        "minute",
+        "second",
+        "microsecond",
+        "nanosecond",
+        "weekday",
+    ],
+)
+def test_dt_component_dtype_pandas_compat(data, component):
+    ps = pd.Series(data)
+    gs = cudf.Series(data)
+
+    expect = getattr(ps.dt, component)
+    got = getattr(gs.dt, component)
+    assert_eq(expect, got, check_dtype=True)
