@@ -413,7 +413,11 @@ def _wrap_and_validate(
     ):
         valid_types = {plc.TypeId.STRING}
         if isinstance(dtype, np.dtype) and dtype.kind == "U":
-            dtype = np.dtype(object)
+            raise ValueError(
+                f"dtype {dtype} is a numpy Unicode dtype. "
+                "Normalize to np.dtype('O') before calling "
+                "ColumnBase.create."
+            )
     elif is_dtype_obj_decimal(dtype):
         valid_types = {
             plc.TypeId.DECIMAL128,
