@@ -234,6 +234,15 @@ segmented_bitmask_and(host_span<column_view const> colviews,
                       rmm::device_async_resource_ref mr);
 
 /**
+ * @copydoc cudf::segmented_bitmask_and
+ */
+std::pair<std::vector<std::unique_ptr<rmm::device_buffer>>, std::vector<size_type>>
+segmented_bitmask_and(host_span<bitmask_type const* const> masks,
+                      host_span<size_type const> segment_offsets,
+                      size_type mask_size_bits,
+                      rmm::cuda_stream_view stream,
+                      rmm::device_async_resource_ref mr);
+/**
  * @copydoc cudf::bitmask_or
  *
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
