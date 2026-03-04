@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
 
@@ -34,12 +23,12 @@ namespace cudf {
 namespace detail {
 struct calendrical_month_sequence_functor {
   template <typename T>
-  std::enable_if_t<cudf::is_timestamp_t<T>::value, std::unique_ptr<cudf::column>> operator()(
-    size_type n,
-    scalar const& input,
-    size_type months,
-    rmm::cuda_stream_view stream,
-    rmm::device_async_resource_ref mr)
+  std::unique_ptr<cudf::column> operator()(size_type n,
+                                           scalar const& input,
+                                           size_type months,
+                                           rmm::cuda_stream_view stream,
+                                           rmm::device_async_resource_ref mr)
+    requires(cudf::is_timestamp_t<T>::value)
   {
     // Return empty column if n = 0
     if (n == 0) return cudf::make_empty_column(input.type());
@@ -50,7 +39,7 @@ struct calendrical_month_sequence_functor {
     auto output             = cudf::make_fixed_width_column(
       output_column_type, n, cudf::mask_state::UNALLOCATED, stream, mr);
 
-    thrust::transform(rmm::exec_policy(stream),
+    thrust::transform(rmm::exec_policy_nosync(stream),
                       thrust::make_counting_iterator<size_type>(0),
                       thrust::make_counting_iterator<size_type>(n),
                       output->mutable_view().begin<T>(),
@@ -63,8 +52,8 @@ struct calendrical_month_sequence_functor {
   }
 
   template <typename T, typename... Args>
-  std::enable_if_t<!cudf::is_timestamp_t<T>::value, std::unique_ptr<cudf::column>> operator()(
-    Args&&...)
+  std::unique_ptr<cudf::column> operator()(Args&&...)
+    requires(!cudf::is_timestamp_t<T>::value)
   {
     CUDF_FAIL("Cannot make a date_range of a non-datetime type");
   }

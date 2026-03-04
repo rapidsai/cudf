@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2020-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf/copying.hpp>
@@ -20,6 +9,7 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/merge.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/row_operator/lexicographic.cuh>
 #include <cudf/detail/search.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
@@ -30,7 +20,6 @@
 #include <cudf/merge.hpp>
 #include <cudf/strings/detail/merge.hpp>
 #include <cudf/structs/structs_column_view.hpp>
-#include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/default_stream.hpp>
@@ -44,14 +33,12 @@
 
 #include <cuda/functional>
 #include <cuda/std/iterator>
+#include <cuda/std/utility>
 #include <thrust/binary_search.h>
-#include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/merge.h>
-#include <thrust/pair.h>
 #include <thrust/sequence.h>
 #include <thrust/transform.h>
-#include <thrust/tuple.h>
 
 #include <limits>
 #include <numeric>
@@ -83,10 +70,10 @@ struct row_lexicographic_tagged_comparator {
     table_device_view const* ptr_right_dview{r_side == side::LEFT ? &_lhs : &_rhs};
     auto const comparator = [&]() {
       if constexpr (has_nulls) {
-        return cudf::experimental::row::lexicographic::device_row_comparator<false, bool>{
+        return cudf::detail::row::lexicographic::device_row_comparator<false, bool>{
           has_nulls, *ptr_left_dview, *ptr_right_dview, _column_order, _null_precedence};
       } else {
-        return cudf::experimental::row::lexicographic::device_row_comparator<false, bool>{
+        return cudf::detail::row::lexicographic::device_row_comparator<false, bool>{
           has_nulls, *ptr_left_dview, *ptr_right_dview, _column_order};
       }
     }();
@@ -109,8 +96,8 @@ using index_type = detail::index_type;
  *
  * Merges the bits from two column_device_views into the destination validity buffer
  * according to `merged_indices` map such that bit `i` in `out_validity`
- * will be equal to bit `thrust::get<1>(merged_indices[i])` from `left_dcol`
- * if `thrust::get<0>(merged_indices[i])` equals `side::LEFT`; otherwise,
+ * will be equal to bit `cuda::std::get<1>(merged_indices[i])` from `left_dcol`
+ * if `cuda::std::get<0>(merged_indices[i])` equals `side::LEFT`; otherwise,
  * from `right_dcol`.
  *
  * `left_dcol` and `right_dcol` must not overlap.
@@ -266,7 +253,7 @@ index_vector generate_merged_indices(table_view const& left_table,
 
     auto ineq_op = detail::row_lexicographic_tagged_comparator<true>(
       *lhs_device_view, *rhs_device_view, d_column_order, d_null_precedence);
-    thrust::merge(rmm::exec_policy(stream),
+    thrust::merge(rmm::exec_policy_nosync(stream),
                   left_begin,
                   left_begin + left_size,
                   right_begin,
@@ -276,7 +263,7 @@ index_vector generate_merged_indices(table_view const& left_table,
   } else {
     auto ineq_op = detail::row_lexicographic_tagged_comparator<false>(
       *lhs_device_view, *rhs_device_view, d_column_order, {});
-    thrust::merge(rmm::exec_policy(stream),
+    thrust::merge(rmm::exec_policy_nosync(stream),
                   left_begin,
                   left_begin + left_size,
                   right_begin,
@@ -330,10 +317,10 @@ index_vector generate_merged_indices_nested(table_view const& left_table,
         // would fall
         auto const r_bound      = thrust::upper_bound(thrust::seq, left, left + left_size, idx);
         auto const r_segment    = cuda::std::distance(left, r_bound);
-        merged[r_segment + idx] = thrust::make_pair(side::RIGHT, idx);
+        merged[r_segment + idx] = cuda::std::make_pair(side::RIGHT, idx);
       } else {
         auto const left_idx               = idx - right_size;
-        merged[left[left_idx] + left_idx] = thrust::make_pair(side::LEFT, left_idx);
+        merged[left[left_idx] + left_idx] = cuda::std::make_pair(side::LEFT, left_idx);
       }
     });
 
@@ -359,11 +346,11 @@ struct column_merger {
   // column merger operator;
   //
   template <typename Element>
-  std::enable_if_t<is_rep_layout_compatible<Element>(), std::unique_ptr<column>> operator()(
-    column_view const& lcol,
-    column_view const& rcol,
-    rmm::cuda_stream_view stream,
-    rmm::device_async_resource_ref mr) const
+  std::unique_ptr<column> operator()(column_view const& lcol,
+                                     column_view const& rcol,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::device_async_resource_ref mr) const
+    requires(is_rep_layout_compatible<Element>())
   {
     auto lsz         = lcol.size();
     auto merged_size = lsz + rcol.size();
@@ -402,7 +389,7 @@ struct column_merger {
     // and "gather" into merged_view.data()[indx_merged]
     // from lcol or rcol, depending on side;
     //
-    thrust::transform(rmm::exec_policy(stream),
+    thrust::transform(rmm::exec_policy_nosync(stream),
                       row_order_.begin(),
                       row_order_.end(),
                       merged_view.begin<Element>(),

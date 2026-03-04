@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 """Spilling in multi-partition Dask execution using RAPIDSMPF."""
 
@@ -8,9 +8,9 @@ from typing import TYPE_CHECKING, Any
 
 from dask.sizeof import sizeof
 from distributed import get_worker
-from rapidsmpf.buffer.buffer import MemoryType
 from rapidsmpf.integrations.dask.core import get_worker_context
 from rapidsmpf.integrations.dask.spilling import SpillableWrapper
+from rapidsmpf.memory.buffer import MemoryType
 
 from cudf_polars.containers import DataFrame
 
@@ -18,7 +18,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable, MutableMapping
     from typing import Any
 
-    from cudf_polars.utils.config import ConfigOptions
+    from cudf_polars.utils.config import ConfigOptions, StreamingExecutor
 
 
 def wrap_arg(obj: Any) -> Any:
@@ -108,7 +108,7 @@ def wrap_func_spillable(
 def wrap_dataframe_in_spillable(
     graph: MutableMapping[Any, Any],
     ignore_key: str | tuple[str, int],
-    config_options: ConfigOptions,
+    config_options: ConfigOptions[StreamingExecutor],
 ) -> MutableMapping[Any, Any]:
     """
     Wraps functions within a task graph to handle spillable DataFrames.
@@ -130,9 +130,6 @@ def wrap_dataframe_in_spillable(
     -------
     A new task graph with wrapped functions.
     """
-    assert config_options.executor.name == "streaming", (
-        "'in-memory' executor not supported in 'wrap_dataframe_in_spillable'"
-    )
     target_partition_size = config_options.executor.target_partition_size
 
     ret = {}

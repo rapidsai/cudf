@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "binary_ops.hpp"
@@ -22,7 +11,6 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/structs/utilities.hpp>
-#include <cudf/detail/utilities/functional.hpp>
 #include <cudf/scalar/scalar_device_view.cuh>
 #include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/utilities/memory_resource.hpp>
@@ -32,8 +20,7 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
-#include <thrust/functional.h>
-#include <thrust/iterator/constant_iterator.h>
+#include <cuda/iterator>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform.h>
 
@@ -78,9 +65,8 @@ scalar_as_column_view::return_type scalar_as_column_view::operator()<cudf::strin
   auto& h_scalar_type_view = static_cast<cudf::scalar_type_t<T>&>(const_cast<scalar&>(s));
 
   // build offsets column from the string size
-  auto offsets_transformer_itr =
-    thrust::make_constant_iterator<size_type>(h_scalar_type_view.size());
-  auto offsets_column = std::get<0>(cudf::detail::make_offsets_child_column(
+  auto offsets_transformer_itr = cuda::make_constant_iterator<size_type>(h_scalar_type_view.size());
+  auto offsets_column          = std::get<0>(cudf::detail::make_offsets_child_column(
     offsets_transformer_itr, offsets_transformer_itr + 1, stream, mr));
 
   auto chars_column_v = column_view(
@@ -139,10 +125,9 @@ struct compare_functor {
 
   // This is used to compare a scalar and a column value
   template <typename LhsViewT = LhsDeviceViewT, typename RhsViewT = RhsDeviceViewT>
-  __device__ inline std::enable_if_t<std::is_same_v<LhsViewT, column_device_view> &&
-                                       !std::is_same_v<RhsViewT, column_device_view>,
-                                     OutT>
-  operator()(cudf::size_type i) const
+  __device__ inline OutT operator()(cudf::size_type i) const
+    requires(std::is_same_v<LhsViewT, column_device_view> &&
+             !std::is_same_v<RhsViewT, column_device_view>)
   {
     return cfunc_(lhs_dev_view_.is_valid(i),
                   rhs_dev_view_.is_valid(),
@@ -153,10 +138,9 @@ struct compare_functor {
 
   // This is used to compare a scalar and a column value
   template <typename LhsViewT = LhsDeviceViewT, typename RhsViewT = RhsDeviceViewT>
-  __device__ inline std::enable_if_t<!std::is_same_v<LhsViewT, column_device_view> &&
-                                       std::is_same_v<RhsViewT, column_device_view>,
-                                     OutT>
-  operator()(cudf::size_type i) const
+  __device__ inline OutT operator()(cudf::size_type i) const
+    requires(!std::is_same_v<LhsViewT, column_device_view> &&
+             std::is_same_v<RhsViewT, column_device_view>)
   {
     return cfunc_(lhs_dev_view_.is_valid(),
                   rhs_dev_view_.is_valid(i),
@@ -167,10 +151,9 @@ struct compare_functor {
 
   // This is used to compare 2 column values
   template <typename LhsViewT = LhsDeviceViewT, typename RhsViewT = RhsDeviceViewT>
-  __device__ inline std::enable_if_t<std::is_same_v<LhsViewT, column_device_view> &&
-                                       std::is_same_v<RhsViewT, column_device_view>,
-                                     OutT>
-  operator()(cudf::size_type i) const
+  __device__ inline OutT operator()(cudf::size_type i) const
+    requires(std::is_same_v<LhsViewT, column_device_view> &&
+             std::is_same_v<RhsViewT, column_device_view>)
   {
     return cfunc_(lhs_dev_view_.is_valid(i),
                   rhs_dev_view_.is_valid(i),
@@ -204,7 +187,7 @@ struct null_considering_binop {
     compare_functor<LhsViewT, RhsViewT, OutT, CompareFunc> binop_func{lhsv, rhsv, cfunc};
 
     // Execute it on every element
-    thrust::transform(rmm::exec_policy(stream),
+    thrust::transform(rmm::exec_policy_nosync(stream),
                       thrust::make_counting_iterator(0),
                       thrust::make_counting_iterator(col_size),
                       out_col,
@@ -242,8 +225,8 @@ struct null_considering_binop {
           return invalid_str;
         else if (lhs_valid && rhs_valid) {
           return (op == binary_operator::NULL_MAX)
-                   ? cudf::detail::maximum<cudf::string_view>()(lhs_value, rhs_value)
-                   : cudf::detail::minimum<cudf::string_view>()(lhs_value, rhs_value);
+                   ? cuda::maximum<cudf::string_view>()(lhs_value, rhs_value)
+                   : cuda::minimum<cudf::string_view>()(lhs_value, rhs_value);
         } else if (lhs_valid)
           return lhs_value;
         else
@@ -425,7 +408,7 @@ void apply_sorting_struct_binary_op(mutable_column_view& out,
         is_lhs_scalar,
         is_rhs_scalar,
         op,
-        cudf::experimental::row::equality::nan_equal_physical_equality_comparator{},
+        cudf::detail::row::equality::nan_equal_physical_equality_comparator{},
         stream);
       break;
     case binary_operator::LESS:
@@ -435,7 +418,7 @@ void apply_sorting_struct_binary_op(mutable_column_view& out,
         rhs,
         is_lhs_scalar,
         is_rhs_scalar,
-        cudf::experimental::row::lexicographic::sorting_physical_element_comparator{},
+        cudf::detail::row::lexicographic::sorting_physical_element_comparator{},
         stream);
       break;
     case binary_operator::GREATER:
@@ -445,7 +428,7 @@ void apply_sorting_struct_binary_op(mutable_column_view& out,
         rhs,
         is_lhs_scalar,
         is_rhs_scalar,
-        cudf::experimental::row::lexicographic::sorting_physical_element_comparator{},
+        cudf::detail::row::lexicographic::sorting_physical_element_comparator{},
         stream);
       break;
     case binary_operator::LESS_EQUAL:
@@ -455,7 +438,7 @@ void apply_sorting_struct_binary_op(mutable_column_view& out,
         rhs,
         is_lhs_scalar,
         is_rhs_scalar,
-        cudf::experimental::row::lexicographic::sorting_physical_element_comparator{},
+        cudf::detail::row::lexicographic::sorting_physical_element_comparator{},
         stream);
       break;
     case binary_operator::GREATER_EQUAL:
@@ -465,7 +448,7 @@ void apply_sorting_struct_binary_op(mutable_column_view& out,
         rhs,
         is_lhs_scalar,
         is_rhs_scalar,
-        cudf::experimental::row::lexicographic::sorting_physical_element_comparator{},
+        cudf::detail::row::lexicographic::sorting_physical_element_comparator{},
         stream);
       break;
     default: CUDF_FAIL("Unsupported operator for structs");

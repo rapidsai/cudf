@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "simple.cuh"
@@ -54,10 +43,11 @@ struct all_fn {
     int32_t* d_result;
   };
 
-  template <typename T, std::enable_if_t<std::is_arithmetic_v<T>>* = nullptr>
+  template <typename T>
   std::unique_ptr<scalar> operator()(column_view const& input,
                                      rmm::cuda_stream_view stream,
                                      rmm::device_async_resource_ref mr)
+    requires(std::is_arithmetic_v<T>)
   {
     auto const d_dict = cudf::column_device_view::create(input, stream);
     auto const iter   = [&] {
@@ -68,16 +58,17 @@ struct all_fn {
     }();
     auto d_result =
       cudf::detail::device_scalar<int32_t>(1, stream, cudf::get_current_device_resource_ref());
-    thrust::for_each_n(rmm::exec_policy(stream),
+    thrust::for_each_n(rmm::exec_policy_nosync(stream),
                        thrust::make_counting_iterator<size_type>(0),
                        input.size(),
                        all_true_fn<decltype(iter)>{iter, d_result.data()});
     return std::make_unique<numeric_scalar<bool>>(d_result.value(stream), true, stream, mr);
   }
-  template <typename T, std::enable_if_t<!std::is_arithmetic_v<T>>* = nullptr>
+  template <typename T>
   std::unique_ptr<scalar> operator()(column_view const&,
                                      rmm::cuda_stream_view,
                                      rmm::device_async_resource_ref)
+    requires(!std::is_arithmetic_v<T>)
   {
     CUDF_FAIL("Unexpected key type for dictionary in reduction all()");
   }

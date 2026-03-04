@@ -1,4 +1,5 @@
-# Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 """
 Tests for Streamz Dataframes (SDFs) built on top of cuDF DataFrames.
@@ -24,23 +25,17 @@ cudf = pytest.importorskip("cudf")
 
 
 @pytest.fixture(scope="module")
-def disable_distributed_gc_diagnosis():
+def client():
+    client = Client(processes=False, asynchronous=False)
+
     # Fix flaky tests seen in workflows like
     # https://github.com/rapidsai/cudf/actions/runs/15119048978/job/42498435703?pr=18870#step:9:1722
     # These manifest as a RecursionError in https://github.com/dask/distributed/blob/a890b85c8f107f7c8664ef96270ef8c25a2b31e4/distributed/gc.py#L201
     # There isn't a public API for whether it's enabled or disabled. We'll just
     # assume that it's enabled and disable it for the duration of the tests.
-    distributed.gc.disable_gc_diagnosis()
-    yield
-    distributed.gc.enable_gc_diagnosis()
+    client.run_on_scheduler(distributed.gc.disable_gc_diagnosis)
+    client.run(distributed.gc.disable_gc_diagnosis)
 
-
-pytestmark = pytest.mark.usefixtures("disable_distributed_gc_diagnosis")
-
-
-@pytest.fixture(scope="module")
-def client():
-    client = Client(processes=False, asynchronous=False)
     try:
         yield client
     finally:
@@ -200,10 +195,7 @@ def test_unary_operators(op, getter):
     "func",
     [
         lambda df: df.query("x > 1 and x < 4"),
-        pytest.param(
-            lambda df: df.x.value_counts().nlargest(2).astype(int),
-            marks=pytest.mark.xfail(reason="Index name lost in _getattr_"),
-        ),
+        lambda df: df.x.value_counts().nlargest(2).astype(int),
     ],
 )
 def test_dataframe_simple(func):
@@ -439,16 +431,17 @@ def test_rolling_count_aggregations(
     expected = getattr(post_get(pre_get(df).rolling(window)), op)(**kwargs)
 
     sdf = DataFrame(example=df, stream=stream)
-    roll = getattr(post_get(pre_get(sdf).rolling(window)), op)(**kwargs)
-    L = roll.stream.gather().sink_to_list()
+    with cudf.option_context("mode.pandas_compatible", True):
+        roll = getattr(post_get(pre_get(sdf).rolling(window)), op)(**kwargs)
+        L = roll.stream.gather().sink_to_list()
     assert len(L) == 0
 
     for i in range(0, len(df), m):
         sdf.emit(df.iloc[i : i + m])
 
     assert len(L) > 1
-
-    assert_eq(cudf.concat(L), expected)
+    with cudf.option_context("mode.pandas_compatible", True):
+        assert_eq(cudf.concat(L), expected)
 
 
 def test_stream_to_dataframe(stream):
@@ -846,7 +839,7 @@ def test_rolling_aggs_with_start_state(stream):
     )
     assert assert_eq(
         output0[-1][1].reset_index(drop=True),
-        cudf.Series([450], name="amount"),
+        cudf.Series([450.0], name="amount"),
     )
 
     stream = Stream()
@@ -866,7 +859,7 @@ def test_rolling_aggs_with_start_state(stream):
     )
     assert assert_eq(
         output1[-1][1].reset_index(drop=True),
-        cudf.Series([300], name="amount"),
+        cudf.Series([300.0], name="amount"),
     )
 
 

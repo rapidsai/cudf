@@ -1,4 +1,5 @@
-# Copyright (c) 2019-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 import random
 import string
@@ -7,7 +8,6 @@ import numpy as np
 import pytest
 
 import cudf
-from cudf.core.byte_pair_encoding import BytePairEncoder
 from cudf.core.character_normalizer import CharacterNormalizer
 from cudf.core.tokenize_vocabulary import TokenizeVocabulary
 from cudf.testing import assert_eq
@@ -794,34 +794,6 @@ def test_edit_distance():
     assert_eq(expected, actual)
 
 
-def test_edit_distance_matrix():
-    # normal
-    sr = cudf.Series(["rounded", "bounded", "bounce", "trounce", "ounce"])
-
-    expected = cudf.Series(
-        [
-            [0, 1, 3, 3, 3],
-            [1, 0, 2, 4, 3],
-            [3, 2, 0, 2, 1],
-            [3, 4, 2, 0, 2],
-            [3, 3, 1, 2, 0],
-        ]
-    )
-    got = sr.str.edit_distance_matrix()
-
-    assert_eq(expected, got, check_dtype=False)
-
-    # 1-row series
-    sr2 = cudf.Series(["x"])
-    with pytest.raises(ValueError, match="Require size >= 2"):
-        sr2.str.edit_distance_matrix()
-
-    # null rows
-    sr3 = cudf.Series(["rounded", None, "bounce", "trounce", "ounce"])
-    with pytest.raises(ValueError, match="Cannot compute"):
-        sr3.str.edit_distance_matrix()
-
-
 def test_porter_stemmer_measure():
     strings = cudf.Series(
         [
@@ -985,12 +957,12 @@ def test_jaccard_index():
 
 
 def _make_list_of_strings_of_random_length(
-    num_strings, min_length, max_length
+    num_strings, min_length, max_length, rng
 ):
     return [
         "".join(
-            random.choice(string.ascii_lowercase)
-            for _ in range(random.randint(min_length, max_length))
+            rng.choice(string.ascii_lowercase)
+            for _ in range(rng.randint(min_length, max_length))
         )
         for _ in range(num_strings)
     ]
@@ -998,17 +970,17 @@ def _make_list_of_strings_of_random_length(
 
 def test_jaccard_index_random_strings():
     # Seed the rng before random string generation.
-    random.seed(42)
+    rng = random.Random(42)
     num_strings = 100
     jaccard_width = 5
     common_strings = _make_list_of_strings_of_random_length(
-        num_strings, jaccard_width, 50
+        num_strings, jaccard_width, 50, rng
     )
     uncommon_strings1 = _make_list_of_strings_of_random_length(
-        num_strings, jaccard_width, 10
+        num_strings, jaccard_width, 10, rng
     )
     uncommon_strings2 = _make_list_of_strings_of_random_length(
-        num_strings, jaccard_width, 20
+        num_strings, jaccard_width, 20, rng
     )
     str1 = cudf.Series(uncommon_strings1).str.cat(cudf.Series(common_strings))
     str2 = cudf.Series(uncommon_strings2).str.cat(cudf.Series(common_strings))
@@ -1038,46 +1010,6 @@ def test_jaccard_index_random_strings():
     expected = cudf.Series(res)
 
     actual = str1.str.jaccard_index(str2, jaccard_width)
-    assert_eq(expected, actual)
-
-
-@pytest.mark.parametrize(
-    "separator, input, results",
-    [
-        (" ", "thetestsentence", "the test sent ence"),
-        ("_", "sentenceistest", "sent_ence_is_test"),
-        ("$", "istestsentencehere", "is$test$sent$ence$he$r$e"),
-    ],
-)
-def test_byte_pair_encoding(separator, input, results):
-    pairs_table = cudf.Series(
-        [
-            "t he",
-            "h e",
-            "e n",
-            "i t",
-            "i s",
-            "e s",
-            "en t",
-            "c e",
-            "es t",
-            "en ce",
-            "t h",
-            "h i",
-            "th is",
-            "t est",
-            "s i",
-            "s ent",
-        ]
-    )
-    encoder = BytePairEncoder(pairs_table)
-
-    strings = cudf.Series([input, None, "", input])
-
-    expected = cudf.Series([results, None, "", results])
-
-    actual = encoder(strings, separator)
-    assert type(expected) is type(actual)
     assert_eq(expected, actual)
 
 

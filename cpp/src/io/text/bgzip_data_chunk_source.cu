@@ -1,20 +1,10 @@
 /*
- * Copyright (c) 2022-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
-#include "io/comp/io_uncomp.hpp"
+#include "io/comp/common.hpp"
+#include "io/comp/decompression.hpp"
 #include "io/text/device_data_chunks.hpp"
 
 #include <cudf/detail/nvtx/ranges.hpp>
@@ -22,6 +12,7 @@
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/config_utils.hpp>
+#include <cudf/io/detail/codec.hpp>
 #include <cudf/io/text/data_chunk_source_factories.hpp>
 #include <cudf/io/text/detail/bgzip_utils.hpp>
 #include <cudf/utilities/default_stream.hpp>
@@ -31,6 +22,7 @@
 #include <rmm/device_buffer.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/std/tuple>
 #include <thrust/host_vector.h>
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/transform.h>
@@ -50,17 +42,17 @@ struct bgzip_nvcomp_transform_functor {
   uint8_t const* compressed_ptr;
   uint8_t* decompressed_ptr;
 
-  __device__ thrust::tuple<device_span<uint8_t const>, device_span<uint8_t>> operator()(
-    thrust::tuple<std::size_t, std::size_t, std::size_t, std::size_t> t)
+  __device__ cuda::std::tuple<device_span<uint8_t const>, device_span<uint8_t>> operator()(
+    cuda::std::tuple<std::size_t, std::size_t, std::size_t, std::size_t> t)
   {
-    auto const compressed_begin   = thrust::get<0>(t);
-    auto const compressed_end     = thrust::get<1>(t);
-    auto const decompressed_begin = thrust::get<2>(t);
-    auto const decompressed_end   = thrust::get<3>(t);
-    return thrust::make_tuple(device_span<uint8_t const>{compressed_ptr + compressed_begin,
-                                                         compressed_end - compressed_begin},
-                              device_span<uint8_t>{decompressed_ptr + decompressed_begin,
-                                                   decompressed_end - decompressed_begin});
+    auto const compressed_begin   = cuda::std::get<0>(t);
+    auto const compressed_end     = cuda::std::get<1>(t);
+    auto const decompressed_begin = cuda::std::get<2>(t);
+    auto const decompressed_end   = cuda::std::get<3>(t);
+    return cuda::std::make_tuple(device_span<uint8_t const>{compressed_ptr + compressed_begin,
+                                                            compressed_end - compressed_begin},
+                                 device_span<uint8_t>{decompressed_ptr + decompressed_begin,
+                                                      decompressed_end - decompressed_begin});
   }
 };
 
@@ -85,6 +77,11 @@ class bgzip_data_chunk_reader : public data_chunk_reader {
     static constexpr std::size_t default_offset_alloc =
       1 << 16;  // 64k offset allocation, resized on demand
 
+    decompression_blocks(decompression_blocks const&)            = delete;
+    decompression_blocks& operator=(decompression_blocks const&) = delete;
+    decompression_blocks(decompression_blocks&&)                 = default;
+    decompression_blocks& operator=(decompression_blocks&&)      = default;
+
     cudaEvent_t event;
     cudf::detail::host_vector<char> h_compressed_blocks;
     cudf::detail::host_vector<std::size_t> h_compressed_offsets;
@@ -95,7 +92,7 @@ class bgzip_data_chunk_reader : public data_chunk_reader {
     rmm::device_uvector<std::size_t> d_decompressed_offsets;
     rmm::device_uvector<device_span<uint8_t const>> d_compressed_spans;
     rmm::device_uvector<device_span<uint8_t>> d_decompressed_spans;
-    rmm::device_uvector<cudf::io::detail::compression_result> d_decompression_results;
+    rmm::device_uvector<cudf::io::detail::codec_exec_result> d_decompression_results;
     std::size_t compressed_size_with_headers{};
     std::size_t max_decompressed_size{};
     // this is usually equal to decompressed_size()

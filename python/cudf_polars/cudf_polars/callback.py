@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 """Callback for the polars collect function to execute on device."""
@@ -7,13 +7,14 @@ from __future__ import annotations
 
 import contextlib
 import os
+import textwrap
 import time
 import warnings
 from functools import cache, partial
-from typing import TYPE_CHECKING, Literal, overload
+from threading import Lock
+from typing import TYPE_CHECKING, Literal, assert_never, overload
 
 import nvtx
-from typing_extensions import assert_never
 
 from polars.exceptions import ComputeError, PerformanceWarning
 
@@ -21,7 +22,14 @@ import pylibcudf
 import rmm
 from rmm._cuda import gpu
 
+import cudf_polars.dsl.tracing
+from cudf_polars.dsl.ir import IRExecutionContext
+from cudf_polars.dsl.tracing import CUDF_POLARS_NVTX_DOMAIN
 from cudf_polars.dsl.translate import Translator
+from cudf_polars.utils.config import (
+    _env_get_int,
+    get_total_device_memory,
+)
 from cudf_polars.utils.timer import Timer
 
 if TYPE_CHECKING:
@@ -32,30 +40,16 @@ if TYPE_CHECKING:
 
     from cudf_polars.dsl.ir import IR
     from cudf_polars.typing import NodeTraverser
-    from cudf_polars.utils.config import ConfigOptions
+    from cudf_polars.utils.config import ConfigOptions, MemoryResourceConfig
 
 __all__: list[str] = ["execute_with_cudf"]
-
-
-_SUPPORTED_PREFETCHES = {
-    "column_view::get_data",
-    "mutable_column_view::get_data",
-    "gather",
-    "hash_join",
-}
-
-
-def _env_get_int(name: str, default: int) -> int:
-    try:
-        return int(os.getenv(name, default))
-    except (ValueError, TypeError):  # pragma: no cover
-        return default  # pragma: no cover
 
 
 @cache
 def default_memory_resource(
     device: int,
     cuda_managed_memory: bool,  # noqa: FBT001
+    memory_resource_config: MemoryResourceConfig | None,
 ) -> rmm.mr.DeviceMemoryResource:
     """
     Return the default memory resource for cudf-polars.
@@ -67,6 +61,9 @@ def default_memory_resource(
         the active device when this function is called.
     cuda_managed_memory
         Whether to use managed memory or not.
+    memory_resource_config
+        Memory resource configuration to use. If ``None``, the default
+        memory resource is used.
 
     Returns
     -------
@@ -76,7 +73,9 @@ def default_memory_resource(
         else, an async pool resource is returned.
     """
     try:
-        if (
+        if memory_resource_config is not None:
+            mr = memory_resource_config.create_memory_resource()
+        elif (
             cuda_managed_memory
             and pylibcudf.utils._is_concurrent_managed_access_supported()
         ):
@@ -84,8 +83,7 @@ def default_memory_resource(
             # Leaving a 20% headroom to avoid OOM errors.
             free_memory, _ = rmm.mr.available_device_memory()
             free_memory = int(round(float(free_memory) * 0.80 / 256) * 256)
-            for key in _SUPPORTED_PREFETCHES:
-                pylibcudf.experimental.enable_prefetching(key)
+            pylibcudf.prefetch.enable()
             mr = rmm.mr.PrefetchResourceAdaptor(
                 rmm.mr.PoolMemoryResource(
                     rmm.mr.ManagedMemoryResource(),
@@ -102,8 +100,7 @@ def default_memory_resource(
         ):
             raise ComputeError(
                 "GPU engine requested, but incorrect cudf-polars package installed. "
-                "If your system has a CUDA 11 driver, please uninstall `cudf-polars-cu12` "
-                "and install `cudf-polars-cu11`"
+                "cudf-polars requires CUDA 12.2+ to installed."
             ) from None
         else:
             raise
@@ -114,6 +111,7 @@ def default_memory_resource(
 @contextlib.contextmanager
 def set_memory_resource(
     mr: rmm.mr.DeviceMemoryResource | None,
+    memory_resource_config: MemoryResourceConfig | None,
 ) -> Generator[rmm.mr.DeviceMemoryResource, None, None]:
     """
     Set the current memory resource for an execution block.
@@ -123,6 +121,9 @@ def set_memory_resource(
     mr
         Memory resource to use. If `None`, calls :func:`default_memory_resource`
         to obtain an mr on the currently active device.
+    memory_resource_config
+        Memory resource configuration to use when a concrete memory resource.
+        is not provided. If ``None``, the default memory resource is used.
 
     Returns
     -------
@@ -140,14 +141,30 @@ def set_memory_resource(
         mr = default_memory_resource(
             device=device,
             cuda_managed_memory=bool(
-                _env_get_int("POLARS_GPU_ENABLE_CUDA_MANAGED_MEMORY", default=1) != 0
+                _env_get_int(
+                    "POLARS_GPU_ENABLE_CUDA_MANAGED_MEMORY",
+                    default=1 if get_total_device_memory() is not None else 0,
+                )
+                != 0
             ),
+            memory_resource_config=memory_resource_config,
         )
+
+    if (
+        cudf_polars.dsl.tracing.LOG_TRACES
+    ):  # pragma: no cover; requires CUDF_POLARS_LOG_TRACES=1
+        mr = rmm.mr.StatisticsResourceAdaptor(mr)
+
     rmm.mr.set_current_device_resource(mr)
     try:
         yield mr
     finally:
         rmm.mr.set_current_device_resource(previous)
+
+
+# libcudf doesn't support executing on multiple devices from within the same process.
+SEEN_DEVICE = None
+SEEN_DEVICE_LOCK = Lock()
 
 
 @contextlib.contextmanager
@@ -168,13 +185,28 @@ def set_device(device: int | None) -> Generator[int, None, None]:
     -----
     At exit, the device is restored to whatever was current at entry.
     """
-    previous: int = gpu.getDevice()
-    if device is not None:
-        gpu.setDevice(device)
-    try:
-        yield previous
-    finally:
-        gpu.setDevice(previous)
+    global SEEN_DEVICE  # noqa: PLW0603
+    current: int = gpu.getDevice()
+    to_use = device if device is not None else current
+    with SEEN_DEVICE_LOCK:
+        if (
+            SEEN_DEVICE is not None and to_use != SEEN_DEVICE
+        ):  # pragma: no cover; requires multiple GPUs in CI
+            raise RuntimeError(
+                "cudf-polars does not support running queries on "
+                "multiple devices in the same process. "
+                f"A previous query used device-{SEEN_DEVICE}, "
+                f"the current query is using device-{to_use}."
+            )
+        SEEN_DEVICE = to_use
+    if to_use != current:
+        gpu.setDevice(to_use)
+        try:
+            yield to_use
+        finally:
+            gpu.setDevice(current)
+    else:
+        yield to_use
 
 
 @overload
@@ -221,14 +253,16 @@ def _callback(
     assert n_rows is None
     if timer is not None:
         assert should_time
+
     with (
-        nvtx.annotate(message="ExecuteIR", domain="cudf_polars"),
+        nvtx.annotate(message="ExecuteIR", domain=CUDF_POLARS_NVTX_DOMAIN),
         # Device must be set before memory resource is obtained.
         set_device(config_options.device),
-        set_memory_resource(memory_resource),
+        set_memory_resource(memory_resource, config_options.memory_resource_config),
     ):
         if config_options.executor.name == "in-memory":
-            df = ir.evaluate(cache={}, timer=timer).to_polars()
+            context = IRExecutionContext.from_config_options(config_options)
+            df = ir.evaluate(cache={}, timer=timer, context=context).to_polars()
             if timer is None:
                 return df
             else:
@@ -236,8 +270,18 @@ def _callback(
         elif config_options.executor.name == "streaming":
             from cudf_polars.experimental.parallel import evaluate_streaming
 
-            return evaluate_streaming(ir, config_options).to_polars()
-        assert_never(f"Unknown executor '{config_options.executor}'")
+            if timer is not None:
+                msg = textwrap.dedent("""\
+                    LazyFrame.profile() is not supported with the streaming executor.
+                    To profile execution with the streaming executor, use:
+
+                    - NVIDIA NSight Systems with the 'streaming' scheduler.
+                    - Dask's built-in profiling tools with the 'distributed' scheduler.
+                    """)
+                raise NotImplementedError(msg)
+
+            return evaluate_streaming(ir, config_options)
+        assert_never(config_options.executor)
 
 
 def execute_with_cudf(
@@ -277,7 +321,7 @@ def execute_with_cudf(
 
     memory_resource = config.memory_resource
 
-    with nvtx.annotate(message="ConvertIR", domain="cudf_polars"):
+    with nvtx.annotate(message="ConvertIR", domain=CUDF_POLARS_NVTX_DOMAIN):
         translator = Translator(nt, config)
         ir = translator.translate_ir()
         ir_translation_errors = translator.errors
@@ -287,7 +331,7 @@ def execute_with_cudf(
         if (
             memory_resource is None
             and translator.config_options.executor.name == "streaming"
-            and translator.config_options.executor.scheduler == "distributed"
+            and translator.config_options.executor.cluster == "distributed"
         ):  # pragma: no cover; Requires distributed cluster
             memory_resource = rmm.mr.get_current_device_resource()
         if len(ir_translation_errors):

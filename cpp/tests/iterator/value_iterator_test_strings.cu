@@ -1,28 +1,19 @@
 /*
- * Copyright (c) 2020-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software distributed under the License
- * is distributed on an "AS IS" BASIS,  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express
- * or implied. See the License for the specific language governing permissions and limitations under
- * the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 #include "iterator_tests.cuh"
 
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/utilities/memory_resource.hpp>
+#include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 
+#include <cuda/std/utility>
 #include <thrust/host_vector.h>
 #include <thrust/iterator/counting_iterator.h>
-#include <thrust/pair.h>
 
 auto strings_to_string_views(std::vector<std::string>& input_strings)
 {
@@ -52,9 +43,10 @@ TEST_F(StringIteratorTest, string_view_null_iterator)
   using T = cudf::string_view;
   std::string zero("zero");
   // the char data has to be in GPU
-  auto initmsg = cudf::detail::make_device_uvector(
-    zero, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
-  T init = T{initmsg.data(), int(initmsg.size())};
+  auto initmsg = cudf::detail::make_device_uvector(cudf::host_span<char const>{zero},
+                                                   cudf::get_default_stream(),
+                                                   cudf::get_current_device_resource_ref());
+  T init       = T{initmsg.data(), int(initmsg.size())};
 
   // data and valid arrays
   std::vector<std::string> host_values(
@@ -88,9 +80,10 @@ TEST_F(StringIteratorTest, string_view_no_null_iterator)
   // T init = T{"", 0};
   std::string zero("zero");
   // the char data has to be in GPU
-  auto initmsg = cudf::detail::make_device_uvector(
-    zero, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
-  T init = T{initmsg.data(), int(initmsg.size())};
+  auto initmsg = cudf::detail::make_device_uvector(cudf::host_span<char const>{zero},
+                                                   cudf::get_default_stream(),
+                                                   cudf::get_current_device_resource_ref());
+  T init       = T{initmsg.data(), int(initmsg.size())};
 
   // data array
   std::vector<std::string> host_values(
@@ -113,9 +106,10 @@ TEST_F(StringIteratorTest, string_scalar_iterator)
   // T init = T{"", 0};
   std::string zero("zero");
   // the char data has to be in GPU
-  auto initmsg = cudf::detail::make_device_uvector(
-    zero, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
-  T init = T{initmsg.data(), int(initmsg.size())};
+  auto initmsg = cudf::detail::make_device_uvector(cudf::host_span<char const>{zero},
+                                                   cudf::get_default_stream(),
+                                                   cudf::get_current_device_resource_ref());
+  T init       = T{initmsg.data(), int(initmsg.size())};
 
   // data array
   std::vector<std::string> host_values(100, zero);
@@ -123,9 +117,9 @@ TEST_F(StringIteratorTest, string_scalar_iterator)
   auto [dev_chars, all_array] = strings_to_string_views(host_values);
 
   // calculate the expected value by CPU.
-  thrust::host_vector<thrust::pair<T, bool>> value_and_validity(host_values.size());
+  thrust::host_vector<cuda::std::pair<T, bool>> value_and_validity(host_values.size());
   std::transform(all_array.begin(), all_array.end(), value_and_validity.begin(), [](auto v) {
-    return thrust::pair<T, bool>{v, true};
+    return cuda::std::pair<T, bool>{v, true};
   });
 
   // create a scalar

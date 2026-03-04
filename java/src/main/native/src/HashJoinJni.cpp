@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2021-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "cudf_jni_apis.hpp"
@@ -26,7 +15,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_HashJoin_create(JNIEnv* env,
                                                             jboolean j_nulls_equal)
 {
   JNI_NULL_CHECK(env, j_table, "table handle is null", 0);
-  try {
+  JNI_TRY
+  {
     auto const load_factor = 0.5;
     cudf::jni::auto_set_device(env);
     auto tview         = reinterpret_cast<cudf::table_view const*>(j_table);
@@ -34,17 +24,18 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_HashJoin_create(JNIEnv* env,
     auto hash_join_ptr = new cudf::hash_join(*tview, cudf::nullable_join::YES, nulleq, load_factor);
     return reinterpret_cast<jlong>(hash_join_ptr);
   }
-  CATCH_STD(env, 0);
+  JNI_CATCH(env, 0);
 }
 
 JNIEXPORT void JNICALL Java_ai_rapids_cudf_HashJoin_destroy(JNIEnv* env, jclass, jlong j_handle)
 {
-  try {
+  JNI_TRY
+  {
     cudf::jni::auto_set_device(env);
     auto hash_join_ptr = reinterpret_cast<cudf::hash_join*>(j_handle);
     delete hash_join_ptr;
   }
-  CATCH_STD(env, );
+  JNI_CATCH(env, );
 }
 
 }  // extern "C"

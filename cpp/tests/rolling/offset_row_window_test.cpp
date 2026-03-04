@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2021-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf_test/base_fixture.hpp>
@@ -21,6 +10,8 @@
 
 #include <cudf/aggregation.hpp>
 #include <cudf/rolling.hpp>
+
+#include <cuda/iterator>
 
 template <typename T>
 using fwcw = cudf::test::fixed_width_column_wrapper<T>;
@@ -38,7 +29,7 @@ using cudf::test::iterators::nulls_at;
 auto constexpr null = int32_t{0};  // NULL representation for int32_t;
 
 // clang-tidy doesn't think std::transform can handle a
-// thrust::constant_iterator, so this is a workaround that uses nulls_at
+// cuda::constant_iterator, so this is a workaround that uses nulls_at
 // instead of no_nulls
 auto no_nulls_list() { return nulls_at({}); }
 
@@ -266,7 +257,7 @@ TEST_F(OffsetRowWindowTest, TestNegativeBoundsClamp)
     thrust::make_transform_iterator(thrust::make_counting_iterator(0), [](auto const& i) {
       return i / 10;  // 0-9 in the first group, 10-19 in the second, etc.
     });
-  auto const agg_iter = thrust::make_constant_iterator(1);
+  auto const agg_iter = cuda::make_constant_iterator(1);
 
   auto const grp = ints_column(grp_iter, grp_iter + 30);
   auto const agg = ints_column(agg_iter, agg_iter + 30);
@@ -326,7 +317,7 @@ TEST_F(OffsetRowWindowTest, CheckGroupBoundaries)
                                    100,
                                    1,
                                    *cudf::make_max_aggregation<cudf::rolling_aggregation>());
-    auto const null_iter = thrust::make_constant_iterator<int32_t>(null);
+    auto const null_iter = cuda::make_constant_iterator<int32_t>(null);
     auto const expected  = ints_column(null_iter, null_iter + 30, all_nulls());
 
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected);

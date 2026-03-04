@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2020-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf/column/column.hpp>
@@ -21,6 +10,7 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/sizes_to_offsets_iterator.cuh>
+#include <cudf/detail/utilities/grid_1d.cuh>
 #include <cudf/hashing/detail/murmurhash3_x86_32.cuh>
 #include <cudf/lists/detail/lists_column_factories.hpp>
 #include <cudf/strings/detail/strings_children.cuh>
@@ -42,7 +32,6 @@
 #include <cuda/functional>
 #include <cuda/std/iterator>
 #include <thrust/copy.h>
-#include <thrust/functional.h>
 #include <thrust/iterator/counting_iterator.h>
 
 #include <stdexcept>
@@ -268,8 +257,7 @@ std::unique_ptr<cudf::column> generate_character_ngrams(cudf::strings_column_vie
                std::invalid_argument);
 
   if (input.is_empty()) {  // if no strings, return an empty column
-    return cudf::lists::detail::make_empty_lists_column(
-      cudf::data_type{cudf::type_id::STRING}, stream, mr);
+    return cudf::lists::detail::make_empty_lists_column(cudf::data_type{cudf::type_id::STRING});
   }
   if (input.size() == input.null_count()) {
     return cudf::lists::detail::make_all_nulls_lists_column(
@@ -303,7 +291,7 @@ std::unique_ptr<cudf::column> generate_character_ngrams(cudf::strings_column_vie
     total_ngrams, std::move(offsets_column), chars.release(), 0, rmm::device_buffer{});
 
   return make_lists_column(
-    input.size(), std::move(offsets), std::move(output), 0, rmm::device_buffer{}, stream, mr);
+    input.size(), std::move(offsets), std::move(output), 0, rmm::device_buffer{});
 }
 
 namespace {
@@ -320,14 +308,9 @@ CUDF_KERNEL void character_ngram_hash_kernel(cudf::column_device_view const d_st
                                              cudf::size_type const* d_ngram_offsets,
                                              cudf::hash_value_type* d_results)
 {
-  auto const idx = cudf::detail::grid_1d::global_thread_id();
-  if (idx >= (static_cast<cudf::thread_index_type>(d_strings.size()) * cudf::detail::warp_size)) {
-    return;
-  }
-
+  auto const idx     = cudf::detail::grid_1d::global_thread_id();
   auto const str_idx = idx / cudf::detail::warp_size;
-
-  if (d_strings.is_null(str_idx)) { return; }
+  if (str_idx >= d_strings.size() or d_strings.is_null(str_idx)) { return; }
   auto const d_str = d_strings.element<cudf::string_view>(str_idx);
   if (d_str.empty()) { return; }
 
@@ -338,7 +321,10 @@ CUDF_KERNEL void character_ngram_hash_kernel(cudf::column_device_view const d_st
 
   auto const end        = d_str.data() + d_str.size_bytes();
   auto const warp_count = (d_str.size_bytes() / cudf::detail::warp_size) + 1;
-  auto const lane_idx   = idx % cudf::detail::warp_size;
+
+  namespace cg        = cooperative_groups;
+  auto const warp     = cg::tiled_partition<cudf::detail::warp_size>(cg::this_thread_block());
+  auto const lane_idx = warp.thread_rank();
 
   auto d_hashes = d_results + ngram_offset;
   auto itr      = d_str.data() + lane_idx;
@@ -353,7 +339,7 @@ CUDF_KERNEL void character_ngram_hash_kernel(cudf::column_device_view const d_st
       if (left == 0) { hash = hasher(cudf::string_view(itr, bytes)); }
     }
     hvs[threadIdx.x] = hash;  // store hash into shared memory
-    __syncwarp();
+    warp.sync();
     if (lane_idx == 0) {
       // copy valid hash values into d_hashes
       auto const hashes = &hvs[threadIdx.x];
@@ -362,7 +348,7 @@ CUDF_KERNEL void character_ngram_hash_kernel(cudf::column_device_view const d_st
           return h != 0;
         });
     }
-    __syncwarp();
+    warp.sync();
     itr += cudf::detail::warp_size;
   }
 }
@@ -406,7 +392,7 @@ std::unique_ptr<cudf::column> hash_character_ngrams(cudf::strings_column_view co
     *d_strings, ngrams, seed, d_offsets, d_hashes);
 
   return make_lists_column(
-    input.size(), std::move(offsets), std::move(hashes), 0, rmm::device_buffer{}, stream, mr);
+    input.size(), std::move(offsets), std::move(hashes), 0, rmm::device_buffer{});
 }
 
 }  // namespace detail

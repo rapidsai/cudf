@@ -1,4 +1,5 @@
-# Copyright (c) 2023-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
 
@@ -19,11 +20,11 @@ class TokenizeVocabulary:
 
     def __init__(self, vocabulary: Series) -> None:
         self.vocabulary = plc.nvtext.tokenize.TokenizeVocabulary(
-            vocabulary._column.to_pylibcudf(mode="read")
+            vocabulary._column.plc_column
         )
 
     def tokenize(
-        self, text, delimiter: str = "", default_id: int = -1
+        self, text: Series, delimiter: str = "", default_id: int = -1
     ) -> Series:
         """
         Parameters

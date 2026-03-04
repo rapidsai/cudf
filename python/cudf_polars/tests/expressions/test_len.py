@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -23,7 +23,10 @@ def test_len(dtype, empty):
         q = df.select(pl.len().cast(dtype))
 
     # Workaround for https://github.com/pola-rs/polars/issues/16904
-    assert_gpu_result_equal(q, collect_kwargs={"projection_pushdown": False})
+    assert_gpu_result_equal(
+        q,
+        collect_kwargs={"optimizations": pl.QueryOptFlags(projection_pushdown=False)},
+    )
 
 
 @pytest.mark.parametrize("data", [[1, 2, 3], [1, 2, None]])

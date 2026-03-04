@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf/column/column_factories.hpp>
@@ -75,7 +64,7 @@ std::unique_ptr<column> remove_keys_fn(dictionary_column_view const& dictionary_
   auto map_itr =
     cudf::detail::indexalator_factory::make_output_iterator(map_indices->mutable_view());
   // init to max to identify new nulls
-  thrust::fill(rmm::exec_policy(stream),
+  thrust::fill(rmm::exec_policy_nosync(stream),
                map_itr,
                map_itr + keys_view.size(),
                max_size);  // all valid indices are less than this value
@@ -87,7 +76,7 @@ std::unique_ptr<column> remove_keys_fn(dictionary_column_view const& dictionary_
       auto positions = make_fixed_width_column(
         indices_type, keys_view.size(), cudf::mask_state::UNALLOCATED, stream);
       auto itr = cudf::detail::indexalator_factory::make_output_iterator(positions->mutable_view());
-      thrust::sequence(rmm::exec_policy(stream), itr, itr + keys_view.size());
+      thrust::sequence(rmm::exec_policy_nosync(stream), itr, itr + keys_view.size());
       return positions;
     }();
     // copy the non-removed keys ( keys_to_keep_fn(idx)==true )
@@ -101,7 +90,7 @@ std::unique_ptr<column> remove_keys_fn(dictionary_column_view const& dictionary_
       cudf::detail::indexalator_factory::make_input_iterator(keys_positions->view());
     // build indices mapper
     // Example scatter([0,1,2][0,2,4][max,max,max,max,max]) => [0,max,1,max,2]
-    thrust::scatter(rmm::exec_policy(stream),
+    thrust::scatter(rmm::exec_policy_nosync(stream),
                     positions_itr,
                     positions_itr + filtered_view.size(),
                     filtered_itr,
@@ -182,7 +171,7 @@ std::unique_ptr<column> remove_unused_keys(dictionary_column_view const& diction
   auto const matches = [&] {
     // build keys index to verify against indices values
     rmm::device_uvector<int32_t> keys_positions(keys_size, stream);
-    thrust::sequence(rmm::exec_policy(stream), keys_positions.begin(), keys_positions.end());
+    thrust::sequence(rmm::exec_policy_nosync(stream), keys_positions.begin(), keys_positions.end());
     // wrap the indices for comparison in contains()
     column_view keys_positions_view(
       data_type{type_id::INT32}, keys_size, keys_positions.data(), nullptr, 0);

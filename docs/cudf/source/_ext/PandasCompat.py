@@ -1,4 +1,5 @@
-# Copyright (c) 2021-2025, NVIDIA CORPORATION
+# SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION
+# SPDX-License-Identifier: Apache-2.0
 
 # This file is adapted from official sphinx tutorial for `todo` extension:
 # https://www.sphinx-doc.org/en/master/development/tutorials/todo.html

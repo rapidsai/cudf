@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
@@ -40,15 +29,32 @@ std::string random_file_in_dir(std::string const& dir_path);
  */
 class cuio_source_sink_pair {
  public:
-  cuio_source_sink_pair(io_type type);
-  ~cuio_source_sink_pair()
-  {
-    // delete the temporary file
-    std::remove(file_name.c_str());
-  }
-  // move constructor
-  cuio_source_sink_pair(cuio_source_sink_pair&& ss)            = default;
-  cuio_source_sink_pair& operator=(cuio_source_sink_pair&& ss) = default;
+  cuio_source_sink_pair(io_type type_param);
+  ~cuio_source_sink_pair();
+
+  /**
+   * @brief Move constructor that transfers file ownership.
+   *
+   * After the move, the source object no longer owns the temporary file and its destructor will not
+   * delete it.
+   *
+   * @param ss The source object to move from
+   */
+  cuio_source_sink_pair(cuio_source_sink_pair&& ss) noexcept;
+
+  /**
+   * @brief Move assignment operator that transfers file ownership.
+   *
+   * If this object currently owns a file, it is deleted before taking ownership of the source's
+   * file.
+   *
+   * @param ss The source object to move from
+   * @return Reference to this object
+   */
+  cuio_source_sink_pair& operator=(cuio_source_sink_pair&& ss) noexcept;
+
+  cuio_source_sink_pair(cuio_source_sink_pair const&)            = delete;
+  cuio_source_sink_pair& operator=(cuio_source_sink_pair const&) = delete;
 
   /**
    * @brief Created a source info of the set type
@@ -75,14 +81,20 @@ class cuio_source_sink_pair {
   [[nodiscard]] size_t size();
 
  private:
+  /**
+   * @brief Deletes the temporary file.
+   */
+  void cleanup();
+
   static temp_directory const tmpdir;
 
-  io_type const type;
+  io_type type;
   std::vector<char> h_buffer;
   cudf::detail::host_vector<char> pinned_buffer;
   rmm::device_uvector<std::byte> d_buffer;
-  std::string const file_name;
+  std::string file_name;
   std::unique_ptr<cudf::io::data_sink> void_sink;
+  bool owns_file;
 };
 
 /**
@@ -133,14 +145,24 @@ std::vector<std::string> select_column_names(std::vector<std::string> const& col
 std::vector<cudf::size_type> segments_in_chunk(int num_segments, int num_chunks, int chunk);
 
 /**
- * @brief Drops L3 cache if `CUDF_BENCHMARK_DROP_CACHE` environment variable is set.
+ * @brief Drops the page cache based on the `CUDF_BENCHMARK_DROP_CACHE` environment variable.
  *
- * Has no effect if the environment variable is not set.
- * May require sudo access ro run successfully.
+ * The environment variable controls whether and how page cache is dropped. All options are
+ * case-insensitive.
+ * - Unset, `false`, `off`, `no`, `0`: No cache dropping. The benchmark is to be run with hot
+ * cache with a warning logged.
+ * - `true`, `on`, `yes`, `1`, `file`: Drops page cache for each file in `file_paths` (recommended,
+ * no privileges required)
+ * - `system`: Drops the system-wide page cache (legacy behavior, may require privileges)
  *
- * @throw cudf::logic_error if the environment variable is set and the command fails
+ * @param file_paths Files for which to drop the page cache. Only used when the environment variable
+ * is set to `file`.
+ *
+ * @throw std::invalid_argument if the environment variable has an unrecognized value
+ * @throw cudf::logic_error if system-wide cache dropping is requested but fails
+ * @throw kvikio::GenericSystemError if file-specific cache dropping fails
  */
-void try_drop_l3_cache();
+void drop_page_cache_if_enabled(std::vector<std::string> const& file_paths);
 
 /**
  * @brief Convert a string to the corresponding io_type enum value.

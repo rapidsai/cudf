@@ -1,4 +1,5 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 from libcpp cimport bool
 from libcpp.functional cimport reference_wrapper
 from libcpp.memory cimport unique_ptr
@@ -22,6 +23,9 @@ from pylibcudf.libcudf.types cimport (
     size_type,
     sorted,
 )
+
+from rmm.librmm.cuda_stream_view cimport cuda_stream_view
+from rmm.librmm.memory_resource cimport device_memory_resource
 
 # workaround for https://github.com/cython/cython/issues/3885
 ctypedef const scalar constscalar
@@ -50,25 +54,6 @@ cdef extern from "cudf/groupby.hpp" \
         unique_ptr[table] values
 
     cdef cppclass groupby:
-        groupby(const table_view& keys) except +libcudf_exception_handler
-        groupby(
-            const table_view& keys,
-            null_policy include_null_keys
-        ) except +libcudf_exception_handler
-
-        groupby(
-            const table_view& keys,
-            null_policy include_null_keys,
-            sorted keys_are_sorted,
-        ) except +libcudf_exception_handler
-
-        groupby(
-            const table_view& keys,
-            null_policy include_null_keys,
-            sorted keys_are_sorted,
-            const vector[order]& column_order,
-        ) except +libcudf_exception_handler
-
         groupby(
             const table_view& keys,
             null_policy include_null_keys,
@@ -82,6 +67,8 @@ cdef extern from "cudf/groupby.hpp" \
             vector[aggregation_result]
         ] aggregate(
             const vector[aggregation_request]& requests,
+            cuda_stream_view stream,
+            device_memory_resource* mr
         ) except +libcudf_exception_handler
 
         pair[
@@ -89,6 +76,8 @@ cdef extern from "cudf/groupby.hpp" \
             vector[aggregation_result]
         ] scan(
             const vector[scan_request]& requests,
+            cuda_stream_view stream,
+            device_memory_resource* mr
         ) except +libcudf_exception_handler
 
         pair[
@@ -97,13 +86,20 @@ cdef extern from "cudf/groupby.hpp" \
         ] shift(
             const table_view values,
             const vector[size_type] offset,
-            const vector[reference_wrapper[constscalar]] fill_values
+            const vector[reference_wrapper[constscalar]] fill_values,
+            cuda_stream_view stream,
+            device_memory_resource* mr
         ) except +libcudf_exception_handler
 
-        groups get_groups() except +libcudf_exception_handler
-        groups get_groups(table_view values) except +libcudf_exception_handler
+        groups get_groups(
+            table_view values,
+            cuda_stream_view stream,
+            device_memory_resource* mr
+        ) except +libcudf_exception_handler
 
         pair[unique_ptr[table], unique_ptr[table]] replace_nulls(
             const table_view& values,
-            const vector[replace_policy] replace_policy
+            const vector[replace_policy] replace_policy,
+            cuda_stream_view stream,
+            device_memory_resource* mr
         ) except +libcudf_exception_handler

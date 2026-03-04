@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
@@ -65,25 +54,15 @@ class distinct_hash_join {
   /**
    * @brief Constructs a distinct hash join object for subsequent probe calls
    *
-   * @deprecated Deprecated constructor. Use the new load factor overload instead.
-   *
    * @throw cudf::logic_error if the build table has no columns
-   * @param build The build table that contains distinct elements
-   * @param compare_nulls Controls whether null join-key values should match or not
-   * @param stream CUDA stream used for device memory operations and kernel launches
-   */
-  [[deprecated]] distinct_hash_join(cudf::table_view const& build,
-                                    null_equality compare_nulls,
-                                    rmm::cuda_stream_view stream = cudf::get_default_stream());
-
-  /**
-   * @copydoc distinct_hash_join(cudf::table_view const&, null_equality, rmm::cuda_stream_view)
-   *
    * @throw std::invalid_argument if load_factor is not greater than 0 and less than or equal to 1
    *
+   * @param build The build table that contains distinct elements
+   * @param compare_nulls Controls whether null join-key values should match or not
    * @param load_factor The desired ratio of filled slots to total slots in the hash table, must be
    * in range (0,1]. For example, 0.5 indicates a target of 50% occupancy. Note that the actual
    * occupancy achieved may be slightly lower than the specified value.
+   * @param stream CUDA stream used for device memory operations and kernel launches
    */
   distinct_hash_join(cudf::table_view const& build,
                      null_equality compare_nulls  = null_equality::EQUAL,
@@ -114,7 +93,7 @@ class distinct_hash_join {
    *
    * @note For a given row index `i` of the probe table, the resulting `build_indices[i]` contains
    * the row index of the matched row from the build table if there is a match. Otherwise, contains
-   * `JoinNoneValue`.
+   * `JoinNoMatch`.
    *
    * @param probe The probe table, from which the keys are probed
    * @param stream CUDA stream used for device memory operations and kernel launches

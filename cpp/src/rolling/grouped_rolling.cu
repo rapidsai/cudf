@@ -1,35 +1,20 @@
 /*
- * Copyright (c) 2020-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "detail/optimized_unbounded_window.hpp"
 #include "detail/range_window_bounds.hpp"
 #include "detail/rolling.cuh"
-#include "detail/rolling_jit.hpp"
+#include "detail/rolling_udf.cuh"
 #include "detail/rolling_utils.cuh"
-#include "rolling/detail/rolling.hpp"
 
+#include <cudf/detail/groupby/sort_helper.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/detail/rolling.hpp>
-#include <cudf/detail/utilities/assert.cuh>
-#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/rolling.hpp>
 #include <cudf/rolling/range_window_bounds.hpp>
 #include <cudf/types.hpp>
-#include <cudf/unary.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
@@ -37,10 +22,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
-#include <cuda/functional>
-
-#include <iterator>
-#include <variant>
+#include <cuda/std/functional>
 
 namespace cudf {
 
@@ -324,8 +306,11 @@ std::unique_ptr<table> grouped_range_rolling_window(table_view const& group_keys
           return nulls_per_group[i] < (d_offsets[i + 1] - d_offsets[i]) &&
                  d_orderby.is_null_nocheck(d_offsets[i]);
         }));
-    auto is_before = thrust::reduce(
-      rmm::exec_policy_nosync(stream), it, it + offsets.size() - 1, false, thrust::logical_or<>{});
+    auto is_before = thrust::reduce(rmm::exec_policy_nosync(stream),
+                                    it,
+                                    it + offsets.size() - 1,
+                                    false,
+                                    cuda::std::logical_or<>{});
     return is_before ? null_order::BEFORE : null_order::AFTER;
   } else {
     // Sort order is DESCENDING
@@ -342,8 +327,11 @@ std::unique_ptr<table> grouped_range_rolling_window(table_view const& group_keys
           return nulls_per_group[i] < (d_offsets[i + 1] - d_offsets[i]) &&
                  d_orderby.is_null_nocheck(d_offsets[i + 1] - 1);
         }));
-    auto is_before = thrust::reduce(
-      rmm::exec_policy_nosync(stream), it, it + offsets.size() - 1, false, thrust::logical_or<>{});
+    auto is_before = thrust::reduce(rmm::exec_policy_nosync(stream),
+                                    it,
+                                    it + offsets.size() - 1,
+                                    false,
+                                    cuda::std::logical_or<>{});
     return is_before ? null_order::BEFORE : null_order::AFTER;
   }
 }

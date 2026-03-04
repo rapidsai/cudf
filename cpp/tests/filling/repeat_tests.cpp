@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf_test/base_fixture.hpp>
@@ -25,7 +14,7 @@
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 
-#include <thrust/iterator/constant_iterator.h>
+#include <cuda/iterator>
 #include <thrust/iterator/counting_iterator.h>
 
 #include <algorithm>
@@ -276,7 +265,7 @@ TEST_F(RepeatErrorTestFixture, CountHasNulls)
   auto count =
     cudf::test::fixed_width_column_wrapper<cudf::size_type>(thrust::make_counting_iterator(0),
                                                             thrust::make_counting_iterator(0) + 100,
-                                                            thrust::make_constant_iterator(false));
+                                                            cuda::make_constant_iterator(false));
 
   cudf::table_view input_table{{input}};
 

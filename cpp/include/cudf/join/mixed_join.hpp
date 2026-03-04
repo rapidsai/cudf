@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
@@ -37,6 +26,15 @@ namespace CUDF_EXPORT cudf {
  * @{
  * @file
  */
+
+/**
+ * @brief Type alias for output size data used in mixed joins.
+ *
+ * This type represents an optional pair containing:
+ * - The exact output size of the join operation
+ * - A device span of per-row match counts for each row in the larger input table
+ */
+using output_size_data_type = std::optional<std::pair<std::size_t, device_span<size_type const>>>;
 
 /**
  * @brief Returns a pair of row index vectors corresponding to all pairs of
@@ -87,16 +85,15 @@ namespace CUDF_EXPORT cudf {
  */
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
-mixed_inner_join(
-  table_view const& left_equality,
-  table_view const& right_equality,
-  table_view const& left_conditional,
-  table_view const& right_conditional,
-  ast::expression const& binary_predicate,
-  null_equality compare_nulls = null_equality::EQUAL,
-  std::optional<std::pair<std::size_t, device_span<size_type const>>> output_size_data = {},
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+mixed_inner_join(table_view const& left_equality,
+                 table_view const& right_equality,
+                 table_view const& left_conditional,
+                 table_view const& right_conditional,
+                 ast::expression const& binary_predicate,
+                 null_equality compare_nulls            = null_equality::EQUAL,
+                 output_size_data_type output_size_data = {},
+                 rmm::cuda_stream_view stream           = cudf::get_default_stream(),
+                 rmm::device_async_resource_ref mr      = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Returns a pair of row index vectors corresponding to all pairs of
@@ -149,16 +146,15 @@ mixed_inner_join(
  */
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
-mixed_left_join(
-  table_view const& left_equality,
-  table_view const& right_equality,
-  table_view const& left_conditional,
-  table_view const& right_conditional,
-  ast::expression const& binary_predicate,
-  null_equality compare_nulls = null_equality::EQUAL,
-  std::optional<std::pair<std::size_t, device_span<size_type const>>> output_size_data = {},
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+mixed_left_join(table_view const& left_equality,
+                table_view const& right_equality,
+                table_view const& left_conditional,
+                table_view const& right_conditional,
+                ast::expression const& binary_predicate,
+                null_equality compare_nulls            = null_equality::EQUAL,
+                output_size_data_type output_size_data = {},
+                rmm::cuda_stream_view stream           = cudf::get_default_stream(),
+                rmm::device_async_resource_ref mr      = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Returns a pair of row index vectors corresponding to all pairs of
@@ -211,16 +207,15 @@ mixed_left_join(
  */
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
-mixed_full_join(
-  table_view const& left_equality,
-  table_view const& right_equality,
-  table_view const& left_conditional,
-  table_view const& right_conditional,
-  ast::expression const& binary_predicate,
-  null_equality compare_nulls = null_equality::EQUAL,
-  std::optional<std::pair<std::size_t, device_span<size_type const>>> output_size_data = {},
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+mixed_full_join(table_view const& left_equality,
+                table_view const& right_equality,
+                table_view const& left_conditional,
+                table_view const& right_conditional,
+                ast::expression const& binary_predicate,
+                null_equality compare_nulls            = null_equality::EQUAL,
+                output_size_data_type output_size_data = {},
+                rmm::cuda_stream_view stream           = cudf::get_default_stream(),
+                rmm::device_async_resource_ref mr      = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Returns an index vector corresponding to all rows in the left tables
@@ -232,7 +227,6 @@ mixed_full_join(
  * choose a suitable compare_nulls value AND use appropriate null-safe
  * operators in the expression.
  *
- * If the provided output size or per-row counts are incorrect, behavior is undefined.
  *
  * @code{.pseudo}
  * left_equality: {{0, 1, 2}}
@@ -258,8 +252,7 @@ mixed_full_join(
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned table and columns' device memory
  *
- * @return A pair of vectors [`left_indices`, `right_indices`] that can be used to construct
- * the result of performing a mixed full join between the four input tables.
+ * @return A vector of indices from the left table that have matches in the right table.
  */
 std::unique_ptr<rmm::device_uvector<size_type>> mixed_left_semi_join(
   table_view const& left_equality,
@@ -282,7 +275,6 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_left_semi_join(
  * choose a suitable compare_nulls value AND use appropriate null-safe
  * operators in the expression.
  *
- * If the provided output size or per-row counts are incorrect, behavior is undefined.
  *
  * @code{.pseudo}
  * left_equality: {{0, 1, 2}}
@@ -308,8 +300,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_left_semi_join(
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned table and columns' device memory
  *
- * @return A pair of vectors [`left_indices`, `right_indices`] that can be used to construct
- * the result of performing a mixed full join between the four input tables.
+ * @return A vector of indices from the left table that do not have matches in the right table.
  */
 std::unique_ptr<rmm::device_uvector<size_type>> mixed_left_anti_join(
   table_view const& left_equality,

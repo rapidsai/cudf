@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 /**
@@ -23,7 +12,7 @@
 
 #include "hybrid_scan_helpers.hpp"
 #include "io/parquet/parquet_gpu.hpp"
-#include "io/parquet/reader_impl_chunking.hpp"
+#include "io/parquet/reader_impl.hpp"
 
 #include <cudf/io/detail/utils.hpp>
 #include <cudf/io/experimental/hybrid_scan.hpp>
@@ -31,7 +20,7 @@
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/mr/device/device_memory_resource.hpp>
+#include <rmm/mr/device_memory_resource.hpp>
 
 #include <thrust/host_vector.h>
 
@@ -41,12 +30,14 @@
 
 namespace cudf::io::parquet::experimental::detail {
 
+using cudf::io::parquet::detail::ColumnChunkDesc;
+using cudf::io::parquet::detail::PageInfo;
 using text::byte_range_info;
 
 /**
  * @brief Implementation of the experimental Parquet reader optimized for Hybrid Scan operation
  */
-class hybrid_scan_reader_impl {
+class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
  public:
   /**
    * @brief Constructor for the experimental parquet reader implementation to optimally read
@@ -56,6 +47,16 @@ class hybrid_scan_reader_impl {
    * @param options Parquet reader options
    */
   explicit hybrid_scan_reader_impl(cudf::host_span<uint8_t const> footer_bytes,
+                                   parquet_reader_options const& options);
+
+  /**
+   * @brief Constructor for the experimental parquet reader implementation to optimally read
+   * Parquet files subject to highly selective filters
+   *
+   * @param parquet_metadata Pre-populated Parquet file metadata
+   * @param options Parquet reader options
+   */
+  explicit hybrid_scan_reader_impl(FileMetaData const& parquet_metadata,
                                    parquet_reader_options const& options);
 
   /**
@@ -85,6 +86,18 @@ class hybrid_scan_reader_impl {
     cudf::host_span<std::vector<size_type> const> row_group_indices) const;
 
   /**
+   * @copydoc cudf::io::experimental::hybrid_scan::reset_column_selection
+   */
+  void reset_column_selection();
+
+  /**
+   * @copydoc cudf::io::experimental::hybrid_scan::filter_row_groups_with_byte_range
+   */
+  [[nodiscard]] std::vector<std::vector<cudf::size_type>> filter_row_groups_with_byte_range(
+    cudf::host_span<std::vector<size_type> const> row_group_indices,
+    parquet_reader_options const& options) const;
+
+  /**
    * @copydoc cudf::io::experimental::hybrid_scan::filter_row_groups_with_stats
    */
   [[nodiscard]] std::vector<std::vector<size_type>> filter_row_groups_with_stats(
@@ -103,7 +116,7 @@ class hybrid_scan_reader_impl {
    * @copydoc cudf::io::experimental::hybrid_scan::filter_row_groups_with_dictionary_pages
    */
   [[nodiscard]] std::vector<std::vector<size_type>> filter_row_groups_with_dictionary_pages(
-    cudf::host_span<rmm::device_buffer> dictionary_page_data,
+    cudf::host_span<cudf::device_span<uint8_t const> const> dictionary_page_data,
     cudf::host_span<std::vector<size_type> const> row_group_indices,
     parquet_reader_options const& options,
     rmm::cuda_stream_view stream);
@@ -112,19 +125,27 @@ class hybrid_scan_reader_impl {
    * @copydoc cudf::io::experimental::hybrid_scan::filter_row_groups_with_bloom_filters
    */
   [[nodiscard]] std::vector<std::vector<size_type>> filter_row_groups_with_bloom_filters(
-    cudf::host_span<rmm::device_buffer> bloom_filter_data,
+    cudf::host_span<cudf::device_span<uint8_t const> const> bloom_filter_data,
     cudf::host_span<std::vector<size_type> const> row_group_indices,
     parquet_reader_options const& options,
     rmm::cuda_stream_view stream);
 
   /**
-   * @copydoc cudf::io::experimental::hybrid_scan::filter_data_pages_with_stats
+   * @copydoc cudf::io::experimental::hybrid_scan::build_all_true_row_mask
    */
-  [[nodiscard]] std::pair<std::unique_ptr<cudf::column>, std::vector<thrust::host_vector<bool>>>
-  filter_data_pages_with_stats(cudf::host_span<std::vector<size_type> const> row_group_indices,
-                               parquet_reader_options const& options,
-                               rmm::cuda_stream_view stream,
-                               rmm::device_async_resource_ref mr);
+  [[nodiscard]] std::unique_ptr<cudf::column> build_all_true_row_mask(
+    cudf::host_span<std::vector<size_type> const> row_group_indices,
+    rmm::cuda_stream_view stream,
+    rmm::device_async_resource_ref mr);
+
+  /**
+   * @copydoc cudf::io::experimental::hybrid_scan::build_row_mask_with_page_index_stats
+   */
+  [[nodiscard]] std::unique_ptr<cudf::column> build_row_mask_with_page_index_stats(
+    cudf::host_span<std::vector<size_type> const> row_group_indices,
+    parquet_reader_options const& options,
+    rmm::cuda_stream_view stream,
+    rmm::device_async_resource_ref mr);
 
   /**
    * @brief Fetches byte ranges of column chunks of filter columns
@@ -142,12 +163,13 @@ class hybrid_scan_reader_impl {
    * @copydoc cudf::io::experimental::hybrid_scan::materialize_filter_columns
    */
   [[nodiscard]] table_with_metadata materialize_filter_columns(
-    cudf::host_span<thrust::host_vector<bool> const> data_page_pask,
     cudf::host_span<std::vector<size_type> const> row_group_indices,
-    std::vector<rmm::device_buffer> column_chunk_buffers,
-    cudf::mutable_column_view row_mask,
+    cudf::host_span<cudf::device_span<uint8_t const> const> column_chunk_data,
+    cudf::mutable_column_view& row_mask,
+    use_data_page_mask mask_data_pages,
     parquet_reader_options const& options,
-    rmm::cuda_stream_view stream);
+    rmm::cuda_stream_view stream,
+    rmm::device_async_resource_ref mr);
 
   /**
    * @brief Fetches byte ranges of column chunks of payload columns
@@ -166,57 +188,157 @@ class hybrid_scan_reader_impl {
    */
   [[nodiscard]] table_with_metadata materialize_payload_columns(
     cudf::host_span<std::vector<size_type> const> row_group_indices,
-    std::vector<rmm::device_buffer> column_chunk_buffers,
-    cudf::column_view row_mask,
+    cudf::host_span<cudf::device_span<uint8_t const> const> column_chunk_data,
+    cudf::column_view const& row_mask,
+    use_data_page_mask mask_data_pages,
     parquet_reader_options const& options,
-    rmm::cuda_stream_view stream);
+    rmm::cuda_stream_view stream,
+    rmm::device_async_resource_ref mr);
 
   /**
-   * @brief Updates the output row mask such that such that out_row_mask[i] = true iff
-   * in_row_mask[i] is valid and true
+   * @brief Fetches byte ranges for all (or selected) column chunks
+   *
+   * @param row_group_indices Input row groups indices
+   * @param options Parquet reader options
+   * @return Pair of a vector of byte ranges to column chunks of all (or selected) columns and a
+   * vector of their corresponding input source file indices
+   */
+  [[nodiscard]] std::pair<std::vector<byte_range_info>, std::vector<cudf::size_type>>
+  all_column_chunks_byte_ranges(cudf::host_span<std::vector<size_type> const> row_group_indices,
+                                parquet_reader_options const& options);
+
+  /**
+   * @copydoc cudf::io::experimental::hybrid_scan::materialize_all_columns
+   */
+  [[nodiscard]] table_with_metadata materialize_all_columns(
+    cudf::host_span<std::vector<size_type> const> row_group_indices,
+    cudf::host_span<cudf::device_span<uint8_t const> const> column_chunk_data,
+    parquet_reader_options const& options,
+    rmm::cuda_stream_view stream,
+    rmm::device_async_resource_ref mr);
+
+  /**
+   * @copydoc cudf::io::experimental::hybrid_scan::setup_chunking_for_filter_columns
+   */
+  void setup_chunking_for_filter_columns(
+    std::size_t chunk_read_limit,
+    std::size_t pass_read_limit,
+    cudf::host_span<std::vector<size_type> const> row_group_indices,
+    cudf::column_view const& row_mask,
+    use_data_page_mask mask_data_pages,
+    cudf::host_span<cudf::device_span<uint8_t const> const> column_chunk_data,
+    parquet_reader_options const& options,
+    rmm::cuda_stream_view stream,
+    rmm::device_async_resource_ref mr);
+
+  /**
+   * @copydoc cudf::io::experimental::hybrid_scan::materialize_filter_columns_chunk
+   */
+  [[nodiscard]] table_with_metadata materialize_filter_columns_chunk(
+    cudf::mutable_column_view& row_mask);
+
+  /**
+   * @copydoc cudf::io::experimental::hybrid_scan::setup_chunking_for_payload_columns
+   */
+  void setup_chunking_for_payload_columns(
+    std::size_t chunk_read_limit,
+    std::size_t pass_read_limit,
+    cudf::host_span<std::vector<size_type> const> row_group_indices,
+    cudf::column_view const& row_mask,
+    use_data_page_mask mask_data_pages,
+    cudf::host_span<cudf::device_span<uint8_t const> const> column_chunk_data,
+    parquet_reader_options const& options,
+    rmm::cuda_stream_view stream,
+    rmm::device_async_resource_ref mr);
+
+  /**
+   * @copydoc cudf::io::experimental::hybrid_scan::materialize_payload_columns_chunk
+   */
+  [[nodiscard]] table_with_metadata materialize_payload_columns_chunk(
+    cudf::column_view const& row_mask);
+
+  /**
+   * @copydoc cudf::io::experimental::hybrid_scan::setup_chunking_for_all_columns
+   */
+  void setup_chunking_for_all_columns(
+    std::size_t chunk_read_limit,
+    std::size_t pass_read_limit,
+    cudf::host_span<std::vector<size_type> const> row_group_indices,
+    cudf::host_span<cudf::device_span<uint8_t const> const> column_chunk_data,
+    parquet_reader_options const& options,
+    rmm::cuda_stream_view stream,
+    rmm::device_async_resource_ref mr);
+
+  /**
+   * @copydoc cudf::io::experimental::hybrid_scan::materialize_all_columns_chunk
+   */
+  [[nodiscard]] table_with_metadata materialize_all_columns_chunk();
+
+  /**
+   * @copydoc cudf::io::experimental::hybrid_scan::has_next_table_chunk
+   */
+  [[nodiscard]] bool has_next_table_chunk();
+
+  /**
+   * @brief Updates the output row mask such that such that out_row_mask[i + out_row_mask_offset] =
+   * true if and only if in_row_mask[i] is valid and true
    *
    * Updates the output row mask to reflect the final valid and surviving rows from the input row
    * mask. This is inline with the masking behavior of cudf::detail::apply_boolean_mask
    *
    * @param in_row_mask Input row mask column
    * @param out_row_mask Output row mask column
+   * @param out_row_mask_offset Offset into the output row mask column
    * @param stream CUDA stream
    */
-  static void update_row_mask(cudf::column_view in_row_mask,
-                              cudf::mutable_column_view out_row_mask,
+  static void update_row_mask(cudf::column_view const& in_row_mask,
+                              cudf::mutable_column_view& out_row_mask,
+                              cudf::size_type out_row_mask_offset,
                               rmm::cuda_stream_view stream);
 
  private:
   /**
-   * @brief The enum indicating whether we are reading the filter columns or the payload columns
+   * @brief The enum indicating whether we are reading the filter, payload, or all columns
    */
-  enum class read_mode { FILTER_COLUMNS, PAYLOAD_COLUMNS };
+  enum class read_columns_mode { FILTER_COLUMNS, PAYLOAD_COLUMNS, ALL_COLUMNS };
 
   /**
    * @brief Initialize the necessary options related internal variables for use later on
    *
-   * @param row_group_indices Row group indices to read
    * @param options Reader options
+   * @param num_sources Number of input sources
    * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource used to allocate the returned column's device memory
    */
-  void initialize_options(cudf::host_span<std::vector<size_type> const> row_group_indices,
-                          parquet_reader_options const& options,
-                          rmm::cuda_stream_view stream);
+  void initialize_options(parquet_reader_options const& options,
+                          std::size_t num_sources,
+                          rmm::cuda_stream_view stream,
+                          rmm::device_async_resource_ref mr);
 
   /**
-   * @brief Set the mask for pages
+   * @brief Convert the input filter expression such that all column name references are replaced
+   * with corresponding column references
+   *
+   * @param options Reader options
+   * @return Converted expression
+   */
+  [[nodiscard]] named_to_reference_converter build_converted_expression(
+    parquet_reader_options const& options);
+
+  /**
+   * @brief Set the page mask for the pass pages
    *
    * @param data_page_mask Input data page mask from page-pruning step
    */
-  void set_page_mask(cudf::host_span<thrust::host_vector<bool> const> data_page_mask);
+  void set_pass_page_mask(cudf::host_span<bool const> data_page_mask);
 
   /**
    * @brief Select the columns to be read based on the read mode
    *
-   * @param read_mode Read mode indicating if we are reading filter or payload columns
+   * @param read_columns_mode Read mode indicating if we are reading filter or payload columns
    * @param options Reader options
    */
-  void select_columns(read_mode read_mode, parquet_reader_options const& options);
+  void select_columns(read_columns_mode read_columns_mode, parquet_reader_options const& options);
 
   /**
    * @brief Get the byte ranges for the input column chunks
@@ -229,11 +351,28 @@ class hybrid_scan_reader_impl {
     cudf::host_span<std::vector<size_type> const> row_group_indices) const;
 
   /**
-   * @brief Invalidate output buffer nullmask for rows spanned by the pruned pages
+   * @brief Helper to prepare converted filter expression and output column data types
    *
-   * @param page_mask Boolean vector indicating if a page needs to be decoded or is pruned
+   * @param options Parquet reader options
+   * @return A pair of a converted filter expression and a vector of output column data types
    */
-  void update_output_nullmasks_for_pruned_pages(cudf::host_span<bool const> page_mask);
+  std::pair<named_to_reference_converter, std::vector<cudf::data_type>>
+  prepare_filter_and_output_types(parquet_reader_options const& options);
+
+  /**
+   * @brief Helper to prepare column materialization
+   *
+   * @param read_columns_mode Read mode indicating if we are reading filter or payload columns
+   * @param num_sources Number of input sources
+   * @param options Parquet reader options
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource used to allocate the device memory for the output columns
+   */
+  void prepare_materialization(read_columns_mode read_columns_mode,
+                               std::size_t num_sources,
+                               parquet_reader_options const& options,
+                               rmm::cuda_stream_view stream,
+                               rmm::device_async_resource_ref mr);
 
   /**
    * @brief Perform the necessary data preprocessing for parsing file later on
@@ -242,31 +381,57 @@ class hybrid_scan_reader_impl {
    * groups and computes the schedule of top level passes (see `pass_intermediate_data`) and the
    * schedule of subpasses (see `subpass_intermediate_data`).
    *
+   * @param mode Value indicating if the data sources are read all at once or chunk by chunk
    * @param row_group_indices Row group indices to read
-   * @param column_chunk_buffers Device buffers containing column chunk data
-   * @param options Parquet reader options
+   * @param column_chunk_data Device spans of buffers containing column chunk data
+   * @param data_page_mask Input data page mask from page-pruning step
    */
-  void prepare_data(cudf::host_span<std::vector<size_type> const> row_group_indices,
-                    std::vector<rmm::device_buffer> column_chunk_buffers,
-                    parquet_reader_options const& options);
+  void prepare_data(read_mode mode,
+                    cudf::host_span<std::vector<size_type> const> row_group_indices,
+                    cudf::host_span<cudf::device_span<uint8_t const> const> column_chunk_data,
+                    cudf::host_span<bool const> data_page_mask);
+
+  /**
+   * @brief Create descriptors for filter column chunks and decode dictionary page headers
+   *
+   * @param row_group_indices The row groups to read
+   * @param dictionary_page_data Device buffers containing dictionary page data
+   * @param dictionary_col_schemas Schema indices of output columns with (in)equality predicate
+   * @param options Parquet reader options
+   * @param stream CUDA stream
+   *
+   * @return A tuple of a boolean indicating if any of the chunks have compressed data, a host
+   * device vector of column chunk descriptors, and a host device vector of decoded dictionary page
+   * headers
+   */
+  std::tuple<bool,
+             cudf::detail::hostdevice_vector<ColumnChunkDesc>,
+             cudf::detail::hostdevice_vector<PageInfo>>
+  prepare_dictionaries(cudf::host_span<std::vector<size_type> const> row_group_indices,
+                       cudf::host_span<cudf::device_span<uint8_t const> const> dictionary_page_data,
+                       cudf::host_span<int const> dictionary_col_schemas,
+                       parquet_reader_options const& options,
+                       rmm::cuda_stream_view stream);
 
   /**
    * @brief Prepares the select input row groups and associated chunk information
    *
+   * @param mode Value indicating if the data sources are read all at once or chunk by chunk
    * @param row_group_indices Row group indices to read
-   * @param options Parquet reader options
    */
-  void prepare_row_groups(cudf::host_span<std::vector<size_type> const> row_group_indices,
-                          parquet_reader_options const& options);
+  void prepare_row_groups(read_mode mode,
+                          cudf::host_span<std::vector<size_type> const> row_group_indices);
 
   /**
    * @brief Ratchet the pass/subpass/chunk process forward.
    *
-   * @param column_chunk_buffers Device buffers containing column chunk data
-   * @param options Parquet reader options
+   * @param mode Value indicating if the data sources are read all at once or chunk by chunk
+   * @param column_chunk_data Device spans of buffers containing column chunk data
+   * @param data_page_mask Input data page mask from page-pruning step for the current pass
    */
-  void handle_chunking(std::vector<rmm::device_buffer> column_chunk_buffers,
-                       parquet_reader_options const& options);
+  void handle_chunking(read_mode mode,
+                       cudf::host_span<cudf::device_span<uint8_t const> const> column_chunk_data,
+                       cudf::host_span<bool const> data_page_mask);
 
   /**
    * @brief Setup step for the next input read pass.
@@ -274,96 +439,28 @@ class hybrid_scan_reader_impl {
    * A 'pass' is defined as a subset of row groups read out of the globally
    * requested set of all row groups.
    *
-   * @param column_chunk_buffers Device buffers containing column chunk data
-   * @param options Parquet reader options
+   * @param column_chunk_data Device spans of buffers containing column chunk data
    */
-  void setup_next_pass(std::vector<rmm::device_buffer> column_chunk_buffers,
-                       parquet_reader_options const& options);
-
-  /**
-   * @brief Setup step for the next decompression subpass.
-   *
-   * A 'subpass' is defined as a subset of pages within a pass that are
-   * decompressed and decoded as a batch. Subpasses may be further subdivided
-   * into output chunks.
-   *
-   * @param options Parquet reader options
-   *
-   */
-  void setup_next_subpass(parquet_reader_options const& options);
-
-  /**
-   * @brief Populate the output table metadata from the parquet file metadata.
-   *
-   * @param out_metadata The output table metadata to add to
-   */
-  void populate_metadata(table_metadata& out_metadata) const;
+  void setup_next_pass(cudf::host_span<cudf::device_span<uint8_t const> const> column_chunk_data);
 
   /**
    * @brief Setup pointers to columns chunks to be processed for this pass.
    *
    * Does not decompress the chunk data.
    *
+   * @param column_chunk_data Device spans of buffers containing column chunk data
    * @return boolean indicating if compressed chunks were found
    */
-  bool setup_column_chunks();
+  bool setup_column_chunks(
+    cudf::host_span<cudf::device_span<uint8_t const> const> column_chunk_data);
 
   /**
    * @brief Setup compressed column chunks data and decode page headers for the current pass.
    *
-   * @param column_chunk_buffers Device buffers containing column chunk data
+   * @param column_chunk_data Device spans of buffers containing column chunk data
    */
-  void setup_compressed_data(std::vector<rmm::device_buffer> column_chunk_buffers);
-
-  /**
-   * @brief Build string dictionary indices for a pass.
-   */
-  void build_string_dict_indices();
-
-  /**
-   * @brief For list columns, generate estimated row counts for pages in the current pass.
-   *
-   * The row counts in the pages that come out of the file only reflect the number of values in
-   * all of the rows in the page, not the number of rows themselves. In order to do subpass reading
-   * more accurately, we would like to have a more accurate guess of the real number of rows per
-   * page.
-   */
-  void generate_list_column_row_count_estimates();
-
-  /**
-   * @brief Perform some preprocessing for subpass page data and also compute the split locations
-   * {skip_rows, num_rows} for chunked reading.
-   *
-   * There are several pieces of information we can't compute directly from row counts in
-   * the parquet headers when dealing with nested schemas:
-   * - The total sizes of all output columns at all nesting levels
-   * - The starting output buffer offset for each page, for each nesting level
-   *
-   * For flat schemas, these values are computed during header decoding (see gpuDecodePageHeaders).
-   *
-   * @param chunk_read_limit Limit on total number of bytes to be returned per read,
-   *        or `0` if there is no limit
-   */
-  void preprocess_subpass_pages(size_t chunk_read_limit);
-
-  /**
-   * @brief Allocate nesting information storage for all pages and set pointers to it.
-   *
-   * One large contiguous buffer of PageNestingInfo structs is allocated and
-   * distributed among the PageInfo structs.
-   *
-   * Note that this gets called even in the flat schema case so that we have a
-   * consistent place to store common information such as value counts, etc.
-   */
-  void allocate_nesting_info();
-
-  /**
-   * @brief Allocate space for use when decoding definition/repetition levels.
-   *
-   * One large contiguous buffer of data allocated and
-   * distributed among the PageInfo structs.
-   */
-  void allocate_level_decode_space();
+  void setup_compressed_data(
+    cudf::host_span<cudf::device_span<uint8_t const> const> column_chunk_data);
 
   /**
    * @brief Reset the internal state of the reader.
@@ -376,7 +473,7 @@ class hybrid_scan_reader_impl {
    *
    * @tparam RowMaskView View type of the row mask column
    *
-   * @param[in] read_mode Read mode indicating if we are reading filter or payload columns
+   * @param[in] read_columns_mode Read mode indicating if we are reading filter or payload columns
    * @param[in,out] out_metadata The output table metadata
    * @param[in,out] out_columns The columns for building the output table
    * @param[in,out] row_mask Boolean column indicating which rows need to be read after page-pruning
@@ -384,58 +481,10 @@ class hybrid_scan_reader_impl {
    * @return The output table along with columns' metadata
    */
   template <typename RowMaskView>
-  table_with_metadata finalize_output(read_mode read_mode,
+  table_with_metadata finalize_output(read_columns_mode read_columns_mode,
                                       table_metadata& out_metadata,
                                       std::vector<std::unique_ptr<column>>& out_columns,
                                       RowMaskView row_mask);
-
-  /**
-   * @brief Allocate data buffers for the output columns.
-   *
-   * @param skip_rows Crop all rows below skip_rows
-   * @param num_rows Maximum number of rows to read
-   */
-  void allocate_columns(size_t skip_rows, size_t num_rows);
-
-  /**
-   * @brief Calculate per-page offsets for string data
-   *
-   * @return Vector of total string data sizes for each column
-   */
-  cudf::detail::host_vector<size_t> calculate_page_string_offsets();
-
-  /**
-   * @brief Converts the page data and outputs to columns.
-   *
-   * @param skip_rows Minimum number of rows from start
-   * @param num_rows Number of rows to output
-   */
-  void decode_page_data(size_t skip_rows, size_t num_rows);
-
-  /**
-   * @brief Creates file-wide parquet chunk information.
-   *
-   * Creates information about all chunks in the file, storing it in
-   * the file-wide _file_itm_data structure.
-   */
-  void create_global_chunk_info(parquet_reader_options const& options);
-
-  /**
-   * @brief Computes all of the passes we will perform over the file.
-   */
-  void compute_input_passes();
-
-  /**
-   * @brief Given a set of pages that have had their sizes computed by nesting level and
-   * a limit on total read size, generate a set of {skip_rows, num_rows} pairs representing
-   * a set of reads that will generate output columns of total size <= `chunk_read_limit` bytes.
-   */
-  void compute_output_chunks_for_subpass();
-
-  /**
-   * @brief Check if there is more work to be done.
-   */
-  [[nodiscard]] bool has_more_work() const;
 
   /**
    * @brief Read a chunk of data and return an output table.
@@ -443,73 +492,39 @@ class hybrid_scan_reader_impl {
    * This function is called internally and expects all preprocessing steps have already been done.
    *
    * @tparam RowMaskView View type of the row mask column
-   * @param[in] read_mode Read mode indicating if we are reading filter or payload columns
+   * @param mode Value indicating if the data sources are read all at once or chunk by chunk
+   * @param[in] read_columns_mode Read mode indicating if we are reading filter or payload columns
    * @param[in,out] row_mask Boolean column indicating which rows need to be read after page-pruning
    *                         for filter columns, or after materialize step for payload columns
    * @return The output table along with columns' metadata
    */
   template <typename RowMaskView>
-  table_with_metadata read_chunk_internal(read_mode read_mode, RowMaskView row_mask);
+  table_with_metadata read_chunk_internal(read_mode mode,
+                                          read_columns_mode read_columns_mode,
+                                          RowMaskView row_mask);
 
   /**
    * @brief Check if this is the first output chunk
    *
    * @return True if this is the first output chunk
    */
-  [[nodiscard]] bool is_first_output_chunk() const;
+  [[nodiscard]] bool is_first_output_chunk() const
+  {
+    return _file_itm_data._output_chunk_count == 0 and _rows_processed_so_far == 0;
+  }
 
  private:
-  using named_to_reference_converter = parquet::detail::named_to_reference_converter;
-  using input_column_info            = parquet::detail::input_column_info;
-  using inline_column_buffer         = io::detail::inline_column_buffer;
-  using reader_column_schema         = io::reader_column_schema;
-  using file_intermediate_data       = parquet::detail::file_intermediate_data;
-  using pass_intermediate_data       = parquet::detail::pass_intermediate_data;
-
-  rmm::cuda_stream_view _stream;
-  rmm::device_async_resource_ref _mr{cudf::get_current_device_resource_ref()};
-
-  std::unique_ptr<aggregate_reader_metadata> _metadata;
-
-  // name to reference converter to extract AST output filter
-  named_to_reference_converter _expr_conv{std::nullopt, table_metadata{}};
-
-  // input columns to be processed
-  std::vector<input_column_info> _input_columns;
-  // Buffers for generating output columns
-  std::vector<inline_column_buffer> _output_buffers;
-  // Buffers copied from `_output_buffers` after construction for reuse
-  std::vector<inline_column_buffer> _output_buffers_template;
-  // _output_buffers associated schema indices
-  std::vector<int> _output_column_schemas;
-
-  // _output_buffers associated metadata
-  std::unique_ptr<table_metadata> _output_metadata;
+  aggregate_reader_metadata* _extended_metadata;
 
   std::optional<std::vector<std::string>> _filter_columns_names;
 
-  bool _strings_to_categorical = false;
+  cudf::size_type _rows_processed_so_far{0};
 
-  // are there usable page indexes available
-  bool _has_page_index = false;
-
-  size_type _num_sources{1};
-
-  // timestamp_type
-  cudf::data_type _timestamp_type;
-
-  std::optional<std::vector<reader_column_schema>> _reader_column_schema;
-
-  thrust::host_vector<bool> _page_mask;
-
-  file_intermediate_data _file_itm_data;
-  bool _file_preprocessed{false};
-  bool _uses_custom_row_bounds{false};
+  bool _use_pandas_metadata{false};
 
   bool _is_filter_columns_selected{false};
   bool _is_payload_columns_selected{false};
-
-  std::unique_ptr<pass_intermediate_data> _pass_itm_data;
+  bool _is_all_columns_selected{false};
 };
 
 }  // namespace cudf::io::parquet::experimental::detail

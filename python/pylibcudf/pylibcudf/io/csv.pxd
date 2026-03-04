@@ -1,9 +1,11 @@
-# Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 from libcpp cimport bool
 from libcpp.string cimport string
 from libcpp.vector cimport vector
 
 from rmm.pylibrmm.stream cimport Stream
+from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 
 from pylibcudf.io.types cimport SinkInfo, SourceInfo, TableWithMetadata
 
@@ -44,6 +46,7 @@ cdef class CsvReaderOptions:
     cpdef void set_true_values(self, list true_values)
     cpdef void set_false_values(self, list false_values)
     cpdef void set_na_values(self, list na_values)
+    cpdef void set_source(self, SourceInfo src)
 
 
 cdef class CsvReaderOptionsBuilder:
@@ -67,9 +70,12 @@ cdef class CsvReaderOptionsBuilder:
     cpdef CsvReaderOptionsBuilder keep_default_na(self, bool keep_default_na)
     cpdef CsvReaderOptionsBuilder na_filter(self, bool na_filter)
     cpdef CsvReaderOptionsBuilder dayfirst(self, bool dayfirst)
+    cpdef CsvReaderOptionsBuilder delimiter(self, str delimiter)
     cpdef CsvReaderOptions build(self)
 
-cpdef TableWithMetadata read_csv(CsvReaderOptions options, Stream stream = *)
+cpdef TableWithMetadata read_csv(
+    CsvReaderOptions options, Stream stream = *, DeviceMemoryResource mr=*
+)
 
 cdef class CsvWriterOptions:
     cdef csv_writer_options c_obj

@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2021-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf/column/column_device_view.cuh>
@@ -53,13 +42,15 @@ struct tabulator {
   size_type const* const offsets;
 
   template <typename U>
-  static std::enable_if_t<!cudf::is_duration<U>(), T> __device__ multiply(U x, size_type times)
+  static T __device__ multiply(U x, size_type times)
+    requires(!cudf::is_duration<U>())
   {
     return x * static_cast<T>(times);
   }
 
   template <typename U>
-  static std::enable_if_t<cudf::is_duration<U>(), T> __device__ multiply(U x, size_type times)
+  static T __device__ multiply(U x, size_type times)
+    requires(cudf::is_duration<U>())
   {
     return T{x.count() * times};
   }
@@ -125,7 +116,7 @@ struct sequences_functor<T, std::enable_if_t<is_supported<T>()>> {
     auto const steps_begin  = steps ? steps.value().template begin<T>() : nullptr;
 
     auto const op = tabulator<T>{n_lists, n_elements, starts_begin, steps_begin, offsets};
-    thrust::tabulate(rmm::exec_policy(stream), result_begin, result_begin + n_elements, op);
+    thrust::tabulate(rmm::exec_policy_nosync(stream), result_begin, result_begin + n_elements, op);
 
     return result;
   }
@@ -156,7 +147,7 @@ std::unique_ptr<column> sequences(column_view const& starts,
   }
 
   auto const n_lists = starts.size();
-  if (n_lists == 0) { return cudf::make_empty_lists_column(starts.type(), stream, mr); }
+  if (n_lists == 0) { return cudf::make_empty_lists_column(starts.type()); }
 
   auto const sizes_input_it = cudf::detail::indexalator_factory::make_input_iterator(sizes);
   // Generate list offsets for the output.
@@ -174,13 +165,8 @@ std::unique_ptr<column> sequences(column_view const& starts,
                                stream,
                                mr);
 
-  return make_lists_column(n_lists,
-                           std::move(list_offsets),
-                           std::move(child),
-                           0,
-                           rmm::device_buffer(0, stream, mr),
-                           stream,
-                           mr);
+  return make_lists_column(
+    n_lists, std::move(list_offsets), std::move(child), 0, rmm::device_buffer(0, stream, mr));
 }
 
 }  // anonymous namespace

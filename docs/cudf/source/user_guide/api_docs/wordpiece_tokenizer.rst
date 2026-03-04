@@ -10,10 +10,3 @@ Constructor
 
    WordPieceVocabulary
    WordPieceVocabulary.tokenize
-
-.. currentmodule:: cudf.core.subword_tokenizer
-.. autosummary::
-   :toctree: api/
-
-   SubwordTokenizer
-   SubwordTokenizer.__call__

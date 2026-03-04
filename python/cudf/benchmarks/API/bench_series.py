@@ -1,13 +1,14 @@
-# Copyright (c) 2022-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 """Benchmarks of Series methods."""
 
 import pytest
-from config import cudf, cupy
+from config import NUM_ROWS, cudf, cupy
 from utils import benchmark_with_object
 
 
-@pytest.mark.parametrize("N", [100, 1_000_000])
+@pytest.mark.parametrize("N", NUM_ROWS)
 def bench_construction(benchmark, N):
     benchmark(cudf.Series, cupy.random.rand(N))
 

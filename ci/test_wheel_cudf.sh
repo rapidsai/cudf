@@ -1,21 +1,49 @@
 #!/bin/bash
-# Copyright (c) 2023-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
-set -eou pipefail
+set -euo pipefail
 
 source rapids-init-pip
 
 RAPIDS_PY_CUDA_SUFFIX="$(rapids-wheel-ctk-name-gen "${RAPIDS_CUDA_VERSION}")"
 
 # Download the cudf, libcudf, and pylibcudf built in the previous step
-CUDF_WHEELHOUSE=$(RAPIDS_PY_WHEEL_NAME="cudf_${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels-from-github python)
+CUDF_WHEELHOUSE=$(rapids-download-from-github "$(rapids-package-name "wheel_python" cudf --stable --cuda "$RAPIDS_CUDA_VERSION")")
 LIBCUDF_WHEELHOUSE=$(RAPIDS_PY_WHEEL_NAME="libcudf_${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels-from-github cpp)
-PYLIBCUDF_WHEELHOUSE=$(RAPIDS_PY_WHEEL_NAME="pylibcudf_${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels-from-github python)
+PYLIBCUDF_WHEELHOUSE=$(rapids-download-from-github "$(rapids-package-name "wheel_python" pylibcudf --stable --cuda "$RAPIDS_CUDA_VERSION")")
 
-rapids-logger "Install cudf, pylibcudf, and test requirements"
+rapids-logger "Install pylibcudf and its basic dependencies in a virtual environment"
 
 # generate constraints (possibly pinning to oldest support versions of dependencies)
 rapids-generate-pip-constraints py_test_cudf ./constraints.txt
+
+RESULTS_DIR=${RAPIDS_TESTS_DIR:-"$(mktemp -d)"}
+RAPIDS_TESTS_DIR=${RAPIDS_TESTS_DIR:-"${RESULTS_DIR}/test-results"}/
+mkdir -p "${RAPIDS_TESTS_DIR}"
+
+# To test pylibcudf without its optional dependencies, we create a virtual environment
+python -m venv env
+. env/bin/activate
+rapids-pip-retry install \
+    -v \
+    --constraint ./constraints.txt \
+    --constraint "${PIP_CONSTRAINT}" \
+    "$(echo "${LIBCUDF_WHEELHOUSE}"/libcudf_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)" \
+    "$(echo "${PYLIBCUDF_WHEELHOUSE}"/pylibcudf_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)[test]"
+
+rapids-logger "pytest pylibcudf without optional dependencies"
+pushd python/pylibcudf/tests
+timeout 30m python -m pytest \
+  --cache-clear \
+  --numprocesses=8 \
+  --dist=worksteal \
+  .
+popd
+
+deactivate
+
+rapids-logger "Install cudf, pylibcudf, and test requirements"
 
 # notes:
 #
@@ -29,16 +57,11 @@ rapids-pip-retry install \
     --constraint "${PIP_CONSTRAINT}" \
     "$(echo "${CUDF_WHEELHOUSE}"/cudf_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)[test]" \
     "$(echo "${LIBCUDF_WHEELHOUSE}"/libcudf_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)" \
-    "$(echo "${PYLIBCUDF_WHEELHOUSE}"/pylibcudf_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)[test]"
-
-RESULTS_DIR=${RAPIDS_TESTS_DIR:-"$(mktemp -d)"}
-RAPIDS_TESTS_DIR=${RAPIDS_TESTS_DIR:-"${RESULTS_DIR}/test-results"}/
-mkdir -p "${RAPIDS_TESTS_DIR}"
-
+    "$(echo "${PYLIBCUDF_WHEELHOUSE}"/pylibcudf_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)[test, pyarrow, numpy]"
 
 rapids-logger "pytest pylibcudf"
-pushd python/pylibcudf/pylibcudf/tests
-python -m pytest \
+pushd python/pylibcudf/tests
+timeout 30m python -m pytest \
   --cache-clear \
   --numprocesses=8 \
   --dist=worksteal \
@@ -47,7 +70,7 @@ popd
 
 rapids-logger "pytest cudf"
 pushd python/cudf/cudf/tests
-python -m pytest \
+timeout 30m python -m pytest \
   --cache-clear \
   --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf.xml" \
   --numprocesses=8 \

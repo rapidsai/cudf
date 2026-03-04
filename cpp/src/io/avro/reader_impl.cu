@@ -1,28 +1,17 @@
 /*
- * Copyright (c) 2020-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "avro.hpp"
 #include "avro_gpu.hpp"
+#include "io/comp/decompression.hpp"
 #include "io/comp/gpuinflate.hpp"
-#include "io/comp/io_uncomp.hpp"
 #include "io/utilities/column_buffer.hpp"
 #include "io/utilities/hostdevice_vector.hpp"
 
 #include <cudf/detail/null_mask.hpp>
-#include <cudf/detail/utilities/functional.hpp>
+#include <cudf/detail/structs/utilities.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/detail/avro.hpp>
@@ -38,8 +27,6 @@
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/equal.h>
-#include <thrust/functional.h>
-#include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/transform_output_iterator.h>
 #include <thrust/tabulate.h>
 
@@ -115,6 +102,11 @@ type_id to_type_id(avro::schema_entry const* col)
 class metadata : public file_metadata {
  public:
   explicit metadata(datasource* const src) : source(src) {}
+
+  metadata(metadata const&)            = delete;
+  metadata& operator=(metadata const&) = delete;
+  metadata(metadata&&)                 = delete;
+  metadata& operator=(metadata&&)      = delete;
 
   /**
    * @brief Initializes the parser and filters down to a subset of rows
@@ -195,11 +187,11 @@ rmm::device_buffer decompress_data(datasource& source,
     auto inflate_out =
       cudf::detail::hostdevice_vector<device_span<uint8_t>>(meta.block_list.size(), stream);
     auto inflate_stats =
-      cudf::detail::hostdevice_vector<compression_result>(meta.block_list.size(), stream);
-    thrust::fill(rmm::exec_policy(stream),
+      cudf::detail::hostdevice_vector<codec_exec_result>(meta.block_list.size(), stream);
+    thrust::fill(rmm::exec_policy_nosync(stream),
                  inflate_stats.d_begin(),
                  inflate_stats.d_end(),
-                 compression_result{0, compression_status::FAILURE});
+                 codec_exec_result{0, codec_status::FAILURE});
 
     // Guess an initial maximum uncompressed block size. We estimate the compression factor is two
     // and round up to the next multiple of 4096 bytes.
@@ -239,7 +231,7 @@ rmm::device_buffer decompress_data(datasource& source,
                        [](auto const& inf_out, auto const& inf_stats) {
                          // If error status is OUTPUT_OVERFLOW, the `bytes_written` field
                          // actually contains the uncompressed data size
-                         return inf_stats.status == compression_status::OUTPUT_OVERFLOW
+                         return inf_stats.status == codec_status::OUTPUT_OVERFLOW
                                   ? std::max(inf_out.size(), inf_stats.bytes_written)
                                   : inf_out.size();
                        });
@@ -300,7 +292,7 @@ rmm::device_buffer decompress_data(datasource& source,
 
     rmm::device_buffer decompressed_data(uncompressed_data_size, stream);
     rmm::device_uvector<device_span<uint8_t>> decompressed_blocks(num_blocks, stream);
-    thrust::tabulate(rmm::exec_policy(stream),
+    thrust::tabulate(rmm::exec_policy_nosync(stream),
                      decompressed_blocks.begin(),
                      decompressed_blocks.end(),
                      [off  = uncompressed_offsets.device_ptr(),
@@ -309,11 +301,11 @@ rmm::device_buffer decompress_data(datasource& source,
                        return device_span<uint8_t>{data + off[i], size[i]};
                      });
 
-    rmm::device_uvector<compression_result> decomp_results(num_blocks, stream);
+    rmm::device_uvector<codec_exec_result> decomp_results(num_blocks, stream);
     thrust::fill(rmm::exec_policy_nosync(stream),
                  decomp_results.begin(),
                  decomp_results.end(),
-                 compression_result{0, compression_status::FAILURE});
+                 codec_exec_result{0, codec_status::FAILURE});
 
     decompress(compression_type::SNAPPY,
                compressed_blocks,
@@ -322,13 +314,13 @@ rmm::device_buffer decompress_data(datasource& source,
                max_decomp_block_size,
                uncompressed_data_size,
                stream);
-    CUDF_EXPECTS(thrust::equal(rmm::exec_policy(stream),
+    CUDF_EXPECTS(thrust::equal(rmm::exec_policy_nosync(stream),
                                uncompressed_sizes.d_begin(),
                                uncompressed_sizes.d_end(),
                                decomp_results.begin(),
                                [] __device__(auto const& size, auto const& result) {
                                  return size == result.bytes_written and
-                                        result.status == compression_status::SUCCESS;
+                                        result.status == codec_status::SUCCESS;
                                }),
                  "Error during Snappy decompression");
 
@@ -583,6 +575,8 @@ table_with_metadata read_avro(std::unique_ptr<cudf::io::datasource>&& source,
       }
     }
   }
+
+  out_columns = cudf::structs::detail::enforce_null_consistency(std::move(out_columns), stream, mr);
 
   // Return column names
   metadata_out.schema_info.reserve(selected_columns.size());

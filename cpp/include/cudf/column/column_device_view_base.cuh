@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
 
@@ -78,13 +67,6 @@ namespace detail {
 /**
  * @brief An immutable, non-owning view of device data as a column of elements
  * that is trivially copyable and usable in CUDA device code.
- *
- * column_device_view_base and derived classes do not support has_nulls() or
- * null_count().  The primary reason for this is that creation of column_device_views
- * from column_views that have UNKNOWN null counts would require an on-the-spot, and
- * not-obvious computation of null count, which could lead to undesirable performance issues.
- * This information is also generally not needed in device code, and on the host-side
- * is easily accessible from the associated column_view.
  */
 class alignas(16) column_device_view_base {
  public:
@@ -393,6 +375,7 @@ class alignas(16) column_device_view_core : public detail::column_device_view_ba
     return column_device_view_core{this->type(),
                                    size,
                                    this->head(),
+                                   this->null_count(),
                                    this->null_mask(),
                                    this->offset() + offset,
                                    d_children,
@@ -400,7 +383,7 @@ class alignas(16) column_device_view_core : public detail::column_device_view_ba
   }
 
   /**
-   * @brief Returns reference to element at the specified index.
+   * @brief Returns a copy of the element at the specified index
    *
    * If the element at the specified index is NULL, i.e.,
    * `is_null(element_index) == true`, then any attempt to use the result will
@@ -414,7 +397,7 @@ class alignas(16) column_device_view_core : public detail::column_device_view_ba
    *
    * @tparam T The element type
    * @param element_index Position of the desired element
-   * @return reference to the element at the specified index
+   * @return The element at the specified index
    */
   template <typename T, CUDF_ENABLE_IF(is_rep_layout_compatible<T>())>
   [[nodiscard]] __device__ T element(size_type element_index) const noexcept
@@ -485,6 +468,13 @@ class alignas(16) column_device_view_core : public detail::column_device_view_ba
     return _num_children;
   }
 
+  /**
+   * @brief Returns the number of nulls in this column
+   *
+   * @return The number of nulls
+   */
+  [[nodiscard]] CUDF_HOST_DEVICE size_type null_count() const noexcept { return _null_count; }
+
  protected:
   /**
    * @brief Creates an instance of this class using pre-existing device memory pointers to data,
@@ -493,6 +483,7 @@ class alignas(16) column_device_view_core : public detail::column_device_view_ba
    * @param type The type of the column
    * @param size The number of elements in the column
    * @param data Pointer to the device memory containing the data
+   * @param null_count The number of nulls in the column
    * @param null_mask Pointer to the device memory containing the null bitmask
    * @param offset The index of the first element in the column
    * @param children Pointer to the device memory containing child data
@@ -501,13 +492,15 @@ class alignas(16) column_device_view_core : public detail::column_device_view_ba
   CUDF_HOST_DEVICE column_device_view_core(data_type type,
                                            size_type size,
                                            void const* data,
+                                           size_type null_count,
                                            bitmask_type const* null_mask,
                                            size_type offset,
                                            column_device_view_core* children,
                                            size_type num_children)
     : column_device_view_base(type, size, data, null_mask, offset),
       d_children(children),
-      _num_children(num_children)
+      _num_children(num_children),
+      _null_count{null_count}
   {
   }
 
@@ -517,6 +510,7 @@ class alignas(16) column_device_view_core : public detail::column_device_view_ba
                                           ///< Based on element type, children
                                           ///< may contain additional data
   size_type _num_children{};              ///< The number of child columns
+  size_type _null_count{};                ///< The number of nulls
 };
 
 /**
@@ -750,33 +744,4 @@ class alignas(16) mutable_column_device_view_core : public detail::column_device
   size_type _num_children{};                      ///< The number of child columns
 };
 
-namespace detail {
-
-#ifdef __CUDACC__  // because set_bit in bit.hpp is wrapped with __CUDACC__
-
-/**
- * @brief Convenience function to get offset word from a bitmask
- *
- * @see copy_offset_bitmask
- * @see offset_bitmask_binop
- */
-__device__ inline bitmask_type get_mask_offset_word(bitmask_type const* __restrict__ source,
-                                                    size_type destination_word_index,
-                                                    size_type source_begin_bit,
-                                                    size_type source_end_bit)
-{
-  size_type source_word_index = destination_word_index + word_index(source_begin_bit);
-  bitmask_type curr_word      = source[source_word_index];
-  bitmask_type next_word      = 0;
-  if (word_index(source_end_bit - 1) >
-      word_index(source_begin_bit +
-                 destination_word_index * detail::size_in_bits<bitmask_type>())) {
-    next_word = source[source_word_index + 1];
-  }
-  return __funnelshift_r(curr_word, next_word, source_begin_bit);
-}
-
-#endif
-
-}  // namespace detail
 }  // namespace CUDF_EXPORT cudf

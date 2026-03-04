@@ -1,6 +1,5 @@
 #!/bin/bash
-# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION & AFFILIATES.
-# All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES.  All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 set -eoxu pipefail
@@ -12,9 +11,11 @@ RAPIDS_COVERAGE_DIR=${RAPIDS_COVERAGE_DIR:-"${PWD}/coverage-results"}
 mkdir -p "${RAPIDS_TESTS_DIR}" "${RAPIDS_COVERAGE_DIR}"
 
 DEPENDENCIES_PATH="dependencies.yaml"
+# https://github.com/jupyter/jupyter_core/pull/292
+export JUPYTER_PLATFORM_DIRS=1
 
 # Use grep to find the line containing the package name and version constraint
-pandas_version_constraint=$(grep -oP "pandas>=\d+\.\d+,\<\d+\.\d+\.\d+dev\d+" $DEPENDENCIES_PATH)
+pandas_version_constraint=$(grep -oP "pandas>=\d+\.\d+(\.\d+)?,<\d+\.\d+(\.\d+)?" $DEPENDENCIES_PATH)
 
 # Function to display script usage
 function display_usage {
@@ -51,9 +52,9 @@ else
     RAPIDS_PY_CUDA_SUFFIX="$(rapids-wheel-ctk-name-gen "${RAPIDS_CUDA_VERSION}")"
 
     # Download the cudf, libcudf, and pylibcudf built in the previous step
-    CUDF_WHEELHOUSE=$(RAPIDS_PY_WHEEL_NAME="cudf_${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels-from-github python)
+    CUDF_WHEELHOUSE=$(rapids-download-from-github "$(rapids-package-name "wheel_python" cudf --stable --cuda "$RAPIDS_CUDA_VERSION")")
     LIBCUDF_WHEELHOUSE=$(RAPIDS_PY_WHEEL_NAME="libcudf_${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels-from-github cpp)
-    PYLIBCUDF_WHEELHOUSE=$(RAPIDS_PY_WHEEL_NAME="pylibcudf_${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels-from-github python)
+    PYLIBCUDF_WHEELHOUSE=$(rapids-download-from-github "$(rapids-package-name "wheel_python" pylibcudf --stable --cuda "$RAPIDS_CUDA_VERSION")")
 
     # generate constraints (possibly pinning to oldest support versions of dependencies)
     rapids-generate-pip-constraints test_python_cudf_pandas ./constraints.txt
@@ -76,6 +77,7 @@ fi
 python -m pip install certifi ipykernel
 python -m ipykernel install --user --name python3
 
+rapids-logger "pytest cudf.pandas parallel"
 # The third-party integration tests are ignored because they are run in a separate nightly CI job
 # TODO: Root-cause why we cannot run the tests in profile.py in parallel and reconsider adding
 # them back. Tracking https://github.com/rapidsai/cudf/issues/18261
@@ -84,9 +86,25 @@ python -m pytest -p cudf.pandas \
     --numprocesses=8 \
     --dist=worksteal \
     -k "not profiler" \
+    -m "not serial" \
+    --config-file=./python/cudf/pyproject.toml \
     --cov-config=./python/cudf/.coveragerc \
     --cov=cudf \
     --cov-report=xml:"${RAPIDS_COVERAGE_DIR}/cudf-pandas-coverage.xml" \
+    --cov-report=term \
+    ./python/cudf/cudf_pandas_tests/
+
+
+rapids-logger "pytest cudf.pandas serial"
+
+python -m pytest -p cudf.pandas \
+    --ignore=./python/cudf/cudf_pandas_tests/third_party_integration_tests/ \
+    -k "not profiler" \
+    -m "serial" \
+    --config-file=./python/cudf/pyproject.toml \
+    --cov-config=./python/cudf/.coveragerc \
+    --cov=cudf \
+    --cov-report=xml:"${RAPIDS_COVERAGE_DIR}/cudf-pandas-coverage-serial.xml" \
     --cov-report=term \
     ./python/cudf/cudf_pandas_tests/
 
@@ -97,7 +115,7 @@ python -m pytest -p cudf.pandas \
 # More details: https://github.com/rapidsai/cudf/pull/16930#issuecomment-2707873968
 python -m pytest -p cudf.pandas \
     --ignore=./python/cudf/cudf_pandas_tests/third_party_integration_tests/ \
-    --numprocesses=1 \
+    --numprocesses=0 \
     -k "profiler" \
     ./python/cudf/cudf_pandas_tests/
 
@@ -106,23 +124,38 @@ output=$(python ci/cudf_pandas_scripts/fetch_pandas_versions.py "$pandas_version
 # Convert the comma-separated list into an array
 IFS=',' read -r -a versions <<< "$output"
 
-for version in "${versions[@]}"; do
-    echo "Installing pandas version: ${version}"
-    python -m pip install "numpy>=1.23,<2.0a0" "pandas==${version}.*"
-    python -m pytest -p cudf.pandas \
-        --ignore=./python/cudf/cudf_pandas_tests/third_party_integration_tests/ \
-        --numprocesses=8 \
-        --dist=worksteal \
-        -k "not profiler" \
-        --cov-config=./python/cudf/.coveragerc \
-        --cov=cudf \
-        --cov-report=xml:"${RAPIDS_COVERAGE_DIR}/cudf-pandas-coverage.xml" \
-        --cov-report=term \
-        ./python/cudf/cudf_pandas_tests/
 
-    python -m pytest -p cudf.pandas \
-        --ignore=./python/cudf/cudf_pandas_tests/third_party_integration_tests/ \
-        --numprocesses=1 \
-        -k "profiler" \
-        ./python/cudf/cudf_pandas_tests/
-done
+version_lte() {
+  [ "$1" = "$(echo -e "$1\n$2" | sort -V | head -n1)" ]
+}
+
+if version_lte "${RAPIDS_PY_VERSION}" "3.13"; then
+    for version in "${versions[@]}"; do
+        echo "Installing pandas version: ${version}"
+        # This loop tests cudf.pandas compatibility with older pandas-numpy versions,
+        # requiring numpy<2. cupy>=14 dropped support for numpy<2, so we explicitly
+        # downgrade cupy here to avoid an import failure when cupy tries
+        # to load against the older numpy.
+        python -m pip install "numpy>=1.23,<2.0a0" "pandas==${version}.*" "cupy-cuda${RAPIDS_CUDA_VERSION%%.*}x<14"
+        python -m pytest -p cudf.pandas \
+            --ignore=./python/cudf/cudf_pandas_tests/third_party_integration_tests/ \
+            --numprocesses=8 \
+            --dist=worksteal \
+            -k "not profiler" \
+            -m "not serial" \
+            --cov-config=./python/cudf/.coveragerc \
+            --cov=cudf \
+            --cov-report=xml:"${RAPIDS_COVERAGE_DIR}/cudf-pandas-coverage.xml" \
+            --cov-report=term \
+            ./python/cudf/cudf_pandas_tests/
+
+        # NOTE: We don't currently run serial tests (only 1 as of 2025-07-25)
+        # with multiple versions of pandas.
+
+        python -m pytest -p cudf.pandas \
+            --ignore=./python/cudf/cudf_pandas_tests/third_party_integration_tests/ \
+            --numprocesses=0 \
+            -k "profiler" \
+            ./python/cudf/cudf_pandas_tests/
+    done
+fi

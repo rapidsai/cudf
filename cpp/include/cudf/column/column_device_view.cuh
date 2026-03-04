@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
 
@@ -27,9 +16,9 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <cuda/std/utility>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
-#include <thrust/pair.h>
 
 #include <functional>
 
@@ -100,6 +89,7 @@ class alignas(16) column_device_view : public column_device_view_core {
     return column_device_view{this->type(),
                               size,
                               this->head(),
+                              this->null_count(),
                               this->null_mask(),
                               this->offset() + offset,
                               static_cast<column_device_view*>(d_children),
@@ -107,7 +97,7 @@ class alignas(16) column_device_view : public column_device_view_core {
   }
 
   /**
-   * @brief Returns reference to element at the specified index.
+   * @brief Returns a copy of the element at the specified index
    *
    * If the element at the specified index is NULL, i.e.,
    * `is_null(element_index) == true`, then any attempt to use the result will
@@ -121,7 +111,7 @@ class alignas(16) column_device_view : public column_device_view_core {
    *
    * @tparam T The element type
    * @param element_index Position of the desired element
-   * @return reference to the element at the specified index
+   * @return The element at the specified index
    */
   template <typename T, CUDF_ENABLE_IF(is_rep_layout_compatible<T>())>
   [[nodiscard]] __device__ T element(size_type element_index) const noexcept
@@ -368,7 +358,7 @@ class alignas(16) column_device_view : public column_device_view_core {
   /**
    * @brief Return a pair iterator to the first element of the column.
    *
-   * Dereferencing the returned iterator returns a `thrust::pair<T, bool>`.
+   * Dereferencing the returned iterator returns a `cuda::std::pair<T, bool>`.
    *
    * If an element at position `i` is valid (or `has_nulls == false`), then
    * for `p = *(iter + i)`, `p.first` contains the value of the element at `i`
@@ -398,7 +388,7 @@ class alignas(16) column_device_view : public column_device_view_core {
   /**
    * @brief Return a pair iterator to the first element of the column.
    *
-   * Dereferencing the returned iterator returns a `thrust::pair<rep_type, bool>`,
+   * Dereferencing the returned iterator returns a `cuda::std::pair<rep_type, bool>`,
    * where `rep_type` is `device_storage_type<T>`, the type used to store
    * the value on the device.
    *
@@ -570,6 +560,7 @@ class alignas(16) column_device_view : public column_device_view_core {
    * @param type The type of the column
    * @param size The number of elements in the column
    * @param data Pointer to the device memory containing the data
+   * @param null_count The number of nulls in the column
    * @param null_mask Pointer to the device memory containing the null bitmask
    * @param offset The index of the first element in the column
    * @param children Pointer to the device memory containing child data
@@ -578,11 +569,13 @@ class alignas(16) column_device_view : public column_device_view_core {
   CUDF_HOST_DEVICE column_device_view(data_type type,
                                       size_type size,
                                       void const* data,
+                                      size_type null_count,
                                       bitmask_type const* null_mask,
                                       size_type offset,
                                       column_device_view* children,
                                       size_type num_children)
-    : column_device_view_core{type, size, data, null_mask, offset, children, num_children}
+    : column_device_view_core{
+        type, size, data, null_count, null_mask, offset, children, num_children}
   {
   }
 
@@ -923,7 +916,7 @@ struct pair_accessor {
    * @param[in] i index of the element
    * @return pair(element, validity)
    */
-  __device__ inline thrust::pair<T, bool> operator()(cudf::size_type i) const
+  __device__ inline cuda::std::pair<T, bool> operator()(cudf::size_type i) const
   {
     return {col.element<T>(i), (has_nulls ? col.is_valid_nocheck(i) : true)};
   }
@@ -971,20 +964,22 @@ struct pair_rep_accessor {
    * @param[in] i index of element to access
    * @return pair of element and validity
    */
-  __device__ inline thrust::pair<rep_type, bool> operator()(cudf::size_type i) const
+  __device__ inline cuda::std::pair<rep_type, bool> operator()(cudf::size_type i) const
   {
     return {get_rep<T>(i), (has_nulls ? col.is_valid_nocheck(i) : true)};
   }
 
  private:
-  template <typename R, std::enable_if_t<std::is_same_v<R, rep_type>, void>* = nullptr>
+  template <typename R>
   [[nodiscard]] __device__ inline auto get_rep(cudf::size_type i) const
+    requires(std::is_same_v<R, rep_type>)
   {
     return col.element<R>(i);
   }
 
-  template <typename R, std::enable_if_t<not std::is_same_v<R, rep_type>, void>* = nullptr>
+  template <typename R>
   [[nodiscard]] __device__ inline auto get_rep(cudf::size_type i) const
+    requires(not std::is_same_v<R, rep_type>)
   {
     return col.element<R>(i).value();
   }

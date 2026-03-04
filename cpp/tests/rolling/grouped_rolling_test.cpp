@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "rolling_test.hpp"
@@ -205,7 +194,7 @@ class GroupedRollingTest : public cudf::test::BaseFixture {
     // >>> test UDFs <<<
     if (input.type() == cudf::data_type{cudf::type_id::INT32} && !input.has_nulls()) {
       auto cuda_udf_agg = cudf::make_udf_aggregation<cudf::rolling_aggregation>(
-        cudf::udf_type::CUDA, cuda_func, cudf::data_type{cudf::type_id::INT64});
+        cudf::udf_source_type::CUDA, cuda_func, cudf::data_type{cudf::type_id::INT64});
       run_test_col(keys,
                    input,
                    expected_grouping,
@@ -215,7 +204,7 @@ class GroupedRollingTest : public cudf::test::BaseFixture {
                    *cuda_udf_agg);
 
       auto ptx_udf_agg = cudf::make_udf_aggregation<cudf::rolling_aggregation>(
-        cudf::udf_type::PTX, ptx_func, cudf::data_type{cudf::type_id::INT64});
+        cudf::udf_source_type::PTX, ptx_func, cudf::data_type{cudf::type_id::INT64});
       run_test_col(keys,
                    input,
                    expected_grouping,
@@ -316,17 +305,14 @@ class GroupedRollingTest : public cudf::test::BaseFixture {
     return col.release();
   }
 
-  template <typename agg_op,
-            cudf::aggregation::Kind k,
-            typename OutputType,
-            bool is_mean,
-            std::enable_if_t<is_rolling_supported<T, k>()>* = nullptr>
+  template <typename agg_op, cudf::aggregation::Kind k, typename OutputType, bool is_mean>
   std::unique_ptr<cudf::column> create_reference_output(
     cudf::column_view const& input,
     std::vector<cudf::size_type> const& group_offsets,
     cudf::size_type const& preceding_window,
     cudf::size_type const& following_window,
     cudf::size_type min_periods)
+    requires(is_rolling_supported<T, k>())
   {
     cudf::size_type num_rows = input.size();
     thrust::host_vector<OutputType> ref_data(num_rows);
@@ -373,17 +359,14 @@ class GroupedRollingTest : public cudf::test::BaseFixture {
     return col.release();
   }
 
-  template <typename agg_op,
-            cudf::aggregation::Kind k,
-            typename OutputType,
-            bool is_mean,
-            std::enable_if_t<!is_rolling_supported<T, k>()>* = nullptr>
+  template <typename agg_op, cudf::aggregation::Kind k, typename OutputType, bool is_mean>
   std::unique_ptr<cudf::column> create_reference_output(
     cudf::column_view const& input,
     std::vector<cudf::size_type> const& group_offsets,
     cudf::size_type const& preceding_window_col,
     cudf::size_type const& following_window_col,
     cudf::size_type min_periods)
+    requires(!is_rolling_supported<T, k>())
   {
     CUDF_FAIL("Unsupported combination of type and aggregation");
   }
@@ -955,11 +938,7 @@ class GroupedTimeRangeRollingTest : public cudf::test::BaseFixture {
     return col.release();
   }
 
-  template <typename agg_op,
-            cudf::aggregation::Kind k,
-            typename OutputType,
-            bool is_mean,
-            std::enable_if_t<is_rolling_supported<T, k>()>* = nullptr>
+  template <typename agg_op, cudf::aggregation::Kind k, typename OutputType, bool is_mean>
   std::unique_ptr<cudf::column> create_reference_output(
     cudf::column_view const& timestamp_column,
     cudf::order const& timestamp_order,
@@ -968,6 +947,7 @@ class GroupedTimeRangeRollingTest : public cudf::test::BaseFixture {
     cudf::size_type const& preceding_window_in_days,
     cudf::size_type const& following_window_in_days,
     cudf::size_type min_periods)
+    requires(is_rolling_supported<T, k>())
   {
     assert(timestamp_column.type().id() == cudf::type_id::TIMESTAMP_DAYS);  // Testing with DAYS.
 
@@ -1039,11 +1019,7 @@ class GroupedTimeRangeRollingTest : public cudf::test::BaseFixture {
     return col.release();
   }
 
-  template <typename agg_op,
-            cudf::aggregation::Kind k,
-            typename OutputType,
-            bool is_mean,
-            std::enable_if_t<!is_rolling_supported<T, k>()>* = nullptr>
+  template <typename agg_op, cudf::aggregation::Kind k, typename OutputType, bool is_mean>
   std::unique_ptr<cudf::column> create_reference_output(
     cudf::column_view const& timestamp_column,
     cudf::order const& timestamp_order,
@@ -1052,6 +1028,7 @@ class GroupedTimeRangeRollingTest : public cudf::test::BaseFixture {
     cudf::size_type const& preceding_window_col,
     cudf::size_type const& following_window_col,
     cudf::size_type min_periods)
+    requires(!is_rolling_supported<T, k>())
   {
     CUDF_FAIL("Unsupported combination of type and aggregation");
   }

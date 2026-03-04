@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -11,7 +11,9 @@ import polars as pl
 import pylibcudf as plc
 
 from cudf_polars import Translator
+from cudf_polars.dsl.ir import IRExecutionContext
 from cudf_polars.testing.asserts import assert_gpu_result_equal
+from cudf_polars.utils.versions import POLARS_VERSION_LT_135, POLARS_VERSION_LT_136
 
 
 @pytest.mark.parametrize("descending", [False, True])
@@ -58,9 +60,17 @@ def test_sort_by_expression(descending, nulls_last, maintain_order):
 
 @pytest.mark.parametrize("descending", [False, True])
 @pytest.mark.parametrize("nulls_last", [False, True])
-def test_setsorted(descending, nulls_last, with_nulls):
+@pytest.mark.parametrize("with_nulls", ["no_nulls", "nulls"])
+def test_setsorted(request, descending, nulls_last, with_nulls):
+    if not POLARS_VERSION_LT_135 and POLARS_VERSION_LT_136:
+        request.applymarker(
+            pytest.mark.xfail(
+                reason="See https://github.com/pola-rs/polars/pull/24981, "
+                "fixed in https://github.com/pola-rs/polars/pull/25250"
+            )
+        )
     values = sorted([1, 2, 3, 4, 5, 6, -2], reverse=descending)
-    if with_nulls:
+    if with_nulls == "nulls":
         values[-1 if nulls_last else 0] = None
     df = pl.LazyFrame({"a": values})
 
@@ -68,21 +78,24 @@ def test_setsorted(descending, nulls_last, with_nulls):
 
     assert_gpu_result_equal(q)
 
-    df = (
-        Translator(q._ldf.visit(), pl.GPUEngine())
-        .translate_ir()
-        .evaluate(cache={}, timer=None)
-    )
+    if POLARS_VERSION_LT_135:
+        translator = Translator(q._ldf.visit(), pl.GPUEngine())
 
-    a = df.column_map["a"]
+        df = translator.translate_ir().evaluate(
+            cache={},
+            timer=None,
+            context=IRExecutionContext.from_config_options(translator.config_options),
+        )
 
-    assert a.is_sorted == plc.types.Sorted.YES
-    null_order = (
-        plc.types.NullOrder.AFTER
-        if (descending ^ nulls_last) and with_nulls
-        else plc.types.NullOrder.BEFORE
-    )
-    assert a.null_order == null_order
-    assert a.order == (
-        plc.types.Order.DESCENDING if descending else plc.types.Order.ASCENDING
-    )
+        a = df.column_map["a"]
+
+        assert a.is_sorted == plc.types.Sorted.YES
+        null_order = (
+            plc.types.NullOrder.AFTER
+            if (descending ^ nulls_last) and with_nulls == "nulls"
+            else plc.types.NullOrder.BEFORE
+        )
+        assert a.null_order == null_order
+        assert a.order == (
+            plc.types.Order.DESCENDING if descending else plc.types.Order.ASCENDING
+        )

@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 /**
@@ -22,7 +11,8 @@
 #include "arrow_schema_writer.hpp"
 #include "compact_protocol_reader.hpp"
 #include "compact_protocol_writer.hpp"
-#include "io/comp/comp.hpp"
+#include "io/comp/common.hpp"
+#include "io/comp/compression.hpp"
 #include "io/parquet/parquet_gpu.hpp"
 #include "io/statistics/column_statistics.cuh"
 #include "io/utilities/column_utils.cuh"
@@ -37,6 +27,7 @@
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/linked_column.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/io/detail/codec.hpp>
 #include <cudf/io/parquet_schema.hpp>
 #include <cudf/lists/detail/dremel.hpp>
 #include <cudf/lists/lists_column_view.hpp>
@@ -47,6 +38,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_uvector.hpp>
+#include <rmm/mr/polymorphic_allocator.hpp>
 
 #include <thrust/fill.h>
 #include <thrust/for_each.h>
@@ -330,7 +322,8 @@ struct leaf_schema_fn {
   bool write_arrow_schema;
 
   template <typename T>
-  std::enable_if_t<std::is_same_v<T, bool>, void> operator()()
+  void operator()()
+    requires(std::is_same_v<T, bool>)
   {
     col_schema.type        = Type::BOOLEAN;
     col_schema.stats_dtype = statistics_dtype::dtype_bool;
@@ -338,7 +331,8 @@ struct leaf_schema_fn {
   }
 
   template <typename T>
-  std::enable_if_t<std::is_same_v<T, int8_t>, void> operator()()
+  void operator()()
+    requires(std::is_same_v<T, int8_t>)
   {
     col_schema.type           = Type::INT32;
     col_schema.converted_type = ConvertedType::INT_8;
@@ -347,7 +341,8 @@ struct leaf_schema_fn {
   }
 
   template <typename T>
-  std::enable_if_t<std::is_same_v<T, int16_t>, void> operator()()
+  void operator()()
+    requires(std::is_same_v<T, int16_t>)
   {
     col_schema.type           = Type::INT32;
     col_schema.converted_type = ConvertedType::INT_16;
@@ -356,7 +351,8 @@ struct leaf_schema_fn {
   }
 
   template <typename T>
-  std::enable_if_t<std::is_same_v<T, int32_t>, void> operator()()
+  void operator()()
+    requires(std::is_same_v<T, int32_t>)
   {
     col_schema.type        = Type::INT32;
     col_schema.stats_dtype = statistics_dtype::dtype_int32;
@@ -364,7 +360,8 @@ struct leaf_schema_fn {
   }
 
   template <typename T>
-  std::enable_if_t<std::is_same_v<T, int64_t>, void> operator()()
+  void operator()()
+    requires(std::is_same_v<T, int64_t>)
   {
     col_schema.type        = Type::INT64;
     col_schema.stats_dtype = statistics_dtype::dtype_int64;
@@ -372,7 +369,8 @@ struct leaf_schema_fn {
   }
 
   template <typename T>
-  std::enable_if_t<std::is_same_v<T, uint8_t>, void> operator()()
+  void operator()()
+    requires(std::is_same_v<T, uint8_t>)
   {
     col_schema.type           = Type::INT32;
     col_schema.converted_type = ConvertedType::UINT_8;
@@ -381,7 +379,8 @@ struct leaf_schema_fn {
   }
 
   template <typename T>
-  std::enable_if_t<std::is_same_v<T, uint16_t>, void> operator()()
+  void operator()()
+    requires(std::is_same_v<T, uint16_t>)
   {
     col_schema.type           = Type::INT32;
     col_schema.converted_type = ConvertedType::UINT_16;
@@ -390,7 +389,8 @@ struct leaf_schema_fn {
   }
 
   template <typename T>
-  std::enable_if_t<std::is_same_v<T, uint32_t>, void> operator()()
+  void operator()()
+    requires(std::is_same_v<T, uint32_t>)
   {
     col_schema.type           = Type::INT32;
     col_schema.converted_type = ConvertedType::UINT_32;
@@ -399,7 +399,8 @@ struct leaf_schema_fn {
   }
 
   template <typename T>
-  std::enable_if_t<std::is_same_v<T, uint64_t>, void> operator()()
+  void operator()()
+    requires(std::is_same_v<T, uint64_t>)
   {
     col_schema.type           = Type::INT64;
     col_schema.converted_type = ConvertedType::UINT_64;
@@ -408,7 +409,8 @@ struct leaf_schema_fn {
   }
 
   template <typename T>
-  std::enable_if_t<std::is_same_v<T, float>, void> operator()()
+  void operator()()
+    requires(std::is_same_v<T, float>)
   {
     col_schema.type        = Type::FLOAT;
     col_schema.stats_dtype = statistics_dtype::dtype_float32;
@@ -416,7 +418,8 @@ struct leaf_schema_fn {
   }
 
   template <typename T>
-  std::enable_if_t<std::is_same_v<T, double>, void> operator()()
+  void operator()()
+    requires(std::is_same_v<T, double>)
   {
     col_schema.type        = Type::DOUBLE;
     col_schema.stats_dtype = statistics_dtype::dtype_float64;
@@ -424,7 +427,8 @@ struct leaf_schema_fn {
   }
 
   template <typename T>
-  std::enable_if_t<std::is_same_v<T, cudf::string_view>, void> operator()()
+  void operator()()
+    requires(std::is_same_v<T, cudf::string_view>)
   {
     col_schema.type = Type::BYTE_ARRAY;
     if (col_meta.is_enabled_output_as_binary()) {
@@ -438,7 +442,8 @@ struct leaf_schema_fn {
   }
 
   template <typename T>
-  std::enable_if_t<std::is_same_v<T, cudf::timestamp_D>, void> operator()()
+  void operator()()
+    requires(std::is_same_v<T, cudf::timestamp_D>)
   {
     col_schema.type           = Type::INT32;
     col_schema.converted_type = ConvertedType::DATE;
@@ -447,7 +452,8 @@ struct leaf_schema_fn {
   }
 
   template <typename T>
-  std::enable_if_t<std::is_same_v<T, cudf::timestamp_s>, void> operator()()
+  void operator()()
+    requires(std::is_same_v<T, cudf::timestamp_s>)
   {
     col_schema.type        = (timestamp_is_int96) ? Type::INT96 : Type::INT64;
     col_schema.stats_dtype = statistics_dtype::dtype_timestamp64;
@@ -459,7 +465,8 @@ struct leaf_schema_fn {
   }
 
   template <typename T>
-  std::enable_if_t<std::is_same_v<T, cudf::timestamp_ms>, void> operator()()
+  void operator()()
+    requires(std::is_same_v<T, cudf::timestamp_ms>)
   {
     col_schema.type        = (timestamp_is_int96) ? Type::INT96 : Type::INT64;
     col_schema.stats_dtype = statistics_dtype::dtype_timestamp64;
@@ -470,7 +477,8 @@ struct leaf_schema_fn {
   }
 
   template <typename T>
-  std::enable_if_t<std::is_same_v<T, cudf::timestamp_us>, void> operator()()
+  void operator()()
+    requires(std::is_same_v<T, cudf::timestamp_us>)
   {
     col_schema.type        = (timestamp_is_int96) ? Type::INT96 : Type::INT64;
     col_schema.stats_dtype = statistics_dtype::dtype_timestamp64;
@@ -481,7 +489,8 @@ struct leaf_schema_fn {
   }
 
   template <typename T>
-  std::enable_if_t<std::is_same_v<T, cudf::timestamp_ns>, void> operator()()
+  void operator()()
+    requires(std::is_same_v<T, cudf::timestamp_ns>)
   {
     col_schema.type           = (timestamp_is_int96) ? Type::INT96 : Type::INT64;
     col_schema.converted_type = std::nullopt;
@@ -496,7 +505,8 @@ struct leaf_schema_fn {
   }
 
   template <typename T>
-  std::enable_if_t<std::is_same_v<T, cudf::duration_D>, void> operator()()
+  void operator()()
+    requires(std::is_same_v<T, cudf::duration_D>)
   {
     // duration_D is based on int32_t and not a valid arrow duration type so simply convert to
     // time32(ms).
@@ -508,7 +518,8 @@ struct leaf_schema_fn {
   }
 
   template <typename T>
-  std::enable_if_t<std::is_same_v<T, cudf::duration_s>, void> operator()()
+  void operator()()
+    requires(std::is_same_v<T, cudf::duration_s>)
   {
     // If writing arrow schema, no logical type nor converted type is necessary
     if (write_arrow_schema) {
@@ -525,7 +536,8 @@ struct leaf_schema_fn {
   }
 
   template <typename T>
-  std::enable_if_t<std::is_same_v<T, cudf::duration_ms>, void> operator()()
+  void operator()()
+    requires(std::is_same_v<T, cudf::duration_ms>)
   {
     // If writing arrow schema, no logical type nor converted type is necessary
     if (write_arrow_schema) {
@@ -541,7 +553,8 @@ struct leaf_schema_fn {
   }
 
   template <typename T>
-  std::enable_if_t<std::is_same_v<T, cudf::duration_us>, void> operator()()
+  void operator()()
+    requires(std::is_same_v<T, cudf::duration_us>)
   {
     col_schema.type        = Type::INT64;
     col_schema.stats_dtype = statistics_dtype::dtype_int64;
@@ -553,7 +566,8 @@ struct leaf_schema_fn {
   }
 
   template <typename T>
-  std::enable_if_t<std::is_same_v<T, cudf::duration_ns>, void> operator()()
+  void operator()()
+    requires(std::is_same_v<T, cudf::duration_ns>)
   {
     col_schema.type        = Type::INT64;
     col_schema.stats_dtype = statistics_dtype::dtype_int64;
@@ -564,7 +578,8 @@ struct leaf_schema_fn {
   }
 
   template <typename T>
-  std::enable_if_t<cudf::is_fixed_point<T>(), void> operator()()
+  void operator()()
+    requires(cudf::is_fixed_point<T>())
   {
     if constexpr (std::is_same_v<T, numeric::decimal32>) {
       col_schema.type              = Type::INT32;
@@ -602,13 +617,15 @@ struct leaf_schema_fn {
   }
 
   template <typename T>
-  std::enable_if_t<cudf::is_nested<T>(), void> operator()()
+  void operator()()
+    requires(cudf::is_nested<T>())
   {
     CUDF_FAIL("This functor is only meant for physical data types");
   }
 
   template <typename T>
-  std::enable_if_t<cudf::is_dictionary<T>(), void> operator()()
+  void operator()()
+    requires(cudf::is_dictionary<T>())
   {
     CUDF_FAIL("Dictionary columns are not supported for writing");
   }
@@ -1308,7 +1325,7 @@ build_chunk_dictionaries(hostdevice_2dvector<EncColumnChunk>& chunks,
     } else {
       chunk.use_dictionary = true;
       chunk.dict_map_size =
-        static_cast<cudf::size_type>(cuco::make_bucket_extent<map_cg_size, bucket_size>(
+        static_cast<cudf::size_type>(cuco::make_valid_extent<map_cg_size, bucket_size>(
           static_cast<cudf::size_type>(occupancy_factor * chunk.num_values)));
       chunk.dict_map_offset = total_map_storage_size;
       total_map_storage_size += chunk.dict_map_size;
@@ -1319,11 +1336,10 @@ build_chunk_dictionaries(hostdevice_2dvector<EncColumnChunk>& chunks,
   if (total_map_storage_size == 0) { return {std::move(dict_data), std::move(dict_index)}; }
 
   // Create a single bulk storage used by all sub-dictionaries
-  auto map_storage = storage_type{
-    total_map_storage_size,
-    cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream}};
+  auto map_storage =
+    storage_type{total_map_storage_size, rmm::mr::polymorphic_allocator<char>{}, stream.value()};
   // Create a span of non-const map_storage as map_storage_ref takes in a non-const pointer.
-  device_span<bucket_type> const map_storage_data{map_storage.data(), total_map_storage_size};
+  device_span<slot_type> const map_storage_data{map_storage.data(), total_map_storage_size};
 
   // Synchronize
   chunks.host_to_device_async(stream);
@@ -1475,6 +1491,7 @@ void init_encoder_pages(hostdevice_2dvector<EncColumnChunk>& chunks,
  * @param compression compression format
  * @param column_index_truncate_length maximum length of min or max values in column index, in bytes
  * @param write_v2_headers True if V2 page headers should be written
+ * @param page_level_compression True if V2 pages can make per-page compression decisions
  * @param stream CUDA stream used for device memory operations and kernel launches
  */
 void encode_pages(hostdevice_2dvector<EncColumnChunk>& chunks,
@@ -1486,6 +1503,7 @@ void encode_pages(hostdevice_2dvector<EncColumnChunk>& chunks,
                   compression_type compression,
                   int32_t column_index_truncate_length,
                   bool write_v2_headers,
+                  bool page_level_compression,
                   rmm::cuda_stream_view stream)
 {
   auto const num_pages = pages.size();
@@ -1497,11 +1515,11 @@ void encode_pages(hostdevice_2dvector<EncColumnChunk>& chunks,
 
   rmm::device_uvector<device_span<uint8_t const>> comp_in(max_comp_pages, stream);
   rmm::device_uvector<device_span<uint8_t>> comp_out(max_comp_pages, stream);
-  rmm::device_uvector<compression_result> comp_res(max_comp_pages, stream);
-  thrust::fill(rmm::exec_policy(stream),
+  rmm::device_uvector<codec_exec_result> comp_res(max_comp_pages, stream);
+  thrust::fill(rmm::exec_policy_nosync(stream),
                comp_res.begin(),
                comp_res.end(),
-               compression_result{0, compression_status::FAILURE});
+               codec_exec_result{0, codec_status::FAILURE});
 
   EncodePages(pages, write_v2_headers, comp_in, comp_out, comp_res, stream);
   compress(compression, comp_in, comp_out, comp_res, stream);
@@ -1510,7 +1528,7 @@ void encode_pages(hostdevice_2dvector<EncColumnChunk>& chunks,
   // chunk-level
 
   auto d_chunks = chunks.device_view();
-  DecideCompression(d_chunks.flat_view(), stream);
+  decide_compression(d_chunks.flat_view(), page_level_compression, stream);
   EncodePageHeaders(pages, comp_res, pages_stats, chunk_stats, stream);
   GatherPages(d_chunks.flat_view(), stream);
 
@@ -1614,6 +1632,8 @@ size_t column_index_buffer_size(EncColumnChunk* ck,
  * @param int96_timestamps Flag to indicate if timestamps will be written as INT96
  * @param utc_timestamps Flag to indicate if timestamps are UTC
  * @param write_v2_headers True if V2 page headers are to be written
+ * @param page_level_compression True if V2 pages can make per-page compression decisions
+ * @param write_arrow_schema True if Arrow schema should be written to the file
  * @param out_sink Sink for checking if device write is supported, should not be used to write any
  *        data in this function
  * @param stream CUDA stream used for device memory operations and kernel launches
@@ -1639,6 +1659,7 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
                                    bool int96_timestamps,
                                    bool utc_timestamps,
                                    bool write_v2_headers,
+                                   bool page_level_compression,
                                    bool write_arrow_schema,
                                    host_span<std::unique_ptr<data_sink> const> out_sink,
                                    rmm::cuda_stream_view stream)
@@ -1739,10 +1760,11 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
                  partitions.end(),
                  std::back_inserter(num_frag_in_part),
                  [max_page_fragment_size](auto const& part) {
-                   return util::div_rounding_up_unsafe(part.num_rows, max_page_fragment_size);
+                   return util::div_rounding_up_safe<size_type>(part.num_rows,
+                                                                max_page_fragment_size);
                  });
 
-  size_type num_fragments = std::reduce(num_frag_in_part.begin(), num_frag_in_part.end());
+  auto const num_fragments = std::reduce(num_frag_in_part.begin(), num_frag_in_part.end());
 
   auto part_frag_offset =
     cudf::detail::make_empty_host_vector<int>(num_frag_in_part.size() + 1, stream);
@@ -1762,6 +1784,8 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
   auto parent_column_table_device_view = table_device_view::create(single_streams_table, stream);
   rmm::device_uvector<column_device_view> leaf_column_views(0, stream);
 
+  device_span<parquet_column_device_view const> d_col_desc(col_desc.device_ptr(), col_desc.size());
+
   if (num_fragments != 0) {
     // Move column info to device
     col_desc.host_to_device_async(stream);
@@ -1769,7 +1793,7 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
       col_desc, *parent_column_table_device_view, stream);
 
     init_row_group_fragments(row_group_fragments,
-                             col_desc,
+                             d_col_desc,
                              partitions,
                              d_part_frag_offset,
                              max_page_fragment_size,
@@ -1857,8 +1881,8 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
     for (int r = 0; r < num_rg_in_part[p]; r++) {
       size_t global_r = global_rowgroup_base[p] + r;  // Number of rowgroups already in file/part
       auto& row_group = agg_meta->file(p).row_groups[global_r];
-      uint32_t fragments_in_chunk =
-        util::div_rounding_up_unsafe(row_group.num_rows, max_page_fragment_size);
+      auto const fragments_in_chunk =
+        util::div_rounding_up_safe<uint32_t>(row_group.num_rows, max_page_fragment_size);
       row_group.total_byte_size = 0;
       row_group.columns.resize(num_columns);
       for (int c = 0; c < num_columns; c++) {
@@ -1867,7 +1891,7 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
         ck                   = {};
         ck.col_desc          = col_desc.device_ptr() + c;
         ck.col_desc_id       = c;
-        ck.fragments         = &row_group_fragments.device_view()[c][f];
+        ck.fragments         = row_group_fragments.device_view()[c].data() + f;
         ck.stats             = nullptr;
         ck.start_row         = start_row;
         ck.num_rows          = (uint32_t)row_group.num_rows;
@@ -1877,7 +1901,7 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
         // In fragment struct, add a pointer to the chunk it belongs to
         // In each fragment in chunk_fragments, update the chunk pointer here.
         for (auto& frag : chunk_fragments) {
-          frag.chunk = &chunks.device_view()[r + first_rg_in_part[p]][c];
+          frag.chunk = chunks.device_view()[r + first_rg_in_part[p]].data() + c;
         }
         ck.num_values = std::accumulate(
           chunk_fragments.begin(), chunk_fragments.end(), 0, [](uint32_t l, auto r) {
@@ -1893,7 +1917,7 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
         column_chunk_meta.codec          = Compression::UNCOMPRESSED;
         column_chunk_meta.num_values     = ck.num_values;
 
-        frags_per_column[c] += util::div_rounding_up_unsafe(
+        frags_per_column[c] += util::div_rounding_up_safe<size_type>(
           row_group.num_rows, std::min(column_frag_size[c], max_page_fragment_size));
       }
       f += fragments_in_chunk;
@@ -1931,8 +1955,8 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
         for (int r = 0; r < num_rg_in_part[p]; r++) {
           auto const global_r   = global_rowgroup_base[p] + r;
           auto const& row_group = agg_meta->file(p).row_groups[global_r];
-          uint32_t const fragments_in_chunk =
-            util::div_rounding_up_unsafe(row_group.num_rows, frag_size);
+          auto const fragments_in_chunk =
+            util::div_rounding_up_safe<uint32_t>(row_group.num_rows, frag_size);
           EncColumnChunk& ck = chunks[r + first_rg_in_part[p]][c];
           ck.fragments       = page_fragments.device_ptr(frag_offset);
           ck.first_fragment  = frag_offset;
@@ -1940,7 +1964,7 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
           // update the chunk pointer here for each fragment in chunk.fragments
           for (uint32_t i = 0; i < fragments_in_chunk; i++) {
             page_fragments[frag_offset + i].chunk =
-              &chunks.device_view()[r + first_rg_in_part[p]][c];
+              chunks.device_view()[r + first_rg_in_part[p]].data() + c;
           }
 
           if (not frag_stats.is_empty()) { ck.stats = frag_stats.data() + frag_offset; }
@@ -1966,7 +1990,7 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
 
   // Build chunk dictionaries and count pages. Sends chunks to device.
   auto comp_page_sizes = init_page_sizes(chunks,
-                                         col_desc,
+                                         d_col_desc,
                                          num_columns,
                                          max_page_size_bytes,
                                          max_page_size_rows,
@@ -2073,7 +2097,7 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
 
   if (num_pages != 0) {
     init_encoder_pages(chunks,
-                       col_desc,
+                       d_col_desc,
                        {pages.data(), pages.size()},
                        comp_page_sizes,
                        (num_stats_bfr) ? page_stats.data() : nullptr,
@@ -2107,6 +2131,7 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
       compression,
       column_index_truncate_length,
       write_v2_headers,
+      page_level_compression,
       stream);
 
     bool need_sync{false};
@@ -2133,7 +2158,14 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
       auto& row_group = agg_meta->file(p).row_groups[global_r];
 
       for (auto i = 0; i < num_columns; i++) {
-        auto const& ck          = chunks[r][i];
+#if defined(__GNUC__) && (__GNUC__ >= 14)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdangling-reference"
+#endif
+        auto const& ck = chunks[r][i];
+#if defined(__GNUC__) && (__GNUC__ >= 14)
+#pragma GCC diagnostic pop
+#endif
         auto const dev_bfr      = ck.is_compressed ? ck.compressed_bfr : ck.uncompressed_bfr;
         auto& column_chunk_meta = row_group.columns[i].meta_data;
 
@@ -2176,7 +2208,14 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
         auto& row_group    = agg_meta->file(p).row_groups[global_r];
 
         for (auto i = 0; i < num_columns; i++) {
-          auto const& ck          = chunks[r][i];
+#if defined(__GNUC__) && (__GNUC__ >= 14)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdangling-reference"
+#endif
+          auto const& ck = chunks[r][i];
+#if defined(__GNUC__) && (__GNUC__ >= 14)
+#pragma GCC diagnostic pop
+#endif
           auto const& col         = col_desc[ck.col_desc_id];
           auto& column_chunk_meta = row_group.columns[i].meta_data;
 
@@ -2254,6 +2293,7 @@ writer::impl::impl(std::vector<std::unique_ptr<data_sink>> sinks,
     _int96_timestamps(options.is_enabled_int96_timestamps()),
     _utc_timestamps(options.is_enabled_utc_timestamps()),
     _write_v2_headers(options.is_enabled_write_v2_headers()),
+    _page_level_compression(options.is_enabled_page_level_compression()),
     _write_arrow_schema(options.is_enabled_write_arrow_schema()),
     _sorting_columns(options.get_sorting_columns()),
     _column_index_truncate_length(options.get_column_index_truncate_length()),
@@ -2268,6 +2308,11 @@ writer::impl::impl(std::vector<std::unique_ptr<data_sink>> sinks,
 
   CUDF_EXPECTS(is_supported_write_parquet(_compression),
                "Compression type not supported for Parquet writer");
+
+  if (_page_level_compression and not _write_v2_headers) {
+    CUDF_LOG_WARN(
+      "page_level_compression is only supported with V2 page headers; the option will be ignored");
+  }
 
   init_state();
 }
@@ -2289,6 +2334,7 @@ writer::impl::impl(std::vector<std::unique_ptr<data_sink>> sinks,
     _int96_timestamps(options.is_enabled_int96_timestamps()),
     _utc_timestamps(options.is_enabled_utc_timestamps()),
     _write_v2_headers(options.is_enabled_write_v2_headers()),
+    _page_level_compression(options.is_enabled_page_level_compression()),
     _write_arrow_schema(options.is_enabled_write_arrow_schema()),
     _sorting_columns(options.get_sorting_columns()),
     _column_index_truncate_length(options.get_column_index_truncate_length()),
@@ -2303,6 +2349,11 @@ writer::impl::impl(std::vector<std::unique_ptr<data_sink>> sinks,
 
   CUDF_EXPECTS(is_supported_write_parquet(_compression),
                "Compression type not supported for Parquet writer");
+
+  if (_page_level_compression and not _write_v2_headers) {
+    CUDF_LOG_WARN(
+      "page_level_compression is only supported with V2 page headers; the option will be ignored");
+  }
 
   init_state();
 }
@@ -2372,6 +2423,7 @@ void writer::impl::write(table_view const& input, std::vector<partition_info> co
                                            _int96_timestamps,
                                            _utc_timestamps,
                                            _write_v2_headers,
+                                           _page_level_compression,
                                            _write_arrow_schema,
                                            _out_sink,
                                            _stream);
@@ -2419,7 +2471,14 @@ void writer::impl::write_parquet_data_to_sink(
       auto& row_group    = _agg_meta->file(p).row_groups[global_r];
 
       for (std::size_t i = 0; i < num_columns; i++) {
-        auto const& ck     = chunks[r][i];
+#if defined(__GNUC__) && (__GNUC__ >= 14)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdangling-reference"
+#endif
+        auto const& ck = chunks[r][i];
+#if defined(__GNUC__) && (__GNUC__ >= 14)
+#pragma GCC diagnostic pop
+#endif
         auto const dev_bfr = ck.is_compressed ? ck.compressed_bfr : ck.uncompressed_bfr;
 
         // Skip the range [0, ck.ck_stat_size) since it has already been copied to host
@@ -2449,8 +2508,8 @@ void writer::impl::write_parquet_data_to_sink(
         if (i == 0) { row_group.file_offset = chunk_offset; }
       }
     }
-    for (auto const& task : write_tasks) {
-      task.wait();
+    for (auto& task : write_tasks) {
+      task.get();
     }
   }
 
@@ -2466,7 +2525,14 @@ void writer::impl::write_parquet_data_to_sink(
         int const global_r    = global_rowgroup_base[p] + r - first_rg_in_part[p];
         auto const& row_group = _agg_meta->file(p).row_groups[global_r];
         for (std::size_t i = 0; i < num_columns; i++) {
-          EncColumnChunk const& ck      = chunks[r][i];
+#if defined(__GNUC__) && (__GNUC__ >= 14)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdangling-reference"
+#endif
+          EncColumnChunk const& ck = chunks[r][i];
+#if defined(__GNUC__) && (__GNUC__ >= 14)
+#pragma GCC diagnostic pop
+#endif
           auto const& column_chunk_meta = row_group.columns[i].meta_data;
 
           // start transfer of the column index
@@ -2487,7 +2553,8 @@ void writer::impl::write_parquet_data_to_sink(
             if (enc_page.page_type == PageType::DICTIONARY_PAGE) { continue; }
 
             int32_t const this_page_size =
-              enc_page.hdr_size + (ck.is_compressed ? enc_page.comp_data_size : enc_page.data_size);
+              enc_page.hdr_size +
+              (enc_page.is_compressed ? enc_page.comp_data_size : enc_page.data_size);
             // first_row_idx is relative to start of row group
             PageLocation loc{curr_pg_offset, this_page_size, enc_page.start_row - ck.start_row};
             if (is_byte_arr) { var_bytes.push_back(enc_page.var_bytes_size); }
@@ -2660,7 +2727,7 @@ std::unique_ptr<std::vector<uint8_t>> writer::merge_row_group_metadata(
   // See https://github.com/rapidsai/cudf/pull/14264#issuecomment-1778311615
   for (auto& se : md.schema) {
     if (se.logical_type.has_value() && se.logical_type.value().type == LogicalType::UNKNOWN) {
-      se.logical_type = std::nullopt;
+      se.logical_type = cuda::std::nullopt;
     }
   }
 

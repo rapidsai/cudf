@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -8,7 +8,11 @@ import pytest
 import polars as pl
 from polars.testing import assert_frame_equal
 
-from cudf_polars.testing.asserts import DEFAULT_SCHEDULER, assert_gpu_result_equal
+from cudf_polars.testing.asserts import (
+    DEFAULT_CLUSTER,
+    DEFAULT_RUNTIME,
+    assert_gpu_result_equal,
+)
 
 
 @pytest.fixture(scope="module")
@@ -32,9 +36,13 @@ def test_unique(df, keep, subset, maintain_order, cardinality):
         executor="streaming",
         executor_options={
             "max_rows_per_partition": 50,
-            "scheduler": DEFAULT_SCHEDULER,
-            "cardinality_factor": cardinality,
-            "fallback_mode": "silent",
+            "cluster": DEFAULT_CLUSTER,
+            "runtime": DEFAULT_RUNTIME,
+            "unique_fraction": cardinality,
+            "fallback_mode": "warn",
+            # We are using unique_fraction to control the algorithm,
+            # so we need to disable statistics-based reduction planning.
+            "stats_planning": {"use_reduction_planning": False},
         },
     )
 
@@ -44,7 +52,19 @@ def test_unique(df, keep, subset, maintain_order, cardinality):
         q = q.select(*(pl.col(col) for col in subset))
         check_row_order = False
 
-    assert_gpu_result_equal(q, engine=engine, check_row_order=check_row_order)
+    is_cardinality0 = cardinality == {}
+
+    should_warn = (maintain_order and (not is_cardinality0 or keep == "none")) or (
+        not maintain_order and (not is_cardinality0) and keep in {"first", "last"}
+    )
+
+    if should_warn:
+        with pytest.warns(
+            UserWarning, match="Unsupported unique options for multiple partitions"
+        ):
+            assert_gpu_result_equal(q, engine=engine, check_row_order=check_row_order)
+    else:
+        assert_gpu_result_equal(q, engine=engine, check_row_order=check_row_order)
 
 
 def test_unique_fallback(df):
@@ -53,13 +73,17 @@ def test_unique_fallback(df):
         executor="streaming",
         executor_options={
             "max_rows_per_partition": 50,
-            "scheduler": DEFAULT_SCHEDULER,
-            "cardinality_factor": {"y": 1.0},
+            "cluster": DEFAULT_CLUSTER,
+            "runtime": DEFAULT_RUNTIME,
+            "unique_fraction": {"y": 1.0},
             "fallback_mode": "raise",
         },
     )
     q = df.unique(keep="first", maintain_order=True)
-    with pytest.raises(pl.exceptions.ComputeError, match="Unsupported unique options"):
+    with pytest.raises(
+        NotImplementedError,
+        match="Unsupported unique options",
+    ):
         assert_gpu_result_equal(q, engine=engine)
 
 
@@ -71,14 +95,21 @@ def test_unique_select(df, maintain_order, cardinality):
         executor="streaming",
         executor_options={
             "max_rows_per_partition": 4,
-            "scheduler": DEFAULT_SCHEDULER,
-            "cardinality_factor": cardinality,
-            "fallback_mode": "silent",
+            "cluster": DEFAULT_CLUSTER,
+            "runtime": DEFAULT_RUNTIME,
+            "unique_fraction": cardinality,
+            "fallback_mode": "warn",
         },
     )
 
     q = df.select(pl.col("y").unique(maintain_order=maintain_order))
-    assert_gpu_result_equal(q, engine=engine, check_row_order=False)
+    if cardinality == {"y": 0.5} and maintain_order:
+        with pytest.warns(
+            UserWarning, match="Unsupported unique options for multiple partitions."
+        ):
+            assert_gpu_result_equal(q, engine=engine, check_row_order=False)
+    else:
+        assert_gpu_result_equal(q, engine=engine, check_row_order=False)
 
 
 @pytest.mark.parametrize("keep", ["first", "last", "any"])
@@ -89,7 +120,8 @@ def test_unique_head_tail(keep, zlice):
         executor="streaming",
         executor_options={
             "max_rows_per_partition": 4,
-            "scheduler": DEFAULT_SCHEDULER,
+            "cluster": DEFAULT_CLUSTER,
+            "runtime": DEFAULT_RUNTIME,
         },
     )
     data = [0, 1, 2, 3, 4, 5, 6, 7, 3, 4, 5, 6, 7, 8, 9, 10]
@@ -102,3 +134,22 @@ def test_unique_head_tail(keep, zlice):
         getattr(q, zlice)().collect(engine=engine),
         getattr(expect, zlice)().collect(),
     )
+
+
+def test_unique_complex_slice_fallback(df):
+    """Test that unique with complex slice (offset >= 1) falls back correctly."""
+    engine = pl.GPUEngine(
+        raise_on_fail=True,
+        executor="streaming",
+        executor_options={
+            "max_rows_per_partition": 50,
+            "cluster": DEFAULT_CLUSTER,
+            "runtime": DEFAULT_RUNTIME,
+        },
+    )
+    # unique().slice(offset=5, length=10) has zlice[0] >= 1, triggering fallback
+    q = df.unique(subset=("y",), keep="any").slice(5, 10)
+    with pytest.warns(UserWarning, match="Complex slice not supported"):
+        result = q.collect(engine=engine)
+    # Just verify the fallback produces valid output with expected shape
+    assert result.shape == (10, 3)

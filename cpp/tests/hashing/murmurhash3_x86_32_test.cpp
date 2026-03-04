@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf_test/base_fixture.hpp>
@@ -126,35 +115,36 @@ TEST_F(MurmurHashTest, BasicList)
   using ICW = cudf::test::fixed_width_column_wrapper<uint32_t>;
 
   auto const col = LCW{{}, {}, {1}, {1, 1}, {1}, {1, 2}, {2, 2}, {2}, {2}, {2, 1}, {2, 2}, {2, 2}};
-  auto const input  = cudf::table_view({col});
-  auto const expect = ICW{1607593296,
-                          1607593296,
-                          -636010097,
-                          -132459357,
-                          -636010097,
-                          -2008850957,
-                          -1023787369,
-                          761197503,
-                          761197503,
-                          1340177511,
-                          -1023787369,
-                          -1023787369};
+  auto const input = cudf::table_view({col});
 
   auto const output = cudf::hashing::murmurhash3_x86_32(input);
+  auto const expect = ICW{3248124823u,
+                          3248124823u,
+                          1004521430u,
+                          1508072170u,
+                          1004521430u,
+                          3926647866u,
+                          616744158u,
+                          2401729030u,
+                          2401729030u,
+                          2980709038u,
+                          616744158u,
+                          616744158u};
+
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expect, output->view(), verbosity);
 
-  auto const expect_seeded = ICW{1607594268u,
-                                 1607594268u,
-                                 1576790066u,
-                                 1203671017u,
-                                 1576790066u,
-                                 2107478077u,
-                                 1756855002u,
-                                 2228938758u,
-                                 2228938758u,
-                                 3491134126u,
-                                 1756855002u,
-                                 1756855002u};
+  auto const expect_seeded = ICW{3248124823u,
+                                 3248124823u,
+                                 3217320641u,
+                                 2844201578u,
+                                 3217320641u,
+                                 3748008630u,
+                                 3397385561u,
+                                 3869469325u,
+                                 3869469325u,
+                                 836697381u,
+                                 3397385561u,
+                                 3397385561u};
 
   auto const seeded_output = cudf::hashing::murmurhash3_x86_32(input, 15);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expect_seeded, seeded_output->view(), verbosity);
@@ -169,32 +159,32 @@ TEST_F(MurmurHashTest, NullableList)
     std::vector<bool>{true, true, true, true, true, true, true, false, true, true, false};
   auto const col =
     LCW{{{}, {}, {1}, {1}, {2, 2}, {2}, {2}, {}, {2, 2}, {2, 2}, {}}, valids.begin()};
-  auto expect = ICW{-2023148619,
-                    -2023148619,
-                    -31671896,
-                    -31671896,
-                    -1205248335,
-                    1865773848,
-                    1865773848,
-                    -2023148682,
-                    -1205248335,
-                    -1205248335,
-                    -2023148682};
+  auto expect = ICW{3912350204u,
+                    3912350204u,
+                    1608859631u,
+                    1608859631u,
+                    435283192u,
+                    3506305375u,
+                    3506305375u,
+                    3912350141u,
+                    435283192u,
+                    435283192u,
+                    3912350141u};
 
   auto const output = cudf::hashing::murmurhash3_x86_32(cudf::table_view({col}));
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expect, output->view(), verbosity);
 
-  auto const expect_seeded = ICW{2271820643u,
-                                 2271820643u,
-                                 1038318696u,
-                                 1038318696u,
-                                 595138041u,
-                                 3027840870u,
-                                 3027840870u,
-                                 2271820578u,
-                                 595138041u,
-                                 595138041u,
-                                 2271820578u};
+  auto const expect_seeded = ICW{3912350204u,
+                                 3912350204u,
+                                 2678848247u,
+                                 2678848247u,
+                                 2235667558u,
+                                 373403129u,
+                                 373403129u,
+                                 3912350141u,
+                                 2235667558u,
+                                 2235667558u,
+                                 3912350141u};
 
   auto const seeded_output = cudf::hashing::murmurhash3_x86_32(cudf::table_view({col}), 31);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expect_seeded, seeded_output->view(), verbosity);
@@ -287,44 +277,44 @@ TEST_F(MurmurHashTest, ListOfStruct)
   auto list_column = cudf::make_lists_column(
     17, offsets.release(), struct_col.release(), null_count, std::move(null_mask));
 
-  auto expect = cudf::test::fixed_width_column_wrapper<uint32_t>{83451479,
-                                                                 83451479,
-                                                                 83455332,
-                                                                 83455332,
-                                                                 -759684425,
-                                                                 -959632766,
-                                                                 -959632766,
-                                                                 -959632766,
-                                                                 -959636527,
-                                                                 -656998704,
-                                                                 613652814,
-                                                                 1902080426,
-                                                                 1902080426,
-                                                                 2061025592,
-                                                                 2061025592,
-                                                                 -319840811,
-                                                                 -319840811};
+  auto expect = cudf::test::fixed_width_column_wrapper<uint32_t>{3876952264u,
+                                                                 3876952264u,
+                                                                 3876956377u,
+                                                                 3876956377u,
+                                                                 249032782u,
+                                                                 816478621u,
+                                                                 816478621u,
+                                                                 816478621u,
+                                                                 816458092u,
+                                                                 1889870927u,
+                                                                 1034306752u,
+                                                                 1190276260u,
+                                                                 1190276260u,
+                                                                 2709265927u,
+                                                                 2709265927u,
+                                                                 441177952u,
+                                                                 441177952u};
 
   auto const output = cudf::hashing::murmurhash3_x86_32(cudf::table_view({*list_column}));
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expect, output->view(), verbosity);
 
-  auto expect_seeded = cudf::test::fixed_width_column_wrapper<uint32_t>{81710442u,
-                                                                        81710442u,
-                                                                        81729816u,
-                                                                        81729816u,
-                                                                        3532787573u,
-                                                                        3642097855u,
-                                                                        3642097855u,
-                                                                        3642097855u,
-                                                                        3642110391u,
-                                                                        3889855760u,
-                                                                        1494406307u,
-                                                                        103934081u,
-                                                                        103934081u,
-                                                                        3462063680u,
-                                                                        3462063680u,
-                                                                        1696730835u,
-                                                                        1696730835u};
+  auto expect_seeded = cudf::test::fixed_width_column_wrapper<uint32_t>{3876952264u,
+                                                                        3876952264u,
+                                                                        3876956377u,
+                                                                        3876956377u,
+                                                                        249032782u,
+                                                                        816478621u,
+                                                                        816478621u,
+                                                                        816478621u,
+                                                                        816458092u,
+                                                                        2345768357u,
+                                                                        1324751236u,
+                                                                        4220906854u,
+                                                                        4220906854u,
+                                                                        422565830u,
+                                                                        422565830u,
+                                                                        2621843520u,
+                                                                        2621843520u};
 
   auto const seeded_output =
     cudf::hashing::murmurhash3_x86_32(cudf::table_view({*list_column}), 619);
@@ -362,19 +352,19 @@ TEST_F(MurmurHashTest, ListOfEmptyStruct)
   auto list_column = cudf::make_lists_column(
     13, offsets.release(), std::move(struct_col), null_count, std::move(null_mask));
 
-  auto expect = cudf::test::fixed_width_column_wrapper<uint32_t>{2271818677u,
-                                                                 2271818677u,
-                                                                 2271818614u,
-                                                                 2271818614u,
-                                                                 3954409013u,
-                                                                 3954409013u,
-                                                                 3954409013u,
-                                                                 2295666275u,
-                                                                 2295666275u,
-                                                                 2295666276u,
-                                                                 2295666276u,
-                                                                 3954409052u,
-                                                                 3954409052u};
+  auto expect = cudf::test::fixed_width_column_wrapper<uint32_t>{3912350204u,
+                                                                 3912350204u,
+                                                                 3912350141u,
+                                                                 3912350141u,
+                                                                 1299973244u,
+                                                                 1299973244u,
+                                                                 1299973244u,
+                                                                 3936197802u,
+                                                                 3936197802u,
+                                                                 3936197803u,
+                                                                 3936197803u,
+                                                                 1299973283u,
+                                                                 1299973283u};
 
   auto output = cudf::hashing::murmurhash3_x86_32(cudf::table_view({*list_column}));
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expect, output->view(), verbosity);
@@ -399,7 +389,7 @@ TEST_F(MurmurHashTest, EmptyDeepList)
     4, offsets.release(), list1.release(), null_count, std::move(null_mask));
 
   auto expect = cudf::test::fixed_width_column_wrapper<uint32_t>{
-    2271818677u, 2271818677u, 2271818614u, 2271818614u};
+    3912350204u, 3912350204u, 3912350141u, 3912350141u};
 
   auto output = cudf::hashing::murmurhash3_x86_32(cudf::table_view({*list_column}));
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expect, output->view(), verbosity);

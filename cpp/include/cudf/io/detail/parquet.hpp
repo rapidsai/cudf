@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 /**
@@ -42,13 +31,15 @@ class CUDF_EXPORT chunked_parquet_writer_options;
 
 namespace parquet::detail {
 
+// Forward declaration of the implementation class
+class reader_impl;
+
 /**
  * @brief Class to read Parquet dataset data into columns.
  */
 class reader {
  protected:
-  class impl;
-  std::unique_ptr<impl> _impl;
+  std::unique_ptr<reader_impl> _impl;
 
   /**
    * @brief Default constructor, needed for subclassing.
@@ -60,11 +51,13 @@ class reader {
    * @brief Constructor from an array of datasources
    *
    * @param sources Input `datasource` objects to read the dataset from
+   * @param parquet_metadatas Pre-materialized Parquet file metadata(s). Read from sources if empty
    * @param options Settings for controlling reading behavior
    * @param stream CUDA stream used for device memory operations and kernel launches.
    * @param mr Device memory resource to use for device memory allocation
    */
   explicit reader(std::vector<std::unique_ptr<cudf::io::datasource>>&& sources,
+                  std::vector<FileMetaData>&& parquet_metadatas,
                   parquet_reader_options const& options,
                   rmm::cuda_stream_view stream,
                   rmm::device_async_resource_ref mr);
@@ -111,8 +104,8 @@ class chunked_reader : private reader {
    * ```
    *
    * If `chunk_read_limit == 0` (i.e., no output limit), and `pass_read_limit == 0` (no input
-   * temporary memory size limit) a call to `read_chunk()` will read the whole file and return a
-   * table containing all rows.
+   * temporary memory size limit), a call to `read_chunk()` will read the whole file (at most 2
+   * billion rows at once) and return corresponding table(s).
    *
    * The chunk_read_limit parameter controls the size of the output chunks produces.  If the user
    * specifies 100 MB of data, the reader will attempt to return chunks containing tables that have
@@ -135,14 +128,15 @@ class chunked_reader : private reader {
    *  }
    * @endcode
    *
-   * With a pass_read_limit of `0` you are simply saying you have one pass that reads the entire
-   * file as normal.
+   * With a pass_read_limit of `0` you are simply saying you have one pass that reads up to 2
+   * billion rows (or the entire file if smaller) as normal.
    *
    * @param chunk_read_limit Limit on total number of bytes to be returned per read,
    * or `0` if there is no limit
    * @param pass_read_limit Limit on total amount of memory used for temporary computations during
    * loading, or `0` if there is no limit
    * @param sources Input `datasource` objects to read the dataset from
+   * @param parquet_metadatas Pre-materialized Parquet file metadata(s). Read from sources if empty
    * @param options Settings for controlling reading behavior
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource to use for device memory allocation
@@ -150,6 +144,7 @@ class chunked_reader : private reader {
   explicit chunked_reader(std::size_t chunk_read_limit,
                           std::size_t pass_read_limit,
                           std::vector<std::unique_ptr<cudf::io::datasource>>&& sources,
+                          std::vector<parquet::FileMetaData>&& parquet_metadatas,
                           parquet_reader_options const& options,
                           rmm::cuda_stream_view stream,
                           rmm::device_async_resource_ref mr);
@@ -257,6 +252,17 @@ class writer {
  * metadata.
  */
 parquet_metadata read_parquet_metadata(host_span<std::unique_ptr<datasource> const> sources);
+
+/**
+ * @brief Constructs FileMetaData objects from parquet dataset
+ *
+ * @param sources Input `datasource` objects to read the dataset from
+ *
+ * @return List of FileMetaData objects, one per parquet source
+ */
+std::vector<parquet::FileMetaData> read_parquet_footers(
+  host_span<std::unique_ptr<datasource> const> sources);
+
 }  // namespace parquet::detail
 }  // namespace io
 }  // namespace CUDF_EXPORT cudf

@@ -1,4 +1,5 @@
-# Copyright (c) 2022-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 
 from functools import cache
@@ -10,7 +11,7 @@ from numba.core.errors import TypingError
 from numba.cuda.cudadrv.devices import get_context
 from numba.np import numpy_support
 
-from cudf.core.column import column_empty
+from cudf.core.column import as_column, column_empty
 from cudf.core.udf.groupby_typing import (
     SUPPORTED_GROUPBY_NUMPY_TYPES,
     Group,
@@ -123,11 +124,11 @@ def jit_groupby_apply(offsets, grouped_values, function, *args):
 
     kr = GroupByApplyKernel(grouped_values, function, args)
     kernel, return_type = kr.get_kernel()
-
-    offsets = cp.asarray(offsets)
+    offsets = as_column(offsets)
     ngroups = len(offsets) - 1
 
-    output = column_empty(ngroups, dtype=return_type, for_numba=True)
+    output = column_empty(ngroups, dtype=return_type)
+    output = output.set_mask(None, 0)
     launch_args = [
         offsets,
         output,

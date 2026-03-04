@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -22,5 +22,8 @@ def test_filter(expr, predicate_pushdown):
 
     query = ldf.filter(expr)
     assert_gpu_result_equal(
-        query, collect_kwargs={"predicate_pushdown": predicate_pushdown}
+        query,
+        collect_kwargs={
+            "optimizations": pl.QueryOptFlags(predicate_pushdown=predicate_pushdown)
+        },
     )

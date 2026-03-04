@@ -1,6 +1,10 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
+ * SPDX-FileCopyrightText: Copyright 2018 BlazingDB, Inc.
+ * SPDX-FileCopyrightText: Copyright 2018 Alexander Ocsa <cristhian@blazingdb.com>
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+/*
  * Copyright 2018 BlazingDB, Inc.
  *     Copyright 2018 Alexander Ocsa <cristhian@blazingdb.com>
  *
@@ -31,7 +35,7 @@
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 
-#include <thrust/iterator/constant_iterator.h>
+#include <cuda/iterator>
 #include <thrust/iterator/counting_iterator.h>
 
 using namespace cudf::test::iterators;
@@ -446,7 +450,7 @@ TYPED_TEST(ReplaceNullsPolicyTest, PrecedingFillLargeArray)
   auto nulls_idx_end   = nulls_idx_begin + sz - 1;
 
   // Expected: 0, 0, 0, ...
-  auto expected_begin = thrust::make_constant_iterator(0);
+  auto expected_begin = cuda::make_constant_iterator(0);
   auto expected_end   = expected_begin + sz;
 
   TestReplaceNullsWithPolicy(
@@ -467,7 +471,7 @@ TYPED_TEST(ReplaceNullsPolicyTest, FollowingFillLargeArray)
   auto nulls_idx_end   = nulls_idx_begin + sz - 1;
 
   // Expected: 999, 999, 999, ...
-  auto expected_begin = thrust::make_constant_iterator(sz - 1);
+  auto expected_begin = cuda::make_constant_iterator(sz - 1);
   auto expected_end   = expected_begin + sz;
 
   TestReplaceNullsWithPolicy(
@@ -619,30 +623,29 @@ struct ReplaceDictionaryTest : public cudf::test::BaseFixture {};
 
 TEST_F(ReplaceDictionaryTest, ReplaceNulls)
 {
-  cudf::test::strings_column_wrapper input_w({"c", "", "", "a", "d", "d", "", ""},
-                                             {1, 0, 0, 1, 1, 1, 0, 0});
-  auto input = cudf::dictionary::encode(input_w);
-  cudf::test::strings_column_wrapper replacement_w({"c", "c", "", "a", "d", "d", "b", ""},
-                                                   {1, 1, 0, 1, 1, 1, 1, 0});
-  auto replacement = cudf::dictionary::encode(replacement_w);
-  cudf::test::strings_column_wrapper expected_w({"c", "c", "", "a", "d", "d", "b", ""},
-                                                {1, 1, 0, 1, 1, 1, 1, 0});
-  auto expected = cudf::dictionary::encode(expected_w);
+  auto input_w       = cudf::test::strings_column_wrapper({"c", "", "", "a", "d", "d", "", ""},
+                                                          {1, 0, 0, 1, 1, 1, 0, 0});
+  auto input         = cudf::dictionary::encode(input_w);
+  auto replacement_w = cudf::test::strings_column_wrapper({"c", "c", "", "a", "d", "d", "b", ""},
+                                                          {1, 1, 0, 1, 1, 1, 1, 0});
+  auto replacement   = cudf::dictionary::encode(replacement_w);
+  auto expected      = cudf::test::strings_column_wrapper({"c", "c", "", "a", "d", "d", "b", ""},
+                                                          {1, 1, 0, 1, 1, 1, 1, 0});
 
-  auto result = cudf::replace_nulls(input->view(), replacement->view());
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected->view());
+  auto result  = cudf::replace_nulls(input->view(), replacement->view());
+  auto decoded = cudf::dictionary::decode(result->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(decoded->view(), expected);
 }
 
 TEST_F(ReplaceDictionaryTest, ReplaceNullsWithScalar)
 {
-  cudf::test::strings_column_wrapper input_w({"c", "", "", "a", "d", "d", "", ""},
-                                             {1, 0, 0, 1, 1, 1, 0, 0});
-  auto input = cudf::dictionary::encode(input_w);
-  cudf::test::strings_column_wrapper expected_w({"c", "b", "b", "a", "d", "d", "b", "b"});
-  auto expected = cudf::dictionary::encode(expected_w);
-
-  auto result = cudf::replace_nulls(input->view(), cudf::string_scalar("b"));
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected->view());
+  auto input_w  = cudf::test::strings_column_wrapper({"c", "", "", "a", "d", "d", "", ""},
+                                                     {1, 0, 0, 1, 1, 1, 0, 0});
+  auto input    = cudf::dictionary::encode(input_w);
+  auto result   = cudf::replace_nulls(input->view(), cudf::string_scalar("b"));
+  auto decoded  = cudf::dictionary::decode(result->view());
+  auto expected = cudf::test::strings_column_wrapper({"c", "b", "b", "a", "d", "d", "b", "b"});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(decoded->view(), expected);
 }
 
 TEST_F(ReplaceDictionaryTest, ReplaceNullsError)

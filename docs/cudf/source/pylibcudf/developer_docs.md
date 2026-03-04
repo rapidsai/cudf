@@ -1,3 +1,5 @@
+(pylibcudf-developer-docs)=
+
 # Developer Documentation
 
 pylibcudf is a lightweight Cython wrapper around libcudf.
@@ -134,7 +136,7 @@ def pa_column(pa_dtype):
 
 @pytest.fixture(scope="module")
 def column(pa_column):
-    return plc.Column(pa_column)
+    return plc.Column.from_arrow(pa_column)
 
 
 def test_foo(pa_column, column):
@@ -151,7 +153,7 @@ Some guidelines on what should be tested:
   - Exception: In special cases where constructing suitable large tests is difficult in C++ (such as creating suitable input data for I/O testing), tests may be added to pylibcudf instead.
 - Nullable data should always be tested.
 - Expected exceptions should be tested. Tests should be written from the user's perspective in mind, and if the API is not currently throwing the appropriate exception it should be updated.
-  - Important note: If the exception should be produced by libcudf, the underlying libcudf API should be updated to throw the desired exception in C++. Such changes may require consultation with libcudf devs in nontrivial cases. [This issue](https://github.com/rapidsai/cudf/issues/12885) provides an overview and an indication of acceptable exception types that should cover most use cases. In rare cases a new C++ exception may need to be introduced in [`error.hpp`](https://github.com/rapidsai/cudf/blob/branch-24.04/cpp/include/cudf/utilities/error.hpp). If so, this exception will also need to be mapped to a suitable Python exception in `exception_handler.pxd`.
+  - Important note: If the exception should be produced by libcudf, the underlying libcudf API should be updated to throw the desired exception in C++. Such changes may require consultation with libcudf devs in nontrivial cases. [This issue](https://github.com/rapidsai/cudf/issues/12885) provides an overview and an indication of acceptable exception types that should cover most use cases. In rare cases a new C++ exception may need to be introduced in [`error.hpp`](https://github.com/rapidsai/cudf/blob/main/cpp/include/cudf/utilities/error.hpp). If so, this exception will also need to be mapped to a suitable Python exception in `exception_handler.pxd`.
 
 Some guidelines on how best to use pytests.
 - By default, fixtures producing device data containers should be of module scope and treated as immutable by tests. Allocating data on the GPU is expensive and slows tests. Almost all pylibcudf operations are out of place operations, so module-scoped fixtures should not typically be problematic to work with. Session-scoped fixtures would also work, but they are harder to reason about since they live in a different module, and if they need to change for any reason they could affect an arbitrarily large number of tests. Module scope is a good balance.
@@ -222,6 +224,22 @@ from pylibcudf.libcudf.copying cimport out_of_bounds_policy
 from pylibcudf.libcudf.copying import \
     out_of_bounds_policy as OutOfBoundsPolicy  # no-cython-lint
 ```
+
+### Enum string representations
+
+By default, Cython's `cpdef enum class` generates a valid Python `Enum` type for
+each C++ enum. However, the default `__str__` implementation for these enums is not
+very informative. It returns the underlying value (e.g., `11` instead of `<type_id.BOOL8: 11>`).
+
+To improve developer experience, we manually set `__str__ = __repr__` for all public
+enums. This ensures that printing an enum from Python returns a meaningful name like:
+
+```python
+>>> from pylibcudf.types import TypeId
+>>> print(TypeId.INT32)
+<type_id.INT32>
+```
+
 
 ### Handling overloaded functions in libcudf
 As a C++ library, libcudf makes extensive use of function overloading.

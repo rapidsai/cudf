@@ -1,21 +1,10 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
-#include "common_sort_impl.cuh"
 #include "sort_impl.cuh"
+#include "sort_radix.hpp"
 
 #include <cudf/column/column.hpp>
 #include <cudf/detail/gather.hpp>
@@ -27,9 +16,6 @@
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-
-#include <thrust/functional.h>
-#include <thrust/sort.h>
 
 namespace cudf {
 namespace detail {
@@ -69,13 +55,10 @@ std::unique_ptr<table> sort(table_view const& input,
                             rmm::cuda_stream_view stream,
                             rmm::device_async_resource_ref mr)
 {
-  // fast-path sort conditions: single, non-floating-point, fixed-width column with no nulls
-  if (inplace_column_sort_fn<sort_method::UNSTABLE>::is_usable(input)) {
-    auto output = std::make_unique<column>(input.column(0), stream, mr);
-    auto view   = output->mutable_view();
+  // fast-path sort conditions: single, fixed-width column with no nulls
+  if (input.num_columns() == 1 && is_radix_sortable(input.column(0))) {
     auto order  = (column_order.empty() ? order::ASCENDING : column_order.front());
-    cudf::type_dispatcher<dispatch_storage_type>(
-      output->type(), inplace_column_sort_fn<sort_method::UNSTABLE>{}, view, order, stream);
+    auto output = sort_radix(input.column(0), order == order::ASCENDING, stream, mr);
     std::vector<std::unique_ptr<column>> columns;
     columns.emplace_back(std::move(output));
     return std::make_unique<table>(std::move(columns));

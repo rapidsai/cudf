@@ -1,10 +1,10 @@
-# Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 import operator
 
 import numpy as np
 from numba import types
-from numba.core.datamodel import default_manager
 from numba.core.extending import (
     make_attribute_wrapper,
     models,
@@ -19,6 +19,7 @@ from numba.core.typing.templates import (
 )
 from numba.core.typing.typeof import typeof
 from numba.cuda.cudadecl import registry as cuda_decl_registry
+from numba.cuda.descriptor import cuda_target
 from numba.np.numpy_support import from_dtype
 
 from cudf.core.missing import NA
@@ -31,16 +32,17 @@ from cudf.core.udf._ops import (
 )
 from cudf.core.udf.nrt_utils import _current_nrt_context
 from cudf.core.udf.strings_typing import (
+    ManagedUDFString,
     StringView,
     UDFString,
     bool_binary_funcs,
     id_unary_funcs,
     int_binary_funcs,
+    managed_udf_string,
     size_type,
     string_return_attrs,
     string_unary_funcs,
     string_view,
-    udf_string,
 )
 from cudf.utils.dtypes import (
     DATETIME_TYPES,
@@ -63,7 +65,7 @@ _supported_masked_types = (
     | _datetime_cases
     | _timedelta_cases
     | {types.boolean}
-    | {string_view, udf_string}
+    | {string_view, managed_udf_string}
 )
 
 
@@ -74,6 +76,7 @@ SUPPORTED_NUMBA_TYPES = (
     types.NPTimedelta,
     StringView,
     UDFString,
+    ManagedUDFString,
 )
 
 
@@ -110,7 +113,9 @@ class MaskedType(types.Type):
     def __init__(self, value):
         # MaskedType in Numba shall be parameterized
         # with a value type
-        if default_manager[value].has_nrt_meminfo():
+        if cuda_target.target_context.data_model_manager[
+            value
+        ].has_nrt_meminfo():
             ctx = _current_nrt_context.get(None)
             if ctx is not None:
                 # we're in a compilation that is determining
@@ -479,7 +484,9 @@ for unary_op in unary_ops:
 def _is_valid_string_arg(ty):
     return (
         isinstance(ty, MaskedType)
-        and isinstance(ty.value_type, (StringView, UDFString))
+        and isinstance(
+            ty.value_type, (StringView, UDFString, ManagedUDFString)
+        )
     ) or isinstance(ty, types.StringLiteral)
 
 
@@ -514,7 +521,7 @@ def len_typing(self, args, kws):
 def concat_typing(self, args, kws):
     if _is_valid_string_arg(args[0]) and _is_valid_string_arg(args[1]):
         return nb_signature(
-            MaskedType(udf_string),
+            MaskedType(managed_udf_string),
             MaskedType(string_view),
             MaskedType(string_view),
         )
@@ -610,7 +617,7 @@ class MaskedStringViewReplace(AbstractTemplate):
 
     def generic(self, args, kws):
         return nb_signature(
-            MaskedType(udf_string),
+            MaskedType(managed_udf_string),
             MaskedType(string_view),
             MaskedType(string_view),
             recvr=self.this,
@@ -656,7 +663,7 @@ for func in string_return_attrs:
     setattr(
         MaskedStringViewAttrs,
         f"resolve_{func}",
-        create_masked_binary_attr(f"MaskedType.{func}", udf_string),
+        create_masked_binary_attr(f"MaskedType.{func}", managed_udf_string),
     )
 
 for func in id_unary_funcs:
@@ -670,16 +677,16 @@ for func in string_unary_funcs:
     setattr(
         MaskedStringViewAttrs,
         f"resolve_{func}",
-        create_masked_unary_attr(f"MaskedType.{func}", udf_string),
+        create_masked_unary_attr(f"MaskedType.{func}", managed_udf_string),
     )
 
 
-class MaskedUDFStringAttrs(MaskedStringViewAttrs):
-    key = MaskedType(udf_string)
+class MaskedManagedUDFStringAttrs(MaskedStringViewAttrs):
+    key = MaskedType(managed_udf_string)
 
     def resolve_value(self, mod):
-        return udf_string
+        return managed_udf_string
 
 
 cuda_decl_registry.register_attr(MaskedStringViewAttrs)
-cuda_decl_registry.register_attr(MaskedUDFStringAttrs)
+cuda_decl_registry.register_attr(MaskedManagedUDFStringAttrs)

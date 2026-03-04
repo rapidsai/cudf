@@ -1,21 +1,8 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
-#include "io/comp/comp.hpp"
-#include "io/comp/io_uncomp.hpp"
 #include "io/orc/orc.hpp"
 #include "io/utilities/getenv_or.hpp"
 
@@ -27,16 +14,19 @@
 #include <cudf/io/data_sink.hpp>
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/detail/avro.hpp>
+#include <cudf/io/detail/codec.hpp>
 #include <cudf/io/detail/csv.hpp>
 #include <cudf/io/detail/json.hpp>
 #include <cudf/io/detail/orc.hpp>
 #include <cudf/io/detail/parquet.hpp>
 #include <cudf/io/detail/utils.hpp>
+#include <cudf/io/experimental/cudftable.hpp>
 #include <cudf/io/json.hpp>
 #include <cudf/io/orc.hpp>
 #include <cudf/io/orc_metadata.hpp>
 #include <cudf/io/parquet.hpp>
 #include <cudf/io/parquet_metadata.hpp>
+#include <cudf/io/parquet_schema.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 
@@ -162,11 +152,12 @@ chunked_parquet_writer_options_builder chunked_parquet_writer_options::builder(
   return chunked_parquet_writer_options_builder{sink};
 }
 
-namespace {
-
+/**
+ * @copydoc cudf::io::make_datasources
+ */
 std::vector<std::unique_ptr<cudf::io::datasource>> make_datasources(source_info const& info,
-                                                                    size_t offset            = 0,
-                                                                    size_t max_size_estimate = 0)
+                                                                    size_t offset,
+                                                                    size_t max_size_estimate)
 {
   switch (info.type()) {
     case io_type::FILEPATH: {
@@ -199,6 +190,8 @@ std::vector<std::unique_ptr<cudf::io::datasource>> make_datasources(source_info 
     default: CUDF_FAIL("Unsupported source type");
   }
 }
+
+namespace {
 
 std::vector<std::unique_ptr<data_sink>> make_datasinks(sink_info const& info)
 {
@@ -624,8 +617,22 @@ table_with_metadata read_parquet(parquet_reader_options const& options,
   CUDF_FUNC_RANGE();
 
   auto datasources = make_datasources(options.get_source());
-  auto reader =
-    std::make_unique<detail_parquet::reader>(std::move(datasources), options, stream, mr);
+  auto reader      = std::make_unique<detail_parquet::reader>(
+    std::move(datasources), std::vector<parquet::FileMetaData>{}, options, stream, mr);
+
+  return reader->read();
+}
+
+table_with_metadata read_parquet(std::vector<std::unique_ptr<cudf::io::datasource>>&& datasources,
+                                 std::vector<parquet::FileMetaData>&& parquet_metadatas,
+                                 parquet_reader_options const& options,
+                                 rmm::cuda_stream_view stream,
+                                 rmm::device_async_resource_ref mr)
+{
+  CUDF_FUNC_RANGE();
+
+  auto reader = std::make_unique<detail_parquet::reader>(
+    std::move(datasources), std::move(parquet_metadatas), options, stream, mr);
 
   return reader->read();
 }
@@ -636,6 +643,13 @@ parquet_metadata read_parquet_metadata(source_info const& src_info)
 
   auto datasources = make_datasources(src_info);
   return detail_parquet::read_parquet_metadata(datasources);
+}
+
+std::vector<parquet::FileMetaData> read_parquet_footers(
+  host_span<std::unique_ptr<cudf::io::datasource> const> sources)
+{
+  CUDF_FUNC_RANGE();
+  return detail_parquet::read_parquet_footers(sources);
 }
 
 /**
@@ -712,8 +726,33 @@ chunked_parquet_reader::chunked_parquet_reader(std::size_t chunk_read_limit,
                                                parquet_reader_options const& options,
                                                rmm::cuda_stream_view stream,
                                                rmm::device_async_resource_ref mr)
-  : reader{std::make_unique<detail_parquet::chunked_reader>(
-      chunk_read_limit, 0, make_datasources(options.get_source()), options, stream, mr)}
+  : reader{std::make_unique<detail_parquet::chunked_reader>(chunk_read_limit,
+                                                            0,
+                                                            make_datasources(options.get_source()),
+                                                            std::vector<parquet::FileMetaData>{},
+                                                            options,
+                                                            stream,
+                                                            mr)}
+{
+}
+
+/**
+ * @copydoc cudf::io::chunked_parquet_reader::chunked_parquet_reader
+ */
+chunked_parquet_reader::chunked_parquet_reader(
+  std::size_t chunk_read_limit,
+  std::vector<std::unique_ptr<cudf::io::datasource>>&& datasources,
+  std::vector<parquet::FileMetaData>&& parquet_metadatas,
+  parquet_reader_options const& options,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
+  : reader{std::make_unique<detail_parquet::chunked_reader>(chunk_read_limit,
+                                                            0,
+                                                            std::move(datasources),
+                                                            std::move(parquet_metadatas),
+                                                            options,
+                                                            stream,
+                                                            mr)}
 {
 }
 
@@ -728,6 +767,28 @@ chunked_parquet_reader::chunked_parquet_reader(std::size_t chunk_read_limit,
   : reader{std::make_unique<detail_parquet::chunked_reader>(chunk_read_limit,
                                                             pass_read_limit,
                                                             make_datasources(options.get_source()),
+                                                            std::vector<parquet::FileMetaData>{},
+                                                            options,
+                                                            stream,
+                                                            mr)}
+{
+}
+
+/**
+ * @copydoc cudf::io::chunked_parquet_reader::chunked_parquet_reader
+ */
+chunked_parquet_reader::chunked_parquet_reader(
+  std::size_t chunk_read_limit,
+  std::size_t pass_read_limit,
+  std::vector<std::unique_ptr<cudf::io::datasource>>&& datasources,
+  std::vector<parquet::FileMetaData>&& parquet_metadatas,
+  parquet_reader_options const& options,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
+  : reader{std::make_unique<detail_parquet::chunked_reader>(chunk_read_limit,
+                                                            pass_read_limit,
+                                                            std::move(datasources),
+                                                            std::move(parquet_metadatas),
                                                             options,
                                                             stream,
                                                             mr)}
@@ -759,12 +820,12 @@ table_with_metadata chunked_parquet_reader::read_chunk() const
   return reader->read_chunk();
 }
 
-parquet_chunked_writer::parquet_chunked_writer() = default;
+chunked_parquet_writer::chunked_parquet_writer() = default;
 
 /**
- * @copydoc cudf::io::parquet_chunked_writer::parquet_chunked_writer
+ * @copydoc cudf::io::chunked_parquet_writer::chunked_parquet_writer
  */
-parquet_chunked_writer::parquet_chunked_writer(chunked_parquet_writer_options const& options,
+chunked_parquet_writer::chunked_parquet_writer(chunked_parquet_writer_options const& options,
                                                rmm::cuda_stream_view stream)
 {
   namespace io_detail = cudf::io::detail;
@@ -775,12 +836,12 @@ parquet_chunked_writer::parquet_chunked_writer(chunked_parquet_writer_options co
     std::move(sinks), options, io_detail::single_write_mode::NO, stream);
 }
 
-parquet_chunked_writer::~parquet_chunked_writer() = default;
+chunked_parquet_writer::~chunked_parquet_writer() = default;
 
 /**
- * @copydoc cudf::io::parquet_chunked_writer::write
+ * @copydoc cudf::io::chunked_parquet_writer::write
  */
-parquet_chunked_writer& parquet_chunked_writer::write(table_view const& table,
+chunked_parquet_writer& chunked_parquet_writer::write(table_view const& table,
                                                       std::vector<partition_info> const& partitions)
 {
   CUDF_FUNC_RANGE();
@@ -791,9 +852,9 @@ parquet_chunked_writer& parquet_chunked_writer::write(table_view const& table,
 }
 
 /**
- * @copydoc cudf::io::parquet_chunked_writer::close
+ * @copydoc cudf::io::chunked_parquet_writer::close
  */
-std::unique_ptr<std::vector<uint8_t>> parquet_chunked_writer::close(
+std::unique_ptr<std::vector<uint8_t>> chunked_parquet_writer::close(
   std::vector<std::string> const& column_chunks_file_path)
 {
   CUDF_FUNC_RANGE();
@@ -802,8 +863,10 @@ std::unique_ptr<std::vector<uint8_t>> parquet_chunked_writer::close(
 
 void parquet_reader_options::set_row_groups(std::vector<std::vector<size_type>> row_groups)
 {
-  if ((!row_groups.empty()) and ((_skip_rows != 0) or _num_rows.has_value())) {
-    CUDF_FAIL("row_groups can't be set along with skip_rows and num_rows");
+  if ((!row_groups.empty()) and
+      (_skip_rows != 0 or _num_rows.has_value() or _skip_bytes != 0 or _num_bytes.has_value())) {
+    CUDF_FAIL(
+      "row_groups can't be set along with skip_rows and num_rows or skip_bytes and num_bytes");
   }
 
   _row_groups = std::move(row_groups);
@@ -813,16 +876,46 @@ void parquet_reader_options::set_skip_rows(int64_t val)
 {
   CUDF_EXPECTS(val >= 0, "skip_rows cannot be negative");
   CUDF_EXPECTS(_row_groups.empty(), "skip_rows can't be set along with a non-empty row_groups");
+  CUDF_EXPECTS(_skip_bytes == 0 and not _num_bytes.has_value(),
+               "skip_rows can't be set along with skip_bytes or num_bytes");
 
   _skip_rows = val;
 }
 
-void parquet_reader_options::set_num_rows(size_type val)
+void parquet_reader_options::set_num_rows(int64_t val)
 {
   CUDF_EXPECTS(val >= 0, "num_rows cannot be negative");
   CUDF_EXPECTS(_row_groups.empty(), "num_rows can't be set along with a non-empty row_groups");
+  CUDF_EXPECTS(_skip_bytes == 0 and not _num_bytes.has_value(),
+               "num_rows can't be set along with skip_bytes or num_bytes");
 
   _num_rows = val;
+}
+
+void parquet_reader_options::set_skip_bytes(size_t val)
+{
+  // Hybrid scan reader does not contain a source so relaxing this check to zero or one source
+  CUDF_EXPECTS(val == 0 or _source.num_sources() == 1 or _source.num_sources() == 0,
+               "skip_bytes can only be set for single parquet source case");
+  CUDF_EXPECTS(val == 0 or (not _num_rows.has_value() and _skip_rows == 0),
+               "skip_bytes cannot be set along with skip_rows and num_rows");
+  CUDF_EXPECTS(val == 0 or _row_groups.empty(),
+               "skip_bytes can't be set along with a non-empty row_groups");
+
+  _skip_bytes = val;
+}
+
+void parquet_reader_options::set_num_bytes(size_t val)
+{
+  // Hybrid scan reader does not contain a source so relaxing this check to zero or one source
+  CUDF_EXPECTS(val == std::numeric_limits<size_t>::max() or _source.num_sources() == 1 or
+                 _source.num_sources() == 0,
+               "num_bytes can only be set for single parquet source case");
+  CUDF_EXPECTS(not _num_rows.has_value() and _skip_rows == 0,
+               "num_bytes cannot be set along with skip_rows and num_rows");
+  CUDF_EXPECTS(_row_groups.empty(), "num_bytes can't be set along with a non-empty row_groups");
+
+  _num_bytes = val;
 }
 
 void parquet_writer_options_base::set_metadata(table_input_metadata metadata)
@@ -926,6 +1019,11 @@ void parquet_writer_options_base::set_compression_statistics(
 }
 
 void parquet_writer_options_base::enable_write_v2_headers(bool val) { _v2_page_headers = val; }
+
+void parquet_writer_options_base::enable_page_level_compression(bool val)
+{
+  _page_level_compression = val;
+}
 
 void parquet_writer_options_base::set_sorting_columns(std::vector<sorting_column> sorting_columns)
 {
@@ -1086,6 +1184,14 @@ BuilderT& parquet_writer_options_builder_base<BuilderT, OptionsT>::write_v2_head
 }
 
 template <class BuilderT, class OptionsT>
+BuilderT& parquet_writer_options_builder_base<BuilderT, OptionsT>::page_level_compression(
+  bool enabled)
+{
+  _options.enable_page_level_compression(enabled);
+  return static_cast<BuilderT&>(*this);
+}
+
+template <class BuilderT, class OptionsT>
 BuilderT& parquet_writer_options_builder_base<BuilderT, OptionsT>::sorting_columns(
   std::vector<sorting_column> sorting_columns)
 {
@@ -1141,4 +1247,43 @@ chunked_parquet_writer_options_builder::chunked_parquet_writer_options_builder(
 {
 }
 
+namespace experimental {
+
+// Forward declarations for detail functions
+namespace detail {
+void write_cudftable(data_sink* sink, table_view const& input, rmm::cuda_stream_view stream);
+packed_table read_cudftable(datasource* source,
+                            rmm::cuda_stream_view stream,
+                            rmm::device_async_resource_ref mr);
+}  // namespace detail
+
+/**
+ * @copydoc cudf::io::experimental::write_cudftable
+ */
+void write_cudftable(cudftable_writer_options const& options, rmm::cuda_stream_view stream)
+{
+  CUDF_FUNC_RANGE();
+
+  auto sinks = make_datasinks(options.get_sink());
+  CUDF_EXPECTS(sinks.size() == 1, "CudfTable format only supports single sink");
+
+  detail::write_cudftable(sinks[0].get(), options.get_table(), stream);
+}
+
+/**
+ * @copydoc cudf::io::experimental::read_cudftable
+ */
+packed_table read_cudftable(cudftable_reader_options const& options,
+                            rmm::cuda_stream_view stream,
+                            rmm::device_async_resource_ref mr)
+{
+  CUDF_FUNC_RANGE();
+
+  auto datasources = make_datasources(options.get_source());
+  CUDF_EXPECTS(datasources.size() == 1, "CudfTable format only supports single source");
+
+  return detail::read_cudftable(datasources[0].get(), stream, mr);
+}
+
+}  // namespace experimental
 }  // namespace cudf::io

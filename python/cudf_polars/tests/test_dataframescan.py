@@ -1,13 +1,19 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
+
+from decimal import Decimal
 
 import pytest
 
 import polars as pl
 
-from cudf_polars.testing.asserts import assert_gpu_result_equal
+from cudf_polars.testing.asserts import (
+    assert_gpu_result_equal,
+    assert_ir_translation_raises,
+)
+from cudf_polars.utils.versions import POLARS_VERSION_LT_138
 
 
 @pytest.mark.parametrize(
@@ -39,7 +45,10 @@ def test_scan_drop_nulls(subset, predicate_pushdown):
     q = df.drop_nulls(subset)
 
     assert_gpu_result_equal(
-        q, collect_kwargs={"predicate_pushdown": predicate_pushdown}
+        q,
+        collect_kwargs={
+            "optimizations": pl.QueryOptFlags(predicate_pushdown=predicate_pushdown)
+        },
     )
 
 
@@ -60,3 +69,30 @@ def test_can_convert_lists():
     )
 
     assert_gpu_result_equal(df)
+
+
+def test_dataframescan_with_decimals():
+    q = pl.LazyFrame(
+        {
+            "foo": [1, 2],
+            "bar": [Decimal("1.23"), Decimal("4.56")],
+        },
+        schema={"foo": pl.Int64, "bar": pl.Decimal(precision=15, scale=2)},
+    )
+    assert_gpu_result_equal(q)
+
+
+@pytest.mark.skipif(
+    POLARS_VERSION_LT_138,
+    reason="height parameter added in Polars 1.38",
+)
+def test_dataframescan_zero_width_with_rows():
+    df = pl.LazyFrame(height=5)
+    q = df.select(pl.len())
+    assert_gpu_result_equal(q)
+
+
+def test_struct_literal_not_supported():
+    dtype = pl.Struct([pl.Field("a", pl.Int64), pl.Field("b", pl.String)])
+    q = pl.LazyFrame().select(pl.lit(None, dtype=pl.Null).cast(dtype, strict=True))
+    assert_ir_translation_raises(q, NotImplementedError)

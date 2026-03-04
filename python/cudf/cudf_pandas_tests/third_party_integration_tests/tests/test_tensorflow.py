@@ -1,9 +1,17 @@
-# Copyright (c) 2023-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
+
+import warnings
 
 import numpy as np
 import pandas as pd
 import pytest
-import tensorflow as tf
+
+with warnings.catch_warnings():
+    # Silence a warning from numpy on keras import
+    warnings.filterwarnings("ignore", category=FutureWarning)
+    import tensorflow as tf
+
 
 SHUFFLE_BUFFER = 500
 BATCH_SIZE = 2

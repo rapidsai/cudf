@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf_test/base_fixture.hpp>
@@ -20,6 +9,7 @@
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/column/column_factories.hpp>
+#include <cudf/copying.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/types.hpp>
@@ -1393,11 +1383,14 @@ TYPED_TEST(ListColumnWrapperTestTyped, ListsOfStructsWithValidity)
   auto num_lists      = lists_column_offsets->size() - 1;
   auto [null_mask, null_count] =
     cudf::test::detail::make_null_mask(list_null_mask.begin(), list_null_mask.end());
-  auto lists_column = cudf::make_lists_column(num_lists,
-                                              std::move(lists_column_offsets),
-                                              std::move(struct_column),
-                                              null_count,
-                                              std::move(null_mask));
+  auto lists_column = [&] {
+    auto tmp = cudf::make_lists_column(num_lists,
+                                       std::move(lists_column_offsets),
+                                       std::move(struct_column),
+                                       null_count,
+                                       std::move(null_mask));
+    return cudf::purge_nonempty_nulls(tmp->view());
+  }();
 
   // Check if child column is unchanged.
 
@@ -1466,11 +1459,14 @@ TYPED_TEST(ListColumnWrapperTestTyped, ListsOfListsOfStructsWithValidity)
   auto list_null_mask = {1, 1, 0};
   auto [null_mask, null_count] =
     cudf::test::detail::make_null_mask(list_null_mask.begin(), list_null_mask.end());
-  auto lists_column = cudf::make_lists_column(num_lists,
-                                              std::move(lists_column_offsets),
-                                              std::move(struct_column),
-                                              null_count,
-                                              std::move(null_mask));
+  auto lists_column = [&] {
+    auto tmp = cudf::make_lists_column(num_lists,
+                                       std::move(lists_column_offsets),
+                                       std::move(struct_column),
+                                       null_count,
+                                       std::move(null_mask));
+    return cudf::purge_nonempty_nulls(tmp->view());
+  }();
 
   auto lists_of_lists_column_offsets =
     cudf::test::fixed_width_column_wrapper<cudf::size_type>{0, 2, 3}.release();
@@ -1479,12 +1475,14 @@ TYPED_TEST(ListColumnWrapperTestTyped, ListsOfListsOfStructsWithValidity)
 
   std::tie(null_mask, null_count) = cudf::test::detail::make_null_mask(
     list_of_lists_null_mask.begin(), list_of_lists_null_mask.end());
-  auto lists_of_lists_of_structs_column =
-    cudf::make_lists_column(num_lists_of_lists,
-                            std::move(lists_of_lists_column_offsets),
-                            std::move(lists_column),
-                            null_count,
-                            std::move(null_mask));
+  auto lists_of_lists_of_structs_column = [&] {
+    auto tmp = cudf::make_lists_column(num_lists_of_lists,
+                                       std::move(lists_of_lists_column_offsets),
+                                       std::move(lists_column),
+                                       null_count,
+                                       std::move(null_mask));
+    return cudf::purge_nonempty_nulls(tmp->view());
+  }();
 
   // Check if child column is unchanged.
 

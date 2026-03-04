@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 """Multi-partition evaluation."""
 
@@ -22,8 +22,10 @@ from cudf_polars.dsl.ir import (
     Filter,
     HConcat,
     HStack,
+    IRExecutionContext,
     MapFunction,
     Projection,
+    Slice,
     Union,
 )
 from cudf_polars.dsl.traversal import CachingVisitor, traversal
@@ -32,15 +34,25 @@ from cudf_polars.experimental.dispatch import (
     generate_ir_tasks,
     lower_ir_node,
 )
-from cudf_polars.experimental.utils import _concat, _lower_ir_fallback
+from cudf_polars.experimental.io import _clear_source_info_cache
+from cudf_polars.experimental.repartition import Repartition
+from cudf_polars.experimental.statistics import collect_statistics
+from cudf_polars.experimental.utils import (
+    _concat,
+    _contains_over,
+    _dynamic_planning_on,
+    _lower_ir_fallback,
+)
 
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
     from typing import Any
 
-    from cudf_polars.containers import DataFrame
-    from cudf_polars.experimental.dispatch import LowerIRTransformer
-    from cudf_polars.utils.config import ConfigOptions
+    import polars as pl
+
+    from cudf_polars.experimental.base import StatsCollector
+    from cudf_polars.experimental.dispatch import LowerIRTransformer, State
+    from cudf_polars.utils.config import ConfigOptions, StreamingExecutor
 
 
 @lower_ir_node.register(IR)
@@ -54,8 +66,8 @@ def _(
 
 
 def lower_ir_graph(
-    ir: IR, config_options: ConfigOptions
-) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
+    ir: IR, config_options: ConfigOptions[StreamingExecutor]
+) -> tuple[IR, MutableMapping[IR, PartitionInfo], StatsCollector]:
     """
     Rewrite an IR graph and extract partitioning information.
 
@@ -68,9 +80,10 @@ def lower_ir_graph(
 
     Returns
     -------
-    new_ir, partition_info
-        The rewritten graph, and a mapping from unique nodes
-        in the new graph to associated partitioning information.
+    new_ir, partition_info, stats
+        The rewritten graph, a mapping from unique nodes
+        in the new graph to associated partitioning information,
+        and the statistics collector.
 
     Notes
     -----
@@ -81,12 +94,18 @@ def lower_ir_graph(
     --------
     lower_ir_node
     """
-    mapper = CachingVisitor(lower_ir_node, state={"config_options": config_options})
-    return mapper(ir)
+    state: State = {
+        "config_options": config_options,
+        "stats": collect_statistics(ir, config_options),
+    }
+    mapper: LowerIRTransformer = CachingVisitor(lower_ir_node, state=state)
+    return *mapper(ir), state["stats"]
 
 
 def task_graph(
-    ir: IR, partition_info: MutableMapping[IR, PartitionInfo]
+    ir: IR,
+    partition_info: MutableMapping[IR, PartitionInfo],
+    config_options: ConfigOptions,
 ) -> tuple[MutableMapping[Any, Any], str | tuple[str, int]]:
     """
     Construct a task graph for evaluation of an IR graph.
@@ -98,6 +117,10 @@ def task_graph(
     partition_info
         A mapping from all unique IR nodes to the
         associated partitioning information.
+    config_options
+        GPUEngine configuration options.
+    context
+        Runtime context for IR node execution.
 
     Returns
     -------
@@ -111,37 +134,48 @@ def task_graph(
     graph with root `ir`, and extracts the tasks for
     each node with :func:`generate_ir_tasks`.
 
+    The output is passed into :func:`post_process_task_graph` to
+    add any additional processing that is specific to the executor.
+
     See Also
     --------
     generate_ir_tasks
     """
+    context = IRExecutionContext.from_config_options(config_options)
     graph = reduce(
         operator.or_,
-        (generate_ir_tasks(node, partition_info) for node in traversal([ir])),
+        (
+            generate_ir_tasks(node, partition_info, context=context)
+            for node in traversal([ir])
+        ),
     )
 
     key_name = get_key_name(ir)
     partition_count = partition_info[ir].count
+
+    key: str | tuple[str, int]
     if partition_count > 1:
-        graph[key_name] = (_concat, *partition_info[ir].keys(ir))
-        return graph, key_name
+        graph[key_name] = (
+            partial(_concat, context=context),
+            *partition_info[ir].keys(ir),
+        )
+        key = key_name
     else:
-        return graph, (key_name, 0)
+        key = (key_name, 0)
+
+    graph = post_process_task_graph(graph, key, config_options)
+    return graph, key
 
 
 # The true type signature for get_scheduler() needs an overload. Not worth it.
 
 
-def get_scheduler(config_options: ConfigOptions) -> Any:
+def get_scheduler(config_options: ConfigOptions[StreamingExecutor]) -> Any:
     """Get appropriate task scheduler."""
-    assert config_options.executor.name == "streaming", (
-        "'in-memory' executor not supported in 'generate_ir_tasks'"
-    )
-
-    scheduler = config_options.executor.scheduler
+    cluster = config_options.executor.cluster
 
     if (
-        scheduler == "distributed"
+        cluster == "distributed"
     ):  # pragma: no cover; block depends on executor type and Distributed cluster
         from distributed import get_client
 
@@ -151,18 +185,18 @@ def get_scheduler(config_options: ConfigOptions) -> Any:
         DaskRegisterManager.register_once()
         DaskRegisterManager.run_on_cluster(client)
         return client.get
-    elif scheduler == "synchronous":
+    elif cluster == "single":
         from cudf_polars.experimental.scheduler import synchronous_scheduler
 
         return synchronous_scheduler
     else:  # pragma: no cover
-        raise ValueError(f"{scheduler} not a supported scheduler option.")
+        raise ValueError(f"{cluster} not a supported cluster option.")
 
 
 def post_process_task_graph(
     graph: MutableMapping[Any, Any],
     key: str | tuple[str, int],
-    config_options: ConfigOptions,
+    config_options: ConfigOptions[StreamingExecutor],
 ) -> MutableMapping[Any, Any]:
     """
     Post-process the task graph.
@@ -181,10 +215,6 @@ def post_process_task_graph(
     graph
         A Dask-compatible task graph.
     """
-    assert config_options.executor.name == "streaming", (
-        "'in-memory' executor not supported in 'post_process_task_graph'"
-    )
-
     if config_options.executor.rapidsmpf_spill:  # pragma: no cover
         from cudf_polars.experimental.spilling import wrap_dataframe_in_spillable
 
@@ -194,7 +224,34 @@ def post_process_task_graph(
     return graph
 
 
-def evaluate_streaming(ir: IR, config_options: ConfigOptions) -> DataFrame:
+def evaluate_rapidsmpf(
+    ir: IR,
+    config_options: ConfigOptions[StreamingExecutor],
+) -> pl.DataFrame:  # pragma: no cover; rapidsmpf runtime not tested in CI yet
+    """
+    Evaluate with the RapidsMPF streaming runtime.
+
+    Parameters
+    ----------
+    ir
+        Logical plan to evaluate.
+    config_options
+        GPUEngine configuration options.
+
+    Returns
+    -------
+    A cudf-polars DataFrame object.
+    """
+    from cudf_polars.experimental.rapidsmpf.core import evaluate_logical_plan
+
+    result, _ = evaluate_logical_plan(ir, config_options, collect_metadata=False)
+    return result
+
+
+def evaluate_streaming(
+    ir: IR,
+    config_options: ConfigOptions[StreamingExecutor],
+) -> pl.DataFrame:
     """
     Evaluate an IR graph with partitioning.
 
@@ -209,25 +266,36 @@ def evaluate_streaming(ir: IR, config_options: ConfigOptions) -> DataFrame:
     -------
     A cudf-polars DataFrame object.
     """
-    ir, partition_info = lower_ir_graph(ir, config_options)
+    # Clear source info cache in case data was overwritten
+    _clear_source_info_cache()
 
-    graph, key = task_graph(ir, partition_info)
+    if (
+        config_options.executor.runtime == "rapidsmpf"
+    ):  # pragma: no cover; rapidsmpf runtime not tested in CI yet
+        # Using the RapidsMPF streaming runtime.
+        return evaluate_rapidsmpf(ir, config_options)
+    else:
+        # Using the default task engine.
+        ir, partition_info, _ = lower_ir_graph(ir, config_options)
 
-    graph = post_process_task_graph(graph, key, config_options)
+        graph, key = task_graph(ir, partition_info, config_options)
 
-    return get_scheduler(config_options)(graph, key)
+        return get_scheduler(config_options)(graph, key).to_polars()
 
 
 @generate_ir_tasks.register(IR)
 def _(
-    ir: IR, partition_info: MutableMapping[IR, PartitionInfo]
+    ir: IR,
+    partition_info: MutableMapping[IR, PartitionInfo],
+    context: IRExecutionContext,
 ) -> MutableMapping[Any, Any]:
     # Generate pointwise (embarrassingly-parallel) tasks by default
     child_names = [get_key_name(c) for c in ir.children]
     bcast_child = [partition_info[c].count == 1 for c in ir.children]
+
     return {
         key: (
-            ir.do_evaluate,
+            partial(ir.do_evaluate, context=context),
             *ir._non_child_args,
             *[
                 (child_name, 0 if bcast_child[j] else i)
@@ -243,9 +311,13 @@ def _(
     ir: Union, rec: LowerIRTransformer
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
     # Check zlice
-    if ir.zlice is not None:  # pragma: no cover
-        return _lower_ir_fallback(
-            ir, rec, msg="zlice is not supported for multiple partitions."
+    if ir.zlice is not None:
+        return rec(
+            Slice(
+                ir.schema,
+                *ir.zlice,
+                Union(ir.schema, None, *ir.children),
+            )
         )
 
     # Lower children
@@ -263,7 +335,9 @@ def _(
 
 @generate_ir_tasks.register(Union)
 def _(
-    ir: Union, partition_info: MutableMapping[IR, PartitionInfo]
+    ir: Union,
+    partition_info: MutableMapping[IR, PartitionInfo],
+    context: IRExecutionContext,
 ) -> MutableMapping[Any, Any]:
     key_name = get_key_name(ir)
     partition = itertools.count()
@@ -320,7 +394,81 @@ def _lower_ir_pwise(
 
 _lower_ir_pwise_preserve = partial(_lower_ir_pwise, preserve_partitioning=True)
 lower_ir_node.register(Projection, _lower_ir_pwise_preserve)
-lower_ir_node.register(Filter, _lower_ir_pwise_preserve)
-lower_ir_node.register(Cache, _lower_ir_pwise)
-lower_ir_node.register(HStack, _lower_ir_pwise)
+lower_ir_node.register(Cache, _lower_ir_pwise_preserve)
 lower_ir_node.register(HConcat, _lower_ir_pwise)
+
+
+@lower_ir_node.register(Filter)
+def _(
+    ir: Filter, rec: LowerIRTransformer
+) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
+    child, partition_info = rec(ir.children[0])
+
+    if partition_info[child].count > 1 and _contains_over([ir.mask.value]):
+        # mask contains .over(...), collapse to single partition
+        return _lower_ir_fallback(
+            ir.reconstruct([child]),
+            rec,
+            msg=(
+                "over(...) inside filter is not supported for multiple partitions; "
+                "falling back to in-memory evaluation."
+            ),
+        )
+
+    if partition_info[child].count > 1 and not all(
+        expr.is_pointwise for expr in traversal([ir.mask.value])
+    ):
+        # TODO: Use expression decomposition to lower Filter
+        # See: https://github.com/rapidsai/cudf/issues/20076
+        return _lower_ir_fallback(
+            ir, rec, msg="This filter is not supported for multiple partitions."
+        )
+
+    new_node = ir.reconstruct([child])
+    partition_info[new_node] = partition_info[child]
+    return new_node, partition_info
+
+
+@lower_ir_node.register(Slice)
+def _(
+    ir: Slice, rec: LowerIRTransformer
+) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
+    # Check for dynamic planning - may have more partitions at runtime
+    config_options = rec.state["config_options"]
+    dynamic_planning = _dynamic_planning_on(config_options)
+
+    if ir.offset == 0:
+        # Taking the first N rows.
+        # We don't know how large each partition is, so we reduce.
+        new_node, partition_info = _lower_ir_pwise(ir, rec)
+        if partition_info[new_node].count > 1 or dynamic_planning:
+            # Collapse down to single partition
+            inter = Repartition(new_node.schema, new_node)
+            partition_info[inter] = PartitionInfo(count=1)
+            # Slice reduced partition
+            new_node = ir.reconstruct([inter])
+            partition_info[new_node] = PartitionInfo(count=1)
+        return new_node, partition_info
+
+    # Fallback
+    return _lower_ir_fallback(
+        ir, rec, msg="This slice not supported for multiple partitions."
+    )
+
+
+@lower_ir_node.register(HStack)
+def _(
+    ir: HStack, rec: LowerIRTransformer
+) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
+    if not all(
+        expr.is_pointwise for expr in traversal([e.value for e in ir.columns])
+    ):  # pragma: no cover
+        # TODO: Avoid fallback if/when possible
+        return _lower_ir_fallback(
+            ir, rec, msg="This HStack not supported for multiple partitions."
+        )
+
+    child, partition_info = rec(ir.children[0])
+    new_node = ir.reconstruct([child])
+    partition_info[new_node] = partition_info[child]
+    return new_node, partition_info

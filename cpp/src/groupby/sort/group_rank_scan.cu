@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2021-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "common_utils.cuh"
@@ -21,8 +10,8 @@
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
+#include <cudf/detail/row_operator/equality.cuh>
 #include <cudf/detail/utilities/device_operators.cuh>
-#include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 
@@ -30,10 +19,9 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/std/functional>
+#include <cuda/std/iterator>
 #include <cuda/std/limits>
-#include <thrust/functional.h>
-#include <thrust/iterator/reverse_iterator.h>
-#include <thrust/pair.h>
+#include <cuda/std/utility>
 #include <thrust/scan.h>
 #include <thrust/tabulate.h>
 #include <thrust/transform.h>
@@ -106,8 +94,7 @@ std::unique_ptr<column> rank_generator(column_view const& grouped_values,
                                        rmm::device_async_resource_ref mr)
 {
   auto const grouped_values_view = table_view{{grouped_values}};
-  auto const comparator =
-    cudf::experimental::row::equality::self_comparator{grouped_values_view, stream};
+  auto const comparator = cudf::detail::row::equality::self_comparator{grouped_values_view, stream};
 
   auto ranks = make_fixed_width_column(
     data_type{type_to_id<size_type>()}, grouped_values.size(), mask_state::UNALLOCATED, stream, mr);
@@ -117,11 +104,11 @@ std::unique_ptr<column> rank_generator(column_view const& grouped_values,
     auto const permuted_equal =
       permuted_row_equality_comparator(d_equal, value_order.begin<size_type>());
 
-    thrust::tabulate(rmm::exec_policy(stream),
+    thrust::tabulate(rmm::exec_policy_nosync(stream),
                      mutable_ranks.begin<size_type>(),
                      mutable_ranks.end<size_type>(),
                      unique_identifier<forward, decltype(permuted_equal), value_resolver>(
-                       group_labels.begin(), group_offsets.begin(), permuted_equal, resolver));
+                       group_labels.data(), group_offsets.data(), permuted_equal, resolver));
   };
 
   if (cudf::detail::has_nested_columns(grouped_values_view)) {
@@ -136,13 +123,13 @@ std::unique_ptr<column> rank_generator(column_view const& grouped_values,
 
   auto [group_labels_begin, mutable_rank_begin] = [&]() {
     if constexpr (forward) {
-      return thrust::pair{group_labels.begin(), mutable_ranks.begin<size_type>()};
+      return cuda::std::pair{group_labels.begin(), mutable_ranks.begin<size_type>()};
     } else {
-      return thrust::pair{thrust::reverse_iterator(group_labels.end()),
-                          thrust::reverse_iterator(mutable_ranks.end<size_type>())};
+      return cuda::std::pair{cuda::std::reverse_iterator(group_labels.end()),
+                             cuda::std::reverse_iterator(mutable_ranks.end<size_type>())};
     }
   }();
-  thrust::inclusive_scan_by_key(rmm::exec_policy(stream),
+  thrust::inclusive_scan_by_key(rmm::exec_policy_nosync(stream),
                                 group_labels_begin,
                                 group_labels_begin + group_labels.size(),
                                 mutable_rank_begin,
@@ -205,7 +192,7 @@ std::unique_ptr<column> first_rank_scan(column_view const& grouped_values,
   auto ranks = make_fixed_width_column(
     data_type{type_to_id<size_type>()}, group_labels.size(), mask_state::UNALLOCATED, stream, mr);
   auto mutable_ranks = ranks->mutable_view();
-  thrust::tabulate(rmm::exec_policy(stream),
+  thrust::tabulate(rmm::exec_policy_nosync(stream),
                    mutable_ranks.begin<size_type>(),
                    mutable_ranks.end<size_type>(),
                    [labels  = group_labels.begin(),
@@ -238,7 +225,7 @@ std::unique_ptr<column> average_rank_scan(column_view const& grouped_values,
   auto ranks    = make_fixed_width_column(
     data_type{type_to_id<double>()}, group_labels.size(), mask_state::UNALLOCATED, stream, mr);
   auto mutable_ranks = ranks->mutable_view();
-  thrust::transform(rmm::exec_policy(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream),
                     max_rank->view().begin<size_type>(),
                     max_rank->view().end<size_type>(),
                     min_rank->view().begin<size_type>(),
@@ -286,7 +273,7 @@ std::unique_ptr<column> group_rank_to_percentage(rank_method const method,
     return group_size == 1 ? 0.0 : ((rank - 1.0) / (group_size - 1));
   };
   if (method == rank_method::DENSE) {
-    thrust::tabulate(rmm::exec_policy(stream),
+    thrust::tabulate(rmm::exec_policy_nosync(stream),
                      mutable_ranks.begin<double>(),
                      mutable_ranks.end<double>(),
                      [percentage,
@@ -300,13 +287,13 @@ std::unique_ptr<column> group_rank_to_percentage(rank_method const method,
                        double const r   = is_double ? d_rank[row_index] : s_rank[row_index];
                        auto const count = dcount[labels[row_index]];
                        size_type const last_rank_index = offsets[labels[row_index]] + count - 1;
-                       auto const last_rank            = s_rank[last_rank_index];
+                       auto const last_rank = last_rank_index < 0 ? 1 : s_rank[last_rank_index];
                        return percentage == rank_percentage::ZERO_NORMALIZED
                                 ? r / last_rank
                                 : one_normalized(r, last_rank);
                      });
   } else {
-    thrust::tabulate(rmm::exec_policy(stream),
+    thrust::tabulate(rmm::exec_policy_nosync(stream),
                      mutable_ranks.begin<double>(),
                      mutable_ranks.end<double>(),
                      [percentage,

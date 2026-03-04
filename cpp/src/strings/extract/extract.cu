@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "strings/regex/regex_program_impl.h"
@@ -36,15 +25,12 @@
 #include <thrust/fill.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/permutation_iterator.h>
-#include <thrust/pair.h>
 
 namespace cudf {
 namespace strings {
 namespace detail {
 
 namespace {
-
-using string_index_pair = thrust::pair<char const*, size_type>;
 
 /**
  * @brief This functor handles extracting strings by applying the compiled regex pattern
@@ -104,7 +90,9 @@ std::unique_ptr<table> extract(strings_column_view const& input,
 
   auto const d_strings = column_device_view::create(input.parent(), stream);
 
-  launch_for_each_kernel(extract_fn{*d_strings, d_indices}, *d_prog, input.size(), stream);
+  if (!input.is_empty()) {
+    launch_for_each_kernel(extract_fn{*d_strings, d_indices}, *d_prog, input.size(), stream);
+  }
 
   // build a result column for each group
   std::vector<std::unique_ptr<column>> results(groups);
@@ -161,6 +149,8 @@ std::unique_ptr<column> extract_single(strings_column_view const& input,
                                        rmm::cuda_stream_view stream,
                                        rmm::device_async_resource_ref mr)
 {
+  if (input.is_empty()) { return make_empty_column(type_id::STRING); }
+
   // create device object from regex_program
   auto d_prog = regex_device_builder::create_prog_device(prog, stream);
 

@@ -1,19 +1,9 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
+#include <cudf/detail/algorithms/copy_if.cuh>
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/copy_if_else.cuh>
 #include <cudf/detail/gather.hpp>
@@ -33,7 +23,6 @@
 #include <rmm/device_uvector.hpp>
 
 #include <cuda/std/iterator>
-#include <thrust/copy.h>
 #include <thrust/iterator/counting_iterator.h>
 
 #include <stdexcept>
@@ -55,14 +44,16 @@ struct copy_if_else_functor_impl {
  * @brief Functor to fetch a device-view for the specified scalar/column_view.
  */
 struct get_iterable_device_view {
-  template <typename T, CUDF_ENABLE_IF(std::is_same_v<T, cudf::column_view>)>
+  template <typename T>
   auto operator()(T const& input, rmm::cuda_stream_view stream)
+    requires(std::is_same_v<T, cudf::column_view>)
   {
     return cudf::column_device_view::create(input, stream);
   }
 
-  template <typename T, CUDF_ENABLE_IF(std::is_same_v<T, cudf::scalar>)>
+  template <typename T>
   auto operator()(T const& input, rmm::cuda_stream_view)
+    requires(std::is_same_v<T, cudf::scalar>)
   {
     return &input;
   }
@@ -166,11 +157,11 @@ std::unique_ptr<column> scatter_gather_based_if_else(cudf::column_view const& lh
                                                      rmm::device_async_resource_ref mr)
 {
   auto gather_map = rmm::device_uvector<size_type>{static_cast<std::size_t>(size), stream};
-  auto const gather_map_end = thrust::copy_if(rmm::exec_policy(stream),
-                                              thrust::make_counting_iterator(size_type{0}),
-                                              thrust::make_counting_iterator(size_type{size}),
-                                              gather_map.begin(),
-                                              is_left);
+  auto const gather_map_end = cudf::detail::copy_if(thrust::counting_iterator(size_type{0}),
+                                                    thrust::counting_iterator(size_type{size}),
+                                                    gather_map.begin(),
+                                                    is_left,
+                                                    stream);
 
   gather_map.resize(cuda::std::distance(gather_map.begin(), gather_map_end), stream);
 
@@ -200,11 +191,11 @@ std::unique_ptr<column> scatter_gather_based_if_else(cudf::scalar const& lhs,
                                                      rmm::device_async_resource_ref mr)
 {
   auto scatter_map = rmm::device_uvector<size_type>{static_cast<std::size_t>(size), stream};
-  auto const scatter_map_end = thrust::copy_if(rmm::exec_policy(stream),
-                                               thrust::make_counting_iterator(size_type{0}),
-                                               thrust::make_counting_iterator(size_type{size}),
-                                               scatter_map.begin(),
-                                               is_left);
+  auto const scatter_map_end = cudf::detail::copy_if(thrust::counting_iterator(size_type{0}),
+                                                     thrust::counting_iterator(size_type{size}),
+                                                     scatter_map.begin(),
+                                                     is_left,
+                                                     stream);
 
   auto const scatter_map_size  = std::distance(scatter_map.begin(), scatter_map_end);
   auto scatter_source          = std::vector<std::reference_wrapper<scalar const>>{std::ref(lhs)};

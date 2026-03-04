@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf/column/column_device_view.cuh>
@@ -46,19 +35,26 @@ std::unique_ptr<column> find_multiple(strings_column_view const& input,
   CUDF_EXPECTS(
     !targets.has_nulls(), "Search targets cannot contain null strings", std::invalid_argument);
 
+  auto const total_elements =
+    static_cast<int64_t>(strings_count) * static_cast<int64_t>(targets_count);
+  CUDF_EXPECTS(
+    total_elements <= static_cast<decltype(total_elements)>(std::numeric_limits<size_type>::max()),
+    "Size of output exceeds the column size limit",
+    std::overflow_error);
+
   auto strings_column = column_device_view::create(input.parent(), stream);
   auto d_strings      = *strings_column;
   auto targets_column = column_device_view::create(targets.parent(), stream);
   auto d_targets      = *targets_column;
 
-  auto const total_count = strings_count * targets_count;
+  auto const total_count = static_cast<size_type>(total_elements);
 
   // create output column
   auto results = make_numeric_column(
     data_type{type_id::INT32}, total_count, rmm::device_buffer{0, stream, mr}, 0, stream, mr);
 
   // fill output column with position values
-  thrust::transform(rmm::exec_policy(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream),
                     thrust::make_counting_iterator<size_type>(0),
                     thrust::make_counting_iterator<size_type>(total_count),
                     results->mutable_view().begin<int32_t>(),
@@ -76,13 +72,8 @@ std::unique_ptr<column> find_multiple(strings_column_view const& input,
                                         numeric_scalar<size_type>(targets_count, true, stream),
                                         stream,
                                         mr);
-  return make_lists_column(strings_count,
-                           std::move(offsets),
-                           std::move(results),
-                           0,
-                           rmm::device_buffer{0, stream, mr},
-                           stream,
-                           mr);
+  return make_lists_column(
+    strings_count, std::move(offsets), std::move(results), 0, rmm::device_buffer{0, stream, mr});
 }
 
 }  // namespace detail

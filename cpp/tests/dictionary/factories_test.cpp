@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf_test/base_fixture.hpp>
@@ -96,7 +85,7 @@ TEST_F(DictionaryFactoriesTest, KeysWithNulls)
   cudf::test::fixed_width_column_wrapper<int32_t> keys{{0, 1, 2, 3, 4},
                                                        {true, true, true, false, true}};
   cudf::test::fixed_width_column_wrapper<int32_t> indices{5, 4, 3, 2, 1, 0};
-  EXPECT_THROW(cudf::make_dictionary_column(keys, indices), cudf::logic_error);
+  EXPECT_THROW(cudf::make_dictionary_column(keys, indices), std::invalid_argument);
 }
 
 TEST_F(DictionaryFactoriesTest, IndicesWithNulls)
@@ -106,15 +95,15 @@ TEST_F(DictionaryFactoriesTest, IndicesWithNulls)
                                                           {true, true, true, false, true, false}};
   EXPECT_THROW(
     cudf::make_dictionary_column(keys.release(), indices.release(), rmm::device_buffer{}, 0),
-    cudf::logic_error);
+    std::invalid_argument);
 }
 
 TEST_F(DictionaryFactoriesTest, InvalidIndices)
 {
   cudf::test::fixed_width_column_wrapper<int32_t> keys{0, 1, 2, 3, 4};
   cudf::test::fixed_width_column_wrapper<uint16_t> indices{5, 4, 3, 2, 1, 0};
-  EXPECT_THROW(cudf::make_dictionary_column(keys, indices), cudf::logic_error);
+  EXPECT_THROW(cudf::make_dictionary_column(keys, indices), std::invalid_argument);
   EXPECT_THROW(
     cudf::make_dictionary_column(keys.release(), indices.release(), rmm::device_buffer{}, 0),
-    cudf::logic_error);
+    std::invalid_argument);
 }

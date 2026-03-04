@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2023-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "parquet_common.hpp"
@@ -24,6 +13,10 @@
 #include <cudf/io/parquet.hpp>
 
 #include <array>
+#include <format>
+#include <limits>
+#include <random>
+#include <string>
 
 using cudf::test::iterators::no_nulls;
 
@@ -81,6 +74,7 @@ TEST_P(ParquetV2Test, MultiColumn)
   cudf::io::parquet_writer_options out_opts =
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
       .write_v2_headers(is_v2)
+      .page_level_compression(is_v2)
       .compression(cudf::io::compression_type::ZSTD)
       .metadata(expected_metadata);
   cudf::io::write_parquet(out_opts);
@@ -149,6 +143,7 @@ TEST_P(ParquetV2Test, MultiColumnWithNulls)
   cudf::io::parquet_writer_options out_opts =
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
       .write_v2_headers(is_v2)
+      .page_level_compression(is_v2)
       .compression(cudf::io::compression_type::ZSTD)
       .metadata(expected_metadata);
 
@@ -191,6 +186,7 @@ TEST_P(ParquetV2Test, Strings)
   cudf::io::parquet_writer_options out_opts =
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
       .write_v2_headers(is_v2)
+      .page_level_compression(is_v2)
       .compression(cudf::io::compression_type::ZSTD)
       .metadata(expected_metadata);
   cudf::io::write_parquet(out_opts);
@@ -245,6 +241,7 @@ TEST_P(ParquetV2Test, StringsAsBinary)
   cudf::io::parquet_writer_options out_opts =
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, write_tbl)
       .write_v2_headers(is_v2)
+      .page_level_compression(is_v2)
       .dictionary_policy(cudf::io::dictionary_policy::NEVER)
       .metadata(expected_metadata);
   cudf::io::write_parquet(out_opts);
@@ -370,6 +367,7 @@ TEST_P(ParquetV2Test, SlicedTable)
   cudf::io::parquet_writer_options out_opts =
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected_slice)
       .write_v2_headers(is_v2)
+      .page_level_compression(is_v2)
       .metadata(expected_metadata);
   cudf::io::write_parquet(out_opts);
 
@@ -470,6 +468,7 @@ TEST_P(ParquetV2Test, ListColumn)
   auto filepath = temp_env->get_temp_filepath("ListColumn.parquet");
   auto out_opts = cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
                     .write_v2_headers(is_v2)
+                    .page_level_compression(is_v2)
                     .metadata(expected_metadata)
                     .compression(cudf::io::compression_type::NONE);
 
@@ -550,6 +549,7 @@ TEST_P(ParquetV2Test, StructOfList)
   cudf::io::parquet_writer_options args =
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
       .write_v2_headers(is_v2)
+      .page_level_compression(is_v2)
       .metadata(expected_metadata);
   cudf::io::write_parquet(args);
 
@@ -607,6 +607,7 @@ TEST_P(ParquetV2Test, ListOfStruct)
   cudf::io::parquet_writer_options args =
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
       .write_v2_headers(is_v2)
+      .page_level_compression(is_v2)
       .metadata(expected_metadata);
   cudf::io::write_parquet(args);
 
@@ -640,6 +641,7 @@ TEST_P(ParquetV2Test, PartitionedWriteEmptyPartitions)
       cudf::io::sink_info(std::vector<std::string>{filepath1, filepath2}), *source)
       .partitions({partition1, partition2})
       .write_v2_headers(is_v2)
+      .page_level_compression(is_v2)
       .compression(cudf::io::compression_type::NONE);
   cudf::io::write_parquet(args);
 
@@ -674,6 +676,7 @@ TEST_P(ParquetV2Test, PartitionedWriteEmptyColumns)
       cudf::io::sink_info(std::vector<std::string>{filepath1, filepath2}), *source)
       .partitions({partition1, partition2})
       .write_v2_headers(is_v2)
+      .page_level_compression(is_v2)
       .compression(cudf::io::compression_type::NONE);
   cudf::io::write_parquet(args);
 
@@ -694,12 +697,9 @@ TEST_P(ParquetV2Test, CheckColumnOffsetIndex)
     is_v2 ? cudf::io::parquet::PageType::DATA_PAGE_V2 : cudf::io::parquet::PageType::DATA_PAGE;
 
   // fixed length strings
-  auto str1_elements = cudf::detail::make_counting_transform_iterator(0, [](auto i) {
-    std::array<char, 30> buf;
-    sprintf(buf.data(), "%012d", i);
-    return std::string(buf.data());
-  });
-  auto col0          = cudf::test::strings_column_wrapper(str1_elements, str1_elements + num_rows);
+  auto str1_elements = cudf::detail::make_counting_transform_iterator(
+    0, [](auto i) { return std::format("{:012d}", i); });
+  auto col0 = cudf::test::strings_column_wrapper(str1_elements, str1_elements + num_rows);
 
   auto col1_data = random_values<int8_t>(num_rows);
   auto col2_data = random_values<int16_t>(num_rows);
@@ -716,12 +716,9 @@ TEST_P(ParquetV2Test, CheckColumnOffsetIndex)
   auto col6 = cudf::test::fixed_width_column_wrapper<double>(col6_data.begin(), col6_data.end());
 
   // mixed length strings
-  auto str2_elements = cudf::detail::make_counting_transform_iterator(0, [](auto i) {
-    std::array<char, 30> buf;
-    sprintf(buf.data(), "%d", i);
-    return std::string(buf.data());
-  });
-  auto col7          = cudf::test::strings_column_wrapper(str2_elements, str2_elements + num_rows);
+  auto str2_elements =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return std::format("{}", i); });
+  auto col7 = cudf::test::strings_column_wrapper(str2_elements, str2_elements + num_rows);
 
   auto const expected = table_view{{col0, col1, col2, col3, col4, col5, col6, col7}};
 
@@ -730,6 +727,7 @@ TEST_P(ParquetV2Test, CheckColumnOffsetIndex)
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
       .stats_level(cudf::io::statistics_freq::STATISTICS_COLUMN)
       .write_v2_headers(is_v2)
+      .page_level_compression(is_v2)
       .max_page_size_rows(20000);
   cudf::io::write_parquet(out_opts);
 
@@ -788,12 +786,9 @@ TEST_P(ParquetV2Test, CheckColumnOffsetIndexNulls)
     is_v2 ? cudf::io::parquet::PageType::DATA_PAGE_V2 : cudf::io::parquet::PageType::DATA_PAGE;
 
   // fixed length strings
-  auto str1_elements = cudf::detail::make_counting_transform_iterator(0, [](auto i) {
-    std::array<char, 30> buf;
-    sprintf(buf.data(), "%012d", i);
-    return std::string(buf.data());
-  });
-  auto col0          = cudf::test::strings_column_wrapper(str1_elements, str1_elements + num_rows);
+  auto str1_elements = cudf::detail::make_counting_transform_iterator(
+    0, [](auto i) { return std::format("{:012d}", i); });
+  auto col0 = cudf::test::strings_column_wrapper(str1_elements, str1_elements + num_rows);
 
   auto col1_data = random_values<int8_t>(num_rows);
   auto col2_data = random_values<int16_t>(num_rows);
@@ -820,11 +815,8 @@ TEST_P(ParquetV2Test, CheckColumnOffsetIndexNulls)
     cudf::test::fixed_width_column_wrapper<double>(col6_data.begin(), col6_data.end(), valids);
 
   // mixed length strings
-  auto str2_elements = cudf::detail::make_counting_transform_iterator(0, [](auto i) {
-    std::array<char, 30> buf;
-    sprintf(buf.data(), "%d", i);
-    return std::string(buf.data());
-  });
+  auto str2_elements =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return std::format("{}", i); });
   auto col7 = cudf::test::strings_column_wrapper(str2_elements, str2_elements + num_rows, valids);
 
   auto expected = table_view{{col0, col1, col2, col3, col4, col5, col6, col7}};
@@ -834,6 +826,7 @@ TEST_P(ParquetV2Test, CheckColumnOffsetIndexNulls)
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
       .stats_level(cudf::io::statistics_freq::STATISTICS_COLUMN)
       .write_v2_headers(is_v2)
+      .page_level_compression(is_v2)
       .max_page_size_rows(20000);
   cudf::io::write_parquet(out_opts);
 
@@ -898,12 +891,9 @@ TEST_P(ParquetV2Test, CheckColumnOffsetIndexNullColumn)
     is_v2 ? cudf::io::parquet::PageType::DATA_PAGE_V2 : cudf::io::parquet::PageType::DATA_PAGE;
 
   // fixed length strings
-  auto str1_elements = cudf::detail::make_counting_transform_iterator(0, [](auto i) {
-    std::array<char, 30> buf;
-    sprintf(buf.data(), "%012d", i);
-    return std::string(buf.data());
-  });
-  auto col0          = cudf::test::strings_column_wrapper(str1_elements, str1_elements + num_rows);
+  auto str1_elements = cudf::detail::make_counting_transform_iterator(
+    0, [](auto i) { return std::format("{:012d}", i); });
+  auto col0 = cudf::test::strings_column_wrapper(str1_elements, str1_elements + num_rows);
 
   auto col1_data = random_values<int32_t>(num_rows);
   auto col2_data = random_values<int32_t>(num_rows);
@@ -915,12 +905,9 @@ TEST_P(ParquetV2Test, CheckColumnOffsetIndexNullColumn)
   auto col2 = cudf::test::fixed_width_column_wrapper<int32_t>(col2_data.begin(), col2_data.end());
 
   // mixed length strings
-  auto str2_elements = cudf::detail::make_counting_transform_iterator(0, [](auto i) {
-    std::array<char, 30> buf;
-    sprintf(buf.data(), "%d", i);
-    return std::string(buf.data());
-  });
-  auto col3          = cudf::test::strings_column_wrapper(str2_elements, str2_elements + num_rows);
+  auto str2_elements =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return std::format("{}", i); });
+  auto col3 = cudf::test::strings_column_wrapper(str2_elements, str2_elements + num_rows);
 
   auto expected = table_view{{col0, col1, col2, col3}};
 
@@ -929,6 +916,7 @@ TEST_P(ParquetV2Test, CheckColumnOffsetIndexNullColumn)
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
       .stats_level(cudf::io::statistics_freq::STATISTICS_COLUMN)
       .write_v2_headers(is_v2)
+      .page_level_compression(is_v2)
       .max_page_size_rows(20000);
   cudf::io::write_parquet(out_opts);
 
@@ -1026,6 +1014,7 @@ TEST_P(ParquetV2Test, CheckColumnOffsetIndexStruct)
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
       .stats_level(cudf::io::statistics_freq::STATISTICS_COLUMN)
       .write_v2_headers(is_v2)
+      .page_level_compression(is_v2)
       .max_page_size_rows(page_size_for_ordered_tests);
   cudf::io::write_parquet(out_opts);
 
@@ -1119,6 +1108,7 @@ TEST_P(ParquetV2Test, CheckColumnOffsetIndexStructNulls)
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
       .stats_level(cudf::io::statistics_freq::STATISTICS_COLUMN)
       .write_v2_headers(is_v2)
+      .page_level_compression(is_v2)
       .max_page_size_rows(page_size_for_ordered_tests);
   cudf::io::write_parquet(out_opts);
 
@@ -1325,6 +1315,7 @@ TEST_P(ParquetV2Test, CheckColumnIndexListWithNulls)
   auto out_opts = cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
                     .stats_level(cudf::io::statistics_freq::STATISTICS_COLUMN)
                     .write_v2_headers(is_v2)
+                    .page_level_compression(is_v2)
                     .compression(cudf::io::compression_type::NONE);
 
   cudf::io::write_parquet(out_opts);
@@ -1423,7 +1414,8 @@ TEST_P(ParquetV2Test, CheckEncodings)
   cudf::io::parquet_writer_options out_opts =
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
       .max_page_size_rows(num_rows)
-      .write_v2_headers(is_v2);
+      .write_v2_headers(is_v2)
+      .page_level_compression(is_v2);
   cudf::io::write_parquet(out_opts);
 
   // make sure the expected encodings are present
@@ -1465,4 +1457,119 @@ TEST_P(ParquetV2Test, CheckEncodings)
     EXPECT_TRUE(contains(chunk2_enc, Encoding::RLE));
     EXPECT_TRUE(contains(chunk2_enc, Encoding::PLAIN_DICTIONARY));
   }
+}
+
+TEST_F(ParquetWriterTest, V2PageLevelCompression)
+{
+  constexpr auto num_rows           = 20000;
+  constexpr auto max_page_size_rows = 5000;
+
+  // Create a column with highly compressible data (constant value)
+  auto compressible_data = std::vector<int64_t>(num_rows, 12345);
+  auto col0 = cudf::test::fixed_width_column_wrapper<int64_t>(compressible_data.begin(),
+                                                              compressible_data.end());
+
+  auto const expected = table_view{{col0}};
+
+  auto const filepath = temp_env->get_temp_filepath("V2PageLevelCompression.parquet");
+  cudf::io::parquet_writer_options out_opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
+      .write_v2_headers(true)
+      .page_level_compression(true)
+      .compression(cudf::io::compression_type::SNAPPY)
+      .max_page_size_rows(max_page_size_rows)
+      .stats_level(cudf::io::statistics_freq::STATISTICS_COLUMN)
+      .dictionary_policy(cudf::io::dictionary_policy::NEVER);
+  cudf::io::write_parquet(out_opts);
+
+  cudf::io::parquet_reader_options in_opts =
+    cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath});
+  auto result = cudf::io::read_parquet(in_opts);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
+
+  auto const source = cudf::io::datasource::create(filepath);
+  cudf::io::parquet::FileMetaData fmd;
+  read_footer(source, &fmd);
+
+  ASSERT_TRUE(fmd.row_groups.size() > 0);
+  auto const& chunk = fmd.row_groups[0].columns[0];
+  EXPECT_EQ(chunk.meta_data.codec, cudf::io::parquet::Compression::SNAPPY);
+
+  auto const oi = read_offset_index(source, chunk);
+  ASSERT_TRUE(oi.page_locations.size() > 1);
+
+  for (auto const& page_loc : oi.page_locations) {
+    auto const ph = read_page_header(source, page_loc);
+    EXPECT_EQ(ph.type, cudf::io::parquet::PageType::DATA_PAGE_V2);
+    EXPECT_TRUE(ph.data_page_header_v2.is_compressed);
+    EXPECT_LT(ph.compressed_page_size, ph.uncompressed_page_size);
+  }
+}
+
+TEST_F(ParquetWriterTest, V2PageLevelCompressionMixed)
+{
+  constexpr auto num_rows           = 20000;
+  constexpr auto max_page_size_rows = 5000;
+
+  // Create a column with mixed data:
+  // First half: random data (won't compress well)
+  // Second half: constant data (will compress well)
+  std::vector<int64_t> mixed_data;
+  mixed_data.reserve(num_rows);
+
+  std::mt19937 gen(42);
+  std::uniform_int_distribution<int64_t> dist(std::numeric_limits<int64_t>::min(),
+                                              std::numeric_limits<int64_t>::max());
+  for (int i = 0; i < num_rows / 2; i++) {
+    mixed_data.push_back(dist(gen));
+  }
+
+  for (int i = 0; i < num_rows / 2; i++) {
+    mixed_data.push_back(42);
+  }
+
+  auto col0 = cudf::test::fixed_width_column_wrapper<int64_t>(mixed_data.begin(), mixed_data.end());
+
+  auto const expected = table_view{{col0}};
+
+  auto const filepath = temp_env->get_temp_filepath("V2PageLevelCompressionMixed.parquet");
+  cudf::io::parquet_writer_options out_opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
+      .write_v2_headers(true)
+      .page_level_compression(true)
+      .compression(cudf::io::compression_type::SNAPPY)
+      .max_page_size_rows(max_page_size_rows)
+      .stats_level(cudf::io::statistics_freq::STATISTICS_COLUMN)
+      .dictionary_policy(cudf::io::dictionary_policy::NEVER);
+  cudf::io::write_parquet(out_opts);
+
+  cudf::io::parquet_reader_options in_opts =
+    cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath});
+  auto result = cudf::io::read_parquet(in_opts);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
+
+  auto const source = cudf::io::datasource::create(filepath);
+  cudf::io::parquet::FileMetaData fmd;
+  read_footer(source, &fmd);
+
+  ASSERT_TRUE(fmd.row_groups.size() > 0);
+  auto const& chunk = fmd.row_groups[0].columns[0];
+
+  auto const oi = read_offset_index(source, chunk);
+  ASSERT_TRUE(oi.page_locations.size() > 1);
+
+  bool found_compressed = false;
+  for (auto const& page_loc : oi.page_locations) {
+    auto const ph = read_page_header(source, page_loc);
+    EXPECT_EQ(ph.type, cudf::io::parquet::PageType::DATA_PAGE_V2);
+
+    if (ph.data_page_header_v2.is_compressed) {
+      found_compressed = true;
+      EXPECT_LT(ph.compressed_page_size, ph.uncompressed_page_size);
+    } else {
+      EXPECT_EQ(ph.compressed_page_size, ph.uncompressed_page_size);
+    }
+  }
+
+  EXPECT_TRUE(found_compressed);
 }

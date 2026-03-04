@@ -1,36 +1,25 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <benchmarks/common/generate_input.hpp>
-#include <benchmarks/fixture/benchmark_fixture.hpp>
-#include <benchmarks/synchronization/synchronization.hpp>
 
 #include <cudf/partitioning.hpp>
+#include <cudf/utilities/default_stream.hpp>
+
+#include <nvbench/nvbench.cuh>
 
 #include <algorithm>
 #include <numeric>
 
-class Hashing : public cudf::benchmark {};
-
-template <class T>
-void BM_hash_partition(benchmark::State& state)
+static void bench_hash_partition(nvbench::state& state)
 {
-  auto const num_rows       = state.range(0);
-  auto const num_cols       = state.range(1);
-  auto const num_partitions = state.range(2);
+  using T = double;
+
+  auto const num_rows       = static_cast<cudf::size_type>(state.get_int64("num_rows"));
+  auto const num_cols       = static_cast<cudf::size_type>(state.get_int64("num_cols"));
+  auto const num_partitions = static_cast<cudf::size_type>(state.get_int64("num_partitions"));
 
   // Create owning columns
   auto input_table = create_sequence_table(cycle_dtypes({cudf::type_to_id<T>()}, num_cols),
@@ -40,34 +29,22 @@ void BM_hash_partition(benchmark::State& state)
   auto columns_to_hash = std::vector<cudf::size_type>(num_cols);
   std::iota(columns_to_hash.begin(), columns_to_hash.end(), 0);
 
-  for (auto _ : state) {
-    cuda_event_timer timer(state, true);
+  // Set up CUDA stream for nvbench
+  auto stream = cudf::get_default_stream();
+  state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
+
+  state.exec(nvbench::exec_tag::sync, [&](nvbench::launch&) {
     auto output = cudf::hash_partition(input, columns_to_hash, num_partitions);
-  }
+  });
 
-  auto const bytes_read      = num_rows * num_cols * sizeof(T);
-  auto const bytes_written   = num_rows * num_cols * sizeof(T);
-  auto const partition_bytes = num_partitions * sizeof(cudf::size_type);
-
-  state.SetBytesProcessed(static_cast<int64_t>(state.iterations()) *
-                          (bytes_read + bytes_written + partition_bytes));
+  // Set memory usage statistics for nvbench
+  state.add_global_memory_reads<T>(static_cast<int64_t>(num_rows) * num_cols);
+  state.add_global_memory_writes<T>(static_cast<int64_t>(num_rows) * num_cols);
+  state.add_global_memory_writes<cudf::size_type>(num_partitions);
 }
 
-BENCHMARK_DEFINE_F(Hashing, hash_partition)
-(::benchmark::State& state) { BM_hash_partition<double>(state); }
-
-static void CustomRanges(benchmark::internal::Benchmark* b)
-{
-  for (int columns = 1; columns <= 256; columns *= 16) {
-    for (int partitions = 64; partitions <= 1024; partitions *= 2) {
-      for (int rows = 1 << 17; rows <= 1 << 21; rows *= 2) {
-        b->Args({rows, columns, partitions});
-      }
-    }
-  }
-}
-
-BENCHMARK_REGISTER_F(Hashing, hash_partition)
-  ->Apply(CustomRanges)
-  ->Unit(benchmark::kMillisecond)
-  ->UseManualTime();
+NVBENCH_BENCH(bench_hash_partition)
+  .set_name("hash_partition")
+  .add_int64_axis("num_rows", {1 << 17, 1 << 18, 1 << 19, 1 << 20, 1 << 21})
+  .add_int64_axis("num_cols", {1, 16, 256})
+  .add_int64_axis("num_partitions", {64, 128, 256, 512, 1024});

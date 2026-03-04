@@ -1,4 +1,5 @@
-# Copyright (c) 2021-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 import random
 
@@ -95,7 +96,7 @@ def test_from_pandas():
         }
     )
 
-    gdf = cudf.DataFrame.from_pandas(df)
+    gdf = cudf.DataFrame(df)
 
     # Test simple around to/from cudf
     ingested = dd.from_pandas(gdf, npartitions=2)
@@ -136,7 +137,7 @@ def _fragmented_gdf(df, nsplit):
     subdivsize = n // nsplit
     starts = [i * subdivsize for i in range(nsplit)]
     ends = starts[1:] + [None]
-    frags = [df[s:e] for s, e in zip(starts, ends)]
+    frags = [df[s:e] for s, e in zip(starts, ends, strict=True)]
     return frags
 
 
@@ -146,7 +147,7 @@ def test_query():
     df = pd.DataFrame(
         {"x": rng.integers(0, 5, size=10), "y": rng.normal(size=10)}
     )
-    gdf = cudf.DataFrame.from_pandas(df)
+    gdf = cudf.DataFrame(df)
     expr = "x > 2"
 
     dd.assert_eq(gdf.query(expr), df.query(expr))
@@ -164,7 +165,7 @@ def test_query_local_dict():
     df = pd.DataFrame(
         {"x": rng.integers(0, 5, size=10), "y": rng.normal(size=10)}
     )
-    gdf = cudf.DataFrame.from_pandas(df)
+    gdf = cudf.DataFrame(df)
     ddf = dask_cudf.from_cudf(gdf, npartitions=2)
 
     val = 2
@@ -183,7 +184,7 @@ def test_head():
             "y": rng.normal(size=100),
         }
     )
-    gdf = cudf.DataFrame.from_pandas(df)
+    gdf = cudf.DataFrame(df)
     dgf = dd.from_pandas(gdf, npartitions=2)
 
     dd.assert_eq(dgf.head(), df.head())
@@ -249,7 +250,7 @@ def test_set_index_2(nelem):
         )
         expect = df.set_index("x").sort_index()
 
-        dgf = dd.from_pandas(cudf.DataFrame.from_pandas(df), npartitions=4)
+        dgf = dd.from_pandas(cudf.DataFrame(df), npartitions=4)
         res = dgf.set_index("x")  # sort by default
         got = res.compute().to_pandas()
 
@@ -268,7 +269,7 @@ def test_set_index_w_series():
         )
         expect = df.set_index(df.x).sort_index()
 
-        dgf = dd.from_pandas(cudf.DataFrame.from_pandas(df), npartitions=4)
+        dgf = dd.from_pandas(cudf.DataFrame(df), npartitions=4)
         res = dgf.set_index(dgf.x)  # sort by default
         got = res.compute().to_pandas()
 
@@ -299,14 +300,14 @@ def test_assign():
         {"x": rng.integers(0, 5, size=20), "y": rng.normal(size=20)}
     )
 
-    dgf = dd.from_pandas(cudf.DataFrame.from_pandas(df), npartitions=2)
+    dgf = dd.from_pandas(cudf.DataFrame(df), npartitions=2)
     pdcol = pd.Series(np.arange(20) + 1000)
     newcol = dd.from_pandas(cudf.Series(pdcol), npartitions=dgf.npartitions)
     got = dgf.assign(z=newcol)
 
     # Using `loc[:, ["x", "y"]]` was broken for dask-expr 0.4.0
     dd.assert_eq(got[["x", "y"]], df)
-    np.testing.assert_array_equal(got["z"].compute().values_host, pdcol)
+    np.testing.assert_array_equal(got["z"].compute().to_numpy(), pdcol.values)
 
 
 @pytest.mark.parametrize("data_type", ["int8", "int16", "int32", "int64"])
@@ -316,7 +317,7 @@ def test_setitem_scalar_integer(data_type):
     df = pd.DataFrame(
         {"x": rng.integers(0, 5, size=20), "y": rng.normal(size=20)}
     )
-    dgf = dd.from_pandas(cudf.DataFrame.from_pandas(df), npartitions=2)
+    dgf = dd.from_pandas(cudf.DataFrame(df), npartitions=2)
 
     df["z"] = scalar
     dgf["z"] = scalar
@@ -332,7 +333,7 @@ def test_setitem_scalar_float(data_type):
     df = pd.DataFrame(
         {"x": rng.integers(0, 5, size=20), "y": rng.normal(size=20)}
     )
-    dgf = dd.from_pandas(cudf.DataFrame.from_pandas(df), npartitions=2)
+    dgf = dd.from_pandas(cudf.DataFrame(df), npartitions=2)
 
     df["z"] = scalar
     dgf["z"] = scalar
@@ -347,7 +348,7 @@ def test_setitem_scalar_datetime():
     df = pd.DataFrame(
         {"x": rng.integers(0, 5, size=20), "y": rng.normal(size=20)}
     )
-    dgf = dd.from_pandas(cudf.DataFrame.from_pandas(df), npartitions=2)
+    dgf = dd.from_pandas(cudf.DataFrame(df), npartitions=2)
 
     df["z"] = scalar
     dgf["z"] = scalar
@@ -369,7 +370,7 @@ def test_repartition_timeseries(start, stop):
         partition_freq=start,
         dtypes={"x": int, "y": float},
     )
-    gdf = pdf.map_partitions(cudf.DataFrame.from_pandas)
+    gdf = pdf.map_partitions(cudf.DataFrame)
 
     a = pdf.repartition(freq=stop)
     b = gdf.repartition(freq=stop)
@@ -384,7 +385,7 @@ def test_repartition_simple_divisions(start, stop):
     pdf = pd.DataFrame({"x": range(100)})
 
     pdf = dd.from_pandas(pdf, npartitions=start)
-    gdf = pdf.map_partitions(cudf.DataFrame.from_pandas)
+    gdf = pdf.map_partitions(cudf.DataFrame)
 
     a = pdf.repartition(npartitions=stop)
     b = gdf.repartition(npartitions=stop)
@@ -566,15 +567,6 @@ def test_drop(gdf, gddf):
     dd.assert_eq(gdf2, gddf2)
 
 
-@pytest.mark.parametrize("deep", [True, False])
-@pytest.mark.parametrize("index", [True, False])
-def test_memory_usage(gdf, gddf, index, deep):
-    dd.assert_eq(
-        gdf.memory_usage(deep=deep, index=index),
-        gddf.memory_usage(deep=deep, index=index),
-    )
-
-
 @pytest.mark.parametrize("index", [True, False])
 def test_hash_object_dispatch(index):
     obj = cudf.DataFrame(
@@ -620,36 +612,35 @@ def test_hash_object_dispatch(index):
     ],
 )
 def test_make_meta_backends(index):
-    dtypes = ["int8", "int32", "int64", "float64"]
-    df = cudf.DataFrame(
-        {dt: np.arange(start=0, stop=3, dtype=dt) for dt in dtypes}
-    )
-    df["strings"] = ["cat", "dog", "fish"]
-    df["cats"] = df["strings"].astype("category")
-    df["time_s"] = np.array(
-        ["2018-10-07", "2018-10-08", "2018-10-09"], dtype="datetime64[s]"
-    )
-    df["time_ms"] = df["time_s"].astype("datetime64[ms]")
-    df["time_ns"] = df["time_s"].astype("datetime64[ns]")
-    df = df.set_index(index)
-
-    # Check "empty" metadata types
-    chk_meta = dask_make_meta(df)
-    dd.assert_eq(chk_meta.dtypes, df.dtypes)
-
-    # Check "non-empty" metadata types
-    chk_meta_nonempty = meta_nonempty(df)
-    dd.assert_eq(chk_meta.dtypes, chk_meta_nonempty.dtypes)
-
-    # Check dask code path if not MultiIndex
-    if not isinstance(df.index, cudf.MultiIndex):
-        ddf = dask_cudf.from_cudf(df, npartitions=1)
+    with dask.config.set({"dataframe.convert-string": False}):
+        dtypes = ["int8", "int32", "int64", "float64"]
+        df = cudf.DataFrame({dt: np.arange(0, 3, dtype=dt) for dt in dtypes})
+        df["strings"] = ["cat", "dog", "fish"]
+        df["cats"] = df["strings"].astype("category")
+        df["time_s"] = np.array(
+            ["2018-10-07", "2018-10-08", "2018-10-09"], dtype="datetime64[s]"
+        )
+        df["time_ms"] = df["time_s"].astype("datetime64[ms]")
+        df["time_ns"] = df["time_s"].astype("datetime64[ns]")
+        df = df.set_index(index)
 
         # Check "empty" metadata types
-        dd.assert_eq(ddf._meta.dtypes, df.dtypes)
+        chk_meta = dask_make_meta(df)
+        dd.assert_eq(chk_meta.dtypes, df.dtypes)
 
         # Check "non-empty" metadata types
-        dd.assert_eq(ddf._meta.dtypes, ddf._meta_nonempty.dtypes)
+        chk_meta_nonempty = meta_nonempty(df)
+        dd.assert_eq(chk_meta.dtypes, chk_meta_nonempty.dtypes)
+
+        # Check dask code path if not MultiIndex
+        if not isinstance(df.index, cudf.MultiIndex):
+            ddf = dask_cudf.from_cudf(df, npartitions=1)
+
+            # Check "empty" metadata types
+            dd.assert_eq(ddf._meta.dtypes, df.dtypes)
+
+            # Check "non-empty" metadata types
+            dd.assert_eq(ddf._meta.dtypes, ddf._meta_nonempty.dtypes)
 
 
 @pytest.mark.parametrize(
@@ -780,36 +771,37 @@ def test_index_map_partitions():
 
 
 def test_merging_categorical_columns():
-    df_1 = cudf.DataFrame(
-        {"id_1": [0, 1, 2, 3], "cat_col": ["a", "b", "f", "f"]}
-    )
+    with dask.config.set({"dataframe.convert-string": False}):
+        df_1 = cudf.DataFrame(
+            {"id_1": [0, 1, 2, 3], "cat_col": ["a", "b", "f", "f"]}
+        )
 
-    ddf_1 = dask_cudf.from_cudf(df_1, npartitions=2)
+        ddf_1 = dask_cudf.from_cudf(df_1, npartitions=2)
 
-    ddf_1 = ddf_1.categorize(columns=["cat_col"])
+        ddf_1 = ddf_1.categorize(columns=["cat_col"])
 
-    df_2 = cudf.DataFrame(
-        {"id_2": [111, 112, 113], "cat_col": ["g", "h", "f"]}
-    )
+        df_2 = cudf.DataFrame(
+            {"id_2": [111, 112, 113], "cat_col": ["g", "h", "f"]}
+        )
 
-    ddf_2 = dask_cudf.from_cudf(df_2, npartitions=2)
+        ddf_2 = dask_cudf.from_cudf(df_2, npartitions=2)
 
-    ddf_2 = ddf_2.categorize(columns=["cat_col"])
+        ddf_2 = ddf_2.categorize(columns=["cat_col"])
 
-    expected = cudf.DataFrame(
-        {
-            "id_1": [2, 3],
-            "cat_col": cudf.Series(
-                ["f", "f"],
-                dtype=cudf.CategoricalDtype(
-                    categories=["a", "b", "f", "g", "h"], ordered=False
+        expected = cudf.DataFrame(
+            {
+                "id_1": [2, 3],
+                "cat_col": cudf.Series(
+                    ["f", "f"],
+                    dtype=cudf.CategoricalDtype(
+                        categories=["a", "b", "f", "g", "h"], ordered=False
+                    ),
                 ),
-            ),
-            "id_2": [113, 113],
-        }
-    )
-    with pytest.warns(UserWarning, match="mismatch"):
-        dd.assert_eq(ddf_1.merge(ddf_2), expected)
+                "id_2": [113, 113],
+            }
+        )
+        with pytest.warns(UserWarning, match="mismatch"):
+            dd.assert_eq(ddf_1.merge(ddf_2), expected)
 
 
 def test_correct_meta():
@@ -919,6 +911,8 @@ def test_to_backend_simplify():
 
 @pytest.mark.parametrize("numeric_only", [True, False])
 @pytest.mark.parametrize("op", ["corr", "cov"])
+# the implementation might warn about ddof<=0 or divide by zero
+@pytest.mark.filterwarnings("ignore::RuntimeWarning")
 def test_cov_corr(op, numeric_only):
     rng = np.random.default_rng(seed=0)
     df = cudf.DataFrame.from_dict(

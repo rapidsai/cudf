@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2020-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf/detail/aggregation/aggregation.cuh>
@@ -49,25 +38,27 @@ struct identity_initializer {
   template <typename T, aggregation::Kind k>
   static constexpr bool is_supported()
   {
-    return cudf::is_fixed_width<T>() and
-           (k == aggregation::SUM or k == aggregation::MIN or k == aggregation::MAX or
-            k == aggregation::COUNT_VALID or k == aggregation::COUNT_ALL or
-            k == aggregation::ARGMAX or k == aggregation::ARGMIN or
-            k == aggregation::SUM_OF_SQUARES or k == aggregation::STD or
-            k == aggregation::VARIANCE or
-            (k == aggregation::PRODUCT and is_product_supported<T>()));
+    return (cudf::is_fixed_width<T>() and
+            (k == aggregation::SUM or k == aggregation::MIN or k == aggregation::MAX or
+             k == aggregation::COUNT_VALID or k == aggregation::COUNT_ALL or
+             k == aggregation::ARGMAX or k == aggregation::ARGMIN or
+             k == aggregation::SUM_OF_SQUARES or k == aggregation::M2 or k == aggregation::STD or
+             k == aggregation::VARIANCE or
+             (k == aggregation::PRODUCT and is_product_supported<T>()))) or
+           (k == aggregation::SUM_WITH_OVERFLOW and std::is_same_v<T, cudf::struct_view>);
   }
 
   template <typename T, aggregation::Kind k>
-  std::enable_if_t<not std::is_same_v<corresponding_operator_t<k>, void>, T>
-  identity_from_operator()
+  T identity_from_operator()
+    requires(not std::is_same_v<corresponding_operator_t<k>, void>)
   {
     using DeviceType = device_storage_type_t<T>;
     return corresponding_operator_t<k>::template identity<DeviceType>();
   }
 
   template <typename T, aggregation::Kind k>
-  std::enable_if_t<std::is_same_v<corresponding_operator_t<k>, void>, T> identity_from_operator()
+  T identity_from_operator()
+    requires(std::is_same_v<corresponding_operator_t<k>, void>)
   {
     CUDF_FAIL("Unable to get identity/sentinel from device operator");
   }
@@ -90,26 +81,41 @@ struct identity_initializer {
 
  public:
   template <typename T, aggregation::Kind k>
-  std::enable_if_t<is_supported<T, k>(), void> operator()(mutable_column_view const& col,
-                                                          rmm::cuda_stream_view stream)
+  void operator()(mutable_column_view const& col, rmm::cuda_stream_view stream)
+    requires(is_supported<T, k>())
   {
-    using DeviceType = device_storage_type_t<T>;
-    thrust::fill(rmm::exec_policy(stream),
-                 col.begin<DeviceType>(),
-                 col.end<DeviceType>(),
-                 get_identity<DeviceType, k>());
+    if constexpr (k == aggregation::SUM_WITH_OVERFLOW) {
+      // SUM_WITH_OVERFLOW uses a struct with sum and overflow children
+      auto sum_col      = col.child(0);
+      auto overflow_col = col.child(1);
+
+      // Initialize sum column using standard SUM aggregation dispatch
+      dispatch_type_and_aggregation(
+        sum_col.type(), aggregation::SUM, identity_initializer{}, sum_col, stream);
+      thrust::uninitialized_fill_n(
+        rmm::exec_policy_nosync(stream), overflow_col.begin<bool>(), col.size(), false);
+    } else if constexpr (std::is_same_v<T, cudf::struct_view>) {
+      // This should only happen for SUM_WITH_OVERFLOW, but handle it just in case
+      CUDF_FAIL("Struct columns are only supported for SUM_WITH_OVERFLOW aggregation");
+    } else {
+      using DeviceType = device_storage_type_t<T>;
+      thrust::fill(rmm::exec_policy_nosync(stream),
+                   col.begin<DeviceType>(),
+                   col.end<DeviceType>(),
+                   get_identity<DeviceType, k>());
+    }
   }
 
   template <typename T, aggregation::Kind k>
-  std::enable_if_t<not is_supported<T, k>(), void> operator()(mutable_column_view const& col,
-                                                              rmm::cuda_stream_view stream)
+  void operator()(mutable_column_view const& col, rmm::cuda_stream_view stream)
+    requires(not is_supported<T, k>())
   {
     CUDF_FAIL("Unsupported aggregation for initializing values");
   }
 };
 }  // namespace
 
-void initialize_with_identity(mutable_table_view& table,
+void initialize_with_identity(mutable_table_view const& table,
                               host_span<cudf::aggregation::Kind const> aggs,
                               rmm::cuda_stream_view stream)
 {

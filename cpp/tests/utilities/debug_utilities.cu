@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf_test/column_utilities.hpp>
@@ -98,14 +87,16 @@ std::vector<std::string> to_strings(cudf::column_view const& col, std::string co
 
 namespace {
 
-template <typename T, std::enable_if_t<std::is_integral_v<T>>* = nullptr>
+template <typename T>
 static auto numeric_to_string_precise(T value)
+  requires(std::is_integral_v<T>)
 {
   return std::to_string(value);
 }
 
-template <typename T, std::enable_if_t<std::is_floating_point_v<T>>* = nullptr>
+template <typename T>
 static auto numeric_to_string_precise(T value)
+  requires(std::is_floating_point_v<T>)
 {
   std::ostringstream o;
   o << std::setprecision(std::numeric_limits<T>::max_digits10) << value;
@@ -161,7 +152,7 @@ std::string nested_offsets_to_string(NestedColumnView const& c, std::string cons
   // normalize the offset values for the column offset
   size_type const* d_offsets = offsets.head<size_type>() + c.offset();
   thrust::transform(
-    rmm::exec_policy(cudf::get_default_stream()),
+    rmm::exec_policy_nosync(cudf::get_default_stream()),
     d_offsets,
     d_offsets + output_size,
     shifted_offsets.begin(),
@@ -178,8 +169,9 @@ std::string nested_offsets_to_string(NestedColumnView const& c, std::string cons
 }
 
 struct column_view_printer {
-  template <typename Element, std::enable_if_t<is_numeric<Element>()>* = nullptr>
+  template <typename Element>
   void operator()(cudf::column_view const& col, std::vector<std::string>& out, std::string const&)
+    requires(is_numeric<Element>())
   {
     auto h_data = cudf::test::to_host<Element>(col);
 
@@ -202,10 +194,11 @@ struct column_view_printer {
     }
   }
 
-  template <typename Element, std::enable_if_t<is_timestamp<Element>()>* = nullptr>
+  template <typename Element>
   void operator()(cudf::column_view const& col,
                   std::vector<std::string>& out,
                   std::string const& indent)
+    requires(is_timestamp<Element>())
   {
     //  For timestamps, convert timestamp column to column of strings, then
     //  call string version
@@ -228,8 +221,9 @@ struct column_view_printer {
     this->template operator()<cudf::string_view>(*col_as_strings, out, indent);
   }
 
-  template <typename Element, std::enable_if_t<cudf::is_fixed_point<Element>()>* = nullptr>
+  template <typename Element>
   void operator()(cudf::column_view const& col, std::vector<std::string>& out, std::string const&)
+    requires(cudf::is_fixed_point<Element>())
   {
     auto const h_data = cudf::test::to_host<Element>(col);
     if (col.nullable()) {
@@ -249,9 +243,9 @@ struct column_view_printer {
     }
   }
 
-  template <typename Element,
-            std::enable_if_t<std::is_same_v<Element, cudf::string_view>>* = nullptr>
+  template <typename Element>
   void operator()(cudf::column_view const& col, std::vector<std::string>& out, std::string const&)
+    requires(std::is_same_v<Element, cudf::string_view>)
   {
     //
     //  Implementation for strings, call special to_host variant
@@ -288,9 +282,9 @@ struct column_view_printer {
                    });
   }
 
-  template <typename Element,
-            std::enable_if_t<std::is_same_v<Element, cudf::dictionary32>>* = nullptr>
+  template <typename Element>
   void operator()(cudf::column_view const& col, std::vector<std::string>& out, std::string const&)
+    requires(std::is_same_v<Element, cudf::dictionary32>)
   {
     cudf::dictionary_column_view dictionary(col);
     if (col.is_empty()) return;
@@ -310,8 +304,9 @@ struct column_view_printer {
   }
 
   // Print the tick counts with the units
-  template <typename Element, std::enable_if_t<is_duration<Element>()>* = nullptr>
+  template <typename Element>
   void operator()(cudf::column_view const& col, std::vector<std::string>& out, std::string const&)
+    requires(is_duration<Element>())
   {
     auto h_data = cudf::test::to_host<Element>(col);
 
@@ -335,10 +330,11 @@ struct column_view_printer {
     }
   }
 
-  template <typename Element, std::enable_if_t<std::is_same_v<Element, cudf::list_view>>* = nullptr>
+  template <typename Element>
   void operator()(cudf::column_view const& col,
                   std::vector<std::string>& out,
                   std::string const& indent)
+    requires(std::is_same_v<Element, cudf::list_view>)
   {
     lists_column_view lcv(col);
 
@@ -364,11 +360,11 @@ struct column_view_printer {
     out.push_back(tmp);
   }
 
-  template <typename Element,
-            std::enable_if_t<std::is_same_v<Element, cudf::struct_view>>* = nullptr>
+  template <typename Element>
   void operator()(cudf::column_view const& col,
                   std::vector<std::string>& out,
                   std::string const& indent)
+    requires(std::is_same_v<Element, cudf::struct_view>)
   {
     structs_column_view view{col};
 

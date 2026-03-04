@@ -1,4 +1,5 @@
-# Copyright (c) 2022-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
 import os
@@ -387,7 +388,7 @@ class option_context(ContextDecorator):
                 "[(pat, val), ...])."
             )
 
-        self.ops = tuple(zip(args[::2], args[1::2]))
+        self.ops = tuple(zip(args[::2], args[1::2], strict=True))
 
     def __enter__(self) -> None:
         self.undo = tuple((pat, get_option(pat)) for pat, _ in self.ops)

@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2022-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
 
@@ -24,6 +13,64 @@
 #include <cstdint>
 
 namespace cudf::io::fst::detail {
+
+/**
+ * @brief Alias temporaries to externally-allocated device storage (or simply return the amount of
+ * storage needed).
+ *
+ * This is a replacement for the removed `cub::AliasTemporaries` function.
+ *
+ * @param[in] d_temp_storage
+ *   Device-accessible allocation of temporary storage.
+ *   When nullptr, the required allocation size is written to @p temp_storage_bytes and no work is
+ *   done.
+ *
+ * @param[in,out] temp_storage_bytes
+ *   Size in bytes of @p d_temp_storage allocation
+ *
+ * @param[in,out] allocations
+ *   Pointers to device allocations needed
+ *
+ * @param[in] allocation_sizes
+ *   Sizes in bytes of device allocations needed
+ */
+template <int ALLOCATIONS>
+cudaError_t AliasTemporaries(void* d_temp_storage,
+                             size_t& temp_storage_bytes,
+                             void* (&allocations)[ALLOCATIONS],
+                             size_t const (&allocation_sizes)[ALLOCATIONS])
+{
+  constexpr size_t ALIGN_BYTES = 256;
+  constexpr size_t ALIGN_MASK  = ~(ALIGN_BYTES - 1);
+
+  // Compute exclusive prefix sum over allocation requests
+  size_t allocation_offsets[ALLOCATIONS];
+  size_t bytes_needed = 0;
+  for (int i = 0; i < ALLOCATIONS; ++i) {
+    size_t const allocation_bytes = (allocation_sizes[i] + ALIGN_BYTES - 1) & ALIGN_MASK;
+    allocation_offsets[i]         = bytes_needed;
+    bytes_needed += allocation_bytes;
+  }
+  bytes_needed += ALIGN_BYTES - 1;
+
+  // Check if the caller is simply requesting the size of the storage allocation
+  if (!d_temp_storage) {
+    temp_storage_bytes = bytes_needed;
+    return cudaSuccess;
+  }
+
+  // Check if enough storage provided
+  if (temp_storage_bytes < bytes_needed) { return CubDebug(cudaErrorInvalidValue); }
+
+  // Alias
+  d_temp_storage = reinterpret_cast<void*>(
+    (reinterpret_cast<uintptr_t>(d_temp_storage) + ALIGN_BYTES - 1) & ALIGN_MASK);
+  for (int i = 0; i < ALLOCATIONS; ++i) {
+    allocations[i] = static_cast<char*>(d_temp_storage) + allocation_offsets[i];
+  }
+
+  return cudaSuccess;
+}
 
 /**
  * @brief The tuning policy comprising all the architecture-specific compile-time tuning parameters.
@@ -172,8 +219,8 @@ struct DispatchFSM : DeviceFSMPolicy {
     cudaError_t error;
 
     // Get PTX version
-    int ptx_version;
-    error = cub::PtxVersion(ptx_version);
+    int ptx_version = 0;
+    error           = cub::PtxVersion(ptx_version);
     if (error != cudaSuccess) return error;
 
     // Create dispatch functor
@@ -392,8 +439,7 @@ struct DispatchFSM : DeviceFSMPolicy {
 
     // Alias the temporary allocations from the single storage blob (or compute the necessary size
     // of the blob)
-    error = cub::detail::AliasTemporaries(
-      d_temp_storage, temp_storage_bytes, allocations, allocation_sizes);
+    error = AliasTemporaries(d_temp_storage, temp_storage_bytes, allocations, allocation_sizes);
     if (error != cudaSuccess) return error;
 
     // Return if the caller is simply requesting the size of the storage allocation

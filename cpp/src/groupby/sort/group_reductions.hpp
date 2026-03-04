@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
@@ -556,6 +545,22 @@ std::unique_ptr<column> group_bitwise(bitwise_op bit_op,
                                       rmm::cuda_stream_view stream,
                                       rmm::device_async_resource_ref mr);
 
+/**
+ * @brief Internal API to find top k elements in each group of grouped values
+ *
+ * @param k Number of top elements to find in each group
+ * @param topk_order Identifies ascending or descending for selecting the values
+ * @param values Grouped values to find top k elements within
+ * @param group_offsets Offsets to identify each group in values
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ */
+std::unique_ptr<column> group_top_k(size_type k,
+                                    order topk_order,
+                                    column_view const& values,
+                                    device_span<size_type const> group_offsets,
+                                    rmm::cuda_stream_view stream,
+                                    rmm::device_async_resource_ref mr);
 }  // namespace detail
 }  // namespace groupby
 }  // namespace cudf

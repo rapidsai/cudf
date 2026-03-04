@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/copying.hpp>
@@ -24,6 +13,7 @@
 #include <cudf/detail/scatter.hpp>
 #include <cudf/detail/stream_compaction.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/detail/utilities/grid_1d.cuh>
 #include <cudf/dictionary/detail/search.hpp>
 #include <cudf/lists/list_view.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
@@ -39,8 +29,8 @@
 #include <rmm/cuda_stream_view.hpp>
 
 #include <cuda/functional>
+#include <cuda/iterator>
 #include <thrust/count.h>
-#include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/permutation_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
@@ -125,7 +115,7 @@ struct column_scalar_scatterer_impl {
     // Use permutation iterator with constant index to dereference scalar data
     auto scalar_impl = static_cast<scalar_type_t<Element> const*>(&source.get());
     auto scalar_iter =
-      thrust::make_permutation_iterator(scalar_impl->data(), thrust::make_constant_iterator(0));
+      thrust::make_permutation_iterator(scalar_impl->data(), cuda::make_constant_iterator(0));
 
     thrust::scatter(rmm::exec_policy_nosync(stream),
                     scalar_iter,
@@ -153,7 +143,7 @@ struct column_scalar_scatterer_impl<string_view, MapIterator> {
 
     auto const scalar_impl = static_cast<string_scalar const*>(&source.get());
     auto const source_view = string_view(scalar_impl->data(), scalar_impl->size());
-    auto const begin       = thrust::make_constant_iterator(source_view);
+    auto const begin       = cuda::make_constant_iterator(source_view);
     auto const end         = begin + scatter_rows;
     auto result            = strings::detail::scatter(begin, end, scatter_iter, target, stream, mr);
 
@@ -200,7 +190,7 @@ struct column_scalar_scatterer_impl<dictionary32, MapIterator> {
     auto scalar_index = dictionary::detail::get_index(
       dict_view, source.get(), stream, cudf::get_current_device_resource_ref());
     auto scalar_iter = thrust::make_permutation_iterator(
-      indexalator_factory::make_input_iterator(*scalar_index), thrust::make_constant_iterator(0));
+      indexalator_factory::make_input_iterator(*scalar_index), cuda::make_constant_iterator(0));
     auto new_indices = std::make_unique<column>(dict_view.get_indices_annotated(), stream, mr);
     auto target_iter = indexalator_factory::make_output_iterator(new_indices->mutable_view());
 
@@ -210,23 +200,11 @@ struct column_scalar_scatterer_impl<dictionary32, MapIterator> {
                     scatter_iter,
                     target_iter);
 
-    // build the dictionary indices column from the result
-    auto const indices_type = new_indices->type();
-    auto const output_size  = new_indices->size();
-    auto const null_count   = new_indices->null_count();
-    auto contents           = new_indices->release();
-    auto indices_column     = std::make_unique<column>(indices_type,
-                                                   static_cast<size_type>(output_size),
-                                                   std::move(*(contents.data.release())),
-                                                   rmm::device_buffer{},
-                                                   0);
     // use the keys from the matched column
     std::unique_ptr<column> keys_column(std::move(dict_target->release().children.back()));
     // create the output column
-    auto result = make_dictionary_column(std::move(keys_column),
-                                         std::move(indices_column),
-                                         std::move(*(contents.null_mask.release())),
-                                         null_count);
+    auto result =
+      make_dictionary_column(std::move(keys_column), std::move(new_indices), stream, mr);
 
     scatter_scalar_bitmask_inplace(source, scatter_iter, scatter_rows, *result, stream, mr);
     return result;

@@ -1,22 +1,16 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
 
-#include "text/subword/detail/cp_data.h"
+#include "text/detail/cp_data.h"
+
+#include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_uvector.hpp>
+
+#include <cstdint>
 
 namespace nvtext {
 namespace detail {
@@ -95,6 +89,20 @@ __device__ constexpr bool is_multi_char_transform(uint32_t metadata)
  * a utf8 character. That is, not binary `10xxxxxx`
  */
 __device__ constexpr bool is_head_byte(unsigned char utf8_byte) { return (utf8_byte >> 6) != 2; }
+
+/**
+ * @brief Retrieve the code point metadata table.
+ *
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ */
+rmm::device_uvector<codepoint_metadata_type> get_codepoint_metadata(rmm::cuda_stream_view stream);
+
+/**
+ * @brief Retrieve the auxiliary code point metadata table.
+ *
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ */
+rmm::device_uvector<aux_codepoint_data_type> get_aux_codepoint_data(rmm::cuda_stream_view stream);
 
 }  // namespace detail
 }  // namespace nvtext

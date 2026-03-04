@@ -1,4 +1,5 @@
-# Copyright (c) 2018-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 # If libcudf was installed as a wheel, we must request it to load the library symbols.
 # Otherwise, we assume that the library was installed in a system path that ld can find.
@@ -10,22 +11,9 @@ else:
     libcudf.load_library()
     del libcudf
 
-# _setup_numba _must be called before numba.cuda is imported, because
-# it sets the numba config variable responsible for enabling
-# Minor Version Compatibility. Setting it after importing numba.cuda has no effect.
-from cudf.utils._numba import _setup_numba
-from cudf.utils.gpu_utils import validate_setup
-
-_setup_numba()
-validate_setup()
-
-del _setup_numba
-del validate_setup
-
 import cupy
 from numba import cuda
 
-import rmm
 from rmm.allocators.cupy import rmm_cupy_allocator
 from rmm.allocators.numba import RMMNumbaManager
 
@@ -70,8 +58,7 @@ from cudf.core.reshape import (
     pivot_table,
     unstack,
 )
-from cudf.core.scalar import Scalar
-from cudf.core.series import Series, isclose
+from cudf.core.series import Series
 from cudf.core.tools.datetimes import DateOffset, date_range, to_datetime
 from cudf.core.tools.numeric import to_numeric
 from cudf.io import (
@@ -100,10 +87,6 @@ del cupy
 del rmm_cupy_allocator
 del RMMNumbaManager
 
-rmm.register_reinitialize_hook(lambda: Scalar._clear_instance_cache())
-
-del rmm
-
 __all__ = [
     "NA",
     "CategoricalDtype",
@@ -123,7 +106,6 @@ __all__ = [
     "NaT",
     "NamedAgg",
     "RangeIndex",
-    "Scalar",
     "Series",
     "StructDtype",
     "TimedeltaIndex",
@@ -144,7 +126,6 @@ __all__ = [
     "get_option",
     "interval_range",
     "io",
-    "isclose",
     "melt",
     "merge",
     "option_context",

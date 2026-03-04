@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2020-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
@@ -70,6 +59,19 @@ class datasource {
     virtual ~buffer() = default;
 
     /**
+     * @brief Implicit conversion operator to host_span<uint8_t const>
+     *
+     * Allows a buffer to be implicitly converted to a host_span for convenient use
+     * in APIs that accept spans.
+     *
+     * @return A host_span view of the buffer's data
+     */
+    operator cudf::host_span<uint8_t const>() const
+    {
+      return cudf::host_span<uint8_t const>{data(), size()};
+    }
+
+    /**
      * @brief Factory to construct a datasource buffer object from a container.
      *
      * @tparam Container Type of the container to construct the buffer from
@@ -101,16 +103,6 @@ class datasource {
   static std::unique_ptr<datasource> create(std::string const& filepath,
                                             size_t offset            = 0,
                                             size_t max_size_estimate = 0);
-
-  /**
-   * @brief Creates a source from a host memory buffer.
-   *
-   # @deprecated Since 23.04
-   *
-   * @param[in] buffer Host buffer object
-   * @return Constructed datasource object
-   */
-  static std::unique_ptr<datasource> create(host_buffer const& buffer);
 
   /**
    * @brief Creates a source from a host memory buffer.
@@ -422,6 +414,21 @@ class datasource {
     size_t _size;
   };
 };
+
+/**
+ * @brief Constructs datasources from dataset source information
+ *
+ * @ingroup io_datasources
+ *
+ * @param info Dataset source information
+ * @param offset Starting byte offset from which data will be read (default zero)
+ * @param max_size_estimate Upper estimate of the data range that will be read (default zero,
+ * which means the entire file after `offset`)
+ * @return Constructed vector of datasource objects
+ */
+std::vector<std::unique_ptr<cudf::io::datasource>> make_datasources(source_info const& info,
+                                                                    size_t offset            = 0,
+                                                                    size_t max_size_estimate = 0);
 
 /** @} */  // end of group
 }  // namespace io

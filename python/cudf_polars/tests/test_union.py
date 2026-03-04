@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -40,4 +40,7 @@ def test_concat_diagonal_empty():
 
     q = pl.concat([df1, df2], how="diagonal_relaxed")
 
-    assert_gpu_result_equal(q, collect_kwargs={"no_optimization": True})
+    assert_gpu_result_equal(
+        q,
+        collect_kwargs={"optimizations": pl.QueryOptFlags()},
+    )

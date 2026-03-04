@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -32,4 +32,9 @@ def test_slice(offset, length, slice_pushdown):
         .sort(by=pl.col("a"))
         .slice(offset, length)
     )
-    assert_gpu_result_equal(query, collect_kwargs={"slice_pushdown": slice_pushdown})
+    assert_gpu_result_equal(
+        query,
+        collect_kwargs={
+            "optimizations": pl.QueryOptFlags(slice_pushdown=slice_pushdown)
+        },
+    )

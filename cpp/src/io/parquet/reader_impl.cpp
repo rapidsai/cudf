@@ -1,53 +1,40 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "reader_impl.hpp"
 
 #include "error.hpp"
+#include "runtime/context.hpp"
 
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/stream_compaction.hpp>
+#include <cudf/detail/structs/utilities.hpp>
 #include <cudf/detail/transform.hpp>
 #include <cudf/detail/utilities/stream_pool.hpp>
+#include <cudf/io/parquet_schema.hpp>
 #include <cudf/null_mask.hpp>
+#include <cudf/stream_compaction.hpp>
 #include <cudf/strings/detail/utilities.hpp>
+#include <cudf/unary.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
+#include <cuda/std/tuple>
 #include <thrust/iterator/counting_iterator.h>
 
 #include <bitset>
 #include <limits>
 #include <numeric>
+#include <stdexcept>
+#include <utility>
 
 namespace cudf::io::parquet::detail {
 
-namespace {
-// Tests the passed in logical type for a FIXED_LENGTH_BYTE_ARRAY column to see if it should
-// be treated as a string. Currently the only logical type that has special handling is DECIMAL.
-// Other valid types in the future would be UUID (still treated as string) and FLOAT16 (which
-// for now would also be treated as a string).
-inline bool is_treat_fixed_length_as_string(std::optional<LogicalType> const& logical_type)
+void reader_impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num_rows)
 {
-  if (!logical_type.has_value()) { return true; }
-  return logical_type->type != LogicalType::DECIMAL;
-}
+  CUDF_FUNC_RANGE();
 
-}  // namespace
-
-void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num_rows)
-{
   auto& pass    = *_pass_itm_data;
   auto& subpass = *pass.subpass;
 
@@ -55,10 +42,6 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
   auto& page_nesting_decode = subpass.page_nesting_decode_info;
 
   auto const level_type_size = pass.level_type_size;
-
-  // temporary space for DELTA_BYTE_ARRAY decoding. this only needs to live until
-  // gpu::DecodeDeltaByteArray returns.
-  rmm::device_uvector<uint8_t> delta_temp_buf(0, _stream);
 
   // Should not reach here if there is no page data.
   CUDF_EXPECTS(subpass.pages.size() > 0, "There are no pages to decode");
@@ -68,8 +51,8 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
       return cursum + _metadata->get_output_nesting_depth(chunk.src_col_schema);
     });
 
-  // figure out which kernels to run
-  auto const kernel_mask = GetAggregatedDecodeKernelMask(subpass.pages, _stream);
+  auto const kernel_mask = subpass.kernel_mask;
+  auto const has_strings = (kernel_mask & STRINGS_MASK) != 0;
 
   // Check to see if there are any string columns present. If so, then we need to get size info
   // for each string page. This size info will be used to pre-allocate memory for the column,
@@ -77,28 +60,8 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
   // doing a gather operation later on.
   // TODO: This step is somewhat redundant if size info has already been calculated (nested schema,
   // chunked reader).
-  auto const has_strings = (kernel_mask & STRINGS_MASK) != 0;
-  auto col_string_sizes  = cudf::detail::make_host_vector<size_t>(_input_columns.size(), _stream);
+  auto col_string_sizes = cudf::detail::make_host_vector<size_t>(_input_columns.size(), _stream);
   if (has_strings) {
-    // need to compute pages bounds/sizes if we lack page indexes or are using custom bounds
-    // TODO: we could probably dummy up size stats for FLBA data since we know the width
-    auto const has_flba =
-      std::any_of(pass.chunks.begin(), pass.chunks.end(), [](auto const& chunk) {
-        return chunk.physical_type == Type::FIXED_LEN_BYTE_ARRAY and
-               is_treat_fixed_length_as_string(chunk.logical_type);
-      });
-
-    if (!_has_page_index || uses_custom_row_bounds(mode) || has_flba) {
-      ComputePageStringSizes(subpass.pages,
-                             pass.chunks,
-                             delta_temp_buf,
-                             skip_rows,
-                             num_rows,
-                             level_type_size,
-                             kernel_mask,
-                             _stream);
-    }
-
     // Compute column string sizes (using page string offsets) for this output table chunk
     col_string_sizes = calculate_page_string_offsets();
 
@@ -212,12 +175,6 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
     }
   }
 
-  // TODO: Page pruning not yet implemented (especially for the chunked reader) so set all pages in
-  // this subpass to be decoded.
-  auto host_page_mask = cudf::detail::make_host_vector<bool>(subpass.pages.size(), _stream);
-  std::fill(host_page_mask.begin(), host_page_mask.end(), true);
-  auto page_mask = cudf::detail::make_device_uvector_async(host_page_mask, _stream, _mr);
-
   // Create an empty device vector to store the initial str offset for large string columns from for
   // string decoders.
   auto initial_str_offsets = rmm::device_uvector<size_t>{0, _stream, _mr};
@@ -228,7 +185,7 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
   if (has_strings) {
     // Host vector to initialize the initial string offsets
     auto host_offsets_vector =
-      cudf::detail::make_host_vector<size_t>(_input_columns.size(), _stream);
+      cudf::detail::make_pinned_vector_async<size_t>(_input_columns.size(), _stream);
     std::fill(
       host_offsets_vector.begin(), host_offsets_vector.end(), std::numeric_limits<size_t>::max());
     // Initialize the initial string offsets vector from the host vector
@@ -247,16 +204,17 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
   int s_idx = 0;
 
   auto decode_data = [&](decode_kernel_mask decoder_mask) {
-    DecodePageData(subpass.pages,
-                   pass.chunks,
-                   num_rows,
-                   skip_rows,
-                   level_type_size,
-                   decoder_mask,
-                   page_mask,
-                   initial_str_offsets,
-                   error_code.data(),
-                   streams[s_idx++]);
+    detail::decode_page_data(subpass.pages,
+                             pass.chunks,
+                             num_rows,
+                             skip_rows,
+                             level_type_size,
+                             decoder_mask,
+                             _subpass_page_mask,
+                             initial_str_offsets,
+                             subpass.page_string_offset_indices,
+                             error_code.data(),
+                             streams[s_idx++]);
   };
 
   // launch string decoder for plain encoded flat columns
@@ -306,40 +264,40 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
 
   // launch delta byte array decoder
   if (BitAnd(kernel_mask, decode_kernel_mask::DELTA_BYTE_ARRAY) != 0) {
-    DecodeDeltaByteArray(subpass.pages,
-                         pass.chunks,
-                         num_rows,
-                         skip_rows,
-                         level_type_size,
-                         page_mask,
-                         initial_str_offsets,
-                         error_code.data(),
-                         streams[s_idx++]);
+    decode_delta_byte_array(subpass.pages,
+                            pass.chunks,
+                            num_rows,
+                            skip_rows,
+                            level_type_size,
+                            _subpass_page_mask,
+                            initial_str_offsets,
+                            error_code.data(),
+                            streams[s_idx++]);
   }
 
   // launch delta length byte array decoder
   if (BitAnd(kernel_mask, decode_kernel_mask::DELTA_LENGTH_BA) != 0) {
-    DecodeDeltaLengthByteArray(subpass.pages,
-                               pass.chunks,
-                               num_rows,
-                               skip_rows,
-                               level_type_size,
-                               page_mask,
-                               initial_str_offsets,
-                               error_code.data(),
-                               streams[s_idx++]);
+    decode_delta_length_byte_array(subpass.pages,
+                                   pass.chunks,
+                                   num_rows,
+                                   skip_rows,
+                                   level_type_size,
+                                   _subpass_page_mask,
+                                   initial_str_offsets,
+                                   error_code.data(),
+                                   streams[s_idx++]);
   }
 
   // launch delta binary decoder
   if (BitAnd(kernel_mask, decode_kernel_mask::DELTA_BINARY) != 0) {
-    DecodeDeltaBinary(subpass.pages,
-                      pass.chunks,
-                      num_rows,
-                      skip_rows,
-                      level_type_size,
-                      page_mask,
-                      error_code.data(),
-                      streams[s_idx++]);
+    decode_delta_binary(subpass.pages,
+                        pass.chunks,
+                        num_rows,
+                        skip_rows,
+                        level_type_size,
+                        _subpass_page_mask,
+                        error_code.data(),
+                        streams[s_idx++]);
   }
 
   // launch byte stream split decoder
@@ -359,14 +317,14 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
 
   // launch byte stream split decoder
   if (BitAnd(kernel_mask, decode_kernel_mask::BYTE_STREAM_SPLIT) != 0) {
-    DecodeSplitPageData(subpass.pages,
-                        pass.chunks,
-                        num_rows,
-                        skip_rows,
-                        level_type_size,
-                        page_mask,
-                        error_code.data(),
-                        streams[s_idx++]);
+    decode_split_page_data(subpass.pages,
+                           pass.chunks,
+                           num_rows,
+                           skip_rows,
+                           level_type_size,
+                           _subpass_page_mask,
+                           error_code.data(),
+                           streams[s_idx++]);
   }
 
   // launch fixed width type decoder
@@ -416,25 +374,31 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
 
   // launch the catch-all page decoder
   if (BitAnd(kernel_mask, decode_kernel_mask::GENERAL) != 0) {
-    DecodePageData(subpass.pages,
-                   pass.chunks,
-                   num_rows,
-                   skip_rows,
-                   level_type_size,
-                   page_mask,
-                   error_code.data(),
-                   streams[s_idx++]);
+    detail::decode_page_data(subpass.pages,
+                             pass.chunks,
+                             num_rows,
+                             skip_rows,
+                             level_type_size,
+                             _subpass_page_mask,
+                             error_code.data(),
+                             streams[s_idx++]);
   }
 
   // synchronize the streams
   cudf::detail::join_streams(streams, _stream);
 
+  // the delta_temp_buf in the subpass struct can be freed now
+  subpass.delta_temp_buf.release();
+
   subpass.pages.device_to_host_async(_stream);
   page_nesting.device_to_host_async(_stream);
   page_nesting_decode.device_to_host_async(_stream);
 
+  // Invalidate output buffer nullmasks at row indices spanned by pruned pages
+  update_output_nullmasks_for_pruned_pages(_subpass_page_mask, skip_rows, num_rows);
+
   // Copy over initial string offsets from device
-  auto h_initial_str_offsets = cudf::detail::make_host_vector_async(initial_str_offsets, _stream);
+  auto h_initial_str_offsets = cudf::detail::make_pinned_vector_async(initial_str_offsets, _stream);
 
   if (auto const error = error_code.value_sync(_stream); error != 0) {
     CUDF_FAIL("Parquet data decode failed with code(s) " + kernel_error::to_string(error));
@@ -469,8 +433,7 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
         out_buf.user_data |= PARQUET_COLUMN_BUFFER_FLAG_LIST_TERMINATED;
       } else if (out_buf.type.id() == type_id::STRING) {
         // only if it is not a large strings column
-        if (col_string_sizes[idx] <=
-            static_cast<size_t>(strings::detail::get_offset64_threshold())) {
+        if (std::cmp_less_equal(col_string_sizes[idx], strings::detail::get_offset64_threshold())) {
           out_buffers.emplace_back(static_cast<size_type*>(out_buf.data()) + out_buf.size);
           final_offsets.emplace_back(static_cast<size_type>(col_string_sizes[idx]));
         }
@@ -484,7 +447,11 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
     }
   }
   // Write the final offsets for list and string columns in a batched manner
-  WriteFinalOffsets(final_offsets, out_buffers, _stream);
+  auto pinned_final_offsets = cudf::detail::make_pinned_vector(
+    cudf::host_span<cudf::size_type const>{final_offsets}, _stream);
+  auto pinned_out_buffers =
+    cudf::detail::make_pinned_vector(cudf::host_span<cudf::size_type* const>{out_buffers}, _stream);
+  write_final_offsets(pinned_final_offsets, pinned_out_buffers, _stream);
 
   // update null counts in the final column buffers
   for (size_t idx = 0; idx < subpass.pages.size(); idx++) {
@@ -512,40 +479,65 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
   _stream.synchronize();
 }
 
-reader::impl::impl(std::vector<std::unique_ptr<datasource>>&& sources,
-                   parquet_reader_options const& options,
-                   rmm::cuda_stream_view stream,
-                   rmm::device_async_resource_ref mr)
-  : impl(0 /*chunk_read_limit*/,
-         0 /*input_pass_read_limit*/,
-         std::forward<std::vector<std::unique_ptr<cudf::io::datasource>>>(sources),
-         options,
-         stream,
-         mr)
+reader_impl::reader_impl()
+  : _options{},
+    _subpass_page_mask{cudf::detail::hostdevice_vector<bool>(0, cudf::get_default_stream())}
 {
 }
 
-reader::impl::impl(std::size_t chunk_read_limit,
-                   std::size_t pass_read_limit,
-                   std::vector<std::unique_ptr<datasource>>&& sources,
-                   parquet_reader_options const& options,
-                   rmm::cuda_stream_view stream,
-                   rmm::device_async_resource_ref mr)
-  : _stream{stream},
-    _mr{mr},
+reader_impl::reader_impl(std::vector<std::unique_ptr<datasource>>&& sources,
+                         std::vector<FileMetaData>&& parquet_metadatas,
+                         parquet_reader_options const& options,
+                         rmm::cuda_stream_view stream,
+                         rmm::device_async_resource_ref mr)
+  : reader_impl(0 /*chunk_read_limit*/,
+                0 /*input_pass_read_limit*/,
+                std::forward<std::vector<std::unique_ptr<cudf::io::datasource>>>(sources),
+                std::forward<std::vector<FileMetaData>>(parquet_metadatas),
+                options,
+                stream,
+                mr)
+{
+}
+
+reader_impl::reader_impl(std::size_t chunk_read_limit,
+                         std::size_t pass_read_limit,
+                         std::vector<std::unique_ptr<datasource>>&& sources,
+                         std::vector<FileMetaData>&& file_metadatas,
+                         parquet_reader_options const& options,
+                         rmm::cuda_stream_view stream,
+                         rmm::device_async_resource_ref mr)
+  : _stream{std::move(stream)},
+    _mr{std::move(mr)},
     _options{options.get_timestamp_type(),
+             options.get_decimal_width(),
              options.get_skip_rows(),
              options.get_num_rows(),
-             options.get_row_groups()},
+             options.get_skip_bytes(),
+             options.get_num_bytes(),
+             options.get_row_groups(),
+             options.is_enabled_use_jit_filter()},
     _sources{std::move(sources)},
+    _subpass_page_mask{cudf::detail::hostdevice_vector<bool>(0, _stream)},
     _output_chunk_read_limit{chunk_read_limit},
     _input_pass_read_limit{pass_read_limit}
 {
   // Open and parse the source dataset metadata
-  _metadata = std::make_unique<aggregate_reader_metadata>(
-    _sources,
-    options.is_enabled_use_arrow_schema(),
-    options.get_columns().has_value() and options.is_enabled_allow_mismatched_pq_schemas());
+  CUDF_EXPECTS(file_metadatas.empty() or file_metadatas.size() == _sources.size(),
+               "Encountered a mismatch in the number of provided data sources and metadatas");
+  _metadata = file_metadatas.empty() ? std::make_unique<aggregate_reader_metadata>(
+                                         _sources,
+                                         options.is_enabled_use_arrow_schema(),
+                                         options.get_column_names().has_value() and
+                                           options.is_enabled_allow_mismatched_pq_schemas())
+                                     : std::make_unique<aggregate_reader_metadata>(
+                                         std::forward<std::vector<FileMetaData>>(file_metadatas),
+                                         options.is_enabled_use_arrow_schema(),
+                                         options.get_column_names().has_value() and
+                                           options.is_enabled_allow_mismatched_pq_schemas());
+
+  // Number of input sources
+  _num_sources = _sources.size();
 
   // Strings may be returned as either string or categorical columns
   _strings_to_categorical = options.is_enabled_convert_strings_to_categories();
@@ -554,20 +546,26 @@ reader::impl::impl(std::size_t chunk_read_limit,
   _reader_column_schema = options.get_column_schema();
 
   // Select only columns required by the options and filter
-  std::optional<std::vector<std::string>> filter_columns_names;
-  if (options.get_filter().has_value() and options.get_columns().has_value()) {
+  auto select_column_names =
+    get_column_projection(options, options.is_enabled_ignore_missing_columns());
+
+  std::optional<std::vector<std::string>> filter_only_columns_names;
+  if (options.get_filter().has_value() and
+      (options.get_column_names().has_value() or options.get_column_indices().has_value())) {
     // list, struct, dictionary are not supported by AST filter yet.
-    // extract columns not present in get_columns() & keep count to remove at end.
-    filter_columns_names =
-      get_column_names_in_expression(options.get_filter(), *(options.get_columns()));
-    _num_filter_only_columns = filter_columns_names->size();
+    // extract columns not present in get_column_names() & keep count to remove at end.
+    filter_only_columns_names = get_column_names_in_expression(
+      options.get_filter(), *select_column_names, options, _metadata->get_schema_tree());
+    _num_filter_only_columns = filter_only_columns_names->size();
   }
   std::tie(_input_columns, _output_buffers, _output_column_schemas) =
-    _metadata->select_columns(options.get_columns(),
-                              filter_columns_names,
+    _metadata->select_columns(select_column_names,
+                              filter_only_columns_names,
                               options.is_enabled_use_pandas_metadata(),
                               _strings_to_categorical,
-                              _options.timestamp_type.id());
+                              options.is_enabled_ignore_missing_columns(),
+                              _options.timestamp_type.id(),
+                              _options.decimal_width);
 
   // Save the states of the output buffers for reuse in `chunk_read()`.
   std::transform(
@@ -583,7 +581,7 @@ reader::impl::impl(std::size_t chunk_read_limit,
   _expr_conv = named_to_reference_converter(options.get_filter(), metadata);
 }
 
-void reader::impl::prepare_data(read_mode mode)
+void reader_impl::prepare_data(read_mode mode)
 {
   // if we have not preprocessed at the whole-file level, do that now
   if (!_file_preprocessed) {
@@ -599,7 +597,7 @@ void reader::impl::prepare_data(read_mode mode)
   if (_file_itm_data._current_input_pass < _file_itm_data.num_passes()) { handle_chunking(mode); }
 }
 
-void reader::impl::populate_metadata(table_metadata& out_metadata)
+void reader_impl::populate_metadata(table_metadata& out_metadata)
 {
   // Return column names
   out_metadata.schema_info.resize(_output_buffers.size());
@@ -616,8 +614,52 @@ void reader::impl::populate_metadata(table_metadata& out_metadata)
                                      out_metadata.per_file_user_data[0].end()};
 }
 
-table_with_metadata reader::impl::read_chunk_internal(read_mode mode)
+void reader_impl::preprocess_chunk_strings(read_mode mode, row_range const& read_info)
 {
+  auto& pass    = *_pass_itm_data;
+  auto& subpass = *pass.subpass;
+
+  if (!(subpass.kernel_mask & STRINGS_MASK)) { return; }
+
+  // we may need to (re)compute string sizes.
+  // string sizes were computed in the page preprocess step for the subpass if we are doing an
+  // output chunked read, but contains the size for all strings, not necessarily just the rows that
+  // may have been selected for an output chunk. so, if we didn't compute the sizes at all, or
+  // if we are actually doing a chunked subpass (reading anything other than all the rows in the
+  // entire pass) we need to recompute
+  bool full_string_sizes_computed = _output_chunk_read_limit > 0;
+  bool const need_string_size_recompute =
+    // if we haven't computed string sizes at all because we're not in the chunked read path
+    (!full_string_sizes_computed) ||
+    // if we are in the chunked path and we have chunked to something other than the initial row
+    // bounds
+    ((pass.skip_rows != read_info.skip_rows) || (pass.num_rows != read_info.num_rows)) ||
+    // if the user has specified skip_rows / num_rows at all. i am explicitly not calling
+    // uses_custom_row_bounds() here because it will return true at all times in the chunked
+    // read case, which we don't want. if we are doing a chunked read, but no chunking has occurred,
+    // the full size compute step is all we need.
+    ((_options.num_rows.has_value() or _options.skip_rows != 0));
+
+  if (need_string_size_recompute) {
+    constexpr bool compute_all_string_sizes = false;
+    compute_page_string_sizes_pass1(subpass.pages,
+                                    pass.chunks,
+                                    _subpass_page_mask,
+                                    subpass.page_string_offset_indices,
+                                    read_info.skip_rows,
+                                    read_info.num_rows,
+                                    subpass.kernel_mask,
+                                    compute_all_string_sizes,
+                                    _pass_itm_data->level_type_size,
+                                    _stream);
+  }
+  compute_page_string_sizes_pass2(subpass.pages, pass.chunks, subpass.delta_temp_buf, _stream);
+}
+
+table_with_metadata reader_impl::read_chunk_internal(read_mode mode)
+{
+  CUDF_FUNC_RANGE();
+
   // If `_output_metadata` has been constructed, just copy it over.
   auto out_metadata = _output_metadata ? table_metadata{*_output_metadata} : table_metadata{};
   out_metadata.schema_info.resize(_output_buffers.size());
@@ -629,7 +671,7 @@ table_with_metadata reader::impl::read_chunk_internal(read_mode mode)
   // Copy number of total input row groups and number of surviving row groups from predicate
   // pushdown.
   out_metadata.num_input_row_groups = _file_itm_data.num_input_row_groups;
-  // Copy the number surviving row groups from each predicate pushdown only if the filter has value.
+  // Copy the number surviving row groups from each predicate pushdown only if the filter has value
   if (_expr_conv.get_converted_expr().has_value()) {
     out_metadata.num_row_groups_after_stats_filter =
       _file_itm_data.surviving_row_groups.after_stats_filter;
@@ -653,6 +695,25 @@ table_with_metadata reader::impl::read_chunk_internal(read_mode mode)
   auto& pass            = *_pass_itm_data;
   auto& subpass         = *pass.subpass;
   auto const& read_info = subpass.output_chunk_read_info[subpass.current_output_chunk];
+
+  // computes:
+  // PageNestingInfo::batch_size for each level of nesting, for each page, taking row bounds into
+  // account. PageInfo::skipped_values, which tells us where to start decoding in the input to
+  // respect the user bounds. It is only necessary to do this second pass if uses_custom_row_bounds
+  // is set (if the user has specified artificial bounds).
+  if (uses_custom_row_bounds(mode)) {
+    compute_page_sizes(subpass.pages,
+                       pass.chunks,
+                       _subpass_page_mask,
+                       read_info.skip_rows,
+                       read_info.num_rows,
+                       false,  // num_rows is already computed
+                       pass.level_type_size,
+                       _stream);
+  }
+
+  // preprocess strings
+  preprocess_chunk_strings(mode, read_info);
 
   // Allocate memory buffers for the output columns.
   allocate_columns(mode, read_info.skip_rows, read_info.num_rows);
@@ -684,6 +745,9 @@ table_with_metadata reader::impl::read_chunk_internal(read_mode mode)
     }
   }
 
+  out_columns =
+    cudf::structs::detail::enforce_null_consistency(std::move(out_columns), _stream, _mr);
+
   // Check if number of rows per source should be included in output metadata.
   if (include_output_num_rows_per_source()) {
     // For chunked reading, compute the output number of rows per source
@@ -702,8 +766,8 @@ table_with_metadata reader::impl::read_chunk_internal(read_mode mode)
   return finalize_output(mode, out_metadata, out_columns);
 }
 
-std::vector<size_t> reader::impl::calculate_output_num_rows_per_source(size_t const chunk_start_row,
-                                                                       size_t const chunk_num_rows)
+std::vector<size_t> reader_impl::calculate_output_num_rows_per_source(size_t const chunk_start_row,
+                                                                      size_t const chunk_num_rows)
 {
   // Handle base cases.
   if (_file_itm_data.num_rows_per_source.size() == 0) {
@@ -753,10 +817,57 @@ std::vector<size_t> reader::impl::calculate_output_num_rows_per_source(size_t co
   return num_rows_per_source;
 }
 
-table_with_metadata reader::impl::finalize_output(read_mode mode,
-                                                  table_metadata& out_metadata,
-                                                  std::vector<std::unique_ptr<column>>& out_columns)
+std::optional<std::vector<std::string>> reader_impl::get_column_projection(
+  parquet_reader_options const& options, bool ignore_missing_columns) const
 {
+  auto const has_column_names   = options.get_column_names().has_value();
+  auto const has_column_indices = options.get_column_indices().has_value();
+
+  CUDF_EXPECTS(
+    not(has_column_names and has_column_indices),
+    "Parquet reader encountered column selection by both names and indices simultaneously");
+
+  // No column selection specified. Return nullopt indicating all columns to be selected
+  if (not has_column_names and not has_column_indices) {
+    return std::nullopt;
+  } else if (has_column_names) {
+    return options.get_column_names();
+  } else {
+    std::vector<std::string> col_names;
+    auto const& top_level_schema_indices = _metadata->get_schema(0).children_idx;
+    for (auto const index : options.get_column_indices().value_or(std::vector<cudf::size_type>{})) {
+      auto const is_valid_index =
+        std::cmp_greater_equal(index, 0) and std::cmp_less(index, top_level_schema_indices.size());
+      CUDF_EXPECTS(ignore_missing_columns or is_valid_index,
+                   "Encountered an invalid col index in the top-level column selection");
+      if (is_valid_index) {
+        col_names.emplace_back(_metadata->get_schema(top_level_schema_indices[index]).name);
+      }
+    }
+    return std::make_optional(std::move(col_names));
+  }
+}
+
+void reader_impl::apply_decimal_width_cast(std::vector<std::unique_ptr<column>>& out_columns)
+{
+  // TODO: Instead of casting the columns after the read is done, we should
+  // be able to decode data directly into the target decimal type buffer.
+  if (_options.decimal_width == type_id::EMPTY) { return; }
+  for (auto& col : out_columns) {
+    auto const col_type = col->type();
+    if (cudf::is_fixed_point(col_type) && col_type.id() != _options.decimal_width) {
+      col =
+        cudf::cast(col->view(), data_type{_options.decimal_width, col_type.scale()}, _stream, _mr);
+    }
+  }
+}
+
+table_with_metadata reader_impl::finalize_output(read_mode mode,
+                                                 table_metadata& out_metadata,
+                                                 std::vector<std::unique_ptr<column>>& out_columns)
+{
+  CUDF_FUNC_RANGE();
+
   // Create empty columns as needed (this can happen if we've ended up with no actual data to read)
   for (size_t i = out_columns.size(); i < _output_buffers.size(); ++i) {
     if (!_output_metadata) {
@@ -766,6 +877,8 @@ table_with_metadata reader::impl::finalize_output(read_mode mode,
       out_columns.emplace_back(io::detail::empty_like(_output_buffers[i], nullptr, _stream, _mr));
     }
   }
+
+  apply_decimal_width_cast(out_columns);
 
   if (!_output_metadata) {
     populate_metadata(out_metadata);
@@ -785,34 +898,49 @@ table_with_metadata reader::impl::finalize_output(read_mode mode,
 
   // check if the output filter AST expression (= _expr_conv.get_converted_expr()) exists
   if (_expr_conv.get_converted_expr().has_value()) {
-    auto read_table = std::make_unique<table>(std::move(out_columns));
-    auto predicate  = cudf::detail::compute_column(*read_table,
-                                                  _expr_conv.get_converted_expr().value().get(),
-                                                  _stream,
-                                                  cudf::get_current_device_resource_ref());
-    CUDF_EXPECTS(predicate->view().type().id() == type_id::BOOL8,
-                 "Predicate filter should return a boolean");
-    // Exclude columns present in filter only in output
+    auto read_table         = std::make_unique<table>(std::move(out_columns));
     auto counting_it        = thrust::make_counting_iterator<std::size_t>(0);
     auto const output_count = read_table->num_columns() - _num_filter_only_columns;
     auto only_output        = read_table->select(counting_it, counting_it + output_count);
-    auto output_table = cudf::detail::apply_boolean_mask(only_output, *predicate, _stream, _mr);
+
     if (_num_filter_only_columns > 0) { out_metadata.schema_info.resize(output_count); }
-    return {std::move(output_table), std::move(out_metadata)};
+
+    bool use_jit = cudf::get_context().use_jit() || _options.use_jit_filter;
+
+    if (!use_jit) {
+      auto predicate = cudf::detail::compute_column(
+        *read_table, _expr_conv.get_converted_expr().value().get(), _stream, _mr);
+      CUDF_EXPECTS(predicate->view().type().id() == type_id::BOOL8,
+                   "Predicate filter should return a boolean");
+      // Exclude columns present in filter only in output
+      auto output_table = cudf::detail::apply_boolean_mask(only_output, *predicate, _stream, _mr);
+      return {std::move(output_table), std::move(out_metadata)};
+    } else {
+      auto output_table = cudf::filter(read_table->view(),
+                                       _expr_conv.get_converted_expr().value().get(),
+                                       only_output,
+                                       _stream,
+                                       _mr);
+
+      return {std::move(output_table), std::move(out_metadata)};
+    }
   }
   return {std::make_unique<table>(std::move(out_columns)), std::move(out_metadata)};
 }
 
-table_with_metadata reader::impl::read()
+table_with_metadata reader_impl::read()
 {
   CUDF_EXPECTS(_output_chunk_read_limit == 0,
                "Reading the whole file must not have non-zero byte_limit.");
-
+  CUDF_EXPECTS(!_options.num_rows.has_value() ||
+                 _options.num_rows.value() <= std::numeric_limits<size_type>::max(),
+               "Requested number of rows to read exceeds column size limit",
+               std::overflow_error);
   prepare_data(read_mode::READ_ALL);
   return read_chunk_internal(read_mode::READ_ALL);
 }
 
-table_with_metadata reader::impl::read_chunk()
+table_with_metadata reader_impl::read_chunk()
 {
   // Reset the output buffers to their original states (right after reader construction).
   // Don't need to do it if we read the file all at once.
@@ -828,7 +956,7 @@ table_with_metadata reader::impl::read_chunk()
   return read_chunk_internal(read_mode::CHUNKED_READ);
 }
 
-bool reader::impl::has_next()
+bool reader_impl::has_next()
 {
   prepare_data(read_mode::CHUNKED_READ);
 
@@ -839,6 +967,122 @@ bool reader::impl::has_next()
   return has_more_work() or is_first_output_chunk();
 }
 
+void reader_impl::update_output_nullmasks_for_pruned_pages(cudf::host_span<bool const> page_mask,
+                                                           size_t skip_rows,
+                                                           size_t num_rows)
+{
+  auto const& subpass    = _pass_itm_data->subpass;
+  auto const& pages      = subpass->pages;
+  auto const& chunks     = _pass_itm_data->chunks;
+  auto const num_columns = _input_columns.size();
+
+  CUDF_EXPECTS(pages.size() == page_mask.size(), "Page mask size mismatch");
+
+  // Return early if page mask is empty or all pages are required
+  if (page_mask.empty() or std::all_of(page_mask.begin(), page_mask.end(), std::identity{})) {
+    return;
+  }
+
+  auto page_and_mask_begin =
+    thrust::make_zip_iterator(cuda::std::make_tuple(pages.host_begin(), page_mask.begin()));
+
+  auto null_masks = std::vector<bitmask_type*>{};
+  auto begin_bits = std::vector<cudf::size_type>{};
+  auto end_bits   = std::vector<cudf::size_type>{};
+
+  std::for_each(
+    page_and_mask_begin, page_and_mask_begin + pages.size(), [&](auto const& page_and_mask_pair) {
+      // Return early if the page is valid - Note: dictionary pages are always valid
+      if (cuda::std::get<1>(page_and_mask_pair)) { return; }
+
+      // Get the current page
+      auto const& page = cuda::std::get<0>(page_and_mask_pair);
+
+      // Table row bounds
+      auto const table_start_row = skip_rows;
+      auto const table_end_row   = skip_rows + num_rows;
+
+      // Current page row bounds
+      auto const chunk_idx      = page.chunk_idx;
+      auto const page_start_row = chunks[chunk_idx].start_row + page.chunk_row;
+      auto const page_end_row   = page_start_row + page.num_rows;
+
+      auto const is_page_out_of_bounds =
+        (page_start_row < table_start_row and page_end_row < table_start_row) or
+        (page_start_row > table_end_row and page_end_row > table_end_row);
+      if (is_page_out_of_bounds) { return; }
+
+      // The page is either completely or partially within the table row bounds
+      auto const [start_row, end_row] = [&]() -> std::pair<size_type, size_type> {
+        // Page is completely within the table row bounds
+        if (page_start_row >= table_start_row and page_end_row <= table_end_row) {
+          return {page_start_row - table_start_row, page_end_row - table_start_row};
+        }
+        // Page starts earlier but ends within the table row bounds
+        else if (page_start_row < table_start_row) {
+          return {0, page_end_row - table_start_row};
+        }
+        // Page starts within the table row bounds but ends after
+        else {
+          return {page_start_row - table_start_row, num_rows};
+        }
+      }();
+
+      // Make sure the row bounds are valid
+      CUDF_EXPECTS(std::cmp_greater_equal(start_row, 0) and std::cmp_less_equal(end_row, num_rows),
+                   "Invalid row bounds");
+
+      auto& input_col      = _input_columns[chunk_idx % num_columns];
+      auto const max_depth = input_col.nesting_depth();
+      auto* cols           = &_output_buffers;
+
+      for (size_t l_idx = 0; l_idx < max_depth; l_idx++) {
+        auto& out_buf = (*cols)[input_col.nesting[l_idx]];
+        cols          = &out_buf.children;
+        if (out_buf.user_data & PARQUET_COLUMN_BUFFER_FLAG_HAS_LIST_PARENT) { continue; }
+        // Add the nullmask and bit bounds to corresponding lists
+        null_masks.emplace_back(out_buf.null_mask());
+        begin_bits.emplace_back(start_row);
+        end_bits.emplace_back(end_row);
+
+        // Increment the null count by the number of rows in this page
+        out_buf.null_count() += page.num_rows;
+      }
+    });
+
+  // Min number of nullmasks to use bulk update optimally
+  constexpr auto min_nullmasks_for_bulk_update = 32;
+
+  // Use a bounce buffer to avoid pageable copies
+  auto pinned_null_masks =
+    cudf::detail::make_pinned_vector(cudf::host_span<bitmask_type* const>{null_masks}, _stream);
+  auto const pinned_begin_bits =
+    cudf::detail::make_pinned_vector(cudf::host_span<cudf::size_type const>{begin_bits}, _stream);
+  auto const pinned_end_bits =
+    cudf::detail::make_pinned_vector(cudf::host_span<cudf::size_type const>{end_bits}, _stream);
+
+  // Bulk update the nullmasks if the number of pages is above the threshold
+  if (pinned_null_masks.size() >= min_nullmasks_for_bulk_update) {
+    auto pinned_valids = cudf::detail::make_pinned_vector<bool>(pinned_null_masks.size(), _stream);
+    std::fill(pinned_valids.begin(), pinned_valids.end(), false);
+    cudf::set_null_masks_safe(
+      pinned_null_masks, pinned_begin_bits, pinned_end_bits, pinned_valids, _stream);
+  }
+  // Otherwise, update the nullmasks in a loop
+  else {
+    auto nullmask_iter = thrust::make_zip_iterator(cuda::std::make_tuple(
+      pinned_null_masks.begin(), pinned_begin_bits.begin(), pinned_end_bits.begin()));
+    std::for_each(
+      nullmask_iter, nullmask_iter + pinned_null_masks.size(), [&](auto const& nullmask_tuple) {
+        cudf::set_null_mask(cuda::std::get<0>(nullmask_tuple),
+                            cuda::std::get<1>(nullmask_tuple),
+                            cuda::std::get<2>(nullmask_tuple),
+                            false,
+                            _stream);
+      });
+  }
+}
+
 namespace {
 parquet_column_schema walk_schema(aggregate_reader_metadata const* mt, int idx)
 {
@@ -847,20 +1091,29 @@ parquet_column_schema walk_schema(aggregate_reader_metadata const* mt, int idx)
   for (auto const& child_idx : sch.children_idx) {
     children.push_back(walk_schema(mt, child_idx));
   }
-  return parquet_column_schema{sch.name, static_cast<parquet::Type>(sch.type), std::move(children)};
+
+  auto const type_id   = to_type_id(sch, false, type_id::EMPTY, type_id::EMPTY);
+  auto const cudf_type = to_data_type(type_id, sch);
+
+  return parquet_column_schema{
+    sch.name, static_cast<parquet::Type>(sch.type), std::move(children), cudf_type};
 }
 }  // namespace
 
 parquet_metadata read_parquet_metadata(host_span<std::unique_ptr<datasource> const> sources)
 {
-  // Do not use arrow schema when reading information from parquet metadata.
+  // Do not use arrow schema when only reading the parquet footer metadata.
   constexpr auto use_arrow_schema = false;
 
   // Do not select any columns when only reading the parquet metadata.
   constexpr auto has_column_projection = false;
 
+  // Do not read page indexes as it's not used to construct `parquet_metadata`.
+  constexpr auto read_page_indexes = false;
+
   // Open and parse the source dataset metadata
-  auto metadata = aggregate_reader_metadata(sources, use_arrow_schema, has_column_projection);
+  auto metadata =
+    aggregate_reader_metadata(sources, use_arrow_schema, has_column_projection, read_page_indexes);
 
   return parquet_metadata{parquet_schema{walk_schema(&metadata, 0)},
                           metadata.get_num_rows(),
@@ -869,6 +1122,24 @@ parquet_metadata read_parquet_metadata(host_span<std::unique_ptr<datasource> con
                           metadata.get_key_value_metadata()[0],
                           metadata.get_rowgroup_metadata(),
                           metadata.get_column_chunk_metadata()};
+}
+
+std::vector<parquet::FileMetaData> read_parquet_footers(
+  host_span<std::unique_ptr<datasource> const> sources)
+{
+  // Do not use arrow schema when only reading the parquet metadata.
+  constexpr auto use_arrow_schema = false;
+
+  // Do not select any columns when only reading the parquet metadata.
+  constexpr auto has_column_projection = false;
+
+  // Read page indexes if available here since we will want to reuse the raw metadata for later use.
+  constexpr auto read_page_indexes = true;
+
+  // Parse the source dataset metadata
+  return aggregate_reader_metadata(
+           sources, use_arrow_schema, has_column_projection, read_page_indexes)
+    .get_parquet_metadatas();
 }
 
 }  // namespace cudf::io::parquet::detail

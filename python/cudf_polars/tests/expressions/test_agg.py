@@ -1,6 +1,9 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
+
+from datetime import date
+from decimal import Decimal
 
 import pytest
 
@@ -11,6 +14,7 @@ from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
     assert_ir_translation_raises,
 )
+from cudf_polars.utils.versions import POLARS_VERSION_LT_135, POLARS_VERSION_LT_136
 
 
 @pytest.fixture(
@@ -49,6 +53,15 @@ def is_sorted(request):
 
 
 @pytest.fixture
+def xfail_if_sorted_gt_135(is_sorted, request):
+    # See https://github.com/rapidsai/cudf/pull/20791#issuecomment-3750528419
+    if is_sorted and not POLARS_VERSION_LT_135:
+        request.applymarker(
+            pytest.mark.xfail(reason="See https://github.com/pola-rs/polars/pull/24981")
+        )
+
+
+@pytest.fixture
 def df(dtype, with_nulls, is_sorted):
     values = [-10, 4, 5, 2, 3, 6, 8, 9, 4, 4, 5, 2, 3, 7, 3, 6, -10, -11]
     if with_nulls:
@@ -68,27 +81,28 @@ def df(dtype, with_nulls, is_sorted):
     return df
 
 
-def test_agg(df, agg):
+@pytest.fixture
+def decimal_df() -> pl.LazyFrame:
+    return pl.LazyFrame(
+        {
+            "a": pl.Series(
+                "a",
+                [Decimal("0.10"), Decimal("1.10"), Decimal("100.10")],
+                dtype=pl.Decimal(precision=9, scale=2),
+            ),
+        }
+    )
+
+
+def test_agg(df, agg, xfail_if_sorted_gt_135):
     expr = getattr(pl.col("a"), agg)()
     q = df.select(expr)
-
-    # https://github.com/rapidsai/cudf/issues/15852
-    check_dtypes = agg not in {"n_unique", "median"}
-    if not check_dtypes and q.collect_schema()["a"] != pl.Float64:
-        with pytest.raises(AssertionError):
-            assert_gpu_result_equal(q)
-    assert_gpu_result_equal(q, check_dtypes=check_dtypes, check_exact=False)
+    assert_gpu_result_equal(q, check_exact=False)
 
 
-def test_bool_agg(agg, request):
+def test_bool_agg(agg):
     if agg == "cum_min" or agg == "cum_max":
         pytest.skip("Does not apply")
-    request.applymarker(
-        pytest.mark.xfail(
-            condition=agg == "n_unique",
-            reason="Wrong dtype we get Int32, polars gets UInt32",
-        )
-    )
     df = pl.LazyFrame({"a": [True, False, None, True]})
     expr = getattr(pl.col("a"), agg)()
     q = df.select(expr)
@@ -107,16 +121,10 @@ def test_cum_agg_reverse_unsupported(cum_agg):
 
 @pytest.mark.parametrize("q", [0.5, pl.lit(0.5)])
 @pytest.mark.parametrize("interp", ["nearest", "higher", "lower", "midpoint", "linear"])
-def test_quantile(df, q, interp):
+def test_quantile(df, q, interp, xfail_if_sorted_gt_135):
     expr = pl.col("a").quantile(q, interp)
     q = df.select(expr)
-
-    # https://github.com/rapidsai/cudf/issues/15852
-    check_dtypes = q.collect_schema()["a"] == pl.Float64
-    if not check_dtypes:
-        with pytest.raises(AssertionError):
-            assert_gpu_result_equal(q)
-    assert_gpu_result_equal(q, check_dtypes=check_dtypes, check_exact=False)
+    assert_gpu_result_equal(q, check_exact=False)
 
 
 def test_quantile_invalid_q(df):
@@ -179,4 +187,42 @@ def test_implode_agg_unsupported():
         }
     )
     q = df.select(pl.col("b").implode())
+    assert_ir_translation_raises(q, NotImplementedError)
+
+
+def test_decimal_aggs(decimal_df: pl.LazyFrame) -> None:
+    q = decimal_df.with_columns(
+        sum=pl.col("a").sum(),
+        min=pl.col("a").min(),
+        max=pl.col("a").max(),
+        mean=pl.col("a").mean(),
+        median=pl.col("a").median(),
+        mean_f32=pl.col("a").mean().cast(pl.Float32),
+        median_f32=pl.col("a").median().cast(pl.Float32),
+    )
+    assert_gpu_result_equal(q)
+
+
+def test_invalid_agg(request):
+    request.applymarker(
+        pytest.mark.xfail(
+            condition=not POLARS_VERSION_LT_136,
+            reason="polars raises now",
+        )
+    )
+    df = pl.LazyFrame({"s": pl.Series(["a", "b", "c"], dtype=pl.String())})
+    q = df.select(pl.col("s").sum())
+    assert_ir_translation_raises(q, NotImplementedError)
+
+
+def test_sum_all_null_decimal_dtype():
+    df = pl.LazyFrame({"foo": pl.Series([None], dtype=pl.Decimal(9, 2))})
+    q = df.select(pl.col("foo").sum())
+    assert_gpu_result_equal(q)
+
+
+@pytest.mark.parametrize("expr", [pl.col("a").median(), pl.col("a").quantile(0.5)])
+def test_temporal_quantile_median_not_supported(expr):
+    df = pl.LazyFrame({"a": [date(2025, 1, 1), date(2025, 1, 2), date(2025, 1, 3)]})
+    q = df.select(expr)
     assert_ir_translation_raises(q, NotImplementedError)

@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf_test/base_fixture.hpp>
@@ -22,6 +11,7 @@
 #include <cudf/aggregation.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/groupby.hpp>
+#include <cudf/sorting.hpp>
 
 using namespace cudf::test::iterators;
 
@@ -41,14 +31,39 @@ using M2s_col = cudf::test::fixed_width_column_wrapper<T>;
 
 auto compute_M2(cudf::column_view const& keys, cudf::column_view const& values)
 {
-  std::vector<cudf::groupby::aggregation_request> requests;
-  requests.emplace_back();
-  requests[0].values = values;
-  requests[0].aggregations.emplace_back(cudf::make_m2_aggregation<cudf::groupby_aggregation>());
-
   auto gb_obj = cudf::groupby::groupby(cudf::table_view({keys}));
-  auto result = gb_obj.aggregate(requests);
-  return std::pair(std::move(result.first->release()[0]), std::move(result.second[0].results[0]));
+
+  auto [hash_gb_keys, hash_gb_vals] = [&] {
+    std::vector<cudf::groupby::aggregation_request> requests;
+    requests.emplace_back();
+    requests[0].values = values;
+    requests[0].aggregations.emplace_back(cudf::make_m2_aggregation<cudf::groupby_aggregation>());
+    auto const result      = gb_obj.aggregate(requests);
+    auto const sort_order  = cudf::sorted_order(result.first->view(), {}, {});
+    auto const sorted_keys = cudf::gather(result.first->view(), *sort_order);
+    auto const sorted_vals =
+      cudf::gather(cudf::table_view({result.second[0].results[0]->view()}), *sort_order);
+    return std::pair(std::move(sorted_keys->release()[0]), std::move(sorted_vals->release()[0]));
+  }();
+
+  auto const [sort_gb_keys, sort_gb_vals] = [&] {
+    // Create a fresh aggregation request for sort-based aggregation instead of reusing.
+    // This is to avoid wrong output when the previous groupby aggregation has not been executed
+    // while the requests vector is modified.
+    std::vector<cudf::groupby::aggregation_request> requests;
+    requests.emplace_back();
+    requests[0].values = values;
+    requests[0].aggregations.emplace_back(cudf::make_m2_aggregation<cudf::groupby_aggregation>());
+    requests[0].aggregations.emplace_back(
+      cudf::make_nth_element_aggregation<cudf::groupby_aggregation>(0));
+    auto result = gb_obj.aggregate(requests);
+    return std::pair(std::move(result.first->release()[0]), std::move(result.second[0].results[0]));
+  }();
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*hash_gb_keys, *sort_gb_keys, verbosity);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*hash_gb_vals, *sort_gb_vals, verbosity);
+
+  return std::pair(std::move(hash_gb_keys), std::move(hash_gb_vals));
 }
 }  // namespace
 
@@ -99,7 +114,7 @@ TYPED_TEST(GroupbyM2TypedTest, AllNullValuesInput)
   auto const vals = vals_col<T>{{3, 4, 5}, all_nulls()};
 
   auto const [out_keys, out_M2s] = compute_M2(keys, vals);
-  auto const expected_M2s        = M2s_col<R>{{null, null, null}, all_nulls()};
+  auto const expected_M2s        = M2s_col<R>{0, 0, 0};
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(keys, *out_keys, verbosity);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_M2s, *out_M2s, verbosity);
@@ -153,7 +168,7 @@ TYPED_TEST(GroupbyM2TypedTest, ValuesHaveNulls)
 
   auto const [out_keys, out_M2s] = compute_M2(keys, vals);
   auto const expected_keys       = keys_col<T>{1, 2, 3, 4, 5};
-  auto const expected_M2s        = M2s_col<R>{{0.0, 2.0, 8.0, 0.0, 0.0 /*NULL*/}, null_at(4)};
+  auto const expected_M2s        = M2s_col<R>{0.0, 2.0, 8.0, 0.0, 0.0};
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_keys, *out_keys, verbosity);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_M2s, *out_M2s, verbosity);
@@ -173,7 +188,7 @@ TYPED_TEST(GroupbyM2TypedTest, KeysAndValuesHaveNulls)
 
   auto const [out_keys, out_M2s] = compute_M2(keys, vals);
   auto const expected_keys       = keys_col<T>{1, 2, 3, 4};
-  auto const expected_M2s = M2s_col<R>{{4.5, 32.0 + 2.0 / 3.0, 18.0, 0.0 /*NULL*/}, null_at(3)};
+  auto const expected_M2s        = M2s_col<R>{4.5, 32.0 + 2.0 / 3.0, 18.0, 0.0};
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_keys, *out_keys, verbosity);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_M2s, *out_M2s, verbosity);

@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf/column/column.hpp>
@@ -167,20 +156,20 @@ void column::set_null_count(size_type new_null_count)
 namespace {
 struct create_column_from_view {
   cudf::column_view view;
-  rmm::cuda_stream_view stream{cudf::get_default_stream()};
+  rmm::cuda_stream_view stream;
   rmm::device_async_resource_ref mr;
 
-  template <typename ColumnType,
-            std::enable_if_t<std::is_same_v<ColumnType, cudf::string_view>>* = nullptr>
+  template <typename ColumnType>
   std::unique_ptr<column> operator()()
+    requires(std::is_same_v<ColumnType, cudf::string_view>)
   {
     cudf::strings_column_view sview(view);
     return cudf::strings::detail::copy_slice(sview, 0, view.size(), stream, mr);
   }
 
-  template <typename ColumnType,
-            std::enable_if_t<std::is_same_v<ColumnType, cudf::dictionary32>>* = nullptr>
+  template <typename ColumnType>
   std::unique_ptr<column> operator()()
+    requires(std::is_same_v<ColumnType, cudf::dictionary32>)
   {
     std::vector<std::unique_ptr<column>> children;
     if (view.num_children()) {
@@ -202,8 +191,9 @@ struct create_column_from_view {
                                     std::move(children));
   }
 
-  template <typename ColumnType, std::enable_if_t<cudf::is_fixed_width<ColumnType>()>* = nullptr>
+  template <typename ColumnType>
   std::unique_ptr<column> operator()()
+    requires(cudf::is_fixed_width<ColumnType>())
   {
     auto op       = [&](auto const& child) { return std::make_unique<column>(child, stream, mr); };
     auto begin    = thrust::make_transform_iterator(view.child_begin(), op);
@@ -222,17 +212,17 @@ struct create_column_from_view {
       std::move(children));
   }
 
-  template <typename ColumnType,
-            std::enable_if_t<std::is_same_v<ColumnType, cudf::list_view>>* = nullptr>
+  template <typename ColumnType>
   std::unique_ptr<column> operator()()
+    requires(std::is_same_v<ColumnType, cudf::list_view>)
   {
     auto lists_view = lists_column_view(view);
     return cudf::lists::detail::copy_slice(lists_view, 0, view.size(), stream, mr);
   }
 
-  template <typename ColumnType,
-            std::enable_if_t<std::is_same_v<ColumnType, cudf::struct_view>>* = nullptr>
+  template <typename ColumnType>
   std::unique_ptr<column> operator()()
+    requires(std::is_same_v<ColumnType, cudf::struct_view>)
   {
     if (view.is_empty()) { return cudf::empty_like(view); }
 

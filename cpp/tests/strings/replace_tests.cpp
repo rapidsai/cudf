@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf_test/base_fixture.hpp>
@@ -23,6 +12,8 @@
 #include <cudf/strings/combine.hpp>
 #include <cudf/strings/replace.hpp>
 #include <cudf/strings/strings_column_view.hpp>
+
+#include <cuda/iterator>
 
 #include <vector>
 
@@ -203,7 +194,7 @@ TEST_F(StringsReplaceTest, ReplaceAllNullInput)
 {
   std::vector<char const*> h_null_strings(128);
   auto input = cudf::test::strings_column_wrapper(
-    h_null_strings.begin(), h_null_strings.end(), thrust::make_constant_iterator(false));
+    h_null_strings.begin(), h_null_strings.end(), cuda::make_constant_iterator(false));
   auto strings_view = cudf::strings_column_view(input);
   auto results =
     cudf::strings::replace(strings_view, cudf::string_scalar("+"), cudf::string_scalar(""));

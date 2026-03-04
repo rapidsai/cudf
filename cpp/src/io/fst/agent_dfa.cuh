@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2022-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
 
@@ -19,10 +8,10 @@
 
 #include <cub/cub.cuh>
 #include <cuda/functional>
+#include <cuda/iterator>
 #include <cuda/std/array>
 #include <cuda/std/type_traits>
 #include <thrust/execution_policy.h>
-#include <thrust/iterator/discard_iterator.h>
 #include <thrust/sequence.h>
 
 namespace cudf::io::fst::detail {
@@ -783,9 +772,9 @@ __launch_bounds__(int32_t(AgentDFAPolicy::BLOCK_THREADS)) CUDF_KERNEL
   // static constexpr int32_t MIN_TRANSLATED_OUT = DfaT::MIN_TRANSLATED_OUT;
   static constexpr int32_t num_max_translated_out = DfaT::MAX_TRANSLATED_OUT;
   static constexpr bool discard_out_index =
-    ::cuda::std::is_same<TransducedIndexOutItT, thrust::discard_iterator<>>::value;
+    ::cuda::std::is_same<TransducedIndexOutItT, cuda::discard_iterator>::value;
   static constexpr bool discard_out_it =
-    ::cuda::std::is_same<TransducedOutItT, thrust::discard_iterator<>>::value;
+    ::cuda::std::is_same<TransducedOutItT, cuda::discard_iterator>::value;
   using NonWriteCoalescingT =
     DFAWriteCallbackWrapper<num_max_translated_out,
                             decltype(dfa.InitTranslationTable(transducer_table_storage)),

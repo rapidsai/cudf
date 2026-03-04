@@ -1,26 +1,15 @@
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
+#include <cudf/detail/row_operator/equality.cuh>
 #include <cudf/detail/scan.hpp>
 #include <cudf/detail/structs/utilities.hpp>
 #include <cudf/detail/utilities/device_operators.cuh>
-#include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -71,14 +60,14 @@ std::unique_ptr<column> rank_generator(column_view const& order_by,
                                        rmm::device_async_resource_ref mr)
 {
   auto const order_by_tview = table_view{{order_by}};
-  auto comp = cudf::experimental::row::equality::self_comparator(order_by_tview, stream);
+  auto comp                 = cudf::detail::row::equality::self_comparator(order_by_tview, stream);
 
   auto ranks = make_fixed_width_column(
     data_type{type_to_id<size_type>()}, order_by.size(), mask_state::UNALLOCATED, stream, mr);
   auto mutable_ranks = ranks->mutable_view();
 
   auto const comparator_helper = [&](auto const device_comparator) {
-    thrust::tabulate(rmm::exec_policy(stream),
+    thrust::tabulate(rmm::exec_policy_nosync(stream),
                      mutable_ranks.begin<size_type>(),
                      mutable_ranks.end<size_type>(),
                      rank_equality_functor<decltype(device_comparator), value_resolver>(
@@ -95,7 +84,7 @@ std::unique_ptr<column> rank_generator(column_view const& order_by,
     comparator_helper(device_comparator);
   }
 
-  thrust::inclusive_scan(rmm::exec_policy(stream),
+  thrust::inclusive_scan(rmm::exec_policy_nosync(stream),
                          mutable_ranks.begin<size_type>(),
                          mutable_ranks.end<size_type>(),
                          mutable_ranks.begin<size_type>(),
@@ -143,7 +132,7 @@ std::unique_ptr<column> inclusive_one_normalized_percent_rank_scan(
   auto percent_rank_result = cudf::make_fixed_width_column(
     data_type{type_to_id<result_type>()}, rank_view.size(), mask_state::UNALLOCATED, stream, mr);
 
-  thrust::transform(rmm::exec_policy(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream),
                     rank_view.begin<size_type>(),
                     rank_view.end<size_type>(),
                     percent_rank_result->mutable_view().begin<result_type>(),

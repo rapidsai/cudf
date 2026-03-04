@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf/column/column.hpp>
@@ -21,7 +10,6 @@
 #include <cudf/detail/gather.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/repeat.hpp>
-#include <cudf/detail/utilities/functional.hpp>
 #include <cudf/filling.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/table/table.hpp>
@@ -37,8 +25,6 @@
 
 #include <cuda/functional>
 #include <thrust/binary_search.h>
-#include <thrust/functional.h>
-#include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_output_iterator.h>
 #include <thrust/reduce.h>
@@ -53,7 +39,8 @@ struct count_accessor {
   cudf::scalar const* p_scalar = nullptr;
 
   template <typename T>
-  std::enable_if_t<std::is_integral_v<T>, cudf::size_type> operator()(rmm::cuda_stream_view stream)
+  cudf::size_type operator()(rmm::cuda_stream_view stream)
+    requires(std::is_integral_v<T>)
   {
     using ScalarType = cudf::scalar_type_t<T>;
     auto p_count     = static_cast<ScalarType const*>(this->p_scalar);
@@ -66,7 +53,8 @@ struct count_accessor {
   }
 
   template <typename T>
-  std::enable_if_t<not std::is_integral_v<T>, cudf::size_type> operator()(rmm::cuda_stream_view)
+  cudf::size_type operator()(rmm::cuda_stream_view)
+    requires(not std::is_integral_v<T>)
   {
     CUDF_FAIL("count value should be a integral type.");
   }
@@ -76,13 +64,14 @@ struct count_checker {
   cudf::column_view const& count;
 
   template <typename T>
-  std::enable_if_t<std::is_integral_v<T>, void> operator()(rmm::cuda_stream_view stream)
+  void operator()(rmm::cuda_stream_view stream)
+    requires(std::is_integral_v<T>)
   {
     // static_cast is necessary due to bool
     if (static_cast<int64_t>(std::numeric_limits<T>::max()) >
         std::numeric_limits<cudf::size_type>::max()) {
       auto max = thrust::reduce(
-        rmm::exec_policy(stream), count.begin<T>(), count.end<T>(), 0, cudf::detail::maximum<T>());
+        rmm::exec_policy_nosync(stream), count.begin<T>(), count.end<T>(), 0, cuda::maximum<T>());
       CUDF_EXPECTS(max <= std::numeric_limits<cudf::size_type>::max(),
                    "count exceeds the column size limit",
                    std::overflow_error);
@@ -90,7 +79,8 @@ struct count_checker {
   }
 
   template <typename T>
-  std::enable_if_t<not std::is_integral_v<T>, void> operator()(rmm::cuda_stream_view)
+  void operator()(rmm::cuda_stream_view)
+    requires(not std::is_integral_v<T>)
   {
     CUDF_FAIL("count value type should be integral.");
   }
@@ -114,11 +104,11 @@ std::unique_ptr<table> repeat(table_view const& input_table,
 
   rmm::device_uvector<cudf::size_type> offsets(count.size(), stream);
   thrust::inclusive_scan(
-    rmm::exec_policy(stream), count_iter, count_iter + count.size(), offsets.begin());
+    rmm::exec_policy_nosync(stream), count_iter, count_iter + count.size(), offsets.begin());
 
   size_type output_size{offsets.back_element(stream)};
   rmm::device_uvector<size_type> indices(output_size, stream);
-  thrust::upper_bound(rmm::exec_policy(stream),
+  thrust::upper_bound(rmm::exec_policy_nosync(stream),
                       offsets.begin(),
                       offsets.end(),
                       thrust::make_counting_iterator(0),

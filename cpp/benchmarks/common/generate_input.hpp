@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
@@ -155,11 +144,14 @@ struct distribution_params<T, std::enable_if_t<cudf::is_chrono<T>()>> {
 };
 
 /**
- * @brief Strings are parameterized by the distribution of their length, as an integral value.
+ * @brief Strings are parameterized by the distribution of their length and character range.
  */
 template <typename T>
 struct distribution_params<T, std::enable_if_t<std::is_same_v<T, cudf::string_view>>> {
   distribution_params<uint32_t> length_params;
+  unsigned char char_lower = 32;   ///< Lower bound of character range (inclusive)
+  unsigned char char_upper = 137;  ///< Upper bound of character range (inclusive), >126 produces
+                                   ///< UTF-8
 };
 
 /**
@@ -238,8 +230,11 @@ class data_profile {
 
   double bool_probability_true           = 0.5;
   std::optional<double> null_probability = 0.01;
-  cudf::size_type cardinality            = 2000;
-  cudf::size_type avg_run_length         = 4;
+  cudf::size_type cardinality =
+    2000;  /// Upper bound on the number of unique values generated if `0 <= cardinality < n`, where
+           /// `n` is the total number of values to be generated. If `cardinality >= n`, n` unique
+           /// values of the requested data type are generated.
+  cudf::size_type avg_run_length = 4;
 
  public:
   template <typename T,
@@ -437,6 +432,13 @@ class data_profile {
       "Cannot include STRUCT as its own subtype");
     struct_dist_desc.leaf_types.assign(types.begin(), types.end());
   }
+
+  void set_string_char_range(unsigned char lower, unsigned char upper)
+  {
+    CUDF_EXPECTS(lower <= upper, "Lower bound must be <= upper bound");
+    string_dist_desc.char_lower = lower;
+    string_dist_desc.char_upper = upper;
+  }
 };
 
 /**
@@ -446,14 +448,14 @@ class data_profile {
  * For example, `data_profile` initialization
  * @code{.pseudo}
  * data_profile profile;
- * profile.set_null_probability(0.0);
+ * profile.set_null_probability(0.01);
  * profile.set_cardinality(0);
  * profile.set_distribution_params(cudf::type_id::INT32, distribution_id::UNIFORM, 0, 100);
  * @endcode
  * becomes
  * @code{.pseudo}
  * data_profile const profile =
- *   data_profile_builder().cardinality(0).null_probability(0.0).distribution(
+ *   data_profile_builder().cardinality(0).null_probability(0.01).distribution(
  *     cudf::type_id::INT32, distribution_id::UNIFORM, 0, 100);
  * @endcode
  * The builder makes it easier to have immutable `data_profile` objects even with the complex
@@ -462,7 +464,7 @@ class data_profile {
  *
  * The builder API also includes a few additional convenience setters:
  * Overload of `distribution` that only takes the distribution type (not the range).
- * `no_validity`, which is a simpler equivalent of `null_probability(std::nullopr)`.
+ * `no_validity`, which is a simpler equivalent of `null_probability(std::nullopt)`.
  */
 class data_profile_builder {
   data_profile profile;
@@ -610,6 +612,22 @@ class data_profile_builder {
   }
 
   /**
+   * @brief Sets the character range for generated strings.
+   *
+   * Characters are uniformly distributed in the range [lower, upper].
+   * Values > 126 will produce multi-byte UTF-8 characters.
+   *
+   * @param lower Lower bound of character range (inclusive, must be >= 32)
+   * @param upper Upper bound of character range (inclusive)
+   * @return this for chaining
+   */
+  data_profile_builder& string_char_range(unsigned char lower, unsigned char upper)
+  {
+    profile.set_string_char_range(lower, upper);
+    return *this;
+  }
+
+  /**
    * @brief move data_profile member once it's built.
    */
   operator data_profile&&() { return std::move(profile); }
@@ -681,6 +699,17 @@ std::unique_ptr<cudf::column> create_random_column(cudf::type_id dtype_id,
 std::unique_ptr<cudf::column> create_string_column(cudf::size_type num_rows,
                                                    cudf::size_type row_width,
                                                    int32_t hit_rate);
+
+/**
+ * @brief Generates an string column filled with ASCII characters only
+ *
+ * @param num_rows Number of rows in the output column
+ * @param profile Data profile for the output column
+ * @param seed Optional, seed for the pseudo-random engine
+ */
+std::unique_ptr<cudf::column> create_ascii_string_column(cudf::size_type num_rows,
+                                                         data_profile const& profile,
+                                                         unsigned seed = 1);
 
 /**
  * @brief Generate sequence columns starting with value 0 in first row and increasing by 1 in

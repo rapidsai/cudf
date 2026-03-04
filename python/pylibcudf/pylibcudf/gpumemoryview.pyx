@@ -1,4 +1,5 @@
-# Copyright (c) 2023-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 from libc.stddef cimport size_t
 import functools
@@ -71,6 +72,15 @@ cdef class gpumemoryview:
     @property
     def __cuda_array_interface__(self):
         return self.cai
+
+    @property
+    def size(self) -> int:
+        """
+        Size of the memory region in bytes (Span protocol).
+
+        This is an alias for nbytes to satisfy the Span protocol.
+        """
+        return self.nbytes
 
     def __len__(self):
         return self.obj.__cuda_array_interface__["shape"][0]

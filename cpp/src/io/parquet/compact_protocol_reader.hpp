@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
@@ -20,6 +9,8 @@
 
 #include <cudf/io/parquet_schema.hpp>
 #include <cudf/utilities/export.hpp>
+
+#include <cuda/std/bit>
 
 #include <algorithm>
 #include <cstddef>
@@ -131,8 +122,7 @@ class CompactProtocolReader {
  public:
   static inline constexpr int NumRequiredBits(uint32_t max_level) noexcept
   {
-    // TODO: Use `std::countl_zero` instead of `__builtin_clz` once we migrate to C++20
-    return max_level > 0 ? 32 - __builtin_clz(max_level) : 0;
+    return 32 - cuda::std::countl_zero(max_level);
   }
   bool InitSchema(FileMetaData* md);
 
@@ -153,6 +143,8 @@ class CompactProtocolReader {
   friend class parquet_field_binary;
   friend class parquet_field_binary_list;
   friend class parquet_field_struct_blob;
+  template <typename T>
+  friend class parquet_field_struct_list;
 };
 
 }  // namespace io::parquet::detail

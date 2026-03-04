@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -9,7 +9,11 @@ import pytest
 
 import polars as pl
 
-from cudf_polars.testing.asserts import DEFAULT_SCHEDULER, assert_gpu_result_equal
+from cudf_polars.testing.asserts import (
+    DEFAULT_CLUSTER,
+    DEFAULT_RUNTIME,
+    assert_gpu_result_equal,
+)
 
 
 @pytest.fixture(scope="module")
@@ -19,7 +23,8 @@ def engine():
         executor="streaming",
         executor_options={
             "max_rows_per_partition": 4,
-            "scheduler": DEFAULT_SCHEDULER,
+            "cluster": DEFAULT_CLUSTER,
+            "runtime": DEFAULT_RUNTIME,
         },
     )
 
@@ -29,6 +34,7 @@ def df():
     return pl.LazyFrame(
         {
             "x": range(150),
+            "xx": list(range(75)) * 2,
             "y": [1, 2, 3] * 50,
             "z": [1.0, 2.0, 3.0, 4.0, 5.0] * 30,
         }
@@ -53,7 +59,8 @@ def test_groupby_single_partitions(df, op, keys):
             executor="streaming",
             executor_options={
                 "max_rows_per_partition": int(1e9),
-                "scheduler": DEFAULT_SCHEDULER,
+                "cluster": DEFAULT_CLUSTER,
+                "runtime": DEFAULT_RUNTIME,
             },
         ),
         check_row_order=False,
@@ -66,8 +73,6 @@ def test_groupby_single_partitions(df, op, keys):
 @pytest.mark.parametrize("keys", [("y",), ("y", "z")])
 def test_groupby_agg(df, engine, op, keys):
     agg = getattr(pl.col("x"), op)()
-    if op == "n_unique":
-        agg = agg.cast(pl.Int64)
     q = df.group_by(*keys).agg(agg)
     assert_gpu_result_equal(q, engine=engine, check_row_order=False)
 
@@ -81,11 +86,12 @@ def test_groupby_agg_config_options(df, op, keys):
         executor_options={
             "max_rows_per_partition": 4,
             # Trigger shuffle-based groupby
-            "cardinality_factor": {"z": 0.5},
+            "unique_fraction": {"z": 0.5},
             # Check that we can change the n-ary factor
             "groupby_n_ary": 8,
-            "scheduler": DEFAULT_SCHEDULER,
-            "shuffle_method": "tasks",
+            "cluster": DEFAULT_CLUSTER,
+            "runtime": DEFAULT_RUNTIME,
+            "shuffle_method": DEFAULT_RUNTIME,  # Names coincide
         },
     )
     agg = getattr(pl.col("x"), op)()
@@ -103,7 +109,8 @@ def test_groupby_fallback(df, engine, fallback_mode):
         executor_options={
             "fallback_mode": fallback_mode,
             "max_rows_per_partition": 4,
-            "scheduler": DEFAULT_SCHEDULER,
+            "cluster": DEFAULT_CLUSTER,
+            "runtime": DEFAULT_RUNTIME,
         },
     )
     match = "Failed to decompose groupby aggs"
@@ -113,7 +120,10 @@ def test_groupby_fallback(df, engine, fallback_mode):
     if fallback_mode == "silent":
         ctx = contextlib.nullcontext()
     elif fallback_mode == "raise":
-        ctx = pytest.raises(pl.exceptions.ComputeError, match=match)
+        ctx = pytest.raises(
+            NotImplementedError,
+            match=match,
+        )
     elif fallback_mode == "foo":
         ctx = pytest.raises(
             pl.exceptions.ComputeError,
@@ -170,3 +180,84 @@ def test_groupby_agg_duplicate(
 def test_groupby_agg_empty(df: pl.LazyFrame, engine: pl.GPUEngine) -> None:
     q = df.group_by("y").agg()
     assert_gpu_result_equal(q, engine=engine, check_row_order=False)
+
+
+@pytest.mark.parametrize("zlice", [(0, 2), (2, 2), (-2, None)])
+def test_groupby_then_slice(
+    df: pl.LazyFrame, engine: pl.GPUEngine, zlice: tuple[int, int]
+) -> None:
+    df = pl.LazyFrame(
+        {
+            "x": [0, 1, 2, 3] * 2,
+            "y": [1, 2, 1, 2] * 2,
+        }
+    )
+    q = df.group_by("y", maintain_order=True).max().slice(*zlice)
+    assert_gpu_result_equal(q, engine=engine)
+
+
+def test_groupby_on_equality(df: pl.LazyFrame, engine: pl.GPUEngine) -> None:
+    # See: https://github.com/rapidsai/cudf/issues/19152
+    df = pl.LazyFrame(
+        {
+            "key1": [1, 1, 1, 2, 3, 1, 4, 6, 7],
+            "key2": [2, 2, 2, 2, 6, 1, 4, 6, 8],
+            "int32": pl.Series([1, 2, 3, 4, 5, 6, 7, 8, 9], dtype=pl.Int32()),
+        }
+    )
+    q = df.group_by(pl.col("key1") == pl.col("key2")).agg(pl.col("int32").sum())
+    assert_gpu_result_equal(q, engine=engine, check_row_order=False)
+
+
+@pytest.mark.parametrize(
+    "values",
+    [
+        [1, None, 2, None],
+        [1, None, None, None],
+    ],
+)
+def test_mean_partitioned(values: list[int | None]) -> None:
+    df = pl.LazyFrame(
+        {
+            "key1": [1, 1, 2, 2],
+            "uint16_with_null": pl.Series(values, dtype=pl.UInt16()),
+        }
+    )
+
+    q = df.group_by("key1").agg(pl.col("uint16_with_null").mean())
+    assert_gpu_result_equal(
+        q,
+        engine=pl.GPUEngine(
+            executor="streaming",
+            executor_options={
+                "max_rows_per_partition": 2,
+                "cluster": DEFAULT_CLUSTER,
+                "runtime": DEFAULT_RUNTIME,
+            },
+        ),
+        check_row_order=False,
+    )
+
+
+def test_groupby_literal_with_stats_planning(df):
+    engine = pl.GPUEngine(
+        raise_on_fail=True,
+        executor="streaming",
+        executor_options={
+            "max_rows_per_partition": 4,
+            "cluster": DEFAULT_CLUSTER,
+            "runtime": DEFAULT_RUNTIME,
+            "stats_planning": {"use_reduction_planning": True},
+        },
+    )
+
+    q = (
+        df.group_by(
+            pl.lit(True).alias("key"),  # noqa: FBT003
+            maintain_order=False,
+        )
+        .agg(pl.col("x").sum())
+        .drop("key")
+    )
+
+    assert_gpu_result_equal(q, engine=engine)

@@ -1,29 +1,19 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/algorithms/reduce.cuh>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/row_operator/equality.cuh>
 #include <cudf/detail/search.hpp>
 #include <cudf/dictionary/detail/search.hpp>
 #include <cudf/dictionary/detail/update_keys.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/scalar/scalar_device_view.cuh>
 #include <cudf/search.hpp>
-#include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
@@ -33,8 +23,6 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <thrust/count.h>
-#include <thrust/pair.h>
 #include <thrust/transform.h>
 
 namespace cudf {
@@ -82,11 +70,14 @@ struct contains_scalar_dispatch {
       d_haystack->optional_begin<DType>(cudf::nullate::DYNAMIC{haystack.has_nulls()});
     auto const end = d_haystack->optional_end<DType>(cudf::nullate::DYNAMIC{haystack.has_nulls()});
 
-    return thrust::count_if(
-             rmm::exec_policy(stream), begin, end, [d_needle] __device__(auto const val_pair) {
+    return cudf::detail::count_if(
+             begin,
+             end,
+             [d_needle] __device__(auto const val_pair) {
                auto needle = get_scalar_value<Element>(d_needle);
                return val_pair.has_value() && (needle == *val_pair);
-             }) > 0;
+             },
+             stream) > 0;
   }
 
   template <typename Element>
@@ -108,11 +99,11 @@ struct contains_scalar_dispatch {
     auto const has_nulls     = has_nested_nulls(haystack_tv) || has_nested_nulls(needle_tv);
 
     auto const comparator =
-      cudf::experimental::row::equality::two_table_comparator(haystack_tv, needle_tv, stream);
+      cudf::detail::row::equality::two_table_comparator(haystack_tv, needle_tv, stream);
 
-    auto const begin = cudf::experimental::row::lhs_iterator(0);
+    auto const begin = cudf::detail::row::lhs_iterator(0);
     auto const end   = begin + haystack.size();
-    using cudf::experimental::row::rhs_index_type;
+    using cudf::detail::row::rhs_index_type;
 
     auto const check_nulls      = haystack.has_nulls();
     auto const haystack_cdv_ptr = column_device_view::create(haystack, stream);
@@ -124,7 +115,7 @@ struct contains_scalar_dispatch {
     // runtime performance over using the comparator in a transform iterator with thrust::count_if.
     auto d_results = rmm::device_uvector<bool>(haystack.size(), stream);
     thrust::transform(
-      rmm::exec_policy(stream),
+      rmm::exec_policy_nosync(stream),
       begin,
       end,
       d_results.begin(),
@@ -135,7 +126,8 @@ struct contains_scalar_dispatch {
         return d_comp(idx, rhs_index_type{0});  // compare haystack[idx] == needle[0].
       });
 
-    return thrust::count(rmm::exec_policy(stream), d_results.begin(), d_results.end(), true) > 0;
+    return thrust::count(
+             rmm::exec_policy_nosync(stream), d_results.begin(), d_results.end(), true) > 0;
   }
 };
 
