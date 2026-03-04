@@ -144,15 +144,49 @@ std::reference_wrapper<ast::expression const> stats_expression_converter::visit(
         return *_always_true;
       }
     } else {
-      // For all other expression forms, visit operand and push expression
-      auto new_operands = visit_operands(expr.get_operands());
-      if (&new_operands.front().get() == _always_true.get()) {
-        // Pass through the _always_true child operand as is
-        _stats_expr.push(ast::operation{ast_operator::IDENTITY, _stats_expr.back()});
-        return *_always_true;
+      // Special handling for the NOT operator since is necessary as stats transforms use different
+      // columns (vmin, vmax, is_null) for different operators such that NOT(col < val) is not
+      // equivalent to NOT(vmin < val) and instead is equivalent to vmax >= val.
+      if (input_op == ast_operator::NOT) {
+        auto const* child_operation =
+          dynamic_cast<ast::operation const*>(&expr.get_operands().front().get());
+        if (child_operation != nullptr) {
+          auto const child_op = child_operation->get_operator();
+
+          // If the child operator is IS_NULL, we can safely NULL it without any modifications
+          if (child_op == ast_operator::IS_NULL) {
+            auto new_operands = visit_operands(expr.get_operands());
+            if (&new_operands.front().get() == _always_true.get()) {
+              _stats_expr.push(ast::operation{ast_operator::IDENTITY, _stats_expr.back()});
+              return *_always_true;
+            } else {
+              _stats_expr.push(ast::operation{ast_operator::NOT, new_operands.front()});
+              return _stats_expr.back();
+            }
+          }  // Binary operation wrapped
+          else if (cudf::ast::detail::ast_operator_arity(child_op) == 2) {
+            auto const binary_operands = extract_binary_operands(*child_operation);
+            auto const lhs_kind        = binary_operands.lhs_type;
+            auto const rhs_kind        = binary_operands.rhs_type;
+
+            // For NOT(col op lit) negate the operator if negatable and visit the negated operation
+            // directly
+            if (lhs_kind == operand_kind::COLUMN_REF and rhs_kind == operand_kind::LITERAL) {
+              auto const negated_op = transform_operator(child_op, operator_transform::NEGATE);
+              if (negated_op.has_value()) {
+                auto const& child_operands = child_operation->get_operands();
+                return visit(
+                  ast::operation{*negated_op, child_operands.front(), child_operands.back()});
+              }
+            }
+          }
+        }
       }
-      _stats_expr.push(ast::operation{input_op, new_operands.front()});
-      return _stats_expr.back();
+      // For all other unsafe NOT forms such as NOT(expr AND expr) as well as all other unary
+      // operators applied to expressions such as ABS(expr), conservatively degrade to always_true
+      std::ignore = visit_operands(expr.get_operands());
+      _stats_expr.push(ast::operation{ast_operator::IDENTITY, *_always_true});
+      return *_always_true;
     }
   }
 
@@ -169,12 +203,12 @@ std::reference_wrapper<ast::expression const> stats_expression_converter::visit(
 
     switch (op) {
       /* transform to stats conditions
-      col1 == val --> vmin <= val && vmax >= val
-      col1 != val --> !(vmin == val && vmax == val)
-      col1 >  val --> vmax > val
-      col1 <  val --> vmin < val
-      col1 >= val --> vmax >= val
-      col1 <= val --> vmin <= val
+      col == val --> vmin <= val && vmax >= val
+      col != val --> !(vmin == val && vmax == val)
+      col >  val --> vmax > val
+      col <  val --> vmin < val
+      col >= val --> vmax >= val
+      col <= val --> vmin <= val
       */
       case ast_operator::EQUAL: {
         auto const& vmin =

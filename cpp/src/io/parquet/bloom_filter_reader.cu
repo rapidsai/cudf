@@ -234,6 +234,7 @@ class bloom_filter_expression_converter : public equality_literals_collector {
         _bloom_filter_expr.push(ast::operation{ast_operator::IDENTITY, value});
       } else {
         _bloom_filter_expr.push(ast::operation{ast_operator::IDENTITY, *_always_true});
+        return *_always_true;
       }
     }  // Visit operands and push expression for `expr op expr` form
     else if (lhs_kind == operand_kind::EXPRESSION and rhs_kind == operand_kind::EXPRESSION) {
@@ -242,6 +243,7 @@ class bloom_filter_expression_converter : public equality_literals_collector {
     }  // Push _always_true for `col op col`, `expr op col`, `expr op lit` forms
     else {
       _bloom_filter_expr.push(ast::operation{ast_operator::IDENTITY, *_always_true});
+      return *_always_true;
     }
 
     return _bloom_filter_expr.back();

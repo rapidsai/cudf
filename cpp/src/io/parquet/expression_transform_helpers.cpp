@@ -21,23 +21,6 @@ namespace cudf::io::parquet::detail {
 namespace {
 
 /**
- * @brief Inverts the non-commutative comparison operator
- *
- * @param op Operator to invert
- * @return Inverted operator
- */
-ast::ast_operator invert_non_commutative_operator(ast::ast_operator op)
-{
-  switch (op) {
-    case ast::ast_operator::LESS: return ast::ast_operator::GREATER;
-    case ast::ast_operator::GREATER: return ast::ast_operator::LESS;
-    case ast::ast_operator::LESS_EQUAL: return ast::ast_operator::GREATER_EQUAL;
-    case ast::ast_operator::GREATER_EQUAL: return ast::ast_operator::LESS_EQUAL;
-    default: return op;
-  }
-}
-
-/**
  * @brief Classifies an AST operand as column reference, literal, or expression
  *
  * @param operand AST operand to classify
@@ -57,6 +40,31 @@ ast::ast_operator invert_non_commutative_operator(ast::ast_operator op)
 }
 
 }  // namespace
+
+std::optional<ast::ast_operator> transform_operator(ast::ast_operator op, operator_transform mode)
+{
+  switch (op) {
+    case ast::ast_operator::LESS:
+      return mode == operator_transform::INVERT ? ast::ast_operator::GREATER
+                                                : ast::ast_operator::GREATER_EQUAL;
+    case ast::ast_operator::GREATER:
+      return mode == operator_transform::INVERT ? ast::ast_operator::LESS
+                                                : ast::ast_operator::LESS_EQUAL;
+    case ast::ast_operator::LESS_EQUAL:
+      return mode == operator_transform::INVERT ? ast::ast_operator::GREATER_EQUAL
+                                                : ast::ast_operator::GREATER;
+    case ast::ast_operator::GREATER_EQUAL:
+      return mode == operator_transform::INVERT ? ast::ast_operator::LESS_EQUAL
+                                                : ast::ast_operator::LESS;
+    case ast::ast_operator::EQUAL:
+      return mode == operator_transform::INVERT ? ast::ast_operator::EQUAL
+                                                : ast::ast_operator::NOT_EQUAL;
+    case ast::ast_operator::NOT_EQUAL:
+      return mode == operator_transform::INVERT ? ast::ast_operator::NOT_EQUAL
+                                                : ast::ast_operator::EQUAL;
+    default: return std::nullopt;
+  }
+}
 
 unary_operand extract_unary_operand(ast::operation const& expr)
 {
@@ -82,7 +90,7 @@ binary_operands extract_binary_operands(ast::operation const& expr)
 
   // Normalize `lit op col` to `col op lit` by inverting the operator
   if (lhs_kind == operand_kind::LITERAL and rhs_kind == operand_kind::COLUMN_REF) {
-    return {.op       = invert_non_commutative_operator(op),
+    return {.op       = transform_operator(op, operator_transform::INVERT).value_or(op),
             .lhs_type = rhs_kind,
             .rhs_type = lhs_kind,
             .col_ref  = dynamic_cast<ast::column_reference const*>(&rhs),
@@ -193,7 +201,10 @@ std::reference_wrapper<ast::expression const> names_from_expression::visit(
   ast::column_reference const& expr)
 {
   // Map the column index to its name
-  auto const col_name = _column_indices_to_names.at(expr.get_column_index());
+  auto const col_name_iter = _column_indices_to_names.find(expr.get_column_index());
+  CUDF_EXPECTS(col_name_iter != _column_indices_to_names.end(),
+               "Column index not found in column indices to names map");
+  auto const col_name = col_name_iter->second;
   // If the column name is not in the skip_names, add it to the set
   if (_skip_names.count(col_name) == 0) { _column_names.insert(col_name); }
   return expr;

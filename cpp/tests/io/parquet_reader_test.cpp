@@ -1533,13 +1533,13 @@ TEST_F(ParquetReaderTest, FilterWithColumnProjection)
       auto read_opts = cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath})
                          .column_names({"col_double", "col_uint32"})
                          .filter(read_ref_expr);
-      EXPECT_ANY_THROW(cudf::io::read_parquet(read_opts));
+      EXPECT_THROW(cudf::io::read_parquet(read_opts), cudf::logic_error);
 
       // Repeat but select columns using indices instead of names
       read_opts = cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath})
                     .column_indices({2, 0})
                     .filter(read_ref_expr);
-      EXPECT_ANY_THROW(cudf::io::read_parquet(read_opts));
+      EXPECT_THROW(cudf::io::read_parquet(read_opts), cudf::logic_error);
     }
   }
 }
@@ -3113,9 +3113,9 @@ TYPED_TEST(ParquetReaderSourceTest, BufferSourceArrayTypes)
 
 // Test for Types - numeric, chrono, string.
 template <typename T>
-struct ParquetReaderPredicatePushdownTest : public ParquetReaderTest {};
+struct ParquetPredicatePushdownTest : public ParquetReaderTest {};
 
-TYPED_TEST_SUITE(ParquetReaderPredicatePushdownTest, SupportedTestTypes);
+TYPED_TEST_SUITE(ParquetPredicatePushdownTest, SupportedTestTypes);
 
 template <typename T, bool use_jit>
 void filter_typed_test()
@@ -3368,12 +3368,14 @@ void filter_unary_operation_typed_test()
       }
     }();
 
-    auto const literal = cudf::ast::literal(literal_value);
-    auto const expr1   = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_name_0, literal);
-    auto const expr2   = cudf::ast::operation(cudf::ast::ast_operator::IS_NULL, col_name_0);
+    auto const literal   = cudf::ast::literal(literal_value);
+    auto const expr1     = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_name_0, literal);
+    auto const not_expr1 = cudf::ast::operation(cudf::ast::ast_operator::NOT, expr1);
+    auto const expr2     = cudf::ast::operation(cudf::ast::ast_operator::IS_NULL, col_name_0);
 
     auto const ref_expr1 = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref_0, literal);
-    auto const ref_expr2 = cudf::ast::operation(cudf::ast::ast_operator::IS_NULL, col_ref_0);
+    auto const ref_not_expr1 = cudf::ast::operation(cudf::ast::ast_operator::NOT, ref_expr1);
+    auto const ref_expr2     = cudf::ast::operation(cudf::ast::ast_operator::IS_NULL, col_ref_0);
 
     // col0 < 100 AND IS_NULL(col0)
     auto filter_expression =
@@ -3386,10 +3388,13 @@ void filter_unary_operation_typed_test()
                             expected_total_row_groups,
                             expected_filtered_row_groups_with_unary_and);
 
-    // col0 < 100 OR IS_NULL(col0)
-    filter_expression = cudf::ast::operation(cudf::ast::ast_operator::LOGICAL_OR, expr1, expr2);
-    ref_filter = cudf::ast::operation(cudf::ast::ast_operator::LOGICAL_OR, ref_expr1, ref_expr2);
-    auto constexpr expected_filtered_row_groups_with_unary_or = 3;
+    // NOT(col0 < 100) OR IS_NULL(col0)
+    filter_expression = cudf::ast::operation(cudf::ast::ast_operator::LOGICAL_OR, not_expr1, expr2);
+    ref_filter =
+      cudf::ast::operation(cudf::ast::ast_operator::LOGICAL_OR, ref_not_expr1, ref_expr2);
+    // For signed numeric types, RGs 1,2,3 pass. Otherwise, RGs 2,3 pass
+    auto constexpr expected_filtered_row_groups_with_unary_or =
+      (cudf::is_numeric<T>() and cudf::is_signed<T>()) ? 3 : 2;
     test_predicate_pushdown(filter_expression,
                             ref_filter,
                             expected_total_row_groups,
@@ -3397,13 +3402,13 @@ void filter_unary_operation_typed_test()
   }
 }
 
-TYPED_TEST(ParquetReaderPredicatePushdownTest, FilterTyped)
+TYPED_TEST(ParquetPredicatePushdownTest, FilterTyped)
 {
   filter_typed_test<TypeParam, false>();
   filter_unary_operation_typed_test<TypeParam>();
 }
 
-TYPED_TEST(ParquetReaderPredicatePushdownTest, FilterTypedJIT)
+TYPED_TEST(ParquetPredicatePushdownTest, FilterTypedJIT)
 {
   filter_typed_test<TypeParam, true>();
   // JIT does not support nullness-dependent operators such as IS_NULL so we can't call

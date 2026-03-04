@@ -441,6 +441,81 @@ TEST_F(HybridScanFiltersTest, FilterRowGroupsWithComplexExpressions)
       input_row_group_indices, options, cudf::get_default_stream());
     EXPECT_EQ(stats_filtered.size(), 4);
   }
+
+  // Filter: NOT(col0 < 50)
+  // Negated to col0 >= 50, stats transform: vmax >= 50. Prunes RG0 (vmax=49).
+  {
+    auto literal_value = cudf::numeric_scalar<T>(50);
+    auto literal       = cudf::ast::literal(literal_value);
+    auto inner         = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref0, literal);
+    auto filter        = cudf::ast::operation(cudf::ast::ast_operator::NOT, inner);
+    options.set_filter(filter);
+    reader->reset_column_selection();
+
+    auto input_row_group_indices = reader->all_row_groups(options);
+    auto stats_filtered          = reader->filter_row_groups_with_stats(
+      input_row_group_indices, options, cudf::get_default_stream());
+    EXPECT_EQ(stats_filtered.size(), 3);
+    EXPECT_EQ(reader->total_rows_in_row_groups(stats_filtered), 3 * rows_per_row_group);
+  }
+
+  // Filter: NOT(col0 > 50)
+  // Negated to col0 <= 50, stats transform: vmin <= 50. Prunes RG2 and RG3.
+  {
+    auto literal_value = cudf::numeric_scalar<T>(50);
+    auto literal       = cudf::ast::literal(literal_value);
+    auto inner         = cudf::ast::operation(cudf::ast::ast_operator::GREATER, col_ref0, literal);
+    auto filter        = cudf::ast::operation(cudf::ast::ast_operator::NOT, inner);
+    options.set_filter(filter);
+    reader->reset_column_selection();
+
+    auto input_row_group_indices = reader->all_row_groups(options);
+    auto stats_filtered          = reader->filter_row_groups_with_stats(
+      input_row_group_indices, options, cudf::get_default_stream());
+    EXPECT_EQ(stats_filtered.size(), 2);
+    EXPECT_EQ(reader->total_rows_in_row_groups(stats_filtered), 2 * rows_per_row_group);
+  }
+
+  // Filter: NOT(col0 > 50 AND col0 < 100)
+  // NOT over a compound expression (LOGICAL_AND) cannot be negated, degrades to always_true.
+  {
+    auto literal_50_value  = cudf::numeric_scalar<T>(50);
+    auto literal_50        = cudf::ast::literal(literal_50_value);
+    auto literal_100_value = cudf::numeric_scalar<T>(100);
+    auto literal_100       = cudf::ast::literal(literal_100_value);
+    auto gt_50  = cudf::ast::operation(cudf::ast::ast_operator::GREATER, col_ref0, literal_50);
+    auto lt_100 = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref0, literal_100);
+    auto inner  = cudf::ast::operation(cudf::ast::ast_operator::LOGICAL_AND, gt_50, lt_100);
+    auto filter = cudf::ast::operation(cudf::ast::ast_operator::NOT, inner);
+    options.set_filter(filter);
+    reader->reset_column_selection();
+
+    auto input_row_group_indices = reader->all_row_groups(options);
+    auto stats_filtered          = reader->filter_row_groups_with_stats(
+      input_row_group_indices, options, cudf::get_default_stream());
+    EXPECT_EQ(stats_filtered.size(), 4);
+  }
+
+  // Filter: NOT(NOT(col0 < 100) OR col0 > 150)
+  // Outer NOT wraps a compound expression (LOGICAL_OR), degrades to always_true.
+  {
+    auto literal_100_value = cudf::numeric_scalar<T>(100);
+    auto literal_100       = cudf::ast::literal(literal_100_value);
+    auto literal_150_value = cudf::numeric_scalar<T>(150);
+    auto literal_150       = cudf::ast::literal(literal_150_value);
+    auto lt_100 = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref0, literal_100);
+    auto not_lt = cudf::ast::operation(cudf::ast::ast_operator::NOT, lt_100);
+    auto gt_150 = cudf::ast::operation(cudf::ast::ast_operator::GREATER, col_ref0, literal_150);
+    auto inner  = cudf::ast::operation(cudf::ast::ast_operator::LOGICAL_OR, not_lt, gt_150);
+    auto filter = cudf::ast::operation(cudf::ast::ast_operator::NOT, inner);
+    options.set_filter(filter);
+    reader->reset_column_selection();
+
+    auto input_row_group_indices = reader->all_row_groups(options);
+    auto stats_filtered          = reader->filter_row_groups_with_stats(
+      input_row_group_indices, options, cudf::get_default_stream());
+    EXPECT_EQ(stats_filtered.size(), 4);
+  }
 }
 
 TEST_F(HybridScanFiltersTest, FilterColumnSelection)

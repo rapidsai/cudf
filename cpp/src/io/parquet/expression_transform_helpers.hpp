@@ -58,6 +58,26 @@ struct binary_operands {
 [[nodiscard]] unary_operand extract_unary_operand(ast::operation const& expr);
 
 /**
+ * @brief Specifies how to transform a comparison operator
+ */
+enum class operator_transform : uint8_t {
+  INVERT,  ///< Swap operand sides: `a < b` becomes `b > a`
+  NEGATE   ///< Logical negation: `NOT(a < b)` becomes `a >= b`
+};
+
+/**
+ * @brief Applies the specified transformation to an operator
+ *
+ * INVERT swaps operand order (e.g. LESS => GREATER) for normalizing `lit op col` to `col op lit`.
+ * NEGATE returns the logical complement (e.g. LESS => GREATER_EQUAL) for handling NOT(col op lit).
+ *
+ * Returns std::nullopt if the operator cannot be transformed. For INVERT mode, commutative
+ * operators (EQUAL, NOT_EQUAL) are returned unchanged.
+ */
+[[nodiscard]] std::optional<ast::ast_operator> transform_operator(ast::ast_operator op,
+                                                                  operator_transform mode);
+
+/**
  * @brief Decomposes a binary operation into classified parts.
  *
  * When the expression is of the form `lit op col`, the operator is inverted and the result
