@@ -341,8 +341,9 @@ void reader_impl::setup_next_subpass(read_mode mode)
     h_spans.begin(), h_spans.end(), subpass.column_page_count.begin(), get_span_size{});
 
   // Set the page mask information for the subpass
-  set_subpass_page_mask();
-  _subpass_page_mask.host_to_device_async(_stream);
+  set_subpass_page_mask_span();
+  CUDF_EXPECTS(_subpass_page_mask, "Subpass page mask is not set");
+    _subpass_page_mask->host_to_device_async(_stream);
 
   // decompress the data pages in this subpass; also decompress the dictionary pages in this pass,
   // if this is the first subpass in the pass
@@ -351,7 +352,7 @@ void reader_impl::setup_next_subpass(read_mode mode)
       decompress_page_data(pass.chunks,
                            is_first_subpass ? pass.pages : host_span<PageInfo>{},
                            subpass.pages,
-                           _subpass_page_mask,
+                           subpass_page_mask_span(),
                            _stream,
                            _mr);
 
@@ -674,23 +675,23 @@ void reader_impl::compute_output_chunks_for_subpass()
     c_info, subpass.pages, subpass.skip_rows, subpass.num_rows, _output_chunk_read_limit, _stream);
 }
 
-void reader_impl::set_subpass_page_mask()
+void reader_impl::set_subpass_page_mask_span()
 {
   auto const& pass    = _pass_itm_data;
   auto const& subpass = pass->subpass;
 
   // Create a hostdevice vector to store the subpass page mask
-  _subpass_page_mask = cudf::detail::hostdevice_vector<bool>(subpass->pages.size(), _stream);
+  _subpass_page_mask = std::make_unique<cudf::detail::hostdevice_vector<bool>>(subpass->pages.size(), _stream);
 
   // Fill with all true if no pass level page mask is available
   if (_pass_page_mask.empty()) {
-    std::fill(_subpass_page_mask.begin(), _subpass_page_mask.end(), true);
+    std::fill(_subpass_page_mask->begin(), _subpass_page_mask->end(), true);
     return;
   }
 
   // If this is the only subpass, move the pass level page mask data as is
   if (subpass->single_subpass) {
-    std::move(_pass_page_mask.begin(), _pass_page_mask.end(), _subpass_page_mask.begin());
+    std::move(_pass_page_mask.begin(), _pass_page_mask.end(), _subpass_page_mask->begin());
     return;
   }
 
@@ -700,7 +701,7 @@ void reader_impl::set_subpass_page_mask()
                  host_page_src_index.begin(),
                  host_page_src_index.end(),
                  _pass_page_mask.begin(),
-                 _subpass_page_mask.begin());
+                 _subpass_page_mask->begin());
 }
 
 }  // namespace cudf::io::parquet::detail

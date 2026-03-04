@@ -56,7 +56,7 @@ class hostdevice_span {
                              void>* = nullptr>
   [[nodiscard]] operator cudf::device_span<U>() const noexcept
   {
-    return {_device_data, size()};
+    return cudf::device_span<U>(_device_data, size());
   }
 
   /**
