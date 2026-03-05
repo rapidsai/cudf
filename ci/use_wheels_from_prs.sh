@@ -8,7 +8,6 @@ source rapids-init-pip
 RAPIDS_PY_CUDA_SUFFIX=$(rapids-wheel-ctk-name-gen "${RAPIDS_CUDA_VERSION}")
 
 # download wheels, store the directories holding them in variables
-https://github.com/rapidsai/kvikio/pull/942/commits/b71d3beaca46a0ec8d54a948c1c9bca5e4359b53
 KVIKIO_COMMIT=b71d3beaca46a0ec8d54a948c1c9bca5e4359b53
 LIBKVIKIO_WHEELHOUSE=$(
   RAPIDS_PY_WHEEL_NAME="libkvikio_${RAPIDS_PY_CUDA_SUFFIX}" rapids-get-pr-artifact kvikio 942 cpp wheel "${KVIKIO_COMMIT}"
