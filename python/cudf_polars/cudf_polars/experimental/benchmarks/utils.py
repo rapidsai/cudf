@@ -635,9 +635,9 @@ def get_executor_options(
         executor_options["runtime"] = run_config.runtime
         executor_options["max_io_threads"] = run_config.max_io_threads
         executor_options["spill_to_pinned_memory"] = run_config.spill_to_pinned_memory
-        if run_config.dynamic_planning:
-            # Pass empty dict to enable with defaults; None means disabled
-            executor_options["dynamic_planning"] = {}
+        if not run_config.dynamic_planning:
+            # Disable dynamic planning
+            executor_options["dynamic_planning"] = None
 
     if (
         benchmark
@@ -1167,8 +1167,8 @@ def build_parser(num_queries: int = 22) -> argparse.ArgumentParser:
     parser.add_argument(
         "--dynamic-planning",
         action=argparse.BooleanOptionalAction,
-        default=False,
-        help="Enable dynamic shuffle planning (not yet implemented). ",
+        default=True,
+        help="Enable dynamic physical-plan generation. Only available for the 'rapidsmpf' runtime.",
     )
     parser.add_argument(
         "--max-io-threads",

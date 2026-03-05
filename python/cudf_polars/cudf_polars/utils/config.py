@@ -829,7 +829,9 @@ class StreamingExecutor:
     stats_planning: StatsPlanningOptions = dataclasses.field(
         default_factory=StatsPlanningOptions
     )
-    dynamic_planning: DynamicPlanningOptions | None = None
+    dynamic_planning: DynamicPlanningOptions | None = dataclasses.field(
+        default_factory=DynamicPlanningOptions
+    )
     max_io_threads: int = dataclasses.field(
         default_factory=_make_default_factory(
             f"{_env_prefix}__MAX_IO_THREADS", int, default=4
@@ -1219,12 +1221,10 @@ class ConfigOptions(Generic[ExecutorType]):
                 )
                 if user_dynamic_planning is None:
                     env_dynamic_planning = os.environ.get(
-                        "CUDF_POLARS__EXECUTOR__DYNAMIC_PLANNING", "0"
+                        "CUDF_POLARS__EXECUTOR__DYNAMIC_PLANNING", "1"
                     )
-                    if _bool_converter(env_dynamic_planning):
-                        user_executor_options["dynamic_planning"] = (
-                            DynamicPlanningOptions()
-                        )
+                    if not _bool_converter(env_dynamic_planning):
+                        user_executor_options["dynamic_planning"] = None
 
                 executor = StreamingExecutor(**user_executor_options)
             case _:  # pragma: no cover; Unreachable
