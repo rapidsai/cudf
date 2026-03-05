@@ -341,9 +341,7 @@ def _normalize_types_column(col: plc.Column) -> plc.Column:
     return _rebuild_column(col, normalized_children)
 
 
-def _wrap_and_validate(
-    col: plc.Column, dtype: DtypeObj
-) -> tuple[plc.Column, DtypeObj]:
+def _wrap_and_validate(col: plc.Column, dtype: DtypeObj) -> plc.Column:
     type_id = col.type().id()
     dtype_kind = dtype.kind
     valid_types: set[plc.TypeId] = set()
@@ -351,9 +349,7 @@ def _wrap_and_validate(
     if is_dtype_obj_list(dtype):
         valid_types = {plc.TypeId.LIST}
         child_dtype = element_type_from_list_dtype(dtype)
-        values, values_dtype = _wrap_and_validate(
-            col.list_view().child(), child_dtype
-        )
+        values = _wrap_and_validate(col.list_view().child(), child_dtype)
         offsets = _wrap_column(col.list_view().offsets())
         wrapped = _rebuild_column(
             col,
@@ -361,10 +357,6 @@ def _wrap_and_validate(
             data_type=plc.DataType(plc.TypeId.LIST),
             wrap_buffers=True,
         )
-        if isinstance(dtype, ListDtype):
-            # values_dtype may have gotten normalized
-            # e.g. np.dtype(str), pd.DatetimeTZDtype
-            dtype = ListDtype(values_dtype)
     elif is_dtype_obj_interval(dtype):
         valid_types = {plc.TypeId.STRUCT}
         if col.num_children() != 2:
@@ -373,8 +365,7 @@ def _wrap_and_validate(
             )
         interval_subtype = subtype_from_interval_dtype(dtype)
         wrapped_children = [
-            # Discarding the returned subtype since we assume it cannot have changed
-            _wrap_and_validate(child, interval_subtype)[0]
+            _wrap_and_validate(child, interval_subtype)
             for side, child in zip(
                 ("Left", "Right"), col.children(), strict=True
             )
@@ -393,7 +384,7 @@ def _wrap_and_validate(
             col.children(), struct_fields.items(), strict=True
         ):
             try:
-                wrapped_child, _ = _wrap_and_validate(child, field_dtype)
+                wrapped_child = _wrap_and_validate(child, field_dtype)
             except ValueError as e:
                 raise ValueError(
                     f"Field '{field_name}' validation failed"
@@ -485,7 +476,7 @@ def _wrap_and_validate(
             f"{valid_types}. If normalization is required, please run the "
             "column through _normalize_types_column first."
         )
-    return wrapped, dtype
+    return wrapped
 
 
 class MaskCAIWrapper:
@@ -950,9 +941,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         like copy-on-write. When validation is disabled, the caller is responsible for
         ensuring that col and its children are already normalized and wrapped.
         """
-        wrapped, dtype = (
-            _wrap_and_validate(col, dtype) if validate else (col, dtype)
-        )
+        wrapped = _wrap_and_validate(col, dtype) if validate else col
         # Dispatch to the appropriate subclass based on dtype
         target_cls = ColumnBase._dispatch_subclass_from_dtype(dtype)
 
