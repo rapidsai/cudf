@@ -288,6 +288,7 @@ def _wrap_buffer_or_span(
 def _rebuild_column(
     col: plc.Column,
     children: list[plc.Column],
+    *,
     wrap_buffers: bool,
 ) -> plc.Column:
     data = col.data()
@@ -332,7 +333,7 @@ def _normalize_types_column(col: plc.Column) -> plc.Column:
     ):
         return col
 
-    return _rebuild_column(col, normalized_children, False)
+    return _rebuild_column(col, normalized_children, wrap_buffers=False)
 
 
 def _wrap_and_validate(col: plc.Column, dtype: DtypeObj) -> plc.Column:
