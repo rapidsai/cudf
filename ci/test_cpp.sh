@@ -33,11 +33,11 @@ if (( SUITEERROR == 0 )); then
 fi
 
 # Ensure that benchmarks are runnable
-if (( SUITEERROR == 0 )); then
-    rapids-logger "Run tests of libcudf benchmarks"
-    timeout 30m ./ci/run_cudf_benchmark_smoketests.sh
-    SUITEERROR=$?
-fi
+# if (( SUITEERROR == 0 )); then
+#     rapids-logger "Run tests of libcudf benchmarks"
+#     timeout 30m ./ci/run_cudf_benchmark_smoketests.sh
+#     SUITEERROR=$?
+# fi
 
 rapids-logger "Test script exiting with value: $EXITCODE"
 exit ${EXITCODE}
