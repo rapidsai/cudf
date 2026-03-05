@@ -684,3 +684,26 @@ TEST_F(PackUnpackTest, MetadataViewRejectsCorruptedChildCount)
 
   EXPECT_THROW(cudf::packed_metadata_view{corrupted}, cudf::logic_error);
 }
+
+TEST_F(PackUnpackTest, MetadataViewColumnIndexOutOfRange)
+{
+  cudf::test::fixed_width_column_wrapper<int> col{1, 2, 3};
+  auto packed = cudf::pack(cudf::table_view({col}));
+  auto view   = cudf::packed_metadata_view(*packed.metadata);
+
+  EXPECT_THROW(std::ignore = view.column(-1), std::out_of_range);
+  EXPECT_THROW(std::ignore = view.column(view.num_columns()), std::out_of_range);
+}
+
+TEST_F(PackUnpackTest, MetadataViewChildIndexOutOfRange)
+{
+  cudf::test::fixed_width_column_wrapper<int> ints{1, 2, 3};
+  cudf::test::fixed_width_column_wrapper<float> floats{4.0f, 5.0f, 6.0f};
+  auto struct_col = cudf::test::structs_column_wrapper({ints, floats});
+  auto packed     = cudf::pack(cudf::table_view({struct_col}));
+  auto view       = cudf::packed_metadata_view(*packed.metadata);
+  auto col_meta   = view.column(0);
+
+  EXPECT_THROW(std::ignore = col_meta.child(-1), std::out_of_range);
+  EXPECT_THROW(std::ignore = col_meta.child(col_meta.num_children()), std::out_of_range);
+}
