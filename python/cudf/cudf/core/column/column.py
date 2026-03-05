@@ -441,6 +441,8 @@ def _wrap_and_validate(col: plc.Column, dtype: DtypeObj) -> plc.Column:
             plc.TypeId.FLOAT64,
             plc.TypeId.BOOL8,
         }
+    else:
+        raise TypeError(f"Unsupported dtype {dtype}.")
     wrapped = _rebuild_column(col, children, wrap_buffers=True)
     if dtype_to_pylibcudf_type(dtype) != wrapped.type():
         raise ValueError(
