@@ -2361,19 +2361,15 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     def as_decimal_column(self, dtype: DecimalDtype) -> DecimalBaseColumn:
         raise NotImplementedError()
 
-    _apply_boolean_mask = PylibcudfFunction(
-        plc.stream_compaction.apply_boolean_mask,
-        same_dtype_policy,
-        result_index=0,
-    )
-
     def apply_boolean_mask(self, mask: ColumnBase) -> ColumnBase:
         if mask.dtype.kind != "b":
             raise ValueError("boolean_mask is not boolean type.")
 
-        return self._apply_boolean_mask.execute_with_args(
-            ColumnList(self), mask
-        )
+        return PylibcudfFunction(
+            plc.stream_compaction.apply_boolean_mask,
+            same_dtype_policy,
+            result_index=0,
+        ).execute_with_args(ColumnList(self), mask)
 
     def argsort(
         self,

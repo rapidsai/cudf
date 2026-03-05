@@ -61,16 +61,13 @@ if TYPE_CHECKING:
 _DEFAULT_CATEGORICAL_VALUE = np.int8(-1)
 
 
-_sort_column_fn = PylibcudfFunction(
-    plc.sorting.sort,
-    same_dtype_policy,
-    result_index=0,
-)
-
-
 def _sort_column(col: ColumnBase) -> ColumnBase:
     """Sort a column in ascending order with nulls after."""
-    return _sort_column_fn.execute_with_args(
+    return PylibcudfFunction(
+        plc.sorting.sort,
+        same_dtype_policy,
+        result_index=0,
+    ).execute_with_args(
         ColumnList(col),
         column_order=[plc.types.Order.ASCENDING],
         null_precedence=[plc.types.NullOrder.AFTER],
