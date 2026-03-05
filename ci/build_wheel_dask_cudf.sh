@@ -6,6 +6,9 @@ set -euo pipefail
 
 source rapids-init-pip
 
+# TODO(jameslamb): revert before merging
+source ci/use_wheels_from_prs.sh
+
 package_dir="python/dask_cudf"
 
 ./ci/build_wheel.sh dask-cudf ${package_dir}
