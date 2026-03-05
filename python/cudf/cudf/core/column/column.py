@@ -472,10 +472,7 @@ def _wrap_and_validate(col: plc.Column, dtype: DtypeObj) -> plc.Column:
             plc.TypeId.FLOAT64,
             plc.TypeId.BOOL8,
         }
-    if (
-        not isinstance(dtype, CategoricalDtype)
-        and dtype_to_pylibcudf_type(dtype) != wrapped.type()
-    ):
+    if dtype_to_pylibcudf_type(dtype) != wrapped.type():
         raise ValueError(
             f"dtype {dtype} does not match the type of the plc_column "
             f"{col.type().id()}. If normalization is required, please run the "
