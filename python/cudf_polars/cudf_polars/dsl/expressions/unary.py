@@ -170,6 +170,10 @@ class UnaryFunction(Expr):
                 raise NotImplementedError(
                     f"ranking with {method=} is not yet supported"
                 )
+        if self.name in ("shift", "shift_and_fill") and not isinstance(
+            self.children[1], Literal
+        ):
+            raise NotImplementedError("Shifting by an expression is not yet supported")
 
     def do_evaluate(
         self, df: DataFrame, *, context: ExecutionContext = ExecutionContext.FRAME

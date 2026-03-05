@@ -2,11 +2,16 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
+import datetime
+
 import pytest
 
 import polars as pl
 
-from cudf_polars.testing.asserts import assert_gpu_result_equal
+from cudf_polars.testing.asserts import (
+    assert_gpu_result_equal,
+    assert_ir_translation_raises,
+)
 
 
 @pytest.mark.parametrize("n", [0, 1, 2, -1, -2, 5, -5])
@@ -50,6 +55,12 @@ def test_shift_and_fill_float():
     assert_gpu_result_equal(q)
 
 
+def test_shift_and_fill_expr():
+    df = pl.LazyFrame({"a": [1.0, 2.0, 3.0, 4.0, 5.0]})
+    q = df.select(pl.col("a").shift(n=2, fill_value=pl.col("a").min()))
+    assert_gpu_result_equal(q)
+
+
 def test_shift_string():
     df = pl.LazyFrame({"a": ["x", "y", "z"]})
     q = df.select(pl.col("a").shift(1))
@@ -64,12 +75,18 @@ def test_shift_with_columns():
 
 @pytest.mark.parametrize("n", [1, -1, 2])
 def test_shift_datetime(n):
-    from datetime import datetime
-
     df = pl.LazyFrame(
         {
-            "a": [datetime(2021, 1, 1), datetime(2021, 1, 2), datetime(2021, 1, 3)],
-            "b": [datetime(2022, 6, 1), datetime(2022, 6, 2), datetime(2022, 6, 3)],
+            "a": [
+                datetime.datetime(2021, 1, 1),
+                datetime.datetime(2021, 1, 2),
+                datetime.datetime(2021, 1, 3),
+            ],
+            "b": [
+                datetime.datetime(2022, 6, 1),
+                datetime.datetime(2022, 6, 2),
+                datetime.datetime(2022, 6, 3),
+            ],
         }
     )
     q = df.select(pl.col("a").shift(n), pl.col("b").shift(-n))
@@ -78,8 +95,20 @@ def test_shift_datetime(n):
 
 @pytest.mark.parametrize("n", [1, -1])
 def test_shift_date(n):
-    from datetime import date
-
-    df = pl.LazyFrame({"a": [date(2021, 1, 1), date(2021, 1, 2), date(2021, 1, 3)]})
+    df = pl.LazyFrame(
+        {
+            "a": [
+                datetime.date(2021, 1, 1),
+                datetime.date(2021, 1, 2),
+                datetime.date(2021, 1, 3),
+            ]
+        }
+    )
     q = df.select(pl.col("a").shift(n))
     assert_gpu_result_equal(q)
+
+
+def test_shift_by_expression_raises():
+    df = pl.LazyFrame({"a": [1, 2, 3, 4, 5], "b": [1, 2, 3, 4, 5]})
+    q = df.select(pl.col("a").shift(n=pl.col("b").min()))
+    assert_ir_translation_raises(q, NotImplementedError)
