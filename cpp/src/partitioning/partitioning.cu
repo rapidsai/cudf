@@ -26,6 +26,8 @@
 
 #include <cub/block/block_scan.cuh>
 #include <cub/device/device_histogram.cuh>
+#include <cub/device/device_scan.cuh>
+#include <cuda/atomic>
 #include <cuda/devices>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/scan.h>
@@ -228,6 +230,30 @@ CUDF_KERNEL void compute_row_output_locations(size_type* __restrict__ row_partit
     // Store the row's output location in-place
     row_partition_numbers[row_number] = row_output_location;
 
+    tid += stride;
+  }
+}
+
+/**
+ * @brief Computes partition numbers for each row without using shared memory.
+ *
+ * Used when num_partitions exceeds shared memory capacity. Only computes the
+ * partition number for each row — histogram computation is done separately
+ * via cub::DeviceHistogram.
+ */
+template <class row_hasher_t, typename partitioner_type>
+CUDF_KERNEL void compute_hash_partition_numbers(row_hasher_t the_hasher,
+                                                size_type const num_rows,
+                                                partitioner_type const the_partitioner,
+                                                size_type* __restrict__ row_partition_numbers)
+{
+  auto tid          = cudf::detail::grid_1d::global_thread_id();
+  auto const stride = cudf::detail::grid_1d::grid_stride();
+
+  while (tid < num_rows) {
+    auto const row_number                = static_cast<size_type>(tid);
+    hash_value_type const row_hash_value = the_hasher(row_number);
+    row_partition_numbers[row_number]    = the_partitioner(row_hash_value);
     tid += stride;
   }
 }
@@ -469,16 +495,111 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition_table(
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
+  auto const num_rows = table_to_hash.num_rows();
+
+  auto const row_hasher = detail::row::hash::row_hasher(table_to_hash, stream);
+  auto const hasher =
+    row_hasher.device_hasher<hash_function>(nullate::DYNAMIC{hash_has_nulls}, seed);
+
+  // Check whether the per-block shared memory histograms fit in shared memory
   int dev;
   CUDF_CUDA_TRY(cudaGetDevice(&dev));
-  // Algorithmic restriction in the kernel implementation, there's a histogram that holds one
-  // size_type value per partition in shared memory.
-  CUDF_EXPECTS(static_cast<std::size_t>(num_partitions) <
-                 cuda::device_attributes::max_shared_memory_per_block(cuda::device_ref{dev}) /
-                   sizeof(size_type),
-               "Requested number of partitions does not fit in shared memory.",
-               std::invalid_argument);
-  auto const num_rows = table_to_hash.num_rows();
+  auto const fits_in_shared_memory =
+    static_cast<std::size_t>(num_partitions) <
+    cuda::device_attributes::max_shared_memory_per_block(cuda::device_ref{dev}) / sizeof(size_type);
+
+  if (!fits_in_shared_memory) {
+    // Large partition count path: avoid shared memory entirely.
+    // Uses cub::DeviceHistogram + cub::DeviceScan + atomic scatter.
+    auto row_partition_numbers = rmm::device_uvector<size_type>(num_rows, stream);
+
+    // Compute partition number for each row
+    constexpr size_type block_size = FALLBACK_BLOCK_SIZE;
+    auto const grid_size = util::div_rounding_up_safe(num_rows, static_cast<size_type>(block_size));
+
+    if (is_power_two(num_partitions)) {
+      using partitioner_type = bitwise_partitioner<hash_value_type>;
+      compute_hash_partition_numbers<<<grid_size, block_size, 0, stream.value()>>>(
+        hasher, num_rows, partitioner_type(num_partitions), row_partition_numbers.data());
+    } else {
+      using partitioner_type = modulo_partitioner<hash_value_type>;
+      compute_hash_partition_numbers<<<grid_size, block_size, 0, stream.value()>>>(
+        hasher, num_rows, partitioner_type(num_partitions), row_partition_numbers.data());
+    }
+
+    // Build histogram via cub::DeviceHistogram::HistogramEven
+    rmm::device_uvector<size_type> histogram(num_partitions + 1, stream);
+    {
+      std::size_t const num_levels = num_partitions + 1;
+      size_type const lower_level  = 0;
+      size_type const upper_level  = num_partitions;
+
+      std::size_t temp_storage_bytes{};
+      cub::DeviceHistogram::HistogramEven(nullptr,
+                                          temp_storage_bytes,
+                                          row_partition_numbers.data(),
+                                          histogram.data(),
+                                          num_levels,
+                                          lower_level,
+                                          upper_level,
+                                          num_rows,
+                                          stream.value());
+      rmm::device_buffer temp_storage(temp_storage_bytes, stream);
+      cub::DeviceHistogram::HistogramEven(temp_storage.data(),
+                                          temp_storage_bytes,
+                                          row_partition_numbers.data(),
+                                          histogram.data(),
+                                          num_levels,
+                                          lower_level,
+                                          upper_level,
+                                          num_rows,
+                                          stream.value());
+    }
+
+    // Exclusive scan on histogram to get partition offsets.
+    // histogram has num_partitions+1 elements; after scan, histogram[num_partitions] = num_rows.
+    {
+      std::size_t temp_storage_bytes{};
+      cub::DeviceScan::ExclusiveSum(nullptr,
+                                    temp_storage_bytes,
+                                    histogram.data(),
+                                    histogram.data(),
+                                    num_partitions + 1,
+                                    stream.value());
+      rmm::device_buffer temp_storage(temp_storage_bytes, stream);
+      cub::DeviceScan::ExclusiveSum(temp_storage.data(),
+                                    temp_storage_bytes,
+                                    histogram.data(),
+                                    histogram.data(),
+                                    num_partitions + 1,
+                                    stream.value());
+    }
+
+    // Copy partition offsets to pinned host memory asynchronously
+    auto const pinned_offsets = cudf::detail::make_pinned_vector_async(histogram, stream);
+
+    // Build scatter map: atomically increment partition offsets
+    rmm::device_uvector<size_type> scatter_map(num_rows, stream);
+    thrust::transform(
+      rmm::exec_policy_nosync(stream),
+      row_partition_numbers.begin(),
+      row_partition_numbers.end(),
+      scatter_map.begin(),
+      [offsets = histogram.data()] __device__(auto partition_number) {
+        cuda::atomic_ref<size_type, cuda::thread_scope_device> ref(offsets[partition_number]);
+        return ref.fetch_add(1, cuda::memory_order_relaxed);
+      });
+
+    // Scatter input rows into partitioned output
+    auto output = detail::scatter(input, scatter_map, input, stream, mr);
+
+    stream.synchronize();  // Pinned async D2H copy must finish before returning host vec
+
+    // Convert pinned host_vector to std::vector for the return type
+    auto partition_offsets = std::vector<size_type>(pinned_offsets.begin(), pinned_offsets.end());
+
+    return std::pair{std::move(output), std::move(partition_offsets)};
+  }
 
   bool const use_optimization{num_partitions <= THRESHOLD_FOR_OPTIMIZED_PARTITION_KERNEL};
   auto const block_size = use_optimization ? OPTIMIZED_BLOCK_SIZE : FALLBACK_BLOCK_SIZE;
@@ -508,10 +629,6 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition_table(
 
   auto row_partition_offset = cudf::detail::make_zeroed_device_uvector_async<size_type>(
     num_rows, stream, cudf::get_current_device_resource_ref());
-
-  auto const row_hasher = detail::row::hash::row_hasher(table_to_hash, stream);
-  auto const hasher =
-    row_hasher.device_hasher<hash_function>(nullate::DYNAMIC{hash_has_nulls}, seed);
 
   // If the number of partitions is a power of two, we can compute the partition
   // number of each row more efficiently with bitwise operations

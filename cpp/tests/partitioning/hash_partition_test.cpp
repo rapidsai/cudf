@@ -128,21 +128,77 @@ TEST_F(HashPartition, DISABLED_LargeRowCountNoOverflow)
   EXPECT_EQ(num_rows, offsets.back());
 }
 
-TEST_F(HashPartition, TooManyPartitionsForSharedMemory)
+TEST_F(HashPartition, MorePartitionsThanSharedMemory)
 {
   int dev;
   CUDF_CUDA_TRY(cudaGetDevice(&dev));
   std::size_t const smem_size =
     cuda::device_attributes::max_shared_memory_per_block(cuda::device_ref{dev});
   cudf::size_type const num_rows = 48 * 1024;
-  // hash_partition wants one entry in smem per output partition (stored as size_type). So if we
-  // have more partitions than will fit in smem we expect an error.
+  // Use more partitions than fit in shared memory to exercise the large partition path
   cudf::size_type const num_partitions = smem_size / sizeof(cudf::size_type) + 10;
   auto value                           = cudf::numeric_scalar<bool>(true, /* is_valid = */ true);
   auto bools                           = cudf::make_column_from_scalar(value, num_rows);
   auto input                           = cudf::table_view({bools->view()});
 
-  EXPECT_THROW(cudf::hash_partition(input, {0}, num_partitions), std::invalid_argument);
+  auto [output, offsets] = cudf::hash_partition(input, {0}, num_partitions);
+
+  EXPECT_EQ(1, output->num_columns());
+  EXPECT_EQ(num_rows, output->num_rows());
+  EXPECT_EQ(static_cast<size_t>(num_partitions + 1), offsets.size());
+  EXPECT_EQ(num_rows, offsets.back());
+  EXPECT_EQ(0, offsets.front());
+}
+
+TEST_F(HashPartition, LargePartitionCountCorrectness)
+{
+  cudf::size_type const num_rows       = 1000;
+  cudf::size_type const num_partitions = 20000;
+  auto iter                            = thrust::make_counting_iterator(0);
+  fixed_width_column_wrapper<int32_t> col(iter, iter + num_rows);
+  auto input = cudf::table_view({col});
+
+  auto [output1, offsets1] = cudf::hash_partition(input, {0}, num_partitions);
+  auto [output2, offsets2] = cudf::hash_partition(input, {0}, num_partitions);
+
+  // Offsets are monotonically non-decreasing
+  EXPECT_TRUE(std::is_sorted(offsets1.begin(), offsets1.end()));
+  EXPECT_EQ(0, offsets1.front());
+  EXPECT_EQ(num_rows, offsets1.back());
+  EXPECT_EQ(static_cast<size_t>(num_partitions + 1), offsets1.size());
+
+  // Offsets are deterministic
+  EXPECT_TRUE(std::equal(offsets1.begin(), offsets1.end(), offsets2.begin(), offsets2.end()));
+
+  // Output is a permutation of input: sort both and compare
+  auto sorted_input  = cudf::sort(input);
+  auto sorted_output = cudf::sort(output1->view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(sorted_input->view(), sorted_output->view());
+}
+
+TEST_F(HashPartition, LargePartitionCountMixedTypes)
+{
+  cudf::size_type const num_rows       = 100;
+  cudf::size_type const num_partitions = 20000;
+  auto iter                            = thrust::make_counting_iterator(0);
+
+  fixed_width_column_wrapper<float> floats(iter, iter + num_rows);
+  fixed_width_column_wrapper<int16_t> integers(iter, iter + num_rows);
+  std::vector<std::string> str_data(num_rows);
+  std::generate(
+    str_data.begin(), str_data.end(), [n = 0]() mutable { return "str_" + std::to_string(n++); });
+  strings_column_wrapper strings(str_data.begin(), str_data.end());
+
+  auto input = cudf::table_view({floats, integers, strings});
+
+  auto [output, offsets] = cudf::hash_partition(input, {0, 1}, num_partitions);
+
+  EXPECT_EQ(input.num_columns(), output->num_columns());
+  EXPECT_EQ(num_rows, output->num_rows());
+  EXPECT_EQ(static_cast<size_t>(num_partitions + 1), offsets.size());
+  EXPECT_EQ(0, offsets.front());
+  EXPECT_EQ(num_rows, offsets.back());
+  EXPECT_TRUE(std::is_sorted(offsets.begin(), offsets.end()));
 }
 
 TEST_F(HashPartition, MixedColumnTypes)
