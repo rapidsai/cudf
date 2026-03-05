@@ -147,7 +147,7 @@ def set_memory_resource(
             and executor.name == "streaming"
             and executor.runtime == "rapidsmpf"
             and (device_size := get_total_device_memory()) is not None
-        ):
+        ):  # pragma: no cover; Requires rapidsmpf runtime.
             memory_resource_config = MemoryResourceConfig(
                 qualname="rmm.mr.CudaAsyncMemoryResource",
                 options={
