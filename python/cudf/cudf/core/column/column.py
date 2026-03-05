@@ -308,11 +308,6 @@ def _rebuild_column(
     )
 
 
-def _wrap_column(col: plc.Column) -> plc.Column:
-    wrapped_children = [_wrap_column(child) for child in col.children()]
-    return _rebuild_column(col, wrapped_children, wrap_buffers=True)
-
-
 def _normalize_types_column(col: plc.Column) -> plc.Column:
     """Normalize unsupported types from external sources."""
     type_id = col.type().id()
@@ -345,12 +340,13 @@ def _wrap_and_validate(col: plc.Column, dtype: DtypeObj) -> plc.Column:
     type_id = col.type().id()
     dtype_kind = dtype.kind
     valid_types: set[plc.TypeId] = set()
-    wrapped: plc.Column | None = None
     if is_dtype_obj_list(dtype):
         valid_types = {plc.TypeId.LIST}
         child_dtype = element_type_from_list_dtype(dtype)
         values = _wrap_and_validate(col.list_view().child(), child_dtype)
-        offsets = _wrap_column(col.list_view().offsets())
+        offsets = _wrap_and_validate(
+            col.list_view().offsets(), np.dtype("int32")
+        )
         wrapped = _rebuild_column(
             col,
             [offsets, values],
@@ -396,10 +392,7 @@ def _wrap_and_validate(col: plc.Column, dtype: DtypeObj) -> plc.Column:
             data_type=plc.DataType(plc.TypeId.STRUCT),
             wrap_buffers=True,
         )
-
-    wrapped = _wrap_column(col) if wrapped is None else wrapped
-
-    if is_dtype_obj_string(dtype) or (
+    elif is_dtype_obj_string(dtype) or (
         isinstance(dtype, np.dtype) and dtype.kind == "U"
     ):
         valid_types = {plc.TypeId.STRING}
@@ -409,7 +402,24 @@ def _wrap_and_validate(col: plc.Column, dtype: DtypeObj) -> plc.Column:
                 "Normalize to np.dtype('O') before calling "
                 "ColumnBase.create."
             )
-    elif is_dtype_obj_decimal(dtype):
+        if col.num_children() == 1:
+            child = col.children()[0]
+            offsets_dtype = (
+                np.dtype("int64")
+                if child.type().id() == plc.TypeId.INT64
+                else np.dtype("int32")
+            )
+            wrapped = _rebuild_column(
+                col,
+                [_wrap_and_validate(child, offsets_dtype)],
+                wrap_buffers=True,
+            )
+        else:
+            wrapped = _rebuild_column(col, [], wrap_buffers=True)
+    else:
+        wrapped = _rebuild_column(col, [], wrap_buffers=True)
+
+    if is_dtype_obj_decimal(dtype):
         valid_types = {
             plc.TypeId.DECIMAL128,
             plc.TypeId.DECIMAL64,
