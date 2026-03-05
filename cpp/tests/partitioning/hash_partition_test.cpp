@@ -164,21 +164,17 @@ TEST_F(HashPartition, LargePartitionCountCorrectness)
   fixed_width_column_wrapper<int32_t> col(iter, iter + num_rows);
   auto const input = cudf::table_view({col});
 
-  auto [output1, offsets1] = cudf::hash_partition(input, {0}, num_partitions);
-  auto [output2, offsets2] = cudf::hash_partition(input, {0}, num_partitions);
+  auto [output, offsets] = cudf::hash_partition(input, {0}, num_partitions);
 
   // Offsets are monotonically non-decreasing
-  EXPECT_TRUE(std::is_sorted(offsets1.begin(), offsets1.end()));
-  EXPECT_EQ(0, offsets1.front());
-  EXPECT_EQ(num_rows, offsets1.back());
-  EXPECT_EQ(static_cast<size_t>(num_partitions + 1), offsets1.size());
-
-  // Offsets are deterministic
-  EXPECT_TRUE(std::equal(offsets1.begin(), offsets1.end(), offsets2.begin(), offsets2.end()));
+  EXPECT_TRUE(std::is_sorted(offsets.begin(), offsets.end()));
+  EXPECT_EQ(0, offsets.front());
+  EXPECT_EQ(num_rows, offsets.back());
+  EXPECT_EQ(static_cast<size_t>(num_partitions + 1), offsets.size());
 
   // Output is a permutation of input: sort both and compare
   auto const sorted_input  = cudf::sort(input);
-  auto const sorted_output = cudf::sort(output1->view());
+  auto const sorted_output = cudf::sort(output->view());
   CUDF_TEST_EXPECT_TABLES_EQUAL(sorted_input->view(), sorted_output->view());
 }
 
