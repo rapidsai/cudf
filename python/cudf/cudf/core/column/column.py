@@ -336,9 +336,20 @@ def _normalize_types_column(col: plc.Column) -> plc.Column:
 
 
 def _wrap_and_validate(col: plc.Column, dtype: DtypeObj) -> plc.Column:
-    type_id = col.type().id()
+    if dtype_to_pylibcudf_type(dtype) != col.type():
+        raise ValueError(
+            f"dtype {dtype} does not match the type of the plc_column "
+            f"{col.type().id()}. If normalization is required, please run the "
+            "column through _normalize_types_column first."
+        )
+    if isinstance(dtype, np.dtype) and dtype.kind == "U":
+        raise ValueError(
+            f"dtype {dtype} is a numpy Unicode dtype. "
+            "Normalize to np.dtype('O') before calling "
+            "ColumnBase.create."
+        )
+
     dtype_kind = dtype.kind
-    valid_types: set[plc.TypeId] = set()
     children: list[plc.Column] = []
     if is_dtype_obj_list(dtype):
         valid_types = {plc.TypeId.LIST}
@@ -374,16 +385,8 @@ def _wrap_and_validate(col: plc.Column, dtype: DtypeObj) -> plc.Column:
                     f"Field '{field_name}' validation failed"
                 ) from e
             children.append(wrapped_child)
-    elif is_dtype_obj_string(dtype) or (
-        isinstance(dtype, np.dtype) and dtype.kind == "U"
-    ):
+    elif is_dtype_obj_string(dtype):
         valid_types = {plc.TypeId.STRING}
-        if isinstance(dtype, np.dtype) and dtype.kind == "U":
-            raise ValueError(
-                f"dtype {dtype} is a numpy Unicode dtype. "
-                "Normalize to np.dtype('O') before calling "
-                "ColumnBase.create."
-            )
         # An empty string column may have no children.
         if col.num_children() == 1:
             child = col.children()[0]
@@ -443,20 +446,14 @@ def _wrap_and_validate(col: plc.Column, dtype: DtypeObj) -> plc.Column:
         }
     else:
         raise TypeError(f"Unsupported dtype {dtype}.")
-    wrapped = _rebuild_column(col, children, wrap_buffers=True)
-    if dtype_to_pylibcudf_type(dtype) != wrapped.type():
-        raise ValueError(
-            f"dtype {dtype} does not match the type of the plc_column "
-            f"{type_id}. If normalization is required, please run the "
-            "column through _normalize_types_column first."
-        )
-    if type_id not in valid_types:
+
+    if col.type().id() not in valid_types:
         raise ValueError(
             "plc_column must be a pylibcudf.Column with a TypeId in "
             f"{valid_types}. If normalization is required, please run the "
             "column through _normalize_types_column first."
         )
-    return wrapped
+    return _rebuild_column(col, children, wrap_buffers=True)
 
 
 class MaskCAIWrapper:
@@ -921,12 +918,10 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         like copy-on-write. When validation is disabled, the caller is responsible for
         ensuring that col and its children are already normalized and wrapped.
         """
-        wrapped = _wrap_and_validate(col, dtype) if validate else col
         # Dispatch to the appropriate subclass based on dtype
         target_cls = ColumnBase._dispatch_subclass_from_dtype(dtype)
-
         self = target_cls.__new__(target_cls)
-        self.plc_column = wrapped
+        self.plc_column = _wrap_and_validate(col, dtype) if validate else col
         self._dtype = dtype
         self._distinct_count = {}
         self._has_nulls = {}
