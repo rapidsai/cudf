@@ -39,8 +39,11 @@ void cuda_memcpy_async_impl(
  * @param count Size of dsts, srcs, sizes arrays
  * @param stream CUDA stream on which copies are enqueued
  */
-[[nodiscard]] cudaError_t memcpy_batch_async(
-  void** dsts, void** srcs, std::size_t* sizes, std::size_t count, rmm::cuda_stream_view stream);
+[[nodiscard]] cudaError_t memcpy_batch_async(void* const* dsts,
+                                             void const* const* srcs,
+                                             std::size_t const* sizes,
+                                             std::size_t count,
+                                             rmm::cuda_stream_view stream);
 
 /**
  * @brief Asynchronously copies a single buffer, wrapping `memcpy_batch_async`.

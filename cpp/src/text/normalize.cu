@@ -139,8 +139,7 @@ rmm::device_uvector<codepoint_metadata_type> get_codepoint_metadata(rmm::cuda_st
                table + codepoint_metadata_size,
                codepoint_metadata_default_value);
   void* dsts[]        = {table, table + cp_section2_begin};
-  void* srcs[]        = {const_cast<codepoint_metadata_type*>(codepoint_metadata),
-                         const_cast<codepoint_metadata_type*>(cp_metadata_917505_917999)};
+  void const* srcs[]  = {codepoint_metadata, cp_metadata_917505_917999};
   std::size_t sizes[] = {cp_section1_end * sizeof(codepoint_metadata[0]),
                          (cp_section2_end - cp_section2_begin + 1) * sizeof(codepoint_metadata[0])};
   CUDF_CUDA_TRY(cudf::detail::memcpy_batch_async(dsts, srcs, sizes, 2, stream));
@@ -163,10 +162,10 @@ rmm::device_uvector<aux_codepoint_data_type> get_aux_codepoint_data(rmm::cuda_st
                aux_codepoint_default_value);
   void* dsts[] = {
     table, table + aux_section2_begin, table + aux_section3_begin, table + aux_section4_begin};
-  void* srcs[]        = {const_cast<aux_codepoint_data_type*>(aux_codepoint_data),
-                         const_cast<aux_codepoint_data_type*>(aux_cp_data_44032_55203),
-                         const_cast<aux_codepoint_data_type*>(aux_cp_data_70475_71099),
-                         const_cast<aux_codepoint_data_type*>(aux_cp_data_119134_119232)};
+  void const* srcs[]  = {aux_codepoint_data,
+                         aux_cp_data_44032_55203,
+                         aux_cp_data_70475_71099,
+                         aux_cp_data_119134_119232};
   std::size_t sizes[] = {
     aux_section1_end * sizeof(aux_codepoint_data[0]),
     (aux_section2_end - aux_section2_begin + 1) * sizeof(aux_codepoint_data[0]),
