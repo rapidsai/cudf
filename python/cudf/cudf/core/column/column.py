@@ -340,6 +340,8 @@ def _wrap_and_validate(col: plc.Column, dtype: DtypeObj) -> plc.Column:
     type_id = col.type().id()
     dtype_kind = dtype.kind
     valid_types: set[plc.TypeId] = set()
+    data_type: plc.DataType | None = None
+    children: list[plc.Column] = []
     if is_dtype_obj_list(dtype):
         valid_types = {plc.TypeId.LIST}
         child_dtype = element_type_from_list_dtype(dtype)
@@ -347,12 +349,8 @@ def _wrap_and_validate(col: plc.Column, dtype: DtypeObj) -> plc.Column:
         offsets = _wrap_and_validate(
             col.list_view().offsets(), np.dtype("int32")
         )
-        wrapped = _rebuild_column(
-            col,
-            [offsets, values],
-            data_type=plc.DataType(plc.TypeId.LIST),
-            wrap_buffers=True,
-        )
+        children = [offsets, values]
+        data_type = plc.DataType(plc.TypeId.LIST)
     elif is_dtype_obj_interval(dtype):
         valid_types = {plc.TypeId.STRUCT}
         if col.num_children() != 2:
@@ -360,21 +358,15 @@ def _wrap_and_validate(col: plc.Column, dtype: DtypeObj) -> plc.Column:
                 "plc_column must have two children (left edges, right edges)."
             )
         interval_subtype = subtype_from_interval_dtype(dtype)
-        wrapped_children = [
+        children = [
             _wrap_and_validate(child, interval_subtype)
             for side, child in zip(
                 ("Left", "Right"), col.children(), strict=True
             )
         ]
-        wrapped = _rebuild_column(
-            col,
-            wrapped_children,
-            data_type=plc.DataType(plc.TypeId.STRUCT),
-            wrap_buffers=True,
-        )
+        data_type = plc.DataType(plc.TypeId.STRUCT)
     elif is_dtype_obj_struct(dtype):
         valid_types = {plc.TypeId.STRUCT}
-        wrapped_children = []
         struct_fields = fields_from_struct_dtype(dtype)
         for child, (field_name, field_dtype) in zip(
             col.children(), struct_fields.items(), strict=True
@@ -385,13 +377,8 @@ def _wrap_and_validate(col: plc.Column, dtype: DtypeObj) -> plc.Column:
                 raise ValueError(
                     f"Field '{field_name}' validation failed"
                 ) from e
-            wrapped_children.append(wrapped_child)
-        wrapped = _rebuild_column(
-            col,
-            wrapped_children,
-            data_type=plc.DataType(plc.TypeId.STRUCT),
-            wrap_buffers=True,
-        )
+            children.append(wrapped_child)
+        data_type = plc.DataType(plc.TypeId.STRUCT)
     elif is_dtype_obj_string(dtype) or (
         isinstance(dtype, np.dtype) and dtype.kind == "U"
     ):
@@ -402,6 +389,7 @@ def _wrap_and_validate(col: plc.Column, dtype: DtypeObj) -> plc.Column:
                 "Normalize to np.dtype('O') before calling "
                 "ColumnBase.create."
             )
+        # An empty string column may have no children.
         if col.num_children() == 1:
             child = col.children()[0]
             if child.type().id() not in (plc.TypeId.INT32, plc.TypeId.INT64):
@@ -409,18 +397,8 @@ def _wrap_and_validate(col: plc.Column, dtype: DtypeObj) -> plc.Column:
                     f"String column offsets must be INT32 or INT64, "
                     f"got {child.type().id()}."
                 )
-            wrapped = _rebuild_column(
-                col,
-                [_rebuild_column(child, [], wrap_buffers=True)],
-                wrap_buffers=True,
-            )
-        else:
-            # An empty string column may have no children.
-            wrapped = _rebuild_column(col, [], wrap_buffers=True)
-    else:
-        wrapped = _rebuild_column(col, [], wrap_buffers=True)
-
-    if is_dtype_obj_decimal(dtype):
+            children = [_rebuild_column(child, [], wrap_buffers=True)]
+    elif is_dtype_obj_decimal(dtype):
         valid_types = {
             plc.TypeId.DECIMAL128,
             plc.TypeId.DECIMAL64,
@@ -472,6 +450,9 @@ def _wrap_and_validate(col: plc.Column, dtype: DtypeObj) -> plc.Column:
             plc.TypeId.FLOAT64,
             plc.TypeId.BOOL8,
         }
+    wrapped = _rebuild_column(
+        col, children, data_type=data_type, wrap_buffers=True
+    )
     if dtype_to_pylibcudf_type(dtype) != wrapped.type():
         raise ValueError(
             f"dtype {dtype} does not match the type of the plc_column "
