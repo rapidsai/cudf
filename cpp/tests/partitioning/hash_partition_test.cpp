@@ -128,15 +128,21 @@ TEST_F(HashPartition, DISABLED_LargeRowCountNoOverflow)
   EXPECT_EQ(num_rows, offsets.back());
 }
 
-TEST_F(HashPartition, MorePartitionsThanSharedMemory)
+// Returns a partition count that exceeds shared memory capacity, guaranteeing
+// the global-memory code path is exercised regardless of GPU architecture.
+cudf::size_type partitions_exceeding_shared_memory()
 {
   int dev;
   CUDF_CUDA_TRY(cudaGetDevice(&dev));
   auto const smem_size =
     cuda::device_attributes::max_shared_memory_per_block(cuda::device_ref{dev});
-  cudf::size_type const num_rows = 48 * 1024;
-  // Use more partitions than fit in shared memory to exercise the large partition path
-  cudf::size_type const num_partitions = smem_size / sizeof(cudf::size_type) + 10;
+  return smem_size / sizeof(cudf::size_type) + 10;
+}
+
+TEST_F(HashPartition, MorePartitionsThanSharedMemory)
+{
+  cudf::size_type const num_rows       = 48 * 1024;
+  cudf::size_type const num_partitions = partitions_exceeding_shared_memory();
   auto const value                     = cudf::numeric_scalar<bool>(true, /* is_valid = */ true);
   auto const bools                     = cudf::make_column_from_scalar(value, num_rows);
   auto const input                     = cudf::table_view({bools->view()});
@@ -153,7 +159,7 @@ TEST_F(HashPartition, MorePartitionsThanSharedMemory)
 TEST_F(HashPartition, LargePartitionCountCorrectness)
 {
   cudf::size_type const num_rows       = 1000;
-  cudf::size_type const num_partitions = 20000;
+  cudf::size_type const num_partitions = partitions_exceeding_shared_memory();
   auto const iter                      = thrust::make_counting_iterator(0);
   fixed_width_column_wrapper<int32_t> col(iter, iter + num_rows);
   auto const input = cudf::table_view({col});
@@ -179,7 +185,7 @@ TEST_F(HashPartition, LargePartitionCountCorrectness)
 TEST_F(HashPartition, LargePartitionCountMixedTypes)
 {
   cudf::size_type const num_rows       = 100;
-  cudf::size_type const num_partitions = 20000;
+  cudf::size_type const num_partitions = partitions_exceeding_shared_memory();
   auto const iter                      = thrust::make_counting_iterator(0);
 
   fixed_width_column_wrapper<float> floats(iter, iter + num_rows);
@@ -204,7 +210,7 @@ TEST_F(HashPartition, LargePartitionCountMixedTypes)
 TEST_F(HashPartition, LargePartitionCountWithNulls)
 {
   cudf::size_type const num_rows       = 200;
-  cudf::size_type const num_partitions = 20000;
+  cudf::size_type const num_partitions = partitions_exceeding_shared_memory();
   auto const iter                      = thrust::make_counting_iterator(0);
   auto const valids = thrust::make_transform_iterator(iter, [](auto i) { return i % 4 != 0; });
 
