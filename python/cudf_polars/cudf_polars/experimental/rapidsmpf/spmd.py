@@ -293,7 +293,8 @@ def spmd_execution(
         Extra keyword arguments forwarded directly to
         :class:`~polars.lazyframe.engine_config.GPUEngine`.  For example,
         pass ``parquet_options={"use_rapidsmpf_native": True}`` to enable
-        native Parquet reads.
+        native Parquet reads. The keys ``"memory_resource"`` and
+        ``"executor"`` are reserved and may not be overridden.
 
     Yields
     ------
@@ -337,7 +338,7 @@ def spmd_execution(
     # Check for reserved keys.
     if bad := {"runtime", "cluster", "spmd"} & executor_options.keys():
         raise ValueError(f"executor_options may not contain reserved keys: {bad}")
-    if bad := {"raise_on_fail", "memory_resource", "executor"} & engine_kwargs.keys():
+    if bad := {"memory_resource", "executor"} & engine_kwargs.keys():
         raise ValueError(f"engine_kwargs may not contain reserved keys: {bad}")
 
     rapidsmpf_options = (
@@ -360,7 +361,6 @@ def spmd_execution(
     try:
         with Context.from_options(comm, mr, rapidsmpf_options) as ctx:
             engine = pl.GPUEngine(
-                raise_on_fail=True,
                 memory_resource=ctx.br().device_mr,
                 executor="streaming",
                 executor_options={
