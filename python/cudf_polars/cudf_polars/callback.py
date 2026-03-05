@@ -62,7 +62,7 @@ def _is_concurrent_managed_access_supported() -> bool:
     if err != runtime.cudaError_t.cudaSuccess:
         raise RuntimeError(
             f"Failed to check cudaDevAttrConcurrentManagedAccess with error {err}"
-        )
+        )  # pragma: no cover
     return supports_managed_access != 0
 
 
