@@ -924,7 +924,10 @@ dependencies:
               cuda: "12.*"
             packages:
               - pytorch>=2.4.0
-          # TODO: add a 13.x entry here when pytorch has CUDA 13 packages (https://github.com/pytorch/pytorch/issues/159779)
+          - matrix:
+              cuda: "13.*"
+            packages:
+              - pytorch>=2.10.0
           - matrix:
             packages:
   test_python_cudf_polars:
