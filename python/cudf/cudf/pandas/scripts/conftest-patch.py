@@ -7885,7 +7885,6 @@ NODEIDS_THAT_XPASS_WITH_CUDF_PANDAS = {
 
 # TODO: Investigate why sometimes these fail
 NODEIDS_THAT_FLAKY_XFAIL_WITH_CUDF_PANDAS = {
-<<<<<<< 20178
     "tests/copy_view/test_interp_fillna.py::test_interpolate_downcast_reference_triggers_copy",
     "tests/groupby/test_groupby.py::test_single_element_list_grouping[selection2]",
     "tests/groupby/test_groupby.py::test_obj_arg_get_group_deprecated",
@@ -7907,8 +7906,6 @@ NODEIDS_THAT_FLAKY_XFAIL_WITH_CUDF_PANDAS = {
     "tests/indexing/test_chaining_and_caching.py::TestChaining::test_detect_chained_assignment_warnings_errors",
     "tests/indexes/multi/test_indexing.py::test_pyint_engine",
     "tests/indexes/multi/test_monotonic.py::test_is_monotonic_with_nans[values0-is_monotonic_increasing]",
-=======
->>>>>>> main
     "tests/arithmetic/test_timedelta64.py::TestTimedeltaArraylikeAddSubOps::test_td64arr_sub_timedeltalike[timedelta64_0-array]",
     "tests/arithmetic/test_timedelta64.py::TestTimedeltaArraylikeAddSubOps::test_td64arr_sub_timedeltalike[timedelta64_1-array]",
     "tests/extension/test_arrow.py::TestArrowArray::test_arith_frame_with_scalar[uint16-__rpow__]",
