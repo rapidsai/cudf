@@ -670,6 +670,9 @@ device_span<char> ingest_raw_input(device_span<char> buffer,
   std::size_t const num_streams =
     std::min<std::size_t>(sources.size() - start_source + 1, pools::tpool().get_thread_count());
   auto stream_pool = cudf::detail::fork_streams(stream, num_streams);
+  std::vector<void*> batch_dsts;
+  std::vector<void*> batch_srcs;
+  std::vector<std::size_t> batch_sizes;
   for (std::size_t i = start_source, cur_stream = 0;
        i < sources.size() && bytes_read < total_bytes_to_read;
        i++) {
@@ -684,12 +687,17 @@ device_span<char> ingest_raw_input(device_span<char> buffer,
     } else {
       h_buffers.emplace_back(sources[i]->host_read(range_offset, data_size));
       auto const& h_buffer = h_buffers.back();
-      CUDF_CUDA_TRY(
-        cudf::detail::memcpy_async(destination, h_buffer->data(), h_buffer->size(), stream));
+      batch_dsts.push_back(destination);
+      batch_srcs.push_back(const_cast<void*>(static_cast<void const*>(h_buffer->data())));
+      batch_sizes.push_back(h_buffer->size());
       bytes_read += h_buffer->size();
     }
     range_offset = 0;
     delimiter_map.push_back(bytes_read + (num_delimiter_chars * delimiter_map.size()));
+  }
+  if (!batch_dsts.empty()) {
+    CUDF_CUDA_TRY(cudf::detail::memcpy_batch_async(
+      batch_dsts.data(), batch_srcs.data(), batch_sizes.data(), batch_dsts.size(), stream));
   }
   // Removing delimiter inserted after last non-empty source is read
   if (!delimiter_map.empty()) { delimiter_map.pop_back(); }
