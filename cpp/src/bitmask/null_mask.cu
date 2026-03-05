@@ -905,6 +905,14 @@ std::vector<size_type> batch_null_count(host_span<bitmask_type const* const> bit
   return counts;
 }
 
+std::vector<size_type> segmented_valid_count(bitmask_type const* bitmask,
+                                             host_span<size_type const> indices,
+                                             rmm::cuda_stream_view stream)
+{
+  CUDF_FUNC_RANGE();
+  return detail::segmented_valid_count(bitmask, indices, stream);
+}
+
 std::vector<size_type> segmented_null_count(bitmask_type const* bitmask,
                                             host_span<size_type const> indices,
                                             rmm::cuda_stream_view stream)

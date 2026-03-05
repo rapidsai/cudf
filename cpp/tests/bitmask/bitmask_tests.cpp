@@ -65,8 +65,10 @@ TEST_F(CountBitmaskTest, NullMask)
 
   std::vector<cudf::size_type> indices = {0, 32, 7, 25};
 
-  auto valid_counts = cudf::segmented_null_count(nullptr, indices);
-  EXPECT_THAT(valid_counts, ::testing::ElementsAreArray(std::vector<cudf::size_type>{0, 0}));
+  auto counts = cudf::segmented_null_count(nullptr, indices);
+  EXPECT_THAT(counts, ::testing::ElementsAreArray(std::vector<cudf::size_type>{0, 0}));
+  counts = cudf::segmented_valid_count(nullptr, indices);
+  EXPECT_THAT(counts, ::testing::ElementsAreArray(std::vector<cudf::size_type>{32, 18}));
 }
 
 // Utility to construct a mask vector. If fill_valid is false (default), it is initialized to all
@@ -92,8 +94,9 @@ TEST_F(CountBitmaskTest, NegativeStart)
   EXPECT_THROW(cudf::null_count(mask.data(), -1, 32), std::invalid_argument);
   EXPECT_THROW(cudf::index_of_first_set_bit(mask.data(), -1, 32), std::invalid_argument);
 
-  std::vector<cudf::size_type> indices = {0, 16, -1, 32};
+  auto indices = std::vector<cudf::size_type>{0, 16, -1, 32};
   EXPECT_THROW(cudf::segmented_null_count(mask.data(), indices), std::out_of_range);
+  EXPECT_THROW(cudf::segmented_valid_count(mask.data(), indices), std::out_of_range);
 }
 
 TEST_F(CountBitmaskTest, StartLargerThanStop)
@@ -102,8 +105,9 @@ TEST_F(CountBitmaskTest, StartLargerThanStop)
   EXPECT_THROW(cudf::null_count(mask.data(), 32, 31), std::invalid_argument);
   EXPECT_THROW(cudf::index_of_first_set_bit(mask.data(), 32, 31), std::invalid_argument);
 
-  std::vector<cudf::size_type> indices = {0, 16, 31, 30};
+  auto indices = std::vector<cudf::size_type>{0, 16, 31, 30};
   EXPECT_THROW(cudf::segmented_null_count(mask.data(), indices), std::invalid_argument);
+  EXPECT_THROW(cudf::segmented_valid_count(mask.data(), indices), std::invalid_argument);
 }
 
 TEST_F(CountBitmaskTest, EmptyRange)
@@ -115,6 +119,8 @@ TEST_F(CountBitmaskTest, EmptyRange)
   auto const indices     = std::vector<cudf::size_type>{0, 0, 17, 17};
   auto const null_counts = cudf::segmented_null_count(mask.data(), indices);
   EXPECT_THAT(null_counts, ::testing::ElementsAreArray(std::vector<cudf::size_type>{0, 0}));
+  auto const valid_counts = cudf::segmented_valid_count(mask.data(), indices);
+  EXPECT_THAT(valid_counts, ::testing::ElementsAreArray(std::vector<cudf::size_type>{0, 0}));
 }
 
 TEST_F(CountBitmaskTest, SingleWordAllZero)
@@ -125,6 +131,8 @@ TEST_F(CountBitmaskTest, SingleWordAllZero)
   auto const indices     = std::vector<cudf::size_type>{0, 32, 0, 32};
   auto const null_counts = cudf::segmented_null_count(mask.data(), indices);
   EXPECT_THAT(null_counts, ::testing::ElementsAreArray(std::vector<cudf::size_type>{32, 32}));
+  auto const valid_counts = cudf::segmented_valid_count(mask.data(), indices);
+  EXPECT_THAT(valid_counts, ::testing::ElementsAreArray(std::vector<cudf::size_type>{0, 0}));
 }
 
 TEST_F(CountBitmaskTest, SingleBitAllZero)
@@ -135,6 +143,8 @@ TEST_F(CountBitmaskTest, SingleBitAllZero)
   auto const indices     = std::vector<cudf::size_type>{17, 18, 7, 8};
   auto const null_counts = cudf::segmented_null_count(mask.data(), indices);
   EXPECT_THAT(null_counts, ::testing::ElementsAreArray(std::vector<cudf::size_type>{1, 1}));
+  auto const valid_counts = cudf::segmented_valid_count(mask.data(), indices);
+  EXPECT_THAT(valid_counts, ::testing::ElementsAreArray(std::vector<cudf::size_type>{0, 0}));
 }
 
 TEST_F(CountBitmaskTest, SingleBitAllSet)
@@ -145,6 +155,8 @@ TEST_F(CountBitmaskTest, SingleBitAllSet)
   auto const indices     = std::vector<cudf::size_type>{13, 14, 0, 1};
   auto const null_counts = cudf::segmented_null_count(mask.data(), indices);
   EXPECT_THAT(null_counts, ::testing::ElementsAreArray(std::vector<cudf::size_type>{0, 0}));
+  auto const valid_counts = cudf::segmented_valid_count(mask.data(), indices);
+  EXPECT_THAT(valid_counts, ::testing::ElementsAreArray(std::vector<cudf::size_type>{1, 1}));
 }
 
 TEST_F(CountBitmaskTest, SingleWordAllBitsSet)
@@ -155,6 +167,8 @@ TEST_F(CountBitmaskTest, SingleWordAllBitsSet)
   auto const indices     = std::vector<cudf::size_type>{0, 32, 0, 32};
   auto const null_counts = cudf::segmented_null_count(mask.data(), indices);
   EXPECT_THAT(null_counts, ::testing::ElementsAreArray(std::vector<cudf::size_type>{0, 0}));
+  auto const valid_counts = cudf::segmented_valid_count(mask.data(), indices);
+  EXPECT_THAT(valid_counts, ::testing::ElementsAreArray(std::vector<cudf::size_type>{32, 32}));
 }
 
 TEST_F(CountBitmaskTest, SingleWordPreSlack)
@@ -165,6 +179,12 @@ TEST_F(CountBitmaskTest, SingleWordPreSlack)
   auto const indices     = std::vector<cudf::size_type>{7, 32, 8, 32};
   auto const null_counts = cudf::segmented_null_count(mask.data(), indices);
   EXPECT_THAT(null_counts, ::testing::ElementsAreArray(std::vector<cudf::size_type>{25, 24}));
+  auto valid_counts = cudf::segmented_valid_count(mask.data(), indices);
+  EXPECT_THAT(valid_counts, ::testing::ElementsAreArray(std::vector<cudf::size_type>{0, 0}));
+
+  mask         = make_mask(1, true);
+  valid_counts = cudf::segmented_valid_count(mask.data(), indices);
+  EXPECT_THAT(valid_counts, ::testing::ElementsAreArray(std::vector<cudf::size_type>{25, 24}));
 }
 
 TEST_F(CountBitmaskTest, SingleWordPostSlack)
@@ -175,6 +195,12 @@ TEST_F(CountBitmaskTest, SingleWordPostSlack)
   auto const indices     = std::vector<cudf::size_type>{0, 17, 0, 18};
   auto const null_counts = cudf::segmented_null_count(mask.data(), indices);
   EXPECT_THAT(null_counts, ::testing::ElementsAreArray(std::vector<cudf::size_type>{17, 18}));
+  auto valid_counts = cudf::segmented_valid_count(mask.data(), indices);
+  EXPECT_THAT(valid_counts, ::testing::ElementsAreArray(std::vector<cudf::size_type>{0, 0}));
+
+  mask         = make_mask(1, true);
+  valid_counts = cudf::segmented_valid_count(mask.data(), indices);
+  EXPECT_THAT(valid_counts, ::testing::ElementsAreArray(std::vector<cudf::size_type>{17, 18}));
 }
 
 TEST_F(CountBitmaskTest, SingleWordSubset)
@@ -185,6 +211,12 @@ TEST_F(CountBitmaskTest, SingleWordSubset)
   auto const indices     = std::vector<cudf::size_type>{1, 31, 7, 17};
   auto const null_counts = cudf::segmented_null_count(mask.data(), indices);
   EXPECT_THAT(null_counts, ::testing::ElementsAreArray(std::vector<cudf::size_type>{30, 10}));
+  auto valid_counts = cudf::segmented_valid_count(mask.data(), indices);
+  EXPECT_THAT(valid_counts, ::testing::ElementsAreArray(std::vector<cudf::size_type>{0, 0}));
+
+  mask         = make_mask(1, true);
+  valid_counts = cudf::segmented_valid_count(mask.data(), indices);
+  EXPECT_THAT(valid_counts, ::testing::ElementsAreArray(std::vector<cudf::size_type>{30, 10}));
 }
 
 TEST_F(CountBitmaskTest, SingleWordSubset2)
@@ -195,6 +227,12 @@ TEST_F(CountBitmaskTest, SingleWordSubset2)
   auto const indices     = std::vector<cudf::size_type>{4, 16, 2, 30};
   auto const null_counts = cudf::segmented_null_count(mask.data(), indices);
   EXPECT_THAT(null_counts, ::testing::ElementsAreArray(std::vector<cudf::size_type>{12, 28}));
+  auto valid_counts = cudf::segmented_valid_count(mask.data(), indices);
+  EXPECT_THAT(valid_counts, ::testing::ElementsAreArray(std::vector<cudf::size_type>{0, 0}));
+
+  mask         = make_mask(1, true);
+  valid_counts = cudf::segmented_valid_count(mask.data(), indices);
+  EXPECT_THAT(valid_counts, ::testing::ElementsAreArray(std::vector<cudf::size_type>{12, 28}));
 }
 
 TEST_F(CountBitmaskTest, MultipleWordsAllBits)
@@ -205,6 +243,12 @@ TEST_F(CountBitmaskTest, MultipleWordsAllBits)
   auto const indices     = std::vector<cudf::size_type>{0, 320, 0, 320};
   auto const null_counts = cudf::segmented_null_count(mask.data(), indices);
   EXPECT_THAT(null_counts, ::testing::ElementsAreArray(std::vector<cudf::size_type>{320, 320}));
+  auto valid_counts = cudf::segmented_valid_count(mask.data(), indices);
+  EXPECT_THAT(valid_counts, ::testing::ElementsAreArray(std::vector<cudf::size_type>{0, 0}));
+
+  mask         = make_mask(10, true);
+  valid_counts = cudf::segmented_valid_count(mask.data(), indices);
+  EXPECT_THAT(valid_counts, ::testing::ElementsAreArray(std::vector<cudf::size_type>{320, 320}));
 }
 
 TEST_F(CountBitmaskTest, MultipleWordsSubsetWordBoundary)
@@ -215,6 +259,12 @@ TEST_F(CountBitmaskTest, MultipleWordsSubsetWordBoundary)
   auto const indices     = std::vector<cudf::size_type>{32, 192, 32, 288};
   auto const null_counts = cudf::segmented_null_count(mask.data(), indices);
   EXPECT_THAT(null_counts, ::testing::ElementsAreArray(std::vector<cudf::size_type>{160, 256}));
+  auto valid_counts = cudf::segmented_valid_count(mask.data(), indices);
+  EXPECT_THAT(valid_counts, ::testing::ElementsAreArray(std::vector<cudf::size_type>{0, 0}));
+
+  mask         = make_mask(10, true);
+  valid_counts = cudf::segmented_valid_count(mask.data(), indices);
+  EXPECT_THAT(valid_counts, ::testing::ElementsAreArray(std::vector<cudf::size_type>{160, 256}));
 }
 
 TEST_F(CountBitmaskTest, MultipleWordsSplitWordBoundary)
@@ -225,6 +275,12 @@ TEST_F(CountBitmaskTest, MultipleWordsSplitWordBoundary)
   auto const indices     = std::vector<cudf::size_type>{31, 33, 60, 67};
   auto const null_counts = cudf::segmented_null_count(mask.data(), indices);
   EXPECT_THAT(null_counts, ::testing::ElementsAreArray(std::vector<cudf::size_type>{2, 7}));
+  auto valid_counts = cudf::segmented_valid_count(mask.data(), indices);
+  EXPECT_THAT(valid_counts, ::testing::ElementsAreArray(std::vector<cudf::size_type>{0, 0}));
+
+  mask         = make_mask(10, true);
+  valid_counts = cudf::segmented_valid_count(mask.data(), indices);
+  EXPECT_THAT(valid_counts, ::testing::ElementsAreArray(std::vector<cudf::size_type>{2, 7}));
 }
 
 TEST_F(CountBitmaskTest, MultipleWordsSubset)
@@ -235,6 +291,12 @@ TEST_F(CountBitmaskTest, MultipleWordsSubset)
   auto const indices     = std::vector<cudf::size_type>{67, 293, 37, 319};
   auto const null_counts = cudf::segmented_null_count(mask.data(), indices);
   EXPECT_THAT(null_counts, ::testing::ElementsAreArray(std::vector<cudf::size_type>{226, 282}));
+  auto valid_counts = cudf::segmented_valid_count(mask.data(), indices);
+  EXPECT_THAT(valid_counts, ::testing::ElementsAreArray(std::vector<cudf::size_type>{0, 0}));
+
+  mask         = make_mask(10, true);
+  valid_counts = cudf::segmented_valid_count(mask.data(), indices);
+  EXPECT_THAT(valid_counts, ::testing::ElementsAreArray(std::vector<cudf::size_type>{226, 282}));
 }
 
 TEST_F(CountBitmaskTest, MultipleWordsSingleBit)
@@ -245,6 +307,12 @@ TEST_F(CountBitmaskTest, MultipleWordsSingleBit)
   auto const indices     = std::vector<cudf::size_type>{67, 68, 31, 32, 192, 193};
   auto const null_counts = cudf::segmented_null_count(mask.data(), indices);
   EXPECT_THAT(null_counts, ::testing::ElementsAreArray(std::vector<cudf::size_type>{1, 1, 1}));
+  auto valid_counts = cudf::segmented_valid_count(mask.data(), indices);
+  EXPECT_THAT(valid_counts, ::testing::ElementsAreArray(std::vector<cudf::size_type>{0, 0, 0}));
+
+  mask         = make_mask(10, true);
+  valid_counts = cudf::segmented_valid_count(mask.data(), indices);
+  EXPECT_THAT(valid_counts, ::testing::ElementsAreArray(std::vector<cudf::size_type>{1, 1, 1}));
 }
 
 TEST_F(CountBitmaskTest, BatchNullCount)
