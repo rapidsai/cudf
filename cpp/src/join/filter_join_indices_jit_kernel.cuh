@@ -24,7 +24,7 @@ namespace detail {
  * @brief JIT implementation of filter_join_indices
  *
  * Internal implementation that provides JIT-compiled filtering of join indices.
- * This is the implementation behind the public jit_filter_join_indices function.
+ * This is the implementation behind the public filter_join_indices_jit function.
  *
  * @param left The left table for predicate evaluation
  * @param right The right table for predicate evaluation
@@ -40,7 +40,7 @@ namespace detail {
  */
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
-jit_filter_join_indices(cudf::table_view const& left,
+filter_join_indices_jit(cudf::table_view const& left,
                         cudf::table_view const& right,
                         cudf::device_span<size_type const> left_indices,
                         cudf::device_span<size_type const> right_indices,
@@ -51,14 +51,14 @@ jit_filter_join_indices(cudf::table_view const& left,
                         rmm::device_async_resource_ref mr);
 
 /**
- * @copydoc cudf::jit_filter_join_indices(table_view const&, table_view const&,
+ * @copydoc cudf::filter_join_indices_jit(table_view const&, table_view const&,
  *   device_span<size_type const>, device_span<size_type const>,
  *   ast::expression const&, join_kind, rmm::cuda_stream_view,
  *   rmm::device_async_resource_ref)
  */
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
-jit_filter_join_indices(cudf::table_view const& left,
+filter_join_indices_jit(cudf::table_view const& left,
                         cudf::table_view const& right,
                         cudf::device_span<size_type const> left_indices,
                         cudf::device_span<size_type const> right_indices,
