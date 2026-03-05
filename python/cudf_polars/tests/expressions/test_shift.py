@@ -8,10 +8,7 @@ import pytest
 
 import polars as pl
 
-from cudf_polars.testing.asserts import (
-    assert_gpu_result_equal,
-    assert_ir_translation_raises,
-)
+from cudf_polars.testing.asserts import assert_gpu_result_equal
 
 
 @pytest.mark.parametrize("n", [0, 1, 2, -1, -2, 5, -5])
@@ -108,7 +105,19 @@ def test_shift_date(n):
     assert_gpu_result_equal(q)
 
 
-def test_shift_by_expression_raises():
-    df = pl.LazyFrame({"a": [1, 2, 3, 4, 5], "b": [1, 2, 3, 4, 5]})
-    q = df.select(pl.col("a").shift(n=pl.col("b").min()))
-    assert_ir_translation_raises(q, NotImplementedError)
+def test_shift_by_expression():
+    df = pl.LazyFrame({"a": [1, 2, 3, 4, 5], "b": [1, 1, 1, 1, 1]})
+    q = df.select(pl.col("a").shift(n=pl.col("b").first()))
+    assert_gpu_result_equal(q)
+
+
+def test_shift_by_expression_last():
+    df = pl.LazyFrame({"a": [1, 2, 3, 4, 5], "b": [2, 2, 2, 2, 2]})
+    q = df.select(pl.col("a").shift(n=pl.col("b").last()))
+    assert_gpu_result_equal(q)
+
+
+def test_shift_by_expression_get():
+    df = pl.LazyFrame({"a": [1, 2, 3, 4, 5], "b": [2, 2, 2, 2, 2]})
+    q = df.select(pl.col("a").shift(n=pl.col("b").get(2)))
+    assert_gpu_result_equal(q)

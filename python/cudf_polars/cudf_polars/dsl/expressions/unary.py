@@ -170,10 +170,6 @@ class UnaryFunction(Expr):
                 raise NotImplementedError(
                     f"ranking with {method=} is not yet supported"
                 )
-        if self.name in ("shift", "shift_and_fill") and not isinstance(
-            self.children[1], Literal
-        ):
-            raise NotImplementedError("Shifting by an expression is not yet supported")
 
     def do_evaluate(
         self, df: DataFrame, *, context: ExecutionContext = ExecutionContext.FRAME
@@ -522,8 +518,15 @@ class UnaryFunction(Expr):
         elif self.name in ("shift", "shift_and_fill"):
             column = self.children[0].evaluate(df, context=context)
             n_expr = self.children[1]
-            assert isinstance(n_expr, Literal)
-            offset = n_expr.value
+            if isinstance(n_expr, Literal):
+                offset = n_expr.value
+            else:
+                n_col = n_expr.evaluate(df, context=context)
+                offset_py = plc.copying.get_element(
+                    n_col.obj, 0, stream=df.stream
+                ).to_py()
+                assert isinstance(offset_py, int)
+                offset = offset_py
             if self.name == "shift":
                 fill_scalar = plc.Scalar.from_py(
                     None, column.dtype.plc_type, stream=df.stream
