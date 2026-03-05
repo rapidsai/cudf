@@ -570,7 +570,7 @@ class PDSHQueries:
         supplier = get_data(run_config.dataset_path, "supplier", run_config.suffix)
 
         var1 = "GERMANY"
-        var2 = 0.0001 / run_config.scale_factor
+        var2 = float(f"{0.0001 / run_config.scale_factor:.12f}")
 
         q1 = (
             partsupp.join(supplier, left_on="ps_suppkey", right_on="s_suppkey")
