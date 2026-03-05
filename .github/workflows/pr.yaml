@@ -20,6 +20,7 @@ jobs:
       - cpp-linters
       - conda-cpp-checks
       - conda-cpp-tests
+      - conda-cpp-benchmark-tests
       - conda-python-build
       - conda-python-build-noarch
       - conda-python-cudf-tests
