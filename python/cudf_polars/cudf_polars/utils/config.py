@@ -88,6 +88,7 @@ def get_device_handle() -> Any:
         return handle
 
 
+@functools.cache
 def get_total_device_memory() -> int | None:
     """Return the total memory of the current device."""
     import pynvml
@@ -340,29 +341,51 @@ class ParquetOptions:
             raise TypeError("use_rapidsmpf_native must be a bool")
 
 
-def default_blocksize(cluster: str) -> int:
+def default_target_partition_size(cluster: str, runtime: str) -> int:
     """Return the default blocksize."""
-    device_size = get_total_device_memory()
-    if device_size is None:  # pragma: no cover
+    if (device_size := get_total_device_memory()) is None:  # pragma: no cover
         # System doesn't have proper "GPU memory".
         # Fall back to a conservative 1GB default.
         return 1_000_000_000
 
     if (
-        cluster == "distributed"
-        or _env_get_int("POLARS_GPU_ENABLE_CUDA_MANAGED_MEMORY", default=1) == 0
+        cluster == "single"
+        and runtime == "tasks"
+        and _env_get_int("POLARS_GPU_ENABLE_CUDA_MANAGED_MEMORY", default=1) == 1
     ):
-        # Distributed execution requires a conservative
-        # blocksize for now. We are also more conservative
-        # when UVM is disabled.
-        blocksize = int(device_size * 0.025)
-    else:
-        # Single-GPU execution can lean on UVM to
-        # support a much larger blocksize.
+        # We can use a larger blocksize when UVM is enabled
         blocksize = int(device_size * 0.0625)
+    else:
+        # Otherwise, use a conservative default
+        blocksize = int(device_size * 0.025)
 
     # Use lower and upper bounds of 1GB and 10GB
     return min(max(blocksize, 1_000_000_000), 10_000_000_000)
+
+
+def default_broadcast_join_limit(cluster: str, runtime: str) -> int:
+    """Return the default broadcast join limit."""
+    if (device_size := get_total_device_memory()) is None:  # pragma: no cover
+        # System doesn't have proper "GPU memory".
+        # We probably want to broadcast in most cases.
+        return 32
+
+    if runtime == "rapidsmpf":
+        # Target about 12.5% of the device memory when
+        # default_target_partition_size is used to set the
+        # target partition size (i.e. 5x the 2.5% default).
+        return min(5, int(max(1, (device_size * 0.125) // 1e9)))
+    elif (
+        cluster == "single"
+        and _env_get_int("POLARS_GPU_ENABLE_CUDA_MANAGED_MEMORY", default=1) == 1
+    ):
+        # We can lean on UVM to support most broadcast joins.
+        return 32
+    else:
+        # Extra-conservative default for the "tasks" runtime.
+        # We cannot spill outside a rapidsmpf shuffle within
+        # this runtime. So, shuffling is usually preferred.
+        return 2
 
 
 @dataclasses.dataclass(frozen=True)
@@ -636,15 +659,17 @@ class StreamingExecutor:
         - the ``CUDF_POLARS__EXECUTOR__TARGET_PARTITION_SIZE`` environment variable
 
         By default, cudf-polars uses a target partition size that's a fraction
-        of the device memory, where the fraction depends on the cluster:
+        of the device memory, where the fraction depends on the cluster and runtime:
 
-        - distributed: 1/40th of the device memory
-        - single: 1/16th of the device memory
+        - distributed cluster or rapidsmpf runtime: 1/40th of the device memory
+        - single cluster and tasks runtime: 1/16th of the device memory
 
-        The optional pynvml dependency is used to query the device memory size. If
-        pynvml is not available, a warning is emitted and the device size is assumed
-        to be 12 GiB.
+        The pynvml library is used to query the total device memory on the first
+        visible GPU. If the device size is not available, the default target
+        partition size will be 1GB. The default will always be between 1GB and 10GB.
 
+        NOTE: If this configuration is changed manually, it is recommended to set
+        `broadcast_join_limit` manually as well.
     groupby_n_ary
         The factor by which the number of partitions is decreased when performing
         a groupby on a partitioned column. For example, if a column has 64 partitions,
@@ -653,7 +678,11 @@ class StreamingExecutor:
         This is useful when the absolute number of partitions is large.
     broadcast_join_limit
         The maximum number of partitions to allow for the smaller table in
-        a broadcast join.
+        a broadcast join. For example, if the target partition size is 1GB and the
+        broadcast join limit is 5, then the smaller table will be broadcasted
+        if it is smaller than 5GB (within the "rapidsmpf" runtime) or contains
+        fewer than 5 partitions (within the "tasks" runtime). The default depends
+        on the cluster and runtime.
     shuffle_method
         The method to use for shuffling data between workers. Defaults to
         'rapidsmpf' for distributed cluster if available (otherwise 'tasks'),
@@ -682,7 +711,7 @@ class StreamingExecutor:
         Options controlling dynamic shuffle planning. See
         :class:`~cudf_polars.utils.config.DynamicPlanningOptions` for more.
     max_io_threads
-        Maximum number of IO threads for the rapidsmpf runtime. Default is 2.
+        Maximum number of IO threads for the rapidsmpf runtime. Default is 4.
         This controls the parallelism of IO operations when reading data.
     spill_to_pinned_memory
         Whether RapidsMPF should spill to pinned host memory when available,
@@ -793,7 +822,7 @@ class StreamingExecutor:
     dynamic_planning: DynamicPlanningOptions | None = None
     max_io_threads: int = dataclasses.field(
         default_factory=_make_default_factory(
-            f"{_env_prefix}__MAX_IO_THREADS", int, default=2
+            f"{_env_prefix}__MAX_IO_THREADS", int, default=4
         )
     )
     spill_to_pinned_memory: bool = dataclasses.field(
@@ -879,14 +908,13 @@ class StreamingExecutor:
             object.__setattr__(
                 self,
                 "target_partition_size",
-                default_blocksize(self.cluster),
+                default_target_partition_size(self.cluster, self.runtime),
             )
         if self.broadcast_join_limit == 0:
             object.__setattr__(
                 self,
                 "broadcast_join_limit",
-                # Usually better to avoid shuffling for single gpu with UVM
-                2 if self.cluster == "distributed" else 32,
+                default_broadcast_join_limit(self.cluster, self.runtime),
             )
         object.__setattr__(self, "cluster", Cluster(self.cluster))
         object.__setattr__(self, "shuffle_method", ShuffleMethod(self.shuffle_method))

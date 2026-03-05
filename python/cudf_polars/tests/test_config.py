@@ -651,7 +651,9 @@ def test_memory_resource(memory_resource, memory_resource_config) -> None:
         )
     )
 
-    with set_memory_resource(memory_resource, memory_resource_config) as result:
+    with set_memory_resource(
+        memory_resource, memory_resource_config, config.executor
+    ) as result:
         if memory_resource is None and memory_resource_config is None:
             # The default case: We make a new RMM MR, whose type depends on the GPU's features.
 
