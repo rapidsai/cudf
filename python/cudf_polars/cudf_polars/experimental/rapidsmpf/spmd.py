@@ -97,6 +97,7 @@ def evaluate_pipeline_spmd_mode(
 
     nodes, output = generate_network(
         context,
+        context.comm(),
         ir,
         partition_info,
         config_options,

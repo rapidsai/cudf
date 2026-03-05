@@ -104,6 +104,11 @@ class PDSDSPolarsQueries(PDSDSQueries):
             pl.col("total shipping cost").cast(pl.Decimal(18, 2)),
             pl.col("total net profit").cast(pl.Decimal(18, 2)),
         ],
+        19: [pl.col("ext_price").cast(pl.Decimal(18, 2))],
+        20: [
+            pl.col("itemrevenue").cast(pl.Decimal(18, 2)),
+            pl.col("revenueratio").cast(pl.Decimal(38, 2)),
+        ],
         63: [pl.col("sum_sales").cast(pl.Decimal(18, 2))],
         70: [pl.col("total_sum").cast(pl.Decimal(18, 2))],
         71: [pl.col("ext_price").cast(pl.Decimal(18, 2))],
@@ -134,6 +139,15 @@ class PDSDSPolarsQueries(PDSDSQueries):
         ],
         14: [pl.col("sum_number_sales").cast(COUNT_DTYPE)],
         16: [pl.col("order count").cast(COUNT_DTYPE)],
+        17: [
+            pl.col("store_sales_quantitycount").cast(COUNT_DTYPE),
+            pl.col("store_returns_quantitycount").cast(COUNT_DTYPE),
+            pl.col("catalog_sales_quantitycount").cast(COUNT_DTYPE),
+        ],
+        21: [
+            pl.col("inv_before").cast(pl.Int32),
+            pl.col("inv_after").cast(pl.Int32),
+        ],
         69: [
             pl.col("cnt1").cast(COUNT_DTYPE),
             pl.col("cnt2").cast(COUNT_DTYPE),
