@@ -9,12 +9,14 @@ from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING, Any
 
-import rapidsmpf.progress_thread
-from rapidsmpf.communicator.single import new_communicator
+from rapidsmpf.communicator.single import (
+    new_communicator as single_process_communicator,
+)
 from rapidsmpf.config import Options, get_environment_variables
 from rapidsmpf.memory.buffer import MemoryType
 from rapidsmpf.memory.buffer_resource import BufferResource, LimitAvailableMemory
 from rapidsmpf.memory.pinned_memory_resource import PinnedMemoryResource
+from rapidsmpf.progress_thread import ProgressThread
 from rapidsmpf.rmm_resource_adaptor import RmmResourceAdaptor
 from rapidsmpf.streaming.core.actor import (
     run_actor_network,
@@ -50,6 +52,7 @@ from cudf_polars.utils.config import CUDAStreamPoolConfig
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
 
+    from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.streaming.core.channel import Channel
     from rapidsmpf.streaming.core.leaf_actor import DeferredMessages
     from rapidsmpf.streaming.cudf.channel_metadata import ChannelMetadata
@@ -130,6 +133,7 @@ def evaluate_logical_plan(
                 config_options,
                 stats,
                 collective_id_map,
+                single_process_communicator(Options(), ProgressThread()),
                 collect_metadata=collect_metadata,
             )
 
@@ -142,6 +146,7 @@ def evaluate_pipeline(
     config_options: ConfigOptions[StreamingExecutor],
     stats: StatsCollector,
     collective_id_map: dict[IR, list[int]],
+    comm: Communicator,
     rmpf_context: Context | None = None,
     *,
     collect_metadata: bool = False,
@@ -161,6 +166,8 @@ def evaluate_pipeline(
         The statistics collector.
     collective_id_map
         The mapping of IR nodes to lists of collective IDs.
+    comm
+        The communicator describing the participating processes.
     rmpf_context
         The RapidsMPF context.
     collect_metadata
@@ -218,16 +225,13 @@ def evaluate_pipeline(
             else None
         )
         use_stream_pool = stream_pool is not None
-        local_comm = new_communicator(
-            options, rapidsmpf.progress_thread.ProgressThread()
-        )
         br = BufferResource(
             mr,
             pinned_mr=pinned_mr,
             memory_available=memory_available,
             stream_pool=stream_pool,
         )
-        rmpf_context_manager = Context(local_comm, br, options)
+        rmpf_context_manager = Context(comm.logger, br, options)
 
     with rmpf_context_manager as rmpf_context:
         # Create the IR execution context
@@ -245,6 +249,7 @@ def evaluate_pipeline(
         )
         nodes, output = generate_network(
             rmpf_context,
+            comm,
             ir,
             partition_info,
             config_options,
@@ -422,6 +427,7 @@ def determine_fanout_nodes(
 
 def generate_network(
     context: Context,
+    comm: Communicator,
     ir: IR,
     partition_info: MutableMapping[IR, PartitionInfo],
     config_options: ConfigOptions,
@@ -438,6 +444,8 @@ def generate_network(
     ----------
     context
         The rapidsmpf context.
+    comm
+        The communicator the network generation is collective over.
     ir
         The IR node.
     partition_info
@@ -478,6 +486,7 @@ def generate_network(
     # Generate the network
     state: GenState = {
         "context": context,
+        "comm": comm,
         "config_options": config_options,
         "partition_info": partition_info,
         "fanout_nodes": fanout_nodes,
@@ -497,6 +506,7 @@ def generate_network(
     ch_final_data: Channel[TableChunk] = context.create_channel()
     drain_node = metadata_drain_node(
         context,
+        comm,
         ir,
         ir_context,
         ch_out,
