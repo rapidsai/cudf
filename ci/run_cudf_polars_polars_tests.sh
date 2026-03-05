@@ -79,6 +79,27 @@ CUDF_POLARS__EXECUTOR__FALLBACK_MODE=silent \
        py-polars/tests \
        --executor streaming
 
+rapids-logger "Run polars tests with the streaming executor and rapidsmpf runtime"
+CUDF_POLARS__PARQUET_OPTIONS__USE_RAPIDSMPF_NATIVE=1 \
+CUDF_POLARS__EXECUTOR__SHUFFLE_METHOD=rapidsmpf \
+CUDF_POLARS__EXECUTOR__TARGET_PARTITION_SIZE=805306368 \
+CUDF_POLARS__EXECUTOR__FALLBACK_MODE=silent \
+    python -m pytest \
+       --import-mode=importlib \
+       --cache-clear \
+       -m "" \
+       -p cudf_polars.testing.plugin \
+       -n 8 \
+       --dist=worksteal \
+       -vv \
+       --tb=native \
+       $DESELECTED_TESTS_STR \
+       "$@" \
+       py-polars/tests \
+       --executor streaming \
+       --blocksize-mode small \
+       --runtime rapidsmpf
+
 rapids-logger "Run polars tests with the in-memory executor"
 python -m pytest \
        --import-mode=importlib \
