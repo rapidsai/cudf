@@ -374,7 +374,7 @@ def default_broadcast_join_limit(cluster: str, runtime: str) -> int:
         # Target about 12.5% of the device memory when
         # default_target_partition_size is used to set the
         # target partition size (i.e. 5x the 2.5% default).
-        if device_size >= 32e9:
+        if device_size >= 40e9:
             return 5
         else:
             return int(max(1, (device_size * 0.125) // 1e9))
