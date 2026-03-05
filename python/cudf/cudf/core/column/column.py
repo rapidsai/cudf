@@ -401,10 +401,6 @@ def _wrap_and_validate(col: plc.Column, dtype: DtypeObj) -> plc.Column:
         }
     elif isinstance(dtype, CategoricalDtype):
         valid_types = {
-            plc.TypeId.INT8,
-            plc.TypeId.INT16,
-            plc.TypeId.INT32,
-            plc.TypeId.INT64,
             plc.TypeId.UINT8,
             plc.TypeId.UINT16,
             plc.TypeId.UINT32,
