@@ -13,12 +13,38 @@
 #include <cudf/copying.hpp>
 
 struct PackUnpackTest : public cudf::test::BaseFixture {
+  void verify_column_metadata(cudf::column_view const& col,
+                              cudf::packed_column_metadata const& meta)
+  {
+    EXPECT_EQ(meta.type(), col.type());
+    EXPECT_EQ(meta.num_rows(), col.size());
+    EXPECT_EQ(meta.null_count(), col.null_count());
+    EXPECT_EQ(meta.num_children(), col.num_children());
+    for (cudf::size_type i = 0; i < col.num_children(); i++) {
+      verify_column_metadata(col.child(i), meta.child(i));
+    }
+  }
+
+  void verify_metadata(cudf::table_view const& t, cudf::packed_columns const& packed)
+  {
+    auto view = cudf::packed_metadata_view(*packed.metadata);
+    EXPECT_EQ(view.num_columns(), t.num_columns());
+    EXPECT_EQ(view.num_rows(), t.num_rows());
+    for (cudf::size_type i = 0; i < t.num_columns(); i++) {
+      verify_column_metadata(t.column(i), view.column(i));
+    }
+  }
+
   void run_test(cudf::table_view const& t)
   {
     // verify pack/unpack works
     auto packed   = cudf::pack(t);
     auto unpacked = cudf::unpack(packed);
     CUDF_TEST_EXPECT_TABLES_EQUAL(t, unpacked);
+
+    // verify packed_metadata_view matches the unpacked table (which reflects
+    // the compacted sizes stored in the packed metadata, not the original sliced sizes)
+    if (!packed.metadata->empty()) { verify_metadata(unpacked, packed); }
 
     // verify packed_size returns the correct size
     EXPECT_EQ(cudf::packed_size(t), packed.gpu_data->size());
