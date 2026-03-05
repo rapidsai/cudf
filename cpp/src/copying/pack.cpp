@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -57,6 +57,16 @@ struct serialized_column {
   // comparable
   int pad{};
 };
+
+constexpr size_t serialized_column_size = sizeof(serialized_column);
+
+// Read a serialized_column entry at `ptr` via memcpy, avoiding strict-aliasing concerns.
+serialized_column read_entry(uint8_t const* ptr)
+{
+  serialized_column entry;
+  std::memcpy(&entry, ptr, serialized_column_size);
+  return entry;
+}
 
 /**
  * @brief Deserialize a single column into a column_view
@@ -135,18 +145,18 @@ table_view unpack(uint8_t const* metadata, uint8_t const* gpu_data)
 {
   // gpu data can be null if everything is empty but the metadata must always be valid
   CUDF_EXPECTS(metadata != nullptr, "Encountered invalid packed column input");
-  auto serialized_columns = reinterpret_cast<serialized_column const*>(metadata);
   uint8_t const* base_ptr = gpu_data;
   // first entry is a stub where size == the total # of top level columns (see pack_metadata above)
-  auto const num_columns = serialized_columns[0].size;
-  size_t current_index   = 1;
+  auto const num_columns = read_entry(metadata).size;
+  // current_ptr tracks position in the metadata byte buffer
+  auto const* current_ptr = metadata + serialized_column_size;
 
   std::function<std::vector<column_view>(size_type)> get_columns;
-  get_columns = [&serialized_columns, &current_index, base_ptr, &get_columns](size_t num_columns) {
+  get_columns = [&current_ptr, base_ptr, &get_columns](size_t num_columns) {
     std::vector<column_view> cols;
     for (size_t i = 0; i < num_columns; i++) {
-      auto serial_column = serialized_columns[current_index];
-      current_index++;
+      auto serial_column = read_entry(current_ptr);
+      current_ptr += serialized_column_size;
 
       std::vector<column_view> const children = get_columns(serial_column.num_children);
 
@@ -204,7 +214,7 @@ class metadata_builder_impl {
 
   [[nodiscard]] std::vector<uint8_t> build() const
   {
-    auto output = std::vector<uint8_t>(metadata.size() * sizeof(detail::serialized_column));
+    auto output = std::vector<uint8_t>(metadata.size() * sizeof(serialized_column));
     std::memcpy(output.data(), metadata.data(), output.size());
     return output;
   }
@@ -217,7 +227,7 @@ class metadata_builder_impl {
   }
 
  private:
-  std::vector<detail::serialized_column> metadata;
+  std::vector<serialized_column> metadata;
 };
 
 metadata_builder::metadata_builder(size_type const num_root_columns)
