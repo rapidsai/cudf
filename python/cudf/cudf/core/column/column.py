@@ -356,8 +356,9 @@ def _wrap_and_validate(col: plc.Column, dtype: DtypeObj) -> plc.Column:
         valid_types = {plc.TypeId.LIST}
         child_dtype = element_type_from_list_dtype(dtype)
         values = _wrap_and_validate(col.list_view().child(), child_dtype)
+        offsets_plc = col.list_view().offsets()
         offsets = _wrap_and_validate(
-            col.list_view().offsets(), np.dtype("int32")
+            offsets_plc, dtype_from_pylibcudf_column(offsets_plc)
         )
         children = [offsets, values]
     elif is_dtype_obj_interval(dtype):
