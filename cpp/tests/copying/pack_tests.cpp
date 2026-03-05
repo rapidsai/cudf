@@ -616,3 +616,71 @@ TEST_F(PackUnpackTest, DISABLED_LongOffsetsAndChars)
   cudf::table_view tbl({*str});
   this->run_test(tbl);
 }
+
+TEST_F(PackUnpackTest, MetadataViewRejectsNonMultipleSize)
+{
+  // Pack a valid table, then present its metadata with one byte chopped off
+  // so the size is not a multiple of the serialized entry size.
+  cudf::test::fixed_width_column_wrapper<int> col{1, 2, 3};
+  auto packed = cudf::pack(cudf::table_view({col}));
+  ASSERT_GT(packed.metadata->size(), 1);
+  auto truncated = std::span<uint8_t const>(packed.metadata->data(), packed.metadata->size() - 1);
+  EXPECT_THROW(cudf::packed_metadata_view{truncated}, cudf::logic_error);
+}
+
+TEST_F(PackUnpackTest, MetadataViewRejectsTruncatedBuffer)
+{
+  // Pack a multi-column table, then lop off one serialized entry so
+  // the stub claims more columns than the buffer actually contains.
+  cudf::test::fixed_width_column_wrapper<int> col1{1, 2, 3};
+  cudf::test::fixed_width_column_wrapper<float> col2{4.0f, 5.0f, 6.0f};
+  cudf::test::fixed_width_column_wrapper<double> col3{7.0, 8.0, 9.0};
+  auto packed = cudf::pack(cudf::table_view({col1, col2, col3}));
+
+  // Metadata has 4 entries (1 stub + 3 columns).  Remove the last entry so
+  // the stub still says "3 columns" but only 2 column entries remain.
+  auto const entry_size     = packed.metadata->size() / 4;
+  auto const truncated_size = packed.metadata->size() - entry_size;
+
+  auto truncated = std::span<uint8_t const>(packed.metadata->data(), truncated_size);
+  EXPECT_THROW(cudf::packed_metadata_view{truncated}, cudf::logic_error);
+}
+
+TEST_F(PackUnpackTest, MetadataViewRejectsTooLongBuffer)
+{
+  // Pack a valid table, then extend the buffer by one entry so the tree
+  // doesn't consume the entire buffer.
+  cudf::test::fixed_width_column_wrapper<int> col{1, 2, 3};
+  auto packed = cudf::pack(cudf::table_view({col}));
+
+  auto const entry_size = packed.metadata->size() / 2;  // 2 entries: stub + 1 column
+  auto extended         = *packed.metadata;
+  extended.resize(packed.metadata->size() + entry_size, 0);
+
+  EXPECT_THROW(cudf::packed_metadata_view{extended}, cudf::logic_error);
+}
+
+TEST_F(PackUnpackTest, MetadataViewRejectsCorruptedChildCount)
+{
+  // Pack a table with a struct column, then corrupt the struct's num_children
+  // field so traversal would read past the buffer.
+  cudf::test::fixed_width_column_wrapper<int> ints{1, 2, 3};
+  cudf::test::fixed_width_column_wrapper<float> floats{4.0f, 5.0f, 6.0f};
+  auto struct_col = cudf::test::structs_column_wrapper({ints, floats});
+  auto packed     = cudf::pack(cudf::table_view({struct_col}));
+
+  // The metadata layout is: [stub, struct, ints_child, floats_child]
+  // The struct entry is at index 1.  We corrupt its num_children from 2 to
+  // something larger so the tree claims more entries than exist.
+  auto corrupted = *packed.metadata;
+
+  // The struct entry is at index 1. The num_children field is the
+  // second-to-last 4-byte value in each entry (before the trailing pad).
+  auto const entry_size          = corrupted.size() / 4;                // 4 entries total
+  auto const num_children_offset = entry_size                           // skip stub entry
+                                   + entry_size - 2 * sizeof(int32_t);  // num_children in struct
+  cudf::size_type bad_children = 10;
+  std::memcpy(corrupted.data() + num_children_offset, &bad_children, sizeof(bad_children));
+
+  EXPECT_THROW(cudf::packed_metadata_view{corrupted}, cudf::logic_error);
+}
