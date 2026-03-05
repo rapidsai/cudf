@@ -76,7 +76,7 @@ auto create_device_views(host_span<column_view const> views, rmm::cuda_stream_vi
     make_device_uvector_async(device_views, stream, cudf::get_current_device_resource_ref());
 
   // Compute the partition offsets
-  auto offsets = cudf::detail::make_host_vector<size_t>(views.size() + 1, stream);
+  auto offsets = cudf::detail::make_pinned_vector_async<size_t>(views.size() + 1, stream);
   thrust::transform_inclusive_scan(
     thrust::host,
     device_views.cbegin(),
@@ -84,8 +84,9 @@ auto create_device_views(host_span<column_view const> views, rmm::cuda_stream_vi
     std::next(offsets.begin()),
     [](auto const& col) { return col.size(); },
     cuda::std::plus{});
+  auto d_offsets =
+    make_device_uvector_async(offsets, stream, cudf::get_current_device_resource_ref());
   auto const output_size = offsets.back();
-  auto d_offsets = make_device_uvector(offsets, stream, cudf::get_current_device_resource_ref());
 
   return std::make_tuple(
     std::move(device_view_owners), std::move(d_views), std::move(d_offsets), output_size);
