@@ -682,7 +682,7 @@ void reader_impl::set_subpass_page_mask_span()
 
   // Create a hostdevice vector to store the subpass page mask
   _subpass_page_mask =
-    std::make_unique<cudf::detail::hostdevice_vector<bool>>(subpass->pages.size(), _stream, cudf::get_current_device_resource_ref());
+    std::make_unique<cudf::detail::hostdevice_vector<bool>>(subpass->pages.size(), _stream);
 
   // Fill with all true if no pass level page mask is available
   if (_pass_page_mask.empty()) {
