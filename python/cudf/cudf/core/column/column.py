@@ -350,16 +350,16 @@ def _wrap_and_validate(col: plc.Column, dtype: DtypeObj) -> plc.Column:
         children = [offsets, values]
     elif is_dtype_obj_interval(dtype):
         valid_types = {plc.TypeId.STRUCT}
-        if col.num_children() != 2:
+        interval_subtype = subtype_from_interval_dtype(dtype)
+        try:
+            paired = list(zip(("Left", "Right"), col.children(), strict=True))
+        except ValueError as e:
             raise ValueError(
                 "plc_column must have two children (left edges, right edges)."
-            )
-        interval_subtype = subtype_from_interval_dtype(dtype)
+            ) from e
         children = [
             _wrap_and_validate(child, interval_subtype)
-            for side, child in zip(
-                ("Left", "Right"), col.children(), strict=True
-            )
+            for side, child in paired
         ]
     elif is_dtype_obj_struct(dtype):
         valid_types = {plc.TypeId.STRUCT}
