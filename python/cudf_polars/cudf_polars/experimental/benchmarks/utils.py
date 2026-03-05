@@ -402,6 +402,11 @@ class RunConfig:
             raise ValueError(
                 "gather_shuffle_stats is only supported when shuffle='rapidsmpf'."
             )
+        if self.io_mode == "hot" and self.iterations < 2:
+            raise ValueError(
+                "--io-mode hot requires at least 2 iterations: "
+                "iteration 0 warms the cache, iterations 1+ are the hot measurements."
+            )
 
     @classmethod
     def from_args(cls, args: argparse.Namespace) -> RunConfig:
@@ -801,10 +806,13 @@ def drop_file_page_cache_recursively(path: os.PathLike | str) -> None:
             "kvikio is required for cold-run page cache dropping. "
             "Install it or switch to --io-mode lukewarm."
         ) from err
-    for f in Path(path).rglob("*"):
-        if not f.is_file():
-            continue
-        kvikio.drop_file_page_cache(f)
+    p = Path(path).expanduser()
+    if p.is_file():
+        kvikio.drop_file_page_cache(p)
+        return
+    for f in p.rglob("*"):
+        if f.is_file():
+            kvikio.drop_file_page_cache(f)
 
 
 def execute_query(
@@ -816,14 +824,14 @@ def execute_query(
     engine: None | pl.GPUEngine = None,
 ) -> tuple[pl.DataFrame, float]:
     """Execute a query with NVTX annotation."""
+    if run_config.io_mode == "cold":
+        drop_file_page_cache_recursively(run_config.dataset_path)
+
     with nvtx.annotate(
         message=f"Query {q_id} - Iteration {i}",
         domain="cudf_polars",
         color="green",
     ):
-        if run_config.io_mode == "cold":
-            drop_file_page_cache_recursively(run_config.dataset_path)
-
         if run_config.executor == "cpu":
             t0 = time.monotonic()
             result = q.collect(engine="streaming")
@@ -1537,27 +1545,6 @@ def run_polars_query(
     validation_failed = False
     record: SuccessRecord | FailedRecord
 
-    if run_config.io_mode == "hot":
-        print(f"Query {q_id} - Running warmup iteration (hot run)...", flush=True)
-        try:
-            run_polars_query_iteration(
-                q_id=q_id,
-                iteration=-1,
-                q=q,
-                run_config=run_config,
-                args=args,
-                engine=engine,
-                expected=None,
-                query_result=query_result,
-                client=client,
-            )
-            print(f"Query {q_id} - Warmup complete", flush=True)
-        except Exception:
-            print(
-                f"❌ Query {q_id} - Warmup failed:\n{traceback.format_exc()}",
-                flush=True,
-            )
-
     for i in range(args.iterations):
         if _HAS_STRUCTLOG and run_config.collect_traces:
             setup_logging(q_id, i)
@@ -1978,22 +1965,6 @@ def run_duckdb(
 
         print(f"DuckDB Executing: {q_id}")
         records[q_id] = []
-
-        if run_config.io_mode == "hot":
-            print(f"Query {q_id} - Running warmup iteration (hot run)...", flush=True)
-            try:
-                execute_duckdb_query(
-                    sql,
-                    run_config.dataset_path,
-                    suffix=run_config.suffix,
-                    query_set=duckdb_queries_cls.name,
-                )
-                print(f"Query {q_id} - Warmup complete", flush=True)
-            except Exception:
-                print(
-                    f"❌ Query {q_id} - Warmup failed:\n{traceback.format_exc()}",
-                    flush=True,
-                )
 
         for i in range(args.iterations):
             if run_config.io_mode == "cold":
