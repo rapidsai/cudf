@@ -60,3 +60,26 @@ def test_shift_with_columns():
     df = pl.LazyFrame({"a": [1, 2, 3, 4, 5]})
     q = df.with_columns(shift=pl.col("a").shift(-2, fill_value=100))
     assert_gpu_result_equal(q)
+
+
+@pytest.mark.parametrize("n", [1, -1, 2])
+def test_shift_datetime(n):
+    from datetime import datetime
+
+    df = pl.LazyFrame(
+        {
+            "a": [datetime(2021, 1, 1), datetime(2021, 1, 2), datetime(2021, 1, 3)],
+            "b": [datetime(2022, 6, 1), datetime(2022, 6, 2), datetime(2022, 6, 3)],
+        }
+    )
+    q = df.select(pl.col("a").shift(n), pl.col("b").shift(-n))
+    assert_gpu_result_equal(q)
+
+
+@pytest.mark.parametrize("n", [1, -1])
+def test_shift_date(n):
+    from datetime import date
+
+    df = pl.LazyFrame({"a": [date(2021, 1, 1), date(2021, 1, 2), date(2021, 1, 3)]})
+    q = df.select(pl.col("a").shift(n))
+    assert_gpu_result_equal(q)
