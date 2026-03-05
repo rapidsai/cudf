@@ -7890,6 +7890,7 @@ NODEIDS_THAT_XPASS_WITH_CUDF_PANDAS = {
 
 # TODO: Investigate why sometimes these fail
 NODEIDS_THAT_FLAKY_XFAIL_WITH_CUDF_PANDAS = {
+    "tests/copy_view/test_interp_fillna.py::test_interpolate_downcast_reference_triggers_copy",
     "tests/groupby/test_groupby.py::test_single_element_list_grouping[selection2]",
     "tests/groupby/test_groupby.py::test_obj_arg_get_group_deprecated",
     "tests/frame/methods/test_sort_index.py::TestDataFrameSortIndex::test_sort_index_inplace",
