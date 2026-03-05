@@ -4,6 +4,13 @@
 
 set -euo pipefail
 
+# TODO(jameslamb): revert before merging
+git clone --branch generate-pip-constraints \
+    https://github.com/rapidsai/gha-tools.git \
+    /tmp/gha-tools
+
+export PATH="/tmp/gha-tools/tools:${PATH}"
+
 source rapids-init-pip
 
 # TODO(jameslamb): revert before merging
@@ -19,7 +26,7 @@ PYLIBCUDF_WHEELHOUSE=$(rapids-download-from-github "$(rapids-package-name "wheel
 rapids-logger "Install pylibcudf and its basic dependencies in a virtual environment"
 
 # generate constraints (possibly pinning to oldest support versions of dependencies)
-rapids-generate-pip-constraints py_test_cudf ./constraints.txt
+rapids-generate-pip-constraints py_test_cudf "${PIP_CONSTRAINT}"
 
 RESULTS_DIR=${RAPIDS_TESTS_DIR:-"$(mktemp -d)"}
 RAPIDS_TESTS_DIR=${RAPIDS_TESTS_DIR:-"${RESULTS_DIR}/test-results"}/
@@ -28,9 +35,16 @@ mkdir -p "${RAPIDS_TESTS_DIR}"
 # To test pylibcudf without its optional dependencies, we create a virtual environment
 python -m venv env
 . env/bin/activate
+
+# notes:
+#
+#   * echo to expand wildcard before adding `[test]` requires for pip
+#   * just providing --constraint="${PIP_CONSTRAINT}" to be explicit, and because
+#     that environment variable is ignored if any other --constraint are passed via the CLI
+#
 rapids-pip-retry install \
     -v \
-    --constraint ./constraints.txt \
+    --prefer-binary \
     --constraint "${PIP_CONSTRAINT}" \
     "$(echo "${LIBCUDF_WHEELHOUSE}"/libcudf_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)" \
     "$(echo "${PYLIBCUDF_WHEELHOUSE}"/pylibcudf_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)[test]"
@@ -51,12 +65,12 @@ rapids-logger "Install cudf, pylibcudf, and test requirements"
 # notes:
 #
 #   * echo to expand wildcard before adding `[test]` requires for pip
-#   * need to provide --constraint="${PIP_CONSTRAINT}" because that environment variable is
-#     ignored if any other --constraint are passed via the CLI
+#   * just providing --constraint="${PIP_CONSTRAINT}" to be explicit, and because
+#     that environment variable is ignored if any other --constraint are passed via the CLI
 #
 rapids-pip-retry install \
     -v \
-    --constraint ./constraints.txt \
+    --prefer-binary \
     --constraint "${PIP_CONSTRAINT}" \
     "$(echo "${CUDF_WHEELHOUSE}"/cudf_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)[test]" \
     "$(echo "${LIBCUDF_WHEELHOUSE}"/libcudf_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)" \
