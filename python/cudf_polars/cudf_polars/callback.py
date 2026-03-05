@@ -27,6 +27,7 @@ from cudf_polars.dsl.ir import IRExecutionContext
 from cudf_polars.dsl.tracing import CUDF_POLARS_NVTX_DOMAIN
 from cudf_polars.dsl.translate import Translator
 from cudf_polars.utils.config import (
+    MemoryResourceConfig,
     _env_get_int,
     get_total_device_memory,
 )
@@ -40,7 +41,7 @@ if TYPE_CHECKING:
 
     from cudf_polars.dsl.ir import IR
     from cudf_polars.typing import NodeTraverser
-    from cudf_polars.utils.config import ConfigOptions, MemoryResourceConfig
+    from cudf_polars.utils.config import ConfigOptions, ExecutorType
 
 __all__: list[str] = ["execute_with_cudf"]
 
@@ -112,6 +113,7 @@ def default_memory_resource(
 def set_memory_resource(
     mr: rmm.mr.DeviceMemoryResource | None,
     memory_resource_config: MemoryResourceConfig | None,
+    executor: ExecutorType,
 ) -> Generator[rmm.mr.DeviceMemoryResource, None, None]:
     """
     Set the current memory resource for an execution block.
@@ -124,6 +126,8 @@ def set_memory_resource(
     memory_resource_config
         Memory resource configuration to use when a concrete memory resource.
         is not provided. If ``None``, the default memory resource is used.
+    executor
+        Executor configuration.
 
     Returns
     -------
@@ -137,6 +141,20 @@ def set_memory_resource(
     """
     previous = rmm.mr.get_current_device_resource()
     if mr is None:
+        # Use cuda async by default with the rapidsmpf runtime.
+        if (
+            memory_resource_config is None
+            and executor.name == "streaming"
+            and executor.runtime == "rapidsmpf"
+            and (device_size := get_total_device_memory()) is not None
+        ):  # pragma: no cover; Requires rapidsmpf runtime.
+            memory_resource_config = MemoryResourceConfig(
+                qualname="rmm.mr.CudaAsyncMemoryResource",
+                options={
+                    "release_threshold": int(0.5 * device_size / 256) * 256,
+                },
+            )
+
         device: int = gpu.getDevice()
         mr = default_memory_resource(
             device=device,
@@ -258,7 +276,11 @@ def _callback(
         nvtx.annotate(message="ExecuteIR", domain=CUDF_POLARS_NVTX_DOMAIN),
         # Device must be set before memory resource is obtained.
         set_device(config_options.device),
-        set_memory_resource(memory_resource, config_options.memory_resource_config),
+        set_memory_resource(
+            memory_resource,
+            config_options.memory_resource_config,
+            config_options.executor,
+        ),
     ):
         if config_options.executor.name == "in-memory":
             context = IRExecutionContext.from_config_options(config_options)
