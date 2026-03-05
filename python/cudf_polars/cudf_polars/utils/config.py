@@ -483,17 +483,11 @@ class DynamicPlanningOptions:
     These options can be configured via environment variables
     with the prefix ``CUDF_POLARS__EXECUTOR__DYNAMIC_PLANNING__``.
 
-    .. note::
-        Dynamic planning is not yet implemented. These options are
-        reserved for future use and currently have no effect.
-
     Parameters
     ----------
     sample_chunk_count
         The maximum number of chunks to sample before deciding whether
-        to shuffle. A higher value provides more accurate estimates but
-        increases latency before the shuffle decision is made.
-        Default is 2.
+        to shuffle. Default is 2.
     """
 
     _env_prefix = "CUDF_POLARS__EXECUTOR__DYNAMIC_PLANNING"
@@ -716,10 +710,6 @@ class StreamingExecutor:
     dynamic_planning
         Options controlling dynamic shuffle planning. See
         :class:`~cudf_polars.utils.config.DynamicPlanningOptions` for more.
-
-        .. note::
-            Dynamic planning is not yet implemented. These options are
-            reserved for future use and currently have no effect.
     max_io_threads
         Maximum number of IO threads for the rapidsmpf runtime. Default is 4.
         This controls the parallelism of IO operations when reading data.
