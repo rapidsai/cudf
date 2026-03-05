@@ -972,10 +972,6 @@ dependencies:
     common:
       - output_types: [conda]
         packages:
-        # 0.28.0 broke Python warning filters, UDF compilation with PyObjects
-        # 0.28.1 causes dlpack serialization issues with datetime types
-        # https://github.com/NVIDIA/numba-cuda/issues/822
-        # https://github.com/NVIDIA/numba-cuda/pull/823
         - &numba_cuda numba-cuda>=0.22.2
     specific:
       - output_types: [requirements, pyproject]
