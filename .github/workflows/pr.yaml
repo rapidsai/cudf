@@ -347,8 +347,8 @@ jobs:
     with:
       build_type: pull-request
       script: ci/test_cpp.sh
-  # TODO: Remove this once benchmarks are working
   conda-cpp-benchmark-tests:
+    # TODO: Remove this once benchmarks are working
     needs: [conda-cpp-build, changed-files]
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/conda-cpp-tests.yaml@python-3.14
