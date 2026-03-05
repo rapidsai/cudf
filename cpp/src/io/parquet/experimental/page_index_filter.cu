@@ -915,28 +915,28 @@ std::unique_ptr<cudf::column> aggregate_reader_metadata::build_row_mask_with_pag
       if (not stats_columns_mask[col_idx] or
           (cudf::is_compound(dtype) && dtype.id() != cudf::type_id::STRING)) {
         // Placeholder for unsupported types and non-participating columns
-        page_stats_columns.push_back(
-          cudf::make_numeric_column(data_type{cudf::type_id::BOOL8},
-                                    total_rows,
-                                    rmm::device_buffer{0, stream, cudf::get_current_device_resource_ref()},
-                                    0,
-                                    stream,
-                                    cudf::get_current_device_resource_ref()));
-        page_stats_columns.push_back(
-          cudf::make_numeric_column(data_type{cudf::type_id::BOOL8},
-                                    total_rows,
-                                    rmm::device_buffer{0, stream, cudf::get_current_device_resource_ref()},
-                                    0,
-                                    stream,
-                                    cudf::get_current_device_resource_ref()));
+        page_stats_columns.push_back(cudf::make_numeric_column(
+          data_type{cudf::type_id::BOOL8},
+          total_rows,
+          rmm::device_buffer{0, stream, cudf::get_current_device_resource_ref()},
+          0,
+          stream,
+          cudf::get_current_device_resource_ref()));
+        page_stats_columns.push_back(cudf::make_numeric_column(
+          data_type{cudf::type_id::BOOL8},
+          total_rows,
+          rmm::device_buffer{0, stream, cudf::get_current_device_resource_ref()},
+          0,
+          stream,
+          cudf::get_current_device_resource_ref()));
         if (has_is_null_operator) {
-          page_stats_columns.push_back(
-            cudf::make_numeric_column(data_type{cudf::type_id::BOOL8},
-                                      total_rows,
-                                      rmm::device_buffer{0, stream, cudf::get_current_device_resource_ref()},
-                                      0,
-                                      stream,
-                                      cudf::get_current_device_resource_ref()));
+          page_stats_columns.push_back(cudf::make_numeric_column(
+            data_type{cudf::type_id::BOOL8},
+            total_rows,
+            rmm::device_buffer{0, stream, cudf::get_current_device_resource_ref()},
+            0,
+            stream,
+            cudf::get_current_device_resource_ref()));
         }
         return;
       }

@@ -1011,7 +1011,9 @@ struct dictionary_caster {
    * @return A vector of BOOL8 columns
    */
   [[nodiscard]] std::vector<std::unique_ptr<cudf::column>> build_columns(
-    cudf::host_span<rmm::device_buffer> results_buffers, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
+    cudf::host_span<rmm::device_buffer> results_buffers,
+    rmm::cuda_stream_view stream,
+    rmm::device_async_resource_ref mr)
   {
     auto columns = std::vector<std::unique_ptr<cudf::column>>{};
     columns.reserve(results_buffers.size());
