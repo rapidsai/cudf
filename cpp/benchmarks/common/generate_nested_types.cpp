@@ -7,10 +7,6 @@
 
 #include "generate_input.hpp"
 
-#include <cudf_test/column_wrapper.hpp>
-
-#include <algorithm>
-#include <random>
 #include <vector>
 
 std::unique_ptr<cudf::table> create_lists_data(nvbench::state& state,
