@@ -5,7 +5,7 @@
 
 #pragma once
 
-#include "../cuio_common.hpp"
+#include <benchmarks/io/cuio_common.hpp>
 
 #include <nvbench/nvbench.cuh>
 
