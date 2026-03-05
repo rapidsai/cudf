@@ -339,6 +339,8 @@ class StringColumn(ColumnBase, Scannable):
             )
 
     def as_string_column(self, dtype: DtypeObj) -> Self:
+        if isinstance(dtype, np.dtype) and dtype.kind == "U":
+            dtype = np.dtype("O")
         if dtype != self.dtype:
             return cast(Self, ColumnBase.create(self.plc_column, dtype))
         return self
