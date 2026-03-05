@@ -386,7 +386,7 @@ class packed_column_metadata {
  *           << ", rows: "  << view.num_rows() << "\n";
  * for (cudf::size_type i = 0; i < view.num_columns(); i++) {
  *   auto col = view.column(i);
- *   std::cout << "  type=" << static_cast<int>(col.type().id())
+ *   std::cout << "  type=" << cudf::type_to_name(col.type())
  *             << " children=" << col.num_children() << "\n";
  * }
  * @endcode
