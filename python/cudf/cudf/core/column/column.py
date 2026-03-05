@@ -404,17 +404,18 @@ def _wrap_and_validate(col: plc.Column, dtype: DtypeObj) -> plc.Column:
             )
         if col.num_children() == 1:
             child = col.children()[0]
-            offsets_dtype = (
-                np.dtype("int64")
-                if child.type().id() == plc.TypeId.INT64
-                else np.dtype("int32")
-            )
+            if child.type().id() not in (plc.TypeId.INT32, plc.TypeId.INT64):
+                raise ValueError(
+                    f"String column offsets must be INT32 or INT64, "
+                    f"got {child.type().id()}."
+                )
             wrapped = _rebuild_column(
                 col,
-                [_wrap_and_validate(child, offsets_dtype)],
+                [_rebuild_column(child, [], wrap_buffers=True)],
                 wrap_buffers=True,
             )
         else:
+            # An empty string column may have no children.
             wrapped = _rebuild_column(col, [], wrap_buffers=True)
     else:
         wrapped = _rebuild_column(col, [], wrap_buffers=True)
