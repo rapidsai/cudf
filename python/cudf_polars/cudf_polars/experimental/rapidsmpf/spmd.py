@@ -207,7 +207,7 @@ def spmd_execution(
     *,
     executor_options: dict[str, object] | None = None,
     mr: rmm.mr.DeviceMemoryResource | None = None,
-    options: Options | None = None,
+    rapidsmpf_options: Options | None = None,
     **engine_kwargs: Any,
 ) -> Iterator[tuple[Context, pl.GPUEngine]]:
     """
@@ -260,7 +260,7 @@ def spmd_execution(
         result = intermediate.lazy().pipe(transform).collect(engine=engine)
 
     In both cases rank k operates on exactly the data it read from parquet. The
-    intermediate ``collect`` simply materializes the data on the GPU; it does not
+    intermediate ``collect`` simply materializes the data in memory; it does not
     change which rows belong to which rank.
 
     **Query symmetry requirement**
@@ -286,7 +286,7 @@ def spmd_execution(
     mr
         RMM device memory resource to use. Defaults to
         ``rmm.mr.CudaAsyncMemoryResource()`` when ``None``.
-    options
+    rapidsmpf_options
         RapidsMPF options. Defaults to ``Options(get_environment_variables())``
         when ``None``.
     **engine_kwargs
@@ -340,12 +340,16 @@ def spmd_execution(
     if bad := {"raise_on_fail", "memory_resource", "executor"} & engine_kwargs.keys():
         raise ValueError(f"engine_kwargs may not contain reserved keys: {bad}")
 
-    options = options if options is not None else Options(get_environment_variables())
+    rapidsmpf_options = (
+        rapidsmpf_options
+        if rapidsmpf_options is not None
+        else Options(get_environment_variables())
+    )
     mr = RmmResourceAdaptor(mr if mr is not None else rmm.mr.CudaAsyncMemoryResource())
     comm = bootstrap.create_ucxx_comm(
         progress_thread=ProgressThread(),
         type=bootstrap.BackendType.AUTO,
-        options=options,
+        options=rapidsmpf_options,
     )
     py_executor = ThreadPoolExecutor(
         max_workers=cast(
@@ -354,7 +358,7 @@ def spmd_execution(
         thread_name_prefix="spmd-executor",
     )
     try:
-        with Context.from_options(comm, mr, options) as ctx:
+        with Context.from_options(comm, mr, rapidsmpf_options) as ctx:
             engine = pl.GPUEngine(
                 raise_on_fail=True,
                 memory_resource=ctx.br().device_mr,
