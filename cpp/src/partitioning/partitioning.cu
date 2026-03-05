@@ -242,9 +242,9 @@ CUDF_KERNEL void compute_row_output_locations(size_type* __restrict__ row_partit
  * via cub::DeviceHistogram.
  */
 template <class row_hasher_t, typename partitioner_type>
-CUDF_KERNEL void compute_hash_partition_numbers(row_hasher_t the_hasher,
+CUDF_KERNEL void compute_hash_partition_numbers(row_hasher_t hasher,
                                                 size_type const num_rows,
-                                                partitioner_type const the_partitioner,
+                                                partitioner_type const partitioner,
                                                 size_type* __restrict__ row_partition_numbers)
 {
   auto tid          = cudf::detail::grid_1d::global_thread_id();
@@ -252,8 +252,8 @@ CUDF_KERNEL void compute_hash_partition_numbers(row_hasher_t the_hasher,
 
   while (tid < num_rows) {
     auto const row_number                = static_cast<size_type>(tid);
-    hash_value_type const row_hash_value = the_hasher(row_number);
-    row_partition_numbers[row_number]    = the_partitioner(row_hash_value);
+    hash_value_type const row_hash_value = hasher(row_number);
+    row_partition_numbers[row_number]    = partitioner(row_hash_value);
     tid += stride;
   }
 }
