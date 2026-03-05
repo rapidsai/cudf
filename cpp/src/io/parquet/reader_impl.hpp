@@ -191,7 +191,7 @@ class reader_impl {
   /**
    * @brief Copies over the relevant page mask information for the subpass
    */
-  void set_subpass_page_mask_span();
+  void set_subpass_page_mask();
 
   /**
    * @brief Read a chunk of data and return an output table.

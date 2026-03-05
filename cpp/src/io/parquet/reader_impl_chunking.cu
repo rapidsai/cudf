@@ -341,7 +341,7 @@ void reader_impl::setup_next_subpass(read_mode mode)
     h_spans.begin(), h_spans.end(), subpass.column_page_count.begin(), get_span_size{});
 
   // Set the page mask information for the subpass
-  set_subpass_page_mask_span();
+  set_subpass_page_mask();
   CUDF_EXPECTS(_subpass_page_mask, "Subpass page mask is not set");
   _subpass_page_mask->host_to_device_async(_stream);
 
@@ -675,7 +675,7 @@ void reader_impl::compute_output_chunks_for_subpass()
     c_info, subpass.pages, subpass.skip_rows, subpass.num_rows, _output_chunk_read_limit, _stream);
 }
 
-void reader_impl::set_subpass_page_mask_span()
+void reader_impl::set_subpass_page_mask()
 {
   auto const& pass    = _pass_itm_data;
   auto const& subpass = pass->subpass;
