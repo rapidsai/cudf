@@ -47,6 +47,11 @@ from cudf.core.buffer import (
 )
 from cudf.core.column.utils import access_columns
 from cudf.core.copy_types import GatherMap
+from cudf.core.dtype.conversions import (
+    element_type_from_list_dtype,
+    fields_from_struct_dtype,
+    subtype_from_interval_dtype,
+)
 from cudf.core.dtype.validators import (
     is_dtype_obj_datetime_tz,
     is_dtype_obj_decimal,
@@ -341,16 +346,9 @@ def _wrap_and_validate(
     dtype_kind = dtype.kind
     valid_types: set[plc.TypeId] = set()
     wrapped: plc.Column | None = None
-    is_arrow_dtype = isinstance(dtype, pd.ArrowDtype)
     if is_dtype_obj_list(dtype):
         valid_types = {plc.TypeId.LIST}
-        child_dtype = (
-            pd.ArrowDtype(
-                cast("pd.ArrowDtype", dtype).pyarrow_dtype.value_type
-            )
-            if is_arrow_dtype
-            else cast("ListDtype", dtype).element_type
-        )
+        child_dtype = element_type_from_list_dtype(dtype)
         values, values_dtype = _wrap_and_validate(
             col.list_view().child(), child_dtype
         )
@@ -371,12 +369,7 @@ def _wrap_and_validate(
             raise ValueError(
                 "plc_column must have two children (left edges, right edges)."
             )
-        interval_subtype = (
-            pd.ArrowDtype(cast("pd.ArrowDtype", dtype).pyarrow_dtype.subtype)
-            if is_arrow_dtype
-            else cast("IntervalDtype", dtype).subtype
-        )
-        assert interval_subtype is not None
+        interval_subtype = subtype_from_interval_dtype(dtype)
         wrapped_children = [
             # Discarding the returned subtype since we assume it cannot have changed
             _wrap_and_validate(child, interval_subtype)[0]
@@ -393,16 +386,9 @@ def _wrap_and_validate(
     elif is_dtype_obj_struct(dtype):
         valid_types = {plc.TypeId.STRUCT}
         wrapped_children = []
-        struct_fields = (
-            (
-                (field.name, pd.ArrowDtype(field.type))
-                for field in cast("pd.ArrowDtype", dtype).pyarrow_dtype
-            )
-            if is_arrow_dtype
-            else cast("StructDtype", dtype).fields.items()
-        )
+        struct_fields = fields_from_struct_dtype(dtype)
         for child, (field_name, field_dtype) in zip(
-            col.children(), struct_fields, strict=True
+            col.children(), struct_fields.items(), strict=True
         ):
             try:
                 wrapped_child, _ = _wrap_and_validate(child, field_dtype)
