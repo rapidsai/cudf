@@ -41,7 +41,7 @@ jobs:
       sha: ${{ inputs.sha }}
   conda-cpp-benchmark-tests:
     secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/conda-cpp-tests.yaml@python-3.14
+    uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@python-3.14
     with:
       build_type: ${{ inputs.build_type }}
       branch: ${{ inputs.branch }}
