@@ -60,6 +60,7 @@ from cudf_polars.experimental.utils import _dynamic_planning_on
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
 
+    from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.streaming.core.channel import Channel
     from rapidsmpf.streaming.core.context import Context
 
@@ -148,6 +149,7 @@ def lower_dataframescan_rapidsmpf(
 @define_actor()
 async def dataframescan_node(
     context: Context,
+    comm: Communicator,
     ir: DataFrameScan,
     ir_context: IRExecutionContext,
     ch_out: Channel[TableChunk],
@@ -163,6 +165,8 @@ async def dataframescan_node(
     ----------
     context
         The rapidsmpf context.
+    comm
+        The communicator.
     ir
         The DataFrameScan node.
     ir_context
@@ -183,12 +187,12 @@ async def dataframescan_node(
         global_count = math.ceil(nrows / rows_per_partition) if nrows > 0 else 0
 
         # For single rank, simplify the logic
-        if context.comm().nranks == 1:
+        if comm.nranks == 1:
             local_count = global_count
             local_offset = 0
         else:
-            local_count = math.ceil(global_count / context.comm().nranks)
-            local_offset = local_count * context.comm().rank
+            local_count = math.ceil(global_count / comm.nranks)
+            local_offset = local_count * comm.rank
 
         # Send basic metadata
         await send_metadata(
@@ -281,6 +285,7 @@ def _(
         ir: [
             dataframescan_node(
                 context,
+                rec.state["comm"],
                 ir,
                 ir_context,
                 channels[ir].reserve_input_slot(),
@@ -383,6 +388,7 @@ async def read_chunk(
 @define_actor()
 async def scan_node(
     context: Context,
+    comm: Communicator,
     ir: Scan,
     ir_context: IRExecutionContext,
     ch_out: Channel[TableChunk],
@@ -399,6 +405,8 @@ async def scan_node(
     ----------
     context
         The rapidsmpf context.
+    comm
+        The communicator.
     ir
         The Scan node.
     ir_context
@@ -420,8 +428,8 @@ async def scan_node(
         scans: list[Scan | SplitScan] = []
         if plan.flavor == IOPartitionFlavor.SPLIT_FILES:
             count = plan.factor * len(ir.paths)
-            local_count = math.ceil(count / context.comm().nranks)
-            local_offset = local_count * context.comm().rank
+            local_count = math.ceil(count / comm.nranks)
+            local_offset = local_count * comm.rank
             path_offset = local_offset // plan.factor
             path_end = math.ceil((local_offset + local_count) / plan.factor)
             path_count = path_end - path_offset
@@ -459,8 +467,8 @@ async def scan_node(
 
         else:
             count = math.ceil(len(ir.paths) / plan.factor)
-            local_count = math.ceil(count / context.comm().nranks)
-            local_offset = local_count * context.comm().rank
+            local_count = math.ceil(count / comm.nranks)
+            local_offset = local_count * comm.rank
             paths_offset_start = local_offset * plan.factor
             paths_offset_end = paths_offset_start + plan.factor * local_count
             for offset in range(paths_offset_start, paths_offset_end, plan.factor):
@@ -545,6 +553,7 @@ async def scan_node(
 
 def make_rapidsmpf_read_parquet_node(
     context: Context,
+    comm: Communicator,
     ir: Scan,
     num_producers: int,
     ch_out: Channel[TableChunk],
@@ -558,6 +567,8 @@ def make_rapidsmpf_read_parquet_node(
     ----------
     context
         The rapidsmpf context.
+    comm
+        The communicator.
     ir
         The Scan node.
     num_producers
@@ -630,6 +641,7 @@ def make_rapidsmpf_read_parquet_node(
     try:
         return read_parquet(
             context,
+            comm,
             ch_out,
             num_producers,
             parquet_reader_options,
@@ -663,8 +675,7 @@ def _(
 
     # Native node cannot split large files in distributed mode yet
     distributed_split_files = (
-        plan.flavor == IOPartitionFlavor.SPLIT_FILES
-        and rec.state["context"].comm().nranks > 1
+        plan.flavor == IOPartitionFlavor.SPLIT_FILES and rec.state["comm"].nranks > 1
     )
 
     # Use rapidsmpf native read_parquet node if possible
@@ -686,6 +697,7 @@ def _(
         ch_in = rec.state["context"].create_channel()
         native_node = make_rapidsmpf_read_parquet_node(
             rec.state["context"],
+            rec.state["comm"],
             ir,
             num_producers,
             ch_in,
@@ -704,9 +716,7 @@ def _(
             ChannelMetadata(
                 # partition_info.count is the estimated "global" count.
                 # Just estimate the local count as well.
-                local_count=math.ceil(
-                    partition_info.count / rec.state["context"].comm().nranks
-                ),
+                local_count=math.ceil(partition_info.count / rec.state["comm"].nranks),
             ),
         )
         nodes[ir] = [native_node, metadata_node]
@@ -717,6 +727,7 @@ def _(
         nodes[ir] = [
             scan_node(
                 rec.state["context"],
+                rec.state["comm"],
                 ir,
                 rec.state["ir_context"],
                 ch_out,
@@ -732,6 +743,7 @@ def _(
 @define_actor()
 async def sink_node(
     context: Context,
+    comm: Communicator,
     ir: StreamingSink,
     ir_context: IRExecutionContext,
     ch_in: Channel[TableChunk],
@@ -746,6 +758,8 @@ async def sink_node(
     ----------
     context
         The rapidsmpf context.
+    comm
+        The communicator.
     ir
         The StreamingSink node.
     ir_context
@@ -773,9 +787,9 @@ async def sink_node(
         )
 
         path_root = f"{ir.sink.path}/part"
-        if context.comm().nranks > 1:
-            rank_width = math.ceil(math.log10(context.comm().nranks))
-            rank_str = str(context.comm().rank).zfill(rank_width)
+        if comm.nranks > 1:
+            rank_width = math.ceil(math.log10(comm.nranks))
+            rank_str = str(comm.rank).zfill(rank_width)
             path_root = f"{path_root}.{rank_str}"
         count_width = math.ceil(math.log10(metadata.local_count))
         count_width = max(count_width, 6)
@@ -841,6 +855,7 @@ def _(
     nodes[ir] = [
         sink_node(
             rec.state["context"],
+            rec.state["comm"],
             ir,
             rec.state["ir_context"],
             channels[ir.children[0]].reserve_output_slot(),

@@ -435,7 +435,7 @@ struct MixedInnerJoinTest : public MixedJoinPairReturnTest<T> {
 
       // Verify JIT filter_join_indices if provided
       if (!jit_predicate.empty()) {
-        auto jit_filter_result = cudf::jit_filter_join_indices(
+        auto jit_filter_result = cudf::filter_join_indices_jit(
           left_conditional,
           right_conditional,
           cudf::device_span<cudf::size_type const>(*hash_join_result.first),
@@ -446,7 +446,7 @@ struct MixedInnerJoinTest : public MixedJoinPairReturnTest<T> {
       }
 
       // Verify AST-based JIT filter_join_indices
-      auto jit_ast_filter_result = cudf::jit_filter_join_indices(
+      auto jit_ast_filter_result = cudf::filter_join_indices_jit(
         left_conditional,
         right_conditional,
         cudf::device_span<cudf::size_type const>(*hash_join_result.first),
@@ -911,7 +911,7 @@ TEST_F(MixedInnerJoinTest2, InvalidJoinKind)
     }
   )";
 
-  EXPECT_THROW(cudf::jit_filter_join_indices(left_table,
+  EXPECT_THROW(cudf::filter_join_indices_jit(left_table,
                                              right_table,
                                              left_span,
                                              right_span,
@@ -944,22 +944,22 @@ TEST_F(MixedInnerJoinTest2, UnsupportedColumnType)
   )";
 
   // JIT filter (string predicate) — struct in left table
-  EXPECT_THROW(cudf::jit_filter_join_indices(
+  EXPECT_THROW(cudf::filter_join_indices_jit(
                  struct_table, valid_table, span, span, jit_pred, cudf::join_kind::INNER_JOIN),
                std::invalid_argument);
 
   // JIT filter (string predicate) — struct in right table
-  EXPECT_THROW(cudf::jit_filter_join_indices(
+  EXPECT_THROW(cudf::filter_join_indices_jit(
                  valid_table, struct_table, span, span, jit_pred, cudf::join_kind::INNER_JOIN),
                std::invalid_argument);
 
   // JIT filter (AST predicate) — struct in left table
-  EXPECT_THROW(cudf::jit_filter_join_indices(
+  EXPECT_THROW(cudf::filter_join_indices_jit(
                  struct_table, valid_table, span, span, pred, cudf::join_kind::INNER_JOIN),
                std::invalid_argument);
 
   // JIT filter (AST predicate) — struct in right table
-  EXPECT_THROW(cudf::jit_filter_join_indices(
+  EXPECT_THROW(cudf::filter_join_indices_jit(
                  valid_table, struct_table, span, span, pred, cudf::join_kind::INNER_JOIN),
                std::invalid_argument);
 }
@@ -988,7 +988,7 @@ TEST_F(MixedInnerJoinTest2, JitOnlyPredicate)
   )";
 
   auto result =
-    cudf::jit_filter_join_indices(left_conditional,
+    cudf::filter_join_indices_jit(left_conditional,
                                   right_conditional,
                                   cudf::device_span<cudf::size_type const>(*hash_result.first),
                                   cudf::device_span<cudf::size_type const>(*hash_result.second),
@@ -1091,7 +1091,7 @@ struct MixedLeftJoinTest : public MixedJoinPairReturnTest<T> {
 
       // Verify JIT filter_join_indices if provided
       if (!jit_predicate.empty()) {
-        auto jit_filter_result = cudf::jit_filter_join_indices(
+        auto jit_filter_result = cudf::filter_join_indices_jit(
           left_conditional,
           right_conditional,
           cudf::device_span<cudf::size_type const>(*hash_join_result.first),
@@ -1102,7 +1102,7 @@ struct MixedLeftJoinTest : public MixedJoinPairReturnTest<T> {
       }
 
       // Verify AST-based JIT filter_join_indices
-      auto jit_ast_filter_result = cudf::jit_filter_join_indices(
+      auto jit_ast_filter_result = cudf::filter_join_indices_jit(
         left_conditional,
         right_conditional,
         cudf::device_span<cudf::size_type const>(*hash_join_result.first),
@@ -1369,7 +1369,7 @@ struct MixedFullJoinTest : public MixedJoinPairReturnTest<T> {
 
       // Verify JIT filter_join_indices if provided
       if (!jit_predicate.empty()) {
-        auto jit_filter_result = cudf::jit_filter_join_indices(
+        auto jit_filter_result = cudf::filter_join_indices_jit(
           left_conditional,
           right_conditional,
           cudf::device_span<cudf::size_type const>(*hash_join_result.first),
@@ -1380,7 +1380,7 @@ struct MixedFullJoinTest : public MixedJoinPairReturnTest<T> {
       }
 
       // Verify AST-based JIT filter_join_indices
-      auto jit_ast_filter_result = cudf::jit_filter_join_indices(
+      auto jit_ast_filter_result = cudf::filter_join_indices_jit(
         left_conditional,
         right_conditional,
         cudf::device_span<cudf::size_type const>(*hash_join_result.first),
