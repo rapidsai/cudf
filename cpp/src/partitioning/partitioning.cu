@@ -514,7 +514,7 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition_table(
     auto row_partition_numbers = rmm::device_uvector<size_type>(num_rows, stream);
 
     // Compute partition number for each row
-    constexpr size_type block_size = FALLBACK_BLOCK_SIZE;
+    constexpr auto block_size = FALLBACK_BLOCK_SIZE;
     auto const grid_size = util::div_rounding_up_safe(num_rows, static_cast<size_type>(block_size));
 
     if (is_power_two(num_partitions)) {
@@ -527,12 +527,15 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition_table(
         hasher, num_rows, partitioner_type(num_partitions), row_partition_numbers.data());
     }
 
-    // Build histogram via cub::DeviceHistogram::HistogramEven
-    rmm::device_uvector<size_type> histogram(num_partitions + 1, stream);
+    // Build histogram via cub::DeviceHistogram::HistogramEven.
+    // HistogramEven writes num_partitions bins; the extra element is used by the exclusive scan
+    // below to produce the total row count as the last offset. Zero-initialize to avoid UB.
+    auto histogram = cudf::detail::make_zeroed_device_uvector_async<size_type>(
+      num_partitions + 1, stream, cudf::get_current_device_resource_ref());
     {
-      std::size_t const num_levels = num_partitions + 1;
-      size_type const lower_level  = 0;
-      size_type const upper_level  = num_partitions;
+      auto const num_levels  = static_cast<std::size_t>(num_partitions + 1);
+      auto const lower_level = size_type{0};
+      auto const upper_level = num_partitions;
 
       std::size_t temp_storage_bytes{};
       cub::DeviceHistogram::HistogramEven(nullptr,
