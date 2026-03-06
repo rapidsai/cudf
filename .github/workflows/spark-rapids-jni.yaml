@@ -19,78 +19,51 @@ jobs:
       - uses: actions/checkout@v4
         with:
           path: thirdparty/cudf
-      - name: Setup sccache client
-        run: |
-          set -euo pipefail
-
-          # Install jq
-          dnf -y install jq
-
-          # Install latest rapidsai/sccache client
-          wget --no-hsts -q -O- "https://github.com/rapidsai/sccache/releases/latest/download/sccache-$(uname -m)-unknown-linux-musl.tar.gz" \
-            | tar -C /usr/bin -vzf - --wildcards --strip-components=1 -x '*/sccache'
-
-          # Don't use the build cluster for CMake's compiler tests
-          echo -e '\nset(ENV{SCCACHE_NO_DIST_COMPILE} "1")' >> thirdparty/cudf-pins/add_dependency_pins.cmake
-
-          # Memory (in KB) used by each `sccache <compiler> ...` invocation from ninja
-          # * 1.5Mb for the shell launched by ninja
-          # * 6MiB for each sccache client process
-          # * round up
-          mem_per_sccache_client="$((1024 * 8))"
-
-          # It's usually around 400-600MiB, but be conservative
-          # and assume the sccache daemon will use 1GiB of RAM
-          mem_for_sccache_daemon="$((1 * 1024 * 1024))"
-
-          # Preprocessor invocations take ~250Mb or so
-          mem_for_preprocessor="$(($(nproc --all) * 250 * 1024))"
-
-          # Available memory (in KB), for more details see free(1).
-          mem_avail="$(cat /proc/meminfo | grep MemAvailable | tr -s '[:space:]' | cut -d' ' -f2)"
-
-          # Total job count is available memory after accounting for `nproc` preprocessor calls
-          # divided by the amount of memory required to invoke the sccache thin client process.
-          echo "CPP_PARALLEL_LEVEL=$(((mem_avail - mem_for_preprocessor - mem_for_sccache_daemon) / mem_per_sccache_client))" >> "$GITHUB_ENV"
-
-          # Build 100 GPU archs in parallel
-          echo "NVCC_APPEND_FLAGS=-t=100" >> "$GITHUB_ENV"
-
-          # Use sccache for C, C++, and CUDA compilations
-          cat <<EOF >> "$GITHUB_ENV"
-          CMAKE_C_COMPILER_LAUNCHER=/usr/bin/sccache
-          CMAKE_CXX_COMPILER_LAUNCHER=/usr/bin/sccache
-          CMAKE_CUDA_COMPILER_LAUNCHER=/usr/bin/sccache
-          EOF
-
-          # Build cache configuration
-          cat <<EOF >> "$GITHUB_ENV"
-          SCCACHE_BUCKET=rapids-sccache-east
-          SCCACHE_REGION=${{ vars.AWS_REGION }}
-          SCCACHE_IDLE_TIMEOUT=0
-          SCCACHE_S3_USE_SSL=true
-          SCCACHE_S3_KEY_PREFIX=spark-rapids-jni
-          SCCACHE_S3_NO_CREDENTIALS=false
-          SCCACHE_S3_PREPROCESSOR_CACHE_KEY_PREFIX=spark-rapids-jni/preprocessor
-          SCCACHE_S3_USE_PREPROCESSOR_CACHE_MODE=true
-          EOF
-
-          # Build cluster endpoint
-          cat <<EOF >> "$GITHUB_ENV"
-          SCCACHE_DIST_AUTH_TYPE=token
-          SCCACHE_DIST_SCHEDULER_URL=https://$(uname -m | sed -e 's/x86_64/amd64/' -e 's/aarch64/arm64/').linux.sccache.rapids.nvidia.com
-          EOF
-      - name: Setup sccache-dist
-        uses: rapidsai/shared-actions/setup-sccache-dist@main
-        with:
-          log-level: sccache=info
       - uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # v6.0.0
         with:
           role-to-assume: ${{ vars.AWS_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION }}
           role-duration-seconds: 43200 # 12h
       - name: "Build spark-rapids-jni"
+        env:
+          SCCACHE_S3_KEY_PREFIX: spark-rapids-jni
+          SCCACHE_S3_PREPROCESSOR_CACHE_KEY_PREFIX: spark-rapids-jni/preprocessor
+          SCCACHE_S3_USE_PREPROCESSOR_CACHE_MODE: true
         run: |
+          set -euo pipefail
+
+          ###
+          # Setup sccache client
+          ###
+
+          # Install jq
+          dnf -y install jq
+
+          # Download gha-tools
+          wget https://github.com/rapidsai/gha-tools/releases/latest/download/tools.tar.gz -O - | tar -xz -C /usr/local/bin
+
+          # Build cluster endpoint
+          export SCCACHE_DIST_SCHEDULER_URL="https://$(uname -m | sed -e 's/x86_64/amd64/' -e 's/aarch64/arm64/').linux.sccache.rapids.nvidia.com"
+
+          export SCCACHE_DIST_AUTH_TOKEN="$(
+            curl -fsSL -H "Authorization: Bearer $(
+              curl -fsSL -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+                "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=token.rapids.nvidia.com" \
+            | jq -r '.value'
+            )" https://token.rapids.nvidia.com/gh/token/exchange \
+          | jq -r '.token')"
+
+          # Install sccache client
+          . rapids-install-sccache
+
+          # Configure sccache
+          . rapids-configure-sccache
+
+          export CPP_PARALLEL_LEVEL="$PARALLEL_LEVEL"
+
+          # Don't use the build cluster for CMake's compiler tests
+          echo -e '\nset(ENV{SCCACHE_NO_DIST_COMPILE} "1")' >> thirdparty/cudf-pins/add_dependency_pins.cmake
+
           echo "------------------------"
           env | sort
           echo "------------------------"
@@ -115,3 +88,5 @@ jobs:
 
           mkdir target
           source build/env.sh && CMAKE_CUDA_ARCHITECTURES=90 LIBCUDF_DEPENDENCY_MODE=latest USE_GDS=on ${sclCMD} build/buildcpp.sh
+
+          sccache --show-stats
