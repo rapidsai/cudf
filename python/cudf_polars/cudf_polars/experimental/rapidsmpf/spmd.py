@@ -163,7 +163,7 @@ def allgather_polars_dataframe(
     Parameters
     ----------
     comm
-        The RapidsMPF communicator shared across all ranks.
+        The RapidsMPF communicator.
     ctx
         The RapidsMPF context.
     local_df

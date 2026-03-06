@@ -624,9 +624,9 @@ class SPMDContext:
     Parameters
     ----------
     comm
-        The RapidsMPF communicator shared across all ranks.
+        The active RapidsMPF communicator.
     context
-        The RapidsMPF context shared across all ranks.
+        The active RapidsMPF context.
     py_executor
         Thread-pool executor used to drive the actor network on each rank.
     """
