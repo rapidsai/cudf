@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -11,6 +11,7 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 
+#include <cuda/std/iterator>
 #include <thrust/iterator/counting_iterator.h>
 
 #include <nvbench/nvbench.cuh>
@@ -53,7 +54,7 @@ static void BM_binaryop_transform(nvbench::state& state)
       }
     } else {
       auto result = cudf::binary_operation(table.column(0), table.column(1), op, result_data_type);
-      std::for_each(std::next(table.begin(), 2), table.end(), [&](auto const& col) {
+      std::for_each(cuda::std::next(table.begin(), 2), table.end(), [&](auto const& col) {
         result = cudf::binary_operation(result->view(), col, op, result_data_type);
       });
     }

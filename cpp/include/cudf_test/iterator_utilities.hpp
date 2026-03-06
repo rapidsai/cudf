@@ -41,7 +41,7 @@ namespace iterators {
 template <typename Iter>
 [[maybe_unused]] static auto nulls_at(Iter index_start, Iter index_end)
 {
-  using index_type = typename std::iterator_traits<Iter>::value_type;
+  using index_type = typename cuda::std::iterator_traits<Iter>::value_type;
 
   return cudf::detail::make_counting_transform_iterator(
     0, [indices = std::vector<index_type>{index_start, index_end}](auto i) {

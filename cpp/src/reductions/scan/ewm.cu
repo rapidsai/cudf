@@ -16,6 +16,7 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
+#include <cuda/std/iterator>
 #include <cuda/std/utility>
 #include <thrust/scan.h>
 #include <thrust/transform_scan.h>
@@ -144,7 +145,7 @@ rmm::device_uvector<cudf::size_type> null_roll_up(column_view const& input,
                                 invalid_it,
                                 invalid_it + input.size() - 1,
                                 invalid_it,
-                                std::next(output.begin()));
+                                cuda::std::next(output.begin()));
   return output;
 }
 

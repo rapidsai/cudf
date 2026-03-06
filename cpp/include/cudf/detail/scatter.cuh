@@ -75,12 +75,12 @@ auto scatter_to_gather(MapIterator scatter_map_begin,
                              std::numeric_limits<size_type>::lowest());
 
   // Convert scatter map to a gather map
-  thrust::scatter(
-    rmm::exec_policy_nosync(stream),
-    thrust::make_counting_iterator<MapValueType>(0),
-    thrust::make_counting_iterator<MapValueType>(std::distance(scatter_map_begin, scatter_map_end)),
-    scatter_map_begin,
-    gather_map.begin());
+  thrust::scatter(rmm::exec_policy_nosync(stream),
+                  thrust::make_counting_iterator<MapValueType>(0),
+                  thrust::make_counting_iterator<MapValueType>(
+                    cuda::std::distance(scatter_map_begin, scatter_map_end)),
+                  scatter_map_begin,
+                  gather_map.begin());
 
   return gather_map;
 }
@@ -219,7 +219,7 @@ struct column_scatterer_impl<dictionary32> {
     auto target_itr  = indexalator_factory::make_output_iterator(new_indices->mutable_view());
     thrust::scatter(rmm::exec_policy_nosync(stream),
                     source_itr,
-                    source_itr + std::distance(scatter_map_begin, scatter_map_end),
+                    source_itr + cuda::std::distance(scatter_map_begin, scatter_map_end),
                     scatter_map_begin,
                     target_itr);
 
@@ -258,7 +258,7 @@ struct column_scatterer_impl<struct_view> {
     CUDF_EXPECTS(source.num_children() == target.num_children(),
                  "Scatter source and target are not of the same type.");
 
-    auto const scatter_map_size = std::distance(scatter_map_begin, scatter_map_end);
+    auto const scatter_map_size = cuda::std::distance(scatter_map_begin, scatter_map_end);
     if (scatter_map_size == 0) { return std::make_unique<column>(target, stream, mr); }
 
     structs_column_view const structs_src(source);
@@ -374,7 +374,7 @@ std::unique_ptr<table> scatter(table_view const& source,
 
   using MapType = cuda::std::iter_value_t<MapIterator>;
 
-  CUDF_EXPECTS(std::distance(scatter_map_begin, scatter_map_end) <= source.num_rows(),
+  CUDF_EXPECTS(cuda::std::distance(scatter_map_begin, scatter_map_end) <= source.num_rows(),
                "scatter map size should be <= to number of rows in source");
 
   // Transform negative indices to index + target size.

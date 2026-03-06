@@ -663,7 +663,7 @@ device_span<char> ingest_raw_input(device_span<char> buffer,
                                 [](std::unique_ptr<datasource> const& s) { return s->size(); });
   auto upper =
     std::upper_bound(prefsum_source_sizes.begin(), prefsum_source_sizes.end(), range_offset);
-  std::size_t start_source = std::distance(prefsum_source_sizes.begin(), upper);
+  std::size_t start_source = cuda::std::distance(prefsum_source_sizes.begin(), upper);
 
   auto const total_bytes_to_read = std::min(range_size, prefsum_source_sizes.back() - range_offset);
   range_offset -= start_source ? prefsum_source_sizes[start_source - 1] : 0;

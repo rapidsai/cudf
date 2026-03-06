@@ -12,6 +12,7 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/logger.hpp>
 
+#include <cuda/std/iterator>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
 
@@ -430,7 +431,7 @@ std::vector<byte_range_info> aggregate_reader_metadata::get_dictionary_page_byte
                            "Column chunk with schema index " + std::to_string(schema_idx) +
                              " not found in row group",
                            std::invalid_argument);
-              colchunk_iter_offset = std::distance(row_group.columns.begin(), colchunk_iter);
+              colchunk_iter_offset = cuda::std::distance(row_group.columns.begin(), colchunk_iter);
             }
             auto const colchunk_iter = row_group.columns.begin() + colchunk_iter_offset.value();
             auto const& col_chunk    = *colchunk_iter;

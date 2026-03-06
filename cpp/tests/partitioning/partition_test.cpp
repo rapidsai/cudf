@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #include <cudf_test/base_fixture.hpp>
@@ -14,6 +14,7 @@
 #include <cudf/sorting.hpp>
 #include <cudf/table/table.hpp>
 
+#include <cuda/std/iterator>
 #include <cuda/std/tuple>
 #include <thrust/iterator/zip_iterator.h>
 
@@ -89,7 +90,9 @@ void expect_equal_partitions(cudf::table_view expected,
   // Need to convert partition offsets into split points by dropping the first
   // and last element
   std::vector<cudf::size_type> split_points;
-  std::copy(std::next(offsets.begin()), std::prev(offsets.end()), std::back_inserter(split_points));
+  std::copy(cuda::std::next(offsets.begin()),
+            cuda::std::prev(offsets.end()),
+            std::back_inserter(split_points));
 
   // Split the partitions, sort each partition, then compare for equality
   auto actual_split   = cudf::split(actual, split_points);

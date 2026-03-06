@@ -25,6 +25,8 @@
 #include <rmm/mr/owning_wrapper.hpp>
 #include <rmm/mr/pool_memory_resource.hpp>
 
+#include <cuda/std/iterator>
+
 #include <algorithm>
 #include <cstdlib>
 #include <ctime>
@@ -110,7 +112,7 @@ cudf::size_type table_with_names::column_id(std::string const& col_name) const
     std::string err_msg = "Column `" + col_name + "` not found";
     throw std::runtime_error(err_msg);
   }
-  return std::distance(col_names.begin(), it);
+  return cuda::std::distance(col_names.begin(), it);
 }
 
 table_with_names& table_with_names::append(std::unique_ptr<cudf::column>& col,

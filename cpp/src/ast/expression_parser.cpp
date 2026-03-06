@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #include <cudf/ast/detail/expression_parser.hpp>
@@ -10,6 +10,7 @@
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
 
+#include <cuda/std/iterator>
 #include <thrust/iterator/transform_iterator.h>
 
 #include <algorithm>
@@ -311,7 +312,7 @@ cudf::size_type expression_parser::add_data_reference(detail::device_data_refere
   // reference and return the new index.
   auto const it = std::find(_data_references.cbegin(), _data_references.cend(), data_ref);
   if (it != _data_references.cend()) {
-    return std::distance(_data_references.cbegin(), it);
+    return cuda::std::distance(_data_references.cbegin(), it);
   } else {
     _data_references.push_back(data_ref);
     return _data_references.size() - 1;

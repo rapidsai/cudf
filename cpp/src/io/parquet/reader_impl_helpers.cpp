@@ -18,6 +18,7 @@
 #include <cudf/io/parquet_schema.hpp>
 #include <cudf/logger.hpp>
 
+#include <cuda/std/iterator>
 #include <cuda/std/tuple>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
@@ -447,8 +448,10 @@ std::vector<metadata> aggregate_reader_metadata::metadatas_from_sources(
   std::vector<std::future<metadata>> metadata_ctor_tasks;
   metadata_ctor_tasks.reserve(sources.size());
   for (auto const& source : sources) {
-    metadata_ctor_tasks.emplace_back(cudf::detail::host_worker_pool().submit_task(
-      [source = source.get(), read_page_indexes] { return metadata{source, read_page_indexes}; }));
+    metadata_ctor_tasks.emplace_back(
+      cudf::detail::host_worker_pool().submit_task([source = source.get(), read_page_indexes] {
+        return metadata{source, read_page_indexes};
+      }));
   }
   std::vector<metadata> metadatas;
   metadatas.reserve(sources.size());
@@ -471,7 +474,9 @@ aggregate_reader_metadata::collect_keyval_metadata() const
                    std::transform(pfm.key_value_metadata.cbegin(),
                                   pfm.key_value_metadata.cend(),
                                   std::inserter(kv_map, kv_map.end()),
-                                  [](auto const& kv) { return std::pair{kv.key, kv.value}; });
+                                  [](auto const& kv) {
+                                    return std::pair{kv.key, kv.value};
+                                  });
                    return kv_map;
                  });
 
@@ -1506,11 +1511,11 @@ aggregate_reader_metadata::select_row_groups(
       // if row bounds were previously applied
       if (is_row_bounded_row_groups) {
         // Find the source index of the first non-empty row group
-        auto const first_non_empty_source_idx =
-          std::distance(current_row_group_indices.begin(),
-                        std::find_if(current_row_group_indices.begin(),
-                                     current_row_group_indices.end(),
-                                     [](auto const& indices) { return not indices.empty(); }));
+        auto const first_non_empty_source_idx = cuda::std::distance(
+          current_row_group_indices.begin(),
+          std::find_if(current_row_group_indices.begin(),
+                       current_row_group_indices.end(),
+                       [](auto const& indices) { return not indices.empty(); }));
 
         // Update the rows to skip relative to the first surviving row group
         if (std::cmp_less(first_non_empty_source_idx, current_row_group_indices.size())) {

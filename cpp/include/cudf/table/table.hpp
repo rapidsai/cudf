@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -10,6 +10,8 @@
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+
+#include <cuda/std/iterator>
 
 #include <memory>
 #include <vector>
@@ -143,7 +145,7 @@ class table {
   template <typename InputIterator>
   [[nodiscard]] table_view select(InputIterator begin, InputIterator end) const
   {
-    std::vector<column_view> columns(std::distance(begin, end));
+    std::vector<column_view> columns(cuda::std::distance(begin, end));
     std::transform(
       begin, end, columns.begin(), [this](auto index) { return _columns.at(index)->view(); });
     return table_view{columns};
