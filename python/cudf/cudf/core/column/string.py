@@ -345,6 +345,11 @@ class StringColumn(ColumnBase, Scannable):
             return cast(Self, ColumnBase.create(self.plc_column, dtype))
         return self
 
+    def astype(self, dtype: DtypeObj, copy: bool | None = False) -> Self:
+        if not copy and isinstance(dtype, np.dtype) and dtype.kind == "U":
+            return self
+        return super().astype(dtype, copy)  # type: ignore[return-value]
+
     @property
     def values(self) -> cp.ndarray:
         """

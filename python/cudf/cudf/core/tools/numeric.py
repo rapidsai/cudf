@@ -260,7 +260,7 @@ def _convert_str_col(
         if errors == "coerce":
             non_numerics = is_float.unary_operator("not")
             converted_col[non_numerics] = None
-            converted_col = converted_col.astype(np.dtype(np.float64))  # type: ignore[assignment]
+            converted_col = converted_col.astype(np.dtype(np.float64))
             return converted_col  # type: ignore[return-value]
         else:
             raise ValueError("Unable to convert some strings to numerics.")

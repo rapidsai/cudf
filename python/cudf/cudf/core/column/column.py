@@ -343,12 +343,6 @@ def _wrap_and_validate(col: plc.Column, dtype: DtypeObj) -> plc.Column:
             f"{col.type().id()}. If normalization is required, please run the "
             "column through _normalize_types_column first."
         )
-    if isinstance(dtype, np.dtype) and dtype.kind == "U":
-        raise ValueError(
-            f"dtype {dtype} is a numpy Unicode dtype. "
-            "Normalize to np.dtype('O') before calling "
-            "ColumnBase.create."
-        )
 
     dtype_kind = dtype.kind
     children: list[plc.Column] = []
@@ -387,7 +381,7 @@ def _wrap_and_validate(col: plc.Column, dtype: DtypeObj) -> plc.Column:
                     f"Field '{field_name}' validation failed"
                 ) from e
             children.append(wrapped_child)
-    elif is_dtype_obj_string(dtype):
+    elif is_dtype_obj_string(dtype) or dtype_kind == "U":
         valid_types = {plc.TypeId.STRING}
         # An empty string column may have no children.
         if col.num_children() == 1:
@@ -924,6 +918,12 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         target_cls = ColumnBase._dispatch_subclass_from_dtype(dtype)
         self = target_cls.__new__(target_cls)
         self.plc_column = _wrap_and_validate(col, dtype) if validate else col
+        if (
+            target_cls is cudf.core.column.StringColumn
+            and isinstance(dtype, np.dtype)
+            and dtype.kind == "U"
+        ):
+            dtype = CUDF_STRING_DTYPE
         self._dtype = dtype
         self._distinct_count = {}
         self._has_nulls = {}
@@ -980,6 +980,8 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         if is_dtype_obj_numeric(dtype, include_decimal=False):
             return cudf.core.column.NumericalColumn
 
+        if dtype_kind == "U":
+            return cudf.core.column.StringColumn
         raise TypeError(f"Unrecognized dtype: {dtype}")
 
     @staticmethod
