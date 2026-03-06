@@ -7,7 +7,8 @@ from functools import cache
 import cupy as cp
 import numpy as np
 from numba import cuda, types
-from numba.core.errors import TypingError
+from numba.core.errors import TypingError as CoreTypingError
+from numba.cuda.core.errors import TypingError as CudaTypingError
 from numba.cuda.cudadrv.devices import get_context
 from numba.np import numpy_support
 
@@ -189,7 +190,7 @@ def _can_be_jitted(frame, func, args):
     try:
         kr._get_udf_return_type()
         return True
-    except (UDFError, TypingError):
+    except (UDFError, CoreTypingError, CudaTypingError):
         return False
 
 

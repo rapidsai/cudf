@@ -111,14 +111,15 @@ class PDSDSPolarsQueries(PDSDSQueries):
         ],
         24: [pl.col("paid").cast(pl.Decimal(18, 2))],
         30: [pl.col("ctr_total_return").cast(pl.Decimal(18, 2))],
-        32: [pl.col("excess discount amount").cast(pl.Decimal(18, 2))],
         31: [
             pl.col("web_q1_q2_increase").cast(pl.Decimal(38, 2)),
             pl.col("store_q1_q2_increase").cast(pl.Decimal(38, 2)),
             pl.col("web_q2_q3_increase").cast(pl.Decimal(38, 2)),
             pl.col("store_q2_q3_increase").cast(pl.Decimal(38, 2)),
         ],
+        32: [pl.col("excess discount amount").cast(pl.Decimal(18, 2))],
         33: [pl.col("total_sales").cast(pl.Decimal(18, 2))],
+        42: [pl.col("sum(ss_ext_sales_price)").cast(pl.Decimal(18, 2))],
         63: [pl.col("sum_sales").cast(pl.Decimal(18, 2))],
         64: [
             pl.col("s1").cast(pl.Decimal(18, 2)),
