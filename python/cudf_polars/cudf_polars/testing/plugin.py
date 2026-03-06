@@ -12,7 +12,7 @@ import pytest
 
 import polars
 
-from cudf_polars.utils.config import StreamingFallbackMode
+from cudf_polars.utils.config import Runtime, StreamingFallbackMode
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -46,6 +46,13 @@ def pytest_addoption(parser: pytest.Parser) -> None:
             "to run most tests with multiple partitions."
         ),
     )
+    group.addoption(
+        "--runtime",
+        action="store",
+        default="tasks",
+        choices=("tasks", "rapidsmpf"),
+        help="Runtime to use for the 'streaming' executor.",
+    )
 
 
 def pytest_configure(config: pytest.Config) -> None:
@@ -53,6 +60,7 @@ def pytest_configure(config: pytest.Config) -> None:
     no_fallback = config.getoption("--cudf-polars-no-fallback")
     executor = config.getoption("--executor")
     blocksize_mode = config.getoption("--blocksize-mode")
+    runtime = config.getoption("--runtime")
     if no_fallback:
         collect = polars.LazyFrame.collect
         engine = polars.GPUEngine(raise_on_fail=no_fallback)
@@ -68,6 +76,7 @@ def pytest_configure(config: pytest.Config) -> None:
         executor_options["target_partition_size"] = 10
         # We expect many tests to fall back, so silence the warnings
         executor_options["fallback_mode"] = StreamingFallbackMode.SILENT
+        executor_options["runtime"] = Runtime[runtime.upper()]
         collect = polars.LazyFrame.collect
         engine = polars.GPUEngine(executor=executor, executor_options=executor_options)
         polars.LazyFrame.collect = partialmethod(collect, engine=engine)  # type: ignore[method-assign, assignment]
