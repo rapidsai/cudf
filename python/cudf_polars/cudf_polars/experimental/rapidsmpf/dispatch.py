@@ -33,7 +33,7 @@ class FanoutInfo(NamedTuple):
     """Whether the node needs unbounded fanout."""
 
 
-class GenState(TypedDict, total=False):
+class GenState(TypedDict):
     """
     State used for generating a streaming sub-network.
 
@@ -58,8 +58,6 @@ class GenState(TypedDict, total=False):
         Statistics collector.
     collective_id_map
         The mapping of IR nodes to lists of collective IDs.
-    root_ir
-        The root IR node (used e.g. to make root Slice a pass-through).
     """
 
     context: Context
@@ -71,7 +69,6 @@ class GenState(TypedDict, total=False):
     max_io_threads: int
     stats: StatsCollector
     collective_id_map: dict[IR, list[int]]
-    root_ir: IR
 
 
 SubNetGenerator: TypeAlias = GenericTransformer[

@@ -21,7 +21,7 @@ import pylibcudf as plc
 
 from cudf_polars.containers import DataFrame, DataType
 from cudf_polars.dsl.expr import Col
-from cudf_polars.dsl.ir import Sort
+from cudf_polars.dsl.ir import Empty, Sort
 from cudf_polars.dsl.utils.naming import unique_names
 from cudf_polars.experimental.rapidsmpf.collectives.allgather import AllGatherManager
 from cudf_polars.experimental.rapidsmpf.collectives.shuffle import ShuffleManager
@@ -30,6 +30,8 @@ from cudf_polars.experimental.rapidsmpf.nodes import shutdown_on_error
 from cudf_polars.experimental.rapidsmpf.utils import (
     ChannelManager,
     chunk_to_frame,
+    concat_batch,
+    empty_table_chunk,
     make_spill_function,
     names_to_indices,
     recv_metadata,
@@ -49,24 +51,27 @@ if TYPE_CHECKING:
 
     from cudf_polars.dsl.ir import IRExecutionContext
     from cudf_polars.experimental.rapidsmpf.dispatch import SubNetGenerator
+    from cudf_polars.typing import Schema
 
 
-def _boundary_schema(
-    by: list[str], by_dtypes: list[DataType]
-) -> tuple[list[str], list[DataType]]:
+def _boundary_schema(by: list[str], by_dtypes: list[DataType]) -> Schema:
     """Schema of boundaries table."""
     name_gen = unique_names(by)
     part_id_dtype = DataType(pl.UInt32())
-    names = [*list(by), next(name_gen), next(name_gen)]
-    dtypes = [*list(by_dtypes), part_id_dtype, part_id_dtype]
-    return names, dtypes
+    return dict(
+        zip(
+            [*list(by), next(name_gen), next(name_gen)],
+            [*list(by_dtypes), part_id_dtype, part_id_dtype],
+            strict=False,
+        )
+    )
 
 
 async def _compute_sort_boundaries(
     context: Context,
     comm: Communicator,
     ir_context: IRExecutionContext,
-    local_candidates_list: list[DataFrame],
+    local_candidates_list: list[TableChunk],
     by: list[str],
     by_dtypes: list[DataType],
     num_partitions: int,
@@ -76,35 +81,28 @@ async def _compute_sort_boundaries(
 ) -> plc.Table:
     """Compute global sort boundaries."""
     stream = ir_context.get_cuda_stream()
-    if local_candidates_list:
-        combined = plc.concatenate.concatenate(
-            [c.table for c in local_candidates_list], stream=stream
-        )
-        local_df = DataFrame.from_table(
-            combined,
-            list(local_candidates_list[0].column_names),
-            list(local_candidates_list[0].dtypes),
-            stream=stream,
-        )
-        local_boundaries_df = _get_final_sort_boundaries(
-            local_df, column_order, null_order, num_partitions
-        )
-    else:
-        boundary_names, boundary_dtypes = _boundary_schema(by, by_dtypes)
-        empty_tbl = plc.Table(
-            [
-                plc.column_factories.make_empty_column(
-                    boundary_dtypes[i].plc_type, stream=stream
-                )
-                for i in range(len(boundary_names))
-            ]
-        )
-        local_boundaries_df = DataFrame.from_table(
-            empty_tbl, boundary_names, boundary_dtypes, stream=stream
-        )
+    boundary_ir = Empty(_boundary_schema(by, by_dtypes))
+    local_boundaries_df = _get_final_sort_boundaries(
+        chunk_to_frame(
+            await concat_batch(
+                local_candidates_list,
+                context,
+                boundary_ir.schema,
+                ir_context,
+            )
+            if local_candidates_list
+            else empty_table_chunk(
+                boundary_ir,
+                context,
+                stream,
+            ),
+            boundary_ir,
+        ),
+        column_order,
+        null_order,
+        num_partitions,
+    )
 
-    names = list(local_boundaries_df.column_names)
-    dtypes = list(local_boundaries_df.dtypes)
     if comm.nranks > 1:
         allgather = AllGatherManager(context, comm, allgather_id)
         chunk = TableChunk.from_pylibcudf_table(
@@ -121,8 +119,8 @@ async def _compute_sort_boundaries(
     boundaries_df = _get_final_sort_boundaries(
         DataFrame.from_table(
             concat_table,
-            names,
-            dtypes,
+            list(boundary_ir.schema.keys()),
+            list(boundary_ir.schema.values()),
             stream=local_boundaries_df.stream,
         ),
         column_order,
@@ -130,17 +128,20 @@ async def _compute_sort_boundaries(
         num_partitions,
     )
 
-    return plc.copying.gather(
-        boundaries_df.table,
-        plc.filling.sequence(
-            boundaries_df.table.num_rows(),
-            plc.Scalar.from_py(0, plc.types.SIZE_TYPE, stream=stream),
-            plc.Scalar.from_py(1, plc.types.SIZE_TYPE, stream=stream),
-            stream=stream,
-        ),
-        plc.copying.OutOfBoundsPolicy.DONT_CHECK,
-        stream=stream,
-    )
+    if boundaries_df.table.num_rows() > 0:
+        return plc.copying.gather(
+            boundaries_df.table,
+            plc.filling.sequence(
+                boundaries_df.table.num_rows(),
+                plc.Scalar.from_py(0, plc.types.SIZE_TYPE, stream=stream),
+                plc.Scalar.from_py(1, plc.types.SIZE_TYPE, stream=stream),
+                stream=boundaries_df.stream,
+            ),
+            plc.copying.OutOfBoundsPolicy.DONT_CHECK,
+            stream=boundaries_df.stream,
+        )
+    else:
+        return boundaries_df.table
 
 
 @define_actor()
@@ -174,7 +175,7 @@ async def sort_actor(
 
         chunks_buffer = SpillableMessages()
         message_ids: list[int] = []
-        local_candidates_list: list[DataFrame] = []
+        local_candidates_list: list[TableChunk] = []
         spill_func_id = context.br().spill_manager.add_spill_function(
             make_spill_function([chunks_buffer], context), priority=0
         )
@@ -190,16 +191,20 @@ async def sort_actor(
                     ir.children[0],
                 )
                 local_candidates_list.append(
-                    _select_local_split_candidates(
-                        DataFrame.from_table(
-                            plc.Table([df.table.columns()[i] for i in by_indices]),
+                    TableChunk.from_pylibcudf_table(
+                        _select_local_split_candidates(
+                            DataFrame.from_table(
+                                plc.Table([df.table.columns()[i] for i in by_indices]),
+                                by,
+                                by_dtypes,
+                                stream=df.stream,
+                            ),
                             by,
-                            by_dtypes,
-                            stream=df.stream,
-                        ),
-                        by,
-                        num_partitions,
-                        seq_num,
+                            num_partitions,
+                            seq_num,
+                        ).table,
+                        df.stream,
+                        exclusive_view=True,
                     )
                 )
                 if sort_ir.stable:

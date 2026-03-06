@@ -519,13 +519,14 @@ def generate_network(
         "max_io_threads": max_io_threads_local,
         "stats": stats,
         "collective_id_map": collective_id_map,
-        "root_ir": ir,
     }
     mapper: SubNetGenerator = CachingVisitor(
         generate_ir_sub_network_wrapper, state=state
     )
-    nodes_dict, channels = mapper(ir)
-    ch_out = channels[ir].reserve_output_slot()
+    # Final Slice is always applied in evaluate_pipeline
+    root_ir = ir.children[0] if isinstance(ir, Slice) else ir
+    nodes_dict, channels = mapper(root_ir)
+    ch_out = channels[root_ir].reserve_output_slot()
 
     # Add node to drain metadata before pull_from_channel
     # (since pull_from_channel doesn't handle metadata messages)

@@ -233,8 +233,8 @@ def _get_final_sort_boundaries(
     column_order = list(column_order)
     null_order = list(null_order)
 
-    if num_partitions <= 1:
-        # No split boundaries; return empty table with same schema.
+    if num_partitions <= 1 or sort_boundaries_candidates.table.num_rows() == 0:
+        # No split boundaries or candidates; return empty table with same schema.
         stream = sort_boundaries_candidates.stream
         empty_table = plc.Table(
             [
