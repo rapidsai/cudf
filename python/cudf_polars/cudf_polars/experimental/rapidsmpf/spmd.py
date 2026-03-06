@@ -205,9 +205,9 @@ def allgather_polars_dataframe(
 @contextmanager
 def spmd_execution(
     *,
-    executor_options: dict[str, object] | None = None,
     mr: rmm.mr.DeviceMemoryResource | None = None,
     rapidsmpf_options: Options | None = None,
+    executor_options: dict[str, object] | None = None,
     **engine_kwargs: Any,
 ) -> Iterator[tuple[Communicator, Context, pl.GPUEngine]]:
     """
@@ -278,17 +278,17 @@ def spmd_execution(
 
     Parameters
     ----------
-    executor_options
-        Extra keyword arguments forwarded to the ``executor_options`` dict of
-        :class:`~polars.lazyframe.engine_config.GPUEngine`.  The keys
-        ``"runtime"``, ``"cluster"``, and ``"spmd"`` are reserved and may not
-        be overridden.
     mr
         RMM device memory resource to use. Defaults to
         ``rmm.mr.CudaAsyncMemoryResource()`` when ``None``.
     rapidsmpf_options
         RapidsMPF options. Defaults to ``Options(get_environment_variables())``
         when ``None``.
+    executor_options
+        Extra keyword arguments forwarded to the ``executor_options`` dict of
+        :class:`~polars.lazyframe.engine_config.GPUEngine`.  The keys
+        ``"runtime"``, ``"cluster"``, and ``"spmd"`` are reserved and may not
+        be overridden.
     **engine_kwargs
         Extra keyword arguments forwarded directly to
         :class:`~polars.lazyframe.engine_config.GPUEngine`.  For example,
