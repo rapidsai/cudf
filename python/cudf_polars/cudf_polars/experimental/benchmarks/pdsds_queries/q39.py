@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
-from cudf_polars.experimental.benchmarks.utils import get_data
+from cudf_polars.experimental.benchmarks.utils import QueryResult, get_data
 
 if TYPE_CHECKING:
     from cudf_polars.experimental.benchmarks.utils import RunConfig
@@ -89,7 +89,7 @@ def duckdb_impl(run_config: RunConfig) -> str:
     """
 
 
-def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
+def polars_impl(run_config: RunConfig) -> QueryResult:
     """Query 39."""
     params = load_parameters(
         int(run_config.scale_factor),
@@ -159,37 +159,40 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         )
     )
 
-    return (
-        inv1.join(
-            inv2,
-            left_on=["w_warehouse_sk", "i_item_sk"],
-            right_on=["inv_warehouse_sk", "inv_item_sk"],
-            how="inner",
-        )
-        .select(
-            [
-                "w_warehouse_sk",
-                "i_item_sk",
-                "d_moy",
-                "mean",
-                "cov",
-                "w_warehouse_sk_2",
-                "i_item_sk_2",
-                "d_moy_2",
-                "mean_2",
-                "cov_2",
-            ]
-        )
-        .sort(
-            [
-                "w_warehouse_sk",
-                "i_item_sk",
-                "d_moy",
-                "mean",
-                "cov",
-                "d_moy_2",
-                "mean_2",
-                "cov_2",
-            ]
-        )
+    sort_by = {
+        "wsk1": False,
+        "isk1": False,
+        "dmoy1": False,
+        "mean1": False,
+        "cov1": False,
+        "d_moy": False,
+        "mean": False,
+        "cov": False,
+    }
+    return QueryResult(
+        frame=(
+            inv1.join(
+                inv2,
+                left_on=["w_warehouse_sk", "i_item_sk"],
+                right_on=["inv_warehouse_sk", "inv_item_sk"],
+                how="inner",
+            )
+            .select(
+                [
+                    pl.col("w_warehouse_sk").alias("wsk1"),
+                    pl.col("i_item_sk").alias("isk1"),
+                    pl.col("d_moy").alias("dmoy1"),
+                    pl.col("mean").alias("mean1"),
+                    pl.col("cov").alias("cov1"),
+                    pl.col("w_warehouse_sk_2").alias("w_warehouse_sk"),
+                    pl.col("i_item_sk_2").alias("i_item_sk"),
+                    pl.col("d_moy_2").alias("d_moy"),
+                    pl.col("mean_2").alias("mean"),
+                    pl.col("cov_2").alias("cov"),
+                ]
+            )
+            .sort(sort_by.keys(), nulls_last=True)
+        ),
+        sort_by=list(sort_by.items()),
+        limit=None,
     )
