@@ -123,6 +123,8 @@ struct device_optional_span : device_span<T> {
   /// @copydoc column_device_view::nullable
   [[nodiscard]] CUDF_HOST_DEVICE bool nullable() const { return _null_mask != nullptr; }
 
+  [[nodiscard]] CUDF_HOST_DEVICE bitmask_type const* null_mask() const { return _null_mask; }
+
 #ifdef __CUDACC__
 
   /// @copydoc column_device_view::is_valid_nocheck

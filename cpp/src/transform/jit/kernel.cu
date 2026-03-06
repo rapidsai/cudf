@@ -15,6 +15,7 @@
 
 #include <jit/accessors.cuh>
 #include <jit/span.cuh>
+#include <jit/transform_bit_utils.cuh>
 
 #pragma nv_hdrstop  // The above headers are used by the kernel below and need to be included before
                     // it. Each UDF will have a different operation-udf.hpp generated for it, so we
@@ -38,6 +39,7 @@ template <null_aware is_null_aware,
 CUDF_KERNEL void kernel(cudf::mutable_column_device_view_core const* outputs,
                         cudf::column_device_view_core const* inputs,
                         bool* intermediate_null_mask,
+                        cudf::size_type* valid_count,
                         void* user_data)
 {
   // inputs to JITIFY kernels have to be either sized-integral types or pointers. Structs or
@@ -50,7 +52,12 @@ CUDF_KERNEL void kernel(cudf::mutable_column_device_view_core const* outputs,
   for (auto i = start; i < size; i += stride) {
     if constexpr (is_null_aware == null_aware::NO) {
       if constexpr (may_evaluate_null) {
-        if (Out::is_null(outputs, i)) { continue; }
+        if ((true && ... && In::is_valid(inputs, i))) {
+          intermediate_null_mask[i] = true;
+        } else {
+          intermediate_null_mask[i] = false;
+          continue;
+        }
       }
 
       if constexpr (has_user_data) {
@@ -73,6 +80,14 @@ CUDF_KERNEL void kernel(cudf::mutable_column_device_view_core const* outputs,
       if constexpr (may_evaluate_null) { intermediate_null_mask[i] = result.has_value(); }
     }
   }
+
+  if constexpr (may_evaluate_null) {
+    __threadfence_system();  // ensure intermediate null mask is visible to other threads before
+                             // reduction
+
+    boolean_mask_to_nullmask_subkernel(
+      intermediate_null_mask, size, outputs[0].null_mask(), valid_count);
+  }
 }
 
 template <null_aware is_null_aware,
@@ -83,6 +98,7 @@ template <null_aware is_null_aware,
 CUDF_KERNEL void fixed_point_kernel(cudf::mutable_column_device_view_core const* outputs,
                                     cudf::column_device_view_core const* inputs,
                                     bool* intermediate_null_mask,
+                                    cudf::size_type* valid_count,
                                     void* user_data)
 {
   auto const start        = cudf::detail::grid_1d::global_thread_id();
@@ -93,7 +109,12 @@ CUDF_KERNEL void fixed_point_kernel(cudf::mutable_column_device_view_core const*
   for (auto i = start; i < size; i += stride) {
     if constexpr (is_null_aware == null_aware::NO) {
       if constexpr (may_evaluate_null) {
-        if (Out::is_null(outputs, i)) { continue; }
+        if ((true && ... && In::is_valid(inputs, i))) {
+          intermediate_null_mask[i] = true;
+        } else {
+          intermediate_null_mask[i] = false;
+          continue;
+        }
       }
 
       typename Out::type result{numeric::scaled_integer<typename Out::type::rep>{0, output_scale}};
@@ -121,6 +142,14 @@ CUDF_KERNEL void fixed_point_kernel(cudf::mutable_column_device_view_core const*
       if constexpr (may_evaluate_null) { intermediate_null_mask[i] = result.has_value(); }
     }
   }
+
+  if constexpr (may_evaluate_null) {
+    __threadfence_system();  // ensure intermediate null mask is visible to other threads before
+                             // reduction
+
+    boolean_mask_to_nullmask_subkernel(
+      intermediate_null_mask, size, outputs[0].null_mask(), valid_count);
+  }
 }
 
 template <null_aware is_null_aware,
@@ -131,6 +160,7 @@ template <null_aware is_null_aware,
 CUDF_KERNEL void span_kernel(cudf::jit::device_optional_span<typename Out::type> const* outputs,
                              cudf::column_device_view_core const* inputs,
                              bool* intermediate_null_mask,
+                             cudf::size_type* valid_count,
                              void* user_data)
 {
   auto const start  = cudf::detail::grid_1d::global_thread_id();
@@ -140,7 +170,12 @@ CUDF_KERNEL void span_kernel(cudf::jit::device_optional_span<typename Out::type>
   for (auto i = start; i < size; i += stride) {
     if constexpr (is_null_aware == null_aware::NO) {
       if constexpr (may_evaluate_null) {
-        if (Out::is_null(outputs, i)) { continue; }
+        if ((true && ... && In::is_valid(inputs, i))) {
+          intermediate_null_mask[i] = true;
+        } else {
+          intermediate_null_mask[i] = false;
+          continue;
+        }
       }
 
       if constexpr (has_user_data) {
@@ -161,6 +196,14 @@ CUDF_KERNEL void span_kernel(cudf::jit::device_optional_span<typename Out::type>
 
       if constexpr (may_evaluate_null) { intermediate_null_mask[i] = result.has_value(); }
     }
+  }
+
+  if constexpr (may_evaluate_null) {
+    __threadfence_system();  // ensure intermediate null mask is visible to other threads before
+                             // reduction
+
+    boolean_mask_to_nullmask_subkernel(
+      intermediate_null_mask, size, outputs[0].null_mask(), valid_count);
   }
 }
 
