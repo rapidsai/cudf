@@ -879,10 +879,6 @@ class StreamingExecutor:
         if self.runtime == "rapidsmpf":  # pragma: no cover; requires rapidsmpf runtime
             if not rapidsmpf_single_available():
                 raise ValueError("The rapidsmpf streaming engine requires rapidsmpf.")
-            if self.shuffle_method == "tasks":
-                raise ValueError(
-                    "The rapidsmpf streaming engine does not support task-based shuffling."
-                )
             object.__setattr__(self, "shuffle_method", "rapidsmpf")
 
         # Handle backward compatibility for deprecated scheduler parameter

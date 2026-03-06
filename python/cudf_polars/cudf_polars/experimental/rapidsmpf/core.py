@@ -28,13 +28,21 @@ from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 import rmm
 
 import cudf_polars.experimental.rapidsmpf.collectives.shuffle
+import cudf_polars.experimental.rapidsmpf.collectives.sort
 import cudf_polars.experimental.rapidsmpf.groupby
 import cudf_polars.experimental.rapidsmpf.io
 import cudf_polars.experimental.rapidsmpf.join
 import cudf_polars.experimental.rapidsmpf.repartition
 import cudf_polars.experimental.rapidsmpf.union  # noqa: F401
 from cudf_polars.containers import DataFrame
-from cudf_polars.dsl.ir import DataFrameScan, IRExecutionContext, Join, Scan, Union
+from cudf_polars.dsl.ir import (
+    DataFrameScan,
+    IRExecutionContext,
+    Join,
+    Scan,
+    Slice,
+    Union,
+)
 from cudf_polars.dsl.traversal import CachingVisitor, traversal
 from cudf_polars.experimental.dispatch import lower_ir_node
 from cudf_polars.experimental.rapidsmpf.collectives import ReserveOpIDs
@@ -283,6 +291,9 @@ def evaluate_pipeline(
         # Keep chunks alive until after concatenation to prevent
         # use-after-free with stream-ordered allocations
         messages = output.release()
+        # Sort by sequence_number so partition-ordered output (e.g. sort with
+        # contiguous assignment) is concatenated in correct global order.
+        messages.sort(key=lambda m: int(m.sequence_number))
         chunks = [
             TableChunk.from_message(msg).make_available_and_spill(
                 br, allow_overbooking=True
@@ -313,6 +324,11 @@ def evaluate_pipeline(
             )
 
         result = df.to_polars()
+
+        # Apply root Slice (e.g. head/tail) if present; in-pipeline Slice may not
+        # see a single concatenated chunk, so apply here to ensure correct row count.
+        if isinstance(ir, Slice):
+            result = result.slice(ir.offset, ir.length)
 
         # Now we need to drop *all* GPU data. This ensures that no cudaFreeAsync runs
         # before the Context, which ultimately contains the rmm MR, goes out of scope.
@@ -507,8 +523,10 @@ def generate_network(
     mapper: SubNetGenerator = CachingVisitor(
         generate_ir_sub_network_wrapper, state=state
     )
-    nodes_dict, channels = mapper(ir)
-    ch_out = channels[ir].reserve_output_slot()
+    # Final Slice is always applied in evaluate_pipeline
+    root_ir = ir.children[0] if isinstance(ir, Slice) else ir
+    nodes_dict, channels = mapper(root_ir)
+    ch_out = channels[root_ir].reserve_output_slot()
 
     # Add node to drain metadata before pull_from_channel
     # (since pull_from_channel doesn't handle metadata messages)
