@@ -26,7 +26,6 @@
 
 #include <cub/block/block_scan.cuh>
 #include <cub/device/device_histogram.cuh>
-#include <cub/device/device_scan.cuh>
 #include <cuda/atomic>
 #include <cuda/devices>
 #include <thrust/iterator/counting_iterator.h>
@@ -485,6 +484,97 @@ struct copy_block_partitions_dispatcher {
   }
 };
 
+/**
+ * @brief Hash-partition using global memory when partition count exceeds shared memory capacity.
+ */
+template <typename Hasher>
+std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition_table_global_memory(
+  table_view const& input,
+  size_type num_rows,
+  size_type num_partitions,
+  Hasher hasher,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
+{
+  auto row_partition_numbers = rmm::device_uvector<size_type>(num_rows, stream);
+
+  // Compute partition number for each row
+  constexpr auto block_size = FALLBACK_BLOCK_SIZE;
+  auto const grid_size = util::div_rounding_up_safe(num_rows, static_cast<size_type>(block_size));
+
+  if (is_power_two(num_partitions)) {
+    using partitioner_type = bitwise_partitioner<hash_value_type>;
+    compute_hash_partition_numbers<<<grid_size, block_size, 0, stream.value()>>>(
+      hasher, num_rows, partitioner_type(num_partitions), row_partition_numbers.data());
+  } else {
+    using partitioner_type = modulo_partitioner<hash_value_type>;
+    compute_hash_partition_numbers<<<grid_size, block_size, 0, stream.value()>>>(
+      hasher, num_rows, partitioner_type(num_partitions), row_partition_numbers.data());
+  }
+
+  // Build histogram via cub::DeviceHistogram::HistogramEven.
+  // HistogramEven writes num_partitions bins; the extra element is used by the exclusive scan
+  // below to produce the total row count as the last offset. Zero-initialize to avoid UB.
+  auto histogram = cudf::detail::make_zeroed_device_uvector_async<size_type>(
+    num_partitions + 1, stream, cudf::get_current_device_resource_ref());
+  {
+    auto const num_levels  = static_cast<std::size_t>(num_partitions + 1);
+    auto const lower_level = size_type{0};
+    auto const upper_level = num_partitions;
+
+    std::size_t temp_storage_bytes{};
+    cub::DeviceHistogram::HistogramEven(nullptr,
+                                        temp_storage_bytes,
+                                        row_partition_numbers.data(),
+                                        histogram.data(),
+                                        num_levels,
+                                        lower_level,
+                                        upper_level,
+                                        num_rows,
+                                        stream.value());
+    rmm::device_buffer temp_storage(temp_storage_bytes, stream);
+    cub::DeviceHistogram::HistogramEven(temp_storage.data(),
+                                        temp_storage_bytes,
+                                        row_partition_numbers.data(),
+                                        histogram.data(),
+                                        num_levels,
+                                        lower_level,
+                                        upper_level,
+                                        num_rows,
+                                        stream.value());
+  }
+
+  // Exclusive scan on histogram to get partition offsets.
+  // histogram has num_partitions+1 elements; after scan, histogram[num_partitions] = num_rows.
+  thrust::exclusive_scan(
+    rmm::exec_policy_nosync(stream), histogram.begin(), histogram.end(), histogram.begin());
+
+  // Copy partition offsets to pinned host memory asynchronously
+  auto const pinned_offsets = cudf::detail::make_pinned_vector_async(histogram, stream);
+
+  // Build scatter map: atomically increment partition offsets
+  rmm::device_uvector<size_type> scatter_map(num_rows, stream);
+  thrust::transform(
+    rmm::exec_policy_nosync(stream),
+    row_partition_numbers.begin(),
+    row_partition_numbers.end(),
+    scatter_map.begin(),
+    [offsets = histogram.data()] __device__(auto partition_number) {
+      cuda::atomic_ref<size_type, cuda::thread_scope_device> ref(offsets[partition_number]);
+      return ref.fetch_add(1, cuda::memory_order_relaxed);
+    });
+
+  // Scatter input rows into partitioned output
+  auto output = detail::scatter(input, scatter_map, input, stream, mr);
+
+  stream.synchronize();  // Pinned async D2H copy must finish before returning host vec
+
+  // Convert pinned host_vector to std::vector for the return type
+  auto partition_offsets = std::vector<size_type>(pinned_offsets.begin(), pinned_offsets.end());
+
+  return std::pair{std::move(output), std::move(partition_offsets)};
+}
+
 // NOTE hash_has_nulls must be true if table_to_hash has nulls
 template <template <typename> class hash_function, bool hash_has_nulls>
 std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition_table(
@@ -509,99 +599,7 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition_table(
     cuda::device_attributes::max_shared_memory_per_block(cuda::device_ref{dev}) / sizeof(size_type);
 
   if (!fits_in_shared_memory) {
-    // Large partition count path: avoid shared memory entirely.
-    // Uses cub::DeviceHistogram + cub::DeviceScan + atomic scatter.
-    auto row_partition_numbers = rmm::device_uvector<size_type>(num_rows, stream);
-
-    // Compute partition number for each row
-    constexpr auto block_size = FALLBACK_BLOCK_SIZE;
-    auto const grid_size = util::div_rounding_up_safe(num_rows, static_cast<size_type>(block_size));
-
-    if (is_power_two(num_partitions)) {
-      using partitioner_type = bitwise_partitioner<hash_value_type>;
-      compute_hash_partition_numbers<<<grid_size, block_size, 0, stream.value()>>>(
-        hasher, num_rows, partitioner_type(num_partitions), row_partition_numbers.data());
-    } else {
-      using partitioner_type = modulo_partitioner<hash_value_type>;
-      compute_hash_partition_numbers<<<grid_size, block_size, 0, stream.value()>>>(
-        hasher, num_rows, partitioner_type(num_partitions), row_partition_numbers.data());
-    }
-
-    // Build histogram via cub::DeviceHistogram::HistogramEven.
-    // HistogramEven writes num_partitions bins; the extra element is used by the exclusive scan
-    // below to produce the total row count as the last offset. Zero-initialize to avoid UB.
-    auto histogram = cudf::detail::make_zeroed_device_uvector_async<size_type>(
-      num_partitions + 1, stream, cudf::get_current_device_resource_ref());
-    {
-      auto const num_levels  = static_cast<std::size_t>(num_partitions + 1);
-      auto const lower_level = size_type{0};
-      auto const upper_level = num_partitions;
-
-      std::size_t temp_storage_bytes{};
-      cub::DeviceHistogram::HistogramEven(nullptr,
-                                          temp_storage_bytes,
-                                          row_partition_numbers.data(),
-                                          histogram.data(),
-                                          num_levels,
-                                          lower_level,
-                                          upper_level,
-                                          num_rows,
-                                          stream.value());
-      rmm::device_buffer temp_storage(temp_storage_bytes, stream);
-      cub::DeviceHistogram::HistogramEven(temp_storage.data(),
-                                          temp_storage_bytes,
-                                          row_partition_numbers.data(),
-                                          histogram.data(),
-                                          num_levels,
-                                          lower_level,
-                                          upper_level,
-                                          num_rows,
-                                          stream.value());
-    }
-
-    // Exclusive scan on histogram to get partition offsets.
-    // histogram has num_partitions+1 elements; after scan, histogram[num_partitions] = num_rows.
-    {
-      std::size_t temp_storage_bytes{};
-      cub::DeviceScan::ExclusiveSum(nullptr,
-                                    temp_storage_bytes,
-                                    histogram.data(),
-                                    histogram.data(),
-                                    num_partitions + 1,
-                                    stream.value());
-      rmm::device_buffer temp_storage(temp_storage_bytes, stream);
-      cub::DeviceScan::ExclusiveSum(temp_storage.data(),
-                                    temp_storage_bytes,
-                                    histogram.data(),
-                                    histogram.data(),
-                                    num_partitions + 1,
-                                    stream.value());
-    }
-
-    // Copy partition offsets to pinned host memory asynchronously
-    auto const pinned_offsets = cudf::detail::make_pinned_vector_async(histogram, stream);
-
-    // Build scatter map: atomically increment partition offsets
-    rmm::device_uvector<size_type> scatter_map(num_rows, stream);
-    thrust::transform(
-      rmm::exec_policy_nosync(stream),
-      row_partition_numbers.begin(),
-      row_partition_numbers.end(),
-      scatter_map.begin(),
-      [offsets = histogram.data()] __device__(auto partition_number) {
-        cuda::atomic_ref<size_type, cuda::thread_scope_device> ref(offsets[partition_number]);
-        return ref.fetch_add(1, cuda::memory_order_relaxed);
-      });
-
-    // Scatter input rows into partitioned output
-    auto output = detail::scatter(input, scatter_map, input, stream, mr);
-
-    stream.synchronize();  // Pinned async D2H copy must finish before returning host vec
-
-    // Convert pinned host_vector to std::vector for the return type
-    auto partition_offsets = std::vector<size_type>(pinned_offsets.begin(), pinned_offsets.end());
-
-    return std::pair{std::move(output), std::move(partition_offsets)};
+    return hash_partition_table_global_memory(input, num_rows, num_partitions, hasher, stream, mr);
   }
 
   bool const use_optimization{num_partitions <= THRESHOLD_FOR_OPTIMIZED_PARTITION_KERNEL};
