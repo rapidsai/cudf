@@ -754,7 +754,7 @@ rmm::device_uvector<int32_t> v2{100, s, mr};
 
 ## Memory Copies
 
-libcudf code should prefer `cudf::detail::memcpy_async` and `cudf::detail::cuda_memcpy_async` over
+libcudf code should prefer `cudf::detail::cuda_memcpy_async` and `cudf::detail::memcpy_async` over
 direct calls to `cudaMemcpyAsync`. These cudf utilities try to use `cudaMemcpyBatchAsync` on CUDA
 13.0+, but not primarily for the "batch" properties:
 - `cudaMemcpyBatchAsync` can be lower-overhead, it is actually asynchronous in certain cases where
