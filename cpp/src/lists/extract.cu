@@ -125,8 +125,7 @@ std::unique_ptr<column> extract_list_element_impl(lists_column_view lists_column
                                                     make_index_offsets(num_lists, stream),
                                                     make_index_child(index, num_lists, stream),
                                                     0,
-                                                    {},
-                                                    stream);
+                                                    {});
 
   // We want the output of `segmented_gather` to be a lists column in which each list has exactly
   // one element, even for the null lists.

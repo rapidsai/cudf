@@ -59,9 +59,7 @@ struct byte_list_conversion_fn<T, std::enable_if_t<cudf::is_numeric<T>()>> {
                                         rmm::cuda_stream_view stream,
                                         rmm::device_async_resource_ref mr)
   {
-    if (input.size() == 0) {
-      return cudf::lists::detail::make_empty_lists_column(output_type, stream, mr);
-    }
+    if (input.size() == 0) { return cudf::lists::detail::make_empty_lists_column(output_type); }
     if (input.size() == input.null_count()) {
       return cudf::lists::detail::make_all_nulls_lists_column(
         input.size(), output_type, stream, mr);
@@ -94,9 +92,7 @@ struct byte_list_conversion_fn<T, std::enable_if_t<cudf::is_numeric<T>()>> {
                                     std::move(offsets_column),
                                     std::move(byte_column),
                                     input.null_count(),
-                                    detail::copy_bitmask(input, stream, mr),
-                                    stream,
-                                    mr);
+                                    detail::copy_bitmask(input, stream, mr));
 
     // If any nulls are present, the corresponding lists must be purged so that
     // the result is sanitized.
@@ -116,9 +112,7 @@ struct byte_list_conversion_fn<T, std::enable_if_t<std::is_same_v<T, cudf::strin
                                         rmm::cuda_stream_view stream,
                                         rmm::device_async_resource_ref mr)
   {
-    if (input.size() == 0) {
-      return cudf::lists::detail::make_empty_lists_column(output_type, stream, mr);
-    }
+    if (input.size() == 0) { return cudf::lists::detail::make_empty_lists_column(output_type); }
     if (input.size() == input.null_count()) {
       return cudf::lists::detail::make_all_nulls_lists_column(
         input.size(), output_type, stream, mr);
@@ -139,9 +133,7 @@ struct byte_list_conversion_fn<T, std::enable_if_t<std::is_same_v<T, cudf::strin
       std::move(col_content.children[cudf::strings_column_view::offsets_column_index]),
       std::move(uint8_col),
       input.null_count(),
-      detail::copy_bitmask(input, stream, mr),
-      stream,
-      mr);
+      detail::copy_bitmask(input, stream, mr));
 
     // If any nulls are present, the corresponding lists must be purged so that
     // the result is sanitized.

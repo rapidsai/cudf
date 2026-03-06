@@ -19,8 +19,8 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
+#include <cuda/iterator>
 #include <thrust/iterator/counting_iterator.h>
-#include <thrust/iterator/discard_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/scan.h>
 #include <thrust/scatter.h>
@@ -88,7 +88,7 @@ std::unique_ptr<column> group_nth_element(column_view const& values,
         cudf::detail::reduce_by_key_async(group_labels.begin(),
                                           group_labels.end(),
                                           bitmask_iterator,
-                                          thrust::make_discard_iterator(),
+                                          cuda::make_discard_iterator(),
                                           group_count.begin(),
                                           cuda::std::plus<size_type>(),
                                           stream);

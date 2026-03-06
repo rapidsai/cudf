@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -8,7 +8,32 @@
 #include <cudf/utilities/bit.hpp>
 
 #include <rolling/detail/rolling_jit.hpp>
-#include <rolling/jit/operation.hpp>
+
+#pragma nv_hdrstop  // The above headers are used by the kernel below and need to be included before
+                    // it. Each UDF will have a different operation-udf.hpp generated for it, so we
+                    // need to put this pragma before including it to avoid PCH mismatch.
+
+#include <cudf/detail/operation-udf.hpp>
+
+struct rolling_udf_ptx {
+  template <typename OutType, typename InType>
+  static OutType operate(InType const* in_col, cudf::size_type start, cudf::size_type count)
+  {
+    OutType ret;
+    GENERIC_ROLLING_OP(&ret, 0, 0, 0, 0, &in_col[start], count, sizeof(InType));
+    return ret;
+  }
+};
+
+struct rolling_udf_cuda {
+  template <typename OutType, typename InType>
+  static OutType operate(InType const* in_col, cudf::size_type start, cudf::size_type count)
+  {
+    OutType ret;
+    GENERIC_ROLLING_OP(&ret, in_col, start, count);
+    return ret;
+  }
+};
 
 namespace cudf {
 namespace rolling {

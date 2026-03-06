@@ -15,7 +15,12 @@ import pylibcudf as plc
 
 import cudf
 from cudf.core._internals import binaryop
-from cudf.core.column.column import ColumnBase, as_column
+from cudf.core.column.column import (
+    ColumnBase,
+    PylibcudfFunction,
+    as_column,
+    fixed_dtype_policy,
+)
 from cudf.core.column.temporal_base import TemporalBaseColumn
 from cudf.errors import MixedTypeError
 from cudf.utils.dtypes import (
@@ -77,21 +82,6 @@ class TimeDeltaColumn(TemporalBaseColumn):
         "__rtruediv__",
         "__rfloordiv__",
     }
-    _VALID_PLC_TYPES = {
-        plc.TypeId.DURATION_SECONDS,
-        plc.TypeId.DURATION_MILLISECONDS,
-        plc.TypeId.DURATION_MICROSECONDS,
-        plc.TypeId.DURATION_NANOSECONDS,
-    }
-
-    @classmethod
-    def _validate_args(
-        cls, plc_column: plc.Column, dtype: DtypeObj
-    ) -> tuple[plc.Column, DtypeObj]:
-        plc_column, dtype = super()._validate_args(plc_column, dtype)
-        if dtype.kind != "m":
-            raise ValueError("dtype must be a timedelta dtype.")
-        return plc_column, dtype
 
     def _reduce(
         self,
@@ -141,6 +131,11 @@ class TimeDeltaColumn(TemporalBaseColumn):
             else other.dtype
         )
         other_is_null_scalar = is_na_like(other)
+        if (
+            isinstance(self.dtype, pd.ArrowDtype)
+            or isinstance(other_cudf_dtype, pd.ArrowDtype)
+        ) and op == "__mod__":
+            raise NotImplementedError("ArrowDtype does not support modulo")
 
         if other_cudf_dtype.kind == "m":
             # TODO: pandas will allow these operators to work but return false
@@ -241,16 +236,13 @@ class TimeDeltaColumn(TemporalBaseColumn):
     ) -> StringColumn:
         if len(self) == 0:
             return super().strftime(format)
-        with self.access(mode="read", scope="internal"):
-            return cast(
-                cudf.core.column.string.StringColumn,
-                ColumnBase.create(
-                    plc.strings.convert.convert_durations.from_durations(
-                        self.plc_column, format
-                    ),
-                    dtype,
-                ),
-            )
+        return cast(
+            cudf.core.column.string.StringColumn,
+            PylibcudfFunction(
+                plc.strings.convert.convert_durations.from_durations,
+                fixed_dtype_policy(dtype),
+            ).execute_with_args(self, format),
+        )
 
     def as_string_column(self, dtype: DtypeObj) -> StringColumn:
         if cudf.get_option("mode.pandas_compatible"):

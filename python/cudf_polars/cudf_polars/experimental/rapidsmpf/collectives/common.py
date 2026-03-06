@@ -5,21 +5,24 @@
 from __future__ import annotations
 
 import threading
+from contextlib import contextmanager
 from typing import TYPE_CHECKING, Literal
 
 from rapidsmpf.shuffler import Shuffler
 
 from cudf_polars.dsl.ir import Distinct, GroupBy
 from cudf_polars.dsl.traversal import traversal
+from cudf_polars.experimental.io import StreamingSink
 from cudf_polars.experimental.join import Join
 from cudf_polars.experimental.repartition import Repartition
 from cudf_polars.experimental.shuffle import Shuffle
 
 if TYPE_CHECKING:
+    from collections.abc import Iterator
     from types import TracebackType
 
     from cudf_polars.dsl.ir import IR
-    from cudf_polars.utils.config import ConfigOptions
+    from cudf_polars.utils.config import ConfigOptions, StreamingExecutor
 
 
 # Set of available collective IDs
@@ -67,21 +70,29 @@ class ReserveOpIDs:
     (e.g., for metadata gathering, shuffling multiple sides of a join).
     """
 
-    def __init__(self, ir: IR, config_options: ConfigOptions | None = None):
+    def __init__(
+        self, ir: IR, config_options: ConfigOptions[StreamingExecutor] | None = None
+    ):
         self.config_options = config_options
 
         # Check if dynamic planning is enabled
         self.dynamic_planning_enabled = (
             config_options is not None
-            and config_options.executor.name == "streaming"
             and config_options.executor.dynamic_planning is not None
         )
 
         # Find all collective IR nodes.
-        collective_types: tuple[type, ...] = (Shuffle, Join, Repartition)
+        collective_types: tuple[type, ...] = (Shuffle, Join, Repartition, StreamingSink)
         if self.dynamic_planning_enabled:
             # Include GroupBy and Distinct when dynamic planning is enabled
-            collective_types = (Shuffle, Join, Repartition, GroupBy, Distinct)
+            collective_types = (
+                Shuffle,
+                Join,
+                Repartition,
+                StreamingSink,
+                GroupBy,
+                Distinct,
+            )
 
         self.collective_nodes: list[IR] = [
             node for node in traversal([ir]) if isinstance(node, collective_types)
@@ -130,3 +141,25 @@ class ReserveOpIDs:
             for collective_id in collective_ids:
                 _release_collective_id(collective_id)
         return False
+
+
+@contextmanager
+def reserve_op_id() -> Iterator[int]:
+    """
+    Reserve a single collective operation ID.
+
+    This function and the ID it yields must only be used **outside** of a
+    ``run_actor_graph`` call. It is intended for SPMD mode, where operations
+    such as gathering results across ranks are performed directly rather than
+    through the actor graph. The contained block _must_ wait for completion of the collective.
+
+    Yields
+    ------
+    collective_id : int
+        A vacant collective ID reserved from the global vacancy pool.
+    """
+    collective_id = _get_new_collective_id()
+    try:
+        yield collective_id
+    finally:
+        _release_collective_id(collective_id)

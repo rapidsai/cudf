@@ -212,9 +212,6 @@ def _(
         )
 
     config_options = rec.state["config_options"]
-    assert config_options.executor.name == "streaming", (
-        "'in-memory' executor not supported in 'lower_ir_node'"
-    )
     dynamic_planning = _dynamic_planning_on(config_options)
 
     # Lower children
@@ -272,7 +269,6 @@ def _(
 
     # Check for dynamic planning - may have more partitions at runtime
     config_options = rec.state["config_options"]
-    assert config_options.executor.name == "streaming"
     dynamic_planning = _dynamic_planning_on(config_options)
 
     left, right = children
@@ -293,6 +289,12 @@ def _(
             rec,
             msg=f"Join({maintain_order=}) not supported for multiple partitions.",
         )
+
+    # Check for dynamic planning - defer broadcast vs shuffle decision to runtime
+    if dynamic_planning:  # pragma: no cover; Requires rapidsmpf runtime
+        new_node = ir.reconstruct(children)
+        partition_info[new_node] = PartitionInfo(count=output_count)
+        return new_node, partition_info
 
     if _should_bcast_join(
         ir,

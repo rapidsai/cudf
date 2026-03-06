@@ -613,6 +613,7 @@ def on_missing_reference(app, env, node, contnode):
 
 # The following are erroneously warned due to
 # https://github.com/sphinx-doc/sphinx/issues/11225
+# or https://github.com/sphinx-doc/sphinx/issues/10974
 nitpick_ignore = [
     ("py:class", "Dtype"),
     ("py:class", "pandas.core.indexes.frozen.FrozenList"),
@@ -622,6 +623,7 @@ nitpick_ignore = [
     ("py:class", "DtypeObj"),
     ("py:class", "Axis"),
     ("py:class", "ArrowLike"),
+    ("py:class", "ExecutorType"),
 ]
 
 

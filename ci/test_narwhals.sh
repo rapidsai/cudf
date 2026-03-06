@@ -31,14 +31,45 @@ python -c "import narwhals; print(narwhals.show_versions())"
 # test_to_numpy[cudf]: Passes as of https://github.com/rapidsai/cudf/pull/19923
 # test_fill_null_strategies_with_limit_as_none[cudf]: Narwhals passes inplace=None instead of a bool
 # test_fill_null_series_limit_as_none[cudf]: Narwhals passes inplace=None instead of a bool
+# test_cast_decimal_to_native[cudf-*]: Decimal casting issues
+# test_categorical[cudf], test_categorical_as_str[cudf-*], test_cast[cudf], test_cast_series[cudf], test_cast_to_enum_vmain[cudf]: Categorical type handling issues - TypeError: unhashable type
+# test_iter_columns[cudf]: Column iteration not implemented - NotImplementedError
+# test_getitem_boolean_columns[cudf]: Boolean column indexing not implemented
+# test_check_row_order[cudf-False], test_self_equal[cudf]: Testing/comparison issues with categorical columns
+# test_schema_from_pandas_like[cudf]: Schema differences with categorical columns
+# test_to_datetime[cudf], test_to_datetime_series[cudf], test_to_datetime_infer_fmt[cudf-*], test_to_datetime_series_infer_fmt[cudf-*]: String to datetime conversion issues
+# test_with_columns_dtypes_single_row[cudf]: Type handling issue with single row
+# test_first_last_different_orders[cudf]: Multiple order_by in groupby not supported by narwhals pandas-like backend
+# test_series_rfloordiv_by_zero[cudf-0], test_expr_rfloordiv_by_zero[cudf-0]: xpass(strict) - now passing but tests expect failure
+# test_first_last_expr_over_order_by[cudf] - now passing but tests expect failure
+# test_cast_datetime_tz_aware[cudf]: Passes as of https://github.com/rapidsai/cudf/pull/21451
+# test_nested_structures: Passes as of https://github.com/rapidsai/cudf/pull/21514
 TESTS_THAT_NEED_NARWHALS_FIX_FOR_CUDF=" \
 test_to_numpy[cudf] or \
 test_fill_null_strategies_with_limit_as_none[cudf] or \
 test_fill_null_series_limit_as_none[cudf] or \
-test_to_datetime_infer_fmt or \
-test_to_datetime or \
-test_to_datetime_series or \
-test_to_datetime_series_infer_fmt \
+(test_cast_decimal_to_native and cudf) or \
+(test_categorical_as_str and cudf) or \
+test_categorical[cudf] or \
+test_cast[cudf] or \
+test_cast_series[cudf] or \
+test_cast_to_enum_vmain[cudf] or \
+test_iter_columns[cudf] or \
+test_getitem_boolean_columns[cudf] or \
+test_check_row_order[cudf-False] or \
+test_self_equal[cudf] or \
+test_schema_from_pandas_like[cudf] or \
+(test_to_datetime_infer_fmt and cudf) or \
+(test_to_datetime and cudf) or \
+(test_to_datetime_series and cudf) or \
+(test_to_datetime_series_infer_fmt and cudf) or \
+test_with_columns_dtypes_single_row[cudf] or \
+test_first_last_different_orders[cudf] or \
+test_first_last_expr_over_order_by[cudf] or \
+test_series_rfloordiv_by_zero[cudf-0] or \
+test_expr_rfloordiv_by_zero[cudf-0] or \
+test_cast_datetime_tz_aware[cudf] or \
+test_nested_structures \
 "
 
 rapids-logger "Run narwhals tests for cuDF"
@@ -60,12 +91,16 @@ PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 \
 # test_datetime[polars[lazy]]: Fixed in the next narwhals release >2.0.1
 # test_nan[polars[lazy]]: Passes as of https://github.com/rapidsai/cudf/pull/19742
 # test_to_datetime_tz_aware[polars[lazy]-None]: Fixed in the Narwhals version that supports polars 1.33.1
+# test_nested_structures[polars[lazy]-value0|1|3|4|6|7]: List/tuple literals without nested lists
+# test_series_from_iterable[pandas-*]: Pandas-specific test that shouldn't run with polars constructor
 TESTS_THAT_NEED_NARWHALS_FIX_FOR_CUDF_POLARS=" \
 test_datetime[polars[lazy]] or \
 test_nan[polars[lazy]] or \
 test_to_datetime_tz_aware[polars[lazy]-None] or \
 test_truncate[polars[lazy]-1ns-expected0] or \
-test_truncate_multiples[polars[lazy]-2ns-expected0] \
+test_truncate_multiples[polars[lazy]-2ns-expected0] or \
+((test_nested_structures and polars and lazy) and (value0 or value1 or value3 or value4 or value6 or value7)) or \
+(test_series_from_iterable and pandas) \
 "
 
 rapids-logger "Run narwhals tests for cuDF Polars"
@@ -127,10 +162,38 @@ test_pandas_object_series \
 # test_get_dtype_backend: We now preserve arrow extension dtypes
 # (e.g. bool[pyarrow], duration[ns][pyarrow]).
 # test_explode_multiple_cols[pandas-l1-more_columns0-expected0] matches pandas now so needs a skip in the test
+# test_series_from_iterable[*-cudf.pandas.fast_slow_proxy._FunctionProxy-*]: FunctionProxy issues with series_from_iterable
+# test_group_by_agg_first/last[pandas-*]: first/last aggregation with order_by not working correctly in cudf.pandas
+# test_first_expr_in_group_by[pandas]: Related to first/last aggregation issues
+# test_any_value_group_by[pandas-False]: Non-deterministic any_value in groupby
+# test_over_when_then_aggregation_partition_by[pandas-*]: Window function issues with when/then
+# test_pandas_pyarrow_dtypes, test_nested_dtypes_dask, test_schema_from_pandas_like[pandas]: PyArrow dtype handling differences
+# test_top_k[pandas]: top_k ordering mismatch
+# test_get_series[pandas-0-expected0]: List.get operation issue
+# test_sqrt_dtype_pandas[*]: sqrt with nulls returns 0.0 instead of NA in cudf.pandas
+# test_check_row_order_nested_only[pandas]: Nested dtype row ordering check not raising NotImplementedError as expected
+# test_cast_string: String casting issues with cudf.pandas
+# test_contains_case_insensitive[pandas], test_contains_series_case_insensitive[pandas]: String contains with case_insensitive returns False instead of None for nulls
 TESTS_THAT_NEED_NARWHALS_FIX_FOR_CUDF_PANDAS=" \
 test_dtypes or \
 test_explode_multiple_cols or \
-(test_get_dtype_backend and pyarrow and (pandas or modin)) \
+(test_get_dtype_backend and pyarrow and (pandas or modin)) or \
+test_series_from_iterable or \
+(test_group_by_agg_first and pandas) or \
+(test_group_by_agg_last and pandas) or \
+test_first_expr_in_group_by[pandas] or \
+test_any_value_group_by[pandas-False] or \
+(test_over_when_then_aggregation_partition_by and pandas) or \
+test_pandas_pyarrow_dtypes or \
+test_nested_dtypes_dask or \
+test_schema_from_pandas_like[pandas] or \
+test_top_k[pandas] or \
+test_get_series[pandas-0-expected0] or \
+test_sqrt_dtype_pandas or \
+test_check_row_order_nested_only[pandas] or \
+test_cast_string or \
+(test_contains_case_insensitive and pandas) or \
+(test_contains_series_case_insensitive and pandas) \
 "
 
 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 \

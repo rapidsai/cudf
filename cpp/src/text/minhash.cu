@@ -602,9 +602,7 @@ std::unique_ptr<cudf::column> build_list_result(cudf::column_view const& input,
                                   std::move(offsets),
                                   std::move(hashes),
                                   input.null_count(),
-                                  cudf::detail::copy_bitmask(input, stream, mr),
-                                  stream,
-                                  mr);
+                                  cudf::detail::copy_bitmask(input, stream, mr));
   // expect this condition to be very rare
   if (input.null_count() > 0) {
     result = cudf::detail::purge_nonempty_nulls(result->view(), stream, mr);

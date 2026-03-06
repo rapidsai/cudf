@@ -20,8 +20,8 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
+#include <cuda/iterator>
 #include <thrust/iterator/counting_iterator.h>
-#include <thrust/iterator/discard_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/scan.h>
 
@@ -104,7 +104,7 @@ generate_regrouped_offsets_and_null_mask(table_device_view const& input,
   cudf::detail::reduce_by_key_async(keys,
                                     keys + (input.num_rows() * input.num_columns()),
                                     values,
-                                    thrust::make_discard_iterator(),
+                                    cuda::make_discard_iterator(),
                                     offsets->mutable_view().begin<size_type>(),
                                     cuda::std::plus<size_type>(),
                                     stream);
@@ -169,7 +169,7 @@ rmm::device_uvector<size_type> generate_null_counts(table_device_view const& inp
   cudf::detail::reduce_by_key_async(keys,
                                     keys + (input.num_rows() * input.num_columns()),
                                     null_values,
-                                    thrust::make_discard_iterator(),
+                                    cuda::make_discard_iterator(),
                                     null_counts.data(),
                                     cuda::std::plus<size_type>(),
                                     stream);
@@ -293,9 +293,7 @@ std::unique_ptr<column> concatenate_rows(table_view const& input,
     std::move(offsets),
     std::move(contents.children[lists_column_view::child_column_index]),
     null_count,
-    std::move(null_mask),
-    stream,
-    mr);
+    std::move(null_mask));
 }
 
 }  // namespace detail

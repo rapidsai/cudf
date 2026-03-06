@@ -546,6 +546,28 @@ constexpr inline bool is_dictionary()
 bool is_dictionary(data_type type);
 
 /**
+ * @brief Indicates whether the type `T` is a valid dictionary key type
+ *
+ * @tparam T  The type to verify
+ * @return true `T` can be a dictionary key type
+ * @return false  `T` cannot be a dictionary key type
+ */
+template <typename T>
+constexpr inline bool is_dictionary_key()
+{
+  return !is_dictionary<T>() && is_relationally_comparable<T, T>();
+}
+
+/**
+ * @brief Indicates whether `type` is a valid dictionary type
+ *
+ * @param type The `data_type` to verify
+ * @return true `type` can be a dictionary key type
+ * @return false `type` cannot be a dictionary type
+ */
+bool is_dictionary_key(data_type type);
+
+/**
  * @brief Indicates whether elements of type `T` are fixed-width.
  *
  * Elements of a fixed-width type all have the same size in bytes.

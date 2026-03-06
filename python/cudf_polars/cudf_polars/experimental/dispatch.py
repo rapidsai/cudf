@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 """Multi-partition dispatch functions."""
 
@@ -19,7 +19,7 @@ if TYPE_CHECKING:
         PartitionInfo,
         StatsCollector,
     )
-    from cudf_polars.utils.config import ConfigOptions
+    from cudf_polars.utils.config import ConfigOptions, StreamingExecutor
 
 
 class State(TypedDict):
@@ -34,7 +34,7 @@ class State(TypedDict):
         Statistics collector.
     """
 
-    config_options: ConfigOptions
+    config_options: ConfigOptions[StreamingExecutor]
     stats: StatsCollector
 
 
@@ -112,7 +112,7 @@ def generate_ir_tasks(
 
 @singledispatch
 def initialize_column_stats(
-    ir: IR, stats: StatsCollector, config_options: ConfigOptions
+    ir: IR, stats: StatsCollector, config_options: ConfigOptions[StreamingExecutor]
 ) -> dict[str, ColumnStats]:
     """
     Initialize column statistics for an IR node.
@@ -145,7 +145,7 @@ def initialize_column_stats(
 def update_column_stats(
     ir: IR,
     stats: StatsCollector,
-    config_options: ConfigOptions,
+    config_options: ConfigOptions[StreamingExecutor],
 ) -> None:
     """
     Finalize local column statistics for an IR node.
