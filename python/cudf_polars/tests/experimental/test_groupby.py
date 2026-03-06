@@ -182,6 +182,7 @@ def test_groupby_agg_empty(df: pl.LazyFrame, engine: pl.GPUEngine) -> None:
     assert_gpu_result_equal(q, engine=engine, check_row_order=False)
 
 
+@pytest.mark.filterwarnings("ignore:This slice not supported for multiple partitions.")
 @pytest.mark.parametrize("zlice", [(0, 2), (2, 2), (-2, None)])
 def test_groupby_then_slice(
     df: pl.LazyFrame, engine: pl.GPUEngine, zlice: tuple[int, int]
