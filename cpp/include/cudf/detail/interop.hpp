@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -7,15 +7,11 @@
 
 #include <cudf/interop.hpp>
 #include <cudf/utilities/default_stream.hpp>
-#include <cudf/utilities/error.hpp>
-#include <cudf/utilities/export.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
-#include <numbers>
-
-namespace CUDF_EXPORT cudf {
+namespace cudf {
 namespace detail {
 
 /**
@@ -36,17 +32,5 @@ DLManagedTensor* to_dlpack(table_view const& input,
                            rmm::cuda_stream_view stream,
                            rmm::device_async_resource_ref mr);
 
-/**
- * @brief Return a maximum precision for a given type.
- *
- * @tparam T the type to get the maximum precision for
- */
-template <typename T>
-constexpr std::size_t max_precision()
-{
-  auto constexpr num_bits = sizeof(T) * 8;
-  return std::floor(num_bits * std::numbers::ln2 / std::numbers::ln10);
-}
-
 }  // namespace detail
-}  // namespace CUDF_EXPORT cudf
+}  // namespace cudf
