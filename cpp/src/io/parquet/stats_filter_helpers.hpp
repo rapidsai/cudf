@@ -66,14 +66,16 @@ class stats_caster_base {
   }
 
   // uses storage type as T
-  template <typename T, CUDF_ENABLE_IF(cudf::is_dictionary<T>() or cudf::is_nested<T>())>
+  template <typename T>
   static inline T convert(uint8_t const* stats_val, size_t stats_size, Type const type)
+    requires(cudf::is_dictionary<T>() or cudf::is_nested<T>())
   {
     CUDF_FAIL("unsupported type for stats casting");
   }
 
-  template <typename T, CUDF_ENABLE_IF(cudf::is_boolean<T>())>
+  template <typename T>
   static inline T convert(uint8_t const* stats_val, size_t stats_size, Type const type)
+    requires(cudf::is_boolean<T>())
   {
     CUDF_EXPECTS(type == Type::BOOLEAN, "Invalid type and stats combination");
     return stats_caster_base::target_type<T>(*reinterpret_cast<bool const*>(stats_val));
@@ -81,9 +83,9 @@ class stats_caster_base {
 
   // integral but not boolean, and fixed_point, and chrono.
   template <typename T>
+  static inline T convert(uint8_t const* stats_val, size_t stats_size, Type const type)
     requires((cudf::is_integral<T>() and !cudf::is_boolean<T>()) or cudf::is_fixed_point<T>() or
              cudf::is_chrono<T>())
-  static inline T convert(uint8_t const* stats_val, size_t stats_size, Type const type)
   {
     switch (type) {
       case Type::INT32:
@@ -115,8 +117,9 @@ class stats_caster_base {
     }
   }
 
-  template <typename T, CUDF_ENABLE_IF(cudf::is_floating_point<T>())>
+  template <typename T>
   static inline T convert(uint8_t const* stats_val, size_t stats_size, Type const type)
+    requires(cudf::is_floating_point<T>())
   {
     switch (type) {
       case Type::FLOAT:
@@ -127,8 +130,9 @@ class stats_caster_base {
     }
   }
 
-  template <typename T, CUDF_ENABLE_IF(std::is_same_v<T, string_view>)>
+  template <typename T>
   static inline T convert(uint8_t const* stats_val, size_t stats_size, Type const type)
+    requires(std::is_same_v<T, string_view>)
   {
     switch (type) {
       case Type::BYTE_ARRAY: [[fallthrough]];
