@@ -11,14 +11,17 @@ import pytest
 import polars as pl
 from polars.testing.asserts import assert_frame_equal
 
-import pylibcudf as plc
 import rmm
 from rmm._cuda import gpu
 from rmm.pylibrmm import CudaStreamFlags
 
 import cudf_polars.callback
 import cudf_polars.utils.config
-from cudf_polars.callback import default_memory_resource, set_memory_resource
+from cudf_polars.callback import (
+    _is_concurrent_managed_access_supported,
+    default_memory_resource,
+    set_memory_resource,
+)
 from cudf_polars.dsl.ir import DataFrameScan, IRExecutionContext
 from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
@@ -121,7 +124,7 @@ def test_invalid_memory_resource_raises(mr, monkeypatch):
 
 
 @pytest.mark.skipif(
-    not plc.utils._is_concurrent_managed_access_supported(),
+    not _is_concurrent_managed_access_supported(),
     reason="managed memory not supported",
 )
 @pytest.mark.parametrize("enable_managed_memory", ["1", "0"])
@@ -657,7 +660,7 @@ def test_memory_resource(memory_resource, memory_resource_config) -> None:
         if memory_resource is None and memory_resource_config is None:
             # The default case: We make a new RMM MR, whose type depends on the GPU's features.
 
-            if plc.utils._is_concurrent_managed_access_supported():
+            if _is_concurrent_managed_access_supported():
                 assert isinstance(result, rmm.mr.PrefetchResourceAdaptor)
             else:
                 assert isinstance(result, rmm.mr.CudaAsyncMemoryResource)
