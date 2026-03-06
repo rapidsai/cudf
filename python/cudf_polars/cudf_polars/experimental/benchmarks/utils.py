@@ -1602,7 +1602,6 @@ def run_polars_query(
 def run_polars(
     benchmark: Any,
     args: argparse.Namespace,
-    num_queries: int = 22,
 ) -> None:
     """Run the queries using the given benchmark and executor options."""
     vars(args).update({"query_set": benchmark.name})
@@ -1937,9 +1936,7 @@ def execute_duckdb_query(
         return conn.execute(query).pl()
 
 
-def run_duckdb(
-    duckdb_queries_cls: Any, args: argparse.Namespace, *, num_queries: int
-) -> None:
+def run_duckdb(duckdb_queries_cls: Any, args: argparse.Namespace) -> None:
     """Run the benchmark with DuckDB."""
     vars(args).update({"query_set": duckdb_queries_cls.name})
     run_config = RunConfig.from_args(args)
