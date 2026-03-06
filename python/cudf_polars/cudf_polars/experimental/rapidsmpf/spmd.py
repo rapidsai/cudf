@@ -30,7 +30,7 @@ from cudf_polars.dsl.ir import IRExecutionContext
 from cudf_polars.experimental.rapidsmpf.core import generate_network
 from cudf_polars.experimental.rapidsmpf.utils import empty_table_chunk
 from cudf_polars.experimental.utils import _concat
-from cudf_polars.utils.config import ContextSPMD
+from cudf_polars.utils.config import SPMDContext
 
 if TYPE_CHECKING:
     from collections.abc import Iterator, MutableMapping
@@ -367,7 +367,7 @@ def spmd_execution(
                     **executor_options,
                     "runtime": "rapidsmpf",
                     "cluster": "spmd",
-                    "spmd": ContextSPMD(context=ctx, py_executor=py_executor),
+                    "spmd": SPMDContext(context=ctx, py_executor=py_executor),
                 },
                 **engine_kwargs,
             )

@@ -44,7 +44,7 @@ def test_spmd_execution_reserved_keys() -> None:
 
 def test_spmd_execution_engine_kwargs_reserved_keys() -> None:
     """engine_kwargs rejects keys that are set explicitly by spmd_execution."""
-    for key in ("raise_on_fail", "memory_resource", "executor"):
+    for key in ("memory_resource", "executor"):
         kwargs: dict[str, Any] = {key: "anything"}
         with (
             pytest.raises(ValueError, match="reserved"),

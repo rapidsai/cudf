@@ -46,11 +46,11 @@ if TYPE_CHECKING:
 __all__ = [
     "Cluster",
     "ConfigOptions",
-    "ContextSPMD",
     "DynamicPlanningOptions",
     "InMemoryExecutor",
     "ParquetOptions",
     "Runtime",
+    "SPMDContext",
     "Scheduler",  # Deprecated, kept for backward compatibility
     "ShuffleMethod",
     "ShufflerInsertionMethod",
@@ -590,7 +590,7 @@ class MemoryResourceConfig:
 
 
 @dataclasses.dataclass(frozen=True)
-class ContextSPMD:
+class SPMDContext:
     """
     Configuration for SPMD (Single Program Multiple Data) execution.
 
@@ -838,7 +838,7 @@ class StreamingExecutor:
             f"{_env_prefix}__RAPIDSMPF_PY_EXECUTOR_MAX_WORKERS", int, default=None
         )
     )
-    spmd: ContextSPMD | None = None
+    spmd: SPMDContext | None = None
 
     def __post_init__(self) -> None:  # noqa: D105
         # Check for rapidsmpf runtime
