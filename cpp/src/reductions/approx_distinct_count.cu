@@ -177,11 +177,12 @@ approx_distinct_count<Hasher>::approx_distinct_count(table_view const& input,
 }
 
 template <template <typename> class Hasher>
-approx_distinct_count<Hasher>::approx_distinct_count(table_view const& input,
-                                                     cudf::approx_standard_error error,
-                                                     null_policy null_handling,
-                                                     nan_policy nan_handling,
-                                                     rmm::cuda_stream_view stream)
+approx_distinct_count<Hasher>::approx_distinct_count(
+  table_view const& input,
+  cudf::approx_distinct_count::desired_standard_error error,
+  null_policy null_handling,
+  nan_policy nan_handling,
+  rmm::cuda_stream_view stream)
   : approx_distinct_count{
       input, precision_from_standard_error(error.value), null_handling, nan_handling, stream}
 {
@@ -364,7 +365,7 @@ approx_distinct_count::approx_distinct_count(table_view const& input,
 }
 
 approx_distinct_count::approx_distinct_count(table_view const& input,
-                                             approx_standard_error error,
+                                             desired_standard_error error,
                                              null_policy null_handling,
                                              nan_policy nan_handling,
                                              rmm::cuda_stream_view stream)

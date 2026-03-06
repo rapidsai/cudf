@@ -791,16 +791,19 @@ TEST_F(ApproxDistinctCount, StandardErrorConstructor)
   cudf::table_view table({col});
 
   // ~1% standard error should give precision 14 (1.04/sqrt(2^14) ≈ 0.0081)
-  auto adc_stderr = cudf::approx_distinct_count(table, cudf::approx_standard_error{0.01});
+  auto adc_stderr =
+    cudf::approx_distinct_count(table, cudf::approx_distinct_count::desired_standard_error{0.01});
   EXPECT_EQ(14, adc_stderr.precision());
   EXPECT_TRUE(is_reasonable_approximation(adc_stderr.estimate(), 500, 14));
 
   // 3.25% standard error (exact boundary) gives precision 10 (1.04/sqrt(2^10) = 0.0325)
-  auto adc_stderr2 = cudf::approx_distinct_count(table, cudf::approx_standard_error{0.0325});
+  auto adc_stderr2 =
+    cudf::approx_distinct_count(table, cudf::approx_distinct_count::desired_standard_error{0.0325});
   EXPECT_EQ(10, adc_stderr2.precision());
 
   // Slightly smaller than boundary gets higher precision
-  auto adc_stderr3 = cudf::approx_distinct_count(table, cudf::approx_standard_error{0.032});
+  auto adc_stderr3 =
+    cudf::approx_distinct_count(table, cudf::approx_distinct_count::desired_standard_error{0.032});
   EXPECT_EQ(11, adc_stderr3.precision());
 }
 
@@ -815,8 +818,8 @@ TEST_F(ApproxDistinctCount, StandardErrorGetter)
   EXPECT_GT(adc10.standard_error(), adc12.standard_error());
   EXPECT_GT(adc12.standard_error(), adc14.standard_error());
 
-  auto adc_rt =
-    cudf::approx_distinct_count(empty_table, cudf::approx_standard_error{adc12.standard_error()});
+  auto adc_rt = cudf::approx_distinct_count(
+    empty_table, cudf::approx_distinct_count::desired_standard_error{adc12.standard_error()});
   EXPECT_EQ(adc12.precision(), adc_rt.precision());
 }
 
@@ -840,10 +843,12 @@ TEST_F(ApproxDistinctCount, InvalidStandardErrorThrows)
   cudf::test::fixed_width_column_wrapper<int32_t> col(data.begin(), data.end());
   cudf::table_view table({col});
 
-  EXPECT_THROW(cudf::approx_distinct_count(table, cudf::approx_standard_error{0.0}),
-               std::invalid_argument);
-  EXPECT_THROW(cudf::approx_distinct_count(table, cudf::approx_standard_error{-0.01}),
-               std::invalid_argument);
+  EXPECT_THROW(
+    cudf::approx_distinct_count(table, cudf::approx_distinct_count::desired_standard_error{0.0}),
+    std::invalid_argument);
+  EXPECT_THROW(
+    cudf::approx_distinct_count(table, cudf::approx_distinct_count::desired_standard_error{-0.01}),
+    std::invalid_argument);
 }
 
 TEST_F(ApproxDistinctCount, SketchBytesAndAlignment)

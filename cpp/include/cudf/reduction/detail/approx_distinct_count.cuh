@@ -95,13 +95,14 @@ class approx_distinct_count {
    * than requested. Use the `standard_error()` getter to retrieve the actual value.
    *
    * @param input Table whose rows will be added to the sketch
-   * @param error The desired standard error (e.g., `approx_standard_error{0.01}` for ~1%)
+   * @param error The desired standard error
+   *              (e.g., `approx_distinct_count::desired_standard_error{0.01}` for ~1%)
    * @param null_handling `INCLUDE` or `EXCLUDE` rows with nulls
    * @param nan_handling `NAN_IS_VALID` or `NAN_IS_NULL`
    * @param stream CUDA stream used for device memory operations and kernel launches
    */
   approx_distinct_count(table_view const& input,
-                        cudf::approx_standard_error error,
+                        cudf::approx_distinct_count::desired_standard_error error,
                         null_policy null_handling,
                         nan_policy nan_handling,
                         rmm::cuda_stream_view stream);
@@ -225,11 +226,22 @@ class approx_distinct_count {
    */
   [[nodiscard]] double standard_error() const noexcept;
 
+  /**
+   * @brief Returns the number of bytes required to store a sketch at the given precision
+   *
+   * @param precision HyperLogLog precision parameter
+   * @return Required sketch storage size in bytes
+   */
   [[nodiscard]] static constexpr std::size_t sketch_bytes(std::int32_t precision)
   {
     return hll_ref_type::sketch_bytes(cuco::precision{precision});
   }
 
+  /**
+   * @brief Returns the required alignment for sketch storage
+   *
+   * @return Required sketch storage alignment in bytes
+   */
   [[nodiscard]] static constexpr std::size_t sketch_alignment()
   {
     return hll_ref_type::sketch_alignment();
