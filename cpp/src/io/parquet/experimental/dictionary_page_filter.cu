@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -1011,7 +1011,9 @@ struct dictionary_caster {
    * @return A vector of BOOL8 columns
    */
   [[nodiscard]] std::vector<std::unique_ptr<cudf::column>> build_columns(
-    cudf::host_span<rmm::device_buffer> results_buffers)
+    cudf::host_span<rmm::device_buffer> results_buffers,
+    rmm::cuda_stream_view stream,
+    rmm::device_async_resource_ref mr)
   {
     auto columns = std::vector<std::unique_ptr<cudf::column>>{};
     columns.reserve(results_buffers.size());
@@ -1023,7 +1025,7 @@ struct dictionary_caster {
                        cudf::data_type{cudf::type_id::BOOL8},
                        static_cast<cudf::size_type>(total_row_groups),
                        std::move(result_buffer),
-                       rmm::device_buffer{},
+                       rmm::device_buffer{0, stream, mr},
                        0);
                    });
     return columns;
@@ -1206,7 +1208,7 @@ struct dictionary_caster {
                                                                     physical_type);
 
     // Build the BOOL8 columns from the results buffers
-    return build_columns(results_buffers);
+    return build_columns(results_buffers, stream, mr);
   }
 
   /**
@@ -1308,7 +1310,7 @@ struct dictionary_caster {
     }
 
     // Build the BOOL8 columns from the results buffers
-    return build_columns(results_buffers);
+    return build_columns(results_buffers, stream, mr);
   }
 
   template <typename T>
