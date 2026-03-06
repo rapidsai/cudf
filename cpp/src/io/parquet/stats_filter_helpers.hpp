@@ -18,8 +18,9 @@
 #include <cudf/utilities/traits.hpp>
 
 #include <algorithm>
-#include <numeric>
-#include <string>
+#include <array>
+#include <bit>
+#include <string_view>
 
 namespace cudf::io::parquet::detail {
 
@@ -38,8 +39,17 @@ constexpr size_t initial_chars_capacity = 1024;
  */
 class stats_caster_base {
  protected:
+  static inline numeric::decimal128::rep decode_flba_decimal128(uint8_t const* stats_val)
+  {
+    using RepType  = numeric::decimal128::rep;
+    auto value_rep = std::bit_cast<std::array<std::byte, sizeof(RepType)>>(
+      *reinterpret_cast<RepType const*>(stats_val));
+    std::ranges::reverse(value_rep);
+    return std::bit_cast<RepType>(value_rep);
+  }
+
   template <typename ToType, typename FromType>
-  static inline ToType targetType(FromType const value)
+  static inline ToType target_type(FromType const value)
   {
     if constexpr (cudf::is_timestamp<ToType>()) {
       return static_cast<ToType>(
@@ -62,33 +72,39 @@ class stats_caster_base {
   static inline T convert(uint8_t const* stats_val, size_t stats_size, Type const type)
   {
     CUDF_EXPECTS(type == Type::BOOLEAN, "Invalid type and stats combination");
-    return stats_caster_base::targetType<T>(*reinterpret_cast<bool const*>(stats_val));
+    return stats_caster_base::target_type<T>(*reinterpret_cast<bool const*>(stats_val));
   }
 
   // integral but not boolean, and fixed_point, and chrono.
-  template <typename T,
-            CUDF_ENABLE_IF((cudf::is_integral<T>() and !cudf::is_boolean<T>()) or
-                           cudf::is_fixed_point<T>() or cudf::is_chrono<T>())>
+  template <typename T>
+    requires((cudf::is_integral<T>() and !cudf::is_boolean<T>()) or cudf::is_fixed_point<T>() or
+             cudf::is_chrono<T>())
   static inline T convert(uint8_t const* stats_val, size_t stats_size, Type const type)
   {
     switch (type) {
       case Type::INT32:
-        return stats_caster_base::targetType<T>(*reinterpret_cast<int32_t const*>(stats_val));
+        return stats_caster_base::target_type<T>(*reinterpret_cast<int32_t const*>(stats_val));
       case Type::INT64:
-        return stats_caster_base::targetType<T>(*reinterpret_cast<int64_t const*>(stats_val));
+        return stats_caster_base::target_type<T>(*reinterpret_cast<int64_t const*>(stats_val));
       case Type::INT96:  // Deprecated in parquet specification
-        return stats_caster_base::targetType<T>(
+        return stats_caster_base::target_type<T>(
           static_cast<__int128_t>(reinterpret_cast<int64_t const*>(stats_val)[0]) << 32 |
           reinterpret_cast<int32_t const*>(stats_val)[2]);
       case Type::BYTE_ARRAY: [[fallthrough]];
       case Type::FIXED_LEN_BYTE_ARRAY:
         if (stats_size == sizeof(T)) {
-          // if type size == length of stats_val. then typecast and return.
           if constexpr (cudf::is_chrono<T>()) {
-            return stats_caster_base::targetType<T>(
+            return stats_caster_base::target_type<T>(
               *reinterpret_cast<typename T::rep const*>(stats_val));
-          } else {
-            return stats_caster_base::targetType<T>(*reinterpret_cast<T const*>(stats_val));
+          }  // Decimals with physical type FLBA/BYTE_ARRAY are stored as two's complement using
+             // big-endian.
+          else if constexpr (std::is_same_v<T, numeric::decimal128::rep>) {
+            CUDF_EXPECTS(stats_size == sizeof(T), "Invalid stats size for decimal128");
+            return stats_caster_base::target_type<T>(decode_flba_decimal128(stats_val));
+          }  // TODO(mh): We may need to add support for `decimal256` (two's complement using
+             // big-endian) and `UUID` types (big-endian)
+          else {
+            return stats_caster_base::target_type<T>(*reinterpret_cast<T const*>(stats_val));
           }
         }
         // unsupported type
@@ -101,9 +117,9 @@ class stats_caster_base {
   {
     switch (type) {
       case Type::FLOAT:
-        return stats_caster_base::targetType<T>(*reinterpret_cast<float const*>(stats_val));
+        return stats_caster_base::target_type<T>(*reinterpret_cast<float const*>(stats_val));
       case Type::DOUBLE:
-        return stats_caster_base::targetType<T>(*reinterpret_cast<double const*>(stats_val));
+        return stats_caster_base::target_type<T>(*reinterpret_cast<double const*>(stats_val));
       default: CUDF_FAIL("Invalid type and stats combination");
     }
   }

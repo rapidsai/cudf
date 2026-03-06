@@ -38,6 +38,7 @@
 
 #include <algorithm>
 #include <limits>
+#include <numeric>
 
 namespace cudf::io::parquet::experimental::detail {
 
