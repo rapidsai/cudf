@@ -14,7 +14,7 @@
 
 struct PackUnpackTest : public cudf::test::BaseFixture {
   void verify_column_metadata(cudf::column_view const& col,
-                              cudf::packed_column_metadata const& meta)
+                              cudf::packed_metadata_view::column_view const& meta)
   {
     EXPECT_EQ(meta.type(), col.type());
     EXPECT_EQ(meta.num_rows(), col.size());

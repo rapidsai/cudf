@@ -10,6 +10,7 @@
 #include <cudf/utilities/export.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
+#include <cstdint>
 #include <memory>
 #include <span>
 #include <vector>
@@ -313,63 +314,6 @@ table_view unpack(packed_columns const& input);
 table_view unpack(uint8_t const* metadata, uint8_t const* gpu_data);
 
 /**
- * @brief A non-owning view of a single column's metadata within packed column data.
- *
- * This lightweight view (two pointers) wraps a single serialized column entry and provides
- * access to its schema information (type, size, null count, children) without requiring
- * device data or building a `column_view`.
- *
- * Instances are obtained from `packed_metadata_view::column()` or
- * `packed_column_metadata::child()`. They remain valid as long as the underlying
- * metadata byte buffer is alive.
- */
-class packed_column_metadata {
- public:
-  /**
-   * @brief Return the data type of this column.
-   * @return The column's `data_type`
-   */
-  [[nodiscard]] data_type type() const;
-
-  /**
-   * @brief Return the number of rows in this column.
-   * @return The row count
-   */
-  [[nodiscard]] size_type num_rows() const;
-
-  /**
-   * @brief Return the null count of this column.
-   * @return The null count
-   */
-  [[nodiscard]] size_type null_count() const;
-
-  /**
-   * @brief Return the number of children of this column.
-   * @return The child count
-   */
-  [[nodiscard]] size_type num_children() const;
-
-  /**
-   * @brief Return a view of the i-th child column's metadata.
-   *
-   * @throws std::out_of_range if `i` is not contained in `[0, num_children())`
-   * @param i Index of the child column
-   * @return A `packed_column_metadata` for the i-th child
-   */
-  [[nodiscard]] packed_column_metadata child(size_type i) const;
-
- private:
-  friend class packed_metadata_view;
-  data_type _type{type_id::EMPTY};
-  size_type _size{};
-  size_type _null_count{};
-  size_type _num_children{};
-  // Span from this entry to the end of the metadata buffer (needed for child traversal).
-  std::span<uint8_t const> _buffer;
-  explicit packed_column_metadata(std::span<uint8_t const> buffer);
-};
-
-/**
  * @brief A non-owning view over the host metadata produced by `cudf::pack`.
  *
  * `packed_metadata_view` enables schema introspection — querying column types,
@@ -394,21 +338,74 @@ class packed_column_metadata {
 class packed_metadata_view {
  public:
   /**
-   * @brief Construct a view from a metadata byte buffer.
+   * @brief A non-owning view of a single column's metadata within packed column data.
    *
-   * @throws cudf::logic_error if the buffer is empty or does not describe a valid column tree
-   * @param buffer The metadata bytes (as produced by `cudf::pack`)
+   * This lightweight view (two pointers) wraps a single serialized column entry and provides
+   * access to its schema information (type, size, null count, children) without requiring
+   * device data or building a `column_view`.
+   *
+   * Instances are obtained from `packed_metadata_view::column()` or
+   * `packed_column_metadata::child()`. They remain valid as long as the underlying
+   * metadata byte buffer is alive.
    */
-  explicit packed_metadata_view(std::span<uint8_t const> buffer);
+  class column_view {
+   public:
+    /**
+     * @brief @return The `data_type` of this column.
+     */
+    [[nodiscard]] data_type type() const;
+
+    /**
+     * @brief @return The number of rows in this column.
+     */
+    [[nodiscard]] size_type num_rows() const;
+
+    /**
+     * @brief @return The null count of this column.
+     */
+    [[nodiscard]] size_type null_count() const;
+
+    /**
+     * @brief @return The number of children of this column.
+     */
+    [[nodiscard]] size_type num_children() const;
+
+    /**
+     * @brief A view of the i-th child column's metadata.
+     *
+     * @throws std::out_of_range if `i` is not contained in `[0, num_children())`
+     * @param i Index of the child column
+     * @return A `packed_column_metadata_view` for the i-th child
+     */
+    [[nodiscard]] column_view child(size_type i) const;
+
+   private:
+    friend class packed_metadata_view;
+    data_type _type{type_id::EMPTY};
+    size_type _size{};
+    size_type _null_count{};
+    size_type _num_children{};
+    // Span from this entry to the end of the metadata buffer (needed for child traversal).
+    std::span<std::uint8_t const> _buffer;
+    explicit column_view(std::span<std::uint8_t const> buffer);
+  };
 
   /**
-   * @brief Return the number of top-level columns.
-   * @return The column count
+   * @brief Construct a view from a metadata byte buffer.
+   *
+   * @throws cudf::logic_error if the buffer is empty or does not satisfy minimum requirements for
+   * describing a valid column tree.
+   * @param buffer The metadata bytes (as produced by `cudf::pack`)
+   */
+  explicit packed_metadata_view(std::span<std::uint8_t const> buffer);
+
+  /**
+   * @brief @return The number of top-level columns.
    */
   [[nodiscard]] size_type num_columns() const;
 
   /**
-   * @brief Return the number of rows in the table.
+   * @brief The number of rows in the table.
    *
    * This is the row count of the first top-level column.
    * Returns 0 if the table has no columns.
@@ -418,17 +415,17 @@ class packed_metadata_view {
   [[nodiscard]] size_type num_rows() const;
 
   /**
-   * @brief Return a view of the i-th top-level column's metadata.
+   * @brief A view of the i-th top-level column's metadata.
    *
    * @throws std::out_of_range if `i` is not contained in `[0, num_columns())`
    * @param i Index of the top-level column
-   * @return A `packed_column_metadata` for the i-th column
+   * @return A `packed_metadata_view::column` for the i-th column
    */
-  [[nodiscard]] packed_column_metadata column(size_type i) const;
+  [[nodiscard]] column_view column(size_type i) const;
 
  private:
   // Span from the first top-level column entry to the end of the metadata buffer.
-  std::span<uint8_t const> _entries;
+  std::span<std::uint8_t const> _entries;
   size_type _num_columns{};
 };
 

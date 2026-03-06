@@ -10,6 +10,9 @@
 #include <rmm/cuda_stream_view.hpp>
 
 #include <algorithm>
+#include <cstddef>
+#include <cstdint>
+#include <cstring>
 #include <functional>
 #include <memory>
 #include <utility>
@@ -58,15 +61,15 @@ struct serialized_column {
   int pad{};
 };
 
-constexpr size_t serialized_column_size = sizeof(serialized_column);
+constexpr auto serialized_column_size = sizeof(serialized_column);
 
 // Read a serialized_column entry at `ptr`, optionally checking that the read
 // stays within [ptr, buffer_end).  When buffer_end is nullptr the check is
 // skipped (used by the internal unpack path which has its own validation).
-serialized_column read_entry(uint8_t const* ptr, uint8_t const* buffer_end = nullptr)
+serialized_column read_entry(std::uint8_t const* ptr, std::uint8_t const* buffer_end = nullptr)
 {
   if (buffer_end) {
-    CUDF_EXPECTS(static_cast<size_t>(buffer_end - ptr) >= serialized_column_size,
+    CUDF_EXPECTS(static_cast<std::size_t>(buffer_end - ptr) >= serialized_column_size,
                  "packed metadata access is out of bounds");
   }
   serialized_column entry;
@@ -76,7 +79,7 @@ serialized_column read_entry(uint8_t const* ptr, uint8_t const* buffer_end = nul
 
 // Returns the total number of serialized_column entries in the subtree
 // rooted at the entry at `ptr` (including that entry itself).
-size_type subtree_size(uint8_t const* ptr, uint8_t const* buffer_end = nullptr)
+size_type subtree_size(std::uint8_t const* ptr, std::uint8_t const* buffer_end = nullptr)
 {
   auto entry          = read_entry(ptr, buffer_end);
   size_type count     = 1;
@@ -92,7 +95,9 @@ size_type subtree_size(uint8_t const* ptr, uint8_t const* buffer_end = nullptr)
 
 // Advance past `n` consecutive subtrees starting at `ptr`, returning
 // a pointer to the first byte after the skipped subtrees.
-uint8_t const* skip_subtrees(uint8_t const* ptr, size_type n, uint8_t const* buffer_end = nullptr)
+uint8_t const* skip_subtrees(std::uint8_t const* ptr,
+                             size_type n,
+                             std::uint8_t const* buffer_end = nullptr)
 {
   for (size_type i = 0; i < n; ++i) {
     ptr += subtree_size(ptr, buffer_end) * serialized_column_size;
@@ -290,7 +295,7 @@ void metadata_builder::clear() { return impl->clear(); }
 
 }  // namespace detail
 
-packed_column_metadata::packed_column_metadata(std::span<uint8_t const> buffer) : _buffer(buffer)
+packed_metadata_view::column_view::column_view(std::span<uint8_t const> buffer) : _buffer(buffer)
 {
   auto const entry = detail::read_entry(_buffer.data(), _buffer.data() + _buffer.size());
   _type            = entry.type;
@@ -299,22 +304,22 @@ packed_column_metadata::packed_column_metadata(std::span<uint8_t const> buffer) 
   _num_children    = entry.num_children;
 }
 
-data_type packed_column_metadata::type() const { return _type; }
+data_type packed_metadata_view::column_view::type() const { return _type; }
 
-size_type packed_column_metadata::num_rows() const { return _size; }
+size_type packed_metadata_view::column_view::num_rows() const { return _size; }
 
-size_type packed_column_metadata::null_count() const { return _null_count; }
+size_type packed_metadata_view::column_view::null_count() const { return _null_count; }
 
-size_type packed_column_metadata::num_children() const { return _num_children; }
+size_type packed_metadata_view::column_view::num_children() const { return _num_children; }
 
-packed_column_metadata packed_column_metadata::child(size_type i) const
+packed_metadata_view::column_view packed_metadata_view::column_view::child(size_type i) const
 {
   CUDF_EXPECTS(i >= 0 && i < _num_children, "child index out of range", std::out_of_range);
   auto const* end = _buffer.data() + _buffer.size();
   // Children start immediately after this entry in pre-order layout.
   auto const* child_ptr =
     detail::skip_subtrees(_buffer.data() + detail::serialized_column_size, i, end);
-  return packed_column_metadata{{child_ptr, end}};
+  return packed_metadata_view::column_view{{child_ptr, end}};
 }
 
 packed_metadata_view::packed_metadata_view(std::span<uint8_t const> buffer)
@@ -342,12 +347,12 @@ size_type packed_metadata_view::num_rows() const
   return detail::read_entry(_entries.data(), _entries.data() + detail::serialized_column_size).size;
 }
 
-packed_column_metadata packed_metadata_view::column(size_type i) const
+packed_metadata_view::column_view packed_metadata_view::column(size_type i) const
 {
   CUDF_EXPECTS(i >= 0 && i < _num_columns, "column index out of range", std::out_of_range);
   auto const* end    = _entries.data() + _entries.size();
   auto const* target = detail::skip_subtrees(_entries.data(), i, end);
-  return packed_column_metadata{{target, end}};
+  return packed_metadata_view::column_view{{target, end}};
 }
 
 /**
