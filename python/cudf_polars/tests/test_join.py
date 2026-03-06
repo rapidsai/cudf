@@ -66,6 +66,8 @@ def test_join_maintain_order(left, right, maintain_order):
     [
         pl.col("a"),
         pl.col("a") * 2,
+        pl.col("a").abs(),
+        pl.col("a").cast(pl.Int32),
         [pl.col("a"), pl.col("c") + 1],
         ["c", "a"],
     ],
