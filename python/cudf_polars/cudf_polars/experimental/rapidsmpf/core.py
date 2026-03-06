@@ -312,11 +312,7 @@ def evaluate_pipeline(
                 stream,
             )
 
-        # We need to materialize the polars dataframe before we drop the rapidsmpf
-        # context, which keeps the CUDA streams alive.
-        with ir_context.stream_ordered_after(df) as stream:
-            result = df.to_polars()
-        stream.synchronize()
+        result = df.to_polars()
 
         # Now we need to drop *all* GPU data. This ensures that no cudaFreeAsync runs
         # before the Context, which ultimately contains the rmm MR, goes out of scope.

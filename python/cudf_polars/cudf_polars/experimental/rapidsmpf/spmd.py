@@ -109,9 +109,6 @@ def evaluate_pipeline_spmd_mode(
 
     run_actor_network(actors=nodes, py_executor=py_executor)
 
-    # Extract/return the concatenated result.
-    # Keep chunks alive until after concatenation to prevent
-    # use-after-free with stream-ordered allocations
     messages = output.release()
     chunks = [
         TableChunk.from_message(msg).make_available_and_spill(
@@ -142,9 +139,7 @@ def evaluate_pipeline_spmd_mode(
             stream,
         )
 
-    with ir_context.stream_ordered_after(df) as stream:
-        result = df.to_polars()
-    stream.synchronize()
+    result = df.to_polars()
     return result, metadata_collector
 
 
