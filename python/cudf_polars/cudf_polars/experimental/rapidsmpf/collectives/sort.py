@@ -136,12 +136,12 @@ async def sort_node(
 
         by_indices = names_to_indices(tuple(by), ir.schema)
         by_dtypes = [ir.schema[b] for b in by]
-        my_part_id = comm.rank  # TODO: check if this is correct
+        my_part_id = comm.rank
 
         chunks_buffer: list[TableChunk] = []
         local_candidates_list: list[DataFrame] = []
         while (msg := await ch_in.recv(context)) is not None:
-            # Local sort (do_evaluate runs the sort IR on this chunk).
+            # Local sort
             df = await asyncio.to_thread(
                 ir.do_evaluate,
                 *ir._non_child_args,
@@ -153,8 +153,7 @@ async def sort_node(
                 ),
                 context=ir_context,
             )  # type: ignore[call-arg]
-            # Select local split candidates for this chunk (small table; we keep
-            # it so we can concatenate and allgather without touching chunks again).
+            # Select local split candidates for this chunk
             local_candidates_list.append(
                 _select_local_split_candidates(
                     DataFrame.from_table(
@@ -201,9 +200,7 @@ async def sort_node(
         )
         skip_insert = metadata_in.duplicated and comm.rank != 0
 
-        # Insert sorted chunks into the shuffler. Each chunk is made available
-        # only once here; it was already sorted in the receive loop and may
-        # have been spilled in the buffer.
+        # Insert sorted chunks into the shuffler
         for chunk in chunks_buffer:
             if skip_insert:
                 continue
@@ -233,8 +230,8 @@ async def sort_node(
         for partition_id in sorted(shuffle.local_partitions()):
             stream = ir_context.get_cuda_stream()
             out_table = await shuffle.extract_chunk(partition_id, stream)
-            # Partition is built from multiple locally-sorted chunks; sort so
-            # output is globally ordered (same as tasks sort).
+            # Partition is built from multiple locally-sorted chunks.
+            # Sort concatenated chunk one more tome.
             if out_table.num_rows() > 0:
                 df = DataFrame.from_table(
                     out_table,
