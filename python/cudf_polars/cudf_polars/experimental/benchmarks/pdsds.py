@@ -110,6 +110,15 @@ class PDSDSPolarsQueries(PDSDSQueries):
             pl.col("revenueratio").cast(pl.Decimal(38, 2)),
         ],
         24: [pl.col("paid").cast(pl.Decimal(18, 2))],
+        30: [pl.col("ctr_total_return").cast(pl.Decimal(18, 2))],
+        32: [pl.col("excess discount amount").cast(pl.Decimal(18, 2))],
+        31: [
+            pl.col("web_q1_q2_increase").cast(pl.Decimal(38, 2)),
+            pl.col("store_q1_q2_increase").cast(pl.Decimal(38, 2)),
+            pl.col("web_q2_q3_increase").cast(pl.Decimal(38, 2)),
+            pl.col("store_q2_q3_increase").cast(pl.Decimal(38, 2)),
+        ],
+        33: [pl.col("total_sales").cast(pl.Decimal(18, 2))],
         63: [pl.col("sum_sales").cast(pl.Decimal(18, 2))],
         64: [
             pl.col("s1").cast(pl.Decimal(18, 2)),
@@ -148,6 +157,12 @@ class PDSDSPolarsQueries(PDSDSQueries):
         21: [
             pl.col("inv_before").cast(pl.Int32),
             pl.col("inv_after").cast(pl.Int32),
+        ],
+        34: [pl.col("cnt").cast(COUNT_DTYPE)],
+        35: [
+            pl.col("cnt1").cast(COUNT_DTYPE),
+            pl.col("cnt2").cast(COUNT_DTYPE),
+            pl.col("cnt3").cast(COUNT_DTYPE),
         ],
         64: [
             pl.col("cnt").cast(COUNT_DTYPE),
@@ -190,8 +205,8 @@ if __name__ == "__main__":
     args = parse_args(parser=parser)
 
     if args.engine == "polars":
-        run_polars(PDSDSPolarsQueries, args, num_queries=99)
+        run_polars(PDSDSPolarsQueries, args)
     elif args.engine == "duckdb":
-        run_duckdb(PDSDSDuckDBQueries, args, num_queries=99)
+        run_duckdb(PDSDSDuckDBQueries, args)
     else:
         raise ValueError(f"Invalid engine: {args.engine}")
