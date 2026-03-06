@@ -28,6 +28,7 @@
 #include <cub/device/device_histogram.cuh>
 #include <cuda/atomic>
 #include <cuda/devices>
+#include <cuda/iterator>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/scan.h>
 #include <thrust/transform.h>
@@ -229,30 +230,6 @@ CUDF_KERNEL void compute_row_output_locations(size_type* __restrict__ row_partit
     // Store the row's output location in-place
     row_partition_numbers[row_number] = row_output_location;
 
-    tid += stride;
-  }
-}
-
-/**
- * @brief Computes partition numbers for each row without using shared memory.
- *
- * Used when num_partitions exceeds shared memory capacity. Only computes the
- * partition number for each row — histogram computation is done separately
- * via cub::DeviceHistogram.
- */
-template <class row_hasher_t, typename partitioner_type>
-CUDF_KERNEL void compute_hash_partition_numbers(row_hasher_t hasher,
-                                                size_type const num_rows,
-                                                partitioner_type const partitioner,
-                                                size_type* __restrict__ row_partition_numbers)
-{
-  auto tid          = cudf::detail::grid_1d::global_thread_id();
-  auto const stride = cudf::detail::grid_1d::grid_stride();
-
-  while (tid < num_rows) {
-    auto const row_number                = static_cast<size_type>(tid);
-    hash_value_type const row_hash_value = hasher(row_number);
-    row_partition_numbers[row_number]    = partitioner(row_hash_value);
     tid += stride;
   }
 }
@@ -499,17 +476,24 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition_table_g
   auto row_partition_numbers = rmm::device_uvector<size_type>(num_rows, stream);
 
   // Compute partition number for each row
-  constexpr auto block_size = FALLBACK_BLOCK_SIZE;
-  auto const grid_size = util::div_rounding_up_safe(num_rows, static_cast<size_type>(block_size));
-
   if (is_power_two(num_partitions)) {
-    using partitioner_type = bitwise_partitioner<hash_value_type>;
-    compute_hash_partition_numbers<<<grid_size, block_size, 0, stream.value()>>>(
-      hasher, num_rows, partitioner_type(num_partitions), row_partition_numbers.data());
+    auto const partitioner = bitwise_partitioner<hash_value_type>(num_partitions);
+    thrust::transform(rmm::exec_policy_nosync(stream),
+                      cuda::counting_iterator<size_type>(0),
+                      cuda::counting_iterator<size_type>(num_rows),
+                      row_partition_numbers.begin(),
+                      [hasher, partitioner] __device__(size_type row) -> size_type {
+                        return partitioner(hasher(row));
+                      });
   } else {
-    using partitioner_type = modulo_partitioner<hash_value_type>;
-    compute_hash_partition_numbers<<<grid_size, block_size, 0, stream.value()>>>(
-      hasher, num_rows, partitioner_type(num_partitions), row_partition_numbers.data());
+    auto const partitioner = modulo_partitioner<hash_value_type>(num_partitions);
+    thrust::transform(rmm::exec_policy_nosync(stream),
+                      cuda::counting_iterator<size_type>(0),
+                      cuda::counting_iterator<size_type>(num_rows),
+                      row_partition_numbers.begin(),
+                      [hasher, partitioner] __device__(size_type row) -> size_type {
+                        return partitioner(hasher(row));
+                      });
   }
 
   // Build histogram via cub::DeviceHistogram::HistogramEven.
