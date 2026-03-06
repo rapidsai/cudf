@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
-from cudf_polars.experimental.benchmarks.utils import get_data
+from cudf_polars.experimental.benchmarks.utils import QueryResult, get_data
 
 if TYPE_CHECKING:
     from cudf_polars.experimental.benchmarks.utils import RunConfig
@@ -52,7 +52,7 @@ def duckdb_impl(run_config: RunConfig) -> str:
     """
 
 
-def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
+def polars_impl(run_config: RunConfig) -> QueryResult:
     """Query 32."""
     params = load_parameters(
         int(run_config.scale_factor),
@@ -84,15 +84,21 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         .agg([(pl.col("cs_ext_discount_amt").mean() * 1.3).alias("threshold_discount")])
     )
     # Main query: find items with specified manufacturer and high discount amounts
-    return (
-        catalog_sales.join(item, left_on="cs_item_sk", right_on="i_item_sk")
-        .join(date_dim, left_on="cs_sold_date_sk", right_on="d_date_sk")
-        .join(item_avg_discounts, on="cs_item_sk")
-        .filter(
-            (pl.col("i_manufact_id") == imid)
-            & (pl.col("d_date").is_between(start_date, end_date))
-            & (pl.col("cs_ext_discount_amt") > pl.col("threshold_discount"))
-        )
-        .select([pl.col("cs_ext_discount_amt").sum().alias("excess discount amount")])
-        .limit(100)
+    return QueryResult(
+        frame=(
+            catalog_sales.join(item, left_on="cs_item_sk", right_on="i_item_sk")
+            .join(date_dim, left_on="cs_sold_date_sk", right_on="d_date_sk")
+            .join(item_avg_discounts, on="cs_item_sk")
+            .filter(
+                (pl.col("i_manufact_id") == imid)
+                & (pl.col("d_date").is_between(start_date, end_date))
+                & (pl.col("cs_ext_discount_amt") > pl.col("threshold_discount"))
+            )
+            .select(
+                [pl.col("cs_ext_discount_amt").sum().alias("excess discount amount")]
+            )
+            .limit(100)
+        ),
+        sort_by=[],
+        limit=None,
     )
