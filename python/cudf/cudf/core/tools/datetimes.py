@@ -935,13 +935,13 @@ def date_range(
     _periods_not_specified = False
 
     if start is None:
-        end = dtype.type(end, unit)
+        end = dtype.type(end, _unit)
         start = (
             pd.Timestamp(end)
             - (periods - 1) * offset._maybe_as_fast_pandas_offset()
         ).to_numpy()
     elif end is None:
-        start = dtype.type(start, unit)
+        start = dtype.type(start, _unit)
     elif periods is None:
         # When `periods` is unspecified, its upper bound estimated by
         # dividing the number of timestamps between two timestamps with
