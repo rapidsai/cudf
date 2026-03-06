@@ -109,15 +109,17 @@ class PDSDSPolarsQueries(PDSDSQueries):
             pl.col("itemrevenue").cast(pl.Decimal(18, 2)),
             pl.col("revenueratio").cast(pl.Decimal(38, 2)),
         ],
-        63: [pl.col("sum_sales").cast(pl.Decimal(18, 2))],
-        70: [pl.col("total_sum").cast(pl.Decimal(18, 2))],
-        71: [pl.col("ext_price").cast(pl.Decimal(18, 2))],
-        68: [
-            pl.col("extended_price").cast(pl.Decimal(18, 2)),
-            pl.col("extended_tax").cast(pl.Decimal(18, 2)),
-            pl.col("list_price").cast(pl.Decimal(18, 2)),
+        24: [pl.col("paid").cast(pl.Decimal(18, 2))],
+        30: [pl.col("ctr_total_return").cast(pl.Decimal(18, 2))],
+        32: [pl.col("excess discount amount").cast(pl.Decimal(18, 2))],
+        31: [
+            pl.col("web_q1_q2_increase").cast(pl.Decimal(38, 2)),
+            pl.col("store_q1_q2_increase").cast(pl.Decimal(38, 2)),
+            pl.col("web_q2_q3_increase").cast(pl.Decimal(38, 2)),
+            pl.col("store_q2_q3_increase").cast(pl.Decimal(38, 2)),
         ],
-        65: [pl.col("revenue").cast(pl.Decimal(18, 2))],
+        33: [pl.col("total_sales").cast(pl.Decimal(18, 2))],
+        63: [pl.col("sum_sales").cast(pl.Decimal(18, 2))],
         64: [
             pl.col("s1").cast(pl.Decimal(18, 2)),
             pl.col("s2").cast(pl.Decimal(18, 2)),
@@ -126,6 +128,14 @@ class PDSDSPolarsQueries(PDSDSQueries):
             pl.col("s2_1").cast(pl.Decimal(18, 2)),
             pl.col("s3_1").cast(pl.Decimal(18, 2)),
         ],
+        65: [pl.col("revenue").cast(pl.Decimal(18, 2))],
+        68: [
+            pl.col("extended_price").cast(pl.Decimal(18, 2)),
+            pl.col("extended_tax").cast(pl.Decimal(18, 2)),
+            pl.col("list_price").cast(pl.Decimal(18, 2)),
+        ],
+        70: [pl.col("total_sum").cast(pl.Decimal(18, 2))],
+        71: [pl.col("ext_price").cast(pl.Decimal(18, 2))],
     }
     EXPECTED_CASTS: ClassVar[dict] = {
         6: [pl.col("cnt").cast(COUNT_DTYPE)],
@@ -148,7 +158,8 @@ class PDSDSPolarsQueries(PDSDSQueries):
             pl.col("inv_before").cast(pl.Int32),
             pl.col("inv_after").cast(pl.Int32),
         ],
-        69: [
+        34: [pl.col("cnt").cast(COUNT_DTYPE)],
+        35: [
             pl.col("cnt1").cast(COUNT_DTYPE),
             pl.col("cnt2").cast(COUNT_DTYPE),
             pl.col("cnt3").cast(COUNT_DTYPE),
@@ -158,6 +169,11 @@ class PDSDSPolarsQueries(PDSDSQueries):
             pl.col("cnt_1").cast(COUNT_DTYPE),
         ],
         67: [pl.col("rk").cast(pl.UInt32())],
+        69: [
+            pl.col("cnt1").cast(COUNT_DTYPE),
+            pl.col("cnt2").cast(COUNT_DTYPE),
+            pl.col("cnt3").cast(COUNT_DTYPE),
+        ],
         70: [pl.col("rank_within_parent").cast(pl.UInt32())],
         72: [
             pl.col("total_cnt").cast(COUNT_DTYPE),
@@ -189,8 +205,8 @@ if __name__ == "__main__":
     args = parse_args(parser=parser)
 
     if args.engine == "polars":
-        run_polars(PDSDSPolarsQueries, args, num_queries=99)
+        run_polars(PDSDSPolarsQueries, args)
     elif args.engine == "duckdb":
-        run_duckdb(PDSDSDuckDBQueries, args, num_queries=99)
+        run_duckdb(PDSDSDuckDBQueries, args)
     else:
         raise ValueError(f"Invalid engine: {args.engine}")

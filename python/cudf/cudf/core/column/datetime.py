@@ -913,6 +913,7 @@ class DatetimeTZColumn(DatetimeColumn):
         self, dtype: pd.ArrowDtype | pd.DatetimeTZDtype
     ) -> DatetimeColumn:
         if isinstance(dtype, pd.DatetimeTZDtype):
+            dtype = get_compatible_timezone(dtype)
             if dtype.unit != self.time_unit:
                 casted_plc = (
                     super()
