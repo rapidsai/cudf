@@ -473,6 +473,9 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition_table_g
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
+  CUDF_EXPECTS(num_partitions < std::numeric_limits<size_type>::max(),
+               "num_partitions exceeds cudf's supported limit");
+
   auto row_partition_numbers = rmm::device_uvector<size_type>(num_rows, stream);
 
   // Compute partition number for each row
@@ -502,7 +505,7 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition_table_g
   auto histogram = cudf::detail::make_zeroed_device_uvector_async<size_type>(
     num_partitions + 1, stream, cudf::get_current_device_resource_ref());
   {
-    auto const num_levels  = static_cast<std::size_t>(num_partitions + 1);
+    auto const num_levels  = num_partitions + 1;
     auto const lower_level = size_type{0};
     auto const upper_level = num_partitions;
 
