@@ -254,8 +254,6 @@ segmented_bitmask_and(host_span<column_view const> colviews,
  * device buffers, with each buffer containing the resulting bitmask for a segment, and (ii) a
  * vector of integers representing the count of null (unset) bits for each segment
  *
- * The function assumes all the input columns passed are nullable.
- *
  * @param masks A span containing bitmasks that will be ANDed within their
  * respective segments
  * @param segment_offsets A span containing the starting positions of each segment

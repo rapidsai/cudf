@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -76,6 +76,16 @@ TEST_F(NullMaskTest, NullCount)
 
   cudf::null_count(
     static_cast<cudf::column_view>(col).null_mask(), 0, 4, cudf::test::get_default_stream());
+}
+
+TEST_F(NullMaskTest, SegmentedCount)
+{
+  auto stream        = cudf::test::get_default_stream();
+  auto mask          = rmm::device_uvector<cudf::bitmask_type>(10, stream);
+  auto const indices = std::vector<cudf::size_type>{0, 320, 0, 320};
+
+  cudf::segmented_null_count(mask.data(), indices, stream);
+  cudf::segmented_valid_count(mask.data(), indices, stream);
 }
 
 CUDF_TEST_PROGRAM_MAIN()
