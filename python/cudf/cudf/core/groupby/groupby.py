@@ -1108,6 +1108,7 @@ class GroupBy(Serializable, Reducible, Scannable):
 
         multilevel = _is_multi_agg(func)
         data = {}
+        index_column = None
         for col_name, aggs, cols, orig_dtype in zip(
             column_names,
             included_aggregations,
@@ -1125,13 +1126,23 @@ class GroupBy(Serializable, Reducible, Scannable):
 
                 create_dtype = dtype_from_pylibcudf_column(plc_result)
                 cast_dtype = None
+                needs_index_labels = agg_kind in {
+                    "ARGMIN",
+                    "ARGMAX",
+                } and get_option("mode.pandas_compatible")
                 if agg in {list, "collect"}:
                     # Collect wraps the original dtype in ListDtype (e.g., int -> list<int>)
                     create_dtype = get_dtype_of_same_kind(
                         orig_dtype, ListDtype(orig_dtype)
                     )
                 # Override for specific aggregation types that need dtype adjustments
-                if agg_kind in {"COUNT", "SIZE", "ARGMIN", "ARGMAX"}:
+                if agg_kind in {"COUNT", "SIZE"}:
+                    cast_dtype = get_dtype_of_same_kind(
+                        orig_dtype, np.dtype(np.int64)
+                    )
+                elif (
+                    agg_kind in {"ARGMIN", "ARGMAX"} and not needs_index_labels
+                ):
                     cast_dtype = get_dtype_of_same_kind(
                         orig_dtype, np.dtype(np.int64)
                     )
@@ -1158,6 +1169,16 @@ class GroupBy(Serializable, Reducible, Scannable):
                     # pandas 0-indexes cumulative count, see
                     # https://github.com/rapidsai/cudf/issues/10237
                     result_col = result_col - 1
+                if needs_index_labels:
+                    if (
+                        index_column is None
+                        and len(self.obj.index._columns) == 1
+                    ):
+                        index_column = self.obj.index._columns[0]
+                    if index_column is not None:
+                        result_col = index_column.take(
+                            result_col, nullify=True
+                        )
                 if cast_dtype is not None:
                     result_col = result_col.astype(cast_dtype)
                 data[key] = result_col

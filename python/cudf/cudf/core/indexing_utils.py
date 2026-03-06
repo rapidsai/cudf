@@ -657,6 +657,18 @@ def parse_single_row_loc_key(
     if isinstance(key, slice):
         return find_label_range_or_mask(key, index)
     else:
+        if (
+            index.dtype.kind == "M"
+            and isinstance(key, str)
+            and cudf.get_option("mode.pandas_compatible")
+        ):
+            try:
+                pandas_loc = index.get_loc(key)
+            except KeyError:
+                pass
+            else:
+                if isinstance(pandas_loc, slice):
+                    return SliceIndexer(pandas_loc)
         is_scalar = _is_scalar_or_zero_d_array(key)
         if is_scalar and isinstance(key, np.ndarray):
             key = as_column(key.item())

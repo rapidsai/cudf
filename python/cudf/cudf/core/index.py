@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, Any, Literal, Self, cast
 import cupy
 import numpy as np
 import pandas as pd
+import pandas.tseries.offsets as pd_offset
 import pyarrow as pa
 
 import pylibcudf as plc
@@ -25,6 +26,7 @@ from cudf.api.types import (
     is_integer,
     is_list_like,
     is_scalar,
+    is_timedelta64_dtype,
 )
 from cudf.core._compat import PANDAS_LT_300
 from cudf.core._internals import copying, sorting
@@ -1916,6 +1918,35 @@ class Index(SingleColumnFrame):
         except TypeError:
             return False
 
+    def is_(self, other: Any) -> bool:
+        if self is other:
+            return True
+        if not isinstance(other, Index):
+            return False
+        self_column = getattr(self, "_column", None)
+        other_column = getattr(other, "_column", None)
+        if self_column is not None and other_column is not None:
+            return self_column is other_column
+        self_columns = getattr(self, "_columns", None)
+        other_columns = getattr(other, "_columns", None)
+        if (
+            self_columns is None
+            or other_columns is None
+            or len(self_columns) != len(other_columns)
+        ):
+            return False
+        return all(
+            lcol is rcol
+            for lcol, rcol in zip(self_columns, other_columns, strict=True)
+        )
+
+    def view(self, cls=None):
+        if cls is None or cls is type(self):
+            return type(self)._from_column(self._column, name=self.name)
+        if cls is np.ndarray or isinstance(cls, np.dtype):
+            return self.to_numpy().view(cls)
+        return self.astype(cls)
+
     @_performance_tracking
     def copy(self, name: Hashable = None, deep: bool = False) -> Self:
         """
@@ -2160,9 +2191,11 @@ class Index(SingleColumnFrame):
             and isinstance(self, DatetimeIndex)
             and self._freq is not None
         ):
-            keywords.append(
-                f"freq={self._freq._maybe_as_fast_pandas_offset().freqstr!r}"
-            )
+            freqstr = getattr(self._freq, "freqstr", None)
+            if freqstr is None:
+                pandas_freq = _freq_to_pandas_offset(self._freq)
+                freqstr = None if pandas_freq is None else pandas_freq.freqstr
+            keywords.append(f"freq={freqstr!r}")
         joined_keywords = ", ".join(keywords)
         lines.append(f"{prior_to_dtype} {joined_keywords})")
         return "\n".join(lines)
@@ -3645,6 +3678,11 @@ class DatetimeIndex(Index):
         result._freq = _validate_freq(self._freq)
         return result
 
+    def _pandas_repr_compatible(self) -> Self:
+        result = super()._pandas_repr_compatible()
+        result._freq = _validate_freq(self._freq)
+        return result
+
     @classmethod
     def _from_data(
         cls, data: MutableMapping, name: Any = no_default, freq: Any = None
@@ -3666,9 +3704,143 @@ class DatetimeIndex(Index):
 
     def __getitem__(self, index):
         value = super().__getitem__(index)
+        if (
+            isinstance(value, DatetimeIndex)
+            and self._freq is not None
+            and isinstance(index, slice)
+            and index.step in (None, 1)
+        ):
+            value._freq = _validate_freq(self._freq)
         if isinstance(value, np.datetime64):
             return pd.Timestamp(value)
         return value
+
+    def to_pandas(
+        self, *, nullable: bool = False, arrow_type: bool = False
+    ) -> pd.DatetimeIndex:
+        result = super().to_pandas(nullable=nullable, arrow_type=arrow_type)
+        if self._freq is None:
+            return result
+        pandas_freq = _freq_to_pandas_offset(self._freq)
+        if pandas_freq is None:
+            return result
+        try:
+            return result._with_freq(pandas_freq)
+        except (TypeError, ValueError, AssertionError):
+            try:
+                result.freq = pandas_freq
+            except (TypeError, ValueError):
+                return result
+            return result
+
+    @staticmethod
+    def _is_timedelta_like(other: Any) -> bool:
+        if isinstance(
+            other, (datetime.timedelta, np.timedelta64, pd.Timedelta)
+        ):
+            return True
+        dtype = getattr(other, "dtype", None)
+        if dtype is not None:
+            return is_timedelta64_dtype(dtype)
+        return False
+
+    def _binaryop(
+        self,
+        other: Any,
+        op: str,
+        fill_value: Any = None,
+        *args,
+        **kwargs,
+    ) -> SingleColumnFrame:
+        result = super()._binaryop(other, op, fill_value, *args, **kwargs)
+        if (
+            isinstance(result, DatetimeIndex)
+            and self._freq is not None
+            and op in {"__add__", "__sub__", "__radd__"}
+            and self._is_timedelta_like(other)
+        ):
+            result._freq = _validate_freq(self._freq)
+        return result
+
+    def get_loc(self, key) -> int | slice | cupy.ndarray:
+        if cudf.get_option("mode.pandas_compatible") and isinstance(key, str):
+            pandas_loc = self.to_pandas().get_loc(key)
+            if isinstance(pandas_loc, slice):
+                return pandas_loc
+            if isinstance(pandas_loc, np.ndarray):
+                return cupy.asarray(pandas_loc)
+            return int(pandas_loc)
+        return super().get_loc(key)
+
+    def sort_values(
+        self,
+        return_indexer: bool = False,
+        ascending: bool = True,
+        na_position: Literal["first", "last"] = "last",
+        key=None,
+    ) -> Self | tuple[Self, cupy.ndarray]:
+        result = super().sort_values(
+            return_indexer=return_indexer,
+            ascending=ascending,
+            na_position=na_position,
+            key=key,
+        )
+        if return_indexer:
+            sorted_index, indexer = cast(tuple[Self, cupy.ndarray], result)
+        else:
+            sorted_index = cast(Self, result)
+
+        if return_indexer and cudf.get_option("mode.pandas_compatible"):
+            indexer = indexer.astype(np.intp)
+
+        if isinstance(sorted_index, DatetimeIndex) and self._freq is not None:
+            new_freq = _validate_freq(self._freq)
+            if not ascending:
+                pandas_freq = _freq_to_pandas_offset(self._freq)
+                if pandas_freq is not None:
+                    try:
+                        pandas_freq = -pandas_freq
+                    except TypeError:
+                        pandas_freq = pandas_freq * -1
+                    new_freq = _validate_freq(pandas_freq)
+            sorted_index._freq = new_freq
+
+        if return_indexer:
+            return sorted_index, indexer
+        return sorted_index
+
+    def union(self, other, sort: bool | None = None) -> Index:
+        result = super().union(other, sort=sort)
+        if not isinstance(result, DatetimeIndex):
+            return result
+        if not isinstance(other, DatetimeIndex):
+            return result
+        if len(self) == 0 and len(other):
+            result._freq = _validate_freq(other._freq)
+        elif len(other) == 0 and len(self):
+            result._freq = _validate_freq(self._freq)
+        elif (
+            self._freq is not None
+            and other._freq is not None
+            and self.equals(other)
+        ):
+            result._freq = _validate_freq(self._freq)
+        return result
+
+    def intersection(self, other, sort: bool | None = False) -> Index:
+        result = super().intersection(other, sort=sort)
+        if not isinstance(result, DatetimeIndex):
+            return result
+        if not isinstance(other, DatetimeIndex):
+            return result
+        if (
+            len(result)
+            and self._freq is not None
+            and other._freq is not None
+            and self._freq == other._freq
+        ):
+            result._freq = _validate_freq(self._freq)
+        return result
 
     def find_label_range(self, loc: slice) -> slice:
         # For indexing, try to interpret slice arguments as datetime-convertible
@@ -3698,6 +3870,13 @@ class DatetimeIndex(Index):
         idx_copy = super().copy(name=name, deep=deep)
         idx_copy._freq = _validate_freq(self._freq)
         return idx_copy
+
+    def view(self, cls=None):
+        if cls is None or cls is type(self):
+            return type(self)._from_column(
+                self._column, name=self.name, freq=self._freq
+            )
+        return super().view(cls)
 
     def as_unit(self, unit: str, round_ok: bool = True) -> Self:
         """
@@ -3845,6 +4024,11 @@ class DatetimeIndex(Index):
 
     @property
     def freq(self) -> DateOffset | None:
+        if (
+            cudf.get_option("mode.pandas_compatible")
+            and self._freq is not None
+        ):
+            return _freq_to_pandas_offset(self._freq)
         return self._freq
 
     @freq.setter
@@ -3852,8 +4036,14 @@ class DatetimeIndex(Index):
         raise NotImplementedError("Setting freq is currently not supported.")
 
     @property
-    def freqstr(self) -> str:
-        raise NotImplementedError("freqstr is currently not implemented")
+    def freqstr(self) -> str | None:
+        if self._freq is None:
+            return None
+        freqstr = getattr(self._freq, "freqstr", None)
+        if freqstr is None:
+            pandas_freq = _freq_to_pandas_offset(self._freq)
+            return None if pandas_freq is None else pandas_freq.freqstr
+        return freqstr
 
     @property
     def resolution(self) -> str:
@@ -4326,7 +4516,7 @@ class DatetimeIndex(Index):
         """
         # .quarter is already a cached_property
         return Index._from_column(
-            self._column.quarter.astype(np.dtype(np.int8))
+            self._column.quarter.astype(np.dtype(np.int8)), name=self.name
         )
 
     @_performance_tracking
@@ -4392,15 +4582,6 @@ class DatetimeIndex(Index):
         """
         ca = ColumnAccessor(self._column.isocalendar(), verify=False)
         return cudf.DataFrame._from_data(ca, index=self)
-
-    @_performance_tracking
-    def to_pandas(
-        self, *, nullable: bool = False, arrow_type: bool = False
-    ) -> pd.DatetimeIndex:
-        result = super().to_pandas(nullable=nullable, arrow_type=arrow_type)
-        if not arrow_type and self._freq is not None:
-            result.freq = self._freq._maybe_as_fast_pandas_offset()
-        return result
 
     def _is_boolean(self) -> bool:
         return False
@@ -5925,11 +6106,35 @@ def _get_nearest_indexer(
     return indexer
 
 
+def _freq_to_pandas_offset(
+    freq: DateOffset | MonthEnd | YearEnd,
+) -> pd_offset.BaseOffset | None:
+    from cudf.core.tools.datetimes import MonthEnd, YearEnd
+
+    if isinstance(freq, (MonthEnd, YearEnd)):
+        return freq._maybe_as_fast_pandas_offset()
+    if isinstance(freq, cudf.DateOffset):
+        return freq._pandas_offset()
+    if isinstance(freq, pd_offset.BaseOffset):
+        return freq
+    return None
+
+
 def _validate_freq(freq: Any) -> DateOffset | MonthEnd | YearEnd | None:
+    from cudf.core.tools.datetimes import MonthEnd, YearEnd
+
     if isinstance(freq, str):
         return cudf.DateOffset._from_freqstr(freq)
-    elif freq is None:
+    if freq is None:
+        return None
+    if isinstance(freq, (MonthEnd, YearEnd, cudf.DateOffset)):
         return freq
-    elif freq is not None and not isinstance(freq, cudf.DateOffset):
-        raise ValueError(f"Invalid frequency: {freq}")
-    return cast(cudf.DateOffset, freq)
+    if isinstance(freq, (pd_offset.Tick, pd_offset.Week)):
+        return cudf.DateOffset._from_pandas_ticks_or_weeks(freq)
+    if isinstance(freq, pd_offset.MonthEnd):
+        return MonthEnd(n=freq.n, freqstr=freq.freqstr)
+    if isinstance(freq, pd_offset.YearEnd):
+        return YearEnd(n=freq.n, month=freq.month, freqstr=freq.freqstr)
+    if isinstance(freq, pd_offset.DateOffset):
+        return cudf.DateOffset(**freq.kwds, n=freq.n)
+    raise ValueError(f"Invalid frequency: {freq}")

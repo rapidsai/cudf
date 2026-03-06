@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 import re
@@ -219,8 +219,11 @@ def test_index_mixed_dtype_error(data):
 def test_index_date_duration_freq_error(cls):
     s = cls([1, 2, 3], freq="infer")
     with cudf.option_context("mode.pandas_compatible", True):
-        with pytest.raises(NotImplementedError):
-            cudf.Index(s)
+        if cls is pd.TimedeltaIndex:
+            with pytest.raises(NotImplementedError):
+                cudf.Index(s)
+        else:
+            assert_eq(cudf.Index(s), s)
 
 
 def test_index_empty_from_pandas(all_supported_types_as_str):
