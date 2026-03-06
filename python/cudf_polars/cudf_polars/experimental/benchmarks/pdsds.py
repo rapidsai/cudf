@@ -180,6 +180,11 @@ class PDSDSPolarsQueries(PDSDSQueries):
             pl.col("no_promo").cast(COUNT_DTYPE),
             pl.col("promo").cast(COUNT_DTYPE),
         ],
+        83: [
+            pl.col("sr_item_qty").cast(pl.Int64),
+            pl.col("cr_item_qty").cast(pl.Int64),
+            pl.col("wr_item_qty").cast(pl.Int64),
+        ],
     }
 
     @property
