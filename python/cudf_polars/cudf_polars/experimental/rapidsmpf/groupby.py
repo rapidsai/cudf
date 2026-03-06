@@ -34,12 +34,12 @@ from cudf_polars.experimental.rapidsmpf.dispatch import (
 )
 from cudf_polars.experimental.rapidsmpf.utils import (
     ChannelManager,
+    NormalizedPartitioning,
     allgather_reduce,
     chunkwise_evaluate,
     empty_table_chunk,
     evaluate_batch,
     evaluate_chunk,
-    get_partitioning_moduli,
     process_children,
     recv_metadata,
     send_metadata,
@@ -48,6 +48,7 @@ from cudf_polars.experimental.rapidsmpf.utils import (
 from cudf_polars.experimental.repartition import Repartition
 
 if TYPE_CHECKING:
+    from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.streaming.core.channel import Channel
 
     from cudf_polars.dsl.ir import IRExecutionContext
@@ -257,6 +258,7 @@ async def _local_aggregation(
 
 async def _tree_reduce(
     context: Context,
+    comm: Communicator,
     decomposed: DecomposedGroupBy,
     ir_context: IRExecutionContext,
     ch_out: Channel[TableChunk],
@@ -274,6 +276,8 @@ async def _tree_reduce(
     ----------
     context
         The rapidsmpf streaming context.
+    comm
+        The communicator.
     decomposed
         The decomposed groupby containing piecewise, reduction, and select IRs.
     ir_context
@@ -291,9 +295,7 @@ async def _tree_reduce(
     tracer
         Optional tracer for runtime metrics.
     """
-    need_allgather = (
-        not local and not metadata_in.duplicated and context.comm().nranks > 1
-    )
+    need_allgather = not local and not metadata_in.duplicated and comm.nranks > 1
 
     metadata_out = ChannelMetadata(
         local_count=1,
@@ -303,7 +305,7 @@ async def _tree_reduce(
     await send_metadata(ch_out, context, metadata_out)
 
     if need_allgather:
-        allgather = AllGatherManager(context, collective_id)
+        allgather = AllGatherManager(context, comm, collective_id)
 
         allgather.insert(
             0,
@@ -337,6 +339,7 @@ async def _tree_reduce(
 
 async def _shuffle_reduce(
     context: Context,
+    comm: Communicator,
     decomposed: DecomposedGroupBy,
     ir_context: IRExecutionContext,
     ch_out: Channel[TableChunk],
@@ -361,6 +364,8 @@ async def _shuffle_reduce(
     ----------
     context
         The rapidsmpf streaming context for channel operations.
+    comm
+        The communicator.
     decomposed
         The decomposed groupby or distinct containing piecewise, reduction, and select IRs.
     ir_context
@@ -387,12 +392,13 @@ async def _shuffle_reduce(
         Optional tracer for runtime metrics.
     """
     shuffle_context = context
-    if local and context.comm().nranks > 1:
+    shuffle_comm = comm
+    if local and comm.nranks > 1:
         options = Options(get_environment_variables())
-        local_comm = single_comm(options)
-        shuffle_context = Context(local_comm, context.br(), options)
-    shuf_nranks = shuffle_context.comm().nranks
-    shuf_rank = shuffle_context.comm().rank
+        shuffle_comm = single_comm(options, comm.progress_thread)
+        shuffle_context = Context(shuffle_comm.logger, context.br(), options)
+    shuf_nranks = shuffle_comm.nranks
+    shuf_rank = shuffle_comm.rank
     modulus = max(shuf_nranks, modulus)
 
     if shuf_nranks == 1:
@@ -420,7 +426,11 @@ async def _shuffle_reduce(
     await send_metadata(ch_out, context, metadata_out)
 
     shuffle = ShuffleManager(
-        shuffle_context, modulus, decomposed.shuffle_indices, collective_id
+        shuffle_context,
+        shuffle_comm,
+        modulus,
+        decomposed.shuffle_indices,
+        collective_id,
     )
 
     shuffle.insert_chunk(
@@ -526,6 +536,7 @@ def _require_tree(ir: GroupBy | Distinct) -> bool:
 
 async def _choose_strategy(
     context: Context,
+    comm: Communicator,
     local_count: int,
     aggregated: TableChunk,
     chunks_received: int,
@@ -542,6 +553,8 @@ async def _choose_strategy(
     ----------
     context
         The rapidsmpf context.
+    comm
+        The communicator.
     local_count
         The local count of the input channel.
     aggregated
@@ -577,6 +590,7 @@ async def _choose_strategy(
             total_need_shuffle,
         ) = await allgather_reduce(
             context,
+            comm,
             collective_ids.pop(),
             local_estimated_size,
             local_count,
@@ -607,6 +621,7 @@ async def _choose_strategy(
 @define_actor()
 async def groupby_actor(
     context: Context,
+    comm: Communicator,
     ir: GroupBy | Distinct,
     ir_context: IRExecutionContext,
     ch_out: Channel[TableChunk],
@@ -626,6 +641,8 @@ async def groupby_actor(
     ----------
     context
         The rapidsmpf context.
+    comm
+        The communicator.
     ir
         The IR node to evaluate.
     ir_context
@@ -642,14 +659,17 @@ async def groupby_actor(
     async with shutdown_on_error(context, ch_in, ch_out, trace_ir=ir) as tracer:
         metadata_in = await recv_metadata(ch_in, context)
 
-        nranks = context.comm().nranks
-        key_indices = _key_indices(ir, ir.children[0].schema)
-        require_tree = _require_tree(ir)
-        inter_rank_modulus, local_modulus = get_partitioning_moduli(
-            metadata_in, key_indices, nranks, allow_subset=True
+        nranks = comm.nranks
+        partitioning = NormalizedPartitioning.from_indices(
+            metadata_in.partitioning,
+            nranks,
+            indices=_key_indices(ir, ir.children[0].schema),
         )
-        partitioned_inter_rank = bool(inter_rank_modulus)
-        partitioned_local = local_modulus is None or bool(local_modulus)
+        require_tree = _require_tree(ir)
+        partitioned_inter_rank = bool(partitioning.inter_rank_modulus)
+        partitioned_local = partitioning.local_modulus is None or bool(
+            partitioning.local_modulus
+        )
         fully_partitioned = partitioned_inter_rank and partitioned_local
         fallback_case = (
             # NOTE: This criteria means that we fell back
@@ -688,6 +708,7 @@ async def groupby_actor(
         skip_global_comm = metadata_in.duplicated or partitioned_inter_rank
         output_count = await _choose_strategy(
             context,
+            comm,
             metadata_in.local_count,
             aggregated,
             chunks_received,
@@ -701,6 +722,7 @@ async def groupby_actor(
         if output_count == 1:
             await _tree_reduce(
                 context,
+                comm,
                 decomposed,
                 ir_context,
                 ch_out,
@@ -713,6 +735,7 @@ async def groupby_actor(
         else:
             await _shuffle_reduce(
                 context,
+                comm,
                 decomposed,
                 ir_context,
                 ch_out,
@@ -750,6 +773,7 @@ def _(
     actors[ir] = [
         groupby_actor(
             rec.state["context"],
+            rec.state["comm"],
             ir,
             rec.state["ir_context"],
             channels[ir].reserve_input_slot(),

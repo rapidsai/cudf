@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import TYPE_CHECKING, Any
 
 from rapidsmpf.streaming.coll.shuffler import PartitionAssignment
@@ -16,13 +17,13 @@ import pylibcudf as plc
 
 from cudf_polars.containers import DataFrame, DataType
 from cudf_polars.dsl.expr import Col
-from cudf_polars.dsl.ir import Sort
 from cudf_polars.experimental.rapidsmpf.collectives.allgather import AllGatherManager
 from cudf_polars.experimental.rapidsmpf.collectives.shuffle import ShuffleManager
 from cudf_polars.experimental.rapidsmpf.dispatch import generate_ir_sub_network
 from cudf_polars.experimental.rapidsmpf.nodes import shutdown_on_error
 from cudf_polars.experimental.rapidsmpf.utils import (
     ChannelManager,
+    chunk_to_frame,
     recv_metadata,
     send_metadata,
 )
@@ -34,6 +35,7 @@ from cudf_polars.experimental.sort import (
 )
 
 if TYPE_CHECKING:
+    from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.streaming.core.channel import Channel
     from rapidsmpf.streaming.core.context import Context
 
@@ -44,6 +46,7 @@ if TYPE_CHECKING:
 @define_actor()
 async def sort_node(
     context: Context,
+    comm: Communicator,
     ir: Any,
     ir_context: IRExecutionContext,
     ch_in: Channel[TableChunk],
@@ -58,38 +61,44 @@ async def sort_node(
 ) -> None:
     async with shutdown_on_error(context, ch_in, ch_out):
         metadata_in = await recv_metadata(ch_in, context)
-        stream = ir_context.get_cuda_stream()
         by_indices = [column_names.index(b) for b in by]
-        my_part_id = context.comm().rank
+        my_part_id = comm.rank
 
         chunks_buffer: list[TableChunk] = []
-        local_sort_tables: list[plc.Table] = []
-
         while (msg := await ch_in.recv(context)) is not None:
-            chunk = TableChunk.from_message(msg).make_available_and_spill(
-                context.br(), allow_overbooking=True
+            df = await asyncio.to_thread(
+                ir.do_evaluate,
+                *ir._non_child_args,
+                chunk_to_frame(
+                    TableChunk.from_message(msg).make_available_and_spill(
+                        context.br(), allow_overbooking=True
+                    ),
+                    ir.children[0],
+                ),
+                context=ir_context,
             )
-            chunks_buffer.append(chunk)
+            chunks_buffer.append(
+                TableChunk.from_pylibcudf_table(
+                    df.table,
+                    df.stream,
+                    exclusive_view=True,
+                )
+            )
+            del df
 
         # Build combined from sort columns of *sorted* chunks so boundary
         # candidates are sampled from globally sorted order. Keep the
         # made-available chunks for the insert loop (avoid released chunks).
         chunks_for_insert: list[TableChunk] = []
+        local_sort_tables: list[plc.Table] = []
         for chunk in chunks_buffer:
             chunk = chunk.make_available_and_spill(context.br(), allow_overbooking=True)
-            chunks_for_insert.append(chunk)
-            tbl = chunk.table_view()
-            sort_cols_tbl = plc.Table([tbl.columns()[i] for i in by_indices])
-            sorted_tbl = plc.sorting.sort_by_key(
-                tbl,
-                sort_cols_tbl,
-                list(column_order),
-                list(null_order),
-                stream=stream,
-            )
+            sorted_tbl = chunk.table_view()
             sort_cols = plc.Table([sorted_tbl.columns()[i] for i in by_indices])
             local_sort_tables.append(sort_cols)
+            chunks_for_insert.append(chunk)
 
+        stream = ir_context.get_cuda_stream()
         if not local_sort_tables:
             combined = plc.Table(
                 [
@@ -115,7 +124,7 @@ async def sort_node(
 
         allgather_id = collective_ids[0]
         shuffle_id = collective_ids[1]
-        allgather = AllGatherManager(context, allgather_id)
+        allgather = AllGatherManager(context, comm, allgather_id)
         allgather.insert(my_part_id, candidates_chunk)
         allgather.insert_finished()
         concat_table = await allgather.extract_concatenated(stream, ordered=True)
@@ -140,12 +149,13 @@ async def sort_node(
 
         shuffle = ShuffleManager(
             context,
+            comm,
             num_partitions,
             (),
             shuffle_id,
             partition_assignment=PartitionAssignment.CONTIGUOUS,
         )
-        skip_insert = metadata_in.duplicated and context.comm().rank != 0
+        skip_insert = metadata_in.duplicated and comm.rank != 0
 
         for chunk in chunks_for_insert:
             if skip_insert:
@@ -158,7 +168,7 @@ async def sort_node(
                 sort_cols_tbl,
                 list(column_order),
                 list(null_order),
-                stream=stream,
+                stream=chunk.stream,
             )
             sort_cols_tbl = plc.Table([sorted_tbl.columns()[i] for i in by_indices])
             splits = find_sort_splits(
@@ -167,18 +177,18 @@ async def sort_node(
                 my_part_id,
                 list(column_order),
                 list(null_order),
-                stream=stream,
+                stream=chunk.stream,
                 chunk_relative=True,
             )
             sorted_chunk = TableChunk.from_pylibcudf_table(
-                sorted_tbl, stream, exclusive_view=True
+                sorted_tbl, chunk.stream, exclusive_view=True
             )
             shuffle.insert_chunk_sorted(sorted_chunk, splits)
 
         await shuffle.insert_finished()
 
         output_metadata = ChannelMetadata(
-            local_count=max(1, num_partitions // context.comm().nranks),
+            local_count=max(1, num_partitions // comm.nranks),
             partitioning=Partitioning(inter_rank=None, local="inherit"),
         )
         await send_metadata(ch_out, context, output_metadata)
@@ -188,6 +198,7 @@ async def sort_node(
         dtypes_list = [ir.schema[n] for n in column_names_list]
 
         for partition_id in sorted(shuffle.local_partitions()):
+            stream = ir_context.get_cuda_stream()
             out_table = await shuffle.extract_chunk(partition_id, stream)
             # Partition is built from multiple locally-sorted chunks; sort so
             # output is globally ordered (same as tasks sort).
@@ -217,15 +228,6 @@ async def sort_node(
         await ch_out.drain(context)
 
 
-@generate_ir_sub_network.register(Sort)
-def _sort_passthrough(ir: Sort, rec: SubNetGenerator) -> tuple[dict, dict]:
-    (child,) = ir.children
-    nodes, channels = rec(child)
-    nodes[ir] = []
-    channels[ir] = channels[child]
-    return nodes, channels
-
-
 @generate_ir_sub_network.register(ShuffleSorted)
 def _shuffle_sorted_network(
     ir: ShuffleSorted, rec: SubNetGenerator
@@ -245,6 +247,7 @@ def _shuffle_sorted_network(
     nodes[ir] = [
         sort_node(
             rec.state["context"],
+            rec.state["comm"],
             ir,
             rec.state["ir_context"],
             ch_in=channels[child].reserve_output_slot(),

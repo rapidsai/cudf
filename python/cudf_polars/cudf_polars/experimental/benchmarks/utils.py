@@ -1271,7 +1271,11 @@ def parse_args(
         if missing_files:
             raise ValueError(f"Missing files for queries: {','.join(missing_files)}")
 
-    if parsed_args.output_expected_directory and not parsed_args.validate:
+    if (
+        parsed_args.output_expected_directory
+        and not parsed_args.validate
+        and parsed_args.engine != "duckdb"
+    ):
         raise ValueError("Must specify --validate to use --output-expected-directory.")
 
     if parsed_args.suffix and not parsed_args.suffix.startswith("."):
@@ -1378,7 +1382,7 @@ def check_input_data_type(
             .collect_schema()["o_orderdate"]
         )
 
-        if t.to_python() is datetime.date:
+        if t.to_python().__name__ == "date":
             date_type = "date"
         else:
             date_type = "timestamp"
@@ -1937,6 +1941,10 @@ def run_duckdb(
                 print(result)
             print(f"Query {q_id} - Iteration {i} finished in {record.duration:0.4f}s")
             records[q_id].append(record)
+            if i == 0 and args.output_expected_directory is not None:
+                expected_dir = Path(args.output_expected_directory)
+                expected_dir.mkdir(parents=True, exist_ok=True)
+                result.write_parquet(expected_dir / f"q_{q_id:02d}.parquet")
 
     run_config = dataclasses.replace(run_config, records=dict(records))
     if args.summarize:
