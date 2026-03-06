@@ -143,6 +143,21 @@ def test_spmd_execution_max_workers() -> None:
     assert result.shape == (3, 1)
 
 
+def test_allgather_polars_dataframe_empty() -> None:
+    """allgather handles an empty (zero-row) local DataFrame on every rank."""
+    with spmd_execution() as (comm, ctx, _):
+        local = pl.DataFrame(
+            {"a": pl.Series([], dtype=pl.Int32), "b": pl.Series([], dtype=pl.Float64)}
+        )
+        with reserve_op_id() as op_id:
+            result = allgather_polars_dataframe(
+                comm=comm, ctx=ctx, local_df=local, op_id=op_id
+            )
+    assert result.shape == (0, 2)
+    assert result.columns == ["a", "b"]
+    assert result.dtypes == [pl.Int32, pl.Float64]
+
+
 def test_allgather_polars_dataframe_multi_column() -> None:
     """allgather preserves column names, count, and dtypes for multi-column DataFrames."""
     with spmd_execution() as (comm, ctx, _):
