@@ -60,32 +60,24 @@ cudaError_t memcpy_batch_async(void* const* dsts,
 {
   // Filter out invalid copies (nullptr dst/src or size==0);
   // cudaMemcpyBatchAsync does not support these inputs
-  std::size_t valid_count = 0;
-  for (std::size_t i = 0; i < count; ++i) {
-    if (dsts[i] != nullptr && srcs[i] != nullptr && sizes[i] != 0) { ++valid_count; }
-  }
-  if (valid_count == 0) { return cudaSuccess; }
-
-  // Build filtered arrays if any copies were invalid
   std::vector<void*> valid_dsts;
   std::vector<void const*> valid_srcs;
   std::vector<std::size_t> valid_sizes;
-  if (valid_count < count) {
-    valid_dsts.reserve(valid_count);
-    valid_srcs.reserve(valid_count);
-    valid_sizes.reserve(valid_count);
-    for (std::size_t i = 0; i < count; ++i) {
-      if (dsts[i] != nullptr && srcs[i] != nullptr && sizes[i] != 0) {
-        valid_dsts.push_back(dsts[i]);
-        valid_srcs.push_back(srcs[i]);
-        valid_sizes.push_back(sizes[i]);
-      }
+  valid_dsts.reserve(count);
+  valid_srcs.reserve(count);
+  valid_sizes.reserve(count);
+  for (std::size_t i = 0; i < count; ++i) {
+    if (dsts[i] != nullptr && srcs[i] != nullptr && sizes[i] != 0) {
+      valid_dsts.push_back(dsts[i]);
+      valid_srcs.push_back(srcs[i]);
+      valid_sizes.push_back(sizes[i]);
     }
-    dsts  = valid_dsts.data();
-    srcs  = valid_srcs.data();
-    sizes = valid_sizes.data();
-    count = valid_count;
   }
+  if (valid_dsts.empty()) { return cudaSuccess; }
+  dsts  = valid_dsts.data();
+  srcs  = valid_srcs.data();
+  sizes = valid_sizes.data();
+  count = valid_dsts.size();
 
   // Uses cudaMemcpyBatchAsync for CUDA 13.0+ to avoid driver-side locking overhead.
   // cudaMemcpyBatchAsync does not support the default stream.
