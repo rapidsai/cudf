@@ -590,9 +590,13 @@ def _(
 
     # Extract shuffle method
     config_options = rec.state["config_options"]
+    executor = config_options.executor
+
     # Avoid rapidsmpf shuffle with maintain_order=True (for now)
     shuffle_method = (
-        ShuffleMethod("tasks") if ir.stable else config_options.executor.shuffle_method
+        ShuffleMethod("tasks")
+        if (ir.stable and executor.runtime == "tasks")
+        else config_options.executor.shuffle_method
     )
     if (
         shuffle_method != config_options.executor.shuffle_method

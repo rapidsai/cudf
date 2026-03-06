@@ -5,18 +5,24 @@
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING, Any
+from collections.abc import Sequence
+from typing import TYPE_CHECKING, Any, cast
 
 from rapidsmpf.streaming.coll.shuffler import PartitionAssignment
 from rapidsmpf.streaming.core.actor import define_actor
 from rapidsmpf.streaming.core.message import Message
+from rapidsmpf.streaming.core.spillable_messages import SpillableMessages
 from rapidsmpf.streaming.cudf.channel_metadata import ChannelMetadata, Partitioning
 from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 
+import polars as pl
+
 import pylibcudf as plc
 
-from cudf_polars.containers import DataFrame
+from cudf_polars.containers import DataFrame, DataType
 from cudf_polars.dsl.expr import Col
+from cudf_polars.dsl.ir import Sort
+from cudf_polars.dsl.utils.naming import unique_names
 from cudf_polars.experimental.rapidsmpf.collectives.allgather import AllGatherManager
 from cudf_polars.experimental.rapidsmpf.collectives.shuffle import ShuffleManager
 from cudf_polars.experimental.rapidsmpf.dispatch import generate_ir_sub_network
@@ -24,6 +30,7 @@ from cudf_polars.experimental.rapidsmpf.nodes import shutdown_on_error
 from cudf_polars.experimental.rapidsmpf.utils import (
     ChannelManager,
     chunk_to_frame,
+    make_spill_function,
     names_to_indices,
     recv_metadata,
     send_metadata,
@@ -40,9 +47,19 @@ if TYPE_CHECKING:
     from rapidsmpf.streaming.core.channel import Channel
     from rapidsmpf.streaming.core.context import Context
 
-    from cudf_polars.containers import DataType
     from cudf_polars.dsl.ir import IRExecutionContext
     from cudf_polars.experimental.rapidsmpf.dispatch import SubNetGenerator
+
+
+def _boundary_schema(
+    by: list[str], by_dtypes: list[DataType]
+) -> tuple[list[str], list[DataType]]:
+    """Schema of boundaries table."""
+    name_gen = unique_names(by)
+    part_id_dtype = DataType(pl.UInt32())
+    names = [*list(by), next(name_gen), next(name_gen)]
+    dtypes = [*list(by_dtypes), part_id_dtype, part_id_dtype]
+    return names, dtypes
 
 
 async def _compute_sort_boundaries(
@@ -53,81 +70,92 @@ async def _compute_sort_boundaries(
     by: list[str],
     by_dtypes: list[DataType],
     num_partitions: int,
-    my_part_id: int,
     column_order: list[Any],
     null_order: list[Any],
     allgather_id: int,
 ) -> plc.Table:
-    """Compute global sort boundaries from local candidates."""
-    allgather = AllGatherManager(context, comm, allgather_id)
-
+    """Compute global sort boundaries."""
     stream = ir_context.get_cuda_stream()
     if local_candidates_list:
-        # Concat this rank's candidates and contribute to the allgather.
         combined = plc.concatenate.concatenate(
             [c.table for c in local_candidates_list], stream=stream
         )
-        names = list(local_candidates_list[0].column_names)
-        dtypes = list(local_candidates_list[0].dtypes)
-        chunk = TableChunk.from_pylibcudf_table(combined, stream, exclusive_view=True)
-        allgather.insert(my_part_id, chunk)
+        local_df = DataFrame.from_table(
+            combined,
+            list(local_candidates_list[0].column_names),
+            list(local_candidates_list[0].dtypes),
+            stream=stream,
+        )
+        local_boundaries_df = _get_final_sort_boundaries(
+            local_df, column_order, null_order, num_partitions
+        )
     else:
-        # We didn't contribute; we still need the candidate schema to build
-        # concat_df from the concatenated table (other ranks' data).
+        boundary_names, boundary_dtypes = _boundary_schema(by, by_dtypes)
         empty_tbl = plc.Table(
             [
                 plc.column_factories.make_empty_column(
-                    by_dtypes[i].plc_type, stream=stream
+                    boundary_dtypes[i].plc_type, stream=stream
                 )
-                for i in range(len(by))
+                for i in range(len(boundary_names))
             ]
         )
-        empty_df = DataFrame.from_table(empty_tbl, by, by_dtypes, stream=stream)
-        schema_only = _select_local_split_candidates(
-            empty_df, by, num_partitions, my_part_id
+        local_boundaries_df = DataFrame.from_table(
+            empty_tbl, boundary_names, boundary_dtypes, stream=stream
         )
-        names = list(schema_only.column_names)
-        dtypes = list(schema_only.dtypes)
 
-    allgather.insert_finished()
+    names = list(local_boundaries_df.column_names)
+    dtypes = list(local_boundaries_df.dtypes)
+    if comm.nranks > 1:
+        allgather = AllGatherManager(context, comm, allgather_id)
+        chunk = TableChunk.from_pylibcudf_table(
+            local_boundaries_df.table,
+            local_boundaries_df.stream,
+            exclusive_view=True,
+        )
+        allgather.insert(comm.rank, chunk)
+        allgather.insert_finished()
+        concat_table = await allgather.extract_concatenated(stream, ordered=True)
+    else:
+        concat_table = local_boundaries_df.table
 
-    concat_table = await allgather.extract_concatenated(stream, ordered=True)
-    concat_df = DataFrame.from_table(concat_table, names, dtypes, stream=stream)
     boundaries_df = _get_final_sort_boundaries(
-        concat_df, column_order, null_order, num_partitions
+        DataFrame.from_table(
+            concat_table,
+            names,
+            dtypes,
+            stream=local_boundaries_df.stream,
+        ),
+        column_order,
+        null_order,
+        num_partitions,
     )
 
-    # Return an owned copy (caller can drop concat_df / boundaries_df).
-    n = boundaries_df.table.num_rows()
-    gather_map = plc.filling.sequence(
-        n,
-        plc.Scalar.from_py(0, plc.types.SIZE_TYPE, stream=stream),
-        plc.Scalar.from_py(1, plc.types.SIZE_TYPE, stream=stream),
-        stream=stream,
-    )
     return plc.copying.gather(
         boundaries_df.table,
-        gather_map,
+        plc.filling.sequence(
+            boundaries_df.table.num_rows(),
+            plc.Scalar.from_py(0, plc.types.SIZE_TYPE, stream=stream),
+            plc.Scalar.from_py(1, plc.types.SIZE_TYPE, stream=stream),
+            stream=stream,
+        ),
         plc.copying.OutOfBoundsPolicy.DONT_CHECK,
         stream=stream,
     )
 
 
 @define_actor()
-async def sort_node(
+async def sort_actor(
     context: Context,
     comm: Communicator,
-    ir: Any,
+    ir: ShuffleSorted,
     ir_context: IRExecutionContext,
     ch_in: Channel[TableChunk],
     ch_out: Channel[TableChunk],
     by: list[str],
-    column_order: tuple[Any, ...],
-    null_order: tuple[Any, ...],
     num_partitions: int,
     collective_ids: list[int],
 ) -> None:
-    """Streaming sort (ShuffleSorted): local sort, boundary allgather, shuffle by splits."""
+    """Streaming sort actor."""
     async with shutdown_on_error(context, ch_in, ch_out):
         metadata_in = await recv_metadata(ch_in, context)
         output_metadata = ChannelMetadata(
@@ -136,117 +164,162 @@ async def sort_node(
         )
         await send_metadata(ch_out, context, output_metadata)
 
+        column_order = list(ir.order)
+        null_order = list(ir.null_order)
         by_indices = names_to_indices(tuple(by), ir.schema)
         by_dtypes = [ir.schema[b] for b in by]
-        my_part_id = comm.rank
+        sort_ir = ir.children[0]
+        assert isinstance(sort_ir, Sort), "ShuffleSorted must have a Sort child."
+        seq_id_name = next(unique_names(ir.schema.keys())) if sort_ir.stable else None
 
-        chunks_buffer: list[TableChunk] = []
+        chunks_buffer = SpillableMessages()
+        message_ids: list[int] = []
         local_candidates_list: list[DataFrame] = []
-        while (msg := await ch_in.recv(context)) is not None:
-            # Local sort
-            df = await asyncio.to_thread(
-                ir.do_evaluate,
-                *ir._non_child_args,
-                chunk_to_frame(
+        spill_func_id = context.br().spill_manager.add_spill_function(
+            make_spill_function([chunks_buffer], context), priority=0
+        )
+        try:
+            while (msg := await ch_in.recv(context)) is not None:
+                seq_num = int(msg.sequence_number)
+                # Chunks are already locally sorted by the upstream Sort; just load.
+                df = await asyncio.to_thread(
+                    chunk_to_frame,
                     TableChunk.from_message(msg).make_available_and_spill(
                         context.br(), allow_overbooking=True
                     ),
                     ir.children[0],
-                ),
-                context=ir_context,
-            )  # type: ignore[call-arg]
-            # Select local split candidates for this chunk
-            local_candidates_list.append(
-                _select_local_split_candidates(
-                    DataFrame.from_table(
-                        plc.Table([df.table.columns()[i] for i in by_indices]),
+                )
+                local_candidates_list.append(
+                    _select_local_split_candidates(
+                        DataFrame.from_table(
+                            plc.Table([df.table.columns()[i] for i in by_indices]),
+                            by,
+                            by_dtypes,
+                            stream=df.stream,
+                        ),
                         by,
-                        by_dtypes,
+                        num_partitions,
+                        seq_num,
+                    )
+                )
+                if sort_ir.stable:
+                    nrows = df.table.num_rows()
+                    base = seq_num * (1 << 32)
+                    seq_id_col = plc.filling.sequence(
+                        nrows,
+                        plc.Scalar.from_py(
+                            base, plc.DataType(plc.TypeId.UINT64), stream=df.stream
+                        ),
+                        plc.Scalar.from_py(
+                            1, plc.DataType(plc.TypeId.UINT64), stream=df.stream
+                        ),
                         stream=df.stream,
-                    ),
-                    by,
-                    num_partitions,
-                    my_part_id,
+                    )
+                    tbl = plc.Table([*df.table.columns(), seq_id_col])
+                else:
+                    tbl = df.table
+                chunk = TableChunk.from_pylibcudf_table(
+                    tbl, df.stream, exclusive_view=True
                 )
-            )
-            chunks_buffer.append(
-                TableChunk.from_pylibcudf_table(
-                    df.table,
-                    df.stream,
-                    exclusive_view=True,
-                )
-            )
-            del df
+                mid = chunks_buffer.insert(Message(seq_num, chunk))
+                message_ids.append(mid)
+                del df
 
-        sort_boundaries_tbl = await _compute_sort_boundaries(
-            context,
-            comm,
-            ir_context,
-            local_candidates_list,
-            by,
-            by_dtypes,
-            num_partitions,
-            my_part_id,
-            list(column_order),
-            list(null_order),
-            collective_ids.pop(),
-        )
-
-        shuffle = ShuffleManager(
-            context,
-            comm,
-            num_partitions,
-            (),
-            collective_ids.pop(),
-            partition_assignment=PartitionAssignment.CONTIGUOUS,
-        )
-        skip_insert = metadata_in.duplicated and comm.rank != 0
-
-        # Insert sorted chunks into the shuffler
-        for chunk in chunks_buffer:
-            if skip_insert:
-                continue
-            available_chunk = chunk.make_available_and_spill(
-                context.br(), allow_overbooking=True
-            )
-            tbl = available_chunk.table_view()
-            # Chunk is already sorted; only need sort columns for split indices.
-            sort_cols_tbl = plc.Table([tbl.columns()[i] for i in by_indices])
-            splits = find_sort_splits(
-                sort_cols_tbl,
-                sort_boundaries_tbl,
-                my_part_id,
+            sort_boundaries_tbl = await _compute_sort_boundaries(
+                context,
+                comm,
+                ir_context,
+                local_candidates_list,
+                by,
+                by_dtypes,
+                num_partitions,
                 list(column_order),
                 list(null_order),
-                stream=available_chunk.stream,
-                chunk_relative=True,
+                collective_ids.pop(),
             )
-            shuffle.insert_chunk_sorted(available_chunk, splits)
 
-        await shuffle.insert_finished()
+            shuffle = ShuffleManager(
+                context,
+                comm,
+                num_partitions,
+                (),
+                collective_ids.pop(),
+                partition_assignment=PartitionAssignment.CONTIGUOUS,
+            )
+            skip_insert = metadata_in.duplicated and comm.rank != 0
 
-        sort_ir = ir.children[0]  # Sort node for do_evaluate
-        column_names_list = list(ir.schema.keys())
-        dtypes_list = [ir.schema[n] for n in column_names_list]
+            # Insert sorted chunks into the shuffler
+            for mid in message_ids:
+                msg = chunks_buffer.extract(mid=mid)
+                if skip_insert:
+                    continue
+                seq_num = int(msg.sequence_number)
+                available_chunk = TableChunk.from_message(msg).make_available_and_spill(
+                    context.br(), allow_overbooking=True
+                )
+                tbl = available_chunk.table_view()
+                # Chunk is already sorted; only need sort columns for split indices.
+                sort_cols_tbl = plc.Table([tbl.columns()[i] for i in by_indices])
+                splits = find_sort_splits(
+                    sort_cols_tbl,
+                    sort_boundaries_tbl,
+                    seq_num,
+                    list(column_order),
+                    list(null_order),
+                    stream=available_chunk.stream,
+                    chunk_relative=True,
+                )
+                shuffle.insert_chunk_sorted(available_chunk, splits)
+
+            await shuffle.insert_finished()
+        finally:
+            context.br().spill_manager.remove_spill_function(spill_func_id)
+
+        column_names_list = list(ir.schema) + ([seq_id_name] if sort_ir.stable else [])
+        dtypes_list = [ir.schema[n] for n in ir.schema] + (
+            [DataType(pl.UInt64())] if sort_ir.stable else []
+        )
 
         for partition_id in sorted(shuffle.local_partitions()):
             stream = ir_context.get_cuda_stream()
             out_table = await shuffle.extract_chunk(partition_id, stream)
-            # Partition is built from multiple locally-sorted chunks.
-            # Sort concatenated chunk one more tome.
             if out_table.num_rows() > 0:
-                df = DataFrame.from_table(
-                    out_table,
-                    column_names_list,
-                    dtypes_list,
-                    stream,
-                )
-                result_df = sort_ir.do_evaluate(
-                    *sort_ir._non_child_args,
-                    df,
-                    context=ir_context,
-                )
-                out_table = result_df.table
+                if sort_ir.stable:
+                    df = DataFrame.from_table(
+                        out_table,
+                        cast(Sequence[str], column_names_list),
+                        dtypes_list,
+                        stream,
+                    )
+                    sort_order = [
+                        list(column_order)[by.index(n)]
+                        if n in by
+                        else plc.types.Order.ASCENDING
+                        for n in column_names_list
+                    ]
+                    nulls = [
+                        list(null_order)[by.index(n)]
+                        if n in by
+                        else plc.types.NullOrder.AFTER
+                        for n in column_names_list
+                    ]
+                    sorted_tbl = plc.sorting.sort(
+                        df.table, sort_order, nulls, stream=stream
+                    )
+                    out_table = plc.Table(sorted_tbl.columns()[:-1])
+                else:
+                    df = DataFrame.from_table(
+                        out_table,
+                        list(ir.schema),
+                        [ir.schema[n] for n in ir.schema],
+                        stream,
+                    )
+                    result_df = sort_ir.do_evaluate(
+                        *sort_ir._non_child_args,
+                        df,
+                        context=ir_context,
+                    )
+                    out_table = result_df.table
             await ch_out.send(
                 context,
                 Message(
@@ -275,7 +348,7 @@ def _shuffle_sorted_network(
 
     channels[ir] = ChannelManager(rec.state["context"])
     nodes[ir] = [
-        sort_node(
+        sort_actor(
             rec.state["context"],
             rec.state["comm"],
             ir,
@@ -283,8 +356,6 @@ def _shuffle_sorted_network(
             ch_in=channels[child].reserve_output_slot(),
             ch_out=channels[ir].reserve_input_slot(),
             by=by,
-            column_order=ir.order,
-            null_order=ir.null_order,
             num_partitions=num_partitions,
             collective_ids=collective_ids,
         )

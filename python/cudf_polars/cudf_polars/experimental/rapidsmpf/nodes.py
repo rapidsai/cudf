@@ -19,7 +19,7 @@ from rapidsmpf.streaming.cudf.table_chunk import (
 )
 
 from cudf_polars.containers import DataFrame
-from cudf_polars.dsl.ir import IR, Empty
+from cudf_polars.dsl.ir import IR, Empty, Slice
 from cudf_polars.experimental.rapidsmpf.dispatch import (
     generate_ir_sub_network,
 )
@@ -479,6 +479,50 @@ async def fanout_node_unbounded(
         finally:
             # Clean up spill function registration
             context.br().spill_manager.remove_spill_function(spill_func_id)
+
+
+@define_actor()
+async def slice_pass_through_node(
+    context: Context,
+    ch_out: Channel[TableChunk],
+    ch_in: Channel[TableChunk],
+) -> None:
+    """
+    Pass-through node for root Slice: forward chunks unchanged.
+
+    The root Slice is applied once in core.evaluate_pipeline after
+    concatenation; applying do_evaluate per chunk would double-slice.
+    """
+    async with shutdown_on_error(context, ch_in, ch_out):
+        metadata_in = await recv_metadata(ch_in, context)
+        await send_metadata(ch_out, context, metadata_in)
+        seq_num = 0
+        while (msg := await ch_in.recv(context)) is not None:
+            chunk = TableChunk.from_message(msg)
+            await ch_out.send(context, Message(seq_num, chunk))
+            seq_num += 1
+        await ch_out.drain(context)
+
+
+@generate_ir_sub_network.register(Slice)
+def _(
+    ir: Slice, rec: SubNetGenerator
+) -> tuple[dict[IR, list[Any]], dict[IR, ChannelManager]]:
+    # When Slice is the root, pass through and apply slice once at the end.
+    root_ir = rec.state.get("root_ir")
+    if root_ir is not None and ir is root_ir:
+        nodes, channels = rec(ir.children[0])
+        channels[ir] = ChannelManager(rec.state["context"])
+        nodes[ir] = [
+            slice_pass_through_node(
+                rec.state["context"],
+                channels[ir].reserve_input_slot(),
+                channels[ir.children[0]].reserve_output_slot(),
+            )
+        ]
+        return nodes, channels
+    # Non-root Slice: use default (do_evaluate per chunk).
+    return generate_ir_sub_network.dispatch(IR)(ir, rec)
 
 
 @generate_ir_sub_network.register(IR)
