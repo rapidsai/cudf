@@ -182,7 +182,7 @@ async def sort_actor(
         try:
             while (msg := await ch_in.recv(context)) is not None:
                 seq_num = int(msg.sequence_number)
-                # Chunks are already locally sorted by the upstream Sort; just load.
+                # Incoming chunks are locally sorted by the upstream Sort
                 df = await asyncio.to_thread(
                     chunk_to_frame,
                     TableChunk.from_message(msg).make_available_and_spill(
@@ -263,7 +263,6 @@ async def sort_actor(
                     context.br(), allow_overbooking=True
                 )
                 tbl = available_chunk.table_view()
-                # Chunk is already sorted; only need sort columns for split indices.
                 sort_cols_tbl = plc.Table([tbl.columns()[i] for i in by_indices])
                 splits = find_sort_splits(
                     sort_cols_tbl,
