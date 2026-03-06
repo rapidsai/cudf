@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
-from cudf_polars.experimental.benchmarks.utils import get_data
+from cudf_polars.experimental.benchmarks.utils import QueryResult, get_data
 
 if TYPE_CHECKING:
     from cudf_polars.experimental.benchmarks.utils import RunConfig
@@ -59,7 +59,7 @@ def duckdb_impl(run_config: RunConfig) -> str:
     """
 
 
-def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
+def polars_impl(run_config: RunConfig) -> QueryResult:
     """Query 45."""
     params = load_parameters(
         int(run_config.scale_factor),
@@ -107,25 +107,31 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         filtered_items, left_on="i_item_id", right_on="i_item_id", how="semi"
     )
 
-    return (
-        pl.concat([zip_match, item_match])
-        .group_by(["ca_zip", "ca_state"])
-        .agg(
-            [
-                pl.col("ws_sales_price").sum().alias("sales_sum"),
-                pl.col("ws_sales_price").count().alias("sales_count"),
-            ]
-        )
-        .with_columns(
-            [
-                pl.when(pl.col("sales_count") > 0)
-                .then(pl.col("sales_sum"))
-                .otherwise(None)
-                .alias("sum(ws_sales_price)")
-            ]
-        )
-        .drop(["sales_sum", "sales_count"])
-        .sort(["ca_zip", "ca_state"], nulls_last=True)
-        .select(["ca_zip", "ca_state", "sum(ws_sales_price)"])
-        .limit(100)
+    sort_by = {"ca_zip": False, "ca_state": False}
+    limit = 100
+    return QueryResult(
+        frame=(
+            pl.concat([zip_match, item_match])
+            .group_by(["ca_zip", "ca_state"])
+            .agg(
+                [
+                    pl.col("ws_sales_price").sum().alias("sales_sum"),
+                    pl.col("ws_sales_price").count().alias("sales_count"),
+                ]
+            )
+            .with_columns(
+                [
+                    pl.when(pl.col("sales_count") > 0)
+                    .then(pl.col("sales_sum"))
+                    .otherwise(None)
+                    .alias("sum(ws_sales_price)")
+                ]
+            )
+            .drop(["sales_sum", "sales_count"])
+            .sort(sort_by.keys(), nulls_last=True)
+            .select(["ca_zip", "ca_state", "sum(ws_sales_price)"])
+            .limit(limit)
+        ),
+        sort_by=list(sort_by.items()),
+        limit=limit,
     )

@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
-from cudf_polars.experimental.benchmarks.utils import get_data
+from cudf_polars.experimental.benchmarks.utils import QueryResult, get_data
 
 if TYPE_CHECKING:
     from cudf_polars.experimental.benchmarks.utils import RunConfig
@@ -78,7 +78,7 @@ def duckdb_impl(run_config: RunConfig) -> str:
     """
 
 
-def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
+def polars_impl(run_config: RunConfig) -> QueryResult:
     """Query 71."""
     params = load_parameters(
         int(run_config.scale_factor),
@@ -137,23 +137,37 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         pl.col("t_meal_time").is_in(["breakfast", "dinner"])
     ).select(["t_time_sk", "t_hour", "t_minute"])
 
-    return (
-        combined_sales.join(
-            filtered_items, left_on="sold_item_sk", right_on="i_item_sk"
-        )
-        .join(filtered_time, left_on="time_sk", right_on="t_time_sk")
-        .group_by(["i_brand", "i_brand_id", "t_hour", "t_minute"])
-        .agg(pl.col("ext_price").sum().alias("ext_price"))
-        .select(
-            pl.col("i_brand_id").alias("brand_id"),
-            pl.col("i_brand").alias("brand"),
-            "t_hour",
-            "t_minute",
-            "ext_price",
-        )
-        .sort(
-            ["ext_price", "brand_id", "t_hour"],
-            descending=[True, False, False],
-            nulls_last=False,
-        )
+    return QueryResult(
+        frame=(
+            combined_sales.join(
+                filtered_items, left_on="sold_item_sk", right_on="i_item_sk"
+            )
+            .join(filtered_time, left_on="time_sk", right_on="t_time_sk")
+            .group_by(["i_brand", "i_brand_id", "t_hour", "t_minute"])
+            .agg(
+                pl.col("ext_price").sum().alias("ext_price"),
+                pl.col("ext_price").count().alias("_ext_price_count"),
+            )
+            .with_columns(
+                pl.when(pl.col("_ext_price_count") > 0)
+                .then(pl.col("ext_price"))
+                .otherwise(None)
+                .alias("ext_price")
+            )
+            .drop("_ext_price_count")
+            .select(
+                pl.col("i_brand_id").alias("brand_id"),
+                pl.col("i_brand").alias("brand"),
+                "t_hour",
+                "t_minute",
+                "ext_price",
+            )
+            .sort(
+                ["ext_price", "brand_id", "t_hour"],
+                descending=[True, False, False],
+                nulls_last=False,
+            )
+        ),
+        sort_by=[("ext_price", True), ("brand_id", False), ("t_hour", False)],
+        limit=None,
     )
