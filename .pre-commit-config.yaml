@@ -104,8 +104,8 @@ repos:
         entry: 'rmm::exec_policy\('
         language: pygrep
         types_or: [c, c++, cuda]
-      - id: use-cudf-memcpy
-        name: use-cudf-memcpy
+      - id: use-cudf-memcpy-async
+        name: use-cudf-memcpy-async
         description: 'Enforce that cudf::detail::memcpy_async or memcpy_batch_async is used instead of cudaMemcpyAsync (see developer guide)'
         entry: 'cudaMemcpyAsync'
         language: pygrep
