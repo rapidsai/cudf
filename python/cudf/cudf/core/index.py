@@ -4835,6 +4835,11 @@ def interval_range(
 
     if periods is not None and not is_integer(periods):
         raise TypeError(f"periods must be an integer, got {periods}")
+
+    # Track whether all three of start/end/freq were provided before
+    # computing the missing parameter, since the dtype logic differs.
+    have_all_sef = all(x is not None for x in (start, end, freq))
+
     if start is None:
         start = end - freq * periods
     elif freq is None:
@@ -4860,13 +4865,35 @@ def interval_range(
     ):
         raise ValueError("start, end, periods, freq must be numeric values.")
 
-    common_dtype = find_common_type(
-        (
-            cudf_dtype_from_pa_type(pa_start.type),
-            cudf_dtype_from_pa_type(pa_freq.type),
-            cudf_dtype_from_pa_type(pa_end.type),
+    # Determine output dtype matching pandas behaviour.
+    common_dtype: np.dtype = np.dtype("int64")
+    if have_all_sef:
+        if (
+            isinstance(start, (np.integer, np.floating))
+            and isinstance(end, (np.integer, np.floating))
+            and start.dtype == end.dtype
+        ):
+            common_dtype = start.dtype
+        elif any(
+            isinstance(x, (float, np.floating)) for x in (start, end, freq)
+        ):
+            common_dtype = np.dtype("float64")
+    else:
+        # linspace path: numpy determines dtype from start and end.
+        # Only the originally-provided values matter for the integer
+        # downcast check (freq was auto-computed, not user-provided).
+        common_dtype = find_common_type(  # type: ignore[assignment]
+            [x for x in (start, end) if x is not None]
         )
-    )
+        if all(is_integer(x) for x in (start, end) if x is not None):
+            common_dtype = np.dtype("int64")
+
+    # If freq has a fractional part but common_dtype is integer,
+    # promote to float64 so the cast doesn't truncate.
+    if common_dtype.kind == "i" and isinstance(freq, (float, np.floating)):
+        if freq != int(freq):
+            common_dtype = np.dtype("float64")
+
     pa_start = pa_start.cast(cudf_dtype_to_pa_type(common_dtype))
     pa_freq = pa_freq.cast(cudf_dtype_to_pa_type(common_dtype))
 
