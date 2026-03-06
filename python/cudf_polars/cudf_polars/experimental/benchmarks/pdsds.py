@@ -120,6 +120,16 @@ class PDSDSPolarsQueries(PDSDSQueries):
         32: [pl.col("excess discount amount").cast(pl.Decimal(18, 2))],
         33: [pl.col("total_sales").cast(pl.Decimal(18, 2))],
         42: [pl.col("sum(ss_ext_sales_price)").cast(pl.Decimal(18, 2))],
+        45: [pl.col("sum(ws_sales_price)").cast(pl.Decimal(18, 2))],
+        46: [
+            pl.col("amt").cast(pl.Decimal(18, 2)),
+            pl.col("profit").cast(pl.Decimal(18, 2)),
+        ],
+        47: [
+            pl.col("sum_sales").cast(pl.Decimal(18, 2)),
+            pl.col("psum").cast(pl.Decimal(18, 2)),
+            pl.col("nsum").cast(pl.Decimal(18, 2)),
+        ],
         63: [pl.col("sum_sales").cast(pl.Decimal(18, 2))],
         64: [
             pl.col("s1").cast(pl.Decimal(18, 2)),
@@ -165,6 +175,8 @@ class PDSDSPolarsQueries(PDSDSQueries):
             pl.col("cnt2").cast(COUNT_DTYPE),
             pl.col("cnt3").cast(COUNT_DTYPE),
         ],
+        44: [pl.col("rnk").cast(COUNT_DTYPE)],
+        48: [pl.col("sum(ss_quantity)").cast(pl.Int64)],
         64: [
             pl.col("cnt").cast(COUNT_DTYPE),
             pl.col("cnt_1").cast(COUNT_DTYPE),
