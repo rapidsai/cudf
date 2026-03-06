@@ -18,6 +18,7 @@ files:
       - cuda_version
       - cudf_polars_trace
       - depends_on_cupy
+      - depends_on_cuda_python
       - depends_on_dask_cuda
       - depends_on_libkvikio
       - depends_on_librmm
@@ -196,6 +197,7 @@ files:
       - depends_on_numba_cuda
       - depends_on_pylibcudf_pyarrow
       - depends_on_rmm
+      - depends_on_cuda_python
   py_test_cudf:
     output: pyproject
     pyproject_dir: python/cudf
@@ -266,6 +268,7 @@ files:
       - depends_on_libcudf
       - depends_on_rmm
       - run_pylibcudf
+      - depends_on_cuda_python
   py_run_pylibcudf_numpy:
     output: pyproject
     pyproject_dir: python/pylibcudf
@@ -326,6 +329,7 @@ files:
     includes:
       - run_cudf_polars
       - depends_on_pylibcudf
+      - depends_on_cuda_python
   py_run_cudf_polars_experimental:
     output: pyproject
     pyproject_dir: python/cudf_polars
@@ -695,6 +699,7 @@ dependencies:
       - output_types: [conda, requirements, pyproject]
         packages:
           - nvtx>=0.2.1
+  depends_on_cuda_python:
     specific:
       - output_types: [conda, requirements, pyproject]
         matrices:
@@ -716,16 +721,6 @@ dependencies:
           - packaging
           - rich
     specific:
-      - output_types: [conda, requirements, pyproject]
-        matrices:
-          - matrix:
-              cuda: "12.*"
-            packages:
-              - cuda-python>=12.9.2,<13.0
-          # fallback to CUDA 13 versions if 'cuda' is '13.*' or not provided
-          - matrix:
-            packages:
-              - cuda-python>=13.0.1,<14.0
       - output_types: [requirements, pyproject]
         matrices:
           - matrix:
@@ -925,7 +920,10 @@ dependencies:
               cuda: "12.*"
             packages:
               - pytorch>=2.4.0
-          # TODO: add a 13.x entry here when pytorch has CUDA 13 packages (https://github.com/pytorch/pytorch/issues/159779)
+          - matrix:
+              cuda: "13.*"
+            packages:
+              - pytorch>=2.10.0
           - matrix:
             packages:
   test_python_cudf_polars:
