@@ -40,7 +40,7 @@ struct unique_keys_dispatch_fn {
   std::unique_ptr<cudf::column> operator()(cudf::column_view const& all_keys,
                                            rmm::cuda_stream_view stream,
                                            rmm::device_async_resource_ref mr)
-    requires(cudf::is_relationally_comparable<T, T>())
+    requires(cudf::is_dictionary_key<T>())
   {
     using probe_t = cuco::linear_probing<
       1,
@@ -82,7 +82,7 @@ struct unique_keys_dispatch_fn {
   std::unique_ptr<cudf::column> operator()(cudf::column_view const&,
                                            rmm::cuda_stream_view,
                                            rmm::device_async_resource_ref)
-    requires(not cudf::is_relationally_comparable<T, T>())
+    requires(not cudf::is_dictionary_key<T>())
   {
     CUDF_UNREACHABLE("invalid dictionary key type");
   }
