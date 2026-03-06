@@ -790,6 +790,32 @@ must remain valid until the stream has executed the copies**. For device memory 
 satisfied; for host memory the caller must ensure the sources are not freed before the stream is
 synchronized.
 
+When a temporary host buffer is used as the source of an async copy, its destructor must not free
+the memory before the stream has consumed it. Buffers allocated with a stream-ordered allocator
+(e.g., the pinned memory pool) are safe — deallocation is deferred until the stream catches up.
+Buffers from non-stream-ordered allocators (e.g., `new_delete_resource`) require an explicit
+`stream.synchronize()` before the buffer is destroyed. Prefer `make_pinned_vector_async` for
+temporary host staging buffers to avoid the sync:
+
+```c++
+// UNSAFE — std::vector uses pageable memory; must synchronize before it goes out of scope
+{
+  auto staging = std::vector<char>(size);
+  fill(staging);
+  cudf::detail::cuda_memcpy_async<char>(d_buf, staging, stream);
+  stream.synchronize();  // required: pageable allocator is not stream-ordered
+}
+
+// SAFE — stream-ordered pinned buffer, no sync needed
+{
+  auto staging = cudf::detail::make_pinned_vector_async<char>(size, stream);
+  fill(staging);
+  cudf::detail::cuda_memcpy_async<char>(d_buf, staging, stream);
+} // deallocation is stream-ordered → no race
+```
+
+The same stream-safety requirements apply to `memcpy_async` and `memcpy_batch_async`.
+
 ## Default Parameters
 
 While public libcudf APIs are free to include default function parameters, detail functions should
