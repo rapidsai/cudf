@@ -58,16 +58,23 @@ async def _compute_sort_boundaries(
     null_order: list[Any],
     allgather_id: int,
 ) -> plc.Table:
-    """
-    Allgather per-chunk split candidates and compute the final sort-boundary table.
+    """Compute global sort boundaries from local candidates."""
+    allgather = AllGatherManager(context, comm, allgather_id)
 
-    Each rank contributes concatenated local candidates; returns a table of
-    boundaries (sort columns plus partition_id and local_row) used by
-    find_sort_splits for partitioning sorted chunks.
-    """
     stream = ir_context.get_cuda_stream()
-    if not local_candidates_list:
-        empty_sort_tbl = plc.Table(
+    if local_candidates_list:
+        # Concat this rank's candidates and contribute to the allgather.
+        combined = plc.concatenate.concatenate(
+            [c.table for c in local_candidates_list], stream=stream
+        )
+        names = list(local_candidates_list[0].column_names)
+        dtypes = list(local_candidates_list[0].dtypes)
+        chunk = TableChunk.from_pylibcudf_table(combined, stream, exclusive_view=True)
+        allgather.insert(my_part_id, chunk)
+    else:
+        # We didn't contribute; we still need the candidate schema to build
+        # concat_df from the concatenated table (other ranks' data).
+        empty_tbl = plc.Table(
             [
                 plc.column_factories.make_empty_column(
                     by_dtypes[i].plc_type, stream=stream
@@ -75,36 +82,31 @@ async def _compute_sort_boundaries(
                 for i in range(len(by))
             ]
         )
-        empty_df = DataFrame.from_table(empty_sort_tbl, by, by_dtypes, stream=stream)
-        local_candidates_list = [
-            _select_local_split_candidates(empty_df, by, num_partitions, my_part_id)
-        ]
-    combined_candidates_tbl = plc.concatenate.concatenate(
-        [c.table for c in local_candidates_list], stream=stream
-    )
-    candidate_names = list(local_candidates_list[0].column_names)
-    candidate_dtypes = list(local_candidates_list[0].dtypes)
-    candidates_chunk = TableChunk.from_pylibcudf_table(
-        combined_candidates_tbl, stream, exclusive_view=True
-    )
+        empty_df = DataFrame.from_table(empty_tbl, by, by_dtypes, stream=stream)
+        schema_only = _select_local_split_candidates(
+            empty_df, by, num_partitions, my_part_id
+        )
+        names = list(schema_only.column_names)
+        dtypes = list(schema_only.dtypes)
 
-    allgather = AllGatherManager(context, comm, allgather_id)
-    allgather.insert(my_part_id, candidates_chunk)
     allgather.insert_finished()
-    concat_table = await allgather.extract_concatenated(stream, ordered=True)
 
-    concat_df = DataFrame.from_table(
-        concat_table, candidate_names, candidate_dtypes, stream=stream
-    )
-    sort_boundaries_df = _get_final_sort_boundaries(
+    concat_table = await allgather.extract_concatenated(stream, ordered=True)
+    concat_df = DataFrame.from_table(concat_table, names, dtypes, stream=stream)
+    boundaries_df = _get_final_sort_boundaries(
         concat_df, column_order, null_order, num_partitions
     )
-    n = sort_boundaries_df.table.num_rows()
-    init = plc.Scalar.from_py(0, plc.types.SIZE_TYPE, stream=stream)
-    step = plc.Scalar.from_py(1, plc.types.SIZE_TYPE, stream=stream)
-    gather_map = plc.filling.sequence(n, init, step, stream=stream)
+
+    # Return an owned copy (caller can drop concat_df / boundaries_df).
+    n = boundaries_df.table.num_rows()
+    gather_map = plc.filling.sequence(
+        n,
+        plc.Scalar.from_py(0, plc.types.SIZE_TYPE, stream=stream),
+        plc.Scalar.from_py(1, plc.types.SIZE_TYPE, stream=stream),
+        stream=stream,
+    )
     return plc.copying.gather(
-        sort_boundaries_df.table,
+        boundaries_df.table,
         gather_map,
         plc.copying.OutOfBoundsPolicy.DONT_CHECK,
         stream=stream,
