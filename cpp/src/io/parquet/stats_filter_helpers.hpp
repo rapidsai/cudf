@@ -41,10 +41,14 @@ class stats_caster_base {
  protected:
   static inline numeric::decimal128::rep decode_flba_decimal128(uint8_t const* stats_val)
   {
+    auto constexpr endianness = std::endian::native;
+    static_assert(endianness == std::endian::little or endianness == std::endian::big,
+                  "Encountered unsupported endianness while decoding decimal128 from FLBA");
     using RepType  = numeric::decimal128::rep;
     auto value_rep = std::bit_cast<std::array<std::byte, sizeof(RepType)>>(
       *reinterpret_cast<RepType const*>(stats_val));
-    std::ranges::reverse(value_rep);
+    // byte-swap to native representation on little-endian platforms
+    if constexpr (endianness == std::endian::little) { std::ranges::reverse(value_rep); }
     return std::bit_cast<RepType>(value_rep);
   }
 
