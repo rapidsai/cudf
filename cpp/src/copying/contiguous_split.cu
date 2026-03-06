@@ -1900,7 +1900,7 @@ struct contiguous_split_state {
     return make_packed_tables();
   }
 
-  cudf::size_type contiguous_split_chunk(cudf::device_span<uint8_t> const& user_buffer)
+  std::size_t contiguous_split_chunk(cudf::device_span<uint8_t> const& user_buffer)
   {
     CUDF_FUNC_RANGE();
     CUDF_EXPECTS(
