@@ -432,12 +432,17 @@ std::vector<column_buffer> decode_data(metadata& meta,
                             stream);
 
   // Copy valid bits that are shared between columns
-  for (size_t i = 0; i < out_buffers.size(); i++) {
-    if (valid_alias[i] != nullptr) {
-      CUDF_CUDA_TRY(cudf::detail::memcpy_async(
-        out_buffers[i].null_mask(), valid_alias[i], out_buffers[i].null_mask_size(), stream));
-    }
+  auto const num_bufs = out_buffers.size();
+  std::vector<void*> dsts(num_bufs);
+  std::vector<void const*> srcs(num_bufs);
+  std::vector<std::size_t> sizes(num_bufs);
+  for (size_t i = 0; i < num_bufs; i++) {
+    dsts[i]  = valid_alias[i] ? out_buffers[i].null_mask() : nullptr;
+    srcs[i]  = valid_alias[i];
+    sizes[i] = valid_alias[i] ? out_buffers[i].null_mask_size() : 0;
   }
+  CUDF_CUDA_TRY(
+    cudf::detail::memcpy_batch_async(dsts.data(), srcs.data(), sizes.data(), num_bufs, stream));
   schema_desc.device_to_host(stream);
 
   for (size_t i = 0; i < out_buffers.size(); i++) {
