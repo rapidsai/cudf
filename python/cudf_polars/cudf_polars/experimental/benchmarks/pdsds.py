@@ -192,6 +192,6 @@ if __name__ == "__main__":
     if args.engine == "polars":
         run_polars(PDSDSPolarsQueries, args)
     elif args.engine == "duckdb":
-        run_duckdb(PDSDSDuckDBQueries, args, num_queries=99)
+        run_duckdb(PDSDSDuckDBQueries, args)
     else:
         raise ValueError(f"Invalid engine: {args.engine}")

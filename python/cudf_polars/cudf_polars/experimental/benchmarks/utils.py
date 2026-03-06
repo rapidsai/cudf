@@ -1897,9 +1897,7 @@ def execute_duckdb_query(
         return conn.execute(query).pl()
 
 
-def run_duckdb(
-    duckdb_queries_cls: Any, args: argparse.Namespace, *, num_queries: int
-) -> None:
+def run_duckdb(duckdb_queries_cls: Any, args: argparse.Namespace) -> None:
     """Run the benchmark with DuckDB."""
     vars(args).update({"query_set": duckdb_queries_cls.name})
     run_config = RunConfig.from_args(args)
