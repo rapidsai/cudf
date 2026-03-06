@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -12,6 +12,8 @@
 #include <cudf/strings/combine.hpp>
 #include <cudf/strings/replace.hpp>
 #include <cudf/strings/strings_column_view.hpp>
+
+#include <cuda/iterator>
 
 #include <vector>
 
@@ -192,7 +194,7 @@ TEST_F(StringsReplaceTest, ReplaceAllNullInput)
 {
   std::vector<char const*> h_null_strings(128);
   auto input = cudf::test::strings_column_wrapper(
-    h_null_strings.begin(), h_null_strings.end(), thrust::make_constant_iterator(false));
+    h_null_strings.begin(), h_null_strings.end(), cuda::make_constant_iterator(false));
   auto strings_view = cudf::strings_column_view(input);
   auto results =
     cudf::strings::replace(strings_view, cudf::string_scalar("+"), cudf::string_scalar(""));

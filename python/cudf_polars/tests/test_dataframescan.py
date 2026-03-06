@@ -9,7 +9,11 @@ import pytest
 
 import polars as pl
 
-from cudf_polars.testing.asserts import assert_gpu_result_equal
+from cudf_polars.testing.asserts import (
+    assert_gpu_result_equal,
+    assert_ir_translation_raises,
+)
+from cudf_polars.utils.versions import POLARS_VERSION_LT_138
 
 
 @pytest.mark.parametrize(
@@ -76,3 +80,19 @@ def test_dataframescan_with_decimals():
         schema={"foo": pl.Int64, "bar": pl.Decimal(precision=15, scale=2)},
     )
     assert_gpu_result_equal(q)
+
+
+@pytest.mark.skipif(
+    POLARS_VERSION_LT_138,
+    reason="height parameter added in Polars 1.38",
+)
+def test_dataframescan_zero_width_with_rows():
+    df = pl.LazyFrame(height=5)
+    q = df.select(pl.len())
+    assert_gpu_result_equal(q)
+
+
+def test_struct_literal_not_supported():
+    dtype = pl.Struct([pl.Field("a", pl.Int64), pl.Field("b", pl.String)])
+    q = pl.LazyFrame().select(pl.lit(None, dtype=pl.Null).cast(dtype, strict=True))
+    assert_ir_translation_raises(q, NotImplementedError)

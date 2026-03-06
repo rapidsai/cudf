@@ -1,11 +1,12 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
 
 #include "jit/cache.hpp"
+#include "jit/helpers.hpp"
 #include "jit/parser.hpp"
 #include "jit/util.hpp"
 #include "rolling.hpp"
@@ -73,7 +74,7 @@ std::unique_ptr<column> rolling_window_udf(column_view const& input,
   auto output_view = output->mutable_view();
   cudf::detail::device_scalar<size_type> device_valid_count{0, stream};
 
-  std::string kernel_name =
+  std::string kernel_reflection =
     jitify2::reflection::Template("cudf::rolling::jit::gpu_rolling_new")  //
       .instantiate(cudf::type_to_name(input.type()),  // list of template arguments
                    cudf::type_to_name(output->type()),
@@ -81,10 +82,8 @@ std::unique_ptr<column> rolling_window_udf(column_view const& input,
                    preceding_window_str.c_str(),
                    following_window_str.c_str());
 
-  cudf::jit::get_program_cache(*rolling_jit_kernel_cu_jit)
-    .get_kernel(
-      kernel_name, {}, {{"rolling/jit/operation-udf.hpp", cuda_source}}, {"-arch=sm_."})  //
-    ->configure_1d_max_occupancy(0, 0, nullptr, stream.value())                           //
+  cudf::jit::get_udf_kernel(*rolling_jit_kernel_cu_jit, kernel_reflection, cuda_source)
+    ->configure_1d_max_occupancy(0, 0, nullptr, stream.value())
     ->launch(input.size(),
              cudf::jit::get_data_ptr(input),
              input.null_mask(),

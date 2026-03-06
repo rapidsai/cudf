@@ -687,8 +687,7 @@ struct column_to_strings_fn {
       std::move(new_offsets),
       child_string_with_null(),
       column.null_count(),
-      cudf::detail::copy_bitmask(column, stream_, cudf::get_current_device_resource_ref()),
-      stream_);
+      cudf::detail::copy_bitmask(column, stream_, cudf::get_current_device_resource_ref()));
     return join_list_of_strings(lists_column_view(*list_child_string),
                                 list_row_begin_wrap.value(stream_),
                                 list_row_end_wrap.value(stream_),

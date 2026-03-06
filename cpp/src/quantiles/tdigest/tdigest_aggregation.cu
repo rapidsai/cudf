@@ -28,15 +28,12 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
-#include <cuda/std/iterator>
+#include <cuda/iterator>
 #include <cuda/std/span>
 #include <cuda/std/tuple>
 #include <thrust/binary_search.h>
 #include <thrust/execution_policy.h>
-#include <thrust/functional.h>
-#include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
-#include <thrust/iterator/discard_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/merge.h>
@@ -1044,16 +1041,16 @@ std::unique_ptr<column> compute_tdigests(int delta,
 
   // reduce the centroids into the clusters
   auto output = thrust::make_zip_iterator(cuda::std::make_tuple(
-    mean_col.begin<double>(), weight_col.begin<double>(), thrust::make_discard_iterator()));
+    mean_col.begin<double>(), weight_col.begin<double>(), cuda::make_discard_iterator()));
 
   auto const num_values = std::distance(centroids_begin, centroids_end);
   thrust::reduce_by_key(rmm::exec_policy_nosync(stream),
                         keys,
-                        keys + num_values,                // keys
-                        centroids_begin,                  // values
-                        thrust::make_discard_iterator(),  // key output
-                        output,                           // output
-                        cuda::std::equal_to{},            // key equality check
+                        keys + num_values,              // keys
+                        centroids_begin,                // values
+                        cuda::make_discard_iterator(),  // key output
+                        output,                         // output
+                        cuda::std::equal_to{},          // key equality check
                         merge_centroids{});
 
   // generate offsets column. if we are running in the simple case, cinfo.cluster_start will not
@@ -1449,7 +1446,7 @@ std::unique_ptr<column> merge_tdigests(tdigest_column_view const& tdv,
                         group_labels,
                         group_labels + num_group_labels,
                         min_iter,
-                        thrust::make_discard_iterator(),
+                        cuda::make_discard_iterator(),
                         merged_min_col->mutable_view().begin<double>(),
                         cuda::std::equal_to{},  // key equality check
                         cuda::minimum{});
@@ -1464,7 +1461,7 @@ std::unique_ptr<column> merge_tdigests(tdigest_column_view const& tdv,
                         group_labels,
                         group_labels + num_group_labels,
                         max_iter,
-                        thrust::make_discard_iterator(),
+                        cuda::make_discard_iterator(),
                         merged_max_col->mutable_view().begin<double>(),
                         cuda::std::equal_to{},  // key equality check
                         cuda::maximum{});
@@ -1647,7 +1644,7 @@ std::unique_ptr<scalar> reduce_merge_tdigest(column_view const& input,
 
   auto group_offsets_ = group_offsets_fn{input.size()};
   auto group_offsets  = cudf::detail::make_counting_transform_iterator(0, group_offsets_);
-  auto group_labels   = thrust::make_constant_iterator(0);
+  auto group_labels   = cuda::make_constant_iterator(0);
   return to_tdigest_scalar(
     merge_tdigests(tdv, group_offsets, group_labels, input.size(), 1, max_centroids, stream, mr),
     stream,

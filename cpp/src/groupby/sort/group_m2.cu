@@ -19,7 +19,7 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <thrust/iterator/discard_iterator.h>
+#include <cuda/iterator>
 #include <thrust/transform.h>
 
 namespace cudf {
@@ -67,7 +67,7 @@ void compute_m2_fn(column_device_view const& values,
   cudf::detail::reduce_by_key_async(group_labels.begin(),
                                     group_labels.end(),
                                     m2_vals.begin(),
-                                    thrust::make_discard_iterator(),
+                                    cuda::make_discard_iterator(),
                                     d_result,
                                     cuda::std::plus<ResultType>(),
                                     stream);

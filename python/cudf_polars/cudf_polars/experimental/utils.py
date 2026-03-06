@@ -23,7 +23,7 @@ if TYPE_CHECKING:
     from cudf_polars.dsl.ir import IR, IRExecutionContext
     from cudf_polars.experimental.base import ColumnStats
     from cudf_polars.experimental.dispatch import LowerIRTransformer
-    from cudf_polars.utils.config import ConfigOptions
+    from cudf_polars.utils.config import ConfigOptions, StreamingExecutor
 
 
 def _concat(*dfs: DataFrame, context: IRExecutionContext) -> DataFrame:
@@ -31,13 +31,10 @@ def _concat(*dfs: DataFrame, context: IRExecutionContext) -> DataFrame:
     return dfs[0] if len(dfs) == 1 else Union.do_evaluate(None, *dfs, context=context)
 
 
-def _fallback_inform(msg: str, config_options: ConfigOptions) -> None:
+def _fallback_inform(
+    msg: str, config_options: ConfigOptions[StreamingExecutor]
+) -> None:
     """Inform the user of single-partition fallback."""
-    # Satisfy type checking
-    assert config_options.executor.name == "streaming", (
-        "'in-memory' executor not supported in '_fallback_inform'"
-    )
-
     match fallback_mode := config_options.executor.fallback_mode:
         case "warn":
             warnings.warn(msg, stacklevel=2)
@@ -52,12 +49,8 @@ def _fallback_inform(msg: str, config_options: ConfigOptions) -> None:
             )
 
 
-def _dynamic_planning_on(config_options: ConfigOptions) -> bool:
+def _dynamic_planning_on(config_options: ConfigOptions[StreamingExecutor]) -> bool:
     """Check if dynamic planning is enabled for rapidsmpf runtime."""
-    assert config_options.executor.name == "streaming", (
-        "'in-memory' executor not supported in 'lower_ir_node'"
-    )
-
     return (
         config_options.executor.runtime == "rapidsmpf"
         and config_options.executor.dynamic_planning is not None
@@ -76,9 +69,6 @@ def _lower_ir_fallback(
     from cudf_polars.experimental.repartition import Repartition
 
     config_options = rec.state["config_options"]
-    assert config_options.executor.name == "streaming", (
-        "'in-memory' executor not supported in 'generate_ir_sub_network'"
-    )
     rapidsmpf_engine = config_options.executor.runtime == "rapidsmpf"
 
     # Lower children

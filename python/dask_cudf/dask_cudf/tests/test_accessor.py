@@ -241,12 +241,13 @@ def data_str_1():
 
 @pytest.mark.parametrize("data", [data_str_1()])
 def test_string_slicing(data):
-    pdsr = pd.Series(data.copy())
-    sr = Series(pdsr)
-    dsr = dask_cudf.from_cudf(sr, npartitions=2)
-    base = pdsr.str.slice(0, 4)
-    test = dsr.str.slice(0, 4).compute()
-    assert_eq(base, test)
+    with dask.config.set({"dataframe.convert-string": False}):
+        pdsr = pd.Series(data.copy())
+        sr = Series(pdsr)
+        dsr = dask_cudf.from_cudf(sr, npartitions=2)
+        base = pdsr.str.slice(0, 4)
+        test = dsr.str.slice(0, 4).compute()
+        assert_eq(base, test)
 
 
 def test_categorical_categories():
@@ -529,9 +530,12 @@ def test_dask_struct_field_Int_Error(data):
 )
 def test_struct_explode(data):
     expect = Series(data).struct.explode()
-    got = dask_cudf.from_cudf(Series(data), 2).struct.explode()
+    got = dask_cudf.from_cudf(Series(data), 2).struct.explode().compute()
     # Output index will not agree for >1 partitions
-    assert_eq(expect, got.compute().reset_index(drop=True))
+    if len(data[0]) == 0:
+        # expect.columns is an empty RangeIndex, got is an empty Index[object]
+        got.columns = expect.columns
+    assert_eq(expect, got)
 
 
 def test_tz_localize():

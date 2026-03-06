@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 """
@@ -16,13 +16,17 @@ from __future__ import annotations
 import contextlib
 import importlib
 import os
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, ClassVar
+
+import polars as pl
 
 with contextlib.suppress(ImportError):
     from cudf_polars.experimental.benchmarks.utils import (
+        COUNT_DTYPE,
+        build_parser,
+        parse_args,
         run_duckdb,
         run_polars,
-        run_validate,
     )
 
 if TYPE_CHECKING:
@@ -71,6 +75,118 @@ class PDSDSPolarsQueries(PDSDSQueries):
     """Polars Queries."""
 
     q_impl = "polars_impl"
+    # See comments for EXPECTED_CASTS and EXPECTED_CASTS_DECIMAL
+    # in cudf/python/cudf_polars/cudf_polars/experimental/benchmarks/pdsh.py
+    # for more details.
+    EXPECTED_CASTS_DECIMAL: ClassVar[dict] = {
+        2: [
+            pl.col("round((sun_sales1 / sun_sales2), 2)").cast(pl.Decimal(38, 2)),
+            pl.col("round((mon_sales1 / mon_sales2), 2)").cast(pl.Decimal(38, 2)),
+            pl.col("round((tue_sales1 / tue_sales2), 2)").cast(pl.Decimal(38, 2)),
+            pl.col("round((wed_sales1 / wed_sales2), 2)").cast(pl.Decimal(38, 2)),
+            pl.col("round((thu_sales1 / thu_sales2), 2)").cast(pl.Decimal(38, 2)),
+            pl.col("round((fri_sales1 / fri_sales2), 2)").cast(pl.Decimal(38, 2)),
+            pl.col("round((sat_sales1 / sat_sales2), 2)").cast(pl.Decimal(38, 2)),
+        ],
+        3: [pl.col("sum_agg").cast(pl.Decimal(18, 2))],
+        5: [
+            pl.col("sales").cast(pl.Decimal(18, 2)),
+            pl.col("returns1").cast(pl.Decimal(18, 2)),
+        ],
+        8: [pl.col("sum(ss_net_profit)").cast(pl.Decimal(18, 2))],
+        12: [
+            pl.col("itemrevenue").cast(pl.Decimal(18, 2)),
+            pl.col("revenueratio").cast(pl.Decimal(38, 2)),
+        ],
+        13: [pl.col("sum(ss_ext_wholesale_cost)").cast(pl.Decimal(18, 2))],
+        15: [pl.col("sum(cs_sales_price)").cast(pl.Decimal(18, 2))],
+        16: [
+            pl.col("total shipping cost").cast(pl.Decimal(18, 2)),
+            pl.col("total net profit").cast(pl.Decimal(18, 2)),
+        ],
+        19: [pl.col("ext_price").cast(pl.Decimal(18, 2))],
+        20: [
+            pl.col("itemrevenue").cast(pl.Decimal(18, 2)),
+            pl.col("revenueratio").cast(pl.Decimal(38, 2)),
+        ],
+        24: [pl.col("paid").cast(pl.Decimal(18, 2))],
+        30: [pl.col("ctr_total_return").cast(pl.Decimal(18, 2))],
+        31: [
+            pl.col("web_q1_q2_increase").cast(pl.Decimal(38, 2)),
+            pl.col("store_q1_q2_increase").cast(pl.Decimal(38, 2)),
+            pl.col("web_q2_q3_increase").cast(pl.Decimal(38, 2)),
+            pl.col("store_q2_q3_increase").cast(pl.Decimal(38, 2)),
+        ],
+        32: [pl.col("excess discount amount").cast(pl.Decimal(18, 2))],
+        33: [pl.col("total_sales").cast(pl.Decimal(18, 2))],
+        42: [pl.col("sum(ss_ext_sales_price)").cast(pl.Decimal(18, 2))],
+        63: [pl.col("sum_sales").cast(pl.Decimal(18, 2))],
+        64: [
+            pl.col("s1").cast(pl.Decimal(18, 2)),
+            pl.col("s2").cast(pl.Decimal(18, 2)),
+            pl.col("s3").cast(pl.Decimal(18, 2)),
+            pl.col("s1_1").cast(pl.Decimal(18, 2)),
+            pl.col("s2_1").cast(pl.Decimal(18, 2)),
+            pl.col("s3_1").cast(pl.Decimal(18, 2)),
+        ],
+        65: [pl.col("revenue").cast(pl.Decimal(18, 2))],
+        68: [
+            pl.col("extended_price").cast(pl.Decimal(18, 2)),
+            pl.col("extended_tax").cast(pl.Decimal(18, 2)),
+            pl.col("list_price").cast(pl.Decimal(18, 2)),
+        ],
+        70: [pl.col("total_sum").cast(pl.Decimal(18, 2))],
+        71: [pl.col("ext_price").cast(pl.Decimal(18, 2))],
+    }
+    EXPECTED_CASTS: ClassVar[dict] = {
+        6: [pl.col("cnt").cast(COUNT_DTYPE)],
+        10: [
+            pl.col("cnt1").cast(COUNT_DTYPE),
+            pl.col("cnt2").cast(COUNT_DTYPE),
+            pl.col("cnt3").cast(COUNT_DTYPE),
+            pl.col("cnt4").cast(COUNT_DTYPE),
+            pl.col("cnt5").cast(COUNT_DTYPE),
+            pl.col("cnt6").cast(COUNT_DTYPE),
+        ],
+        14: [pl.col("sum_number_sales").cast(COUNT_DTYPE)],
+        16: [pl.col("order count").cast(COUNT_DTYPE)],
+        17: [
+            pl.col("store_sales_quantitycount").cast(COUNT_DTYPE),
+            pl.col("store_returns_quantitycount").cast(COUNT_DTYPE),
+            pl.col("catalog_sales_quantitycount").cast(COUNT_DTYPE),
+        ],
+        21: [
+            pl.col("inv_before").cast(pl.Int32),
+            pl.col("inv_after").cast(pl.Int32),
+        ],
+        34: [pl.col("cnt").cast(COUNT_DTYPE)],
+        35: [
+            pl.col("cnt1").cast(COUNT_DTYPE),
+            pl.col("cnt2").cast(COUNT_DTYPE),
+            pl.col("cnt3").cast(COUNT_DTYPE),
+        ],
+        64: [
+            pl.col("cnt").cast(COUNT_DTYPE),
+            pl.col("cnt_1").cast(COUNT_DTYPE),
+        ],
+        67: [pl.col("rk").cast(pl.UInt32())],
+        69: [
+            pl.col("cnt1").cast(COUNT_DTYPE),
+            pl.col("cnt2").cast(COUNT_DTYPE),
+            pl.col("cnt3").cast(COUNT_DTYPE),
+        ],
+        70: [pl.col("rank_within_parent").cast(pl.UInt32())],
+        72: [
+            pl.col("total_cnt").cast(COUNT_DTYPE),
+            pl.col("no_promo").cast(COUNT_DTYPE),
+            pl.col("promo").cast(COUNT_DTYPE),
+        ],
+    }
+
+    @property
+    def duckdb_queries(self) -> type[PDSDSDuckDBQueries]:
+        """Link to the DuckDB queries for this benchmark."""
+        return PDSDSDuckDBQueries
 
 
 class PDSDSDuckDBQueries(PDSDSQueries):
@@ -80,27 +196,18 @@ class PDSDSDuckDBQueries(PDSDSQueries):
 
 
 if __name__ == "__main__":
-    import argparse
-
-    parser = argparse.ArgumentParser(description="Run PDS-DS benchmarks.")
+    parser = build_parser(num_queries=99)
     parser.add_argument(
         "--engine",
-        choices=["polars", "duckdb", "validate"],
+        choices=["polars", "duckdb"],
         default="polars",
         help="Which engine to use for executing the benchmarks or to validate results.",
     )
-    args, extra_args = parser.parse_known_args()
+    args = parse_args(parser=parser)
 
     if args.engine == "polars":
-        run_polars(PDSDSPolarsQueries, extra_args, num_queries=99)
+        run_polars(PDSDSPolarsQueries, args)
     elif args.engine == "duckdb":
-        run_duckdb(PDSDSDuckDBQueries, extra_args, num_queries=99)
-    elif args.engine == "validate":
-        run_validate(
-            PDSDSPolarsQueries,
-            PDSDSDuckDBQueries,
-            extra_args,
-            num_queries=99,
-            check_dtypes=True,
-            check_column_order=True,
-        )
+        run_duckdb(PDSDSDuckDBQueries, args)
+    else:
+        raise ValueError(f"Invalid engine: {args.engine}")

@@ -45,7 +45,7 @@ namespace {
 // Other valid types in the future would be UUID (still treated as string) and FLOAT16 (which
 // for now would also be treated as a string).
 [[maybe_unused]] inline bool is_treat_fixed_length_as_string(
-  std::optional<LogicalType> const& logical_type)
+  cuda::std::optional<LogicalType> const& logical_type)
 {
   if (!logical_type.has_value()) { return true; }
   return logical_type->type != LogicalType::DECIMAL;
@@ -128,7 +128,8 @@ void hybrid_scan_reader_impl::select_columns(read_columns_mode read_columns_mode
                                 options.is_enabled_use_pandas_metadata(),
                                 _strings_to_categorical,
                                 options.is_enabled_ignore_missing_columns(),
-                                _options.timestamp_type.id());
+                                _options.timestamp_type.id(),
+                                _options.decimal_width);
 
     _is_all_columns_selected     = true;
     _is_filter_columns_selected  = false;
@@ -148,7 +149,8 @@ void hybrid_scan_reader_impl::select_columns(read_columns_mode read_columns_mode
                                          _use_pandas_metadata,
                                          _strings_to_categorical,
                                          ignore_missing_columns,
-                                         _options.timestamp_type.id());
+                                         _options.timestamp_type.id(),
+                                         _options.decimal_width);
 
     _is_filter_columns_selected  = true;
     _is_payload_columns_selected = false;
@@ -164,7 +166,8 @@ void hybrid_scan_reader_impl::select_columns(read_columns_mode read_columns_mode
                                                  _use_pandas_metadata,
                                                  _strings_to_categorical,
                                                  options.is_enabled_ignore_missing_columns(),
-                                                 _options.timestamp_type.id());
+                                                 _options.timestamp_type.id(),
+                                                 _options.decimal_width);
 
     _is_payload_columns_selected = true;
     _is_filter_columns_selected  = false;
@@ -730,6 +733,7 @@ void hybrid_scan_reader_impl::reset_internal_state()
   _subpass_page_mask = cudf::detail::hostdevice_vector<bool>(0, _stream);
   _output_metadata.reset();
   _options.timestamp_type = cudf::data_type{};
+  _options.decimal_width  = type_id::EMPTY;
   _options.num_rows       = std::nullopt;
   _options.row_group_indices.clear();
   _num_sources             = 0;
@@ -750,6 +754,7 @@ void hybrid_scan_reader_impl::initialize_options(parquet_reader_options const& o
   _strings_to_categorical = options.is_enabled_convert_strings_to_categories();
 
   _options.timestamp_type = cudf::data_type{options.get_timestamp_type().id()};
+  _options.decimal_width  = options.get_decimal_width();
 
   _use_pandas_metadata = options.is_enabled_use_pandas_metadata();
 
@@ -944,6 +949,8 @@ table_with_metadata hybrid_scan_reader_impl::finalize_output(
 
   // increment the output chunk count
   _file_itm_data._output_chunk_count++;
+
+  apply_decimal_width_cast(out_columns);
 
   // Create a table from the output columns.
   auto read_table = std::make_unique<table>(std::move(out_columns));

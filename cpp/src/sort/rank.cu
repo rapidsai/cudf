@@ -22,10 +22,10 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
+#include <cuda/iterator>
 #include <cuda/std/type_traits>
 #include <cuda/std/utility>
 #include <thrust/iterator/counting_iterator.h>
-#include <thrust/iterator/discard_iterator.h>
 #include <thrust/iterator/permutation_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/reduce.h>
@@ -131,7 +131,7 @@ void tie_break_ranks_transform(cudf::device_span<size_type const> dense_rank_sor
                         dense_rank_sorted.begin(),
                         dense_rank_sorted.end(),
                         tie_iter,
-                        thrust::make_discard_iterator(),
+                        cuda::make_discard_iterator(),
                         tie_sorted.begin(),
                         cuda::std::equal_to{},
                         tie_breaker);

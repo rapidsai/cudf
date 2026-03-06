@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -16,7 +16,7 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/traits.hpp>
 
-#include <thrust/iterator/constant_iterator.h>
+#include <cuda/iterator>
 #include <thrust/iterator/counting_iterator.h>
 
 auto all_valid   = [](cudf::size_type row) { return true; };
@@ -300,7 +300,7 @@ TEST_F(FillErrorTestFixture, InvalidRange)
   auto destination =
     cudf::test::fixed_width_column_wrapper<int32_t>(thrust::make_counting_iterator(0),
                                                     thrust::make_counting_iterator(0) + 100,
-                                                    thrust::make_constant_iterator(true));
+                                                    cuda::make_constant_iterator(true));
 
   cudf::mutable_column_view destination_view{destination};
 

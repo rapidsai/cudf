@@ -25,11 +25,11 @@
 #include <cooperative_groups.h>
 #include <cooperative_groups/reduce.h>
 #include <cuda/atomic>
+#include <cuda/iterator>
 #include <cuda/std/utility>
 #include <thrust/binary_search.h>
 #include <thrust/fill.h>
 #include <thrust/for_each.h>
-#include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform.h>
 
@@ -223,7 +223,7 @@ std::unique_ptr<column> find_fn(strings_column_view const& input,
   }
 
   // find-utility function fills in the results column
-  auto target_itr      = thrust::make_constant_iterator(d_target);
+  auto target_itr      = cuda::make_constant_iterator(d_target);
   using TargetIterator = decltype(target_itr);
   find_utility<TargetIterator, forward>(input, target_itr, *results, start, stop, stream);
   results->set_null_count(input.null_count());

@@ -446,20 +446,7 @@ ConfigureTest(
 # ##################################################################################################
 # * span tests -------------------------------------------------------------------------------
 
-# This test must be split into two executables so that one can use the preload library and one does
-# not. The one that doesn't includes a thrust::device_vector copy, which is always synchronous on
-# the default stream and is out of libcudf's control (but must be tested).
-set(_allowlist_filter SpanTest.CanConstructFromDeviceContainers)
-
 ConfigureTest(SPAN_TEST utilities_tests/span_tests.cu)
-ConfigureTest(SPAN_TEST_DEVICE_VECTOR utilities_tests/span_tests.cu)
-
-# Overwrite the environments set by ConfigureTest
-set_property(
-  TEST SPAN_TEST SPAN_TEST_DEVICE_VECTOR
-  APPEND
-  PROPERTY ENVIRONMENT "GTEST_FILTER=-${_allowlist_filter}"
-)
 
 # ##################################################################################################
 # * iterator tests --------------------------------------------------------------------------------
@@ -682,6 +669,7 @@ ConfigureTest(
   dictionary/search_test.cpp
   dictionary/set_keys_test.cpp
   dictionary/slice_test.cpp
+  dictionary/sort_test.cpp
 )
 
 # ##################################################################################################

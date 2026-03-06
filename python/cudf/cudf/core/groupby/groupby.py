@@ -546,6 +546,10 @@ class GroupBy(Serializable, Reducible, Scannable):
             self.grouping, self._dropna
         )
 
+    @cached_property
+    def _range_column_from_obj(self) -> ColumnBase:
+        return ColumnBase.from_range(range(len(self.obj)))
+
     def __iter__(self):
         group_names, offsets, _, grouped_values = self._grouped()
         if isinstance(group_names, Index):
@@ -648,7 +652,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         {10: array([0, 1]), 40: array([2])}
         """
         offsets, group_keys, (indices,) = self._groups(
-            [as_column(range(len(self.obj)), dtype=SIZE_TYPE_DTYPE)]
+            [self._range_column_from_obj]
         )
 
         key_dtypes = [col.dtype for col in group_keys]
@@ -742,6 +746,17 @@ class GroupBy(Serializable, Reducible, Scannable):
             .groupby(self.grouping, sort=self._sort, dropna=self._dropna)
             .agg("size")
         )
+        if isinstance(getattr(self.obj, "dtype", None), pd.ArrowDtype):
+            # TODO: Remove once groupby.agg preserves pandas extension dtypes.
+            arrow_dtype = pd.ArrowDtype(pa.int64())
+            if isinstance(result, Series):
+                result._column = ColumnBase.create(
+                    result._column.plc_column, arrow_dtype
+                )
+            elif "size" in result._column_names:
+                result._data["size"] = ColumnBase.create(
+                    result._data["size"].plc_column, arrow_dtype
+                )
         if not self._as_index:
             result = result.rename("size").reset_index()
         return result
@@ -1342,9 +1357,7 @@ class GroupBy(Serializable, Reducible, Scannable):
             # Can't use _mimic_pandas_order because we need to
             # subsample the gather map from the full input ordering,
             # rather than permuting the gather map of the output.
-            _, _, (ordering,) = self._groups(
-                [as_column(range(0, len(self.obj)))]
-            )
+            _, _, (ordering,) = self._groups([self._range_column_from_obj])
             # Invert permutation from original order to groups on the
             # subset of entries we want.
             gather_map = ordering.take(to_take).argsort()
@@ -2686,10 +2699,70 @@ class GroupBy(Serializable, Reducible, Scannable):
                 "numeric_only is not currently supported."
             )
 
+        if is_list_like(q):
+            return self._quantile_array(list(q), interpolation=interpolation)
+
         def func(x):
             return getattr(x, "quantile")(q=q, interpolation=interpolation)
 
         return self.agg(func)
+
+    def _quantile_array(self, qs, interpolation="linear"):
+        """Compute multiple quantiles and return result with proper
+        MultiIndex including quantile values as the innermost level.
+        """
+        # Compute each quantile separately and collect results
+        results = [self.quantile(qi, interpolation=interpolation) for qi in qs]
+        nqs = len(qs)
+        first = results[0]
+        idx = first.index
+        ngroups = len(idx)
+
+        # Concatenate results (order: all groups for q0, then q1, ...)
+        combined = concat(results, ignore_index=True)
+
+        # Reorder to interleave: group0-q0, group0-q1, group1-q0, group1-q1
+        order = (
+            np.arange(ngroups * nqs)
+            .reshape(ngroups, nqs, order="F")
+            .reshape(-1)
+        )
+
+        combined = combined.iloc[order]
+
+        # Build new MultiIndex with quantile as innermost level
+        q_level = Index(qs, dtype=np.float64)
+
+        if isinstance(idx, MultiIndex):
+            levels = [*list(idx.levels), q_level]
+            new_codes = [cp.repeat(code.values, nqs) for code in idx._codes]
+            new_codes.append(cp.tile(cp.arange(nqs), ngroups))
+
+            new_index = MultiIndex(
+                levels=levels,
+                codes=new_codes,
+                names=[*list(idx.names), None],
+            )
+        else:
+            new_index = MultiIndex(
+                levels=[idx, q_level],
+                codes=[
+                    cp.repeat(cp.arange(ngroups, dtype=np.int64), nqs),
+                    cp.tile(cp.arange(nqs, dtype=np.int64), ngroups),
+                ],
+                names=[idx.name, None],
+            )
+
+        combined.index = new_index
+
+        # If operating on a SeriesGroupBy, return a Series instead of
+        # a single-column DataFrame.
+        from cudf.core.series import Series
+
+        if isinstance(first, Series):
+            return combined.iloc[:, 0]
+
+        return combined
 
     @_performance_tracking
     def unique(self):
@@ -2994,7 +3067,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         # result coming back from libcudf has null_count few rows than
         # the input, so we must produce an ordering from the full
         # input range.
-        _, _, (ordering,) = self._groups([as_column(range(0, len(self.obj)))])
+        _, _, (ordering,) = self._groups([self._range_column_from_obj])
         if self._dropna and any(
             c.has_nulls(include_nan=True) > 0
             for c in self.grouping._key_columns

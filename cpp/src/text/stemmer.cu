@@ -21,8 +21,8 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/iterator>
 #include <thrust/for_each.h>
-#include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform.h>
 
@@ -250,7 +250,7 @@ std::unique_ptr<cudf::column> is_letter(cudf::strings_column_view const& input,
 {
   CUDF_FUNC_RANGE();
   return detail::is_letter(
-    input, ltype, thrust::make_constant_iterator<cudf::size_type>(character_index), stream, mr);
+    input, ltype, cuda::make_constant_iterator<cudf::size_type>(character_index), stream, mr);
 }
 
 std::unique_ptr<cudf::column> is_letter(cudf::strings_column_view const& input,

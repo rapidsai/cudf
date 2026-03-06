@@ -18,6 +18,8 @@ from cudf_polars.utils.versions import (
     POLARS_VERSION_LT_131,
     POLARS_VERSION_LT_132,
     POLARS_VERSION_LT_133,
+    POLARS_VERSION_LT_136,
+    POLARS_VERSION_LT_138,
 )
 
 
@@ -256,6 +258,12 @@ def test_split_exact_inclusive_unsupported(ldf_split):
     assert_ir_translation_raises(q, NotImplementedError)
 
 
+def test_split_exact_null_correct_children():
+    df = pl.LazyFrame({"a": ["a_b", None]})
+    q = df.slice(1).select(pl.col("a").str.split_exact("_", 1))
+    assert_gpu_result_equal(q)
+
+
 @pytest.mark.parametrize("cache", [True, False], ids=lambda cache: f"{cache=}")
 @pytest.mark.parametrize("strict", [True, False], ids=lambda strict: f"{strict=}")
 @pytest.mark.parametrize("exact", [True, False], ids=lambda exact: f"{exact=}")
@@ -364,6 +372,13 @@ def test_replace_many_ascii_case(ldf):
     q = ldf.select(
         pl.col("a").str.replace_many(["a", "b", "c"], "a", ascii_case_insensitive=True)
     )
+
+    assert_ir_translation_raises(q, NotImplementedError)
+
+
+@pytest.mark.skipif(POLARS_VERSION_LT_136, reason="leftmost arg added in 1.36")
+def test_replace_many_leftmost(ldf):
+    q = ldf.select(pl.col("a").str.replace_many(["a", "b"], "x", leftmost=True))
 
     assert_ir_translation_raises(q, NotImplementedError)
 
@@ -889,3 +904,14 @@ def test_concat_str_with_boolean():
     lf = pl.LazyFrame({"c0": [True, False, None]})
     q = lf.with_columns(pl.concat_str([pl.col("c0"), pl.lit("bool")]))
     assert_gpu_result_equal(q)
+
+
+@pytest.mark.skipif(
+    POLARS_VERSION_LT_138, reason="Split with literal parameter added in 1.38"
+)
+def test_split_regex_not_supported():
+    lf = pl.LazyFrame({"a": ["foo1bar", "baz456boo", "abc321"]})
+
+    q = lf.select(pl.col("a").str.split(r"\d+", literal=False))
+
+    assert_ir_translation_raises(q, NotImplementedError)

@@ -61,7 +61,7 @@ if TYPE_CHECKING:
     from cudf_polars.dsl.ir import IR
     from cudf_polars.experimental.base import ColumnStat, ColumnStats
     from cudf_polars.typing import GenericTransformer, Schema
-    from cudf_polars.utils.config import ConfigOptions
+    from cudf_polars.utils.config import ConfigOptions, StreamingExecutor
 
 
 class State(TypedDict):
@@ -157,7 +157,7 @@ def _decompose_unique(
     unique: UnaryFunction,
     input_ir: IR,
     partition_info: MutableMapping[IR, PartitionInfo],
-    config_options: ConfigOptions,
+    config_options: ConfigOptions[StreamingExecutor],
     row_count_estimate: ColumnStat[int],
     column_stats: dict[str, ColumnStats],
     *,
@@ -205,10 +205,6 @@ def _decompose_unique(
         names=names,
     )
     (column,) = columns
-
-    assert config_options.executor.name == "streaming", (
-        "'in-memory' executor not supported in '_decompose_unique'"
-    )
 
     unique_fraction_dict = _get_unique_fractions(
         _leaf_column_names(child),
@@ -346,10 +342,6 @@ def _decompose_agg_node(
             agg = agg.reconstruct([child])
             shuffle_on = (NamedExpr(next(names), child),)
 
-            assert config_options.executor.name == "streaming", (
-                "'in-memory' executor not supported in '_decompose_agg_node'"
-            )
-
             input_ir = Shuffle(
                 input_ir.schema,
                 shuffle_on,
@@ -410,7 +402,7 @@ def _decompose_expr_node(
     expr: Expr,
     input_ir: IR,
     partition_info: MutableMapping[IR, PartitionInfo],
-    config_options: ConfigOptions,
+    config_options: ConfigOptions[StreamingExecutor],
     row_count_estimate: ColumnStat[int],
     column_stats: dict[str, ColumnStats],
     *,

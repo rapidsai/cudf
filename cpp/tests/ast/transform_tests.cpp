@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -231,6 +231,41 @@ TYPED_TEST(TransformTest, BasicEquality)
   auto expected = column_wrapper<bool>{true, false, true, false};
   auto result   = Executor::compute_column(table, expression);
 
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
+}
+
+TYPED_TEST(TransformTest, ScalarBroadcast)
+{
+  using Executor = TypeParam;
+
+  auto c_0 = column_wrapper<int32_t>{{3, 20, 1, 50, 60}, {0, 0, 1, 0, 1}};
+  auto c_1 = column_wrapper<int32_t>{{3, 20, 1, 50, 60}, {0, 0, 0, 0, 0}};
+  auto c_2 = column_wrapper<int32_t>{{3, 20, 1, 50, 60}, {1, 1, 1, 1, 1}};
+  auto c_3 = column_wrapper<int32_t>{3, 20, 1, 50, 60};
+
+  auto t0 = cudf::table_view{{c_0}};
+
+  auto col_ref_0 = cudf::ast::column_reference(0);
+  auto scalar    = cudf::numeric_scalar<int32_t>(42);
+  auto literal   = cudf::ast::literal(scalar);
+
+  auto expected = column_wrapper<int32_t>{{42, 42, 42, 42, 42}};
+
+  auto result = Executor::compute_column(t0, literal);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
+
+  auto t1 = cudf::table_view{{c_1}};
+  result  = Executor::compute_column(t1, literal);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
+
+  auto t2 = cudf::table_view{{c_2}};
+  result  = Executor::compute_column(t2, literal);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
+
+  auto t3 = cudf::table_view{{c_3}};
+  result  = Executor::compute_column(t3, literal);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
 }
 
@@ -986,6 +1021,30 @@ TYPED_TEST(TransformTest, ComplexScalarOnly)
   auto expected = column_wrapper<bool>{true, true, true, true, true};
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
+template <typename T>
+struct DecimalComparisonTest : public cudf::test::BaseFixture {};
+
+TYPED_TEST_SUITE(DecimalComparisonTest, cudf::test::FixedPointTypes);
+
+TYPED_TEST(DecimalComparisonTest, DecimalComparison)
+{
+  using decimalXX = TypeParam;
+  using RepType   = cudf::device_storage_type_t<decimalXX>;
+
+  auto const scale = numeric::scale_type{-4};
+  auto c_a         = cudf::test::fixed_point_column_wrapper<RepType>({1, 2, 3, 4}, scale);
+  auto table       = cudf::table_view{{c_a}};
+
+  auto literal_value = cudf::fixed_point_scalar<decimalXX>(2, scale, true);
+  auto literal       = cudf::ast::literal(literal_value);
+  auto col_ref       = cudf::ast::column_reference(0);
+  auto expression    = cudf::ast::operation(cudf::ast::ast_operator::EQUAL, col_ref, literal);
+  auto result        = cudf::compute_column(table, expression);
+
+  auto expected = column_wrapper<bool>({false, true, false, false});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
 }
 
 CUDF_TEST_PROGRAM_MAIN()

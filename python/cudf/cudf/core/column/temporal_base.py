@@ -26,7 +26,6 @@ from cudf.utils.dtypes import (
     cudf_dtype_to_pa_type,
     dtype_to_pylibcudf_type,
     find_common_type,
-    is_pandas_nullable_extension_dtype,
 )
 from cudf.utils.utils import is_na_like
 
@@ -167,7 +166,7 @@ class TemporalBaseColumn(ColumnBase, Scannable):
                         to_unit = self.time_unit
                     if np.isnat(other):
                         # Workaround for https://github.com/numpy/numpy/issues/28496
-                        # Once fixed, can always use the astype below
+                        # Can always use the astype below once minimum numpy version is 2.4
                         # call-overload must be ignored because numpy stubs only accept literal strings
                         # for time units (e.g., "ns", "us") to allow compile-time validation,
                         # but we're passing a variable string (to_unit) with a time unit that
@@ -203,15 +202,19 @@ class TemporalBaseColumn(ColumnBase, Scannable):
 
     @functools.cached_property
     def time_unit(self) -> str:
-        return np.datetime_data(self.dtype)[0]
+        if isinstance(self.dtype, np.dtype):
+            # np.dtype defaults to dtype[float64] for typing
+            return np.datetime_data(self.dtype)[0]  # type: ignore[arg-type]
+        else:
+            return cast("pd.ArrowDtype", self.dtype).pyarrow_dtype.unit
 
     @property
     def values(self) -> cp.ndarray:
         """
         Return a CuPy representation of the TemporalBaseColumn.
         """
-        if is_pandas_nullable_extension_dtype(self.dtype):
-            dtype = getattr(self.dtype, "numpy_dtype", self.dtype)
+        if isinstance(self.dtype, pd.ArrowDtype):
+            dtype = self.dtype.numpy_dtype
         else:
             dtype = self.dtype
 
@@ -224,10 +227,9 @@ class TemporalBaseColumn(ColumnBase, Scannable):
 
     def element_indexing(self, index: int) -> ScalarLike:
         result = super().element_indexing(index)
-        if result is self._PANDAS_NA_VALUE:
-            return result
-        result = result.as_py()
-        return self._PD_SCALAR(result)
+        if isinstance(result, (datetime.datetime, datetime.timedelta)):
+            return self._PD_SCALAR(result)
+        return result
 
     def to_pandas(
         self,
@@ -293,10 +295,11 @@ class TemporalBaseColumn(ColumnBase, Scannable):
         if isinstance(replacement, type(self)):
             replacement = replacement.astype(self._UNDERLYING_DTYPE)
         try:
-            return (
-                self.astype(self._UNDERLYING_DTYPE)  # type:ignore[return-value]
+            return cast(
+                "Self",
+                self.astype(self._UNDERLYING_DTYPE)
                 .find_and_replace(to_replace, replacement, all_nan)
-                .astype(self.dtype)
+                .astype(self.dtype),
             )
         except TypeError:
             return self.copy(deep=True)
