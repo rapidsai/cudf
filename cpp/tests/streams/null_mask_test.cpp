@@ -88,4 +88,15 @@ TEST_F(NullMaskTest, SegmentedCount)
   cudf::segmented_valid_count(mask.data(), indices, stream);
 }
 
+TEST_F(NullMaskTest, SegmentedAnd)
+{
+  auto col1 = cudf::test::fixed_width_column_wrapper<bool>({0, 1, 0, 1, 1}, {0, 1, 1, 1, 0});
+  auto col2 = cudf::test::fixed_width_column_wrapper<bool>({0, 2, 1, 0, 255}, {1, 1, 0, 1, 0});
+  auto col3 = cudf::test::fixed_width_column_wrapper<bool>({0, 2, 1, 0, 255}, {1, 1, 1, 1, 1});
+
+  std::vector<cudf::column_view> const colviews({col1, col2, col3});
+  std::vector<cudf::size_type> const segment_offsets{0, 1};
+  cudf::segmented_bitmask_and(colviews, segment_offsets, cudf::test::get_default_stream());
+}
+
 CUDF_TEST_PROGRAM_MAIN()
