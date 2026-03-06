@@ -28,6 +28,13 @@ from cudf_polars.testing.io import make_lazy_frame, make_partitioned_source
 if TYPE_CHECKING:
     from pathlib import Path
 
+# Only rapidsmpf emits "Sort does not support multiple partitions"; apply filter conditionally.
+_maybe_ignore_sort_warning = (
+    pytest.mark.filterwarnings("ignore:Sort does not support multiple partitions")
+    if DEFAULT_RUNTIME == "rapidsmpf"
+    else lambda f: f
+)
+
 
 @pytest.fixture(scope="module")
 def df():
@@ -224,6 +231,7 @@ def test_fmt_row_count():
     assert _fmt_row_count(1_250_000_000) == "1.25 B"
 
 
+@_maybe_ignore_sort_warning
 @pytest.mark.parametrize("kind", ["parquet", "csv", "frame"])
 @pytest.mark.parametrize("n_rows", [None, 3])
 @pytest.mark.parametrize("select", [True, False])
@@ -264,6 +272,7 @@ def test_explain_logical_io_then_distinct(engine, tmp_path, kind, n_rows, select
         assert re.search(rf"^\s*SORT.*row_count=\'~{value}\'\s*$", repr, re.MULTILINE)
 
 
+@_maybe_ignore_sort_warning
 @pytest.mark.parametrize("kind", ["parquet", "csv", "frame"])
 def test_explain_logical_io_then_filter(engine, tmp_path, kind):
     # Create simple Distinct or Select(unique) + Sort query.
@@ -714,6 +723,7 @@ def test_shuffle_properties():
             "shuffle_method": DEFAULT_RUNTIME,
             "broadcast_join_limit": 1,
             "shuffler_insertion_method": "insert_chunks",
+            "dynamic_planning": None,  # Requires static planning
         },
     )
     dag = serialize_query(q, engine)

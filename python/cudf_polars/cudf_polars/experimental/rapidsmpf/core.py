@@ -133,6 +133,19 @@ def evaluate_logical_plan(
                 collective_id_map,
                 collect_metadata=collect_metadata,
             )
+        elif config_options.executor.cluster == "spmd":
+            from cudf_polars.experimental.rapidsmpf.spmd import (
+                evaluate_pipeline_spmd_mode,
+            )
+
+            result, metadata_collector = evaluate_pipeline_spmd_mode(
+                ir,
+                partition_info,
+                config_options,
+                stats,
+                collective_id_map,
+                collect_metadata=collect_metadata,
+            )
         else:
             # Single-process execution: Run locally
             result, metadata_collector = evaluate_pipeline(
@@ -310,11 +323,7 @@ def evaluate_pipeline(
                 stream,
             )
 
-        # We need to materialize the polars dataframe before we drop the rapidsmpf
-        # context, which keeps the CUDA streams alive.
-        stream = df.stream
         result = df.to_polars()
-        stream.synchronize()
 
         # Apply root Slice (e.g. head/tail) if present; in-pipeline Slice may not
         # see a single concatenated chunk, so apply here to ensure correct row count.

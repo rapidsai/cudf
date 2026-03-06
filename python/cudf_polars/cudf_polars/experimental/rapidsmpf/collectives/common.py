@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import threading
+from contextlib import contextmanager
 from typing import TYPE_CHECKING, Literal
 
 from rapidsmpf.shuffler import Shuffler
@@ -18,6 +19,7 @@ from cudf_polars.experimental.shuffle import Shuffle
 from cudf_polars.experimental.sort import ShuffleSorted
 
 if TYPE_CHECKING:
+    from collections.abc import Iterator
     from types import TracebackType
 
     from cudf_polars.dsl.ir import IR
@@ -150,3 +152,25 @@ class ReserveOpIDs:
             for collective_id in collective_ids:
                 _release_collective_id(collective_id)
         return False
+
+
+@contextmanager
+def reserve_op_id() -> Iterator[int]:
+    """
+    Reserve a single collective operation ID.
+
+    This function and the ID it yields must only be used **outside** of a
+    ``run_actor_graph`` call. It is intended for SPMD mode, where operations
+    such as gathering results across ranks are performed directly rather than
+    through the actor graph. The contained block _must_ wait for completion of the collective.
+
+    Yields
+    ------
+    collective_id : int
+        A vacant collective ID reserved from the global vacancy pool.
+    """
+    collective_id = _get_new_collective_id()
+    try:
+        yield collective_id
+    finally:
+        _release_collective_id(collective_id)

@@ -157,6 +157,7 @@ async def dataframescan_node(
     num_producers: int,
     rows_per_partition: int,
     estimated_chunk_bytes: int,
+    distributed_scan: bool,
 ) -> None:
     """
     DataFrameScan node for rapidsmpf.
@@ -180,14 +181,23 @@ async def dataframescan_node(
     estimated_chunk_bytes
         Estimated size of each chunk in bytes. Used for memory reservation
         with block spilling to avoid thrashing.
+    distributed_scan
+        If ``True``, the DataFrame is treated as a shared object and divided
+        across workers so each rank reads a disjoint subset. This is normally
+        used in ``Cluster.DISTRIBUTED`` mode.
+
+        If ``False``, the DataFrame is treated as rank-local and each rank
+        scans its local DataFrame in full. This is normally used in
+        ``Cluster.SPMD`` mode.
     """
     async with shutdown_on_error(context, ch_out, trace_ir=ir) as tracer:
         # Find local partition count.
         nrows = ir.df.shape()[0]
         global_count = math.ceil(nrows / rows_per_partition) if nrows > 0 else 0
 
-        # For single rank, simplify the logic
-        if comm.nranks == 1:
+        # For single rank or when scanning the full local DataFrame, each rank
+        # uses all partitions with no offset.
+        if not distributed_scan or comm.nranks == 1:
             local_count = global_count
             local_offset = 0
         else:
@@ -292,10 +302,10 @@ def _(
                 num_producers=num_producers,
                 rows_per_partition=rows_per_partition,
                 estimated_chunk_bytes=estimated_chunk_bytes,
+                distributed_scan=config_options.executor.cluster != "spmd",
             )
         ]
     }
-
     return nodes, channels
 
 
