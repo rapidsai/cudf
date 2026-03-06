@@ -4879,9 +4879,6 @@ def interval_range(
         ):
             common_dtype = np.dtype("float64")
     else:
-        # linspace path: numpy determines dtype from start and end.
-        # Only the originally-provided values matter for the integer
-        # downcast check (freq was auto-computed, not user-provided).
         common_dtype = find_common_type(  # type: ignore[assignment]
             [x for x in (start, end) if x is not None]
         )
