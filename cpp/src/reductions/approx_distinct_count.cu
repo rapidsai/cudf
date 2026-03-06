@@ -18,7 +18,6 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 
-#include <cuco/hyperloglog_ref.cuh>
 #include <cuda/functional>
 #include <thrust/iterator/counting_iterator.h>
 
@@ -29,10 +28,10 @@ namespace detail {
 
 namespace {
 
-using hll_ref_type =
-  cuco::hyperloglog_ref<std::uint64_t, cuda::thread_scope_device, cuda::std::identity>;
-
-constexpr double hll_constant        = 1.04;  // ≈ β∞ = √(3ln2 − 1) from Flajolet et al.
+constexpr double hll_constant =
+  1.04;  // ≈ β∞ = √(3ln2 − 1), Flajolet et al., "HyperLogLog: the analysis of a near-optimal
+// cardinality estimation algorithm"
+// https://arxiv.org/pdf/1702.01284.pdf
 constexpr std::int32_t min_precision = 4;
 constexpr std::int32_t max_precision = 18;
 
@@ -78,14 +77,16 @@ constexpr double standard_error_from_precision(std::int32_t precision)
 template <typename SpanT>
 [[nodiscard]] SpanT check_sketch_span(SpanT sketch_span, std::int32_t precision)
 {
-  auto const expected_size = hll_ref_type::sketch_bytes(cuco::precision{precision});
+  auto const expected_size =
+    approx_distinct_count<cudf::hashing::detail::XXHash_64>::sketch_bytes(precision);
   CUDF_EXPECTS(sketch_span.size() == expected_size,
                "Sketch span size does not match expected size for precision",
                std::invalid_argument);
-  CUDF_EXPECTS(
-    reinterpret_cast<std::uintptr_t>(sketch_span.data()) % hll_ref_type::sketch_alignment() == 0,
-    "Sketch span must be 4-byte aligned",
-    std::invalid_argument);
+  CUDF_EXPECTS(reinterpret_cast<std::uintptr_t>(sketch_span.data()) %
+                   approx_distinct_count<cudf::hashing::detail::XXHash_64>::sketch_alignment() ==
+                 0,
+               "Sketch span must be 4-byte aligned",
+               std::invalid_argument);
   return sketch_span;
 }
 
@@ -163,9 +164,7 @@ approx_distinct_count<Hasher>::approx_distinct_count(table_view const& input,
                                                      nan_policy nan_handling,
                                                      rmm::cuda_stream_view stream)
   : _storage{rmm::device_uvector<register_type>{
-      hll_ref_type::sketch_bytes(cuco::precision{check_precision(precision)}) /
-        sizeof(register_type),
-      stream}},
+      sketch_bytes(check_precision(precision)) / sizeof(register_type), stream}},
     _precision{precision},
     _null_handling{null_handling},
     _nan_handling{nan_handling}
@@ -206,7 +205,7 @@ void approx_distinct_count<Hasher>::add(table_view const& input, rmm::cuda_strea
   auto const num_rows = input.num_rows();
   if (num_rows == 0) { return; }
 
-  hll_ref_type ref{sketch(), cuda::std::identity{}};
+  typename approx_distinct_count<Hasher>::hll_ref_type ref{sketch(), cuda::std::identity{}};
 
   auto const has_nulls = nullate::DYNAMIC{cudf::has_nested_nulls(input)};
   auto const preprocessed_input =
@@ -267,8 +266,9 @@ void approx_distinct_count<Hasher>::merge(approx_distinct_count const& other,
                "Cannot merge sketches with different NaN handling policies",
                std::invalid_argument);
 
-  hll_ref_type ref{sketch(), cuda::std::identity{}};
-  hll_ref_type other_ref{const_cast<approx_distinct_count&>(other).sketch(), cuda::std::identity{}};
+  typename approx_distinct_count<Hasher>::hll_ref_type ref{sketch(), cuda::std::identity{}};
+  typename approx_distinct_count<Hasher>::hll_ref_type other_ref{
+    const_cast<approx_distinct_count&>(other).sketch(), cuda::std::identity{}};
   ref.merge_async(other_ref, stream);
 }
 
@@ -278,8 +278,8 @@ void approx_distinct_count<Hasher>::merge(cuda::std::span<cuda::std::byte const>
 {
   auto const checked = check_sketch_span(sketch_span, _precision);
 
-  hll_ref_type ref{sketch(), cuda::std::identity{}};
-  hll_ref_type other_ref{
+  typename approx_distinct_count<Hasher>::hll_ref_type ref{sketch(), cuda::std::identity{}};
+  typename approx_distinct_count<Hasher>::hll_ref_type other_ref{
     cuda::std::span<cuda::std::byte>{const_cast<cuda::std::byte*>(checked.data()), checked.size()},
     cuda::std::identity{}};
   ref.merge_async(other_ref, stream);
@@ -288,7 +288,8 @@ void approx_distinct_count<Hasher>::merge(cuda::std::span<cuda::std::byte const>
 template <template <typename> class Hasher>
 std::size_t approx_distinct_count<Hasher>::estimate(rmm::cuda_stream_view stream) const
 {
-  hll_ref_type ref{const_cast<approx_distinct_count*>(this)->sketch(), cuda::std::identity{}};
+  typename approx_distinct_count<Hasher>::hll_ref_type ref{
+    const_cast<approx_distinct_count*>(this)->sketch(), cuda::std::identity{}};
   return ref.estimate(stream);
 }
 
