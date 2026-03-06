@@ -21,7 +21,7 @@ from cudf_polars.experimental.rapidsmpf.spmd import (
 
 pytestmark = pytest.mark.skipif(
     not is_running_with_rrun(),
-    reason="use `rrun -n <nproc> pytest ...` to run SPMD tests",
+    reason="use something like `rrun -n <nproc> python -m pytest ...` to run SPMD tests",
 )
 
 

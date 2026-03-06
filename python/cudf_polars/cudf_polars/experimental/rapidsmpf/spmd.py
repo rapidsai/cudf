@@ -215,13 +215,13 @@ def spmd_execution(
 
     **SPMD execution model**
 
-    SPMD (Single Program, Multiple Data) is a parallel programming style where
-    every process runs the *same* Python script independently on its own slice of
-    data.  When you launch with ``rrun -n N pytest`` (or any ``rrun`` invocation),
-    ``N`` identical processes are started.  Each process owns a rank-local
-    :class:`~polars.LazyFrame` that represents its fragment of the distributed
-    dataset.  Collective operations — shuffles, all-gathers, joins — coordinate
-    across ranks so that the result is globally consistent.
+    SPMD (Single Program, Multiple Data) is a parallel programming model where each
+    process runs the *same* Python script independently on its own slice of data.
+    When launched with the RapidsMPF launcher `rrun`, multiple identical processes
+    are started. Each process owns a rank-local :class:`~polars.LazyFrame`
+    representing its fragment of the distributed dataset. Collective operations,
+    such as shuffles, all-gathers, and joins, coordinate across ranks to produce
+    a globally consistent result.
 
     This context manager is the primary entry point for SPMD execution. It:
 
@@ -311,7 +311,6 @@ def spmd_execution(
     RuntimeError
         If not running under the ``rrun`` launcher (i.e.
         :func:`rapidsmpf.bootstrap.is_running_with_rrun` returns ``False``).
-        Launch with ``rrun -n <nproc> python -m pytest ...`` to fix this.
     ValueError
         If ``executor_options`` contains any of the reserved keys
         ``"runtime"``, ``"cluster"``, or ``"spmd"``.
