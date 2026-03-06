@@ -96,14 +96,13 @@ class stats_caster_base {
           if constexpr (cudf::is_chrono<T>()) {
             return stats_caster_base::target_type<T>(
               *reinterpret_cast<typename T::rep const*>(stats_val));
-          }  // Decimals with physical type FLBA/BYTE_ARRAY are stored as two's complement using
-             // big-endian.
-          else if constexpr (std::is_same_v<T, numeric::decimal128::rep>) {
-            CUDF_EXPECTS(stats_size == sizeof(T), "Invalid stats size for decimal128");
+          } else if constexpr (std::is_same_v<T, numeric::decimal128::rep>) {
+            // Decimals with physical type FLBA/BYTE_ARRAY are stored as two's complement using
+            // big-endian.
             return stats_caster_base::target_type<T>(decode_flba_decimal128(stats_val));
-          }  // TODO(mh): We may need to add support for `decimal256` (two's complement using
-             // big-endian) and `UUID` types (big-endian)
-          else {
+          } else {
+            // TODO(mh): We may need to add support for `decimal256` (two's complement using
+            // big-endian) and `UUID` types (big-endian)
             return stats_caster_base::target_type<T>(*reinterpret_cast<T const*>(stats_val));
           }
         }

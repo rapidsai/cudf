@@ -3191,15 +3191,15 @@ void decimal_stats_filter_test()
 
   auto constexpr num_input_row_groups = 3;
 
-  auto filepath = temp_env->get_temp_filepath("DecimalStatsFilter.parquet");
+  auto const filepath = temp_env->get_temp_filepath("DecimalStatsFilter.parquet");
 
   for (auto const scale :
        {numeric::scale_type{-5}, numeric::scale_type{0}, numeric::scale_type{3}}) {
     {
-      auto const rg0 =
-        cudf::test::fixed_point_column_wrapper<RepType>({RepType{100}, RepType{200}}, scale);
-      auto const rg1 =
-        cudf::test::fixed_point_column_wrapper<RepType>({RepType{-50}, RepType{300}}, scale);
+      auto const rg0 = cudf::test::fixed_point_column_wrapper<RepType>(
+        {RepType{100}, RepType{0}, RepType{200}}, {true, false, true}, scale);
+      auto const rg1 = cudf::test::fixed_point_column_wrapper<RepType>(
+        {RepType{-50}, RepType{300}, RepType{0}}, {true, true, false}, scale);
       auto const rg2 =
         cudf::test::fixed_point_column_wrapper<RepType>({RepType{-600}, RepType{-400}}, scale);
       auto const t0 = cudf::table_view{{rg0}};
