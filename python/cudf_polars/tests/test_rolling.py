@@ -134,9 +134,6 @@ def test_grouped_rolling():
     assert_gpu_result_equal(q)
 
 
-@pytest.mark.filterwarnings(
-    "ignore:shuffle_method=tasks does not support maintain_order=True. Falling back to shuffle_method=tasks."
-)
 def test_grouped_rolling_unsorted_raises(using_rapidsmpf):
     df = pl.LazyFrame(
         {
