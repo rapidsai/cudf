@@ -153,7 +153,7 @@ ConfigureNVBench(
   join/distinct_join.cu
   join/filter_join_indices.cu
   join/generate_input_tables.cu
-  join/jit_filter_join_indices.cu
+  join/filter_join_indices_jit.cu
   join/multiplicity_join.cu
   join/sort_merge_join.cu
   join/join_heuristics.cu
@@ -306,6 +306,11 @@ ConfigureNVBench(
 # * parquet reader filter benchmark
 # ----------------------------------------------------------------------
 ConfigureNVBench(PARQUET_READER_FILTER_NVBENCH io/parquet/parquet_reader_filter.cpp)
+
+# ##################################################################################################
+# * parquet reader metadata benchmark
+# ----------------------------------------------------------------------
+ConfigureNVBench(PARQUET_READER_METADATA_NVBENCH io/parquet/parquet_reader_metadata.cpp)
 
 # ##################################################################################################
 # * parquet deletion vector benchmark

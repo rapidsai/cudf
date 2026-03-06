@@ -277,9 +277,9 @@ class CategoricalColumn(ColumnBase):
 
     def element_indexing(self, index: int) -> ScalarLike:
         val = super().element_indexing(index)
-        if val is self._PANDAS_NA_VALUE:
-            return val
-        return self._decode(val.as_py())
+        if isinstance(val, int):
+            return self._decode(val)
+        return val
 
     @property
     def __cuda_array_interface__(self) -> Mapping[str, Any]:
@@ -331,11 +331,11 @@ class CategoricalColumn(ColumnBase):
             if self.size > 0
             else np.dtype(np.int8)
         )
+        assert self.ordered is not None
         return pa.DictionaryArray.from_arrays(
             self.codes.astype(signed_type).to_arrow(),
             self.categories.to_arrow(),
-            # TODO: Investigate if self.ordered can actually be None here
-            ordered=self.ordered if self.ordered is not None else False,
+            ordered=self.ordered,
         )
 
     def clip(self, lo: ScalarLike, hi: ScalarLike) -> Self:
