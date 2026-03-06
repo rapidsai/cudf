@@ -35,6 +35,7 @@ from cudf_polars.utils.config import SPMDContext
 if TYPE_CHECKING:
     from collections.abc import Iterator, MutableMapping
 
+    from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.streaming.cudf.channel_metadata import ChannelMetadata
 
     from cudf_polars.dsl.ir import IR
@@ -88,6 +89,7 @@ def evaluate_pipeline_spmd_mode(
         raise RuntimeError("Runtime must be rapidsmpf")
     if config_options.executor.spmd is None:
         raise RuntimeError("spmd must be set for SPMD mode")
+    comm = config_options.executor.spmd.comm
     context = config_options.executor.spmd.context
     py_executor = config_options.executor.spmd.py_executor
 
@@ -97,7 +99,7 @@ def evaluate_pipeline_spmd_mode(
 
     nodes, output = generate_network(
         context,
-        context.comm(),
+        comm,
         ir,
         partition_info,
         config_options,
@@ -145,6 +147,7 @@ def evaluate_pipeline_spmd_mode(
 
 def allgather_polars_dataframe(
     *,
+    comm: Communicator,
     ctx: Context,
     local_df: pl.DataFrame,
     op_id: int,
@@ -159,6 +162,8 @@ def allgather_polars_dataframe(
 
     Parameters
     ----------
+    comm
+        The RapidsMPF communicator shared across all ranks.
     ctx
         The RapidsMPF context.
     local_df
@@ -183,7 +188,7 @@ def allgather_polars_dataframe(
     )
 
     # Bulk AllGather: each rank contributes once (sequence_number=0)
-    allgather = AllGather(ctx.comm(), ctx.comm().progress_thread, op_id, ctx.br())
+    allgather = AllGather(comm, op_id, ctx.br())
     allgather.insert(0, packed_data)
     allgather.insert_finished()
     results = allgather.wait_and_extract(ordered=True)
@@ -204,7 +209,7 @@ def spmd_execution(
     mr: rmm.mr.DeviceMemoryResource | None = None,
     rapidsmpf_options: Options | None = None,
     **engine_kwargs: Any,
-) -> Iterator[tuple[Context, pl.GPUEngine]]:
+) -> Iterator[tuple[Communicator, Context, pl.GPUEngine]]:
     """
     Context manager that bootstraps a RapidsMPF SPMD context and a matching GPUEngine.
 
@@ -293,11 +298,12 @@ def spmd_execution(
 
     Yields
     ------
+    comm : Communicator
+        The active RapidsMPF communicator.
     ctx : Context
-        The active RapidsMPF context. Pass it to collective operations such as
-        :func:`allgather_polars_dataframe`.
+        The active RapidsMPF context.
     engine : pl.GPUEngine
-        A Polars GPU engine wired to ``ctx``. Pass it to
+        A Polars GPU engine wired to ``comm`` and ``ctx``. Pass it to
         ``LazyFrame.collect(engine=engine)`` on each rank.
 
     Raises
@@ -315,11 +321,13 @@ def spmd_execution(
 
     Examples
     --------
-    >>> with spmd_execution() as (ctx, engine):  # doctest: +SKIP
+    >>> with spmd_execution() as (comm, ctx, engine):  # doctest: +SKIP
     ...     result = (
     ...         df.lazy().group_by("a").agg(pl.col("b").sum()).collect(engine=engine)
     ...     )
-    ...     full = allgather_polars_dataframe(ctx=ctx, local_df=result, op_id=0)
+    ...     full = allgather_polars_dataframe(
+    ...         comm=comm, ctx=ctx, local_df=result, op_id=0
+    ...     )
     """
     if not bootstrap.is_running_with_rrun():
         raise RuntimeError(
@@ -355,7 +363,7 @@ def spmd_execution(
         thread_name_prefix="spmd-executor",
     )
     try:
-        with Context.from_options(comm, mr, rapidsmpf_options) as ctx:
+        with Context.from_options(comm.logger, mr, rapidsmpf_options) as ctx:
             engine = pl.GPUEngine(
                 memory_resource=ctx.br().device_mr,
                 executor="streaming",
@@ -363,11 +371,13 @@ def spmd_execution(
                     **executor_options,
                     "runtime": "rapidsmpf",
                     "cluster": "spmd",
-                    "spmd": SPMDContext(context=ctx, py_executor=py_executor),
+                    "spmd": SPMDContext(
+                        comm=comm, context=ctx, py_executor=py_executor
+                    ),
                 },
                 **engine_kwargs,
             )
-            yield ctx, engine
+            yield comm, ctx, engine
     finally:
         # The Context has already been exited above, so no work can be
         # pending in py_executor at this point; wait=False is safe.

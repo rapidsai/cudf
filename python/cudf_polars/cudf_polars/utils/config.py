@@ -36,6 +36,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
     from concurrent.futures import ThreadPoolExecutor
 
+    from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.streaming.core.context import Context
 
     import polars.lazyframe.engine_config
@@ -611,14 +612,26 @@ class SPMDContext:
     """
     Configuration for SPMD (Single Program Multiple Data) execution.
 
+    .. note::
+        This dataclass is **not picklable** because :class:`Communicator`,
+        :class:`Context`, and :class:`~concurrent.futures.ThreadPoolExecutor`
+        cannot be serialized. In SPMD mode each rank constructs its own
+        ``SPMDContext`` locally inside
+        :func:`~cudf_polars.experimental.rapidsmpf.spmd.spmd_execution`, so
+        pickling is never required. Do not use this class with Dask or any other
+        framework that serializes executor configuration across process boundaries.
+
     Parameters
     ----------
+    comm
+        The RapidsMPF communicator shared across all ranks.
     context
         The RapidsMPF context shared across all ranks.
     py_executor
         Thread-pool executor used to drive the actor network on each rank.
     """
 
+    comm: Communicator
     context: Context
     py_executor: ThreadPoolExecutor
 
