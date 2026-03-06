@@ -34,6 +34,10 @@ from rmm.pylibrmm import CudaStreamFlags, CudaStreamPool
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+    from concurrent.futures import ThreadPoolExecutor
+
+    from rapidsmpf.communicator.communicator import Communicator
+    from rapidsmpf.streaming.core.context import Context
 
     import polars.lazyframe.engine_config
 
@@ -47,6 +51,7 @@ __all__ = [
     "InMemoryExecutor",
     "ParquetOptions",
     "Runtime",
+    "SPMDContext",
     "Scheduler",  # Deprecated, kept for backward compatibility
     "ShuffleMethod",
     "ShufflerInsertionMethod",
@@ -167,6 +172,7 @@ class Cluster(enum.StrEnum):
 
     SINGLE = "single"
     DISTRIBUTED = "distributed"
+    SPMD = "spmd"
 
 
 class Scheduler(enum.StrEnum):
@@ -601,6 +607,35 @@ class MemoryResourceConfig:
         return hash((self.qualname, json.dumps(self.options, sort_keys=True)))
 
 
+@dataclasses.dataclass(frozen=True)
+class SPMDContext:
+    """
+    Configuration for SPMD (Single Program Multiple Data) execution.
+
+    .. note::
+        This dataclass is **not picklable** because :class:`Communicator`,
+        :class:`Context`, and :class:`~concurrent.futures.ThreadPoolExecutor`
+        cannot be serialized. In SPMD mode each rank constructs its own
+        ``SPMDContext`` locally inside
+        :func:`~cudf_polars.experimental.rapidsmpf.spmd.spmd_execution`, so
+        pickling is never required. Do not use this class with Dask or any other
+        framework that serializes executor configuration across process boundaries.
+
+    Parameters
+    ----------
+    comm
+        The active RapidsMPF communicator.
+    context
+        The active RapidsMPF context.
+    py_executor
+        Thread-pool executor used to drive the actor network on each rank.
+    """
+
+    comm: Communicator
+    context: Context
+    py_executor: ThreadPoolExecutor
+
+
 @dataclasses.dataclass(frozen=True, eq=True)
 class StreamingExecutor:
     """
@@ -819,7 +854,9 @@ class StreamingExecutor:
     stats_planning: StatsPlanningOptions = dataclasses.field(
         default_factory=StatsPlanningOptions
     )
-    dynamic_planning: DynamicPlanningOptions | None = None
+    dynamic_planning: DynamicPlanningOptions | None = dataclasses.field(
+        default_factory=DynamicPlanningOptions
+    )
     max_io_threads: int = dataclasses.field(
         default_factory=_make_default_factory(
             f"{_env_prefix}__MAX_IO_THREADS", int, default=4
@@ -835,6 +872,7 @@ class StreamingExecutor:
             f"{_env_prefix}__RAPIDSMPF_PY_EXECUTOR_MAX_WORKERS", int, default=None
         )
     )
+    spmd: SPMDContext | None = None
 
     def __post_init__(self) -> None:  # noqa: D105
         # Check for rapidsmpf runtime
@@ -1209,12 +1247,10 @@ class ConfigOptions(Generic[ExecutorType]):
                 )
                 if user_dynamic_planning is None:
                     env_dynamic_planning = os.environ.get(
-                        "CUDF_POLARS__EXECUTOR__DYNAMIC_PLANNING", "0"
+                        "CUDF_POLARS__EXECUTOR__DYNAMIC_PLANNING", "1"
                     )
-                    if _bool_converter(env_dynamic_planning):
-                        user_executor_options["dynamic_planning"] = (
-                            DynamicPlanningOptions()
-                        )
+                    if not _bool_converter(env_dynamic_planning):
+                        user_executor_options["dynamic_planning"] = None
 
                 executor = StreamingExecutor(**user_executor_options)
             case _:  # pragma: no cover; Unreachable
