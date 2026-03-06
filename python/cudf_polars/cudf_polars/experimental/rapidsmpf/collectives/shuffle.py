@@ -27,6 +27,7 @@ from cudf_polars.experimental.rapidsmpf.dispatch import (
 from cudf_polars.experimental.rapidsmpf.nodes import shutdown_on_error
 from cudf_polars.experimental.rapidsmpf.utils import (
     ChannelManager,
+    NormalizedPartitioning,
     recv_metadata,
     send_metadata,
 )
@@ -145,29 +146,116 @@ def _is_already_partitioned(
     metadata: ChannelMetadata,
     columns_to_hash: tuple[int, ...],
     num_partitions: int,
+    nranks: int,
 ) -> bool:
     """Check if data is already partitioned on the required keys."""
-    if metadata.partitioning is None:
-        return False
-
-    # Check that inter_rank is a HashScheme (not None or "inherit")
-    inter_rank = metadata.partitioning.inter_rank
-    if not isinstance(inter_rank, HashScheme):
-        return False
-
-    # Check that local partitioning is inherit
-    if metadata.partitioning.local != "inherit":
-        return False
-
-    # Check for exact match: same columns and same modulus
-    return (
-        inter_rank.column_indices == columns_to_hash
-        and inter_rank.modulus == num_partitions
+    partitioning = NormalizedPartitioning.from_indices(
+        metadata.partitioning,
+        nranks,
+        indices=columns_to_hash,
+        allow_subset=False,
     )
+    partitioning_desired = NormalizedPartitioning(
+        inter_rank_modulus=num_partitions,
+        inter_rank_indices=columns_to_hash,
+        local_modulus=None,
+        local_indices=(),
+    )
+    return bool(partitioning and partitioning == partitioning_desired)
+
+
+async def _global_shuffle(
+    context: Context,
+    comm: Communicator,
+    ir_context: IRExecutionContext,
+    ch_out: Channel[TableChunk],
+    ch_in: Channel[TableChunk],
+    columns_to_hash: tuple[int, ...],
+    num_partitions: int,
+    collective_id: int,
+) -> None:
+    """
+    Global shuffle implementation.
+
+    Parameters
+    ----------
+    context
+        The streaming context.
+    comm
+        The communicator.
+    ir_context
+        The execution context for the IR node.
+    ch_out
+        Output Channel[TableChunk] with metadata and data channels.
+    ch_in
+        Input Channel[TableChunk] with metadata and data channels.
+    columns_to_hash
+        Tuple of column indices to use for hashing.
+    num_partitions
+        Number of partitions to shuffle into.
+    collective_id
+        The collective ID.
+    """
+    metadata_in = await recv_metadata(ch_in, context)
+
+    # Check if we can skip the shuffle (already partitioned correctly)
+    if _is_already_partitioned(
+        metadata_in, columns_to_hash, num_partitions, comm.nranks
+    ):
+        # Forward metadata and data unchanged
+        await send_metadata(ch_out, context, metadata_in)
+        while (msg := await ch_in.recv(context)) is not None:
+            await ch_out.send(context, msg)
+        await ch_out.drain(context)
+        return
+
+    # Normal shuffle path
+    output_metadata = ChannelMetadata(
+        local_count=max(1, num_partitions // comm.nranks),
+        partitioning=Partitioning(
+            inter_rank=HashScheme(columns_to_hash, num_partitions),
+            local="inherit",
+        ),
+    )
+    await send_metadata(ch_out, context, output_metadata)
+
+    # Create ShuffleManager instance
+    shuffle = ShuffleManager(
+        context, comm, num_partitions, columns_to_hash, collective_id
+    )
+    # When input is duplicated, only rank 0 should contribute data.
+    # Other ranks still participate in the shuffle protocol.
+    skip_insert = metadata_in.duplicated and comm.rank != 0
+
+    while (msg := await ch_in.recv(context)) is not None:
+        if not skip_insert:
+            shuffle.insert_chunk(
+                TableChunk.from_message(msg).make_available_and_spill(
+                    context.br(), allow_overbooking=True
+                )
+            )
+
+    await shuffle.insert_finished()
+
+    for partition_id in shuffle.shuffler.local_partitions():
+        stream = ir_context.get_cuda_stream()
+        await ch_out.send(
+            context,
+            Message(
+                partition_id,
+                TableChunk.from_pylibcudf_table(
+                    table=await shuffle.extract_chunk(partition_id, stream),
+                    stream=stream,
+                    exclusive_view=True,
+                ),
+            ),
+        )
+
+    await ch_out.drain(context)
 
 
 @define_actor()
-async def shuffle_node(
+async def shuffle_actor(
     context: Context,
     comm: Communicator,
     ir: Shuffle,
@@ -207,63 +295,16 @@ async def shuffle_node(
         The collective ID.
     """
     async with shutdown_on_error(context, ch_in, ch_out):
-        # Receive input metadata
-        metadata_in = await recv_metadata(ch_in, context)
-
-        # Check if we can skip the shuffle (already partitioned correctly)
-        if _is_already_partitioned(metadata_in, columns_to_hash, num_partitions):
-            # Forward metadata and data unchanged
-            await send_metadata(ch_out, context, metadata_in)
-            while (msg := await ch_in.recv(context)) is not None:
-                await ch_out.send(context, msg)
-            await ch_out.drain(context)
-            return
-
-        # Normal shuffle path
-        output_metadata = ChannelMetadata(
-            local_count=max(1, num_partitions // comm.nranks),
-            partitioning=Partitioning(
-                inter_rank=HashScheme(columns_to_hash, num_partitions),
-                local="inherit",
-            ),
+        await _global_shuffle(
+            context,
+            comm,
+            ir_context,
+            ch_out,
+            ch_in,
+            columns_to_hash,
+            num_partitions,
+            collective_id,
         )
-        await send_metadata(ch_out, context, output_metadata)
-
-        # Create ShuffleManager instance
-        shuffle = ShuffleManager(
-            context, comm, num_partitions, columns_to_hash, collective_id
-        )
-        # When input is duplicated, only rank 0 should contribute data.
-        # Other ranks still participate in the shuffle protocol.
-        skip_insert = metadata_in.duplicated and comm.rank != 0
-
-        while (msg := await ch_in.recv(context)) is not None:
-            if not skip_insert:
-                # Extract TableChunk from message and insert into shuffler
-                shuffle.insert_chunk(
-                    TableChunk.from_message(msg).make_available_and_spill(
-                        context.br(), allow_overbooking=True
-                    )
-                )
-            del msg
-
-        await shuffle.insert_finished()
-
-        for partition_id in shuffle.shuffler.local_partitions():
-            stream = ir_context.get_cuda_stream()
-            await ch_out.send(
-                context,
-                Message(
-                    partition_id,
-                    TableChunk.from_pylibcudf_table(
-                        table=await shuffle.extract_chunk(partition_id, stream),
-                        stream=stream,
-                        exclusive_view=True,
-                    ),
-                ),
-            )
-
-        await ch_out.drain(context)
 
 
 @generate_ir_sub_network.register(Shuffle)
@@ -293,7 +334,7 @@ def _(
 
     # Complete shuffle node
     nodes[ir] = [
-        shuffle_node(
+        shuffle_actor(
             context,
             rec.state["comm"],
             ir,
