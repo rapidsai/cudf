@@ -296,12 +296,19 @@ std::unique_ptr<column> for_each_concatenate(host_span<column_view const> views,
 
   auto m_view = col->mutable_view();
 
-  auto count = 0;
-  for (auto& v : views) {
-    CUDF_CUDA_TRY(cudf::detail::memcpy_async(
-      m_view.begin<T>() + count, v.begin<T>(), v.size() * sizeof(T), stream));
-    count += v.size();
+  auto const num_views = views.size();
+  std::vector<void*> dsts(num_views);
+  std::vector<void const*> srcs(num_views);
+  std::vector<std::size_t> sizes(num_views);
+  size_type count = 0;
+  for (std::size_t i = 0; i < num_views; ++i) {
+    dsts[i]  = m_view.begin<T>() + count;
+    srcs[i]  = views[i].begin<T>();
+    sizes[i] = views[i].size() * sizeof(T);
+    count += views[i].size();
   }
+  CUDF_CUDA_TRY(
+    cudf::detail::memcpy_batch_async(dsts.data(), srcs.data(), sizes.data(), num_views, stream));
 
   // If concatenated column is nullable, proceed to calculate it
   if (has_nulls) {
