@@ -1,8 +1,9 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#include "io/utilities/getenv_or.hpp"
 #include "runtime/context.hpp"
 
 #include <cudf/context.hpp>
@@ -95,38 +96,61 @@ std::string get_program_cache_dir()
 #endif
 }
 
-std::size_t try_parse_numeric_env_var(char const* const env_name, std::size_t default_val)
-{
-  auto const value = std::getenv(env_name);
-  return value != nullptr ? std::stoull(value) : default_val;
-}
 }  // namespace
 
 jitify2::ProgramCache<>& jit::program_cache::get(jitify2::PreprocessedProgramData const& preprog)
 {
   CUDF_FUNC_RANGE();
-  std::lock_guard<std::mutex> const caches_lock(_caches_mutex);
+  std::lock_guard caches_lock(_caches_mutex);
 
   auto existing_cache = _caches.find(preprog.name());
 
-  if (existing_cache == _caches.end()) {
-    auto const kernel_limit_proc =
-      try_parse_numeric_env_var("LIBCUDF_KERNEL_CACHE_LIMIT_PER_PROCESS", 10'000);
-    auto const kernel_limit_disk =
-      try_parse_numeric_env_var("LIBCUDF_KERNEL_CACHE_LIMIT_DISK", 100'000);
-
-    // if kernel_limit_disk is zero, jitify will assign it the value of kernel_limit_proc.
-    // to avoid this, we treat zero as "disable disk caching" by not providing the cache dir.
-    auto const cache_dir = kernel_limit_disk == 0 ? std::string{} : get_program_cache_dir();
-
-    auto const res =
-      _caches.insert({preprog.name(),
+  if (existing_cache == _caches.end() || _disabled.load(std::memory_order_seq_cst)) {
+    auto res =
+      _caches.emplace(preprog.name(),
                       std::make_unique<jitify2::ProgramCache<>>(
-                        kernel_limit_proc, preprog, nullptr, cache_dir, kernel_limit_disk)});
+                        _kernel_limit_proc, preprog, nullptr, _cache_dir, _kernel_limit_disk));
     existing_cache = res.first;
   }
 
   return *(existing_cache->second);
+}
+
+void jit::program_cache::clear()
+{
+  CUDF_FUNC_RANGE();
+  std::lock_guard caches_lock(_caches_mutex);
+
+  _caches.clear();
+
+  // non-atomic
+  std::filesystem::remove_all(_cache_dir);
+}
+
+void jit::program_cache::enable(bool enable)
+{
+  _disabled.store(!enable, std::memory_order_seq_cst);
+}
+
+bool jit::program_cache::is_enabled() const { return !_disabled.load(std::memory_order_seq_cst); }
+
+std::unique_ptr<jit::program_cache> jit::program_cache::create()
+{
+  auto kernel_limit_proc = getenv_or("LIBCUDF_KERNEL_CACHE_LIMIT_PER_PROCESS", 10'000);
+  auto kernel_limit_disk = getenv_or("LIBCUDF_KERNEL_CACHE_LIMIT_DISK", 100'000);
+  auto disabled          = get_bool_env_or("LIBCUDF_KERNEL_CACHE_DISABLED", false);
+  auto clear_cache       = get_bool_env_or("LIBCUDF_KERNEL_CACHE_CLEAR", false);
+
+  // if kernel_limit_disk is zero, jitify will assign it the value of kernel_limit_proc.
+  // to avoid this, we treat zero as "disable disk caching" by not providing the cache dir.
+  auto cache_dir = kernel_limit_disk == 0 ? std::string{} : get_program_cache_dir();
+
+  auto cache =
+    std::make_unique<jit::program_cache>(kernel_limit_proc, kernel_limit_disk, cache_dir, disabled);
+
+  if (clear_cache) { cache->clear(); }
+
+  return cache;
 }
 
 jitify2::ProgramCache<>& jit::get_program_cache(jitify2::PreprocessedProgramData const& preprog)
