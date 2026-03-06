@@ -30,8 +30,7 @@ namespace {
 
 constexpr double hll_constant =
   1.04;  // ≈ β∞ = √(3ln2 − 1), Flajolet et al., "HyperLogLog: the analysis of a near-optimal
-// cardinality estimation algorithm"
-// https://arxiv.org/pdf/1702.01284.pdf
+         // cardinality estimation algorithm"
 constexpr std::int32_t min_precision = 4;
 constexpr std::int32_t max_precision = 18;
 
