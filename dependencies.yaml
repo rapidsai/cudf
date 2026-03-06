@@ -513,6 +513,9 @@ dependencies:
       - output_types: [requirements, pyproject]
         matrices:
           - matrix:
+              use_cuda_wheels: "false"
+            packages:
+          - matrix:
               cuda: "12.*"
             packages:
               - nvidia-libnvcomp-cu12==5.1.0.21
@@ -522,6 +525,7 @@ dependencies:
               - nvidia-libnvcomp-cu13==5.1.0.21
           - matrix:
             packages:
+              - nvidia-libnvcomp==5.1.0.21
   rapids_build_skbuild:
     common:
       - output_types: [conda, requirements, pyproject]
