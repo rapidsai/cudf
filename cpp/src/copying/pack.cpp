@@ -69,7 +69,7 @@ constexpr auto serialized_column_size = sizeof(serialized_column);
 serialized_column read_entry(std::uint8_t const* ptr, std::uint8_t const* buffer_end = nullptr)
 {
   if (buffer_end) {
-    CUDF_EXPECTS(static_cast<std::size_t>(buffer_end - ptr) >= serialized_column_size,
+    CUDF_EXPECTS(std::cmp_greater_equal(buffer_end - ptr, serialized_column_size),
                  "packed metadata access is out of bounds");
   }
   serialized_column entry;
