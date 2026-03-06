@@ -329,7 +329,8 @@ def spmd_execution(
     if not bootstrap.is_running_with_rrun():
         raise RuntimeError(
             "spmd_execution() requires the rrun launcher. "
-            "Use `rrun -n <nproc> python -m pytest ...` to run SPMD tests."
+            "Launch your script with `rrun -n <nproc> python your_script.py` "
+            "to enable SPMD execution."
         )
 
     executor_options = executor_options or {}
