@@ -84,7 +84,7 @@ struct dictionary_wrapper {
    */
   static CUDF_HOST_DEVICE inline constexpr value_type max_value()
   {
-    return std::numeric_limits<value_type>::max();
+    return cuda::std::numeric_limits<value_type>::max();
   }
 
   /**
@@ -94,7 +94,7 @@ struct dictionary_wrapper {
    */
   static CUDF_HOST_DEVICE inline constexpr value_type min_value()
   {
-    return std::numeric_limits<value_type>::min();
+    return cuda::std::numeric_limits<value_type>::min();
   }
 
   /**
