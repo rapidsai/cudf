@@ -467,10 +467,8 @@ std::vector<metadata> aggregate_reader_metadata::metadatas_from_sources(
   std::vector<std::future<metadata>> metadata_ctor_tasks;
   metadata_ctor_tasks.reserve(sources.size());
   for (auto const& source : sources) {
-    metadata_ctor_tasks.emplace_back(
-      cudf::detail::host_worker_pool().submit_task([source = source.get(), read_page_indexes] {
-        return metadata{source, read_page_indexes};
-      }));
+    metadata_ctor_tasks.emplace_back(cudf::detail::host_worker_pool().submit_task(
+      [source = source.get(), read_page_indexes] { return metadata{source, read_page_indexes}; }));
   }
   std::vector<metadata> metadatas;
   metadatas.reserve(sources.size());
@@ -493,9 +491,7 @@ aggregate_reader_metadata::collect_keyval_metadata() const
                    std::transform(pfm.key_value_metadata.cbegin(),
                                   pfm.key_value_metadata.cend(),
                                   std::inserter(kv_map, kv_map.end()),
-                                  [](auto const& kv) {
-                                    return std::pair{kv.key, kv.value};
-                                  });
+                                  [](auto const& kv) { return std::pair{kv.key, kv.value}; });
                    return kv_map;
                  });
 
@@ -1760,8 +1756,7 @@ aggregate_reader_metadata::select_columns(
   auto const equal_to_except_num_children = [&](SchemaElement const& lhs,
                                                 SchemaElement const& rhs) {
     return lhs.type == rhs.type and lhs.converted_type == rhs.converted_type and
-           lhs.type_length == rhs.type_length and
-           are_column_paths_equal(lhs.name, rhs.name, case_sensitive_names) and
+           lhs.type_length == rhs.type_length and lhs.name == rhs.name and
            lhs.decimal_scale == rhs.decimal_scale and
            lhs.decimal_precision == rhs.decimal_precision and lhs.field_id == rhs.field_id;
   };

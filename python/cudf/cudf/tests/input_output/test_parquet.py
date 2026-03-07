@@ -4078,7 +4078,7 @@ def test_chunked_parquet_reader_nrows_skiprows(
             "b": ["av", "qw", None, "xyz"] * 500,
         }
     )
-    expected = df[skip_rows : skip_rows + nrows]
+    expected = df[skip_rows: skip_rows + nrows]
     buffer = BytesIO()
     df.to_parquet(
         buffer,
@@ -4212,9 +4212,10 @@ def test_parquet_reader_with_mismatched_tables(store_schema):
     # Read mismatched Parquet files
     got = cudf.read_parquet(
         [buf1, buf2],
-        columns=["list", "d_list", "str"],
-        filters=[("i64", ">", 20)],
+        columns=["list", "D_List", "Str"],
+        filters=[("I64", ">", 20)],
         allow_mismatched_pq_schemas=True,
+        case_sensitive_names=False,
     )
 
     # Construct the expected table
