@@ -5,6 +5,7 @@
 
 #pragma once
 
+#include <cudf/types.hpp>
 #include <cudf/utilities/export.hpp>
 
 #include <cuda/functional>

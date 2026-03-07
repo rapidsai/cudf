@@ -531,7 +531,7 @@ constexpr bool is_rep_layout_compatible()
  * @return false  `T` is not dictionary-type
  */
 template <typename T>
-constexpr inline bool is_dictionary()
+CUDF_HOST_DEVICE constexpr inline bool is_dictionary()
 {
   return cuda::std::is_same_v<dictionary32, T>;
 }

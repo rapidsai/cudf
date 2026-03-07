@@ -85,7 +85,7 @@ struct partition_fn {
       if (*itr <= ' ')  // whitespace delimited
         pos = offset;
     } else {
-      auto bytes = std::min(d_str.size_bytes() - offset, d_delimiter.size_bytes());
+      auto bytes = cuda::std::min(d_str.size_bytes() - offset, d_delimiter.size_bytes());
       if (d_delimiter.compare(d_str.data() + offset, bytes) == 0) pos = offset;
     }
     if (pos >= 0)  // delimiter found, set results

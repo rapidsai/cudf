@@ -132,7 +132,7 @@ std::pair<rmm::device_uvector<string_index_pair>, std::unique_ptr<column>> gener
   // convert match counts to token offsets
   auto map_fn = cuda::proclaim_return_type<size_type>(
     [d_strings, d_counts, max_tokens] __device__(auto idx) -> size_type {
-      return d_strings.is_null(idx) ? 0 : std::min(d_counts[idx], max_tokens) + 1;
+      return d_strings.is_null(idx) ? 0 : cuda::std::min(d_counts[idx], max_tokens) + 1;
     });
 
   auto const begin = cudf::detail::make_counting_transform_iterator(0, map_fn);

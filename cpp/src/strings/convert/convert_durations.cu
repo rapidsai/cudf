@@ -218,7 +218,7 @@ struct from_durations_fn {
       // next digit
       value = value / 10;
     }
-    digits_idx = std::max(digits_idx, min_digits);
+    digits_idx = cuda::std::max(digits_idx, min_digits);
     // digits are backwards, reverse the string into the output
     while (digits_idx-- > 0)
       *str++ = digits[digits_idx];
