@@ -24,37 +24,6 @@
 namespace cudf::io::parquet::detail {
 
 /**
- * @brief Returns a normalized column name or path
- */
-[[nodiscard]] std::string normalize_column_path(std::string_view col_path,
-                                                bool case_sensitive_names);
-
-/**
- * @brief Compares two column paths, optionally case-insensitively.
- */
-[[nodiscard]] bool column_paths_equal(std::string_view lhs,
-                                      std::string_view rhs,
-                                      bool case_sensitive);
-
-/**
- * @brief Translates Parquet datatype to cuDF type enum
- */
-[[nodiscard]] type_id to_type_id(SchemaElement const& schema,
-                                 bool strings_to_categorical,
-                                 type_id timestamp_type_id,
-                                 type_id decimal_type_id);
-
-/**
- * @brief Converts cuDF type enum to column logical type
- */
-[[nodiscard]] inline data_type to_data_type(type_id t_id, SchemaElement const& schema)
-{
-  return t_id == type_id::DECIMAL32 || t_id == type_id::DECIMAL64 || t_id == type_id::DECIMAL128
-           ? data_type{t_id, numeric::scale_type{-schema.decimal_scale}}
-           : data_type{t_id};
-}
-
-/**
  * @brief page location and size info
  */
 struct page_info {
@@ -115,6 +84,49 @@ struct row_group_info {
    */
   [[nodiscard]] bool has_page_index() const { return column_chunks.has_value(); }
 };
+
+/**
+ * @brief Returns a normalized (lowercased) column name or path when case-insensitive matching is
+ * enabled
+ *
+ * @param col_path The column name or path to normalize
+ * @param case_sensitive_names Whether to normalize the column path case-insensitively
+ *
+ * @return The normalized column path
+ */
+[[nodiscard]] std::string normalize_column_path(std::string_view col_path,
+                                                bool case_sensitive_names);
+
+/**
+ * @brief Compares two column paths with specified case-insensitivity
+ *
+ * @param lhs The left-hand side column path
+ * @param rhs The right-hand side column path
+ * @param case_sensitive Whether to compare the column paths case-sensitively
+ *
+ * @return Boolean indicating if the column paths are equal
+ */
+[[nodiscard]] bool is_column_paths_equal(std::string_view lhs,
+                                         std::string_view rhs,
+                                         bool case_sensitive);
+
+/**
+ * @brief Translates Parquet datatype to cuDF type enum
+ */
+[[nodiscard]] type_id to_type_id(SchemaElement const& schema,
+                                 bool strings_to_categorical,
+                                 type_id timestamp_type_id,
+                                 type_id decimal_type_id);
+
+/**
+ * @brief Converts cuDF type enum to column logical type
+ */
+[[nodiscard]] inline data_type to_data_type(type_id t_id, SchemaElement const& schema)
+{
+  return t_id == type_id::DECIMAL32 || t_id == type_id::DECIMAL64 || t_id == type_id::DECIMAL128
+           ? data_type{t_id, numeric::scale_type{-schema.decimal_scale}}
+           : data_type{t_id};
+}
 
 /**
  * @brief Class for parsing dataset metadata

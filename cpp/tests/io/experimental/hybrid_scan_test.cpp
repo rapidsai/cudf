@@ -252,7 +252,7 @@ std::unique_ptr<cudf::table> test_hybrid_scan_column_selection(
     cudf::io::parquet_reader_options const options =
       cudf::io::parquet_reader_options::builder(cudf::io::source_info(parquet_buffer))
         .filter(filter_expression)
-        .case_sensitive_names(false);
+        .case_sensitive_names(case_sensitive_names);
     auto const expected_tbl = cudf::io::read_parquet(options, stream, mr).tbl;
 
     // Validate
@@ -284,7 +284,7 @@ std::unique_ptr<cudf::table> test_hybrid_scan_column_selection(
   cudf::io::parquet_reader_options options =
     cudf::io::parquet_reader_options::builder(cudf::io::source_info(parquet_buffer))
       .filter(filter_expression)
-      .case_sensitive_names(false);
+      .case_sensitive_names(case_sensitive_names);
   if (all_column_names.has_value()) { options.set_column_names(all_column_names.value()); }
   auto const expected_tbl = cudf::io::read_parquet(options, stream, mr).tbl;
 

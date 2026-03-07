@@ -92,18 +92,19 @@ cuda::std::optional<LogicalType> converted_to_logical_type(SchemaElement const& 
 
 }  // namespace
 
-std::string normalize_column_path(std::string_view col_name, bool case_sensitive_names)
+std::string normalize_column_path(std::string_view col_path, bool case_sensitive_names)
 {
-  if (case_sensitive_names) { return std::string{col_name}; }
-  auto normalized_name = std::string{};
-  normalized_name.reserve(col_name.size());
-  std::transform(col_name.begin(), col_name.end(), normalized_name.begin(), [](unsigned char c) {
-    return std::tolower(c);
-  });
-  return normalized_name;
+  if (case_sensitive_names) { return std::string{col_path}; }
+  auto normalized_path = std::string{};
+  normalized_path.reserve(col_path.size());
+  std::transform(
+    col_path.begin(), col_path.end(), std::back_inserter(normalized_path), [](unsigned char c) {
+      return std::tolower(c);
+    });
+  return normalized_path;
 }
 
-bool column_paths_equal(std::string_view lhs, std::string_view rhs, bool case_sensitive)
+bool is_column_paths_equal(std::string_view lhs, std::string_view rhs, bool case_sensitive)
 {
   if (lhs.size() != rhs.size()) { return false; }
   if (case_sensitive) { return lhs == rhs; }
@@ -466,8 +467,10 @@ std::vector<metadata> aggregate_reader_metadata::metadatas_from_sources(
   std::vector<std::future<metadata>> metadata_ctor_tasks;
   metadata_ctor_tasks.reserve(sources.size());
   for (auto const& source : sources) {
-    metadata_ctor_tasks.emplace_back(cudf::detail::host_worker_pool().submit_task(
-      [source = source.get(), read_page_indexes] { return metadata{source, read_page_indexes}; }));
+    metadata_ctor_tasks.emplace_back(
+      cudf::detail::host_worker_pool().submit_task([source = source.get(), read_page_indexes] {
+        return metadata{source, read_page_indexes};
+      }));
   }
   std::vector<metadata> metadatas;
   metadatas.reserve(sources.size());
@@ -490,7 +493,9 @@ aggregate_reader_metadata::collect_keyval_metadata() const
                    std::transform(pfm.key_value_metadata.cbegin(),
                                   pfm.key_value_metadata.cend(),
                                   std::inserter(kv_map, kv_map.end()),
-                                  [](auto const& kv) { return std::pair{kv.key, kv.value}; });
+                                  [](auto const& kv) {
+                                    return std::pair{kv.key, kv.value};
+                                  });
                    return kv_map;
                  });
 
@@ -1641,7 +1646,7 @@ aggregate_reader_metadata::select_columns(
         std::find_if(schema_elem.children_idx.cbegin(),
                      schema_elem.children_idx.cend(),
                      [&](size_t col_schema_idx) {
-                       return column_paths_equal(
+                       return is_column_paths_equal(
                          get_schema(col_schema_idx, pfm_idx).name, name, case_sensitive_names);
                      });
 
@@ -1756,7 +1761,7 @@ aggregate_reader_metadata::select_columns(
                                                 SchemaElement const& rhs) {
     return lhs.type == rhs.type and lhs.converted_type == rhs.converted_type and
            lhs.type_length == rhs.type_length and
-           column_paths_equal(lhs.name, rhs.name, case_sensitive_names) and
+           is_column_paths_equal(lhs.name, rhs.name, case_sensitive_names) and
            lhs.decimal_scale == rhs.decimal_scale and
            lhs.decimal_precision == rhs.decimal_precision and lhs.field_id == rhs.field_id;
   };
@@ -1899,7 +1904,7 @@ aggregate_reader_metadata::select_columns(
       for (auto const& selected_path : used_column_names.get()) {
         auto found_path =
           std::find_if(all_paths.begin(), all_paths.end(), [&](path_info& valid_path) {
-            return column_paths_equal(valid_path.full_path, selected_path, case_sensitive_names);
+            return is_column_paths_equal(valid_path.full_path, selected_path, case_sensitive_names);
           });
         // Ensure that selected path matches a path in all_paths
         if (found_path != all_paths.end()) {

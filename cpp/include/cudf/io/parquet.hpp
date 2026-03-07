@@ -523,7 +523,7 @@ class parquet_reader_options {
   /**
    * @brief Sets whether column name matching is case sensitive.
    *
-   * @param val Boolean indicating whetherenable case-sensitive matching.
+   * @param val Boolean indicating whether to enable case-sensitive matching.
    */
   void enable_case_sensitive_names(bool val) { _case_sensitive_names = val; }
 };
