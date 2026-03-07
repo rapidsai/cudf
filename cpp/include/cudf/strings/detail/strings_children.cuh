@@ -72,12 +72,8 @@ rmm::device_uvector<char> make_chars_buffer(column_view const& offsets,
 
   auto const src_ptrs = thrust::make_transform_iterator(
     thrust::make_counting_iterator<uint32_t>(0),
-    cuda::proclaim_return_type<void*>([begin] __device__(uint32_t idx) {
-      // Due to a bug in cub (https://github.com/NVIDIA/cccl/issues/586),
-      // we have to use `const_cast` to remove `const` qualifier from the source pointer.
-      // This should be fine as long as we only read but not write anything to the source.
-      return reinterpret_cast<void*>(const_cast<char*>(begin[idx].first));
-    }));
+    cuda::proclaim_return_type<void const*>(
+      [begin] __device__(uint32_t idx) -> void const* { return begin[idx].first; }));
   auto const src_sizes = thrust::make_transform_iterator(
     thrust::make_counting_iterator<uint32_t>(0),
     cuda::proclaim_return_type<size_type>(
@@ -100,6 +96,41 @@ rmm::device_uvector<char> make_chars_buffer(column_view const& offsets,
                                            stream.value()));
 
   return chars_data;
+}
+
+rmm::device_uvector<char> make_chars_buffer(column_view const& offsets_view,
+                                            int64_t chars_size,
+                                            string_view const* begin,
+                                            bitmask_type const* stencil,
+                                            size_type size,
+                                            rmm::cuda_stream_view stream,
+                                            rmm::device_async_resource_ref mr)
+{
+  auto offsets = cudf::detail::offsetalator_factory::make_input_iterator(offsets_view);
+  auto chars   = rmm::device_uvector<char>(chars_size, stream, mr);
+
+  auto srcs = make_counting_transform_iterator(
+    size_type{0}, [begin] __device__(size_type idx) -> void const* { return begin[idx].data(); });
+
+  auto src_sizes = make_counting_transform_iterator(
+    size_type{0}, [begin, stencil] __device__(size_type idx) -> size_type {
+      if (stencil != nullptr && !bit_is_set(stencil, idx)) { return 0; }
+      return static_cast<size_type>(begin[idx].size_bytes());
+    });
+
+  auto dsts = make_counting_transform_iterator(
+    size_type{0}, [offsets, chars = chars.data()] __device__(size_type idx) -> void* {
+      return chars + offsets[idx];
+    });
+
+  size_t temp_storage_bytes = 0;
+  CUDF_CUDA_TRY(cub::DeviceMemcpy::Batched(
+    nullptr, temp_storage_bytes, srcs, dsts, src_sizes, size, stream.value()));
+  rmm::device_buffer d_temp_storage(temp_storage_bytes, stream);
+  CUDF_CUDA_TRY(cub::DeviceMemcpy::Batched(
+    d_temp_storage.data(), temp_storage_bytes, srcs, dsts, src_sizes, size, stream.value()));
+
+  return chars;
 }
 
 /**

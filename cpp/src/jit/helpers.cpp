@@ -52,16 +52,6 @@ size_type get_projection_size(std::span<std::variant<column_view, scalar_column_
                            thrust::make_transform_iterator(inputs.end(), get_size));
 }
 
-std::string input_reflection::accessor(int32_t index) const
-{
-  auto column_accessor =
-    jitify2::reflection::Template("cudf::jit::column_accessor").instantiate(type_name, index);
-
-  return is_scalar ? jitify2::reflection::Template("cudf::jit::scalar_accessor")
-                       .instantiate(column_accessor)
-                   : column_accessor;
-}
-
 std::map<uint32_t, std::string> build_ptx_params(std::span<std::string const> output_typenames,
                                                  std::span<std::string const> input_typenames,
                                                  bool has_user_data)
@@ -85,51 +75,38 @@ std::map<uint32_t, std::string> build_ptx_params(std::span<std::string const> ou
   return params;
 }
 
-std::vector<std::string> output_type_names(std::span<mutable_column_view const> views)
-{
-  std::vector<std::string> names;
-
-  std::transform(views.begin(), views.end(), std::back_inserter(names), [](auto const& view) {
-    return type_to_name(view.type());
-  });
-
-  return names;
-}
-
 std::vector<std::string> input_type_names(
   std::span<std::variant<column_view, scalar_column_view> const> views)
 {
   std::vector<std::string> names;
-  auto get_type_name = [](auto const& var) {
-    return std::visit([](auto& a) { return type_to_name(a.type()); }, var);
-  };
 
   std::transform(views.begin(), views.end(), std::back_inserter(names), [&](auto const& view) {
-    return get_type_name(view);
+    return std::visit([](auto& a) { return type_to_name(a.type()); }, view);
   });
 
   return names;
 }
 
-input_reflection reflect_input(std::variant<column_view, scalar_column_view> const& input)
+std::string reflect_input_accessor(std::variant<column_view, scalar_column_view> const& input,
+                                   int32_t index)
 {
-  auto get_type_name = [](auto const& var) {
-    return std::visit([](auto& a) { return type_to_name(a.type()); }, var);
-  };
+  auto element   = std::visit([](auto& a) { return type_to_name(a.type()); }, input);
+  bool as_scalar = std::holds_alternative<scalar_column_view>(input);
 
-  return input_reflection{get_type_name(input), std::holds_alternative<scalar_column_view>(input)};
+  return jitify2::Template("cudf::jit::column_accessor")
+    .instantiate("cudf::column_device_view_core", element, as_scalar);
 }
 
-std::vector<input_reflection> reflect_inputs(
+std::vector<std::string> reflect_input_accessors(
   std::span<std::variant<column_view, scalar_column_view> const> inputs)
 {
-  std::vector<input_reflection> reflections;
-  std::transform(
-    inputs.begin(), inputs.end(), std::back_inserter(reflections), [&](auto const& view) {
-      return reflect_input(view);
-    });
+  std::vector<std::string> res;
+  std::transform(thrust::counting_iterator<size_t>(0),
+                 thrust::counting_iterator(inputs.size()),
+                 std::back_inserter(res),
+                 [&](auto i) { return reflect_input_accessor(inputs[i], i); });
 
-  return reflections;
+  return res;
 }
 
 jitify2::Kernel get_udf_kernel(jitify2::PreprocessedProgramData const& preprocessed_program_data,

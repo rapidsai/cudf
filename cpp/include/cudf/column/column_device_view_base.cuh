@@ -325,6 +325,8 @@ struct mutable_value_accessor;
  */
 class alignas(16) column_device_view_core : public detail::column_device_view_base {
  public:
+ static constexpr bool is_mutable = false;
+
   column_device_view_core()                               = delete;
   ~column_device_view_core()                              = default;
   column_device_view_core(column_device_view_core const&) = default;  ///< Copy constructor
@@ -447,6 +449,14 @@ class alignas(16) column_device_view_core : public detail::column_device_view_ba
     return T{scaled_integer<rep>{data<rep>()[element_index], scale}};
   }
 
+  template <typename T>
+  [[nodiscard]] __device__ cuda::std::optional<T> nullable_element(
+    size_type element_index) const noexcept
+  {
+    if (is_null(element_index)) { return cuda::std::nullopt; }
+    return element<T>(element_index);
+  }
+
   /**
    * @brief Returns the specified child
    *
@@ -521,6 +531,8 @@ class alignas(16) column_device_view_core : public detail::column_device_view_ba
  */
 class alignas(16) mutable_column_device_view_core : public detail::column_device_view_base {
  public:
+ static constexpr bool is_mutable = true;
+
   mutable_column_device_view_core()  = delete;
   ~mutable_column_device_view_core() = default;
   mutable_column_device_view_core(mutable_column_device_view_core const&) =
@@ -599,6 +611,55 @@ class alignas(16) mutable_column_device_view_core : public detail::column_device
   [[nodiscard]] __device__ T& element(size_type element_index) const noexcept
   {
     return data<T>()[element_index];
+  }
+
+  /**
+   * @brief Returns `string_view` to the string element at the specified index.
+   *
+   * If the element at the specified index is NULL, i.e., `is_null(element_index)
+   * == true`, then any attempt to use the result will lead to undefined behavior.
+   *
+   * This function accounts for the offset.
+   *
+   * @param element_index Position of the desired string element
+   * @return string_view instance representing this element at this index
+   */
+  template <typename T, CUDF_ENABLE_IF(cuda::std::is_same_v<T, string_view>)>
+  [[nodiscard]] __device__ T element(size_type element_index) const noexcept
+  {
+    size_type index       = element_index + offset();  // account for this view's _offset
+    char const* d_strings = static_cast<char const*>(_data);
+    auto const offsets    = child(offsets_column_index);
+    auto const itr        = cudf::detail::input_offsetalator(offsets.head(), offsets.type());
+    auto const offset     = itr[index];
+    return string_view{d_strings + offset, static_cast<cudf::size_type>(itr[index + 1] - offset)};
+  }
+
+  /**
+   * @brief Returns a `numeric::fixed_point` element at the specified index for a `fixed_point`
+   * column.
+   *
+   * If the element at the specified index is NULL, i.e., `is_null(element_index) == true`,
+   * then any attempt to use the result will lead to undefined behavior.
+   *
+   * @param element_index Position of the desired element
+   * @return numeric::fixed_point representing the element at this index
+   */
+  template <typename T, CUDF_ENABLE_IF(cudf::is_fixed_point<T>())>
+  [[nodiscard]] __device__ T element(size_type element_index) const noexcept
+  {
+    using namespace numeric;
+    using rep        = typename T::rep;
+    auto const scale = scale_type{_type.scale()};
+    return T{scaled_integer<rep>{data<rep>()[element_index], scale}};
+  }
+
+  template <typename T>
+  [[nodiscard]] __device__ cuda::std::optional<T> nullable_element(
+    size_type element_index) const noexcept
+  {
+    if (is_null(element_index)) { return cuda::std::nullopt; }
+    return element<T>(element_index);
   }
 
   /**

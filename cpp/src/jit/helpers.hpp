@@ -32,13 +32,6 @@ get_transform_base_column(std::vector<column_view> const& inputs);
 size_type get_projection_size(
   std::span<std::variant<column_view, scalar_column_view> const> inputs);
 
-struct input_reflection {
-  std::string type_name;
-  bool is_scalar = false;
-
-  [[nodiscard]] std::string accessor(int32_t index) const;
-};
-
 std::map<uint32_t, std::string> build_ptx_params(std::span<std::string const> output_typenames,
                                                  std::span<std::string const> input_typenames,
                                                  bool has_user_data);
@@ -78,15 +71,35 @@ column_views_to_device(std::span<ColumnView const> views,
   return std::make_tuple(std::move(handles), std::move(device_array));
 }
 
-std::vector<std::string> output_type_names(std::span<mutable_column_view const> views);
-
 std::vector<std::string> input_type_names(
   std::span<std::variant<column_view, scalar_column_view> const> views);
 
-input_reflection reflect_input(std::variant<column_view, scalar_column_view> const& input);
+// TODO: how do we support mutable column view?, the arguments need to be casted
+/**
+ * @brief Reflects the input column or scalar into a string that can be used in the generated CUDA
+ * code.
+ *
+ * @param index The index of the input in the list of inputs.
+ * @param input The input column or scalar to reflect.
+ * @param may_be_nullable Whether to allow runtime checks of the nullability of the input
+ * @return A string representing the input in the generated CUDA code.
+ */
+std::string reflect_input(
+  int32_t index,
+  std::variant<column_view, scalar_column_view, mutable_column_view> const& input,
+  bool may_be_nullable);
 
-std::vector<input_reflection> reflect_inputs(
-  std::span<std::variant<column_view, scalar_column_view> const> inputs);
+/**
+ * @brief Reflects the input columns or scalars into strings that can be used in the generated CUDA
+ * code.
+ *
+ * @param inputs The input columns or scalars to reflect.
+ * @param may_be_nullable Whether to allow runtime checks of the nullability of the inputs
+ * @return A vector of strings representing the inputs in the generated CUDA code.
+ */
+std::vector<std::string> reflect_inputs(
+  std::span<std::variant<column_view, scalar_column_view, mutable_column_view> const> inputs,
+  std::span<bool const> may_be_nullable);
 
 jitify2::Kernel get_udf_kernel(jitify2::PreprocessedProgramData const& preprocessed_program_data,
                                std::string const& kernel_name,

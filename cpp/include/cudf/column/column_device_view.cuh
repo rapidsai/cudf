@@ -749,6 +749,18 @@ class alignas(16) mutable_column_device_view : public mutable_column_device_view
    */
   static std::size_t extent(mutable_column_view source_view);
 
+  static mutable_column_device_view from_parts(data_type type,
+                                               size_type size,
+                                               void const* data,
+                                               bitmask_type const* null_mask,
+                                               size_type offset,
+                                               mutable_column_device_view* children,
+                                               size_type num_children)
+  {
+    return mutable_column_device_view{
+      mutable_column_device_view_core{type, size, data, null_mask, offset, children, num_children}};
+  }
+
   /**
    * @brief Destroy the `mutable_column_device_view` object.
    *

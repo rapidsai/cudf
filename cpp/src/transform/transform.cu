@@ -29,186 +29,206 @@
 #include <variant>
 
 namespace cudf {
-using InputsView = std::span<std::variant<column_view, scalar_column_view> const>;
-
-namespace transformation {
-
-namespace jit {
 namespace {
 
-jitify2::StringVec build_jit_template_params(null_aware is_null_aware,
-                                             bool may_evaluate_null,
-                                             bool has_user_data,
-                                             std::span<std::string const> span_outputs,
-                                             std::span<std::string const> column_outputs,
-                                             std::span<cudf::jit::input_reflection const> inputs)
-{
-  jitify2::StringVec tparams;
+// TODO: update parameter names and reflection
+template <typename T>
+struct mutable_vector_column_view {
+  T* _data{nullptr};
+  size_type _size{0};
+  bitmask_type const* _null_mask{nullptr};
+  size_type _offset{0};
+  size_type _null_count{0};
 
-  tparams.emplace_back(jitify2::reflection::reflect(is_null_aware));
-  tparams.emplace_back(jitify2::reflection::reflect(may_evaluate_null));
-  tparams.emplace_back(jitify2::reflection::reflect(has_user_data));
-
-  std::transform(thrust::counting_iterator<size_t>(0),
-                 thrust::counting_iterator(span_outputs.size()),
-                 std::back_inserter(tparams),
-                 [&](auto i) {
-                   return jitify2::reflection::Template("cudf::jit::span_accessor")
-                     .instantiate(span_outputs[i], i);
-                 });
-
-  std::transform(thrust::counting_iterator<size_t>(0),
-                 thrust::counting_iterator(column_outputs.size()),
-                 std::back_inserter(tparams),
-                 [&](auto i) {
-                   return jitify2::reflection::Template("cudf::jit::column_accessor")
-                     .instantiate(column_outputs[i], i);
-                 });
-
-  std::transform(thrust::counting_iterator<size_t>(0),
-                 thrust::counting_iterator(inputs.size()),
-                 std::back_inserter(tparams),
-                 [&](auto i) { return inputs[i].accessor(i); });
-
-  return tparams;
-}
-
-jitify2::ConfiguredKernel build_transform_kernel(
-  std::string_view kernel_name,
-  std::span<mutable_column_view const> output_columns,
-  InputsView inputs,
-  null_aware is_null_aware,
-  bool may_evaluate_null,
-  bool has_user_data,
-  std::string const& udf,
-  cudf::udf_source_type source_type,
-  rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
-{
-  auto output_typenames  = cudf::jit::output_type_names(output_columns);
-  auto input_typenames   = cudf::jit::input_type_names(inputs);
-  auto input_reflections = cudf::jit::reflect_inputs(inputs);
-
-  auto const cuda_source =
-    (source_type == cudf::udf_source_type::PTX)
-      ? cudf::jit::parse_single_function_ptx(
-          udf,
-          "GENERIC_TRANSFORM_OP",
-          cudf::jit::build_ptx_params(output_typenames, input_typenames, has_user_data))
-      : cudf::jit::parse_single_function_cuda(udf, "GENERIC_TRANSFORM_OP");
-
-  auto kernel_reflection =
-    jitify2::reflection::Template(kernel_name)
-      .instantiate(build_jit_template_params(
-        is_null_aware, may_evaluate_null, has_user_data, {}, output_typenames, input_reflections));
-
-  return cudf::jit::get_udf_kernel(*transform_jit_kernel_cu_jit, kernel_reflection, cuda_source)
-    ->configure_1d_max_occupancy(0, 0, nullptr, stream.value());
-}
-
-jitify2::ConfiguredKernel build_span_kernel(std::string_view kernel_name,
-                                            std::span<std::string const> span_outputs,
-                                            InputsView inputs,
-                                            null_aware is_null_aware,
-                                            bool may_evaluate_null,
-                                            bool has_user_data,
-                                            std::string const& udf,
-                                            cudf::udf_source_type source_type,
-                                            rmm::cuda_stream_view stream,
-                                            rmm::device_async_resource_ref mr)
-{
-  CUDF_FUNC_RANGE();
-  auto output_typenames  = span_outputs;
-  auto input_typenames   = cudf::jit::input_type_names(inputs);
-  auto input_reflections = cudf::jit::reflect_inputs(inputs);
-
-  auto const cuda_source =
-    (source_type == cudf::udf_source_type::PTX)
-      ? cudf::jit::parse_single_function_ptx(
-          udf,
-          "GENERIC_TRANSFORM_OP",
-          cudf::jit::build_ptx_params(output_typenames, input_typenames, has_user_data))
-      : cudf::jit::parse_single_function_cuda(udf, "GENERIC_TRANSFORM_OP");
-
-  auto kernel_reflection =
-    jitify2::reflection::Template(kernel_name)
-      .instantiate(build_jit_template_params(
-        is_null_aware, may_evaluate_null, has_user_data, span_outputs, {}, input_reflections));
-
-  return cudf::jit::get_udf_kernel(*transform_jit_kernel_cu_jit, kernel_reflection, cuda_source)
-    ->configure_1d_max_occupancy(0, 0, nullptr, stream.value());
-}
-
-column_view to_column_view(column_view const& col) { return col; }
-
-column_view to_column_view(scalar_column_view const& scalar) { return scalar.as_column_view(); }
-
-auto to_device_input_arg(InputsView inputs,
-                         rmm::cuda_stream_view stream,
-                         rmm::device_async_resource_ref mr)
-{
-  std::vector<column_view> columns;
-  for (auto const& input : inputs) {
-    columns.emplace_back(std::visit([](auto const& col) { return to_column_view(col); }, input));
+  auto to_device() const
+  {
+    auto deleter = +[](mutable_column_device_view* ptr) { delete ptr; };
+    return std::unique_ptr<mutable_column_device_view,
+                           std::function<void(mutable_column_device_view*)>>(
+      new mutable_column_device_view{mutable_column_device_view::from_parts(
+        data_type{type_id::EMPTY}, _size, _data, _null_mask, _offset, nullptr, 0)},
+      deleter);
   }
-
-  return cudf::jit::column_views_to_device<column_device_view, column_view>(columns, stream, mr);
-}
-
-auto to_device_output_arg(std::span<mutable_column_view const> outputs,
-                          rmm::cuda_stream_view stream,
-                          rmm::device_async_resource_ref mr)
-{
-  return cudf::jit::column_views_to_device<mutable_column_device_view, mutable_column_view>(
-    outputs, stream, mr);
-}
-
-void launch_column_output_kernel(jitify2::ConfiguredKernel& kernel,
-                                 std::span<mutable_column_view const> output_columns,
-                                 InputsView inputs,
-                                 std::optional<bool*> intermediate_null_mask,
-                                 std::optional<void*> user_data,
-                                 rmm::cuda_stream_view stream,
-                                 rmm::device_async_resource_ref mr)
-{
-  auto [output_arg_handles, output_args] = to_device_output_arg(output_columns, stream, mr);
-  auto [input_arg_handles, input_args]   = to_device_input_arg(inputs, stream, mr);
-
-  mutable_column_device_view const* p_outputs = output_args.data();
-  column_device_view const* p_inputs          = input_args.data();
-  bool* p_intermediate_null_mask              = intermediate_null_mask.value_or(nullptr);
-  void* p_user_data                           = user_data.value_or(nullptr);
-
-  std::array<void*, 4> args{&p_outputs, &p_inputs, &p_intermediate_null_mask, &p_user_data};
-
-  kernel->launch_raw(args.data());
-}
+};
 
 template <typename T>
-void launch_span_kernel(jitify2::ConfiguredKernel& kernel,
-                        cudf::jit::device_optional_span<T> const& output,
-                        InputsView inputs,
-                        std::optional<bool*> intermediate_null_mask,
-                        std::optional<void*> user_data,
-                        rmm::cuda_stream_view stream,
-                        rmm::device_async_resource_ref mr)
+struct vector_column {
+  using mutable_view_type = mutable_vector_column_view<T>;
+
+  rmm::device_uvector<T> _data{};
+  rmm::device_buffer _null_mask{};
+  size_type _offset{0};
+  size_type _null_count{0};
+
+  static auto make(size_type size,
+                   null_mask_state null_state,
+                   rmm::cuda_stream_view stream,
+                   rmm::device_async_resource_ref mr)
+  {
+    rmm::device_uvector<T> data{size, stream, mr};
+    auto null_mask = create_null_mask(size, null_state, stream, mr);
+
+    return vector_column<T>{std::move(data), std::move(null_mask), 0, size, 0};
+  }
+
+  auto mutable_view()
+  {
+    return mutable_view_type{_data.data(),
+                             _data.size(),
+                             static_cast<bitmask_type*>(_null_mask.data()),
+                             _offset,
+                             _null_count};
+  }
+};
+
+using string_view_column              = vector_column<string_view>;
+using mutable_string_view_column_view = typename string_view_column::mutable_view_type;
+
+using OutputColumn = std::variant<std::unique_ptr<column>, std::unique_ptr<string_view_column>>;
+using InputView    = std::variant<column_view, scalar_column_view>;
+using OutputView   = std::variant<mutable_column_view, mutable_string_view_column_view>;
+using InputViews   = std::span<InputView const>;
+using OutputViews  = std::span<OutputView const>;
+using InHandle     = std::unique_ptr<column_device_view, std::function<void(column_device_view*)>>;
+using OutHandle =
+  std::unique_ptr<mutable_column_device_view, std::function<void(mutable_column_device_view*)>>;
+using Handle = std::variant<InHandle, OutHandle>;
+
+std::string reflect_output_accessor(OutputView const& output)
 {
-  auto output_args = cudf::jit::to_device_vector(std::vector{output}, stream, mr);
+  auto element = std::visit([](auto& a) { return type_to_name(a.type()); }, output);
+  auto column =
+    std::holds_alternative<mutable_string_view_column_view>(output)
+      ? "cudf::jit::column_device_view_span_wrapper<cudf::mutable_column_device_view_core>"
+      : "cudf::mutable_column_device_view_core";
 
-  auto [input_arg_handles, input_args] = to_device_input_arg(inputs, stream, mr);
-
-  cudf::jit::device_optional_span<T> const* p_outputs = output_args.data();
-  column_device_view const* p_inputs                  = input_args.data();
-  bool* p_intermediate_null_mask                      = intermediate_null_mask.value_or(nullptr);
-  void* p_user_data                                   = user_data.value_or(nullptr);
-
-  std::array<void*, 4> args{&p_outputs, &p_inputs, &p_intermediate_null_mask, &p_user_data};
-
-  kernel->launch_raw(args.data());
+  return jitify2::Template("cudf::jit::column_accessor").instantiate(column, element, false);
 }
 
+std::vector<std::string> reflect_output_accessors(OutputViews outputs)
+{
+  std::vector<std::string> res;
+  std::transform(thrust::counting_iterator<size_t>(0),
+                 thrust::counting_iterator(outputs.size()),
+                 std::back_inserter(res),
+                 [&](auto i) { return reflect_output_accessor(outputs[i]); });
+
+  return res;
+}
+
+struct TransformKernel {
+  static jitify2::Kernel instantiate(null_aware is_null_aware,
+                                     bool may_evaluate_null,
+                                     bool has_user_data,
+                                     std::string const& ins,
+                                     std::string const& outs,
+                                     std::string const& udf,
+                                     udf_source_type source_type)
+  {
+    CUDF_FUNC_RANGE();
+    auto cuda_source =
+      (source_type == udf_source_type::PTX)
+        ? jit::parse_single_function_ptx(
+            udf,
+            "GENERIC_TRANSFORM_OP",
+            jit::build_ptx_params(output_typenames, input_typenames, has_user_data))
+        : jit::parse_single_function_cuda(udf, "GENERIC_TRANSFORM_OP");
+
+    auto kernel = jitify2::reflection::Template("cudf::jit::transform_kernel")
+                    .instantiate(is_null_aware, may_evaluate_null, has_user_data, ins, outs);
+
+    return jit::get_udf_kernel(*transform_jit_kernel_cu_jit, kernel, cuda_source);
+  }
+
+  static void launch(jitify2::Kernel const& kernel,
+                     size_type row_size,
+                     void* user_data,
+                     column_device_view_core const* inputs,
+                     bitmask_type const* null_mask_and,
+                     mutable_column_device_view_core const* outputs,
+                     rmm::cuda_stream_view stream)
+  {
+    CUDF_FUNC_RANGE();
+    void* args[] = {&row_size, &user_data, &inputs, &null_mask_and, &outputs};
+    kernel->configure_1d_max_occupancy(0, 0, nullptr, stream.value())->launch_raw(args);
+  }
+
+  static auto to_device_args(InputViews inputs,
+                             OutputViews outputs,
+                             rmm::cuda_stream_view stream,
+                             rmm::device_async_resource_ref mr)
+  {
+    std::vector<Handle> handles;
+    std::vector<column_device_view> h_args;
+
+    for (auto& in : inputs) {
+      if (auto* col = std::get_if<column_view>(&in)) {
+        auto handle = column_device_view::create(*col, stream, mr);
+        h_args.push_back(*handle);
+        handles.push_back(std::move(handle));
+      } else if (auto& scalar = std::get<scalar_column_view>(in)) {
+        auto handle = column_device_view::create(scalar.as_column_view(), stream, mr);
+        h_args.push_back(*handle);
+        handles.push_back(std::move(handle));
+      }
+    }
+
+    for (auto& out : outputs) {
+      if (auto* col = std::get_if<mutable_column_view>(&out)) {
+        auto handle = mutable_column_device_view::create(*col, stream, mr);
+        h_args.push_back(*handle);
+        handles.push_back(std::move(handle));
+      } else if (auto& sv_column = std::get<mutable_string_view_column_view>(out)) {
+        auto handle = sv_column.to_device();
+        h_args.push_back(*handle);
+        handles.push_back(std::move(handle));
+      }
+    }
+
+    rmm::device_uvector<column_device_view> d_args{h_args.size(), stream, mr};
+
+    detail::cuda_memcpy_async_impl(d_args.data(),
+                                   h_args.data(),
+                                   h_args.size() * sizeof(column_device_view),
+                                   detail::host_memory_kind::PAGEABLE,
+                                   stream);
+
+    return std::make_tuple(std::move(handles), std::move(d_args));
+  }
+
+  static void run(null_aware is_null_aware,
+                  bool may_evaluate_null,
+                  bool has_user_data,
+                  size_type row_size,
+                  void* user_data,
+                  InputViews inputs,
+                  bitmask_type const* d_null_mask_and,
+                  OutputsView outputs,
+                  std::string const& udf,
+                  udf_source_type source_type,
+                  rmm::cuda_stream_view stream,
+                  rmm::device_async_resource_ref mr)
+  {
+    auto in_types = jitify2::reflection::Template("cudf::jit::type_list")
+                      .instantiate(jit::reflect_input_accessors(inputs));
+    auto out_types = jitify2::reflection::Template("cudf::jit::type_list")
+                       .instantiate(jit::reflect_output_accessors(outputs));
+
+    auto kernel = instantiate(
+      is_null_aware, may_evaluate_null, has_user_data, in_types, out_types, udf, source_type);
+
+    auto [args, handles] = to_device_args(inputs, outputs, stream, mr);
+
+    auto* d_inputs = args.data();
+    auto* d_outputs =
+      reinterpret_cast<mutable_column_device_view const*>(args.data() + inputs.size());
+
+    launch(kernel, row_size, user_data, d_inputs, d_null_mask_and, d_outputs, stream);
+  }
+};
+
 std::tuple<rmm::device_buffer, size_type> and_null_mask(size_type row_size,
-                                                        InputsView inputs,
+                                                        InputViews inputs,
                                                         rmm::cuda_stream_view stream,
                                                         rmm::device_async_resource_ref mr)
 {
@@ -219,10 +239,9 @@ std::tuple<rmm::device_buffer, size_type> and_null_mask(size_type row_size,
   // then all the rows of the transform output will be null. This helps us prevent creating
   // column-sized bitmasks for each scalar.
   for (auto const& in : inputs) {
-    if (std::holds_alternative<scalar_column_view>(in)) {
-      auto& scalar = std::get<scalar_column_view>(in);
+    if (auto* scalar = std::get_if<scalar_column_view>(&in)) {
       // all nulls
-      if (scalar.has_nulls()) {
+      if (scalar->has_nulls()) {
         return std::make_tuple(create_null_mask(row_size, mask_state::ALL_NULL, stream, mr),
                                row_size);
       }
@@ -235,13 +254,13 @@ std::tuple<rmm::device_buffer, size_type> and_null_mask(size_type row_size,
   if (bitmask_columns.empty()) {
     // if there are no non-scalar columns contributing to the null-mask, then the output is all
     // valid (scalar projection) given that the scalar is not null (checked above)
-    return std::make_tuple(create_null_mask(row_size, mask_state::ALL_VALID, stream, mr), 0);
+    return std::make_tuple(create_null_mask(row_size, mask_state::UNALLOCATED, stream, mr), 0);
   }
 
   return cudf::bitmask_and(table_view{bitmask_columns}, stream, mr);
 }
 
-bool may_evaluate_null(InputsView inputs, null_aware is_null_aware, output_nullability null_out)
+bool may_evaluate_null(InputViews inputs, null_aware is_null_aware, output_nullability null_out)
 {
   // null-aware UDFs will evaluate nulls unless explicitly marked as not producing nulls
   if (is_null_aware == null_aware::YES) {
@@ -256,169 +275,92 @@ bool may_evaluate_null(InputsView inputs, null_aware is_null_aware, output_nulla
   }
 }
 
-std::unique_ptr<column> transform_operation(size_type row_size,
-                                            InputsView inputs,
-                                            std::string const& udf,
-                                            data_type output_type,
-                                            cudf::udf_source_type source_type,
-                                            std::optional<void*> user_data,
-                                            null_aware is_null_aware,
-                                            output_nullability null_policy,
-                                            rmm::cuda_stream_view stream,
-                                            rmm::device_async_resource_ref mr)
+auto finalize(std::vector<OutputColumn> outputs,
+              rmm::cuda_stream_view stream,
+              rmm::device_async_resource_ref mr)
 {
-  auto output =
-    make_fixed_width_column(output_type, row_size, cudf::mask_state::UNALLOCATED, stream, mr);
+  std::vector<std::unique_ptr<column>> results;
 
-  auto may_return_nulls = may_evaluate_null(inputs, is_null_aware, null_policy);
-
-  std::optional<rmm::device_uvector<bool>> intermediate_null_mask = std::nullopt;
-
-  if (is_null_aware == null_aware::NO) {
-    if (may_return_nulls) {
-      auto [and_mask_buffer, and_mask_null_count] = and_null_mask(row_size, inputs, stream, mr);
-      output->set_null_mask(std::move(and_mask_buffer), and_mask_null_count);
+  for (auto& out : outputs) {
+    if (auto* col = std::get_if<std::unique_ptr<column>>(&out)) {
+      results.push_back(std::move(*col));
+    } else if (auto& str = std::get<std::unique_ptr<string_view_column>>(out)) {
+      auto result = detail::make_strings_column(
+        str->_data, std::move(str->_null_mask), std::nullopt, stream, mr);
+      results.push_back(std::move(result));
     }
-  } else if (is_null_aware == null_aware::YES) {
-    if (may_return_nulls) { intermediate_null_mask.emplace(row_size, stream, mr); }
   }
 
-  mutable_column_view outputs[] = {{*output}};
-  auto kernel                   = build_transform_kernel(is_fixed_point(output_type)
-                                         ? "cudf::transformation::jit::fixed_point_kernel"
-                                         : "cudf::transformation::jit::kernel",
-                                       outputs,
-                                       inputs,
-                                       is_null_aware,
-                                       may_return_nulls,
-                                       user_data.has_value(),
-                                       udf,
-                                       source_type,
-                                       stream,
-                                       mr);
-
-  launch_column_output_kernel(kernel,
-                              outputs,
-                              inputs,
-                              intermediate_null_mask.has_value()
-                                ? std::optional<bool*>(intermediate_null_mask->data())
-                                : std::nullopt,
-                              user_data,
-                              stream,
-                              mr);
-
-  if (intermediate_null_mask.has_value()) {
-    auto [null_mask, null_count] = detail::valid_if(
-      intermediate_null_mask->begin(),
-      intermediate_null_mask->end(),
-      [] __device__(bool element) { return element; },
-      stream,
-      mr);
-
-    output->set_null_mask(std::move(null_mask), null_count);
-  }
-
-  return output;
+  return results;
 }
 
-std::unique_ptr<column> string_view_operation(size_type row_size,
-                                              InputsView inputs,
-                                              std::string const& udf,
-                                              data_type output_type,
-                                              cudf::udf_source_type source_type,
-                                              std::optional<void*> user_data,
-                                              null_aware is_null_aware,
-                                              output_nullability null_policy,
-                                              rmm::cuda_stream_view stream,
-                                              rmm::device_async_resource_ref mr)
+std::unique_ptr<table> transform_operation(size_type row_size,
+                                           InputViews inputs,
+                                           std::string const& udf,
+                                           std::span<data_type const> output_types,
+                                           udf_source_type source_type,
+                                           std::optional<void*> user_data,
+                                           null_aware is_null_aware,
+                                           std::span<output_nullability const> null_policies,
+                                           rmm::cuda_stream_view stream,
+                                           rmm::device_async_resource_ref mr)
 {
-  rmm::device_uvector<string_view> string_views(row_size, stream, mr);
+  std::vector<OutputColumn> outputs;
 
-  auto may_return_nulls = may_evaluate_null(inputs, is_null_aware, null_policy);
+  auto may_return_nulls =
+    std::any_of(null_policies.begin(), null_policies.end(), [](auto null_policy) {
+      return null_policy != output_nullability::ALL_VALID;
+    }) may_evaluate_null(inputs, is_null_aware, null_policy);
 
-  std::optional<rmm::device_uvector<bool>> intermediate_null_mask   = std::nullopt;
-  std::optional<std::tuple<rmm::device_buffer, size_type>> and_mask = std::nullopt;
+  for (size_t i = 0; i < output_types.size(); i++) {
+    auto type        = output_types[i];
+    auto null_policy = null_policies[i];
 
-  if (is_null_aware == null_aware::NO) {
-    if (may_return_nulls) { and_mask = and_null_mask(row_size, inputs, stream, mr); }
-  } else if (is_null_aware == null_aware::YES) {
-    if (may_return_nulls) { intermediate_null_mask.emplace(row_size, stream, mr); }
+    if (is_fixed_width(type)) {
+      auto col = make_fixed_width_column(type, row_size, stream, mr);
+    } else if (type == type_id::STRING) {
+      auto col = string_view_column::make(
+        row_size,
+        may_return_nulls ? null_mask_state::UNINITIALIZED : null_mask_state::UNALLOCATED,
+        stream,
+        mr);
+
+      outputs.push_back(std::make_unique<string_view_column>(std::move(col)));
+    } else {
+      CUDF_UNREACHABLE("Unsupported output type for transform");
+    }
   }
 
-  auto output_span = cudf::jit::device_optional_span<string_view>{
-    cudf::jit::device_span<string_view>{string_views.data(), string_views.size()},
-    and_mask.has_value() ? static_cast<bitmask_type*>(std::get<0>(*and_mask).data()) : nullptr};
+  TransformKernel::run(is_null_aware,
+                       may_return_nulls,
+                       user_data.has_value(),
+                       row_size,
+                       user_data.value_or(nullptr),
+                       inputs,
+                       nullptr,  // TODO: compute and pass the and of the null masks if needed
+                       outputs,
+                       udf,
+                       source_type,
+                       stream,
+                       mr);
 
-  std::string output_typenames[] = {"cudf::string_view"};
-
-  auto kernel = build_span_kernel("cudf::transformation::jit::span_kernel",
-                                  output_typenames,
-                                  inputs,
-                                  is_null_aware,
-                                  may_return_nulls,
-                                  user_data.has_value(),
-                                  udf,
-                                  source_type,
-                                  stream,
-                                  mr);
-
-  launch_span_kernel<string_view>(kernel,
-                                  output_span,
-                                  inputs,
-                                  intermediate_null_mask.has_value()
-                                    ? std::optional<bool*>(intermediate_null_mask->data())
-                                    : std::nullopt,
-                                  user_data,
-                                  stream,
-                                  mr);
-
-  auto output = make_strings_column(string_views, cudf::string_view{}, stream, mr);
-
-  if (and_mask.has_value()) {
-    auto [and_mask_buffer, and_mask_null_count] = std::move(*and_mask);
-    output->set_null_mask(std::move(and_mask_buffer), and_mask_null_count);
-  } else if (intermediate_null_mask.has_value()) {
-    auto [null_mask, null_count] = detail::valid_if(
-      intermediate_null_mask->begin(),
-      intermediate_null_mask->end(),
-      [] __device__(bool element) { return element; },
-      stream,
-      mr);
-
-    output->set_null_mask(std::move(null_mask), null_count);
-  }
-
-  return output;
+  return std::make_unique<table>(finalize(std::move(outputs), stream, mr));
 }
 
-void check_row_size(std::optional<size_type> in_row_size, InputsView inputs)
+void perform_checks(null_aware is_null_aware,
+                    udf_source_type source_type,
+                    std::optional<size_type> in_row_size,
+                    std::span<data_type const> output_types,
+                    InputViews inputs)
 {
-  auto row_size = in_row_size.value_or(cudf::jit::get_projection_size(inputs));
-
-  if (!in_row_size.has_value()) {
-    CUDF_EXPECTS(
-      std::any_of(inputs.begin(),
-                  inputs.end(),
-                  [](auto const& input) { return std::holds_alternative<column_view>(input); }),
-      "At least one input of a transform must be a non-scalar column if row size is not provided",
-      std::invalid_argument);
-  }
-
-  CUDF_EXPECTS(std::all_of(inputs.begin(),
-                           inputs.end(),
-                           [&](auto const& input) {
-                             if (std::holds_alternative<column_view>(input)) {
-                               return std::get<column_view>(input).size() == row_size;
-                             }
-
-                             return true;
-                           }),
-               "All transform input columns must have the same size",
+  // TODO: what to do when mutable_column_view arguments violate expected flow?
+  // i.e. stencil generation, row-size determination, etc.
+  CUDF_EXPECTS(
+    !inputs.empty(), "Transform must have at least 1 input column", std::invalid_argument);
+  CUDF_EXPECTS(!(is_null_aware == null_aware::YES && source_type == udf_source_type::PTX),
+               "Optional types are not supported in PTX UDFs",
                std::invalid_argument);
-}
 
-void perform_checks(std::optional<size_type> in_row_size, data_type output_type, InputsView inputs)
-{
   CUDF_EXPECTS(is_fixed_width(output_type) || output_type.id() == type_id::STRING,
                "Transforms only support output of fixed-width or string types",
                std::invalid_argument);
@@ -434,65 +376,42 @@ void perform_checks(std::optional<size_type> in_row_size, data_type output_type,
     "Transforms only support input of fixed-width or string types",
     std::invalid_argument);
 
-  check_row_size(in_row_size, inputs);
+
+  if (!in_row_size.has_value()) {
+    CUDF_EXPECTS(
+      std::any_of(inputs.begin(),
+                  inputs.end(),
+                  [](auto const& input) { return std::holds_alternative<column_view>(input); }),
+      "At least one input of a transform must be a non-scalar column if row size is not provided",
+      std::invalid_argument);
+  }
+
+  auto row_size = in_row_size.value_or(jit::get_projection_size(inputs));
+  CUDF_EXPECTS(std::all_of(inputs.begin(),
+                           inputs.end(),
+                           [&](auto & in) {
+                             if (auto * col = std::get_if<column_view>(&input)) {
+                               return col->size() == row_size;
+                             }
+                             return true;
+                           }),
+               "All transform input columns must have the same size",
+               std::invalid_argument);
 }
 
 }  // namespace
 
-}  // namespace jit
-}  // namespace transformation
-
-namespace detail {
-
-std::unique_ptr<column> transform(InputsView inputs,
-                                  std::string const& udf,
-                                  data_type output_type,
-                                  cudf::udf_source_type source_type,
-                                  std::optional<void*> user_data,
-                                  null_aware is_null_aware,
-                                  std::optional<size_type> in_row_size,
-                                  output_nullability null_policy,
-                                  rmm::cuda_stream_view stream,
-                                  rmm::device_async_resource_ref mr)
+std::vector<std::unique_ptr<column>> transform_extended2(std::string const& udf,
+                                                         udf_source_type source_type,
+                                                         null_aware is_null_aware,
+                                                         std::optional<size_type> row_size,
+                                                         std::optional<void*> user_data,
+                                                         std::span<transform_input const> inputs,
+                                                         std::span<transform_output const> outputs,
+                                                         rmm::cuda_stream_view stream,
+                                                         rmm::device_async_resource_ref mr)
 {
-  CUDF_EXPECTS(
-    !inputs.empty(), "Transform must have at least 1 input column", std::invalid_argument);
-  CUDF_EXPECTS(!(is_null_aware == null_aware::YES && source_type == cudf::udf_source_type::PTX),
-               "Optional types are not supported in PTX UDFs",
-               std::invalid_argument);
-
-  transformation::jit::perform_checks(in_row_size, output_type, inputs);
-
-  auto row_size = in_row_size.value_or(cudf::jit::get_projection_size(inputs));
-
-  if (is_fixed_width(output_type)) {
-    return transformation::jit::transform_operation(row_size,
-                                                    inputs,
-                                                    udf,
-                                                    output_type,
-                                                    source_type,
-                                                    user_data,
-                                                    is_null_aware,
-                                                    null_policy,
-                                                    stream,
-                                                    mr);
-  } else if (output_type.id() == type_id::STRING) {
-    return transformation::jit::string_view_operation(row_size,
-                                                      inputs,
-                                                      udf,
-                                                      output_type,
-                                                      source_type,
-                                                      user_data,
-                                                      is_null_aware,
-                                                      null_policy,
-                                                      stream,
-                                                      mr);
-  } else {
-    CUDF_FAIL("Unsupported output type for transform operation");
-  }
 }
-
-}  // namespace detail
 
 std::unique_ptr<column> transform_extended(
   std::span<std::variant<column_view, scalar_column_view> const> inputs,
@@ -507,16 +426,6 @@ std::unique_ptr<column> transform_extended(
   rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::transform(inputs,
-                           udf,
-                           output_type,
-                           source_type,
-                           user_data,
-                           is_null_aware,
-                           row_size,
-                           null_policy,
-                           stream,
-                           mr);
 }
 
 std::unique_ptr<column> transform(std::vector<column_view> const& columns,
@@ -545,16 +454,19 @@ std::unique_ptr<column> transform(std::vector<column_view> const& columns,
     }
   }
 
-  return detail::transform(inputs,
-                           transform_udf,
-                           output_type,
-                           is_ptx ? udf_source_type::PTX : udf_source_type::CUDA,
-                           user_data,
-                           is_null_aware,
-                           base_column->size(),
-                           null_policy,
-                           stream,
-                           mr);
+  // TODO: take inputs of mutable column view strings and pass their data to the kernel
+  // TODO: take sizer for the strings, needs to allow zero-sized outputs
+
+  return transform_extended(inputs,
+                            transform_udf,
+                            output_type,
+                            is_ptx ? udf_source_type::PTX : udf_source_type::CUDA,
+                            user_data,
+                            is_null_aware,
+                            base_column->size(),
+                            null_policy,
+                            stream,
+                            mr);
 }
 
 std::unique_ptr<column> compute_column_jit(table_view const& table,
@@ -562,20 +474,19 @@ std::unique_ptr<column> compute_column_jit(table_view const& table,
                                            rmm::cuda_stream_view stream,
                                            rmm::device_async_resource_ref mr)
 {
-  cudf::detail::row_ir::ast_args ast_args{.table = table};
-  auto args = cudf::detail::row_ir::ast_converter::compute_column(
-    cudf::detail::row_ir::target::CUDA, expr, ast_args, stream, mr);
-
-  return cudf::transform_extended(args.inputs,
-                                  args.udf,
-                                  args.output_type,
-                                  args.source_type,
-                                  args.user_data,
-                                  args.is_null_aware,
-                                  args.row_size,
-                                  args.null_policy,
-                                  stream,
-                                  mr);
+  detail::row_ir::ast_args ast_args{.table = table};
+  auto args = detail::row_ir::ast_converter::compute_column(
+    detail::row_ir::target::CUDA, expr, ast_args, stream, mr);
+  return transform_extended(args.inputs,
+                            args.udf,
+                            args.output_type,
+                            args.source_type,
+                            args.user_data,
+                            args.is_null_aware,
+                            args.row_size,
+                            args.null_policy,
+                            stream,
+                            mr);
 }
 
 }  // namespace cudf

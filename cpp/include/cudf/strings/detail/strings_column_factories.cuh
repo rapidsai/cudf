@@ -84,6 +84,45 @@ std::unique_ptr<column> make_strings_column(IndexPairIterator begin,
                              std::move(null_mask));
 }
 
+std::unique_ptr<column> make_strings_column(device_span<string_view const> strings,
+                                            rmm::device_buffer null_mask,
+                                            std::optional<size_type> null_count,
+                                            rmm::cuda_stream_view stream,
+                                            rmm::device_async_resource_ref mr)
+{
+  CUDF_FUNC_RANGE();
+  auto size = static_cast<size_type>(strings.size());
+  if (size == 0) return make_empty_column(type_id::STRING);
+
+  // build offsets column from the strings sizes
+  auto sizes = thrust::make_counting_transform_iterator(
+    cudf::size_type{0},
+    [stencil = null_mask.data(),
+     strings = strings.data()] __device__(cudf::size_type index) -> size_type {
+      if (stencil != nullptr && !bit_is_set(stencil, index)) { return size_type{0}; }
+      return static_cast<size_type>(strings[index].size_bytes());
+    });
+
+  auto [offsets, bytes] =
+    cudf::strings::detail::make_offsets_child_column(sizes, sizes + size, stream, mr);
+
+  auto final_null_count = size_type{0};
+
+  if (!null_count.has_value()) {
+    final_null_count =
+      null_mask.empty() ? 0
+                        : cudf::detail::count_set_bits(null_mask.data(), 0, strings.size(), stream);
+  } else {
+    final_null_count = null_count.value();
+  }
+
+  auto chars =
+    make_chars_buffer(offsets->view(), bytes, strings.data(), null_mask.data(), size, stream, mr);
+
+  return make_strings_column(
+    size, std::move(offsets), chars.release(), final_null_count, std::move(null_mask));
+}
+
 /**
  * @brief Create a strings-type column from iterators to chars, offsets, and bitmask.
  *

@@ -71,7 +71,12 @@ namespace CUDF_EXPORT cudf {
  * @brief Typedef for inputs to the transform function. Each input can be either a column or a
  * scalar column.
  */
-using transform_input = std::variant<column_view, scalar_column_view>;
+using transform_input = std::variant<column_view, scalar_column_view, mutable_column_view>;
+
+struct transform_output {
+  data_type type                 = data_type{type_id::EMPTY};
+  output_nullability nullability = output_nullability::PRESERVE;
+};
 
 /**
  * @brief Creates a new column by applying a transform function against every
@@ -84,11 +89,9 @@ using transform_input = std::variant<column_view, scalar_column_view>;
  * @throws std::invalid_argument if any of the input columns have different sizes (except scalars)
  * @throws std::invalid_argument if `output_type` or any of the inputs are not fixed-width or string
  * types
- * @throws std::invalid_argument if any of the input columns have nulls
  * @throws std::invalid_argument if the inputs only have a scalar with no column inputs and
  * `row_size` is not provided. This is because the row size cannot be inferred from the inputs in
  * this case.
- * @throws std::logic_error if JIT is not supported by the runtime
  *
  * The size of the resulting column is the `row_size` if provided, otherwise it is inferred from
  * the input columns.
@@ -118,6 +121,49 @@ std::unique_ptr<column> transform_extended(
   output_nullability null_policy    = output_nullability::PRESERVE,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
+/**
+ * @brief Creates a new column by applying a transform function against every
+ * element of the input columns.
+ *
+ * Computes:
+ * `UDF(&outputs[i]..., inputs[i]...)`.
+ *
+ *
+ * @throws std::invalid_argument if any of the input columns have different sizes (except scalars)
+ * @throws std::invalid_argument if `output_type` or any of the inputs are not fixed-width or string
+ * types
+ * @throws std::invalid_argument if the inputs only have a scalar with no column inputs and
+ * `row_size` is not provided. This is because the row size cannot be inferred from the inputs in
+ * this case.
+ *
+ * The size of the resulting column is the `row_size` if provided, otherwise it is inferred from
+ * the input and pre-allocated output columns.
+ *
+ * @param udf The PTX/CUDA string of the transform function to apply
+ * @param source_type   The source type of the UDF (CUDA or PTX)
+ * @param is_null_aware Signifies the UDF will receive row inputs as optional values
+ * @param row_size The row size of the transform operation. If not provided, it is inferred from the
+ * input columns.
+ * @param user_data     User-defined device data to pass to the UDF.
+ * @param inputs        Immutable views of the inputs to transform (columns and scalar columns)
+ * @param outputs       Specification of the output columns to be created
+ * @param stream        CUDA stream used for device memory operations and kernel launches
+ * @param mr            Device memory resource used to allocate the returned column's device memory
+ * @return              A vector of columns resulting from applying the transform function to
+ *                      every element of the input. These columns are returned in the same order as
+ * the `output_types`.
+ *
+ */
+std::vector<std::unique_ptr<column>> transform_extended2(std::string const& udf,
+                                       udf_source_type source_type,
+                                       null_aware is_null_aware,
+                                       std::optional<size_type> row_size,
+                                       std::optional<void*> user_data,
+                                       std::span<transform_input const> inputs,
+                                       std::span<transform_output const> outputs,
+                                       rmm::cuda_stream_view stream,
+                                       rmm::device_async_resource_ref mr);
 
 /**
  * @brief Creates a null_mask from `input` by converting `NaN` to null and
