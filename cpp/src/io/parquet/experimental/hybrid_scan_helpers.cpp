@@ -203,8 +203,6 @@ aggregate_reader_metadata::select_payload_columns(
   type_id decimal_type_id,
   bool case_sensitive_names)
 {
-  using cudf::io::parquet::detail::normalize_column_path;
-
   // If neither payload nor filter columns are specified, select all columns
   if (not payload_column_names.has_value() and not filter_column_names.has_value()) {
     // Call the base `select_columns()` method without specifying any columns
@@ -219,6 +217,8 @@ aggregate_reader_metadata::select_payload_columns(
   }
 
   std::vector<std::string> valid_payload_columns;
+
+  using cudf::io::parquet::detail::normalize_column_path;
 
   // If payload columns are specified, only select payload columns that do not appear in the filter
   // expression
@@ -236,7 +236,8 @@ aggregate_reader_metadata::select_payload_columns(
         std::remove_if(valid_payload_columns.begin(),
                        valid_payload_columns.end(),
                        [&](auto const& col) {
-                         return filter_columns_set.count(normalize_column_path(col)) > 0;
+                         return filter_columns_set.count(
+                                  normalize_column_path(col, case_sensitive_names)) > 0;
                        }),
         valid_payload_columns.end());
     }
