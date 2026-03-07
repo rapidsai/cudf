@@ -4078,7 +4078,7 @@ def test_chunked_parquet_reader_nrows_skiprows(
             "b": ["av", "qw", None, "xyz"] * 500,
         }
     )
-    expected = df[skip_rows: skip_rows + nrows]
+    expected = df[skip_rows : skip_rows + nrows]
     buffer = BytesIO()
     df.to_parquet(
         buffer,

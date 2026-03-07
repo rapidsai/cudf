@@ -2261,7 +2261,7 @@ def _assign_block(fs, path_or_fob, local_buffer, offset, nbytes):
     if fs is None:
         # We have an open fsspec file object
         path_or_fob.seek(offset)
-        local_buffer[offset: offset + nbytes] = np.frombuffer(
+        local_buffer[offset : offset + nbytes] = np.frombuffer(
             path_or_fob.read(nbytes),
             dtype="b",
         )
@@ -2269,7 +2269,7 @@ def _assign_block(fs, path_or_fob, local_buffer, offset, nbytes):
         # We have an fsspec filesystem and a path
         with fs.open(path_or_fob, mode="rb", cache_type="none") as fob:
             fob.seek(offset)
-            local_buffer[offset: offset + nbytes] = np.frombuffer(
+            local_buffer[offset : offset + nbytes] = np.frombuffer(
                 fob.read(nbytes),
                 dtype="b",
             )
@@ -2333,7 +2333,7 @@ def _get_remote_bytes_all(
         )
         offset = np.cumsum([0] + [unique_count[p] for p in remote_paths])
         buffers = [
-            functools.reduce(operator.add, chunks[offset[i]: offset[i + 1]])
+            functools.reduce(operator.add, chunks[offset[i] : offset[i + 1]])
             for i in range(len(remote_paths))
         ]
         return buffers
@@ -2369,7 +2369,7 @@ def _get_remote_bytes_parquet(
         buf = np.empty(size, dtype="b")
         for range_offset in path_data.keys():
             chunk = path_data[range_offset]
-            buf[range_offset[0]: range_offset[1]] = np.frombuffer(
+            buf[range_offset[0] : range_offset[1]] = np.frombuffer(
                 chunk, dtype="b"
             )
         buffers.append(buf.tobytes())
