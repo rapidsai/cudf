@@ -310,7 +310,7 @@ named_to_reference_converter::named_to_reference_converter(
                  thrust::counting_iterator<size_t>(0),
                  std::inserter(_column_name_to_index, _column_name_to_index.end()),
                  [case_sensitive_names](auto const& sch, auto index) {
-                   return std::make_pair(case_sensitive_names ? sch.name : str_to_lower(sch.name),
+                   return std::make_pair(normalize_column_path(sch.name, case_sensitive_names),
                                          index);
                  });
 
@@ -334,9 +334,8 @@ std::reference_wrapper<ast::expression const> named_to_reference_converter::visi
 std::reference_wrapper<ast::expression const> named_to_reference_converter::visit(
   ast::column_name_reference const& expr)
 {
-  auto const col_name =
-    _case_sensitive_names ? expr.get_column_name() : str_to_lower(expr.get_column_name());
-  auto col_index_it = _column_name_to_index.find(col_name);
+  auto const col_name = normalize_column_path(expr.get_column_name(), _case_sensitive_names);
+  auto col_index_it   = _column_name_to_index.find(col_name);
   if (col_index_it == _column_name_to_index.end()) {
     CUDF_FAIL("Column name not found in metadata");
   }
@@ -381,12 +380,11 @@ names_from_expression::names_from_expression(
   std::vector<SchemaElement> const& schema_tree)
   : _case_sensitive_names(options.is_enabled_case_sensitive_names())
 {
-  std::transform(skip_names.cbegin(),
-                 skip_names.cend(),
-                 std::inserter(_skip_names, _skip_names.end()),
-                 [&](auto const& skip_name) {
-                   return _case_sensitive_names ? skip_name : str_to_lower(skip_name);
-                 });
+  std::transform(
+    skip_names.cbegin(),
+    skip_names.cend(),
+    std::inserter(_skip_names, _skip_names.end()),
+    [&](auto const& skip_name) { return normalize_column_path(skip_name, _case_sensitive_names); });
 
   if (!expr.has_value()) { return; }
 
@@ -415,8 +413,7 @@ std::reference_wrapper<ast::expression const> names_from_expression::visit(
   ast::column_name_reference const& expr)
 {
   // collect column names
-  auto const col_name =
-    _case_sensitive_names ? expr.get_column_name() : str_to_lower(expr.get_column_name());
+  auto const col_name = normalize_column_path(expr.get_column_name(), _case_sensitive_names);
   if (_skip_names.count(col_name) == 0) { _column_names.insert(col_name); }
   return expr;
 }
@@ -463,8 +460,8 @@ void names_from_expression::visit_operands(
                    thrust::counting_iterator<cudf::size_type>(0),
                    std::inserter(column_indices_to_names, column_indices_to_names.end()),
                    [case_sensitive_names](auto const& col_name, auto const col_index) {
-                     return std::make_pair(
-                       col_index, case_sensitive_names ? col_name : str_to_lower(col_name));
+                     return std::make_pair(col_index,
+                                           normalize_column_path(col_name, case_sensitive_names));
                    });
   } else {
     // Map selected top-level column indices to their names from the schema tree
@@ -477,10 +474,9 @@ void names_from_expression::visit_operands(
                      std::inserter(column_indices_to_names, column_indices_to_names.end()),
                      [&](auto selected_col_idx, auto const mapped_col_idx) {
                        auto const schema_idx = root.children_idx[selected_col_idx];
-                       return std::make_pair(mapped_col_idx,
-                                             case_sensitive_names
-                                               ? schema_tree[schema_idx].name
-                                               : str_to_lower(schema_tree[schema_idx].name));
+                       return std::make_pair(
+                         mapped_col_idx,
+                         normalize_column_path(schema_tree[schema_idx].name, case_sensitive_names));
                      });
     } else {
       // Map all top-level column indices to their names from the schema tree
