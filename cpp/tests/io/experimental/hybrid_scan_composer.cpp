@@ -167,13 +167,15 @@ std::tuple<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::table>> hybrid_sc
   cudf::ast::operation const& filter_expression,
   cudf::size_type num_filter_columns,
   std::optional<std::vector<std::string>> const& payload_column_names,
+  bool case_sensitive_names,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr,
   rmm::mr::aligned_resource_adaptor<rmm::mr::device_memory_resource>& aligned_mr)
 {
   // Create reader options with empty source info
-  cudf::io::parquet_reader_options options =
-    cudf::io::parquet_reader_options::builder().filter(filter_expression);
+  cudf::io::parquet_reader_options options = cudf::io::parquet_reader_options::builder()
+                                               .filter(filter_expression)
+                                               .case_sensitive_names(case_sensitive_names);
 
   // Set payload column names if provided
   if (payload_column_names.has_value()) { options.set_column_names(payload_column_names.value()); }
@@ -235,13 +237,15 @@ std::tuple<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::table>> chunked_h
   cudf::ast::operation const& filter_expression,
   cudf::size_type num_filter_columns,
   std::optional<std::vector<std::string>> const& payload_column_names,
+  bool case_sensitive_names,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr,
   rmm::mr::aligned_resource_adaptor<rmm::mr::device_memory_resource>& aligned_mr)
 {
   // Create reader options with empty source info
-  cudf::io::parquet_reader_options options =
-    cudf::io::parquet_reader_options::builder().filter(filter_expression);
+  cudf::io::parquet_reader_options options = cudf::io::parquet_reader_options::builder()
+                                               .filter(filter_expression)
+                                               .case_sensitive_names(case_sensitive_names);
 
   // Set payload column names if provided
   if (payload_column_names.has_value()) { options.set_column_names(payload_column_names.value()); }
@@ -352,12 +356,15 @@ std::unique_ptr<cudf::table> hybrid_scan_single_step(
   cudf::io::datasource& datasource,
   cudf::ast::operation const& filter_expression,
   std::optional<std::vector<std::string>> const& column_names,
+  bool case_sensitive_names,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
   // Create reader options with empty source info
-  cudf::io::parquet_reader_options options =
-    cudf::io::parquet_reader_options::builder().filter(filter_expression).build();
+  cudf::io::parquet_reader_options options = cudf::io::parquet_reader_options::builder()
+                                               .filter(filter_expression)
+                                               .case_sensitive_names(case_sensitive_names)
+                                               .build();
 
   if (column_names.has_value()) { options.set_column_names(column_names.value()); }
 
@@ -389,12 +396,15 @@ std::unique_ptr<cudf::table> chunked_hybrid_scan_single_step(
   cudf::io::datasource& datasource,
   cudf::ast::operation const& filter_expression,
   std::optional<std::vector<std::string>> const& column_names,
+  bool case_sensitive_names,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
   // Create reader options with empty source info
-  cudf::io::parquet_reader_options options =
-    cudf::io::parquet_reader_options::builder().filter(filter_expression).build();
+  cudf::io::parquet_reader_options options = cudf::io::parquet_reader_options::builder()
+                                               .filter(filter_expression)
+                                               .case_sensitive_names(case_sensitive_names)
+                                               .build();
 
   if (column_names.has_value()) { options.set_column_names(column_names.value()); }
 

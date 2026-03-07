@@ -200,7 +200,8 @@ aggregate_reader_metadata::select_payload_columns(
   bool strings_to_categorical,
   bool ignore_missing_columns,
   type_id timestamp_type_id,
-  type_id decimal_type_id)
+  type_id decimal_type_id,
+  bool case_sensitive_names)
 {
   // If neither payload nor filter columns are specified, select all columns
   if (not payload_column_names.has_value() and not filter_column_names.has_value()) {
@@ -211,10 +212,13 @@ aggregate_reader_metadata::select_payload_columns(
                           strings_to_categorical,
                           ignore_missing_columns,
                           timestamp_type_id,
-                          decimal_type_id);
+                          decimal_type_id,
+                          case_sensitive_names);
   }
 
   std::vector<std::string> valid_payload_columns;
+
+  using cudf::io::parquet::detail::normalize_column_path;
 
   // If payload columns are specified, only select payload columns that do not appear in the filter
   // expression
@@ -223,15 +227,19 @@ aggregate_reader_metadata::select_payload_columns(
     // Remove filter columns from the provided payload column names
     if (filter_column_names.has_value() and not filter_column_names->empty()) {
       // Add filter column names to a hash set for faster lookup
-      std::unordered_set<std::string> filter_columns_set(filter_column_names->begin(),
-                                                         filter_column_names->end());
+      std::unordered_set<std::string> filter_columns_set;
+      for (auto const& filter_column_name : *filter_column_names) {
+        filter_columns_set.insert(normalize_column_path(filter_column_name, case_sensitive_names));
+      }
       // Remove a payload column name if it is also present in the hash set
-      valid_payload_columns.erase(std::remove_if(valid_payload_columns.begin(),
-                                                 valid_payload_columns.end(),
-                                                 [&filter_columns_set](auto const& col) {
-                                                   return filter_columns_set.count(col) > 0;
-                                                 }),
-                                  valid_payload_columns.end());
+      valid_payload_columns.erase(
+        std::remove_if(valid_payload_columns.begin(),
+                       valid_payload_columns.end(),
+                       [&](auto const& col) {
+                         return filter_columns_set.count(
+                                  normalize_column_path(col, case_sensitive_names)) > 0;
+                       }),
+        valid_payload_columns.end());
     }
     // Call the base `select_columns()` method with valid payload columns
     return select_columns(valid_payload_columns,
@@ -240,40 +248,41 @@ aggregate_reader_metadata::select_payload_columns(
                           strings_to_categorical,
                           ignore_missing_columns,
                           timestamp_type_id,
-                          decimal_type_id);
+                          decimal_type_id,
+                          case_sensitive_names);
   }
 
   // Else if only filter columns are specified, select all columns that do not appear in the
   // filter expression
-
-  // Add filter column names to a hash set for faster lookup
-  std::unordered_set<std::string> filter_columns_set(filter_column_names->begin(),
-                                                     filter_column_names->end());
+  std::unordered_set<std::string> filter_columns_set;
+  for (auto const& filter_column_name : *filter_column_names) {
+    filter_columns_set.insert(normalize_column_path(filter_column_name, case_sensitive_names));
+  }
 
   std::function<void(std::string, int)> add_column_path = [&](std::string path_till_now,
                                                               int schema_idx) {
     auto const& schema_elem     = get_schema(schema_idx);
     std::string const curr_path = path_till_now + schema_elem.name;
-    // Add the current path to the list of valid payload columns if it is not a filter column
     // TODO: Add children when AST filter expressions start supporting nested struct columns
-    if (filter_columns_set.count(curr_path) == 0) { valid_payload_columns.push_back(curr_path); }
+    if (filter_columns_set.count(normalize_column_path(curr_path, case_sensitive_names)) == 0) {
+      valid_payload_columns.push_back(curr_path);
+    }
   };
 
-  // Add all but filter columns to valid payload columns
   if (not filter_column_names->empty()) {
     for (auto const& child_idx : get_schema(0).children_idx) {
       add_column_path("", child_idx);
     }
   }
 
-  // Call the base `select_columns()` method with all but filter columns
   return select_columns(valid_payload_columns,
                         {},
                         include_index,
                         strings_to_categorical,
                         ignore_missing_columns,
                         timestamp_type_id,
-                        decimal_type_id);
+                        decimal_type_id,
+                        case_sensitive_names);
 }
 
 std::vector<std::vector<cudf::size_type>>
@@ -588,19 +597,26 @@ named_to_reference_converter::named_to_reference_converter(
   std::optional<std::reference_wrapper<ast::expression const>> expr,
   table_metadata const& metadata,
   std::vector<SchemaElement> const& schema_tree,
-  cudf::io::parquet_reader_options const& options)
+  cudf::io::parquet_reader_options const& options,
+  bool case_sensitive_names)
 {
   if (!expr.has_value()) { return; }
 
-  _column_indices_to_names =
-    cudf::io::parquet::detail::map_column_indices_to_names(options, schema_tree);
+  _case_sensitive_names = case_sensitive_names;
+
+  _column_indices_to_names = cudf::io::parquet::detail::map_column_indices_to_names(
+    options, schema_tree, case_sensitive_names);
 
   // Map column names to their indices
-  std::transform(metadata.schema_info.cbegin(),
-                 metadata.schema_info.cend(),
-                 thrust::counting_iterator<size_t>(0),
-                 std::inserter(_column_name_to_index, _column_name_to_index.end()),
-                 [](auto const& sch, auto index) { return std::make_pair(sch.name, index); });
+  std::transform(
+    metadata.schema_info.cbegin(),
+    metadata.schema_info.cend(),
+    thrust::counting_iterator<size_t>(0),
+    std::inserter(_column_name_to_index, _column_name_to_index.end()),
+    [&](auto const& sch, auto index) {
+      return std::make_pair(
+        cudf::io::parquet::detail::normalize_column_path(sch.name, case_sensitive_names), index);
+    });
 
   expr.value().get().accept(*this);
 }
@@ -610,8 +626,8 @@ std::reference_wrapper<ast::expression const> named_to_reference_converter::visi
 {
   // Map the column index to its name
   auto const col_name = _column_indices_to_names[expr.get_column_index()];
-  // Check if the column name exists in the metadata and map it to its new column index
-  auto col_index_it = _column_name_to_index.find(col_name);
+  auto col_index_it   = _column_name_to_index.find(
+    cudf::io::parquet::detail::normalize_column_path(col_name, _case_sensitive_names));
   if (col_index_it == _column_name_to_index.end()) {
     CUDF_FAIL("Column name not found in metadata");
   }

@@ -156,7 +156,8 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
                            bool strings_to_categorical,
                            bool ignore_missing_columns,
                            type_id timestamp_type_id,
-                           type_id decimal_type_id);
+                           type_id decimal_type_id,
+                           bool case_sensitive_names);
 
   /**
    * @brief Filters row groups such that only the row groups that start within the byte range
@@ -367,7 +368,8 @@ class named_to_reference_converter : public parquet::detail::named_to_reference_
   named_to_reference_converter(std::optional<std::reference_wrapper<ast::expression const>> expr,
                                table_metadata const& metadata,
                                std::vector<SchemaElement> const& schema_tree,
-                               cudf::io::parquet_reader_options const& options);
+                               cudf::io::parquet_reader_options const& options,
+                               bool case_sensitive_names);
 
   using parquet::detail::named_to_reference_converter::visit;
 

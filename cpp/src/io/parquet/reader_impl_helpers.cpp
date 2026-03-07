@@ -28,6 +28,7 @@
 #include <numeric>
 #include <optional>
 #include <regex>
+#include <string_view>
 #include <utility>
 
 namespace cudf::io::parquet::detail {
@@ -91,9 +92,28 @@ cuda::std::optional<LogicalType> converted_to_logical_type(SchemaElement const& 
 
 }  // namespace
 
-/**
- * @brief Function that translates Parquet datatype to cuDF type enum
- */
+std::string normalize_column_path(std::string_view col_path, bool case_sensitive_names)
+{
+  if (case_sensitive_names) { return std::string{col_path}; }
+  auto normalized_path = std::string{};
+  normalized_path.reserve(col_path.size());
+  std::transform(
+    col_path.begin(), col_path.end(), std::back_inserter(normalized_path), [](unsigned char c) {
+      return std::tolower(c);
+    });
+  return normalized_path;
+}
+
+bool are_column_paths_equal(std::string_view lhs, std::string_view rhs, bool case_sensitive)
+{
+  if (lhs.size() != rhs.size()) { return false; }
+  if (case_sensitive) { return lhs == rhs; }
+  return std::equal(
+    lhs.begin(), lhs.end(), rhs.begin(), [](unsigned char lhs_char, unsigned char rhs_char) {
+      return std::equal_to<>{}(std::tolower(lhs_char), std::tolower(rhs_char));
+    });
+}
+
 type_id to_type_id(SchemaElement const& schema,
                    bool strings_to_categorical,
                    type_id timestamp_type_id,
@@ -1613,14 +1633,18 @@ aggregate_reader_metadata::select_columns(
   bool strings_to_categorical,
   bool ignore_missing_columns,
   type_id timestamp_type_id,
-  type_id decimal_type_id)
+  type_id decimal_type_id,
+  bool case_sensitive_names)
 {
   auto const find_schema_child =
     [&](SchemaElement const& schema_elem, std::string_view name, int const pfm_idx = 0) {
-      auto const& col_schema_idx = std::find_if(
-        schema_elem.children_idx.cbegin(),
-        schema_elem.children_idx.cend(),
-        [&](size_t col_schema_idx) { return get_schema(col_schema_idx, pfm_idx).name == name; });
+      auto const& col_schema_idx =
+        std::find_if(schema_elem.children_idx.cbegin(),
+                     schema_elem.children_idx.cend(),
+                     [&](size_t col_schema_idx) {
+                       return are_column_paths_equal(
+                         get_schema(col_schema_idx, pfm_idx).name, name, case_sensitive_names);
+                     });
 
       return (col_schema_idx != schema_elem.children_idx.end())
                ? static_cast<size_type>(*col_schema_idx)
@@ -1729,7 +1753,8 @@ aggregate_reader_metadata::select_columns(
     };
 
   // Compares two schema elements to be equal except their number of children
-  auto const equal_to_except_num_children = [](SchemaElement const& lhs, SchemaElement const& rhs) {
+  auto const equal_to_except_num_children = [&](SchemaElement const& lhs,
+                                                SchemaElement const& rhs) {
     return lhs.type == rhs.type and lhs.converted_type == rhs.converted_type and
            lhs.type_length == rhs.type_length and lhs.name == rhs.name and
            lhs.decimal_scale == rhs.decimal_scale and
@@ -1874,11 +1899,13 @@ aggregate_reader_metadata::select_columns(
       for (auto const& selected_path : used_column_names.get()) {
         auto found_path =
           std::find_if(all_paths.begin(), all_paths.end(), [&](path_info& valid_path) {
-            return valid_path.full_path == selected_path;
+            return are_column_paths_equal(
+              valid_path.full_path, selected_path, case_sensitive_names);
           });
         // Ensure that selected path matches a path in all_paths
         if (found_path != all_paths.end()) {
-          valid_selected_paths.push_back({selected_path, found_path->schema_idx});
+          // Use the file's actual path (preserving original case) for the valid_selected_paths
+          valid_selected_paths.push_back({found_path->full_path, found_path->schema_idx});
         } else if (not ignore_missing_columns) {
           CUDF_FAIL("Encountered non-existent column in selected path", std::invalid_argument);
         }

@@ -110,12 +110,13 @@ TEST_F(HybridScanFiltersTest, TestMetadata)
   // Filtering AST - table[0] < 100
   auto literal_value     = cudf::numeric_scalar<T>(100);
   auto literal           = cudf::ast::literal(literal_value);
-  auto col_ref_0         = cudf::ast::column_name_reference("col0");
+  auto col_ref_0         = cudf::ast::column_name_reference("coL0");
   auto filter_expression = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref_0, literal);
 
   // Create reader options with empty source info
-  cudf::io::parquet_reader_options options =
-    cudf::io::parquet_reader_options::builder().filter(filter_expression);
+  cudf::io::parquet_reader_options options = cudf::io::parquet_reader_options::builder()
+                                               .filter(filter_expression)
+                                               .case_sensitive_names(false);
 
   // Input file buffer span
   auto const datasource = cudf::io::datasource::create(cudf::host_span<std::byte const>(

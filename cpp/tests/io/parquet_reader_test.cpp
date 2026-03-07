@@ -3900,3 +3900,58 @@ TEST_F(ParquetReaderTest, DecimalTypeOption)
     EXPECT_EQ(result.tbl->view().column(0).type().scale(), -2);
   }
 }
+
+TEST_F(ParquetReaderTest, CaseInsensitiveColumnSelection)
+{
+  auto col0 = cudf::test::fixed_width_column_wrapper<int32_t>{1, 2, 3, 4, 5};
+  auto col1 = cudf::test::fixed_width_column_wrapper<int32_t>{10, 20, 30, 40, 50};
+  cudf::table_view tbl{{col0, col1}};
+
+  cudf::io::table_input_metadata meta(tbl);
+  meta.column_metadata[0].set_name("col0");
+  meta.column_metadata[1].set_name("col1");
+
+  auto filepath = temp_env->get_temp_filepath("CaseInsensitiveColumnSelection.parquet");
+  cudf::io::parquet_writer_options write_opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, tbl)
+      .metadata(meta)
+      .build();
+  cudf::io::write_parquet(write_opts);
+
+  // Case-sensitive: "col0" is ignored
+  {
+    auto read_opts =
+      cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath}).build();
+    read_opts.set_column_names({"Col0"});
+    // ignore_missing_columns defaults to true, so result should be empty
+    auto result = cudf::io::read_parquet(read_opts);
+    EXPECT_EQ(result.tbl->view().num_columns(), 0);
+  }
+
+  // Case-insensitive: "Col0" -> "col0"
+  {
+    auto read_opts = cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath})
+                       .case_sensitive_names(false)
+                       .build();
+    read_opts.set_column_names({"Col0"});
+    auto result = cudf::io::read_parquet(read_opts);
+    ASSERT_EQ(result.tbl->view().num_columns(), 1);
+    // Output column name should be the file's original name "col0"
+    EXPECT_EQ(result.metadata.schema_info[0].name, "col0");
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->view().column(0), col0);
+  }
+
+  // Case-insensitive: "COL0" -> "col0", "Col1" -> "col1"
+  {
+    auto read_opts = cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath})
+                       .case_sensitive_names(false)
+                       .build();
+    read_opts.set_column_names({"COL0", "Col1"});
+    auto result = cudf::io::read_parquet(read_opts);
+    ASSERT_EQ(result.tbl->view().num_columns(), 2);
+    EXPECT_EQ(result.metadata.schema_info[0].name, "col0");
+    EXPECT_EQ(result.metadata.schema_info[1].name, "col1");
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->view().column(0), col0);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->view().column(1), col1);
+  }
+}
