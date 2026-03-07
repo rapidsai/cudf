@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import contextlib
 from datetime import datetime
 
 import pytest
@@ -133,7 +134,7 @@ def test_grouped_rolling():
     assert_gpu_result_equal(q)
 
 
-def test_grouped_rolling_unsorted_raises():
+def test_grouped_rolling_unsorted_raises(using_rapidsmpf):
     df = pl.LazyFrame(
         {
             "keys": [1, None, 2, 1, 2, None],
@@ -145,7 +146,19 @@ def test_grouped_rolling_unsorted_raises():
 
     with pytest.raises(pl.exceptions.ComputeError):
         q.collect(engine="in-memory")
-    with pytest.raises(RuntimeError, match="Input for grouped rolling is not sorted"):
+
+    fallback_warning = (
+        pytest.warns(
+            UserWarning,
+            match="shuffle_method=rapidsmpf-single does not support maintain_order=True",
+        )
+        if using_rapidsmpf
+        else contextlib.nullcontext()
+    )
+    with (
+        pytest.raises(RuntimeError, match="Input for grouped rolling is not sorted"),
+        fallback_warning,
+    ):
         q.collect(engine=pl.GPUEngine(raise_on_fail=True))
 
 

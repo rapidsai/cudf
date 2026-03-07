@@ -198,7 +198,7 @@ def test_sort_stable_rapidsmpf_warns():
     )
 
     q = df.sort(by=["y", "z"], maintain_order=True)
-    with pytest.warns(UserWarning, match="Falling back to shuffle_method='tasks'."):
+    with pytest.warns(UserWarning, match="Falling back to shuffle_method"):
         assert_gpu_result_equal(q, engine=engine, check_row_order=True)
 
 
