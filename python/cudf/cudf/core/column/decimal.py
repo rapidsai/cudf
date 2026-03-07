@@ -112,12 +112,6 @@ class DecimalBaseColumn(NumericalBaseColumn):
             "Decimals are not yet supported via `__cuda_array_interface__`"
         )
 
-    def element_indexing(self, index: int) -> Decimal | None:
-        result = super().element_indexing(index)
-        if isinstance(result, pa.Scalar):
-            return result.as_py()
-        return result
-
     def as_decimal_column(
         self,
         dtype: DecimalDtype,

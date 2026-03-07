@@ -356,7 +356,7 @@ filter_join_indices(cudf::table_view const& left,
  *     *output = left_val > right_val;
  *   }
  * )";
- * auto [filtered_left, filtered_right] = cudf::jit_filter_join_indices(
+ * auto [filtered_left, filtered_right] = cudf::filter_join_indices_jit(
  *   left_conditional_table,   // Table with columns referenced by predicate
  *   right_conditional_table,  // Table with columns referenced by predicate
  *   *left_indices,           // Indices from hash join
@@ -394,7 +394,7 @@ filter_join_indices(cudf::table_view const& left,
  */
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
-jit_filter_join_indices(
+filter_join_indices_jit(
   cudf::table_view const& left,
   cudf::table_view const& right,
   cudf::device_span<size_type const> left_indices,
@@ -423,7 +423,7 @@ jit_filter_join_indices(
  */
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
-jit_filter_join_indices(
+filter_join_indices_jit(
   cudf::table_view const& left,
   cudf::table_view const& right,
   cudf::device_span<size_type const> left_indices,
