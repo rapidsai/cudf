@@ -27,6 +27,7 @@
 #include <cooperative_groups/reduce.h>
 #include <cooperative_groups/scan.h>
 #include <cub/cub.cuh>
+#include <cuda/std/algorithm>
 
 namespace cudf {
 namespace strings {

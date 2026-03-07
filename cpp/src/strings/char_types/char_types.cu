@@ -20,6 +20,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <cuda/std/limits>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform.h>
 

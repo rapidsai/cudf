@@ -25,6 +25,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 
+#include <cuda/std/algorithm>
 #include <cuda/std/optional>
 #include <cuda/std/utility>
 #include <thrust/execution_policy.h>

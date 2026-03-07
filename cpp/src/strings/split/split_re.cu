@@ -21,6 +21,7 @@
 #include <rmm/cuda_stream_view.hpp>
 
 #include <cuda/functional>
+#include <cuda/std/algorithm>
 #include <cuda/std/iterator>
 #include <cuda/std/tuple>
 #include <thrust/iterator/counting_iterator.h>

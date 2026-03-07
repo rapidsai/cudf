@@ -27,6 +27,8 @@
 #include <cooperative_groups.h>
 #include <cooperative_groups/reduce.h>
 #include <cuda/iterator>
+#include <cuda/std/algorithm>
+#include <cuda/std/limits>
 #include <cuda/std/utility>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform.h>

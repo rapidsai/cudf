@@ -44,6 +44,8 @@ Mark Adler    madler@alumni.caltech.edu
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/std/algorithm>
+#include <cuda/std/cmath>
 #include <cuda/std/tuple>
 #include <thrust/gather.h>
 #include <thrust/sequence.h>
