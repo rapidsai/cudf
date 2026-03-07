@@ -98,7 +98,7 @@ struct row_group_info {
                                                 bool case_sensitive_names);
 
 /**
- * @brief Compares two column paths with specified case-insensitivity
+ * @brief Compares two column paths with specified case sensitivity
  *
  * @param lhs The left-hand side column path
  * @param rhs The right-hand side column path
