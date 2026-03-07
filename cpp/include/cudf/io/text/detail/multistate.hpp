@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -99,7 +99,7 @@ struct multistate {
  * @param rhs future segments
  * @return full join of past and future segments
  */
-constexpr multistate operator+(multistate const& lhs, multistate const& rhs)
+CUDF_HOST_DEVICE constexpr multistate operator+(multistate const& lhs, multistate const& rhs)
 {
   // combine two multistates together by full-joining LHS tails to RHS heads,
   // and taking the corresponding LHS heads and RHS tails.
