@@ -137,6 +137,14 @@ class PDSDSPolarsQueries(PDSDSQueries):
             pl.col("store_cumulative").cast(pl.Decimal(18, 2)),
         ],
         52: [pl.col("ext_price").cast(pl.Decimal(18, 2))],
+        53: [pl.col("sum_sales").cast(pl.Decimal(18, 2))],
+        55: [pl.col("ext_price").cast(pl.Decimal(18, 2))],
+        56: [pl.col("total_sales").cast(pl.Decimal(18, 2))],
+        57: [
+            pl.col("sum_sales").cast(pl.Decimal(18, 2)),
+            pl.col("psum").cast(pl.Decimal(18, 2)),
+            pl.col("nsum").cast(pl.Decimal(18, 2)),
+        ],
         63: [pl.col("sum_sales").cast(pl.Decimal(18, 2))],
         64: [
             pl.col("s1").cast(pl.Decimal(18, 2)),
@@ -194,6 +202,11 @@ class PDSDSPolarsQueries(PDSDSQueries):
             pl.col("61-90 days").cast(COUNT_DTYPE),
             pl.col("91-120 days").cast(COUNT_DTYPE),
             pl.col(">120 days").cast(COUNT_DTYPE),
+        ],
+        54: [
+            pl.col("segment").cast(pl.Float64),
+            pl.col("segment_base").cast(pl.Float64),
+            pl.col("num_customers").cast(COUNT_DTYPE),
         ],
         64: [
             pl.col("cnt").cast(COUNT_DTYPE),
