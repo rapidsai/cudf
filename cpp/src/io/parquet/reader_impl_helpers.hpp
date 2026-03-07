@@ -106,9 +106,9 @@ struct row_group_info {
  *
  * @return Boolean indicating if the column paths are equal
  */
-[[nodiscard]] bool is_column_paths_equal(std::string_view lhs,
-                                         std::string_view rhs,
-                                         bool case_sensitive);
+[[nodiscard]] bool are_column_paths_equal(std::string_view lhs,
+                                          std::string_view rhs,
+                                          bool case_sensitive);
 
 /**
  * @brief Translates Parquet datatype to cuDF type enum

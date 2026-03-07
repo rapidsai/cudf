@@ -104,7 +104,7 @@ std::string normalize_column_path(std::string_view col_path, bool case_sensitive
   return normalized_path;
 }
 
-bool is_column_paths_equal(std::string_view lhs, std::string_view rhs, bool case_sensitive)
+bool are_column_paths_equal(std::string_view lhs, std::string_view rhs, bool case_sensitive)
 {
   if (lhs.size() != rhs.size()) { return false; }
   if (case_sensitive) { return lhs == rhs; }
@@ -1646,7 +1646,7 @@ aggregate_reader_metadata::select_columns(
         std::find_if(schema_elem.children_idx.cbegin(),
                      schema_elem.children_idx.cend(),
                      [&](size_t col_schema_idx) {
-                       return is_column_paths_equal(
+                       return are_column_paths_equal(
                          get_schema(col_schema_idx, pfm_idx).name, name, case_sensitive_names);
                      });
 
@@ -1761,7 +1761,7 @@ aggregate_reader_metadata::select_columns(
                                                 SchemaElement const& rhs) {
     return lhs.type == rhs.type and lhs.converted_type == rhs.converted_type and
            lhs.type_length == rhs.type_length and
-           is_column_paths_equal(lhs.name, rhs.name, case_sensitive_names) and
+           are_column_paths_equal(lhs.name, rhs.name, case_sensitive_names) and
            lhs.decimal_scale == rhs.decimal_scale and
            lhs.decimal_precision == rhs.decimal_precision and lhs.field_id == rhs.field_id;
   };
@@ -1904,7 +1904,8 @@ aggregate_reader_metadata::select_columns(
       for (auto const& selected_path : used_column_names.get()) {
         auto found_path =
           std::find_if(all_paths.begin(), all_paths.end(), [&](path_info& valid_path) {
-            return is_column_paths_equal(valid_path.full_path, selected_path, case_sensitive_names);
+            return are_column_paths_equal(
+              valid_path.full_path, selected_path, case_sensitive_names);
           });
         // Ensure that selected path matches a path in all_paths
         if (found_path != all_paths.end()) {
