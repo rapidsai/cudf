@@ -41,31 +41,6 @@ namespace {
 
 }  // namespace
 
-std::optional<ast::ast_operator> transform_operator(ast::ast_operator op, operator_transform mode)
-{
-  switch (op) {
-    case ast::ast_operator::LESS:
-      return mode == operator_transform::INVERT ? ast::ast_operator::GREATER
-                                                : ast::ast_operator::GREATER_EQUAL;
-    case ast::ast_operator::GREATER:
-      return mode == operator_transform::INVERT ? ast::ast_operator::LESS
-                                                : ast::ast_operator::LESS_EQUAL;
-    case ast::ast_operator::LESS_EQUAL:
-      return mode == operator_transform::INVERT ? ast::ast_operator::GREATER_EQUAL
-                                                : ast::ast_operator::GREATER;
-    case ast::ast_operator::GREATER_EQUAL:
-      return mode == operator_transform::INVERT ? ast::ast_operator::LESS_EQUAL
-                                                : ast::ast_operator::LESS;
-    case ast::ast_operator::EQUAL:
-      return mode == operator_transform::INVERT ? ast::ast_operator::EQUAL
-                                                : ast::ast_operator::NOT_EQUAL;
-    case ast::ast_operator::NOT_EQUAL:
-      return mode == operator_transform::INVERT ? ast::ast_operator::NOT_EQUAL
-                                                : ast::ast_operator::EQUAL;
-    default: return mode == operator_transform::INVERT ? std::make_optional(op) : std::nullopt;
-  }
-}
-
 unary_operand extract_unary_operand(ast::operation const& expr)
 {
   auto const& operands = expr.get_operands();
@@ -90,7 +65,7 @@ binary_operands extract_binary_operands(ast::operation const& expr)
 
   // Normalize `lit op col` to `col op lit` by inverting the operator
   if (lhs_kind == operand_kind::LITERAL and rhs_kind == operand_kind::COLUMN_REF) {
-    return {.op       = transform_operator(op, operator_transform::INVERT).value(),
+    return {.op       = transform_operator<operator_transform::INVERT>(op).value(),
             .lhs_type = rhs_kind,
             .rhs_type = lhs_kind,
             .col_ref  = dynamic_cast<ast::column_reference const*>(&rhs),

@@ -172,7 +172,7 @@ std::reference_wrapper<ast::expression const> stats_expression_converter::visit(
             // For NOT(col op lit) negate the operator if negatable and visit the negated operation
             // directly
             if (lhs_kind == operand_kind::COLUMN_REF and rhs_kind == operand_kind::LITERAL) {
-              auto const negated_op = transform_operator(child_op, operator_transform::NEGATE);
+              auto const negated_op = transform_operator<operator_transform::NEGATE>(child_op);
               if (negated_op.has_value()) {
                 auto const& child_operands = child_operation->get_operands();
                 return visit(

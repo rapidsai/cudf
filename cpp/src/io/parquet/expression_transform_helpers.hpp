@@ -78,14 +78,37 @@ enum class operator_transform : uint8_t {
  *
  * INVERT swaps operand order (e.g. LESS => GREATER) for normalizing `lit op col` to `col op lit`.
  * NEGATE returns the logical complement (e.g. LESS => GREATER_EQUAL) for handling NOT(col op lit).
-
+ *
+ * @tparam mode Transformation mode
+ *
  * @param op Operator to transform
- * @param mode Transformation mode
  * @return Transformed operator or std::nullopt. For INVERT mode, commutative and
  * untransformable operators are returned as is (no std::nullopt)
  */
-[[nodiscard]] std::optional<ast::ast_operator> transform_operator(ast::ast_operator op,
-                                                                  operator_transform mode);
+template <operator_transform mode>
+[[nodiscard]] inline std::optional<ast::ast_operator> transform_operator(ast::ast_operator op)
+{
+  if constexpr (mode == operator_transform::INVERT) {
+    switch (op) {
+      case ast::ast_operator::LESS: return ast::ast_operator::GREATER;
+      case ast::ast_operator::GREATER: return ast::ast_operator::LESS;
+      case ast::ast_operator::LESS_EQUAL: return ast::ast_operator::GREATER_EQUAL;
+      case ast::ast_operator::GREATER_EQUAL: return ast::ast_operator::LESS_EQUAL;
+      default: return std::make_optional(op);
+    }
+  } else {
+    // mode == NEGATE
+    switch (op) {
+      case ast::ast_operator::LESS: return ast::ast_operator::GREATER_EQUAL;
+      case ast::ast_operator::GREATER: return ast::ast_operator::LESS_EQUAL;
+      case ast::ast_operator::LESS_EQUAL: return ast::ast_operator::GREATER;
+      case ast::ast_operator::GREATER_EQUAL: return ast::ast_operator::LESS;
+      case ast::ast_operator::EQUAL: return ast::ast_operator::NOT_EQUAL;
+      case ast::ast_operator::NOT_EQUAL: return ast::ast_operator::EQUAL;
+      default: return std::nullopt;
+    }
+  }
+}
 
 /**
  * @brief Handle unary operation transform for membership-based row group filters. i.e., bloom
