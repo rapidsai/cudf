@@ -36,6 +36,15 @@ class Gather(Expr):
             child.evaluate(df, context=context) for child in self.children
         )
         n = values.size
+        if indices.size == 0:
+            return Column(
+                plc.Column.from_scalar(
+                    plc.Scalar.from_py(None, values.obj.type(), stream=df.stream),
+                    0,
+                    stream=df.stream,
+                ),
+                dtype=self.dtype,
+            )
         lo, hi = plc.reduce.minmax(indices.obj, stream=df.stream)
         if hi.to_py(stream=df.stream) >= n or lo.to_py(stream=df.stream) < -n:  # type: ignore[operator]
             raise ValueError("gather indices are out of bounds")
