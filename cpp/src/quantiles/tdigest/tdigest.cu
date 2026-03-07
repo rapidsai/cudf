@@ -24,6 +24,7 @@
 
 #include <cuda/functional>
 #include <cuda/iterator>
+#include <cuda/std/utility>
 #include <thrust/binary_search.h>
 #include <thrust/execution_policy.h>
 #include <thrust/fill.h>
@@ -134,13 +135,13 @@ CUDF_KERNEL void compute_percentiles_kernel(device_span<size_type const> tdigest
         auto const first_centroid = centroid_index == 0;
         auto const lhs = first_centroid ? centroid{*min_val, 0} : centroids[centroid_index - 1];
         auto const rhs = c;
-        return std::pair<centroid, centroid>{lhs, rhs};
+        return cuda::std::pair<centroid, centroid>{lhs, rhs};
       } else {
         // if we're at the last centroid, "right" of us is the max value
         auto const last_centroid = (centroid_index == tdigest_size - 1);
         auto const lhs           = c;
         auto const rhs = last_centroid ? centroid{*max_val, 0} : centroids[centroid_index + 1];
-        return std::pair<centroid, centroid>{lhs, rhs};
+        return cuda::std::pair<centroid, centroid>{lhs, rhs};
       }
     }();
 

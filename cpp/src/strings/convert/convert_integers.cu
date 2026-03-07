@@ -22,6 +22,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/std/limits>
 #include <cuda/std/utility>
 #include <thrust/execution_policy.h>
 #include <thrust/iterator/counting_iterator.h>
@@ -50,9 +51,9 @@ struct string_to_integer_check_fn {
     auto const iter_end = d_str + p.first.size_bytes();
     if (iter == iter_end) { return false; }
 
-    auto const sign = d_str[0] == '-' ? IntegerType{-1} : IntegerType{1};
-    auto const bound_val =
-      sign > 0 ? std::numeric_limits<IntegerType>::max() : std::numeric_limits<IntegerType>::min();
+    auto const sign      = d_str[0] == '-' ? IntegerType{-1} : IntegerType{1};
+    auto const bound_val = sign > 0 ? cuda::std::numeric_limits<IntegerType>::max()
+                                    : cuda::std::numeric_limits<IntegerType>::min();
 
     IntegerType value = 0;      // parse the string to integer and check for overflow along the way
     while (iter != iter_end) {  // check all bytes for valid characters

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -8,8 +8,9 @@
 #include <cudf/strings/detail/convert/is_float.cuh>
 #include <cudf/strings/string_view.cuh>
 
+#include <cuda/std/limits>
+
 #include <cmath>
-#include <limits>
 
 namespace cudf {
 namespace strings {
@@ -36,8 +37,8 @@ __device__ inline double stod(string_view const& d_str)
   }
 
 #ifndef CUDF_RUNTIME_JIT
-  constexpr double infinity      = std::numeric_limits<double>::infinity();
-  constexpr uint64_t max_holding = (std::numeric_limits<uint64_t>::max() - 9L) / 10L;
+  constexpr double infinity      = cuda::std::numeric_limits<double>::infinity();
+  constexpr uint64_t max_holding = (cuda::std::numeric_limits<uint64_t>::max() - 9L) / 10L;
 #else
   constexpr double infinity      = (1.0 / 0.0);
   constexpr uint64_t max_holding = (18446744073709551615UL - 9UL) / 10UL;
