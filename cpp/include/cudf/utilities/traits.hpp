@@ -281,7 +281,7 @@ CUDF_HOST_DEVICE constexpr inline bool is_signed_iterator()
  * @return false  `T` is not integral
  */
 template <typename T>
-constexpr inline bool is_integral()
+CUDF_HOST_DEVICE constexpr inline bool is_integral()
 {
   return cuda::std::is_integral_v<T>;
 }
