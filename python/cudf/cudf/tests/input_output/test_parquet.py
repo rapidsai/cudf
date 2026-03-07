@@ -4858,3 +4858,74 @@ def test_read_many_colchunks_with_threadpool():
 def test_parquet_decode_column_index_thrift_bool_list(datadir):
     fname = datadir / "column_index_thrift_bool_list.parquet"
     cudf.read_parquet(fname)
+
+
+def test_read_parquet_case_insensitive():
+    df = cudf.DataFrame({"A": [1, 2, 3, 4, 5], "B": [10, 20, 30, 40, 50]})
+    buf = BytesIO()
+    df.to_parquet(buf)
+
+    result = cudf.read_parquet(
+        buf,
+        filters=[("A", "<=", 3)],
+        columns=["b"],
+        case_sensitive_names=False,
+    )
+    expected = cudf.DataFrame({"B": [10, 20, 30]})
+    assert_eq(result, expected)
+
+    result = cudf.read_parquet(
+        buf,
+        filters=[("a", "<=", 3)],
+        columns=["B"],
+        case_sensitive_names=False,
+    )
+    expected = cudf.DataFrame({"B": [10, 20, 30]})
+    assert_eq(result, expected)
+
+    result = cudf.read_parquet(
+        buf,
+        filters=[("a", "<=", 3)],
+        columns=["b"],
+        case_sensitive_names=False,
+    )
+    expected = cudf.DataFrame({"B": [10, 20, 30]})
+    assert_eq(result, expected)
+
+
+def test_read_parquet_case_insensitive_structs():
+    struct_data = [
+        {"a": 1, "b": {"a_a": 10, "b_b": 20}, "c": 2},
+        {"a": 3, "b": {"a_a": 30, "b_b": 40}, "c": 4},
+        {"a": 5, "b": {"a_a": 50, "b_b": None}, "c": 6},
+        {"a": 7, "b": None, "c": 8},
+    ]
+    table = pa.Table.from_pydict(
+        {"struct": struct_data, "id": [10, 20, 30, 40]}
+    )
+    buf = BytesIO()
+    pq.write_table(table, buf)
+
+    result = cudf.read_parquet(
+        buf,
+        columns=["STRUCT.B.A_A"],
+        case_sensitive_names=False,
+    )
+    expected = cudf.read_parquet(
+        buf,
+        columns=["struct.b.a_a"],
+    )
+    assert_eq(result, expected)
+
+    result = cudf.read_parquet(
+        buf,
+        columns=["STRUCT.A"],
+        filters=[("iD", "<=", 20)],
+        case_sensitive_names=False,
+    )
+    expected = cudf.read_parquet(
+        buf,
+        columns=["struct.a"],
+        filters=[("id", "<=", 20)],
+    )
+    assert_eq(result, expected)

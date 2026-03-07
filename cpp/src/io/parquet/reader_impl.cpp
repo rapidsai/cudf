@@ -516,7 +516,8 @@ reader_impl::reader_impl(std::size_t chunk_read_limit,
              options.get_skip_bytes(),
              options.get_num_bytes(),
              options.get_row_groups(),
-             options.is_enabled_use_jit_filter()},
+             options.is_enabled_use_jit_filter(),
+             options.is_enabled_case_sensitive_names()},
     _sources{std::move(sources)},
     _subpass_page_mask{cudf::detail::hostdevice_vector<bool>(0, _stream)},
     _output_chunk_read_limit{chunk_read_limit},
@@ -565,7 +566,8 @@ reader_impl::reader_impl(std::size_t chunk_read_limit,
                               _strings_to_categorical,
                               options.is_enabled_ignore_missing_columns(),
                               _options.timestamp_type.id(),
-                              _options.decimal_width);
+                              _options.decimal_width,
+                              _options.case_sensitive_names);
 
   // Save the states of the output buffers for reuse in `chunk_read()`.
   std::transform(
@@ -578,7 +580,8 @@ reader_impl::reader_impl(std::size_t chunk_read_limit,
   // `preprocess_file()` and `finalize_output()`
   table_metadata metadata;
   populate_metadata(metadata);
-  _expr_conv = named_to_reference_converter(options.get_filter(), metadata);
+  _expr_conv =
+    named_to_reference_converter(options.get_filter(), metadata, _options.case_sensitive_names);
 }
 
 void reader_impl::prepare_data(read_mode mode)
