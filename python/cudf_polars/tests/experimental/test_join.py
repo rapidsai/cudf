@@ -90,6 +90,7 @@ def test_broadcast_join_limit(left, right, broadcast_join_limit):
             "cluster": DEFAULT_CLUSTER,
             "runtime": DEFAULT_RUNTIME,
             "shuffle_method": DEFAULT_RUNTIME,  # Names coincide
+            "dynamic_planning": None,  # Requires static planning
         },
     )
     left = pl.LazyFrame(
@@ -160,6 +161,7 @@ def test_join_conditional(reverse, max_rows_per_partition):
             "cluster": DEFAULT_CLUSTER,
             "runtime": DEFAULT_RUNTIME,
             "fallback_mode": "warn",
+            "dynamic_planning": None,  # Requires static planning
         },
     )
     left = pl.LazyFrame({"x": range(15), "y": [1, 2, 3] * 5})
@@ -261,6 +263,7 @@ def test_cache_preserves_partitioning_join():
             "max_rows_per_partition": 3,
             "cluster": DEFAULT_CLUSTER,
             "runtime": DEFAULT_RUNTIME,
+            "dynamic_planning": None,  # Requires static planning
         },
     )
 
