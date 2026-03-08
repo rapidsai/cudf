@@ -209,7 +209,7 @@ def test_decimal_quantile(decimal_df, interp):
     assert_gpu_result_equal(q)
 
 
-def test_decimal_std_var(decimal_df: pl.LazyFrame) -> None:
+def test_decimal_std_var(decimal_df):
     q = decimal_df.select(
         std=pl.col("a").std(),
         var=pl.col("a").var(),
