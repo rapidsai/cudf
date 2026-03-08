@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
-from cudf_polars.experimental.benchmarks.utils import get_data
+from cudf_polars.experimental.benchmarks.utils import QueryResult, get_data
 
 if TYPE_CHECKING:
     from cudf_polars.experimental.benchmarks.utils import RunConfig
@@ -56,7 +56,7 @@ def duckdb_impl(run_config: RunConfig) -> str:
     """
 
 
-def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
+def polars_impl(run_config: RunConfig) -> QueryResult:
     """Query 37."""
     params = load_parameters(
         int(run_config.scale_factor),
@@ -84,18 +84,24 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     catalog_sales = get_data(
         run_config.dataset_path, "catalog_sales", run_config.suffix
     )
-    return (
-        item.join(inventory, left_on="i_item_sk", right_on="inv_item_sk")
-        .join(date_dim, left_on="inv_date_sk", right_on="d_date_sk")
-        .join(catalog_sales, left_on="i_item_sk", right_on="cs_item_sk")
-        .filter(
-            (pl.col("i_current_price").is_between(price, price + 30))
-            & (pl.col("i_manufact_id").is_in(manufact))
-            & (pl.col("inv_quantity_on_hand").is_between(100, 500))
-            & (pl.col("d_date").is_between(start_date, end_date))
-        )
-        .group_by(["i_item_id", "i_item_desc", "i_current_price"])
-        .agg([])
-        .sort(["i_item_id"])
-        .limit(100)
+    sort_by = {"i_item_id": False}
+    limit = 100
+    return QueryResult(
+        frame=(
+            item.join(inventory, left_on="i_item_sk", right_on="inv_item_sk")
+            .join(date_dim, left_on="inv_date_sk", right_on="d_date_sk")
+            .join(catalog_sales, left_on="i_item_sk", right_on="cs_item_sk")
+            .filter(
+                (pl.col("i_current_price").is_between(price, price + 30))
+                & (pl.col("i_manufact_id").is_in(manufact))
+                & (pl.col("inv_quantity_on_hand").is_between(100, 500))
+                & (pl.col("d_date").is_between(start_date, end_date))
+            )
+            .group_by(["i_item_id", "i_item_desc", "i_current_price"])
+            .agg([])
+            .sort(sort_by.keys(), nulls_last=True)
+            .limit(limit)
+        ),
+        sort_by=list(sort_by.items()),
+        limit=limit,
     )
