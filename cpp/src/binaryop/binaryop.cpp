@@ -162,12 +162,17 @@ void binary_operation(mutable_column_view& out,
                                                  cudf::type_to_name(rhs.type()),
                                                  std::string("cudf::binops::jit::UserDefinedOp"));
 
-  cudf::jit::get_udf_kernel(*binaryop_jit_kernel_cu_jit, kernel_reflection, cuda_source)
-    ->configure_1d_max_occupancy(0, 0, nullptr, stream.value())
-    ->launch(out.size(),
-             cudf::jit::get_data_ptr(out),
-             cudf::jit::get_data_ptr(lhs),
-             cudf::jit::get_data_ptr(rhs));
+  auto kernel = cudf::jit::get_udf_kernel(
+    "src/binaryop/jit/kernel.cu", "src/binaryop/jit/kernel.cu", kernel_reflection, cuda_source);
+
+  auto out_arg = cudf::jit::get_data_ptr(out);
+  auto lhs_arg = cudf::jit::get_data_ptr(lhs);
+  auto rhs_arg = cudf::jit::get_data_ptr(rhs);
+
+  void* args[] = {&out_arg, &lhs_arg, &rhs_arg};
+
+  auto cfg = kernel.max_occupancy_config(0, 0);
+  kernel.launch(cfg.min_grid_size, 1, 1, cfg.block_size, 1, 1, 0, stream, args);
 }
 }  // namespace jit
 

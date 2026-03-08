@@ -17,20 +17,38 @@
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <syscall.h>
 #include <unistd.h>
 
 #include <cerrno>
+#include <chrono>
 #include <cstring>
 #include <filesystem>
 #include <format>
 #include <numeric>
+#include <source_location>
 
 extern "C" {
 #include <openssl/evp.h>
 }
 
-#define RTCX_CONCATENATE_DETAIL(x, y) x##y
-#define RTCX_CONCATENATE(x, y)        RTCX_CONCATENATE_DETAIL(x, y)
+#define RTCX_EXPECTS(_condition, _reason, _exception_type)                               \
+  do {                                                                                   \
+    if (!(_condition)) {                                                                 \
+      throw _exception_type{::std::format("RTCX failure at: {}:{}: {}",                  \
+                                          ::std::source_location::current().file_name(), \
+                                          ::std::source_location::current().line(),      \
+                                          (_reason))};                                   \
+    }                                                                                    \
+  } while (0)
+
+#define RTCX_FAIL(_reason, _exception_type)                                            \
+  do {                                                                                 \
+    throw _exception_type{::std::format("RTCX failure at: {}:{}: {}",                  \
+                                        ::std::source_location::current().file_name(), \
+                                        ::std::source_location::current().line(),      \
+                                        (_reason))};                                   \
+  } while (0)
 
 #define RTCX_CHECK_CUDA(...)                                                              \
   do {                                                                                    \
@@ -93,12 +111,12 @@ namespace RTCX_EXPORT rtcx {
 
 void log_warning(std::string_view message)
 {
-  std::fprintf(stdout, "RTCX WARNING: %.*s\n", static_cast<int>(message.size()), message.data());
+  std::fprintf(stdout, "RTCX WARNING: %.*s\n", static_cast<i32>(message.size()), message.data());
 }
 
 void log_error(std::string_view message)
 {
-  std::fprintf(stderr, "RTCX ERROR: %.*s\n", static_cast<int>(message.size()), message.data());
+  std::fprintf(stderr, "RTCX ERROR: %.*s\n", static_cast<i32>(message.size()), message.data());
 }
 
 sha256_context::sha256_context() : ectx_(nullptr)
@@ -597,6 +615,10 @@ std::vector<unsigned char> compile(compile_params const& params)
 
   RTCX_DEFER([&] { nvrtc->DestroyProgram(&program); });
 
+  for (auto* name_expr : params.name_expressions) {
+    RTCX_CHECK_NVRTC(params, program, nvrtc->AddNameExpression(program, name_expr));
+  }
+
   // TODO: log is printed twice when warnings are raised
   RTCX_CHECK_NVRTC(
     params,
@@ -845,13 +867,10 @@ namespace {
 cache_t::cache_t(std::string cache_dir, cache_limits const& limits)
   : cache_dir_{std::move(cache_dir)},
     limits_{limits},
-    blobs_cache_{limits.num_blobs},
-    libraries_cache_{limits.num_libraries},
+    blobs_cache_{limits.num_mem_blobs},
+    libraries_cache_{limits.num_mem_libraries},
     tick_{0}
 {
-  RTCX_EXPECTS(limits.num_blobs >= 2, "Blob cache limit must be at least 2", std::logic_error);
-  RTCX_EXPECTS(
-    limits.num_libraries >= 2, "Library cache limit must be at least 2", std::logic_error);
 }
 
 std::string const& cache_t::get_cache_dir() { return cache_dir_; }
@@ -864,24 +883,24 @@ std::optional<blob_t> blob_t::from_file(char const* path)
     if (errno == ENOENT) {
       return std::nullopt;
     } else {
-      throw_posix("Failed to open RTC cache file from disk", "open");
+      throw_posix("Failed to open RTCX cache file from disk", "open");
     }
   }
 
   auto file_size = lseek(fd, 0, SEEK_END);
-  if (file_size == -1) { throw_posix("Failed to determine size of RTC cache file", "lseek"); }
+  if (file_size == -1) { throw_posix("Failed to determine size of RTCX cache file", "lseek"); }
 
   void* map = mmap(nullptr, file_size, PROT_READ, MAP_SHARED, fd, 0);
 
-  if (map == MAP_FAILED) { throw_posix("Failed to memory-map RTC cache file", "mmap"); }
+  if (map == MAP_FAILED) { throw_posix("Failed to memory-map RTCX cache file", "mmap"); }
 
   if (close(fd) == -1) {
-    throw_posix("Failed to close RTC cache file after memory-mapping", "close");
+    throw_posix("Failed to close RTCX cache file after memory-mapping", "close");
   }
 
   auto deleter = +[](u8 const* buffer, usize size) {
     if (munmap(static_cast<void*>(const_cast<u8*>(buffer)), size) == -1) {
-      throw_posix("Failed to unmap RTC cache file from memory", "munmap");
+      throw_posix("Failed to unmap RTCX cache file from memory", "munmap");
     }
   };
 
@@ -908,49 +927,123 @@ std::optional<blob> get_disk_blob(std::string const& cache_dir,
   }
 }
 
+void evict_disk_entries(std::string const& cache_dir, u32 limit)
+{
+  i32 dir = open(cache_dir.c_str(), O_RDONLY | O_DIRECTORY);
+
+  if (dir == -1) { throw_posix("Failed to open RTCX cache directory for evicting", "open"); }
+
+  RTCX_DEFER([&] { close(dir); });
+
+  std::vector<char> buffer;
+  buffer.resize(8192);
+
+  std::vector<std::string> paths;
+  std::vector<std::chrono::nanoseconds> access_times;
+
+  isize num_read = 0;
+
+  while ((num_read = syscall(SYS_getdents64, dir, buffer.data(), buffer.size())) > 0) {
+    isize byte_pos = 0;
+
+    while (byte_pos < num_read) {
+      auto* ent = reinterpret_cast<struct dirent64 const*>(buffer.data() + byte_pos);
+
+      if (memcmp(ent->d_name, ".", 2) != 0 && memcmp(ent->d_name, "..", 3) != 0) {
+        RTCX_EXPECTS(ent->d_type != DT_UNKNOWN,
+                     "Found unknown directory entry type in RTCX cache dir",
+                     std::runtime_error);
+
+        if (ent->d_type == DT_REG) {
+          auto path = std::format("{}/{}", cache_dir, ent->d_name);
+          struct stat st;
+          if (stat(path.c_str(), &st) == -1 && errno != ENOENT) {
+            throw_posix("Failed to get RTCX cache file stats", "stat");
+          }
+
+          auto access_time =
+            std::chrono::seconds{st.st_atim.tv_sec} + std::chrono::nanoseconds{st.st_atim.tv_nsec};
+
+          paths.emplace_back(std::move(path));
+          access_times.emplace_back(access_time);
+        }
+      }
+
+      byte_pos += ent->d_reclen;
+    }
+  }
+
+  if (num_read == -1) {
+    throw_posix("Failed to read RTCX cache directory for clearing", "getdents64");
+  }
+
+  if (paths.size() < limit) { return; }
+
+  std::vector<u32> ranking_indices;
+  ranking_indices.resize(paths.size());
+
+  std::iota(ranking_indices.begin(), ranking_indices.end(), 0);
+
+  std::sort(ranking_indices.begin(), ranking_indices.end(), [&](i32 a, i32 b) {
+    return access_times[a] < access_times[b];
+  });
+
+  // evict half of the least recently accessed
+  auto num_evict = (limit == 0) ? paths.size() : ((limit + 1) / 2);
+
+  for (auto index : std::span{ranking_indices}.subspan(0, num_evict)) {
+    if (unlink(paths[index].c_str()) == -1 && errno != ENOENT) {
+      throw_posix("Failed to evict RTCX cache file", "unlink");
+    }
+  }
+}
+
 /// @brief atomically writes a blob to disk by first writing to a temporary file and then renaming
 /// it to the final path.
-void add_blob_to_disk(std::string const& cache_dir,
-                      std::string const& object_type,
-                      sha256 const& sha,
-                      std::span<u8 const> binary)
+void cache_blob_to_disk(std::string const& cache_dir,
+                        std::string const& object_type,
+                        sha256 const& sha,
+                        std::span<u8 const> binary,
+                        u32 limit)
 {
-  char temp_path[] = "/tmp/rtcx-bin-XXXXXX";
+  if (limit > 0) {
+    char temp_path[] = "/tmp/rtcx-bin-XXXXXX";
 
-  {
-    i32 fd = mkstemp(temp_path);
-    if (fd == -1) { throw_posix("Failed to create temporary file for RTC cache", "mkstemp"); }
+    {
+      i32 fd = mkstemp(temp_path);
+      if (fd == -1) { throw_posix("Failed to create temporary file for RTCX cache", "mkstemp"); }
 
-    RTCX_DEFER([&] {
-      if (close(fd) == -1) { throw_posix("Failed to close temporary RTC cache file", "close"); }
-    });
+      RTCX_DEFER([&] {
+        if (close(fd) == -1) { throw_posix("Failed to close temporary RTCX cache file", "close"); }
+      });
 
-    if (write(fd, binary.data(), binary.size()) == -1) {
-      throw_posix("Failed to write RTC cache to temporary file", "write");
-    }
-  }
-
-  auto hex        = sha.to_hex_string();
-  auto final_path = std::format("{}/{}.{}.bin", cache_dir, hex.view(), object_type);
-
-  std::filesystem::create_directories(std::filesystem::path{final_path}.parent_path());
-
-  // rename is atomic, even if another process is performing the same operation
-  if (rename(temp_path, final_path.c_str()) == -1) {
-    auto errc = errno;
-
-    if (errc == EEXIST) {
-      // another process has already created the file, so just remove our temp file
-      if (remove(temp_path) == -1) {
-        throw_posix("Failed to remove temporary RTC cache file", "remove");
+      if (write(fd, binary.data(), binary.size()) == -1) {
+        throw_posix("Failed to write RTCX cache to temporary file", "write");
       }
-      return;
-    } else {
-      throw_posix(
-        std::format("Failed to move temporary RTC cache file to final location ({})", final_path),
-        "rename");
+    }
+
+    auto hex        = sha.to_hex_string();
+    auto final_path = std::format("{}/{}.{}.bin", cache_dir, hex.view(), object_type);
+
+    std::filesystem::create_directories(std::filesystem::path{final_path}.parent_path());
+
+    // rename is atomic, even if another process is performing the same operation
+    if (rename(temp_path, final_path.c_str()) == -1) {
+      if (errno == EEXIST) {
+        // another process has already created the file, so just remove our temp file
+        if (remove(temp_path) == -1) {
+          throw_posix("Failed to remove temporary RTCX cache file", "remove");
+        }
+        return;
+      } else {
+        throw_posix(std::format("Failed to move temporary RTCX cache file to final location ({})",
+                                final_path),
+                    "rename");
+      }
     }
   }
+
+  evict_disk_entries(cache_dir, limit);
 }
 
 }  // namespace
@@ -1011,7 +1104,7 @@ std::shared_future<blob> cache_t::get_or_add_blob(sha256 const& sha, blob_compil
       promise.set_value(result);
 
       // store result to disk
-      add_blob_to_disk(cache_dir_, "blob", sha, result->view());
+      cache_blob_to_disk(cache_dir_, "blob", sha, result->view(), limits_.num_disk_entries);
 
       return ret_fut;
     }
@@ -1081,7 +1174,7 @@ std::shared_future<library> cache_t::get_or_add_library(sha256 const& sha,
       promise.set_value(library);
 
       // store result to disk
-      add_blob_to_disk(cache_dir_, "library", sha, blob->view());
+      cache_blob_to_disk(cache_dir_, "library", sha, blob->view(), limits_.num_disk_entries);
 
       return ret_fut;
     }
@@ -1136,45 +1229,46 @@ void cache_t::clear_memory_store()
 
 void cache_t::clear_disk_store()
 {
-  DIR* dir = opendir(cache_dir_.c_str());
+  i32 dir = open(cache_dir_.c_str(), O_RDONLY | O_DIRECTORY);
 
-  if (dir == nullptr) { throw_posix("Failed to open RTC cache directory for clearing", "opendir"); }
+  if (dir == -1) { throw_posix("Failed to open RTCX cache directory for clearing", "opendir"); }
 
-  RTCX_DEFER([&] { closedir(dir); });
+  RTCX_DEFER([&] { close(dir); });
 
-  errno = 0;  // reset errno before reading
-
-  dirent* entry_iter = nullptr;
+  std::vector<char> buffer;
+  buffer.resize(8192);
   std::vector<char> entry_path;
-  entry_path.resize(PATH_MAX + 1);
+  entry_path.resize(4096);
 
-  while (true) {
-    entry_iter = readdir(dir);
+  isize num_read = 0;
 
-    if (entry_iter == nullptr) {
-      if (errno != 0) {
-        throw_posix("Failed to read RTC cache directory for clearing", "readdir");
-      } else {
-        break;
+  while ((num_read = syscall(SYS_getdents64, dir, buffer.data(), buffer.size())) > 0) {
+    isize byte_pos = 0;
+
+    while (byte_pos < num_read) {
+      auto* ent = reinterpret_cast<struct dirent64 const*>(buffer.data() + byte_pos);
+
+      if (memcmp(ent->d_name, ".", 2) != 0 && memcmp(ent->d_name, "..", 3) != 0) {
+        RTCX_EXPECTS(ent->d_type != DT_UNKNOWN,
+                     "Found unknown directory entry type in RTCX cache dir",
+                     std::runtime_error);
+
+        if (ent->d_type == DT_REG) {
+          snprintf(entry_path.data(), entry_path.size(), "%s/%s", cache_dir_.c_str(), ent->d_name);
+
+          if (unlink(entry_path.data()) == -1 && errno != ENOENT) {
+            throw_posix("Failed to unlink RTCX cache file during clearing", "unlink");
+          }
+        }
       }
+
+      byte_pos += ent->d_reclen;
     }
-
-    struct stat entry_stat;
-
-    if (lstat(entry_path.data(), &entry_stat) == -1) {
-      throw_posix("Failed to get file status for RTC cache clearing", "lstat");
-    }
-
-    if (S_ISREG(entry_stat.st_mode)) {
-      if (unlink(entry_path.data()) == -1) {
-        throw_posix("Failed to unlink RTC cache file during clearing", "unlink");
-      }
-    }
-
-    // reset errno for next iteration
-    errno = 0;
   }
 
-  return;
+  if (num_read == -1) {
+    throw_posix("Failed to read RTCX cache directory for clearing", "getdents64");
+  }
 }
+
 }  // namespace RTCX_EXPORT rtcx

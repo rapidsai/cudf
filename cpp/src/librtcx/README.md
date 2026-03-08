@@ -5,4 +5,4 @@ RTCX (runtime-compiler extended) is a wrapper around NVRTC and NVJitLink designe
 - User-controlled compilation, linking, caching, and pre-loading of CUDA kernels
 - Zero-copy interfaces to manage JIT compilation and linking
 - CMake script to embed **compressed** headers directly into an executable without incurring overhead at runtime on every compilation request
-- Facilities to pre-load and teardown dynamic library dependencies (libcuda, libnvrtc, and libnvjitlink)
+- Facilities to pre-load and teardown dynamic library dependencies (`libcuda`, `libnvrtc`, and `libnvJitlink`)

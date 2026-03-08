@@ -24,11 +24,13 @@ class program_cache;
 class jit_bundle_t;
 
 struct [[nodiscard]] context_config {
-  bool dump_codegen          = false;
-  bool use_jit               = false;
-  std::string rtc_cache_dir  = {};
-  std::string jit_bundle_dir = {};
-  std::string jit_pch_dir    = {};
+  bool dump_codegen                   = false;
+  bool use_jit                        = false;
+  std::string rtc_cache_dir           = {};
+  std::string jit_bundle_dir          = {};
+  std::string jit_pch_dir             = {};
+  uint32_t kernel_cache_limit_process = 0;
+  uint32_t kernel_cache_limit_disk    = 0;
 };
 
 /// @brief The context object contains global state internal to CUDF.
@@ -37,11 +39,8 @@ struct [[nodiscard]] context_config {
 class context {
  private:
   context_config _config;
-  std::once_flag _program_cache_init_flag;
-  std::unique_ptr<jit::program_cache> _program_cache;
-  std::once_flag _rtc_cache_init_flag;
+  std::once_flag _jit_cache_init_flag;
   std::unique_ptr<rtcx::cache_t> _rtc_cache;
-  std::once_flag _jit_bundle_init_flag;
   std::unique_ptr<jit_bundle_t> _jit_bundle;
 
  private:
@@ -49,19 +48,13 @@ class context {
 
   void ensure_jit_cache_initialized();
 
-  void ensure_rtc_cache_initialized();
-
-  void ensure_jit_bundle_initialized();
-
  public:
   context(context_config cfg = {}, init_flags flags = init_flags::DEFAULT);
   context(context const&)            = delete;
   context& operator=(context const&) = delete;
   context(context&&)                 = delete;
   context& operator=(context&&)      = delete;
-  ~context()                         = default;
-
-  jit::program_cache& program_cache();
+  ~context();
 
   rtcx::cache_t& rtc_cache();
 

@@ -14,7 +14,6 @@
 #include <future>
 #include <memory>
 #include <optional>
-#include <source_location>
 #include <span>
 #include <string_view>
 #include <type_traits>
@@ -27,24 +26,6 @@
 #define RTCX_DEFER__CONCATENATE_DETAIL(x, y) x##y
 #define RTCX_DEFER__CONCATENATE(x, y)        RTCX_DEFER__CONCATENATE_DETAIL(x, y)
 #define RTCX_DEFER(...)                      ::rtcx::defer RTCX_DEFER__CONCATENATE(defer_, __COUNTER__)(__VA_ARGS__)
-
-#define RTCX_EXPECTS(_condition, _reason, _exception_type)                               \
-  do {                                                                                   \
-    if (!(_condition)) {                                                                 \
-      throw _exception_type{::std::format("RTCX failure at: {}:{}: {}",                  \
-                                          ::std::source_location::current().file_name(), \
-                                          ::std::source_location::current().line(),      \
-                                          (_reason))};                                   \
-    }                                                                                    \
-  } while (0)
-
-#define RTCX_FAIL(_reason, _exception_type)                                            \
-  do {                                                                                 \
-    throw _exception_type{::std::format("RTCX failure at: {}:{}: {}",                  \
-                                        ::std::source_location::current().file_name(), \
-                                        ::std::source_location::current().line(),      \
-                                        (_reason))};                                   \
-  } while (0)
 
 extern "C" {
 typedef struct evp_md_ctx_st EVP_MD_CTX;
@@ -65,7 +46,9 @@ using i8    = std::int8_t;
 using i16   = std::int16_t;
 using i32   = std::int32_t;
 using i64   = std::int64_t;
-using iszie = std::ptrdiff_t;
+using isize = std::ptrdiff_t;
+using f32   = float;
+using f64   = double;
 
 inline constexpr usize CACHELINE_ALIGNMENT =
   64;  // = std::hardware_destructive_interference_size */
@@ -394,14 +377,15 @@ struct [[nodiscard]] compile_params {
   std::span<char const* const> headers = {};
 
   /**
-   * @brief Sizes of each header file provided in the `headers` field
-   */
-  std::span<usize const> header_sizes = {};
-
-  /**
    * @brief NVRTC compile options
    */
   std::span<char const* const> options = {};
+
+  /**
+   * @brief The name expressions of the kernel entry points to be compiled, used for retrieving
+   * kernel references after compilation.
+   */
+  std::span<char const* const> name_expressions = {};
 
   /**
    * @brief Desired output binary type (e.g. PTX, CUBIN, etc.)
@@ -433,7 +417,6 @@ struct alignas(CACHELINE_ALIGNMENT) lru_memory_cache {
   explicit lru_memory_cache(usize limit) : entries_{}, limit_{limit}
   {
     // reserve space to avoid rehashing
-    RTCX_EXPECTS(limit > 0, "Cache limit must be greater than 0", std::logic_error);
     entries_.reserve(limit * 2);
   }
 
@@ -441,7 +424,7 @@ struct alignas(CACHELINE_ALIGNMENT) lru_memory_cache {
   {
     if (entries_.empty()) { return; }
 
-    auto num_to_purge = std::max(entries_.size() / 2, static_cast<usize>(1));
+    auto num_to_purge = (entries_.size() + 1) / 2;
 
     std::vector<std::pair<sha256, u64>> rankings;
     rankings.reserve(entries_.size());
@@ -464,6 +447,8 @@ struct alignas(CACHELINE_ALIGNMENT) lru_memory_cache {
 
   void insert(sha256 const& sha, T&& value, u64 tick)
   {
+    if (limit_ == 0) { return; }
+
     if ((entries_.size() + 1) > limit_) { purge(); }
 
     entries_.emplace(sha, entry{tick, std::move(value)});
@@ -482,8 +467,9 @@ struct [[nodiscard]] cache_stats {
 };
 
 struct [[nodiscard]] cache_limits {
-  u32 num_blobs     = 1024;
-  u32 num_libraries = 1024;
+  u32 num_mem_blobs     = 16'384;
+  u32 num_mem_libraries = 16'384;
+  u32 num_disk_entries  = 131'072;
 };
 
 struct cache_stats_counter {
@@ -701,5 +687,268 @@ void initialize();
  * This function is not thread-safe.
  */
 void teardown();
+
+namespace reflection {
+
+template <typename T, T VALUE>
+struct NonType {};
+
+// Forward declaration.
+template <typename T>
+inline std::string reflect(const T& value);
+template <typename T>
+inline std::string reflect();
+
+namespace detail {
+
+template <typename T, typename Enable = void>
+struct ValueStringImpl {
+  static std::string value(const T& x) { return std::to_string(x); }
+};
+
+template <typename T>
+struct ValueStringImpl<T, typename std::enable_if<std::is_same<T, bool>::value>::type> {
+  static std::string value(const T& x) { return x ? "true" : "false"; }
+};
+
+template <typename T>
+struct ValueStringImpl<T, typename std::enable_if<std::is_enum<T>::value>::type> {
+  static std::string value(const T& x)
+  {
+    using UnderlyingT = typename std::underlying_type<T>::type;
+    return ValueStringImpl<UnderlyingT>::value(static_cast<UnderlyingT>(x));
+  }
+};
+
+template <typename T>
+inline std::string value_string(const T& x)
+{
+  return ValueStringImpl<T>::value(x);
+}
+
+// Returns the demangled name corresponding to the given typeinfo structure.
+inline std::string get_type_name(const std::type_info& typeinfo)
+{
+  const char* mangled_name = typeinfo.name();
+  size_t bufsize           = 0;
+  char* buf                = nullptr;
+  int status;
+  auto demangled_ptr = std::unique_ptr<char, void (*)(void*)>(
+    abi::__cxa_demangle(mangled_name, buf, &bufsize, &status), std::free);
+  // clang-format off
+  switch (status) {
+  case 0: return demangled_ptr.get();  // Demangled successfully
+  case -2: return mangled_name;        // Interpret as plain unmangled name
+  case -1: // fall-through             // Memory allocation failure
+  case -3: // fall-through             // Invalid argument
+  default: return {};
+  }
+  // clang-format on
+}
+
+template <typename>
+class JitifyTypeNameWrapper_ {};
+
+// Returns the demangled name of the given type.
+template <typename T>
+inline std::string get_type_name()
+{
+  // WAR for typeid discarding cv qualifiers on value-types.
+  // Wraps type in dummy template class to preserve cv-qualifiers, then strips
+  // off the wrapper from the resulting string.
+  std::string wrapped_name = get_type_name(typeid(JitifyTypeNameWrapper_<T>));
+  // Note: The reflected name of this class also has namespace prefixes.
+  const std::string wrapper_class_name = "JitifyTypeNameWrapper_<";
+  size_t start                         = wrapped_name.find(wrapper_class_name);
+  if (start == std::string::npos) return {};  // Unexpected error
+  start += wrapper_class_name.size();
+  return wrapped_name.substr(start, wrapped_name.size() - (start + 1));
+}
+
+template <typename T>
+struct ReflectType {
+  const std::string& operator()() const
+  {
+    // Storing this statically means it is cached after the first call.
+    static const std::string type_name = get_type_name<T>();
+    return type_name;
+  }
+};
+
+template <typename T, T VALUE>
+struct ReflectType<NonType<T, VALUE>> {
+  std::string operator()() const { return reflect(VALUE); }
+};
+
+}  // namespace detail
+
+/*! A wrapper used for representing types as values. */
+template <typename T>
+struct Type {};
+
+/*! Create an Instance object that contains a const reference to the
+ *  value.  We use this to wrap abstract objects from which we want to extract
+ *  their type at runtime (e.g., derived type).  This is used to facilitate
+ *  templating on derived type when all we know at compile time is abstract
+ * type.
+ */
+template <typename T>
+struct Instance {
+  const T& value;
+  Instance(const T& value_arg) : value(value_arg) {}
+};
+
+/*! Create an Instance object from which we can extract the value's run-time
+ * type.
+ *  \param value The const value to be captured.
+ */
+template <typename T>
+inline Instance<T const> instance_of(T const& value)
+{
+  return Instance<T const>(value);
+}
+
+/*! Generate a code-string for a type.
+ *  \code{.cpp}reflect<float>() --> "float"\endcode
+ */
+template <typename T>
+inline std::string reflect()
+{
+  return detail::ReflectType<T>()();
+}
+
+/*! Generate a code-string for a value.
+ *  \code{.cpp}reflect(3.14f) --> "(float)3.14"\endcode
+ */
+template <typename T>
+inline std::string reflect(const T& value)
+{
+  return "(" + reflect<T>() + ")" + detail::value_string(value);
+}
+
+/*! Generate a code-string for an integer non-type template argument
+ *  (via implicit conversion to int64_t).
+ *  \code{.cpp}reflect<7>() --> "(int64_t)7"\endcode
+ */
+template <int64_t N>
+inline std::string reflect()
+{
+  return reflect<NonType<int64_t, N>>();
+}
+
+/*! Generate a code-string for a generic non-type template argument.
+ *  \code{.cpp} reflect<int,7>() --> "(int)7" \endcode
+ */
+template <typename T, T N>
+inline std::string reflect()
+{
+  return reflect<NonType<T, N>>();
+}
+
+/*! Generate a code-string for a type wrapped as a Type instance.
+ *  \code{.cpp}reflect(Type<float>()) --> "float"\endcode
+ */
+template <typename T>
+inline std::string reflect(Type<T>)
+{
+  return reflect<T>();
+}
+
+/*! Generate a code-string for a type wrapped as an Instance instance.
+ *  \code{.cpp}reflect(Instance<float>(3.1f)) --> "float"\endcode
+ *  or more simply when passed to a instance_of helper
+ *  \code{.cpp}reflect(instance_of(3.1f)) --> "float"\endcodei
+ *  This is specifically for the case where we want to extract the run-time
+ *    type, i.e., derived type, of an object pointer.
+ */
+template <typename T>
+inline std::string reflect(const Instance<T>& value)
+{
+  return detail::get_type_name(typeid(value.value));
+}
+
+// TODO: Would there ever be a need to reflect a string literal?
+/*! Use an existing code string as-is. */
+inline std::string reflect(const std::string& s) { return s; }
+/*! Use an existing code string as-is. */
+inline const char* reflect(const char* s) { return s; }
+#if JITIFY_CPLUSPLUS >= 201703L
+/*! Use an existing code string as-is. */
+inline std::string_view reflect(std::string_view s) { return s; }
+#endif
+
+/*! Create a Type object representing a value's type.
+ *  \code{.cpp}type_of(3.14f) -> Type<float>()\endcode
+ *  \param [unnamed] The value whose type is to be captured.
+ */
+template <typename T>
+inline Type<T> type_of(T&)
+{
+  return Type<T>();
+}
+
+/*! Create a Type object representing a value's type.
+ *  \param [unnamed] The const value whose type is to be captured.
+ */
+template <typename T>
+inline Type<T const> type_of(const T&)
+{
+  return Type<T const>();
+}
+
+/*! Generate a code-string for a template instantiation. */
+inline std::string reflect_template(const StringVec& args)
+{
+  // Note: The space in " >" is a WAR to avoid '>>' appearing
+  return jitify2::detail::string_join(args, ",", "<", " >");
+}
+
+/*! Generate a code-string for a template instantiation. */
+template <typename... Ts>
+inline std::string reflect_template()
+{
+  return reflect_template({reflect<Ts>()...});
+}
+
+/*! Generate a code-string for a template instantiation. */
+template <typename... Args>
+inline std::string reflect_template(const Args&... args)
+{
+  return reflect_template({reflect(args)...});
+}
+
+/*! Convenience class for generating code-strings for template instantiations.
+ */
+class Template {
+  std::string name_;
+
+ public:
+  /*! Construct the class.
+   *  \param name The name of the template.
+   */
+  Template(StringRef name) : name_(name) {}
+
+  /*! Generate a code-string for an instantiation of the template. */
+  std::string instantiate(const StringVec& template_args = {}) const
+  {
+    return name_ + reflect_template(template_args);
+  }
+
+  /*! Generate a code-string for an instantiation of the template. */
+  template <typename... TemplateArgs>
+  std::string instantiate() const
+  {
+    return name_ + reflect_template<TemplateArgs...>();
+  }
+
+  /*! Generate a code-string for an instantiation of the template. */
+  template <typename... TemplateArgs>
+  std::string instantiate(const TemplateArgs&... targs) const
+  {
+    return name_ + reflect_template(targs...);
+  }
+};
+
+}  // namespace reflection
 
 }  // namespace RTCX_EXPORT rtcx

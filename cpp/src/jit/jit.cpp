@@ -257,10 +257,14 @@ int32_t get_current_device_physical_model()
   return props.major * 10 + props.minor;
 }
 
-std::tuple<rtcx::library, rtcx::blob> compile_library_uncached(char const* name,
-                                                               char const* cuda_code,
-                                                               bool use_pch,
-                                                               bool log_pch)
+std::tuple<rtcx::library, rtcx::blob> compile_library_uncached(
+  char const* name,
+  char const* cuda_code,
+  std::span<char const* const> extra_header_include_names,
+  std::span<char const* const> extra_headers,
+  std::span<char const* const> name_expressions,
+  bool use_pch,
+  bool log_pch)
 {
   CUDF_FUNC_RANGE();
 
@@ -304,11 +308,13 @@ std::tuple<rtcx::library, rtcx::blob> compile_library_uncached(char const* name,
     options_cstr.emplace_back(option.c_str());
   }
 
-  auto params = rtcx::compile_params{.name        = name,
-                                     .source      = cuda_code,
-                                     .headers     = {},
-                                     .options     = options_cstr,
-                                     .target_type = rtcx::binary_type::CUBIN};
+  auto params = rtcx::compile_params{.name                 = name,
+                                     .source               = cuda_code,
+                                     .header_include_names = extra_header_include_names,
+                                     .headers              = extra_headers,
+                                     .options              = options_cstr,
+                                     .name_expressions     = name_expressions,
+                                     .target_type          = rtcx::binary_type::CUBIN};
 
   auto cubin = rtcx::compile(params);
 
@@ -330,12 +336,27 @@ std::tuple<rtcx::library, rtcx::blob> compile_library_uncached(char const* name,
 
 }  // namespace
 
-[[nodiscard]] rtcx::library get_library(std::string const& name,
-                                        std::string const& key,
-                                        std::string const& cuda_udf,
-                                        bool use_cache,
-                                        bool use_pch,
-                                        bool log_pch)
+static rtcx::kernel_ref get_kernel(rtcx::library const& lib)
+{
+  auto kernels = lib->enumerate_kernels();
+  CUDF_EXPECTS(
+    kernels.size() == 1,
+    +std::format("Expected exactly one kernel in compiled library, but found {}", kernels.size()),
+    std::runtime_error);
+  return kernels[0];
+}
+
+kernel::kernel(rtcx::library lib) : _library(std::move(lib)), _kernel(get_kernel(_library)) {}
+
+kernel get_kernel(std::string const& name,
+                  std::string const& key,
+                  std::string const& cuda_udf,
+                  std::span<char const* const> header_include_names,
+                  std::span<char const* const> headers,
+                  char const* name_expression,
+                  bool use_cache,
+                  bool use_pch,
+                  bool log_pch)
 {
   CUDF_FUNC_RANGE();
 
@@ -362,7 +383,9 @@ bundle={})***",
   auto cache_key_sha256 = hash_string(cache_key);
 
   auto compile = [&] {
-    return compile_library_uncached(name.c_str(), cuda_udf.c_str(), use_pch, log_pch);
+    char const* name_exprs[] = {name_expression};
+    return compile_library_uncached(
+      name.c_str(), cuda_udf.c_str(), header_include_names, headers, name_exprs, use_pch, log_pch);
   };
 
   if (!use_cache) {

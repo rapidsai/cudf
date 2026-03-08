@@ -296,9 +296,6 @@ if(CUDF_BUILD_TESTUTIL)
   include(cmake/thirdparty/get_gtest.cmake)
 endif()
 
-# preprocess jitify-able kernels
-include(cmake/Modules/JitifyPreprocessKernels.cmake)
-
 # find KvikIO
 include(cmake/thirdparty/get_kvikio.cmake)
 

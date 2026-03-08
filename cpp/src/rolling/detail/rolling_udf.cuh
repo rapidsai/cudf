@@ -82,17 +82,30 @@ std::unique_ptr<column> rolling_window_udf(column_view const& input,
                    preceding_window_str.c_str(),
                    following_window_str.c_str());
 
-  cudf::jit::get_udf_kernel(*rolling_jit_kernel_cu_jit, kernel_reflection, cuda_source)
-    ->configure_1d_max_occupancy(0, 0, nullptr, stream.value())
-    ->launch(input.size(),
-             cudf::jit::get_data_ptr(input),
-             input.null_mask(),
-             cudf::jit::get_data_ptr(output_view),
-             output_view.null_mask(),
-             device_valid_count.data(),
-             preceding_window,
-             following_window,
-             min_periods);
+  cudf::size_type nrows_arg               = input.size();
+  auto incol_arg                          = cudf::jit::get_data_ptr(input);
+  auto incol_valid_arg                    = input.null_mask();
+  auto outcol_arg                         = cudf::jit::get_data_ptr(output->mutable_view());
+  auto outcol_valid_arg                   = output_view.null_mask();
+  cudf::size_type* output_valid_count_arg = device_valid_count.data();
+  auto preceding_window_arg               = preceding_window;
+  auto following_window_arg               = following_window;
+  auto min_periods_arg                    = min_periods;
+
+  void* args[] = {&nrows_arg,
+                  &incol_arg,
+                  &incol_valid_arg,
+                  &outcol_arg,
+                  &outcol_valid_arg,
+                  &output_valid_count_arg,
+                  &preceding_window_arg,
+                  &following_window_arg,
+                  &min_periods_arg};
+
+  auto kernel = cudf::jit::get_udf_kernel(
+    "src/rolling/jit/kernel.cu", "src/rolling/jit/kernel.cu", kernel_reflection, cuda_source);
+  auto cfg = kernel.max_occupancy_config(0, 0);
+  kernel.launch(cfg.min_grid_size, 1, 1, cfg.block_size, 1, 1, 0, stream, args);
 
   output->set_null_count(output->size() - device_valid_count.value(stream));
 

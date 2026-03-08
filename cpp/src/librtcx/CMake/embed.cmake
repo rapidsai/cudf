@@ -117,7 +117,7 @@ function(jit_embed)
 
   set(OUTPUT_DIR "${CUDF_GENERATED_INCLUDE_DIR}/rtcx_embed")
   set(CONFIGURED_EMBED_PY "${CMAKE_CURRENT_BINARY_DIR}/${TARGET}_embed.py")
-  set(EMBED_PY_IN "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/embed.py.in")
+  set(EMBED_PY_IN "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/embed.in.py")
 
   set(RTCX_EMBED_PY_ARG__ID "${TARGET}")
   set(RTCX_EMBED_PY_ARG__FILE_PATHS "${jitembed_${TARGET}_incdir__source_files}")
