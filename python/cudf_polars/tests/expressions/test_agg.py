@@ -203,6 +203,20 @@ def test_decimal_aggs(decimal_df: pl.LazyFrame) -> None:
     assert_gpu_result_equal(q)
 
 
+@pytest.mark.parametrize("interp", ["nearest", "higher", "lower", "midpoint", "linear"])
+def test_decimal_quantile(decimal_df, interp):
+    q = decimal_df.select(pl.col("a").quantile(0.5, interpolation=interp))
+    assert_gpu_result_equal(q)
+
+
+def test_decimal_std_var(decimal_df: pl.LazyFrame) -> None:
+    q = decimal_df.select(
+        std=pl.col("a").std(),
+        var=pl.col("a").var(),
+    )
+    assert_gpu_result_equal(q)
+
+
 def test_invalid_agg(request):
     request.applymarker(
         pytest.mark.xfail(
