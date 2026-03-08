@@ -138,6 +138,19 @@ def evaluate_logical_plan(
                     collective_id_map,
                     collect_metadata=collect_metadata,
                 )
+            case "ray":
+                from cudf_polars.experimental.rapidsmpf.ray import (
+                    evaluate_pipeline_ray_mode,
+                )
+
+                result, metadata_collector = evaluate_pipeline_ray_mode(
+                    ir,
+                    partition_info,
+                    config_options,
+                    stats,
+                    collective_id_map,
+                    collect_metadata=collect_metadata,
+                )
             case "single":
                 # Single-process execution: Run locally
                 result, metadata_collector = evaluate_pipeline(

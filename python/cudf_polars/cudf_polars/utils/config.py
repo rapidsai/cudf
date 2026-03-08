@@ -43,6 +43,8 @@ if TYPE_CHECKING:
 
     import rmm.mr
 
+    from cudf_polars.experimental.rapidsmpf.ray import RayClient
+
 
 __all__ = [
     "Cluster",
@@ -173,6 +175,7 @@ class Cluster(enum.StrEnum):
     SINGLE = "single"
     DISTRIBUTED = "distributed"
     SPMD = "spmd"
+    RAY = "ray"
 
 
 class Scheduler(enum.StrEnum):
@@ -873,6 +876,7 @@ class StreamingExecutor:
         )
     )
     spmd: SPMDContext | None = None
+    ray_client: RayClient | None = None
 
     def __post_init__(self) -> None:  # noqa: D105
         # Check for rapidsmpf runtime

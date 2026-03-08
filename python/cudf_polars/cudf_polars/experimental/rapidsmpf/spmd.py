@@ -286,7 +286,7 @@ def spmd_execution(
         when ``None``.
     executor_options
         Extra keyword arguments forwarded to the ``executor_options`` dict of
-        :class:`~polars.lazyframe.engine_config.GPUEngine`.  The keys
+        :class:`~polars.lazyframe.engine_config.GPUEngine`. The keys
         ``"runtime"``, ``"cluster"``, and ``"spmd"`` are reserved and may not
         be overridden.
     **engine_kwargs
