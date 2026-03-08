@@ -145,6 +145,29 @@ class PDSDSPolarsQueries(PDSDSQueries):
             pl.col("psum").cast(pl.Decimal(18, 2)),
             pl.col("nsum").cast(pl.Decimal(18, 2)),
         ],
+        58: [
+            pl.col("ss_item_rev").cast(pl.Decimal(18, 2)),
+            pl.col("cs_item_rev").cast(pl.Decimal(18, 2)),
+            pl.col("ws_item_rev").cast(pl.Decimal(18, 2)),
+            pl.col("ss_dev").cast(pl.Decimal(38, 2)),
+            pl.col("cs_dev").cast(pl.Decimal(38, 2)),
+            pl.col("ws_dev").cast(pl.Decimal(38, 2)),
+            pl.col("average").cast(pl.Decimal(38, 2)),
+        ],
+        59: [
+            pl.col("(sun_sales1 / sun_sales2)").cast(pl.Decimal(38, 2)),
+            pl.col("(mon_sales1 / mon_sales2)").cast(pl.Decimal(38, 2)),
+            pl.col("(tue_sales1 / tue_sales2)").cast(pl.Decimal(38, 2)),
+            pl.col("(wed_sales1 / wed_sales2)").cast(pl.Decimal(38, 2)),
+            pl.col("(thu_sales1 / thu_sales2)").cast(pl.Decimal(38, 2)),
+            pl.col("(fri_sales1 / fri_sales2)").cast(pl.Decimal(38, 2)),
+            pl.col("(sat_sales1 / sat_sales2)").cast(pl.Decimal(38, 2)),
+        ],
+        60: [pl.col("total_sales").cast(pl.Decimal(18, 2))],
+        61: [
+            pl.col("promotions").cast(pl.Decimal(18, 2)),
+            pl.col("total").cast(pl.Decimal(18, 2)),
+        ],
         63: [pl.col("sum_sales").cast(pl.Decimal(18, 2))],
         64: [
             pl.col("s1").cast(pl.Decimal(18, 2)),
@@ -207,6 +230,13 @@ class PDSDSPolarsQueries(PDSDSQueries):
             pl.col("segment").cast(pl.Float64),
             pl.col("segment_base").cast(pl.Float64),
             pl.col("num_customers").cast(COUNT_DTYPE),
+        ],
+        62: [
+            pl.col("30 days").cast(pl.Int32),
+            pl.col("31-60 days").cast(pl.Int32),
+            pl.col("61-90 days").cast(pl.Int32),
+            pl.col("91-120 days").cast(pl.Int32),
+            pl.col(">120 days").cast(pl.Int32),
         ],
         64: [
             pl.col("cnt").cast(COUNT_DTYPE),
