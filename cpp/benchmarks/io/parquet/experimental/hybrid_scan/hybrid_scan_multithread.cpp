@@ -104,11 +104,13 @@ void BM_hybrid_scan_multithreaded_read_common(nvbench::state& state,
                  [](auto& source_sink) { return source_sink.make_source_info(); });
 
   auto filepaths = std::vector<std::string>{};
-  filepaths.reserve(source_info_vector.size());
-  std::transform(source_info_vector.begin(),
-                 source_info_vector.end(),
-                 std::back_inserter(filepaths),
-                 [](auto const& source_info) { return source_info.filepaths().front(); });
+  if (source_type == io_type::FILEPATH) {
+    filepaths.reserve(source_info_vector.size());
+    std::transform(source_info_vector.begin(),
+                   source_info_vector.end(),
+                   std::back_inserter(filepaths),
+                   [](auto const& source_info) { return source_info.filepaths().front(); });
+  }
 
   auto mem_stats_logger = cudf::memory_stats_logger();
 
