@@ -41,9 +41,7 @@ def test_gather_empty_indices():
         }
     )
 
-    query = ldf.select(
-        pl.col("a").gather(pl.lit(pl.Series("idx", [], dtype=pl.Int64)))
-    )
+    query = ldf.select(pl.col("a").gather(pl.lit(pl.Series("idx", [], dtype=pl.Int64))))
     assert_gpu_result_equal(query)
 
 
