@@ -6,6 +6,7 @@
 
 #pragma once
 
+#include <cudf/detail/column_device_view_base.hpp>
 #include <cudf/types.hpp>
 
 #include <cuda/std/cstddef>
@@ -27,9 +28,14 @@ struct column_accessor {
   static constexpr bool as_scalar       = AsScalar;
   static constexpr bool may_be_nullable = MayBeNullable;
 
-  static __device__ element_type element(column_type const* cols, size_type row)
+  static __device__ auto& get(detail::column_device_view_base const* cols)
   {
-    auto& c = cols[index];
+    return reinterpret_cast<column_type const&>(cols[index]);
+  }
+
+  static __device__ element_type element(detail::column_device_view_base const* cols, size_type row)
+  {
+    auto& c = get(cols);
 
     if constexpr (AsScalar) {
       return c.template element<element_type>(0);
@@ -38,12 +44,12 @@ struct column_accessor {
     }
   }
 
-  static __device__ bool is_null(column_type const* cols, size_type row)
+  static __device__ bool is_null(detail::column_device_view_base const* cols, size_type row)
   {
     if constexpr (!MayBeNullable) {
       return false;
     } else {
-      auto& c = cols[index];
+      auto& c = get(cols);
 
       if constexpr (AsScalar) {
         return c.is_null(0);
@@ -53,12 +59,12 @@ struct column_accessor {
     }
   }
 
-  static __device__ bool is_valid(column_type const* cols, size_type row)
+  static __device__ bool is_valid(detail::column_device_view_base const* cols, size_type row)
   {
     if constexpr (!MayBeNullable) {
       return true;
     } else {
-      auto& c = cols[index];
+      auto& c = get(cols);
 
       if constexpr (AsScalar) {
         return c.is_valid(0);
@@ -68,9 +74,10 @@ struct column_accessor {
     }
   }
 
-  static __device__ optional_element_type nullable_element(column_type const* cols, size_type row)
+  static __device__ optional_element_type
+  nullable_element(detail::column_device_view_base const* cols, size_type row)
   {
-    auto& c = cols[index];
+    auto& c = get(cols);
 
     if constexpr (!MayBeNullable) {
       return c.template element<element_type>(row);
@@ -83,9 +90,11 @@ struct column_accessor {
     }
   }
 
-  static __device__ void set_null_word(column_type const* cols, size_type index, bitmask_type word)
+  static __device__ void set_null_word(detail::column_device_view_base const* cols,
+                                       size_type index,
+                                       bitmask_type word)
   {
-    auto& c = cols[index];
+    auto& c = get(cols);
 
     if constexpr (!MayBeNullable) {
       return;
@@ -98,10 +107,12 @@ struct column_accessor {
     }
   }
 
-  static __device__ void assign(column_type const* cols, size_type row, element_type value)
+  static __device__ void assign(detail::column_device_view_base const* cols,
+                                size_type row,
+                                element_type value)
     requires(!AsScalar)
   {
-    cols[index].template assign<element_type>(row, value);
+    get(cols).template assign<element_type>(row, value);
   }
 };
 

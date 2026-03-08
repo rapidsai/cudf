@@ -87,28 +87,6 @@ std::vector<std::string> input_type_names(
   return names;
 }
 
-std::string reflect_input_accessor(std::variant<column_view, scalar_column_view> const& input,
-                                   int32_t index)
-{
-  auto element   = std::visit([](auto& a) { return type_to_name(a.type()); }, input);
-  bool as_scalar = std::holds_alternative<scalar_column_view>(input);
-
-  return jitify2::Template("cudf::jit::column_accessor")
-    .instantiate("cudf::column_device_view_core", element, as_scalar);
-}
-
-std::vector<std::string> reflect_input_accessors(
-  std::span<std::variant<column_view, scalar_column_view> const> inputs)
-{
-  std::vector<std::string> res;
-  std::transform(thrust::counting_iterator<size_t>(0),
-                 thrust::counting_iterator(inputs.size()),
-                 std::back_inserter(res),
-                 [&](auto i) { return reflect_input_accessor(inputs[i], i); });
-
-  return res;
-}
-
 jitify2::Kernel get_udf_kernel(jitify2::PreprocessedProgramData const& preprocessed_program_data,
                                std::string const& kernel_name,
                                std::string const& cuda_source)

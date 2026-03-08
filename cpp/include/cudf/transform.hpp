@@ -71,11 +71,19 @@ namespace CUDF_EXPORT cudf {
  * @brief Typedef for inputs to the transform function. Each input can be either a column or a
  * scalar column.
  */
-using transform_input = std::variant<column_view, scalar_column_view, mutable_column_view>;
+using transform_input = std::variant<column_view, scalar_column_view>;
 
+/**
+ * @brief Specification for the outputs of the transform function. This includes the output type and
+ * nullability policy for each output column.
+ *
+ */
 struct transform_output {
-  data_type type                 = data_type{type_id::EMPTY};
-  output_nullability nullability = output_nullability::PRESERVE;
+  data_type type = data_type{type_id::EMPTY};  ///< The output type of the column to be created
+
+  output_nullability nullability =
+    output_nullability::PRESERVE;  ///< Signifies if a null mask should be created for the output
+                                   ///< column
 };
 
 /**
@@ -127,7 +135,7 @@ std::unique_ptr<column> transform_extended(
  * element of the input columns.
  *
  * Computes:
- * `UDF(&outputs[i]..., inputs[i]...)`.
+ * `(outputs[i]...) =  UDF(inputs[i]...)`.
  *
  *
  * @throws std::invalid_argument if any of the input columns have different sizes (except scalars)
@@ -148,22 +156,24 @@ std::unique_ptr<column> transform_extended(
  * @param user_data     User-defined device data to pass to the UDF.
  * @param inputs        Immutable views of the inputs to transform (columns and scalar columns)
  * @param outputs       Specification of the output columns to be created
+ * @param string_offsets For string output columns, the offsets can be pre-allocated and passed in
+ * to prevent overhead of compacting string views into run-end strings column.
  * @param stream        CUDA stream used for device memory operations and kernel launches
  * @param mr            Device memory resource used to allocate the returned column's device memory
- * @return              A vector of columns resulting from applying the transform function to
- *                      every element of the input. These columns are returned in the same order as
- * the `output_types`.
+ * @return              A table containing the columns resulting from applying the transform
+ * function to every element of the input according to the output specifications
  *
  */
-std::vector<std::unique_ptr<column>> transform_extended2(std::string const& udf,
-                                       udf_source_type source_type,
-                                       null_aware is_null_aware,
-                                       std::optional<size_type> row_size,
-                                       std::optional<void*> user_data,
-                                       std::span<transform_input const> inputs,
-                                       std::span<transform_output const> outputs,
-                                       rmm::cuda_stream_view stream,
-                                       rmm::device_async_resource_ref mr);
+std::unique_ptr<table> transform_extended2(std::string const& udf,
+                                           udf_source_type source_type,
+                                           null_aware is_null_aware,
+                                           std::optional<size_type> row_size,
+                                           std::optional<void*> user_data,
+                                           std::span<transform_input const> inputs,
+                                           std::span<transform_output const> outputs,
+                                           std::vector<std::unique_ptr<column>> string_offsets,
+                                           rmm::cuda_stream_view stream,
+                                           rmm::device_async_resource_ref mr);
 
 /**
  * @brief Creates a null_mask from `input` by converting `NaN` to null and

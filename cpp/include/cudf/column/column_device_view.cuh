@@ -749,16 +749,28 @@ class alignas(16) mutable_column_device_view : public mutable_column_device_view
    */
   static std::size_t extent(mutable_column_view source_view);
 
-  static mutable_column_device_view from_parts(data_type type,
-                                               size_type size,
-                                               void const* data,
-                                               bitmask_type const* null_mask,
-                                               size_type offset,
-                                               mutable_column_device_view* children,
-                                               size_type num_children)
+  /**
+   * @brief Factory to construct a mutable column view that is usable in device memory from
+   * pre-existing device memory pointers to data, nullmask, and offset.
+   *
+   * @param type The type of the column
+   * @param size The number of elements in the column
+   * @param data Pointer to the device memory containing the data
+   * @param null_mask Pointer to the device memory containing the null bitmask
+   * @param offset The index of the first element in the column
+   * @param children Pointer to the device memory containing child data
+   * @param num_children The number of child columns
+   *
+   */
+  static auto from_parts(data_type type,
+                         size_type size,
+                         void const* data,
+                         bitmask_type const* null_mask,
+                         size_type offset,
+                         mutable_column_device_view* children,
+                         size_type num_children)
   {
-    return mutable_column_device_view{
-      mutable_column_device_view_core{type, size, data, null_mask, offset, children, num_children}};
+    return mutable_column_device_view{type, size, data, null_mask, offset, children, num_children};
   }
 
   /**

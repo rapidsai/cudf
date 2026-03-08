@@ -32,7 +32,7 @@ namespace cudf {
 namespace jit {
 namespace {
 template <typename Out>
-__device__ void warp_compact_validity(mutable_column_device_view_core const* outputs,
+__device__ void warp_compact_validity(detail::column_device_view_base const* columns,
                                       size_type row,
                                       bool is_valid)
 {
@@ -40,7 +40,7 @@ __device__ void warp_compact_validity(mutable_column_device_view_core const* out
     return;
   } else {
     auto null_word = __ballot_sync(0xFFFF'FFFFU, is_valid);
-    if ((threadIdx.x % 32) == 0) { Out::set_null_word(outputs, row / 32, null_word); }
+    if ((threadIdx.x & 31) == 0) { Out::set_null_word(columns, row / 32, null_word); }
   }
 }
 }  // namespace
@@ -50,23 +50,22 @@ template <null_aware is_null_aware,
           bool has_user_data,
           typename Ins,
           typename Outs>
-CUDF_KERNEL void transform_kernel(size_type num_rows,
+CUDF_KERNEL void transform_kernel(size_type row_size,
                                   void* user_data,
-                                  column_device_view_core const* inputs,
                                   bitmask_type const* stencil,
-                                  mutable_column_device_view_core const* outputs)
+                                  detail::column_device_view_base const* columns)
 {
   auto const start  = detail::grid_1d::global_thread_id();
   auto const stride = detail::grid_1d::grid_stride();
 
-  for (auto row = start; row < num_rows; row += stride) {
+  for (auto row = start; row < row_size; row += stride) {
     bool is_valid[Outs::size];
 
     transform_udf<is_null_aware, has_stencil, has_user_data, Ins, Outs>::call(
-      GENERIC_TRANSFORM_OP, row, user_data, inputs, stencil, outputs, is_valid);
+      GENERIC_TRANSFORM_OP, row, user_data, stencil, columns, is_valid);
 
     Outs::map([&]<typename... Out> {
-      (warp_compact_validity<Out>(outputs, row, is_valid[Out::index]), ...);
+      (warp_compact_validity<Out>(columns, row, is_valid[Out::index]), ...);
     });
   }
 }

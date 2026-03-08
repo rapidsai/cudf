@@ -10,20 +10,19 @@ namespace CUDF_EXPORT cudf {
 namespace jit {
 
 /**
- * @brief A column wrapper type that treats a column as a span of elements. This treats the element
- * as a contiguous sequence of elements.
+ * @brief A column wrapper type that treats a column as a vector of elements.
  *
  */
 template <typename Column>
-struct span_column : private Column {
+struct vector_column_device_view : private Column {
   using base = Column;
 
-  CUDF_HOST_DEVICE constexpr span_column(Column const& src) : base{src} {}
-  ~span_column()                             = default;
-  span_column(span_column const&)            = default;
-  span_column(span_column&&)                 = default;
-  span_column& operator=(span_column const&) = default;
-  span_column& operator=(span_column&&)      = default;
+  CUDF_HOST_DEVICE constexpr vector_column_device_view(Column const& src) : base{src} {}
+  ~vector_column_device_view()                                           = default;
+  vector_column_device_view(vector_column_device_view const&)            = default;
+  vector_column_device_view(vector_column_device_view&&)                 = default;
+  vector_column_device_view& operator=(vector_column_device_view const&) = default;
+  vector_column_device_view& operator=(vector_column_device_view&&)      = default;
 
   using base::nullable;
   using base::offset;
@@ -61,29 +60,27 @@ struct span_column : private Column {
     return element<T>(element);
   }
 
-  CUDF_HOST_DEVICE Column& to_base() { return static_cast<Column&>(*this); }
-
-  CUDF_HOST_DEVICE Column const& to_base() const { return static_cast<Column const&>(*this); }
 };
 
 /**
  * @brief A column wrapper type that treats a column as a column of mutable strings.
- *
+ * The offsets will have been pre-initialized and the chars will have been pre-allocated.
  */
 template <typename Column>
-struct mut_string_column : private Column {
+struct mut_strings_column_device_view : private Column {
   using base = Column;
 
-  CUDF_HOST_DEVICE constexpr mut_string_column(Column const& src) : base{src} {}
+  CUDF_HOST_DEVICE constexpr mut_strings_column_device_view(Column const& src) : base{src} {}
 
-  ~mut_string_column()                                   = default;
-  mut_string_column(mut_string_column const&)            = default;
-  mut_string_column(mut_string_column&&)                 = default;
-  mut_string_column& operator=(mut_string_column const&) = default;
-  mut_string_column& operator=(mut_string_column&&)      = default;
+  ~mut_strings_column_device_view()                                               = default;
+  mut_strings_column_device_view(mut_strings_column_device_view const&)            = default;
+  mut_strings_column_device_view(mut_strings_column_device_view&&)                 = default;
+  mut_strings_column_device_view& operator=(mut_strings_column_device_view const&) = default;
+  mut_strings_column_device_view& operator=(mut_strings_column_device_view&&)      = default;
 
   using base::is_null;
   using base::is_valid;
+  using base::null_mask;
   using base::nullable;
   using base::offset;
   using base::size;
@@ -111,9 +108,6 @@ struct mut_string_column : private Column {
     return element(element);
   }
 
-  CUDF_HOST_DEVICE Column& to_base() { return static_cast<Column&>(*this); }
-
-  CUDF_HOST_DEVICE Column const& to_base() const { return static_cast<Column const&>(*this); }
 };
 
 }  // namespace jit

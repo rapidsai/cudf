@@ -40,9 +40,8 @@ struct transform_udf {
   static __device__ void call(Fn&& udf,
                               size_type index,
                               void* user_data,
-                              column_device_view_core const* in_cols,
                               bitmask_type const* stencil,
-                              mutable_column_device_view_core const* out_cols,
+                              detail::column_device_view_base const* cols,
                               [[maybe_unused]] bool* is_valid)
     requires(is_null_aware == null_aware::NO)
   {
@@ -57,7 +56,7 @@ struct transform_udf {
       cuda::std::apply([&](auto&&... args) { return cuda::std::tuple{&args...}; }, outs);
 
     auto inputs =
-      Ins::map([&]<typename... A>() { return cuda::std::tuple{A::element(in_cols, index)...}; });
+      Ins::map([&]<typename... A>() { return cuda::std::tuple{A::element(cols, index)...}; });
 
     if constexpr (has_user_data) {
       auto args = cuda::std::tuple_cat(cuda::std::tuple{user_data, index}, out_ptrs, inputs);
@@ -69,7 +68,7 @@ struct transform_udf {
     }
 
     [&]<int... I>(cuda::std::integer_sequence<int, I...>) {
-      (Outs::at<I>::assign(out_cols, index, cuda::std::get<I>(outs)), ...);
+      (Outs::at<I>::assign(cols, index, cuda::std::get<I>(outs)), ...);
     }(Outs::indexed);
   }
 
@@ -77,9 +76,8 @@ struct transform_udf {
   static __device__ void call(Fn&& udf,
                               size_type index,
                               void* user_data,
-                              column_device_view_core const* in_cols,
                               [[maybe_unused]] bitmask_type const* stencil,
-                              mutable_column_device_view_core const* out_cols,
+                              detail::column_device_view_base const* cols,
                               bool* is_valid)
     requires(is_null_aware == null_aware::YES)
   {
@@ -90,7 +88,7 @@ struct transform_udf {
       cuda::std::apply([&](auto&&... args) { return cuda::std::tuple{&args...}; }, outs);
 
     auto inputs = Ins::map(
-      [&]<typename... A>() { return cuda::std::tuple{A::nullable_element(in_cols, index)...}; });
+      [&]<typename... A>() { return cuda::std::tuple{A::nullable_element(cols, index)...}; });
 
     if constexpr (has_user_data) {
       auto args = cuda::std::tuple_cat(cuda::std::tuple{user_data, index}, out_ptrs, inputs);
@@ -102,7 +100,7 @@ struct transform_udf {
     }
 
     [&]<int... I>(cuda::std::integer_sequence<int, I...>) {
-      (Outs::at<I>::assign(out_cols, index, cuda::std::get<I>(outs)), ...);
+      (Outs::at<I>::assign(cols, index, cuda::std::get<I>(outs)), ...);
       ((is_valid[I] = cuda::std::get<I>(outs).has_value()), ...);
     }(Ins::indexed);
   }
