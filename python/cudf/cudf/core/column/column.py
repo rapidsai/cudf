@@ -120,41 +120,72 @@ else:
     NumpyExtensionArray = pd.arrays.PandasArray
 
 
+class ColumnList:
+    """Tag type to mark a group of columns for plc.Table construction.
+
+    Used with PylibcudfFunction to signal that these columns should be
+    packed into a plc.Table before being passed to the pylibcudf function.
+    """
+
+    __slots__ = ("columns",)
+
+    def __init__(self, *columns: "ColumnBase"):
+        self.columns = columns
+
+
 class PylibcudfFunction:
     def __init__(
         self,
         pylibcudf_function: Callable[..., Any],
         dtype_policy: "DtypePolicy",
         mode: Literal["read", "write"] = "read",
+        result_index: int | None = None,
     ) -> None:
         self._pylibcudf_function = pylibcudf_function
         self._dtype_policy = dtype_policy
         self._mode: Literal["read", "write"] = mode
+        self._result_index = result_index
+
+    def _access_column(
+        self,
+        col: "ColumnBase",
+        stack: ExitStack,
+        dtypes: list["DtypeObj"],
+    ) -> plc.Column:
+        accessed = stack.enter_context(
+            col.access(mode=self._mode, scope="internal")
+        )
+        dtypes.append(accessed.dtype)
+        return accessed.plc_column
+
+    def _process_arg(
+        self,
+        arg: Any,
+        stack: ExitStack,
+        dtypes: list["DtypeObj"],
+    ) -> Any:
+        if isinstance(arg, ColumnBase):
+            return self._access_column(arg, stack, dtypes)
+        if isinstance(arg, ColumnList):
+            return plc.Table(
+                [
+                    self._access_column(col, stack, dtypes)
+                    for col in arg.columns
+                ]
+            )
+        return arg
 
     def execute_with_args(self, *args: Any, **kwargs: Any) -> Any:
         dtypes: list["DtypeObj"] = []
         with ExitStack() as stack:
-            plc_args = []
-            for arg in args:
-                if isinstance(arg, ColumnBase):
-                    accessed = stack.enter_context(
-                        arg.access(mode=self._mode, scope="internal")
-                    )
-                    dtypes.append(accessed.dtype)
-                    plc_args.append(accessed.plc_column)
-                else:
-                    plc_args.append(arg)
-            plc_kwargs = {}
-            for k, v in kwargs.items():
-                if isinstance(v, ColumnBase):
-                    accessed = stack.enter_context(
-                        v.access(mode=self._mode, scope="internal")
-                    )
-                    dtypes.append(accessed.dtype)
-                    plc_kwargs[k] = accessed.plc_column
-                else:
-                    plc_kwargs[k] = v
+            plc_args = [self._process_arg(arg, stack, dtypes) for arg in args]
+            plc_kwargs = {
+                k: self._process_arg(v, stack, dtypes)
+                for k, v in kwargs.items()
+            }
             plc_result = self._pylibcudf_function(*plc_args, **plc_kwargs)
+        if self._result_index is not None:
+            plc_result = plc_result.columns()[self._result_index]
         output_dtype = self._dtype_policy(plc_result, dtypes)
         return ColumnBase.create(plc_result, dtype=output_dtype)
 
@@ -1356,16 +1387,14 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
     def dropna(self) -> Self:
         if self.has_nulls():
-            with self.access(mode="read", scope="internal"):
-                plc_table = plc.stream_compaction.drop_nulls(
-                    plc.Table([self.plc_column]),
-                    [0],
-                    1,
-                )
-                return cast(
-                    "Self",
-                    ColumnBase.create(plc_table.columns()[0], self.dtype),
-                )
+            return cast(
+                "Self",
+                PylibcudfFunction(
+                    plc.stream_compaction.drop_nulls,
+                    same_dtype_policy,
+                    result_index=0,
+                ).execute_with_args(ColumnList(self), [0], 1),
+            )
         else:
             return self.copy()
 
@@ -1877,16 +1906,14 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         )
 
     def repeat(self, repeats: int) -> Self:
-        with self.access(mode="read", scope="internal"):
-            return cast(
-                "Self",
-                ColumnBase.create(
-                    plc.filling.repeat(
-                        plc.Table([self.plc_column]), repeats
-                    ).columns()[0],
-                    self.dtype,
-                ),
-            )
+        return cast(
+            "Self",
+            PylibcudfFunction(
+                plc.filling.repeat,
+                same_dtype_policy,
+                result_index=0,
+            ).execute_with_args(ColumnList(self), repeats),
+        )
 
     def fillna(
         self,
@@ -2216,16 +2243,14 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         ):
             return self.copy()
         order = sorting.ordering([ascending], [na_position])
-        with self.access(mode="read", scope="internal"):
-            plc_table = plc.sorting.sort(
-                plc.Table([self.plc_column]),
-                order[0],
-                order[1],
-            )
-            return cast(
-                "Self",
-                ColumnBase.create(plc_table.columns()[0], self.dtype),
-            )
+        return cast(
+            "Self",
+            PylibcudfFunction(
+                plc.sorting.sort,
+                same_dtype_policy,
+                result_index=0,
+            ).execute_with_args(ColumnList(self), order[0], order[1]),
+        )
 
     def distinct_count(self, dropna: bool = True) -> int:
         """Get the (null-aware) number of distinct values in this column."""
@@ -2342,15 +2367,11 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         if mask.dtype.kind != "b":
             raise ValueError("boolean_mask is not boolean type.")
 
-        with access_columns(self, mask, mode="read", scope="internal") as (
-            col,
-            mask_col,
-        ):
-            plc_table = plc.stream_compaction.apply_boolean_mask(
-                plc.Table([col.plc_column]),
-                mask_col.plc_column,
-            )
-            return ColumnBase.create(plc_table.columns()[0], self.dtype)
+        return PylibcudfFunction(
+            plc.stream_compaction.apply_boolean_mask,
+            same_dtype_policy,
+            result_index=0,
+        ).execute_with_args(ColumnList(self), mask)
 
     def argsort(
         self,
@@ -2475,18 +2496,20 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         if self.is_unique:
             return self.copy()
         else:
-            with self.access(mode="read", scope="internal"):
-                plc_table = plc.stream_compaction.stable_distinct(
-                    plc.Table([self.plc_column]),
+            return cast(
+                "Self",
+                PylibcudfFunction(
+                    plc.stream_compaction.stable_distinct,
+                    same_dtype_policy,
+                    result_index=0,
+                ).execute_with_args(
+                    ColumnList(self),
                     [0],
                     plc.stream_compaction.DuplicateKeepOption.KEEP_FIRST,
                     plc.types.NullEquality.EQUAL,
                     plc.types.NanEquality.ALL_EQUAL,
-                )
-                return cast(
-                    "Self",
-                    ColumnBase.create(plc_table.columns()[0], self.dtype),
-                )
+                ),
+            )
 
     def _is_sliced(self) -> bool:
         """
