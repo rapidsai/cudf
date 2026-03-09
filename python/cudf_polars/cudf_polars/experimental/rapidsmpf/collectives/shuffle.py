@@ -274,6 +274,7 @@ async def shuffle_actor(
     columns_to_hash: tuple[int, ...],
     num_partitions: int,
     collective_id: int,
+    *,
     key_ir: IR | None = None,
     drop_ir: IR | None = None,
 ) -> None:
