@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -12,6 +12,8 @@
 #include <cudf/copying.hpp>
 #include <cudf/sorting.hpp>
 #include <cudf/types.hpp>
+
+#include <cuda/iterator>
 
 #include <type_traits>
 #include <vector>
@@ -28,7 +30,7 @@ TYPED_TEST(TopKTypes, TopK)
 {
   using T = TypeParam;
 
-  auto itr   = thrust::counting_iterator<int32_t>(0);
+  auto itr   = cuda::counting_iterator{int32_t{0}};
   auto input = cudf::test::fixed_width_column_wrapper<T, int32_t>(
     itr, itr + 100, cudf::test::iterators::null_at(4));
   auto expected =
@@ -55,7 +57,7 @@ TYPED_TEST(TopKTypes, TopKSegmented)
   using LCW  = cudf::test::lists_column_wrapper<T, int32_t>;
   using LCWO = cudf::test::lists_column_wrapper<cudf::size_type>;
 
-  auto itr   = thrust::counting_iterator<int32_t>(0);
+  auto itr   = cuda::counting_iterator{int32_t{0}};
   auto input = cudf::test::fixed_width_column_wrapper<T, int32_t>(
     itr, itr + 100, cudf::test::iterators::null_at(4));
   auto offsets =
@@ -109,7 +111,7 @@ TEST_F(TopK, Empty)
 
 TEST_F(TopK, Errors)
 {
-  auto itr   = thrust::counting_iterator<int64_t>(0);
+  auto itr   = cuda::counting_iterator{int64_t{0}};
   auto input = cudf::test::fixed_width_column_wrapper<int64_t>(itr, itr + 100);
 
   EXPECT_THROW(cudf::top_k(input, -1), std::invalid_argument);

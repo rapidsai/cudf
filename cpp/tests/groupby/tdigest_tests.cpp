@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -16,7 +16,7 @@
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
-#include <thrust/iterator/counting_iterator.h>
+#include <cuda/iterator>
 
 #include <functional>
 
@@ -132,7 +132,7 @@ TYPED_TEST(TDigestAllTypes, LargeGroups)
   // generate a random set of keys
   std::vector<int> h_keys;
   h_keys.reserve(_values->size());
-  auto iter = thrust::make_counting_iterator(0);
+  auto iter = cuda::counting_iterator{int{0}};
   std::transform(iter, iter + _values->size(), std::back_inserter(h_keys), [](int i) {
     return static_cast<int>(round(cudf::test::rand_range(0, 8)));
   });
@@ -460,7 +460,7 @@ TEST_F(TDigestMergeTest, Grouped)
 
   // generate separate digests
   std::vector<std::unique_ptr<cudf::column>> parts;
-  auto iter = thrust::make_counting_iterator(0);
+  auto iter = cuda::counting_iterator{int{0}};
   std::transform(
     iter,
     iter + split_values.size(),
@@ -528,7 +528,7 @@ TEST_F(TDigestMergeTest, Grouped)
 
     // verify min/max
     auto split_results = cudf::split(*result.second[0].results[0], {1});
-    auto iter          = thrust::make_counting_iterator(0);
+    auto iter          = cuda::counting_iterator{cudf::size_type{0}};
     std::for_each(iter, iter + split_results.size(), [&](cudf::size_type i) {
       auto copied = std::make_unique<cudf::column>(split_results[i]);
       cudf::test::tdigest_minmax_compare<double>(cudf::tdigest::tdigest_column_view(*copied),
@@ -575,7 +575,7 @@ TEST_F(TDigestMergeTest, Grouped)
 
     // verify min/max
     auto split_results = cudf::split(*result.second[0].results[0], {1});
-    auto iter          = thrust::make_counting_iterator(0);
+    auto iter          = cuda::counting_iterator{cudf::size_type{0}};
     std::for_each(iter, iter + split_results.size(), [&](cudf::size_type i) {
       auto copied = std::make_unique<cudf::column>(split_results[i]);
       cudf::test::tdigest_minmax_compare<double>(cudf::tdigest::tdigest_column_view(*copied),
@@ -621,7 +621,7 @@ TEST_F(TDigestMergeTest, Grouped)
 
     // verify min/max
     auto split_results = cudf::split(*result.second[0].results[0], {1});
-    auto iter          = thrust::make_counting_iterator(0);
+    auto iter          = cuda::counting_iterator{cudf::size_type{0}};
     std::for_each(iter, iter + split_results.size(), [&](cudf::size_type i) {
       auto copied = std::make_unique<cudf::column>(split_results[i]);
       cudf::test::tdigest_minmax_compare<double>(cudf::tdigest::tdigest_column_view(*copied),

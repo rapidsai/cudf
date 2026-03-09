@@ -28,8 +28,8 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
+#include <cuda/iterator>
 #include <cuda/std/iterator>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/unique.h>
 
@@ -145,7 +145,7 @@ sort_groupby_helper::index_vector const& sort_groupby_helper::group_offsets(
     // the comparator speeds up compile-time significantly without much degradation in
     // runtime performance over using the comparator directly in thrust::unique_copy.
     auto result       = rmm::device_uvector<bool>(size, stream);
-    auto const itr    = thrust::make_counting_iterator<size_type>(0);
+    auto const itr    = cuda::counting_iterator{size_type{0}};
     auto const row_eq = permuted_row_equality_comparator(d_key_equal, sorted_order);
     auto const ufn    = cudf::detail::unique_copy_fn<decltype(itr), decltype(row_eq)>{
       itr, duplicate_keep_option::KEEP_FIRST, row_eq, size - 1};
@@ -156,8 +156,8 @@ sort_groupby_helper::index_vector const& sort_groupby_helper::group_offsets(
     auto const d_key_equal = comparator.equal_to<false>(
       cudf::nullate::DYNAMIC{cudf::has_nested_nulls(_keys)}, null_equality::EQUAL);
     result_end = thrust::unique_copy(rmm::exec_policy_nosync(stream),
-                                     thrust::counting_iterator<size_type>(0),
-                                     thrust::counting_iterator<size_type>(size),
+                                     cuda::counting_iterator{size_type{0}},
+                                     cuda::counting_iterator{size_type{size}},
                                      group_offsets->begin(),
                                      permuted_row_equality_comparator(d_key_equal, sorted_order));
   }

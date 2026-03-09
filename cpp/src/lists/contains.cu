@@ -24,11 +24,10 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
-#include <cuda/std/iterator>
+#include <cuda/iterator>
 #include <cuda/std/utility>
 #include <thrust/execution_policy.h>
 #include <thrust/find.h>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/logical.h>
 #include <thrust/tabulate.h>
 #include <thrust/transform.h>
@@ -90,8 +89,8 @@ struct is_supported_type_fn {
 template <bool forward>
 __device__ auto element_index_pair_iter(size_type const size)
 {
-  auto const begin = thrust::make_counting_iterator(0);
-  auto const end   = thrust::make_counting_iterator(size);
+  auto const begin = cuda::counting_iterator{cudf::size_type{0}};
+  auto const end   = cuda::counting_iterator{size};
 
   if constexpr (forward) {
     return cuda::std::pair{begin, end};
@@ -349,8 +348,8 @@ std::unique_ptr<column> contains_nulls(lists_column_view const& lists,
       auto const list = list_device_view{lists, list_idx};
       return list.is_null() ||
              thrust::any_of(thrust::seq,
-                            thrust::make_counting_iterator(0),
-                            thrust::make_counting_iterator(list.size()),
+                            cuda::counting_iterator{cudf::size_type{0}},
+                            cuda::counting_iterator{list.size()},
                             [&list](auto const idx) { return list.is_null(idx); });
     }));
 

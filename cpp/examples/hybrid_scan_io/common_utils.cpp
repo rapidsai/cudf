@@ -16,6 +16,8 @@
 #include <rmm/mr/owning_wrapper.hpp>
 #include <rmm/mr/pool_memory_resource.hpp>
 
+#include <cuda/iterator>
+
 #include <filesystem>
 #include <string>
 #include <vector>
@@ -144,7 +146,7 @@ std::vector<io_source> extract_input_sources(std::string const& paths,
 
   // Append the input files by input_multiplier times
   std::for_each(
-    thrust::counting_iterator(1), thrust::counting_iterator(input_multiplier), [&](auto i) {
+    cuda::counting_iterator{int32_t{1}}, cuda::counting_iterator{input_multiplier}, [&](auto i) {
       parquet_files.insert(
         parquet_files.end(), parquet_files.begin(), parquet_files.begin() + initial_size);
     });

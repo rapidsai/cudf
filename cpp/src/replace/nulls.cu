@@ -35,9 +35,8 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 
-#include <cuda/std/iterator>
+#include <cuda/iterator>
 #include <cuda/std/tuple>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/discard_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/scan.h>
@@ -271,7 +270,7 @@ std::unique_ptr<cudf::column> replace_nulls_policy_impl(cudf::column_view const&
                                                         rmm::device_async_resource_ref mr)
 {
   auto device_in = cudf::column_device_view::create(input, stream);
-  auto index     = thrust::make_counting_iterator<cudf::size_type>(0);
+  auto index     = cuda::counting_iterator{cudf::size_type{0}};
   auto valid_it  = cudf::detail::make_validity_iterator(*device_in);
   auto in_begin  = thrust::make_zip_iterator(cuda::std::make_tuple(index, valid_it));
 

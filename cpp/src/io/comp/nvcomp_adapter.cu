@@ -21,9 +21,9 @@ batched_args create_batched_nvcomp_args(device_span<device_span<uint8_t const> c
 {
   auto const num_comp_chunks = inputs.size();
   rmm::device_uvector<void const*> input_data_ptrs(num_comp_chunks, stream);
-  rmm::device_uvector<size_t> input_data_sizes(num_comp_chunks, stream);
+  rmm::device_uvector<std::size_t> input_data_sizes(num_comp_chunks, stream);
   rmm::device_uvector<void*> output_data_ptrs(num_comp_chunks, stream);
-  rmm::device_uvector<size_t> output_data_sizes(num_comp_chunks, stream);
+  rmm::device_uvector<std::size_t> output_data_sizes(num_comp_chunks, stream);
 
   // Prepare the input vectors
   auto ins_it = thrust::make_zip_iterator(input_data_ptrs.begin(), input_data_sizes.begin());
@@ -49,11 +49,12 @@ batched_args create_batched_nvcomp_args(device_span<device_span<uint8_t const> c
           std::move(output_data_sizes)};
 }
 
-std::pair<rmm::device_uvector<void const*>, rmm::device_uvector<size_t>> create_get_temp_size_args(
-  device_span<device_span<uint8_t const> const> inputs, rmm::cuda_stream_view stream)
+std::pair<rmm::device_uvector<void const*>, rmm::device_uvector<std::size_t>>
+create_get_temp_size_args(device_span<device_span<uint8_t const> const> inputs,
+                          rmm::cuda_stream_view stream)
 {
   rmm::device_uvector<void const*> input_data_ptrs(inputs.size(), stream);
-  rmm::device_uvector<size_t> input_data_sizes(inputs.size(), stream);
+  rmm::device_uvector<std::size_t> input_data_sizes(inputs.size(), stream);
 
   auto ins_it = thrust::make_zip_iterator(input_data_ptrs.begin(), input_data_sizes.begin());
   thrust::transform(
@@ -67,7 +68,7 @@ std::pair<rmm::device_uvector<void const*>, rmm::device_uvector<size_t>> create_
 }
 
 void update_compression_results(device_span<nvcompStatus_t const> nvcomp_stats,
-                                device_span<size_t const> actual_output_sizes,
+                                device_span<std::size_t const> actual_output_sizes,
                                 device_span<codec_exec_result> results,
                                 rmm::cuda_stream_view stream)
 {
@@ -87,7 +88,7 @@ void update_compression_results(device_span<nvcompStatus_t const> nvcomp_stats,
     [] __device__(auto const& cudf_status) { return cudf_status.status != codec_status::SKIPPED; });
 }
 
-void update_compression_results(device_span<size_t const> actual_output_sizes,
+void update_compression_results(device_span<std::size_t const> actual_output_sizes,
                                 device_span<codec_exec_result> results,
                                 rmm::cuda_stream_view stream)
 {
@@ -101,9 +102,9 @@ void update_compression_results(device_span<size_t const> actual_output_sizes,
     [] __device__(auto const& results) { return results.status != codec_status::SKIPPED; });
 }
 
-void skip_unsupported_inputs(device_span<size_t> input_sizes,
+void skip_unsupported_inputs(device_span<std::size_t> input_sizes,
                              device_span<codec_exec_result> results,
-                             std::optional<size_t> max_valid_input_size,
+                             std::optional<std::size_t> max_valid_input_size,
                              rmm::cuda_stream_view stream)
 {
   if (max_valid_input_size.has_value()) {
@@ -117,19 +118,19 @@ void skip_unsupported_inputs(device_span<size_t> input_sizes,
       [] __device__(auto const& status) {
         return cuda::std::pair{0, codec_exec_result{0, codec_status::SKIPPED}};
       },
-      [max_size = max_valid_input_size.value()] __device__(size_t input_size) {
+      [max_size = max_valid_input_size.value()] __device__(std::size_t input_size) {
         return input_size > max_size;
       });
   }
 }
-std::pair<size_t, size_t> max_chunk_and_total_input_size(device_span<size_t const> input_sizes,
-                                                         rmm::cuda_stream_view stream)
+std::pair<std::size_t, std::size_t> max_chunk_and_total_input_size(
+  device_span<std::size_t const> input_sizes, rmm::cuda_stream_view stream)
 {
   auto const max = thrust::reduce(rmm::exec_policy_nosync(stream),
                                   input_sizes.begin(),
                                   input_sizes.end(),
                                   0ul,
-                                  cuda::maximum<size_t>());
+                                  cuda::maximum<std::size_t>());
   auto const sum =
     thrust::reduce(rmm::exec_policy_nosync(stream), input_sizes.begin(), input_sizes.end());
   return {max, sum};

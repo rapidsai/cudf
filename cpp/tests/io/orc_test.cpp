@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -27,6 +27,8 @@
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/span.hpp>
+
+#include <cuda/iterator>
 
 #include <array>
 #include <numeric>
@@ -2208,7 +2210,7 @@ TEST_F(OrcChunkedWriterTest, FailedWriteCloseNotThrow)
     size_t bytes_written() override { return 0; }
   };
 
-  auto sequence = thrust::make_counting_iterator(0);
+  auto sequence = cuda::counting_iterator{int8_t{0}};
   column_wrapper<int8_t> col(sequence, sequence + 10);
   table_view table({col});
 

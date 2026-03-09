@@ -9,10 +9,10 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <cuda/iterator>
 #include <cuda/std/iterator>
 #include <thrust/binary_search.h>
 #include <thrust/execution_policy.h>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 
 namespace cudf {
@@ -85,8 +85,8 @@ std::unique_ptr<column> gather_list_leaf(column_view const& column,
                                          rmm::device_async_resource_ref mr)
 {
   // gather map iterator for this level (N)
-  auto gather_map_begin = thrust::make_transform_iterator(
-    thrust::make_counting_iterator<size_type>(0), list_gatherer{gd});
+  auto gather_map_begin =
+    thrust::make_transform_iterator(cuda::counting_iterator{size_type{0}}, list_gatherer{gd});
   size_type gather_map_size = gd.gather_map_size;
 
   // call the normal gather
@@ -114,8 +114,8 @@ std::unique_ptr<column> gather_list_nested(cudf::lists_column_view const& list,
                                            rmm::device_async_resource_ref mr)
 {
   // gather map iterator for this level (N)
-  auto gather_map_begin = thrust::make_transform_iterator(
-    thrust::make_counting_iterator<size_type>(0), list_gatherer{gd});
+  auto gather_map_begin =
+    thrust::make_transform_iterator(cuda::counting_iterator{size_type{0}}, list_gatherer{gd});
   size_type gather_map_size = gd.gather_map_size;
 
   // if the gather map is empty, return an empty column

@@ -18,7 +18,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <thrust/iterator/counting_iterator.h>
+#include <cuda/iterator>
 #include <thrust/transform.h>
 
 namespace cudf {
@@ -55,8 +55,8 @@ std::unique_ptr<column> find_multiple(strings_column_view const& input,
 
   // fill output column with position values
   thrust::transform(rmm::exec_policy_nosync(stream),
-                    thrust::make_counting_iterator<size_type>(0),
-                    thrust::make_counting_iterator<size_type>(total_count),
+                    cuda::counting_iterator{size_type{0}},
+                    cuda::counting_iterator{size_type{total_count}},
                     results->mutable_view().begin<int32_t>(),
                     [d_strings, d_targets, targets_count] __device__(size_type idx) {
                       size_type str_idx = idx / targets_count;

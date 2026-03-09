@@ -23,7 +23,6 @@
 #include <thrust/for_each.h>
 #include <thrust/gather.h>
 #include <thrust/host_vector.h>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
 
 #include <functional>
@@ -87,8 +86,8 @@ dremel_data get_encoding(column_view h_col,
     auto d_off = lcv.offsets().data<size_type>();
 
     auto empties_idx_end = cudf::detail::copy_if(
-      thrust::counting_iterator<size_type>(start),
-      thrust::counting_iterator<size_type>(end),
+      cuda::counting_iterator{size_type{start}},
+      cuda::counting_iterator{size_type{end}},
       empties_idx.begin(),
       [d_off] __device__(auto i) { return d_off[i] == d_off[i + 1]; },
       stream);
@@ -299,7 +298,7 @@ dremel_data get_encoding(column_view h_col,
     // `nesting_levels.size()` == no of list levels + leaf. Max repetition level = no of list levels
     auto input_child_rep_it = cuda::make_constant_iterator(nesting_levels.size() - 1);
     auto input_child_def_it =
-      thrust::make_transform_iterator(thrust::make_counting_iterator(column_offsets[level + 1]),
+      thrust::make_transform_iterator(cuda::counting_iterator{column_offsets[level + 1]},
                                       def_level_fn{d_nesting_levels + level + 1,
                                                    d_nullability.data(),
                                                    start_at_sub_level[level + 1],
@@ -319,8 +318,8 @@ dremel_data get_encoding(column_view h_col,
     auto ends = thrust::merge_by_key(rmm::exec_policy_nosync(stream),
                                      empties.begin(),
                                      empties.begin() + empties_size,
-                                     thrust::make_counting_iterator(column_offsets[level + 1]),
-                                     thrust::make_counting_iterator(column_ends[level + 1]),
+                                     cuda::counting_iterator{column_offsets[level + 1]},
+                                     cuda::counting_iterator{column_ends[level + 1]},
                                      input_parent_zip_it,
                                      input_child_zip_it,
                                      cuda::make_discard_iterator(),
@@ -342,7 +341,7 @@ dremel_data get_encoding(column_view h_col,
     // Add scan output to existing offsets to get new offsets into merged rep level values
     new_offsets = rmm::device_uvector<size_type>(offset_size_at_level, stream);
     thrust::for_each_n(rmm::exec_policy_nosync(stream),
-                       thrust::make_counting_iterator(0),
+                       cuda::counting_iterator{cudf::size_type{0}},
                        offset_size_at_level,
                        [off      = lcv.offsets().data<size_type>() + column_offsets[level],
                         scan_out = scan_out.data(),
@@ -406,8 +405,8 @@ dremel_data get_encoding(column_view h_col,
     auto ends = thrust::merge_by_key(rmm::exec_policy_nosync(stream),
                                      transformed_empties,
                                      transformed_empties + empties_size,
-                                     thrust::make_counting_iterator(0),
-                                     thrust::make_counting_iterator(curr_rep_values_size),
+                                     cuda::counting_iterator{cudf::size_type{0}},
+                                     cuda::counting_iterator{curr_rep_values_size},
                                      input_parent_zip_it,
                                      input_child_zip_it,
                                      cuda::make_discard_iterator(),
@@ -430,7 +429,7 @@ dremel_data get_encoding(column_view h_col,
     // Add scan output to existing offsets to get new offsets into merged rep level values
     rmm::device_uvector<size_type> temp_new_offsets(offset_size_at_level, stream);
     thrust::for_each_n(rmm::exec_policy_nosync(stream),
-                       thrust::make_counting_iterator(0),
+                       cuda::counting_iterator{cudf::size_type{0}},
                        offset_size_at_level,
                        [off      = lcv.offsets().data<size_type>() + column_offsets[level],
                         scan_out = scan_out.data(),

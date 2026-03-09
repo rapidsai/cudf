@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -11,7 +11,7 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 
-#include <thrust/iterator/counting_iterator.h>
+#include <cuda/iterator>
 
 #include <nvbench/nvbench.cuh>
 
@@ -39,7 +39,7 @@ static void BM_binaryop_transform(nvbench::state& state)
   cudf::table_view table{*source_table};
 
   // Use the number of bytes read from global memory
-  state.add_global_memory_reads<key_type>(static_cast<size_t>(num_rows) * (tree_levels + 1));
+  state.add_global_memory_reads<key_type>(static_cast<std::size_t>(num_rows) * (tree_levels + 1));
   state.add_global_memory_writes<key_type>(num_rows);
 
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch&) {
@@ -74,7 +74,7 @@ static void BM_string_compare_binaryop_transform(nvbench::state& state)
   auto const num_cols = tree_levels * 2;
   std::vector<std::unique_ptr<cudf::column>> columns;
   std::for_each(
-    thrust::make_counting_iterator(0), thrust::make_counting_iterator(num_cols), [&](size_t) {
+    cuda::counting_iterator{std::size_t{0}}, cuda::counting_iterator{num_cols}, [&](std::size_t) {
       columns.emplace_back(create_string_column(num_rows, string_width, hit_rate));
     });
 
@@ -101,9 +101,9 @@ static void BM_string_compare_binaryop_transform(nvbench::state& state)
     std::unique_ptr<cudf::column> reduction =
       cudf::binary_operation(table.get_column(0), table.get_column(1), cmp_op, bool_type, stream);
     std::for_each(
-      thrust::make_counting_iterator(1),
-      thrust::make_counting_iterator(tree_levels),
-      [&](size_t idx) {
+      cuda::counting_iterator{cudf::size_type{1}},
+      cuda::counting_iterator{tree_levels},
+      [&](std::size_t idx) {
         std::unique_ptr<cudf::column> comparison = cudf::binary_operation(
           table.get_column(idx * 2), table.get_column(idx * 2 + 1), cmp_op, bool_type, stream);
         std::unique_ptr<cudf::column> reduced =

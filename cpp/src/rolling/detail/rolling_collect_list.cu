@@ -14,9 +14,9 @@
 #include <rmm/device_uvector.hpp>
 
 #include <cuda/functional>
+#include <cuda/iterator>
 #include <thrust/execution_policy.h>
 #include <thrust/fill.h>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/scan.h>
 #include <thrust/scatter.h>
 #include <thrust/tabulate.h>
@@ -49,7 +49,7 @@ std::unique_ptr<column> get_list_child_to_list_row_mapping(cudf::column_view con
   auto per_row_mapping_begin = per_row_mapping->mutable_view().template begin<size_type>();
   thrust::fill_n(rmm::exec_policy_nosync(stream), per_row_mapping_begin, num_child_rows, 0);
 
-  auto const begin = thrust::make_counting_iterator<size_type>(0);
+  auto const begin = cuda::counting_iterator{size_type{0}};
   thrust::scatter_if(rmm::exec_policy_nosync(stream),
                      begin,
                      begin + offsets.size() - 1,

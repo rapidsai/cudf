@@ -21,10 +21,10 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
+#include <cuda/iterator>
 #include <thrust/copy.h>
 #include <thrust/execution_policy.h>
 #include <thrust/for_each.h>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/scan.h>
 #include <thrust/transform.h>
 
@@ -58,8 +58,8 @@ generate_list_offsets_and_validities(table_view const& input,
   // Compute list sizes and validities.
   thrust::transform(
     rmm::exec_policy_nosync(stream),
-    thrust::make_counting_iterator<size_type>(0),
-    thrust::make_counting_iterator<size_type>(num_output_lists),
+    cuda::counting_iterator{size_type{0}},
+    cuda::counting_iterator{size_type{num_output_lists}},
     d_offsets,
     cuda::proclaim_return_type<size_type>([num_cols,
                                            table_dv     = *table_dv_ptr,
@@ -100,7 +100,8 @@ std::unique_ptr<column> concatenate_and_gather_lists(host_span<column_view const
 
   // Generate the gather map that interleaves the input columns.
   auto const iter_gather = cudf::detail::make_counting_transform_iterator(
-    0, cuda::proclaim_return_type<size_t>([num_cols, num_input_rows] __device__(auto const idx) {
+    0,
+    cuda::proclaim_return_type<std::size_t>([num_cols, num_input_rows] __device__(auto const idx) {
       auto const source_col_idx = idx % num_cols;
       auto const source_row_idx = idx / num_cols;
       return source_col_idx * num_input_rows + source_row_idx;
@@ -196,7 +197,7 @@ struct interleave_list_entries_impl<T, std::enable_if_t<std::is_same_v<T, cudf::
     auto comp_fn =
       compute_string_sizes_and_interleave_lists_fn{*table_dv_ptr, d_list_offsets, indices.data()};
     thrust::for_each_n(rmm::exec_policy_nosync(stream),
-                       thrust::counting_iterator<size_type>(0),
+                       cuda::counting_iterator{size_type{0}},
                        num_output_lists,
                        comp_fn);
     return cudf::strings::detail::make_strings_column(indices.begin(), indices.end(), stream, mr);
@@ -230,7 +231,7 @@ struct interleave_list_entries_impl<T, std::enable_if_t<cudf::is_fixed_width<T>(
 
     thrust::for_each_n(
       rmm::exec_policy_nosync(stream),
-      thrust::make_counting_iterator<size_type>(0),
+      cuda::counting_iterator{size_type{0}},
       num_output_lists,
       [num_cols,
        table_dv     = *table_dv_ptr,

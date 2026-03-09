@@ -25,6 +25,7 @@
 
 #include <cub/cub.cuh>
 #include <cuda/functional>
+#include <cuda/iterator>
 #include <cuda/std/iterator>
 #include <cuda/std/utility>
 #include <thrust/copy.h>
@@ -813,7 +814,7 @@ static std::unique_ptr<column> parse_string(string_view_pair_it str_tuples,
   auto single_thread_fn = string_parse<decltype(str_tuples)>{
     str_tuples, static_cast<bitmask_type*>(null_mask.data()), null_count_data, options, d_sizes};
   thrust::for_each_n(rmm::exec_policy_nosync(stream),
-                     thrust::make_counting_iterator<size_type>(0),
+                     cuda::counting_iterator{size_type{0}},
                      col_size,
                      single_thread_fn);
 
@@ -865,7 +866,7 @@ static std::unique_ptr<column> parse_string(string_view_pair_it str_tuples,
   single_thread_fn.d_offsets = d_offsets;
 
   thrust::for_each_n(rmm::exec_policy_nosync(stream),
-                     thrust::make_counting_iterator<size_type>(0),
+                     cuda::counting_iterator{size_type{0}},
                      col_size,
                      single_thread_fn);
 
@@ -942,7 +943,7 @@ std::unique_ptr<column> parse_data(
   // use `ConvertFunctor` to convert non-string values
   thrust::for_each_n(
     rmm::exec_policy_nosync(stream),
-    thrust::make_counting_iterator<size_type>(0),
+    cuda::counting_iterator{size_type{0}},
     col_size,
     [str_tuples, col = *output_dv_ptr, options, col_type, null_count_data] __device__(
       size_type row) {
