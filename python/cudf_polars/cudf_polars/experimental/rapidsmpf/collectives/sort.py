@@ -269,10 +269,8 @@ async def sort_actor(
 
         if sort_ir.stable:
             assert seq_id_name is not None
-            stable_schema = dict(sort_ir.schema)
-            stable_schema[seq_id_name] = DataType(pl.UInt64())
             sort_ir = Sort(
-                stable_schema,
+                sort_ir.schema | {seq_id_name: DataType(pl.UInt64())},
                 (
                     *sort_ir.by,
                     NamedExpr(seq_id_name, Col(DataType(pl.UInt64()), seq_id_name)),

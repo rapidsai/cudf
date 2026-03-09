@@ -44,6 +44,7 @@ from cudf_polars.dsl.ir import (
     Union,
 )
 from cudf_polars.dsl.traversal import CachingVisitor, traversal
+from cudf_polars.experimental.base import PartitionInfo
 from cudf_polars.experimental.dispatch import lower_ir_node
 from cudf_polars.experimental.rapidsmpf.collectives import ReserveOpIDs
 from cudf_polars.experimental.rapidsmpf.dispatch import FanoutInfo
@@ -53,6 +54,7 @@ from cudf_polars.experimental.rapidsmpf.nodes import (
 )
 from cudf_polars.experimental.rapidsmpf.tracing import log_query_plan
 from cudf_polars.experimental.rapidsmpf.utils import empty_table_chunk
+from cudf_polars.experimental.repartition import Repartition
 from cudf_polars.experimental.statistics import collect_statistics
 from cudf_polars.experimental.utils import _concat
 from cudf_polars.utils.config import CUDAStreamPoolConfig
@@ -68,7 +70,7 @@ if TYPE_CHECKING:
     import polars as pl
 
     from cudf_polars.dsl.ir import IR
-    from cudf_polars.experimental.base import PartitionInfo, StatsCollector
+    from cudf_polars.experimental.base import StatsCollector
     from cudf_polars.experimental.dispatch import (
         LowerIRTransformer,
         State as LowerState,
@@ -107,6 +109,14 @@ def evaluate_logical_plan(
 
     # Lower the IR graph on the client process (for now).
     ir, partition_info, stats = lower_ir_graph(ir, config_options)
+
+    # Dask may return chunks in arbitrary order.
+    # Make sure we always finish with a Repartition for now.
+    if config_options.executor.cluster == "distributed" and not isinstance(
+        ir, Repartition
+    ):
+        ir = Repartition(ir.schema, ir)
+        partition_info[ir] = PartitionInfo(count=1)
 
     # Log the query plan structure for tracing (no-op if tracing disabled)
     log_query_plan(ir, config_options)
