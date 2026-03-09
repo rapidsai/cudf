@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
-from cudf_polars.experimental.benchmarks.utils import get_data
+from cudf_polars.experimental.benchmarks.utils import QueryResult, get_data
 
 if TYPE_CHECKING:
     from cudf_polars.experimental.benchmarks.utils import RunConfig
@@ -294,15 +294,22 @@ def build_channel_result(  # noqa: D103
     dom: int,
     average_sales: pl.LazyFrame,
 ) -> pl.LazyFrame:
-    return (
-        sales.join(cross_items, left_on=item_key, right_on="ss_item_sk")
-        .join(item, left_on=item_key, right_on="i_item_sk")
-        .join(date_dim, left_on=date_key, right_on="d_date_sk")
-        .filter(
+    # DuckDB uses d_week_seq to filter, which includes all days in the target week.
+    # Find the d_week_seq for the specific date, then join on that week.
+    target_week = (
+        date_dim.filter(
             (pl.col("d_year") == year)
             & (pl.col("d_moy") == moy)
             & (pl.col("d_dom") == dom)
         )
+        .select("d_week_seq")
+        .unique()
+    )
+    week_dates = date_dim.join(target_week, on="d_week_seq").select("d_date_sk")
+    return (
+        sales.join(cross_items, left_on=item_key, right_on="ss_item_sk")
+        .join(item, left_on=item_key, right_on="i_item_sk")
+        .join(week_dates, left_on=date_key, right_on="d_date_sk")
         .group_by(["i_brand_id", "i_class_id", "i_category_id"])
         .agg(
             [
@@ -364,7 +371,7 @@ def rollup_level(y: pl.LazyFrame, group_cols: list[str]) -> pl.LazyFrame:  # noq
     )
 
 
-def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
+def polars_impl(run_config: RunConfig) -> QueryResult:
     """Query 14."""
     params = load_parameters(
         int(run_config.scale_factor),
@@ -444,10 +451,20 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     level4 = rollup_level(y, ["channel"])
     level5 = rollup_level(y, [])
 
-    return (
-        pl.concat([level1, level2, level3, level4, level5])
-        .sort(
-            ["channel", "i_brand_id", "i_class_id", "i_category_id"], nulls_last=False
-        )
-        .limit(100)
+    return QueryResult(
+        frame=(
+            pl.concat([level1, level2, level3, level4, level5])
+            .sort(
+                ["channel", "i_brand_id", "i_class_id", "i_category_id"],
+                nulls_last=False,
+            )
+            .limit(100)
+        ),
+        sort_by=[
+            ("channel", False),
+            ("i_brand_id", False),
+            ("i_class_id", False),
+            ("i_category_id", False),
+        ],
+        limit=100,
     )

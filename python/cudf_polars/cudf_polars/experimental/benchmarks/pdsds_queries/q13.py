@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
-from cudf_polars.experimental.benchmarks.utils import get_data
+from cudf_polars.experimental.benchmarks.utils import QueryResult, get_data
 
 if TYPE_CHECKING:
     from cudf_polars.experimental.benchmarks.utils import RunConfig
@@ -75,7 +75,7 @@ def duckdb_impl(run_config: RunConfig) -> str:
     """
 
 
-def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
+def polars_impl(run_config: RunConfig) -> QueryResult:
     """Query 13."""
     params = load_parameters(
         int(run_config.scale_factor),
@@ -100,64 +100,70 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         run_config.dataset_path, "customer_address", run_config.suffix
     )
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
-    return (
-        store_sales.join(store, left_on="ss_store_sk", right_on="s_store_sk")
-        .join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
-        .join(household_demographics, left_on="ss_hdemo_sk", right_on="hd_demo_sk")
-        .join(customer_demographics, left_on="ss_cdemo_sk", right_on="cd_demo_sk")
-        .join(customer_address, left_on="ss_addr_sk", right_on="ca_address_sk")
-        .filter(
-            (pl.col("d_year") == 2001)
-            & (pl.col("ca_country") == "United States")
-            &
-            # Demographic conditions (any one of these)
-            (
+    return QueryResult(
+        frame=(
+            store_sales.join(store, left_on="ss_store_sk", right_on="s_store_sk")
+            .join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
+            .join(household_demographics, left_on="ss_hdemo_sk", right_on="hd_demo_sk")
+            .join(customer_demographics, left_on="ss_cdemo_sk", right_on="cd_demo_sk")
+            .join(customer_address, left_on="ss_addr_sk", right_on="ca_address_sk")
+            .filter(
+                (pl.col("d_year") == 2001)
+                & (pl.col("ca_country") == "United States")
+                &
+                # Demographic conditions (any one of these)
                 (
-                    (pl.col("cd_marital_status") == ms[0])
-                    & (pl.col("cd_education_status") == es[0])
-                    & pl.col("ss_sales_price").is_between(100.00, 150.00)
-                    & (pl.col("hd_dep_count") == 3)
+                    (
+                        (pl.col("cd_marital_status") == ms[0])
+                        & (pl.col("cd_education_status") == es[0])
+                        & pl.col("ss_sales_price").is_between(100.00, 150.00)
+                        & (pl.col("hd_dep_count") == 3)
+                    )
+                    | (
+                        (pl.col("cd_marital_status") == ms[1])
+                        & (pl.col("cd_education_status") == es[1])
+                        & pl.col("ss_sales_price").is_between(50.00, 100.00)
+                        & (pl.col("hd_dep_count") == 1)
+                    )
+                    | (
+                        (pl.col("cd_marital_status") == ms[2])
+                        & (pl.col("cd_education_status") == es[2])
+                        & pl.col("ss_sales_price").is_between(150.00, 200.00)
+                        & (pl.col("hd_dep_count") == 1)
+                    )
                 )
-                | (
-                    (pl.col("cd_marital_status") == ms[1])
-                    & (pl.col("cd_education_status") == es[1])
-                    & pl.col("ss_sales_price").is_between(50.00, 100.00)
-                    & (pl.col("hd_dep_count") == 1)
-                )
-                | (
-                    (pl.col("cd_marital_status") == ms[2])
-                    & (pl.col("cd_education_status") == es[2])
-                    & pl.col("ss_sales_price").is_between(150.00, 200.00)
-                    & (pl.col("hd_dep_count") == 1)
+                &
+                # Address conditions (any one of these)
+                (
+                    (
+                        pl.col("ca_state").is_in(state[0:3])
+                        & pl.col("ss_net_profit").is_between(100, 200)
+                    )
+                    | (
+                        pl.col("ca_state").is_in(state[3:6])
+                        & pl.col("ss_net_profit").is_between(150, 300)
+                    )
+                    | (
+                        pl.col("ca_state").is_in(state[6:9])
+                        & pl.col("ss_net_profit").is_between(50, 250)
+                    )
                 )
             )
-            &
-            # Address conditions (any one of these)
-            (
-                (
-                    pl.col("ca_state").is_in(state[0:3])
-                    & pl.col("ss_net_profit").is_between(100, 200)
-                )
-                | (
-                    pl.col("ca_state").is_in(state[3:6])
-                    & pl.col("ss_net_profit").is_between(150, 300)
-                )
-                | (
-                    pl.col("ca_state").is_in(state[6:9])
-                    & pl.col("ss_net_profit").is_between(50, 250)
-                )
+            .select(
+                [
+                    pl.col("ss_quantity").mean().alias("avg(ss_quantity)"),
+                    pl.col("ss_ext_sales_price")
+                    .mean()
+                    .alias("avg(ss_ext_sales_price)"),
+                    pl.col("ss_ext_wholesale_cost")
+                    .mean()
+                    .alias("avg(ss_ext_wholesale_cost)"),
+                    pl.col("ss_ext_wholesale_cost")
+                    .sum()
+                    .alias("sum(ss_ext_wholesale_cost)"),
+                ]
             )
-        )
-        .select(
-            [
-                pl.col("ss_quantity").mean().alias("avg(ss_quantity)"),
-                pl.col("ss_ext_sales_price").mean().alias("avg(ss_ext_sales_price)"),
-                pl.col("ss_ext_wholesale_cost")
-                .mean()
-                .alias("avg(ss_ext_wholesale_cost)"),
-                pl.col("ss_ext_wholesale_cost")
-                .sum()
-                .alias("sum(ss_ext_wholesale_cost)"),
-            ]
-        )
+        ),
+        sort_by=[],
+        limit=None,
     )

@@ -24,7 +24,6 @@
 #include <cuda/std/iterator>
 #include <thrust/binary_search.h>
 #include <thrust/gather.h>
-#include <thrust/iterator/discard_iterator.h>
 #include <thrust/reduce.h>
 #include <thrust/remove.h>
 
@@ -313,7 +312,7 @@ void normalize_single_quotes(datasource::owning_buffer<rmm::device_buffer>& inda
   parser.Transduce(reinterpret_cast<SymbolT const*>(indata.data()),
                    static_cast<SymbolOffsetT>(indata.size()),
                    static_cast<SymbolT*>(outbuf.data()),
-                   thrust::make_discard_iterator(),
+                   cuda::make_discard_iterator(),
                    outbuf_size.data(),
                    normalize_quotes::start_state,
                    stream);
@@ -397,7 +396,7 @@ std::
   cudf::detail::device_scalar<SymbolOffsetT> outbuf_indices_size(stream, mr);
   parser.Transduce(inbuf.data(),
                    static_cast<SymbolOffsetT>(inbuf.size()),
-                   thrust::make_discard_iterator(),
+                   cuda::make_discard_iterator(),
                    outbuf_indices.data(),
                    outbuf_indices_size.data(),
                    normalize_whitespace::start_state,

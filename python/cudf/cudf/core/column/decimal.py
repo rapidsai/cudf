@@ -5,10 +5,10 @@ from __future__ import annotations
 
 import warnings
 from decimal import Decimal
+from functools import cached_property
 from typing import TYPE_CHECKING, Any, ClassVar, cast
 
 import numpy as np
-import pandas as pd
 import pyarrow as pa
 from packaging import version
 
@@ -41,6 +41,8 @@ from cudf.utils.utils import is_na_like
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
 
+    import pandas as pd
+
     from cudf._typing import (
         ColumnBinaryOperand,
         ColumnLike,
@@ -61,6 +63,20 @@ class DecimalBaseColumn(NumericalBaseColumn):
 
     _VALID_BINARY_OPERATIONS = BinaryOperand._SUPPORTED_BINARY_OPERATIONS
     _decimal_type_check: ClassVar[Callable[[DtypeObj], bool]]
+
+    @cached_property
+    def scale(self) -> int:
+        if isinstance(self.dtype, DecimalDtype):
+            return self.dtype.scale
+        else:
+            return cast("pd.ArrowDtype", self.dtype).pyarrow_dtype.scale
+
+    @cached_property
+    def precision(self) -> int:
+        if isinstance(self.dtype, DecimalDtype):
+            return self.dtype.precision
+        else:
+            return cast("pd.ArrowDtype", self.dtype).pyarrow_dtype.precision
 
     def _adjust_reduce_result_dtype(
         self,
@@ -96,17 +112,11 @@ class DecimalBaseColumn(NumericalBaseColumn):
             "Decimals are not yet supported via `__cuda_array_interface__`"
         )
 
-    def element_indexing(self, index: int) -> Decimal | None:
-        result = super().element_indexing(index)
-        if isinstance(result, pa.Scalar):
-            return result.as_py()
-        return result
-
     def as_decimal_column(
         self,
         dtype: DecimalDtype,
     ) -> DecimalBaseColumn:
-        if isinstance(dtype, DecimalDtype) and dtype.scale < self.dtype.scale:  # type: ignore[union-attr]
+        if isinstance(dtype, DecimalDtype) and dtype.scale < self.scale:
             warnings.warn(
                 "cuDF truncates when downcasting decimals to a lower scale. "
                 "To round, use Series.round() or DataFrame.round()."
@@ -185,8 +195,8 @@ class DecimalBaseColumn(NumericalBaseColumn):
                 # This branch occurs if we have a DecimalBaseColumn of a
                 # different size (e.g. 64 instead of 32).
                 if (
-                    self.dtype.precision == other.dtype.precision  # type: ignore[union-attr]
-                    and self.dtype.scale == other.dtype.scale  # type: ignore[union-attr]
+                    self.precision == other.dtype.precision  # type: ignore[union-attr]
+                    and self.scale == other.dtype.scale  # type: ignore[union-attr]
                 ):
                     other = other.astype(self.dtype)
             other_cudf_dtype = other.dtype
@@ -318,25 +328,14 @@ class DecimalBaseColumn(NumericalBaseColumn):
                 "Decimal128Column",
                 self.astype(
                     cudf.Decimal128Dtype(
-                        self.dtype.precision,  # type: ignore[union-attr]
-                        self.dtype.scale,  # type: ignore[union-attr]
+                        self.precision,
+                        self.scale,
                     )
                 ),
             )
         return super(DecimalBaseColumn, col).to_pandas(
             nullable=nullable, arrow_type=arrow_type
         )
-
-    def to_arrow(self) -> pa.Array:
-        arrow_array = super().to_arrow()
-        # We have to preserve the precision since pylibcudf does not.
-        arrow_type = (
-            self.dtype.to_arrow()
-            if isinstance(self.dtype, DecimalDtype)
-            else cast(pd.ArrowDtype, self.dtype).pyarrow_dtype
-        )
-        # To match existing behavior we must allow unsafe casts here
-        return arrow_array.cast(arrow_type, safe=False)
 
 
 class Decimal32Column(DecimalBaseColumn):

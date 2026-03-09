@@ -22,9 +22,9 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/iterator>
 #include <cuda/std/functional>
 #include <thrust/iterator/counting_iterator.h>
-#include <thrust/iterator/discard_iterator.h>
 #include <thrust/reduce.h>
 
 namespace cudf {
@@ -161,7 +161,7 @@ struct group_reduction_functor<
                             group_labels.data(),
                             group_labels.data() + group_labels.size(),
                             inp_iter,
-                            thrust::make_discard_iterator(),
+                            cuda::make_discard_iterator(),
                             out_iter,
                             cuda::std::equal_to{},
                             binop);
@@ -224,7 +224,7 @@ struct group_reduction_functor<
                             group_labels.data(),
                             group_labels.data() + group_labels.size(),
                             inp_iter,
-                            thrust::make_discard_iterator(),
+                            cuda::make_discard_iterator(),
                             out_iter,
                             cuda::std::equal_to{},
                             binop);

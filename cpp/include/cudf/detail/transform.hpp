@@ -15,17 +15,6 @@
 
 namespace CUDF_EXPORT cudf {
 namespace detail {
-/**
- * @copydoc cudf::transform
- *
- * @param stream CUDA stream used for device memory operations and kernel launches.
- */
-std::unique_ptr<column> transform(column_view const& input,
-                                  std::string const& unary_udf,
-                                  data_type output_type,
-                                  bool is_ptx,
-                                  rmm::cuda_stream_view stream,
-                                  rmm::device_async_resource_ref mr);
 
 /**
  * @copydoc cudf::compute_column

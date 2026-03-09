@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -36,8 +36,7 @@ std::unique_ptr<column> create_empty_column(size_type orc_col_id,
                                                    schema_info.children.back(),
                                                    stream),
                                0,
-                               rmm::device_buffer{0, stream},
-                               stream);
+                               rmm::device_buffer{0, stream});
     }
     case MAP: {
       schema_info.children.emplace_back("offsets");
@@ -61,8 +60,7 @@ std::unique_ptr<column> create_empty_column(size_type orc_col_id,
         make_empty_column(type_id::INT32),
         make_structs_column(0, std::move(child_columns), 0, rmm::device_buffer{0, stream}, stream),
         0,
-        rmm::device_buffer{0, stream},
-        stream);
+        rmm::device_buffer{0, stream});
     }
 
     case STRUCT: {

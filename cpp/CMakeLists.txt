@@ -588,6 +588,7 @@ add_library(
   src/join/filtered_join.cu
   src/join/mark_join.cu
   src/join/hash_join.cu
+  src/join/filter_join_indices_jit.cu
   src/join/join.cu
   src/join/join_utils.cu
   src/join/key_remapping.cu

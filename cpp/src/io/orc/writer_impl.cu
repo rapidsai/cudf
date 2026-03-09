@@ -44,7 +44,6 @@
 #include <thrust/execution_policy.h>
 #include <thrust/extrema.h>
 #include <thrust/for_each.h>
-#include <thrust/functional.h>
 #include <thrust/host_vector.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
@@ -702,11 +701,10 @@ std::vector<std::vector<rowgroup_rows>> calculate_aligned_rowgroup_bounds(
 
   auto aligned_rgs = hostdevice_2dvector<rowgroup_rows>(
     segmentation.num_rowgroups(), orc_table.num_columns(), stream);
-  CUDF_CUDA_TRY(cudaMemcpyAsync(aligned_rgs.base_device_ptr(),
-                                segmentation.rowgroups.base_device_ptr(),
-                                aligned_rgs.count() * sizeof(rowgroup_rows),
-                                cudaMemcpyDefault,
-                                stream.value()));
+  CUDF_CUDA_TRY(cudf::detail::memcpy_async(aligned_rgs.base_device_ptr(),
+                                           segmentation.rowgroups.base_device_ptr(),
+                                           aligned_rgs.count() * sizeof(rowgroup_rows),
+                                           stream));
   auto const d_stripes = cudf::detail::make_device_uvector_async(
     segmentation.stripes, stream, cudf::get_current_device_resource_ref());
 

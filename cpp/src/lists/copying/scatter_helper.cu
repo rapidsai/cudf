@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -352,10 +352,8 @@ struct list_child_constructor {
     return cudf::make_lists_column(num_child_rows,
                                    std::move(child_offsets),
                                    std::move(child_column),
-                                   child_null_mask.second,            // Null count
-                                   std::move(child_null_mask.first),  // Null mask
-                                   stream,
-                                   mr);
+                                   child_null_mask.second,             // Null count
+                                   std::move(child_null_mask.first));  // Null mask
   }
 
   /**

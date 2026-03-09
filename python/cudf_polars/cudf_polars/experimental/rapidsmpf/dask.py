@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any, Protocol
 
 from distributed import get_client
 from rapidsmpf.config import Options, get_environment_variables
-from rapidsmpf.integrations.dask import get_worker_context
+from rapidsmpf.integrations.dask import bootstrap_dask_cluster, get_worker_context
 from rapidsmpf.streaming.core.context import Context
 
 import polars as pl
@@ -19,6 +19,7 @@ if TYPE_CHECKING:
     from collections.abc import MutableMapping
 
     from distributed import Client
+    from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.streaming.cudf.channel_metadata import ChannelMetadata
 
     from cudf_polars.dsl.ir import IR
@@ -36,6 +37,7 @@ class EvaluatePipelineCallback(Protocol):
         config_options: ConfigOptions[StreamingExecutor],
         stats: StatsCollector,
         collective_id_map: dict[IR, list[int]],
+        comm: Communicator,
         rmpf_context: Context | None = None,
         *,
         collect_metadata: bool = False,
@@ -87,6 +89,13 @@ def evaluate_pipeline_dask(
     The output DataFrame and metadata collector.
     """
     client = get_dask_client()
+
+    # Make sure the cluster is bootstrapped.
+    # This is a no-op if the cluster is already bootstrapped.
+    # TODO: We can apply configuration options here. However, these
+    # options will be ignored if the cluster is already bootstrapped.
+    bootstrap_dask_cluster(client)
+
     result = client.run(
         _evaluate_pipeline_dask,
         callback,
@@ -150,16 +159,14 @@ def _evaluate_pipeline_dask(
 
     # NOTE: The Dask-CUDA cluster must be bootstrapped
     # ahead of time using bootstrap_dask_cluster
-    # (rapidsmpf.integrations.dask.bootstrap_dask_cluster).
-    # TODO: Automatically bootstrap the cluster if necessary.
+    # (rapidsmpf.integrations.dask.bootstrap_dask_cluster)
     options = Options(
         {"num_streaming_threads": str(max(config_options.executor.max_io_threads, 1))}
         | get_environment_variables()
     )
     dask_context = get_worker_context(dask_worker)
-    with Context(
-        dask_context.comm, dask_context.br, options, dask_context.statistics
-    ) as rmpf_context:
+    assert dask_context.comm is not None
+    with Context(dask_context.comm.logger, dask_context.br, options) as rmpf_context:
         # IDs are already reserved by the caller, just pass them through
         return callback(
             ir,
@@ -167,6 +174,7 @@ def _evaluate_pipeline_dask(
             config_options,
             stats,
             collective_id_map,
+            dask_context.comm,
             rmpf_context,
             collect_metadata=collect_metadata,
         )
