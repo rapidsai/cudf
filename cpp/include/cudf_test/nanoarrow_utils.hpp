@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -403,10 +403,7 @@ std::enable_if_t<std::disjunction_v<std::is_same<T, int32_t>,
                  std::size_t>
 get_decimal_precision()
 {
-  if constexpr (std::is_same_v<T, int64_t>)
-    return 18;
-  else
-    return cudf::detail::max_precision<T>();
+  return std::numeric_limits<T>::digits10;
 }
 
 struct VectorOfArrays {
