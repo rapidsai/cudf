@@ -574,7 +574,7 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition_table(
 
   // Copy the result of the exclusive scan to the output offsets array
   // to indicate the starting point for each partition in the output
-  auto partition_offsets = cudf::detail::make_std_vector_async(global_partition_sizes, stream);
+  auto partition_offsets = cudf::detail::make_std_vector(global_partition_sizes, stream);
   // Add the total row count as the last offset to make the vector num_partitions + 1 in size
   partition_offsets.push_back(num_rows);
 
