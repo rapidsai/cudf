@@ -229,12 +229,21 @@ def _get_final_sort_boundaries(
     num_partitions
         The number of partitions to split the data into.
 
+    Returns
+    -------
+    sort_boundaries
+        Same schema as input (sort keys plus ``partition_id``,
+        ``local_row_number``). Empty when ``num_partitions <= 1``
+        or the candidate list is empty. Otherwise, the DataFrame
+        will contain ``num_partitions - 1`` rows of split
+        boundaries in global sort order.
     """
     column_order = list(column_order)
     null_order = list(null_order)
 
     if num_partitions <= 1 or sort_boundaries_candidates.table.num_rows() == 0:
-        # No split boundaries or candidates; return empty table with same schema.
+        # No split boundaries or candidates.
+        # Return empty table with same schema.
         stream = sort_boundaries_candidates.stream
         empty_table = plc.Table(
             [
