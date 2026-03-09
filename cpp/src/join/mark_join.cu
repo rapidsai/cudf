@@ -226,7 +226,7 @@ CUDF_KERNEL __launch_bounds__(block_size) void mark_retrieve_kernel(
 }
 
 template <int32_t block_size>
-__global__ __launch_bounds__(block_size) void clear_marks_kernel(storage_ref_type storage,
+CUD_KERNEL __launch_bounds__(block_size) void clear_marks_kernel(storage_ref_type storage,
                                                                  slot_type empty_sentinel,
                                                                  cudf::size_type num_buckets)
 {
