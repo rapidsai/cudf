@@ -239,9 +239,9 @@ CUDF_KERNEL __launch_bounds__(block_size) void mark_retrieve_kernel(
 }
 
 template <int32_t block_size>
-CUD_KERNEL __launch_bounds__(block_size) void clear_marks_kernel(storage_ref_type storage,
-                                                                 slot_type empty_sentinel,
-                                                                 cudf::size_type num_buckets)
+CUDF_KERNEL __launch_bounds__(block_size) void clear_marks_kernel(storage_ref_type storage,
+                                                                  slot_type empty_sentinel,
+                                                                  cudf::size_type num_buckets)
 {
   auto const tid    = cudf::detail::grid_1d::global_thread_id<block_size>();
   auto const stride = cudf::detail::grid_1d::grid_stride<block_size>();
