@@ -21,6 +21,7 @@ from cudf.core._compat import PANDAS_GE_220
 from cudf.core._internals import binaryop
 from cudf.core.column.column import (
     ColumnBase,
+    ColumnList,
     PylibcudfFunction,
     as_column,
     bool_same_kind_policy,
@@ -339,6 +340,8 @@ class StringColumn(ColumnBase, Scannable):
             )
 
     def as_string_column(self, dtype: DtypeObj) -> Self:
+        if isinstance(dtype, np.dtype) and dtype.kind == "U":
+            dtype = np.dtype("O")
         if dtype != self.dtype:
             return cast(Self, ColumnBase.create(self.plc_column, dtype))
         return self
@@ -1354,20 +1357,19 @@ class StringColumn(ColumnBase, Scannable):
     def concatenate(
         self, others: Iterable[Self], sep: str, na_rep: str | None
     ) -> Self:
-        with self.access(mode="read", scope="internal"):
-            plc_column = plc.strings.combine.concatenate(
-                plc.Table(
-                    [col.plc_column for col in itertools.chain([self], others)]
-                ),
+        return cast(
+            Self,
+            PylibcudfFunction(
+                plc.strings.combine.concatenate,
+                same_dtype_policy,
+            ).execute_with_args(
+                ColumnList(*itertools.chain([self], others)),
                 plc.Scalar.from_py(sep, dtype=plc.DataType(plc.TypeId.STRING)),
                 plc.Scalar.from_py(
                     na_rep, dtype=plc.DataType(plc.TypeId.STRING)
                 ),
-            )
-            return cast(
-                Self,
-                ColumnBase.create(plc_column, self.dtype),
-            )
+            ),
+        )
 
     def extract(self, pattern: str, flags: int) -> dict[int, Self]:
         with self.access(mode="read", scope="internal"):
