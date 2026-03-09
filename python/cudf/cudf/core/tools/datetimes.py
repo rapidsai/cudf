@@ -1062,10 +1062,8 @@ def _infer_date_range_unit(
         if freq.kwds.get("nanoseconds", 0) != 0:
             return "ns"
     elif isinstance(freq, str):
-        # Check for nanosecond frequency strings like "5ns", "10N"
-        stripped = freq.lstrip("-0123456789")
-        if stripped.lower() in ("ns",) or stripped == "N":
-            return "ns"
+        offset = DateOffset._from_freqstr(freq)
+        return _infer_date_range_unit(offset, unit, start, end)
     return "us"
 
 
