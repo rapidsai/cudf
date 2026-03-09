@@ -258,6 +258,12 @@ def test_split_exact_inclusive_unsupported(ldf_split):
     assert_ir_translation_raises(q, NotImplementedError)
 
 
+def test_split_exact_null_correct_children():
+    df = pl.LazyFrame({"a": ["a_b", None]})
+    q = df.slice(1).select(pl.col("a").str.split_exact("_", 1))
+    assert_gpu_result_equal(q)
+
+
 @pytest.mark.parametrize("cache", [True, False], ids=lambda cache: f"{cache=}")
 @pytest.mark.parametrize("strict", [True, False], ids=lambda strict: f"{strict=}")
 @pytest.mark.parametrize("exact", [True, False], ids=lambda exact: f"{exact=}")

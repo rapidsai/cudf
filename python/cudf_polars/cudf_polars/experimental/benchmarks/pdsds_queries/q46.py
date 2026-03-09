@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
-from cudf_polars.experimental.benchmarks.utils import get_data
+from cudf_polars.experimental.benchmarks.utils import QueryResult, get_data
 
 if TYPE_CHECKING:
     from cudf_polars.experimental.benchmarks.utils import RunConfig
@@ -76,7 +76,7 @@ def duckdb_impl(run_config: RunConfig) -> str:
     """
 
 
-def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
+def polars_impl(run_config: RunConfig) -> QueryResult:
     """Query 46."""
     params = load_parameters(
         int(run_config.scale_factor),
@@ -147,40 +147,44 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         .with_columns([pl.col("ca_city").alias("bought_city")])
         .select(["ss_ticket_number", "ss_customer_sk", "bought_city", "amt", "profit"])
     )
+    sort_by = {
+        "c_last_name": False,
+        "c_first_name": False,
+        "ca_city": False,
+        "bought_city": False,
+        "ss_ticket_number": False,
+    }
+    limit = 100
     # Step 2: Join with customer and current address
-    return (
-        subquery_dn.join(customer, left_on="ss_customer_sk", right_on="c_customer_sk")
-        .join(
-            customer_address,
-            left_on="c_current_addr_sk",
-            right_on="ca_address_sk",
-            suffix="_current",
-        )
-        .filter(
-            # Current city != bought city (people who traveled to shop)
-            pl.col("ca_city") != pl.col("bought_city")
-        )
-        .select(
-            [
-                "c_last_name",
-                "c_first_name",
-                "ca_city",
-                "bought_city",
-                "ss_ticket_number",
-                "amt",
-                "profit",
-            ]
-        )
-        .sort(
-            [
-                "c_last_name",
-                "c_first_name",
-                "ca_city",
-                "bought_city",
-                "ss_ticket_number",
-            ],
-            nulls_last=True,
-            descending=[False, False, False, False, False],
-        )
-        .limit(100)
+    return QueryResult(
+        frame=(
+            subquery_dn.join(
+                customer, left_on="ss_customer_sk", right_on="c_customer_sk"
+            )
+            .join(
+                customer_address,
+                left_on="c_current_addr_sk",
+                right_on="ca_address_sk",
+                suffix="_current",
+            )
+            .filter(
+                # Current city != bought city (people who traveled to shop)
+                pl.col("ca_city") != pl.col("bought_city")
+            )
+            .select(
+                [
+                    "c_last_name",
+                    "c_first_name",
+                    "ca_city",
+                    "bought_city",
+                    "ss_ticket_number",
+                    "amt",
+                    "profit",
+                ]
+            )
+            .sort(sort_by.keys(), nulls_last=True)
+            .limit(limit)
+        ),
+        sort_by=list(sort_by.items()),
+        limit=limit,
     )

@@ -6,7 +6,6 @@
 #include "aggregation128_utils.hpp"
 
 #include <cudf/column/column_factories.hpp>
-#include <cudf/detail/null_mask.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <rmm/exec_policy.hpp>
