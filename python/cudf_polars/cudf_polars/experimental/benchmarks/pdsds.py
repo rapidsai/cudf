@@ -188,6 +188,16 @@ class PDSDSPolarsQueries(PDSDSQueries):
         75: [pl.col("sales_amt_diff").cast(pl.Float64)],
         76: [pl.col("sales_amt").cast(pl.Decimal(18, 2))],
         77: [pl.col("sales").cast(pl.Decimal(18, 2))],
+        78: [
+            pl.col("store_wholesale_cost").cast(pl.Decimal(18, 2)),
+            pl.col("store_sales_price").cast(pl.Decimal(18, 2)),
+        ],
+        79: [
+            pl.col("amt").cast(pl.Decimal(18, 2)),
+            pl.col("profit").cast(pl.Decimal(18, 2)),
+        ],
+        80: [pl.col("sales").cast(pl.Decimal(18, 2))],
+        81: [pl.col("ctr_total_return").cast(pl.Decimal(18, 2))],
     }
     EXPECTED_CASTS: ClassVar[dict] = {
         6: [pl.col("cnt").cast(COUNT_DTYPE)],
@@ -262,6 +272,10 @@ class PDSDSPolarsQueries(PDSDSQueries):
             pl.col("prev_yr_cnt").cast(pl.Int64),
             pl.col("curr_yr_cnt").cast(pl.Int64),
             pl.col("sales_cnt_diff").cast(pl.Int64),
+        ],
+        78: [
+            pl.col("store_qty").cast(pl.Int64),
+            pl.col("other_chan_qty").cast(pl.Int64),
         ],
     }
 

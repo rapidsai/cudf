@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
-from cudf_polars.experimental.benchmarks.utils import get_data
+from cudf_polars.experimental.benchmarks.utils import QueryResult, get_data
 
 if TYPE_CHECKING:
     from cudf_polars.experimental.benchmarks.utils import RunConfig
@@ -84,7 +84,7 @@ def duckdb_impl(run_config: RunConfig) -> str:
     """
 
 
-def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
+def polars_impl(run_config: RunConfig) -> QueryResult:
     """Query 81."""
     params = load_parameters(
         int(run_config.scale_factor),
@@ -138,50 +138,56 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         state_averages, left_on="ctr_state", right_on="ctr_state"
     ).filter(pl.col("ctr_total_return") > pl.col("threshold"))
     state_addresses = customer_address.filter(pl.col("ca_state") == state)
-    return (
-        ctr1_with_threshold.join(
-            customer, left_on="ctr_customer_sk", right_on="c_customer_sk"
-        )
-        .join(state_addresses, left_on="c_current_addr_sk", right_on="ca_address_sk")
-        .select(
-            [
-                "c_customer_id",
-                "c_salutation",
-                "c_first_name",
-                "c_last_name",
-                "ca_street_number",
-                "ca_street_name",
-                "ca_street_type",
-                "ca_suite_number",
-                "ca_city",
-                "ca_county",
-                "ca_state",
-                "ca_zip",
-                "ca_country",
-                "ca_gmt_offset",
-                "ca_location_type",
-                "ctr_total_return",
-            ]
-        )
-        .sort(
-            [
-                "c_customer_id",
-                "c_salutation",
-                "c_first_name",
-                "c_last_name",
-                "ca_street_number",
-                "ca_street_name",
-                "ca_street_type",
-                "ca_suite_number",
-                "ca_city",
-                "ca_county",
-                "ca_state",
-                "ca_zip",
-                "ca_country",
-                "ca_gmt_offset",
-                "ca_location_type",
-                "ctr_total_return",
-            ]
-        )
-        .limit(100)
+    sort_by = {
+        "c_customer_id": False,
+        "c_salutation": False,
+        "c_first_name": False,
+        "c_last_name": False,
+        "ca_street_number": False,
+        "ca_street_name": False,
+        "ca_street_type": False,
+        "ca_suite_number": False,
+        "ca_city": False,
+        "ca_county": False,
+        "ca_state": False,
+        "ca_zip": False,
+        "ca_country": False,
+        "ca_gmt_offset": False,
+        "ca_location_type": False,
+        "ctr_total_return": False,
+    }
+    limit = 100
+    return QueryResult(
+        frame=(
+            ctr1_with_threshold.join(
+                customer, left_on="ctr_customer_sk", right_on="c_customer_sk"
+            )
+            .join(
+                state_addresses, left_on="c_current_addr_sk", right_on="ca_address_sk"
+            )
+            .select(
+                [
+                    "c_customer_id",
+                    "c_salutation",
+                    "c_first_name",
+                    "c_last_name",
+                    "ca_street_number",
+                    "ca_street_name",
+                    "ca_street_type",
+                    "ca_suite_number",
+                    "ca_city",
+                    "ca_county",
+                    "ca_state",
+                    "ca_zip",
+                    "ca_country",
+                    "ca_gmt_offset",
+                    "ca_location_type",
+                    "ctr_total_return",
+                ]
+            )
+            .sort(list(sort_by.keys()), nulls_last=True)
+            .limit(limit)
+        ),
+        sort_by=list(sort_by.items()),
+        limit=limit,
     )
