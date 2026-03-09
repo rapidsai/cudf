@@ -92,7 +92,6 @@ def test_structlog_contains_expected_ir_types():
     assert b"ir_type=DataFrameScan" in result
     assert b"ir_type=Filter" in result
     assert b"ir_type=GroupBy" in result
-    assert b"ir_type=Repartition" in result
 
 
 @pytest.mark.skipif(

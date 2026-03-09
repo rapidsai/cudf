@@ -395,11 +395,17 @@ class RunConfig:
     extra_info: dict[str, Any] = dataclasses.field(default_factory=dict)
     fallback_mode: str | None = None
     validation_method: ValidationMethod | None = None
+    io_mode: Literal["cold", "lukewarm", "hot"] = "lukewarm"
 
     def __post_init__(self) -> None:  # noqa: D105
         if self.gather_shuffle_stats and self.shuffle != "rapidsmpf":
             raise ValueError(
                 "gather_shuffle_stats is only supported when shuffle='rapidsmpf'."
+            )
+        if self.io_mode == "hot" and self.iterations < 2:
+            raise ValueError(
+                "--io-mode hot requires at least 2 iterations: "
+                "iteration 0 warms the cache, iterations 1+ are the hot measurements."
             )
 
     @classmethod
@@ -536,6 +542,7 @@ class RunConfig:
             spill_to_pinned_memory=args.spill_to_pinned_memory,
             fallback_mode=args.fallback_mode,
             validation_method=validation_method,
+            io_mode=args.io_mode,
         )
 
     def serialize(self, engine: pl.GPUEngine | None) -> dict:
@@ -635,9 +642,9 @@ def get_executor_options(
         executor_options["runtime"] = run_config.runtime
         executor_options["max_io_threads"] = run_config.max_io_threads
         executor_options["spill_to_pinned_memory"] = run_config.spill_to_pinned_memory
-        if run_config.dynamic_planning:
-            # Pass empty dict to enable with defaults; None means disabled
-            executor_options["dynamic_planning"] = {}
+        if not run_config.dynamic_planning:
+            # Disable dynamic planning
+            executor_options["dynamic_planning"] = None
 
     if (
         benchmark
@@ -790,6 +797,24 @@ def initialize_dask_cluster(run_config: RunConfig, args: argparse.Namespace):  #
     return client
 
 
+def drop_file_page_cache_recursively(path: os.PathLike | str) -> None:
+    """Drop the Linux page cache for all files under `path`."""
+    try:
+        import kvikio
+    except ImportError as err:
+        raise RuntimeError(
+            "kvikio is required for cold-run page cache dropping. "
+            "Install it or switch to --io-mode lukewarm."
+        ) from err
+    p = Path(path).expanduser()
+    if p.is_file():
+        kvikio.drop_file_page_cache(p)
+        return
+    for f in p.rglob("*"):
+        if f.is_file():
+            kvikio.drop_file_page_cache(f)
+
+
 def execute_query(
     q_id: int,
     i: int,
@@ -799,6 +824,9 @@ def execute_query(
     engine: None | pl.GPUEngine = None,
 ) -> tuple[pl.DataFrame, float]:
     """Execute a query with NVTX annotation."""
+    if run_config.io_mode == "cold":
+        drop_file_page_cache_recursively(run_config.dataset_path)
+
     with nvtx.annotate(
         message=f"Query {q_id} - Iteration {i}",
         domain="cudf_polars",
@@ -1010,6 +1038,17 @@ def build_parser(num_queries: int = 22) -> argparse.ArgumentParser:
         help="Number of times to run the same query.",
     )
     parser.add_argument(
+        "--io-mode",
+        dest="io_mode",
+        default="lukewarm",
+        choices=["cold", "lukewarm", "hot"],
+        help=textwrap.dedent("""\
+            Cache state control for each timed iteration:
+                - cold     : Drop Linux page cache before each iteration (requires kvikio)
+                - lukewarm : No cache manipulation; OS cache state unchanged (default)
+                - hot      : One untimed warmup iteration to populate cache before measured runs"""),
+    )
+    parser.add_argument(
         "--debug",
         default=False,
         action="store_true",
@@ -1167,8 +1206,8 @@ def build_parser(num_queries: int = 22) -> argparse.ArgumentParser:
     parser.add_argument(
         "--dynamic-planning",
         action=argparse.BooleanOptionalAction,
-        default=False,
-        help="Enable dynamic shuffle planning (not yet implemented). ",
+        default=True,
+        help="Enable dynamic physical-plan generation. Only available for the 'rapidsmpf' runtime.",
     )
     parser.add_argument(
         "--max-io-threads",
@@ -1382,7 +1421,7 @@ def check_input_data_type(
             .collect_schema()["o_orderdate"]
         )
 
-        if t.to_python() is datetime.date:
+        if t.to_python().__name__ == "date":
             date_type = "date"
         else:
             date_type = "timestamp"
@@ -1563,7 +1602,6 @@ def run_polars_query(
 def run_polars(
     benchmark: Any,
     args: argparse.Namespace,
-    num_queries: int = 22,
 ) -> None:
     """Run the queries using the given benchmark and executor options."""
     vars(args).update({"query_set": benchmark.name})
@@ -1898,9 +1936,7 @@ def execute_duckdb_query(
         return conn.execute(query).pl()
 
 
-def run_duckdb(
-    duckdb_queries_cls: Any, args: argparse.Namespace, *, num_queries: int
-) -> None:
+def run_duckdb(duckdb_queries_cls: Any, args: argparse.Namespace) -> None:
     """Run the benchmark with DuckDB."""
     vars(args).update({"query_set": duckdb_queries_cls.name})
     run_config = RunConfig.from_args(args)
@@ -1928,6 +1964,8 @@ def run_duckdb(
         records[q_id] = []
 
         for i in range(args.iterations):
+            if run_config.io_mode == "cold":
+                drop_file_page_cache_recursively(run_config.dataset_path)
             t0 = time.time()
             result = execute_duckdb_query(
                 sql,
