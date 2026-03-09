@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
-from cudf_polars.experimental.benchmarks.utils import get_data
+from cudf_polars.experimental.benchmarks.utils import QueryResult, get_data
 
 if TYPE_CHECKING:
     from cudf_polars.experimental.benchmarks.utils import RunConfig
@@ -98,7 +98,7 @@ def duckdb_impl(run_config: RunConfig) -> str:
     """
 
 
-def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
+def polars_impl(run_config: RunConfig) -> QueryResult:
     """Query 60."""
     params = load_parameters(
         int(run_config.scale_factor),
@@ -170,10 +170,16 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
             .select(["i_item_id", "total_sales"])
         )
 
-    return (
-        pl.concat(parts)
-        .group_by("i_item_id")
-        .agg([pl.col("total_sales").sum().alias("total_sales")])
-        .sort(["i_item_id", "total_sales"], descending=[False, False], nulls_last=True)
-        .limit(100)
+    sort_by = {"i_item_id": False, "total_sales": False}
+    limit = 100
+    return QueryResult(
+        frame=(
+            pl.concat(parts)
+            .group_by("i_item_id")
+            .agg([pl.col("total_sales").sum().alias("total_sales")])
+            .sort(sort_by.keys(), nulls_last=True)
+            .limit(limit)
+        ),
+        sort_by=list(sort_by.items()),
+        limit=limit,
     )

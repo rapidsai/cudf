@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
-from cudf_polars.experimental.benchmarks.utils import get_data
+from cudf_polars.experimental.benchmarks.utils import QueryResult, get_data
 
 if TYPE_CHECKING:
     from cudf_polars.experimental.benchmarks.utils import RunConfig
@@ -163,7 +163,7 @@ def duckdb_impl(run_config: RunConfig) -> str:
     """
 
 
-def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
+def polars_impl(run_config: RunConfig) -> QueryResult:
     """Query 49."""
     params = load_parameters(
         int(run_config.scale_factor),
@@ -231,15 +231,8 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         .with_columns(
             [
                 pl.col("ws_item_sk").alias("item"),
-                # Cast -> Int64 to match DuckDB
-                pl.col("return_ratio")
-                .rank(method="min")
-                .cast(pl.Int64)
-                .alias("return_rank"),
-                pl.col("currency_ratio")
-                .rank(method="min")
-                .cast(pl.Int64)
-                .alias("currency_rank"),
+                pl.col("return_ratio").rank(method="min").alias("return_rank"),
+                pl.col("currency_ratio").rank(method="min").alias("currency_rank"),
             ]
         )
         .filter((pl.col("return_rank") <= 10) | (pl.col("currency_rank") <= 10))
@@ -292,15 +285,8 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         .with_columns(
             [
                 pl.col("cs_item_sk").alias("item"),
-                # Cast -> Int64 to match DuckDB
-                pl.col("return_ratio")
-                .rank(method="min")
-                .cast(pl.Int64)
-                .alias("return_rank"),
-                pl.col("currency_ratio")
-                .rank(method="min")
-                .cast(pl.Int64)
-                .alias("currency_rank"),
+                pl.col("return_ratio").rank(method="min").alias("return_rank"),
+                pl.col("currency_ratio").rank(method="min").alias("currency_rank"),
             ]
         )
         .filter((pl.col("return_rank") <= 10) | (pl.col("currency_rank") <= 10))
@@ -350,15 +336,8 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         .with_columns(
             [
                 pl.col("ss_item_sk").alias("item"),
-                # Cast -> Int64 to match DuckDB
-                pl.col("return_ratio")
-                .rank(method="min")
-                .cast(pl.Int64)
-                .alias("return_rank"),
-                pl.col("currency_ratio")
-                .rank(method="min")
-                .cast(pl.Int64)
-                .alias("currency_rank"),
+                pl.col("return_ratio").rank(method="min").alias("return_rank"),
+                pl.col("currency_ratio").rank(method="min").alias("currency_rank"),
             ]
         )
         .filter((pl.col("return_rank") <= 10) | (pl.col("currency_rank") <= 10))
@@ -366,13 +345,15 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         .select(["channel", "item", "return_ratio", "return_rank", "currency_rank"])
     )
     # Union all channels and apply final ordering
-    return (
-        pl.concat([web_data, catalog_data, store_data])
-        .select(["channel", "item", "return_ratio", "return_rank", "currency_rank"])
-        .sort(
-            ["channel", "return_rank", "currency_rank"],
-            nulls_last=True,
-            descending=[False, False, False],
-        )
-        .limit(100)
+    sort_by = {"channel": False, "return_rank": False, "currency_rank": False}
+    limit = 100
+    return QueryResult(
+        frame=(
+            pl.concat([web_data, catalog_data, store_data])
+            .select(["channel", "item", "return_ratio", "return_rank", "currency_rank"])
+            .sort(sort_by.keys(), nulls_last=True)
+            .limit(limit)
+        ),
+        sort_by=list(sort_by.items()),
+        limit=limit,
     )
