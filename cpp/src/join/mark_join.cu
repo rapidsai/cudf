@@ -165,7 +165,7 @@ CUDF_KERNEL __launch_bounds__(block_size) void mark_retrieve_kernel(
 
   // Each warp owns a fixed slice of shared memory and batches row indices there before
   // reserving a contiguous range in the global output.
-  __shared__ alignas(buffer_capacity) cudf::size_type build_buffer[buffer_capacity];
+  __shared__ cudf::size_type build_buffer[buffer_capacity];
   cuda::atomic_ref<cudf::size_type, cuda::thread_scope_device> global_off{*global_offset};
 
   auto const tid    = cudf::detail::grid_1d::global_thread_id<block_size>();
