@@ -174,6 +174,7 @@ async def sort_actor(
         message_ids: list[int] = []
         chunks_buffer = context.spillable_messages()
         local_candidates_list: list[TableChunk] = []
+        local_row_offset = 0
 
         while (msg := await ch_in.recv(context)) is not None:
             seq_num = msg.sequence_number
@@ -199,17 +200,20 @@ async def sort_actor(
             )
             if sort_ir.stable:
                 nrows = df.table.num_rows()
-                base = seq_num * (1 << 32)
+                # High bits = rank
+                # Low bits = local row index.
+                start = (comm.rank * (1 << 48)) + local_row_offset
                 seq_id_col = plc.filling.sequence(
                     nrows,
                     plc.Scalar.from_py(
-                        base, plc.DataType(plc.TypeId.UINT64), stream=df.stream
+                        start, plc.DataType(plc.TypeId.UINT64), stream=df.stream
                     ),
                     plc.Scalar.from_py(
                         1, plc.DataType(plc.TypeId.UINT64), stream=df.stream
                     ),
                     stream=df.stream,
                 )
+                local_row_offset += nrows
                 tbl = plc.Table([*df.table.columns(), seq_id_col])
             else:
                 tbl = df.table
@@ -270,7 +274,7 @@ async def sort_actor(
             [DataType(pl.UInt64())] if sort_ir.stable else []
         )
 
-        for partition_id in sorted(shuffle.local_partitions()):
+        for partition_id in shuffle.local_partitions():
             stream = ir_context.get_cuda_stream()
             out_table = await shuffle.extract_chunk(partition_id, stream)
             if out_table.num_rows() > 0:
