@@ -116,14 +116,6 @@ def test_index_iter_error(data, all_supported_types_as_str):
 
 @pytest.mark.parametrize("data", [[], [1]])
 def test_index_values_host(data, all_supported_types_as_str, request):
-    request.applymarker(
-        pytest.mark.xfail(
-            len(data) > 0
-            and all_supported_types_as_str
-            in {"timedelta64[us]", "timedelta64[ms]", "timedelta64[s]"},
-            reason=f"wrong result for {all_supported_types_as_str}",
-        )
-    )
     gdi = cudf.Index(data, dtype=all_supported_types_as_str)
     pdi = pd.Index(data, dtype=all_supported_types_as_str)
 
