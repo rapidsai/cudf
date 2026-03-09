@@ -59,8 +59,10 @@ if TYPE_CHECKING:
     from cudf_polars.experimental.rapidsmpf.dispatch import SubNetGenerator
     from cudf_polars.experimental.rapidsmpf.tracing import ActorTracer
 
-# Keep a conservative distance from the 2^31-1 (~2.15 billion) row limit
-MAX_BROADCAST_ROWS = 1_500_000_000
+
+# cuDF column/concatenate row limit (int32)
+CUDF_ROW_LIMIT = 2**31 - 1
+MAX_BROADCAST_ROWS = CUDF_ROW_LIMIT // 2
 
 
 @dataclass(frozen=True)
@@ -181,8 +183,7 @@ async def _collect_small_side_for_broadcast(
     )
     row_count = sum(c.table_view().num_rows() for c in chunks)
 
-    cudf_row_limit = 2**31 - 1
-    if (can_concatenate := row_count < cudf_row_limit) and concat_size_limit:
+    if (can_concatenate := row_count < CUDF_ROW_LIMIT) and concat_size_limit:
         can_concatenate = size <= concat_size_limit
 
     dfs: list[DataFrame] = []
@@ -731,6 +732,15 @@ async def _choose_strategy_from_samples(
     # from blowing up the chunk count.
     max_output_chunks = 10 * max(left_total_chunks, right_total_chunks)
     min_shuffle_modulus = min(ideal_output_count, max_output_chunks)
+
+    # Stay away from cuDF's row limit
+    if (estimated_rows_count := max(left_total_rows, right_total_rows)) > 0:
+        max_rows_per_partition = max(1, CUDF_ROW_LIMIT // 4)
+        min_partitions_for_row_limit = (
+            estimated_rows_count + max_rows_per_partition - 1
+        ) // max_rows_per_partition
+        min_shuffle_modulus = max(min_shuffle_modulus, min_partitions_for_row_limit)
+
     shuffle_modulus = _choose_shuffle_modulus(
         comm,
         left_partitioning,
@@ -771,10 +781,10 @@ def _choose_shuffle_modulus(
     small, large = sorted(
         [left_modulus or default_modulus, right_modulus or default_modulus]
     )
-    if large % small == 0:
+    if large % small == 0 and small >= min_shuffle_modulus:
         return small
     else:
-        return large
+        return max(large, min_shuffle_modulus)
 
 
 async def _sample_chunks(
