@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
-from cudf_polars.experimental.benchmarks.utils import get_data
+from cudf_polars.experimental.benchmarks.utils import QueryResult, get_data
 
 if TYPE_CHECKING:
     from cudf_polars.experimental.benchmarks.utils import RunConfig
@@ -129,7 +129,7 @@ def _year_totals_component(
     )
 
 
-def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
+def polars_impl(run_config: RunConfig) -> QueryResult:
     """Query 74."""
     params = load_parameters(
         int(run_config.scale_factor),
@@ -169,52 +169,94 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         ]
     )
 
-    grouped = year_total.group_by(
-        ["customer_id", "customer_first_name", "customer_last_name"]
-    ).agg(
-        [
-            (
+    # Polars sum() returns 0 for all-null groups; SQL returns NULL.
+    # See https://github.com/rapidsai/cudf/issues/19560.
+    grouped = (
+        year_total.group_by(
+            ["customer_id", "customer_first_name", "customer_last_name"]
+        )
+        .agg(
+            [
                 pl.when((pl.col("sale_type") == "s") & (pl.col("year1") == year))
                 .then(pl.col("year_total"))
                 .otherwise(None)
-            )
-            .sum()
-            .alias("s_first"),
-            (
+                .count()
+                .alias("s_first_cnt"),
+                pl.when((pl.col("sale_type") == "s") & (pl.col("year1") == year))
+                .then(pl.col("year_total"))
+                .otherwise(None)
+                .sum()
+                .alias("s_first_sum"),
                 pl.when((pl.col("sale_type") == "s") & (pl.col("year1") == year + 1))
                 .then(pl.col("year_total"))
                 .otherwise(None)
-            )
-            .sum()
-            .alias("s_second"),
-            (
+                .count()
+                .alias("s_second_cnt"),
+                pl.when((pl.col("sale_type") == "s") & (pl.col("year1") == year + 1))
+                .then(pl.col("year_total"))
+                .otherwise(None)
+                .sum()
+                .alias("s_second_sum"),
                 pl.when((pl.col("sale_type") == "w") & (pl.col("year1") == year))
                 .then(pl.col("year_total"))
                 .otherwise(None)
-            )
-            .sum()
-            .alias("w_first"),
-            (
+                .count()
+                .alias("w_first_cnt"),
+                pl.when((pl.col("sale_type") == "w") & (pl.col("year1") == year))
+                .then(pl.col("year_total"))
+                .otherwise(None)
+                .sum()
+                .alias("w_first_sum"),
                 pl.when((pl.col("sale_type") == "w") & (pl.col("year1") == year + 1))
                 .then(pl.col("year_total"))
                 .otherwise(None)
-            )
-            .sum()
+                .count()
+                .alias("w_second_cnt"),
+                pl.when((pl.col("sale_type") == "w") & (pl.col("year1") == year + 1))
+                .then(pl.col("year_total"))
+                .otherwise(None)
+                .sum()
+                .alias("w_second_sum"),
+            ]
+        )
+        .with_columns(
+            pl.when(pl.col("s_first_cnt") > 0)
+            .then(pl.col("s_first_sum"))
+            .otherwise(None)
+            .alias("s_first"),
+            pl.when(pl.col("s_second_cnt") > 0)
+            .then(pl.col("s_second_sum"))
+            .otherwise(None)
+            .alias("s_second"),
+            pl.when(pl.col("w_first_cnt") > 0)
+            .then(pl.col("w_first_sum"))
+            .otherwise(None)
+            .alias("w_first"),
+            pl.when(pl.col("w_second_cnt") > 0)
+            .then(pl.col("w_second_sum"))
+            .otherwise(None)
             .alias("w_second"),
-        ]
+        )
     )
 
-    return (
-        grouped.filter((pl.col("s_first") > 0) & (pl.col("w_first") > 0))
-        .with_columns(
-            (pl.col("w_second") / pl.col("w_first")).alias("w_ratio"),
-            (pl.col("s_second") / pl.col("s_first")).alias("s_ratio"),
-        )
-        .filter(pl.col("w_ratio") > pl.col("s_ratio"))
-        .select(["customer_id", "customer_first_name", "customer_last_name"])
-        .sort(
-            ["customer_id", "customer_first_name", "customer_last_name"],
-            nulls_last=True,
-        )
-        .limit(100)
+    sort_by = {
+        "customer_id": False,
+        "customer_first_name": False,
+        "customer_last_name": False,
+    }
+    limit = 100
+    return QueryResult(
+        frame=(
+            grouped.filter((pl.col("s_first") > 0) & (pl.col("w_first") > 0))
+            .with_columns(
+                (pl.col("w_second") / pl.col("w_first")).alias("w_ratio"),
+                (pl.col("s_second") / pl.col("s_first")).alias("s_ratio"),
+            )
+            .filter(pl.col("w_ratio") > pl.col("s_ratio"))
+            .select(["customer_id", "customer_first_name", "customer_last_name"])
+            .sort(sort_by.keys(), nulls_last=True)
+            .limit(limit)
+        ),
+        sort_by=list(sort_by.items()),
+        limit=limit,
     )

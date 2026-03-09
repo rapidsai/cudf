@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
-from cudf_polars.experimental.benchmarks.utils import get_data
+from cudf_polars.experimental.benchmarks.utils import QueryResult, get_data
 
 if TYPE_CHECKING:
     from cudf_polars.experimental.benchmarks.utils import RunConfig
@@ -105,7 +105,7 @@ def duckdb_impl(run_config: RunConfig) -> str:
     """
 
 
-def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
+def polars_impl(run_config: RunConfig) -> QueryResult:
     """Query 75."""
     params = load_parameters(
         int(run_config.scale_factor),
@@ -236,6 +236,7 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
 
     all_sales = (
         pl.concat([catalog_component, store_component, web_component])
+        .unique()
         .group_by(
             ["d_year", "i_brand_id", "i_class_id", "i_category_id", "i_manufact_id"]
         )
@@ -271,50 +272,60 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         ]
     )
 
-    return (
-        curr_yr.join(
-            prev_yr,
-            left_on=[
-                "curr_brand_id",
-                "curr_class_id",
-                "curr_category_id",
-                "curr_manufact_id",
-            ],
-            right_on=[
-                "prev_brand_id",
-                "prev_class_id",
-                "prev_category_id",
-                "prev_manufact_id",
-            ],
-        )
-        .filter(
-            (pl.col("prev_yr_cnt") > 0)
-            & (
-                pl.col("curr_yr_cnt").cast(pl.Float64)
-                / pl.col("prev_yr_cnt").cast(pl.Float64)
-                < 0.9
+    sort_by = {"sales_cnt_diff": False, "sales_amt_diff": False}
+    limit = 100
+    return QueryResult(
+        frame=(
+            curr_yr.join(
+                prev_yr,
+                left_on=[
+                    "curr_brand_id",
+                    "curr_class_id",
+                    "curr_category_id",
+                    "curr_manufact_id",
+                ],
+                right_on=[
+                    "prev_brand_id",
+                    "prev_class_id",
+                    "prev_category_id",
+                    "prev_manufact_id",
+                ],
             )
-        )
-        .with_columns(
-            [
-                (pl.col("curr_yr_cnt") - pl.col("prev_yr_cnt")).alias("sales_cnt_diff"),
-                (pl.col("curr_yr_amt") - pl.col("prev_yr_amt")).alias("sales_amt_diff"),
-            ]
-        )
-        .select(
-            [
-                pl.col("prev_d_year").alias("prev_year"),
-                pl.col("curr_d_year").alias("year_"),
-                pl.col("curr_brand_id").alias("i_brand_id"),
-                pl.col("curr_class_id").alias("i_class_id"),
-                pl.col("curr_category_id").alias("i_category_id"),
-                pl.col("curr_manufact_id").alias("i_manufact_id"),
-                pl.col("prev_yr_cnt"),
-                pl.col("curr_yr_cnt"),
-                pl.col("sales_cnt_diff"),
-                pl.col("sales_amt_diff"),
-            ]
-        )
-        .sort(["sales_cnt_diff", "sales_amt_diff"], nulls_last=True)
-        .limit(100)
+            .filter(
+                (pl.col("prev_yr_cnt") > 0)
+                & (
+                    pl.col("curr_yr_cnt").cast(pl.Float64)
+                    / pl.col("prev_yr_cnt").cast(pl.Float64)
+                    < 0.9
+                )
+            )
+            .with_columns(
+                [
+                    (pl.col("curr_yr_cnt") - pl.col("prev_yr_cnt")).alias(
+                        "sales_cnt_diff"
+                    ),
+                    (pl.col("curr_yr_amt") - pl.col("prev_yr_amt")).alias(
+                        "sales_amt_diff"
+                    ),
+                ]
+            )
+            .select(
+                [
+                    pl.col("prev_d_year").alias("prev_year"),
+                    pl.col("curr_d_year").alias("year_"),
+                    pl.col("curr_brand_id").alias("i_brand_id"),
+                    pl.col("curr_class_id").alias("i_class_id"),
+                    pl.col("curr_category_id").alias("i_category_id"),
+                    pl.col("curr_manufact_id").alias("i_manufact_id"),
+                    pl.col("prev_yr_cnt"),
+                    pl.col("curr_yr_cnt"),
+                    pl.col("sales_cnt_diff"),
+                    pl.col("sales_amt_diff"),
+                ]
+            )
+            .sort(sort_by.keys(), nulls_last=True)
+            .limit(limit)
+        ),
+        sort_by=list(sort_by.items()),
+        limit=limit,
     )
