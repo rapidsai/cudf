@@ -1078,6 +1078,19 @@ occurred and is used for the exception's `what()` message. If the conditional ev
 `false`, then an error has occurred and an instance of the exception class in the third argument
 (or the default, `cudf::logic_error`) is thrown.
 
+The condition (first argument) of `CUDF_EXPECTS` should be a pure predicate that only inspects
+state without modifying it. If the result of an operation with a side effect needs to be checked,
+capture the result in a variable first:
+
+```c++
+// WRONG — side effect (initialization) inside the condition:
+CUDF_EXPECTS(reader.init(source), "Failed to initialize reader");
+
+// RIGHT — capture the result, then check it:
+auto const init_ok = reader.init(source);
+CUDF_EXPECTS(init_ok, "Failed to initialize reader");
+```
+
 There are times where a particular code path, if reached, should indicate an error no matter what.
 For example, often the `default` case of a `switch` statement represents an invalid alternative.
 Use the `CUDF_FAIL` macro for such errors. This is effectively the same as calling
@@ -1088,6 +1101,11 @@ Example:
 ```c++
 CUDF_FAIL("This code path should not be reached.");
 ```
+
+Prefer `CUDF_EXPECTS` over `if (condition) { CUDF_FAIL(reason); }` when the condition has no side
+effects. The `if`/`CUDF_FAIL` pattern is appropriate when cleanup or other actions must be
+performed before throwing, or when the condition itself involves side effects that cannot be
+separated from the check.
 
 ### CUDA Error Checking
 
