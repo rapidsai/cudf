@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
-from cudf_polars.experimental.benchmarks.utils import get_data
+from cudf_polars.experimental.benchmarks.utils import QueryResult, get_data
 
 if TYPE_CHECKING:
     from cudf_polars.experimental.benchmarks.utils import RunConfig
@@ -67,7 +67,7 @@ def duckdb_impl(run_config: RunConfig) -> str:
     """
 
 
-def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
+def polars_impl(run_config: RunConfig) -> QueryResult:
     """Query 79."""
     params = load_parameters(
         int(run_config.scale_factor),
@@ -121,21 +121,29 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         )
         .drop(["amt_sum", "amt_count", "profit_sum", "profit_count"])
     )
-    return (
-        ms.join(customer, left_on="ss_customer_sk", right_on="c_customer_sk")
-        .select(
-            [
-                "c_last_name",
-                "c_first_name",
-                pl.col("s_city").str.slice(0, 30).alias("substr(s_city, 1, 30)"),
-                "ss_ticket_number",
-                "amt",
-                "profit",
-            ]
-        )
-        .sort(
-            ["c_last_name", "c_first_name", "substr(s_city, 1, 30)", "profit"],
-            nulls_last=True,
-        )
-        .limit(100)
+    sort_by = {
+        "c_last_name": False,
+        "c_first_name": False,
+        "substr(s_city, 1, 30)": False,
+        "profit": False,
+    }
+    limit = 100
+    return QueryResult(
+        frame=(
+            ms.join(customer, left_on="ss_customer_sk", right_on="c_customer_sk")
+            .select(
+                [
+                    "c_last_name",
+                    "c_first_name",
+                    pl.col("s_city").str.slice(0, 30).alias("substr(s_city, 1, 30)"),
+                    "ss_ticket_number",
+                    "amt",
+                    "profit",
+                ]
+            )
+            .sort(list(sort_by.keys()))
+            .limit(limit)
+        ),
+        sort_by=list(sort_by.items()),
+        limit=limit,
     )

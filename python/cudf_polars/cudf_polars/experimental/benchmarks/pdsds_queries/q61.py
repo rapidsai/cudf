@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
-from cudf_polars.experimental.benchmarks.utils import get_data
+from cudf_polars.experimental.benchmarks.utils import QueryResult, get_data
 
 if TYPE_CHECKING:
     from cudf_polars.experimental.benchmarks.utils import RunConfig
@@ -79,7 +79,7 @@ def duckdb_impl(run_config: RunConfig) -> str:
     """
 
 
-def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
+def polars_impl(run_config: RunConfig) -> QueryResult:
     """Query 61."""
     params = load_parameters(
         int(run_config.scale_factor),
@@ -156,22 +156,28 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
             ]
         )
     )
-    return (
-        promotional_sales.join(all_sales, how="cross")
-        .with_columns(
-            [
-                pl.when(pl.col("total").is_null() | (pl.col("total") == 0))
-                .then(None)
-                .otherwise(
-                    pl.col("promotions").cast(pl.Float64)
-                    / pl.col("total").cast(pl.Float64)
-                    * 100.0
-                )
-                .alias(
-                    "((CAST(promotions AS DECIMAL(15,4)) / CAST(total AS DECIMAL(15,4))) * 100)"
-                )
-            ]
-        )
-        .sort(["promotions", "total"], nulls_last=True)
-        .limit(100)
+    sort_by = {"promotions": False, "total": False}
+    limit = 100
+    return QueryResult(
+        frame=(
+            promotional_sales.join(all_sales, how="cross")
+            .with_columns(
+                [
+                    pl.when(pl.col("total").is_null() | (pl.col("total") == 0))
+                    .then(None)
+                    .otherwise(
+                        pl.col("promotions").cast(pl.Float64)
+                        / pl.col("total").cast(pl.Float64)
+                        * 100.0
+                    )
+                    .alias(
+                        "((CAST(promotions AS DECIMAL(15,4)) / CAST(total AS DECIMAL(15,4))) * 100)"
+                    )
+                ]
+            )
+            .sort(sort_by.keys(), nulls_last=True)
+            .limit(limit)
+        ),
+        sort_by=list(sort_by.items()),
+        limit=limit,
     )
