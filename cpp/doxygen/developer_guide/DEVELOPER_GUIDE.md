@@ -752,6 +752,70 @@ auto mr = new my_custom_resource{...};
 rmm::device_uvector<int32_t> v2{100, s, mr};
 ```
 
+## Memory Copies
+
+libcudf code should prefer `cudf::detail::cuda_memcpy_async` and `cudf::detail::memcpy_async` over
+direct calls to `cudaMemcpyAsync`. These cudf utilities try to use `cudaMemcpyBatchAsync` on CUDA
+13.0+, but not primarily for the "batch" properties:
+- `cudaMemcpyBatchAsync` can be lower-overhead, it is actually asynchronous in certain cases where
+  `cudaMemcpyAsync` cannot be asynchronous
+- `cudaMemcpyBatchAsync` may also reduce multi-thread lock contention compared to `cudaMemcpyAsync`
+
+For host-to-device or device-to-host copies, prefer the typed span-based wrappers:
+
+```c++
+cudf::detail::cuda_memcpy_async<T>(device_span<T>{dst}, host_span<T const>{src}, stream);
+cudf::detail::cuda_memcpy_async<T>(host_span<T>{dst}, device_span<T const>{src}, stream);
+```
+
+For device-to-device copies, or when a raw `void*` interface is required, use
+`cudf::detail::memcpy_async` (single buffer) or `cudf::detail::memcpy_batch_async` (multiple
+buffers) and check errors with `CUDF_CUDA_TRY` at the call site:
+
+```c++
+// Single buffer copy
+CUDF_CUDA_TRY(cudf::detail::memcpy_async(dst, src, size_bytes, stream));
+
+// Batch copy of multiple buffers
+CUDF_CUDA_TRY(cudf::detail::memcpy_batch_async(dsts, srcs, sizes, count, stream));
+```
+
+`memcpy_async` is a thin wrapper around `memcpy_batch_async` with `count = 1`. Prefer
+`memcpy_batch_async` directly when copying multiple buffers, as it issues all copies in a single
+`cudaMemcpyBatchAsync` call.
+
+**Important:** Both functions use `cudaMemcpyBatchAsync` with `cudaMemcpySrcAccessOrderStream`,
+which defers reading the source buffers until the stream reaches the copies. The **source buffers
+must remain valid until the stream has executed the copies**. For device memory this is naturally
+satisfied; for host memory the caller must ensure the sources are not freed before the stream is
+synchronized.
+
+When a temporary host buffer is used as the source of an async copy, its destructor must not free
+the memory before the stream has consumed it. Buffers allocated with a stream-ordered allocator
+(e.g., the pinned memory pool) are safe — deallocation is deferred until the stream catches up.
+Buffers from non-stream-ordered allocators (e.g., `new_delete_resource`) require an explicit
+`stream.synchronize()` before the buffer is destroyed. Prefer `make_pinned_vector_async` for
+temporary host staging buffers to avoid the sync:
+
+```c++
+// UNSAFE — std::vector uses pageable memory; must synchronize before it goes out of scope
+{
+  auto staging = std::vector<char>(size);
+  fill(staging);
+  cudf::detail::cuda_memcpy_async<char>(d_buf, staging, stream);
+  stream.synchronize();  // required: pageable allocator is not stream-ordered
+}
+
+// SAFE — stream-ordered pinned buffer, no sync needed
+{
+  auto staging = cudf::detail::make_pinned_vector_async<char>(size, stream);
+  fill(staging);
+  cudf::detail::cuda_memcpy_async<char>(d_buf, staging, stream);
+} // deallocation is stream-ordered → no race
+```
+
+The same stream-safety requirements apply to `memcpy_async` and `memcpy_batch_async`.
+
 ## Default Parameters
 
 While public libcudf APIs are free to include default function parameters, detail functions should
