@@ -22,15 +22,14 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cub/device/device_topk.cuh>
-#include <thrust/sequence.h>
 
 namespace cudf {
 namespace detail {
 namespace {
 bool is_fast_path(column_view const& column)
 {
-  return !column.has_nulls() && cudf::is_numeric(column.type()) &&
-         !cudf::is_floating_point(column.type());
+  return !column.has_nulls() && cudf::is_fixed_width(column.type()) &&
+         !cudf::is_floating_point(column.type());  // needs special NaN handling
 }
 
 template <bool fast_path>
@@ -42,8 +41,7 @@ struct dispatch_topk_fn {
   rmm::device_async_resource_ref mr;
 
   template <typename T>
-    requires(is_numeric<T>())
-  std::unique_ptr<column> operator()()
+  std::unique_ptr<column> top_k()
   {
     auto requirements = cuda::execution::require(cuda::execution::determinism::not_guaranteed,
                                                  cuda::execution::output_ordering::unsorted);
@@ -76,10 +74,25 @@ struct dispatch_topk_fn {
   }
 
   template <typename T>
-    requires(!is_numeric<T>())
+    requires(cudf::is_fixed_width<T>() and !cudf::is_floating_point<T>() and !cudf::is_chrono<T>())
   std::unique_ptr<column> operator()()
   {
-    CUDF_FAIL("unexpected type for topk fast path");
+    return top_k<T>();
+  }
+
+  template <typename T>
+    requires(cudf::is_chrono<T>())
+  std::unique_ptr<column> operator()()
+  {
+    using rep_type = typename T::rep;
+    return top_k<rep_type>();
+  }
+
+  template <typename T>
+    requires(not cudf::is_fixed_width<T>() or cudf::is_floating_point<T>())
+  std::unique_ptr<column> operator()()
+  {
+    CUDF_UNREACHABLE("unexpected type for topk fast path");
   }
 };
 
@@ -96,16 +109,15 @@ std::unique_ptr<column> top_k(column_view const& col,
   if (k >= col.size()) { return std::make_unique<column>(col, stream, mr); }
 
   auto const indices = [&] {
+    auto const temp_mr = cudf::get_current_device_resource_ref();
     if (is_fast_path(col)) {
       return type_dispatcher<dispatch_storage_type>(
-        col.type(), dispatch_topk_fn<true>{col, k, topk_order, stream, mr});
+        col.type(), dispatch_topk_fn<true>{col, k, topk_order, stream, temp_mr});
     }
     auto const nulls = topk_order == order::ASCENDING ? null_order::AFTER : null_order::BEFORE;
-    return sorted_order<sort_method::STABLE>(
-      col, topk_order, nulls, stream, cudf::get_current_device_resource_ref());
+    return sorted_order<sort_method::STABLE>(col, topk_order, nulls, stream, temp_mr);
   }();
 
-  // code will be specialized for fixed-width types once CUB topk function is available
   auto const k_indices = cudf::detail::split(indices->view(), {k}, stream).front();
 
   auto const dont_check  = out_of_bounds_policy::DONT_CHECK;
@@ -129,13 +141,13 @@ std::unique_ptr<column> top_k_order(column_view const& col,
   }
 
   auto const indices = [&] {
+    auto const temp_mr = cudf::get_current_device_resource_ref();
     if (is_fast_path(col)) {
       return type_dispatcher<dispatch_storage_type>(
-        col.type(), dispatch_topk_fn<true>{col, k, topk_order, stream, mr});
+        col.type(), dispatch_topk_fn<true>{col, k, topk_order, stream, temp_mr});
     }
     auto const nulls = topk_order == order::ASCENDING ? null_order::AFTER : null_order::BEFORE;
-    return sorted_order<sort_method::STABLE>(
-      col, topk_order, nulls, stream, cudf::get_current_device_resource_ref());
+    return sorted_order<sort_method::STABLE>(col, topk_order, nulls, stream, temp_mr);
   }();
 
   return std::make_unique<column>(
