@@ -11,14 +11,17 @@ import pytest
 import polars as pl
 from polars.testing.asserts import assert_frame_equal
 
-import pylibcudf as plc
 import rmm
 from rmm._cuda import gpu
 from rmm.pylibrmm import CudaStreamFlags
 
 import cudf_polars.callback
 import cudf_polars.utils.config
-from cudf_polars.callback import default_memory_resource, set_memory_resource
+from cudf_polars.callback import (
+    _is_concurrent_managed_access_supported,
+    default_memory_resource,
+    set_memory_resource,
+)
 from cudf_polars.dsl.ir import DataFrameScan, IRExecutionContext
 from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
@@ -121,7 +124,7 @@ def test_invalid_memory_resource_raises(mr, monkeypatch):
 
 
 @pytest.mark.skipif(
-    not plc.utils._is_concurrent_managed_access_supported(),
+    not _is_concurrent_managed_access_supported(),
     reason="managed memory not supported",
 )
 @pytest.mark.parametrize("enable_managed_memory", ["1", "0"])
@@ -660,11 +663,13 @@ def test_memory_resource(memory_resource, memory_resource_config) -> None:
         )
     )
 
-    with set_memory_resource(memory_resource, memory_resource_config) as result:
+    with set_memory_resource(
+        memory_resource, memory_resource_config, config.executor
+    ) as result:
         if memory_resource is None and memory_resource_config is None:
             # The default case: We make a new RMM MR, whose type depends on the GPU's features.
 
-            if plc.utils._is_concurrent_managed_access_supported():
+            if _is_concurrent_managed_access_supported():
                 assert isinstance(result, rmm.mr.PrefetchResourceAdaptor)
             else:
                 assert isinstance(result, rmm.mr.CudaAsyncMemoryResource)
@@ -929,18 +934,28 @@ def test_dynamic_planning_sample_chunk_count_min() -> None:
 def test_dynamic_planning_defaults() -> None:
     config = ConfigOptions.from_polars_engine(pl.GPUEngine())
     assert config.executor.name == "streaming"
-    # Dynamic planning is disabled (None) by default
+    # Dynamic planning is enabled by default
+    assert config.executor.dynamic_planning is not None
+    assert config.executor.dynamic_planning.sample_chunk_count == 2
+
+
+def test_dynamic_planning_disabled_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Test that env var can disable dynamic planning
+    monkeypatch.setenv("CUDF_POLARS__EXECUTOR__DYNAMIC_PLANNING", "0")
+    config = ConfigOptions.from_polars_engine(pl.GPUEngine())
+    assert config.executor.name == "streaming"
     assert config.executor.dynamic_planning is None
 
 
-def test_dynamic_planning_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("CUDF_POLARS__EXECUTOR__DYNAMIC_PLANNING", "1")
+def test_dynamic_planning_sample_chunk_count_from_env(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Test that sample_chunk_count_reduce can be configured via env var
     monkeypatch.setenv(
         "CUDF_POLARS__EXECUTOR__DYNAMIC_PLANNING__SAMPLE_CHUNK_COUNT", "3"
     )
     config = ConfigOptions.from_polars_engine(pl.GPUEngine())
     assert config.executor.name == "streaming"
-    # When env var is set, dynamic_planning should be a DynamicPlanningOptions
     assert config.executor.dynamic_planning is not None
     assert config.executor.dynamic_planning.sample_chunk_count == 3
 

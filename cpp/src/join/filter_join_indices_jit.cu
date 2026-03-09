@@ -3,8 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#include "filter_join_indices_jit_kernel.cuh"
 #include "jit/filter_join_kernel.cuh"
-#include "jit_filter_join_indices_kernel.cuh"
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/detail/algorithms/copy_if.cuh>
@@ -51,12 +51,13 @@ namespace {
 // Build template parameters for JIT kernel
 jitify2::StringVec build_join_filter_template_params(std::vector<column_view> const& left_columns,
                                                      std::vector<column_view> const& right_columns,
-                                                     bool has_user_data)
+                                                     bool has_user_data,
+                                                     null_aware is_null_aware)
 {
   jitify2::StringVec template_params;
 
-  // Add has_user_data template parameter
   template_params.emplace_back(jitify2::reflection::reflect(has_user_data));
+  template_params.emplace_back(jitify2::reflection::reflect(is_null_aware));
 
   // Add left column accessors
   for (size_t i = 0; i < left_columns.size(); ++i) {
@@ -85,6 +86,7 @@ jitify2::ConfiguredKernel build_join_filter_kernel(std::string const& predicate_
                                                    std::vector<column_view> const& right_columns,
                                                    bool is_ptx,
                                                    bool has_user_data,
+                                                   null_aware is_null_aware,
                                                    rmm::cuda_stream_view stream,
                                                    rmm::device_async_resource_ref mr)
 {
@@ -107,7 +109,7 @@ jitify2::ConfiguredKernel build_join_filter_kernel(std::string const& predicate_
 
   // Build template parameters and kernel name
   auto template_args =
-    build_join_filter_template_params(left_columns, right_columns, has_user_data);
+    build_join_filter_template_params(left_columns, right_columns, has_user_data, is_null_aware);
   auto kernel_name =
     jitify2::reflection::Template("cudf::join::jit::filter_join_kernel").instantiate(template_args);
 
@@ -342,7 +344,7 @@ apply_join_semantics(cudf::table_view const& left,
     return std::pair{std::move(filtered_left_indices), std::move(filtered_right_indices)};
 
   } else {
-    CUDF_FAIL("Unsupported join kind for jit_filter_join_indices");
+    CUDF_FAIL("Unsupported join kind for filter_join_indices_jit");
   }
 }
 
@@ -350,10 +352,12 @@ apply_join_semantics(cudf::table_view const& left,
 jitify2::StringVec build_join_filter_template_params_from_specs(
   std::vector<row_ir::ast_input_spec> const& input_specs,
   cudf::table_view const& left,
-  cudf::table_view const& right)
+  cudf::table_view const& right,
+  null_aware is_null_aware)
 {
   jitify2::StringVec template_params;
   template_params.emplace_back(jitify2::reflection::reflect(false));  // has_user_data = false
+  template_params.emplace_back(jitify2::reflection::reflect(is_null_aware));
 
   // Scalar columns are appended to the left table's device views,
   // starting at index left.num_columns().
@@ -386,7 +390,7 @@ void validate_column_types(cudf::table_view const& table, char const* side)
   for (auto const& col : table) {
     CUDF_EXPECTS(
       cudf::is_fixed_width(col.type()) || col.type().id() == type_id::STRING,
-      "jit_filter_join_indices does not support nested or dictionary column types in the " +
+      "filter_join_indices_jit does not support nested or dictionary column types in the " +
         std::string(side) + " table.",
       std::invalid_argument);
   }
@@ -396,7 +400,7 @@ void validate_column_types(cudf::table_view const& table, char const* side)
 
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
-jit_filter_join_indices(cudf::table_view const& left,
+filter_join_indices_jit(cudf::table_view const& left,
                         cudf::table_view const& right,
                         cudf::device_span<size_type const> left_indices,
                         cudf::device_span<size_type const> right_indices,
@@ -415,7 +419,7 @@ jit_filter_join_indices(cudf::table_view const& left,
 
   CUDF_EXPECTS(join_kind == join_kind::INNER_JOIN || join_kind == join_kind::LEFT_JOIN ||
                  join_kind == join_kind::FULL_JOIN,
-               "jit_filter_join_indices only supports INNER_JOIN, LEFT_JOIN, and FULL_JOIN.",
+               "filter_join_indices_jit only supports INNER_JOIN, LEFT_JOIN, and FULL_JOIN.",
                std::invalid_argument);
 
   validate_column_types(left, "left");
@@ -437,6 +441,7 @@ jit_filter_join_indices(cudf::table_view const& left,
                                          right_cols,
                                          is_ptx,
                                          false,  // has_user_data = false for now
+                                         null_aware::NO,
                                          stream,
                                          mr);
 
@@ -462,7 +467,7 @@ jit_filter_join_indices(cudf::table_view const& left,
 
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
-jit_filter_join_indices(cudf::table_view const& left,
+filter_join_indices_jit(cudf::table_view const& left,
                         cudf::table_view const& right,
                         cudf::device_span<size_type const> left_indices,
                         cudf::device_span<size_type const> right_indices,
@@ -479,7 +484,7 @@ jit_filter_join_indices(cudf::table_view const& left,
 
   CUDF_EXPECTS(join_kind == join_kind::INNER_JOIN || join_kind == join_kind::LEFT_JOIN ||
                  join_kind == join_kind::FULL_JOIN,
-               "jit_filter_join_indices only supports INNER_JOIN, LEFT_JOIN, and FULL_JOIN.",
+               "filter_join_indices_jit only supports INNER_JOIN, LEFT_JOIN, and FULL_JOIN.",
                std::invalid_argument);
 
   validate_column_types(left, "left");
@@ -496,8 +501,8 @@ jit_filter_join_indices(cudf::table_view const& left,
     row_ir::target::CUDA, predicate, ast_args, table_view{}, stream, mr);
 
   // Build template params matching the AST input order
-  auto template_args =
-    build_join_filter_template_params_from_specs(filter_result.input_specs, left, right);
+  auto template_args = build_join_filter_template_params_from_specs(
+    filter_result.input_specs, left, right, filter_result.is_null_aware);
 
   auto const cuda_source =
     cudf::jit::parse_single_function_cuda(filter_result.udf, "GENERIC_JOIN_FILTER_OP");
@@ -537,7 +542,7 @@ jit_filter_join_indices(cudf::table_view const& left,
 // Public API implementations
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
-jit_filter_join_indices(cudf::table_view const& left,
+filter_join_indices_jit(cudf::table_view const& left,
                         cudf::table_view const& right,
                         cudf::device_span<size_type const> left_indices,
                         cudf::device_span<size_type const> right_indices,
@@ -548,13 +553,13 @@ jit_filter_join_indices(cudf::table_view const& left,
                         rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::jit_filter_join_indices(
+  return detail::filter_join_indices_jit(
     left, right, left_indices, right_indices, predicate_code, join_kind, is_ptx, stream, mr);
 }
 
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
-jit_filter_join_indices(cudf::table_view const& left,
+filter_join_indices_jit(cudf::table_view const& left,
                         cudf::table_view const& right,
                         cudf::device_span<size_type const> left_indices,
                         cudf::device_span<size_type const> right_indices,
@@ -564,7 +569,7 @@ jit_filter_join_indices(cudf::table_view const& left,
                         rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::jit_filter_join_indices(
+  return detail::filter_join_indices_jit(
     left, right, left_indices, right_indices, predicate, join_kind, stream, mr);
 }
 
