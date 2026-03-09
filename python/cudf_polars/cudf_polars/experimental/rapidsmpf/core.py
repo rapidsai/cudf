@@ -40,7 +40,6 @@ from cudf_polars.dsl.ir import (
     IRExecutionContext,
     Join,
     Scan,
-    Slice,
     Union,
 )
 from cudf_polars.dsl.traversal import CachingVisitor, traversal
@@ -335,11 +334,6 @@ def evaluate_pipeline(
 
         result = df.to_polars()
 
-        # Apply root Slice (e.g. head/tail) if present; in-pipeline Slice may not
-        # see a single concatenated chunk, so apply here to ensure correct row count.
-        if isinstance(ir, Slice):
-            result = result.slice(ir.offset, ir.length)
-
         # Now we need to drop *all* GPU data. This ensures that no cudaFreeAsync runs
         # before the Context, which ultimately contains the rmm MR, goes out of scope.
         del nodes, output, messages, chunks, dfs, df
@@ -533,10 +527,8 @@ def generate_network(
     mapper: SubNetGenerator = CachingVisitor(
         generate_ir_sub_network_wrapper, state=state
     )
-    # Final Slice is always applied in evaluate_pipeline
-    root_ir = ir.children[0] if isinstance(ir, Slice) else ir
-    nodes_dict, channels = mapper(root_ir)
-    ch_out = channels[root_ir].reserve_output_slot()
+    nodes_dict, channels = mapper(ir)
+    ch_out = channels[ir].reserve_output_slot()
 
     # Add node to drain metadata before pull_from_channel
     # (since pull_from_channel doesn't handle metadata messages)
