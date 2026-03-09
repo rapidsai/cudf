@@ -104,6 +104,22 @@ repos:
         entry: 'rmm::exec_policy\('
         language: pygrep
         types_or: [c, c++, cuda]
+      - id: use-cudf-memcpy-async
+        name: use-cudf-memcpy-async
+        description: 'Enforce that cudf::detail::memcpy_async or memcpy_batch_async is used instead of cudaMemcpyAsync (see developer guide)'
+        entry: 'cudaMemcpyAsync'
+        language: pygrep
+        types_or: [c, c++, cuda]
+        files: '^cpp/(src|include)/'
+        exclude: |
+          (?x)^(
+            cpp/src/utilities/host_memory\.cpp|
+            cpp/src/utilities/cuda_memcpy\.cu|
+            cpp/src/io/utilities/data_sink\.cpp|
+            cpp/include/cudf/contiguous_split\.hpp|
+            cpp/include/cudf/utilities/pinned_memory\.hpp|
+            cpp/include/cudf/utilities/error\.hpp
+          )$
       - id: no-unseeded-default-rng
         name: no-unseeded-default-rng
         description: 'Enforce that no non-seeded default_rng is used and default_rng is used instead of np.random.seed'
