@@ -185,6 +185,9 @@ class PDSDSPolarsQueries(PDSDSQueries):
         ],
         70: [pl.col("total_sum").cast(pl.Decimal(18, 2))],
         71: [pl.col("ext_price").cast(pl.Decimal(18, 2))],
+        75: [pl.col("sales_amt_diff").cast(pl.Float64)],
+        76: [pl.col("sales_amt").cast(pl.Decimal(18, 2))],
+        77: [pl.col("sales").cast(pl.Decimal(18, 2))],
         78: [
             pl.col("store_wholesale_cost").cast(pl.Decimal(18, 2)),
             pl.col("store_sales_price").cast(pl.Decimal(18, 2)),
@@ -263,6 +266,12 @@ class PDSDSPolarsQueries(PDSDSQueries):
             pl.col("total_cnt").cast(COUNT_DTYPE),
             pl.col("no_promo").cast(COUNT_DTYPE),
             pl.col("promo").cast(COUNT_DTYPE),
+        ],
+        73: [pl.col("cnt").cast(COUNT_DTYPE)],
+        75: [
+            pl.col("prev_yr_cnt").cast(pl.Int64),
+            pl.col("curr_yr_cnt").cast(pl.Int64),
+            pl.col("sales_cnt_diff").cast(pl.Int64),
         ],
         78: [
             pl.col("store_qty").cast(pl.Int64),
