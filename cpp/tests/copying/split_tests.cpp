@@ -243,7 +243,7 @@ void split_custom_column(SplitFunc Split,
     create_expected_columns_for_splits<T>(splits, size, valids);
   std::vector<cudf::test::strings_column_wrapper> expected_strings =
     create_expected_string_columns_for_splits(strings, splits, valids2);
-  std::transform(cuda::counting_iterator{static_cast<std::size_t>(0)},
+  std::transform(cuda::counting_iterator{std::size_t{0}},
                  cuda::counting_iterator{expected_fixed.size()},
                  std::back_inserter(expected),
                  [&expected_fixed, &expected_strings](std::size_t i) {

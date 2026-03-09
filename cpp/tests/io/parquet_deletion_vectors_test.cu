@@ -154,7 +154,7 @@ auto build_deletion_vector_and_expected_row_mask(cudf::size_type num_rows,
     roaring::api::roaring64_bulk_context_t{.high_bytes = {0, 0, 0, 0, 0, 0}, .leaf = nullptr};
 
   std::for_each(cuda::counting_iterator{std::size_t{0}},
-                cuda::counting_iterator{static_cast<std::size_t>(num_rows)},
+                cuda::counting_iterator{std::size_t{num_rows}},
                 [&](auto row_idx) {
                   // Insert provided host row index if the row is deleted in the row mask
                   if (not expected_row_mask[row_idx]) {
@@ -380,14 +380,12 @@ TYPED_TEST(RoaringBitmapBasicsTest, BitmapSerialization)
     auto roaring64_context =
       roaring::api::roaring64_bulk_context_t{.high_bytes = {0, 0, 0, 0, 0, 0}, .leaf = nullptr};
 
-    std::for_each(cuda::counting_iterator{Key{0}},
-                  cuda::counting_iterator{static_cast<Key>(num_keys)},
-                  [&](auto key) {
-                    if (is_even[key]) {
-                      roaring::api::roaring64_bitmap_add_bulk(
-                        roaring64_bitmap, &roaring64_context, key);
-                    }
-                  });
+    std::for_each(
+      cuda::counting_iterator{Key{0}}, cuda::counting_iterator{Key{num_keys}}, [&](auto key) {
+        if (is_even[key]) {
+          roaring::api::roaring64_bitmap_add_bulk(roaring64_bitmap, &roaring64_context, key);
+        }
+      });
 
     // Serialize and free the bitmap
     auto const serialized_bitmap_size =
@@ -405,13 +403,12 @@ TYPED_TEST(RoaringBitmapBasicsTest, BitmapSerialization)
     // Context for the roaring64 bitmap for faster (bulk) add operations
     auto roaring_context = roaring::api::roaring_bulk_context_t{};
 
-    std::for_each(cuda::counting_iterator{Key{0}},
-                  cuda::counting_iterator{static_cast<Key>(num_keys)},
-                  [&](auto key) {
-                    if (is_even[key]) {
-                      roaring::api::roaring_bitmap_add_bulk(roaring_bitmap, &roaring_context, key);
-                    }
-                  });
+    std::for_each(
+      cuda::counting_iterator{Key{0}}, cuda::counting_iterator{Key{num_keys}}, [&](auto key) {
+        if (is_even[key]) {
+          roaring::api::roaring_bitmap_add_bulk(roaring_bitmap, &roaring_context, key);
+        }
+      });
 
     // Serialize and free the bitmap
     auto const serialized_bitmap_size =
@@ -438,7 +435,7 @@ TYPED_TEST(RoaringBitmapBasicsTest, BitmapSerialization)
   // Query the roaring bitmap
   auto contained = rmm::device_uvector<bool>(num_keys, stream, mr);
   roaring_bitmap.contains_async(cuda::counting_iterator{Key{0}},
-                                cuda::counting_iterator{static_cast<Key>(num_keys)},
+                                cuda::counting_iterator{Key{num_keys}},
                                 contained.data(),
                                 stream);
   auto results = cudf::detail::make_host_vector_async(contained, stream);
@@ -446,7 +443,7 @@ TYPED_TEST(RoaringBitmapBasicsTest, BitmapSerialization)
   // Validate
   stream.synchronize();
   EXPECT_TRUE(std::all_of(cuda::counting_iterator{Key{0}},
-                          cuda::counting_iterator{static_cast<Key>(num_keys)},
+                          cuda::counting_iterator{Key{num_keys}},
                           [&](auto key) { return results[key] == is_even[key]; }));
 }
 

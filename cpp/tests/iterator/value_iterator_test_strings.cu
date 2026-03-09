@@ -28,7 +28,7 @@ auto strings_to_string_views(std::vector<std::string>& input_strings)
   // calculate the expected value by CPU. (but contains device pointers)
   thrust::host_vector<cudf::string_view> replaced_array(input_strings.size());
   std::transform(cuda::counting_iterator{std::size_t{0}},
-                 cuda::counting_iterator{static_cast<std::size_t>(replaced_array.size())},
+                 cuda::counting_iterator{std::size_t{replaced_array.size()}},
                  replaced_array.begin(),
                  [c_start = dev_chars.begin(), offsets](auto i) {
                    return cudf::string_view(c_start + offsets[i], offsets[i + 1] - offsets[i]);

@@ -1085,7 +1085,7 @@ std::pair<rmm::device_buffer, cudf::size_type> create_random_null_mask(
     return {cudf::create_null_mask(size, cudf::mask_state::ALL_NULL), size};
   } else {
     return cudf::detail::valid_if(cuda::counting_iterator{cudf::size_type{0}},
-                                  cuda::counting_iterator{static_cast<cudf::size_type>(size)},
+                                  cuda::counting_iterator{cudf::size_type{size}},
                                   bool_generator{seed, 1.0 - *null_probability},
                                   cudf::get_default_stream(),
                                   cudf::get_current_device_resource_ref());

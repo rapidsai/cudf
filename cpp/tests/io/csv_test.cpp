@@ -175,7 +175,7 @@ void check_timestamp_column(cudf::column_view const& col_lhs,
   EXPECT_TRUE(nrows == static_cast<cudf::size_type>(h_rhs.size()));
 
   auto begin_count = cuda::counting_iterator{cudf::size_type{0}};
-  auto end_count   = cuda::counting_iterator{static_cast<cudf::size_type>(nrows)};
+  auto end_count   = cuda::counting_iterator{cudf::size_type{nrows}};
 
   auto* ptr_lhs = h_lhs.data();  // cannot capture host_vector in thrust,
                                  // not even in host lambda

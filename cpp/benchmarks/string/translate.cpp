@@ -32,7 +32,7 @@ static void bench_translate(nvbench::state& state)
 
   std::vector<entry_type> entries(entry_count);
   std::transform(cuda::counting_iterator{int{0}},
-                 cuda::counting_iterator{static_cast<int>(entry_count)},
+                 cuda::counting_iterator{int{entry_count}},
                  entries.begin(),
                  [](auto idx) -> entry_type { return entry_type{'!' + idx, '~' - idx}; });
 

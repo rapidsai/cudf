@@ -119,7 +119,7 @@ TYPED_TEST(OffsetalatorTest, device_offsetalator)
 
   thrust::transform(rmm::exec_policy_nosync(stream),
                     cuda::counting_iterator{int{0}},
-                    cuda::counting_iterator{static_cast<int>(input.size())},
+                    cuda::counting_iterator{int{input.size()}},
                     output.begin<int32_t>(),
                     device_functor_fn{*d_input});
 

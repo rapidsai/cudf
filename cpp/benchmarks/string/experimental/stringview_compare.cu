@@ -224,7 +224,7 @@ std::pair<rmm::device_uvector<ArrowBinaryView>, rmm::device_buffer> create_sv_ar
   auto const num_longer_strings = thrust::count_if(
     rmm::exec_policy_nosync(stream),
     cuda::counting_iterator{cudf::size_type{0}},
-    cuda::counting_iterator{static_cast<cudf::size_type>(input.size())},
+    cuda::counting_iterator{cudf::size_type{input.size()}},
     [d_offsets] __device__(auto idx) {
       return d_offsets[idx + 1] - d_offsets[idx] > NANOARROW_BINARY_VIEW_INLINE_SIZE;
     });
@@ -359,7 +359,7 @@ static void BM_sv_hash(nvbench::state& state)
   state.add_global_memory_writes(num_rows * sizeof(cudf::hash_value_type));
   auto output = rmm::device_uvector<cudf::hash_value_type>(num_rows, stream);
   auto begin  = cuda::counting_iterator{cudf::size_type{0}};
-  auto end    = cuda::counting_iterator{static_cast<cudf::size_type>(num_rows)};
+  auto end    = cuda::counting_iterator{cudf::size_type{num_rows}};
 
   if (std::getenv(BM_ARROWSTRINGVIEW)) {
     auto [d_items, data_buffer] = create_sv_array(col_view, stream);
@@ -401,7 +401,7 @@ static void BM_sv_starts(nvbench::state& state)
   state.add_global_memory_writes(num_rows * sizeof(bool));
   auto output = rmm::device_uvector<bool>(num_rows, stream);
   auto begin  = cuda::counting_iterator{cudf::size_type{0}};
-  auto end    = cuda::counting_iterator{static_cast<cudf::size_type>(num_rows)};
+  auto end    = cuda::counting_iterator{cudf::size_type{num_rows}};
 
   if (std::getenv(BM_ARROWSTRINGVIEW)) {
     auto [d_items, data_buffer] = create_sv_array(col_view, stream);
@@ -436,7 +436,7 @@ static void BM_sv_sort(nvbench::state& state)
 
   auto h_data = std::vector<std::string>(card);
   std::transform(cuda::counting_iterator{cudf::size_type{0}},
-                 cuda::counting_iterator{static_cast<cudf::size_type>(card)},
+                 cuda::counting_iterator{cudf::size_type{card}},
                  h_data.begin(),
                  [max_width](auto idx) {
                    auto const fmt = std::format("{{:0{}d}}", max_width);
