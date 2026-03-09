@@ -5,7 +5,9 @@
 
 from __future__ import annotations
 
-PARAMETERS = {
+from typing import Any
+
+PARAMETERS: dict[str, dict[str, dict[str, dict[str, Any]]]] = {
     "scale_factors": {
         "1": {
             "1": {
