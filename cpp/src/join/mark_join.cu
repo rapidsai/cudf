@@ -77,7 +77,7 @@ using storage_ref_type = cuco::bucket_storage_ref<slot_type, 1, cuco::extent<std
 using probe_key_type   = cuco::pair<hash_value_type, rhs_index_type>;
 
 template <int32_t block_size, typename Comparator>
-__global__ __launch_bounds__(block_size) void mark_probe_kernel(
+CUDF_KERNEL __launch_bounds__(block_size) void mark_probe_kernel(
   storage_ref_type storage,
   masked_probing_scheme probing_scheme,
   Comparator comparator,
@@ -147,7 +147,7 @@ __global__ __launch_bounds__(block_size) void mark_probe_kernel(
 }
 
 template <int32_t block_size, bool is_anti_join>
-__global__ __launch_bounds__(block_size) void mark_retrieve_kernel(
+CUDF_KERNEL __launch_bounds__(block_size) void mark_retrieve_kernel(
   storage_ref_type storage,
   slot_type empty_sentinel,
   cudf::size_type* __restrict__ output,
