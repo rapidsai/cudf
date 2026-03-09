@@ -286,8 +286,6 @@ dependencies:
         packages:
           - dask
           - stumpy
-          # TODO: Unpin once https://github.com/NVIDIA/numba-cuda/issues/822 is resolved
-          - numba-cuda<0.28.0
   test_tensorflow:
     common:
       - output_types: conda
