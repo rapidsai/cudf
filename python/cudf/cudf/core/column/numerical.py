@@ -640,10 +640,26 @@ class NumericalColumn(NumericalBaseColumn):
             raise ValueError(f"No string conversion from type {self.dtype}")
 
         with col.access(mode="read", scope="internal"):
-            return cast(
+            result = cast(
                 cudf.core.column.string.StringColumn,
                 ColumnBase.create(conv_func(col.plc_column), dtype),
             )
+        if (
+            cudf.get_option("mode.pandas_compatible")
+            and self.dtype.kind == "f"
+        ):
+            # Match pandas casing for non-finite float string conversions.
+            result = result.replace_multiple(
+                as_column(["NaN", "Inf", "-Inf"]),  # type: ignore[arg-type]
+                as_column(["nan", "inf", "-inf"]),  # type: ignore[arg-type]
+            )
+            if self.dtype == np.dtype(np.float32):
+                # Collapse float32 artifacts like 0.100000001 -> 0.1.
+                result = result.replace_with_backrefs(
+                    r"^([+-]?[0-9]+(?:\.[0-9]*?[1-9])?)0{6,}[0-9]+$",
+                    r"\1",
+                )
+        return result
 
     def _as_temporal_column(self, dtype: np.dtype) -> plc.Column:
         """Convert Self to a temporal pylibcudf Column for as_datetime_column and as_timedelta_column"""

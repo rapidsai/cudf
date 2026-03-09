@@ -90,6 +90,18 @@ def _format_percentile_names(percentiles: np.ndarray) -> list[str]:
     return [f"{int(x * 100)}%" for x in percentiles]
 
 
+def _is_simple_str_lambda(func: Any) -> bool:
+    code = getattr(func, "__code__", None)
+    return (
+        callable(func)
+        and getattr(func, "__name__", None) == "<lambda>"
+        and code is not None
+        and code.co_argcount == 1
+        and code.co_names == ("str",)
+        and code.co_consts == (None,)
+    )
+
+
 def _describe_numeric(obj: Series, percentiles: np.ndarray) -> dict[str, Any]:
     # Helper for Series.describe with numerical data.
     return {
@@ -1261,6 +1273,8 @@ class Series(SingleColumnFrame, IndexedFrame):
             result = res["s"]
             result.name = self.name
             result.index = self.index
+        elif arg is str or _is_simple_str_lambda(arg):
+            result = self.astype(str)
         else:
             result = self.apply(arg)
         return result
@@ -2625,6 +2639,10 @@ class Series(SingleColumnFrame, IndexedFrame):
             raise ValueError("Series.apply only supports convert_dtype=True")
         elif by_row != "compat":
             raise NotImplementedError("by_row is currently not supported.")
+        elif func is str or _is_simple_str_lambda(func):
+            result = self.map(func)
+            result.name = self.name
+            return result
 
         result = self._apply(func, SeriesApplyKernel, *args, **kwargs)
         result.name = self.name

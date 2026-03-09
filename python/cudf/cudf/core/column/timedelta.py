@@ -250,6 +250,42 @@ class TimeDeltaColumn(TemporalBaseColumn):
                 raise MixedTypeError(
                     f"cannot astype a timedelta like from {self.dtype} to {dtype}"
                 )
+            components = self.components
+            has_hours = components["hours"].any()
+            has_minutes = components["minutes"].any()
+            has_seconds = components["seconds"].any()
+            has_millis = (
+                self.time_unit in {"ns", "us", "ms"}
+                and components["milliseconds"].any()
+            )
+            has_micros = (
+                self.time_unit in {"ns", "us"} and self.microseconds.any()
+            )
+            has_nanos = self.time_unit == "ns" and self.nanoseconds.any()
+
+            has_subday = has_hours or has_minutes or has_seconds
+            has_fraction = has_millis or has_micros or has_nanos
+            if not (has_subday or has_fraction):
+                return self.strftime("%D days", dtype=dtype)
+
+            if has_nanos:
+                result = self.strftime("%D days %H:%M:%S.%9f", dtype=dtype)
+                result = result.replace_with_backrefs(
+                    r"(\.\d{6})000$",
+                    r"\1",
+                )
+            elif has_fraction:
+                result = self.strftime("%D days %H:%M:%S.%6f", dtype=dtype)
+            else:
+                result = self.strftime("%D days %H:%M:%S", dtype=dtype)
+
+            # Keep HH:MM:SS for mixed columns while dropping fully-zero
+            # fractional seconds on rows where they are not needed.
+            return result.replace_with_backrefs(
+                r"(\d{2}:\d{2}:\d{2})\.000000$",
+                r"\1",
+            )
+
         return self.strftime("%D days %H:%M:%S", dtype=dtype)
 
     def as_timedelta_column(self, dtype: np.dtype) -> TimeDeltaColumn:
