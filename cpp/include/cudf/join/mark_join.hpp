@@ -18,6 +18,12 @@
 
 namespace CUDF_EXPORT cudf {
 
+/**
+ * @addtogroup column_join
+ * @{
+ * @file
+ */
+
 namespace detail {
 class mark_join;
 }  // namespace detail
@@ -112,5 +118,7 @@ class mark_join {
  private:
   std::unique_ptr<cudf::detail::mark_join> _impl;
 };
+
+/** @} */  // end of group
 
 }  // namespace CUDF_EXPORT cudf
