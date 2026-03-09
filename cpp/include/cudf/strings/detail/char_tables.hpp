@@ -1,17 +1,16 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
 
 #include <cudf/utilities/default_stream.hpp>
-#include <cudf/utilities/export.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
 #include <cstdint>
 
-namespace CUDF_EXPORT cudf {
+namespace cudf {
 namespace strings::detail {
 // Type for the character flags table.
 using character_flags_table_type = std::uint8_t;
@@ -101,4 +100,4 @@ constexpr uint16_t get_special_case_hash_index(uint32_t code_point)
 }
 
 }  // namespace strings::detail
-}  // namespace CUDF_EXPORT cudf
+}  // namespace cudf
