@@ -20,7 +20,7 @@ void bench_transpose(nvbench::state& state)
   constexpr auto column_type_id = cudf::type_id::INT32;
 
   auto int_column_generator =
-    thrust::make_transform_iterator(cuda::counting_iterator{0}, [count](int i) {
+    thrust::make_transform_iterator(cuda::counting_iterator{std::size_t{0}}, [count](int i) {
       return cudf::make_numeric_column(
         cudf::data_type{column_type_id}, count, cudf::mask_state::ALL_VALID);
     });

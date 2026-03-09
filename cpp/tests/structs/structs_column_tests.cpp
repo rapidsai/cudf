@@ -81,8 +81,8 @@ TYPED_TEST(TypedStructColumnWrapperTest, TestColumnFactoryConstruction)
   expected_children.emplace_back(
     cudf::test::fixed_width_column_wrapper<bool>{true, true, false}.release());
 
-  std::for_each(cuda::counting_iterator{0},
-                cuda::counting_iterator{0} + expected_children.size(),
+  std::for_each(cuda::counting_iterator{std::size_t{0}},
+                cuda::counting_iterator{std::size_t{0}} + expected_children.size(),
                 [&](auto idx) {
                   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(struct_col_view.child(idx),
                                                       expected_children[idx]->view());
@@ -132,8 +132,8 @@ TYPED_TEST(TypedStructColumnWrapperTest, TestColumnWrapperConstruction)
     {true, true, false, false, false, false}, {1, 1, 0, 0, 1, 0}}
                                    .release());
 
-  std::for_each(cuda::counting_iterator{0},
-                cuda::counting_iterator{0} + expected_children.size(),
+  std::for_each(cuda::counting_iterator{std::size_t{0}},
+                cuda::counting_iterator{std::size_t{0}} + expected_children.size(),
                 [&](auto idx) {
                   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(struct_col_view.child(idx),
                                                       expected_children[idx]->view());

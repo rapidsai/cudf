@@ -28,7 +28,7 @@ struct write_if {
   using token_t   = cudf::io::json::token_t;
   using scan_type = cuda::std::pair<token_t, bool>;
   PdaTokenT* tokens;
-  size_t n;
+  std::size_t n;
   // Index, value
   __device__ void operator()(size_type i, scan_type x)
   {

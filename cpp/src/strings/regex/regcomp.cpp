@@ -1241,7 +1241,7 @@ void reprog::print(regex_flags const flags)
   printf("startinst_id=%d\n", _startinst_id);
   if (_startinst_ids.size() > 0) {
     printf("startinst_ids: [");
-    for (size_t i = 0; i < _startinst_ids.size(); i++) {
+    for (std::size_t i = 0; i < _startinst_ids.size(); i++) {
       printf(" %d", _startinst_ids[i]);
     }
     printf("]\n");

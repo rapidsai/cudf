@@ -129,7 +129,7 @@ compute_row_frequencies(table_view const& input,
   using row_hash = cudf::detail::row::hash::device_row_hasher<cudf::hashing::detail::default_hash,
                                                               cudf::nullate::DYNAMIC>;
 
-  size_t const num_rows = input.num_rows();
+  std::size_t const num_rows = input.num_rows();
 
   // Construct a vector to store reduced counts and init to zero
   rmm::device_uvector<histogram_count_type> reduction_results(num_rows, stream, mr);
@@ -157,8 +157,8 @@ compute_row_frequencies(table_view const& input,
   // Note that we consider null and NaNs as always equal.
   thrust::for_each(
     rmm::exec_policy_nosync(stream),
-    cuda::counting_iterator{size_t{0}},
-    cuda::counting_iterator{static_cast<size_t>(num_rows)},
+    cuda::counting_iterator{std::size_t{0}},
+    cuda::counting_iterator{static_cast<std::size_t>(num_rows)},
     [set_ref = row_set_ref,
      increments =
        partial_counts.has_value() ? partial_counts.value().begin<histogram_count_type>() : nullptr,

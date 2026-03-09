@@ -36,18 +36,18 @@ TEST(BatchedMemcpyTest, BasicTest)
   auto mr     = cudf::get_current_device_resource_ref();
 
   // Buffer lengths (in number of elements)
-  std::vector<size_t> const h_lens{
+  std::vector<std::size_t> const h_lens{
     50000, 4, 1000, 0, 250000, 1, 100, 8000, 0, 1, 100, 1000, 10000, 100000, 0, 1, 100000};
 
   // Total number of buffers
   auto const num_buffs = h_lens.size();
 
   // Exclusive sum of buffer lengths for pointers
-  std::vector<size_t> h_lens_excl_sum(num_buffs);
+  std::vector<std::size_t> h_lens_excl_sum(num_buffs);
   std::exclusive_scan(h_lens.begin(), h_lens.end(), h_lens_excl_sum.begin(), 0);
 
   // Corresponding buffer sizes (in bytes)
-  std::vector<size_t> h_sizes_bytes;
+  std::vector<std::size_t> h_sizes_bytes;
   h_sizes_bytes.reserve(num_buffs);
   std::transform(
     h_lens.cbegin(), h_lens.cend(), std::back_inserter(h_sizes_bytes), [&](auto& size) {
@@ -97,7 +97,7 @@ TEST(BatchedMemcpyTest, BasicTest)
   auto d_dst_data = cudf::detail::make_zeroed_device_uvector_async<T1>(total_buff_len, stream, mr);
   // Pointers to destination buffers within the giant destination buffer
   std::vector<T1*> h_dst_ptrs(num_buffs);
-  std::for_each(cuda::counting_iterator{static_cast<size_t>(0)},
+  std::for_each(cuda::counting_iterator{static_cast<std::size_t>(0)},
                 cuda::counting_iterator{num_buffs},
                 [&](auto i) { return h_dst_ptrs[i] = d_dst_data.data() + h_lens_excl_sum[i]; });
   // Copy destination data pointers to device

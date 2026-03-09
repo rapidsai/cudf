@@ -145,10 +145,11 @@ std::vector<io_source> extract_input_sources(std::string const& paths,
   parquet_files.reserve(std::max<size_t>(thread_count, input_multiplier * parquet_files.size()));
 
   // Append the input files by input_multiplier times
-  std::for_each(cuda::counting_iterator{1}, cuda::counting_iterator{input_multiplier}, [&](auto i) {
-    parquet_files.insert(
-      parquet_files.end(), parquet_files.begin(), parquet_files.begin() + initial_size);
-  });
+  std::for_each(
+    cuda::counting_iterator{int32_t{1}}, cuda::counting_iterator{input_multiplier}, [&](auto i) {
+      parquet_files.insert(
+        parquet_files.end(), parquet_files.begin(), parquet_files.begin() + initial_size);
+    });
 
   if (parquet_files.size() < thread_count) {
     // Cycle append parquet files from the existing ones if less than the thread_count

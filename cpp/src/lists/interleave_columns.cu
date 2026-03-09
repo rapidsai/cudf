@@ -100,7 +100,8 @@ std::unique_ptr<column> concatenate_and_gather_lists(host_span<column_view const
 
   // Generate the gather map that interleaves the input columns.
   auto const iter_gather = cudf::detail::make_counting_transform_iterator(
-    0, cuda::proclaim_return_type<size_t>([num_cols, num_input_rows] __device__(auto const idx) {
+    0,
+    cuda::proclaim_return_type<std::size_t>([num_cols, num_input_rows] __device__(auto const idx) {
       auto const source_col_idx = idx % num_cols;
       auto const source_row_idx = idx / num_cols;
       return source_col_idx * num_input_rows + source_row_idx;

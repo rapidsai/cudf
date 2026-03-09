@@ -760,7 +760,7 @@ struct StructsColumnTest : public cudf::test::BaseFixture {};
 
 TEST_F(StructsColumnTest, ConcatenateStructs)
 {
-  auto count_iter = cuda::counting_iterator{0};
+  auto count_iter = cuda::counting_iterator{int{0}};
 
   // 1. String "names" column.
   std::vector<std::vector<std::string>> names(
@@ -839,7 +839,7 @@ TEST_F(StructsColumnTest, ConcatenateEmptyStructs)
 
 TEST_F(StructsColumnTest, ConcatenateSplitStructs)
 {
-  auto count_iter = cuda::counting_iterator{0};
+  auto count_iter = cuda::counting_iterator{int{0}};
 
   std::vector<int> splits({2});
 
@@ -916,7 +916,7 @@ TEST_F(StructsColumnTest, ConcatenateStructsNested)
 {
   // includes Struct<Struct> and Struct<List>
 
-  auto count_iter = cuda::counting_iterator{0};
+  auto count_iter = cuda::counting_iterator{int{0}};
 
   // inner structs
   std::vector<cudf::test::structs_column_wrapper> inner_structs;
@@ -1483,7 +1483,7 @@ TEST_F(ListsColumnTest, SlicedColumnsWithNulls)
 
 TEST_F(ListsColumnTest, ListOfStructs)
 {
-  auto count_iter = cuda::counting_iterator{0};
+  auto count_iter = cuda::counting_iterator{int{0}};
 
   // inner structs
   std::vector<cudf::test::structs_column_wrapper> inner_structs;
@@ -1581,7 +1581,7 @@ TEST_F(FixedPointTest, FixedPointConcatentate)
   using namespace numeric;
   using fp_wrapper = cudf::test::fixed_point_column_wrapper<int32_t>;
 
-  auto begin     = cuda::counting_iterator{0};
+  auto begin     = cuda::counting_iterator{int32_t{0}};
   auto const vec = std::vector<int32_t>(begin, begin + 1000);
 
   auto const a = fp_wrapper(vec.begin(), /***/ vec.begin() + 300, scale_type{-2});
@@ -1599,7 +1599,7 @@ TEST_F(FixedPointTest, FixedPointScaleMismatch)
   using namespace numeric;
   using fp_wrapper = cudf::test::fixed_point_column_wrapper<int32_t>;
 
-  auto begin     = cuda::counting_iterator{0};
+  auto begin     = cuda::counting_iterator{int32_t{0}};
   auto const vec = std::vector<int32_t>(begin, begin + 1000);
 
   auto const a = fp_wrapper(vec.begin(), /***/ vec.begin() + 300, scale_type{-1});

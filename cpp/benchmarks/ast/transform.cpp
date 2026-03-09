@@ -70,9 +70,9 @@ static void BM_ast_transform(nvbench::state& state)
 
   // Create column references
   std::for_each(
-    cuda::counting_iterator{0}, cuda::counting_iterator{num_columns}, [&](int column_id) {
-      tree.push(cudf::ast::column_reference(reuse_columns ? 0 : column_id));
-    });
+    cuda::counting_iterator{cudf::size_type{0}},
+    cuda::counting_iterator{num_columns},
+    [&](int column_id) { tree.push(cudf::ast::column_reference(reuse_columns ? 0 : column_id)); });
 
   // Create expression trees
 
@@ -86,15 +86,15 @@ static void BM_ast_transform(nvbench::state& state)
   } else {
     tree.push(cudf::ast::operation(op, tree.at(0), tree.at(1)));
     std::for_each(
-      cuda::counting_iterator{2}, cuda::counting_iterator{num_columns}, [&](int col_id) {
-        tree.push(cudf::ast::operation(op, tree.back(), tree.at(col_id)));
-      });
+      cuda::counting_iterator{cudf::size_type{2}},
+      cuda::counting_iterator{num_columns},
+      [&](int col_id) { tree.push(cudf::ast::operation(op, tree.back(), tree.at(col_id))); });
   }
 
   auto const& root_expression = tree.back();
 
   // Use the number of bytes read from global memory
-  state.add_global_memory_reads<key_type>(static_cast<size_t>(num_rows) * (tree_levels + 1));
+  state.add_global_memory_reads<key_type>(static_cast<std::size_t>(num_rows) * (tree_levels + 1));
   state.add_global_memory_writes<key_type>(num_rows);
 
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch&) {
@@ -126,9 +126,11 @@ static void BM_string_compare_ast_transform(nvbench::state& state)
   // Create table data
   auto const num_columns = tree_levels * 2;
   std::vector<std::unique_ptr<cudf::column>> columns;
-  std::for_each(cuda::counting_iterator{0}, cuda::counting_iterator{num_columns}, [&](size_t) {
-    columns.emplace_back(create_string_column(num_rows, string_width, hit_rate));
-  });
+  std::for_each(cuda::counting_iterator{std::size_t{0}},
+                cuda::counting_iterator{num_columns},
+                [&](std::size_t) {
+                  columns.emplace_back(create_string_column(num_rows, string_width, hit_rate));
+                });
 
   cudf::table table{std::move(columns)};
   cudf::table_view const table_view = table.view();
@@ -145,7 +147,7 @@ static void BM_string_compare_ast_transform(nvbench::state& state)
   cudf::ast::tree tree;
 
   // Create column references
-  std::for_each(cuda::counting_iterator{0},
+  std::for_each(cuda::counting_iterator{cudf::size_type{0}},
                 cuda::counting_iterator{num_columns},
                 [&](int column_id) { tree.push(cudf::ast::column_reference{column_id}); });
 
@@ -153,11 +155,14 @@ static void BM_string_compare_ast_transform(nvbench::state& state)
 
   tree.push(cudf::ast::operation(cmp_op, tree[0], tree[1]));
 
-  std::for_each(cuda::counting_iterator{1}, cuda::counting_iterator{tree_levels}, [&](size_t idx) {
-    auto const& lhs = tree.back();
-    auto const& rhs = tree.push(cudf::ast::operation(cmp_op, tree[idx * 2], tree[idx * 2 + 1]));
-    tree.push(cudf::ast::operation(reduce_op, lhs, rhs));
-  });
+  std::for_each(cuda::counting_iterator{cudf::size_type{1}},
+                cuda::counting_iterator{tree_levels},
+                [&](std::size_t idx) {
+                  auto const& lhs = tree.back();
+                  auto const& rhs =
+                    tree.push(cudf::ast::operation(cmp_op, tree[idx * 2], tree[idx * 2 + 1]));
+                  tree.push(cudf::ast::operation(reduce_op, lhs, rhs));
+                });
 
   // Use the number of bytes read from global memory
   state.add_element_count(chars_size, "chars_size");

@@ -22,8 +22,8 @@ template <typename T>
 std::unique_ptr<cudf::column> example_column()
   requires(cudf::is_fixed_width<T>())
 {
-  auto begin = cuda::counting_iterator{1};
-  auto end   = cuda::counting_iterator{16};
+  auto begin = cuda::counting_iterator{int32_t{1}};
+  auto end   = cuda::counting_iterator{int32_t{16}};
   return cudf::test::fixed_width_column_wrapper<T>(begin, end).release();
 }
 
@@ -58,8 +58,8 @@ template <typename T>
 std::unique_ptr<cudf::column> example_column()
   requires(std::is_same_v<T, cudf::struct_view>)
 {
-  auto begin    = cuda::counting_iterator{1};
-  auto end      = cuda::counting_iterator{16};
+  auto begin    = cuda::counting_iterator{int32_t{1}};
+  auto end      = cuda::counting_iterator{int32_t{16}};
   auto member_0 = cudf::test::fixed_width_column_wrapper<int32_t>(begin, end);
   auto member_1 = cudf::test::fixed_width_column_wrapper<int32_t>(begin + 10, end + 10);
   return cudf::test::structs_column_wrapper({member_0, member_1}).release();

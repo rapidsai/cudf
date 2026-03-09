@@ -81,7 +81,7 @@ void BM_from_arrow_device(nvbench::state& state, nvbench::type_list<nvbench::enu
 
   std::vector<cudf::column_metadata> table_metadata;
 
-  std::transform(cuda::counting_iterator{0},
+  std::transform(cuda::counting_iterator{cudf::size_type{0}},
                  cuda::counting_iterator{num_columns},
                  std::back_inserter(table_metadata),
                  [&](auto const column) {
@@ -123,7 +123,7 @@ void BM_from_arrow_host(nvbench::state& state, nvbench::type_list<nvbench::enum_
 
   std::vector<cudf::column_metadata> table_metadata;
 
-  std::transform(cuda::counting_iterator{0},
+  std::transform(cuda::counting_iterator{cudf::size_type{0}},
                  cuda::counting_iterator{num_columns},
                  std::back_inserter(table_metadata),
                  [&](auto const column) {

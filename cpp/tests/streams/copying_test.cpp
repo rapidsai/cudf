@@ -41,7 +41,7 @@ TEST_F(CopyingTest, ReverseTable)
   constexpr cudf::size_type num_values{10};
 
   auto input = cudf::test::fixed_width_column_wrapper<int32_t, int32_t>(
-    cuda::counting_iterator{0}, cuda::counting_iterator{0} + num_values);
+    cuda::counting_iterator{int32_t{0}}, cuda::counting_iterator{int32_t{0}} + num_values);
 
   auto input_table = cudf::table_view{{input}};
   cudf::reverse(input_table, cudf::test::get_default_stream());
@@ -52,7 +52,7 @@ TEST_F(CopyingTest, ReverseColumn)
   constexpr cudf::size_type num_values{10};
 
   auto input = cudf::test::fixed_width_column_wrapper<int32_t, int32_t>(
-    cuda::counting_iterator{0}, cuda::counting_iterator{0} + num_values);
+    cuda::counting_iterator{int32_t{0}}, cuda::counting_iterator{int32_t{0}} + num_values);
 
   cudf::reverse(input, cudf::test::get_default_stream());
 }
@@ -117,7 +117,7 @@ TEST_F(CopyingTest, CopyRangeInPlace)
   constexpr cudf::size_type size{1000};
 
   cudf::test::fixed_width_column_wrapper<int32_t, int32_t> target(
-    cuda::counting_iterator{0}, cuda::counting_iterator{0} + size);
+    cuda::counting_iterator{int32_t{0}}, cuda::counting_iterator{int32_t{0}} + size);
 
   auto source_elements =
     cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i * 2; });
@@ -138,7 +138,7 @@ TEST_F(CopyingTest, CopyRange)
   constexpr cudf::size_type size{1000};
 
   cudf::test::fixed_width_column_wrapper<int32_t, int32_t> target(
-    cuda::counting_iterator{0}, cuda::counting_iterator{0} + size);
+    cuda::counting_iterator{int32_t{0}}, cuda::counting_iterator{int32_t{0}} + size);
 
   auto source_elements =
     cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i * 2; });
@@ -341,7 +341,7 @@ TEST_F(CopyingTest, ContiguousSplit)
   std::vector<std::string> base_strings(
     {"banana", "pear", "apple", "pecans", "vanilla", "cat", "mouse", "green"});
   auto string_randomizer = thrust::make_transform_iterator(
-    cuda::counting_iterator{0},
+    cuda::counting_iterator{cudf::size_type{0}},
     [&base_strings](cudf::size_type i) { return base_strings[rand() % base_strings.size()]; });
 
   cudf::test::fixed_width_column_wrapper<double> col(iter, iter + size);

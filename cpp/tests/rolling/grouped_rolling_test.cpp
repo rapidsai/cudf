@@ -474,15 +474,15 @@ TEST_F(GroupedRollingErrorTest, SumTimestampNotSupported)
 {
   constexpr cudf::size_type size{10};
   cudf::test::fixed_width_column_wrapper<cudf::timestamp_D, cudf::timestamp_D::rep> input_D(
-    cuda::counting_iterator{0}, cuda::counting_iterator{size});
+    cuda::counting_iterator{cudf::timestamp_D::rep{0}}, cuda::counting_iterator{size});
   cudf::test::fixed_width_column_wrapper<cudf::timestamp_s, cudf::timestamp_s::rep> input_s(
-    cuda::counting_iterator{0}, cuda::counting_iterator{size});
+    cuda::counting_iterator{cudf::timestamp_s::rep{0}}, cuda::counting_iterator{size});
   cudf::test::fixed_width_column_wrapper<cudf::timestamp_ms, cudf::timestamp_ms::rep> input_ms(
-    cuda::counting_iterator{0}, cuda::counting_iterator{size});
+    cuda::counting_iterator{cudf::timestamp_ms::rep{0}}, cuda::counting_iterator{size});
   cudf::test::fixed_width_column_wrapper<cudf::timestamp_us, cudf::timestamp_us::rep> input_us(
-    cuda::counting_iterator{0}, cuda::counting_iterator{size});
+    cuda::counting_iterator{cudf::timestamp_us::rep{0}}, cuda::counting_iterator{size});
   cudf::test::fixed_width_column_wrapper<cudf::timestamp_ns, cudf::timestamp_ns::rep> input_ns(
-    cuda::counting_iterator{0}, cuda::counting_iterator{size});
+    cuda::counting_iterator{cudf::timestamp_ns::rep{0}}, cuda::counting_iterator{size});
 
   // Construct table-view of grouping keys.
   std::vector<cudf::size_type> grouping_keys_vec(size, 0);  // `size` elements, each == 0.

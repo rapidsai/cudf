@@ -164,7 +164,7 @@ TEST_F(ParquetReaderTest, UserBoundsWithNullsMixedTypes)
   std::bernoulli_distribution bn(0.7f);
   auto valids =
     cudf::detail::make_counting_transform_iterator(0, [&](int index) { return bn(gen); });
-  auto values = cuda::counting_iterator{0};
+  auto values = cuda::counting_iterator{int{0}};
 
   // int64
   cudf::test::fixed_width_column_wrapper<int64_t> c0(values, values + num_rows, valids);
@@ -251,7 +251,7 @@ TEST_F(ParquetReaderTest, UserBoundsWithNullsLarge)
   std::bernoulli_distribution bn(0.7f);
   auto valids =
     cudf::detail::make_counting_transform_iterator(0, [&](int index) { return bn(gen); });
-  auto values = cuda::counting_iterator{0};
+  auto values = cuda::counting_iterator{int{0}};
 
   cudf::test::fixed_width_column_wrapper<int> col(values, values + num_rows, valids);
 
@@ -1214,7 +1214,7 @@ TEST_F(ParquetReaderTest, NestingOptimizationTest)
   constexpr cudf::size_type rows_per_level = 2;
 
   constexpr cudf::size_type num_values = (1 << num_nesting_levels) * rows_per_level;
-  auto value_iter                      = cuda::counting_iterator{0};
+  auto value_iter                      = cuda::counting_iterator{int{0}};
   auto validity =
     cudf::detail::make_counting_transform_iterator(0, [](cudf::size_type i) { return i % 2; });
   cudf::test::fixed_width_column_wrapper<int> values(value_iter, value_iter + num_values, validity);

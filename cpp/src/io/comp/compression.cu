@@ -23,11 +23,11 @@ writer_compression_statistics collect_compression_statistics(
     rmm::exec_policy_nosync(stream),
     results.begin(),
     results.end(),
-    cuda::proclaim_return_type<size_t>([] __device__(codec_exec_result const& res) {
+    cuda::proclaim_return_type<std::size_t>([] __device__(codec_exec_result const& res) {
       return res.status == codec_status::SUCCESS ? res.bytes_written : 0;
     }),
     0ul,
-    cuda::std::plus<size_t>());
+    cuda::std::plus<std::size_t>());
 
   auto input_size_with_status = [inputs, results, stream](codec_status status) {
     auto const zipped_begin =
@@ -38,11 +38,11 @@ writer_compression_statistics collect_compression_statistics(
       rmm::exec_policy_nosync(stream),
       zipped_begin,
       zipped_end,
-      cuda::proclaim_return_type<size_t>([status] __device__(auto tup) {
+      cuda::proclaim_return_type<std::size_t>([status] __device__(auto tup) {
         return cuda::std::get<1>(tup).status == status ? cuda::std::get<0>(tup).size() : 0;
       }),
       0ul,
-      cuda::std::plus<size_t>());
+      cuda::std::plus<std::size_t>());
   };
 
   return writer_compression_statistics{input_size_with_status(codec_status::SUCCESS),

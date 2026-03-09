@@ -733,7 +733,8 @@ struct column_to_strings_fn {
 
     // populate vector of string-converted columns:
     //
-    auto i_col_begin = thrust::make_zip_iterator(cuda::counting_iterator{size_t{0}}, column_begin);
+    auto i_col_begin =
+      thrust::make_zip_iterator(cuda::counting_iterator{std::size_t{0}}, column_begin);
     std::transform(
       i_col_begin,
       i_col_begin + num_columns,

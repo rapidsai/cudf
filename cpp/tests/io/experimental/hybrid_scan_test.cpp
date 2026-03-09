@@ -494,7 +494,7 @@ TEST_F(HybridScanTest, MaterializeStructs)
     0, [&](cudf::size_type idx) { return strings[uni(gen)]; });
 
   // struct<list<str(nullable)>(nullable), int(nullable), float(non-nullable)>(nullable)
-  auto values    = cuda::counting_iterator{0};
+  auto values    = cuda::counting_iterator{int{0}};
   auto col1_list = make_list_str_column(gen, true, true);
   cudf::test::fixed_width_column_wrapper<int> col1_ints(values, values + num_rows, valids);
   cudf::test::fixed_width_column_wrapper<float> col1_floats(values, values + num_rows);
@@ -544,7 +544,7 @@ TEST_F(HybridScanTest, MaterializeListsOfStructs)
   // list<struct<list<str(nullable)>(nullable), int(nullable),
   // float(non-nullable)>(nullable)>(nullable)
   auto struct1_list = make_list_str_column(gen, true, true);
-  auto values       = cuda::counting_iterator{0};
+  auto values       = cuda::counting_iterator{int{0}};
   cudf::test::fixed_width_column_wrapper<float> struct1_floats(values, values + num_rows, valids);
   std::vector<std::unique_ptr<cudf::column>> struct1_children;
   struct1_children.push_back(std::move(struct1_list));
@@ -666,7 +666,7 @@ TEST_F(HybridScanTest, MaterializeMixedPayloadColumns)
   auto col6 = make_list_str_column(true);
 
   // struct<list<str(nullable)>(nullable), int(nullable), float(nullable)>(nullable)
-  auto values    = cuda::counting_iterator{0};
+  auto values    = cuda::counting_iterator{int{0}};
   auto col7_list = make_list_str_column(true);
   cudf::test::fixed_width_column_wrapper<int> col7_ints(values, values + num_rows, valids);
   cudf::test::fixed_width_column_wrapper<float> col7_floats(values, values + num_rows, valids);

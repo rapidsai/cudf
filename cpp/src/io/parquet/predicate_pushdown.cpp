@@ -62,7 +62,7 @@ struct row_group_stats_caster : public stats_caster_base {
       if (has_is_null_operator) { is_null = host_column<bool>(total_row_groups, stream); }
 
       size_type stats_idx = 0;
-      for (size_t src_idx = 0; src_idx < row_group_indices.size(); ++src_idx) {
+      for (std::size_t src_idx = 0; src_idx < row_group_indices.size(); ++src_idx) {
         for (auto const rg_idx : row_group_indices[src_idx]) {
           auto const& row_group = per_file_metadata[src_idx].row_groups[rg_idx];
           auto col              = std::find_if(
@@ -144,7 +144,7 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::ap
     .row_group_indices    = input_row_group_indices,
     .has_is_null_operator = has_is_null_operator};
 
-  for (size_t col_idx = 0; col_idx < output_dtypes.size(); col_idx++) {
+  for (std::size_t col_idx = 0; col_idx < output_dtypes.size(); col_idx++) {
     auto const schema_idx = output_column_schemas[col_idx];
     auto const& dtype     = output_dtypes[col_idx];
     // Only participating columns and comparable types except fixed point are supported
@@ -304,7 +304,7 @@ named_to_reference_converter::named_to_reference_converter(
   // create map for column name.
   std::transform(metadata.schema_info.cbegin(),
                  metadata.schema_info.cend(),
-                 cuda::counting_iterator{size_t{0}},
+                 cuda::counting_iterator{std::size_t{0}},
                  std::inserter(_column_name_to_index, _column_name_to_index.end()),
                  [](auto const& sch, auto index) { return std::make_pair(sch.name, index); });
 
@@ -514,7 +514,7 @@ std::optional<std::vector<std::vector<size_type>>> collect_filtered_row_group_in
   // Return only filtered row groups based on predicate
   auto is_row_group_required = cudf::detail::make_pinned_vector(
     cudf::device_span<uint8_t const>{predicate.data<uint8_t>(),
-                                     static_cast<size_t>(predicate.size())},
+                                     static_cast<std::size_t>(predicate.size())},
     stream);
 
   // Return if all are required, or all are nulls.

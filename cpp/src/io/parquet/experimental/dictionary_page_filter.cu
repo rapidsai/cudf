@@ -997,7 +997,7 @@ CUDF_KERNEL void __launch_bounds__(DECODE_BLOCK_SIZE)
 struct dictionary_caster {
   cudf::detail::hostdevice_span<parquet::detail::ColumnChunkDesc const> chunks;
   cudf::detail::hostdevice_span<parquet::detail::PageInfo const> pages;
-  size_t total_row_groups;
+  std::size_t total_row_groups;
   parquet::Type physical_type;
   cudf::size_type type_length;
   cudf::size_type num_dictionary_columns;
@@ -1064,7 +1064,7 @@ struct dictionary_caster {
 
     // Compute the running number of hash set slots and decoded values for all dictionaries
     std::for_each(
-      cuda::counting_iterator{size_t{0}},
+      cuda::counting_iterator{std::size_t{0}},
       cuda::counting_iterator{total_row_groups},
       [&](auto row_group_idx) {
         auto const chunk_idx        = dictionary_col_idx + (row_group_idx * num_dictionary_columns);
@@ -1088,8 +1088,8 @@ struct dictionary_caster {
     auto const value_offsets =
       cudf::detail::make_device_uvector_async(host_value_offsets, stream, default_mr);
 
-    auto const total_set_storage_size = static_cast<size_t>(host_set_offsets.back());
-    auto const total_num_values       = static_cast<size_t>(host_value_offsets.back());
+    auto const total_set_storage_size = static_cast<std::size_t>(host_set_offsets.back());
+    auto const total_num_values       = static_cast<std::size_t>(host_value_offsets.back());
     auto const total_num_literals     = static_cast<cudf::size_type>(literals.size());
 
     // Create a single bulk storage used by all cuco hash sets
@@ -1150,10 +1150,10 @@ struct dictionary_caster {
       CUDF_EXPECTS(physical_type == parquet::Type::BYTE_ARRAY, "Unsupported physical type");
 
       // Number of warps per thread block
-      size_t const warps_per_block = DECODE_BLOCK_SIZE / cudf::detail::warp_size;
+      std::size_t const warps_per_block = DECODE_BLOCK_SIZE / cudf::detail::warp_size;
       // Number of thread blocks to get at least `total_row_groups` warps
       auto const num_blocks =
-        cudf::util::div_rounding_up_safe<size_t>(total_row_groups, warps_per_block);
+        cudf::util::div_rounding_up_safe<std::size_t>(total_row_groups, warps_per_block);
 
       // Decode string dictionaries and insert them to cuco hash sets, one dictionary per
       // warp
@@ -1287,10 +1287,10 @@ struct dictionary_caster {
       CUDF_EXPECTS(physical_type == parquet::Type::BYTE_ARRAY, "Unsupported physical type");
 
       // Number of warps per thread block
-      size_t const warps_per_block = DECODE_BLOCK_SIZE / cudf::detail::warp_size;
+      std::size_t const warps_per_block = DECODE_BLOCK_SIZE / cudf::detail::warp_size;
       // Number of thread blocks to get at least `total_row_groups` warps
       auto const num_blocks =
-        cudf::util::div_rounding_up_safe<size_t>(total_row_groups, warps_per_block);
+        cudf::util::div_rounding_up_safe<std::size_t>(total_row_groups, warps_per_block);
 
       // Decode string dictionaries and evaluate all literals against them, one dictionary per
       // warp

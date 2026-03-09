@@ -114,7 +114,7 @@ std::string ptx_parser::parse_instruction(std::string const& src)
 {
   // I am assuming for an instruction statement the starting phrase is an
   // instruction.
-  size_t const length = src.size();
+  std::size_t const length = src.size();
   std::string output;
   std::string suffix;
 
@@ -122,8 +122,8 @@ std::string ptx_parser::parse_instruction(std::string const& src)
 
   int piece_count = 0;
 
-  size_t start                      = 0;
-  size_t stop                       = 0;
+  std::size_t start                 = 0;
+  std::size_t stop                  = 0;
   bool is_instruction               = true;
   bool is_pragma_instruction        = false;
   bool is_param_loading_instruction = false;
@@ -322,10 +322,10 @@ std::string ptx_parser::parse_function_header(std::string const& src)
 
   std::vector<std::string> param_decls;
 
-  std::transform(cuda::counting_iterator{size_t{0}},
+  std::transform(cuda::counting_iterator{std::size_t{0}},
                  cuda::counting_iterator{ptx_params.size()},
                  std::back_inserter(param_decls),
-                 [&](size_t param_index) {
+                 [&](std::size_t param_index) {
                    auto const& param = ptx_params[param_index];
 
                    if (auto const it = param_types.find(param_index); it != param_types.end()) {
@@ -415,9 +415,9 @@ std::string parse_single_function_cuda(std::string const& src, std::string const
 
   // For CUDA device function we just need to find the function
   // name and replace it with the specified one.
-  size_t const length = no_comments.size();
-  size_t start        = 0;
-  size_t stop         = start;
+  std::size_t const length = no_comments.size();
+  std::size_t start        = 0;
+  std::size_t stop         = start;
 
   while (stop < length && no_comments[stop] != '(') {
     stop++;

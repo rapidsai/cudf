@@ -52,29 +52,30 @@ static void BM_transform(nvbench::state& state)
   std::string expression;
   if constexpr (reuse_columns) {
     expression = "c0 " + op + " c0";
-    std::for_each(cuda::counting_iterator{1}, cuda::counting_iterator{num_columns}, [&](int) {
-      expression = "( " + expression + " ) " + op + " c0 ";
-    });
+    std::for_each(cuda::counting_iterator{std::size_t{1}},
+                  cuda::counting_iterator{num_columns},
+                  [&](int) { expression = "( " + expression + " ) " + op + " c0 "; });
   } else {
     expression = "c0 " + op + " c1";
-    std::for_each(cuda::counting_iterator{2}, cuda::counting_iterator{num_columns}, [&](int col) {
-      expression = "( " + expression + " ) " + op + " c" + std::to_string(col);
-    });
+    std::for_each(
+      cuda::counting_iterator{std::size_t{2}}, cuda::counting_iterator{num_columns}, [&](int col) {
+        expression = "( " + expression + " ) " + op + " c" + std::to_string(col);
+      });
   }
 
   std::string type_name = cudf::type_to_name(cudf::data_type{cudf::type_to_id<key_type>()});
   std::string params    = type_name + " c0";
 
-  std::for_each(cuda::counting_iterator{1}, cuda::counting_iterator{num_columns}, [&](int param) {
-    params += ", " + type_name + " c" + std::to_string(param);
-  });
+  std::for_each(cuda::counting_iterator{std::size_t{1}},
+                cuda::counting_iterator{num_columns},
+                [&](int param) { params += ", " + type_name + " c" + std::to_string(param); });
 
   std::string code =
     "void transform(" + type_name + "* out, " + params + " ) {  *out = " + expression + "; }";
 
   std::vector<cudf::transform_input> inputs;
 
-  std::transform(cuda::counting_iterator{0},
+  std::transform(cuda::counting_iterator{cudf::size_type{0}},
                  cuda::counting_iterator{source_table->num_columns()},
                  std::back_inserter(inputs),
                  [&source_table](int col) {
@@ -82,7 +83,7 @@ static void BM_transform(nvbench::state& state)
                  });
 
   // Use the number of bytes read from global memory
-  state.add_global_memory_reads<key_type>(static_cast<size_t>(num_rows) * (tree_levels + 1));
+  state.add_global_memory_reads<key_type>(static_cast<std::size_t>(num_rows) * (tree_levels + 1));
   state.add_global_memory_writes<key_type>(num_rows);
 
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {

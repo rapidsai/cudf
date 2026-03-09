@@ -44,7 +44,7 @@ void contiguous_split_common(nvbench::state& state,
   if (num_splits > 0) {
     cudf::size_type const split_stride = num_rows / num_splits;
     // start after the first element.
-    auto iter = cuda::counting_iterator{1};
+    auto iter = cuda::counting_iterator{cudf::size_type{1}};
     splits.reserve(num_splits);
     std::transform(iter,
                    iter + num_splits,

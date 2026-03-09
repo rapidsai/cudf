@@ -445,7 +445,7 @@ TEST_F(CollectListTest, RollingWindowHonoursMinPeriodsWithDecimal)
 {
   // Test that when the number of observations is fewer than min_periods,
   // the result is null.
-  auto const input_iter   = cuda::counting_iterator{0};
+  auto const input_iter   = cuda::counting_iterator{int32_t{0}};
   auto const input_column = cudf::test::fixed_point_column_wrapper<int32_t>{
     input_iter, input_iter + 6, numeric::scale_type{0}};
 

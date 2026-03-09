@@ -280,13 +280,13 @@ void run_fixed_width_test(size_t cols,
   columns.reserve(cols);
   if (has_nulls) {
     std::generate_n(std::back_inserter(columns), cols, [rows]() {
-      auto iter   = cuda::counting_iterator{0};
+      auto iter   = cuda::counting_iterator{int32_t{0}};
       auto valids = thrust::make_transform_iterator(iter, [](auto i) { return i % 4 != 0; });
       return fixed_width_column_wrapper<T, int32_t>(iter, iter + rows, valids);
     });
   } else {
     std::generate_n(std::back_inserter(columns), cols, [rows]() {
-      auto iter = cuda::counting_iterator{0};
+      auto iter = cuda::counting_iterator{int32_t{0}};
       return fixed_width_column_wrapper<T, int32_t>(iter, iter + rows);
     });
   }

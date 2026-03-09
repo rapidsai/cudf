@@ -223,7 +223,7 @@ TEST_F(MinHashTest, ErrorsTest)
 
   auto offsets = cudf::test::fixed_width_column_wrapper<int32_t>(
     cuda::counting_iterator{cudf::size_type{0}},
-    cuda::counting_iterator{cudf::size_type{h_input.size() + 1}});
+    cuda::counting_iterator{static_cast<cudf::size_type>(h_input.size() + 1)});
   auto input_ngrams =
     cudf::make_lists_column(h_input.size(), offsets.release(), input.release(), 0, {});
   lview = cudf::lists_column_view(input_ngrams->view());

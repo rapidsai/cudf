@@ -51,7 +51,7 @@ compute_segmented_row_bit_count(cudf::table_view const& input, cudf::size_type s
 
   thrust::transform(
     rmm::exec_policy_nosync(cudf::get_default_stream()),
-    cuda::counting_iterator{0},
+    cuda::counting_iterator{cudf::size_type{0}},
     cuda::counting_iterator{num_segments},
     expected->mutable_view().begin<cudf::size_type>(),
     cuda::proclaim_return_type<cudf::size_type>(

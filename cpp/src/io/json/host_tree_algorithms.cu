@@ -181,7 +181,7 @@ rmm::device_uvector<uint8_t> is_all_nulls_each_column(device_span<SymbolT const>
       if (node_category == NC_STR or node_category == NC_VAL) {
         auto const is_null_literal = serialized_trie_contains(
           options.trie_na,
-          {data + range_begin[i], static_cast<size_t>(range_end[i] - range_begin[i])});
+          {data + range_begin[i], static_cast<std::size_t>(range_end[i] - range_begin[i])});
         if (!is_null_literal) is_all_nulls[col_ids[i]] = false;
       }
     });
@@ -247,8 +247,8 @@ std::map<std::string, schema_element> unified_schema(cudf::io::json_reader_optio
     cudf::detail::visitor_overload{
       [](std::vector<data_type> const& user_dtypes) {
         std::map<std::string, schema_element> dnew;
-        std::transform(cuda::counting_iterator{size_t{0}},
-                       cuda::counting_iterator{static_cast<size_t>(user_dtypes.size())},
+        std::transform(cuda::counting_iterator{std::size_t{0}},
+                       cuda::counting_iterator{static_cast<std::size_t>(user_dtypes.size())},
                        std::inserter(dnew, dnew.end()),
                        [&user_dtypes](auto i) {
                          return std::pair(std::to_string(i), schema_element{user_dtypes[i]});
@@ -566,44 +566,43 @@ std::
       is_pruned[top_level_list_id] = false;
     }
     is_pruned[root_list_col_id] = false;
-    std::visit(cudf::detail::visitor_overload{
-                 [&root_list_col_id, &adj, &mark_is_pruned, &column_names](
-                   std::vector<data_type> const& user_dtypes) -> void {
-                   for (size_t i = 0; i < adj[root_list_col_id].size() && i < user_dtypes.size();
-                        i++) {
-                     NodeIndexT const first_child_id = adj[root_list_col_id][i];
-                     auto const& name                = column_names[first_child_id];
-                     auto value_id                   = std::stol(name);
-                     if (value_id >= 0 and value_id < static_cast<long>(user_dtypes.size()))
-                       mark_is_pruned(first_child_id, schema_element{user_dtypes[value_id]});
-                     // Note: mixed type - forced type, will work here.
-                   }
-                 },
-                 [&root_list_col_id, &adj, &mark_is_pruned, &column_names](
-                   std::map<std::string, data_type> const& user_dtypes) -> void {
-                   for (int first_child_id : adj[root_list_col_id]) {
-                     auto const& name = column_names[first_child_id];
-                     if (user_dtypes.count(name))
-                       mark_is_pruned(first_child_id, schema_element{user_dtypes.at(name)});
-                   }
-                 },
-                 [&root_list_col_id, &adj, &mark_is_pruned, &column_names](
-                   std::map<std::string, schema_element> const& user_dtypes) -> void {
-                   for (int first_child_id : adj[root_list_col_id]) {
-                     auto const& name = column_names[first_child_id];
-                     if (user_dtypes.count(name))
-                       mark_is_pruned(first_child_id, user_dtypes.at(name));
-                   }
-                 },
-                 [&root_list_col_id, &adj, &mark_is_pruned, &column_names](
-                   schema_element const& user_dtypes) -> void {
-                   for (int first_child_id : adj[root_list_col_id]) {
-                     auto const& name = column_names[first_child_id];
-                     if (user_dtypes.child_types.count(name) != 0)
-                       mark_is_pruned(first_child_id, user_dtypes.child_types.at(name));
-                   }
-                 }},
-               options.get_dtypes());
+    std::visit(
+      cudf::detail::visitor_overload{
+        [&root_list_col_id, &adj, &mark_is_pruned, &column_names](
+          std::vector<data_type> const& user_dtypes) -> void {
+          for (std::size_t i = 0; i < adj[root_list_col_id].size() && i < user_dtypes.size(); i++) {
+            NodeIndexT const first_child_id = adj[root_list_col_id][i];
+            auto const& name                = column_names[first_child_id];
+            auto value_id                   = std::stol(name);
+            if (value_id >= 0 and value_id < static_cast<long>(user_dtypes.size()))
+              mark_is_pruned(first_child_id, schema_element{user_dtypes[value_id]});
+            // Note: mixed type - forced type, will work here.
+          }
+        },
+        [&root_list_col_id, &adj, &mark_is_pruned, &column_names](
+          std::map<std::string, data_type> const& user_dtypes) -> void {
+          for (int first_child_id : adj[root_list_col_id]) {
+            auto const& name = column_names[first_child_id];
+            if (user_dtypes.count(name))
+              mark_is_pruned(first_child_id, schema_element{user_dtypes.at(name)});
+          }
+        },
+        [&root_list_col_id, &adj, &mark_is_pruned, &column_names](
+          std::map<std::string, schema_element> const& user_dtypes) -> void {
+          for (int first_child_id : adj[root_list_col_id]) {
+            auto const& name = column_names[first_child_id];
+            if (user_dtypes.count(name)) mark_is_pruned(first_child_id, user_dtypes.at(name));
+          }
+        },
+        [&root_list_col_id, &adj, &mark_is_pruned, &column_names](
+          schema_element const& user_dtypes) -> void {
+          for (int first_child_id : adj[root_list_col_id]) {
+            auto const& name = column_names[first_child_id];
+            if (user_dtypes.child_types.count(name) != 0)
+              mark_is_pruned(first_child_id, user_dtypes.child_types.at(name));
+          }
+        }},
+      options.get_dtypes());
   } else {
     auto root_struct_col_id =
       is_enabled_lines
@@ -621,7 +620,8 @@ std::
       cudf::detail::visitor_overload{
         [&is_pruned, &root_struct_col_id, &adj, &mark_is_pruned](
           std::vector<data_type> const& user_dtypes) -> void {
-          for (size_t i = 0; i < adj[root_struct_col_id].size() && i < user_dtypes.size(); i++) {
+          for (std::size_t i = 0; i < adj[root_struct_col_id].size() && i < user_dtypes.size();
+               i++) {
             NodeIndexT const first_field_id = adj[root_struct_col_id][i];
             is_pruned[first_field_id]       = false;
             for (auto const& child_id : adj[first_field_id])  // children of field (>1 if mixed)
@@ -828,7 +828,7 @@ std::
   construct_tree(adj[parent_node_sentinel][0], parent_ref);
 
   // Forced string type due to input schema and mixed type as string.
-  for (size_t i = 0; i < expected_types.size(); i++) {
+  for (std::size_t i = 0; i < expected_types.size(); i++) {
     if (expected_types[i] == NC_STR) {
       if (columns.count(i)) { columns.at(i).get().forced_as_string_column = true; }
     }

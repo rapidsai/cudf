@@ -725,7 +725,7 @@ std::pair<src_buf_info*, size_type> setup_source_buf_info(InputIter begin,
  *          column size, data offset, bitmask offset, and null count
  */
 template <typename BufInfo>
-std::tuple<size_t, int64_t, int64_t, size_type> build_output_column_metadata(
+std::tuple<std::size_t, int64_t, int64_t, size_type> build_output_column_metadata(
   column_view const& src,
   BufInfo& current_info,
   detail::metadata_builder& mb,
@@ -755,7 +755,7 @@ std::tuple<size_t, int64_t, int64_t, size_type> build_output_column_metadata(
   }();
 
   // size/data pointer for the column
-  auto const col_size = [&]() -> size_t {
+  auto const col_size = [&]() -> std::size_t {
     // if I am a string column, I need to use the number of rows from my child offset column. the
     // number of rows in my dst_buf_info struct will be equal to the number of chars, which is
     // incorrect. this is a quirk of how cudf stores strings.
@@ -769,7 +769,7 @@ std::tuple<size_t, int64_t, int64_t, size_type> build_output_column_metadata(
     }
 
     // otherwise the number of rows is the number of elements
-    return static_cast<size_t>(current_info->num_elements);
+    return static_cast<std::size_t>(current_info->num_elements);
   }();
   int64_t const data_offset =
     col_size == 0 || src.head() == nullptr ? -1 : static_cast<int64_t>(current_info->dst_offset);

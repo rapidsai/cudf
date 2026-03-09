@@ -22,8 +22,8 @@
 template <typename T, CUDF_ENABLE_IF(cudf::is_numeric<T>() or cudf::is_chrono<T>())>
 std::unique_ptr<cudf::column> example_column()
 {
-  auto begin = cuda::counting_iterator{1};
-  auto end   = cuda::counting_iterator{16};
+  auto begin = cuda::counting_iterator{int32_t{1}};
+  auto end   = cuda::counting_iterator{int32_t{16}};
   return cudf::test::fixed_width_column_wrapper<T>(begin, end).release();
 }
 

@@ -750,15 +750,15 @@ TEST_F(RollingErrorTest, SumTimestampNotSupported)
 {
   constexpr cudf::size_type size{10};
   cudf::test::fixed_width_column_wrapper<cudf::timestamp_D, cudf::timestamp_D::rep> input_D(
-    cuda::counting_iterator{0}, cuda::counting_iterator{size});
+    cuda::counting_iterator{cudf::timestamp_D::rep{0}}, cuda::counting_iterator{size});
   cudf::test::fixed_width_column_wrapper<cudf::timestamp_s, cudf::timestamp_s::rep> input_s(
-    cuda::counting_iterator{0}, cuda::counting_iterator{size});
+    cuda::counting_iterator{cudf::timestamp_s::rep{0}}, cuda::counting_iterator{size});
   cudf::test::fixed_width_column_wrapper<cudf::timestamp_ms, cudf::timestamp_ms::rep> input_ms(
-    cuda::counting_iterator{0}, cuda::counting_iterator{size});
+    cuda::counting_iterator{cudf::timestamp_ms::rep{0}}, cuda::counting_iterator{size});
   cudf::test::fixed_width_column_wrapper<cudf::timestamp_us, cudf::timestamp_us::rep> input_us(
-    cuda::counting_iterator{0}, cuda::counting_iterator{size});
+    cuda::counting_iterator{cudf::timestamp_us::rep{0}}, cuda::counting_iterator{size});
   cudf::test::fixed_width_column_wrapper<cudf::timestamp_ns, cudf::timestamp_ns::rep> input_ns(
-    cuda::counting_iterator{0}, cuda::counting_iterator{size});
+    cuda::counting_iterator{cudf::timestamp_ns::rep{0}}, cuda::counting_iterator{size});
 
   EXPECT_THROW(cudf::rolling_window(
                  input_D, 2, 2, 0, *cudf::make_sum_aggregation<cudf::rolling_aggregation>()),
@@ -782,15 +782,15 @@ TEST_F(RollingErrorTest, MeanTimestampNotSupported)
 {
   constexpr cudf::size_type size{10};
   cudf::test::fixed_width_column_wrapper<cudf::timestamp_D, cudf::timestamp_D::rep> input_D(
-    cuda::counting_iterator{0}, cuda::counting_iterator{size});
+    cuda::counting_iterator{cudf::timestamp_D::rep{0}}, cuda::counting_iterator{size});
   cudf::test::fixed_width_column_wrapper<cudf::timestamp_s, cudf::timestamp_s::rep> input_s(
-    cuda::counting_iterator{0}, cuda::counting_iterator{size});
+    cuda::counting_iterator{cudf::timestamp_s::rep{0}}, cuda::counting_iterator{size});
   cudf::test::fixed_width_column_wrapper<cudf::timestamp_ms, cudf::timestamp_ms::rep> input_ms(
-    cuda::counting_iterator{0}, cuda::counting_iterator{size});
+    cuda::counting_iterator{cudf::timestamp_ms::rep{0}}, cuda::counting_iterator{size});
   cudf::test::fixed_width_column_wrapper<cudf::timestamp_us, cudf::timestamp_us::rep> input_us(
-    cuda::counting_iterator{0}, cuda::counting_iterator{size});
+    cuda::counting_iterator{cudf::timestamp_us::rep{0}}, cuda::counting_iterator{size});
   cudf::test::fixed_width_column_wrapper<cudf::timestamp_ns, cudf::timestamp_ns::rep> input_ns(
-    cuda::counting_iterator{0}, cuda::counting_iterator{size});
+    cuda::counting_iterator{cudf::timestamp_ns::rep{0}}, cuda::counting_iterator{size});
 
   EXPECT_THROW(cudf::rolling_window(
                  input_D, 2, 2, 0, *cudf::make_mean_aggregation<cudf::rolling_aggregation>()),
@@ -1279,8 +1279,9 @@ TEST_F(RollingTestUdf, StaticWindow)
 {
   cudf::size_type size = 1000;
 
-  cudf::test::fixed_width_column_wrapper<int32_t> input(
-    cuda::counting_iterator{0}, cuda::counting_iterator{size}, cuda::make_constant_iterator(true));
+  cudf::test::fixed_width_column_wrapper<int32_t> input(cuda::counting_iterator{int32_t{0}},
+                                                        cuda::counting_iterator{size},
+                                                        cuda::make_constant_iterator(true));
 
   std::unique_ptr<cudf::column> output;
 
@@ -1316,8 +1317,9 @@ TEST_F(RollingTestUdf, DynamicWindow)
 {
   cudf::size_type size = 1000;
 
-  cudf::test::fixed_width_column_wrapper<int32_t> input(
-    cuda::counting_iterator{0}, cuda::counting_iterator{size}, cuda::make_constant_iterator(true));
+  cudf::test::fixed_width_column_wrapper<int32_t> input(cuda::counting_iterator{int32_t{0}},
+                                                        cuda::counting_iterator{size},
+                                                        cuda::make_constant_iterator(true));
 
   auto prec = cudf::detail::make_counting_transform_iterator(
     0, [] __device__(cudf::size_type row) { return row % 2 + 2; });

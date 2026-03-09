@@ -174,7 +174,7 @@ auto const read_table_and_nrows_per_source(cudf::io::chunked_parquet_reader cons
 {
   auto out_tables       = std::vector<std::unique_ptr<cudf::table>>{};
   int num_chunks        = 0;
-  auto nrows_per_source = std::vector<size_t>{};
+  auto nrows_per_source = std::vector<std::size_t>{};
   while (reader.has_next()) {
     auto chunk = reader.read_chunk();
     out_tables.emplace_back(std::move(chunk.tbl));
@@ -186,7 +186,7 @@ auto const read_table_and_nrows_per_source(cudf::io::chunked_parquet_reader cons
                      chunk.metadata.num_rows_per_source.cend(),
                      nrows_per_source.begin(),
                      nrows_per_source.begin(),
-                     std::plus<size_t>());
+                     std::plus<std::size_t>());
     }
   }
   auto out_tviews = std::vector<cudf::table_view>{};
@@ -223,7 +223,7 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadSimpleData)
 
   auto const generate_input = [num_rows](bool nullable, bool use_delta) {
     std::vector<std::unique_ptr<cudf::column>> input_columns;
-    auto const value_iter = cuda::counting_iterator{0};
+    auto const value_iter = cuda::counting_iterator{int32_t{0}};
     input_columns.emplace_back(int32s_col(value_iter, value_iter + num_rows).release());
     input_columns.emplace_back(int64s_col(value_iter, value_iter + num_rows).release());
 
@@ -267,7 +267,7 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadBoundaryCases)
 
   auto const [expected, filepath] = [num_rows]() {
     std::vector<std::unique_ptr<cudf::column>> input_columns;
-    auto const value_iter = cuda::counting_iterator{0};
+    auto const value_iter = cuda::counting_iterator{int32_t{0}};
     input_columns.emplace_back(int32s_col(value_iter, value_iter + num_rows).release());
     return write_file(
       input_columns, "chunked_read_simple_boundary", false /*nullable*/, false /*delta_encoding*/);
@@ -350,7 +350,7 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadWithString)
 
   auto const generate_input = [num_rows](bool nullable, bool use_delta) {
     std::vector<std::unique_ptr<cudf::column>> input_columns;
-    auto const value_iter = cuda::counting_iterator{0};
+    auto const value_iter = cuda::counting_iterator{int32_t{0}};
 
     // ints                                            Page    total bytes   cumulative bytes
     // 20000 rows of 4 bytes each                    = A0      80000         80000
@@ -570,7 +570,7 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadWithStructs)
 
   auto const generate_input = [num_rows](bool nullable) {
     std::vector<std::unique_ptr<cudf::column>> input_columns;
-    auto const int_iter = cuda::counting_iterator{0};
+    auto const int_iter = cuda::counting_iterator{int32_t{0}};
     input_columns.emplace_back(int32s_col(int_iter, int_iter + num_rows).release());
     input_columns.emplace_back([=] {
       auto child1 = int32s_col(int_iter, int_iter + num_rows);
@@ -830,7 +830,7 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadWithStructsOfLists)
 
   auto const generate_input = [num_rows](bool nullable) {
     std::vector<std::unique_ptr<cudf::column>> input_columns;
-    auto const int_iter = cuda::counting_iterator{0};
+    auto const int_iter = cuda::counting_iterator{int32_t{0}};
     input_columns.emplace_back(int32s_col(int_iter, int_iter + num_rows).release());
     input_columns.emplace_back([=] {
       std::vector<std::unique_ptr<cudf::column>> child_columns;
@@ -964,7 +964,7 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadWithListsOfStructs)
 
   auto const generate_input = [num_rows](bool nullable) {
     std::vector<std::unique_ptr<cudf::column>> input_columns;
-    auto const int_iter = cuda::counting_iterator{0};
+    auto const int_iter = cuda::counting_iterator{int32_t{0}};
     input_columns.emplace_back(int32s_col(int_iter, int_iter + num_rows).release());
 
     auto offsets = std::vector<cudf::size_type>{};
@@ -1128,7 +1128,7 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadNullCount)
 }
 
 namespace {
-constexpr size_t input_limit_expected_file_count = 4;
+constexpr std::size_t input_limit_expected_file_count = 4;
 
 std::vector<std::string> input_limit_get_test_names(std::string const& base_filename)
 {
@@ -1173,14 +1173,14 @@ void input_limit_test_write(std::vector<std::string> const& test_filenames,
 
 void input_limit_test_read(std::vector<std::string> const& test_filenames,
                            cudf::table_view const& t,
-                           size_t output_limit,
-                           size_t input_limit,
+                           std::size_t output_limit,
+                           std::size_t input_limit,
                            int const expected_chunk_counts[input_limit_expected_file_count])
 {
   CUDF_EXPECTS(test_filenames.size() == input_limit_expected_file_count,
                "Unexpected count of test filenames");
 
-  for (size_t idx = 0; idx < test_filenames.size(); idx++) {
+  for (std::size_t idx = 0; idx < test_filenames.size(); idx++) {
     auto result = chunked_read(test_filenames[idx], output_limit, input_limit);
     // CUDF_EXPECTS(result.second == expected_chunk_counts[idx],
     //            "Unexpected number of chunks produced in chunk read");
@@ -1331,13 +1331,13 @@ TEST_F(ParquetChunkedReaderInputLimitTest, List)
 namespace {
 void tiny_list_rowgroup_test(bool just_list_col)
 {
-  auto iter = cuda::counting_iterator{0};
+  auto iter = cuda::counting_iterator{int{0}};
 
   // test a specific edge case:  a list column composed of multiple row groups, where each row
   // group contains a single, relatively small row.
   std::vector<int> row_sizes{12, 7, 16, 20, 10, 3, 15};
   std::vector<std::unique_ptr<cudf::table>> row_groups;
-  for (size_t idx = 0; idx < row_sizes.size(); idx++) {
+  for (std::size_t idx = 0; idx < row_sizes.size(); idx++) {
     std::vector<std::unique_ptr<cudf::column>> cols;
 
     // add a column before the list
@@ -1381,8 +1381,8 @@ void tiny_list_rowgroup_test(bool just_list_col)
   std::transform(iter, iter + row_groups.size(), std::back_inserter(source_files), [](int i) {
     return temp_env->get_temp_filepath("Tlrg" + std::to_string(i));
   });
-  auto result =
-    chunked_read(source_files, size_t{2} * 1024 * 1024 * 1024, size_t{2} * 1024 * 1024 * 1024);
+  auto result = chunked_read(
+    source_files, std::size_t{2} * 1024 * 1024 * 1024, std::size_t{2} * 1024 * 1024 * 1024);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *(result.first));
 }
@@ -1514,7 +1514,7 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadOutOfBoundChunks)
 {
   auto const generate_input = [](int num_rows, bool nullable) {
     std::vector<std::unique_ptr<cudf::column>> input_columns;
-    auto const value_iter = cuda::counting_iterator{0};
+    auto const value_iter = cuda::counting_iterator{int32_t{0}};
     input_columns.emplace_back(int32s_col(value_iter, value_iter + num_rows).release());
     input_columns.emplace_back(int64s_col(value_iter, value_iter + num_rows).release());
 
@@ -1792,7 +1792,7 @@ TEST_F(ParquetChunkedReaderTest, TestNumRowsPerSourceMultipleSources)
   auto initialize_expected_counts =
     [](int const nsources, int const num_rows, int const rows_to_skip, int const rows_to_read) {
       // Initialize expected_counts
-      std::vector<size_t> expected_counts(nsources, num_rows);
+      std::vector<std::size_t> expected_counts(nsources, num_rows);
 
       // Adjust expected_counts for rows_to_skip
       int64_t counter = 0;
@@ -1836,7 +1836,7 @@ TEST_F(ParquetChunkedReaderTest, TestNumRowsPerSourceMultipleSources)
     auto const [result, num_chunks, num_rows_per_source] = read_table_and_nrows_per_source(reader);
 
     // Initialize expected_counts
-    std::vector<size_t> const expected_counts(nsources, num_rows);
+    std::vector<std::size_t> const expected_counts(nsources, num_rows);
 
     EXPECT_EQ(num_rows_per_source.size(), nsources);
     EXPECT_TRUE(
@@ -1853,9 +1853,12 @@ TEST_F(ParquetChunkedReaderTest, TestNumRowsPerSourceMultipleSources)
     std::vector<int64_t> int64_selected_data{};
     int64_selected_data.reserve(nsources * num_rows);
 
-    std::for_each(cuda::counting_iterator{0}, cuda::counting_iterator{nsources}, [&](auto const i) {
-      std::copy(int64_data.begin(), int64_data.end(), std::back_inserter(int64_selected_data));
-    });
+    std::for_each(
+      cuda::counting_iterator{std::size_t{0}},
+      cuda::counting_iterator{nsources},
+      [&](auto const i) {
+        std::copy(int64_data.begin(), int64_data.end(), std::back_inserter(int64_selected_data));
+      });
 
     std::vector<std::string> const datasources(nsources, filepath);
 
@@ -1895,9 +1898,12 @@ TEST_F(ParquetChunkedReaderTest, TestNumRowsPerSourceMultipleSources)
     std::vector<int64_t> int64_selected_data{};
     int64_selected_data.reserve(nsources * num_rows);
 
-    std::for_each(cuda::counting_iterator{0}, cuda::counting_iterator{nsources}, [&](auto const i) {
-      std::copy(int64_data.begin(), int64_data.end(), std::back_inserter(int64_selected_data));
-    });
+    std::for_each(
+      cuda::counting_iterator{std::size_t{0}},
+      cuda::counting_iterator{nsources},
+      [&](auto const i) {
+        std::copy(int64_data.begin(), int64_data.end(), std::back_inserter(int64_selected_data));
+      });
 
     std::vector<std::string> const datasources(nsources, filepath);
     auto const options =
@@ -1956,7 +1962,7 @@ TEST_F(ParquetChunkedReaderTest, TestNumRowsPerSourceEmptyTable)
   auto const [result, num_chunks, num_rows_per_source] = read_table_and_nrows_per_source(reader);
 
   // Initialize expected_counts
-  std::vector<size_t> const expected_counts(nsources, 0);
+  std::vector<std::size_t> const expected_counts(nsources, 0);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected_empty->view(), result->view());
 

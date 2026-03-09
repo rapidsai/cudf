@@ -217,7 +217,7 @@ inline std::unique_ptr<cudf::column> make_long_offsets_string_column()
   // manually specified long offsets, but < 2B chars
   auto const num_chars = 1024;
   std::vector<int8_t> chars(num_chars);
-  auto iter = cuda::counting_iterator{0};
+  auto iter = cuda::counting_iterator{cudf::size_type{0}};
   std::transform(iter, iter + num_chars, chars.begin(), [](cudf::size_type i) {
     return static_cast<int8_t>('a' + (i % 26));
   });

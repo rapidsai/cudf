@@ -474,7 +474,7 @@ TYPED_TEST(FromArrowTestDecimalsTest, FixedPointTableLarge)
   auto constexpr NUM_ELEMENTS = 1000;
 
   for (auto const scale : {3, 2, 1, 0, -1, -2, -3}) {
-    auto iota           = cuda::counting_iterator{1};
+    auto iota           = cuda::counting_iterator{T{1}};
     auto const data     = std::vector<T>(iota, iota + NUM_ELEMENTS);
     auto const col      = fp_wrapper<T>(iota, iota + NUM_ELEMENTS, scale_type{scale});
     auto const expected = cudf::table_view({col});
@@ -532,7 +532,7 @@ TYPED_TEST(FromArrowTestDecimalsTest, FixedPointTableNullsLarge)
   for (auto const scale : {3, 2, 1, 0, -1, -2, -3}) {
     auto every_other    = [](auto i) { return i % 2 ? 0 : 1; };
     auto validity       = cudf::detail::make_counting_transform_iterator(0, every_other);
-    auto iota           = cuda::counting_iterator{1};
+    auto iota           = cuda::counting_iterator{T{1}};
     auto const data     = std::vector<T>(iota, iota + NUM_ELEMENTS);
     auto const col      = fp_wrapper<T>(iota, iota + NUM_ELEMENTS, validity, scale_type{scale});
     auto const expected = cudf::table_view({col});

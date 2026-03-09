@@ -377,7 +377,7 @@ struct column_view_printer {
                  << detail::to_string(cudf::test::bitmask_to_host(col), col.size(), indent) << "\n";
     }
 
-    auto iter = cuda::counting_iterator{0};
+    auto iter = cuda::counting_iterator{cudf::size_type{0}};
     std::transform(
       iter,
       iter + view.num_children(),

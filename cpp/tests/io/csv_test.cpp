@@ -110,7 +110,7 @@ TYPED_TEST_SUITE(CsvFixedPointReaderTest, cudf::test::FixedPointTypes);
 namespace {
 // Generates a vector of uniform random values of type T
 template <typename T>
-inline auto random_values(size_t size)
+inline auto random_values(std::size_t size)
 {
   std::vector<T> values(size);
 
@@ -175,7 +175,7 @@ void check_timestamp_column(cudf::column_view const& col_lhs,
   EXPECT_TRUE(nrows == static_cast<cudf::size_type>(h_rhs.size()));
 
   auto begin_count = cuda::counting_iterator{cudf::size_type{0}};
-  auto end_count   = cuda::counting_iterator{cudf::size_type{nrows}};
+  auto end_count   = cuda::counting_iterator{static_cast<cudf::size_type>(nrows)};
 
   auto* ptr_lhs = h_lhs.data();  // cannot capture host_vector in thrust,
                                  // not even in host lambda
@@ -194,7 +194,7 @@ void check_timestamp_column(cudf::column_view const& col_lhs,
 // helper to replace in `str`  _all_ occurrences of `from` with `to`
 std::string replace_all_helper(std::string str, std::string const& from, std::string const& to)
 {
-  size_t start_pos = 0;
+  std::size_t start_pos = 0;
   while ((start_pos = str.find(from, start_pos)) != std::string::npos) {
     str.replace(start_pos, from.length(), to);
     start_pos += to.length();
@@ -356,7 +356,7 @@ TYPED_TEST(CsvFixedPointWriterTest, SingleColumnNegativeScale)
   thrust::copy_if(thrust::host,
                   reference_strings.begin(),
                   reference_strings.end(),
-                  cuda::counting_iterator{0},
+                  cuda::counting_iterator{std::size_t{0}},
                   std::back_inserter(valid_reference_strings),
                   validity.functor());
   reference_strings = valid_reference_strings;
@@ -403,7 +403,7 @@ TYPED_TEST(CsvFixedPointWriterTest, SingleColumnPositiveScale)
   thrust::copy_if(thrust::host,
                   reference_strings.begin(),
                   reference_strings.end(),
-                  cuda::counting_iterator{0},
+                  cuda::counting_iterator{std::size_t{0}},
                   std::back_inserter(valid_reference_strings),
                   validity.functor());
   reference_strings = valid_reference_strings;
@@ -1960,20 +1960,20 @@ class TestSource : public cudf::io::datasource {
   std::string const str;
 
   TestSource(std::string s) : str(std::move(s)) {}
-  std::unique_ptr<buffer> host_read(size_t offset, size_t size) override
+  std::unique_ptr<buffer> host_read(std::size_t offset, std::size_t size) override
   {
     size = std::min(size, str.size() - offset);
     return std::make_unique<non_owning_buffer>((uint8_t*)str.data() + offset, size);
   }
 
-  size_t host_read(size_t offset, size_t size, uint8_t* dst) override
+  std::size_t host_read(std::size_t offset, std::size_t size, uint8_t* dst) override
   {
     auto const read_size = std::min(size, str.size() - offset);
     memcpy(dst, str.data() + offset, size);
     return read_size;
   }
 
-  [[nodiscard]] size_t size() const override { return str.size(); }
+  [[nodiscard]] std::size_t size() const override { return str.size(); }
 };
 
 TEST_F(CsvReaderTest, UserImplementedSource)
@@ -2573,7 +2573,7 @@ TEST_F(CsvReaderTest, OutOfMapBoundsReads)
   auto const file_size = num_rows * row.size();
   {
     std::ofstream outfile(filepath, std::ofstream::out);
-    for (size_t i = 0; i < num_rows; ++i) {
+    for (std::size_t i = 0; i < num_rows; ++i) {
       outfile << row;
     }
   }
