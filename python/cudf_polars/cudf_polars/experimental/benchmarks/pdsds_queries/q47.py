@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
-from cudf_polars.experimental.benchmarks.utils import get_data
+from cudf_polars.experimental.benchmarks.utils import QueryResult, get_data
 
 if TYPE_CHECKING:
     from cudf_polars.experimental.benchmarks.utils import RunConfig
@@ -101,7 +101,7 @@ def duckdb_impl(run_config: RunConfig) -> str:
     """
 
 
-def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
+def polars_impl(run_config: RunConfig) -> QueryResult:
     """Query 47."""
     params = load_parameters(
         int(run_config.scale_factor),
@@ -237,41 +237,49 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
             ]
         )
     )
+    sort_by = {"d_moy": False}
+    limit = 100
     # Step 3: Final query with filters and calculations
-    return (
-        v2.filter(
-            (pl.col("d_year") == year)
-            & (pl.col("avg_monthly_sales") > 0)
-            &
-            # Percentage deviation > 10%
-            (
-                pl.when(pl.col("avg_monthly_sales") > 0)
-                .then(
-                    (pl.col("sum_sales") - pl.col("avg_monthly_sales")).abs()
-                    / pl.col("avg_monthly_sales")
+    return QueryResult(
+        frame=(
+            v2.filter(
+                (pl.col("d_year") == year)
+                & (pl.col("avg_monthly_sales") > 0)
+                &
+                # Percentage deviation > 10%
+                (
+                    pl.when(pl.col("avg_monthly_sales") > 0)
+                    .then(
+                        (pl.col("sum_sales") - pl.col("avg_monthly_sales")).abs()
+                        / pl.col("avg_monthly_sales")
+                    )
+                    .otherwise(None)
+                    > 0.1
                 )
-                .otherwise(None)
-                > 0.1
             )
-        )
-        .with_columns(
-            [
-                (pl.col("sum_sales") - pl.col("avg_monthly_sales")).alias(
-                    "sales_deviation"
-                )
-            ]
-        )
-        .sort(["sales_deviation", "d_moy"], nulls_last=True, descending=[False, False])
-        .select(
-            [
-                "i_category",
-                "d_year",
-                "d_moy",
-                "avg_monthly_sales",
-                "sum_sales",
-                "psum",
-                "nsum",
-            ]
-        )
-        .limit(100)
+            .with_columns(
+                [
+                    (pl.col("sum_sales") - pl.col("avg_monthly_sales")).alias(
+                        "sales_deviation"
+                    )
+                ]
+            )
+            .sort(
+                ["sales_deviation", "d_moy"], nulls_last=True, descending=[False, False]
+            )
+            .select(
+                [
+                    "i_category",
+                    "d_year",
+                    "d_moy",
+                    "avg_monthly_sales",
+                    "sum_sales",
+                    "psum",
+                    "nsum",
+                ]
+            )
+            .limit(limit)
+        ),
+        sort_by=list(sort_by.items()),
+        limit=limit,
     )
