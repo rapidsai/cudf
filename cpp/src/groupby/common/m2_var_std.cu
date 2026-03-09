@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -89,12 +89,13 @@ std::unique_ptr<column> compute_m2(data_type source_type,
                                    rmm::cuda_stream_view stream,
                                    rmm::device_async_resource_ref mr)
 {
-  auto output = make_numeric_column(cudf::detail::target_type(source_type, aggregation::M2),
+  auto output      = make_numeric_column(cudf::detail::target_type(source_type, aggregation::M2),
                                     sum.size(),
                                     mask_state::UNALLOCATED,
                                     stream,
                                     mr);
-  type_dispatcher(source_type, m2_functor{}, output->mutable_view(), sum_sqr, sum, count, stream);
+  auto output_view = output->mutable_view();
+  type_dispatcher(source_type, m2_functor{}, output_view, sum_sqr, sum, count, stream);
   return output;
 }
 
@@ -125,13 +126,13 @@ std::unique_ptr<column> compute_variance_std(TransformFunc&& transform_fn,
 {
   auto output = make_numeric_column(
     data_type(type_to_id<TargetType>()), size, mask_state::UNALLOCATED, stream, mr);
+  auto output_view = output->mutable_view();
 
   // Since we may have new null rows depending on the group count, we need to generate a new null
   // mask from scratch.
   rmm::device_uvector<bool> validity(size, stream);
 
-  auto const out_it =
-    thrust::make_zip_iterator(output->mutable_view().begin<TargetType>(), validity.begin());
+  auto const out_it = thrust::make_zip_iterator(output_view.begin<TargetType>(), validity.begin());
   thrust::tabulate(rmm::exec_policy_nosync(stream), out_it, out_it + size, transform_fn);
 
   auto [null_mask, null_count] =
