@@ -735,7 +735,7 @@ async def _choose_strategy_from_samples(
 
     # Stay away from cuDF's row limit
     if (estimated_rows_count := max(left_total_rows, right_total_rows)) > 0:
-        max_rows_per_partition = max(1, CUDF_ROW_LIMIT // 4)
+        max_rows_per_partition = CUDF_ROW_LIMIT // 4
         min_partitions_for_row_limit = (
             estimated_rows_count + max_rows_per_partition - 1
         ) // max_rows_per_partition
