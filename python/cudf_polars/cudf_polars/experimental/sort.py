@@ -113,40 +113,23 @@ def find_sort_splits(
         null_order,
         stream=stream,
     )
-    # And convert to list for final processing
-    # The type ignores are for cross-library boundaries: plc.Column -> pl.Series
-    # These work at runtime via the Arrow C Data Interface protocol
-    # TODO: Find a way for pylibcudf types to show they export the Arrow protocol
-    # (mypy wasn't happy with a custom protocol)
-    split_first_list = pl.Series(split_first_col).to_list()
-    split_last_list = pl.Series(split_last_col).to_list()
-    split_part_id_list = pl.Series(split_part_id).to_list()
-    split_local_row_list = pl.Series(split_local_row).to_list()
-
-    # Find the final split points.  This is slightly tricky because of the possibility
-    # of equal values, which is why we need the part_id and local_row.
-    # Consider for example the case when all data is equal.
-    split_points = []
-    for first, last, part_id, local_row in zip(
-        split_first_list,
-        split_last_list,
-        split_part_id_list,
-        split_local_row_list,
-        strict=True,
-    ):
-        if part_id < my_part_id:
-            # Local data is globally later so split at first valid row.
-            split_points.append(first)
-        elif part_id > my_part_id:
-            # Local data is globally earlier so split after last valid row.
-            split_points.append(last)
-        else:
-            # The split point is within our partition. Use local_row when tbl is
-            # the full partition; use first (position in this chunk) when tbl is
-            # a chunk of the partition to keep splits in [0, tbl.num_rows()].
-            split_points.append(first if chunk_relative else local_row)
-
-    return split_points
+    # Find the final split points.
+    df = pl.DataFrame(
+        {
+            "first": pl.Series(split_first_col),
+            "last": pl.Series(split_last_col),
+            "part_id": pl.Series(split_part_id),
+            "local_row": pl.Series(split_local_row),
+        }
+    )
+    out = (
+        pl.when(pl.col("part_id") < my_part_id)
+        .then(pl.col("first"))
+        .when(pl.col("part_id") > my_part_id)
+        .then(pl.col("last"))
+        .otherwise(pl.col("first") if chunk_relative else pl.col("local_row"))
+    )
+    return df.select(out).to_series().to_list()
 
 
 def _select_local_split_candidates(
