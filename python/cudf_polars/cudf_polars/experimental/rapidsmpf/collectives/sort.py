@@ -60,9 +60,9 @@ def _boundary_schema(by: list[str], by_dtypes: list[DataType]) -> Schema:
     part_id_dtype = DataType(pl.UInt32())
     return dict(
         zip(
-            [*list(by), next(name_gen), next(name_gen)],
-            [*list(by_dtypes), part_id_dtype, part_id_dtype],
-            strict=False,
+            [*by, next(name_gen), next(name_gen)],
+            [*by_dtypes, part_id_dtype, part_id_dtype],
+            strict=True,
         )
     )
 
@@ -80,7 +80,6 @@ async def _compute_sort_boundaries(
     allgather_id: int,
 ) -> plc.Table:
     """Compute global sort boundaries."""
-    stream = ir_context.get_cuda_stream()
     boundary_ir = Empty(_boundary_schema(by, by_dtypes))
     local_boundaries_df = _get_final_sort_boundaries(
         chunk_to_frame(
@@ -94,7 +93,7 @@ async def _compute_sort_boundaries(
             else empty_table_chunk(
                 boundary_ir,
                 context,
-                stream,
+                ir_context.get_cuda_stream(),
             ),
             boundary_ir,
         ),
@@ -102,12 +101,13 @@ async def _compute_sort_boundaries(
         null_order,
         num_partitions,
     )
+    stream = local_boundaries_df.stream
 
     if comm.nranks > 1:
         allgather = AllGatherManager(context, comm, allgather_id)
         chunk = TableChunk.from_pylibcudf_table(
             local_boundaries_df.table,
-            local_boundaries_df.stream,
+            stream,
             exclusive_view=True,
         )
         allgather.insert(comm.rank, chunk)
@@ -121,7 +121,7 @@ async def _compute_sort_boundaries(
             concat_table,
             list(boundary_ir.schema.keys()),
             list(boundary_ir.schema.values()),
-            stream=local_boundaries_df.stream,
+            stream=stream,
         ),
         column_order,
         null_order,
@@ -135,10 +135,10 @@ async def _compute_sort_boundaries(
                 boundaries_df.table.num_rows(),
                 plc.Scalar.from_py(0, plc.types.SIZE_TYPE, stream=stream),
                 plc.Scalar.from_py(1, plc.types.SIZE_TYPE, stream=stream),
-                stream=boundaries_df.stream,
+                stream=stream,
             ),
             plc.copying.OutOfBoundsPolicy.DONT_CHECK,
-            stream=boundaries_df.stream,
+            stream=stream,
         )
     else:
         return boundaries_df.table
