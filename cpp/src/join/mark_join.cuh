@@ -86,16 +86,6 @@ struct masked_key_fn {
   Hasher _hasher;
 };
 
-template <typename IndexType>
-struct hash_pair_fn {
-  hash_value_type const* _hashes;
-
-  __device__ __forceinline__ auto operator()(size_type i) const noexcept
-  {
-    return cuco::pair{_hashes[i], IndexType{i}};
-  }
-};
-
 template <typename Equal>
 struct masked_comparator_fn {
   masked_comparator_fn(Equal const& d_equal) : _d_equal{d_equal} {}
