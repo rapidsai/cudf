@@ -45,8 +45,7 @@ struct dispatch_topk_fn {
   {
     auto requirements = cuda::execution::require(cuda::execution::determinism::not_guaranteed,
                                                  cuda::execution::output_ordering::unsorted);
-    auto stream_ref   = cuda::stream_ref{stream.value()};
-    auto env          = cuda::std::execution::env{stream_ref, requirements};
+    auto env          = cuda::std::execution::env{cuda::stream_ref{stream.value()}, requirements};
     auto tmp_size     = std::size_t{0};
     auto const size   = input.size();
 
@@ -59,13 +58,13 @@ struct dispatch_topk_fn {
     if (topk_order == order::ASCENDING) {
       CUDF_CUDA_TRY(cub::DeviceTopK::MinPairs(
         nullptr, tmp_size, keys_in, keys_out, vals_in, vals_out, size, k, env));
-      auto tmp = rmm::device_uvector<char>(tmp_size, stream);
+      auto tmp = rmm::device_buffer(tmp_size, stream);
       CUDF_CUDA_TRY(cub::DeviceTopK::MinPairs(
         tmp.data(), tmp_size, keys_in, keys_out, vals_in, vals_out, size, k, env));
     } else {
       CUDF_CUDA_TRY(cub::DeviceTopK::MaxPairs(
         nullptr, tmp_size, keys_in, keys_out, vals_in, vals_out, size, k, env));
-      auto tmp = rmm::device_uvector<char>(tmp_size, stream);
+      auto tmp = rmm::device_buffer(tmp_size, stream);
       CUDF_CUDA_TRY(cub::DeviceTopK::MaxPairs(
         tmp.data(), tmp_size, keys_in, keys_out, vals_in, vals_out, size, k, env));
     }
