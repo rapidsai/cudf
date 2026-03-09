@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
-from cudf_polars.experimental.benchmarks.utils import get_data
+from cudf_polars.experimental.benchmarks.utils import QueryResult, get_data
 
 if TYPE_CHECKING:
     from cudf_polars.experimental.benchmarks.utils import RunConfig
@@ -65,7 +65,7 @@ def duckdb_impl(run_config: RunConfig) -> str:
     """
 
 
-def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
+def polars_impl(run_config: RunConfig) -> QueryResult:
     """Query 48."""
     params = load_parameters(
         int(run_config.scale_factor),
@@ -114,31 +114,22 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     for cond in geo_conditions[1:]:
         geo_filter = geo_filter | cond
 
-    return (
-        store_sales
-        # Join with all required tables
-        .join(store, left_on="ss_store_sk", right_on="s_store_sk")
-        .join(customer_demographics, left_on="ss_cdemo_sk", right_on="cd_demo_sk")
-        .join(customer_address, left_on="ss_addr_sk", right_on="ca_address_sk")
-        .join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
-        # Apply filters
-        .filter(
-            # Year filter
-            (pl.col("d_year") == year)
-            &
-            # Complex demographics OR conditions
-            demo_filter
-            &
-            # Complex geography OR conditions
-            geo_filter
-        )
-        # Aggregate - sum of quantity with null-safe handling
-        .select(
-            [
-                pl.when(pl.col("ss_quantity").count() > 0)
-                .then(pl.col("ss_quantity").sum())
-                .otherwise(None)
-                .alias("sum(ss_quantity)")
-            ]
-        )
+    return QueryResult(
+        frame=(
+            store_sales.join(store, left_on="ss_store_sk", right_on="s_store_sk")
+            .join(customer_demographics, left_on="ss_cdemo_sk", right_on="cd_demo_sk")
+            .join(customer_address, left_on="ss_addr_sk", right_on="ca_address_sk")
+            .join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
+            .filter((pl.col("d_year") == year) & demo_filter & geo_filter)
+            .select(
+                [
+                    pl.when(pl.col("ss_quantity").count() > 0)
+                    .then(pl.col("ss_quantity").sum())
+                    .otherwise(None)
+                    .alias("sum(ss_quantity)")
+                ]
+            )
+        ),
+        sort_by=[],
+        limit=None,
     )
