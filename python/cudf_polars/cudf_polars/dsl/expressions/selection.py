@@ -38,10 +38,8 @@ class Gather(Expr):
         n = values.size
         if indices.size == 0:
             return Column(
-                plc.Column.from_scalar(
-                    plc.Scalar.from_py(None, values.obj.type(), stream=df.stream),
-                    0,
-                    stream=df.stream,
+                plc.column_factories.make_empty_column(
+                    self.dtype.plc_type, stream=df.stream
                 ),
                 dtype=self.dtype,
             )
