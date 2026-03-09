@@ -185,6 +185,16 @@ class PDSDSPolarsQueries(PDSDSQueries):
         ],
         70: [pl.col("total_sum").cast(pl.Decimal(18, 2))],
         71: [pl.col("ext_price").cast(pl.Decimal(18, 2))],
+        78: [
+            pl.col("store_wholesale_cost").cast(pl.Decimal(18, 2)),
+            pl.col("store_sales_price").cast(pl.Decimal(18, 2)),
+        ],
+        79: [
+            pl.col("amt").cast(pl.Decimal(18, 2)),
+            pl.col("profit").cast(pl.Decimal(18, 2)),
+        ],
+        80: [pl.col("sales").cast(pl.Decimal(18, 2))],
+        81: [pl.col("ctr_total_return").cast(pl.Decimal(18, 2))],
     }
     EXPECTED_CASTS: ClassVar[dict] = {
         6: [pl.col("cnt").cast(COUNT_DTYPE)],
@@ -253,6 +263,10 @@ class PDSDSPolarsQueries(PDSDSQueries):
             pl.col("total_cnt").cast(COUNT_DTYPE),
             pl.col("no_promo").cast(COUNT_DTYPE),
             pl.col("promo").cast(COUNT_DTYPE),
+        ],
+        78: [
+            pl.col("store_qty").cast(pl.Int64),
+            pl.col("other_chan_qty").cast(pl.Int64),
         ],
     }
 
