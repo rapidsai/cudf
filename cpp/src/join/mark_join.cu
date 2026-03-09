@@ -152,7 +152,7 @@ CUDF_KERNEL __launch_bounds__(block_size) void mark_retrieve_kernel(
   slot_type empty_sentinel,
   cudf::size_type* __restrict__ output,
   cudf::size_type* global_offset,
-  cudf::size_type num_buckets)
+  cudf::thread_index_type num_buckets)
 {
   auto const block = cg::this_thread_block();
   auto const warp  = cg::tiled_partition<cudf::detail::warp_size>(block);
@@ -239,9 +239,8 @@ CUDF_KERNEL __launch_bounds__(block_size) void mark_retrieve_kernel(
 }
 
 template <int32_t block_size>
-CUDF_KERNEL __launch_bounds__(block_size) void clear_marks_kernel(storage_ref_type storage,
-                                                                  slot_type empty_sentinel,
-                                                                  cudf::size_type num_buckets)
+CUDF_KERNEL __launch_bounds__(block_size) void clear_marks_kernel(
+  storage_ref_type storage, slot_type empty_sentinel, cudf::thread_index_type num_buckets)
 {
   auto const tid    = cudf::detail::grid_1d::global_thread_id<block_size>();
   auto const stride = cudf::detail::grid_1d::grid_stride<block_size>();
@@ -269,7 +268,7 @@ static std::size_t compute_mark_join_capacity(cudf::table_view tbl, double load_
 void mark_join::clear_marks(rmm::cuda_stream_view stream)
 {
   auto const storage_ref = _bucket_storage.ref();
-  auto const num_buckets = static_cast<cudf::size_type>(storage_ref.num_buckets());
+  auto const num_buckets = static_cast<cudf::thread_index_type>(storage_ref.num_buckets());
   if (num_buckets == 0) return;
 
   auto const grid_size = cudf::util::div_rounding_up_unsafe(num_buckets, mark_block_size);
@@ -312,7 +311,7 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> mark_join::mark_probe_and_
   }
 
   auto const storage_ref = _bucket_storage.ref();
-  auto const num_buckets = static_cast<cudf::size_type>(storage_ref.num_buckets());
+  auto const num_buckets = static_cast<cudf::thread_index_type>(storage_ref.num_buckets());
 
   auto const probe_has_nulls = has_nested_nulls(probe);
   rmm::device_buffer probe_bitmask_buffer(0, stream);
