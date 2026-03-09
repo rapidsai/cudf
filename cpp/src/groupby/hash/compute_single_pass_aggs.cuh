@@ -128,7 +128,7 @@ std::pair<rmm::device_uvector<size_type>, bool> compute_single_pass_aggs(
       num_rows, unique_keys, stream, cudf::get_current_device_resource_ref());
     thrust::for_each_n(
       rmm::exec_policy_nosync(stream),
-      cuda::counting_iterator{0},
+      cuda::counting_iterator{cudf::size_type{0}},
       grid_size * GROUPBY_BLOCK_SIZE,
       [key_transform_map      = key_transform_map.begin(),
        global_mapping_indices = global_mapping_indices.begin()] __device__(auto const idx) {

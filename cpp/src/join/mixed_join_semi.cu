@@ -149,7 +149,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
                         rmm::mr::polymorphic_allocator<char>{},
                         {stream.value()}};
 
-  auto iter = cuda::counting_iterator{0};
+  auto iter = cuda::counting_iterator{cudf::size_type{0}};
 
   // skip rows that are null here.
   if ((compare_nulls == null_equality::EQUAL) or (not nullable(build))) {
@@ -196,7 +196,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
   // gather_map_end will be the end of valid data in gather_map
   auto gather_map_end = cudf::detail::copy_if(
     cuda::counting_iterator{size_type{0}},
-    cuda::counting_iterator{size_type{probe.num_rows()}},
+    cuda::counting_iterator{static_cast<size_type>(probe.num_rows())},
     left_table_keep_mask.begin(),
     gather_map->begin(),
     [join_type] __device__(bool keep_row) {

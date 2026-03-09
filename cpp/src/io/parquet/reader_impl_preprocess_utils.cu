@@ -491,7 +491,7 @@ void decode_page_headers(pass_intermediate_data& pass,
                      std::cmp_equal(chunk.h_chunk_info->pages.size(), chunk.num_data_pages),
                    "Encountered invalid sized data page information in the page index");
       auto const num_data_pages = chunk.num_data_pages;
-      std::for_each(cuda::counting_iterator{0},
+      std::for_each(cuda::counting_iterator{int32_t{0}},
                     cuda::counting_iterator{num_data_pages},
                     [&](auto const page_idx) {
                       host_page_locations[curr_page_idx] = data_ptr;

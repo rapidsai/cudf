@@ -71,7 +71,7 @@ rmm::device_uvector<size_type> sorted_dense_rank(column_view input_col,
 
   auto const comparator_helper = [&](auto const device_comparator) {
     thrust::transform(rmm::exec_policy_nosync(stream),
-                      cuda::counting_iterator{0},
+                      cuda::counting_iterator{cudf::size_type{0}},
                       cuda::counting_iterator{input_size},
                       dense_rank_sorted.data(),
                       unique_functor<decltype(sorted_index_order), decltype(device_comparator)>{
@@ -157,7 +157,7 @@ void rank_first(column_view sorted_order_view,
   // stable sort order ranking (no ties)
   thrust::scatter(rmm::exec_policy_nosync(stream),
                   cuda::counting_iterator{size_type{1}},
-                  cuda::counting_iterator{size_type{rank_mutable_view.size() + 1}},
+                  cuda::counting_iterator{static_cast<size_type>(rank_mutable_view.size() + 1)},
                   sorted_order_view.begin<size_type>(),
                   rank_mutable_view.begin<outputType>());
 }

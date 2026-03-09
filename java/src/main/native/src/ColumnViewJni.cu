@@ -63,7 +63,7 @@ namespace {
 __device__ bool list_has_nulls(list_device_view list)
 {
   return thrust::any_of(thrust::seq,
-                        cuda::counting_iterator{0},
+                        cuda::counting_iterator{cudf::size_type{0}},
                         cuda::counting_iterator{list.size()},
                         [&list](auto const idx) { return list.is_null(idx); });
 }

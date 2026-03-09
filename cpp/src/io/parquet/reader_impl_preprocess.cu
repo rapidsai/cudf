@@ -84,7 +84,7 @@ void reader_impl::build_string_dict_indices()
   pass.str_dict_index = cudf::detail::make_zeroed_device_uvector_async<string_index_pair>(
     total_str_dict_indexes, _stream, cudf::get_current_device_resource_ref());
 
-  auto iter = cuda::counting_iterator{0};
+  auto iter = cuda::counting_iterator{std::size_t{0}};
   thrust::for_each(
     rmm::exec_policy_nosync(_stream),
     iter,
@@ -422,7 +422,7 @@ void reader_impl::compute_page_string_offset_indices(size_t skip_rows, size_t nu
 
   thrust::transform(rmm::exec_policy_nosync(_stream),
                     cuda::counting_iterator{size_t{0}},
-                    cuda::counting_iterator{size_t{num_pages}},
+                    cuda::counting_iterator{static_cast<size_t>(num_pages)},
                     d_page_offset_counts.begin(),
                     compute_page_offset_count{subpass.pages, pass.chunks, skip_rows, num_rows});
 
@@ -676,7 +676,7 @@ void reader_impl::generate_list_column_row_counts(is_estimate_row_counts is_esti
     // column chunk (each rowgroup) such that it ends on the real known row count. this is so that
     // as we march through the subpasses, we will find that every column cleanly ends up the
     // expected row count at the row group boundary and our split computations work correctly.
-    auto iter = cuda::counting_iterator{0};
+    auto iter = cuda::counting_iterator{std::size_t{0}};
     thrust::for_each(rmm::exec_policy_nosync(_stream),
                      iter,
                      iter + pass.pages.size(),
@@ -761,7 +761,7 @@ void reader_impl::preprocess_subpass_pages(read_mode mode, size_t chunk_read_lim
                        _stream);
   }
 
-  auto iter = cuda::counting_iterator{0};
+  auto iter = cuda::counting_iterator{std::size_t{0}};
 
   // copy our now-correct row counts  back to the base pages stored in the pass.
   // only need to do this if we are not processing the whole pass in one subpass
@@ -995,15 +995,16 @@ void reader_impl::allocate_columns(read_mode mode, size_t skip_rows, size_t num_
       auto const num_keys_this_iter = std::min<size_t>(num_keys_per_iter, num_keys - key_start);
       thrust::transform(
         rmm::exec_policy_nosync(_stream),
-        cuda::counting_iterator{size_t{key_start}},
-        cuda::counting_iterator{size_t{key_start + num_keys_this_iter}},
+        cuda::counting_iterator{static_cast<size_t>(key_start)},
+        cuda::counting_iterator{static_cast<size_t>(key_start + num_keys_this_iter)},
         size_input.begin(),
         get_page_nesting_size{
           d_cols_info.data(), max_depth, subpass.pages.size(), subpass.pages.device_begin()});
 
       // Manually create a size_t `key_start` compatible counting_transform_iterator.
       auto const reduction_keys = thrust::make_transform_iterator(
-        cuda::counting_iterator{std::size_t{key_start}}, get_reduction_key{subpass.pages.size()});
+        cuda::counting_iterator{static_cast<std::size_t>(key_start)},
+        get_reduction_key{subpass.pages.size()});
 
       // Find the size of each column
       cudf::detail::reduce_by_key(reduction_keys,

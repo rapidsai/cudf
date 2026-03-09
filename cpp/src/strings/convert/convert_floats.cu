@@ -65,7 +65,7 @@ struct dispatch_to_floats_fn {
     auto d_results = output_column.data<FloatType>();
     thrust::transform(rmm::exec_policy_nosync(stream),
                       cuda::counting_iterator{size_type{0}},
-                      cuda::counting_iterator{size_type{strings_column.size()}},
+                      cuda::counting_iterator{static_cast<size_type>(strings_column.size())},
                       d_results,
                       string_to_float_fn<FloatType>{strings_column});
   }
@@ -458,7 +458,7 @@ std::unique_ptr<column> is_float(strings_column_view const& input,
   // check strings for valid float chars
   thrust::transform(rmm::exec_policy_nosync(stream),
                     cuda::counting_iterator{size_type{0}},
-                    cuda::counting_iterator{size_type{input.size()}},
+                    cuda::counting_iterator{static_cast<size_type>(input.size())},
                     d_results,
                     [d_column] __device__(size_type idx) {
                       if (d_column.is_null(idx)) return false;

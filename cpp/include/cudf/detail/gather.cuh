@@ -431,7 +431,7 @@ struct column_gatherer_impl<struct_view> {
     // Gathering needs to operate on the sliced children since they need to take into account the
     // offset of the parent structs column.
     std::vector<cudf::column_view> sliced_children;
-    std::transform(cuda::counting_iterator{0},
+    std::transform(cuda::counting_iterator{cudf::size_type{0}},
                    cuda::counting_iterator{column.num_children()},
                    std::back_inserter(sliced_children),
                    [&stream, structs_view = structs_column_view{column}](auto const idx) {
@@ -514,7 +514,7 @@ void gather_bitmask(table_device_view input,
   constexpr size_type block_size = 256;
   using Selector                 = gather_bitmask_functor<Op, decltype(gather_map_begin)>;
   auto selector                  = Selector{input, masks, gather_map_begin};
-  auto counting_it               = cuda::counting_iterator{0};
+  auto counting_it               = cuda::counting_iterator{cudf::size_type{0}};
   auto kernel =
     valid_if_n_kernel<decltype(counting_it), decltype(counting_it), Selector, block_size>;
 

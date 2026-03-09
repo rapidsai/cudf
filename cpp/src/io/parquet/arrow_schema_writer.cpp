@@ -304,7 +304,7 @@ struct dispatch_to_flatbuf {
 
     // Traverse the struct in DFS manner and process children fields.
     else if constexpr (std::is_same_v<T, cudf::struct_view>) {
-      std::transform(cuda::counting_iterator{0UL},
+      std::transform(cuda::counting_iterator{std::size_t{0}},
                      cuda::counting_iterator{col->children.size()},
                      std::back_inserter(children),
                      [&](auto const idx) {

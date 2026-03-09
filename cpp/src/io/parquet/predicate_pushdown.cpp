@@ -463,7 +463,7 @@ void names_from_expression::visit_operands(
     } else {
       // Map all top-level column indices to their names from the schema tree
       std::for_each(cuda::counting_iterator{int32_t{0}},
-                    cuda::counting_iterator{int32_t{root.children_idx.size()}},
+                    cuda::counting_iterator{static_cast<int32_t>(root.children_idx.size())},
                     [&](auto col_idx) {
                       auto const schema_idx = root.children_idx[col_idx];
                       column_indices_to_names.insert({col_idx, schema_tree[schema_idx].name});

@@ -434,7 +434,7 @@ unique_device_array_t to_arrow_host_stringview(cudf::strings_column_view const& 
   auto const num_longer_strings = thrust::count_if(
     rmm::exec_policy_nosync(stream),
     cuda::counting_iterator{cudf::size_type{0}},
-    cuda::counting_iterator{cudf::size_type{col.size()}},
+    cuda::counting_iterator{static_cast<cudf::size_type>(col.size())},
     [d_offsets] __device__(auto idx) {
       return d_offsets[idx + 1] - d_offsets[idx] > NANOARROW_BINARY_VIEW_INLINE_SIZE;
     });

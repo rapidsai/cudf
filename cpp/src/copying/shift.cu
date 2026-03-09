@@ -51,7 +51,7 @@ std::pair<rmm::device_buffer, size_type> create_null_mask(column_device_view con
       return out_of_bounds(size, src_idx) ? *fill : input.is_valid(src_idx);
     };
   return detail::valid_if(cuda::counting_iterator{size_type{0}},
-                          cuda::counting_iterator{size_type{size}},
+                          cuda::counting_iterator{static_cast<size_type>(size)},
                           func_validity,
                           stream,
                           mr);
@@ -111,17 +111,17 @@ struct shift_functor {
 
     auto const size  = input.size();
     auto index_begin = cuda::counting_iterator{size_type{0}};
-    auto index_end   = cuda::counting_iterator{size_type{size}};
+    auto index_end   = cuda::counting_iterator{static_cast<size_type>(size)};
     auto data        = device_output->data<T>();
 
     // avoid assigning elements we know to be invalid.
     if (not scalar_is_valid) {
       if (std::abs(offset) > size) { return output; }
       if (offset > 0) {
-        index_begin = cuda::counting_iterator{size_type{offset}};
+        index_begin = cuda::counting_iterator{static_cast<size_type>(offset)};
         data        = data + offset;
       } else if (offset < 0) {
-        index_end = cuda::counting_iterator{size_type{size + offset}};
+        index_end = cuda::counting_iterator{static_cast<size_type>(size + offset)};
       }
     }
 

@@ -256,7 +256,7 @@ void tdigest_merge_simple(Func op, MergeFunc merge_op)
 
     // generate separate digests
     std::vector<std::unique_ptr<column>> parts;
-    auto iter = cuda::counting_iterator{0};
+    auto iter = cuda::counting_iterator{int{0}};
     std::transform(iter,
                    iter + split_values.size(),
                    std::back_inserter(parts),

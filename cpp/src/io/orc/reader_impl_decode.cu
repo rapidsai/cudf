@@ -294,7 +294,7 @@ void update_null_mask(cudf::detail::hostdevice_2dvector<column_desc>& chunks,
         // Copy indexes at which the parent has valid value.
         cudf::detail::copy_if_async(
           cuda::counting_iterator{size_type{0}},
-          cuda::counting_iterator{size_type{parent_mask_len}},
+          cuda::counting_iterator{static_cast<size_type>(parent_mask_len)},
           dst_idx.begin(),
           [parent_valid_map_base] __device__(auto idx) {
             return bit_is_set(parent_valid_map_base, idx);
@@ -308,8 +308,8 @@ void update_null_mask(cudf::detail::hostdevice_2dvector<column_desc>& chunks,
         // Copy child valid bits from child column to valid indexes, this will merge both child
         // and parent null masks
         thrust::for_each(rmm::exec_policy_nosync(stream),
-                         cuda::counting_iterator{0},
-                         cuda::counting_iterator{0} + dst_idx.size(),
+                         cuda::counting_iterator{std::size_t{0}},
+                         cuda::counting_iterator{std::size_t{0}} + dst_idx.size(),
                          [child_valid_map_base, dst_idx_ptr, merged_mask] __device__(auto idx) {
                            if (bit_is_set(child_valid_map_base, idx)) {
                              cudf::set_bit(merged_mask, dst_idx_ptr[idx]);
@@ -457,7 +457,7 @@ void scan_null_counts(cudf::detail::hostdevice_2dvector<column_desc> const& chun
                      thrust::transform(
                        thrust::seq,
                        cuda::counting_iterator{std::size_t{0ul}},
-                       cuda::counting_iterator{std::size_t{num_stripes}},
+                       cuda::counting_iterator{static_cast<std::size_t>(num_stripes)},
                        psums,
                        [&](auto stripe_idx) { return chunks[stripe_idx][col_idx].null_count; });
                      thrust::inclusive_scan(thrust::seq, psums, psums + num_stripes, psums);
@@ -629,7 +629,7 @@ std::vector<range> find_table_splits(table_view const& input,
 
   thrust::transform(
     rmm::exec_policy_nosync(stream),
-    cuda::counting_iterator{0},
+    cuda::counting_iterator{std::size_t{0}},
     cuda::counting_iterator{d_segmented_sizes->size()},
     segmented_sizes.d_begin(),
     [segment_length,

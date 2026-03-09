@@ -90,7 +90,7 @@ std::unique_ptr<cudf::column> clamp_string_column(strings_column_view const& inp
   rmm::device_uvector<cudf::strings::detail::string_index_pair> indices(input.size(), stream);
   thrust::transform(rmm::exec_policy_nosync(stream),
                     cuda::counting_iterator{size_type{0}},
-                    cuda::counting_iterator{size_type{input.size()}},
+                    cuda::counting_iterator{static_cast<size_type>(input.size())},
                     indices.begin(),
                     fn);
 
@@ -168,7 +168,7 @@ std::unique_ptr<cudf::column> clamp_dictionary_column(dictionary_column_view con
     *d_input, lo_itr, lo_index_itr, hi_itr, hi_index_itr};
   thrust::transform(rmm::exec_policy_nosync(stream),
                     cuda::counting_iterator{size_type{0}},
-                    cuda::counting_iterator{size_type{input.size()}},
+                    cuda::counting_iterator{static_cast<size_type>(input.size())},
                     indices_itr,
                     fn);
 

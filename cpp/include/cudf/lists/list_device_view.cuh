@@ -183,7 +183,7 @@ class list_device_view {
   template <typename T>
   [[nodiscard]] __device__ inline const_pair_iterator<T> pair_end() const
   {
-    return const_pair_iterator<T>{cuda::counting_iterator{size_type{size()}},
+    return const_pair_iterator<T>{cuda::counting_iterator{static_cast<size_type>(size())},
                                   pair_accessor<T>{*this}};
   }
 
@@ -222,7 +222,7 @@ class list_device_view {
   template <typename T>
   [[nodiscard]] __device__ inline const_pair_rep_iterator<T> pair_rep_end() const
   {
-    return const_pair_rep_iterator<T>{cuda::counting_iterator{size_type{size()}},
+    return const_pair_rep_iterator<T>{cuda::counting_iterator{static_cast<size_type>(size())},
                                       pair_rep_accessor<T>{*this}};
   }
 

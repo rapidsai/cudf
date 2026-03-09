@@ -788,7 +788,7 @@ arrow_schema_data_types aggregate_reader_metadata::collect_arrow_schema() const
       if (field_children != nullptr) {
         auto schema_children = std::vector<arrow_schema_data_types>(field->children()->size());
 
-        if (not std::all_of(cuda::counting_iterator{0},
+        if (not std::all_of(cuda::counting_iterator{int32_t{0}},
                             cuda::counting_iterator{static_cast<int32_t>(field_children->size())},
                             [&](auto const& idx) {
                               return walk_field((*field_children)[idx], schema_children[idx]);
@@ -876,7 +876,7 @@ arrow_schema_data_types aggregate_reader_metadata::collect_arrow_schema() const
     schema.children = std::vector<arrow_schema_data_types>(fields->size());
 
     if (not std::all_of(
-          cuda::counting_iterator{0},
+          cuda::counting_iterator{int32_t{0}},
           cuda::counting_iterator{static_cast<int32_t>(fields->size())},
           [&](auto const& idx) { return walk_field((*fields)[idx], schema.children[idx]); })) {
       return {};
@@ -1784,7 +1784,7 @@ aggregate_reader_metadata::select_columns(
                      "column in the selected path",
                      std::out_of_range);
 
-        std::for_each(cuda::counting_iterator{0},
+        std::for_each(cuda::counting_iterator{int32_t{0}},
                       cuda::counting_iterator{src_schema_elem.num_children},
                       [&](auto const child_idx) {
                         map_column(nullptr,

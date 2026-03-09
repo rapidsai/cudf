@@ -111,7 +111,7 @@ std::unique_ptr<table> repeat(table_view const& input_table,
   thrust::upper_bound(rmm::exec_policy_nosync(stream),
                       offsets.begin(),
                       offsets.end(),
-                      cuda::counting_iterator{0},
+                      cuda::counting_iterator{cudf::size_type{0}},
                       cuda::counting_iterator{output_size},
                       indices.begin());
 

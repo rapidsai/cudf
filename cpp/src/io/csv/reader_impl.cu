@@ -788,13 +788,13 @@ table_with_metadata read_csv(cudf::io::datasource* source,
     std::vector<size_t> col_loop_order(column_names.size());
     auto unnamed_it = std::copy_if(
       cuda::counting_iterator{size_t{0}},
-      cuda::counting_iterator{size_t{column_names.size()}},
+      cuda::counting_iterator{static_cast<size_t>(column_names.size())},
       col_loop_order.begin(),
       [&column_names](auto col_idx) -> bool { return not column_names[col_idx].empty(); });
 
     // Rename empty column names to "Unnamed: col_index"
     std::copy_if(cuda::counting_iterator{size_t{0}},
-                 cuda::counting_iterator{size_t{column_names.size()}},
+                 cuda::counting_iterator{static_cast<size_t>(column_names.size())},
                  unnamed_it,
                  [&column_names](auto col_idx) -> bool {
                    auto is_empty = column_names[col_idx].empty();

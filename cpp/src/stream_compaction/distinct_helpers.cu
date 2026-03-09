@@ -41,7 +41,7 @@ rmm::device_uvector<size_type> reduce_by_row(distinct_set_t<RowEqual>& set,
   auto set_ref = set.ref(cuco::op::insert_and_find);
 
   thrust::for_each(rmm::exec_policy_nosync(stream),
-                   cuda::counting_iterator{0},
+                   cuda::counting_iterator{cudf::size_type{0}},
                    cuda::counting_iterator{num_rows},
                    [set_ref, keep, reduction_results = reduction_results.begin()] __device__(
                      size_type const idx) mutable {
@@ -67,7 +67,7 @@ rmm::device_uvector<size_type> reduce_by_row(distinct_set_t<RowEqual>& set,
       // Thus, we only output index of the rows in the groups having group size of `1`.
       return cudf::detail::copy_if(
         cuda::counting_iterator{size_type{0}},
-        cuda::counting_iterator{size_type{num_rows}},
+        cuda::counting_iterator{static_cast<size_type>(num_rows)},
         output_indices.begin(),
         cuda::proclaim_return_type<bool>(
           [reduction_results = reduction_results.begin()] __device__(auto const idx) {

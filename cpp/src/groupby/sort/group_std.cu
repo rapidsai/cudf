@@ -128,7 +128,7 @@ struct var_functor {
     auto d_null_count = null_count.data();
     thrust::for_each_n(
       rmm::exec_policy_nosync(stream),
-      cuda::counting_iterator{0},
+      cuda::counting_iterator{cudf::size_type{0}},
       group_sizes.size(),
       [d_result = *result_view, d_group_sizes, ddof, d_null_count] __device__(size_type i) {
         size_type group_size = d_group_sizes[i];

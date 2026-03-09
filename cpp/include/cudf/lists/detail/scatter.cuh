@@ -185,7 +185,7 @@ std::unique_ptr<column> scatter(column_view const& source,
     list_vector_from_column(unbound_list_view::label_type::TARGET,
                             cudf::detail::lists_column_device_view(*target_device_view),
                             cuda::counting_iterator{size_type{0}},
-                            cuda::counting_iterator{size_type{num_rows}},
+                            cuda::counting_iterator{static_cast<size_type>(num_rows)},
                             stream,
                             mr);
 
@@ -261,7 +261,7 @@ std::unique_ptr<column> scatter(scalar const& slr,
     list_vector_from_column(unbound_list_view::label_type::TARGET,
                             cudf::detail::lists_column_device_view(*target_device_view),
                             cuda::counting_iterator{size_type{0}},
-                            cuda::counting_iterator{size_type{num_rows}},
+                            cuda::counting_iterator{static_cast<size_type>(num_rows)},
                             stream,
                             mr);
 

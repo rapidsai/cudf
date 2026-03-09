@@ -82,7 +82,7 @@ std::string base64_encode(std::string_view string_to_encode)
   // altered: modify base64 encoder loop using STL and Thrust.
   // TODO: Port this loop to thrust cooperative groups if needed for too-wide tables.
   std::for_each(
-    cuda::counting_iterator{0}, cuda::counting_iterator{num_iterations}, [&](auto&& iter) {
+    cuda::counting_iterator{int32_t{0}}, cuda::counting_iterator{num_iterations}, [&](auto&& iter) {
       auto idx = iter * 3;
 
       encoded.push_back(base64_chars[(string_to_encode[idx] & 0xfc) >> 2]);
@@ -154,7 +154,9 @@ std::string base64_decode(std::string_view encoded_string)
   // altered: modify base64 encoder loop to number of iterations using STL and Thrust.
   // TODO: Port this loop to thrust cooperative groups if needed for too-wide tables.
   if (not std::all_of(
-        cuda::counting_iterator{0}, cuda::counting_iterator{num_iterations}, [&](auto&& iter) {
+        cuda::counting_iterator{int32_t{0}},
+        cuda::counting_iterator{num_iterations},
+        [&](auto&& iter) {
           int32_t idx                  = iter * 4;
           size_t current_char_position = 0;
           size_t char1_position        = 0;

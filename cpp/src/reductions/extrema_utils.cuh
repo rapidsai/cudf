@@ -86,7 +86,7 @@ class arg_minmax_dispatcher {
                                   reduction::detail::op::max>;
     auto const binop_generator =
       reduction::detail::arg_minmax_binop_generator::create<Op>(input, stream);
-    return find_extremum_idx(cuda::counting_iterator{0},
+    return find_extremum_idx(cuda::counting_iterator{cudf::size_type{0}},
                              input.size(),
                              stream,
                              noinline_adapter_fn{binop_generator.less()});
@@ -105,8 +105,10 @@ class arg_minmax_dispatcher {
       table_view{{input}}, {}, null_orders, stream};
     auto d_comp =
       comparator.less<false /* has_nested_columns */>(nullate::DYNAMIC{input.has_nulls()});
-    return find_extremum_idx(
-      cuda::counting_iterator{0}, input.size(), stream, noinline_adapter_fn{std::move(d_comp)});
+    return find_extremum_idx(cuda::counting_iterator{cudf::size_type{0}},
+                             input.size(),
+                             stream,
+                             noinline_adapter_fn{std::move(d_comp)});
   }
 
   template <typename ElementType>

@@ -456,8 +456,8 @@ std::pair<column_view, temporary_nullable_data> push_down_nulls_no_sanitize(
                        std::vector<column_view>{child.child_begin(), child.child_end()});
   };
 
-  auto const child_begin =
-    thrust::make_transform_iterator(cuda::counting_iterator{0}, child_with_new_mask);
+  auto const child_begin = thrust::make_transform_iterator(
+    cuda::counting_iterator{cudf::size_type{0}}, child_with_new_mask);
   auto const child_end = child_begin + structs_view.num_children();
   auto ret_children    = std::vector<column_view>{};
 

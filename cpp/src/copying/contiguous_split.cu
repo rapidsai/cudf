@@ -670,7 +670,7 @@ std::pair<src_buf_info*, size_type> buf_info_functor::operator()<cudf::struct_vi
   std::vector<column_view> sliced_children;
   sliced_children.reserve(scv.num_children());
   std::transform(
-    cuda::counting_iterator{0},
+    cuda::counting_iterator{cudf::size_type{0}},
     cuda::counting_iterator{scv.num_children()},
     std::back_inserter(sliced_children),
     [&scv, &stream](size_type child_index) { return scv.get_sliced_child(child_index, stream); });
@@ -1263,7 +1263,7 @@ std::unique_ptr<packed_partition_buf_size_and_dst_buf_info> compute_splits(
   thrust::transform(
     rmm::exec_policy_nosync(stream, temp_mr),
     cuda::counting_iterator{std::size_t{0}},
-    cuda::counting_iterator{std::size_t{num_bufs}},
+    cuda::counting_iterator{static_cast<std::size_t>(num_bufs)},
     d_dst_buf_info,
     cuda::proclaim_return_type<dst_buf_info>([d_src_buf_info,
                                               offset_stack_partition_size,
@@ -1524,7 +1524,7 @@ std::unique_ptr<chunk_iteration_state> chunk_iteration_state::create(
 
   auto out_to_in_index = out_to_in_index_function{d_batch_offsets.begin(), num_bufs};
 
-  auto const iter = cuda::counting_iterator{0};
+  auto const iter = cuda::counting_iterator{cudf::size_type{0}};
 
   // load up the batches as d_dst_buf_info
   rmm::device_uvector<dst_buf_info> d_batched_dst_buf_info(num_batches, stream, temp_mr);
@@ -2045,7 +2045,7 @@ struct contiguous_split_state {
     // build the empty results
     std::vector<packed_table> result;
     result.reserve(num_partitions);
-    auto const iter = cuda::counting_iterator{0};
+    auto const iter = cuda::counting_iterator{std::size_t{0}};
     std::transform(iter,
                    iter + num_partitions,
                    std::back_inserter(result),

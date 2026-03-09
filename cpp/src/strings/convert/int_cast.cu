@@ -215,7 +215,7 @@ std::optional<cudf::data_type> integer_cast_type(strings_column_view const& inpu
   auto bits_size =
     thrust::transform_reduce(rmm::exec_policy_nosync(stream),
                              cuda::counting_iterator{size_type{0}},
-                             cuda::counting_iterator{size_type{input.size()}},
+                             cuda::counting_iterator{static_cast<size_type>(input.size())},
                              cuda::proclaim_return_type<size_type>(
                                [d_strings = *d_strings] __device__(size_type idx) -> size_type {
                                  if (d_strings.is_null(idx)) { return 0; }

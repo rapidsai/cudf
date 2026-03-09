@@ -237,12 +237,12 @@ wordpiece_vocabulary::wordpiece_vocabulary(cudf::strings_column_view const& inpu
 
   // get the indices of all the ## prefixed entries
   auto sub_map_indices = rmm::device_uvector<cudf::size_type>(vocabulary->size(), stream);
-  auto const end =
-    cudf::detail::copy_if(zero_itr,
-                          cuda::counting_iterator{cudf::size_type{sub_map_indices.size()}},
-                          sub_map_indices.begin(),
-                          copy_pieces_fn{*d_vocabulary},
-                          stream);
+  auto const end       = cudf::detail::copy_if(
+    zero_itr,
+    cuda::counting_iterator{static_cast<cudf::size_type>(sub_map_indices.size())},
+    sub_map_indices.begin(),
+    copy_pieces_fn{*d_vocabulary},
+    stream);
   sub_map_indices.resize(cuda::std::distance(sub_map_indices.begin(), end), stream);
 
   // build a 2nd map with just the ## prefixed items
@@ -513,7 +513,7 @@ rmm::device_uvector<cudf::size_type> compute_all_tokens(
   // beginning of a word is a non-space preceded by a space
   auto edges_end = cudf::detail::copy_if(
     cuda::counting_iterator{int64_t{0}},
-    cuda::counting_iterator{int64_t{chars_size}},
+    cuda::counting_iterator{static_cast<int64_t>(chars_size)},
     d_edges.begin(),
     [d_input_chars] __device__(auto idx) {
       if (idx == 0) { return d_input_chars[idx] == ' '; }
@@ -765,7 +765,7 @@ rmm::device_uvector<cudf::size_type> compute_some_tokens(
   // compute max word counts for each row
   thrust::transform(rmm::exec_policy_nosync(stream),
                     cuda::counting_iterator{cudf::size_type{0}},
-                    cuda::counting_iterator{cudf::size_type{input.size()}},
+                    cuda::counting_iterator{static_cast<cudf::size_type>(input.size())},
                     max_word_offsets.begin(),
                     cuda::proclaim_return_type<cudf::size_type>(
                       [d_strings = *d_strings, max_words_per_row] __device__(auto idx) {

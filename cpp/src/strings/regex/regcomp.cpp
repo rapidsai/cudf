@@ -367,7 +367,7 @@ class regex_parser {
     }
 
     // transform pairs of literals to ranges
-    auto const counter = cuda::counting_iterator{0};
+    auto const counter = cuda::counting_iterator{std::size_t{0}};
     std::transform(
       counter, counter + (literals.size() / 2), std::back_inserter(ranges), [&literals](auto idx) {
         return reclass_range{literals[idx * 2], literals[idx * 2 + 1]};

@@ -139,7 +139,7 @@ std::pair<std::unique_ptr<table>, rmm::device_uvector<size_type>> compute_aggs_s
 
   thrust::for_each_n(
     rmm::exec_policy_nosync(stream),
-    cuda::counting_iterator{0},
+    cuda::counting_iterator{cudf::size_type{0}},
     num_rows,
     compute_single_pass_aggs_sparse_output_fn{key_set.ref(cuco::op::insert_and_find),
                                               row_bitmask,

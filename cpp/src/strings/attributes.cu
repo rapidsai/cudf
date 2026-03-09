@@ -82,7 +82,7 @@ std::unique_ptr<column> counts_fn(strings_column_view const& strings,
   // fill in the lengths
   thrust::transform(rmm::exec_policy_nosync(stream),
                     cuda::counting_iterator{cudf::size_type{0}},
-                    cuda::counting_iterator{cudf::size_type{strings.size()}},
+                    cuda::counting_iterator{static_cast<cudf::size_type>(strings.size())},
                     d_lengths,
                     cuda::proclaim_return_type<int32_t>([d_strings, ufn] __device__(size_type idx) {
                       return d_strings.is_null(idx)
@@ -221,7 +221,7 @@ std::unique_ptr<column> code_points(strings_column_view const& input,
   thrust::transform_inclusive_scan(
     rmm::exec_policy_nosync(stream),
     cuda::counting_iterator{size_type{0}},
-    cuda::counting_iterator{size_type{input.size()}},
+    cuda::counting_iterator{static_cast<size_type>(input.size())},
     offsets.begin() + 1,
     cuda::proclaim_return_type<size_type>([d_column] __device__(size_type idx) {
       size_type length = 0;

@@ -298,7 +298,7 @@ std::unique_ptr<cudf::column> edit_distance(cudf::strings_column_view const& inp
   rmm::device_uvector<std::ptrdiff_t> offsets(input.size() + 1, stream);
   thrust::transform(rmm::exec_policy_nosync(stream),
                     cuda::counting_iterator{cudf::size_type{0}},
-                    cuda::counting_iterator{cudf::size_type{input.size()}},
+                    cuda::counting_iterator{static_cast<cudf::size_type>(input.size())},
                     offsets.begin(),
                     calculate_compute_buffer_fn{*d_strings, *d_targets});
 

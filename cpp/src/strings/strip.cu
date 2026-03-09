@@ -64,7 +64,7 @@ std::unique_ptr<column> strip(strings_column_view const& input,
   auto result = rmm::device_uvector<string_index_pair>(input.size(), stream);
   thrust::transform(rmm::exec_policy_nosync(stream),
                     cuda::counting_iterator{size_type{0}},
-                    cuda::counting_iterator{size_type{input.size()}},
+                    cuda::counting_iterator{static_cast<size_type>(input.size())},
                     result.begin(),
                     strip_transform_fn{*d_column, side, d_to_strip});
 

@@ -167,7 +167,7 @@ rmm::device_uvector<size_type> compute_key_transform_map(
   // unique keys). Only these extracted unique keys are mapped.
   rmm::device_uvector<size_type> key_transform_map(num_total_keys, stream, mr);
   thrust::scatter(rmm::exec_policy_nosync(stream),
-                  cuda::counting_iterator{0},
+                  cuda::counting_iterator{cudf::size_type{0}},
                   cuda::counting_iterator{static_cast<size_type>(unique_key_indices.size())},
                   unique_key_indices.begin(),
                   key_transform_map.begin());

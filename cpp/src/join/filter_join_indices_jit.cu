@@ -282,7 +282,7 @@ apply_join_semantics(cudf::table_view const& left,
         return is_unmatched;
       };
       cudf::detail::copy_if(cuda::counting_iterator{size_t{0}},
-                            cuda::counting_iterator{size_t{left.num_rows()}},
+                            cuda::counting_iterator{static_cast<size_t>(left.num_rows())},
                             filtered_left_indices->begin() + num_valid,
                             is_unmatched_idx,
                             stream);
@@ -300,7 +300,7 @@ apply_join_semantics(cudf::table_view const& left,
     };
 
     auto const failed_matched_count =
-      cudf::detail::count_if(cuda::counting_iterator{0},
+      cudf::detail::count_if(cuda::counting_iterator{cudf::size_type{0}},
                              cuda::counting_iterator{static_cast<size_type>(left_indices.size())},
                              is_failed_matched_pair,
                              stream);
@@ -311,7 +311,7 @@ apply_join_semantics(cudf::table_view const& left,
     auto [filtered_left_indices, filtered_right_indices] = make_result_vectors(output_size);
 
     thrust::transform(rmm::exec_policy_nosync(stream),
-                      cuda::counting_iterator{0},
+                      cuda::counting_iterator{cudf::size_type{0}},
                       cuda::counting_iterator{static_cast<size_type>(left_indices.size())},
                       thrust::make_zip_iterator(cuda::std::tuple{filtered_left_indices->begin(),
                                                                  filtered_right_indices->begin()}),
@@ -335,7 +335,7 @@ apply_join_semantics(cudf::table_view const& left,
         });
       cudf::detail::copy_if(failed_match_iter,
                             failed_match_iter + left_indices.size(),
-                            cuda::counting_iterator{0},
+                            cuda::counting_iterator{cudf::size_type{0}},
                             secondary_iter,
                             is_failed_matched_pair,
                             stream);

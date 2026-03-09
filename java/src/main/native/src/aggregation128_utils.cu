@@ -86,7 +86,7 @@ std::unique_ptr<cudf::column> extract_chunk32(cudf::column_view const& in_col,
 
   // Build an iterator for every fourth 32-bit value, i.e.: one "chunk" of a __int128_t value
   thrust::transform_iterator transform_iter{
-    cuda::counting_iterator{0},
+    cuda::counting_iterator{cudf::size_type{0}},
     cuda::proclaim_return_type<cudf::size_type>([] __device__(auto i) { return i * 4; })};
   thrust::permutation_iterator stride_iter{in_begin + chunk_idx, transform_iter};
 
@@ -119,7 +119,7 @@ std::unique_ptr<cudf::table> assemble128_from_sum(cudf::table_view const& chunks
   auto assembled_view = columns[1]->mutable_view();
   thrust::transform(rmm::exec_policy_nosync(stream),
                     cuda::counting_iterator{cudf::size_type{0}},
-                    cuda::counting_iterator{cudf::size_type{num_rows}},
+                    cuda::counting_iterator{static_cast<cudf::size_type>(num_rows)},
                     assembled_view.begin<__int128_t>(),
                     chunk_assembler(overflows_view.begin<bool>(),
                                     chunks0.begin<uint64_t>(),

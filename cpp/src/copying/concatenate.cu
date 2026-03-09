@@ -414,7 +414,7 @@ void traverse_children::operator()<cudf::struct_view>(host_span<column_view cons
                                                       rmm::cuda_stream_view stream)
 {
   // march each child
-  auto child_iter         = cuda::counting_iterator{0};
+  auto child_iter         = cuda::counting_iterator{cudf::size_type{0}};
   auto const num_children = cols.front().num_children();
   std::vector<column_view> nth_children;
   nth_children.reserve(cols.size());

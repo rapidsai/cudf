@@ -51,7 +51,7 @@ std::unique_ptr<cudf::column> token_count_fn(cudf::size_type strings_count,
   // add the counts to the column
   thrust::transform(rmm::exec_policy_nosync(stream),
                     cuda::counting_iterator{cudf::size_type{0}},
-                    cuda::counting_iterator{cudf::size_type{strings_count}},
+                    cuda::counting_iterator{static_cast<cudf::size_type>(strings_count)},
                     d_token_counts,
                     tokenizer);
   return token_counts;
@@ -204,7 +204,7 @@ std::unique_ptr<cudf::column> character_tokenize(cudf::strings_column_view const
   // offsets are at the beginning byte of each character
   cudf::detail::copy_if_async(
     cuda::counting_iterator{int64_t{0}},
-    cuda::counting_iterator{int64_t{chars_bytes + 1}},
+    cuda::counting_iterator{static_cast<int64_t>(chars_bytes + 1)},
     d_new_offsets,
     [d_chars, chars_bytes] __device__(auto idx) {
       // this will also set the final value to the size chars_bytes

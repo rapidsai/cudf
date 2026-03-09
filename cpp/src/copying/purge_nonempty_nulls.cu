@@ -85,7 +85,7 @@ std::unique_ptr<column> purge_nonempty_nulls(column_view const& input,
 
   // Implement via identity gather.
   auto gathered_table = cudf::detail::gather(table_view{{input}},
-                                             cuda::counting_iterator{0},
+                                             cuda::counting_iterator{cudf::size_type{0}},
                                              cuda::counting_iterator{input.size()},
                                              out_of_bounds_policy::DONT_CHECK,
                                              stream,

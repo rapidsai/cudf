@@ -92,7 +92,7 @@ struct dispatch_hex_to_integers_fn {
     auto d_results = output_column.data<IntegerType>();
     thrust::transform(rmm::exec_policy_nosync(stream),
                       cuda::counting_iterator{size_type{0}},
-                      cuda::counting_iterator{size_type{strings_column.size()}},
+                      cuda::counting_iterator{static_cast<size_type>(strings_column.size())},
                       d_results,
                       hex_to_integer_fn<IntegerType>{strings_column});
   }
@@ -232,7 +232,7 @@ std::unique_ptr<column> is_hex(strings_column_view const& strings,
   auto d_results = results->mutable_view().data<bool>();
   thrust::transform(rmm::exec_policy_nosync(stream),
                     cuda::counting_iterator{size_type{0}},
-                    cuda::counting_iterator{size_type{strings.size()}},
+                    cuda::counting_iterator{static_cast<size_type>(strings.size())},
                     d_results,
                     [d_column] __device__(size_type idx) {
                       if (d_column.is_null(idx)) return false;

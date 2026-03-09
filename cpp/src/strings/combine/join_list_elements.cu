@@ -201,7 +201,7 @@ std::unique_ptr<column> join_list_elements(lists_column_view const& lists_string
   auto [offsets_column, chars] = make_strings_children(comp_fn, num_rows, stream, mr);
   auto [null_mask, null_count] =
     cudf::detail::valid_if(cuda::counting_iterator{size_type{0}},
-                           cuda::counting_iterator{size_type{num_rows}},
+                           cuda::counting_iterator{static_cast<size_type>(num_rows)},
                            validities_fn{comp_fn},
                            stream,
                            mr);
@@ -276,7 +276,7 @@ std::unique_ptr<column> join_list_elements(lists_column_view const& lists_string
   auto [offsets_column, chars] = make_strings_children(comp_fn, num_rows, stream, mr);
   auto [null_mask, null_count] =
     cudf::detail::valid_if(cuda::counting_iterator{size_type{0}},
-                           cuda::counting_iterator{size_type{num_rows}},
+                           cuda::counting_iterator{static_cast<size_type>(num_rows)},
                            validities_fn{comp_fn},
                            stream,
                            mr);

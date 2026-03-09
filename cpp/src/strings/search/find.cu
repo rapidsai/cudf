@@ -179,7 +179,7 @@ void find_utility(strings_column_view const& input,
     // string-per-thread function
     thrust::transform(rmm::exec_policy_nosync(stream),
                       cuda::counting_iterator{size_type{0}},
-                      cuda::counting_iterator{size_type{input.size()}},
+                      cuda::counting_iterator{static_cast<size_type>(input.size())},
                       d_results,
                       finder_fn<TargetIterator, forward>{*d_strings, target_itr, start, stop});
   }
@@ -215,7 +215,7 @@ std::unique_ptr<column> find_fn(strings_column_view const& input,
     auto d_results = results->mutable_view().data<size_type>();
     thrust::transform(rmm::exec_policy_nosync(stream),
                       cuda::counting_iterator{size_type{0}},
-                      cuda::counting_iterator{size_type{input.size()}},
+                      cuda::counting_iterator{static_cast<size_type>(input.size())},
                       d_results,
                       empty_target_fn<forward>{*d_strings, start, stop});
     return results;
@@ -448,7 +448,7 @@ std::unique_ptr<column> contains_fn(strings_column_view const& strings,
   // set the bool values by evaluating the passed function
   thrust::transform(rmm::exec_policy_nosync(stream),
                     cuda::counting_iterator{size_type{0}},
-                    cuda::counting_iterator{size_type{strings_count}},
+                    cuda::counting_iterator{static_cast<size_type>(strings_count)},
                     d_results,
                     [d_strings, pfn, d_target] __device__(size_type idx) {
                       return !d_strings.is_null(idx) &&
@@ -502,7 +502,7 @@ std::unique_ptr<column> contains_fn(strings_column_view const& strings,
   thrust::transform(
     rmm::exec_policy_nosync(stream),
     cuda::counting_iterator{size_type{0}},
-    cuda::counting_iterator{size_type{strings.size()}},
+    cuda::counting_iterator{static_cast<size_type>(strings.size())},
     d_results,
     [d_strings, pfn, d_targets] __device__(size_type idx) {
       // empty target string returns true

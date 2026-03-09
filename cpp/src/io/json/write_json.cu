@@ -301,13 +301,13 @@ std::unique_ptr<column> struct_to_strings(table_view const& strings_columns,
     // scatter row_prefix, row_suffix, column_name:, value, value_separator as string_views
     thrust::for_each(rmm::exec_policy_nosync(stream),
                      cuda::counting_iterator{size_type{0}},
-                     cuda::counting_iterator{size_type{total_rows}},
+                     cuda::counting_iterator{static_cast<size_type>(total_rows)},
                      scatter_fn);
   } else {
     thrust::for_each(
       rmm::exec_policy_nosync(stream),
       cuda::counting_iterator{size_type{0}},
-      cuda::counting_iterator{size_type{num_rows}},
+      cuda::counting_iterator{static_cast<size_type>(num_rows)},
       [d_strviews = d_strviews.begin(), row_prefix, row_suffix, num_strviews_per_row] __device__(
         auto idx) {
         auto const this_index                             = idx * num_strviews_per_row;
@@ -334,7 +334,7 @@ std::unique_ptr<column> struct_to_strings(table_view const& strings_columns,
                                   cuda::std::logical_or<bool>{});
     thrust::for_each(rmm::exec_policy_nosync(stream),
                      cuda::counting_iterator{size_type{0}},
-                     cuda::counting_iterator{size_type{total_rows}},
+                     cuda::counting_iterator{static_cast<size_type>(total_rows)},
                      [write_separator = d_str_separator.begin(),
                       d_strviews      = d_strviews.begin(),
                       value_separator,
@@ -477,7 +477,7 @@ std::unique_ptr<column> join_list_of_strings(lists_column_view const& lists_stri
   auto col_device_view = cudf::column_device_view::create(lists_strings.parent(), stream);
   thrust::for_each(rmm::exec_policy_nosync(stream),
                    cuda::counting_iterator{size_type{0}},
-                   cuda::counting_iterator{size_type{num_lists}},
+                   cuda::counting_iterator{static_cast<size_type>(num_lists)},
                    [col = *col_device_view,
                     list_prefix,
                     list_suffix,
@@ -499,7 +499,7 @@ std::unique_ptr<column> join_list_of_strings(lists_column_view const& lists_stri
   auto d_strings_children = cudf::column_device_view::create(strings_children, stream);
   thrust::for_each(rmm::exec_policy_nosync(stream),
                    cuda::counting_iterator{size_type{0}},
-                   cuda::counting_iterator{size_type{num_strings}},
+                   cuda::counting_iterator{static_cast<size_type>(num_strings)},
                    scatter_fn{*col_device_view,
                               d_strview_offsets.data(),
                               d_strviews.data(),
@@ -877,7 +877,7 @@ void write_json_uncompressed(data_sink* out_sink,
     } else {
       std::vector<column_name_info> names;
       // generate strings 0 to table.num_columns()
-      std::transform(cuda::counting_iterator{0},
+      std::transform(cuda::counting_iterator{cudf::size_type{0}},
                      cuda::counting_iterator{table.num_columns()},
                      std::back_inserter(names),
                      [](auto i) { return column_name_info{std::to_string(i)}; });

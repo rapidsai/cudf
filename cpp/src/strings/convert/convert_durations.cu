@@ -651,7 +651,7 @@ struct dispatch_to_durations_fn {
     parse_duration<T> pfn{d_strings, d_items, compiler.items_count()};
     thrust::transform(rmm::exec_policy_nosync(stream),
                       cuda::counting_iterator{size_type{0}},
-                      cuda::counting_iterator{size_type{results_view.size()}},
+                      cuda::counting_iterator{static_cast<size_type>(results_view.size())},
                       d_results,
                       pfn);
   }

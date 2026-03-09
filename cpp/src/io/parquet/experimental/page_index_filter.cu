@@ -101,16 +101,17 @@ struct page_stats_caster : public stats_caster_base {
       // Set all bits in output nullmask to valid
       output_nullmask = cudf::create_null_mask(total_rows, mask_state::ALL_VALID, stream, mr);
       // For each input page, invalidate the null mask for corresponding rows if needed.
-      std::for_each(
-        cuda::counting_iterator{0}, cuda::counting_iterator{total_pages}, [&](auto const page_idx) {
-          if (not bit_is_set(page_nullmask, page_idx)) {
-            cudf::set_null_mask(static_cast<bitmask_type*>(output_nullmask.data()),
-                                page_row_offsets[page_idx],
-                                page_row_offsets[page_idx + 1],
-                                false,
-                                stream);
-          }
-        });
+      std::for_each(cuda::counting_iterator{cudf::size_type{0}},
+                    cuda::counting_iterator{total_pages},
+                    [&](auto const page_idx) {
+                      if (not bit_is_set(page_nullmask, page_idx)) {
+                        cudf::set_null_mask(static_cast<bitmask_type*>(output_nullmask.data()),
+                                            page_row_offsets[page_idx],
+                                            page_row_offsets[page_idx + 1],
+                                            false,
+                                            stream);
+                      }
+                    });
     }
 
     return {std::move(output_data), std::move(output_nullmask)};
@@ -216,16 +217,17 @@ struct page_stats_caster : public stats_caster_base {
       // Set all bits in output nullmask to valid
       output_nullmask = cudf::create_null_mask(total_rows, mask_state::ALL_VALID, stream, mr);
       // For each input page, invalidate the null mask for corresponding rows if needed.
-      std::for_each(
-        cuda::counting_iterator{0}, cuda::counting_iterator{total_pages}, [&](auto const page_idx) {
-          if (not bit_is_set(input_nullmask, page_idx)) {
-            cudf::set_null_mask(static_cast<bitmask_type*>(output_nullmask.data()),
-                                page_row_offsets[page_idx],
-                                page_row_offsets[page_idx + 1],
-                                false,
-                                stream);
-          }
-        });
+      std::for_each(cuda::counting_iterator{cudf::size_type{0}},
+                    cuda::counting_iterator{total_pages},
+                    [&](auto const page_idx) {
+                      if (not bit_is_set(input_nullmask, page_idx)) {
+                        cudf::set_null_mask(static_cast<bitmask_type*>(output_nullmask.data()),
+                                            page_row_offsets[page_idx],
+                                            page_row_offsets[page_idx + 1],
+                                            false,
+                                            stream);
+                      }
+                    });
     }
 
     // Buffer for row-level string offsets (output).
@@ -1030,7 +1032,7 @@ thrust::host_vector<bool> aggregate_reader_metadata::compute_data_page_mask(
     auto const cols_per_thread = cudf::util::div_rounding_up_safe<size_t>(num_columns, max_tasks);
 
     // Submit page row offset compute tasks
-    std::transform(cuda::counting_iterator{0},
+    std::transform(cuda::counting_iterator{int{0}},
                    cuda::counting_iterator{max_tasks},
                    std::back_inserter(page_row_offset_tasks),
                    [&](auto const tid) {
@@ -1091,10 +1093,12 @@ thrust::host_vector<bool> aggregate_reader_metadata::compute_data_page_mask(
   auto host_tree_level_ptrs = cudf::detail::make_pinned_vector_async<bool*>(num_levels, stream);
   // Zeroth level is just the row mask itself
   host_tree_level_ptrs[0] = const_cast<bool*>(row_mask.template begin<bool>()) + row_mask_offset;
-  std::for_each(
-    cuda::counting_iterator{1}, cuda::counting_iterator{num_levels}, [&](auto const level_idx) {
-      host_tree_level_ptrs[level_idx] = tree_levels_data.data() + tree_level_offsets[level_idx - 1];
-    });
+  std::for_each(cuda::counting_iterator{cudf::size_type{1}},
+                cuda::counting_iterator{num_levels},
+                [&](auto const level_idx) {
+                  host_tree_level_ptrs[level_idx] =
+                    tree_levels_data.data() + tree_level_offsets[level_idx - 1];
+                });
 
   auto fenwick_tree_level_ptrs =
     cudf::detail::make_device_uvector_async(host_tree_level_ptrs, stream, mr);
@@ -1102,13 +1106,13 @@ thrust::host_vector<bool> aggregate_reader_metadata::compute_data_page_mask(
   // Build Fenwick tree levels (zeroth level is just the row mask itself)
   auto prev_level_size = total_rows;
   std::for_each(
-    cuda::counting_iterator{0},
+    cuda::counting_iterator{cudf::size_type{0}},
     cuda::counting_iterator{num_levels - 1},
     [&](auto const prev_level) {
       auto const current_level_size = cudf::util::div_rounding_up_safe(prev_level_size, 2);
       thrust::for_each(
         rmm::exec_policy_nosync(stream),
-        cuda::counting_iterator{0},
+        cuda::counting_iterator{cudf::size_type{0}},
         cuda::counting_iterator{current_level_size},
         build_fenwick_tree_level_functor{
           fenwick_tree_level_ptrs.data(), prev_level, prev_level_size, current_level_size});
@@ -1124,7 +1128,7 @@ thrust::host_vector<bool> aggregate_reader_metadata::compute_data_page_mask(
   auto page_offsets = cudf::detail::make_device_uvector_async(pinned_page_offsets, stream, mr);
   thrust::transform(
     rmm::exec_policy_nosync(stream),
-    cuda::counting_iterator{0},
+    cuda::counting_iterator{cudf::size_type{0}},
     cuda::counting_iterator{num_ranges},
     device_data_page_mask.begin(),
     search_fenwick_tree_functor{fenwick_tree_level_ptrs.data(), page_offsets.data(), num_ranges});
