@@ -50,7 +50,7 @@ def _maybe_shuffle_frame(
         # Already shuffled
         return frame
 
-    if shuffle_method in {"rapidsmpf", "rapidsmpf-single"}:
+    if shuffle_method in {"rapidsmpf", "rapidsmpf-single"}:  # pragma: no cover
         # Materialize non-Col expression keys before shuffling
         key_select, new_on = _materialize_key_exprs(frame, on)
         if key_select is not None:

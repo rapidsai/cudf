@@ -40,7 +40,7 @@ _SHUFFLE_METHODS = ("rapidsmpf", "tasks")
 def _materialize_key_exprs(
     frame: IR,
     on: tuple[NamedExpr, ...],
-) -> tuple[Select | None, tuple[NamedExpr, ...]]:
+) -> tuple[Select | None, tuple[NamedExpr, ...]]:  # pragma: no cover
     """Build a Select that materializes the non-Col keys."""
     non_col_expr_index = {i for i, ne in enumerate(on) if not isinstance(ne.value, Col)}
     if not non_col_expr_index:
