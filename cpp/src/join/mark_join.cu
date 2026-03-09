@@ -163,6 +163,8 @@ CUDF_KERNEL __launch_bounds__(block_size) void mark_retrieve_kernel(
   int const warp_buffer_offset         = warp_buffer_capacity * warp.meta_group_rank();
   uint32_t build_buffer_offset         = 0;
 
+  // Each warp owns a fixed slice of shared memory and batches row indices there before
+  // reserving a contiguous range in the global output.
   __shared__ alignas(buffer_capacity) cudf::size_type build_buffer[buffer_capacity];
   cuda::atomic_ref<cudf::size_type, cuda::thread_scope_device> global_off{*global_offset};
 
@@ -180,6 +182,8 @@ CUDF_KERNEL __launch_bounds__(block_size) void mark_retrieve_kernel(
       bool const is_filled   = !slot_is_empty(entry_value, empty_sentinel);
       if (is_filled) {
         bool const marked = is_marked(entry_value.first);
+        // A marked entry has at least one probe-side match. Semi joins emit marked
+        // build rows, while anti joins emit the entries that were never marked.
         if constexpr (is_anti_join) {
           has_match = !marked;
         } else {
@@ -189,6 +193,12 @@ CUDF_KERNEL __launch_bounds__(block_size) void mark_retrieve_kernel(
       }
     }
 
+    // Compact the active lanes into the warp-local buffer. coalesced_threads()
+    // gives each matching lane a dense rank among the currently active lanes so
+    // the warp writes a contiguous chunk into shared memory.
+    //
+    // If any lane would overflow the warp-local buffer, leave that lane pending,
+    // flush the full buffer to global memory, and retry the pending lanes.
     bool pending_writes = warp.any(has_match);
     while (pending_writes) {
       uint32_t offset = 0;
@@ -203,7 +213,9 @@ CUDF_KERNEL __launch_bounds__(block_size) void mark_retrieve_kernel(
       offset              = cg::reduce(warp, offset, cg::greater<uint32_t>{});
       build_buffer_offset = offset + 1;
       if (pending_writes = (offset >= static_cast<uint32_t>(warp_buffer_capacity))) {
-        build_buffer_offset      = 0;
+        build_buffer_offset = 0;
+        // Reserve one contiguous output range for the whole warp and flush the
+        // full warp-local buffer there.
         auto const output_offset = cg::invoke_one_broadcast(warp, [&]() {
           return global_off.fetch_add(warp_buffer_capacity, cuda::memory_order_relaxed);
         });
@@ -215,6 +227,7 @@ CUDF_KERNEL __launch_bounds__(block_size) void mark_retrieve_kernel(
     }
   }
 
+  // Drain the partially filled warp-local buffer left after the final scan iteration.
   if (build_buffer_offset > 0) {
     auto const output_offset = cg::invoke_one_broadcast(warp, [&]() {
       return global_off.fetch_add(build_buffer_offset, cuda::memory_order_relaxed);

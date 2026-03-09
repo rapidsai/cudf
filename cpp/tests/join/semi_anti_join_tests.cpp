@@ -35,8 +35,6 @@ using strcol_wrapper = cudf::test::strings_column_wrapper;
 using column_vector  = std::vector<std::unique_ptr<cudf::column>>;
 using Table          = cudf::table;
 
-struct JoinTest : public cudf::test::BaseFixture {};
-
 // Parameterized test fixture for testing both LEFT and RIGHT table reuse
 struct SemiAntiJoinTest : public cudf::test::BaseFixture,
                           public ::testing::WithParamInterface<cudf::set_as_build_table> {};
@@ -395,8 +393,9 @@ TEST_P(SemiAntiJoinTest, SemiJoinEmptyTables)
   }
 }
 
-TEST_F(JoinTest, AntiSemiJoinLargeExtentOverflowPrevention)
+TEST_P(SemiAntiJoinTest, AntiSemiJoinLargeExtentOverflowPrevention)
 {
+  auto const build_side = GetParam();
   // Test validates size_t extent can handle bucket storage sizes that would
   // overflow int32_t extent when compute_bucket_storage_size() uses low load factors
   constexpr cudf::size_type table_size = 10000000;  // 10M rows
@@ -416,15 +415,24 @@ TEST_F(JoinTest, AntiSemiJoinLargeExtentOverflowPrevention)
 
   // Test with load factors that would cause overflow in int32_t extent
   EXPECT_NO_THROW({
-    cudf::filtered_join obj(build_table,
-                            cudf::null_equality::EQUAL,
-                            cudf::set_as_build_table::RIGHT,
-                            load_factor,
-                            cudf::get_default_stream());
-    auto result = obj.semi_join(
-      empty_probe_table, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
-    result = obj.anti_join(
-      empty_probe_table, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
+    if (build_side == cudf::set_as_build_table::RIGHT) {
+      cudf::filtered_join obj(build_table,
+                              cudf::null_equality::EQUAL,
+                              build_side,
+                              load_factor,
+                              cudf::get_default_stream());
+      auto result = obj.semi_join(
+        empty_probe_table, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
+      result = obj.anti_join(
+        empty_probe_table, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
+    } else {
+      cudf::mark_join obj(
+        build_table, cudf::null_equality::EQUAL, load_factor, cudf::get_default_stream());
+      auto result = obj.semi_join(
+        empty_probe_table, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
+      result = obj.anti_join(
+        empty_probe_table, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
+    }
   });
 }
 
