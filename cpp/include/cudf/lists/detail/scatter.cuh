@@ -176,7 +176,7 @@ std::unique_ptr<column> scatter(column_view const& source,
     list_vector_from_column(unbound_list_view::label_type::SOURCE,
                             cudf::detail::lists_column_device_view(*source_device_view),
                             cuda::counting_iterator{size_type{0}},
-                            cuda::counting_iterator{size_type{scatter_map_size}},
+                            cuda::counting_iterator{static_cast<size_type>(scatter_map_size)},
                             stream,
                             mr);
 
