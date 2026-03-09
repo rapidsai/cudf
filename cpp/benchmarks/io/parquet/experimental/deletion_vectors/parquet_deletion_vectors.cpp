@@ -11,6 +11,8 @@
 #include <cudf/io/experimental/deletion_vectors.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
+#include <cuda/iterator>
+
 #include <nvbench/nvbench.cuh>
 #include <roaring/roaring64.h>
 
@@ -67,14 +69,13 @@ auto build_row_indices(cudf::host_span<size_t const> row_group_offsets,
                   expected_row_indices.begin());
 
   // Inclusive scan to compute the rest of the expected row indices
-  std::for_each(
-    thrust::counting_iterator(0), thrust::counting_iterator(num_row_groups), [&](auto i) {
-      auto start_row_index = row_group_span_offsets[i];
-      auto end_row_index   = row_group_span_offsets[i + 1];
-      thrust::inclusive_scan(expected_row_indices.begin() + start_row_index,
-                             expected_row_indices.begin() + end_row_index,
-                             expected_row_indices.begin() + start_row_index);
-    });
+  std::for_each(cuda::counting_iterator{0}, cuda::counting_iterator{num_row_groups}, [&](auto i) {
+    auto start_row_index = row_group_span_offsets[i];
+    auto end_row_index   = row_group_span_offsets[i + 1];
+    thrust::inclusive_scan(expected_row_indices.begin() + start_row_index,
+                           expected_row_indices.begin() + end_row_index,
+                           expected_row_indices.begin() + start_row_index);
+  });
 
   return expected_row_indices;
 }
@@ -112,8 +113,8 @@ auto build_deletion_vector(cudf::host_span<size_t const> row_group_offsets,
   auto roaring64_context =
     roaring64_bulk_context_t{.high_bytes = {0, 0, 0, 0, 0, 0}, .leaf = nullptr};
 
-  std::for_each(thrust::counting_iterator<size_t>(0),
-                thrust::counting_iterator<size_t>(num_rows),
+  std::for_each(cuda::counting_iterator{size_t{0}},
+                cuda::counting_iterator{size_t{num_rows}},
                 [&](auto row_idx) {
                   // Insert provided host row index if the row is deleted in the row mask
                   if (not input_row_mask[row_idx]) {
@@ -161,8 +162,8 @@ auto setup_table_and_deletion_vector(nvbench::state& state)
   auto row_group_offsets = std::vector<size_t>(num_row_groups);
   row_group_offsets[0]   = static_cast<size_t>(std::llround(2e9));
   std::for_each(
-    thrust::counting_iterator<size_t>(1),
-    thrust::counting_iterator<size_t>(num_row_groups),
+    cuda::counting_iterator{size_t{1}},
+    cuda::counting_iterator{size_t{num_row_groups}},
     [&](auto i) { row_group_offsets[i] = std::llround(row_group_offsets[i - 1] + 0.5e9); });
 
   // Row group splits

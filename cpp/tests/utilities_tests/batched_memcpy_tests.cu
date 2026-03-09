@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -16,7 +16,7 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/device_vector.hpp>
 
-#include <thrust/iterator/counting_iterator.h>
+#include <cuda/iterator>
 #include <thrust/iterator/transform_iterator.h>
 
 #include <iterator>
@@ -97,8 +97,8 @@ TEST(BatchedMemcpyTest, BasicTest)
   auto d_dst_data = cudf::detail::make_zeroed_device_uvector_async<T1>(total_buff_len, stream, mr);
   // Pointers to destination buffers within the giant destination buffer
   std::vector<T1*> h_dst_ptrs(num_buffs);
-  std::for_each(thrust::make_counting_iterator(static_cast<size_t>(0)),
-                thrust::make_counting_iterator(num_buffs),
+  std::for_each(cuda::counting_iterator{static_cast<size_t>(0)},
+                cuda::counting_iterator{num_buffs},
                 [&](auto i) { return h_dst_ptrs[i] = d_dst_data.data() + h_lens_excl_sum[i]; });
   // Copy destination data pointers to device
   auto d_dst_ptrs = cudf::detail::make_device_uvector_async(h_dst_ptrs, stream, mr);

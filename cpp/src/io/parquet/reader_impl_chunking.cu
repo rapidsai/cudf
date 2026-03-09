@@ -14,6 +14,7 @@
 
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/iterator>
 #include <thrust/gather.h>
 #include <thrust/transform_scan.h>
 
@@ -242,7 +243,7 @@ void reader_impl::setup_next_subpass(read_mode mode)
     if (!pass.has_compressed_data || _input_pass_read_limit == 0) {
       rmm::device_uvector<page_span> page_indices(
         num_columns, _stream, cudf::get_current_device_resource_ref());
-      auto iter = thrust::make_counting_iterator(0);
+      auto iter = cuda::counting_iterator{0};
       thrust::transform(rmm::exec_policy_nosync(_stream),
                         iter,
                         iter + num_columns,
@@ -280,7 +281,7 @@ void reader_impl::setup_next_subpass(read_mode mode)
     include_scratch_size(pass.string_offset_sizes, c_info, _stream);
     include_scratch_size(pass.level_decode_sizes, c_info, _stream);
 
-    auto iter               = thrust::make_counting_iterator(0);
+    auto iter               = cuda::counting_iterator{0};
     auto const pass_max_row = pass.skip_rows + pass.num_rows;
     thrust::for_each(rmm::exec_policy_nosync(_stream),
                      iter,
@@ -313,7 +314,7 @@ void reader_impl::setup_next_subpass(read_mode mode)
   else {
     subpass.page_buf       = cudf::detail::hostdevice_vector<PageInfo>(total_pages, _stream);
     subpass.page_src_index = rmm::device_uvector<size_t>(total_pages, _stream);
-    auto iter              = thrust::make_counting_iterator(0);
+    auto iter              = cuda::counting_iterator{0};
     rmm::device_uvector<size_t> dst_offsets(num_columns + 1, _stream);
     thrust::transform_exclusive_scan(rmm::exec_policy_nosync(_stream),
                                      iter,
@@ -657,7 +658,7 @@ void reader_impl::compute_output_chunks_for_subpass()
                                 c_info.begin(),
                                 cuda::std::equal_to{},
                                 cumulative_page_sum{});
-  auto iter = thrust::make_counting_iterator(0);
+  auto iter = cuda::counting_iterator{0};
   // cap the max row in all pages by the max row we expect in the subpass. input chunking
   // can cause "dangling" row counts where for example, only 1 column has a page whose
   // maximum row is beyond our expected subpass max row, which will cause an out of

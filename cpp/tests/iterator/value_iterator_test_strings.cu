@@ -11,9 +11,9 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 
+#include <cuda/iterator>
 #include <cuda/std/utility>
 #include <thrust/host_vector.h>
-#include <thrust/iterator/counting_iterator.h>
 
 auto strings_to_string_views(std::vector<std::string>& input_strings)
 {
@@ -27,8 +27,8 @@ auto strings_to_string_views(std::vector<std::string>& input_strings)
 
   // calculate the expected value by CPU. (but contains device pointers)
   thrust::host_vector<cudf::string_view> replaced_array(input_strings.size());
-  std::transform(thrust::counting_iterator<size_t>(0),
-                 thrust::counting_iterator<size_t>(replaced_array.size()),
+  std::transform(cuda::counting_iterator{size_t{0}},
+                 cuda::counting_iterator{size_t{replaced_array.size()}},
                  replaced_array.begin(),
                  [c_start = dev_chars.begin(), offsets](auto i) {
                    return cudf::string_view(c_start + offsets[i], offsets[i + 1] - offsets[i]);

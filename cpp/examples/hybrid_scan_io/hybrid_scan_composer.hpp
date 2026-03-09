@@ -16,7 +16,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
-#include <thrust/iterator/counting_iterator.h>
+#include <cuda/iterator>
 
 #include <algorithm>
 #include <thread>
@@ -74,9 +74,9 @@ void inline hybrid_scan_multifile(cudf::size_type num_threads, Functor const& hy
   threads.reserve(num_threads);
 
   // Create and launch threads
-  std::for_each(thrust::counting_iterator(0),
-                thrust::counting_iterator(num_threads),
-                [&](auto tid) { threads.emplace_back(hybrid_scan_fn, tid); });
+  std::for_each(cuda::counting_iterator{0}, cuda::counting_iterator{num_threads}, [&](auto tid) {
+    threads.emplace_back(hybrid_scan_fn, tid);
+  });
 
   // Wait for all threads to complete
   for (auto& t : threads) {

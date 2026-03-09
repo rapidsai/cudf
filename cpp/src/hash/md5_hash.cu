@@ -23,7 +23,6 @@
 #include <cuda/iterator>
 #include <cuda/std/utility>
 #include <thrust/for_each.h>
-#include <thrust/iterator/counting_iterator.h>
 
 #include <iterator>
 
@@ -311,8 +310,8 @@ std::unique_ptr<column> md5(table_view const& input,
   // Hash each row, hashing each element sequentially left to right
   thrust::for_each(
     rmm::exec_policy_nosync(stream),
-    thrust::make_counting_iterator(0),
-    thrust::make_counting_iterator(input.num_rows()),
+    cuda::counting_iterator{0},
+    cuda::counting_iterator{input.num_rows()},
     [d_chars, device_input = *device_input] __device__(auto row_index) {
       MD5Hasher hasher(d_chars + (static_cast<int64_t>(row_index) * digest_size));
       for (auto const& col : device_input) {

@@ -16,7 +16,6 @@
 #include <cub/device/device_copy.cuh>
 #include <cuda/functional>
 #include <cuda/iterator>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/transform.h>
 
@@ -45,7 +44,7 @@ void batched_memset(cudf::host_span<cudf::device_span<T> const> host_buffers,
 
   // Vector of sizes of all buffer spans
   auto sizes = thrust::make_transform_iterator(
-    thrust::counting_iterator<size_t>(0),
+    cuda::counting_iterator{size_t{0}},
     cuda::proclaim_return_type<size_t>(
       [buffers = buffers.data()] __device__(size_t i) { return buffers[i].size(); }));
 
@@ -54,7 +53,7 @@ void batched_memset(cudf::host_span<cudf::device_span<T> const> host_buffers,
 
   // Iterator to each device span pointer
   auto iter_out = thrust::make_transform_iterator(
-    thrust::counting_iterator<size_t>(0),
+    cuda::counting_iterator{size_t{0}},
     cuda::proclaim_return_type<T*>(
       [buffers = buffers.data()] __device__(size_t i) { return buffers[i].data(); }));
 

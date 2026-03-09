@@ -33,8 +33,8 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
+#include <cuda/iterator>
 #include <thrust/gather.h>
-#include <thrust/iterator/counting_iterator.h>
 
 #include <algorithm>
 #include <limits>
@@ -101,17 +101,16 @@ struct page_stats_caster : public stats_caster_base {
       // Set all bits in output nullmask to valid
       output_nullmask = cudf::create_null_mask(total_rows, mask_state::ALL_VALID, stream, mr);
       // For each input page, invalidate the null mask for corresponding rows if needed.
-      std::for_each(thrust::counting_iterator(0),
-                    thrust::counting_iterator(total_pages),
-                    [&](auto const page_idx) {
-                      if (not bit_is_set(page_nullmask, page_idx)) {
-                        cudf::set_null_mask(static_cast<bitmask_type*>(output_nullmask.data()),
-                                            page_row_offsets[page_idx],
-                                            page_row_offsets[page_idx + 1],
-                                            false,
-                                            stream);
-                      }
-                    });
+      std::for_each(
+        cuda::counting_iterator{0}, cuda::counting_iterator{total_pages}, [&](auto const page_idx) {
+          if (not bit_is_set(page_nullmask, page_idx)) {
+            cudf::set_null_mask(static_cast<bitmask_type*>(output_nullmask.data()),
+                                page_row_offsets[page_idx],
+                                page_row_offsets[page_idx + 1],
+                                false,
+                                stream);
+          }
+        });
     }
 
     return {std::move(output_data), std::move(output_nullmask)};
@@ -217,17 +216,16 @@ struct page_stats_caster : public stats_caster_base {
       // Set all bits in output nullmask to valid
       output_nullmask = cudf::create_null_mask(total_rows, mask_state::ALL_VALID, stream, mr);
       // For each input page, invalidate the null mask for corresponding rows if needed.
-      std::for_each(thrust::counting_iterator(0),
-                    thrust::counting_iterator(total_pages),
-                    [&](auto const page_idx) {
-                      if (not bit_is_set(input_nullmask, page_idx)) {
-                        cudf::set_null_mask(static_cast<bitmask_type*>(output_nullmask.data()),
-                                            page_row_offsets[page_idx],
-                                            page_row_offsets[page_idx + 1],
-                                            false,
-                                            stream);
-                      }
-                    });
+      std::for_each(
+        cuda::counting_iterator{0}, cuda::counting_iterator{total_pages}, [&](auto const page_idx) {
+          if (not bit_is_set(input_nullmask, page_idx)) {
+            cudf::set_null_mask(static_cast<bitmask_type*>(output_nullmask.data()),
+                                page_row_offsets[page_idx],
+                                page_row_offsets[page_idx + 1],
+                                false,
+                                stream);
+          }
+        });
     }
 
     // Buffer for row-level string offsets (output).
@@ -243,7 +241,7 @@ struct page_stats_caster : public stats_caster_base {
 
     // Iterator for input (page-level) string chars
     auto src_iter = thrust::make_transform_iterator(
-      thrust::make_counting_iterator<size_t>(0),
+      cuda::counting_iterator{size_t{0}},
       cuda::proclaim_return_type<char*>(
         [chars        = page_str_chars.begin(),
          offsets      = page_str_offsets.begin(),
@@ -254,7 +252,7 @@ struct page_stats_caster : public stats_caster_base {
 
     // Iterator for output (row-level) string chars
     auto dst_iter = thrust::make_transform_iterator(
-      thrust::make_counting_iterator<size_t>(0),
+      cuda::counting_iterator{size_t{0}},
       cuda::proclaim_return_type<char*>(
         [chars   = reinterpret_cast<char*>(row_str_chars.data()),
          offsets = row_str_offsets.begin()] __device__(size_t index) {
@@ -263,7 +261,7 @@ struct page_stats_caster : public stats_caster_base {
 
     // Iterator for string sizes
     auto size_iter = thrust::make_transform_iterator(
-      thrust::make_counting_iterator<size_t>(0),
+      cuda::counting_iterator{size_t{0}},
       cuda::proclaim_return_type<size_t>(
         [sizes = row_str_sizes.begin()] __device__(size_t index) { return sizes[index]; }));
 
@@ -310,8 +308,8 @@ struct page_stats_caster : public stats_caster_base {
     auto page_offset_idx = 0;
     // For all row data sources
     std::for_each(
-      thrust::counting_iterator<size_t>(0),
-      thrust::counting_iterator(row_group_indices.size()),
+      cuda::counting_iterator{size_t{0}},
+      cuda::counting_iterator{row_group_indices.size()},
       [&](auto src_idx) {
         // For all column chunks in this source
         auto const& rg_indices = row_group_indices[src_idx];
@@ -330,8 +328,8 @@ struct page_stats_caster : public stats_caster_base {
           auto const page_offset_in_colchunk = col_chunk_page_offsets[page_offset_idx++];
 
           // For all pages in this column chunk
-          std::for_each(thrust::counting_iterator<size_t>(0),
-                        thrust::counting_iterator(num_pages_in_colchunk),
+          std::for_each(cuda::counting_iterator{size_t{0}},
+                        cuda::counting_iterator{num_pages_in_colchunk},
                         [&](auto page_idx) {
                           auto const& min_value      = column_index.min_values[page_idx];
                           auto const& max_value      = column_index.max_values[page_idx];
@@ -853,8 +851,8 @@ std::unique_ptr<cudf::column> aggregate_reader_metadata::build_row_mask_with_pag
 
   // Total number of rows
   auto const total_rows = std::accumulate(
-    thrust::counting_iterator<size_t>(0),
-    thrust::counting_iterator(row_group_indices.size()),
+    cuda::counting_iterator{size_t{0}},
+    cuda::counting_iterator{row_group_indices.size()},
     size_t{0},
     [&](auto sum, auto const src_index) {
       auto const& rg_indices = row_group_indices[src_index];
@@ -906,9 +904,7 @@ std::unique_ptr<cudf::column> aggregate_reader_metadata::build_row_mask_with_pag
 
   std::vector<std::unique_ptr<column>> page_stats_columns;
   std::for_each(
-    thrust::counting_iterator<size_t>(0),
-    thrust::counting_iterator(num_columns),
-    [&](auto col_idx) {
+    cuda::counting_iterator{size_t{0}}, cuda::counting_iterator{num_columns}, [&](auto col_idx) {
       auto const schema_idx = output_column_schemas[col_idx];
       auto const& dtype     = output_dtypes[col_idx];
       // Only participating columns and comparable types except fixed point are supported
@@ -1034,8 +1030,8 @@ thrust::host_vector<bool> aggregate_reader_metadata::compute_data_page_mask(
     auto const cols_per_thread = cudf::util::div_rounding_up_safe<size_t>(num_columns, max_tasks);
 
     // Submit page row offset compute tasks
-    std::transform(thrust::counting_iterator(0),
-                   thrust::counting_iterator(max_tasks),
+    std::transform(cuda::counting_iterator{0},
+                   cuda::counting_iterator{max_tasks},
                    std::back_inserter(page_row_offset_tasks),
                    [&](auto const tid) {
                      return cudf::detail::host_worker_pool().submit_task([&, tid = tid]() {
@@ -1044,8 +1040,8 @@ thrust::host_vector<bool> aggregate_reader_metadata::compute_data_page_mask(
                        task_page_row_offsets_type task_page_row_offsets{};
                        task_page_row_offsets.reserve(end_col - start_col);
                        std::transform(
-                         thrust::counting_iterator(start_col),
-                         thrust::counting_iterator(end_col),
+                         cuda::counting_iterator{start_col},
+                         cuda::counting_iterator{end_col},
                          std::back_inserter(task_page_row_offsets),
                          [&](auto const col_idx) {
                            return compute_page_row_offsets(
@@ -1071,8 +1067,8 @@ thrust::host_vector<bool> aggregate_reader_metadata::compute_data_page_mask(
   if constexpr (cuda::std::is_same_v<ColumnView, cudf::mutable_column_view>) {
     if (row_mask.nullable() and row_mask.null_count() > 0) {
       thrust::for_each(rmm::exec_policy_nosync(stream),
-                       thrust::counting_iterator(row_mask_offset),
-                       thrust::counting_iterator(row_mask_offset + total_rows),
+                       cuda::counting_iterator{row_mask_offset},
+                       cuda::counting_iterator{row_mask_offset + total_rows},
                        [row_mask  = row_mask.template begin<bool>(),
                         null_mask = row_mask.null_mask()] __device__(auto const row_idx) {
                          if (not bit_is_set(null_mask, row_idx)) { row_mask[row_idx] = true; }
@@ -1096,7 +1092,7 @@ thrust::host_vector<bool> aggregate_reader_metadata::compute_data_page_mask(
   // Zeroth level is just the row mask itself
   host_tree_level_ptrs[0] = const_cast<bool*>(row_mask.template begin<bool>()) + row_mask_offset;
   std::for_each(
-    thrust::counting_iterator(1), thrust::counting_iterator(num_levels), [&](auto const level_idx) {
+    cuda::counting_iterator{1}, cuda::counting_iterator{num_levels}, [&](auto const level_idx) {
       host_tree_level_ptrs[level_idx] = tree_levels_data.data() + tree_level_offsets[level_idx - 1];
     });
 
@@ -1106,14 +1102,14 @@ thrust::host_vector<bool> aggregate_reader_metadata::compute_data_page_mask(
   // Build Fenwick tree levels (zeroth level is just the row mask itself)
   auto prev_level_size = total_rows;
   std::for_each(
-    thrust::counting_iterator(0),
-    thrust::counting_iterator(num_levels - 1),
+    cuda::counting_iterator{0},
+    cuda::counting_iterator{num_levels - 1},
     [&](auto const prev_level) {
       auto const current_level_size = cudf::util::div_rounding_up_safe(prev_level_size, 2);
       thrust::for_each(
         rmm::exec_policy_nosync(stream),
-        thrust::counting_iterator(0),
-        thrust::counting_iterator(current_level_size),
+        cuda::counting_iterator{0},
+        cuda::counting_iterator{current_level_size},
         build_fenwick_tree_level_functor{
           fenwick_tree_level_ptrs.data(), prev_level, prev_level_size, current_level_size});
       prev_level_size = current_level_size;
@@ -1128,8 +1124,8 @@ thrust::host_vector<bool> aggregate_reader_metadata::compute_data_page_mask(
   auto page_offsets = cudf::detail::make_device_uvector_async(pinned_page_offsets, stream, mr);
   thrust::transform(
     rmm::exec_policy_nosync(stream),
-    thrust::counting_iterator(0),
-    thrust::counting_iterator(num_ranges),
+    cuda::counting_iterator{0},
+    cuda::counting_iterator{num_ranges},
     device_data_page_mask.begin(),
     search_fenwick_tree_functor{fenwick_tree_level_ptrs.data(), page_offsets.data(), num_ranges});
 
@@ -1143,17 +1139,15 @@ thrust::host_vector<bool> aggregate_reader_metadata::compute_data_page_mask(
   // Discard results for invalid ranges. i.e. ranges starting at the last page of a column and
   // ending at the first page of the next column
   auto num_pages_inserted = 0;
-  std::for_each(thrust::counting_iterator<size_t>(0),
-                thrust::counting_iterator(num_columns),
-                [&](auto col_idx) {
-                  auto const col_num_pages =
-                    col_page_offsets[col_idx + 1] - col_page_offsets[col_idx] - 1;
-                  data_page_mask.insert(data_page_mask.begin() + num_pages_inserted,
-                                        host_results_iter,
-                                        host_results_iter + col_num_pages);
-                  host_results_iter += col_num_pages + 1;
-                  num_pages_inserted += col_num_pages;
-                });
+  std::for_each(
+    cuda::counting_iterator{size_t{0}}, cuda::counting_iterator{num_columns}, [&](auto col_idx) {
+      auto const col_num_pages = col_page_offsets[col_idx + 1] - col_page_offsets[col_idx] - 1;
+      data_page_mask.insert(data_page_mask.begin() + num_pages_inserted,
+                            host_results_iter,
+                            host_results_iter + col_num_pages);
+      host_results_iter += col_num_pages + 1;
+      num_pages_inserted += col_num_pages;
+    });
   return data_page_mask;
 }
 

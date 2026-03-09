@@ -27,7 +27,7 @@
 #include <cub/block/block_scan.cuh>
 #include <cub/device/device_histogram.cuh>
 #include <cuda/devices>
-#include <thrust/iterator/counting_iterator.h>
+#include <cuda/iterator>
 #include <thrust/scan.h>
 #include <thrust/transform.h>
 
@@ -374,7 +374,7 @@ rmm::device_uvector<size_type> compute_gather_map(size_type num_rows,
                                                   size_type grid_size,
                                                   rmm::cuda_stream_view stream)
 {
-  auto sequence = thrust::make_counting_iterator(0);
+  auto sequence = cuda::counting_iterator{0};
   rmm::device_uvector<size_type> gather_map(num_rows, stream);
 
   copy_block_partitions_impl(sequence,

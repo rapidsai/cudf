@@ -18,7 +18,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <thrust/iterator/counting_iterator.h>
+#include <cuda/iterator>
 #include <thrust/transform.h>
 
 namespace cudf {
@@ -52,8 +52,8 @@ std::unique_ptr<column> to_booleans(strings_column_view const& input,
   auto d_results    = results_view.data<bool>();
 
   thrust::transform(rmm::exec_policy_nosync(stream),
-                    thrust::make_counting_iterator<size_type>(0),
-                    thrust::make_counting_iterator<size_type>(strings_count),
+                    cuda::counting_iterator{size_type{0}},
+                    cuda::counting_iterator{size_type{strings_count}},
                     d_results,
                     [d_strings, d_true] __device__(size_type idx) {
                       bool result = false;

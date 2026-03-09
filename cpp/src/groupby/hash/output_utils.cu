@@ -22,6 +22,7 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuco/static_set.cuh>
+#include <cuda/iterator>
 #include <thrust/scatter.h>
 #include <thrust/transform.h>
 
@@ -166,8 +167,8 @@ rmm::device_uvector<size_type> compute_key_transform_map(
   // unique keys). Only these extracted unique keys are mapped.
   rmm::device_uvector<size_type> key_transform_map(num_total_keys, stream, mr);
   thrust::scatter(rmm::exec_policy_nosync(stream),
-                  thrust::make_counting_iterator(0),
-                  thrust::make_counting_iterator(static_cast<size_type>(unique_key_indices.size())),
+                  cuda::counting_iterator{0},
+                  cuda::counting_iterator{static_cast<size_type>(unique_key_indices.size())},
                   unique_key_indices.begin(),
                   key_transform_map.begin());
 

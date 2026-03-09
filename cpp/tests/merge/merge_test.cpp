@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -21,7 +21,7 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
-#include <thrust/iterator/counting_iterator.h>
+#include <cuda/iterator>
 
 #include <vector>
 
@@ -687,7 +687,7 @@ class MergeTest : public cudf::test::BaseFixture {};
 TEST_F(MergeTest, KeysWithNulls)
 {
   cudf::size_type nrows = 13200;  // Ensures that thrust::merge uses more than one tile/block
-  auto data_iter        = thrust::make_counting_iterator<int32_t>(0);
+  auto data_iter        = cuda::counting_iterator{int32_t{0}};
   auto valids1 =
     cudf::detail::make_counting_transform_iterator(0, [](auto row) { return row % 10 != 0; });
   cudf::test::fixed_width_column_wrapper<int32_t> data1(data_iter, data_iter + nrows, valids1);

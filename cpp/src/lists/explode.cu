@@ -18,12 +18,12 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
+#include <cuda/iterator>
 #include <cuda/std/iterator>
 #include <cuda/std/optional>
 #include <thrust/binary_search.h>
 #include <thrust/execution_policy.h>
 #include <thrust/for_each.h>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/scan.h>
 #include <thrust/transform.h>
@@ -51,7 +51,7 @@ std::unique_ptr<table> build_table(
   rmm::device_async_resource_ref mr)
 {
   auto select_iter = thrust::make_transform_iterator(
-    thrust::make_counting_iterator(0),
+    cuda::counting_iterator{0},
     [explode_column_idx](size_type i) { return i >= explode_column_idx ? i + 1 : i; });
 
   auto gathered_table =
@@ -115,7 +115,7 @@ std::unique_ptr<table> explode(table_view const& input_table,
     cuda::std::next(offsets), cuda::proclaim_return_type<size_type>([offsets] __device__(auto i) {
       return (i - offsets[0]) - 1;
     }));
-  auto counting_iter = thrust::make_counting_iterator(0);
+  auto counting_iter = cuda::counting_iterator{0};
 
   // This looks like an off-by-one bug, but what is going on here is that we need to reduce each
   // result from `lower_bound` by 1 to build the correct gather map. This can be accomplished by
@@ -153,7 +153,7 @@ std::unique_ptr<table> explode_position(table_view const& input_table,
     offsets + 1, cuda::proclaim_return_type<size_type>([offsets] __device__(auto i) {
       return (i - offsets[0]) - 1;
     }));
-  auto counting_iter = thrust::make_counting_iterator(0);
+  auto counting_iter = cuda::counting_iterator{0};
 
   rmm::device_uvector<size_type> pos(sliced_child.size(), stream, mr);
 
@@ -195,14 +195,14 @@ std::unique_ptr<table> explode_outer(table_view const& input_table,
 {
   lists_column_view explode_col{input_table.column(explode_column_idx)};
   auto sliced_child  = explode_col.get_sliced_child(stream);
-  auto counting_iter = thrust::make_counting_iterator(0);
+  auto counting_iter = cuda::counting_iterator{0};
   auto offsets       = explode_col.offsets_begin();
 
   // number of nulls or empty lists found so far in the explode column
   rmm::device_uvector<size_type> null_or_empty_offset(explode_col.size(), stream);
 
   auto null_or_empty = thrust::make_transform_iterator(
-    thrust::make_counting_iterator(0),
+    cuda::counting_iterator{0},
     cuda::proclaim_return_type<size_type>(
       [offsets, offsets_size = explode_col.size() - 1] __device__(int idx) {
         return (idx > offsets_size || (offsets[idx + 1] != offsets[idx])) ? 0 : 1;

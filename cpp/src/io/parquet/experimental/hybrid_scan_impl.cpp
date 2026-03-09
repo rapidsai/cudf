@@ -21,8 +21,8 @@
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
+#include <cuda/iterator>
 #include <thrust/host_vector.h>
-#include <thrust/iterator/counting_iterator.h>
 
 #include <bitset>
 #include <iterator>
@@ -417,8 +417,8 @@ hybrid_scan_reader_impl::get_input_column_chunk_byte_ranges(
   auto column_chunk_byte_ranges = std::vector<byte_range_info>{};
   column_chunk_byte_ranges.reserve(num_chunks);
 
-  std::for_each(thrust::counting_iterator<size_t>(0),
-                thrust::counting_iterator(row_group_indices.size()),
+  std::for_each(cuda::counting_iterator{size_t{0}},
+                cuda::counting_iterator{row_group_indices.size()},
                 [&](auto const source_idx) {
                   auto const& row_groups = row_group_indices[source_idx];
                   for (auto const row_group_index : row_groups) {
@@ -1021,8 +1021,8 @@ void hybrid_scan_reader_impl::set_pass_page_mask(cudf::host_span<bool const> dat
 
   size_t num_inserted_data_pages = 0;
   std::for_each(
-    thrust::counting_iterator<size_t>(0),
-    thrust::counting_iterator(_input_columns.size()),
+    cuda::counting_iterator{size_t{0}},
+    cuda::counting_iterator{_input_columns.size()},
     [&](auto col_idx) {
       for (size_t chunk_idx = col_idx; chunk_idx < chunks.size(); chunk_idx += num_columns) {
         // Insert a true value for each dictionary page

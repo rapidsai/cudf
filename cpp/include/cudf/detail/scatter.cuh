@@ -28,7 +28,6 @@
 
 #include <cuda/iterator>
 #include <thrust/count.h>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/scatter.h>
 #include <thrust/sequence.h>
@@ -77,8 +76,8 @@ auto scatter_to_gather(MapIterator scatter_map_begin,
   // Convert scatter map to a gather map
   thrust::scatter(
     rmm::exec_policy_nosync(stream),
-    thrust::make_counting_iterator<MapValueType>(0),
-    thrust::make_counting_iterator<MapValueType>(std::distance(scatter_map_begin, scatter_map_end)),
+    cuda::counting_iterator{MapValueType{0}},
+    cuda::counting_iterator{MapValueType{std::distance(scatter_map_begin, scatter_map_end)}},
     scatter_map_begin,
     gather_map.begin());
 

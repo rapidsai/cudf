@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -29,6 +29,7 @@
 #include <cooperative_groups/reduce.h>
 #include <cuda/atomic>
 #include <cuda/functional>
+#include <cuda/iterator>
 #include <thrust/binary_search.h>
 #include <thrust/for_each.h>
 #include <thrust/merge.h>
@@ -459,7 +460,7 @@ std::unique_ptr<column> convert_case(strings_column_view const& input,
   auto tmp_offsets     = rmm::device_uvector<int64_t>(sub_count + input.size() + 1, stream);
   {
     rmm::device_uvector<int64_t> sub_offsets(sub_count, stream);
-    auto const count_itr = thrust::make_counting_iterator<int64_t>(0);
+    auto const count_itr = cuda::counting_iterator{int64_t{0}};
     thrust::transform(rmm::exec_policy_nosync(stream),
                       count_itr,
                       count_itr + sub_count,

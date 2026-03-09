@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -16,6 +16,7 @@
 #include <cudf/rolling/range_window_bounds.hpp>
 #include <cudf/table/table_view.hpp>
 
+#include <cuda/iterator>
 #include <cuda/std/functional>
 
 #include <vector>
@@ -444,7 +445,7 @@ TEST_F(CollectListTest, RollingWindowHonoursMinPeriodsWithDecimal)
 {
   // Test that when the number of observations is fewer than min_periods,
   // the result is null.
-  auto const input_iter   = thrust::counting_iterator{0};
+  auto const input_iter   = cuda::counting_iterator{0};
   auto const input_column = cudf::test::fixed_point_column_wrapper<int32_t>{
     input_iter, input_iter + 6, numeric::scale_type{0}};
 

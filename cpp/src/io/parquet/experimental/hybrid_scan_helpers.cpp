@@ -12,7 +12,7 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/logger.hpp>
 
-#include <thrust/iterator/counting_iterator.h>
+#include <cuda/iterator>
 #include <thrust/iterator/zip_iterator.h>
 
 #include <cstdint>
@@ -174,8 +174,8 @@ size_type aggregate_reader_metadata::total_rows_in_row_groups(
 {
   size_t total_rows = 0;
 
-  std::for_each(thrust::counting_iterator<size_t>(0),
-                thrust::counting_iterator(row_group_indices.size()),
+  std::for_each(cuda::counting_iterator{size_t{0}},
+                cuda::counting_iterator{row_group_indices.size()},
                 [&](auto const src_idx) {
                   auto const& pfm = per_file_metadata[src_idx];
                   for (auto const row_group_idx : row_group_indices[src_idx]) {
@@ -339,8 +339,8 @@ std::vector<byte_range_info> aggregate_reader_metadata::get_bloom_filter_bytes(
   auto have_bloom_filters = false;
 
   // For all sources
-  std::for_each(thrust::counting_iterator<size_t>(0),
-                thrust::counting_iterator(row_group_indices.size()),
+  std::for_each(cuda::counting_iterator{size_t{0}},
+                cuda::counting_iterator{row_group_indices.size()},
                 [&](auto const src_index) {
                   // Get all row group indices in the data source
                   auto const& rg_indices = row_group_indices[src_index];
@@ -405,8 +405,8 @@ std::vector<byte_range_info> aggregate_reader_metadata::get_dictionary_page_byte
 
   // For all sources
   std::for_each(
-    thrust::counting_iterator<size_t>(0),
-    thrust::counting_iterator(row_group_indices.size()),
+    cuda::counting_iterator{size_t{0}},
+    cuda::counting_iterator{row_group_indices.size()},
     [&](auto const src_index) {
       // Get all row group indices in the data source
       auto const& rg_indices = row_group_indices[src_index];
@@ -598,7 +598,7 @@ named_to_reference_converter::named_to_reference_converter(
   // Map column names to their indices
   std::transform(metadata.schema_info.cbegin(),
                  metadata.schema_info.cend(),
-                 thrust::counting_iterator<size_t>(0),
+                 cuda::counting_iterator{size_t{0}},
                  std::inserter(_column_name_to_index, _column_name_to_index.end()),
                  [](auto const& sch, auto index) { return std::make_pair(sch.name, index); });
 

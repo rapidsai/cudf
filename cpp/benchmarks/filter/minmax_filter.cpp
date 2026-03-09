@@ -15,6 +15,8 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <cuda/iterator>
+
 #include <nvbench/nvbench.cuh>
 #include <nvbench/types.cuh>
 
@@ -69,8 +71,8 @@ void BM_filter_min_max(nvbench::state& state)
   profile.set_null_probability(nullable ? std::optional{0.3} : std::nullopt);
 
   std::vector<std::unique_ptr<cudf::column>> filter_columns;
-  std::transform(thrust::make_counting_iterator(0),
-                 thrust::make_counting_iterator(num_filter_columns),
+  std::transform(cuda::counting_iterator{0},
+                 cuda::counting_iterator{num_filter_columns},
                  std::back_inserter(filter_columns),
                  [&](auto) {
                    return create_random_column(

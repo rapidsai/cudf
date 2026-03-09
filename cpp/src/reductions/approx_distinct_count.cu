@@ -19,7 +19,7 @@
 #include <rmm/device_uvector.hpp>
 
 #include <cuda/functional>
-#include <thrust/iterator/counting_iterator.h>
+#include <cuda/iterator>
 
 #include <cmath>
 
@@ -224,7 +224,7 @@ void approx_distinct_count<Hasher>::add(table_view const& input, rmm::cuda_strea
     }
   } else {
     auto const hash_iter = cudf::detail::make_counting_transform_iterator(0, hash_key);
-    auto const stencil   = thrust::counting_iterator{0};
+    auto const stencil   = cuda::counting_iterator{0};
 
     if (_nan_handling == nan_policy::NAN_IS_VALID) {
       if (!has_nulls) {

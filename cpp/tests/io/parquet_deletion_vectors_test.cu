@@ -16,7 +16,7 @@
 #include <rmm/cuda_stream_view.hpp>
 
 #include <cuco/roaring_bitmap.cuh>
-#include <thrust/iterator/counting_iterator.h>
+#include <cuda/iterator>
 #include <thrust/sequence.h>
 
 #include <roaring/roaring.h>
@@ -87,14 +87,13 @@ auto build_expected_row_indices(cudf::host_span<size_t const> row_group_offsets,
                   expected_row_indices.begin());
 
   // Inclusive scan to compute the rest of the row indices
-  std::for_each(
-    thrust::counting_iterator(0), thrust::counting_iterator(num_row_groups), [&](auto i) {
-      auto start_row_index = row_group_span_offsets[i];
-      auto end_row_index   = row_group_span_offsets[i + 1];
-      std::inclusive_scan(expected_row_indices.begin() + start_row_index,
-                          expected_row_indices.begin() + end_row_index,
-                          expected_row_indices.begin() + start_row_index);
-    });
+  std::for_each(cuda::counting_iterator{0}, cuda::counting_iterator{num_row_groups}, [&](auto i) {
+    auto start_row_index = row_group_span_offsets[i];
+    auto end_row_index   = row_group_span_offsets[i + 1];
+    std::inclusive_scan(expected_row_indices.begin() + start_row_index,
+                        expected_row_indices.begin() + end_row_index,
+                        expected_row_indices.begin() + start_row_index);
+  });
 
   return expected_row_indices;
 }
@@ -153,8 +152,8 @@ auto build_deletion_vector_and_expected_row_mask(cudf::size_type num_rows,
   auto roaring64_context =
     roaring::api::roaring64_bulk_context_t{.high_bytes = {0, 0, 0, 0, 0, 0}, .leaf = nullptr};
 
-  std::for_each(thrust::counting_iterator<size_t>(0),
-                thrust::counting_iterator<size_t>(num_rows),
+  std::for_each(cuda::counting_iterator{size_t{0}},
+                cuda::counting_iterator{size_t{num_rows}},
                 [&](auto row_idx) {
                   // Insert provided host row index if the row is deleted in the row mask
                   if (not expected_row_mask[row_idx]) {
@@ -200,8 +199,8 @@ std::unique_ptr<cudf::table> build_expected_table(
   auto index_and_columns = std::vector<cudf::column_view>{};
   index_and_columns.reserve(input_table_view.num_columns() + 1);
   index_and_columns.push_back(expected_row_index_column);
-  std::transform(thrust::counting_iterator(0),
-                 thrust::counting_iterator(input_table_view.num_columns()),
+  std::transform(cuda::counting_iterator{0},
+                 cuda::counting_iterator{input_table_view.num_columns()},
                  std::back_inserter(index_and_columns),
                  [&](auto col_idx) { return input_table_view.column(col_idx); });
   return cudf::apply_boolean_mask(cudf::table_view{index_and_columns}, row_mask_column, stream, mr);
@@ -381,7 +380,7 @@ TYPED_TEST(RoaringBitmapBasicsTest, BitmapSerialization)
       roaring::api::roaring64_bulk_context_t{.high_bytes = {0, 0, 0, 0, 0, 0}, .leaf = nullptr};
 
     std::for_each(
-      thrust::counting_iterator<Key>(0), thrust::counting_iterator<Key>(num_keys), [&](auto key) {
+      cuda::counting_iterator{Key{0}}, cuda::counting_iterator{Key{num_keys}}, [&](auto key) {
         if (is_even[key]) {
           roaring::api::roaring64_bitmap_add_bulk(roaring64_bitmap, &roaring64_context, key);
         }
@@ -404,7 +403,7 @@ TYPED_TEST(RoaringBitmapBasicsTest, BitmapSerialization)
     auto roaring_context = roaring::api::roaring_bulk_context_t{};
 
     std::for_each(
-      thrust::counting_iterator<Key>(0), thrust::counting_iterator<Key>(num_keys), [&](auto key) {
+      cuda::counting_iterator{Key{0}}, cuda::counting_iterator{Key{num_keys}}, [&](auto key) {
         if (is_even[key]) {
           roaring::api::roaring_bitmap_add_bulk(roaring_bitmap, &roaring_context, key);
         }
@@ -434,16 +433,16 @@ TYPED_TEST(RoaringBitmapBasicsTest, BitmapSerialization)
 
   // Query the roaring bitmap
   auto contained = rmm::device_uvector<bool>(num_keys, stream, mr);
-  roaring_bitmap.contains_async(thrust::counting_iterator<Key>(0),
-                                thrust::counting_iterator<Key>(num_keys),
+  roaring_bitmap.contains_async(cuda::counting_iterator{Key{0}},
+                                cuda::counting_iterator{Key{num_keys}},
                                 contained.data(),
                                 stream);
   auto results = cudf::detail::make_host_vector_async(contained, stream);
 
   // Validate
   stream.synchronize();
-  EXPECT_TRUE(std::all_of(thrust::counting_iterator<Key>(0),
-                          thrust::counting_iterator<Key>(num_keys),
+  EXPECT_TRUE(std::all_of(cuda::counting_iterator{Key{0}},
+                          cuda::counting_iterator{Key{num_keys}},
                           [&](auto key) { return results[key] == is_even[key]; }));
 }
 
@@ -544,8 +543,8 @@ TEST_F(ParquetDeletionVectorsTest, CustomRowIndexColumn)
   auto row_group_offsets = std::vector<size_t>(num_row_groups);
   row_group_offsets[0]   = static_cast<size_t>(std::llround(1e9));
   std::transform(
-    thrust::counting_iterator(1),
-    thrust::counting_iterator(num_row_groups),
+    cuda::counting_iterator{1},
+    cuda::counting_iterator{num_row_groups},
     row_group_offsets.begin() + 1,
     [&](auto i) { return static_cast<size_t>(std::llround(row_group_offsets[i - 1] + 0.5e9)); });
 

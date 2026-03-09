@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -7,7 +7,7 @@
 
 #include <cudf/utilities/error.hpp>
 
-#include <thrust/iterator/counting_iterator.h>
+#include <cuda/iterator>
 
 #include <algorithm>
 #include <numeric>
@@ -322,8 +322,8 @@ std::string ptx_parser::parse_function_header(std::string const& src)
 
   std::vector<std::string> param_decls;
 
-  std::transform(thrust::make_counting_iterator(size_t{0}),
-                 thrust::make_counting_iterator(ptx_params.size()),
+  std::transform(cuda::counting_iterator{size_t{0}},
+                 cuda::counting_iterator{ptx_params.size()},
                  std::back_inserter(param_decls),
                  [&](size_t param_index) {
                    auto const& param = ptx_params[param_index];

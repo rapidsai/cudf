@@ -11,8 +11,8 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/iterator>
 #include <cuda/std/tuple>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/transform.h>
 
@@ -82,7 +82,7 @@ std::unique_ptr<column> merge_m2(column_view const& values,
   auto const count_valid = values.child(0);
   auto const mean_values = values.child(1);
   auto const M2_values   = values.child(2);
-  auto const iter        = thrust::make_counting_iterator<size_type>(0);
+  auto const iter        = cuda::counting_iterator{size_type{0}};
 
   auto const fn = merge_fn<count_type>{group_offsets.data(),
                                        count_valid.template begin<count_type>(),

@@ -15,8 +15,8 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <cuda/iterator>
 #include <thrust/for_each.h>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 
 namespace cudf {
@@ -187,7 +187,7 @@ struct dispatch_from_durations_fn {
     auto d_chars    = chars_data.data();
 
     thrust::for_each_n(rmm::exec_policy_nosync(stream),
-                       thrust::make_counting_iterator<size_type>(0),
+                       cuda::counting_iterator{size_type{0}},
                        strings_count,
                        duration_to_string_fn<T>{d_column, d_new_offsets, d_chars});
 

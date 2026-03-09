@@ -15,6 +15,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/iterator>
 #include <thrust/for_each.h>
 #include <thrust/tabulate.h>
 
@@ -103,7 +104,7 @@ std::pair<std::unique_ptr<table>, rmm::device_uvector<size_type>> compute_aggs_d
   auto d_results_ptr  = mutable_table_device_view::create(*agg_results, stream);
 
   thrust::for_each_n(rmm::exec_policy_nosync(stream),
-                     thrust::make_counting_iterator(int64_t{0}),
+                     cuda::counting_iterator{int64_t{0}},
                      num_rows * static_cast<int64_t>(h_agg_kinds.size()),
                      compute_single_pass_aggs_dense_output_fn{
                        target_indices.begin(), d_agg_kinds.data(), *d_values, *d_results_ptr});
@@ -138,7 +139,7 @@ std::pair<std::unique_ptr<table>, rmm::device_uvector<size_type>> compute_aggs_s
 
   thrust::for_each_n(
     rmm::exec_policy_nosync(stream),
-    thrust::make_counting_iterator(0),
+    cuda::counting_iterator{0},
     num_rows,
     compute_single_pass_aggs_sparse_output_fn{key_set.ref(cuco::op::insert_and_find),
                                               row_bitmask,

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2024, NVIDIA CORPORATION.  All rights reserved.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.  All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -8,7 +8,7 @@
 #include <cudf/strings/detail/utf8.hpp>
 #include <cudf/utilities/error.hpp>
 
-#include <thrust/iterator/counting_iterator.h>
+#include <cuda/iterator>
 
 #include <algorithm>
 #include <array>
@@ -367,7 +367,7 @@ class regex_parser {
     }
 
     // transform pairs of literals to ranges
-    auto const counter = thrust::make_counting_iterator(0);
+    auto const counter = cuda::counting_iterator{0};
     std::transform(
       counter, counter + (literals.size() / 2), std::back_inserter(ranges), [&literals](auto idx) {
         return reclass_range{literals[idx * 2], literals[idx * 2 + 1]};

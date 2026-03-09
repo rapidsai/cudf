@@ -18,7 +18,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <thrust/iterator/counting_iterator.h>
+#include <cuda/iterator>
 #include <thrust/transform.h>
 #include <thrust/transform_scan.h>
 
@@ -49,8 +49,8 @@ std::unique_ptr<column> count_elements(lists_column_view const& input,
 
   // fill in the sizes
   thrust::transform(rmm::exec_policy_nosync(stream),
-                    thrust::make_counting_iterator<cudf::size_type>(0),
-                    thrust::make_counting_iterator<cudf::size_type>(input.size()),
+                    cuda::counting_iterator{cudf::size_type{0}},
+                    cuda::counting_iterator{cudf::size_type{input.size()}},
                     output->mutable_view().begin<size_type>(),
                     list_size_functor{d_column});
 
