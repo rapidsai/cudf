@@ -419,7 +419,7 @@ std::unique_ptr<cudf::column> tokenize_with_vocabulary(cudf::strings_column_view
   d_tmp_offsets.set_element(total_count, chars_size, stream);
   cudf::detail::copy_if_async(
     cuda::counting_iterator{int64_t{0}},
-    cuda::counting_iterator{static_cast<int64_t>(chars_size)},
+    cuda::counting_iterator{int64_t{chars_size}},
     d_tmp_offsets.begin(),
     [d_marks = d_marks.data()] __device__(auto idx) {
       if (idx == 0) return true;

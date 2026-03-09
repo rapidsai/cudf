@@ -132,7 +132,7 @@ std::unique_ptr<column> compute_lead_lag_for_nested(aggregation::Kind op,
   if (op == aggregation::LEAD) {
     thrust::transform(rmm::exec_policy_nosync(stream),
                       cuda::counting_iterator{size_type{0}},
-                      cuda::counting_iterator{static_cast<size_type>(input.size())},
+                      cuda::counting_iterator{size_type{input.size()}},
                       gather_map.begin<size_type>(),
                       cuda::proclaim_return_type<size_type>(
                         [following, input_size, null_index, row_offset] __device__(size_type i) {
@@ -141,7 +141,7 @@ std::unique_ptr<column> compute_lead_lag_for_nested(aggregation::Kind op,
   } else {
     thrust::transform(rmm::exec_policy_nosync(stream),
                       cuda::counting_iterator{size_type{0}},
-                      cuda::counting_iterator{static_cast<size_type>(input.size())},
+                      cuda::counting_iterator{size_type{input.size()}},
                       gather_map.begin<size_type>(),
                       cuda::proclaim_return_type<size_type>(
                         [preceding, input_size, null_index, row_offset] __device__(size_type i) {
@@ -164,7 +164,7 @@ std::unique_ptr<column> compute_lead_lag_for_nested(aggregation::Kind op,
   // Find all indices at which LEAD/LAG computed nulls previously.
   auto scatter_map_end =
     cudf::detail::copy_if(cuda::counting_iterator{size_type{0}},
-                          cuda::counting_iterator{static_cast<size_type>(input.size())},
+                          cuda::counting_iterator{size_type{input.size()}},
                           scatter_map.begin(),
                           is_null_index_predicate(input.size(), gather_map.begin<size_type>()),
                           stream);

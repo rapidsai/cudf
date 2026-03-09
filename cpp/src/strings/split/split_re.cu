@@ -209,7 +209,7 @@ std::unique_ptr<table> split_re(strings_column_view const& input,
   auto const columns_count = thrust::transform_reduce(
     rmm::exec_policy_nosync(stream),
     cuda::counting_iterator{size_type{0}},
-    cuda::counting_iterator{static_cast<size_type>(strings_count)},
+    cuda::counting_iterator{size_type{strings_count}},
     cuda::proclaim_return_type<size_type>([d_offsets] __device__(auto const idx) -> size_type {
       return static_cast<size_type>(d_offsets[idx + 1] - d_offsets[idx]);
     }),
@@ -238,7 +238,7 @@ std::unique_ptr<table> split_re(strings_column_view const& input,
   // build a vector of columns
   results.resize(columns_count);
   std::transform(cuda::counting_iterator{size_type{0}},
-                 cuda::counting_iterator{static_cast<size_type>(columns_count)},
+                 cuda::counting_iterator{size_type{columns_count}},
                  results.begin(),
                  make_strings_lambda);
 

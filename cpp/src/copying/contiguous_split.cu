@@ -1263,7 +1263,7 @@ std::unique_ptr<packed_partition_buf_size_and_dst_buf_info> compute_splits(
   thrust::transform(
     rmm::exec_policy_nosync(stream, temp_mr),
     cuda::counting_iterator{std::size_t{0}},
-    cuda::counting_iterator{static_cast<std::size_t>(num_bufs)},
+    cuda::counting_iterator{std::size_t{num_bufs}},
     d_dst_buf_info,
     cuda::proclaim_return_type<dst_buf_info>([d_src_buf_info,
                                               offset_stack_partition_size,

@@ -40,7 +40,7 @@ struct find_replace_fn {
     // if found return corresponding replacement
     // if not found, return d_str
     auto const begin = cuda::counting_iterator{size_type{0}};
-    auto const end   = cuda::counting_iterator{static_cast<size_type>(d_values.size())};
+    auto const end   = cuda::counting_iterator{size_type{d_values.size()}};
     auto const itr =
       thrust::find_if(thrust::seq, begin, end, [d_values = d_values, d_str](size_type i) -> bool {
         return d_str == d_values.element<string_view>(i);
@@ -66,7 +66,7 @@ std::unique_ptr<cudf::column> find_and_replace_all(
 
   thrust::transform(rmm::exec_policy_nosync(stream),
                     cuda::counting_iterator{size_type{0}},
-                    cuda::counting_iterator{static_cast<size_type>(input.size())},
+                    cuda::counting_iterator{size_type{input.size()}},
                     indices.begin(),
                     find_replace_fn{*d_input, *d_values_to_replace, *d_replacements});
 

@@ -466,7 +466,7 @@ std::unique_ptr<table> boolean_mask_scatter(
 
   // Count valid pair of input and columns as per type at each column/scalar index i
   CUDF_EXPECTS(std::all_of(cuda::counting_iterator{size_type{0}},
-                           cuda::counting_iterator{static_cast<size_type>(target.num_columns())},
+                           cuda::counting_iterator{size_type{target.num_columns()}},
                            [&input, &target](auto index) {
                              return cudf::have_same_types(target.column(index), input[index].get());
                            }),

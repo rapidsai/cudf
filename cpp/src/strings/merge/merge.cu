@@ -40,7 +40,7 @@ std::unique_ptr<column> merge(strings_column_view const& lhs,
   rmm::device_uvector<string_index_pair> indices(strings_count, stream);
   thrust::transform(rmm::exec_policy_nosync(stream),
                     cuda::counting_iterator{size_type{0}},
-                    cuda::counting_iterator{static_cast<size_type>(strings_count)},
+                    cuda::counting_iterator{size_type{strings_count}},
                     indices.begin(),
                     [d_lhs, d_rhs, begin] __device__(size_type idx) {
                       auto const [s, index] = begin[idx];

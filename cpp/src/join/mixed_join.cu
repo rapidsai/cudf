@@ -154,7 +154,7 @@ precompute_mixed_join_data(mixed_multiset_type const& hash_table,
   thrust::transform(
     rmm::exec_policy_nosync(stream),
     cuda::counting_iterator{size_type{0}},
-    cuda::counting_iterator{static_cast<size_type>(probe_table_num_rows)},
+    cuda::counting_iterator{size_type{probe_table_num_rows}},
     thrust::make_zip_iterator(cuda::std::make_tuple(input_pairs.begin(), hash_indices.begin())),
     precompute_fn);
 

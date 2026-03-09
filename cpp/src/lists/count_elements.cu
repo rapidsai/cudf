@@ -50,7 +50,7 @@ std::unique_ptr<column> count_elements(lists_column_view const& input,
   // fill in the sizes
   thrust::transform(rmm::exec_policy_nosync(stream),
                     cuda::counting_iterator{cudf::size_type{0}},
-                    cuda::counting_iterator{static_cast<cudf::size_type>(input.size())},
+                    cuda::counting_iterator{cudf::size_type{input.size()}},
                     output->mutable_view().begin<size_type>(),
                     list_size_functor{d_column});
 

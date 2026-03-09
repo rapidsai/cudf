@@ -119,7 +119,7 @@ std::unique_ptr<cudf::table> assemble128_from_sum(cudf::table_view const& chunks
   auto assembled_view = columns[1]->mutable_view();
   thrust::transform(rmm::exec_policy_nosync(stream),
                     cuda::counting_iterator{cudf::size_type{0}},
-                    cuda::counting_iterator{static_cast<cudf::size_type>(num_rows)},
+                    cuda::counting_iterator{cudf::size_type{num_rows}},
                     assembled_view.begin<__int128_t>(),
                     chunk_assembler(overflows_view.begin<bool>(),
                                     chunks0.begin<uint64_t>(),

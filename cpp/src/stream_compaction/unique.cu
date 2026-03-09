@@ -86,7 +86,7 @@ std::unique_ptr<table> unique(table_view const& input,
       auto row_equal =
         comp.equal_to<false>(nullate::DYNAMIC{has_nested_nulls(keys_view)}, nulls_equal);
       auto result_end = unique_copy(cuda::counting_iterator{size_type{0}},
-                                    cuda::counting_iterator{static_cast<size_type>(num_rows)},
+                                    cuda::counting_iterator{size_type{num_rows}},
                                     mutable_view->begin<size_type>(),
                                     row_equal,
                                     keep,

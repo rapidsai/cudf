@@ -465,7 +465,7 @@ std::unique_ptr<cudf::column> jaccard_index(cudf::strings_column_view const& inp
   // compute the jaccard using the unique counts and the intersect counts
   thrust::transform(rmm::exec_policy_nosync(stream),
                     cuda::counting_iterator{cudf::size_type{0}},
-                    cuda::counting_iterator{static_cast<cudf::size_type>(results->size())},
+                    cuda::counting_iterator{cudf::size_type{results->size()}},
                     d_results,
                     jaccard_fn{d_uniques1.data(), d_uniques2.data(), d_intersects.data()});
 

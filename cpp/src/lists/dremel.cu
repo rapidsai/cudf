@@ -86,8 +86,8 @@ dremel_data get_encoding(column_view h_col,
     auto d_off = lcv.offsets().data<size_type>();
 
     auto empties_idx_end = cudf::detail::copy_if(
-      cuda::counting_iterator{static_cast<size_type>(start)},
-      cuda::counting_iterator{static_cast<size_type>(end)},
+      cuda::counting_iterator{size_type{start}},
+      cuda::counting_iterator{size_type{end}},
       empties_idx.begin(),
       [d_off] __device__(auto i) { return d_off[i] == d_off[i + 1]; },
       stream);

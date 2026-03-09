@@ -158,7 +158,7 @@ compute_row_frequencies(table_view const& input,
   thrust::for_each(
     rmm::exec_policy_nosync(stream),
     cuda::counting_iterator{std::size_t{0}},
-    cuda::counting_iterator{static_cast<std::size_t>(num_rows)},
+    cuda::counting_iterator{std::size_t{num_rows}},
     [set_ref = row_set_ref,
      increments =
        partial_counts.has_value() ? partial_counts.value().begin<histogram_count_type>() : nullptr,

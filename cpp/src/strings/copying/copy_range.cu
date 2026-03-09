@@ -70,7 +70,7 @@ std::unique_ptr<column> copy_range(strings_column_view const& source,
     }
     return cudf::detail::valid_if(
       cuda::counting_iterator{size_type{0}},
-      cuda::counting_iterator{static_cast<size_type>(target.size())},
+      cuda::counting_iterator{size_type{target.size()}},
       [d_source, d_target, source_begin, target_begin, target_end] __device__(size_type idx) {
         return (idx >= target_begin && idx < target_end)
                  ? d_source.is_valid(source_begin + (idx - target_begin))

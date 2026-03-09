@@ -248,7 +248,7 @@ std::map<std::string, schema_element> unified_schema(cudf::io::json_reader_optio
       [](std::vector<data_type> const& user_dtypes) {
         std::map<std::string, schema_element> dnew;
         std::transform(cuda::counting_iterator{std::size_t{0}},
-                       cuda::counting_iterator{static_cast<std::size_t>(user_dtypes.size())},
+                       cuda::counting_iterator{std::size_t{user_dtypes.size()}},
                        std::inserter(dnew, dnew.end()),
                        [&user_dtypes](auto i) {
                          return std::pair(std::to_string(i), schema_element{user_dtypes[i]});

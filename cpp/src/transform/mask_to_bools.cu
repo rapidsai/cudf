@@ -37,8 +37,8 @@ std::unique_ptr<column> mask_to_bools(bitmask_type const* bitmask,
     auto mutable_view = out_col->mutable_view();
 
     thrust::transform(rmm::exec_policy_nosync(stream),
-                      cuda::counting_iterator{static_cast<cudf::size_type>(begin_bit)},
-                      cuda::counting_iterator{static_cast<cudf::size_type>(end_bit)},
+                      cuda::counting_iterator{cudf::size_type{begin_bit}},
+                      cuda::counting_iterator{cudf::size_type{end_bit}},
                       mutable_view.begin<bool>(),
                       [bitmask] __device__(auto index) { return bit_is_set(bitmask, index); });
   }

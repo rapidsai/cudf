@@ -97,14 +97,14 @@ rmm::device_uvector<cudf::size_type> create_token_row_offsets(
 
   auto const output_count =
     cudf::detail::count_if(cuda::counting_iterator{cudf::size_type{0}},
-                           cuda::counting_iterator{static_cast<cudf::size_type>(tokens_counts)},
+                           cuda::counting_iterator{cudf::size_type{tokens_counts}},
                            fn,
                            stream);
 
   auto tokens_offsets = rmm::device_uvector<cudf::size_type>(output_count + 1, stream);
 
   cudf::detail::copy_if_async(cuda::counting_iterator{cudf::size_type{0}},
-                              cuda::counting_iterator{static_cast<cudf::size_type>(tokens_counts)},
+                              cuda::counting_iterator{cudf::size_type{tokens_counts}},
                               tokens_offsets.begin(),
                               fn,
                               stream);

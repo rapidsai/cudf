@@ -700,7 +700,7 @@ void aggregate_reader_metadata::initialize_internals(bool use_arrow_schema,
     // the input sources. This avoids recomputing this within build_column() and
     // populate_metadata().
     std::for_each(
-      cuda::counting_iterator{static_cast<std::size_t>(1)},
+      cuda::counting_iterator{std::size_t{1}},
       cuda::counting_iterator{schema.size()},
       [&](auto const schema_idx) {
         if (schema[schema_idx].repetition_type == FieldRepetitionType::REQUIRED and
@@ -1960,7 +1960,7 @@ aggregate_reader_metadata::select_columns(
 
         // Map the column's schema_idx across the rest of the data sources if required.
         if (per_file_metadata.size() > 1 and not schema_idx_maps.empty()) {
-          std::for_each(cuda::counting_iterator{static_cast<std::size_t>(1)},
+          std::for_each(cuda::counting_iterator{std::size_t{1}},
                         cuda::counting_iterator{per_file_metadata.size()},
                         [&](auto const pfm_idx) {
                           auto const& dst_root = get_schema(0, pfm_idx);

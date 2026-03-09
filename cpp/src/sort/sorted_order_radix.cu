@@ -109,7 +109,7 @@ struct sorted_order_radix_fn {
     auto zip_out = thrust::make_zip_iterator(d_in, dv_in);
     thrust::transform(rmm::exec_policy_nosync(stream),
                       cuda::counting_iterator{size_type{0}},
-                      cuda::counting_iterator{static_cast<size_type>(input.size())},
+                      cuda::counting_iterator{size_type{input.size()}},
                       zip_out,
                       float_to_pair_and_seq<T>{input.begin<T>()});
 

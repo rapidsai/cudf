@@ -530,7 +530,7 @@ std::pair<std::unique_ptr<column>, rmm::device_uvector<string_index_pair>> split
   // will be resolved during token processing.
   auto delimiter_positions = rmm::device_uvector<int64_t>(d_count.value(stream), stream);
   cudf::detail::copy_if_async(cuda::counting_iterator{int64_t{0}},
-                              cuda::counting_iterator{static_cast<int64_t>(chars_bytes)},
+                              cuda::counting_iterator{int64_t{chars_bytes}},
                               delimiter_positions.begin(),
                               delimiter_fn,
                               stream);

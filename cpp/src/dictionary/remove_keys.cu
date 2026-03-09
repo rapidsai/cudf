@@ -123,7 +123,7 @@ std::unique_ptr<column> remove_keys_fn(dictionary_column_view const& dictionary_
   auto indices_itr = cudf::detail::indexalator_factory::make_input_iterator(indices_column->view());
   auto new_nulls   = cudf::detail::valid_if(
     cuda::counting_iterator{size_type{0}},
-    cuda::counting_iterator{static_cast<size_type>(dictionary_column.size())},
+    cuda::counting_iterator{size_type{dictionary_column.size()}},
     [offset, d_null_mask, indices_itr, max_size] __device__(size_type idx) {
       if (d_null_mask && !bit_is_set(d_null_mask, idx + offset)) return false;
       return (indices_itr[idx] < max_size);  // new nulls have max values

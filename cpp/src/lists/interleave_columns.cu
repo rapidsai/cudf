@@ -59,7 +59,7 @@ generate_list_offsets_and_validities(table_view const& input,
   thrust::transform(
     rmm::exec_policy_nosync(stream),
     cuda::counting_iterator{size_type{0}},
-    cuda::counting_iterator{static_cast<size_type>(num_output_lists)},
+    cuda::counting_iterator{size_type{num_output_lists}},
     d_offsets,
     cuda::proclaim_return_type<size_type>([num_cols,
                                            table_dv     = *table_dv_ptr,

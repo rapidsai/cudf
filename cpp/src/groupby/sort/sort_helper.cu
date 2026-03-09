@@ -157,7 +157,7 @@ sort_groupby_helper::index_vector const& sort_groupby_helper::group_offsets(
       cudf::nullate::DYNAMIC{cudf::has_nested_nulls(_keys)}, null_equality::EQUAL);
     result_end = thrust::unique_copy(rmm::exec_policy_nosync(stream),
                                      cuda::counting_iterator{size_type{0}},
-                                     cuda::counting_iterator{static_cast<size_type>(size)},
+                                     cuda::counting_iterator{size_type{size}},
                                      group_offsets->begin(),
                                      permuted_row_equality_comparator(d_key_equal, sorted_order));
   }

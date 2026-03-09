@@ -80,7 +80,7 @@ std::unique_ptr<column> scan_inclusive(column_view const& input,
   rmm::device_uvector<size_type> result_map(input.size(), stream);
   thrust::inclusive_scan(rmm::exec_policy_nosync(stream),
                          cuda::counting_iterator{size_type{0}},
-                         cuda::counting_iterator{static_cast<size_type>(input.size())},
+                         cuda::counting_iterator{size_type{input.size()}},
                          result_map.begin(),
                          min_max_scan_operator<cudf::string_view, Op>{*d_input, input.has_nulls()});
 

@@ -216,7 +216,7 @@ CUDF_KERNEL void like_kernel(column_device_view d_strings,
   };
 
   auto const itr_zero = cuda::counting_iterator{size_type{0}};
-  auto const itr_size = cuda::counting_iterator{static_cast<size_type>(d_pattern.size_bytes())};
+  auto const itr_size = cuda::counting_iterator{size_type{d_pattern.size_bytes()}};
   auto const wcs_size =
     esc_char == multi_wildcard ? 0 : thrust::count_if(thrust::seq, itr_zero, itr_size, count_wc_fn);
 
@@ -326,7 +326,7 @@ std::unique_ptr<column> like(strings_column_view const& input,
         AVG_CHAR_BYTES_THRESHOLD) {
     thrust::transform(rmm::exec_policy_nosync(stream),
                       cuda::counting_iterator{size_type{0}},
-                      cuda::counting_iterator{static_cast<size_type>(input.size())},
+                      cuda::counting_iterator{size_type{input.size()}},
                       results->mutable_view().data<bool>(),
                       like_fn{*d_strings, patterns_itr, d_escape});
   } else {

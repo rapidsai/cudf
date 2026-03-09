@@ -103,7 +103,7 @@ struct has_nans {
     auto device_view       = *input_device_view;
     return thrust::any_of(rmm::exec_policy_nosync(stream),
                           cuda::counting_iterator{cudf::size_type{0}},
-                          cuda::counting_iterator{static_cast<cudf::size_type>(input.size())},
+                          cuda::counting_iterator{cudf::size_type{input.size()}},
                           check_for_nan<T>(device_view));
   }
 

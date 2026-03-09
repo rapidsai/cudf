@@ -83,7 +83,7 @@ std::unique_ptr<column> ipv4_to_integers(strings_column_view const& input,
   // fill output column with ipv4 integers
   thrust::transform(rmm::exec_policy_nosync(stream),
                     cuda::counting_iterator{size_type{0}},
-                    cuda::counting_iterator{static_cast<size_type>(strings_count)},
+                    cuda::counting_iterator{size_type{strings_count}},
                     d_results,
                     ipv4_to_integers_fn{*strings_column});
   // done
@@ -183,7 +183,7 @@ std::unique_ptr<column> is_ipv4(strings_column_view const& input,
   auto d_results = results->mutable_view().data<bool>();
   thrust::transform(rmm::exec_policy_nosync(stream),
                     cuda::counting_iterator{size_type{0}},
-                    cuda::counting_iterator{static_cast<size_type>(input.size())},
+                    cuda::counting_iterator{size_type{input.size()}},
                     d_results,
                     [d_column] __device__(size_type idx) {
                       if (d_column.is_null(idx)) return false;

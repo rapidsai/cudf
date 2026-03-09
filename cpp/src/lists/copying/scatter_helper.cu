@@ -61,7 +61,7 @@ std::pair<rmm::device_buffer, size_type> construct_child_nullmask(
   };
 
   return cudf::detail::valid_if(cuda::counting_iterator{size_type{0}},
-                                cuda::counting_iterator{static_cast<size_type>(num_child_rows)},
+                                cuda::counting_iterator{size_type{num_child_rows}},
                                 is_valid_predicate,
                                 stream,
                                 mr);
