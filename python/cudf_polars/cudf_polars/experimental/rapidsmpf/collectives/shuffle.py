@@ -93,34 +93,38 @@ class ShuffleManager:
         """Get the local partition IDs for this rank."""
         return self.shuffler.local_partitions()
 
-    def insert_chunk(self, chunk: TableChunk) -> None:
+    def insert_chunk(
+        self,
+        chunk: TableChunk,
+        *,
+        splits: list[int] | None = None,
+    ) -> None:
         """
         Insert a chunk into the ShuffleContext.
 
         Parameters
         ----------
-        chunk: TableChunk
+        chunk : TableChunk
             The table chunk to insert.
+        splits : list[int], optional
+            If provided, split the chunk at these indices and pack (for
+            sort/ordered data). If not provided, partition by hash.
         """
-        # Partition and pack using the Python function
-        partitioned_chunks = py_partition_and_pack(
-            table=chunk.table_view(),
-            columns_to_hash=self.columns_to_hash,
-            num_partitions=self.num_partitions,
-            stream=chunk.stream,
-            br=self.context.br(),
-        )
-
-        # Insert into shuffler
-        self.shuffler.insert(partitioned_chunks)
-
-    def insert_chunk_sorted(self, chunk: TableChunk, splits: list[int]) -> None:
-        partitioned_chunks = py_split_and_pack(
-            table=chunk.table_view(),
-            splits=splits,
-            stream=chunk.stream,
-            br=self.context.br(),
-        )
+        if splits is not None:
+            partitioned_chunks = py_split_and_pack(
+                table=chunk.table_view(),
+                splits=splits,
+                stream=chunk.stream,
+                br=self.context.br(),
+            )
+        else:
+            partitioned_chunks = py_partition_and_pack(
+                table=chunk.table_view(),
+                columns_to_hash=self.columns_to_hash,
+                num_partitions=self.num_partitions,
+                stream=chunk.stream,
+                br=self.context.br(),
+            )
         self.shuffler.insert(partitioned_chunks)
 
     async def insert_finished(self) -> None:

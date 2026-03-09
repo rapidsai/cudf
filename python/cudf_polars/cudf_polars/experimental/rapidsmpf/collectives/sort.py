@@ -263,7 +263,7 @@ async def sort_actor(
                 stream=available_chunk.stream,
                 chunk_relative=True,
             )
-            shuffle.insert_chunk_sorted(available_chunk, splits)
+            shuffle.insert_chunk(available_chunk, splits=splits)
 
         await shuffle.insert_finished()
 

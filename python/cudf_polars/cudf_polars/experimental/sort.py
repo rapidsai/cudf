@@ -225,23 +225,7 @@ def _get_final_sort_boundaries(
     null_order = list(null_order)
 
     if num_partitions <= 1 or sort_boundaries_candidates.table.num_rows() == 0:
-        # No split boundaries or candidates.
-        # Return empty table with same schema.
-        stream = sort_boundaries_candidates.stream
-        empty_table = plc.Table(
-            [
-                plc.column_factories.make_empty_column(
-                    sort_boundaries_candidates.dtypes[i].plc_type, stream=stream
-                )
-                for i in range(len(sort_boundaries_candidates.column_names))
-            ]
-        )
-        return DataFrame.from_table(
-            empty_table,
-            sort_boundaries_candidates.column_names,
-            sort_boundaries_candidates.dtypes,
-            stream=stream,
-        )
+        return sort_boundaries_candidates.slice((0, 0))
 
     # The global split candidates need to be stable sorted to find the correct
     # final split points.
