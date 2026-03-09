@@ -66,7 +66,8 @@ metadata::metadata(cudf::host_span<uint8_t const> footer_bytes)
 
   CompactProtocolReader cp(footer_bytes.data(), footer_bytes.size());
   cp.read(this);
-  CUDF_EXPECTS(cp.InitSchema(this), "Cannot initialize schema");
+  auto const is_schema_initialized = cp.InitSchema(this);
+  CUDF_EXPECTS(is_schema_initialized, "Cannot initialize schema");
   sanitize_schema();
 }
 
@@ -612,9 +613,7 @@ std::reference_wrapper<ast::expression const> named_to_reference_converter::visi
   auto const col_name = _column_indices_to_names[expr.get_column_index()];
   // Check if the column name exists in the metadata and map it to its new column index
   auto col_index_it = _column_name_to_index.find(col_name);
-  if (col_index_it == _column_name_to_index.end()) {
-    CUDF_FAIL("Column name not found in metadata");
-  }
+  CUDF_EXPECTS(col_index_it != _column_name_to_index.end(), "Column name not found in metadata");
   auto col_index = col_index_it->second;
   // Create a new column reference
   _col_ref.emplace_back(col_index);
