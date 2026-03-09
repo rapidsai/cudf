@@ -132,7 +132,7 @@ def find_sort_splits(
         split_last_list,
         split_part_id_list,
         split_local_row_list,
-        strict=False,
+        strict=True,
     ):
         if part_id < my_part_id:
             # Local data is globally later so split at first valid row.
@@ -254,7 +254,7 @@ def _get_final_sort_boundaries(
     # The global split candidates need to be stable sorted to find the correct
     # final split points.
     # NOTE: This could be a merge if done earlier (but it should be small data).
-    sorted_candidates = plc.sorting.sort(
+    sorted_candidates = plc.sorting.stable_sort(
         sort_boundaries_candidates.table,
         # split candidates has the additional partition_id and row_number columns
         column_order + [plc.types.Order.ASCENDING] * 2,

@@ -5,8 +5,7 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Sequence
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any
 
 from rapidsmpf.streaming.coll.shuffler import PartitionAssignment
 from rapidsmpf.streaming.core.actor import define_actor
@@ -19,7 +18,7 @@ import polars as pl
 import pylibcudf as plc
 
 from cudf_polars.containers import DataFrame, DataType
-from cudf_polars.dsl.expr import Col
+from cudf_polars.dsl.expr import Col, NamedExpr
 from cudf_polars.dsl.ir import Empty, Sort
 from cudf_polars.dsl.utils.naming import unique_names
 from cudf_polars.experimental.rapidsmpf.collectives.allgather import AllGatherManager
@@ -111,20 +110,19 @@ async def _compute_sort_boundaries(
         allgather.insert(comm.rank, chunk)
         allgather.insert_finished()
         concat_table = await allgather.extract_concatenated(stream, ordered=True)
+        boundaries_df = _get_final_sort_boundaries(
+            DataFrame.from_table(
+                concat_table,
+                list(boundary_ir.schema.keys()),
+                list(boundary_ir.schema.values()),
+                stream=stream,
+            ),
+            column_order,
+            null_order,
+            num_partitions,
+        )
     else:
-        concat_table = local_boundaries_df.table
-
-    boundaries_df = _get_final_sort_boundaries(
-        DataFrame.from_table(
-            concat_table,
-            list(boundary_ir.schema.keys()),
-            list(boundary_ir.schema.values()),
-            stream=stream,
-        ),
-        column_order,
-        null_order,
-        num_partitions,
-    )
+        boundaries_df = local_boundaries_df
 
     if boundaries_df.table.num_rows() > 0:
         return plc.copying.gather(
@@ -269,60 +267,52 @@ async def sort_actor(
 
         await shuffle.insert_finished()
 
-        column_names_list = list(ir.schema) + ([seq_id_name] if sort_ir.stable else [])
-        dtypes_list = [ir.schema[n] for n in ir.schema] + (
-            [DataType(pl.UInt64())] if sort_ir.stable else []
-        )
+        if sort_ir.stable:
+            assert seq_id_name is not None
+            stable_schema = dict(sort_ir.schema)
+            stable_schema[seq_id_name] = DataType(pl.UInt64())
+            sort_ir = Sort(
+                stable_schema,
+                (
+                    *sort_ir.by,
+                    NamedExpr(seq_id_name, Col(DataType(pl.UInt64()), seq_id_name)),
+                ),
+                (*sort_ir.order, plc.types.Order.ASCENDING),
+                (*sort_ir.null_order, plc.types.NullOrder.AFTER),
+                sort_ir.stable,
+                sort_ir.zlice,
+                sort_ir.children[0],
+            )
 
         for partition_id in shuffle.local_partitions():
             stream = ir_context.get_cuda_stream()
             out_table = await shuffle.extract_chunk(partition_id, stream)
+            df = DataFrame.from_table(
+                out_table,
+                list(sort_ir.schema.keys()),
+                list(sort_ir.schema.values()),
+                stream,
+            )
             if out_table.num_rows() > 0:
-                if sort_ir.stable:
-                    df = DataFrame.from_table(
-                        out_table,
-                        cast(Sequence[str], column_names_list),
-                        dtypes_list,
-                        stream,
-                    )
-                    sort_order = [
-                        list(column_order)[by.index(n)]
-                        if n in by
-                        else plc.types.Order.ASCENDING
-                        for n in column_names_list
-                    ]
-                    nulls = [
-                        list(null_order)[by.index(n)]
-                        if n in by
-                        else plc.types.NullOrder.AFTER
-                        for n in column_names_list
-                    ]
-                    sorted_tbl = plc.sorting.sort(
-                        df.table, sort_order, nulls, stream=stream
-                    )
-                    out_table = plc.Table(sorted_tbl.columns()[:-1])
-                else:
-                    df = DataFrame.from_table(
-                        out_table,
-                        list(ir.schema),
-                        [ir.schema[n] for n in ir.schema],
-                        stream,
-                    )
-                    result_df = sort_ir.do_evaluate(
-                        *sort_ir._non_child_args,
-                        df,
-                        context=ir_context,
-                    )
-                    out_table = result_df.table
+                df = sort_ir.do_evaluate(
+                    *sort_ir._non_child_args,
+                    df,
+                    context=ir_context,
+                )
+                out_table = df.table
+            if sort_ir.stable:
+                # Dropt the stable-sort seq_id column
+                out_table = plc.Table(out_table.columns()[:-1])
             await ch_out.send(
                 context,
                 Message(
                     partition_id,
                     TableChunk.from_pylibcudf_table(
-                        out_table, stream, exclusive_view=True
+                        out_table, df.stream, exclusive_view=True
                     ),
                 ),
             )
+            del df
 
         await ch_out.drain(context)
 
