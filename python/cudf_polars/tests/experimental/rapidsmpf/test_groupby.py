@@ -97,3 +97,25 @@ def test_dynamic_groupby_single_row():
     df = pl.LazyFrame({"key": [1], "value": [42]})
     q = df.group_by("key").agg(pl.col("value").sum())
     assert_gpu_result_equal(q, engine=engine, check_row_order=False)
+
+
+@pytest.mark.parametrize(
+    "key_expr",
+    [
+        pl.col("key2").cast(pl.Int64),
+        pl.col("key2").abs(),
+    ],
+)
+def test_groupby_non_col_key_n_unique(df, key_expr):
+    """Test groupby n_unique where the group key is a non-Col expression."""
+    engine = pl.GPUEngine(
+        raise_on_fail=True,
+        executor="streaming",
+        executor_options={
+            "max_rows_per_partition": 50,
+            "runtime": "rapidsmpf",
+            "dynamic_planning": None,
+        },
+    )
+    q = df.group_by(key_expr).agg(pl.col("value").n_unique())
+    assert_gpu_result_equal(q, engine=engine, check_row_order=False)

@@ -12,9 +12,10 @@ import pylibcudf as plc
 from rmm.pylibrmm.stream import DEFAULT_STREAM
 
 from cudf_polars.containers import DataFrame
-from cudf_polars.dsl.expr import Col
-from cudf_polars.dsl.ir import IR
+from cudf_polars.dsl.expr import Col, NamedExpr
+from cudf_polars.dsl.ir import IR, Select
 from cudf_polars.dsl.tracing import log_do_evaluate, nvtx_annotate_cudf_polars
+from cudf_polars.dsl.utils.naming import unique_names
 from cudf_polars.experimental.base import get_key_name
 from cudf_polars.experimental.dispatch import generate_ir_tasks, lower_ir_node
 from cudf_polars.experimental.utils import _concat, _dynamic_planning_on
@@ -25,7 +26,6 @@ if TYPE_CHECKING:
     from collections.abc import Callable, MutableMapping, Sequence
 
     from cudf_polars.containers import DataType
-    from cudf_polars.dsl.expr import NamedExpr
     from cudf_polars.dsl.ir import IRExecutionContext
     from cudf_polars.experimental.dispatch import LowerIRTransformer
     from cudf_polars.experimental.parallel import PartitionInfo
@@ -35,6 +35,37 @@ if TYPE_CHECKING:
 
 # Supported shuffle methods
 _SHUFFLE_METHODS = ("rapidsmpf", "tasks")
+
+
+def _materialize_key_exprs(
+    frame: IR,
+    on: tuple[NamedExpr, ...],
+) -> tuple[Select | None, tuple[NamedExpr, ...]]:
+    """Build a Select that materializes the non-Col keys."""
+    non_col_expr_index = {i for i, ne in enumerate(on) if not isinstance(ne.value, Col)}
+    if not non_col_expr_index:
+        return None, on
+
+    name_generator = unique_names(frame.schema.keys())
+    key_names = {i: next(name_generator) for i in non_col_expr_index}
+    key_schema = {
+        **frame.schema,
+        **{key_names[i]: on[i].value.dtype for i in non_col_expr_index},
+    }
+    key_select = Select(
+        key_schema,
+        [NamedExpr(name, Col(dtype, name)) for name, dtype in frame.schema.items()]
+        + [NamedExpr(key_names[i], on[i].value) for i in non_col_expr_index],
+        False,  # noqa: FBT003
+        frame,
+    )
+    new_on = tuple(
+        NamedExpr(key_names[i], Col(on[i].value.dtype, key_names[i]))
+        if i in non_col_expr_index
+        else ne
+        for i, ne in enumerate(on)
+    )
+    return key_select, new_on
 
 
 class ShuffleOptions(TypedDict):

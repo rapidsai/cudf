@@ -13,7 +13,11 @@ from cudf_polars.dsl.ir import ConditionalJoin, Join, Select, Slice
 from cudf_polars.experimental.base import PartitionInfo, get_key_name
 from cudf_polars.experimental.dispatch import generate_ir_tasks, lower_ir_node
 from cudf_polars.experimental.repartition import Repartition
-from cudf_polars.experimental.shuffle import Shuffle, _hash_partition_dataframe
+from cudf_polars.experimental.shuffle import (
+    Shuffle,
+    _hash_partition_dataframe,
+    _materialize_key_exprs,
+)
 from cudf_polars.experimental.utils import (
     _concat,
     _dynamic_planning_on,
@@ -48,37 +52,14 @@ def _maybe_shuffle_frame(
 
     if shuffle_method in {"rapidsmpf", "rapidsmpf-single"}:
         # Materialize non-Col expression keys before shuffling
-        non_col_expr_index = {
-            i for i, ne in enumerate(on) if not isinstance(ne.value, Col)
-        }
-        if non_col_expr_index:
-            key_names = {i: f"__shuffle_key_{i}__" for i in non_col_expr_index}
-            key_schema = {
-                **frame.schema,
-                **{key_names[i]: on[i].value.dtype for i in non_col_expr_index},
-            }
-            key_select = Select(
-                key_schema,
-                [
-                    NamedExpr(name, Col(dtype, name))
-                    for name, dtype in frame.schema.items()
-                ]
-                + [NamedExpr(key_names[i], on[i].value) for i in non_col_expr_index],
-                False,  # noqa: FBT003
-                frame,
-            )
+        key_select, new_on = _materialize_key_exprs(frame, on)
+        if key_select is not None:
             partition_info[key_select] = PartitionInfo(
                 count=partition_info[frame].count,
                 partitioned_on=partition_info[frame].partitioned_on,
             )
-            new_on = tuple(
-                NamedExpr(key_names[i], Col(on[i].value.dtype, key_names[i]))
-                if i in non_col_expr_index
-                else ne
-                for i, ne in enumerate(on)
-            )
             key_shuffle = Shuffle(
-                key_schema,
+                key_select.schema,
                 new_on,
                 shuffle_method,
                 shuffler_insertion_method,

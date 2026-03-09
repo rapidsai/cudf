@@ -4,7 +4,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from rapidsmpf.integrations.cudf.partition import (
     partition_and_pack as py_partition_and_pack,
@@ -20,7 +20,8 @@ from rapidsmpf.streaming.cudf.channel_metadata import (
 )
 from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 
-from cudf_polars.dsl.expr import Col
+from cudf_polars.dsl.expr import Col, NamedExpr
+from cudf_polars.dsl.ir import Select
 from cudf_polars.experimental.rapidsmpf.dispatch import (
     generate_ir_sub_network,
 )
@@ -28,10 +29,11 @@ from cudf_polars.experimental.rapidsmpf.nodes import shutdown_on_error
 from cudf_polars.experimental.rapidsmpf.utils import (
     ChannelManager,
     NormalizedPartitioning,
+    evaluate_chunk,
     recv_metadata,
     send_metadata,
 )
-from cudf_polars.experimental.shuffle import Shuffle
+from cudf_polars.experimental.shuffle import Shuffle, _materialize_key_exprs
 
 if TYPE_CHECKING:
     from rapidsmpf.communicator.communicator import Communicator
@@ -173,6 +175,9 @@ async def _global_shuffle(
     columns_to_hash: tuple[int, ...],
     num_partitions: int,
     collective_id: int,
+    *,
+    key_ir: IR | None = None,
+    drop_ir: IR | None = None,
 ) -> None:
     """
     Global shuffle implementation.
@@ -195,11 +200,15 @@ async def _global_shuffle(
         Number of partitions to shuffle into.
     collective_id
         The collective ID.
+    key_ir
+        Optional IR node that materializes non-Col key expressions as columns.
+    drop_ir
+        Optional IR node that projects away the materialized key columns.
     """
     metadata_in = await recv_metadata(ch_in, context)
 
     # Check if we can skip the shuffle (already partitioned correctly)
-    if _is_already_partitioned(
+    if key_ir is None and _is_already_partitioned(
         metadata_in, columns_to_hash, num_partitions, comm.nranks
     ):
         # Forward metadata and data unchanged
@@ -229,27 +238,27 @@ async def _global_shuffle(
 
     while (msg := await ch_in.recv(context)) is not None:
         if not skip_insert:
-            shuffle.insert_chunk(
-                TableChunk.from_message(msg).make_available_and_spill(
-                    context.br(), allow_overbooking=True
-                )
+            chunk = TableChunk.from_message(msg).make_available_and_spill(
+                context.br(), allow_overbooking=True
             )
+            if key_ir is not None:
+                chunk = await evaluate_chunk(
+                    context, chunk, key_ir, ir_context=ir_context
+                )
+            shuffle.insert_chunk(chunk)
 
     await shuffle.insert_finished()
 
     for partition_id in shuffle.shuffler.local_partitions():
         stream = ir_context.get_cuda_stream()
-        await ch_out.send(
-            context,
-            Message(
-                partition_id,
-                TableChunk.from_pylibcudf_table(
-                    table=await shuffle.extract_chunk(partition_id, stream),
-                    stream=stream,
-                    exclusive_view=True,
-                ),
-            ),
+        chunk = TableChunk.from_pylibcudf_table(
+            table=await shuffle.extract_chunk(partition_id, stream),
+            stream=stream,
+            exclusive_view=True,
         )
+        if drop_ir is not None:
+            chunk = await evaluate_chunk(context, chunk, drop_ir, ir_context=ir_context)
+        await ch_out.send(context, Message(partition_id, chunk))
 
     await ch_out.drain(context)
 
@@ -265,6 +274,8 @@ async def shuffle_actor(
     columns_to_hash: tuple[int, ...],
     num_partitions: int,
     collective_id: int,
+    key_ir: IR | None = None,
+    drop_ir: IR | None = None,
 ) -> None:
     """
     Execute a global shuffle pipeline within a single node.
@@ -293,6 +304,10 @@ async def shuffle_actor(
         Number of partitions to shuffle into.
     collective_id
         The collective ID.
+    key_ir
+        Optional IR node that materializes non-Col key expressions as columns.
+    drop_ir
+        Optional IR node that projects away the materialized key columns.
     """
     async with shutdown_on_error(context, ch_in, ch_out):
         await _global_shuffle(
@@ -304,6 +319,8 @@ async def shuffle_actor(
             columns_to_hash,
             num_partitions,
             collective_id,
+            key_ir=key_ir,
+            drop_ir=drop_ir,
         )
 
 
@@ -317,13 +334,25 @@ def _(
     (child,) = ir.children
     nodes, channels = rec(child)
 
-    keys: list[Col] = [ne.value for ne in ir.keys if isinstance(ne.value, Col)]
-    if len(keys) != len(ir.keys):  # pragma: no cover
-        raise NotImplementedError("Shuffle requires simple keys.")
-    column_names = list(ir.schema.keys())
+    key_select, new_on = _materialize_key_exprs(child, ir.keys)
+    if key_select is not None:
+        drop_ir: Select | None = Select(
+            ir.schema,
+            [NamedExpr(name, Col(dtype, name)) for name, dtype in ir.schema.items()],
+            False,  # noqa: FBT003
+            key_select,
+        )
+        key_schema = key_select.schema
+    else:
+        drop_ir = None
+        key_schema = ir.schema
+
+    column_names = list(key_schema.keys())
 
     context = rec.state["context"]
-    columns_to_hash = tuple(column_names.index(k.name) for k in keys)
+    columns_to_hash = tuple(
+        column_names.index(cast(Col, ne.value).name) for ne in new_on
+    )
     num_partitions = rec.state["partition_info"][ir].count
 
     # Look up the reserved collective ID for this operation
@@ -344,6 +373,8 @@ def _(
             columns_to_hash=columns_to_hash,
             num_partitions=num_partitions,
             collective_id=collective_id,
+            key_ir=key_select,
+            drop_ir=drop_ir,
         )
     ]
 
