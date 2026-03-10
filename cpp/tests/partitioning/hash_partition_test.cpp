@@ -58,6 +58,17 @@ TEST_F(HashPartition, InvalidColumnsToHash)
   EXPECT_THROW(cudf::hash_partition(input, columns_to_hash, num_partitions), std::out_of_range);
 }
 
+TEST_F(HashPartition, InvalidKeyRows)
+{
+  fixed_width_column_wrapper<float> floats({1.f, 2.f, 3.f, 4.f, 5.f, 6.f, 7.f, 8.f});
+  fixed_width_column_wrapper<int16_t> integers({1, 2, 3, 4, 5, 6, 7, 8, 9});
+  auto input = cudf::table_view({floats});
+  auto keys  = cudf::table_view({integers});
+
+  cudf::size_type const num_partitions = 3;
+  EXPECT_THROW(cudf::hash_partition(input, keys, num_partitions), std::invalid_argument);
+}
+
 TEST_F(HashPartition, ZeroPartitions)
 {
   fixed_width_column_wrapper<float> floats({1.f, 2.f, 3.f, 4.f, 5.f, 6.f, 7.f, 8.f});
