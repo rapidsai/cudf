@@ -66,7 +66,8 @@ metadata::metadata(cudf::host_span<uint8_t const> footer_bytes)
 
   CompactProtocolReader cp(footer_bytes.data(), footer_bytes.size());
   cp.read(this);
-  CUDF_EXPECTS(cp.InitSchema(this), "Cannot initialize schema");
+  auto const is_schema_initialized = cp.InitSchema(this);
+  CUDF_EXPECTS(is_schema_initialized, "Cannot initialize schema");
   sanitize_schema();
 }
 
