@@ -70,8 +70,10 @@ class CUDF_EXPORT hierarchical_thread_pool {
     // it from a const context.
     auto task_ptr = std::make_shared<std::decay_t<F>>(std::forward<F>(task));
 
-    // Capture the submitting thread's CUDA device so worker threads operate on
-    // the correct device. Without this, worker threads default to device 0
+    // Capture the submitting thread's CUDA device so worker threads that perform
+    // GPU work operate on the correct device. Without this, worker threads default
+    // to device 0, which breaks in multi-GPU environments (e.g. Spark RAPIDS
+    // executors assigned to a non-zero GPU).
     int device_id = 0;
     cudaGetDevice(&device_id);
 
