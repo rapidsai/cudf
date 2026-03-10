@@ -52,6 +52,8 @@ rapids-make-<ENV>-env
 
 where `<ENV>` is either `pip` or `conda` depending on the devcontainer environment. You might already have this information from earlier. If not, some users specify this as a part of their `.code-workspace` file name located at `/home/coder`. If not, prompt the user to specify the devcontainer environment we are using, either `pip` or `conda` and remember that for future prompts/sessions.
 
+Make sure to run `clean-cudf` after running this for a fresh subsequent build.
+
 ## Running Google tests
 
 Run relevant Google tests 
