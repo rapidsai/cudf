@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
-from cudf_polars.experimental.benchmarks.utils import get_data
+from cudf_polars.experimental.benchmarks.utils import QueryResult, get_data
 
 if TYPE_CHECKING:
     from cudf_polars.experimental.benchmarks.utils import RunConfig
@@ -103,7 +103,7 @@ def duckdb_impl(run_config: RunConfig) -> str:
     """
 
 
-def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
+def polars_impl(run_config: RunConfig) -> QueryResult:
     """Query 31."""
     params = load_parameters(
         int(run_config.scale_factor),
@@ -149,8 +149,9 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     ws2 = ws.filter((pl.col("d_qoy") == 2) & (pl.col("d_year") == year))
     ws3 = ws.filter((pl.col("d_qoy") == 3) & (pl.col("d_year") == year))
 
+    sort_by = {polars_agg: False}
     # Join all quarters together by county
-    return (
+    result = (
         ss1.join(ss2, on="ca_county", suffix="_q2")
         .join(ss3, on="ca_county", suffix="_q3")
         .join(ws1, on="ca_county", suffix="_ws1")
@@ -208,5 +209,6 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
                 "store_q2_q3_increase",
             ]
         )
-        .sort([polars_agg])
+        .sort(sort_by.keys(), nulls_last=True)
     )
+    return QueryResult(frame=result, sort_by=list(sort_by.items()), limit=None)
