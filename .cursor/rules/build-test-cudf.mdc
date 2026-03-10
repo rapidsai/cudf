@@ -34,7 +34,7 @@ Remember, we are in a devcontainer and don't really want to run the `build.sh` s
 For example, you can build pylibcudf and cudf python as:
 
 ```bash
-build-cudf-cpp ; build-pylibcudf-python ; build-cudf-python
+build-cudf-cpp && build-pylibcudf-python && build-cudf-python
 ```
 
 Note that `build-pylibcudf-python` must always successfully run before running `build-cudf-python` or there will be errors
@@ -58,7 +58,7 @@ Make sure to run `clean-cudf` after running this for a fresh subsequent build.
 Run relevant Google tests. Discover all test name binaries at `${HOME}/cudf/cpp/build/latest`
 
 ```bash
-cd ${HOME}/cudf/cpp/build/latest ; ./gtests/PARQUET_TEST ; ./gtests/HYBRID_SCAN_TEST
+cd ${HOME}/cudf/cpp/build/latest && ./gtests/<TESTNAME>_TEST
 ```
 
 ## Running Pytests
@@ -68,7 +68,7 @@ Make sure to build pylibcudf and python before running any of these.
 Pylibcudf tests can be discovered at: `${HOME}/cudf/python/pylibcudf/tests` and subfolders. You can use `pytest` to run them. Example:
 
 ```bash
-cd ${HOME}/cudf/python/pylibcudf/tests/io ; pytest test_parquet.py
+cd ${HOME}/cudf/python/pylibcudf/tests/io && pytest test_parquet.py
 ```
 
 Similarly, cudf-python tests can be discovered at: `${HOME}/cudf/python/cudf/cudf/tests` and subfolders. These can also be run the same way.
