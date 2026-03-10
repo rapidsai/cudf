@@ -461,17 +461,11 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_rollingWindow(JNIEnv* env
 
     std::unique_ptr<cudf::column> ret;
     if (n_default_output_col != nullptr) {
-      if (n_preceding_col != nullptr && n_following_col != nullptr) {
-        CUDF_FAIL(
-          "A default output column is not currently supported with variable length "
-          "preceding and following");
-        // ret = cudf::rolling_window(*n_input_col, *n_default_output_col,
-        //        *n_preceding_col, *n_following_col, min_periods, agg);
-      } else {
-        ret = cudf::rolling_window(
-          *n_input_col, *n_default_output_col, preceding, following, min_periods, *agg);
-      }
-
+      CUDF_EXPECTS(n_preceding_col == nullptr || n_following_col == nullptr,
+                   "A default output column is not currently supported with variable length "
+                   "preceding and following");
+      ret = cudf::rolling_window(
+        *n_input_col, *n_default_output_col, preceding, following, min_periods, *agg);
     } else {
       if (n_preceding_col != nullptr && n_following_col != nullptr) {
         ret =
@@ -1561,8 +1555,11 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_transform(
     cudf::jni::native_jstring n_j_udf(env, j_udf);
     std::string n_udf(n_j_udf.get());
     cudf::transform_input inputs[] = {*column};
-    return release_as_jlong(
-      cudf::transform_extended(inputs, n_udf, cudf::data_type(cudf::type_id::INT32), j_is_ptx));
+    return release_as_jlong(cudf::transform_extended(
+      inputs,
+      n_udf,
+      cudf::data_type(cudf::type_id::INT32),
+      j_is_ptx ? cudf::udf_source_type::PTX : cudf::udf_source_type::CUDA));
   }
   JNI_CATCH(env, 0);
 }

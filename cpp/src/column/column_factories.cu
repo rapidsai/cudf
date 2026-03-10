@@ -93,7 +93,7 @@ std::unique_ptr<cudf::column> column_from_scalar_dispatch::operator()<cudf::stru
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr) const
 {
-  if (size == 0) CUDF_FAIL("0-length struct column is unsupported.");
+  CUDF_EXPECTS(size != 0, "0-length struct column is unsupported.");
   auto& ss  = static_cast<scalar_type_t<cudf::struct_view> const&>(value);
   auto iter = cuda::make_constant_iterator(0);
 

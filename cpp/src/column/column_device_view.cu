@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #include <cudf/column/column_device_view.cuh>
@@ -23,6 +23,7 @@ column_device_view::column_device_view(column_view source)
   : column_device_view_core{source.type(),
                             source.size(),
                             source.head(),
+                            source.null_count(),
                             source.null_mask(),
                             source.offset(),
                             nullptr,
@@ -53,7 +54,7 @@ create_device_view_from_view(ColumnView const& source, rmm::cuda_stream_view str
   // A buffer of CPU memory is allocated to hold the ColumnDeviceView
   // objects. Once filled, the CPU memory is copied to device memory
   // and then set into the d_children member pointer.
-  auto staging_buffer = detail::make_host_vector<char>(descendant_storage_bytes, stream);
+  auto staging_buffer = detail::make_pinned_vector_async<char>(descendant_storage_bytes, stream);
 
   // Each ColumnDeviceView instance may have child objects that
   // require setting some internal device pointers before being copied
@@ -82,6 +83,7 @@ column_device_view::column_device_view(column_view source, void* h_ptr, void* d_
   : column_device_view_core{source.type(),
                             source.size(),
                             source.head(),
+                            source.null_count(),
                             source.null_mask(),
                             source.offset(),
                             nullptr,
