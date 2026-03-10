@@ -330,7 +330,8 @@ metadata::metadata(datasource* source, bool read_page_indexes)
   auto const buffer = cudf::io::parquet::fetch_footer_to_host(*source);
   CompactProtocolReader cp(buffer->data(), buffer->size());
   cp.read(this);
-  CUDF_EXPECTS(cp.InitSchema(this), "Cannot initialize schema");
+  auto const is_schema_initialized = cp.InitSchema(this);
+  CUDF_EXPECTS(is_schema_initialized, "Cannot initialize schema");
 
   // Reading the page indexes is somewhat expensive, so skip if there are no byte array columns.
   // Currently the indexes are only used for the string size calculations.
@@ -1902,6 +1903,9 @@ aggregate_reader_metadata::select_columns(
               valid_path.full_path, selected_path, case_sensitive_names);
           });
         // Ensure that selected path matches a path in all_paths
+        CUDF_EXPECTS(found_path != all_paths.end() or ignore_missing_columns,
+                     "Encountered non-existent column in selected path",
+                     std::invalid_argument);
         if (found_path != all_paths.end()) {
           // Use the file's actual path (preserving original case) for the valid_selected_paths
           valid_selected_paths.push_back({found_path->full_path, found_path->schema_idx});
