@@ -126,7 +126,31 @@ def maintain_order(request):
     return request.param
 
 
-def test_groupby(df: pl.LazyFrame, maintain_order, keys, exprs):
+def test_groupby(
+    df: pl.LazyFrame, maintain_order, keys, exprs, using_rapidsmpf, request
+):
+    failing_rapidsmpf_nodeids = {
+        'test_groupby[maintain_order-col("key1")-col("int32").mean()]',
+        'test_groupby[maintain_order-col("key1")-col("uint16_with_null").sum()-col("uint16_with_null").mean().alias("mean")]',
+        'test_groupby[maintain_order-col("key2")-col("int32").mean()]',
+        'test_groupby[maintain_order-col("key2")-col("uint16_with_null").sum()-col("uint16_with_null").mean().alias("mean")]',
+        'test_groupby[maintain_order-col("key1")-dyn int: 1-col("int32").mean()]',
+        'test_groupby[maintain_order-col("key1")-dyn int: 1-col("uint16_with_null").sum()-col("uint16_with_null").mean().alias("mean")]',
+        'test_groupby[maintain_order-[(col("key1")) * (col("key2"))]-col("int32").mean()]',
+        'test_groupby[maintain_order-[(col("key1")) * (col("key2"))]-col("uint16_with_null").sum()-col("uint16_with_null").mean().alias("mean")]',
+        'test_groupby[maintain_order-col("key1")-col("key2")-col("int32").mean()]',
+        'test_groupby[maintain_order-col("key1")-col("key2")-col("uint16_with_null").sum()-col("uint16_with_null").mean().alias("mean")]',
+        'test_groupby[maintain_order-[(col("key1")) == (col("key2"))]-col("int32").mean()]',
+        'test_groupby[maintain_order-[(col("key1")) == (col("key2"))]-col("uint16_with_null").sum()-col("uint16_with_null").mean().alias("mean")]',
+        'test_groupby[maintain_order-col("key2")-[(col("key1")) == (1)]-col("int32").mean()]',
+        'test_groupby[maintain_order-col("key2")-[(col("key1")) == (1)]-col("uint16_with_null").sum()-col("uint16_with_null").mean().alias("mean")]',
+    }
+    request.applymarker(
+        pytest.mark.xfail(
+            using_rapidsmpf and request.node.name in failing_rapidsmpf_nodeids,
+            reason="https://github.com/rapidsai/cudf/issues/21642 and probably mean calculation referenced in https://github.com/rapidsai/cudf/issues/21721",
+        )
+    )
     q = df.group_by(*keys, maintain_order=maintain_order).agg(*exprs)
 
     if not maintain_order:
