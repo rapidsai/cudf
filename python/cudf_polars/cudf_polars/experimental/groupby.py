@@ -135,7 +135,7 @@ def decompose(
                 decompose(
                     f"{next(names)}__mean_count",
                     Agg(
-                        DataType(pl.Int32()),
+                        DataType(pl.Int64()),
                         "count",
                         False,  # noqa: FBT003
                         ExecutionContext.GROUPBY,
