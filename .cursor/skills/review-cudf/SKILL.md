@@ -77,7 +77,7 @@ gh api repos/rapidsai/cudf/pulls/<PR_NUMBER>/reviews
 - Forking and joining the input stream to launch multiple kernels across the same or multiple threads is fine.
 - Prefer accepting `host_span`/`device_span` over owning vectors unless when transferring ownership by explicitly moving via rvalue.
 - Spans are lightweight views — pass by value, apply `const` to the element type (`span<T const>`), not to the span itself.
-- Prefer modern C++ primitives allowed by the current libcudf CXX standard (can be found in `cudf/cpp/CMakeLists.txt`). For example, use C++ concepts, `requires()`, `std::ranges`, `std::for_each`, `std::transform` instead of manual implementations and raw for loops. For loops like `for (auto elem : vector)` are fine.
+- Prefer modern C++ primitives allowed by the current libcudf CXX standard (can be found in `cpp/CMakeLists.txt`). For example, use C++ concepts, `requires()`, `std::ranges`, `std::for_each`, `std::transform` instead of manual implementations and raw for loops. For loops like `for (auto elem : vector)` are fine.
 - Use `static_assert` with a clear message when possible to avoid accidental call of a templated function with a wrong tparam or type.
 - Pass in views and spans instead of copies or references of owning objects when possible except when transferring ownership by moving
 
