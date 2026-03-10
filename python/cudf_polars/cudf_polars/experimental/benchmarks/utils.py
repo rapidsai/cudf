@@ -1731,18 +1731,43 @@ def run_polars(
     """Run the queries using the given benchmark and executor options."""
     vars(args).update({"query_set": benchmark.name})
     run_config = RunConfig.from_args(args)
-
-    if run_config.cluster == "spmd":
-        run_polars_spmd(benchmark, args, run_config)
-        return  # run_polars_spmd calls sys.exit; return keeps mypy happy
-
     numeric_type, date_type = check_input_data_type(run_config)
     validation_files = (
         list_validation_files(args.validate_directory)
         if args.validate_directory is not None
         else None
     )
+    parquet_options = (
+        {"use_rapidsmpf_native": run_config.native_parquet}
+        if run_config.runtime == "rapidsmpf"
+        else {}
+    )
+    _args = (
+        benchmark,
+        args,
+        run_config,
+        parquet_options,
+        numeric_type,
+        date_type,
+        validation_files,
+    )
+    match run_config.cluster:
+        case "spmd":
+            run_polars_spmd(*_args)
+        case "single" | "distributed":
+            run_polars_single_or_dask(*_args)
 
+
+def run_polars_single_or_dask(
+    benchmark: Any,
+    args: argparse.Namespace,
+    run_config: RunConfig,
+    parquet_options: dict[str, Any],
+    numeric_type: str,
+    date_type: str,
+    validation_files: dict[int, Path] | None,
+) -> None:
+    """Run benchmark queries using Dask (or single-process) execution."""
     client = initialize_dask_cluster(run_config, args)
     if client is not None:
         run_config = dataclasses.replace(
@@ -1752,11 +1777,6 @@ def run_polars(
     engine = None
     if run_config.executor != "cpu":
         executor_options = get_executor_options(run_config, benchmark=benchmark)
-        parquet_options = (
-            {"use_rapidsmpf_native": run_config.native_parquet}
-            if run_config.runtime == "rapidsmpf"
-            else {}
-        )
         engine = pl.GPUEngine(
             raise_on_fail=True,
             memory_resource=rmm.mr.CudaAsyncMemoryResource(
@@ -1801,8 +1821,67 @@ def run_polars(
     args.output.write(json.dumps(run_config.serialize(engine=engine)))
     args.output.write("\n")
 
-    exit_code = 1 if (query_failures or validation_failures) else 0
-    sys.exit(exit_code)
+    sys.exit(1 if (query_failures or validation_failures) else 0)
+
+
+def run_polars_spmd(
+    benchmark: Any,
+    args: argparse.Namespace,
+    run_config: RunConfig,
+    parquet_options: dict[str, Any],
+    numeric_type: str,
+    date_type: str,
+    validation_files: dict[int, Path] | None,
+) -> None:
+    """Run benchmark queries using SPMD execution via the ``rrun`` launcher."""
+    if run_config.collect_traces:
+        warnings.warn(
+            "--collect-traces is not supported with --cluster spmd and will be ignored.",
+            stacklevel=2,
+        )
+    executor_options = get_executor_options(run_config, benchmark=benchmark)
+    # "runtime" and "cluster" are reserved — spmd_execution sets them
+    executor_options.pop("runtime", None)
+    executor_options.pop("cluster", None)
+    with spmd_execution(
+        mr=rmm.mr.CudaAsyncMemoryResource(release_threshold=args.rmm_release_threshold)
+        if run_config.rmm_async
+        else None,
+        executor_options=executor_options,
+        parquet_options=parquet_options,
+        cuda_stream_policy=run_config.stream_policy,
+    ) as (comm, _, engine):
+        rank = comm.rank
+        run_config = dataclasses.replace(run_config, n_workers=comm.nranks)
+        records, plans, validation_failures, query_failures = _run_query_loop(
+            benchmark,
+            args,
+            run_config,
+            engine,
+            None,
+            numeric_type,
+            date_type,
+            validation_files,
+        )
+    run_config = dataclasses.replace(run_config, records=dict(records), plans=plans)
+    # Only rank 0 writes output and prints summaries to avoid N duplicate outputs.
+    if rank == 0:
+        if args.summarize:
+            run_config.summarize()
+        if args.validate and run_config.executor != "cpu":
+            print("\nValidation Summary")
+            print("==================")
+            if validation_failures:
+                print(
+                    f"{len(validation_failures)} queries failed validation: "
+                    f"{sorted(set(validation_failures))}"
+                )
+            else:
+                print("✅ All validated queries passed.")
+        # engine is not JSON-serializable (holds the SPMD Cython context)
+        args.output.write(json.dumps(run_config.serialize(engine=None)))
+        args.output.write("\n")
+    sys.exit(1 if (query_failures or validation_failures) else 0)
 
 
 def setup_logging(query_id: int, iteration: int) -> None:  # noqa: D103
@@ -2036,73 +2115,3 @@ def run_duckdb(duckdb_queries_cls: Any, args: argparse.Namespace) -> None:
 
     args.output.write(json.dumps(run_config.serialize(engine=None)))
     args.output.write("\n")
-
-
-def run_polars_spmd(
-    benchmark: Any,
-    args: argparse.Namespace,
-    run_config: RunConfig,
-) -> None:
-    """Run benchmark queries using SPMD execution via the ``rrun`` launcher."""
-    if run_config.collect_traces:
-        warnings.warn(
-            "--collect-traces is not supported with --cluster spmd and will be ignored.",
-            stacklevel=2,
-        )
-    executor_options = get_executor_options(run_config, benchmark=benchmark)
-    # "runtime" and "cluster" are reserved — spmd_execution sets them
-    executor_options.pop("runtime", None)
-    executor_options.pop("cluster", None)
-    parquet_options = (
-        {"use_rapidsmpf_native": run_config.native_parquet}
-        if run_config.runtime == "rapidsmpf"
-        else {}
-    )
-    numeric_type, date_type = check_input_data_type(run_config)
-    validation_files = (
-        list_validation_files(args.validate_directory)
-        if args.validate_directory is not None
-        else None
-    )
-    mr = (
-        rmm.mr.CudaAsyncMemoryResource(release_threshold=args.rmm_release_threshold)
-        if run_config.rmm_async
-        else None
-    )
-    with spmd_execution(
-        mr=mr,
-        executor_options=executor_options,
-        parquet_options=parquet_options,
-        cuda_stream_policy=run_config.stream_policy,
-    ) as (comm, _, engine):
-        rank = comm.rank
-        run_config = dataclasses.replace(run_config, n_workers=comm.nranks)
-        records, plans, validation_failures, query_failures = _run_query_loop(
-            benchmark,
-            args,
-            run_config,
-            engine,
-            None,
-            numeric_type,
-            date_type,
-            validation_files,
-        )
-    run_config = dataclasses.replace(run_config, records=dict(records), plans=plans)
-    # Only rank 0 writes output and prints summaries to avoid N duplicate outputs.
-    if rank == 0:
-        if args.summarize:
-            run_config.summarize()
-        if args.validate and run_config.executor != "cpu":
-            print("\nValidation Summary")
-            print("==================")
-            if validation_failures:
-                print(
-                    f"{len(validation_failures)} queries failed validation: "
-                    f"{sorted(set(validation_failures))}"
-                )
-            else:
-                print("✅ All validated queries passed.")
-        # engine is not JSON-serializable (holds the SPMD Cython context)
-        args.output.write(json.dumps(run_config.serialize(engine=None)))
-        args.output.write("\n")
-    sys.exit(1 if (query_failures or validation_failures) else 0)
