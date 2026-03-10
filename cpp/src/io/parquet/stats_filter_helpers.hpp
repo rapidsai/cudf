@@ -44,12 +44,25 @@ class stats_caster_base {
     auto constexpr endianness = std::endian::native;
     static_assert(endianness == std::endian::little or endianness == std::endian::big,
                   "Encountered unsupported endianness while decoding decimal128 from FLBA");
-    using RepType  = numeric::decimal128::rep;
-    auto value_rep = std::bit_cast<std::array<std::byte, sizeof(RepType)>>(
-      *reinterpret_cast<RepType const*>(stats_val));
+    using RepType = numeric::decimal128::rep;
+    auto value    = RepType{};
+    std::memcpy(&value, stats_val, sizeof(RepType));
+    auto value_rep = std::bit_cast<std::array<std::byte, sizeof(RepType)>>(value);
     // byte-swap to native representation on little-endian platforms
     if constexpr (endianness == std::endian::little) { std::ranges::reverse(value_rep); }
     return std::bit_cast<RepType>(value_rep);
+  }
+
+  template <typename T>
+  static inline T decode_fixed_width_value(uint8_t const* stats_val, size_t stats_size)
+    requires((cudf::is_integral<T>() and !cudf::is_boolean<T>()) or cudf::is_fixed_point<T>() or
+             cudf::is_chrono<T>())
+  {
+    CUDF_EXPECTS(stats_size <= sizeof(T),
+                 "Parquet reader encountede a statistics vector larger than the type's size");
+    auto value = T{};
+    std::memcpy(&value, stats_val, std::min(stats_size, sizeof(T)));
+    return value;
   }
 
   template <typename ToType, typename FromType>
@@ -89,19 +102,21 @@ class stats_caster_base {
   {
     switch (type) {
       case Type::INT32:
-        return stats_caster_base::target_type<T>(*reinterpret_cast<int32_t const*>(stats_val));
+        return stats_caster_base::target_type<T>(
+          decode_fixed_width_value<int32_t>(stats_val, stats_size));
       case Type::INT64:
-        return stats_caster_base::target_type<T>(*reinterpret_cast<int64_t const*>(stats_val));
+        return stats_caster_base::target_type<T>(
+          decode_fixed_width_value<int64_t>(stats_val, stats_size));
       case Type::INT96:  // Deprecated in parquet specification
         return stats_caster_base::target_type<T>(
-          static_cast<__int128_t>(reinterpret_cast<int64_t const*>(stats_val)[0]) << 32 |
-          reinterpret_cast<int32_t const*>(stats_val)[2]);
+          static_cast<__int128_t>(decode_fixed_width_value<int64_t>(stats_val, stats_size)) << 32 |
+          decode_fixed_width_value<int32_t>(stats_val + sizeof(int64_t), stats_size));
       case Type::BYTE_ARRAY: [[fallthrough]];
       case Type::FIXED_LEN_BYTE_ARRAY:
         if (stats_size == sizeof(T)) {
           if constexpr (cudf::is_chrono<T>()) {
             return stats_caster_base::target_type<T>(
-              *reinterpret_cast<typename T::rep const*>(stats_val));
+              decode_fixed_width_value<typename T::rep>(stats_val, stats_size));
           } else if constexpr (std::is_same_v<T, numeric::decimal128::rep>) {
             // Decimals with physical type FLBA/BYTE_ARRAY are stored as two's complement using
             // big-endian.
@@ -109,7 +124,8 @@ class stats_caster_base {
           } else {
             // TODO(mh): We may need to add support for `decimal256` (two's complement using
             // big-endian) and `UUID` types (big-endian)
-            return stats_caster_base::target_type<T>(*reinterpret_cast<T const*>(stats_val));
+            return stats_caster_base::target_type<T>(
+              decode_fixed_width_value<T>(stats_val, stats_size));
           }
         }
         // unsupported type
