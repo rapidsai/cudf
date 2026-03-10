@@ -41,7 +41,7 @@ If we run into a fatal CMake error at the very start of CMake while building lib
 rapids-make-<ENV>-env
 ```
 
-where `<ENV>` is either `pip` or `conda` depending on the type of the devcontainer we currently are in. An easy way to check that is to look at the `.code-workspace` file's name at `/home/coder`.
+where `<ENV>` is either `pip` or `conda` depending on the type of the devcontainer we currently are in. Some users may specify this as a part of their workspace name. i.e., the `.code-workspace` file's name located at `/home/coder` so you can use that. Otherwise, prompt me to specify which devcontainer we are using.
 
 ## Running Google tests
 
