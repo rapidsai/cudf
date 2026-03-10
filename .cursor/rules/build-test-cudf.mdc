@@ -44,7 +44,8 @@ Similar to build instructions, we can use `clean-cudf-cpp` or `clean-cudf-python
 
 ## CMake fatal error handling
 If we run into a fatal CMake error at the very start of CMake while building libcudf (stating packages mismatched), it's like because our packages are outdated, we can just update them using:
-
+## Build error handling
+Oftentimes, clean building cudf will resolve all build problems. If we run into a fatal CMake error while building libcudf indicating packages/version mismatch, we can update our packages using the following script. If the error persists, use `--force` flag with the script
 ```bash
 rapids-make-<ENV>-env
 ```
