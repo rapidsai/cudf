@@ -40,6 +40,7 @@ from cudf_polars.experimental.sort import (
     _select_local_split_candidates,
     find_sort_splits,
 )
+from cudf_polars.utils.cuda_stream import get_joined_cuda_stream
 
 if TYPE_CHECKING:
     from rapidsmpf.communicator.communicator import Communicator
@@ -75,7 +76,7 @@ async def _compute_sort_boundaries(
     column_order: list[Any],
     null_order: list[Any],
     allgather_id: int,
-) -> plc.Table:
+) -> DataFrame:
     """Compute global sort boundaries."""
     boundary_ir = Empty(_boundary_schema(by, by_dtypes))
     local_boundaries_df = _get_final_sort_boundaries(
@@ -110,7 +111,7 @@ async def _compute_sort_boundaries(
         allgather.insert(comm.rank, chunk)
         allgather.insert_finished()
         concat_table = await allgather.extract_concatenated(stream, ordered=True)
-        boundaries_df = _get_final_sort_boundaries(
+        return _get_final_sort_boundaries(
             DataFrame.from_table(
                 concat_table,
                 list(boundary_ir.schema.keys()),
@@ -122,22 +123,12 @@ async def _compute_sort_boundaries(
             num_partitions,
         )
     else:
-        boundaries_df = local_boundaries_df
-
-    if boundaries_df.table.num_rows() > 0:
-        return plc.copying.gather(
-            boundaries_df.table,
-            plc.filling.sequence(
-                boundaries_df.table.num_rows(),
-                plc.Scalar.from_py(0, plc.types.SIZE_TYPE, stream=stream),
-                plc.Scalar.from_py(1, plc.types.SIZE_TYPE, stream=stream),
-                stream=stream,
-            ),
-            plc.copying.OutOfBoundsPolicy.DONT_CHECK,
-            stream=stream,
+        return DataFrame.from_table(
+            local_boundaries_df.table,
+            list(boundary_ir.schema.keys()),
+            list(boundary_ir.schema.values()),
+            stream=local_boundaries_df.stream,
         )
-    else:
-        return boundaries_df.table
 
 
 @define_actor()
@@ -220,7 +211,7 @@ async def sort_actor(
             message_ids.append(mid)
             del df
 
-        sort_boundaries_tbl = await _compute_sort_boundaries(
+        sort_boundaries_df = await _compute_sort_boundaries(
             context,
             comm,
             ir_context,
@@ -254,13 +245,19 @@ async def sort_actor(
             )
             tbl = available_chunk.table_view()
             sort_cols_tbl = plc.Table([tbl.columns()[i] for i in by_indices])
+
+            stream = get_joined_cuda_stream(
+                ir_context.get_cuda_stream,
+                upstreams=(available_chunk.stream, sort_boundaries_df.stream),
+            )
+
             splits = find_sort_splits(
                 sort_cols_tbl,
-                sort_boundaries_tbl,
+                sort_boundaries_df.table,
                 seq_num,
                 list(column_order),
                 list(null_order),
-                stream=available_chunk.stream,
+                stream=stream,
                 chunk_relative=True,
             )
             shuffle.insert_chunk(available_chunk, splits=splits)
