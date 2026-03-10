@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
-from cudf_polars.experimental.benchmarks.utils import get_data
+from cudf_polars.experimental.benchmarks.utils import QueryResult, get_data
 
 if TYPE_CHECKING:
     from cudf_polars.experimental.benchmarks.utils import RunConfig
@@ -53,7 +53,7 @@ def duckdb_impl(run_config: RunConfig) -> str:
     """
 
 
-def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
+def polars_impl(run_config: RunConfig) -> QueryResult:
     """Query 92."""
     params = load_parameters(
         int(run_config.scale_factor),
@@ -79,17 +79,32 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         .agg([pl.col("ws_ext_discount_amt").mean().alias("avg_discount")])
         .with_columns([(pl.col("avg_discount") * 1.3).alias("threshold_discount")])
     )
-    return (
-        web_sales.join(item, left_on="ws_item_sk", right_on="i_item_sk", how="inner")
-        .join(date_dim, left_on="ws_sold_date_sk", right_on="d_date_sk", how="inner")
-        .join(avg_discounts, left_on="ws_item_sk", right_on="ws_item_sk", how="inner")
-        .filter(
-            (pl.col("i_manufact_id") == manufact_id)
-            & (pl.col("d_date") >= start_date)
-            & (pl.col("d_date") <= end_date)
-            & (pl.col("ws_ext_discount_amt") > pl.col("threshold_discount"))
-        )
-        .select([pl.col("ws_ext_discount_amt").sum().alias("Excess Discount Amount")])
-        .sort("Excess Discount Amount", nulls_last=True)
-        .limit(100)
+    return QueryResult(
+        frame=(
+            web_sales.join(
+                item, left_on="ws_item_sk", right_on="i_item_sk", how="inner"
+            )
+            .join(
+                date_dim, left_on="ws_sold_date_sk", right_on="d_date_sk", how="inner"
+            )
+            .join(
+                avg_discounts,
+                left_on="ws_item_sk",
+                right_on="ws_item_sk",
+                how="inner",
+            )
+            .filter(
+                (pl.col("i_manufact_id") == manufact_id)
+                & (pl.col("d_date") >= start_date)
+                & (pl.col("d_date") <= end_date)
+                & (pl.col("ws_ext_discount_amt") > pl.col("threshold_discount"))
+            )
+            .select(
+                [pl.col("ws_ext_discount_amt").sum().alias("Excess Discount Amount")]
+            )
+            .sort("Excess Discount Amount", nulls_last=True)
+            .limit(100)
+        ),
+        sort_by=[("Excess Discount Amount", False)],
+        limit=100,
     )

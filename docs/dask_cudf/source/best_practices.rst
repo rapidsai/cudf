@@ -76,14 +76,6 @@ to enable `native spilling support in cuDF
 When using :class:`dask_cuda.LocalCUDACluster`, this is easily accomplished by
 setting ``enable_cudf_spill=True``.
 
-When a Dask cuDF workflow includes conversion between DataFrame and Array
-representations, native cuDF spilling may be insufficient. For these cases,
-`JIT-unspill <https://docs.rapids.ai/api/dask-cuda/nightly/spilling/#jit-unspill>`__
-is likely to produce better protection from out-of-memory (OOM) errors.
-Please see `Dask-CUDA's spilling documentation
-<https://docs.rapids.ai/api/dask-cuda/stable/spilling/>`__ for further details
-and guidance.
-
 Use RMM
 ~~~~~~~
 
