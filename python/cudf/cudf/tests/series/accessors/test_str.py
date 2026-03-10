@@ -2644,7 +2644,6 @@ def test_string_index_duplicate_str_cat(data, others, sep, na_rep, name):
     got = gi.str.cat(others=gd_others, sep=sep, na_rep=na_rep)
     expect = pi.str.cat(others=pd_others, sep=sep, na_rep=na_rep)
 
-    # TODO: Remove got.sort_values call once we have `join` param support
     # in `.str.cat`
     # https://github.com/rapidsai/cudf/issues/5862
 
