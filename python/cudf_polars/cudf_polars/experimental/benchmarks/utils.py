@@ -1842,9 +1842,8 @@ def run_polars_spmd(
 ) -> None:
     """Run benchmark queries using SPMD execution via the ``rrun`` launcher."""
     if run_config.collect_traces:
-        warnings.warn(
-            "--collect-traces is not supported with --cluster spmd and will be ignored.",
-            stacklevel=2,
+        raise NotImplementedError(
+            "--collect-traces is not yet supported with --cluster spmd."
         )
     executor_options = get_executor_options(run_config, benchmark=benchmark)
     # "runtime" and "cluster" are reserved — spmd_execution sets them
