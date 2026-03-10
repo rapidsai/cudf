@@ -2967,7 +2967,7 @@ void filter_typed_test()
                                            numeric::scale_type{0});  // i ∈ [-10,000, 10,000)
       } else {
         return cudf::numeric_scalar<T>(
-          (100 - 100 * std::is_signed_v<T>));  // i/100 ∈ [-100, -100) or [0, 200)
+          (100 - 100 * std::is_signed_v<T>));  // i/100 ∈ [-100, 100) or [0, 200)
       }
     }();
 
