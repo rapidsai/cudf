@@ -5,6 +5,7 @@
 
 #pragma once
 
+#include "io/parquet/expression_transform_helpers.hpp"
 #include "io/parquet/parquet_gpu.hpp"
 #include "io/parquet/reader_impl_helpers.hpp"
 
