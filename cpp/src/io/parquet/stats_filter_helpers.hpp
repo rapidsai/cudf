@@ -58,8 +58,8 @@ class stats_caster_base {
     requires((cudf::is_integral<T>() and !cudf::is_boolean<T>()) or cudf::is_fixed_point<T>() or
              cudf::is_chrono<T>())
   {
-    CUDF_EXPECTS(stats_size <= sizeof(T),
-                 "Parquet reader encountede a statistics vector larger than the type's size");
+    CUDF_EXPECTS(stats_size == sizeof(T),
+                 "Parquet reader encountered a statistics vector larger than the type's size");
     auto value = T{};
     std::memcpy(&value, stats_val, std::min(stats_size, sizeof(T)));
     return value;
