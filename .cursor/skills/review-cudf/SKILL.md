@@ -1,6 +1,6 @@
 ---
 name: review-cudf
-description: Review GitHub pull requests for the cudf project. Use when the user invokes /review with a GitHub PR link, or asks to review a PR, code changes, or diff for cudf.
+description: Review GitHub pull requests for the cudf project. Use when the user invokes /review-cudf with a GitHub PR link, or asks to review a PR, code changes, or diff for cudf.
 ---
 
 # Review cuDF Pull Request
@@ -12,12 +12,11 @@ When the user provides a PR link (e.g. `/review-cudf https://github.com/rapidsai
 1. **Fetch PR metadata and diff**
 
 ```bash
-# Extract owner/repo and PR number from the URL
 gh pr view <PR_NUMBER> --repo rapidsai/cudf --json title,body,files,additions,deletions,baseRefName,headRefName
 gh pr diff <PR_NUMBER> --repo rapidsai/cudf
 ```
 
-Hint: Run `gh auth token` in my terminal that you can export to `GH_TOKEN` once and bypass GH rate limits subsequently.
+Hint: Run `gh auth token` in the terminal that you can export to `GH_TOKEN` once and bypass GH rate limits subsequently. If no token is available and you hit GH rate limits, ask the user if they have a toke and can provide it. If not, use alternative methods.
 
 2. **Fetch review comments already posted**
 
@@ -50,7 +49,7 @@ gh api repos/rapidsai/cudf/pulls/<PR_NUMBER>/reviews
 - Do not access the offsets child of an empty strings or lists column — this is undefined behavior.
 
 ### Naming & Code Duplication
-- No significant code duplication; reusable logic msut be refactored into common helper functions.
+- No significant code duplication; reusable logic must be refactored into common helper functions.
 - Function and variable names are meaningful — not too vague or verbose.
 - No single-letter variable names except loop indices (`i`, `j`, `k`) or thread IDs (`t`, `tid`).
 - Private member variables are prefixed with an underscore (`_rating`, `_column`).

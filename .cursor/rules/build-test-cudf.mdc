@@ -8,7 +8,7 @@ alwaysApply: false
 
 Prompt the user to specify if we are working inside a cudf devcontainer. If not, ignore everything else in this file and don't use any of the following instructions. 
 
-If inside devcontainer, ask about the devcontainer environment, `pip` or `conda`? 
+If inside devcontainer, ask about the devcontainer environment, `pip` or `conda`? Some users specify this as a part of their `.code-workspace` file name located at `/home/coder` so check that before prompting the user.
 
 Remember this and don't ask over and over for each prompt/chat session.
 
@@ -39,8 +39,8 @@ build-cudf-cpp ; build-pylibcudf-python ; build-cudf-python
 
 Note that `build-pylibcudf-python` must always successfully run before running `build-cudf-python` or there will be errors
 
-# Clean up
-Similar to build instructions, we can use `clean-cudf-cpp` or `clean-cudf-python` etc. scripts located at `/usr/bin`.
+## Clean up
+Similar to build instructions, we can use `clean-cudf-cpp` or `clean-cudf-python` etc. scripts located at `/usr/bin`. Use `clean-cudf` to clean everything.
 
 ## Build error handling
 Oftentimes, clean building cudf will resolve all build problems. If we run into a fatal CMake error while building libcudf indicating packages/version mismatch, we can update our packages using the following script. If the error persists, use `--force` flag with the script
@@ -48,13 +48,13 @@ Oftentimes, clean building cudf will resolve all build problems. If we run into 
 rapids-make-<ENV>-env
 ```
 
-where `<ENV>` is either `pip` or `conda` depending on the devcontainer environment. You might already have this information from earlier. If not, some users specify this as a part of their `.code-workspace` file name located at `/home/coder`. If not, prompt the user to specify the devcontainer environment we are using, either `pip` or `conda` and remember that for future prompts/sessions.
+where `<ENV>` is either `pip` or `conda` depending on the devcontainer environment. Prompt the user to specify this information if and only if not specified earlier and isneeded
 
 Make sure to run `clean-cudf` after running this for a fresh subsequent build.
 
 ## Running Google tests
 
-Run relevant Google tests 
+Run relevant Google tests. Discover all test name binaries at `/home/coder/cudf/cpp/build/latest` 
 
 ```bash
 cd /home/coder/cudf/cpp/build/latest ; ./gtests/<TEST_NAME>_TEST
