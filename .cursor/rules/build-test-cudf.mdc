@@ -1,8 +1,16 @@
 ---
-description: Instructions to build and test cudf. Apply whenever you write code and want to build and test changes
+description: Instructions to build and test cudf. Apply whenever you write code and want to build and test changes inside cudf devcontainer
 globs: 
 alwaysApply: false
 ---
+
+## Check if we are in devcontainer
+
+Prompt the user to specify if we are working inside a cudf devcontainer. If not, ignore everything else in this file and don't use any of the following instructions. 
+
+If inside devcontainer, ask about the devcontainer environment, `pip` or `conda`? 
+
+Remember this and don't ask over and over for each prompt/chat session.
 
 ## Building libcudf
 
@@ -41,7 +49,7 @@ If we run into a fatal CMake error at the very start of CMake while building lib
 rapids-make-<ENV>-env
 ```
 
-where `<ENV>` is either `pip` or `conda` depending on the type of the devcontainer we currently are in. Some users may specify this as a part of their workspace name. i.e., the `.code-workspace` file's name located at `/home/coder` so you can use that. Otherwise, prompt me to specify which devcontainer we are using.
+where `<ENV>` is either `pip` or `conda` depending on the devcontainer environment. You might already have this information from earlier. If not, some users specify this as a part of their `.code-workspace` file name located at `/home/coder`. If not, prompt the user to specify the devcontainer environment we are using, either `pip` or `conda` and remember that for future prompts/sessions.
 
 ## Running Google tests
 
