@@ -1742,20 +1742,27 @@ def run_polars(
         if run_config.runtime == "rapidsmpf"
         else {}
     )
-    _args = (
-        benchmark,
-        args,
-        run_config,
-        parquet_options,
-        numeric_type,
-        date_type,
-        validation_files,
-    )
     match run_config.cluster:
         case "spmd":
-            run_polars_spmd(*_args)
+            run_polars_spmd(
+                benchmark,
+                args,
+                run_config,
+                parquet_options,
+                numeric_type,
+                date_type,
+                validation_files,
+            )
         case "single" | "distributed":
-            run_polars_single_or_dask(*_args)
+            run_polars_single_or_dask(
+                benchmark,
+                args,
+                run_config,
+                parquet_options,
+                numeric_type,
+                date_type,
+                validation_files,
+            )
 
 
 def run_polars_single_or_dask(
@@ -1767,7 +1774,7 @@ def run_polars_single_or_dask(
     date_type: str,
     validation_files: dict[int, Path] | None,
 ) -> None:
-    """Run benchmark queries using Dask (or single-process) execution."""
+    """Run benchmark queries using Dask or single-process execution."""
     client = initialize_dask_cluster(run_config, args)
     if client is not None:
         run_config = dataclasses.replace(
