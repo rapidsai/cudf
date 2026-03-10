@@ -14,7 +14,11 @@ from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
     assert_ir_translation_raises,
 )
-from cudf_polars.utils.versions import POLARS_VERSION_LT_135, POLARS_VERSION_LT_136
+from cudf_polars.utils.versions import (
+    POLARS_VERSION_LT_134,
+    POLARS_VERSION_LT_135,
+    POLARS_VERSION_LT_136,
+)
 
 
 @pytest.fixture(
@@ -209,6 +213,10 @@ def test_decimal_quantile(decimal_df, interp):
     assert_gpu_result_equal(q)
 
 
+@pytest.mark.skipif(
+    POLARS_VERSION_LT_134,
+    reason="std/var on decimal not supported before polars 1.34",
+)
 def test_decimal_std_var(decimal_df):
     q = decimal_df.select(
         std=pl.col("a").std(),
