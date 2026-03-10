@@ -897,6 +897,13 @@ class Index(SingleColumnFrame):
                 result = result.sort_values()  # type: ignore[assignment]
             return result
         if not len(self) or not len(other):
+            if not len(self) and isinstance(other.dtype, CategoricalDtype):
+                # Preserve categorical dtype when self is empty,
+                # matching pandas behavior.
+                result = other[:0]
+                result.name = _get_result_name(self.name, other.name)
+                return result
+
             common_dtype = find_common_type([self.dtype, other.dtype])
 
             lhs = self.unique() if self.has_duplicates else self
