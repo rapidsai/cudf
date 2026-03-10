@@ -1757,8 +1757,7 @@ aggregate_reader_metadata::select_columns(
     };
 
   // Compares two schema elements to be equal except their number of children
-  auto const equal_to_except_num_children = [&](SchemaElement const& lhs,
-                                                SchemaElement const& rhs) {
+  auto const equal_to_except_num_children = [](SchemaElement const& lhs, SchemaElement const& rhs) {
     return lhs.type == rhs.type and lhs.converted_type == rhs.converted_type and
            lhs.type_length == rhs.type_length and lhs.name == rhs.name and
            lhs.decimal_scale == rhs.decimal_scale and
