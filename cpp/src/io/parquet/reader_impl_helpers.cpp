@@ -1909,8 +1909,6 @@ aggregate_reader_metadata::select_columns(
         if (found_path != all_paths.end()) {
           // Use the file's actual path (preserving original case) for the valid_selected_paths
           valid_selected_paths.push_back({found_path->full_path, found_path->schema_idx});
-        } else if (not ignore_missing_columns) {
-          CUDF_FAIL("Encountered non-existent column in selected path", std::invalid_argument);
         }
       }
     }
