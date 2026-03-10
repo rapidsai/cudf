@@ -742,7 +742,7 @@ void hybrid_scan_reader_impl::reset_internal_state()
   _has_page_index    = false;
   _pass_itm_data.reset();
   _pass_page_mask.clear();
-  _subpass_page_mask = cudf::detail::hostdevice_vector<bool>(0, _stream);
+  _subpass_page_mask.reset();
   _output_metadata.reset();
   _options.timestamp_type = cudf::data_type{};
   _options.decimal_width  = type_id::EMPTY;
@@ -880,7 +880,7 @@ table_with_metadata hybrid_scan_reader_impl::read_chunk_internal(
   if (uses_custom_row_bounds(mode)) {
     compute_page_sizes(subpass.pages,
                        pass.chunks,
-                       _subpass_page_mask,
+                       subpass_page_mask_span(),
                        read_info.skip_rows,
                        read_info.num_rows,
                        false,  // num_rows is already computed

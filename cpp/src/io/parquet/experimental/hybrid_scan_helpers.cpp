@@ -6,8 +6,8 @@
 #include "hybrid_scan_helpers.hpp"
 
 #include "io/parquet/compact_protocol_reader.hpp"
+#include "io/parquet/expression_transform_helpers.hpp"
 #include "io/parquet/reader_impl_helpers.hpp"
-#include "io/utilities/row_selection.hpp"
 
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/logger.hpp>
@@ -625,12 +625,13 @@ std::reference_wrapper<ast::expression const> named_to_reference_converter::visi
   ast::column_reference const& expr)
 {
   // Map the column index to its name
-  auto const col_name = _column_indices_to_names[expr.get_column_index()];
+  auto const col_name_iter = _column_indices_to_names.find(expr.get_column_index());
+  CUDF_EXPECTS(col_name_iter != _column_indices_to_names.end(),
+               "Column index not found in column indices to names map");
+  auto const col_name = col_name_iter->second;
   auto col_index_it   = _column_name_to_index.find(
     cudf::io::parquet::detail::normalize_column_path(col_name, _case_sensitive_names));
-  if (col_index_it == _column_name_to_index.end()) {
-    CUDF_FAIL("Column name not found in metadata");
-  }
+  CUDF_EXPECTS(col_index_it != _column_name_to_index.end(), "Column name not found in metadata");
   auto col_index = col_index_it->second;
   // Create a new column reference
   _col_ref.emplace_back(col_index);

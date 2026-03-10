@@ -467,8 +467,10 @@ std::vector<metadata> aggregate_reader_metadata::metadatas_from_sources(
   std::vector<std::future<metadata>> metadata_ctor_tasks;
   metadata_ctor_tasks.reserve(sources.size());
   for (auto const& source : sources) {
-    metadata_ctor_tasks.emplace_back(cudf::detail::host_worker_pool().submit_task(
-      [source = source.get(), read_page_indexes] { return metadata{source, read_page_indexes}; }));
+    metadata_ctor_tasks.emplace_back(
+      cudf::detail::host_worker_pool().submit_task([source = source.get(), read_page_indexes] {
+        return metadata{source, read_page_indexes};
+      }));
   }
   std::vector<metadata> metadatas;
   metadatas.reserve(sources.size());
@@ -491,7 +493,9 @@ aggregate_reader_metadata::collect_keyval_metadata() const
                    std::transform(pfm.key_value_metadata.cbegin(),
                                   pfm.key_value_metadata.cend(),
                                   std::inserter(kv_map, kv_map.end()),
-                                  [](auto const& kv) { return std::pair{kv.key, kv.value}; });
+                                  [](auto const& kv) {
+                                    return std::pair{kv.key, kv.value};
+                                  });
                    return kv_map;
                  });
 
@@ -2007,6 +2011,33 @@ aggregate_reader_metadata::select_columns(
 
   return std::make_tuple(
     std::move(input_columns), std::move(output_columns), std::move(output_column_schemas));
+}
+
+std::vector<Type> aggregate_reader_metadata::get_parquet_types(
+  host_span<std::vector<size_type> const> row_group_indices,
+  host_span<int const> column_schemas) const
+{
+  std::vector<Type> parquet_types(column_schemas.size());
+  // Find a source with at least one row group
+  auto const src_iter = std::find_if(row_group_indices.begin(),
+                                     row_group_indices.end(),
+                                     [](auto const& rg) { return rg.size() > 0; });
+  CUDF_EXPECTS(src_iter != row_group_indices.end(),
+               "Cannot determine Parquet types as no source has any selected row groups.",
+               std::invalid_argument);
+
+  // Source index
+  auto const src_index = std::distance(row_group_indices.begin(), src_iter);
+  // Use the first row group in this source
+  auto const first_row_group_index = row_group_indices[src_index].front();
+  std::transform(column_schemas.begin(),
+                 column_schemas.end(),
+                 parquet_types.begin(),
+                 [&](auto const schema_idx) {
+                   return get_column_metadata(first_row_group_index, src_index, schema_idx).type;
+                 });
+
+  return parquet_types;
 }
 
 }  // namespace cudf::io::parquet::detail
