@@ -825,14 +825,6 @@ To read the strings with additional set of quotes:
 0   "hello"   "hello"
 1  "rapids"  "worlds"
 
-Reading a JSON string containing ordered lists and name/value pairs:
-
->>> json_str = '[{"list": [0,1,2], "struct": {"k":"v1"}}, {"list": [3,4,5], "struct": {"k":"v2"}}]'
->>> cudf.read_json(json_str, engine='cudf')
-        list       struct
-0  [0, 1, 2]  {'k': 'v1'}
-1  [3, 4, 5]  {'k': 'v2'}
-
 Reading JSON Lines data containing ordered lists and name/value pairs:
 
 >>> json_str = '{"a": [{"k1": "v1"}]}\n{"a": [{"k1":"v2"}]}'

@@ -242,15 +242,6 @@ def test_empty_index_init():
 
 @pytest.mark.parametrize("data", [[1, 2, 3], range(0, 10)])
 def test_index_with_index_dtype(request, data, all_supported_types_as_str):
-    request.applymarker(
-        pytest.mark.xfail(
-            isinstance(data, list)
-            and all_supported_types_as_str
-            in {"timedelta64[us]", "timedelta64[ms]", "timedelta64[s]"},
-            reason=f"wrong result for {all_supported_types_as_str}",
-        )
-    )
-
     pidx = pd.Index(data)
     gidx = cudf.Index(data)
 

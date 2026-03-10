@@ -864,14 +864,6 @@ def test_series_astype_numeric_to_other(
         pytest.skip(
             f"Casting {all_supported_types_as_str} to {as_dtype} for test data is invalid."
         )
-    request.applymarker(
-        pytest.mark.xfail(
-            all_supported_types_as_str
-            in {"timedelta64[us]", "timedelta64[ms]", "timedelta64[s]"}
-            and as_dtype == "str",
-            reason=f"Casting {all_supported_types_as_str} to {as_dtype} is incorrect.",
-        )
-    )
     psr = pd.Series([1, 2, 3], dtype=all_supported_types_as_str)
     gsr = cudf.from_pandas(psr)
     assert_eq(psr.astype(as_dtype), gsr.astype(as_dtype))

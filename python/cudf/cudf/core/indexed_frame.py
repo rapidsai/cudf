@@ -71,7 +71,6 @@ from cudf.utils import docutils, ioutils
 from cudf.utils._numba import _CUDFNumbaConfig
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
-    DEFAULT_STRING_DTYPE,
     SIZE_TYPE_DTYPE,
     can_convert_to_column,
     cudf_dtype_to_pa_type,
@@ -774,14 +773,14 @@ class IndexedFrame(Frame):
         2     a
         3     b
         4     a
-        dtype: object
+        dtype: str
         >>> s.replace({'a': None})
         0       b
-        1    None
-        2    None
+        1     NaN
+        2     NaN
         3       b
-        4    None
-        dtype: object
+        4     NaN
+        dtype: str
 
         If there is a mismatch in types of the values in
         ``to_replace`` & ``value`` with the actual series, then
@@ -794,15 +793,15 @@ class IndexedFrame(Frame):
         2    a
         3    b
         4    a
-        dtype: object
+        dtype: str
         >>> s.replace('a', 1)
         Traceback (most recent call last):
             ...
-        TypeError: to_replace and value should be of same types,got to_replace dtype: object and value dtype: int64
+        TypeError: to_replace and value should be of same types,got to_replace dtype: str and value dtype: int64
         >>> s.replace(['a', 'c'], [1, 2])
         Traceback (most recent call last):
             ...
-        TypeError: to_replace and value should be of same types,got to_replace dtype: object and value dtype: int64
+        TypeError: to_replace and value should be of same types,got to_replace dtype: str and value dtype: int64
 
         **DataFrame**
 
@@ -1213,7 +1212,7 @@ class IndexedFrame(Frame):
         6        shark
         7        whale
         8        zebra
-        dtype: object
+        dtype: str
 
         Viewing the first 5 lines
 
@@ -1223,7 +1222,7 @@ class IndexedFrame(Frame):
         2       falcon
         3         lion
         4       monkey
-        dtype: object
+        dtype: str
 
         Viewing the first `n` lines (three in this case)
 
@@ -1231,7 +1230,7 @@ class IndexedFrame(Frame):
         0    alligator
         1          bee
         2       falcon
-        dtype: object
+        dtype: str
 
         For negative values of `n`
 
@@ -1242,7 +1241,7 @@ class IndexedFrame(Frame):
         3         lion
         4       monkey
         5       parrot
-        dtype: object
+        dtype: str
 
         **DataFrame**
 
@@ -2655,13 +2654,13 @@ class IndexedFrame(Frame):
         2    b
         1    c
         4    d
-        dtype: object
+        dtype: str
         >>> series.sort_index()
         1    c
         2    b
         3    a
         4    d
-        dtype: object
+        dtype: str
 
         Sort Descending
 
@@ -2670,7 +2669,7 @@ class IndexedFrame(Frame):
         3    a
         2    b
         1    c
-        dtype: object
+        dtype: str
 
         **DataFrame**
 
@@ -2833,7 +2832,7 @@ class IndexedFrame(Frame):
         0    7be4bbacbfdb05fb3044e36c22b41e8b
         1    947ca8d2c5f0f27437f156cfbfab0969
         2    d0580ef52d27c043c8e341fd5039b166
-        dtype: object
+        dtype: str
         >>> series.hash_values(method="murmur3", seed=42)
         0    4279022973
         1    1654398277
@@ -2858,7 +2857,7 @@ class IndexedFrame(Frame):
         0    57ce879751b5169c525907d5c563fae1
         1    948d6221a7c4963d4be411bcead7e32b
         2    fe061786ea286a515b772d91b0dfcd70
-        dtype: object
+        dtype: str
         """
         seed_hash_methods = {"murmur3", "xxhash32", "xxhash64"}
         if seed is None:
@@ -3541,7 +3540,7 @@ class IndexedFrame(Frame):
         except Exception as e:
             raise RuntimeError("UDF kernel execution failed.") from e
 
-        if retty == DEFAULT_STRING_DTYPE:
+        if is_dtype_obj_string(retty):
             plc_col = strings_udf.column_from_managed_udf_string_array(ans_col)
             col = ColumnBase.create(
                 plc_col, dtype=dtype_from_pylibcudf_column(plc_col)
@@ -4088,7 +4087,7 @@ class IndexedFrame(Frame):
         --------
         First, we create a time series with 1 minute intervals:
 
-        >>> index = cudf.date_range(start="2001-01-01", periods=10, freq="1T")
+        >>> index = cudf.date_range(start="2001-01-01", periods=10, freq="1min")
         >>> sr = cudf.Series(range(10), index=index)
         >>> sr
         2001-01-01 00:00:00    0
@@ -4105,7 +4104,7 @@ class IndexedFrame(Frame):
 
         Downsampling to 3 minute intervals, followed by a "sum" aggregation:
 
-        >>> sr.resample("3T").sum()
+        >>> sr.resample("3min").sum()
         2001-01-01 00:00:00     3
         2001-01-01 00:03:00    12
         2001-01-01 00:06:00    21
@@ -4114,7 +4113,7 @@ class IndexedFrame(Frame):
 
         Use the right side of each interval to label the bins:
 
-        >>> sr.resample("3T", label="right").sum()
+        >>> sr.resample("3min", label="right").sum()
         2001-01-01 00:03:00     3
         2001-01-01 00:06:00    12
         2001-01-01 00:09:00    21
@@ -4123,7 +4122,7 @@ class IndexedFrame(Frame):
 
         Close the right side of the interval instead of the left:
 
-        >>> sr.resample("3T", closed="right").sum()
+        >>> sr.resample("3min", closed="right").sum()
         2000-12-31 23:57:00     0
         2001-01-01 00:00:00     6
         2001-01-01 00:03:00    15
@@ -4268,7 +4267,7 @@ class IndexedFrame(Frame):
         >>> df
                name        toy                           born
         0    Alfred  Batmobile  1940-04-25 00:00:00.000000000
-        1    Batman       None                            NaT
+        1    Batman        NaN                            NaT
         2  Catwoman   Bullwhip                            NaT
 
         Drop the rows where at least one element is null.
@@ -4290,7 +4289,7 @@ class IndexedFrame(Frame):
         >>> df.dropna(how='all')
                name        toy                           born
         0    Alfred  Batmobile  1940-04-25 00:00:00.000000000
-        1    Batman       None                            NaT
+        1    Batman        NaN                            NaT
         2  Catwoman   Bullwhip                            NaT
 
         Keep only the rows with at least 2 non-null values.
@@ -4460,7 +4459,7 @@ class IndexedFrame(Frame):
         0    a
         4    e
         3    d
-        dtype: object
+        dtype: str
 
         **DataFrame**
 

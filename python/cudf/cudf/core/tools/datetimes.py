@@ -835,8 +835,8 @@ def date_range(
         Currently only "both" is supported
 
     unit : str, default None
-        Specify the desired resolution of the result. Currently
-        not supported.
+        Specify the desired resolution of the result. If not specified,
+        the unit is inferred from `freq` (defaults to 'us').
 
     Returns
     -------
@@ -873,12 +873,10 @@ def date_range(
     DatetimeIndex(['2021-08-23 08:00:00', '2022-10-23 08:00:00',
                    '2023-12-23 08:00:00', '2025-02-23 08:00:00',
                    '2026-04-23 08:00:00'],
-                  dtype='datetime64[ns]', freq='<DateOffset: months=2, years=1>')
+                  dtype='datetime64[us]', freq='<DateOffset: months=2, years=1>')
     """
     if inclusive != "both":
         raise NotImplementedError(f"{inclusive=} is currently unsupported.")
-    if unit is not None:
-        raise NotImplementedError(f"{unit=} is currently unsupported.")
     if normalize is not False:
         raise NotImplementedError(f"{normalize=} is currently unsupported.")
 
@@ -894,14 +892,14 @@ def date_range(
     if periods is not None and not is_integer(periods):
         raise TypeError(f"periods must be an integer, got {periods}")
 
-    dtype: np.dtype = np.dtype("datetime64[ns]")
-    unit, _ = np.datetime_data(dtype)
+    _unit = _infer_date_range_unit(freq, unit, start, end)
+    dtype: np.dtype = np.dtype(f"datetime64[{_unit}]")
 
     if freq is None:
         # `start`, `end`, `periods` is specified, we treat the timestamps as
         # integers and divide the number range evenly with `periods` elements.
-        start = dtype.type(start, unit).astype(np.dtype(np.int64))
-        end = dtype.type(end, unit).astype(np.dtype(np.int64))
+        start = dtype.type(start, _unit).astype(np.dtype(np.int64))
+        end = dtype.type(end, _unit).astype(np.dtype(np.int64))
         arr = np.linspace(start=start, stop=end, num=periods).astype(dtype)
         result = as_column(arr)
         return DatetimeIndex._from_column(result, name=name).tz_localize(tz)
@@ -937,26 +935,26 @@ def date_range(
     _periods_not_specified = False
 
     if start is None:
-        end = dtype.type(end, unit)
+        end = dtype.type(end, _unit)
         start = (
             pd.Timestamp(end)
             - (periods - 1) * offset._maybe_as_fast_pandas_offset()
         ).to_numpy()
     elif end is None:
-        start = dtype.type(start, unit)
+        start = dtype.type(start, _unit)
     elif periods is None:
         # When `periods` is unspecified, its upper bound estimated by
-        # dividing the number of nanoseconds between two timestamps with
-        # the lower bound of `freq` in nanoseconds. While the final result
-        # may contain extra elements that exceeds `end`, they are trimmed
-        # as a post processing step. [1]
+        # dividing the number of timestamps between two timestamps with
+        # the lower bound of `freq` in the target unit. While the final
+        # result may contain extra elements that exceeds `end`, they are
+        # trimmed as a post processing step. [1]
         _periods_not_specified = True
-        start = pd.Timestamp(start).as_unit("ns").to_numpy()
-        end = pd.Timestamp(end).as_unit("ns").to_numpy()
+        start = pd.Timestamp(start).as_unit(_unit).to_numpy()
+        end = pd.Timestamp(end).as_unit(_unit).to_numpy()
         _is_increment_sequence = end >= start
 
         periods = math.floor(
-            int(end - start) / _offset_to_nanoseconds_lower_bound(offset)
+            (end - start).view("int64") / _offset_to_lower_bound(offset, _unit)
         )
 
         if periods < 0:
@@ -1010,7 +1008,7 @@ def date_range(
         # treating `start`, `stop` and `step` as ints:
         stop = end_estim.astype(np.dtype(np.int64))
         start = start.astype(np.dtype(np.int64))
-        step = _offset_to_nanoseconds_lower_bound(offset)
+        step = _offset_to_lower_bound(offset, _unit)
         res = ColumnBase.from_range(range(int(start), int(stop), step)).astype(
             dtype
         )
@@ -1042,22 +1040,49 @@ def _has_non_fixed_frequency(freq: DateOffset) -> bool:
     return len(freq.kwds.keys() & non_fixed_frequencies) > 0
 
 
-def _offset_to_nanoseconds_lower_bound(offset: DateOffset) -> int:
+def _infer_date_range_unit(
+    freq, unit: str | None, start=None, end=None
+) -> str:
+    """Infer the datetime resolution for date_range.
+
+    Matches pandas 3.0 behavior: default to microseconds ('us') for
+    string inputs, falling back to nanoseconds ('ns') when the freq
+    or input timestamps require nanosecond precision.
+    """
+    if unit is not None:
+        return unit
+    # Preserve resolution of np.datetime64 inputs (pandas 3.0 behavior)
+    for val in (start, end):
+        if isinstance(val, np.datetime64):
+            val_unit, _ = np.datetime_data(val.dtype)
+            if val_unit == "ns":
+                return "ns"
+    # Check if freq has nanosecond components
+    if isinstance(freq, DateOffset):
+        if freq.kwds.get("nanoseconds", 0) != 0:
+            return "ns"
+    elif isinstance(freq, str):
+        offset = DateOffset._from_freqstr(freq)
+        return _infer_date_range_unit(offset, unit, start, end)
+    return "us"
+
+
+def _offset_to_lower_bound(offset: DateOffset, unit: str = "ns") -> int:
     """Given a DateOffset, which can consist of either fixed frequency or
     non-fixed frequency offset, convert to the smallest possible fixed
-    frequency offset based in nanoseconds.
+    frequency offset in the specified unit.
 
     Specifically, the smallest fixed frequency conversion for {months=1}
-    is 28 * nano_seconds_per_day, because 1 month contains at least 28 days.
+    is 28 * units_per_day, because 1 month contains at least 28 days.
     Similarly, the smallest fixed frequency conversion for {year=1} is
-    365 * nano_seconds_per_day.
+    365 * units_per_day.
 
     This utility is used to compute the upper bound of the count of timestamps
     given a range of datetime and an offset.
     """
     nanoseconds_per_day = 24 * 60 * 60 * 10**9
     kwds = offset.kwds
-    return (
+    total_ns = (
         kwds.get("years", 0) * (365 * nanoseconds_per_day)
         + kwds.get("months", 0) * (28 * nanoseconds_per_day)
         + kwds.get("weeks", 0) * (7 * nanoseconds_per_day)
@@ -1069,3 +1094,5 @@ def _offset_to_nanoseconds_lower_bound(offset: DateOffset) -> int:
         + kwds.get("microseconds", 0) * 10**3
         + kwds.get("nanoseconds", 0)
     )
+    _unit_to_ns = {"ns": 1, "us": 10**3, "ms": 10**6, "s": 10**9}
+    return total_ns // _unit_to_ns[unit]

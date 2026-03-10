@@ -341,7 +341,7 @@ class SingleColumnFrame(Frame, NotIterable):
         >>> codes
         array([0, 0, 1])
         >>> uniques
-        Index(['a', 'c'], dtype='object')
+        Index(['a', 'c'], dtype='str')
         """
         # TODO: Avoid accessing factorize from the top level namespace
         return cudf.factorize(

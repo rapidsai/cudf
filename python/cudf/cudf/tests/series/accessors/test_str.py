@@ -2017,9 +2017,9 @@ def test_string_char_types(request, type_op, data_char_types):
     ps = pd.Series(data_char_types)
     request.applymarker(
         pytest.mark.xfail(
-            condition=type_op == "isdigit"
-            and any(x == "7¼" or x == "⅕" for x in data_char_types),
-            reason="https://github.com/pandas-dev/pandas/issues/63372",
+            condition=type_op == "islower"
+            and data_char_types[0] == r"¯\_(ツ)_/¯",
+            reason=f"{type_op} different for {data_char_types} in pyarrow",
         )
     )
     request.applymarker(
