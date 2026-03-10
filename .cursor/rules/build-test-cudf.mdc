@@ -43,6 +43,7 @@ Similar to build instructions, we can use `clean-cudf-cpp` or `clean-cudf-python
 
 ## Build error handling
 Oftentimes, clean building cudf will resolve all build problems. If we run into a fatal CMake error while building libcudf indicating packages/version mismatch, we can update our packages using the following script. If the error persists, use `--force` flag with the script
+
 ```bash
 rapids-make-<ENV>-env
 ```

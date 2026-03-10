@@ -16,7 +16,7 @@ gh pr view <PR_NUMBER> --repo rapidsai/cudf --json title,body,files,additions,de
 gh pr diff <PR_NUMBER> --repo rapidsai/cudf
 ```
 
-Hint: Run `gh auth token` in the terminal that you can export to `GH_TOKEN` once and bypass GH rate limits subsequently. If no token is available and you hit GH rate limits, ask the user if they have a toke and can provide it. If not, use alternative methods.
+Hint: Ensure `GH_TOKEN` (or GitHub CLI auth) is already configured in the environment (for example via your secret manager) so `gh` can authenticate and bypass rate limits; do not run `gh auth token` from within the agent. If no token is available, use alternative methods.
 
 2. **Fetch review comments already posted**
 
