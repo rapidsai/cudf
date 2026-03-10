@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -80,7 +80,7 @@ class SingleSymbolSmemLUT {
    *
    * @param symbol_strings Array of strings, where the i-th string holds all symbols
    * (characters!) that correspond to the i-th symbol group index
-   * @param stream The stream that shall be used to cudaMemcpyAsync the lookup table
+   * @param stream The stream used to copy the lookup table to device
    * @return
    */
   template <typename SymbolGroupItT>

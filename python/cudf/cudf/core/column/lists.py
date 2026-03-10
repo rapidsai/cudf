@@ -16,10 +16,12 @@ import pylibcudf as plc
 import cudf
 from cudf.core.column.column import (
     ColumnBase,
+    ColumnList,
     PylibcudfFunction,
     as_column,
     column_empty,
     int32_same_kind_policy,
+    same_dtype_policy,
 )
 from cudf.core.dtype.conversions import element_type_from_list_dtype
 from cudf.core.dtype.validators import is_dtype_obj_list
@@ -381,18 +383,12 @@ class ListColumn(ColumnBase):
             )
 
     def concatenate_rows(self, other_columns: list[ColumnBase]) -> ColumnBase:
-        with self.access(mode="read", scope="internal"):
-            return ColumnBase.create(
-                plc.lists.concatenate_rows(
-                    plc.Table(
-                        [
-                            col.plc_column
-                            for col in itertools.chain([self], other_columns)
-                        ]
-                    )
-                ),
-                self.dtype,
-            )
+        return PylibcudfFunction(
+            plc.lists.concatenate_rows,
+            same_dtype_policy,
+        ).execute_with_args(
+            ColumnList(*itertools.chain([self], other_columns))
+        )
 
     def concatenate_list_elements(self, dropna: bool) -> ColumnBase:
         with self.access(mode="read", scope="internal"):
