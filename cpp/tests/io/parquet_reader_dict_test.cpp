@@ -88,13 +88,6 @@ cudf::io::table_with_metadata read_parquet(std::string const& filepath)
   return cudf::io::read_parquet(read_opts);
 }
 
-[[maybe_unused]] cudf::io::table_with_metadata read_parquet_dict_encoded(
-  std::string const& filepath)
-{
-  // Note to Bret: This function should yield a table with an already dictionary encoded column.
-  CUDF_FAIL("Not implemented");
-}
-
 }  // namespace
 
 // TODO(mh): Temporarily only using integral and string types. Set this to the list of types in
@@ -124,8 +117,26 @@ TYPED_TEST(ParquetDictDecodeTest, DictDecodeParquet)
   auto const dict_input_view = cudf::dictionary_column_view(dict_input->view());
   auto const decoded_input   = cudf::dictionary::decode(dict_input_view);
 
-  // Test read parquet into standard cudf column
+#if 1
+  // Bret's tests: Set is_bret_testing = true in `src/io/parquet/reader_impl.cpp`
   {
+    // Read parquet into dictionary encoded cudf column
+    auto const read_table = read_parquet(filepath).tbl;
+    EXPECT_EQ(read_table->num_rows(), num_rows);
+    EXPECT_EQ(read_table->num_columns(), 1);
+
+    // Decode the read dictionary column
+    cudf::dictionary_column_view dict_read_view(read_table->view().column(0));
+    auto const decoded_read = cudf::dictionary::decode(dict_read_view);
+
+    // Compare
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(input_col, decoded_read->view());
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(decoded_input->view(), decoded_read->view());
+  }
+#else
+  // Set is_bret_testing = false in `src/io/parquet/reader_impl.cpp`
+  {
+    // Read parquet into standard cudf column
     auto const read_table = read_parquet(filepath).tbl;
     EXPECT_EQ(read_table->num_rows(), num_rows);
     EXPECT_EQ(read_table->num_columns(), 1);
@@ -141,23 +152,6 @@ TYPED_TEST(ParquetDictDecodeTest, DictDecodeParquet)
 
     // Compare
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(read_col, decoded_input->view());
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(input_col, decoded_read->view());
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(decoded_input->view(), decoded_read->view());
-  }
-
-  // Bret's tests: Test read parquet into dictionary encoded cudf column
-#if 0
-  {
-    auto const read_table =
-      read_parquet_dict_encoded(filepath).tbl;  ///< This will CUDF_FAIL for now
-    EXPECT_EQ(read_table->num_rows(), num_rows);
-    EXPECT_EQ(read_table->num_columns(), 1);
-
-    // Decode the read dictionary column
-    cudf::dictionary_column_view dict_read_view(read_table->view().column(0));
-    auto const decoded_read = cudf::dictionary::decode(dict_read_view);
-
-    // Compare
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(input_col, decoded_read->view());
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(decoded_input->view(), decoded_read->view());
   }
