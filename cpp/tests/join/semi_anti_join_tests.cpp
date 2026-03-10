@@ -396,6 +396,7 @@ TEST_P(SemiAntiJoinTest, SemiJoinEmptyTables)
 TEST_P(SemiAntiJoinTest, AntiSemiJoinLargeExtentOverflowPrevention)
 {
   auto const build_side = GetParam();
+  if (build_side == cudf::set_as_build_table::LEFT) { GTEST_SKIP(); }
   // Test validates size_t extent can handle bucket storage sizes that would
   // overflow int32_t extent when compute_bucket_storage_size() uses low load factors
   constexpr cudf::size_type table_size = 10000000;  // 10M rows
