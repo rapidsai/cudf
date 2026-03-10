@@ -71,7 +71,6 @@ from cudf.utils import docutils, ioutils
 from cudf.utils._numba import _CUDFNumbaConfig
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
-    DEFAULT_STRING_DTYPE,
     SIZE_TYPE_DTYPE,
     can_convert_to_column,
     cudf_dtype_to_pa_type,
@@ -3541,7 +3540,7 @@ class IndexedFrame(Frame):
         except Exception as e:
             raise RuntimeError("UDF kernel execution failed.") from e
 
-        if retty == DEFAULT_STRING_DTYPE:
+        if is_dtype_obj_string(retty):
             plc_col = strings_udf.column_from_managed_udf_string_array(ans_col)
             col = ColumnBase.create(
                 plc_col, dtype=dtype_from_pylibcudf_column(plc_col)
