@@ -262,6 +262,10 @@ STREAMING_ONLY_EXPECTED_FAILURES: Mapping[str, str] = {
     # Add tests that are expected to fail with the streaming executor
 }
 
+RAPIDSMPF_ONLY_EXPECTED_FAILURES: Mapping[str, str] = {
+    "tests/unit/interop/test_interop.py::test_0_width_df_roundtrip": "https://github.com/rapidsai/cudf/issues/21644",
+}
+
 
 def pytest_collection_modifyitems(
     session: pytest.Session, config: pytest.Config, items: list[pytest.Item]
@@ -273,6 +277,13 @@ def pytest_collection_modifyitems(
     for item in items:
         if (reason := TESTS_TO_SKIP.get(item.nodeid, None)) is not None:
             item.add_marker(pytest.mark.skip(reason=reason))
+        elif (
+            config.getoption("--runtime") == "rapidsmpf"
+            and (r_reason := RAPIDSMPF_ONLY_EXPECTED_FAILURES.get(item.nodeid, None))
+            is not None
+        ):
+            # Also sets --executor=streaming, so check first
+            item.add_marker(pytest.mark.xfail(reason=r_reason))
         elif (
             config.getoption("--executor") == "streaming"
             and (s_reason := STREAMING_ONLY_EXPECTED_FAILURES.get(item.nodeid, None))
