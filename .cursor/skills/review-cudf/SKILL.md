@@ -42,7 +42,7 @@ gh api repos/rapidsai/cudf/pulls/<PR_NUMBER>/reviews
 - No off-by-one errors in index arithmetic or kernel launch bounds.
 - Proper handling of nullable columns and validity masks.
 - Correct use of `cudf::size_type` (signed 32-bit) for sizes, offsets, indices.
-- Stream orderness preserved across the API flow.
+- Stream ordering preserved across the API flow.
 - Null values of fixed-width columns are undefined — code must not assume null rows contain any particular value (e.g., zero); use the validity mask to determine nullness.
 - When comparing data types of two columns/scalars, use `cudf::have_same_types()` rather than `a.type() == b.type()` — direct comparison mishandles nested types.
 - Nested type columns (LIST, STRUCT) must be sanitized: null list elements should have equal start/end offsets; null struct rows must have null fields; nulls should only be at the parent level for compound columns.
