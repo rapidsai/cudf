@@ -6813,12 +6813,17 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             if bool_only
             else self
         )
-        return super(DataFrame, obj).all(axis, skipna, **kwargs)  # type: ignore[misc]
+        result = super(DataFrame, obj).all(  # type: ignore[misc]
+            0 if axis is None else axis, skipna, **kwargs
+        )
+        if axis is None:
+            return bool(result.all(skipna=skipna))
+        return result
 
     @_performance_tracking
     def any(
         self,
-        axis: Axis = 0,
+        axis: Axis | None = 0,
         bool_only: bool = False,
         skipna: bool = True,
         **kwargs,
@@ -6828,7 +6833,12 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             if bool_only
             else self
         )
-        return super(DataFrame, obj).any(axis, skipna, **kwargs)  # type: ignore[misc]
+        result = super(DataFrame, obj).any(  # type: ignore[misc]
+            0 if axis is None else axis, skipna, **kwargs
+        )
+        if axis is None:
+            return bool(result.any(skipna=skipna))
+        return result
 
     @_performance_tracking
     def _apply_cupy_method_axis_1(self, method: str, *args, **kwargs):
