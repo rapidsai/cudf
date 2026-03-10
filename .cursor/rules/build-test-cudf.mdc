@@ -9,7 +9,8 @@ Prompt the user to specify if we are working inside a cudf devcontainer. If not,
 
 If inside devcontainer, ask about the devcontainer environment, `pip` or `conda`? Some users specify this as a part of their `.code-workspace` file name located at `/home/coder` so check that before prompting the user.
 
-Remember this and don't ask over and over for each prompt/chat session.
+Ask at the start of each session if not already apparent from context.
+
 
 ## Building libcudf
 
@@ -21,13 +22,13 @@ export CUDAARCHS=NATIVE ; build-cudf-cpp
 
 Note that the `build-cudf-cpp` script is located at `/usr/bin` if you can't find it.
 
-If this is an incremental build, you can just navigate to `/home/coder/cudf/cpp/build/latest` and run: 
+If this is an incremental build, you can just navigate to `${HOME}/cudf/cpp/build/latest` and run: 
 
 ```bash
 ninja
 ```
 
-Remember, we are in a devcontainer and don't really want to run the `build.sh` script located at `/home/coder` or install anything ourselves. Instead we always want to use `rapids-*`, `build-*` scripts located at `/usr/bin`.
+Remember, we are in a devcontainer and don't really want to run the `build.sh` script located at `${HOME}` or install anything ourselves. Instead we always want to use `rapids-*`, `build-*` scripts located at `/usr/bin`.
 
 ## Building pylibcudf and cudf python
 For example, you can build pylibcudf and cudf python as:
@@ -48,26 +49,26 @@ Oftentimes, clean building cudf will resolve all build problems. If we run into 
 rapids-make-<ENV>-env
 ```
 
-where `<ENV>` is either `pip` or `conda` depending on the devcontainer environment. Prompt the user to specify this information if and only if not specified earlier and isneeded
+where `<ENV>` is either `pip` or `conda` depending on the devcontainer environment. Prompt the user to specify this information if and only if not specified earlier and is needed.
 
 Make sure to run `clean-cudf` after running this for a fresh subsequent build.
 
 ## Running Google tests
 
-Run relevant Google tests. Discover all test name binaries at `/home/coder/cudf/cpp/build/latest` 
+Run relevant Google tests. Discover all test name binaries at `${HOME}/cudf/cpp/build/latest`
 
 ```bash
-cd /home/coder/cudf/cpp/build/latest ; ./gtests/<TEST_NAME>_TEST
+cd ${HOME}/cudf/cpp/build/latest ; ./gtests/PARQUET_TEST ; ./gtests/HYBRID_SCAN_TEST
 ```
 
 ## Running Pytests
 
 Make sure to build pylibcudf and python before running any of these.
 
-Pylibcudf tests are located here: `/home/coder/cudf/python/pylibcudf/tests` and you can use `py.test` to run them. Example:
+Pylibcudf tests can be discovered at: `${HOME}/cudf/python/pylibcudf/tests` and subfolders. You can use `pytest` to run them. Example:
 
 ```bash
-cd /home/coder/cudf/python/pylibcudf/tests/io ; py.test test_parquet.py
+cd ${HOME}/cudf/python/pylibcudf/tests/io ; pytest test_parquet.py
 ```
 
-Similarly, cudf-python tests are located here: `/home/coder/cudf/python/cudf/cudf/tests` and can be run the same way. Note that the sub-folders contained at this location may have a different name such as `io -> input_output`.
+Similarly, cudf-python tests can be discovered at: `${HOME}/cudf/python/cudf/cudf/tests` and subfolders. These can also be run the same way.
