@@ -19,9 +19,13 @@
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
 #include <cub/device/device_topk.cuh>
+#include <cuda/iterator>
+#include <cuda/std/execution>
+#include <cuda/stream>
 
 namespace cudf {
 namespace detail {
@@ -91,7 +95,7 @@ struct dispatch_topk_fn {
     requires(not cudf::is_fixed_width<T>() or cudf::is_floating_point<T>())
   std::unique_ptr<column> operator()()
   {
-    CUDF_UNREACHABLE("unexpected type for topk fast path");
+    CUDF_UNREACHABLE("unexpected type for top_k fast path");
   }
 };
 
