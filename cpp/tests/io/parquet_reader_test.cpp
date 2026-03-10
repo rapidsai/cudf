@@ -3588,7 +3588,7 @@ template <typename T>
 struct ParquetPredicatePushdownTestJIT : public ParquetReaderTest {};
 TYPED_TEST_SUITE(ParquetPredicatePushdownTestJIT, SupportedTestTypesJIT);
 
-TYPED_TEST(ParquetPredicatePushdownTestJIT, FilterTypedJIT)
+TYPED_TEST(ParquetPredicatePushdownTestJIT, FilterTyped)
 {
   filter_typed_test<TypeParam, true>();
   // JIT does not support decimals and nullness-dependent operators (IS_NULL) so we can't test:
