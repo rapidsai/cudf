@@ -39,15 +39,16 @@ template <typename InputIterator,
   Predicate pred,
   rmm::cuda_stream_view stream)
 {
-  auto const copy_size = std::min(static_cast<std::size_t>(std::distance(first, last)),
+  auto const copy_size = std::min(static_cast<std::size_t>(cuda::std::distance(first, last)),
                                   static_cast<std::size_t>(std::numeric_limits<int>::max()));
 
   auto itr = first;
   while (itr != last) {
-    auto const copy_end =
-      static_cast<std::size_t>(std::distance(itr, last)) <= copy_size ? last : itr + copy_size;
+    auto const copy_end = static_cast<std::size_t>(cuda::std::distance(itr, last)) <= copy_size
+                            ? last
+                            : itr + copy_size;
     result = thrust::copy_if(rmm::exec_policy_nosync(stream), itr, copy_end, stencil, result, pred);
-    stencil += std::distance(itr, copy_end);
+    stencil += cuda::std::distance(itr, copy_end);
     itr = copy_end;
   }
   return result;
@@ -145,13 +146,14 @@ template <typename InputIterator, typename OutputIterator, typename Predicate>
   Predicate pred,
   rmm::cuda_stream_view stream)
 {
-  auto const copy_size = std::min(static_cast<std::size_t>(std::distance(first, last)),
+  auto const copy_size = std::min(static_cast<std::size_t>(cuda::std::distance(first, last)),
                                   static_cast<std::size_t>(std::numeric_limits<int>::max()));
 
   auto itr = first;
   while (itr != last) {
-    auto const copy_end =
-      static_cast<std::size_t>(std::distance(itr, last)) <= copy_size ? last : itr + copy_size;
+    auto const copy_end = static_cast<std::size_t>(cuda::std::distance(itr, last)) <= copy_size
+                            ? last
+                            : itr + copy_size;
     result = thrust::copy_if(rmm::exec_policy_nosync(stream), itr, copy_end, result, pred);
     itr    = copy_end;
   }

@@ -18,6 +18,8 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 
+#include <cuda/std/iterator>
+
 auto constexpr NaN          = std::numeric_limits<double>::quiet_NaN();
 auto constexpr KEEP_ANY     = cudf::duplicate_keep_option::KEEP_ANY;
 auto constexpr KEEP_FIRST   = cudf::duplicate_keep_option::KEEP_FIRST;
@@ -413,7 +415,7 @@ TEST_F(StreamCompactionTest, UniqueCountColumn)
   std::vector<double> input_data(input.begin(), input.end());
 
   auto const new_end  = std::unique(input_data.begin(), input_data.end());
-  auto const expected = std::distance(input_data.begin(), new_end);
+  auto const expected = cuda::std::distance(input_data.begin(), new_end);
   EXPECT_EQ(
     expected,
     cudf::unique_count(
@@ -439,7 +441,7 @@ TEST_F(StreamCompactionTest, UniqueCountTable)
   cudf::table_view input_table({input_col1, input_col2});
 
   auto const new_end = std::unique(pair_input.begin(), pair_input.end());
-  auto const result  = std::distance(pair_input.begin(), new_end);
+  auto const result  = cuda::std::distance(pair_input.begin(), new_end);
   EXPECT_EQ(
     result,
     cudf::unique_count(input_table, null_equality::EQUAL, cudf::test::get_default_stream()));

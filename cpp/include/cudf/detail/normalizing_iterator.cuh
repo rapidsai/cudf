@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -13,7 +13,9 @@
 
 #include <cudf/utilities/traits.hpp>
 
-#include <type_traits>
+#include <cuda/std/iterator>
+
+#include <cstdint>
 
 namespace cudf {
 namespace detail {
@@ -33,7 +35,7 @@ struct alignas(16) base_normalator {
   using difference_type   = std::ptrdiff_t;
   using value_type        = Integer;
   using pointer           = Integer*;
-  using iterator_category = std::random_access_iterator_tag;
+  using iterator_category = cuda::std::random_access_iterator_tag;
 
   base_normalator()                                  = default;
   base_normalator(base_normalator const&)            = default;

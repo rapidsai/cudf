@@ -204,10 +204,10 @@ std::string to_records_orient(std::vector<std::map<std::string, std::string>> co
          kv_pair_it++) {
       auto const& [key, value] = *kv_pair_it;
       result += "\"" + key + "\":" + value;
-      result += (kv_pair_it != std::prev(std::end(*record_it))) ? ", " : "";
+      result += (kv_pair_it != cuda::std::prev(std::end(*record_it))) ? ", " : "";
     }
     result += "}";
-    if (record_it != std::prev(std::end(records))) { result += record_delimiter; }
+    if (record_it != cuda::std::prev(std::end(records))) { result += record_delimiter; }
   }
   return (result + suffix);
 }

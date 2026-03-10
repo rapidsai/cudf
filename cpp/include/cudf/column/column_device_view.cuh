@@ -16,6 +16,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <cuda/std/iterator>
 #include <cuda/std/utility>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
@@ -1051,7 +1052,7 @@ ColumnDeviceView* child_columns_to_device_array(ColumnViewIterator child_begin,
                                                 void* d_ptr)
 {
   ColumnDeviceView* d_children = detail::align_ptr_for_type<ColumnDeviceView>(d_ptr);
-  auto num_children            = std::distance(child_begin, child_end);
+  auto num_children            = cuda::std::distance(child_begin, child_end);
   if (num_children > 0) {
     // The beginning of the memory must be the fixed-sized ColumnDeviceView
     // struct objects in order for d_children to be used as an array.

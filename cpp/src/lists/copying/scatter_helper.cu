@@ -382,7 +382,7 @@ struct list_child_constructor {
       cudf::detail::get_value<size_type>(list_offsets, list_offsets.size() - 1, stream)};
 
     auto const num_struct_members =
-      std::distance(source_structs.child_begin(), source_structs.child_end());
+      cuda::std::distance(source_structs.child_begin(), source_structs.child_end());
     std::vector<std::unique_ptr<column>> child_columns;
     child_columns.reserve(num_struct_members);
 

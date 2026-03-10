@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -11,6 +11,8 @@
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/unary.hpp>
 #include <cudf/utilities/memory_resource.hpp>
+
+#include <cuda/std/iterator>
 
 #include <nvbench/nvbench.cuh>
 
@@ -58,7 +60,7 @@ void run_ndsh_q6(nvbench::state& state,
   // Read out the `lineitem` table from parquet file
   std::vector<std::string> const lineitem_cols = {
     "l_extendedprice", "l_discount", "l_shipdate", "l_quantity"};
-  auto const shipdate_ref = cudf::ast::column_reference(std::distance(
+  auto const shipdate_ref = cudf::ast::column_reference(cuda::std::distance(
     lineitem_cols.begin(), std::find(lineitem_cols.begin(), lineitem_cols.end(), "l_shipdate")));
   auto shipdate_lower =
     cudf::timestamp_scalar<cudf::timestamp_D>(days_since_epoch(1994, 1, 1), true);

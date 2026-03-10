@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -225,7 +225,7 @@ std::unique_ptr<cudf::column> gather(strings_column_view const& strings,
                                      rmm::cuda_stream_view stream,
                                      rmm::device_async_resource_ref mr)
 {
-  auto const output_count = std::distance(begin, end);
+  auto const output_count = cuda::std::distance(begin, end);
   if (output_count == 0) return make_empty_column(type_id::STRING);
 
   // build offsets column

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -149,7 +149,7 @@ std::unique_ptr<column> copy_if_else(bool nullable,
   // This is the type of the cuda::std::optional element in the passed iterators
   using Element = typename cuda::std::iter_value_t<LeftIter>::value_type;
 
-  size_type size           = std::distance(lhs_begin, lhs_end);
+  size_type size           = cuda::std::distance(lhs_begin, lhs_end);
   size_type num_els        = cudf::util::round_up_safe(size, cudf::detail::warp_size);
   constexpr int block_size = 256;
   cudf::detail::grid_1d grid{num_els, block_size, 1};

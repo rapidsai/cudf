@@ -1,11 +1,13 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
 
 #include <cudf/column/column_view.hpp>
 #include <cudf/scalar/scalar.hpp>
+
+#include <cuda/std/iterator>
 
 #include <algorithm>
 
@@ -112,7 +114,7 @@ bool have_same_types(table_view const& lhs, table_view const& rhs);
 template <typename ForwardIt>
 inline bool all_have_same_types(ForwardIt first, ForwardIt last)
 {
-  return first == last || std::all_of(std::next(first), last, [want = *first](auto const& c) {
+  return first == last || std::all_of(cuda::std::next(first), last, [want = *first](auto const& c) {
            return cudf::have_same_types(want, c);
          });
 }

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -20,6 +20,7 @@
 #include <cudf/types.hpp>
 #include <cudf/wrappers/timestamps.hpp>
 
+#include <cuda/std/iterator>
 #include <thrust/iterator/counting_iterator.h>
 
 #include <algorithm>
@@ -254,12 +255,12 @@ TYPED_TEST(MinMaxReductionTest, ArgMinMaxReductions)
   auto const argmin = [](std::vector<T> const& input) -> int {
     if (input.empty()) { return -1; }
     auto const it = std::min_element(input.begin(), input.end());
-    return static_cast<int>(std::distance(input.begin(), it));
+    return static_cast<int>(cuda::std::distance(input.begin(), it));
   };
   auto const argmax = [](std::vector<T> const& input) -> int {
     if (input.empty()) { return -1; }
     auto const it = std::max_element(input.begin(), input.end());
-    return static_cast<int>(std::distance(input.begin(), it));
+    return static_cast<int>(cuda::std::distance(input.begin(), it));
   };
 
   // Test without nulls.
@@ -998,10 +999,11 @@ TEST_F(ReductionDtypeTest, all_null_output)
 {
   auto sum_agg = cudf::make_sum_aggregation<reduce_aggregation>();
 
-  auto const col =
-    cudf::test::fixed_point_column_wrapper<int32_t>{
-      {0, 0, 0}, {false, false, false}, numeric::scale_type{-2}}
-      .release();
+  auto const col = cudf::test::fixed_point_column_wrapper<int32_t>{
+    {0, 0, 0},
+    {false, false, false},
+    numeric::scale_type{
+      -2}}.release();
 
   std::unique_ptr<cudf::scalar> result = cudf::reduce(*col, *sum_agg, col->type());
   EXPECT_EQ(result->is_valid(), false);
@@ -1450,12 +1452,12 @@ TEST_P(StringReductionTest, ArgMinMax)
   auto const argmin = [](std::vector<std::string> const& input) -> int {
     if (input.empty()) { return -1; }
     auto const it = std::min_element(input.begin(), input.end());
-    return static_cast<int>(std::distance(input.begin(), it));
+    return static_cast<int>(cuda::std::distance(input.begin(), it));
   };
   auto const argmax = [](std::vector<std::string> const& input) -> int {
     if (input.empty()) { return -1; }
     auto const it = std::max_element(input.begin(), input.end());
-    return static_cast<int>(std::distance(input.begin(), it));
+    return static_cast<int>(cuda::std::distance(input.begin(), it));
   };
 
   // All valid string column.

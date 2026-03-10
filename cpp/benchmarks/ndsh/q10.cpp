@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -10,6 +10,8 @@
 #include <cudf/column/column.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/utilities/memory_resource.hpp>
+
+#include <cuda/std/iterator>
 
 #include <nvbench/nvbench.cuh>
 
@@ -87,7 +89,7 @@ void run_ndsh_q10(nvbench::state& state,
 {
   // Define the column projection and filter predicate for the `orders` table
   std::vector<std::string> const orders_cols = {"o_custkey", "o_orderkey", "o_orderdate"};
-  auto const o_orderdate_ref                 = cudf::ast::column_reference(std::distance(
+  auto const o_orderdate_ref                 = cudf::ast::column_reference(cuda::std::distance(
     orders_cols.begin(), std::find(orders_cols.begin(), orders_cols.end(), "o_orderdate")));
   auto o_orderdate_lower =
     cudf::timestamp_scalar<cudf::timestamp_D>(days_since_epoch(1993, 10, 1), true);

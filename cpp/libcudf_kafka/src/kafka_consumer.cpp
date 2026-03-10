@@ -1,8 +1,10 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #include <cudf_kafka/kafka_consumer.hpp>
+
+#include <cuda/std/iterator>
 
 #include <librdkafka/rdkafkacpp.h>
 
@@ -150,8 +152,8 @@ std::map<std::string, std::string> kafka_consumer::current_configs()
 {
   std::map<std::string, std::string> configs;
   std::list<std::string>* dump = kafka_conf->dump();
-  for (auto it = dump->begin(); it != dump->end(); std::advance(it, 2))
-    configs.insert({*it, *std::next(it)});
+  for (auto it = dump->begin(); it != dump->end(); cuda::std::advance(it, 2))
+    configs.insert({*it, *cuda::std::next(it)});
   return configs;
 }
 

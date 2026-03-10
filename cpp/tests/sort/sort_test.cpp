@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -16,6 +16,7 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 
+#include <cuda/std/iterator>
 #include <thrust/host_vector.h>
 
 #include <type_traits>
@@ -184,7 +185,7 @@ TYPED_TEST(Sort, WithStructColumn)
                                               "Cheery Littlebottom",
                                               "Detritus",
                                               "Mr Slant"};
-  auto num_rows{std::distance(names.begin(), names.end())};
+  auto num_rows{cuda::std::distance(names.begin(), names.end())};
   auto names_col = cudf::test::strings_column_wrapper{names.begin(), names.end()};
   auto ages_col  = cudf::test::fixed_width_column_wrapper<T, int32_t>{{48, 27, 25, 31, 351, 351}};
 

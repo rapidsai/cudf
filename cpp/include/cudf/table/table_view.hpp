@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -7,6 +7,8 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/export.hpp>
+
+#include <cuda/std/iterator>
 
 #include <algorithm>
 #include <vector>
@@ -228,7 +230,7 @@ class table_view : public detail::table_view_base<column_view> {
   template <typename InputIterator>
   [[nodiscard]] table_view select(InputIterator begin, InputIterator end) const
   {
-    std::vector<column_view> columns(std::distance(begin, end));
+    std::vector<column_view> columns(cuda::std::distance(begin, end));
     std::transform(begin, end, columns.begin(), [this](auto index) { return this->column(index); });
     return table_view{columns};
   }

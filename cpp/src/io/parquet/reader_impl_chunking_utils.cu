@@ -98,7 +98,7 @@ void print_cumulative_page_info(host_span<cumulative_page_info const> sizes,
       auto const split_index = [&]() -> int {
         if (split != end && ((idx == sizes.size() - 1) ||
                              (sizes[idx + 1].end_row_index > sizes[idx].end_row_index))) {
-          return static_cast<int>(std::distance(start, split));
+          return static_cast<int>(cuda::std::distance(start, split));
         }
         return idx == 0 ? 0 : -1;
       }();

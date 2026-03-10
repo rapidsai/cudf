@@ -27,6 +27,8 @@
 
 #include <cudf/utilities/export.hpp>
 
+#include <cuda/std/iterator>
+
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
@@ -88,7 +90,7 @@ using thread_index_type = int64_t;   ///< Thread index type in kernels
 using char_utf8         = uint32_t;  ///< UTF-8 characters are 1-4 bytes
 
 /**
- * @brief Similar to `std::distance` but returns `cudf::size_type` and performs `static_cast`
+ * @brief Similar to `cuda::std::distance` but returns `cudf::size_type` and performs `static_cast`
  *
  * @tparam T Iterator type
  * @param f "first" iterator
@@ -98,7 +100,7 @@ using char_utf8         = uint32_t;  ///< UTF-8 characters are 1-4 bytes
 template <typename T>
 size_type distance(T f, T l)
 {
-  return static_cast<size_type>(std::distance(f, l));
+  return static_cast<size_type>(cuda::std::distance(f, l));
 }
 
 /**
