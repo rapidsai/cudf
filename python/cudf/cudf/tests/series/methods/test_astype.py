@@ -145,7 +145,12 @@ def test_cast_float_nan_to_bool_pandas_compat():
 def test_empty_astype_always_castable(type1, type2, as_dtype, copy):
     ser = cudf.Series([], dtype=as_dtype(type1))
     result = ser.astype(as_dtype(type2), copy=copy)
-    expected = cudf.Series([], dtype=as_dtype(type2))
+    if type2 == "category":
+        # Empty astype to category inherits the source dtype as the
+        # categories dtype, matching pandas behavior.
+        expected = cudf.Series([], dtype=result.dtype)
+    else:
+        expected = cudf.Series([], dtype=as_dtype(type2))
     assert_eq(result, expected)
     if not copy and cudf.dtype(type1) == cudf.dtype(type2):
         assert ser._column is result._column

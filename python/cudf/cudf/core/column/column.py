@@ -2290,12 +2290,12 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     def astype(self, dtype: DtypeObj, copy: bool | None = False) -> ColumnBase:
         if self.dtype == dtype:
             result = self
+        elif isinstance(dtype, CategoricalDtype):
+            result = self.as_categorical_column(dtype)
         elif len(self) == 0:
             result = column_empty(0, dtype=dtype)
         else:
-            if isinstance(dtype, CategoricalDtype):
-                result = self.as_categorical_column(dtype)
-            elif is_dtype_obj_interval(dtype):
+            if is_dtype_obj_interval(dtype):
                 result = self.as_interval_column(dtype)  # type: ignore[arg-type]
             elif is_dtype_obj_list(dtype) or is_dtype_obj_struct(dtype):
                 if isinstance(dtype, pd.ArrowDtype):
