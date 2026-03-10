@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -63,10 +63,10 @@ std::shared_ptr<arrow::LargeStringArray> get_arrow_large_string_array(
   std::shared_ptr<arrow::LargeStringArray> large_string_array;
   arrow::LargeStringBuilder large_string_builder;
 
-  CUDF_EXPECTS(large_string_builder.AppendValues(data, mask.data()).ok(),
-               "Failed to append values to string builder");
-  CUDF_EXPECTS(large_string_builder.Finish(&large_string_array).ok(),
-               "Failed to create arrow string array");
+  auto const append_status = large_string_builder.AppendValues(data, mask.data());
+  CUDF_EXPECTS(append_status.ok(), "Failed to append values to string builder");
+  auto const finish_status = large_string_builder.Finish(&large_string_array);
+  CUDF_EXPECTS(finish_status.ok(), "Failed to create arrow string array");
 
   return large_string_array;
 }
@@ -578,7 +578,7 @@ TYPED_TEST(FromArrowNumericScalarTest, Basic)
 
   auto const cudf_numeric_scalar =
     dynamic_cast<cudf::numeric_scalar<TypeParam>*>(cudf_scalar.value().get());
-  if (cudf_numeric_scalar == nullptr) { CUDF_FAIL("Attempted to test with a non-numeric type."); }
+  CUDF_EXPECTS(cudf_numeric_scalar != nullptr, "Attempted to test with a non-numeric type.");
   EXPECT_EQ(cudf_numeric_scalar->type(), cudf::data_type(cudf::type_to_id<TypeParam>()));
   EXPECT_EQ(cudf_numeric_scalar->value(), value);
 }
