@@ -6,7 +6,6 @@
 #pragma once
 
 #include <cudf/column/column_factories.hpp>
-#include <cudf/unary.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
@@ -27,6 +26,7 @@ namespace detail {
  * @tparam Predicate A predicator type which will be evaluated
  * @param begin Beginning of the sequence of elements
  * @param end End of the sequence of elements
+ * @param size Size of the output column
  * @param p Predicate to be applied to each element in `[begin,end)`
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned column's device memory
