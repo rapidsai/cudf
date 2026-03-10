@@ -183,9 +183,7 @@ def test_groupby_sorted_keys(df: pl.LazyFrame, keys, exprs, using_rapidsmpf, req
     }
     request.applymarker(
         pytest.mark.xfail(
-            using_rapidsmpf
-            and not exprs
-            and request.node.name in failing_rapidsmpf_nodeids,
+            using_rapidsmpf and request.node.name in failing_rapidsmpf_nodeids,
             reason="https://github.com/rapidsai/cudf/issues/21642",
         )
     )
