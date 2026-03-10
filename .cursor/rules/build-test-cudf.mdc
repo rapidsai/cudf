@@ -1,6 +1,5 @@
 ---
 description: Instructions to build and test cudf. Apply whenever you write code and want to build and test changes inside cudf devcontainer
-globs: 
 alwaysApply: false
 ---
 
