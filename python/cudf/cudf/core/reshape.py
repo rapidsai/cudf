@@ -191,17 +191,17 @@ def concat(
     >>> s1
     0    a
     1    b
-    dtype: object
+    dtype: str
     >>> s2
     0    c
     1    d
-    dtype: object
+    dtype: str
     >>> cudf.concat([s1, s2])
     0    a
     1    b
     0    c
     1    d
-    dtype: object
+    dtype: str
 
     Clear the existing index and reset it in the
     result by setting the ``ignore_index`` option to ``True``.
@@ -211,7 +211,7 @@ def concat(
     1    b
     2    c
     3    d
-    dtype: object
+    dtype: str
 
     Combine two DataFrame objects with identical columns.
 
@@ -246,8 +246,8 @@ def concat(
     1      d       4    dog
     >>> cudf.concat([df1, df3], sort=False)
       letter  number animal
-    0      a       1   None
-    1      b       2   None
+    0      a       1    NaN
+    1      b       2    NaN
     0      c       3    cat
     1      d       4    dog
 
@@ -966,8 +966,8 @@ def pivot(
               c
         b     1     2      3
         a
-        1   one   two   None
-        2  None  None  three
+        1   one   two    NaN
+        2   NaN   NaN  three
 
     """
     values_is_list = True
