@@ -135,25 +135,12 @@ void test_hybrid_scan(std::vector<cudf::column_view> const& columns,
   auto datasource_ref = std::ref(*datasource);
 
   // Read parquet using the hybrid scan reader
-  auto const [read_filter_table, read_payload_table] = hybrid_scan(datasource_ref,
-                                                                   filter_expression,
-                                                                   num_filter_columns,
-                                                                   {},
-                                                                   case_sensitive_names,
-                                                                   stream,
-                                                                   mr,
-                                                                   aligned_mr);
+  auto const [read_filter_table, read_payload_table] = hybrid_scan(
+    datasource_ref, filter_expression, {}, case_sensitive_names, stream, mr, aligned_mr);
 
   // Read parquet using the chunked hybrid scan reader
-  auto const [read_filter_table_chunked, read_payload_table_chunked] =
-    chunked_hybrid_scan(datasource_ref,
-                        filter_expression,
-                        num_filter_columns,
-                        {},
-                        case_sensitive_names,
-                        stream,
-                        mr,
-                        aligned_mr);
+  auto const [read_filter_table_chunked, read_payload_table_chunked] = chunked_hybrid_scan(
+    datasource_ref, filter_expression, {}, case_sensitive_names, stream, mr, aligned_mr);
 
   // Check equivalence (equal without checking nullability) with the parquet file read with the
   // original reader
@@ -232,7 +219,6 @@ std::unique_ptr<cudf::table> test_hybrid_scan_column_selection(
   {
     auto const [read_filter_table, read_payload_table] = hybrid_scan(datasource_ref,
                                                                      filter_expression,
-                                                                     num_filter_columns,
                                                                      payload_column_names,
                                                                      case_sensitive_names,
                                                                      stream,
@@ -241,7 +227,6 @@ std::unique_ptr<cudf::table> test_hybrid_scan_column_selection(
     auto const [read_filter_table_chunked, read_payload_table_chunked] =
       chunked_hybrid_scan(datasource_ref,
                           filter_expression,
-                          num_filter_columns,
                           payload_column_names,
                           case_sensitive_names,
                           stream,
