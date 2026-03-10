@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -95,7 +95,7 @@ TYPED_TEST(GatherTest, GatherDetailInvalidIndexTest)
     cudf::detail::gather(source_table,
                          gather_map,
                          cudf::out_of_bounds_policy::NULLIFY,
-                         cudf::detail::negative_index_policy::NOT_ALLOWED,
+                         cudf::negative_index_policy::NOT_ALLOWED,
                          cudf::get_default_stream(),
                          cudf::get_current_device_resource_ref());
 

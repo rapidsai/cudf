@@ -228,7 +228,7 @@ struct rolling_postprocessor {
       auto output_table = detail::gather(table_view{{input}},
                                          intermediate->view(),
                                          cudf::out_of_bounds_policy::NULLIFY,
-                                         detail::negative_index_policy::NOT_ALLOWED,
+                                         negative_index_policy::NOT_ALLOWED,
                                          stream,
                                          mr);
       return std::make_unique<cudf::column>(std::move(output_table->get_column(0)));

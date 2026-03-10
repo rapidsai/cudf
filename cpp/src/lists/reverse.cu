@@ -61,7 +61,7 @@ std::unique_ptr<column> reverse(lists_column_view const& input,
     cudf::detail::gather(table_view{{child}},
                          device_span<size_type const>{gather_map.data(), gather_map.size()},
                          out_of_bounds_policy::DONT_CHECK,
-                         cudf::detail::negative_index_policy::NOT_ALLOWED,
+                         cudf::negative_index_policy::NOT_ALLOWED,
                          stream,
                          mr);
 
