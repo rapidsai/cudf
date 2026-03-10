@@ -51,7 +51,7 @@ struct dispatch_topk_fn {
 
     auto keys_in  = input.begin<T>();
     auto keys_out = cuda::make_discard_iterator();
-    auto indices  = rmm::device_uvector<size_type>(size, stream);
+    auto indices  = rmm::device_uvector<size_type>(k, stream);
     auto vals_in  = cuda::counting_iterator<size_type>();
     auto vals_out = indices.begin();
 
@@ -139,15 +139,13 @@ std::unique_ptr<column> top_k_order(column_view const& col,
       col.size(), numeric_scalar<size_type>(0, true, stream), stream, mr);
   }
 
-  auto const indices = [&] {
-    auto const temp_mr = cudf::get_current_device_resource_ref();
-    if (is_fast_path(col)) {
-      return type_dispatcher<dispatch_storage_type>(
-        col.type(), dispatch_topk_fn<true>{col, k, topk_order, stream, temp_mr});
-    }
-    auto const nulls = topk_order == order::ASCENDING ? null_order::AFTER : null_order::BEFORE;
-    return sorted_order<sort_method::STABLE>(col, topk_order, nulls, stream, temp_mr);
-  }();
+  auto const temp_mr = cudf::get_current_device_resource_ref();
+  if (is_fast_path(col)) {
+    return type_dispatcher<dispatch_storage_type>(
+      col.type(), dispatch_topk_fn<true>{col, k, topk_order, stream, temp_mr});
+  }
+  auto const nulls = topk_order == order::ASCENDING ? null_order::AFTER : null_order::BEFORE;
+  auto indices     = sorted_order<sort_method::STABLE>(col, topk_order, nulls, stream, temp_mr);
 
   return std::make_unique<column>(
     cudf::detail::split(indices->view(), {k}, stream).front(), stream, mr);
