@@ -1480,19 +1480,21 @@ TEST_F(ParquetReaderTest, FilterWithColumnProjection)
   auto [src, filepath] = create_parquet_with_stats("FilterWithColumnProjection.parquet");
   auto val             = cudf::numeric_scalar<uint32_t>{10};
   auto lit             = cudf::ast::literal{val};
-  auto col_ref         = cudf::ast::column_name_reference{"col_uint32"};
-  auto col_index       = cudf::ast::column_reference{0};
-  auto filter_expr     = cudf::ast::operation(cudf::ast::ast_operator::GREATER, lit, col_index);
 
-  auto predicate = cudf::compute_column(src, filter_expr);
+  // Prepare the predicate
+  auto col_index   = cudf::ast::column_reference{0};
+  auto filter_expr = cudf::ast::operation(cudf::ast::ast_operator::GREATER, lit, col_index);
+  auto predicate   = cudf::compute_column(src, filter_expr);
 
   {  // column_name_reference in parquet filter (not present in column projection)
-    auto read_expr       = cudf::ast::operation(cudf::ast::ast_operator::GREATER, lit, col_ref);
+    auto col_ref         = cudf::ast::column_name_reference{"cOL_uint32"};
+    auto read_expr       = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref, lit);
     auto projected_table = cudf::table_view{{src.get_column(2)}};
     auto expected        = cudf::apply_boolean_mask(projected_table, *predicate);
 
     auto read_opts = cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath})
-                       .column_names({"col_double"})
+                       .column_names({"col_Double"})
+                       .case_sensitive_names(false)
                        .filter(read_expr);
     auto result = cudf::io::read_parquet(read_opts);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *expected);
@@ -1500,6 +1502,7 @@ TEST_F(ParquetReaderTest, FilterWithColumnProjection)
     // Repeat but select columns using indices instead of names
     read_opts = cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath})
                   .column_indices({2})
+                  .case_sensitive_names(false)
                   .filter(read_expr);
     result = cudf::io::read_parquet(read_opts);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *expected);
@@ -1512,7 +1515,8 @@ TEST_F(ParquetReaderTest, FilterWithColumnProjection)
     auto projected_table = cudf::table_view{{src.get_column(2), src.get_column(0)}};
     auto expected        = cudf::apply_boolean_mask(projected_table, *predicate);
     auto read_opts = cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath})
-                       .column_names({"col_double", "col_uint32"})
+                       .column_names({"col_Double", "col_UInt32"})
+                       .case_sensitive_names(false)
                        .filter(read_ref_expr);
     auto result = cudf::io::read_parquet(read_opts);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*(cudf::io::read_parquet(read_opts).tbl), *expected);

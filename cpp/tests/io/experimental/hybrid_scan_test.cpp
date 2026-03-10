@@ -773,6 +773,8 @@ TEST_F(HybridScanTest, ExtendedFilterExpressions)
   auto col_ref0 = cudf::ast::column_reference(0);
   auto col_ref1 = cudf::ast::column_reference(1);
 
+  auto constexpr case_sensitive_names = true;
+
   // Filter: (col0 < 100) and (col0 < col1)
   {
     auto literal_value = cudf::numeric_scalar<T>(100);
@@ -782,11 +784,11 @@ TEST_F(HybridScanTest, ExtendedFilterExpressions)
     auto filter =
       cudf::ast::operation(cudf::ast::ast_operator::LOGICAL_AND, col0_lt_100, col0_lt_col1);
 
-    auto [filter_table, payload_table] =
-      hybrid_scan(datasource_ref, filter, std::nullopt, stream, mr, aligned_mr);
+    auto [filter_table, payload_table] = hybrid_scan(
+      datasource_ref, filter, std::nullopt, case_sensitive_names, stream, mr, aligned_mr);
 
-    auto read_single_step =
-      hybrid_scan_single_step(datasource_ref, filter, std::nullopt, stream, mr);
+    auto read_single_step = hybrid_scan_single_step(
+      datasource_ref, filter, std::nullopt, case_sensitive_names, stream, mr);
 
     auto predicate = cudf::compute_column(written_table->view(), filter);
     auto expected  = cudf::apply_boolean_mask(written_table->view(), *predicate);
@@ -816,11 +818,11 @@ TEST_F(HybridScanTest, ExtendedFilterExpressions)
     auto filter = cudf::ast::operation(
       cudf::ast::ast_operator::LOGICAL_OR, col0_lt_10, col0_plus_col1_gt_0_expr);
 
-    auto [filter_table, payload_table] =
-      hybrid_scan(datasource_ref, filter, std::nullopt, stream, mr, aligned_mr);
+    auto [filter_table, payload_table] = hybrid_scan(
+      datasource_ref, filter, std::nullopt, case_sensitive_names, stream, mr, aligned_mr);
 
-    auto read_single_step =
-      hybrid_scan_single_step(datasource_ref, filter, std::nullopt, stream, mr);
+    auto read_single_step = hybrid_scan_single_step(
+      datasource_ref, filter, std::nullopt, case_sensitive_names, stream, mr);
 
     auto predicate = cudf::compute_column(written_table->view(), filter);
     auto expected  = cudf::apply_boolean_mask(written_table->view(), *predicate);
@@ -852,6 +854,8 @@ TEST_F(HybridScanTest, ExtendedFilterExpressions)
   auto col_ref0 = cudf::ast::column_reference(0);
   auto col_ref1 = cudf::ast::column_reference(1);
 
+  auto constexpr case_sensitive_names = true;
+
   // Filter: (col0 < 100) and (col0 < col1)
   {
     auto literal_value = cudf::numeric_scalar<T>(100);
@@ -861,11 +865,11 @@ TEST_F(HybridScanTest, ExtendedFilterExpressions)
     auto filter =
       cudf::ast::operation(cudf::ast::ast_operator::LOGICAL_AND, col0_lt_100, col0_lt_col1);
 
-    auto [filter_table, payload_table] =
-      hybrid_scan(datasource_ref, filter, std::nullopt, stream, mr, aligned_mr);
+    auto [filter_table, payload_table] = hybrid_scan(
+      datasource_ref, filter, std::nullopt, case_sensitive_names, stream, mr, aligned_mr);
 
-    auto read_single_step =
-      hybrid_scan_single_step(datasource_ref, filter, std::nullopt, stream, mr);
+    auto read_single_step = hybrid_scan_single_step(
+      datasource_ref, filter, std::nullopt, case_sensitive_names, stream, mr);
 
     auto predicate = cudf::compute_column(written_table->view(), filter);
     auto expected  = cudf::apply_boolean_mask(written_table->view(), *predicate);
@@ -895,11 +899,11 @@ TEST_F(HybridScanTest, ExtendedFilterExpressions)
     auto filter = cudf::ast::operation(
       cudf::ast::ast_operator::LOGICAL_OR, col0_lt_10, col0_plus_col1_gt_0_expr);
 
-    auto [filter_table, payload_table] =
-      hybrid_scan(datasource_ref, filter, std::nullopt, stream, mr, aligned_mr);
+    auto [filter_table, payload_table] = hybrid_scan(
+      datasource_ref, filter, std::nullopt, case_sensitive_names, stream, mr, aligned_mr);
 
-    auto read_single_step =
-      hybrid_scan_single_step(datasource_ref, filter, std::nullopt, stream, mr);
+    auto read_single_step = hybrid_scan_single_step(
+      datasource_ref, filter, std::nullopt, case_sensitive_names, stream, mr);
 
     auto predicate = cudf::compute_column(written_table->view(), filter);
     auto expected  = cudf::apply_boolean_mask(written_table->view(), *predicate);
