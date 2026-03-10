@@ -406,6 +406,11 @@ class reader_impl {
     return not _expr_conv.get_converted_expr().has_value();
   }
 
+  [[nodiscard]] cudf::detail::hostdevice_span<bool> subpass_page_mask_span() const
+  {
+    return _subpass_page_mask ? *_subpass_page_mask : cudf::detail::hostdevice_span<bool>{};
+  }
+
   /**
    * @brief Calculate the number of rows read from each source in the output chunk
    *
@@ -476,7 +481,7 @@ class reader_impl {
   thrust::host_vector<bool> _pass_page_mask;
 
   // Page mask for filtering out subpass data pages (Copied to the device)
-  cudf::detail::hostdevice_vector<bool> _subpass_page_mask;
+  std::unique_ptr<cudf::detail::hostdevice_vector<bool>> _subpass_page_mask;
 
   // _output_buffers associated metadata
   std::unique_ptr<table_metadata> _output_metadata;
