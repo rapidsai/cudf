@@ -2440,7 +2440,9 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             output = {
                 "shape": (len(self),),
                 "strides": (self.dtype.itemsize,),
-                "typestr": self.dtype.str,
+                "typestr": self.dtype.numpy_dtype.str
+                if not isinstance(self.dtype, np.dtype)
+                else self.dtype.str,
                 "data": (
                     data_buf.ptr + self.offset * self.dtype.itemsize,
                     False,

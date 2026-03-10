@@ -382,12 +382,12 @@ def test_df_sr_binop(psr, colnames, binary_op):
     data = [[3.0, 2.0, 5.0], [3.0, None, 5.0], [6.0, 7.0, np.nan]]
     data = dict(zip(colnames, data, strict=True))
 
-    gsr = cudf.Series(psr).astype("float64")
+    gsr = cudf.Series(psr).astype("Float64")
 
-    gdf = cudf.DataFrame(data)
-    pdf = gdf.to_pandas(nullable=True)
+    gdf = cudf.DataFrame(data).astype("Float64")
+    pdf = gdf.to_pandas()
 
-    psr = gsr.to_pandas(nullable=True)
+    psr = gsr.to_pandas()
 
     try:
         expect = binary_op(pdf, psr)
@@ -399,12 +399,12 @@ def test_df_sr_binop(psr, colnames, binary_op):
         with pytest.raises(ValueError):
             binary_op(gsr, gdf)
     else:
-        got = binary_op(gdf, gsr).to_pandas(nullable=True)
-        assert_eq(expect, got, check_dtype=False, check_like=True)
+        got = binary_op(gdf, gsr)
+        assert_eq(expect, got)
 
         expect = binary_op(psr, pdf)
-        got = binary_op(gsr, gdf).to_pandas(nullable=True)
-        assert_eq(expect, got, check_dtype=False, check_like=True)
+        got = binary_op(gsr, gdf)
+        assert_eq(expect, got)
 
 
 @pytest.mark.parametrize(
