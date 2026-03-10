@@ -3948,7 +3948,7 @@ class DatetimeIndex(Index):
         DatetimeIndex(['2016-12-31', '2017-01-01', '2017-01-02', '2017-01-03',
                        '2017-01-04', '2017-01-05', '2017-01-06', '2017-01-07',
                        '2017-01-08'],
-                      dtype='datetime64[ns]', freq='24h')
+                      dtype='datetime64[us]', freq='24h')
         >>> datetime_index.day_name()
         Index(['Saturday', 'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday',
                'Friday', 'Saturday', 'Sunday'],
@@ -3969,7 +3969,7 @@ class DatetimeIndex(Index):
         >>> datetime_index
         DatetimeIndex(['2017-12-30', '2018-01-06', '2018-01-13', '2018-01-20',
                     '2018-01-27', '2018-02-03'],
-                      dtype='datetime64[ns]', freq='168h')
+                      dtype='datetime64[us]', freq='168h')
         >>> datetime_index.month_name()
         Index(['December', 'January', 'January', 'January', 'January', 'February'], dtype='str')
         """
@@ -4139,7 +4139,7 @@ class DatetimeIndex(Index):
         >>> tz_aware
         DatetimeIndex(['2018-03-01 09:00:00-05:00', '2018-03-02 09:00:00-05:00',
                        '2018-03-03 09:00:00-05:00'],
-                      dtype='datetime64[ns, America/New_York]', freq='24h')
+                      dtype='datetime64[us, America/New_York]', freq='24h')
 
         Ambiguous or nonexistent datetimes are converted to NaT.
 
@@ -4189,12 +4189,12 @@ class DatetimeIndex(Index):
         >>> dti
         DatetimeIndex(['2018-03-01 09:00:00-05:00', '2018-03-02 09:00:00-05:00',
                        '2018-03-03 09:00:00-05:00'],
-                      dtype='datetime64[ns, America/New_York]', freq='24h')
+                      dtype='datetime64[us, America/New_York]', freq='24h')
         >>> dti.tz_convert("Europe/London")
         DatetimeIndex(['2018-03-01 14:00:00+00:00',
                        '2018-03-02 14:00:00+00:00',
                        '2018-03-03 14:00:00+00:00'],
-                      dtype='datetime64[ns, Europe/London]')
+                      dtype='datetime64[us, Europe/London]')
         """
         result_col = self._column.tz_convert(tz)
         return DatetimeIndex._from_column(result_col, name=self.name)

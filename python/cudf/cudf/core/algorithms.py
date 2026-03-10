@@ -58,7 +58,7 @@ def factorize(
     >>> codes
     array([0, 1, 1])
     >>> uniques
-    Index(['a', 'c'], dtype='object')
+    Index(['a', 'c'], dtype='str')
 
     When ``use_na_sentinel=True`` (the default), missing values are indicated
     in the `codes` with the sentinel value ``-1`` and missing values are not
@@ -68,7 +68,7 @@ def factorize(
     >>> codes
     array([ 0, -1,  1,  2,  0])
     >>> uniques
-    Index(['b', 'a', 'c'], dtype='object')
+    Index(['b', 'a', 'c'], dtype='str')
 
     If NA is in the values, and we want to include NA in the uniques of the
     values, it can be achieved by setting ``use_na_sentinel=False``.
@@ -161,7 +161,7 @@ def unique(values):
     >>> import pandas as pd
     >>> cudf.unique(cudf.Series([pd.Timestamp("20160101"), pd.Timestamp("20160101")]))
     0   2016-01-01
-    dtype: datetime64[ns]
+    dtype: datetime64[us]
 
     >>> cudf.unique(
     ...     cudf.Series(
@@ -174,7 +174,7 @@ def unique(values):
     ... )
     0   2016-01-01 00:00:00-05:00
     1   2016-01-03 00:00:00-05:00
-    dtype: datetime64[ns, US/Eastern]
+    dtype: datetime64[us, US/Eastern]
 
     >>> cudf.unique(
     ...     cudf.Index(
@@ -185,7 +185,7 @@ def unique(values):
     ...         ]
     ...     )
     ... )
-    DatetimeIndex(['2016-01-01 00:00:00-05:00', '2016-01-03 00:00:00-05:00'], dtype='datetime64[ns, US/Eastern]')
+    DatetimeIndex(['2016-01-01 00:00:00-05:00', '2016-01-03 00:00:00-05:00'], dtype='datetime64[us, US/Eastern]')
 
     An unordered Categorical will return categories in the
     order of appearance.
@@ -195,14 +195,14 @@ def unique(values):
     1    a
     2    c
     dtype: category
-    Categories (3, object): ['a', 'b', 'c']
+    Categories (3, str): ['a', 'b', 'c']
 
     >>> cudf.unique(cudf.Series(pd.Categorical(list("baabc"), categories=list("abc"))))
     0    b
     1    a
     2    c
     dtype: category
-    Categories (3, object): ['a', 'b', 'c']
+    Categories (3, str): ['a', 'b', 'c']
 
     An ordered Categorical preserves the category ordering.
 
@@ -215,7 +215,7 @@ def unique(values):
     1    a
     2    c
     dtype: category
-    Categories (3, object): ['a' < 'b' < 'c']
+    Categories (3, str): ['a' < 'b' < 'c']
     """
     # TODO: Avoid accessing Index and Series from the top level namespace
     if not isinstance(values, (cudf.Series, cudf.Index, cp.ndarray)):

@@ -499,8 +499,8 @@ class Series(SingleColumnFrame, IndexedFrame):
         >>> cudf.Series.from_arrow(pa.array(["a", "b", None]))
         0       a
         1       b
-        2    None
-        dtype: object
+        2     NaN
+        dtype: str
         """
         return cls._from_column(ColumnBase.from_arrow(array))
 
@@ -1006,7 +1006,7 @@ class Series(SingleColumnFrame, IndexedFrame):
         10       a
         11       b
         12       c
-        13    None
+        13     NaN
         15       d
         Name: sample, dtype: str
         >>> series.to_frame()
@@ -1014,7 +1014,7 @@ class Series(SingleColumnFrame, IndexedFrame):
         10      a
         11      b
         12      c
-        13   None
+        13    NaN
         15      d
         """
         res = self._to_frame(name=name, index=self.index)
@@ -1145,7 +1145,7 @@ class Series(SingleColumnFrame, IndexedFrame):
         >>> s
         0      cat
         1      dog
-        2     None
+        2      NaN
         3   rabbit
         dtype: str
 
@@ -1156,9 +1156,9 @@ class Series(SingleColumnFrame, IndexedFrame):
         >>> s.map({'cat': 'kitten', 'dog': 'puppy'})
         0   kitten
         1    puppy
-        2     None
-        3     None
-        dtype: object
+        2      NaN
+        3      NaN
+        dtype: str
 
         It also accepts numeric functions:
 
@@ -1639,7 +1639,7 @@ class Series(SingleColumnFrame, IndexedFrame):
         >>> ser = cudf.Series(['', None, 'abc'])
         >>> ser
         0
-        1    None
+        1     NaN
         2     abc
         dtype: str
         >>> ser.dropna()
@@ -3028,15 +3028,15 @@ class Series(SingleColumnFrame, IndexedFrame):
         0       a
         1       a
         2       b
-        3    None
+        3     NaN
         4       b
-        5    None
+        5     NaN
         6       c
         dtype: str
         >>> series.unique()
         0       a
         1       b
-        2    None
+        2     NaN
         3       c
         dtype: str
         """
@@ -4383,7 +4383,7 @@ class DatetimeProperties(BaseDatelikeProperties):
         5     Thursday
         6       Friday
         7     Saturday
-        dtype: object
+        dtype: str
         """
         return self._return_result_like_self(
             self.series._column.get_day_names(locale)
@@ -4413,7 +4413,7 @@ class DatetimeProperties(BaseDatelikeProperties):
         3     January
         4     January
         5    February
-        dtype: object
+        dtype: str
         """
         return self._return_result_like_self(
             self.series._column.get_month_names(locale)
@@ -4449,7 +4449,7 @@ class DatetimeProperties(BaseDatelikeProperties):
         3    30
         4    30
         5    30
-        Name: week, dtype: object
+        Name: week, dtype: UInt32
 
         >>> serIndex = cudf.to_datetime(pd.Series(["2010-01-01", pd.NaT]))
         >>> serIndex.dt.isocalendar()
@@ -4459,7 +4459,7 @@ class DatetimeProperties(BaseDatelikeProperties):
         >>> serIndex.dt.isocalendar().year
         0    2009
         1    <NA>
-        Name: year, dtype: object
+        Name: year, dtype: UInt32
         """
         ca = ColumnAccessor(self.series._column.isocalendar(), verify=False)
         return self.series._constructor_expanddim._from_data(
@@ -4866,17 +4866,17 @@ class DatetimeProperties(BaseDatelikeProperties):
         0    2000-03-31
         1    2000-06-30
         2    2000-09-30
-        dtype: object
+        dtype: str
         >>> weekday_series.dt.strftime("%Y %d %m")
         0    2000 31 03
         1    2000 30 06
         2    2000 30 09
-        dtype: object
+        dtype: str
         >>> weekday_series.dt.strftime("%Y / %d / %m")
         0    2000 / 31 / 03
         1    2000 / 30 / 06
         2    2000 / 30 / 09
-        dtype: object
+        dtype: str
 
         .. pandas-compat::
             :meth:`pandas.DatetimeIndex.strftime`

@@ -1245,9 +1245,9 @@ class Frame(BinaryOperand, Scannable, Serializable):
         ...                    'toy': [None, 'Batmobile', 'Joker']})
         >>> df
             age                           born    name        toy
-        0     5                           NaT  Alfred        None
-        1     6  1939-05-27 00:00:00.000000000  Batman  Batmobile
-        2  <NA>  1940-04-25 00:00:00.000000000              Joker
+        0     5                        NaT  Alfred        NaN
+        1     6  1939-05-27 00:00:00.000000  Batman  Batmobile
+        2  <NA>  1940-04-25 00:00:00.000000              Joker
         >>> df.isna()
              age   born   name    toy
         0  False   True  False   True
@@ -1326,9 +1326,9 @@ class Frame(BinaryOperand, Scannable, Serializable):
         ...                    'toy': [None, 'Batmobile', 'Joker']})
         >>> df
             age                           born    name        toy
-        0     5                           NaT  Alfred        None
-        1     6  1939-05-27 00:00:00.000000000  Batman  Batmobile
-        2  <NA>  1940-04-25 00:00:00.000000000              Joker
+        0     5                        NaT  Alfred        NaN
+        1     6  1939-05-27 00:00:00.000000  Batman  Batmobile
+        2  <NA>  1940-04-25 00:00:00.000000              Joker
         >>> df.notna()
              age   born  name    toy
         0   True  False  True  False

@@ -939,8 +939,8 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
     ... ])
     >>> df
        0     1     2     3             4
-    0  5  cats  jump  <NA>          None
-    1  2  dogs   dig   7.5          None
+    0  5  cats  jump  <NA>           NaN
+    1  2  dogs   dig   7.5           NaN
     2  3  cows   moo  -2.1  occasionally
 
     Convert from a Pandas DataFrame:
@@ -6752,7 +6752,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         >>> df.mode()
           species  legs  wings
         0    bird     2    0.0
-        1    None  <NA>    2.0
+        1     NaN  <NA>    2.0
 
         Setting ``dropna=False``, ``NA`` values are considered and they can be
         the mode (like for wings).
@@ -8549,7 +8549,7 @@ def from_pandas(obj, nan_as_null=no_default):
     >>> type(gdf)
     <class 'cudf.core.dataframe.DataFrame'>
     >>> type(pdf)
-    <class 'pandas.core.frame.DataFrame'>
+    <class 'pandas.DataFrame'>
 
     Converting a Pandas Series to cuDF Series:
 
@@ -8559,18 +8559,18 @@ def from_pandas(obj, nan_as_null=no_default):
     1    b
     2    c
     3    d
-    Name: apple, dtype: object
+    Name: apple, dtype: str
     >>> gsr = cudf.from_pandas(psr)
     >>> gsr
     0    a
     1    b
     2    c
     3    d
-    Name: apple, dtype: object
+    Name: apple, dtype: str
     >>> type(gsr)
     <class 'cudf.core.series.Series'>
     >>> type(psr)
-    <class 'pandas.core.series.Series'>
+    <class 'pandas.Series'>
 
     Converting a Pandas Index to cuDF Index:
 
@@ -8583,7 +8583,7 @@ def from_pandas(obj, nan_as_null=no_default):
     >>> type(gidx)
     <class 'cudf.core.index.Index'>
     >>> type(pidx)
-    <class 'pandas.core.indexes.base.Index'>
+    <class 'pandas.Index'>
 
     Converting a Pandas MultiIndex to cuDF MultiIndex:
 
@@ -8610,7 +8610,7 @@ def from_pandas(obj, nan_as_null=no_default):
     >>> type(gmidx)
     <class 'cudf.core.multiindex.MultiIndex'>
     >>> type(pmidx)
-    <class 'pandas.core.indexes.multi.MultiIndex'>
+    <class 'pandas.MultiIndex'>
     """
     if nan_as_null is no_default:
         nan_as_null = False if get_option("mode.pandas_compatible") else None
