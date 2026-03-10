@@ -19,7 +19,6 @@ _SKIP_DOCTESTS = frozenset(
         "register_dataframe_accessor",
         "register_index_accessor",
         "register_series_accessor",
-        "read_json",  # TODO: read_json doctest passes raw string that cudf treats as filepath
     }
 )
 
