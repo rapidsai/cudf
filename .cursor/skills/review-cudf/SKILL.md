@@ -63,7 +63,7 @@ gh api repos/rapidsai/cudf/pulls/<PR_NUMBER>/reviews
 - Detail APIs must not have default parameters for stream or MR.
 - No raw owning pointers; use `std::unique_ptr`, `std::shared_ptr`, `std::reference_wrapper`.
 - Proper exception handling via `CUDF_EXPECTS`, `CUDF_FAIL`, `CUDF_UNREACHABLE`. Prefer specific exception types (`std::invalid_argument`, `std::out_of_range`) as the third arg to `CUDF_EXPECTS` when appropriate.
-- Prefer `CUDF_EXPECTS(condition, msg)` over `if (!condition) { CUDF_FAIL(msg); }` when the condition has no side effects. Otherwise, evaluate the `condition` in a variable separately and use that in `CUDF_EXPECTS` 
+- Prefer `CUDF_EXPECTS(condition, msg)` over `if (!condition) { CUDF_FAIL(msg); }` when the condition has no side effects. Otherwise, evaluate the `condition` in a variable separately and use that in `CUDF_EXPECTS`
 - The condition (first argument) of `CUDF_EXPECTS` must be a pure predicate — capture side-effecting results in a variable first.
 - `CUDF_UNREACHABLE` (not `CUDF_FAIL`) for template code paths that are statically unreachable but cannot be removed due to template instantiation.
 - Input validation is limited to column/table sizes and data types; libcudf does not validate data contents (integer overflow, 2GB limit, etc.).

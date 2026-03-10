@@ -5,7 +5,7 @@ alwaysApply: false
 
 ## Check if we are in devcontainer
 
-Prompt the user to specify if we are working inside a cudf devcontainer. If not, ignore everything else in this file and don't use any of the following instructions. 
+Prompt the user to specify if we are working inside a cudf devcontainer. If not, ignore everything else in this file and don't use any of the following instructions.
 
 If inside devcontainer, ask about the devcontainer environment, `pip` or `conda`? Some users specify this as a part of their `.code-workspace` file name located at `/home/coder` so check that before prompting the user.
 
@@ -22,7 +22,7 @@ export CUDAARCHS=NATIVE ; build-cudf-cpp
 
 Note that the `build-cudf-cpp` script is located at `/usr/bin` if you can't find it.
 
-If this is an incremental build, you can just navigate to `${HOME}/cudf/cpp/build/latest` and run: 
+If this is an incremental build, you can just navigate to `${HOME}/cudf/cpp/build/latest` and run:
 
 ```bash
 ninja
