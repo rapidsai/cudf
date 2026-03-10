@@ -866,19 +866,22 @@ struct IdentityHash {
 template <template <typename> class hash_function>
 std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition(
   table_view const& input,
-  std::vector<size_type> const& columns_to_hash,
+  table_view const& table_to_hash,
   int num_partitions,
   uint32_t seed,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
-  auto table_to_hash = input.select(columns_to_hash);
-
   // Return empty result if there are no partitions or nothing to hash
   if (num_partitions <= 0 || input.num_rows() == 0 || table_to_hash.num_columns() == 0) {
     return std::pair{empty_like(input), std::vector<size_type>(num_partitions + 1, 0)};
   }
 
+  if constexpr (std::is_same_v<hash_function<void>, cudf::detail::IdentityHash<void>>) {
+    for (auto const& c : table_to_hash) {
+      CUDF_EXPECTS(is_numeric(c.type()), "IdentityHash does not support this data type");
+    }
+  }
   if (has_nested_nulls(table_to_hash)) {
     return hash_partition_table<hash_function, true>(
       input, table_to_hash, num_partitions, seed, stream, mr);
@@ -922,17 +925,39 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition(
 {
   CUDF_FUNC_RANGE();
 
+  auto table_to_hash = input.select(columns_to_hash);
+
   switch (hash_function) {
     case (hash_id::HASH_IDENTITY):
-      for (size_type const& column_id : columns_to_hash) {
-        if (!is_numeric(input.column(column_id).type()))
-          CUDF_FAIL("IdentityHash does not support this data type");
-      }
       return detail::hash_partition<cudf::detail::IdentityHash>(
-        input, columns_to_hash, num_partitions, seed, stream, mr);
+        input, table_to_hash, num_partitions, seed, stream, mr);
     case (hash_id::HASH_MURMUR3):
       return detail::hash_partition<cudf::hashing::detail::MurmurHash3_x86_32>(
-        input, columns_to_hash, num_partitions, seed, stream, mr);
+        input, table_to_hash, num_partitions, seed, stream, mr);
+    default: CUDF_FAIL("Unsupported hash function in hash_partition");
+  }
+}
+
+std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition(
+  table_view const& input,
+  table_view const& keys,
+  int num_partitions,
+  hash_id hash_function,
+  uint32_t seed,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
+{
+  CUDF_FUNC_RANGE();
+  CUDF_EXPECTS(input.num_rows() == keys.num_rows(),
+               "Input table and key table must have same number of rows",
+               std::invalid_argument);
+  switch (hash_function) {
+    case (hash_id::HASH_IDENTITY):
+      return detail::hash_partition<cudf::detail::IdentityHash>(
+        input, keys, num_partitions, seed, stream, mr);
+    case (hash_id::HASH_MURMUR3):
+      return detail::hash_partition<cudf::hashing::detail::MurmurHash3_x86_32>(
+        input, keys, num_partitions, seed, stream, mr);
     default: CUDF_FAIL("Unsupported hash function in hash_partition");
   }
 }
