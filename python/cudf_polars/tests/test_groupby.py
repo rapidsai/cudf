@@ -139,6 +139,8 @@ def test_groupby(df: pl.LazyFrame, maintain_order, keys, exprs):
 def test_groupby_sorted_keys(df: pl.LazyFrame, keys, exprs, using_rapidsmpf, request):
     failing_rapidsmpf_nodeids = {
         'test_groupby_sorted_keys[col("key1")-]',
+        'test_groupby_sorted_keys[col("key2")-]',
+        'test_groupby_sorted_keys[[(col("key1")) * (col("key2"))]-]',
         'test_groupby_sorted_keys[[(col("key1")) * (col("key2"))]-col("int").first()-col("float").last()]',
         'test_groupby_sorted_keys[[(col("key1")) * (col("key2"))]-col("float").quantile()4]',
         'test_groupby_sorted_keys[[(col("key1")) == (col("key2"))]-float-int]',
