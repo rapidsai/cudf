@@ -214,8 +214,6 @@ std::unique_ptr<cudf::table> test_hybrid_scan_column_selection(
     reinterpret_cast<std::byte const*>(parquet_buffer.data()), parquet_buffer.size()));
   auto datasource_ref = std::ref(*datasource);
 
-  auto const num_filter_columns = filter_column_name.empty() ? 0 : 1;
-
   {
     auto const [read_filter_table, read_payload_table] = hybrid_scan(datasource_ref,
                                                                      filter_expression,
