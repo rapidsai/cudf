@@ -30,7 +30,7 @@ def gather(
             if nullify
             else plc.copying.OutOfBoundsPolicy.DONT_CHECK,
         )
-        return plc_tbl.columns()
+    return plc_tbl.columns()
 
 
 def scatter(

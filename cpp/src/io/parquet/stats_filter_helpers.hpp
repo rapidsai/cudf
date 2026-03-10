@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -201,7 +201,7 @@ class stats_caster_base {
         auto [d_chars, d_offsets, _] = make_strings_children(val, chars, stream, mr);
         return cudf::make_strings_column(
           val.size(),
-          std::make_unique<column>(std::move(d_offsets), rmm::device_buffer{}, 0),
+          std::make_unique<column>(std::move(d_offsets), rmm::device_buffer{0, stream, mr}, 0),
           d_chars.release(),
           null_count,
           rmm::device_buffer{

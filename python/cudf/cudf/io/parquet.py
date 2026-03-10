@@ -47,8 +47,7 @@ from cudf.utils.performance_tracking import _performance_tracking
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Hashable, Sequence
-
-    from typing_extensions import Self
+    from typing import Self
 
     from cudf._typing import DtypeObj
     from cudf.core.series import Series
@@ -1297,14 +1296,18 @@ def _parquet_to_frame(
             _len = len(dfs[-1])
             if partition_categories and name in partition_categories:
                 # Build the categorical column from `codes`
+                cat_dtype = CategoricalDtype(
+                    categories=partition_categories[name],
+                    ordered=False,
+                )
                 codes = as_column(
                     partition_categories[name].index(value),
                     length=_len,
+                    dtype=cat_dtype._codes_dtype,
                 )
-                col = codes._with_type_metadata(
-                    CategoricalDtype(
-                        categories=partition_categories[name], ordered=False
-                    )
+                col = ColumnBase.create(
+                    codes.plc_column,
+                    cat_dtype,
                 )
             else:
                 # Not building categorical columns, so
@@ -1385,7 +1388,7 @@ def _read_parquet(
             if skip_rows != 0:
                 options.set_skip_rows(skip_rows)
             if columns is not None:
-                options.set_columns(columns)
+                options.set_column_names(columns)
             if filters is not None:
                 options.set_filter(filters)
 
@@ -1412,14 +1415,14 @@ def _read_parquet(
                         [concatenated_columns[i], columns.pop()]
                     )
 
-            data = {
-                name: ColumnBase.from_pylibcudf(col)
-                for name, col in zip(
-                    column_names, concatenated_columns, strict=True
-                )
-            }
-            df = DataFrame._from_data(data)
-            ioutils._add_df_col_struct_names(df, child_names)
+            plc_table = plc.Table(concatenated_columns)
+            df = DataFrame.from_pylibcudf(
+                plc_table,
+                metadata={
+                    "columns": column_names,
+                    "child_names": child_names,
+                },
+            )
             df = _process_metadata(
                 df,
                 column_names,
@@ -1453,7 +1456,7 @@ def _read_parquet(
             if skip_rows != 0:
                 options.set_skip_rows(skip_rows)
             if columns is not None:
-                options.set_columns(columns)
+                options.set_column_names(columns)
             if filters is not None:
                 options.set_filter(filters)
 

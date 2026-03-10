@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -687,8 +687,7 @@ struct column_to_strings_fn {
       std::move(new_offsets),
       child_string_with_null(),
       column.null_count(),
-      cudf::detail::copy_bitmask(column, stream_, cudf::get_current_device_resource_ref()),
-      stream_);
+      cudf::detail::copy_bitmask(column, stream_, cudf::get_current_device_resource_ref()));
     return join_list_of_strings(lists_column_view(*list_child_string),
                                 list_row_begin_wrap.value(stream_),
                                 list_row_end_wrap.value(stream_),
@@ -806,7 +805,7 @@ std::unique_ptr<column> make_strings_column_from_host(host_span<std::string cons
   std::string const host_chars =
     std::accumulate(host_strings.begin(), host_strings.end(), std::string(""));
   auto d_chars = cudf::detail::make_device_uvector_async(
-    host_chars, stream, cudf::get_current_device_resource_ref());
+    host_span<char const>{host_chars}, stream, cudf::get_current_device_resource_ref());
   std::vector<cudf::size_type> offsets(host_strings.size() + 1, 0);
   std::transform_inclusive_scan(host_strings.begin(),
                                 host_strings.end(),

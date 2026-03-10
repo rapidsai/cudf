@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 """Parallel GroupBy Logic."""
 
@@ -22,7 +22,11 @@ from cudf_polars.experimental.base import PartitionInfo
 from cudf_polars.experimental.dispatch import lower_ir_node
 from cudf_polars.experimental.repartition import Repartition
 from cudf_polars.experimental.shuffle import Shuffle
-from cudf_polars.experimental.utils import _get_unique_fractions, _lower_ir_fallback
+from cudf_polars.experimental.utils import (
+    _dynamic_planning_on,
+    _get_unique_fractions,
+    _lower_ir_fallback,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Generator, MutableMapping
@@ -131,7 +135,7 @@ def decompose(
                 decompose(
                     f"{next(names)}__mean_count",
                     Agg(
-                        DataType(pl.Int32()),
+                        DataType(pl.Int64()),
                         "count",
                         False,  # noqa: FBT003
                         ExecutionContext.GROUPBY,
@@ -185,8 +189,11 @@ def _(
     original_child = ir.children[0]
     child, partition_info = rec(ir.children[0])
 
+    config_options = rec.state["config_options"]
+    dynamic_planning = _dynamic_planning_on(config_options)
+
     # Handle single-partition case
-    if partition_info[child].count == 1:
+    if partition_info[child].count == 1 and not dynamic_planning:
         single_part_node = ir.reconstruct([child])
         partition_info[single_part_node] = partition_info[child]
         return single_part_node, partition_info
@@ -205,23 +212,9 @@ def _(
     post_aggregation_count = 1  # Default tree reduction
     groupby_key_columns = [ne.name for ne in ir.keys]
     shuffled = partition_info[child].partitioned_on == ir.keys
-
-    config_options = rec.state["config_options"]
-    assert config_options.executor.name == "streaming", (
-        "'in-memory' executor not supported in 'lower_ir_node'"
-    )
-
     child_count = partition_info[child].count
-    if unique_fraction_dict := _get_unique_fractions(
-        groupby_key_columns,
-        config_options.executor.unique_fraction,
-        row_count=rec.state["stats"].row_count.get(original_child),
-        column_stats=rec.state["stats"].column_stats.get(original_child),
-    ):
-        # Use unique_fraction to determine output partitioning
-        unique_fraction = max(unique_fraction_dict.values())
-        post_aggregation_count = max(int(unique_fraction * child_count), 1)
 
+    # Decompose the aggregation requests into three distinct phases
     new_node: IR
     name_generator = unique_names(ir.schema.keys())
     # Decompose the aggregation requests into three distinct phases
@@ -257,6 +250,27 @@ def _(
             partitioned_on=ir.keys,
         )
         shuffled = True
+
+    # Check for dynamic planning
+    if dynamic_planning:  # pragma: no cover
+        # Dynamic planning: Just reconstruct the GroupBy.
+        # The runtime GroupBy node will handle decomposition and shuffle decisions.
+        dynamic_node = ir.reconstruct([child])
+        partition_info[dynamic_node] = PartitionInfo(
+            count=child_count,
+            partitioned_on=ir.keys,
+        )
+        return dynamic_node, partition_info
+
+    if unique_fraction_dict := _get_unique_fractions(
+        groupby_key_columns,
+        config_options.executor.unique_fraction,
+        row_count=rec.state["stats"].row_count.get(original_child),
+        column_stats=rec.state["stats"].column_stats.get(original_child),
+    ):
+        # Use unique_fraction to determine output partitioning
+        unique_fraction = max(unique_fraction_dict.values())
+        post_aggregation_count = max(int(unique_fraction * child_count), 1)
 
     # Partition-wise groupby operation
     pwise_schema = {k.name: k.value.dtype for k in ir.keys} | {
@@ -298,10 +312,6 @@ def _(
         partition_info[gb_inter] = PartitionInfo(count=post_aggregation_count)
     else:
         # N-ary tree reduction
-        assert config_options.executor.name == "streaming", (
-            "'in-memory' executor not supported in 'generate_ir_tasks'"
-        )
-
         n_ary = config_options.executor.groupby_n_ary
         count = child_count
         gb_inter = gb_pwise

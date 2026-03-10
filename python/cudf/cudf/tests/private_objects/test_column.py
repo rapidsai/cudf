@@ -14,7 +14,11 @@ from cudf.core._compat import (
     PANDAS_VERSION,
 )
 from cudf.core.column.column import _can_values_be_equal, as_column
-from cudf.core.column.decimal import Decimal32Column, Decimal64Column
+from cudf.core.column.decimal import (
+    Decimal32Column,
+    Decimal64Column,
+    Decimal128Column,
+)
 from cudf.testing import assert_eq
 
 
@@ -408,78 +412,6 @@ def test_as_column_arrow_array(data, pyarrow_kwargs, cudf_kwargs):
 
 
 @pytest.mark.parametrize(
-    "pd_dtype,expect_dtype",
-    [
-        # TODO: Nullable float is coming
-        (pd.StringDtype(), np.dtype("O")),
-        (pd.UInt8Dtype(), np.dtype("uint8")),
-        (pd.UInt16Dtype(), np.dtype("uint16")),
-        (pd.UInt32Dtype(), np.dtype("uint32")),
-        (pd.UInt64Dtype(), np.dtype("uint64")),
-        (pd.Int8Dtype(), np.dtype("int8")),
-        (pd.Int16Dtype(), np.dtype("int16")),
-        (pd.Int32Dtype(), np.dtype("int32")),
-        (pd.Int64Dtype(), np.dtype("int64")),
-        (pd.BooleanDtype(), np.dtype("bool")),
-    ],
-)
-def test_build_df_from_nullable_pandas_dtype(pd_dtype, expect_dtype):
-    if pd_dtype == pd.StringDtype():
-        data = ["a", pd.NA, "c", pd.NA, "e"]
-    elif pd_dtype == pd.BooleanDtype():
-        data = [True, pd.NA, False, pd.NA, True]
-    else:
-        data = [1, pd.NA, 3, pd.NA, 5]
-
-    pd_data = pd.DataFrame.from_dict({"a": data}, dtype=pd_dtype)
-    gd_data = cudf.DataFrame(pd_data)
-
-    assert gd_data["a"].dtype == expect_dtype
-
-    # check mask
-    expect_mask = [x is not pd.NA for x in pd_data["a"]]
-    got_mask = gd_data["a"]._column._get_mask_as_column().values_host
-
-    np.testing.assert_array_equal(expect_mask, got_mask)
-
-
-@pytest.mark.parametrize(
-    "pd_dtype,expect_dtype",
-    [
-        # TODO: Nullable float is coming
-        (pd.StringDtype(), np.dtype("O")),
-        (pd.UInt8Dtype(), np.dtype("uint8")),
-        (pd.UInt16Dtype(), np.dtype("uint16")),
-        (pd.UInt32Dtype(), np.dtype("uint32")),
-        (pd.UInt64Dtype(), np.dtype("uint64")),
-        (pd.Int8Dtype(), np.dtype("int8")),
-        (pd.Int16Dtype(), np.dtype("int16")),
-        (pd.Int32Dtype(), np.dtype("int32")),
-        (pd.Int64Dtype(), np.dtype("int64")),
-        (pd.BooleanDtype(), np.dtype("bool")),
-    ],
-)
-def test_build_series_from_nullable_pandas_dtype(pd_dtype, expect_dtype):
-    if pd_dtype == pd.StringDtype():
-        data = ["a", pd.NA, "c", pd.NA, "e"]
-    elif pd_dtype == pd.BooleanDtype():
-        data = [True, pd.NA, False, pd.NA, True]
-    else:
-        data = [1, pd.NA, 3, pd.NA, 5]
-
-    pd_data = pd.Series(data, dtype=pd_dtype)
-    gd_data = cudf.Series(pd_data)
-
-    assert gd_data.dtype == expect_dtype
-
-    # check mask
-    expect_mask = [x is not pd.NA for x in pd_data]
-    got_mask = gd_data._column._get_mask_as_column().values_host
-
-    np.testing.assert_array_equal(expect_mask, got_mask)
-
-
-@pytest.mark.parametrize(
     "left, right, expected",
     [
         (np.dtype(np.int64), np.dtype(np.int64), True),
@@ -551,29 +483,33 @@ def test_datetime_can_cast_safely():
     ],
 )
 @pytest.mark.parametrize(
-    "typ_",
+    "col,typ_",
     [
-        pa.decimal128(precision=4, scale=2),
-        pa.decimal128(precision=5, scale=3),
-        pa.decimal128(precision=6, scale=4),
+        (Decimal32Column, pa.decimal32(precision=4, scale=2)),
+        (Decimal64Column, pa.decimal64(precision=5, scale=3)),
+        (Decimal128Column, pa.decimal128(precision=6, scale=4)),
     ],
 )
-@pytest.mark.parametrize("col", [Decimal32Column, Decimal64Column])
 def test_round_trip_decimal_column(data_, typ_, col):
     pa_arr = pa.array(data_, type=typ_)
-    col_32 = col.from_arrow(pa_arr)
-    assert pa_arr.equals(col_32.to_arrow())
+    decimal_col = col.from_arrow(pa_arr)
+    result = decimal_col.to_arrow()
+
+    # Round-trip should preserve the exact PyArrow decimal type
+    assert result.equals(pa_arr)
 
 
 def test_from_arrow_max_precision_decimal64():
+    # Decimal64 max precision is 18, so 19 should raise ValueError
     with pytest.raises(ValueError):
         Decimal64Column.from_arrow(
-            pa.array([1, 2, 3], type=pa.decimal128(scale=0, precision=19))
+            pa.array([1, 2, 3], type=pa.decimal64(scale=0, precision=19))
         )
 
 
 def test_from_arrow_max_precision_decimal32():
+    # Decimal32 max precision is 9, so 10 should raise ValueError
     with pytest.raises(ValueError):
         Decimal32Column.from_arrow(
-            pa.array([1, 2, 3], type=pa.decimal128(scale=0, precision=10))
+            pa.array([1, 2, 3], type=pa.decimal32(scale=0, precision=10))
         )

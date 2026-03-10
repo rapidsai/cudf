@@ -90,6 +90,7 @@ def test_broadcast_join_limit(left, right, broadcast_join_limit):
             "cluster": DEFAULT_CLUSTER,
             "runtime": DEFAULT_RUNTIME,
             "shuffle_method": DEFAULT_RUNTIME,  # Names coincide
+            "dynamic_planning": None,  # Requires static planning
         },
     )
     left = pl.LazyFrame(
@@ -160,6 +161,7 @@ def test_join_conditional(reverse, max_rows_per_partition):
             "cluster": DEFAULT_CLUSTER,
             "runtime": DEFAULT_RUNTIME,
             "fallback_mode": "warn",
+            "dynamic_planning": None,  # Requires static planning
         },
     )
     left = pl.LazyFrame({"x": range(15), "y": [1, 2, 3] * 5})
@@ -218,12 +220,10 @@ def test_join_and_slice(zlice):
     # Need sort to match order after a join
     q = left.join(right, on="a", how="inner").sort(pl.col("a")).slice(*zlice)
     if zlice == (2, 2):
-        msg = (
-            "does not support multiple partitions."
-            if DEFAULT_RUNTIME == "rapidsmpf"
-            else "does not support a multi-partition slice with an offset."
-        )
-        with pytest.warns(UserWarning, match=msg):
+        with pytest.warns(
+            UserWarning,
+            match="does not support a multi-partition slice with an offset.",
+        ):
             assert_gpu_result_equal(q, engine=engine)
     else:
         assert_gpu_result_equal(q, engine=engine)
@@ -263,6 +263,7 @@ def test_cache_preserves_partitioning_join():
             "max_rows_per_partition": 3,
             "cluster": DEFAULT_CLUSTER,
             "runtime": DEFAULT_RUNTIME,
+            "dynamic_planning": None,  # Requires static planning
         },
     )
 

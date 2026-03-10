@@ -227,6 +227,7 @@ ConfigureTest(
   reductions/approx_distinct_count_tests.cpp
   reductions/bitwise_tests.cpp
   reductions/collect_ops_tests.cpp
+  reductions/distinct_count_tests.cpp
   reductions/ewm_tests.cpp
   reductions/host_udf_example_tests.cu
   reductions/list_rank_test.cpp
@@ -235,6 +236,7 @@ ConfigureTest(
   reductions/scan_tests.cpp
   reductions/segmented_reduction_tests.cpp
   reductions/tdigest_tests.cpp
+  reductions/unique_count_tests.cpp
   GPUS 1
   PERCENT 70
 )
@@ -340,7 +342,7 @@ ConfigureTest(
 )
 ConfigureTest(
   HYBRID_SCAN_TEST
-  io/experimental/hybrid_scan_common.cpp
+  io/experimental/hybrid_scan_composer.cpp
   io/experimental/hybrid_scan_filters_test.cpp
   io/experimental/hybrid_scan_test.cpp
   io/parquet_common.cpp
@@ -444,20 +446,7 @@ ConfigureTest(
 # ##################################################################################################
 # * span tests -------------------------------------------------------------------------------
 
-# This test must be split into two executables so that one can use the preload library and one does
-# not. The one that doesn't includes a thrust::device_vector copy, which is always synchronous on
-# the default stream and is out of libcudf's control (but must be tested).
-set(_allowlist_filter SpanTest.CanConstructFromDeviceContainers)
-
 ConfigureTest(SPAN_TEST utilities_tests/span_tests.cu)
-ConfigureTest(SPAN_TEST_DEVICE_VECTOR utilities_tests/span_tests.cu)
-
-# Overwrite the environments set by ConfigureTest
-set_property(
-  TEST SPAN_TEST SPAN_TEST_DEVICE_VECTOR
-  APPEND
-  PROPERTY ENVIRONMENT "GTEST_FILTER=-${_allowlist_filter}"
-)
 
 # ##################################################################################################
 # * iterator tests --------------------------------------------------------------------------------
@@ -516,12 +505,10 @@ ConfigureTest(
 ConfigureTest(
   STREAM_COMPACTION_TEST
   stream_compaction/apply_boolean_mask_tests.cpp
-  stream_compaction/distinct_count_tests.cpp
   stream_compaction/distinct_tests.cpp
   stream_compaction/drop_nans_tests.cpp
   stream_compaction/drop_nulls_tests.cpp
   stream_compaction/stable_distinct_tests.cpp
-  stream_compaction/unique_count_tests.cpp
   stream_compaction/unique_tests.cpp
 )
 
@@ -647,7 +634,6 @@ ConfigureTest(STRUCTS_TEST structs/structs_column_tests.cpp structs/utilities_te
 # * nvtext test -----------------------------------------------------------------------------------
 ConfigureTest(
   TEXT_TEST
-  text/bpe_tests.cpp
   text/deduplicate_tests.cpp
   text/edit_distance_tests.cpp
   text/jaccard_tests.cpp
@@ -683,6 +669,7 @@ ConfigureTest(
   dictionary/search_test.cpp
   dictionary/set_keys_test.cpp
   dictionary/slice_test.cpp
+  dictionary/sort_test.cpp
 )
 
 # ##################################################################################################
@@ -792,7 +779,6 @@ ConfigureTest(
 )
 ConfigureTest(
   STREAM_TEXT_TEST
-  streams/text/bpe_test.cpp
   streams/text/edit_distance_test.cpp
   streams/text/ngrams_test.cpp
   streams/text/replace_test.cpp

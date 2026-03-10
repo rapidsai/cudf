@@ -21,7 +21,7 @@ from pylibcudf.libcudf.io.types cimport (
     table_with_metadata,
 )
 from pylibcudf.libcudf.table.table_view cimport table_view
-from pylibcudf.libcudf.types cimport data_type, size_type
+from pylibcudf.libcudf.types cimport data_type, size_type, type_id
 from rmm.librmm.cuda_stream_view cimport cuda_stream_view
 from rmm.librmm.memory_resource cimport device_memory_resource
 
@@ -34,6 +34,7 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
         const optional[reference_wrapper[expression]]& get_filter()\
             except +libcudf_exception_handler
         data_type get_timestamp_type() except +libcudf_exception_handler
+        type_id get_decimal_width() noexcept
         bool is_enabled_use_pandas_metadata() except +libcudf_exception_handler
         bool is_enabled_arrow_schema() except +libcudf_exception_handler
         bool is_enabled_allow_mismatched_pq_schemas() except +libcudf_exception_handler
@@ -44,6 +45,11 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
         void set_source(source_info src) except +libcudf_exception_handler
         void set_filter(expression &filter) except +libcudf_exception_handler
         void set_columns(vector[string] col_names) except +libcudf_exception_handler
+        void set_column_names(
+                vector[string] col_names) except +libcudf_exception_handler
+        void set_column_indices(
+            vector[size_type] col_indices
+        ) except +libcudf_exception_handler
         void set_num_rows(int64_t val) except +libcudf_exception_handler
         void set_row_groups(
             vector[vector[size_type]] row_grp
@@ -58,6 +64,7 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
         ) except +libcudf_exception_handler
         void enable_use_pandas_metadata(bool val) except +libcudf_exception_handler
         void set_timestamp_type(data_type type) except +libcudf_exception_handler
+        void set_decimal_width(type_id width) noexcept
 
         @staticmethod
         parquet_reader_options_builder builder(
@@ -71,6 +78,12 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
         ) except +libcudf_exception_handler
         parquet_reader_options_builder& columns(
             vector[string] col_names
+        ) except +libcudf_exception_handler
+        parquet_reader_options_builder& column_names(
+            vector[string] col_names
+        ) except +libcudf_exception_handler
+        parquet_reader_options_builder& column_indices(
+            vector[size_type] col_indices
         ) except +libcudf_exception_handler
         parquet_reader_options_builder& row_groups(
             vector[vector[size_type]] row_grp
@@ -93,6 +106,9 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
         parquet_reader_options_builder& timestamp_type(
             data_type type
         ) except +libcudf_exception_handler
+        parquet_reader_options_builder& decimal_width(
+            type_id width
+        ) noexcept
         parquet_reader_options_builder& filter(
             const expression & f
         ) except +libcudf_exception_handler

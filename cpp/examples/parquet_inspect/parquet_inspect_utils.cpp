@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -9,6 +9,7 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/cuda_memcpy.hpp>
 #include <cudf/io/experimental/hybrid_scan.hpp>
+#include <cudf/io/parquet_io_utils.hpp>
 #include <cudf/io/parquet_schema.hpp>
 #include <cudf/io/text/byte_range_info.hpp>
 #include <cudf/io/types.hpp>
@@ -186,8 +187,7 @@ auto make_page_data_list_column(cudf::host_span<T const> data,
                                  std::move(offsets_column),
                                  std::move(page_data_column),
                                  0,
-                                 rmm::device_buffer{},
-                                 stream);
+                                 rmm::device_buffer{});
 }
 
 }  // namespace
@@ -199,40 +199,6 @@ std::shared_ptr<rmm::mr::device_memory_resource> create_memory_resource(bool is_
       std::make_shared<rmm::mr::cuda_memory_resource>(), rmm::percent_of_free_device_memory(50));
   }
   return std::make_shared<rmm::mr::cuda_async_memory_resource>();
-}
-
-cudf::host_span<uint8_t const> fetch_footer_bytes(cudf::host_span<uint8_t const> buffer)
-{
-  CUDF_FUNC_RANGE();
-
-  using namespace cudf::io::parquet;
-
-  constexpr auto header_len = sizeof(file_header_s);
-  constexpr auto ender_len  = sizeof(file_ender_s);
-  size_t const len          = buffer.size();
-
-  auto const header_buffer = cudf::host_span<uint8_t const>(buffer.data(), header_len);
-  auto const header        = reinterpret_cast<file_header_s const*>(header_buffer.data());
-  auto const ender_buffer =
-    cudf::host_span<uint8_t const>(buffer.data() + len - ender_len, ender_len);
-  auto const ender = reinterpret_cast<file_ender_s const*>(ender_buffer.data());
-  CUDF_EXPECTS(len > header_len + ender_len, "Incorrect data source");
-  constexpr uint32_t parquet_magic = (('P' << 0) | ('A' << 8) | ('R' << 16) | ('1' << 24));
-  CUDF_EXPECTS(header->magic == parquet_magic && ender->magic == parquet_magic,
-               "Corrupted header or footer");
-  CUDF_EXPECTS(ender->footer_len != 0 && ender->footer_len <= (len - header_len - ender_len),
-               "Incorrect footer length");
-
-  return cudf::host_span<uint8_t const>(buffer.data() + len - ender->footer_len - ender_len,
-                                        ender->footer_len);
-}
-
-cudf::host_span<uint8_t const> fetch_page_index_bytes(
-  cudf::host_span<uint8_t const> buffer, cudf::io::text::byte_range_info const page_index_bytes)
-{
-  return cudf::host_span<uint8_t const>(
-    reinterpret_cast<uint8_t const*>(buffer.data()) + page_index_bytes.offset(),
-    page_index_bytes.size());
 }
 
 std::tuple<cudf::io::parquet::FileMetaData, bool> read_parquet_file_metadata(
@@ -247,10 +213,12 @@ std::tuple<cudf::io::parquet::FileMetaData, bool> read_parquet_file_metadata(
 
   auto options = cudf::io::parquet_reader_options::builder().build();
 
-  // Fetch footer bytes and setup reader
-  auto const footer_buffer = fetch_footer_bytes(file_buffer);
+  auto datasource     = cudf::io::datasource::create(std::string(input_filepath));
+  auto datasource_ref = std::ref(*datasource);
+
+  auto const footer_buffer = cudf::io::parquet::fetch_footer_to_host(datasource_ref);
   auto const reader =
-    std::make_unique<cudf::io::parquet::experimental::hybrid_scan_reader>(footer_buffer, options);
+    std::make_unique<cudf::io::parquet::experimental::hybrid_scan_reader>(*footer_buffer, options);
 
   // Get page index byte range from the reader
   auto const page_index_byte_range = reader->page_index_byte_range();
@@ -258,8 +226,9 @@ std::tuple<cudf::io::parquet::FileMetaData, bool> read_parquet_file_metadata(
   // Check and setup page index if the file contains one
   auto const has_page_index = not page_index_byte_range.is_empty();
   if (has_page_index) {
-    auto const page_index_buffer = fetch_page_index_bytes(file_buffer, page_index_byte_range);
-    reader->setup_page_index(page_index_buffer);
+    auto const page_index_buffer =
+      cudf::io::parquet::fetch_page_index_to_host(datasource_ref, page_index_byte_range);
+    reader->setup_page_index(*page_index_buffer);
   } else {
     std::cout << "The input parquet file does not contain a page index\n";
   }

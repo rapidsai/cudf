@@ -26,7 +26,6 @@
 #include <cuda/std/type_traits>
 #include <cuda/std/utility>
 #include <thrust/execution_policy.h>
-#include <thrust/iterator/reverse_iterator.h>
 #include <thrust/mismatch.h>
 
 using cudf::device_span;
@@ -370,8 +369,8 @@ __inline__ __device__ cuda::std::pair<char const*, char const*> trim_whitespaces
 
   auto const trim_begin = thrust::find_if(thrust::seq, begin, end, not_whitespace);
   auto const trim_end   = thrust::find_if(thrust::seq,
-                                        thrust::make_reverse_iterator(end),
-                                        thrust::make_reverse_iterator(trim_begin),
+                                        cuda::std::make_reverse_iterator(end),
+                                        cuda::std::make_reverse_iterator(trim_begin),
                                         not_whitespace);
 
   return {skip_character(trim_begin, quotechar), skip_character(trim_end, quotechar).base()};
@@ -392,8 +391,8 @@ __inline__ __device__ cuda::std::pair<char const*, char const*> trim_whitespaces
 
   auto const trim_begin = thrust::find_if(thrust::seq, begin, end, not_whitespace);
   auto const trim_end   = thrust::find_if(thrust::seq,
-                                        thrust::make_reverse_iterator(end),
-                                        thrust::make_reverse_iterator(trim_begin),
+                                        cuda::std::make_reverse_iterator(end),
+                                        cuda::std::make_reverse_iterator(trim_begin),
                                         not_whitespace);
 
   return {trim_begin, trim_end.base()};

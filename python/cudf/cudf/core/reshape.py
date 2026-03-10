@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -247,8 +247,8 @@ def concat(
     1      d       4    dog
     >>> cudf.concat([df1, df3], sort=False)
       letter  number animal
-    0      a       1   <NA>
-    1      b       2   <NA>
+    0      a       1   None
+    1      b       2   None
     0      c       3    cat
     1      d       4    dog
 
@@ -771,10 +771,10 @@ def get_dummies(
     2  0     False     False
 
     >>> cudf.get_dummies(df, dummy_na=True)
-       b  a_<NA>  a_value1  a_value2
-    0  0   False      True     False
-    1  0   False     False      True
-    2  0    True     False     False
+       b  a_value1  a_value2  a_<NA>
+    0  0      True     False   False
+    1  0     False      True   False
+    2  0     False     False    True
 
     >>> import numpy as np
     >>> df = cudf.DataFrame({"a":cudf.Series([1, 2, np.nan, None],
@@ -787,11 +787,11 @@ def get_dummies(
     3  <NA>
 
     >>> cudf.get_dummies(df, dummy_na=True, columns=["a"])
-       a_<NA>  a_1.0  a_2.0  a_nan
-    0   False   True  False  False
-    1   False  False   True  False
-    2   False  False  False   True
-    3    True  False  False  False
+       a_1.0  a_2.0  a_nan  a_<NA>
+    0   True  False  False   False
+    1  False   True  False   False
+    2  False  False   True   False
+    3  False  False  False    True
 
     >>> series = cudf.Series([1, 2, None, 2, 4])
     >>> series
@@ -802,12 +802,12 @@ def get_dummies(
     4       4
     dtype: int64
     >>> cudf.get_dummies(series, dummy_na=True)
-        <NA>      1      2      4
-    0  False   True  False  False
-    1  False  False   True  False
-    2   True  False  False  False
-    3  False  False   True  False
-    4  False  False  False   True
+           1      2      4   <NA>
+    0   True  False  False  False
+    1  False   True  False  False
+    2  False  False  False   True
+    3  False   True  False  False
+    4  False  False   True  False
     """
     if sparse:
         raise NotImplementedError("sparse is not supported yet")
@@ -983,8 +983,8 @@ def pivot(
               c
         b     1     2      3
         a
-        1   one   two   <NA>
-        2  <NA>  <NA>  three
+        1   one   two   None
+        2  None  None  three
 
     """
     values_is_list = True

@@ -69,7 +69,7 @@ rmm::device_uvector<column_device_view> create_leaf_column_device_views(
         col = child;
       }
       // Store leaf_column to device storage
-      column_device_view* leaf_col_ptr = leaf_columns.begin() + index;
+      column_device_view* leaf_col_ptr = leaf_columns.data() + index;
       *leaf_col_ptr                    = col;
       col_desc[index].leaf_column      = leaf_col_ptr;
     });

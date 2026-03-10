@@ -11,7 +11,7 @@
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 
-#include <thrust/iterator/constant_iterator.h>
+#include <cuda/iterator>
 #include <thrust/scatter.h>
 #include <thrust/uninitialized_fill.h>
 
@@ -50,8 +50,8 @@ std::unique_ptr<table> stable_distinct(table_view const& input,
       rmm::exec_policy_nosync(stream), markers.begin(), markers.end(), false);
     thrust::scatter(
       rmm::exec_policy_nosync(stream),
-      thrust::constant_iterator<bool>(true, 0),
-      thrust::constant_iterator<bool>(true, static_cast<size_type>(distinct_indices.size())),
+      cuda::constant_iterator<bool>(true, 0),
+      cuda::constant_iterator<bool>(true, static_cast<size_type>(distinct_indices.size())),
       distinct_indices.begin(),
       markers.begin());
     return markers;

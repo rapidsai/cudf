@@ -2636,19 +2636,26 @@ TEST_F(CsvReaderTest, DoubleQuotesOddCount)
 
 TEST_F(CsvReaderTest, UnquotedStringDoubledQuotes)
 {
-  std::string const content{R"("Monday":"" Tuesday)"};
-  std::string const buffer = content + "\n";
+  // Tab delimiter makes the entire line a single unquoted field containing commas and quotes
+  std::string const buffer = R"(hello,"",world
+foo
+bar
+end
+)";
 
   cudf::io::csv_reader_options in_opts =
     cudf::io::csv_reader_options::builder(
       cudf::io::source_info{cudf::host_span<std::byte const>{
         reinterpret_cast<std::byte const*>(buffer.data()), buffer.size()}})
       .header(-1)
-      .dtypes({dtype<cudf::string_view>()});
+      .dtypes({dtype<cudf::string_view>()})
+      .delimiter('\t');
   auto const result = cudf::io::read_csv(in_opts);
   EXPECT_EQ(result.tbl->view().num_columns(), 1);
+  EXPECT_EQ(result.tbl->view().num_rows(), 4);
 
-  auto const expected = cudf::test::strings_column_wrapper({content});
+  auto const expected =
+    cudf::test::strings_column_wrapper({R"(hello,"",world)", R"(foo)", R"(bar)", R"(end)"});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->view().column(0), expected);
 }
 
@@ -2672,6 +2679,105 @@ TEST_F(CsvReaderTest, QuotedFieldWithTrailingDelimiter)
 
   auto const expected_col0 = cudf::test::fixed_width_column_wrapper<int32_t>({1, 2, 3});
   auto const expected_col1 = cudf::test::strings_column_wrapper({"trailing,", "normal", "end"});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result.tbl->view().column(0), expected_col0);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result.tbl->view().column(1), expected_col1);
+}
+
+TEST_F(CsvReaderTest, EscapedQuotesWithSemicolonDelimiter)
+{
+  std::string const buffer = R"(a;b
+1;"hello""world"
+2;"test"
+3;"end"
+)";
+
+  cudf::io::csv_reader_options in_opts =
+    cudf::io::csv_reader_options::builder(
+      cudf::io::source_info{cudf::host_span<std::byte const>{
+        reinterpret_cast<std::byte const*>(buffer.data()), buffer.size()}})
+      .delimiter(';')
+      .dtypes(std::vector<data_type>{dtype<int32_t>(), dtype<cudf::string_view>()});
+  auto const result = cudf::io::read_csv(in_opts);
+
+  EXPECT_EQ(result.tbl->view().num_rows(), 3);
+  EXPECT_EQ(result.tbl->view().num_columns(), 2);
+
+  auto const expected_col0 = cudf::test::fixed_width_column_wrapper<int32_t>({1, 2, 3});
+  auto const expected_col1 = cudf::test::strings_column_wrapper({"hello\"world", "test", "end"});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result.tbl->view().column(0), expected_col0);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result.tbl->view().column(1), expected_col1);
+}
+
+TEST_F(CsvReaderTest, EscapedQuoteBeforeDelimiterInQuotedField)
+{
+  std::string const buffer =
+    "a;b\n"
+    "1;\"hello\"\";\"\n"  // hello"; escaped as "hello"";"
+    "2;\"test\"\n"
+    "3;\"end\"\n";
+
+  cudf::io::csv_reader_options in_opts =
+    cudf::io::csv_reader_options::builder(
+      cudf::io::source_info{cudf::host_span<std::byte const>{
+        reinterpret_cast<std::byte const*>(buffer.data()), buffer.size()}})
+      .delimiter(';')
+      .dtypes(std::vector<data_type>{dtype<int32_t>(), dtype<cudf::string_view>()});
+  auto const result = cudf::io::read_csv(in_opts);
+
+  EXPECT_EQ(result.tbl->view().num_rows(), 3);
+  EXPECT_EQ(result.tbl->view().num_columns(), 2);
+}
+
+TEST_F(CsvReaderTest, CommentLines)
+{
+  std::string const buffer =
+    "# This is a comment\n"
+    "a,b,c\n"
+    "1,2,3\n"
+    "# Another comment\n"
+    "4,5,6\n";
+
+  cudf::io::csv_reader_options in_opts =
+    cudf::io::csv_reader_options::builder(
+      cudf::io::source_info{cudf::host_span<std::byte const>{
+        reinterpret_cast<std::byte const*>(buffer.data()), buffer.size()}})
+      .comment('#')
+      .dtypes(std::vector<data_type>{dtype<int32_t>(), dtype<int32_t>(), dtype<int32_t>()});
+  auto const result = cudf::io::read_csv(in_opts);
+
+  EXPECT_EQ(result.tbl->view().num_rows(), 2);
+  EXPECT_EQ(result.tbl->view().num_columns(), 3);
+
+  auto const expected_col0 = cudf::test::fixed_width_column_wrapper<int32_t>({1, 4});
+  auto const expected_col1 = cudf::test::fixed_width_column_wrapper<int32_t>({2, 5});
+  auto const expected_col2 = cudf::test::fixed_width_column_wrapper<int32_t>({3, 6});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result.tbl->view().column(0), expected_col0);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result.tbl->view().column(1), expected_col1);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result.tbl->view().column(2), expected_col2);
+}
+
+TEST_F(CsvReaderTest, CommentLinesWithQuotedStrings)
+{
+  std::string const buffer =
+    "# comment\n"
+    "a,b\n"
+    "1,\"hello\"\"world\"\n"
+    "# another comment\n"
+    "2,\"test\"\n";
+
+  cudf::io::csv_reader_options in_opts =
+    cudf::io::csv_reader_options::builder(
+      cudf::io::source_info{cudf::host_span<std::byte const>{
+        reinterpret_cast<std::byte const*>(buffer.data()), buffer.size()}})
+      .comment('#')
+      .dtypes(std::vector<data_type>{dtype<int32_t>(), dtype<cudf::string_view>()});
+  auto const result = cudf::io::read_csv(in_opts);
+
+  EXPECT_EQ(result.tbl->view().num_rows(), 2);
+  EXPECT_EQ(result.tbl->view().num_columns(), 2);
+
+  auto const expected_col0 = cudf::test::fixed_width_column_wrapper<int32_t>({1, 2});
+  auto const expected_col1 = cudf::test::strings_column_wrapper({"hello\"world", "test"});
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result.tbl->view().column(0), expected_col0);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result.tbl->view().column(1), expected_col1);
 }

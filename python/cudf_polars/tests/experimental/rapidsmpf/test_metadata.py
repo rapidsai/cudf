@@ -6,11 +6,21 @@
 from __future__ import annotations
 
 import pytest
+from rapidsmpf.streaming.cudf.channel_metadata import (
+    HashScheme,
+    Partitioning,
+)
 
 import polars as pl
 
 from cudf_polars import Translator
+from cudf_polars.dsl import expr
+from cudf_polars.dsl.ir import Projection, Select
 from cudf_polars.experimental.rapidsmpf.core import evaluate_logical_plan
+from cudf_polars.experimental.rapidsmpf.utils import (
+    NormalizedPartitioning,
+    maybe_remap_partitioning,
+)
 from cudf_polars.testing.asserts import (
     DEFAULT_CLUSTER,
     DEFAULT_RUNTIME,
@@ -58,6 +68,7 @@ def test_rapidsmpf_join_metadata(
             "broadcast_join_limit": broadcast_join_limit,
             "cluster": DEFAULT_CLUSTER,
             "runtime": DEFAULT_RUNTIME,
+            "dynamic_planning": None,  # Requires static planning
         },
     )
     config_options = ConfigOptions.from_polars_engine(engine)
@@ -79,8 +90,233 @@ def test_rapidsmpf_join_metadata(
     assert metadata.local_count == left_count
     assert metadata.duplicated is False
     if right_count > broadcast_join_limit:
-        assert metadata.partitioning is not None
-        assert metadata.partitioning.columns == ("y",)
-        assert metadata.partitioning.scope == "global"
+        # After shuffle, partitioning has inter_rank=HashScheme, local="inherit"
+        assert isinstance(metadata.partitioning.inter_rank, HashScheme)
+        # "y" is at index 1 in the output schema: ["x", "y", "z", "xx", "zz"]
+        assert metadata.partitioning.inter_rank.column_indices == (1,)
+        assert metadata.partitioning.local == "inherit"
     else:
-        assert metadata.partitioning is None
+        # No partitioning (broadcast join preserves no partitioning from IO)
+        assert metadata.partitioning.inter_rank is None
+        assert metadata.partitioning.local is None
+
+
+@pytest.mark.parametrize(
+    "partitioning,key_indices,nranks,expected",
+    [
+        (None, (0, 1), 1, (1, 0)),
+        (None, (0, 1), 4, (0, 0)),
+        (
+            Partitioning(inter_rank=HashScheme((0, 1), 8), local="inherit"),
+            (0, 1),
+            4,
+            (8, None),
+        ),
+        (
+            Partitioning(
+                inter_rank=HashScheme((0, 1), 8),
+                local=HashScheme((0, 1), 4),
+            ),
+            (0, 1),
+            4,
+            (8, 4),
+        ),
+        (
+            Partitioning(
+                inter_rank=HashScheme((0, 1), 8),
+                local=HashScheme((0,), 4),
+            ),
+            (0, 1),
+            4,
+            (8, 0),
+        ),
+        (
+            Partitioning(inter_rank=HashScheme((0,), 8), local="inherit"),
+            (0, 1),
+            4,
+            (0, 0),
+        ),
+        (
+            Partitioning(inter_rank=HashScheme((1, 0), 8), local="inherit"),
+            (0, 1),
+            4,
+            (0, 0),
+        ),
+        (
+            Partitioning(
+                inter_rank=None,
+                local=HashScheme((0, 1), 4),
+            ),
+            (0, 1),
+            1,
+            (4, None),
+        ),
+        (
+            Partitioning(
+                inter_rank=None,
+                local=HashScheme((0, 1), 4),
+            ),
+            (0, 1),
+            4,
+            (0, 0),
+        ),
+        (
+            Partitioning(
+                inter_rank=HashScheme((0, 1), 8),
+                local=None,
+            ),
+            (0, 1),
+            4,
+            (8, 0),
+        ),
+    ],
+)
+def test_get_partitioning_moduli(partitioning, key_indices, nranks, expected) -> None:
+    """NormalizedPartitioning.from_indices returns (inter_rank_modulus, local_modulus) (allow_subset=False)."""
+    state = NormalizedPartitioning.from_indices(
+        partitioning, nranks, indices=key_indices, allow_subset=False
+    )
+    assert (state.inter_rank_modulus, state.local_modulus) == expected
+
+
+@pytest.mark.parametrize(
+    "partitioning,key_indices,nranks,expected",
+    [
+        # Partitioned on (0,); keys (0, 1) → prefix (0,) matches
+        (
+            Partitioning(inter_rank=HashScheme((0,), 8), local="inherit"),
+            (0, 1),
+            4,
+            (8, None),
+        ),
+        # Partitioned on (0, 1); keys (0, 1, 2) → prefix (0, 1) matches
+        (
+            Partitioning(inter_rank=HashScheme((0, 1), 8), local="inherit"),
+            (0, 1, 2),
+            4,
+            (8, None),
+        ),
+        # Partitioned on (0,) with explicit local; keys (0, 1) → prefix matches
+        (
+            Partitioning(
+                inter_rank=HashScheme((0,), 8),
+                local=HashScheme((0,), 4),
+            ),
+            (0, 1),
+            4,
+            (8, 4),
+        ),
+        # Full key match with allow_subset: same as exact match
+        (
+            Partitioning(inter_rank=HashScheme((0, 1), 8), local="inherit"),
+            (0, 1),
+            4,
+            (8, None),
+        ),
+        # Keys (0,) are shorter than partition (0, 1) → no prefix match
+        (
+            Partitioning(inter_rank=HashScheme((0, 1), 8), local="inherit"),
+            (0,),
+            4,
+            (0, 0),
+        ),
+        # Partitioned on (1,); keys (0, 1) → prefix of keys is (0,), not (1,) → no match
+        (
+            Partitioning(inter_rank=HashScheme((1,), 8), local="inherit"),
+            (0, 1),
+            4,
+            (0, 0),
+        ),
+    ],
+)
+def test_get_partitioning_moduli_allow_subset(
+    partitioning, key_indices, nranks, expected
+) -> None:
+    """NormalizedPartitioning.from_indices with allow_subset=True matches on prefix of key_indices."""
+    state = NormalizedPartitioning.from_indices(
+        partitioning, nranks, indices=key_indices, allow_subset=True
+    )
+    assert (state.inter_rank_modulus, state.local_modulus) == expected
+
+
+def _make_select_ir(engine: pl.GPUEngine, output_columns: tuple[str, ...]):
+    q = pl.LazyFrame({"a": [1], "b": [2], "c": [3]})
+    child = Translator(q._ldf.visit(), engine).translate_ir()
+    out_schema = {k: child.schema[k] for k in output_columns}
+    exprs = tuple(
+        expr.NamedExpr(name, expr.Col(child.schema[name], name))
+        for name in output_columns
+    )
+    return Select(out_schema, exprs, should_broadcast=False, df=child)
+
+
+def test_remap_partitioning_select_none_input() -> None:
+    engine = pl.GPUEngine(executor="streaming")
+    assert maybe_remap_partitioning(_make_select_ir(engine, ("a", "b")), None) is None
+
+
+def test_remap_partitioning_select_preserves_keys() -> None:
+    engine = pl.GPUEngine(executor="streaming")
+    part = Partitioning(inter_rank=HashScheme((0, 1), 8), local="inherit")
+    result = maybe_remap_partitioning(_make_select_ir(engine, ("a", "b")), part)
+    assert result is not None
+    assert result.inter_rank is not None
+    assert result.inter_rank.column_indices == (0, 1)
+    assert result.inter_rank.modulus == 8
+    assert result.local == "inherit"
+
+
+def test_remap_partitioning_select_drops_key() -> None:
+    engine = pl.GPUEngine(executor="streaming")
+    part = Partitioning(inter_rank=HashScheme((0, 1), 8), local="inherit")
+    result = maybe_remap_partitioning(_make_select_ir(engine, ("a",)), part)
+    assert result is not None
+    assert result.inter_rank is None
+    assert result.local == "inherit"
+
+
+def test_remap_partitioning_select_renamed_key() -> None:
+    engine = pl.GPUEngine(executor="streaming")
+    q = pl.LazyFrame({"a": [1], "b": [2], "c": [3]})
+    child = Translator(q._ldf.visit(), engine).translate_ir()
+    # Output (a_renamed, b) where a_renamed is Col("a")
+    out_schema = {"a_renamed": child.schema["a"], "b": child.schema["b"]}
+    exprs = (
+        expr.NamedExpr("a_renamed", expr.Col(child.schema["a"], "a")),
+        expr.NamedExpr("b", expr.Col(child.schema["b"], "b")),
+    )
+    select = Select(out_schema, exprs, should_broadcast=False, df=child)
+    part = Partitioning(inter_rank=HashScheme((0, 1), 8), local="inherit")
+    result = maybe_remap_partitioning(select, part)
+    assert result is not None
+    assert result.inter_rank is not None
+    assert result.inter_rank.column_indices == (0, 1)  # a_renamed, b in output
+    assert result.inter_rank.modulus == 8
+    assert result.local == "inherit"
+
+
+def test_remap_partitioning_reorder_columns() -> None:
+    engine = pl.GPUEngine(executor="streaming")
+    # Select (b, a) from (a, b, c) -> partition keys (a,b) become indices (1, 0) in output
+    select = _make_select_ir(engine, ("b", "a"))
+    part = Partitioning(inter_rank=HashScheme((0, 1), 8), local="inherit")
+    result = maybe_remap_partitioning(select, part)
+    assert result is not None
+    assert result.inter_rank is not None
+    assert result.inter_rank.column_indices == (1, 0)
+    assert result.inter_rank.modulus == 8
+
+
+def test_remap_partitioning_reorder_columns_projection() -> None:
+    engine = pl.GPUEngine(executor="streaming")
+    q = pl.LazyFrame({"a": [1], "b": [2], "c": [3]})
+    child = Translator(q._ldf.visit(), engine).translate_ir()
+    # Projection output (b, a) -> child has (a, b, c); partition keys (a,b) -> indices (1, 0)
+    out_schema = {k: child.schema[k] for k in ("b", "a")}
+    proj = Projection(out_schema, child)
+    part = Partitioning(inter_rank=HashScheme((0, 1), 8), local="inherit")
+    result = maybe_remap_partitioning(proj, part, child_ir=proj.children[0])
+    assert result is not None
+    assert result.inter_rank is not None
+    assert result.inter_rank.column_indices == (1, 0)
+    assert result.inter_rank.modulus == 8

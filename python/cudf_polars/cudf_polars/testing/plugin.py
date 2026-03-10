@@ -13,7 +13,6 @@ import pytest
 import polars
 
 from cudf_polars.utils.config import StreamingFallbackMode
-from cudf_polars.utils.versions import POLARS_VERSION_LT_135
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -86,7 +85,6 @@ def pytest_configure(config: pytest.Config) -> None:
 
 
 EXPECTED_FAILURES: Mapping[str, str | tuple[str, bool]] = {
-    "tests/unit/io/test_csv.py::test_compressed_csv": "Need to determine if file is compressed",
     "tests/unit/io/test_csv.py::test_read_csv_only_loads_selected_columns": "Memory usage won't be correct due to GPU",
     "tests/unit/io/test_delta.py::test_scan_delta_version": "Need to expose hive partitioning",
     "tests/unit/io/test_delta.py::test_scan_delta_relative": "Need to expose hive partitioning",
@@ -94,11 +92,6 @@ EXPECTED_FAILURES: Mapping[str, str | tuple[str, bool]] = {
     "tests/unit/io/test_delta.py::test_scan_delta_schema_evolution_nested_struct_field_19915": "Need to expose hive partitioning",
     "tests/unit/io/test_delta.py::test_scan_delta_nanosecond_timestamp": "polars generates the wrong schema: https://github.com/pola-rs/polars/issues/23949",
     "tests/unit/io/test_delta.py::test_scan_delta_nanosecond_timestamp_nested": "polars generates the wrong schema: https://github.com/pola-rs/polars/issues/23949",
-    "tests/unit/io/test_delta.py::test_scan_delta_loads_aws_profile_endpoint_url": (
-        "See https://github.com/rapidsai/cudf/pull/20791#issuecomment-3750528419",
-        not POLARS_VERSION_LT_135,
-    ),
-    "tests/unit/io/test_lazy_count_star.py::test_count_compressed_csv_18057": "Need to determine if file is compressed",
     "tests/unit/io/test_lazy_count_star.py::test_count_parquet[small.parquet-4]": "Debug output on stderr doesn't match",
     "tests/unit/io/test_lazy_count_star.py::test_count_parquet[foods*.parquet-54]": "Debug output on stderr doesn't match",
     "tests/unit/io/test_lazy_parquet.py::test_parquet_is_in_statistics": "Debug output on stderr doesn't match",
@@ -131,6 +124,7 @@ EXPECTED_FAILURES: Mapping[str, str | tuple[str, bool]] = {
     "tests/unit/io/test_partition.py::test_partition_to_memory_sort_by[df1-a-io_type0]": "partition sinks not yet supported in standard engine.",
     "tests/unit/io/test_partition.py::test_partition_to_memory_sort_by[df1-a-io_type1]": "partition sinks not yet supported in standard engine.",
     "tests/unit/io/test_partition.py::test_partition_to_memory_sort_by[df1-a-io_type2]": "partition sinks not yet supported in standard engine.",
+    "tests/unit/io/test_sink.py::test_collect_all_lazy": "SinkMultiple not supported by InMemory CPU Engine, which we fallback to. See pola-rs/polars/pull/26537",
     "tests/unit/io/test_lazy_parquet.py::test_scan_parquet_ignores_dtype_mismatch_for_non_projected_columns_19249[False-False]": "Needs some variant of cudf#16394",
     "tests/unit/io/test_lazy_parquet.py::test_scan_parquet_ignores_dtype_mismatch_for_non_projected_columns_19249[True-False]": "Needs some variant of cudf#16394",
     "tests/unit/io/test_lazy_parquet.py::test_parquet_unaligned_schema_read[False]": "Incomplete handling of projected reads with mismatching schemas, cudf#16394",
@@ -155,7 +149,7 @@ EXPECTED_FAILURES: Mapping[str, str | tuple[str, bool]] = {
     "tests/unit/io/test_parquet.py::test_binary_offset_roundtrip": "binary offset type unsupported",
     "tests/unit/lazyframe/test_engine_selection.py::test_engine_import_error_raises[gpu]": "Expect this to pass because cudf-polars is installed",
     "tests/unit/lazyframe/test_engine_selection.py::test_engine_import_error_raises[engine1]": "Expect this to pass because cudf-polars is installed",
-    "tests/unit/lazyframe/test_lazyframe.py::test_round[dtype1-123.55-1-123.6]": "Rounding midpoints is handled incorrectly",
+    "tests/unit/lazyframe/test_lazyframe.py::test_round[dtype2-123.55-1-123.6]": "libcudf HALF_EVEN rounding bug for Float64 with decimal_places > 0. See https://github.com/rapidsai/cudf/issues/21319",
     "tests/unit/lazyframe/test_lazyframe.py::test_cast_frame": "Casting that raises not supported on GPU",
     "tests/unit/lazyframe/test_lazyframe.py::test_lazy_cache_hit": "Debug output on stderr doesn't match",
     "tests/unit/operations/aggregation/test_aggregations.py::test_binary_op_agg_context_no_simplify_expr_12423": "groupby-agg of just literals should not produce collect_list",
@@ -166,10 +160,6 @@ EXPECTED_FAILURES: Mapping[str, str | tuple[str, bool]] = {
     "tests/unit/operations/test_group_by.py::test_group_by_mean_by_dtype[input11-expected11-input_dtype11-output_dtype11]": "Unsupported groupby-agg for a particular dtype",
     "tests/unit/operations/test_group_by.py::test_group_by_mean_by_dtype[input12-expected12-input_dtype12-output_dtype12]": "Unsupported groupby-agg for a particular dtype",
     "tests/unit/operations/test_group_by.py::test_group_by_mean_by_dtype[input13-expected13-input_dtype13-output_dtype13]": "Unsupported groupby-agg for a particular dtype",
-    "tests/unit/operations/test_group_by.py::test_group_by_median_by_dtype[input10-expected10-Date-output_dtype10]": "Unsupported groupby-agg for a particular dtype",
-    "tests/unit/operations/test_group_by.py::test_group_by_median_by_dtype[input11-expected11-input_dtype11-output_dtype11]": "Unsupported groupby-agg for a particular dtype",
-    "tests/unit/operations/test_group_by.py::test_group_by_median_by_dtype[input12-expected12-input_dtype12-output_dtype12]": "Unsupported groupby-agg for a particular dtype",
-    "tests/unit/operations/test_group_by.py::test_group_by_median_by_dtype[input13-expected13-input_dtype13-output_dtype13]": "Unsupported groupby-agg for a particular dtype",
     "tests/unit/operations/test_group_by.py::test_group_by_median_by_dtype[input14-expected14-input_dtype14-output_dtype14]": "Unsupported groupby-agg for a particular dtype",
     "tests/unit/operations/test_group_by.py::test_group_by_median_by_dtype[input15-expected15-input_dtype15-output_dtype15]": "Unsupported groupby-agg for a particular dtype",
     "tests/unit/operations/test_group_by.py::test_group_by_median_by_dtype[input16-expected16-input_dtype16-output_dtype16]": "Unsupported groupby-agg for a particular dtype",
@@ -190,19 +180,12 @@ EXPECTED_FAILURES: Mapping[str, str | tuple[str, bool]] = {
     "tests/unit/sql/test_cast.py::test_cast_errors[values1-values::uint4-conversion from `i64` to `u32` failed]": "Casting that raises not supported on GPU",
     "tests/unit/sql/test_cast.py::test_cast_errors[values2-values::int1-conversion from `i64` to `i8` failed]": "Casting that raises not supported on GPU",
     "tests/unit/sql/test_cast.py::test_cast_errors[values5-values::int4-conversion from `str` to `i32` failed]": "Cast raises, but error user receives is wrong",
+    "tests/unit/lazyframe/test_predicates.py::test_predicate_pushdown_split_pushable": "Casting that raises not supported on GPU",
     "tests/unit/sql/test_miscellaneous.py::test_read_csv": "Incorrect handling of missing_is_null in read_csv",
-    "tests/unit/test_cse.py::test_cse_predicate_self_join": "Debug output on stderr doesn't match",
-    "tests/unit/test_cse.py::test_nested_cache_no_panic_16553": "Needs https://github.com/rapidsai/cudf/issues/18630",
-    "tests/unit/test_errors.py::test_error_on_empty_group_by": "Incorrect exception raised",
-    "tests/unit/test_predicates.py::test_predicate_pushdown_split_pushable": "Casting that raises not supported on GPU",
+    "tests/unit/lazyframe/test_cse.py::test_cse_predicate_self_join[False]": "Debug output on stderr doesn't match",
     "tests/unit/io/test_scan_row_deletion.py::test_scan_row_deletion_skips_file_with_all_rows_deleted": "The test intentionally corrupts the parquet file, so we cannot read the row count from the header.",
     "tests/unit/io/test_multiscan.py::test_multiscan_row_index[scan_csv-write_csv-csv]": "Debug output on stderr doesn't match",
     "tests/unit/datatypes/test_decimal.py::test_decimal_aggregations": "https://github.com/rapidsai/cudf/issues/20508",
-    "tests/unit/datatypes/test_struct.py::test_struct_agg_all": "Needs nested list[struct] support",
-    "tests/unit/constructors/test_structs.py::test_constructor_non_strict_schema_17956": "Needs nested list[struct] support",
-    "tests/unit/io/test_delta.py::test_read_delta_arrow_map_type": "Needs nested list[struct] support",
-    "tests/unit/datatypes/test_struct.py::test_struct_null_cast": "pylibcudf.Scalar does not support struct scalars",
-    "tests/unit/datatypes/test_struct.py::test_struct_outer_nullability_zip_18119": "pylibcudf.Scalar does not support struct scalars",
     "tests/unit/io/test_lazy_parquet.py::test_parquet_schema_arg[True-columns]": "allow_missing_columns argument in read_parquet not translated in IR",
     "tests/unit/io/test_lazy_parquet.py::test_parquet_schema_arg[True-row_groups]": "allow_missing_columns argument in read_parquet not translated in IR",
     "tests/unit/io/test_lazy_parquet.py::test_parquet_schema_arg[True-prefiltered]": "allow_missing_columns argument in read_parquet not translated in IR",
@@ -211,31 +194,18 @@ EXPECTED_FAILURES: Mapping[str, str | tuple[str, bool]] = {
     "tests/unit/io/test_lazy_parquet.py::test_parquet_schema_arg[False-row_groups]": "allow_missing_columns argument in read_parquet not translated in IR",
     "tests/unit/io/test_lazy_parquet.py::test_parquet_schema_arg[False-prefiltered]": "allow_missing_columns argument in read_parquet not translated in IR",
     "tests/unit/io/test_lazy_parquet.py::test_parquet_schema_arg[False-none]": "allow_missing_columns argument in read_parquet not translated in IR",
-    "tests/unit/test_cse.py::test_cse_predicate_self_join[False]": "polars removed the refcount in the logical plan",
     "tests/unit/io/test_multiscan.py::test_multiscan_row_index[scan_csv-write_csv]": "CSV multiscan with row_index and no row limit is not yet supported.",
-    "tests/unit/io/test_scan.py::test_scan_empty_paths_friendly_error[scan_parquet-failed to retrieve first file schema (parquet)-'parquet scan']": "Debug output on stderr doesn't match",
-    "tests/unit/io/test_scan.py::test_scan_empty_paths_friendly_error[scan_ipc-failed to retrieve first file schema (ipc)-'ipc scan']": "Debug output on stderr doesn't match",
-    "tests/unit/io/test_scan.py::test_scan_empty_paths_friendly_error[scan_csv-failed to retrieve file schemas (csv)-'csv scan']": "Debug output on stderr doesn't match",
-    "tests/unit/io/test_scan.py::test_scan_empty_paths_friendly_error[scan_ndjson-failed to retrieve first file schema (ndjson)-'ndjson scan']": "Debug output on stderr doesn't match",
-    "tests/unit/operations/test_slice.py::test_schema_gather_get_on_literal_24101[lit1-idx2-False]": "Aggregating a list literal: cudf#19610",
-    "tests/unit/operations/test_slice.py::test_schema_gather_get_on_literal_24101[lit2-idx2-False]": "Aggregating a list literal: cudf#19610",
-    "tests/unit/operations/test_slice.py::test_schema_gather_get_on_literal_24101[lit1-0-False]": "Aggregating a list literal: cudf#19610",
-    "tests/unit/operations/test_slice.py::test_schema_gather_get_on_literal_24101[lit1-idx1-False]": "Aggregating a list literal: cudf#19610",
-    "tests/unit/operations/test_slice.py::test_schema_gather_get_on_literal_24101[lit2-0-False]": "Aggregating a list literal: cudf#19610",
-    "tests/unit/operations/test_slice.py::test_schema_gather_get_on_literal_24101[lit2-idx1-False]": "Aggregating a list literal: cudf#19610",
-    "tests/unit/operations/test_slice.py::test_schema_head_tail_on_literal_24102[lit1-1-False]": "Aggregating a list literal: cudf#19610",
-    "tests/unit/operations/test_slice.py::test_schema_head_tail_on_literal_24102[lit1-len1-False]": "Aggregating a list literal: cudf#19610",
-    "tests/unit/operations/test_slice.py::test_schema_head_tail_on_literal_24102[lit2-1-False]": "Aggregating a list literal: cudf#19610",
-    "tests/unit/operations/test_slice.py::test_schema_head_tail_on_literal_24102[lit2-len1-False]": "Aggregating a list literal: cudf#19610",
-    "tests/unit/operations/test_slice.py::test_schema_slice_on_literal_23999[lit2-offset1-0-False]": "Aggregating a list literal: cudf#19610",
-    "tests/unit/operations/test_slice.py::test_schema_slice_on_literal_23999[lit2-offset1-len1-False]": "Aggregating a list literal: cudf#19610",
-    "tests/unit/operations/test_slice.py::test_schema_slice_on_literal_23999[lit1-0-len1-False]": "Aggregating a list literal: cudf#19610",
-    "tests/unit/operations/test_slice.py::test_schema_slice_on_literal_23999[lit1-offset1-0-False]": "Aggregating a list literal: cudf#19610",
-    "tests/unit/operations/test_slice.py::test_schema_slice_on_literal_23999[lit1-offset1-len1-False]": "Aggregating a list literal: cudf#19610",
-    "tests/unit/operations/test_slice.py::test_schema_slice_on_literal_23999[lit2-0-0-False]": "Aggregating a list literal: cudf#19610",
-    "tests/unit/operations/test_slice.py::test_schema_slice_on_literal_23999[lit2-0-len1-False]": "Aggregating a list literal: cudf#19610",
-    "tests/unit/operations/test_slice.py::test_schema_slice_on_literal_23999[lit1-0-0-False]": "Aggregating a list literal: cudf#19610",
-    "tests/unit/operations/namespaces/test_binary.py::test_binary_compounded_literal_aggstate_24460": "Aggregating a list literal: cudf#19610",
+    "tests/unit/operations/namespaces/test_binary.py::test_binary_compounded_literal_aggstate_24460": "List literal loses nesting in gather: cudf#19610",
+    "tests/unit/operations/test_slice.py::test_schema_gather_get_on_literal_24101[lit1-0-False]": "List literal loses nesting in gather: cudf#19610",
+    "tests/unit/operations/test_slice.py::test_schema_gather_get_on_literal_24101[lit1-idx1-False]": "List literal loses nesting in gather: cudf#19610",
+    "tests/unit/operations/test_slice.py::test_schema_gather_get_on_literal_24101[lit1-idx2-False]": "List literal loses nesting in gather: cudf#19610",
+    "tests/unit/operations/test_slice.py::test_schema_head_tail_on_literal_24102[lit1-1-False]": "List literal loses nesting in head/tail: cudf#19610",
+    "tests/unit/operations/test_slice.py::test_schema_head_tail_on_literal_24102[lit1-len1-False]": "List literal loses nesting in head/tail: cudf#19610",
+    "tests/unit/operations/test_slice.py::test_schema_slice_on_literal_23999[lit1-0-0-False]": "List literal loses nesting in slice: cudf#19610",
+    "tests/unit/operations/test_slice.py::test_schema_slice_on_literal_23999[lit1-0-len1-False]": "List literal loses nesting in slice: cudf#19610",
+    "tests/unit/operations/test_slice.py::test_schema_slice_on_literal_23999[lit1-offset1-0-False]": "List literal loses nesting in slice: cudf#19610",
+    "tests/unit/operations/test_slice.py::test_schema_slice_on_literal_23999[lit1-offset1-len1-False]": "List literal loses nesting in slice: cudf#19610",
+    "tests/unit/functions/test_concat.py::test_concat_horizontally_strict": "polars doesnt hand us the hconcat options. Fixed in 1.39.",
 }
 
 
@@ -270,15 +240,17 @@ TESTS_TO_SKIP: Mapping[str, str] = {
     # New iceberg release causes this test to fail. We can remove in the next polars version bump: https://github.com/rapidsai/cudf/pull/19912
     "tests/unit/io/test_iceberg.py::test_fill_missing_fields_with_identity_partition_values[False]": "https://github.com/pola-rs/polars/pull/24456",
     "tests/unit/operations/test_rolling.py::test_rolling_agg_bad_input_types[str]": "https://github.com/rapidsai/cudf/issues/20551",
+    "tests/unit/operations/test_group_by_dynamic.py::test_group_by_dynamic_agg_bad_input_types[str]": "TODO: Need to investigate why this fails in CI but passes locally. We should fallback to CPU for group_by_dynamic",
+    "tests/unit/expr/test_exprs.py::test_exp_log1p[Float16-Float16]": "Flaky test: Small floating-point precision differences in exp/log1p results",
+    # TODO: Investigate why these tests fail in CI but pass locally.
+    "tests/unit/io/test_delta.py::test_scan_delta_extract_table_statistics_df": "schemas mismatch: dtypes different",
+    "tests/unit/io/test_partition.py::test_sink_partitioned_no_columns_in_file_25535[scan_parquet-sink_parquet]": "Incorrect row count. Related to https://github.com/rapidsai/cudf/issues/21428",
+    "tests/unit/operations/test_group_by.py::test_unique_head_tail_26429[0]": "ZeroDivisionError: division by zero",
 }
 
 
 STREAMING_ONLY_EXPECTED_FAILURES: Mapping[str, str] = {
-    "tests/unit/io/test_parquet.py::test_field_overwrites_metadata": "cannot serialize in-memory sink target.",
-    "tests/unit/io/test_parquet_field_overwrites.py::test_required_flat": "cannot serialize in-memory sink target.",
-    "tests/unit/io/test_parquet_field_overwrites.py::test_required_list[dtype0]": "cannot serialize in-memory sink target.",
-    "tests/unit/io/test_parquet_field_overwrites.py::test_required_list[dtype1]": "cannot serialize in-memory sink target.",
-    "tests/unit/io/test_parquet_field_overwrites.py::test_required_struct": "cannot serialize in-memory sink target.",
+    # Add tests that are expected to fail with the streaming executor
 }
 
 

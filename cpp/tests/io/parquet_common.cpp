@@ -1,11 +1,14 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "parquet_common.hpp"
 
 #include <cudf/io/parquet.hpp>
+#include <cudf/io/parquet_io_utils.hpp>
+
+#include <src/io/parquet/compact_protocol_reader.hpp>
 
 #include <format>
 #include <string>
@@ -209,26 +212,10 @@ template std::vector<uint64_t> random_values<uint64_t>(size_t size);
 void read_footer(std::unique_ptr<cudf::io::datasource> const& source,
                  cudf::io::parquet::FileMetaData* file_meta_data)
 {
-  using namespace cudf::io::parquet;
-  constexpr auto header_len = sizeof(file_header_s);
-  constexpr auto ender_len  = sizeof(file_ender_s);
-
-  auto const len           = source->size();
-  auto const header_buffer = source->host_read(0, header_len);
-  auto const header        = reinterpret_cast<file_header_s const*>(header_buffer->data());
-  auto const ender_buffer  = source->host_read(len - ender_len, ender_len);
-  auto const ender         = reinterpret_cast<file_ender_s const*>(ender_buffer->data());
-
-  // checks for valid header, footer, and file length
-  ASSERT_GT(len, header_len + ender_len);
-  ASSERT_TRUE(header->magic == detail::parquet_magic && ender->magic == detail::parquet_magic);
-  ASSERT_TRUE(ender->footer_len != 0 && ender->footer_len <= (len - header_len - ender_len));
-
   // parquet files end with 4-byte footer_length and 4-byte magic == "PAR1"
   // seek backwards from the end of the file (footer_length + 8 bytes of ender)
-  auto const footer_buffer =
-    source->host_read(len - ender->footer_len - ender_len, ender->footer_len);
-  detail::CompactProtocolReader cp(footer_buffer->data(), ender->footer_len);
+  auto const footer_buffer = cudf::io::parquet::fetch_footer_to_host(*source);
+  cudf::io::parquet::detail::CompactProtocolReader cp(footer_buffer->data(), footer_buffer->size());
 
   cp.read(file_meta_data);
 }

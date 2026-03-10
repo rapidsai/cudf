@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -15,7 +15,7 @@
 #include <cudf/dictionary/encode.hpp>
 #include <cudf/scalar/scalar.hpp>
 
-#include <thrust/iterator/constant_iterator.h>
+#include <cuda/iterator>
 #include <thrust/iterator/counting_iterator.h>
 
 #include <stdexcept>
@@ -586,7 +586,7 @@ TYPED_TEST(FixedPointTypes, FixedPointLarge)
   using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
 
   auto a = thrust::make_counting_iterator(-1000);
-  auto b = thrust::make_constant_iterator(0);
+  auto b = cuda::make_constant_iterator(0);
   auto m = cudf::detail::make_counting_transform_iterator(-1000, [](int i) { return i > 0; });
   auto e =
     cudf::detail::make_counting_transform_iterator(-1000, [](int i) { return std::max(0, i); });
