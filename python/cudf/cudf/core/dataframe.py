@@ -6582,7 +6582,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                         ) from err
                     else:
                         raise
-            if axis == 2:
+            if reduction_axis == 2:
                 return _apply_reduction(
                     as_column(axis_0_results, nan_as_null=False), op, kwargs
                 )
