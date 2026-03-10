@@ -88,7 +88,16 @@ def _match_join_keys(
         return _match_categorical_dtypes_both(lcol, rcol, how)  # type: ignore[arg-type]
     elif left_is_categorical or right_is_categorical:
         if left_is_categorical:
-            if how in {"left", "leftsemi", "leftanti"}:
+            if how in {"leftsemi", "leftanti"}:
+                # Decategorize both sides and find a common type
+                # instead of casting right to left's categorical
+                # type, which would introduce spurious nulls for
+                # right values not in the left categories.
+                common_type = find_common_type(
+                    (ltype.categories.dtype, rtype)  # type: ignore[union-attr]
+                )
+                return lcol.astype(common_type), rcol.astype(common_type)
+            if how == "left":
                 return lcol, rcol.astype(ltype)
             common_type = get_dtype_of_same_kind(rtype, ltype.categories.dtype)  # type: ignore[union-attr]
         else:

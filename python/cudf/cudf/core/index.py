@@ -2804,7 +2804,7 @@ class RangeIndex(Index):
             return index
         # Evenly spaced values can return a
         # RangeIndex instead of a materialized Index.
-        if not index._column.has_nulls():
+        if not index._column.has_nulls() and len(index) > 1:
             uniques = cupy.unique(cupy.diff(index.values))
             if len(uniques) == 1 and (diff := uniques[0].get()) != 0:
                 new_range = range(index[0], index[-1] + diff, diff)
