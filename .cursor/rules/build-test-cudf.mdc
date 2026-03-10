@@ -1,0 +1,64 @@
+---
+description: Instructions to build and test cudf. Apply whenever you write code and want to build and test changes
+globs: 
+alwaysApply: false
+---
+
+## Building libcudf
+
+Whenever building libcudf from scratch (CMake has not been run before), run:
+
+```bash
+export CUDAARCHS=NATIVE ; build-cudf-cpp
+```
+
+Note that the `build-cudf-cpp` script is located at `/usr/bin` if you can't find it.
+
+If this is an incremental build, you can just navigate to `/home/coder/cudf/cpp/build/latest` and run: 
+
+```bash
+ninja
+```
+
+Remember, we are in a devcontainer and don't really want to run the `build.sh` script located at `/home/coder` or install anything ourselves. Instead we always want to use `rapids-*`, `build-*` scripts located at `/usr/bin`.
+
+## Building pylibcudf and cudf python
+For example, you can build pylibcudf and cudf python as:
+
+```bash
+build-cudf-cpp ; build-pylibcudf-python ; build-cudf-python
+```
+
+Note that `build-pylibcudf-python` must always successfully run before running `build-cudf-python` or there will be errors
+
+# Clean up
+Similar to build instructions, we can use `clean-cudf-cpp` or `clean-cudf-python` etc. scripts located at `/usr/bin`.
+
+## CMake fatal error handling
+If we run into a fatal CMake error at the very start of CMake while building libcudf (stating packages mismatched), it's like because our packages are outdated, we can just update them using:
+
+```bash
+rapids-make-<ENV>-env
+```
+
+where `<ENV>` is either `pip` or `conda` depending on the type of the devcontainer we currently are in. An easy way to check that is to look at the `.code-workspace` file's name at `/home/coder`.
+
+## Running Google tests
+
+Run relevant Google tests 
+
+```bash
+cd /home/coder/cudf/cpp/build/latest ; ./gtests/<TEST_NAME>_TEST
+```
+
+## Running Pytests
+
+Make sure to build pylibcudf and python before running any of these.
+
+Pylibcudf tests are located here: `/home/coder/cudf/python/pylibcudf/tests` and you can use `py.test` to run them. Example:
+
+```bash
+cd /home/coder/cudf/python/pylibcudf/tests/io ; py.test test_parquet.py
+```
+
+Similarly, cudf-python tests are located here: `/home/coder/cudf/python/cudf/cudf/tests` and can be run the same way. Note that the sub-folders contained at this location may have a different name such as `io -> input_output`.
