@@ -82,7 +82,7 @@ struct quantile_index {
     quantile = cuda::std::min(cuda::std::max(quantile, 0.0), 1.0);
 
     double val      = quantile * (count - 1);
-    lower           = std::floor(val);
+    lower           = cuda::std::floor(val);
     higher          = static_cast<size_type>(cuda::std::ceil(val));
     nearest         = static_cast<size_type>(cuda::std::nearbyint(val));
     nearest_half_up = static_cast<size_type>(cuda::std::round(val));
