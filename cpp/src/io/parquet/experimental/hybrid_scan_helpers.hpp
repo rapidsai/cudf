@@ -145,6 +145,7 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
    * @param ignore_missing_columns Whether to ignore non-existent columns
    * @param timestamp_type_id Type conversion parameter
    * @param decimal_type_id Type conversion parameter
+   * @param case_sensitive_names Boolean indicating if column names are case sensitive
    *
    * @return input column information, output column buffers, list of output column schema
    * indices
