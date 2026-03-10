@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
-from cudf_polars.experimental.benchmarks.utils import get_data
+from cudf_polars.experimental.benchmarks.utils import QueryResult, get_data
 
 if TYPE_CHECKING:
     from cudf_polars.experimental.benchmarks.utils import RunConfig
@@ -61,7 +61,7 @@ def duckdb_impl(run_config: RunConfig) -> str:
     """
 
 
-def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
+def polars_impl(run_config: RunConfig) -> QueryResult:
     """Query 90."""
     params = load_parameters(
         int(run_config.scale_factor),
@@ -109,30 +109,36 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
             )
         )
     )
-    return (
-        base_query.select(
-            [
-                pl.when(pl.col("t_hour").is_between(am_hour, am_hour + 1))
-                .then(1)
-                .otherwise(0)
-                .sum()
-                .alias("amc"),
-                pl.when(pl.col("t_hour").is_between(pm_hour, pm_hour + 1))
-                .then(1)
-                .otherwise(0)
-                .sum()
-                .alias("pmc"),
-            ]
-        )
-        .with_columns(
-            [
-                pl.when(pl.col("pmc") != 0)
-                .then(pl.col("amc").cast(pl.Float64) / pl.col("pmc").cast(pl.Float64))
-                .otherwise(None)
-                .alias("am_pm_ratio")
-            ]
-        )
-        .select("am_pm_ratio")
-        .sort("am_pm_ratio", nulls_last=True)
-        .limit(100)
+    return QueryResult(
+        frame=(
+            base_query.select(
+                [
+                    pl.when(pl.col("t_hour").is_between(am_hour, am_hour + 1))
+                    .then(1)
+                    .otherwise(0)
+                    .sum()
+                    .alias("amc"),
+                    pl.when(pl.col("t_hour").is_between(pm_hour, pm_hour + 1))
+                    .then(1)
+                    .otherwise(0)
+                    .sum()
+                    .alias("pmc"),
+                ]
+            )
+            .with_columns(
+                [
+                    pl.when(pl.col("pmc") != 0)
+                    .then(
+                        pl.col("amc").cast(pl.Float64) / pl.col("pmc").cast(pl.Float64)
+                    )
+                    .otherwise(None)
+                    .alias("am_pm_ratio")
+                ]
+            )
+            .select("am_pm_ratio")
+            .sort("am_pm_ratio", nulls_last=True)
+            .limit(100)
+        ),
+        sort_by=[("am_pm_ratio", False)],
+        limit=100,
     )

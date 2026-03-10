@@ -100,16 +100,16 @@ def test_read_parquet_filters_metadata(tmp_path, if_prune_rowgroup, result):
     if if_prune_rowgroup:
         # Prune the only row group since the filter aims to find elements larger than the max
         filter = Operation(
-            ASTOperator.GREATER,
-            ColumnNameReference("a"),
+            ASTOperator.LESS,
             Literal(plc.Scalar.from_arrow(pa.scalar(max_element))),
+            ColumnNameReference("a"),
         )
     else:
         # No real pruning
         filter = Operation(
-            ASTOperator.GREATER,
-            ColumnNameReference("a"),
+            ASTOperator.LESS,
             Literal(plc.Scalar.from_arrow(pa.scalar(min_element))),
+            ColumnNameReference("a"),
         )
     options.set_filter(filter)
     plc_table_w_meta = plc.io.parquet.read_parquet(options)
@@ -140,9 +140,9 @@ def test_read_parquet_filters_metadata(tmp_path, if_prune_rowgroup, result):
                     Literal(plc.Scalar.from_arrow(pa.scalar(10))),
                 ),
                 Operation(
-                    ASTOperator.LESS,
-                    ColumnNameReference("col_double"),
+                    ASTOperator.GREATER,
                     Literal(plc.Scalar.from_arrow(pa.scalar(0.0))),
+                    ColumnNameReference("col_double"),
                 ),
             ),
         ),
@@ -346,10 +346,10 @@ def test_write_parquet(
             pc.field("col_str") == "foo",
             Operation(
                 ASTOperator.EQUAL,
-                ColumnNameReference("col_str"),
                 Literal(
                     plc.Scalar.from_arrow(pa.scalar("foo", type=pa.string()))
                 ),
+                ColumnNameReference("col_str"),
             ),
         ),
     ],

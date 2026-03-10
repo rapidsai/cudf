@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
-from cudf_polars.experimental.benchmarks.utils import get_data
+from cudf_polars.experimental.benchmarks.utils import QueryResult, get_data
 
 if TYPE_CHECKING:
     from cudf_polars.experimental.benchmarks.utils import RunConfig
@@ -105,7 +105,7 @@ def duckdb_impl(run_config: RunConfig) -> str:
     """
 
 
-def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
+def polars_impl(run_config: RunConfig) -> QueryResult:
     """Query 78."""
     params = load_parameters(
         int(run_config.scale_factor),
@@ -231,7 +231,7 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
             ]
         )
     )
-    return (
+    result = (
         ss.join(
             ws,
             left_on=["ss_sold_year", "ss_item_sk", "ss_customer_sk"],
@@ -245,14 +245,18 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
             how="left",
         )
         .filter(
-            (pl.col("ws_qty").fill_null(0) > 0)
-            & (pl.col("cs_qty").fill_null(0) > 0)
+            ((pl.col("ws_qty").fill_null(0) > 0) | (pl.col("cs_qty").fill_null(0) > 0))
             & (pl.col("ss_sold_year") == year)
         )
         .select(
             [
+                pl.col("ss_sold_year"),
                 pl.col("ss_item_sk"),
-                (pl.col("ss_qty") / (pl.col("ws_qty") + pl.col("cs_qty")).fill_null(1))
+                pl.col("ss_customer_sk"),
+                (
+                    pl.col("ss_qty")
+                    / (pl.col("ws_qty").fill_null(0) + pl.col("cs_qty").fill_null(0))
+                )
                 .round(2)
                 .alias("ratio"),
                 pl.col("ss_qty").alias("store_qty"),
@@ -269,18 +273,28 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
                 ),
             ]
         )
-        .sort(
-            [
-                "ss_item_sk",
-                "store_qty",
-                "store_wholesale_cost",
-                "store_sales_price",
-                "other_chan_qty",
-                "other_chan_wholesale_cost",
-                "other_chan_sales_price",
-                "ratio",
-            ],
-            descending=[False, True, True, True, False, False, False, False],
-        )
-        .limit(100)
+    )
+    sort_by = {
+        "ss_sold_year": False,
+        "ss_item_sk": False,
+        "ss_customer_sk": False,
+        "store_qty": True,
+        "store_wholesale_cost": True,
+        "store_sales_price": True,
+        "other_chan_qty": False,
+        "other_chan_wholesale_cost": False,
+        "other_chan_sales_price": False,
+        "ratio": False,
+    }
+    limit = 100
+    return QueryResult(
+        frame=(
+            result.sort(
+                list(sort_by.keys()),
+                descending=list(sort_by.values()),
+                nulls_last=True,
+            ).limit(limit)
+        ),
+        sort_by=list(sort_by.items()),
+        limit=limit,
     )
