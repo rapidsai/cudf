@@ -949,12 +949,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         target_cls = ColumnBase._dispatch_subclass_from_dtype(dtype)
         self = target_cls.__new__(target_cls)
         self.plc_column = _wrap_and_validate(col, dtype) if validate else col
-        if (
-            target_cls is cudf.core.column.StringColumn
-            and isinstance(dtype, np.dtype)
-            and dtype.kind == "U"
-        ):
-            dtype = CUDF_STRING_DTYPE
         self._dtype = dtype
         self._distinct_count = {}
         self._has_nulls = {}
@@ -2285,6 +2279,8 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         if self.dtype == dtype:
             result = self
         elif len(self) == 0:
+            if isinstance(dtype, np.dtype) and dtype.kind == "U":
+                dtype = np.dtype("object")
             result = column_empty(0, dtype=dtype)
         else:
             if isinstance(dtype, CategoricalDtype):

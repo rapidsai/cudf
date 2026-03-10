@@ -2208,8 +2208,6 @@ NODEIDS_THAT_FAIL_WITH_CUDF_PANDAS = {
     "tests/frame/methods/test_astype.py::TestAstype::test_astype_dt64_to_string[Series-None]",
     "tests/frame/methods/test_astype.py::TestAstype::test_astype_dt64tz",
     "tests/frame/methods/test_astype.py::TestAstype::test_astype_dt64tz_to_str",
-    "tests/frame/methods/test_astype.py::TestAstype::test_astype_td64_to_string[DataFrame]",
-    "tests/frame/methods/test_astype.py::TestAstype::test_astype_td64_to_string[Series]",
     "tests/frame/methods/test_astype.py::TestAstype::test_astype_with_exclude_string",
     "tests/frame/methods/test_astype.py::test_astype_to_string_not_modifying_input[pyarrow_numpy-None]",
     "tests/frame/methods/test_astype.py::test_astype_to_string_not_modifying_input[pyarrow_numpy-val4]",

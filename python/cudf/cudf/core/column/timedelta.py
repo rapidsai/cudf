@@ -245,11 +245,17 @@ class TimeDeltaColumn(TemporalBaseColumn):
         )
 
     def as_string_column(self, dtype: DtypeObj) -> StringColumn:
+        if (
+            cudf.get_option("mode.pandas_compatible")
+            and isinstance(dtype, np.dtype)
+            and dtype.kind == "O"
+        ):
+            raise MixedTypeError(
+                f"cannot astype a timedelta like from {self.dtype} to {dtype}"
+            )
+        if isinstance(dtype, np.dtype) and dtype.kind == "U":
+            dtype = np.dtype("object")
         if cudf.get_option("mode.pandas_compatible"):
-            if isinstance(dtype, np.dtype) and dtype.kind == "O":
-                raise MixedTypeError(
-                    f"cannot astype a timedelta like from {self.dtype} to {dtype}"
-                )
             components = self.components
             has_hours = components["hours"].any()
             has_minutes = components["minutes"].any()
