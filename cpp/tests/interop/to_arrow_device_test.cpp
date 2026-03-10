@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -719,7 +719,7 @@ TEST_F(ToArrowDeviceTest, FixedPoint32Table)
     ArrowSchemaInit(expected_schema->children[0]);
     NANOARROW_THROW_NOT_OK(ArrowSchemaSetTypeDecimal(expected_schema->children[0],
                                                      NANOARROW_TYPE_DECIMAL32,
-                                                     cudf::detail::max_precision<int32_t>(),
+                                                     get_decimal_precision<int32_t>(),
                                                      -scale));
     NANOARROW_THROW_NOT_OK(ArrowSchemaSetName(expected_schema->children[0], "a"));
     expected_schema->children[0]->flags = 0;
@@ -819,7 +819,7 @@ TEST_F(ToArrowDeviceTest, FixedPoint128Table)
     ArrowSchemaInit(expected_schema->children[0]);
     NANOARROW_THROW_NOT_OK(ArrowSchemaSetTypeDecimal(expected_schema->children[0],
                                                      NANOARROW_TYPE_DECIMAL128,
-                                                     cudf::detail::max_precision<__int128_t>(),
+                                                     get_decimal_precision<__int128_t>(),
                                                      -scale));
     NANOARROW_THROW_NOT_OK(ArrowSchemaSetName(expected_schema->children[0], "a"));
     expected_schema->children[0]->flags = 0;

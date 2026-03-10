@@ -31,8 +31,7 @@ def create_test_table(nbytes: int, stream: Stream) -> plc.Table:
     # Create a simple table with one column of random float32 data
     num_elements = nbytes // 4
     data = np.random.random(num_elements).astype(np.float32)
-    # mypy doesn't recognize pylibcudf's from_array signature correctly
-    return plc.Table([plc.Column.from_array(data, stream=stream)])  # type: ignore[call-arg]
+    return plc.Table([plc.Column.from_array(data, stream=stream)])
 
 
 def test_make_spill_function(local_context: Context) -> None:

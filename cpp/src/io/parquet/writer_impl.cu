@@ -1075,7 +1075,7 @@ parquet_column_view::parquet_column_view(schema_tree_node const& schema_node,
   }
   _nullability = std::vector<uint8_t>(r_nullability.crbegin(), r_nullability.crend());
   // TODO(cp): Explore doing this for all columns in a single go outside this ctor. Maybe using
-  // hostdevice_vector. Currently this involves a cudaMemcpyAsync for each column.
+  // hostdevice_vector. Currently this involves a separate async H2D copy for each column.
   _d_nullability = cudf::detail::make_device_uvector_async(
     _nullability, stream, cudf::get_current_device_resource_ref());
 
@@ -2582,7 +2582,6 @@ std::unique_ptr<std::vector<uint8_t>> writer::impl::close(
   for (size_t p = 0; p < _out_sink.size(); p++) {
     std::vector<uint8_t> buffer;
     CompactProtocolWriter cpw(&buffer);
-    file_ender_s fendr;
     auto& fmd = _agg_meta->file(p);
 
     if (_stats_granularity == statistics_freq::STATISTICS_COLUMN) {
@@ -2612,7 +2611,7 @@ std::unique_ptr<std::vector<uint8_t>> writer::impl::close(
     }
 
     // set row group ordinals
-    auto iter        = thrust::make_counting_iterator(0);
+    auto iter        = thrust::counting_iterator(0);
     auto& row_groups = fmd.row_groups;
     std::for_each(
       iter, iter + row_groups.size(), [&row_groups](auto idx) { row_groups[idx].ordinal = idx; });
@@ -2632,35 +2631,35 @@ std::unique_ptr<std::vector<uint8_t>> writer::impl::close(
       });
     }
     buffer.resize(0);
-    fendr.footer_len = static_cast<uint32_t>(cpw.write(_agg_meta->get_metadata(p)));
-    fendr.magic      = parquet_magic;
+    file_ender_s fendr{.footer_len = static_cast<uint32_t>(cpw.write(_agg_meta->get_metadata(p))),
+                       .magic      = parquet_magic};
     _out_sink[p]->host_write(buffer.data(), buffer.size());
     _out_sink[p]->host_write(&fendr, sizeof(fendr));
     _out_sink[p]->flush();
   }
 
-  // Optionally output raw file metadata with the specified column chunk file path
-  if (column_chunks_file_path.size() > 0) {
-    CUDF_EXPECTS(column_chunks_file_path.size() == _agg_meta->num_files(),
-                 "Expected one column chunk path per output file");
-    _agg_meta->set_file_paths(column_chunks_file_path);
-    file_header_s fhdr = {parquet_magic};
-    std::vector<uint8_t> buffer;
-    CompactProtocolWriter cpw(&buffer);
-    buffer.insert(buffer.end(),
-                  reinterpret_cast<uint8_t const*>(&fhdr),
-                  reinterpret_cast<uint8_t const*>(&fhdr) + sizeof(fhdr));
-    file_ender_s fendr;
-    fendr.magic      = parquet_magic;
-    fendr.footer_len = static_cast<uint32_t>(cpw.write(_agg_meta->get_merged_metadata()));
-    buffer.insert(buffer.end(),
-                  reinterpret_cast<uint8_t const*>(&fendr),
-                  reinterpret_cast<uint8_t const*>(&fendr) + sizeof(fendr));
-    return std::make_unique<std::vector<uint8_t>>(std::move(buffer));
-  } else {
-    return {nullptr};
-  }
-  return nullptr;
+  // Output raw file metadata
+  std::vector<uint8_t> buffer;
+  file_header_s fhdr = {.magic = parquet_magic};
+  buffer.insert(buffer.end(),
+                reinterpret_cast<uint8_t const*>(&fhdr),
+                reinterpret_cast<uint8_t const*>(&fhdr) + sizeof(fhdr));
+
+  CUDF_EXPECTS(
+    column_chunks_file_path.empty() or column_chunks_file_path.size() == _agg_meta->num_files(),
+    "Expected one column chunk path per output file");
+
+  // Only set file paths if column_chunks_file_path is provided
+  if (column_chunks_file_path.size() > 0) { _agg_meta->set_file_paths(column_chunks_file_path); }
+
+  CompactProtocolWriter cpw(&buffer);
+  file_ender_s fendr{
+    .footer_len = static_cast<uint32_t>(cpw.write(_agg_meta->get_merged_metadata())),
+    .magic      = parquet_magic};
+  buffer.insert(buffer.end(),
+                reinterpret_cast<uint8_t const*>(&fendr),
+                reinterpret_cast<uint8_t const*>(&fendr) + sizeof(fendr));
+  return std::make_unique<std::vector<uint8_t>>(std::move(buffer));
 }
 
 // Forward to implementation
