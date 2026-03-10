@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
-from cudf_polars.experimental.benchmarks.utils import get_data
+from cudf_polars.experimental.benchmarks.utils import QueryResult, get_data
 
 if TYPE_CHECKING:
     from cudf_polars.experimental.benchmarks.utils import RunConfig
@@ -69,7 +69,7 @@ def duckdb_impl(run_config: RunConfig) -> str:
     """
 
 
-def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
+def polars_impl(run_config: RunConfig) -> QueryResult:
     """Query 73."""
     params = load_parameters(
         int(run_config.scale_factor),
@@ -116,17 +116,28 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         .agg([pl.len().alias("cnt")])
         .filter(pl.col("cnt").is_between(1, 5))
     )
-    return (
-        inner_query.join(customer, left_on="ss_customer_sk", right_on="c_customer_sk")
-        .select(
-            [
-                "c_last_name",
-                "c_first_name",
-                "c_salutation",
-                "c_preferred_cust_flag",
-                "ss_ticket_number",
-                "cnt",
-            ]
-        )
-        .sort(["cnt", "c_last_name"], descending=[True, False], nulls_last=True)
+    sort_by = {"cnt": True, "c_last_name": False}
+    return QueryResult(
+        frame=(
+            inner_query.join(
+                customer, left_on="ss_customer_sk", right_on="c_customer_sk"
+            )
+            .select(
+                [
+                    "c_last_name",
+                    "c_first_name",
+                    "c_salutation",
+                    "c_preferred_cust_flag",
+                    "ss_ticket_number",
+                    "cnt",
+                ]
+            )
+            .sort(
+                list(sort_by.keys()),
+                descending=list(sort_by.values()),
+                nulls_last=True,
+            )
+        ),
+        sort_by=list(sort_by.items()),
+        limit=None,
     )
