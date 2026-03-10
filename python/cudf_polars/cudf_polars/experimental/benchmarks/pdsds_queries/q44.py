@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
-from cudf_polars.experimental.benchmarks.utils import get_data
+from cudf_polars.experimental.benchmarks.utils import QueryResult, get_data
 
 if TYPE_CHECKING:
     from cudf_polars.experimental.benchmarks.utils import RunConfig
@@ -80,7 +80,7 @@ def duckdb_impl(run_config: RunConfig) -> str:
     """
 
 
-def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
+def polars_impl(run_config: RunConfig) -> QueryResult:
     """Query 44."""
     params = load_parameters(
         int(run_config.scale_factor),
@@ -162,25 +162,30 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         .select(["ss_item_sk", "rnk"])
     )
 
+    sort_by = {"rnk": False}
+    limit = 100
     # Step 5: Join rankings and get product names
-    return (
-        ascending_rank.join(descending_rank, on="rnk", how="inner", suffix="_desc")
-        .join(item, left_on="ss_item_sk", right_on="i_item_sk", how="inner")
-        .join(
-            item,
-            left_on="ss_item_sk_desc",
-            right_on="i_item_sk",
-            how="inner",
-            suffix="_worst",
-        )
-        .select(
-            [
-                # Cast -> Int64 to match DuckDB
-                pl.col("rnk").cast(pl.Int64),
-                pl.col("i_product_name").alias("best_performing"),
-                pl.col("i_product_name_worst").alias("worst_performing"),
-            ]
-        )
-        .sort(["rnk"], nulls_last=True, descending=[False])
-        .limit(100)
+    return QueryResult(
+        frame=(
+            ascending_rank.join(descending_rank, on="rnk", how="inner", suffix="_desc")
+            .join(item, left_on="ss_item_sk", right_on="i_item_sk", how="inner")
+            .join(
+                item,
+                left_on="ss_item_sk_desc",
+                right_on="i_item_sk",
+                how="inner",
+                suffix="_worst",
+            )
+            .select(
+                [
+                    pl.col("rnk"),
+                    pl.col("i_product_name").alias("best_performing"),
+                    pl.col("i_product_name_worst").alias("worst_performing"),
+                ]
+            )
+            .sort(sort_by.keys(), nulls_last=True)
+            .limit(limit)
+        ),
+        sort_by=list(sort_by.items()),
+        limit=limit,
     )

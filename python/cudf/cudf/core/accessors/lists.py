@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Literal, cast
+from typing import TYPE_CHECKING, Literal
 
 import pandas as pd
 import pyarrow as pa
@@ -11,8 +11,8 @@ import pyarrow as pa
 from cudf.api.types import is_scalar
 from cudf.core.accessors.base_accessor import BaseAccessor
 from cudf.core.column.column import as_column
-from cudf.core.dtype.validators import is_dtype_obj_list, is_dtype_obj_numeric
-from cudf.core.dtypes import ListDtype, dtype as cudf_dtype
+from cudf.core.dtype.validators import is_dtype_obj_list
+from cudf.core.dtypes import dtype as cudf_dtype
 from cudf.utils.scalar import pa_scalar_to_plc_scalar
 
 if TYPE_CHECKING:
@@ -271,25 +271,8 @@ class ListMethods(BaseAccessor):
         2        []
         dtype: list
         """
-        lists_indices_col = as_column(lists_indices)
-        if not isinstance(lists_indices_col.dtype, ListDtype):
-            raise ValueError("lists_indices should be list type array.")
-        if not lists_indices_col.size == self._column.size:
-            raise ValueError(
-                "lists_indices and list column is of different size."
-            )
-        if (
-            not is_dtype_obj_numeric(
-                lists_indices_col.dtype.element_type, include_decimal=False
-            )
-            or lists_indices_col.dtype.element_type.kind not in "iu"
-        ):
-            raise TypeError(
-                "lists_indices should be column of values of index types."
-            )
-
         return self._return_or_inplace(
-            self._column.segmented_gather(lists_indices_col)
+            self._column.segmented_gather(as_column(lists_indices))
         )
 
     def unique(self) -> Series | Index:
@@ -317,11 +300,6 @@ class ListMethods(BaseAccessor):
         3              []
         dtype: list
         """
-        if isinstance(
-            cast("ListDtype", self._column.dtype).element_type, ListDtype
-        ):
-            raise NotImplementedError("Nested lists unique is not supported.")
-
         return self._return_or_inplace(
             self._column.distinct(nulls_equal=True, nans_all_equal=True)
         )
@@ -378,13 +356,6 @@ class ListMethods(BaseAccessor):
             raise NotImplementedError("`inplace` not currently implemented.")
         if kind != "quicksort":
             raise NotImplementedError("`kind` not currently implemented.")
-        if na_position not in {"first", "last"}:
-            raise ValueError(f"Unknown `na_position` value {na_position}")
-        if isinstance(
-            cast("ListDtype", self._column.dtype).element_type, ListDtype
-        ):
-            raise NotImplementedError("Nested lists sort is not supported.")
-
         return self._return_or_inplace(
             self._column.sort_lists(ascending, na_position),
             retain_index=not ignore_index,
