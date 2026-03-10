@@ -136,7 +136,33 @@ def test_groupby(df: pl.LazyFrame, maintain_order, keys, exprs):
     assert_gpu_result_equal(q, check_exact=False)
 
 
-def test_groupby_sorted_keys(df: pl.LazyFrame, keys, exprs):
+def test_groupby_sorted_keys(df: pl.LazyFrame, keys, exprs, using_rapidsmpf, request):
+    failing_rapidsmpf_nodeids = {
+        'test_groupby_sorted_keys[col("key1")-]',
+        'test_groupby_sorted_keys[[(col("key1")) * (col("key2"))]-col("int").first()-col("float").last()]',
+        'test_groupby_sorted_keys[[(col("key1")) * (col("key2"))]-col("float").quantile()4]',
+        'test_groupby_sorted_keys[[(col("key1")) == (col("key2"))]-float-int]',
+        'test_groupby_sorted_keys[[(col("key1")) == (col("key2"))]-[(col("float")) + (col("int"))]]',
+        'test_groupby_sorted_keys[[(col("key1")) == (col("key2"))]-col("int32").sum()]',
+        'test_groupby_sorted_keys[[(col("key1")) == (col("key2"))]-col("int32").mean()]',
+        'test_groupby_sorted_keys[[(col("key1")) == (col("key2"))]-[([(col("float").max()) - (col("int").min())]) + (col("int").max())]]',
+        'test_groupby_sorted_keys[[(col("key1")) == (col("key2"))]-[(col("float")) - (dyn int: 2)].max()]',
+        'test_groupby_sorted_keys[[(col("key1")) == (col("key2"))]-col("float").sum().round()0]',
+        'test_groupby_sorted_keys[[(col("key1")) == (col("key2"))]-col("float").round().sum()0]',
+        'test_groupby_sorted_keys[[(col("key1")) == (col("key2"))]-col("int").first()-col("float").last()]',
+        'test_groupby_sorted_keys[[(col("key1")) == (col("key2"))]-col("float").quantile()2]',
+        'test_groupby_sorted_keys[col("key2")-[(col("key1")) == (1)]-[([(col("float").max()) - (col("int").min())]) + (col("int").max())]]',
+        'test_groupby_sorted_keys[col("key2")-[(col("key1")) == (1)]-col("int").first()-col("float").last()]',
+        'test_groupby_sorted_keys[col("key2")-[(col("key1")) == (1)]-col("float").quantile()0]',
+    }
+    request.applymarker(
+        pytest.mark.xfail(
+            using_rapidsmpf
+            and not exprs
+            and request.node.name in failing_rapidsmpf_nodeids,
+            reason="https://github.com/rapidsai/cudf/issues/21642",
+        )
+    )
     sorted_keys = [
         key.sort(descending=descending)
         for key, descending in zip(keys, itertools.cycle([False, True]))
