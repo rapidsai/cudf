@@ -521,6 +521,21 @@ TEST_F(ScanCountTest, InclusiveWithNullsInclude)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
 
+TEST_F(ScanCountTest, InclusiveWithOffset)
+{
+  cudf::test::strings_column_wrapper col({"5", "4", "6", "", "1", "6", "5", "3"},
+                                         {1, 1, 1, 0, 1, 1, 1, 1});
+  auto input = cudf::slice(col, {1, 7}).front();
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> expected({1, 2, 3, 3, 4, 5},
+                                                                   {1, 1, 0, 1, 1, 1});
+
+  auto result = cudf::scan(input,
+                           *cudf::make_count_aggregation<cudf::scan_aggregation>(),
+                           cudf::scan_type::INCLUSIVE,
+                           cudf::null_policy::EXCLUDE);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
 struct ScanExclusiveErrorTest : public cudf::test::BaseFixture {};
 
 TEST_F(ScanExclusiveErrorTest, ExclusiveThrows)

@@ -129,11 +129,9 @@ struct scan_functor<Op, T> {
     auto result        = output_column->mutable_view();
 
     auto const begin = make_counting_transform_iterator(
-      0,
-      cuda::proclaim_return_type<size_type>(
-        [mask, offset = input_view.offset()] __device__(auto idx) -> size_type {
-          return static_cast<size_type>(mask == nullptr || bit_is_set(mask, idx + offset));
-        }));
+      0, cuda::proclaim_return_type<size_type>([mask] __device__(auto idx) -> size_type {
+        return static_cast<size_type>(mask == nullptr || bit_is_set(mask, idx));
+      }));
 
     thrust::inclusive_scan(
       rmm::exec_policy_nosync(stream), begin, begin + input_view.size(), result.data<size_type>());
