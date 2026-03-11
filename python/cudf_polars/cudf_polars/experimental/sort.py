@@ -226,7 +226,7 @@ def _get_final_sort_boundaries(
     null_order = list(null_order)
 
     if num_partitions <= 1 or sort_boundaries_candidates.table.num_rows() == 0:
-        return sort_boundaries_candidates.slice((0, 0))
+        return sort_boundaries_candidates.slice((0, 0))  # pragma: no cover
 
     # The global split candidates need to be stable sorted to find the correct
     # final split points.
@@ -608,15 +608,6 @@ def _(
     partition_info[final_sort_node] = partition_info[shuffle]
 
     return final_sort_node, partition_info
-
-
-@lower_ir_node.register(ShuffleSorted)
-def _(
-    ir: ShuffleSorted, rec: LowerIRTransformer
-) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
-    from cudf_polars.experimental.parallel import _lower_ir_pwise
-
-    return _lower_ir_pwise(ir, rec)
 
 
 @generate_ir_tasks.register(ShuffleSorted)
