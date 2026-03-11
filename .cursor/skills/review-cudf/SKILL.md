@@ -37,7 +37,7 @@ gh api repos/rapidsai/cudf/pulls/<PR_NUMBER>/reviews
 
 ## Review Checklist
 
-> Items marked **(guide)** are covered in detail in the Developer Guide — verify compliance against the guide. Items without the tag are review-specific or derived from codebase patterns.
+> Items marked **(guide: Section Name(s))** are covered in detail in the Developer Guide — verify compliance against the mentioned section(s) of the developer guide. Items without the tag are review-specific or derived from codebase patterns.
 
 ### Correctness & Logic
 
@@ -57,95 +57,8 @@ gh api repos/rapidsai/cudf/pulls/<PR_NUMBER>/reviews
 
 ### Performance Optimization
 - Optimal algorithms and data structures have been employed. For example, use unordered sets in place of vectors for mass lookups.
-- Prefer GPU-accelerating compute-intensive algorithms using CUDA, CUB/Thrust (CCCL), cuCollections and other available NVIDIA libraries.
-- Prefer parallelizing host-side compute or memory intensive algorithms using `cudf::detail::host_worker_pool()`
-- Prefer modern CUDA C++ primitives and patterns via using Thrust, CUB (NVIDIA CCCL) and cuCollections over C-like versions. For example, prefer `cuda::std::popcount` over `__popc`, use `cg::thread_block::thread_rank()` over `threadIdx.x`, `cudf::detail::warp_size` over hardcoded `32`, use `thrust::transform` instead of launching a CUDA kernel with `<<<>>>`, `cg::warp::reduce()` instead of a custom implementation and so on.
-
-### Naming & Code Duplication
-- No significant code duplication; reusable logic must be refactored into common helper functions.
-- Function and variable names are meaningful — not too vague or verbose.
-- No single-letter variable names except loop indices (`i`, `j`, `k`) or thread IDs (`t`, `tid`).
-- Private member variables prefixed with underscore. **(guide: "Code and Documentation Style")**
-
-### API & Design (libcudf C++)
-
-Verify compliance with the guide sections: **"Directory Structure and File Naming"**, **"Streams"**, **"Default Parameters"**, **"NVTX Ranges"**, **"Input/Output Style"**, **"Multiple Return Values"**, **"Namespaces"**, **"Error Handling"**, **"Spans"**, and **"Deprecating and Removing Code"**. Key points to watch for:
-
-- Public APIs in `cpp/include/cudf/` with `CUDF_EXPORT`; detail headers in `include/cudf/detail/` or `include/cudf/<sub>/detail/`.
-- Stream and MR as last two parameters (stream before MR); public defaults, no defaults in detail APIs.
-- Views as input, `unique_ptr` as output; `std::pair` for multiple returns (not `std::tuple`).
-- `CUDF_EXPECTS` / `CUDF_FAIL` / `CUDF_UNREACHABLE` used correctly; `CUDF_EXPECTS` condition must be a pure predicate.
-- Public functions: `CUDF_FUNC_RANGE()` then delegate to `detail::`.
-- `cudaDeviceSynchronize()` never used; sync only via `stream.synchronize()` when required.
-
-Additional review-specific items not in the guide:
-- No raw owning pointers; use `std::unique_ptr`, `std::shared_ptr`, `std::reference_wrapper`.
-- Prefer pinned memory/vectors for small H2D and H2D transfers via `cudf::make_pinned_vector` instead of `cudf::make_host_vector`.
-- Prefer `span` versions of constructors for `cudf::make_pinned_vector` and `cudf::make_host_vector`.
-- Functions defined in headers (e.g. templates) must be `inline`.
-- Anonymous namespaces for single-TU helpers; never in headers.
-- Prefer `host_span`/`device_span` over owning vectors unless transferring ownership via rvalue move.
-- Prefer modern C++ primitives allowed by the current libcudf standard (see `cpp/CMakeLists.txt`): concepts, `requires`, `std::ranges`, `std::for_each`, `std::transform` over manual implementations and raw loops. Range-for like `for (auto elem : vec)` is fine.
-- Use `static_assert` with a clear message to prevent accidental template misuse.
-
-### Memory Allocation & Management
-
-Verify compliance with guide sections: **"Memory Allocation"** (Output Memory, Temporary Memory, Memory Management) and **"Memory Copies"**. Key points:
-
-- Returned memory uses the passed-in MR; temporary memory uses `cudf::get_current_device_resource_ref()`.
-- Prefer `rmm::device_uvector` over `device_vector`/`thrust::device_vector`.
-- Use `cudf::detail::device_scalar<T>` (not `rmm::device_scalar<T>`).
-- Prefer `cudf::detail::cuda_memcpy_async` / `memcpy_async` / `memcpy_batch_async` over raw `cudaMemcpyAsync`.
-- Async memcpy staging buffers must outlive the copy — use `make_pinned_vector_async`; pageable buffers need `stream.synchronize()` first.
-
-### Style & Formatting
-
-Verify compliance with guide sections: **"Code and Documentation Style and Formatting"**, **"C++ Guidelines"**, and **"File extensions"**. Additional items from codebase patterns:
-
-- CUDA kernels use `CUDF_KERNEL` macro (not raw `__global__`), preferably with `__launch_bounds__`.
-- Use `cuda::std::` types/algorithms (`cuda::std::min`, `cuda::std::distance`, `cuda::std::pair`) instead of `std::` in device code.
-- Use `cuda::make_constant_iterator` over `thrust::make_constant_iterator` for device-side constant iterators.
-- Prefer `cuda::proclaim_return_type<T>(lambda)` when passing device lambdas to `make_counting_transform_iterator`.
-
-### Includes
-
-Verify compliance with guide section: **"Includes"**. Watch especially for:
-- Unnecessary includes in headers.
-- Wrong bracket style (`<>` vs `""`).
-- Internal `src/` headers included from tests or public headers.
-
-### Documentation (Doxygen)
-- Public API functions and classes have `/** ... */` doxygen comments.
-- Use `@brief`, `@param`, `@return`, `@throw`, `@tparam` tags. Document all of these when a function, struct, or functor is added or modified unless it's trivial and in the `detail` namespace (just `@brief` is sufficient there).
-- Copyright header: `SPDX-FileCopyrightText: Copyright (c) <year>, NVIDIA CORPORATION.` with `SPDX-License-Identifier: Apache-2.0`.
-- Copyright year span updated if the file was modified.
-
-### Deprecations & Removals
-
-Verify compliance with guide section: **"Deprecating and Removing Code"**. Ensure `[[deprecated]]`, `@deprecated`, and correct PR labels ("deprecation" / "breaking").
-
-### Testing
-
-Refer to the **Testing Guide** (`cpp/doxygen/developer_guide/TESTING.md`) for full conventions. Key review checks:
-
-- Tests use `#include <cudf_test/cudf_gtest.hpp>` (never raw `gtest/gtest.h`).
-- Test code is in the **global namespace** (no `using namespace cudf;`).
-- Tests cover: empty input, null values, sliced columns, boundary sizes (around warp size 32), multi-block sizes.
-- Strings tests include non-ASCII UTF-8 characters.
-- Decimal types are in `FixedWidthTypes` but not `NumericTypes`; verify correct type list usage.
-- Prefer `rmm::device_uvector` and `column_wrapper` over `thrust::device_vector`.
-- Use `ASSERT_*` or `EXPECT_*` correctly for exception safety.
-
-### Benchmarks
-
-Refer to the **Benchmarking Guide** (`cpp/doxygen/developer_guide/BENCHMARKING.md`). Key review checks:
-
-- New benchmarks use NVBench (not Google Benchmark).
-- Benchmark source mirrors the feature path (`cpp/benchmarks/<feature>/`).
-- Prefer `.cpp` over `.cu` for benchmark files when possible.
-- NVTX ranges inserted for all public and work-heavy internal functions via `CUDF_FUNC_RANGE()` or `cudf::scoped_range`.
-
-### Performance
+- Prefer GPU-accelerated algorithms for compute-intensive problems.
+- Prefer parallel algorithms using `cudf::detail::host_worker_pool()` for host-side compute or memory intensive problems.
 - Prefer STL/Thrust/CUB algorithms over raw loops and raw kernels. **(guide: "C++ Guidelines")**
 - Use `rmm::exec_policy_nosync(stream)` for all Thrust device execution. **(guide: "Thrust Execution Policy")**
 - Avoid unnecessary host-device synchronization.
@@ -153,6 +66,7 @@ Refer to the **Benchmarking Guide** (`cpp/doxygen/developer_guide/BENCHMARKING.m
 - Avoid multiple levels of `type_dispatcher`. **(guide: "Avoid Multiple Type Dispatch")**
 
 ### CUDA-Specific
+- Prefer modern CUDA C++ primitives and patterns using Thrust/CUB (NVIDIA CCCL) and cooperative groups over C-like versions. For example, prefer `cuda::std::popcount` over `__popc`, use `cg::thread_block::thread_rank()` over `threadIdx.x` and so on.
 - Kernels check bounds correctly.
 - Shared memory usage doesn't exceed device limits.
 - No race conditions in concurrent kernel access patterns.
@@ -175,6 +89,89 @@ Refer to the **Benchmarking Guide** (`cpp/doxygen/developer_guide/BENCHMARKING.m
 - Use `cudf::detail::make_counting_transform_iterator` instead of `thrust::make_transform_iterator(thrust::counting_iterator(0), fn)`.
 - `column_device_view::create(col_view, stream)` returns a smart pointer; dereference with `*d_col` when passing to kernels or Thrust.
 - For strings columns, pass `.parent()` to `column_device_view::create`.
+
+### Naming & Code Duplication
+- No significant code duplication; reusable logic must be refactored into common helper functions.
+- Function and variable names are meaningful — not too vague or verbose.
+- No single-letter variable names except loop indices (`i`, `j`, `k`) or thread IDs (`t`, `tid`).
+- Private member variables prefixed with underscore. **(guide: "Code and Documentation Style")**
+
+### API & Design (libcudf C++)
+
+Verify compliance with the developer guide sections: **(guide: "Directory Structure and File Naming"**, **"Streams"**, **"Default Parameters"**, **"NVTX Ranges"**, **"Input/Output Style"**, **"Multiple Return Values"**, **"Namespaces"**, **"Error Handling"**, **"Spans"**, and **"Deprecating and Removing Code")**. Key points to watch for:
+
+- Public APIs in `cpp/include/cudf/` with `CUDF_EXPORT`; detail headers in `include/cudf/detail/` or `include/cudf/<sub>/detail/`.
+- Stream and MR as last two parameters (stream before MR); public defaults, no defaults in detail APIs.
+- `CUDF_EXPECTS` / `CUDF_FAIL` / `CUDF_UNREACHABLE` used correctly; `CUDF_EXPECTS` condition must be a pure predicate.
+- Public functions: `CUDF_FUNC_RANGE()` then delegate to `detail::`.
+- `cudaDeviceSynchronize()` never used; sync only via `stream.synchronize()` when required.
+
+Additional review-specific items not in the guide:
+- No raw owning pointers; use `std::unique_ptr`, `std::shared_ptr`, `std::reference_wrapper`.
+- Prefer pinned memory/vectors for small H2D and H2D transfers via `cudf::make_pinned_vector` instead of `cudf::make_host_vector`.
+- Prefer `span` versions of constructors for `cudf::make_pinned_vector` and `cudf::make_host_vector`.
+- Functions defined in headers (e.g. templates) must be `inline`.
+- Anonymous namespaces for single-TU helpers; never in headers.
+- Prefer `host_span`/`device_span` over owning vectors unless transferring ownership via rvalue move.
+- Prefer modern C++ primitives allowed by the current libcudf standard (see `cpp/CMakeLists.txt`): concepts, `requires`, `std::ranges`, `std::for_each`, `std::transform` over manual implementations and raw loops. Range-for like `for (auto elem : vec)` is fine.
+- Use `static_assert` with a clear message to prevent accidental template misuse.
+
+### Memory Allocation & Management
+
+Verify compliance with the developer guide sections: **(guide: "Memory Allocation)"** and subsections subsections including (Output Memory, Temporary Memory, Memory Management) and **(guide:"Memory Copies")**. Key points:
+
+- Returned memory uses the passed-in MR; temporary memory uses `cudf::get_current_device_resource_ref()`.
+- Prefer `rmm::device_uvector` over `device_vector`/`thrust::device_vector`.
+- Use `cudf::detail::device_scalar<T>` (not `rmm::device_scalar<T>`).
+- Prefer `cudf::detail::cuda_memcpy_async` / `memcpy_async` / `memcpy_batch_async` over raw `cudaMemcpyAsync`.
+- Async memcpy staging buffers must outlive the copy — use `make_pinned_vector_async`; pageable buffers need `stream.synchronize()` first.
+
+### Style & Formatting
+
+Verify compliance with the developer guide sections: **(guide: "Code and Documentation Style and Formatting"**, **"C++ Guidelines"**, and **"File extensions")**. Additional items from codebase patterns:
+
+- CUDA kernels use `CUDF_KERNEL` macro (not raw `__global__`), preferably with `__launch_bounds__`.
+- Use `cuda::std::` types/algorithms (`cuda::std::min`, `cuda::std::distance`, `cuda::std::pair`) instead of `std::` in device code.
+- Use `cuda::make_constant_iterator` over `thrust::make_constant_iterator` for device-side constant iterators.
+- Prefer `cuda::proclaim_return_type<T>(lambda)` when passing device lambdas to `make_counting_transform_iterator`.
+
+### Includes
+
+Verify compliance with the developer guide section: **(guide: "Includes")**. Watch especially for:
+- Unnecessary includes in headers.
+- Wrong bracket style (`<>` vs `""`).
+- Internal `src/` headers included from tests or public headers.
+
+### Documentation (Doxygen)
+- Public API functions and classes have `/** ... */` doxygen comments.
+- Use `@brief`, `@param`, `@return`, `@throw`, `@tparam` tags. Document all of these when a function, struct, or functor is added or modified unless it's trivial and in the `detail` namespace (just `@brief` is sufficient there).
+- Copyright header: `SPDX-FileCopyrightText: Copyright (c) <year>, NVIDIA CORPORATION.` with `SPDX-License-Identifier: Apache-2.0`.
+- Copyright year span updated if the file was modified.
+
+### Deprecations & Removals
+
+Verify compliance with the developer guide section: **(guide:"Deprecating and Removing Code")**. Ensure `[[deprecated]]`, `@deprecated`, and correct PR labels ("deprecation" / "breaking").
+
+### Testing
+
+Refer to the **Testing Guide** (`cpp/doxygen/developer_guide/TESTING.md`) for full conventions. Key review checks:
+
+- Tests use `#include <cudf_test/cudf_gtest.hpp>` (never raw `gtest/gtest.h`).
+- Test code is in the **global namespace** (no `using namespace cudf;`).
+- Tests cover: empty input, null values, sliced columns, boundary sizes (around warp size 32), multi-block sizes.
+- Strings tests include non-ASCII UTF-8 characters.
+- Decimal types are in `FixedWidthTypes` but not `NumericTypes`; verify correct type list usage.
+- Prefer `rmm::device_uvector` and `column_wrapper` over `thrust::device_vector`.
+- Use `ASSERT_*` or `EXPECT_*` correctly for exception safety.
+
+### Benchmarks
+
+Refer to the **Benchmarking Guide** (`cpp/doxygen/developer_guide/BENCHMARKING.md`). Key review checks:
+
+- New benchmarks use NVBench (not Google Benchmark).
+- Benchmark source mirrors the feature path (`cpp/benchmarks/<feature>/`).
+- Prefer `.cpp` over `.cu` for benchmark files when possible.
+- NVTX ranges inserted for all public and work-heavy internal functions via `CUDF_FUNC_RANGE()` or `cudf::scoped_range`.
 
 ### Python Bindings (if applicable)
 - Cython bindings match the C++ API.
