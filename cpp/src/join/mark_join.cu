@@ -291,10 +291,11 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> mark_join::mark_probe_and_
 
   auto materialize_probe_rows = [&](auto const& key_fn) {
     rmm::device_uvector<probe_key_type> probe_rows(probe.num_rows(), stream);
-    auto const probe_iter = cuda::transform_iterator(
-      cuda::counting_iterator{size_type{0}}, cuda::proclaim_return_type<probe_key_type>(key_fn));
-    cub::DeviceTransform::Transform(
-      probe_iter, probe_rows.begin(), probe.num_rows(), cuda::std::identity{}, stream.value());
+    cub::DeviceTransform::Transform(cuda::counting_iterator{size_type{0}},
+                                    probe_rows.begin(),
+                                    probe.num_rows(),
+                                    cuda::proclaim_return_type<probe_key_type>(key_fn),
+                                    stream.value());
     return probe_rows;
   };
 
