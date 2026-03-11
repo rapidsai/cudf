@@ -42,9 +42,6 @@ gh api repos/rapidsai/cudf/pulls/<PR_NUMBER>/reviews
 ### Correctness & Logic
 
 - Core logic implemented by algorithms is clear, correct and coherent.
-- Optimal algorithms and data structures have been employed. For example, use `std::unordered_set` instead of a `std::vector` for mass-queries. 
-- GPU-accelerated algorithms via Thrust, CUB and cuCollections are used for compute-intensive workloads.
-- `cudf::detail::host_worker_pool()` is used for compute or memory intensive parallelizable CPU algorithms.
 - No unnecessary memory usage or leaks, no excessive defensive programming.
 - Algorithms handle edge cases (empty input, single-row, nulls, sliced columns with nonzero offset, unintended fallthrough logic).
 - For recursive and branched algorithms, trace the recursion/branch to ensure no pitfalls, unintended fallthroughs, or unhandled cases.
@@ -57,6 +54,12 @@ gh api repos/rapidsai/cudf/pulls/<PR_NUMBER>/reviews
 - Use `cudf::have_same_types()` for data type comparison, not `a.type() == b.type()`. **(guide: "Comparing Data Types")**
 - Nested type columns (LIST, STRUCT) must be sanitized per guide rules. **(guide: "libcudf expects nested types to have sanitized null masks")**
 - Do not access the offsets child of an empty strings or lists column. **(guide: "Empty Columns")**
+
+### Performance Optimization
+- Optimal algorithms and data structures have been employed. For example, use unordered sets in place of vectors for mass lookups.
+- Prefer GPU-accelerating compute-intensive algorithms using CUDA, CUB/Thrust (CCCL), cuCollections and other available NVIDIA libraries.
+- Prefer parallelizing host-side compute or memory intensive algorithms using `cudf::detail::host_worker_pool()`
+- Prefer modern CUDA C++ primitives and patterns via using Thrust, CUB (NVIDIA CCCL) and cuCollections over C-like versions. For example, prefer `cuda::std::popcount` over `__popc`, use `cg::thread_block::thread_rank()` over `threadIdx.x`, `cudf::detail::warp_size` over hardcoded `32`, use `thrust::transform` instead of launching a CUDA kernel with `<<<>>>`, `cg::warp::reduce()` instead of a custom implementation and so on.
 
 ### Naming & Code Duplication
 - No significant code duplication; reusable logic must be refactored into common helper functions.
