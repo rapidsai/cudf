@@ -161,36 +161,11 @@ def test_groupby(
 
 
 def test_groupby_sorted_keys(df: pl.LazyFrame, keys, exprs, using_rapidsmpf, request):
-    failing_rapidsmpf_nodeids = {
-        'test_groupby_sorted_keys[col("key1")-]',
-        'test_groupby_sorted_keys[col("key2")-]',
-        'test_groupby_sorted_keys[[(col("key1")) * (col("key2"))]-]',
-        'test_groupby_sorted_keys[[(col("key1")) == (col("key2"))]-[(col("float")) + (col("int"))]]',
-        'test_groupby_sorted_keys[[(col("key1")) == (col("key2"))]-[([(col("float").max()) - (col("int").min())]) + (col("int").max())]]',
-        'test_groupby_sorted_keys[[(col("key1")) == (col("key2"))]-[(col("float")) - (dyn int: 2)].max()]',
-        'test_groupby_sorted_keys[col("key2")-[(col("key1")) == (1)]-[([(col("float").max()) - (col("int").min())]) + (col("int").max())]]',
-        'test_groupby_sorted_keys[[(col("key1")) * (col("key2"))]-col("float").sum().round()0]',
-        'test_groupby_sorted_keys[[(col("key1")) == (col("key2"))]-col("float").is_not_null()]',
-        'test_groupby_sorted_keys[[(col("key1")) == (col("key2"))]-col("uint16_with_null").sum()-col("uint16_with_null").mean().alias("mean")]',
-        'test_groupby_sorted_keys[[(col("key1")) == (col("key2"))]-col("float").mean()-col("int").std()]',
-        'test_groupby_sorted_keys[[(col("key1")) == (col("key2"))]-col("float").sum().round()1]',
-        'test_groupby_sorted_keys[[(col("key1")) == (col("key2"))]-col("float").round().sum()1]',
-        'test_groupby_sorted_keys[col("key2")-[(col("key1")) == (1)]-int]',
-        'test_groupby_sorted_keys[col("key2")-[(col("key1")) == (1)]-[(col("float")) + (col("int"))]]',
-        'test_groupby_sorted_keys[col("key2")-[(col("key1")) == (1)]-col("int32").mean()]',
-        'test_groupby_sorted_keys[col("key2")-[(col("key1")) == (1)]-col("uint16_with_null").sum()-col("uint16_with_null").mean().alias("mean")]',
-        'test_groupby_sorted_keys[col("key2")-[(col("key1")) == (1)]-col("float").round().sum()0]',
-        'test_groupby_sorted_keys[col("key2")-[(col("key1")) == (1)]-col("float").sum().round()1]',
-        'test_groupby_sorted_keys[col("key2")-[(col("key1")) == (1)]-col("float").round().sum()1]',
-        'test_groupby_sorted_keys[col("key2")-[(col("key1")) == (1)]-col("int").sum()-col("string").str.replace(["h", "foo"])]',
-        'test_groupby_sorted_keys[col("key2")-[(col("key1")) == (1)]-col("float").quantile()1]',
-        'test_groupby_sorted_keys[col("key2")-[(col("key1")) == (1)]-col("float").quantile()3]',
-        'test_groupby_sorted_keys[col("key2")-[(col("key1")) == (1)]-col("float").quantile()4]',
-    }
     request.applymarker(
         pytest.mark.xfail(
-            using_rapidsmpf and request.node.name in failing_rapidsmpf_nodeids,
-            reason="https://github.com/rapidsai/cudf/issues/21642",
+            using_rapidsmpf,
+            strict=False,
+            reason="https://github.com/rapidsai/cudf/issues/21642 -  no deterministic sort for keys",
         )
     )
     sorted_keys = [
