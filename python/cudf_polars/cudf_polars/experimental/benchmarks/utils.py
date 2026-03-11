@@ -1448,9 +1448,13 @@ def run_polars_query_iteration(
     expected: pl.DataFrame | None,
     query_result: Any,
     client: Any,
+    prepare_validation_result: Callable[[pl.DataFrame], pl.DataFrame] | None = None,
 ) -> SuccessRecord:
     """Run a single query iteration. Caller must wrap in try/except."""
     result, duration = execute_query(q_id, iteration, q, run_config, args, engine)
+
+    if expected is not None and prepare_validation_result is not None:
+        result = prepare_validation_result(result)
 
     if run_config.shuffle == "rapidsmpf" and run_config.gather_shuffle_stats:
         from rapidsmpf.integrations.dask.shuffler import (
@@ -1502,6 +1506,7 @@ def run_polars_query(
     numeric_type: str,
     date_type: str,
     validation_files: dict[int, Path] | None,
+    prepare_validation_result: Callable[[pl.DataFrame], pl.DataFrame] | None = None,
 ) -> QueryRunResult:
     """Run all iterations for a single query. Caller must wrap in try/except."""
     query_result = getattr(benchmark, f"q{q_id}")(run_config)
@@ -1571,6 +1576,7 @@ def run_polars_query(
                 expected=expected,
                 query_result=query_result,
                 client=client,
+                prepare_validation_result=prepare_validation_result,
             )
         except Exception:
             print(f"❌ query={q_id} iteration={i} failed!")
@@ -1617,6 +1623,7 @@ def _run_query_loop(
     numeric_type: str,
     date_type: str,
     validation_files: dict[int, Path] | None,
+    prepare_validation_result: Callable[[pl.DataFrame], pl.DataFrame] | None = None,
 ) -> tuple[
     defaultdict[int, list[SuccessRecord | FailedRecord]],
     dict[int, Any],
@@ -1641,6 +1648,7 @@ def _run_query_loop(
                 numeric_type=numeric_type,
                 date_type=date_type,
                 validation_files=validation_files,
+                prepare_validation_result=prepare_validation_result,
             )
         except Exception:
             print(f"❌ query={q_id} failed (setup or execution)!")
@@ -1856,7 +1864,19 @@ def run_polars_spmd(
         executor_options=executor_options,
         parquet_options=parquet_options,
         cuda_stream_policy=run_config.stream_policy,
-    ) as (comm, _, engine):
+    ) as (comm, ctx, engine):
+        from cudf_polars.experimental.rapidsmpf.collectives.common import reserve_op_id
+        from cudf_polars.experimental.rapidsmpf.spmd import allgather_polars_dataframe
+
+        def _allgather_result(df: pl.DataFrame) -> pl.DataFrame:
+            with reserve_op_id() as op_id:
+                return allgather_polars_dataframe(
+                    comm=comm,
+                    ctx=ctx,
+                    local_df=df,
+                    op_id=op_id,
+                )
+
         rank = comm.rank
         run_config = dataclasses.replace(run_config, n_workers=comm.nranks)
         records, plans, validation_failures, query_failures = _run_query_loop(
@@ -1868,6 +1888,7 @@ def run_polars_spmd(
             numeric_type,
             date_type,
             validation_files,
+            prepare_validation_result=_allgather_result,
         )
     run_config = dataclasses.replace(run_config, records=dict(records), plans=plans)
     # Only rank 0 writes output and prints summaries to avoid N duplicate outputs.
