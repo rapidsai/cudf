@@ -11,7 +11,8 @@ from rapidsmpf.integrations.cudf.partition import (
     split_and_pack as py_split_and_pack,
     unpack_and_concat as py_unpack_and_concat,
 )
-from rapidsmpf.streaming.coll.shuffler import PartitionAssignment, ShufflerAsync
+from rapidsmpf.shuffler import PartitionAssignment
+from rapidsmpf.streaming.coll.shuffler import ShufflerAsync
 from rapidsmpf.streaming.core.actor import define_actor
 from rapidsmpf.streaming.core.message import Message
 from rapidsmpf.streaming.cudf.channel_metadata import (
