@@ -70,7 +70,9 @@ def lower_distinct(
     """
     subset: frozenset[str] = ir.subset or frozenset(ir.schema)
     distinct_keys = tuple(
-        NamedExpr(name, Col(ir.schema[name], name)) for name in subset
+        NamedExpr(name, Col(ir.schema[name], name))
+        for name in ir.schema
+        if name in subset
     )
 
     child_count = partition_info[child].count
@@ -144,7 +146,9 @@ def _(
     child_count = partition_info[child].count
     subset: frozenset[str] = ir.subset or frozenset(ir.schema)
     distinct_keys = tuple(
-        NamedExpr(name, Col(ir.schema[name], name)) for name in subset
+        NamedExpr(name, Col(ir.schema[name], name))
+        for name in ir.schema
+        if name in subset
     )
 
     config_options = rec.state["config_options"]
