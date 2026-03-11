@@ -117,7 +117,13 @@ def test_shift_by_expression_last():
     assert_gpu_result_equal(q)
 
 
-def test_shift_by_expression_get():
+def test_shift_by_expression_get(using_rapidsmpf, request):
+    request.applymarker(
+        pytest.mark.xfail(
+            using_rapidsmpf,
+            reason="Shifts by 1 instead of 2 for rapidsmpf runtime",
+        )
+    )
     df = pl.LazyFrame({"a": [1, 2, 3, 4, 5], "b": [2, 2, 2, 2, 2]})
     q = df.select(pl.col("a").shift(n=pl.col("b").get(2)))
     assert_gpu_result_equal(q)
