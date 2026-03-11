@@ -227,7 +227,7 @@ def assert_tpch_result_equal(
         left_sorted = left.sort(by=non_float_columns)
         right_sorted = right.sort(by=non_float_columns)
 
-        if limit is None:
+        if limit is None or left.is_empty():
             try:
                 polars.testing.assert_frame_equal(
                     left_sorted,
