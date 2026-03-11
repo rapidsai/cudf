@@ -396,6 +396,8 @@ TEST_P(SemiAntiJoinTest, SemiJoinEmptyTables)
 TEST_P(SemiAntiJoinTest, AntiSemiJoinLargeExtentOverflowPrevention)
 {
   auto const build_side = GetParam();
+  // The LEFT build-side mark_join path can require up to 20 GB of device memory,
+  // so skip it on purpose. TODO: undo this skip once all CI GPUs support >20 GB.
   if (build_side == cudf::set_as_build_table::LEFT) { GTEST_SKIP(); }
   // Test validates size_t extent can handle bucket storage sizes that would
   // overflow int32_t extent when compute_bucket_storage_size() uses low load factors
