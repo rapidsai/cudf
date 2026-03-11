@@ -521,7 +521,7 @@ def _key_indices(ir: GroupBy | Distinct, schema: Schema) -> tuple[int, ...]:
         return tuple(schema_keys[k] for k in groupby_key_names)
     else:
         subset = ir.subset or frozenset(ir.schema)
-        return tuple(schema_keys[k] for k in subset)
+        return tuple(schema_keys[k] for k in schema if k in subset)
 
 
 def _require_tree(ir: GroupBy | Distinct) -> bool:
