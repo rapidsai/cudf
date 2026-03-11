@@ -15,6 +15,7 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/exec_policy.hpp>
 
 #include <cuda/std/bit>
 #include <cuda/std/cmath>
