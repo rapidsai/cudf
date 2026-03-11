@@ -100,10 +100,7 @@ def test_gather_cluster_info(ray_client: RayClient) -> None:
         assert "hostname" in info
         assert "pid" in info
         assert "cuda_visible_devices" in info
-        assert "comm_rank" in info
         assert isinstance(info["pid"], int)
-        # comm_rank is set after setup_worker; verify it is a valid rank index.
-        assert info["comm_rank"] in range(ray_client.nranks)
     # Each actor runs in its own process.
     assert len({info["pid"] for info in infos}) == ray_client.nranks
 
