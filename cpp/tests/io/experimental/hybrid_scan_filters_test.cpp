@@ -1193,9 +1193,9 @@ TEST_F(HybridScanFiltersTest, FilterRowGroupsWithDictionary)
 template <typename T>
 struct RowGroupFilteringWithDictTest : public HybridScanFiltersTest {};
 
-// Booleans are not supported for dictionary based filtering
+// Booleans and fixed-point types are not supported for dictionary based filtering
 using DictionaryTestTypes =
-  cudf::test::RemoveIf<cudf::test::ContainedIn<cudf::test::Types<bool>>, SupportedTestTypes>;
+  cudf::test::RemoveIf<cudf::test::ContainedIn<cudf::test::Types<bool>>, SupportedTestTypesJIT>;
 
 TYPED_TEST_SUITE(RowGroupFilteringWithDictTest, DictionaryTestTypes);
 

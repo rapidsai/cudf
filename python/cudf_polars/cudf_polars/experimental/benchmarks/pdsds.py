@@ -290,6 +290,11 @@ class PDSDSPolarsQueries(PDSDSQueries):
             pl.col("store_qty").cast(pl.Int64),
             pl.col("other_chan_qty").cast(pl.Int64),
         ],
+        83: [
+            pl.col("sr_item_qty").cast(pl.Int64),
+            pl.col("cr_item_qty").cast(pl.Int64),
+            pl.col("wr_item_qty").cast(pl.Int64),
+        ],
         94: [pl.col("order count").cast(COUNT_DTYPE)],
         95: [pl.col("order count").cast(COUNT_DTYPE)],
         96: [pl.col("count_star()").cast(COUNT_DTYPE)],
