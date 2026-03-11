@@ -22,9 +22,11 @@
 
 #include <cooperative_groups.h>
 #include <cooperative_groups/reduce.h>
+#include <cub/device/device_transform.cuh>
 #include <cuco/detail/open_addressing/kernels.cuh>
 #include <cuco/static_multiset_ref.cuh>
 #include <cuda/atomic>
+#include <cuda/functional>
 #include <cuda/iterator>
 #include <thrust/copy.h>
 #include <thrust/sequence.h>
@@ -289,10 +291,8 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> mark_join::mark_probe_and_
 
   auto materialize_probe_rows = [&](auto const& probe_iter) {
     rmm::device_uvector<probe_key_type> probe_rows(probe.num_rows(), stream);
-    thrust::copy(rmm::exec_policy_nosync(stream),
-                 probe_iter,
-                 probe_iter + probe.num_rows(),
-                 probe_rows.begin());
+    cub::DeviceTransform::Transform(
+      probe_iter, probe_rows.begin(), probe.num_rows(), cuda::std::identity{}, stream.value());
     return probe_rows;
   };
 
@@ -396,8 +396,8 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> mark_join::mark_probe_and_
     auto const bitmask_buffer_and_ptr = build_row_bitmask(_build, stream);
     auto const row_bitmask_ptr        = bitmask_buffer_and_ptr.second;
     thrust::copy_if(rmm::exec_policy_nosync(stream),
-                    thrust::counting_iterator<size_type>(0),
-                    thrust::counting_iterator<size_type>(_build.num_rows()),
+                    cuda::counting_iterator{size_type{0}},
+                    cuda::counting_iterator{_build.num_rows()},
                     result.begin() + unmatched_valid,
                     row_is_null{row_bitmask_ptr});
   }
@@ -437,7 +437,7 @@ mark_join::mark_join(cudf::table_view const& build,
         <<<grid_size, cuco::detail::default_block_size(), 0, stream.value()>>>(
           build_iter,
           _build.num_rows(),
-          thrust::counting_iterator<size_type>{0},
+          cuda::counting_iterator{size_type{0}},
           row_is_valid{row_bitmask_ptr},
           insert_ref);
     } else {
