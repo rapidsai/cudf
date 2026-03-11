@@ -38,6 +38,7 @@
 
 #include <algorithm>
 #include <limits>
+#include <numeric>
 
 namespace cudf::io::parquet::experimental::detail {
 
@@ -910,7 +911,7 @@ std::unique_ptr<cudf::column> aggregate_reader_metadata::build_row_mask_with_pag
     [&](auto col_idx) {
       auto const schema_idx = output_column_schemas[col_idx];
       auto const& dtype     = output_dtypes[col_idx];
-      // Only participating columns and comparable types except fixed point are supported
+      // Only participating columns and comparable types are supported
       if (not stats_columns_mask[col_idx] or
           (cudf::is_compound(dtype) && dtype.id() != cudf::type_id::STRING)) {
         // Placeholder for unsupported types and non-participating columns
