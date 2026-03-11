@@ -20,28 +20,28 @@ cluster) and differ only in how the user script interacts with them.
 ### SPMD mode
 
 The user script runs on **all N workers simultaneously**. There is no separate
-client — every process is both driver and worker.
+client — every process is both client and worker.
 
 ```
-  rank 0                rank 1          ...     rank N-1
+       rank 0               rank 1       ...      rank N-1
 ┌─────────────────┐  ┌─────────────────┐     ┌─────────────────┐
 │   User script   │  │   User script   │     │   User script   │
 │ (same code on   │  │ (same code on   │     │ (same code on   │
 │  every rank)    │  │  every rank)    │     │  every rank)    │
 └────────┬────────┘  └────────┬────────┘     └────────┬────────┘
-         │                    │                        │
-         │     LazyFrame.collect(engine=engine)        │
-         ↓                    ↓                        ↓
+         │                    │                       │
+         │     LazyFrame.collect(engine=engine)       │
+         ↓                    ↓                       ↓
 ┌─────────────────┐  ┌─────────────────┐     ┌─────────────────┐
 │     run IR      │  │     run IR      │     │     run IR      │
 └────────┬────────┘  └────────┬────────┘     └────────┬────────┘
-         │                    │                        │
-         ↓                    ↓                        ↓
+         │                    │                       │
+         ↓                    ↓                       ↓
 ┌────────────────────────────────────────────────────────────────┐
 │                     RapidsMPF streaming engine                 │
 │   shuffle / all-gather · UCXX communicator · RMM GPU memory    │
 └────────────────────────────────────────────────────────────────┘
-         ↑                    ↑                        ↑
+         ↑                    ↑                       ↑
       GPU 0                GPU 1                   GPU N-1
 ```
 
@@ -50,13 +50,13 @@ assemble the full dataset on every rank.
 
 ### Ray mode
 
-A single driver script dispatches work to N `RankActor` Ray actors (one per
-GPU). The driver never touches a GPU directly.
+A single client script dispatches work to N `RankActor` Ray actors (one per
+GPU). The client never touches a GPU directly.
 
 ```
                  ┌──────────────────────────────┐
                  │        User script           │
-                 │   (single driver process)    │
+                 │   (single client process)    │
                  │  LazyFrame.collect(engine=…) │
                  └──────────────┬───────────────┘
                                 │ IR dispatched to all actors
@@ -76,13 +76,13 @@ GPU). The driver never touches a GPU directly.
              GPU 0            GPU 1            GPU N-1
 ```
 
-Per-rank output fragments are concatenated on the driver before being returned.
+Per-rank output fragments are concatenated on the client before being returned.
 No `allgather` step is needed.
 
 ### Key insight — why client modes exist
 
 In SPMD mode every process runs the same code, which is unfamiliar to users
-accustomed to single-process or Dask-style driver/worker workflows. Client
+accustomed to single-process or Dask-style client/worker workflows. Client
 frontends such as Ray let users write a normal single-process script while the
 cluster handles distribution transparently. The underlying engine is unchanged;
 only the dispatch layer differs. Future frontends (Dask, custom clients) can
@@ -96,7 +96,7 @@ target the same SPMD cluster without modifying the engine.
 
 The user script is launched with `rrun -n N python script.py`. `rrun` starts N
 identical processes, each pinned to one GPU. There is no separate client
-process — every process runs the full script, acting simultaneously as driver
+process — every process runs the full script, acting simultaneously as client
 and worker on its rank-local data.
 
 Because every rank runs independent Python, a `pl.DataFrame` is always
@@ -200,10 +200,10 @@ Reserved `engine_kwargs` keys: `"memory_resource"`, `"executor"`.
 
 ### Execution model
 
-The user runs a single driver script. `ray_execution()` creates N `RankActor`
+The user runs a single client script. `ray_execution()` creates N `RankActor`
 Ray remote actors — one per available GPU. The actors form a private SPMD
-cluster; the driver dispatches Polars IR to them and receives concatenated
-results directly, with no `allgather` step needed on the client.
+cluster; the client dispatches Polars IR to them and receives concatenated
+results directly, with no `allgather` step needed.
 
 ### Bootstrapping
 
@@ -222,7 +222,7 @@ results directly, with no `allgather` step needed on the client.
 Ray's resource scheduler assigns `num_gpus=1` to each `RankActor` before the
 actor process starts, setting `CUDA_VISIBLE_DEVICES` automatically. The
 `RAY_ACCEL_ENV_VAR_OVERRIDE_ON_ZERO=0` environment variable prevents Ray from
-overriding `CUDA_VISIBLE_DEVICES` to empty on the driver process (which has
+overriding `CUDA_VISIBLE_DEVICES` to empty on the client process (which has
 zero GPUs assigned).
 
 For hardware placement details, see [Section 5](#5-hardware-mapping-gpu-pinning).
@@ -277,7 +277,7 @@ with ray_execution() as (ray_client, engine):
         .agg(pl.col("value").sum())
         .collect(engine=engine)
     )
-    # result is the full concatenated output, returned directly to the driver
+    # result is the full concatenated output, returned directly to the client
     print(result)
 ```
 
