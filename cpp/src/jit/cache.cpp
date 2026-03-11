@@ -136,10 +136,10 @@ bool jit::program_cache::is_enabled() const { return !_disabled.load(std::memory
 
 std::unique_ptr<jit::program_cache> jit::program_cache::create()
 {
-  auto kernel_limit_proc = getenv_or("LIBCUDF_KERNEL_CACHE_LIMIT_PER_PROCESS", 10'000);
-  auto kernel_limit_disk = getenv_or("LIBCUDF_KERNEL_CACHE_LIMIT_DISK", 100'000);
-  auto disabled          = get_bool_env_or("LIBCUDF_KERNEL_CACHE_DISABLED", false);
-  auto clear_cache       = get_bool_env_or("LIBCUDF_KERNEL_CACHE_CLEAR", false);
+  auto const kernel_limit_proc = getenv_or("LIBCUDF_KERNEL_CACHE_LIMIT_PER_PROCESS", 10'000);
+  auto const kernel_limit_disk = getenv_or("LIBCUDF_KERNEL_CACHE_LIMIT_DISK", 100'000);
+  auto const disabled          = get_bool_env_or("LIBCUDF_KERNEL_CACHE_DISABLED", false);
+  auto const clear_cache       = get_bool_env_or("LIBCUDF_KERNEL_CACHE_CLEAR", false);
 
   // if kernel_limit_disk is zero, jitify will assign it the value of kernel_limit_proc.
   // to avoid this, we treat zero as "disable disk caching" by not providing the cache dir.
