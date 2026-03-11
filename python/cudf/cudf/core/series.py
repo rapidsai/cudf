@@ -1274,7 +1274,18 @@ class Series(SingleColumnFrame, IndexedFrame):
             result.name = self.name
             result.index = self.index
         elif arg is str or _is_simple_str_lambda(arg):
-            result = self.astype(str)
+            if self.dtype.kind == "M":
+                from cudf.core.column.datetime import (
+                    _dtype_to_format_conversion,
+                )
+
+                result = self.dt.strftime(
+                    _dtype_to_format_conversion.get(
+                        self.dtype.name, "%Y-%m-%d %H:%M:%S"
+                    )
+                )
+            else:
+                result = self.astype(str)
         else:
             result = self.apply(arg)
         return result
