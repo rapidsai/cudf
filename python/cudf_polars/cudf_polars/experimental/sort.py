@@ -129,7 +129,8 @@ def find_sort_splits(
         .then(pl.col("last"))
         .otherwise(pl.col("first") if chunk_relative else pl.col("local_row"))
     )
-    return df.select(out).to_series().to_list()
+    cap = tbl.num_rows()
+    return sorted([min(max(s, 0), cap) for s in df.select(out).to_series().to_list()])
 
 
 def _select_local_split_candidates(
