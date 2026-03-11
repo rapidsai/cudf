@@ -1,9 +1,10 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf/contiguous_split.hpp>
+#include <cudf/detail/utilities/cuda_memcpy.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/data_sink.hpp>
 #include <cudf/io/datasource.hpp>
@@ -102,11 +103,8 @@ packed_table read_cudftable(datasource* source,
       data_offset, header.data_length, static_cast<uint8_t*>(packed.gpu_data->data()), stream);
   } else {
     auto host_buffer = source->host_read(data_offset, header.data_length);
-    CUDF_CUDA_TRY(cudaMemcpyAsync(packed.gpu_data->data(),
-                                  host_buffer->data(),
-                                  header.data_length,
-                                  cudaMemcpyHostToDevice,
-                                  stream.value()));
+    CUDF_CUDA_TRY(cudf::detail::memcpy_async(
+      packed.gpu_data->data(), host_buffer->data(), header.data_length, stream));
     stream.synchronize();
   }
 

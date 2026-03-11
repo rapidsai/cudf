@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import pytest
 from rapidsmpf.streaming.cudf.channel_metadata import (
-    ChannelMetadata,
     HashScheme,
     Partitioning,
 )
@@ -19,7 +18,7 @@ from cudf_polars.dsl import expr
 from cudf_polars.dsl.ir import Projection, Select
 from cudf_polars.experimental.rapidsmpf.core import evaluate_logical_plan
 from cudf_polars.experimental.rapidsmpf.utils import (
-    get_partitioning_moduli,
+    NormalizedPartitioning,
     maybe_remap_partitioning,
 )
 from cudf_polars.testing.asserts import (
@@ -69,6 +68,7 @@ def test_rapidsmpf_join_metadata(
             "broadcast_join_limit": broadcast_join_limit,
             "cluster": DEFAULT_CLUSTER,
             "runtime": DEFAULT_RUNTIME,
+            "dynamic_planning": None,  # Requires static planning
         },
     )
     config_options = ConfigOptions.from_polars_engine(engine)
@@ -102,19 +102,17 @@ def test_rapidsmpf_join_metadata(
 
 
 @pytest.mark.parametrize(
-    "local_count,partitioning,key_indices,nranks,expected",
+    "partitioning,key_indices,nranks,expected",
     [
-        (4, None, (0, 1), 1, (1, 0)),
-        (4, None, (0, 1), 4, (0, 0)),
+        (None, (0, 1), 1, (1, 0)),
+        (None, (0, 1), 4, (0, 0)),
         (
-            8,
             Partitioning(inter_rank=HashScheme((0, 1), 8), local="inherit"),
             (0, 1),
             4,
             (8, None),
         ),
         (
-            4,
             Partitioning(
                 inter_rank=HashScheme((0, 1), 8),
                 local=HashScheme((0, 1), 4),
@@ -124,7 +122,6 @@ def test_rapidsmpf_join_metadata(
             (8, 4),
         ),
         (
-            8,
             Partitioning(
                 inter_rank=HashScheme((0, 1), 8),
                 local=HashScheme((0,), 4),
@@ -134,31 +131,18 @@ def test_rapidsmpf_join_metadata(
             (8, 0),
         ),
         (
-            8,  # local_count != local modulus
-            Partitioning(
-                inter_rank=HashScheme((0, 1), 8),
-                local=HashScheme((0, 1), 4),
-            ),
-            (0, 1),
-            4,
-            (8, 0),
-        ),
-        (
-            8,
             Partitioning(inter_rank=HashScheme((0,), 8), local="inherit"),
             (0, 1),
             4,
             (0, 0),
         ),
         (
-            8,
             Partitioning(inter_rank=HashScheme((1, 0), 8), local="inherit"),
             (0, 1),
             4,
             (0, 0),
         ),
         (
-            4,
             Partitioning(
                 inter_rank=None,
                 local=HashScheme((0, 1), 4),
@@ -168,7 +152,6 @@ def test_rapidsmpf_join_metadata(
             (4, None),
         ),
         (
-            4,
             Partitioning(
                 inter_rank=None,
                 local=HashScheme((0, 1), 4),
@@ -178,7 +161,6 @@ def test_rapidsmpf_join_metadata(
             (0, 0),
         ),
         (
-            8,
             Partitioning(
                 inter_rank=HashScheme((0, 1), 8),
                 local=None,
@@ -189,23 +171,19 @@ def test_rapidsmpf_join_metadata(
         ),
     ],
 )
-def test_get_partitioning_moduli(
-    local_count, partitioning, key_indices, nranks, expected
-) -> None:
-    """get_partitioning_moduli returns (inter_rank_modulus, local_modulus)."""
-    metadata = ChannelMetadata(
-        local_count=local_count,
-        partitioning=partitioning,
+def test_get_partitioning_moduli(partitioning, key_indices, nranks, expected) -> None:
+    """NormalizedPartitioning.from_indices returns (inter_rank_modulus, local_modulus) (allow_subset=False)."""
+    state = NormalizedPartitioning.from_indices(
+        partitioning, nranks, indices=key_indices, allow_subset=False
     )
-    assert get_partitioning_moduli(metadata, key_indices, nranks) == expected
+    assert (state.inter_rank_modulus, state.local_modulus) == expected
 
 
 @pytest.mark.parametrize(
-    "local_count,partitioning,key_indices,nranks,expected",
+    "partitioning,key_indices,nranks,expected",
     [
         # Partitioned on (0,); keys (0, 1) → prefix (0,) matches
         (
-            8,
             Partitioning(inter_rank=HashScheme((0,), 8), local="inherit"),
             (0, 1),
             4,
@@ -213,7 +191,6 @@ def test_get_partitioning_moduli(
         ),
         # Partitioned on (0, 1); keys (0, 1, 2) → prefix (0, 1) matches
         (
-            8,
             Partitioning(inter_rank=HashScheme((0, 1), 8), local="inherit"),
             (0, 1, 2),
             4,
@@ -221,7 +198,6 @@ def test_get_partitioning_moduli(
         ),
         # Partitioned on (0,) with explicit local; keys (0, 1) → prefix matches
         (
-            4,
             Partitioning(
                 inter_rank=HashScheme((0,), 8),
                 local=HashScheme((0,), 4),
@@ -232,7 +208,6 @@ def test_get_partitioning_moduli(
         ),
         # Full key match with allow_subset: same as exact match
         (
-            8,
             Partitioning(inter_rank=HashScheme((0, 1), 8), local="inherit"),
             (0, 1),
             4,
@@ -240,7 +215,6 @@ def test_get_partitioning_moduli(
         ),
         # Keys (0,) are shorter than partition (0, 1) → no prefix match
         (
-            8,
             Partitioning(inter_rank=HashScheme((0, 1), 8), local="inherit"),
             (0,),
             4,
@@ -248,7 +222,6 @@ def test_get_partitioning_moduli(
         ),
         # Partitioned on (1,); keys (0, 1) → prefix of keys is (0,), not (1,) → no match
         (
-            8,
             Partitioning(inter_rank=HashScheme((1,), 8), local="inherit"),
             (0, 1),
             4,
@@ -257,17 +230,13 @@ def test_get_partitioning_moduli(
     ],
 )
 def test_get_partitioning_moduli_allow_subset(
-    local_count, partitioning, key_indices, nranks, expected
+    partitioning, key_indices, nranks, expected
 ) -> None:
-    """get_partitioning_moduli with allow_subset=True matches on prefix of key_indices."""
-    metadata = ChannelMetadata(
-        local_count=local_count,
-        partitioning=partitioning,
+    """NormalizedPartitioning.from_indices with allow_subset=True matches on prefix of key_indices."""
+    state = NormalizedPartitioning.from_indices(
+        partitioning, nranks, indices=key_indices, allow_subset=True
     )
-    assert (
-        get_partitioning_moduli(metadata, key_indices, nranks, allow_subset=True)
-        == expected
-    )
+    assert (state.inter_rank_modulus, state.local_modulus) == expected
 
 
 def _make_select_ir(engine: pl.GPUEngine, output_columns: tuple[str, ...]):

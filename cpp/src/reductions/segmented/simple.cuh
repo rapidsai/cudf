@@ -348,7 +348,7 @@ struct same_column_type_dispatcher {
                                      rmm::cuda_stream_view stream,
                                      rmm::device_async_resource_ref mr)
   {
-    if (init.has_value()) { CUDF_FAIL("Initial value not supported for strings"); }
+    CUDF_EXPECTS(!init.has_value(), "Initial value not supported for strings");
 
     return string_segmented_reduction<ElementType, Op>(col, offsets, null_handling, stream, mr);
   }

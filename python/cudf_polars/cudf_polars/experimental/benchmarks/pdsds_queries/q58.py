@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
-from cudf_polars.experimental.benchmarks.utils import get_data
+from cudf_polars.experimental.benchmarks.utils import QueryResult, get_data
 
 if TYPE_CHECKING:
     from cudf_polars.experimental.benchmarks.utils import RunConfig
@@ -119,7 +119,7 @@ def _build_sales_agg(
     )
 
 
-def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
+def polars_impl(run_config: RunConfig) -> QueryResult:
     """Query 58."""
     params = load_parameters(
         int(run_config.scale_factor),
@@ -174,77 +174,89 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         "ws_item_rev",
     )
 
-    return (
-        ss_items.join(cs_items, on="item_id", how="inner")
-        .join(ws_items, on="item_id", how="inner")
-        .filter(
-            (
-                pl.col("ss_item_rev").is_between(
-                    0.9 * pl.col("cs_item_rev"), 1.1 * pl.col("cs_item_rev")
-                )
-            )
-            & (
-                pl.col("ss_item_rev").is_between(
-                    0.9 * pl.col("ws_item_rev"), 1.1 * pl.col("ws_item_rev")
-                )
-            )
-            & (
-                pl.col("cs_item_rev").is_between(
-                    0.9 * pl.col("ss_item_rev"), 1.1 * pl.col("ss_item_rev")
-                )
-            )
-            & (
-                pl.col("cs_item_rev").is_between(
-                    0.9 * pl.col("ws_item_rev"), 1.1 * pl.col("ws_item_rev")
-                )
-            )
-            & (
-                pl.col("ws_item_rev").is_between(
-                    0.9 * pl.col("ss_item_rev"), 1.1 * pl.col("ss_item_rev")
-                )
-            )
-            & (
-                pl.col("ws_item_rev").is_between(
-                    0.9 * pl.col("cs_item_rev"), 1.1 * pl.col("cs_item_rev")
-                )
-            )
-        )
-        .with_columns(
-            [
+    sort_by = {"item_id": False, "ss_item_rev": False}
+    limit = 100
+    return QueryResult(
+        frame=(
+            ss_items.join(cs_items, on="item_id", how="inner")
+            .join(ws_items, on="item_id", how="inner")
+            .filter(
                 (
-                    pl.col("ss_item_rev")
-                    + pl.col("cs_item_rev")
-                    + pl.col("ws_item_rev")
-                ).alias("total_rev"),
-                (
+                    pl.col("ss_item_rev").is_between(
+                        0.9 * pl.col("cs_item_rev"), 1.1 * pl.col("cs_item_rev")
+                    )
+                )
+                & (
+                    pl.col("ss_item_rev").is_between(
+                        0.9 * pl.col("ws_item_rev"), 1.1 * pl.col("ws_item_rev")
+                    )
+                )
+                & (
+                    pl.col("cs_item_rev").is_between(
+                        0.9 * pl.col("ss_item_rev"), 1.1 * pl.col("ss_item_rev")
+                    )
+                )
+                & (
+                    pl.col("cs_item_rev").is_between(
+                        0.9 * pl.col("ws_item_rev"), 1.1 * pl.col("ws_item_rev")
+                    )
+                )
+                & (
+                    pl.col("ws_item_rev").is_between(
+                        0.9 * pl.col("ss_item_rev"), 1.1 * pl.col("ss_item_rev")
+                    )
+                )
+                & (
+                    pl.col("ws_item_rev").is_between(
+                        0.9 * pl.col("cs_item_rev"), 1.1 * pl.col("cs_item_rev")
+                    )
+                )
+            )
+            .with_columns(
+                [
                     (
                         pl.col("ss_item_rev")
                         + pl.col("cs_item_rev")
                         + pl.col("ws_item_rev")
-                    )
-                    / 3
-                ).alias("average"),
-            ]
-        )
-        .with_columns(
-            [
-                (pl.col("ss_item_rev") / pl.col("total_rev") / 3 * 100).alias("ss_dev"),
-                (pl.col("cs_item_rev") / pl.col("total_rev") / 3 * 100).alias("cs_dev"),
-                (pl.col("ws_item_rev") / pl.col("total_rev") / 3 * 100).alias("ws_dev"),
-            ]
-        )
-        .select(
-            [
-                "item_id",
-                "ss_item_rev",
-                "ss_dev",
-                "cs_item_rev",
-                "cs_dev",
-                "ws_item_rev",
-                "ws_dev",
-                "average",
-            ]
-        )
-        .sort(["item_id", "ss_item_rev"], nulls_last=True)
-        .limit(100)
+                    ).alias("total_rev"),
+                    (
+                        (
+                            pl.col("ss_item_rev")
+                            + pl.col("cs_item_rev")
+                            + pl.col("ws_item_rev")
+                        )
+                        / 3
+                    ).alias("average"),
+                ]
+            )
+            .with_columns(
+                [
+                    (pl.col("ss_item_rev") / pl.col("total_rev") / 3 * 100).alias(
+                        "ss_dev"
+                    ),
+                    (pl.col("cs_item_rev") / pl.col("total_rev") / 3 * 100).alias(
+                        "cs_dev"
+                    ),
+                    (pl.col("ws_item_rev") / pl.col("total_rev") / 3 * 100).alias(
+                        "ws_dev"
+                    ),
+                ]
+            )
+            .select(
+                [
+                    "item_id",
+                    "ss_item_rev",
+                    "ss_dev",
+                    "cs_item_rev",
+                    "cs_dev",
+                    "ws_item_rev",
+                    "ws_dev",
+                    "average",
+                ]
+            )
+            .sort(sort_by.keys(), nulls_last=True)
+            .limit(limit)
+        ),
+        sort_by=list(sort_by.items()),
+        limit=limit,
     )

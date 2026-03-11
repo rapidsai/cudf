@@ -1,12 +1,11 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <benchmarks/common/generate_input.hpp>
 #include <benchmarks/common/nvbench_utilities.hpp>
 
-#include <cudf/detail/null_mask.cuh>
 #include <cudf/null_mask.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
@@ -17,13 +16,6 @@
 namespace {
 
 constexpr float null_probability = 0.5;
-
-struct anding {
-  __device__ cudf::bitmask_type operator()(cudf::bitmask_type left, cudf::bitmask_type right)
-  {
-    return left & right;
-  }
-};
 
 auto setup_masks(nvbench::state& state)
 {
@@ -81,13 +73,7 @@ void BM_segmented_bitmask_and(nvbench::state& state)
   state.add_element_count(data_bytes, "input size");
   state.template add_global_memory_reads<nvbench::int8_t>(data_bytes);
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
-    auto result = cudf::detail::segmented_bitmask_binop(anding{},
-                                                        mask_pointers,
-                                                        mask_begin_bits,
-                                                        mask_size_bits,
-                                                        segments,
-                                                        cudf::get_default_stream(),
-                                                        cudf::get_current_device_resource_ref());
+    auto result = cudf::segmented_bitmask_and(mask_pointers, segments, mask_size_bits);
   });
   set_throughputs(state);
 }
@@ -106,13 +92,10 @@ void BM_multi_segment_bitmask_and(nvbench::state& state)
     for (size_t i = 0; i < num_segments; i++) {
       auto segment_size = segments[i + 1] - segments[i];
       if (segment_size) {
-        auto result = cudf::detail::bitmask_binop(
-          anding{},
+        auto result = cudf::bitmask_and(
           cudf::host_span<cudf::bitmask_type*>(mask_pointers.data() + segments[i], segment_size),
           cudf::host_span<cudf::size_type>(mask_begin_bits.data() + segments[i], segment_size),
-          mask_size_bits,
-          cudf::get_default_stream(),
-          cudf::get_current_device_resource_ref());
+          mask_size_bits);
       }
     }
   });

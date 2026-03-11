@@ -17,9 +17,12 @@ import cudf
 from cudf.api.types import is_scalar
 from cudf.core.column.column import (
     ColumnBase,
+    ColumnList,
+    PylibcudfFunction,
     as_column,
     column_empty,
     concat_columns,
+    same_dtype_policy,
 )
 from cudf.core.column.utils import access_columns
 from cudf.core.dtypes import CategoricalDtype, IntervalDtype
@@ -60,14 +63,15 @@ _DEFAULT_CATEGORICAL_VALUE = np.int8(-1)
 
 def _sort_column(col: ColumnBase) -> ColumnBase:
     """Sort a column in ascending order with nulls after."""
-    with col.access(mode="read", scope="internal"):
-        table = plc.Table([col.plc_column])
-        sorted_table = plc.sorting.sort(
-            table,
-            column_order=[plc.types.Order.ASCENDING],
-            null_precedence=[plc.types.NullOrder.AFTER],
-        )
-    return ColumnBase.create(sorted_table.columns()[0], col.dtype)
+    return PylibcudfFunction(
+        plc.sorting.sort,
+        same_dtype_policy,
+        result_index=0,
+    ).execute_with_args(
+        ColumnList(col),
+        column_order=[plc.types.Order.ASCENDING],
+        null_precedence=[plc.types.NullOrder.AFTER],
+    )
 
 
 class CategoricalColumn(ColumnBase):
@@ -331,11 +335,11 @@ class CategoricalColumn(ColumnBase):
             if self.size > 0
             else np.dtype(np.int8)
         )
+        assert self.ordered is not None
         return pa.DictionaryArray.from_arrays(
             self.codes.astype(signed_type).to_arrow(),
             self.categories.to_arrow(),
-            # TODO: Investigate if self.ordered can actually be None here
-            ordered=self.ordered if self.ordered is not None else False,
+            ordered=self.ordered,
         )
 
     def clip(self, lo: ScalarLike, hi: ScalarLike) -> Self:
