@@ -240,21 +240,6 @@ fetch_byte_ranges_to_device_async(
       switch (op.method) {
         case io_method::GDS_DEVICE:
         case io_method::PLAIN_DEVICE:
-#if 0
-          if ((op.src_offset % 4096) or (op.read_size % 4096) or
-              (reinterpret_cast<uintptr_t>(op.dest) % 4096)) {
-            if (op.method == io_method::PLAIN_DEVICE) {
-              std::cout << "io_method: PLAIN_DEVICE" << std::endl;
-            } else if (op.method == io_method::GDS_DEVICE) {
-              std::cout << "io_method: GDS_DEVICE" << std::endl;
-            }
-            std::cout << std::boolalpha << "is 4K aligned: " << !(op.src_offset % 4096) << ", "
-                      << !(op.read_size % 4096) << ", "
-                      << !(reinterpret_cast<uintptr_t>(op.dest) % 4096) << std::endl;
-          }
-          std::cout << "reading: " << op.read_size << " bytes from " << op.src_offset << " to "
-                    << reinterpret_cast<uintptr_t>(op.dest) << std::endl;
-#endif
           device_read_tasks.emplace_back(
             datasource.device_read_async(op.src_offset, op.read_size, op.dest, stream));
           break;
