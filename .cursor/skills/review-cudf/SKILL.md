@@ -40,6 +40,12 @@ gh api repos/rapidsai/cudf/pulls/<PR_NUMBER>/reviews
 > Items marked **(guide)** are covered in detail in the Developer Guide — verify compliance against the guide. Items without the tag are review-specific or derived from codebase patterns.
 
 ### Correctness & Logic
+
+- Core logic implemented by algorithms is clear, correct and coherent.
+- Optimal algorithms and data structures have been employed. For example, use `std::unordered_set` instead of a `std::vector` for mass-queries. 
+- GPU-accelerated algorithms via Thrust, CUB and cuCollections are used for compute-intensive workloads.
+- `cudf::detail::host_worker_pool()` is used for compute or memory intensive parallelizable CPU algorithms.
+- No unnecessary memory usage or leaks, no excessive defensive programming.
 - Algorithms handle edge cases (empty input, single-row, nulls, sliced columns with nonzero offset, unintended fallthrough logic).
 - For recursive and branched algorithms, trace the recursion/branch to ensure no pitfalls, unintended fallthroughs, or unhandled cases.
 - Google Tests and/or Python tests must cover all possible edge cases.
@@ -71,6 +77,8 @@ Verify compliance with the guide sections: **"Directory Structure and File Namin
 
 Additional review-specific items not in the guide:
 - No raw owning pointers; use `std::unique_ptr`, `std::shared_ptr`, `std::reference_wrapper`.
+- Prefer pinned memory/vectors for small H2D and H2D transfers via `cudf::make_pinned_vector` instead of `cudf::make_host_vector`.
+- Prefer `span` versions of constructors for `cudf::make_pinned_vector` and `cudf::make_host_vector`.
 - Functions defined in headers (e.g. templates) must be `inline`.
 - Anonymous namespaces for single-TU helpers; never in headers.
 - Prefer `host_span`/`device_span` over owning vectors unless transferring ownership via rvalue move.
