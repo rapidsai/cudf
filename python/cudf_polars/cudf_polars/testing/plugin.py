@@ -286,7 +286,7 @@ RAPIDSMPF_ONLY_EXPECTED_FAILURES: Mapping[str, str] = {
     "tests/unit/lazyframe/test_optimizations.py::test_is_not_null_followed_by_any": "AssertionError: DataFrames are different (height (row count) mismatch)",
     "tests/unit/lazyframe/test_optimizations.py::test_is_not_null_followed_by_sum": "AssertionError: DataFrames are different (height (row count) mismatch)",
     "tests/unit/sql/test_joins.py::test_cross_join_unnest_from_cte": "RapidsMPF fatal error at: /cpp/src/streaming/cudf/table_chunk.cpp:52: packed data cannot be empty",
-    "tests/unit/sql/test_miscellaneous.py::test_count": "KeyError: '_________________13'",
+    "tests/unit/sql/test_miscellaneous.py::test_count": "https://github.com/rapidsai/cudf/issues/21757",
     "tests/unit/streaming/test_streaming.py::test_streaming_9776": "Type mismatch in columns to concatenate.",
     "tests/unit/operations/test_shift.py::test_shift_fill_value": "https://github.com/rapidsai/cudf/issues/21645",
     "tests/unit/operations/test_shift.py::test_shift_expr": "https://github.com/rapidsai/cudf/issues/21645",
