@@ -274,9 +274,8 @@ void drop_page_cache_if_enabled(std::vector<std::string> const& file_paths)
   }
 
   if (not is_file_scope) {
-    if (not kvikio::drop_system_page_cache()) {
-      CUDF_FAIL("Failed to execute the drop cache command");
-    }
+    auto const is_cache_dropped = kvikio::drop_system_page_cache();
+    CUDF_EXPECTS(is_cache_dropped, "Failed to execute the drop cache command");
     return;
   }
 
