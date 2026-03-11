@@ -112,14 +112,15 @@ def evaluate_pipeline_ray_mode(
         executor=dataclasses.replace(config_options.executor, ray_client=None),
     )
 
+    # ir, partition_info, stats, and collective_id_map must be pickled together
+    # so that the IR-node keys in partition_info / collective_id_map are the
+    # same objects as the nodes in the ir tree after deserialization.
+    query_bundle = (ir, partition_info, stats, collective_id_map)
     result = ray.get(
         [
             rank.evaluate_polars_ir.remote(
-                ir,
-                partition_info,
+                query_bundle,
                 actor_config_options,
-                stats,
-                collective_id_map,
                 collect_metadata=collect_metadata,
             )
             for rank in rank_actors
@@ -264,11 +265,13 @@ class RankActor:
 
     def evaluate_polars_ir(
         self,
-        ir: IR,
-        partition_info: MutableMapping[IR, PartitionInfo],
+        query_bundle: tuple[
+            IR,
+            MutableMapping[IR, PartitionInfo],
+            StatsCollector,
+            dict[IR, list[int]],
+        ],
         config_options: ConfigOptions[StreamingExecutor],
-        stats: StatsCollector,
-        collective_id_map: dict[IR, list[int]],
         *,
         collect_metadata: bool,
     ) -> tuple[pl.DataFrame, list[ChannelMetadata] | None]:
@@ -282,17 +285,14 @@ class RankActor:
 
         Parameters
         ----------
-        ir
-            Root IR node describing the query to execute.
-        partition_info
-            Per-node partition metadata produced by the planner.
+        query_bundle
+            Tuple of ``(ir, partition_info, stats, collective_id_map)``.
+            Bundled into a single argument so that all four objects are
+            pickled together, preserving object identity between IR-node
+            keys in ``partition_info`` / ``collective_id_map`` and the
+            nodes in the ``ir`` tree.
         config_options
             Executor configuration forwarded from the client.
-        stats
-            Statistics collector used during execution.
-        collective_id_map
-            Mapping from IR nodes to their pre-allocated collective operation
-            IDs.
         collect_metadata
             If ``True``, collect channel metadata during execution.
 
@@ -309,6 +309,7 @@ class RankActor:
         AssertionError
             If :meth:`setup_worker` has not been called first.
         """
+        ir, partition_info, stats, collective_id_map = query_bundle
         assert self._ctx is not None, (
             "setup_worker must be called before evaluate_polars_ir"
         )
