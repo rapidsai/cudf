@@ -391,8 +391,10 @@ void run_fixed_width_test(size_t cols,
   auto columns_to_hash = std::vector<cudf::size_type>(cols);
   std::iota(columns_to_hash.begin(), columns_to_hash.end(), 0);
 
-  auto [output1, offsets1] = cudf::hash_partition(input, columns_to_hash, num_partitions);
-  auto [output2, offsets2] = cudf::hash_partition(input, columns_to_hash, num_partitions);
+  auto [output1, offsets1] =
+    cudf::hash_partition(input, columns_to_hash, num_partitions, hash_function);
+  auto [output2, offsets2] =
+    cudf::hash_partition(input, columns_to_hash, num_partitions, hash_function);
 
   // Expect output to have size num_partitions + 1
   EXPECT_EQ(static_cast<size_t>(num_partitions + 1), offsets1.size());
