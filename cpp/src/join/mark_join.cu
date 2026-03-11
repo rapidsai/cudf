@@ -289,8 +289,10 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> mark_join::mark_probe_and_
 {
   CUDF_FUNC_RANGE();
 
-  auto materialize_probe_rows = [&](auto const& probe_iter) {
+  auto materialize_probe_rows = [&](auto const& key_fn) {
     rmm::device_uvector<probe_key_type> probe_rows(probe.num_rows(), stream);
+    auto const probe_iter = cuda::transform_iterator(
+      cuda::counting_iterator{size_type{0}}, cuda::proclaim_return_type<probe_key_type>(key_fn));
     cub::DeviceTransform::Transform(
       probe_iter, probe_rows.begin(), probe.num_rows(), cuda::std::identity{}, stream.value());
     return probe_rows;
@@ -299,15 +301,12 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> mark_join::mark_probe_and_
   rmm::device_uvector<probe_key_type> probe_rows(0, stream);
   if (is_primitive_row_op_compatible(_build)) {
     auto const d_probe_hasher = primitive_row_hasher{nullate::DYNAMIC{true}, preprocessed_probe};
-    auto const probe_iter     = cudf::detail::make_counting_transform_iterator(
-      size_type{0}, masked_key_fn<rhs_index_type, primitive_row_hasher>{d_probe_hasher});
-    probe_rows = materialize_probe_rows(probe_iter);
+    probe_rows =
+      materialize_probe_rows(masked_key_fn<rhs_index_type, primitive_row_hasher>{d_probe_hasher});
   } else {
     auto const d_probe_hasher =
       cudf::detail::row::hash::row_hasher{preprocessed_probe}.device_hasher(nullate::YES{});
-    auto const probe_iter = cudf::detail::make_counting_transform_iterator(
-      size_type{0}, masked_key_fn<rhs_index_type, row_hasher>{d_probe_hasher});
-    probe_rows = materialize_probe_rows(probe_iter);
+    probe_rows = materialize_probe_rows(masked_key_fn<rhs_index_type, row_hasher>{d_probe_hasher});
   }
 
   auto const storage_ref = _bucket_storage.ref();
