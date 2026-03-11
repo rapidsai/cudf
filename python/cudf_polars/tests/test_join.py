@@ -70,20 +70,7 @@ def test_join_maintain_order(left, right, maintain_order):
         ["c", "a"],
     ],
 )
-def test_non_coalesce_join(
-    left, right, how, nulls_equal, join_expr, request, using_rapidsmpf
-):
-    failing_rapidsmpf_nodeids = {
-        "test_non_coalesce_join[full-nulls_not_equal-join_expr1]",
-        "test_non_coalesce_join[left-nulls_equal-join_expr1]",
-        "test_non_coalesce_join[left-nulls_not_equal-join_expr2]",
-    }
-    request.applymarker(
-        pytest.mark.xfail(
-            using_rapidsmpf and request.node.name in failing_rapidsmpf_nodeids,
-            reason="Maybe https://github.com/rapidsai/cudf/issues/21742?",
-        )
-    )
+def test_non_coalesce_join(left, right, how, nulls_equal, join_expr):
     query = left.join(
         right, on=join_expr, how=how, nulls_equal=nulls_equal, coalesce=False
     )
