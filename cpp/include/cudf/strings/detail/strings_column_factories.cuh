@@ -8,7 +8,6 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/valid_if.cuh>
-#include <cudf/strings/detail/gather.cuh>
 #include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/memory_resource.hpp>
@@ -19,12 +18,7 @@
 #include <cuda/functional>
 #include <cuda/std/iterator>
 #include <cuda/std/utility>
-#include <thrust/copy.h>
-#include <thrust/for_each.h>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
-#include <thrust/iterator/zip_iterator.h>
-#include <thrust/transform.h>
 
 namespace cudf {
 namespace strings {
