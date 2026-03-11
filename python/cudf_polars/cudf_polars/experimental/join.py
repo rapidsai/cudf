@@ -34,7 +34,7 @@ def _maybe_shuffle_frame(
     on: tuple[NamedExpr, ...],
     partition_info: MutableMapping[IR, PartitionInfo],
     shuffle_method: ShuffleMethod,
-    output_count: int
+    output_count: int,
 ) -> IR:
     # Shuffle `frame` if it isn't already shuffled.
     if (
