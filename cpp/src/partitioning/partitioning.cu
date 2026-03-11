@@ -923,19 +923,8 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition(
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
-  CUDF_FUNC_RANGE();
-
-  auto table_to_hash = input.select(columns_to_hash);
-
-  switch (hash_function) {
-    case (hash_id::HASH_IDENTITY):
-      return detail::hash_partition<cudf::detail::IdentityHash>(
-        input, table_to_hash, num_partitions, seed, stream, mr);
-    case (hash_id::HASH_MURMUR3):
-      return detail::hash_partition<cudf::hashing::detail::MurmurHash3_x86_32>(
-        input, table_to_hash, num_partitions, seed, stream, mr);
-    default: CUDF_FAIL("Unsupported hash function in hash_partition");
-  }
+  return hash_partition(
+    input, input.select(columns_to_hash), num_partitions, hash_function, seed, stream, mr);
 }
 
 std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition(
