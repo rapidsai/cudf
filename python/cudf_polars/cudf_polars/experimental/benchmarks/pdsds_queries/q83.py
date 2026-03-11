@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
-from cudf_polars.experimental.benchmarks.utils import get_data
+from cudf_polars.experimental.benchmarks.utils import QueryResult, get_data
 
 if TYPE_CHECKING:
     from cudf_polars.experimental.benchmarks.utils import RunConfig
@@ -116,12 +116,23 @@ def q83_segment(
         )
         .join(dates, left_on=returned_date_key, right_on="d_date_sk")
         .group_by("i_item_id")
-        .agg(pl.col(qty_col).sum().alias(out_qty_name))
+        .agg(
+            [
+                pl.col(qty_col).count().alias(f"{out_qty_name}_count"),
+                pl.col(qty_col).sum().alias(f"{out_qty_name}_sum"),
+            ]
+        )
+        .with_columns(
+            pl.when(pl.col(f"{out_qty_name}_count") > 0)
+            .then(pl.col(f"{out_qty_name}_sum"))
+            .otherwise(None)
+            .alias(out_qty_name)
+        )
         .select(["i_item_id", out_qty_name])
     )
 
 
-def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
+def polars_impl(run_config: RunConfig) -> QueryResult:
     """Query 83."""
     params = load_parameters(
         int(run_config.scale_factor),
@@ -180,40 +191,48 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         out_qty_name="wr_item_qty",
     )
 
-    return (
-        sr_items.join(cr_items, on="i_item_id")
-        .join(wr_items, on="i_item_id")
-        .with_columns(
-            (
-                pl.col("sr_item_qty") + pl.col("cr_item_qty") + pl.col("wr_item_qty")
-            ).alias("total_qty")
-        )
-        .with_columns(
-            [
-                (pl.col("total_qty") / 3.0).cast(pl.Float64).alias("average"),
-                (pl.col("sr_item_qty") / pl.col("total_qty") / 3.0 * 100)
-                .cast(pl.Float64)
-                .alias("sr_dev"),
-                (pl.col("cr_item_qty") / pl.col("total_qty") / 3.0 * 100)
-                .cast(pl.Float64)
-                .alias("cr_dev"),
-                (pl.col("wr_item_qty") / pl.col("total_qty") / 3.0 * 100)
-                .cast(pl.Float64)
-                .alias("wr_dev"),
-            ]
-        )
-        .select(
-            [
-                pl.col("i_item_id").alias("item_id"),
-                "sr_item_qty",
-                "sr_dev",
-                "cr_item_qty",
-                "cr_dev",
-                "wr_item_qty",
-                "wr_dev",
-                "average",
-            ]
-        )
-        .sort(["item_id", "sr_item_qty"])
-        .limit(100)
+    sort_by = {"item_id": False, "sr_item_qty": False}
+    limit = 100
+    return QueryResult(
+        frame=(
+            sr_items.join(cr_items, on="i_item_id")
+            .join(wr_items, on="i_item_id")
+            .with_columns(
+                (
+                    pl.col("sr_item_qty")
+                    + pl.col("cr_item_qty")
+                    + pl.col("wr_item_qty")
+                ).alias("total_qty")
+            )
+            .with_columns(
+                [
+                    (pl.col("total_qty") / 3.0).cast(pl.Float64).alias("average"),
+                    (pl.col("sr_item_qty") / pl.col("total_qty") / 3.0 * 100)
+                    .cast(pl.Float64)
+                    .alias("sr_dev"),
+                    (pl.col("cr_item_qty") / pl.col("total_qty") / 3.0 * 100)
+                    .cast(pl.Float64)
+                    .alias("cr_dev"),
+                    (pl.col("wr_item_qty") / pl.col("total_qty") / 3.0 * 100)
+                    .cast(pl.Float64)
+                    .alias("wr_dev"),
+                ]
+            )
+            .select(
+                [
+                    pl.col("i_item_id").alias("item_id"),
+                    "sr_item_qty",
+                    "sr_dev",
+                    "cr_item_qty",
+                    "cr_dev",
+                    "wr_item_qty",
+                    "wr_dev",
+                    "average",
+                ]
+            )
+            .sort(["item_id", "sr_item_qty"], nulls_last=True)
+            .limit(limit)
+        ),
+        sort_by=list(sort_by.items()),
+        limit=limit,
     )
