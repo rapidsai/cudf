@@ -4,6 +4,7 @@
  */
 
 #include "compute_column_kernel.hpp"
+#include "runtime/context.hpp"
 
 #include <cudf/ast/detail/expression_evaluator.cuh>
 #include <cudf/ast/detail/expression_parser.hpp>
@@ -21,8 +22,6 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/mr/device_memory_resource.hpp>
-
-#include "runtime/context.hpp"
 
 #include <algorithm>
 

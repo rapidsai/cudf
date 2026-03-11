@@ -11,8 +11,8 @@
 
 #include <jitify2.hpp>
 
-#include <filesystem>
 #include <atomic>
+#include <filesystem>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -33,7 +33,7 @@ class program_cache {
                 int32_t kernel_limit_disk,
                 std::filesystem::path cache_dir,
                 bool disabled)
-    : _kernel_limit_proc {kernel_limit_proc},
+    : _kernel_limit_proc{kernel_limit_proc},
       _kernel_limit_disk{kernel_limit_disk},
       _cache_dir{std::move(cache_dir)},
       _disabled{disabled}
