@@ -73,7 +73,7 @@ async def _compute_sort_boundaries(
     ir: ShuffleSorted,
     by: list[str],
     num_partitions: int,
-    allgather_id: int,
+    allgather_id: int | None,
 ) -> DataFrame:
     """Compute global sort boundaries."""
     column_order = list(ir.order)
@@ -102,7 +102,7 @@ async def _compute_sort_boundaries(
     )
     stream = local_boundaries_df.stream
 
-    if comm.nranks > 1:
+    if allgather_id is not None:
         allgather = AllGatherManager(context, comm, allgather_id)
         chunk = TableChunk.from_pylibcudf_table(
             local_boundaries_df.table,
@@ -339,6 +339,7 @@ async def sort_actor(
             context, ch_in, chunks_buffer, sort_ir, by, num_partitions, comm
         )
 
+        need_allgather = comm.nranks > 1 and not metadata_in.duplicated
         sort_boundaries_df = await _compute_sort_boundaries(
             context,
             comm,
@@ -347,7 +348,7 @@ async def sort_actor(
             ir,
             by,
             num_partitions,
-            collective_ids.pop(),
+            collective_ids.pop() if need_allgather else None,
         )
 
         shuffle, sort_ir = await _insert_chunks_into_shuffle(
