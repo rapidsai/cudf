@@ -232,7 +232,7 @@ auto reflect(udf_source_type source_type,
              std::span<char const> input_may_be_nullable,
              std::span<char const> output_may_be_nullable)
 {
-  std::vector<std::string> ins;
+  std::vector<std::string> in_types;
 
   for (size_t i = 0; i < inputs.size(); i++) {
     auto& in               = inputs[i];
@@ -246,10 +246,10 @@ auto reflect(udf_source_type source_type,
       jitify2::reflection::Template("cudf::jit::column_accessor")
         .instantiate(
           i, column, element, optional_element, as_scalar, may_be_nullable, is_strings_output);
-    ins.push_back(accessor);
+    in_types.push_back(accessor);
   }
 
-  std::vector<std::string> outs;
+  std::vector<std::string> out_types;
 
   for (size_t i = 0; i < outputs.size(); i++) {
     auto& out              = outputs[i];
@@ -264,27 +264,26 @@ auto reflect(udf_source_type source_type,
         .instantiate(
           i, column, element, optional_element, as_scalar, may_be_nullable, is_strings_output);
 
-    outs.push_back(accessor);
+    out_types.push_back(accessor);
   }
 
-  auto ins  = jitify2::reflection::Template("cudf::jit::type_list").instantiate(ins);
-  auto outs = jitify2::reflection::Template("cudf::jit::type_list").instantiate(outs);
+  auto ins  = jitify2::reflection::Template("cudf::jit::type_list").instantiate(in_types);
+  auto outs = jitify2::reflection::Template("cudf::jit::type_list").instantiate(out_types);
 
-  std::vector<std::string> ptx_input_types;
-  std::vector<std::string> ptx_output_types;
+  std::vector<std::string> ptx_in_types;
+  std::vector<std::string> ptx_out_types;
 
   if (source_type == udf_source_type::PTX) {
     for (auto& in : inputs) {
-      ptx_input_types.push_back(std::visit([](auto& c) { return reflect_input_element(c); }, in));
+      ptx_in_types.push_back(std::visit([](auto& c) { return reflect_input_element(c); }, in));
     }
 
     for (auto& out : outputs) {
-      ptx_output_types.push_back(
-        std::visit([](auto& c) { return reflect_output_element(c); }, out));
+      ptx_out_types.push_back(std::visit([](auto& c) { return reflect_output_element(c); }, out));
     }
   }
 
-  return std::make_tuple(ins, outs, ptx_input_types, ptx_output_types);
+  return std::make_tuple(ins, outs, ptx_in_types, ptx_out_types);
 }
 
 auto to_args(std::span<input_column_view const> inputs,

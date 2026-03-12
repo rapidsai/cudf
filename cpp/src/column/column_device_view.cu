@@ -20,20 +20,20 @@
 namespace cudf {
 
 template <typename A, typename B>
-inline constexpr bool bitwise_compatible = (sizeof(A) == sizeof(B)) && (alignof(A) == alignof(B));
+inline constexpr bool layout_compatible = (sizeof(A) == sizeof(B)) && (alignof(A) == alignof(B));
 
 static_assert(
-  bitwise_compatible<detail::column_device_view_base, column_device_view_core>,
-  "detail::column_device_view_base and column_device_view_core must be bitwise-compatible");
-static_assert(bitwise_compatible<column_device_view_core, column_device_view>,
-              "column_device_view_core and column_device_view must be bitwise-compatible");
+  layout_compatible<detail::column_device_view_base, column_device_view_core>,
+  "detail::column_device_view_base and column_device_view_core must be layout-compatible");
+static_assert(layout_compatible<column_device_view_core, column_device_view>,
+              "column_device_view_core and column_device_view must be layout-compatible");
 
 static_assert(
-  bitwise_compatible<detail::column_device_view_base, mutable_column_device_view_core>,
-  "detail::column_device_view_base and mutable_column_device_view_core must be bitwise-compatible");
+  layout_compatible<detail::column_device_view_base, mutable_column_device_view_core>,
+  "detail::column_device_view_base and mutable_column_device_view_core must be layout-compatible");
 static_assert(
-  bitwise_compatible<mutable_column_device_view_core, mutable_column_device_view>,
-  "mutable_column_device_view_core and mutable_column_device_view must be bitwise-compatible");
+  layout_compatible<mutable_column_device_view_core, mutable_column_device_view>,
+  "mutable_column_device_view_core and mutable_column_device_view must be layout-compatible");
 
 // Trivially copy all members but the children
 column_device_view::column_device_view(column_view source)
