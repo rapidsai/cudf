@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -14,8 +14,6 @@
 #include <cudf/io/parquet_schema.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
-
-#include <src/io/parquet/compact_protocol_reader.hpp>
 
 #include <random>
 #include <type_traits>
@@ -47,9 +45,14 @@ using ByteLikeTypes = cudf::test::Types<int8_t, char, uint8_t, unsigned char, st
 // them.
 using UnsupportedChronoTypes =
   cudf::test::Types<cudf::timestamp_s, cudf::duration_D, cudf::duration_s>;
-// Also fixed point types unsupported, because AST does not support them yet.
-using SupportedTestTypes = cudf::test::RemoveIf<cudf::test::ContainedIn<UnsupportedChronoTypes>,
-                                                cudf::test::ComparableTypes>;
+
+// Support types for AST expression evaluator
+using SupportedTestTypesAST =
+  cudf::test::RemoveIf<cudf::test::ContainedIn<UnsupportedChronoTypes>, ComparableAndFixedTypes>;
+
+// JIT does not yet support fixed point types
+using SupportedTestTypesJIT =
+  cudf::test::RemoveIf<cudf::test::ContainedIn<cudf::test::FixedPointTypes>, SupportedTestTypesAST>;
 
 // removing duration_D, duration_s, and timestamp_s as they don't appear to be supported properly.
 // see definition of UnsupportedChronoTypes above.

@@ -1,18 +1,18 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 """Utilities for tracing and monitoring IR execution."""
 
 from __future__ import annotations
 
+import enum
 import functools
 import os
 import time
-from typing import TYPE_CHECKING, Any, Concatenate, Literal
+from typing import TYPE_CHECKING, Any, Concatenate, Literal, ParamSpec
 
 import nvtx
 import pynvml
-from typing_extensions import ParamSpec
 
 import rmm
 import rmm.statistics
@@ -48,6 +48,14 @@ if TYPE_CHECKING:
 
     import cudf_polars.containers
     from cudf_polars.dsl import ir
+
+
+class Scope(str, enum.Enum):
+    """Scope values for structured logging."""
+
+    PLAN = "plan"
+    ACTOR = "actor"
+    EVALUATE_IR_NODE = "evaluate_ir_node"
 
 
 @functools.cache
@@ -165,11 +173,11 @@ def log_do_evaluate(
             pid = _getpid()
             log = structlog.get_logger()
 
-            # By convention, all non-dataframe arguments (non_child) come first.
+            # By convention, all non-dataframe arguments (non-child) come first.
             # Anything remaining is a dataframe, except for 'context' kwarg.
             frames: list[cudf_polars.containers.DataFrame] = (
                 list(args) + [v for k, v in kwargs.items() if k != "context"]
-            )[len(cls._non_child) :]  # type: ignore[assignment]
+            )[cls._n_non_child_args :]  # type: ignore[assignment]
 
             before_start = time.monotonic_ns()
             before = make_snapshot(
@@ -199,8 +207,9 @@ def log_do_evaluate(
                 before
                 | after
                 | {
+                    "scope": Scope.EVALUATE_IR_NODE.value,
                     "overhead_duration": (before_end - before_start)
-                    + (after_end - after_start)
+                    + (after_end - after_start),
                 }
             )
             log.info("Execute IR", **record)

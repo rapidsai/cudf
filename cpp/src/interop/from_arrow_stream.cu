@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -45,9 +45,7 @@ std::unique_ptr<column> make_empty_column_from_schema(ArrowSchema const* schema,
                                      cudf::make_empty_column(data_type{type_id::INT32}),
                                      make_empty_column_from_schema(schema->children[0], stream, mr),
                                      0,
-                                     {},
-                                     stream,
-                                     mr);
+                                     {});
     }
     case type_id::STRUCT: {
       std::vector<std::unique_ptr<column>> child_columns;

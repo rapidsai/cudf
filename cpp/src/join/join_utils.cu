@@ -14,9 +14,9 @@
 #include <rmm/exec_policy.hpp>
 #include <rmm/resource_ref.hpp>
 
+#include <cuda/iterator>
 #include <cuda/std/functional>
 #include <thrust/copy.h>
-#include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/scatter.h>
 #include <thrust/sequence.h>
@@ -105,8 +105,8 @@ VectorPair get_left_join_indices_complement(
     // invalid_index_map[index_ptr[i]] = 0 for i = 0 to right_table_row_count
     // Thus specifying that those locations are valid
     thrust::scatter_if(rmm::exec_policy_nosync(stream),
-                       thrust::make_constant_iterator(0),
-                       thrust::make_constant_iterator(0) + right_indices->size(),
+                       cuda::make_constant_iterator(0),
+                       cuda::make_constant_iterator(0) + right_indices->size(),
                        right_indices->begin(),      // Index locations
                        right_indices->begin(),      // Stencil - Check if index location is valid
                        invalid_index_map->begin(),  // Output indices

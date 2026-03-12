@@ -7,11 +7,10 @@ import collections.abc
 import time
 import weakref
 from threading import RLock
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any, Literal, Self
 
 import numpy
 import nvtx
-from typing_extensions import Self
 
 import rmm
 

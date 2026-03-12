@@ -12,6 +12,7 @@
 
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/structs/utilities.hpp>
+#include <cudf/detail/utilities/cuda_memcpy.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/detail/avro.hpp>
@@ -27,8 +28,6 @@
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/equal.h>
-#include <thrust/functional.h>
-#include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/transform_output_iterator.h>
 #include <thrust/tabulate.h>
 
@@ -433,15 +432,17 @@ std::vector<column_buffer> decode_data(metadata& meta,
                             stream);
 
   // Copy valid bits that are shared between columns
-  for (size_t i = 0; i < out_buffers.size(); i++) {
-    if (valid_alias[i] != nullptr) {
-      CUDF_CUDA_TRY(cudaMemcpyAsync(out_buffers[i].null_mask(),
-                                    valid_alias[i],
-                                    out_buffers[i].null_mask_size(),
-                                    cudaMemcpyDefault,
-                                    stream.value()));
-    }
+  auto const num_bufs = out_buffers.size();
+  std::vector<void*> dsts(num_bufs);
+  std::vector<void const*> srcs(num_bufs);
+  std::vector<std::size_t> sizes(num_bufs);
+  for (size_t i = 0; i < num_bufs; i++) {
+    dsts[i]  = valid_alias[i] ? out_buffers[i].null_mask() : nullptr;
+    srcs[i]  = valid_alias[i];
+    sizes[i] = valid_alias[i] ? out_buffers[i].null_mask_size() : 0;
   }
+  CUDF_CUDA_TRY(
+    cudf::detail::memcpy_batch_async(dsts.data(), srcs.data(), sizes.data(), num_bufs, stream));
   schema_desc.device_to_host(stream);
 
   for (size_t i = 0; i < out_buffers.size(); i++) {

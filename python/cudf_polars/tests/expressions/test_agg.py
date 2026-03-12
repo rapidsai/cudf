@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
+from datetime import date
 from decimal import Decimal
 
 import pytest
@@ -13,7 +14,11 @@ from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
     assert_ir_translation_raises,
 )
-from cudf_polars.utils.versions import POLARS_VERSION_LT_135
+from cudf_polars.utils.versions import (
+    POLARS_VERSION_LT_134,
+    POLARS_VERSION_LT_135,
+    POLARS_VERSION_LT_136,
+)
 
 
 @pytest.fixture(
@@ -202,7 +207,31 @@ def test_decimal_aggs(decimal_df: pl.LazyFrame) -> None:
     assert_gpu_result_equal(q)
 
 
-def test_invalid_agg():
+@pytest.mark.parametrize("interp", ["nearest", "higher", "lower", "midpoint", "linear"])
+def test_decimal_quantile(decimal_df, interp):
+    q = decimal_df.select(pl.col("a").quantile(0.5, interpolation=interp))
+    assert_gpu_result_equal(q)
+
+
+@pytest.mark.skipif(
+    POLARS_VERSION_LT_134,
+    reason="std/var on decimal not supported before polars 1.34",
+)
+def test_decimal_std_var(decimal_df):
+    q = decimal_df.select(
+        std=pl.col("a").std(),
+        var=pl.col("a").var(),
+    )
+    assert_gpu_result_equal(q)
+
+
+def test_invalid_agg(request):
+    request.applymarker(
+        pytest.mark.xfail(
+            condition=not POLARS_VERSION_LT_136,
+            reason="polars raises now",
+        )
+    )
     df = pl.LazyFrame({"s": pl.Series(["a", "b", "c"], dtype=pl.String())})
     q = df.select(pl.col("s").sum())
     assert_ir_translation_raises(q, NotImplementedError)
@@ -212,3 +241,10 @@ def test_sum_all_null_decimal_dtype():
     df = pl.LazyFrame({"foo": pl.Series([None], dtype=pl.Decimal(9, 2))})
     q = df.select(pl.col("foo").sum())
     assert_gpu_result_equal(q)
+
+
+@pytest.mark.parametrize("expr", [pl.col("a").median(), pl.col("a").quantile(0.5)])
+def test_temporal_quantile_median_not_supported(expr):
+    df = pl.LazyFrame({"a": [date(2025, 1, 1), date(2025, 1, 2), date(2025, 1, 3)]})
+    q = df.select(expr)
+    assert_ir_translation_raises(q, NotImplementedError)

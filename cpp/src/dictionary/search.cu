@@ -18,8 +18,8 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/std/iterator>
-#include <thrust/binary_search.h>
 #include <thrust/execution_policy.h>
+#include <thrust/find.h>
 
 namespace cudf {
 namespace dictionary {
@@ -49,7 +49,6 @@ struct dispatch_scalar_index {
  * @brief Find index of a given key within a dictionary's keys column.
  *
  * The index is the position within the keys column where the given key (scalar) is found.
- * The keys column is sorted and unique so only one value is expected.
  * The result is an integer scalar identifying the index value.
  * If the key is not found, the resulting scalar has `is_valid()=false`.
  */
@@ -72,14 +71,13 @@ struct find_index_fn {
     using ScalarType = cudf::scalar_type_t<Element>;
     auto find_key    = static_cast<ScalarType const&>(key).value(stream);
     auto keys_view   = column_device_view::create(input.keys(), stream);
-    auto iter        = thrust::equal_range(rmm::exec_policy_nosync(stream),
-                                    keys_view->begin<Element>(),
-                                    keys_view->end<Element>(),
-                                    find_key);
+    auto const begin = keys_view->begin<Element>();
+    auto const end   = keys_view->end<Element>();
+    auto const iter  = thrust::find(rmm::exec_policy_nosync(stream), begin, end, find_key);
     return type_dispatcher(input.indices().type(),
                            dispatch_scalar_index{},
-                           cuda::std::distance(keys_view->begin<Element>(), iter.first),
-                           (cuda::std::distance(iter.first, iter.second) > 0),
+                           cuda::std::distance(begin, iter),
+                           iter != end,
                            stream,
                            mr);
   }
@@ -97,49 +95,6 @@ struct find_index_fn {
   }
 };
 
-struct find_insert_index_fn {
-  template <typename Element>
-  std::unique_ptr<scalar> operator()(dictionary_column_view const& input,
-                                     scalar const& key,
-                                     rmm::cuda_stream_view stream,
-                                     rmm::device_async_resource_ref mr) const
-    requires(not std::is_same_v<Element, dictionary32> and
-             not std::is_same_v<Element, list_view> and not std::is_same_v<Element, struct_view>)
-  {
-    if (!key.is_valid(stream)) {
-      return type_dispatcher(input.indices().type(), dispatch_scalar_index{}, 0, false, stream, mr);
-    }
-    CUDF_EXPECTS(cudf::have_same_types(input.parent(), key),
-                 "search key type must match dictionary keys type",
-                 cudf::data_type_error);
-
-    using ScalarType = cudf::scalar_type_t<Element>;
-    auto find_key    = static_cast<ScalarType const&>(key).value(stream);
-    auto keys_view   = column_device_view::create(input.keys(), stream);
-    auto iter        = thrust::lower_bound(rmm::exec_policy_nosync(stream),
-                                    keys_view->begin<Element>(),
-                                    keys_view->end<Element>(),
-                                    find_key);
-    return type_dispatcher(input.indices().type(),
-                           dispatch_scalar_index{},
-                           cuda::std::distance(keys_view->begin<Element>(), iter),
-                           true,
-                           stream,
-                           mr);
-  }
-
-  template <typename Element>
-  std::unique_ptr<scalar> operator()(dictionary_column_view const&,
-                                     scalar const&,
-                                     rmm::cuda_stream_view,
-                                     rmm::device_async_resource_ref) const
-    requires(std::is_same_v<Element, dictionary32> or std::is_same_v<Element, list_view> or
-             std::is_same_v<Element, struct_view>)
-  {
-    CUDF_FAIL("dictionary, list_view, and struct_view columns cannot be the keys for a dictionary");
-  }
-};
-
 }  // namespace
 
 std::unique_ptr<scalar> get_index(dictionary_column_view const& dictionary,
@@ -152,18 +107,6 @@ std::unique_ptr<scalar> get_index(dictionary_column_view const& dictionary,
   }
   return type_dispatcher<dispatch_storage_type>(
     dictionary.keys().type(), find_index_fn(), dictionary, key, stream, mr);
-}
-
-std::unique_ptr<scalar> get_insert_index(dictionary_column_view const& dictionary,
-                                         scalar const& key,
-                                         rmm::cuda_stream_view stream,
-                                         rmm::device_async_resource_ref mr)
-{
-  if (dictionary.is_empty()) {
-    return std::make_unique<numeric_scalar<int32_t>>(0, false, stream, mr);
-  }
-  return type_dispatcher<dispatch_storage_type>(
-    dictionary.keys().type(), find_insert_index_fn(), dictionary, key, stream, mr);
 }
 
 }  // namespace detail

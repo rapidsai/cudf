@@ -72,13 +72,8 @@ std::unique_ptr<column> find_multiple(strings_column_view const& input,
                                         numeric_scalar<size_type>(targets_count, true, stream),
                                         stream,
                                         mr);
-  return make_lists_column(strings_count,
-                           std::move(offsets),
-                           std::move(results),
-                           0,
-                           rmm::device_buffer{0, stream, mr},
-                           stream,
-                           mr);
+  return make_lists_column(
+    strings_count, std::move(offsets), std::move(results), 0, rmm::device_buffer{0, stream, mr});
 }
 
 }  // namespace detail

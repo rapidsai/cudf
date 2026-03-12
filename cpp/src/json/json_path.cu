@@ -660,9 +660,9 @@ std::pair<cuda::std::optional<rmm::device_uvector<path_operator>>, int> build_co
   int max_stack_depth = 1;
   do {
     op = p_state.get_next_operator();
-    if (op.type == path_operator_type::ERROR) {
-      CUDF_FAIL("Encountered invalid JSONPath input string", std::invalid_argument);
-    }
+    CUDF_EXPECTS(op.type != path_operator_type::ERROR,
+                 "Encountered invalid JSONPath input string",
+                 std::invalid_argument);
     if (op.type == path_operator_type::CHILD_WILDCARD) { max_stack_depth++; }
     // convert pointer to device pointer
     if (op.name.size_bytes() > 0) {
@@ -981,12 +981,16 @@ std::unique_ptr<cudf::column> get_json_object(cudf::strings_column_view const& c
 
   // if the query is empty, return a string column containing all nulls
   if (!std::get<0>(preprocess).has_value()) {
-    return std::make_unique<column>(
-      data_type{type_id::STRING},
+    // Create a proper all-null strings column with valid structure (offsets + chars children)
+    auto offsets = cudf::make_column_from_scalar(
+      cudf::numeric_scalar<int32_t>(0, true, stream), col.size() + 1, stream, mr);
+
+    return make_strings_column(
       col.size(),
-      rmm::device_buffer{0, stream, mr},  // no data
-      cudf::detail::create_null_mask(col.size(), mask_state::ALL_NULL, stream, mr),
-      col.size());  // null count
+      std::move(offsets),
+      rmm::device_buffer{0, stream, mr},  // empty chars
+      col.size(),                         // null_count
+      cudf::detail::create_null_mask(col.size(), mask_state::ALL_NULL, stream, mr));
   }
 
   // compute output sizes

@@ -1,11 +1,12 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #include "iterator_tests.cuh"
 
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/utilities/memory_resource.hpp>
+#include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
@@ -42,9 +43,10 @@ TEST_F(StringIteratorTest, string_view_null_iterator)
   using T = cudf::string_view;
   std::string zero("zero");
   // the char data has to be in GPU
-  auto initmsg = cudf::detail::make_device_uvector(
-    zero, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
-  T init = T{initmsg.data(), int(initmsg.size())};
+  auto initmsg = cudf::detail::make_device_uvector(cudf::host_span<char const>{zero},
+                                                   cudf::get_default_stream(),
+                                                   cudf::get_current_device_resource_ref());
+  T init       = T{initmsg.data(), int(initmsg.size())};
 
   // data and valid arrays
   std::vector<std::string> host_values(
@@ -78,9 +80,10 @@ TEST_F(StringIteratorTest, string_view_no_null_iterator)
   // T init = T{"", 0};
   std::string zero("zero");
   // the char data has to be in GPU
-  auto initmsg = cudf::detail::make_device_uvector(
-    zero, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
-  T init = T{initmsg.data(), int(initmsg.size())};
+  auto initmsg = cudf::detail::make_device_uvector(cudf::host_span<char const>{zero},
+                                                   cudf::get_default_stream(),
+                                                   cudf::get_current_device_resource_ref());
+  T init       = T{initmsg.data(), int(initmsg.size())};
 
   // data array
   std::vector<std::string> host_values(
@@ -103,9 +106,10 @@ TEST_F(StringIteratorTest, string_scalar_iterator)
   // T init = T{"", 0};
   std::string zero("zero");
   // the char data has to be in GPU
-  auto initmsg = cudf::detail::make_device_uvector(
-    zero, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
-  T init = T{initmsg.data(), int(initmsg.size())};
+  auto initmsg = cudf::detail::make_device_uvector(cudf::host_span<char const>{zero},
+                                                   cudf::get_default_stream(),
+                                                   cudf::get_current_device_resource_ref());
+  T init       = T{initmsg.data(), int(initmsg.size())};
 
   // data array
   std::vector<std::string> host_values(100, zero);

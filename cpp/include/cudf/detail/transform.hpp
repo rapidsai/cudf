@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -15,17 +15,6 @@
 
 namespace CUDF_EXPORT cudf {
 namespace detail {
-/**
- * @copydoc cudf::transform
- *
- * @param stream CUDA stream used for device memory operations and kernel launches.
- */
-std::unique_ptr<column> transform(column_view const& input,
-                                  std::string const& unary_udf,
-                                  data_type output_type,
-                                  bool is_ptx,
-                                  rmm::cuda_stream_view stream,
-                                  rmm::device_async_resource_ref mr);
 
 /**
  * @copydoc cudf::compute_column
@@ -36,14 +25,6 @@ std::unique_ptr<column> compute_column(table_view const& table,
                                        ast::expression const& expr,
                                        rmm::cuda_stream_view stream,
                                        rmm::device_async_resource_ref mr);
-
-/**
- * @copydoc cudf::nans_to_nulls
- *
- * @param stream CUDA stream used for device memory operations and kernel launches.
- */
-std::pair<std::unique_ptr<rmm::device_buffer>, size_type> nans_to_nulls(
-  column_view const& input, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr);
 
 /**
  * @copydoc cudf::bools_to_mask

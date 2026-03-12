@@ -8,11 +8,11 @@
 #include "page_index_filter_utils.hpp"
 
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/algorithms/reduce.cuh>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/transform.hpp>
-#include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/detail/utilities/batched_memcpy.hpp>
 #include <cudf/detail/utilities/grid_1d.cuh>
 #include <cudf/detail/utilities/host_worker_pool.hpp>
@@ -38,6 +38,7 @@
 
 #include <algorithm>
 #include <limits>
+#include <numeric>
 
 namespace cudf::io::parquet::experimental::detail {
 
@@ -96,7 +97,7 @@ struct page_stats_caster : public stats_caster_base {
                    reinterpret_cast<T*>(output_data.data()));
 
     // Buffer for output bitmask
-    auto output_nullmask = rmm::device_buffer{};
+    auto output_nullmask = rmm::device_buffer{0, stream, mr};
     if (input_column.null_count()) {
       // Set all bits in output nullmask to valid
       output_nullmask = cudf::create_null_mask(total_rows, mask_state::ALL_VALID, stream, mr);
@@ -212,7 +213,7 @@ struct page_stats_caster : public stats_caster_base {
     auto const input_nullmask = host_page_nullmask;
 
     // Buffer for row-level strings nullmask (output)
-    auto output_nullmask = rmm::device_buffer{};
+    auto output_nullmask = rmm::device_buffer{0, stream, mr};
     if (host_null_count) {
       // Set all bits in output nullmask to valid
       output_nullmask = cudf::create_null_mask(total_rows, mask_state::ALL_VALID, stream, mr);
@@ -911,32 +912,32 @@ std::unique_ptr<cudf::column> aggregate_reader_metadata::build_row_mask_with_pag
     [&](auto col_idx) {
       auto const schema_idx = output_column_schemas[col_idx];
       auto const& dtype     = output_dtypes[col_idx];
-      // Only participating columns and comparable types except fixed point are supported
+      // Only participating columns and comparable types are supported
       if (not stats_columns_mask[col_idx] or
           (cudf::is_compound(dtype) && dtype.id() != cudf::type_id::STRING)) {
         // Placeholder for unsupported types and non-participating columns
-        page_stats_columns.push_back(
-          cudf::make_numeric_column(data_type{cudf::type_id::BOOL8},
-                                    total_rows,
-                                    rmm::device_buffer{},
-                                    0,
-                                    stream,
-                                    cudf::get_current_device_resource_ref()));
-        page_stats_columns.push_back(
-          cudf::make_numeric_column(data_type{cudf::type_id::BOOL8},
-                                    total_rows,
-                                    rmm::device_buffer{},
-                                    0,
-                                    stream,
-                                    cudf::get_current_device_resource_ref()));
+        page_stats_columns.push_back(cudf::make_numeric_column(
+          data_type{cudf::type_id::BOOL8},
+          total_rows,
+          rmm::device_buffer{0, stream, cudf::get_current_device_resource_ref()},
+          0,
+          stream,
+          cudf::get_current_device_resource_ref()));
+        page_stats_columns.push_back(cudf::make_numeric_column(
+          data_type{cudf::type_id::BOOL8},
+          total_rows,
+          rmm::device_buffer{0, stream, cudf::get_current_device_resource_ref()},
+          0,
+          stream,
+          cudf::get_current_device_resource_ref()));
         if (has_is_null_operator) {
-          page_stats_columns.push_back(
-            cudf::make_numeric_column(data_type{cudf::type_id::BOOL8},
-                                      total_rows,
-                                      rmm::device_buffer{},
-                                      0,
-                                      stream,
-                                      cudf::get_current_device_resource_ref()));
+          page_stats_columns.push_back(cudf::make_numeric_column(
+            data_type{cudf::type_id::BOOL8},
+            total_rows,
+            rmm::device_buffer{0, stream, cudf::get_current_device_resource_ref()},
+            0,
+            stream,
+            cudf::get_current_device_resource_ref()));
         }
         return;
       }

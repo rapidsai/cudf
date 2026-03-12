@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 from rmm.pylibrmm.memory_resource import DeviceMemoryResource
 from rmm.pylibrmm.stream import Stream
@@ -14,6 +14,11 @@ def nans_to_nulls(
     stream: Stream | None = None,
     mr: DeviceMemoryResource | None = None,
 ) -> tuple[gpumemoryview, int]: ...
+def column_nans_to_nulls(
+    input: Column,
+    stream: Stream | None = None,
+    mr: DeviceMemoryResource | None = None,
+) -> Column: ...
 def compute_column(
     input: Table,
     expr: Expression,

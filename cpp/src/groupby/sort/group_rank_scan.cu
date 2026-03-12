@@ -19,10 +19,9 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/std/functional>
+#include <cuda/std/iterator>
 #include <cuda/std/limits>
 #include <cuda/std/utility>
-#include <thrust/functional.h>
-#include <thrust/iterator/reverse_iterator.h>
 #include <thrust/scan.h>
 #include <thrust/tabulate.h>
 #include <thrust/transform.h>
@@ -109,7 +108,7 @@ std::unique_ptr<column> rank_generator(column_view const& grouped_values,
                      mutable_ranks.begin<size_type>(),
                      mutable_ranks.end<size_type>(),
                      unique_identifier<forward, decltype(permuted_equal), value_resolver>(
-                       group_labels.begin(), group_offsets.begin(), permuted_equal, resolver));
+                       group_labels.data(), group_offsets.data(), permuted_equal, resolver));
   };
 
   if (cudf::detail::has_nested_columns(grouped_values_view)) {
