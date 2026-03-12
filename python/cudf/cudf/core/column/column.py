@@ -1012,8 +1012,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         if is_dtype_obj_numeric(dtype, include_decimal=False):
             return cudf.core.column.NumericalColumn
 
-        if dtype_kind == "U":
-            return cudf.core.column.StringColumn
         raise TypeError(f"Unrecognized dtype: {dtype}")
 
     @staticmethod
