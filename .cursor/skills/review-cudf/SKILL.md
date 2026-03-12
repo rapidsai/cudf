@@ -66,16 +66,15 @@ Hint: Ensure `GH_TOKEN` (or GitHub CLI auth) is already configured in the enviro
 - Functors may include a `static constexpr bool is_supported()` helper for compile-time type filtering.
 
 ### Column Construction Patterns
-- Use `make_empty_column(type)` to construct empty columns for early returns when `size == 0`.
-- Use `make_fixed_width_column` / `make_numeric_column` with the appropriate `mask_state` (`UNALLOCATED`, `ALL_NULL`, `ALL_VALID`).
-- Use `cudf::detail::copy_bitmask(col, stream, mr)` when output nullability mirrors input.
-- Use `cudf::detail::bitmask_and(table_view({col1, col2}), stream, mr)` to combine null masks; returns `{null_mask, null_count}`.
-- Pass `rmm::device_buffer{0, stream}` (not a null pointer) when constructing a column with `null_count == 0`.
-- Strings columns may use a two-phase approach via `make_strings_children` (computes sizes then fills chars). The functor stores `size_type* d_sizes`, `char* d_chars`, and `input_offsetalator d_offsets`; when `d_chars == nullptr` it computes sizes, otherwise it writes characters.
-- Use `cudf::strings::detail::make_offsets_child_column` (returns `{offsets_col, total_bytes}`) for strings; use `cudf::detail::make_offsets_child_column` for non-strings lists.
+- Use `make_empty_column` to construct empty columns for early returns.
+- Use `cudf::make_column_from_scalar` to construct a column filled with the same value.
+- Use `cudf::detail::copy_bitmask` when output nullability mirrors the input.
+- Use `cudf::detail::bitmask_and` to combine null masks.
+- Use `rmm::device_buffer{0, stream}` (not a null pointer) when constructing a non-nullable column.
+- Strings columns may use a two-phase approach via `make_strings_children`.
+- Use `cudf::strings::detail::make_offsets_child_column` for strings; use `cudf::detail::make_offsets_child_column` for non-strings lists.
 - Use `cudf::detail::offsetalator_factory::make_input_iterator` for type-erased offset access supporting both INT32 and INT64 offsets.
 - Use `cudf::detail::make_counting_transform_iterator` instead of `thrust::make_transform_iterator(thrust::counting_iterator(0), fn)`.
-- `column_device_view::create(col_view, stream)` returns a smart pointer; dereference with `*d_col` when passing to kernels or Thrust.
 - For strings columns, pass `.parent()` to `column_device_view::create`.
 
 ### Naming & Code Duplication
