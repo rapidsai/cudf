@@ -5,17 +5,18 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 import polars as pl
 
+from cudf_polars.utils.config import RayContext
+
 ray = pytest.importorskip("ray")
 
 from cudf_polars.experimental.rapidsmpf.ray import (  # noqa: E402
     RayClient,
-    RayContext,
     ray_execution,
 )
 
@@ -26,11 +27,19 @@ if TYPE_CHECKING:
 @pytest.fixture(scope="session")
 def _ray_env() -> Iterator[tuple[RayClient, pl.GPUEngine]]:
     """Create one Ray cluster + GPU actors shared across the test session."""
-    with ray_execution(ray_init_kwargs={"include_dashboard": False}) as (
-        ray_client,
-        engine,
-    ):
-        yield ray_client, engine
+    try:
+        with ray_execution(
+            # Use a small partition size so tests exercise the multi-partition
+            # code path deterministically, regardless of input size.
+            executor_options={"max_rows_per_partition": 10},
+            ray_init_kwargs={"include_dashboard": False},
+        ) as (
+            ray_client,
+            engine,
+        ):
+            yield ray_client, engine
+    except RuntimeError as e:
+        pytest.skip(f"Ray GPU cluster unavailable: {e}")
 
 
 @pytest.fixture(scope="session")
@@ -76,9 +85,21 @@ def test_ray_client_shutdown_idempotent() -> None:
     """RayClient.shutdown() is safe to call more than once."""
     mock_engine = MagicMock(spec=pl.GPUEngine)
     mock_engine.config = {"executor_options": {"ray_context": RayContext([])}}
-    client = RayClient(mock_engine, ray_was_initialized=True)
+    client = RayClient(mock_engine, owns_ray=False)
     client.shutdown()
     client.shutdown()  # must not raise
+
+
+def test_ray_execution_raises_inside_rrun() -> None:
+    """ray_execution() must not be called from within an rrun cluster."""
+    with (
+        patch(
+            "cudf_polars.experimental.rapidsmpf.ray.bootstrap.is_running_with_rrun",
+            return_value=True,
+        ),
+        pytest.raises(RuntimeError, match="rrun"),
+    ):
+        ray_execution()
 
 
 # ---------------------------------------------------------------------------
@@ -94,6 +115,18 @@ def test_ray_execution_yields_client_and_engine(
     assert isinstance(ray_client, RayClient)
     assert isinstance(engine, pl.GPUEngine)
     assert ray_client.nranks >= 1
+
+
+def test_ray_execution_executor_options_forwarded(
+    ray_client: RayClient,
+    engine: pl.GPUEngine,
+) -> None:
+    """Reserved executor_options keys are injected into the engine config."""
+    opts = engine.config["executor_options"]
+    assert opts["runtime"] == "rapidsmpf"
+    assert opts["cluster"] == "ray"
+    assert isinstance(opts["ray_context"], RayContext)
+    assert len(opts["ray_context"].rank_actors) == ray_client.nranks
 
 
 def test_gather_cluster_info(ray_client: RayClient) -> None:
@@ -126,15 +159,42 @@ def test_ray_execution_filter(engine: pl.GPUEngine) -> None:
     assert sorted(result["a"].to_list()) == [4, 5]
 
 
-def test_ray_execution_group_by(engine: pl.GPUEngine) -> None:
-    """Group-by produces the correct global aggregation across all actors."""
-    lf = pl.LazyFrame({"key": ["a", "a", "b"], "val": [1, 2, 3]})
+def test_ray_execution_group_by(ray_client: RayClient, engine: pl.GPUEngine) -> None:
+    """Group-by produces the correct aggregation across all ranks."""
+    # max_rows_per_partition=10 (set on the session fixture) gives each rank
+    # exactly 5 partitions, so the multi-partition path is always exercised.
+    n, n_keys = ray_client.nranks * 50, 5
+    keys = [str(i % n_keys) for i in range(n)]
+    vals = list(range(n))
+    lf = pl.LazyFrame({"key": keys, "val": vals})
     result = (
         lf.group_by("key").agg(pl.col("val").sum()).collect(engine=engine).sort("key")
     )
-    assert result.shape == (2, 2)
-    assert result["key"].to_list() == ["a", "b"]
-    assert result["val"].to_list() == [3, 3]
+    expected = (
+        pl.LazyFrame({"key": keys, "val": vals})
+        .group_by("key")
+        .agg(pl.col("val").sum())
+        .collect()
+        .sort("key")
+    )
+    assert result.shape == expected.shape
+    assert result["key"].to_list() == expected["key"].to_list()
+    assert result["val"].to_list() == expected["val"].to_list()
+
+
+def test_ray_execution_join(ray_client: RayClient, engine: pl.GPUEngine) -> None:
+    """Hash join between two tables produces the correct result across all ranks."""
+    # max_rows_per_partition=10 (set on the session fixture) gives each rank
+    # exactly 5 partitions, so the multi-partition path is always exercised.
+    n = ray_client.nranks * 50
+    lf_left = pl.LazyFrame({"key": list(range(n)), "val_left": list(range(n))})
+    lf_right = pl.LazyFrame(
+        {"key": list(range(n)), "val_right": [x * 2 for x in range(n)]}
+    )
+    result = lf_left.join(lf_right, on="key").collect(engine=engine).sort("key")
+    assert result.shape == (n, 3)
+    assert result["val_left"].to_list() == list(range(n))
+    assert result["val_right"].to_list() == [x * 2 for x in range(n)]
 
 
 def test_ray_execution_empty_dataframe(engine: pl.GPUEngine) -> None:

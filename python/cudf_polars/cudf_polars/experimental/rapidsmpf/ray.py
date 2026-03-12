@@ -41,6 +41,7 @@ if TYPE_CHECKING:
 
     from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.streaming.cudf.channel_metadata import ChannelMetadata
+    from ray.actor import ActorHandle
 
     from cudf_polars.dsl.ir import IR
     from cudf_polars.experimental.base import PartitionInfo, StatsCollector
@@ -245,7 +246,7 @@ class RankActor:
         """
         Release actor-owned resources and exit the process.
 
-        Raises `ray.exceptions.RayActorError`
+        Raises `ray.exceptions.RayActorError`.
         """
         self._py_executor.shutdown(wait=True, cancel_futures=True)
         self._comm = None
@@ -310,13 +311,12 @@ class RankActor:
 
         Raises
         ------
-        AssertionError
+        RuntimeError
             If :meth:`setup_worker` has not been called first.
         """
         ir, partition_info, stats, collective_id_map = query_bundle
-        assert self._ctx is not None, (
-            "setup_worker must be called before evaluate_polars_ir"
-        )
+        if self._ctx is None:
+            raise RuntimeError("setup_worker must be called before evaluate_polars_ir")
         ir_context = IRExecutionContext(get_cuda_stream=self._ctx.get_stream_from_pool)
         metadata_collector: list[ChannelMetadata] | None = (
             [] if collect_metadata else None
@@ -343,7 +343,6 @@ class RankActor:
             )
             for msg in messages
         ]
-        dfs: list[DataFrame]
         if chunks:
             dfs = [
                 DataFrame.from_table(
@@ -382,22 +381,21 @@ class RayClient:
         Polars GPU engine configured to execute queries on the Ray-backed
         RapidsMPF cluster. Must have been created with ``"ray_context"`` in
         its ``executor_options``.
-    ray_was_initialized
-        Indicates whether Ray was already initialized before this client
-        was created. Used to determine whether the client should shut down
-        Ray on :meth:`shutdown`.
+    owns_ray
+        If ``True``, this client initialized Ray and is responsible for
+        calling :func:`ray.shutdown` in :meth:`shutdown`.
     """
 
     def __init__(
         self,
         engine: pl.GPUEngine,
         *,
-        ray_was_initialized: bool,
+        owns_ray: bool,
     ) -> None:
         self._engine: pl.GPUEngine = engine
-        self._ray_was_initialized: bool = ray_was_initialized
+        self._owns_ray: bool = owns_ray
         # Own copy of actor handles for shutdown; drained to [] on first call.
-        self._rank_actors: list[Any] = list(
+        self._rank_actors: list[ActorHandle[RankActor]] = list(
             engine.config["executor_options"]["ray_context"].rank_actors
         )
 
@@ -449,8 +447,8 @@ class RayClient:
                 pass  # expected: exit_actor() terminates the process immediately
             except Exception as e:
                 print(f"shutdown error: {e}")
-        if not self._ray_was_initialized:
-            self._ray_was_initialized = True
+        if self._owns_ray:
+            self._owns_ray = False
             ray.shutdown()
 
     def __enter__(self) -> tuple[RayClient, pl.GPUEngine]:
@@ -487,6 +485,8 @@ def ray_execution(
         ``Options(get_environment_variables())``.
     executor_options
         Additional key-value pairs forwarded to the Polars executor options.
+        If ``"max_io_threads"`` is present, its value is also used as the
+        default for ``rapidsmpf_options["num_streaming_threads"]``.
     engine_kwargs
         Additional keyword arguments forwarded to :class:`polars.GPUEngine`.
     ray_init_kwargs
@@ -495,10 +495,9 @@ def ray_execution(
 
     Returns
     -------
-    RayClient
-        A client connected to the newly created Ray actor cluster.
-        Call :meth:`RayClient.shutdown` (or use it as a context manager)
-        to release resources when done.
+    A client connected to the newly created Ray actor cluster.
+    Call :meth:`RayClient.shutdown` (or use it as a context manager)
+    to release resources when done.
 
     Raises
     ------
@@ -557,12 +556,13 @@ def ray_execution(
     if not ray_was_initialized:
         # Prevent Ray from overriding CUDA_VISIBLE_DEVICES to "" when a worker
         # process starts with zero visible GPUs (e.g. the driver process itself).
-        # Without this, Ray's accelerator detection resets the variable before our
-        # actors acquire their GPU assignment, hiding all GPUs from CUDA.
         os.environ.setdefault("RAY_ACCEL_ENV_VAR_OVERRIDE_ON_ZERO", "0")
         ray.init(**ray_init_kwargs)
 
     total_gpus = int(ray.cluster_resources().get("GPU", 0.0))
+    # Note: available_resources() is a snapshot and inherently racy. This is a
+    # best-effort guard; another process could claim GPUs between this check and
+    # actor creation.
     free_gpus = int(ray.available_resources().get("GPU", 0.0))
     if total_gpus != free_gpus:
         raise RuntimeError(
@@ -572,7 +572,7 @@ def ray_execution(
         raise RuntimeError("No available GPUs in the Ray cluster at startup")
 
     # Create one actor per GPU. Ray adds .remote() dynamically; no type stubs.
-    rank_actors: list[Any] = [
+    rank_actors: list[ActorHandle[RankActor]] = [
         RankActor.remote(  # type: ignore[attr-defined]
             nranks=free_gpus,
             executor_options=executor_options,
@@ -600,4 +600,4 @@ def ray_execution(
         },
         **engine_kwargs,
     )
-    return RayClient(engine, ray_was_initialized=ray_was_initialized)
+    return RayClient(engine, owns_ray=not ray_was_initialized)

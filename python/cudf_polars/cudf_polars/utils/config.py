@@ -38,10 +38,13 @@ if TYPE_CHECKING:
 
     from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.streaming.core.context import Context
+    from ray.actor import ActorHandle
 
     import polars.lazyframe.engine_config
 
     import rmm.mr
+
+    from cudf_polars.experimental.rapidsmpf.ray import RankActor
 
 
 __all__ = [
@@ -657,7 +660,7 @@ class RayContext:
         handles, one per GPU in the cluster.
     """
 
-    rank_actors: list
+    rank_actors: list[ActorHandle[RankActor]]
 
 
 @dataclasses.dataclass(frozen=True, eq=True)
