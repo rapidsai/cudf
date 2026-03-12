@@ -89,10 +89,7 @@ def plc_flags_from_re_flags(
 def _infer_timedelta_format(col: StringColumn) -> str:
     """Infer strptime format from the first non-null timedelta string."""
     nonnull = col.dropna()
-    if len(nonnull) == 0:
-        return "%D days %H:%M:%S"
-    first = nonnull.element_indexing(0)
-    if ":" in first:
+    if len(nonnull) == 0 or ":" in nonnull.element_indexing(0):
         return "%D days %H:%M:%S"
     return "%D days"
 
