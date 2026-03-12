@@ -229,8 +229,8 @@ std::string reflect_output_column(mut_strings_column const&)
 auto reflect(udf_source_type source_type,
              std::span<input_column_view const> inputs,
              std::span<output_column const> outputs,
-             std::span<uint8_t const> input_may_be_nullable,
-             std::span<uint8_t const> output_may_be_nullable)
+             std::span<char const> input_may_be_nullable,
+             std::span<char const> output_may_be_nullable)
 {
   std::vector<std::string> ins;
 
@@ -267,8 +267,8 @@ auto reflect(udf_source_type source_type,
     outs.push_back(accessor);
   }
 
-  auto in_list  = jitify2::reflection::Template("cudf::jit::type_list").instantiate(ins);
-  auto out_list = jitify2::reflection::Template("cudf::jit::type_list").instantiate(outs);
+  auto ins  = jitify2::reflection::Template("cudf::jit::type_list").instantiate(ins);
+  auto outs = jitify2::reflection::Template("cudf::jit::type_list").instantiate(outs);
 
   std::vector<std::string> ptx_input_types;
   std::vector<std::string> ptx_output_types;
@@ -284,7 +284,7 @@ auto reflect(udf_source_type source_type,
     }
   }
 
-  return std::make_tuple(in_list, out_list, ptx_input_types, ptx_output_types);
+  return std::make_tuple(ins, outs, ptx_input_types, ptx_output_types);
 }
 
 auto to_args(std::span<input_column_view const> inputs,
@@ -337,8 +337,8 @@ void run(null_aware is_null_aware,
          void* user_data,
          std::span<input_column_view const> inputs,
          std::span<output_column const> outputs,
-         std::span<uint8_t const> input_may_be_nullable,
-         std::span<uint8_t const> output_may_be_nullable,
+         std::span<char const> input_may_be_nullable,
+         std::span<char const> output_may_be_nullable,
          std::string const& udf,
          udf_source_type source_type,
          rmm::cuda_stream_view stream,
@@ -368,6 +368,8 @@ size_type inplace_null_mask_and(bitmask_type* null_mask,
                                 std::span<transform_input const> inputs,
                                 rmm::cuda_stream_view stream)
 {
+  CUDF_FUNC_RANGE();
+
   auto is_nullable = null_mask != nullptr;
 
   if (!is_nullable) { return 0; }
@@ -375,7 +377,11 @@ size_type inplace_null_mask_and(bitmask_type* null_mask,
   auto num_words = num_bitmask_words(row_size);
   auto num_bytes = num_words * sizeof(bitmask_type);
 
-  CUDF_EXPECTS(!inputs.empty(), "Inputs must not be empty", std::logic_error);
+  if (inputs.empty()) {
+    // no input, set all to valid
+    CUDF_CUDA_TRY(cudaMemsetAsync(null_mask, 0xFF, num_bytes, stream.value()));
+    return 0;
+  }
 
   auto has_scalars = std::any_of(inputs.begin(), inputs.end(), [](auto& in) {
     return std::holds_alternative<scalar_column_view>(in);
@@ -390,7 +396,6 @@ size_type inplace_null_mask_and(bitmask_type* null_mask,
     if (scalar_is_null) {
       // scalar is null, all rows will be null
       CUDF_CUDA_TRY(cudaMemsetAsync(null_mask, 0x00, num_bytes, stream.value()));
-
       return row_size;
     }
   }
@@ -401,7 +406,6 @@ size_type inplace_null_mask_and(bitmask_type* null_mask,
   if (has_cols) {
     // no non-scalar columns, so all rows are valid
     CUDF_CUDA_TRY(cudaMemsetAsync(null_mask, 0xFF, num_bytes, stream.value()));
-
     return 0;
   }
 
@@ -423,24 +427,24 @@ size_type inplace_null_mask_and(bitmask_type* null_mask,
   if (nullable_masks.empty()) {
     // we only have non-nullable columns, so all rows are valid
     CUDF_CUDA_TRY(cudaMemsetAsync(null_mask, 0xFF, num_bytes, stream.value()));
-
     return 0;
   }
 
   if (nullable_masks.size() == 1) {
     // only 1 mask provided, copy it directly to the output
-
     detail::cuda_memcpy_async_impl(
       null_mask, nullable_masks[0], num_bytes, detail::host_memory_kind::PINNED, stream);
     return nullable_null_counts[0];
   }
 
-  return detail::inplace_bitmask_and(
+  auto num_valid = detail::inplace_bitmask_and(
     device_span<bitmask_type>{null_mask, static_cast<size_t>(num_words)},
     nullable_masks,
     nullable_offsets,
     row_size,
     stream);
+
+  return row_size - std::min(num_valid, row_size);
 }
 
 /**
@@ -453,17 +457,17 @@ auto get_null_transformation(null_aware is_null_aware,
                              std::span<transform_input const> inputs,
                              std::span<transform_output const> outputs)
 {
-  std::vector<uint8_t> input_may_be_nullable;
+  std::vector<char> input_may_be_nullable;
 
   for (auto& in : inputs) {
     input_may_be_nullable.push_back(true);
   }
 
-  bool any_input_nullable = std::any_of(inputs.begin(), inputs.end(), [](auto& in) {
+  auto any_input_nullable = std::any_of(inputs.begin(), inputs.end(), [](auto& in) {
     return std::visit([](auto& c) { return c.nullable(); }, in);
   });
 
-  std::vector<uint8_t> output_may_be_nullable;
+  std::vector<char> output_may_be_nullable;
   for (auto& out : outputs) {
     bool may_eval_nulls = true;
     if (is_null_aware == null_aware::YES) {
@@ -488,26 +492,52 @@ void perform_checks(udf_source_type source_type,
                     std::span<transform_output const> outputs,
                     std::span<std::unique_ptr<column> const> string_offsets)
 {
-  CUDF_EXPECTS(
-    !inputs.empty(), "Transform must have at least 1 input column", std::invalid_argument);
-  CUDF_EXPECTS(!(is_null_aware == null_aware::YES && source_type == udf_source_type::PTX),
-               "Optional types are not supported in PTX UDFs",
-               std::invalid_argument);
+  if (source_type == udf_source_type::PTX) {
+    CUDF_EXPECTS(std::none_of(inputs.begin(),
+                              inputs.end(),
+                              [](auto& in) {
+                                return std::visit(
+                                  [](auto& c) {
+                                    auto type = c.type();
+                                    return !is_integer(type) && !is_floating_point(type) &&
+                                           type.id() != type_id::BOOL8;
+                                  },
+                                  in);
+                              }),
+                 "Transforms with PTX UDFs only support integer, floating-point, and boolean",
+                 std::invalid_argument);
+    CUDF_EXPECTS(std::none_of(outputs.begin(),
+                              outputs.end(),
+                              [](auto& out) {
+                                return std::visit(
+                                  [](auto& c) {
+                                    auto type = c.type();
+                                    return !is_integer(type) && !is_floating_point(type) &&
+                                           type.id() != type_id::BOOL8;
+                                  },
+                                  out);
+                              }),
+                 "Transforms with PTX UDFs only support integer, floating-point, and boolean types",
+                 std::invalid_argument);
+    CUDF_EXPECTS(is_null_aware == null_aware::NO,
+                 "PTX UDFs do not support null-aware transformations",
+                 std::invalid_argument);
+  }
 
-  CUDF_EXPECTS(std::all_of(outputs.begin(),
-                           outputs.end(),
-                           [](auto& out) {
-                             return is_fixed_width(out.type) || (out.type.id() == type_id::STRING);
-                           }),
+  CUDF_EXPECTS(std::none_of(outputs.begin(),
+                            outputs.end(),
+                            [](auto& out) {
+                              return !is_fixed_width(out.type) && out.type.id() != type_id::STRING;
+                            }),
                "Transforms only support output of fixed-width or string types",
                std::invalid_argument);
 
-  CUDF_EXPECTS(std::all_of(inputs.begin(),
-                           inputs.end(),
-                           [&](auto& in) {
-                             auto type = std::visit([](auto& c) { return c.type(); }, in);
-                             return is_fixed_width(type) || (type.id() == type_id::STRING);
-                           }),
+  CUDF_EXPECTS(std::none_of(inputs.begin(),
+                            inputs.end(),
+                            [&](auto& in) {
+                              auto type = std::visit([](auto& c) { return c.type(); }, in);
+                              return !is_fixed_width(type) && type.id() != type_id::STRING;
+                            }),
                "Transforms only support input of fixed-width or string types",
                std::invalid_argument);
 
@@ -520,39 +550,38 @@ void perform_checks(udf_source_type source_type,
       std::invalid_argument);
   }
 
-  auto row_size = in_row_size.value_or(jit::get_projection_size(inputs));
-  CUDF_EXPECTS(std::all_of(inputs.begin(),
-                           inputs.end(),
-                           [&](auto& in) {
-                             if (auto* col = std::get_if<column_view>(&in)) {
-                               return col->size() == row_size;
-                             }
-                             return true;
-                           }),
+  auto row_size = in_row_size.has_value() ? *in_row_size : jit::get_projection_size(inputs);
+  CUDF_EXPECTS(std::none_of(inputs.begin(),
+                            inputs.end(),
+                            [&](auto& in) {
+                              if (auto* col = std::get_if<column_view>(&in)) {
+                                return col->size() != row_size;
+                              }
+                              return false;
+                            }),
                "All transform input columns must have the same size",
                std::invalid_argument);
 
   CUDF_EXPECTS(string_offsets.empty() || (string_offsets.size() == outputs.size()),
-               "Number of string offsets must be empty or match the number of outputs",
+               "Number of string offsets must be empty or match the number of outputs (with nulls "
+               "for each non-string column)",
                std::invalid_argument);
 
-  CUDF_EXPECTS(std::all_of(thrust::make_counting_iterator(size_t{0}),
-                           thrust::make_counting_iterator(string_offsets.size()),
-                           [&](auto i) {
-                             if (outputs[i].type.id() == type_id::STRING) { return true; }
-                             return string_offsets.empty() || string_offsets[i] != nullptr;
-                           }),
+  CUDF_EXPECTS(std::none_of(thrust::make_counting_iterator(size_t{0}),
+                            thrust::make_counting_iterator(string_offsets.size()),
+                            [&](auto i) {
+                              if (outputs[i].type.id() == type_id::STRING) { return false; }
+                              return !string_offsets.empty() && string_offsets[i] == nullptr;
+                            }),
                "String offsets must only be provided for string outputs",
                std::invalid_argument);
 }
 
-std::optional<bitmask_type const*> prepare_stencil(null_aware is_null_aware,
-                                                   bool null_strict,
-                                                   size_type row_size,
-                                                   std::span<transform_input const> inputs,
-                                                   std::span<output_column> outputs,
-                                                   std::span<bitmask_type* const> output_masks,
-                                                   rmm::cuda_stream_view stream)
+std::optional<bitmask_type const*> make_stencil(null_aware is_null_aware,
+                                                size_type row_size,
+                                                std::span<transform_input const> inputs,
+                                                std::span<output_column> outputs,
+                                                rmm::cuda_stream_view stream)
 {
   CUDF_FUNC_RANGE();
 
@@ -561,75 +590,51 @@ std::optional<bitmask_type const*> prepare_stencil(null_aware is_null_aware,
 
   std::optional<bitmask_type*> stencil = std::nullopt;
 
-  for (auto* mask : output_masks) {
-    if (mask != nullptr) {
-      stencil = mask;
-      break;
-    }
+  for (auto& out : outputs) {
+    if (auto* mask = std::visit([&](auto& c) { return c.null_mask(); }, out)) { stencil = mask; }
   }
 
   // no nullable outputs
-  if (!stencil.has_value()) {
-    if (!null_strict) {
-      // function is not null-strict, we don't need to use the stencil in the kernel
-      return std::nullopt;
+  if (!stencil.has_value()) { return nullptr; }
+
+  auto stencil_null_count = inplace_null_mask_and(*stencil, row_size, inputs, stream);
+
+  for (auto& out : outputs) {
+    auto* mask = std::visit([&](auto& c) { return c.null_mask(); }, out);
+
+    if (mask != nullptr && mask != *stencil) {
+      detail::cuda_memcpy_async_impl(mask,
+                                     *stencil,
+                                     bitmask_allocation_size_bytes(row_size),
+                                     detail::host_memory_kind::PINNED,
+                                     stream);
     }
 
-    return nullptr;
-  }
+    auto null_count = mask == nullptr ? 0 : stencil_null_count;
 
-  auto null_count = inplace_null_mask_and(*stencil, row_size, inputs, stream);
-
-  for (size_t i = 0; i < outputs.size(); i++) {
-    auto* mask = output_masks[i];
-
-    if (mask != nullptr) {
-      if (mask != *stencil) {
-        detail::cuda_memcpy_async_impl(mask,
-                                       *stencil,
-                                       bitmask_allocation_size_bytes(row_size),
-                                       detail::host_memory_kind::PINNED,
-                                       stream);
-      }
-
-      std::visit(
-        [&](auto& c) {
-          if (c.nullable()) {
-            c.set_null_count(null_count);
-          } else {
-            c.set_null_count(0);
-          }
-        },
-        outputs[i]);
-    }
-  }
-
-  if (!null_strict) {
-    // function is not null-strict, we don't need to use the stencil in the kernel
-    return std::nullopt;
+    std::visit([&](auto& c) { c.set_null_count(null_count); }, out);
   }
 
   return stencil;
 }
 
-auto allocate_outputs(size_type row_size,
-                      std::span<transform_output const> outputs,
-                      std::span<uint8_t const> is_nullable,
-                      std::vector<std::unique_ptr<column>> string_offsets,
-                      rmm::cuda_stream_view stream,
-                      rmm::device_async_resource_ref mr)
+auto make_outputs(size_type row_size,
+                  std::span<transform_input const> inputs,
+                  std::span<transform_output const> outputs,
+                  std::span<char const> is_output_nullable,
+                  std::vector<std::unique_ptr<column>> string_offsets,
+                  rmm::cuda_stream_view stream,
+                  rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
 
   std::vector<output_column> cols;
-  std::vector<bitmask_type*> masks;
 
   for (size_t i = 0; i < outputs.size(); i++) {
     auto output     = outputs[i];
-    auto nullable   = is_nullable[i];
+    auto nullable   = is_output_nullable[i];
     auto null_state = nullable ? mask_state::UNINITIALIZED : mask_state::UNALLOCATED;
     auto null_mask  = create_null_mask(row_size, null_state, stream, mr);
-    masks.push_back(static_cast<bitmask_type*>(null_mask.data()));
 
     if (is_fixed_width(output.type)) {
       auto col =
@@ -652,24 +657,7 @@ auto allocate_outputs(size_type row_size,
     }
   }
 
-  return std::make_tuple(std::move(cols), std::move(masks));
-}
-
-auto prepare_outputs(null_aware is_null_aware,
-                     size_type row_size,
-                     std::span<transform_input const> inputs,
-                     std::span<transform_output const> outputs,
-                     std::span<uint8_t const> output_is_nullable,
-                     std::vector<std::unique_ptr<column>> string_offsets,
-                     rmm::cuda_stream_view stream,
-                     rmm::device_async_resource_ref mr)
-{
-  CUDF_FUNC_RANGE();
-
-  auto [output_columns, output_column_masks] =
-    allocate_outputs(row_size, outputs, output_is_nullable, std::move(string_offsets), stream, mr);
-  auto stencil = prepare_stencil(
-    is_null_aware, true, row_size, inputs, output_columns, output_column_masks, stream);
+  auto stencil = make_stencil(is_null_aware, row_size, inputs, output_columns, stream);
 
   return std::make_tuple(std::move(output_columns), stencil);
 }
@@ -680,7 +668,7 @@ void update_null_counts(std::span<output_column> outputs,
                         rmm::cuda_stream_view stream)
 {
   // update null counts if the function is not null-aware, since we haven't processed nullability
-  // ahead of time
+  // ahead of time (as in the non-null-aware case)
   if (is_null_aware == null_aware::YES) {
     std::vector<bitmask_type const*> bitmasks;
     std::vector<int32_t> indices;
@@ -757,17 +745,17 @@ std::unique_ptr<table> execute_transform(std::string const& udf,
                                          rmm::cuda_stream_view stream,
                                          rmm::device_async_resource_ref mr)
 {
-  auto row_size = in_row_size.value_or(jit::get_projection_size(inputs));
+  auto row_size = in_row_size.has_value() ? *in_row_size : jit::get_projection_size(inputs);
   auto [input_may_be_nullable, output_may_be_nullable] =
     get_null_transformation(is_null_aware, inputs, outputs);
-  auto [output_columns, stencil] = prepare_outputs(is_null_aware,
-                                                   row_size,
-                                                   inputs,
-                                                   outputs,
-                                                   output_may_be_nullable,
-                                                   std::move(string_offsets),
-                                                   stream,
-                                                   mr);
+  auto [output_columns, stencil] = make_outputs(is_null_aware,
+                                                row_size,
+                                                inputs,
+                                                outputs,
+                                                output_may_be_nullable,
+                                                std::move(string_offsets),
+                                                stream,
+                                                mr);
   jit_transform::run(is_null_aware,
                      stencil.has_value(),
                      user_data.has_value(),
@@ -842,7 +830,6 @@ std::unique_ptr<column> transform(std::vector<column_view> const& columns,
                                   rmm::cuda_stream_view stream,
                                   rmm::device_async_resource_ref mr)
 {
-  CUDF_FUNC_RANGE();
   // legacy behavior was to detect which column were scalars based on their sizes
   std::vector<transform_input> inputs;
 
