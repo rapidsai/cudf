@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -57,7 +57,6 @@ def test_hash_shuffle(df: pl.LazyFrame, engine: pl.GPUEngine) -> None:
         qir.schema,
         keys,
         options.executor.shuffle_method,
-        options.executor.shuffler_insertion_method,
         qir,
     )
 
@@ -66,7 +65,6 @@ def test_hash_shuffle(df: pl.LazyFrame, engine: pl.GPUEngine) -> None:
         qir.schema,
         keys,
         options.executor.shuffle_method,
-        options.executor.shuffler_insertion_method,
         qir1,
     )
 
@@ -81,7 +79,6 @@ def test_hash_shuffle(df: pl.LazyFrame, engine: pl.GPUEngine) -> None:
         qir2.schema,
         keys2,
         options.executor.shuffle_method,
-        options.executor.shuffler_insertion_method,
         qir2,
     )
 

@@ -722,7 +722,6 @@ def test_shuffle_properties():
             "runtime": DEFAULT_RUNTIME,
             "shuffle_method": DEFAULT_RUNTIME,
             "broadcast_join_limit": 1,
-            "shuffler_insertion_method": "insert_chunks",
             "dynamic_planning": None,  # Requires static planning
         },
     )
@@ -742,7 +741,6 @@ def test_shuffle_properties():
     assert node.properties == {
         "keys": ["a"],
         "shuffle_method": shuffle_method,
-        "shuffler_insertion_method": "insert_chunks",
     }
 
 
