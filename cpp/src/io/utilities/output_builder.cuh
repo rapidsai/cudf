@@ -322,6 +322,7 @@ class output_builder {
   /**
    * @brief Resizes a vector without reallocating
    *
+   * @param vector The vector
    * @param new_size The new size. Must be smaller than the vector's capacity
    * @param stream The stream on which to resize the vector. Since this function will not
    *               reallocate, this only changes the stream of `vector`, impacting its subsequent
