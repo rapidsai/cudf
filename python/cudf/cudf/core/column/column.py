@@ -2288,7 +2288,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         elif len(self) == 0:
             if isinstance(dtype, np.dtype) and dtype.kind == "U":
                 dtype = np.dtype("object")
-            result = column_empty(0, dtype=dtype)
+            result = self if self.dtype == dtype else column_empty(0, dtype=dtype)
         else:
             if isinstance(dtype, CategoricalDtype):
                 result = self.as_categorical_column(dtype)
