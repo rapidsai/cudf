@@ -92,8 +92,8 @@ std::unique_ptr<column> make_strings_column(IndexPairIterator begin,
  *
  * @param chars_begin First character byte (inclusive)
  * @param chars_end Last character byte (exclusive)
- * @param offset_begin First offset value (inclusive)
- * @param offset_end Last offset value (exclusive)
+ * @param offsets_begin First offset value (inclusive)
+ * @param offsets_end Last offset value (exclusive)
  * @param null_count Number of null rows
  * @param null_mask The validity bitmask in Arrow format
  * @param stream CUDA stream used for device memory operations

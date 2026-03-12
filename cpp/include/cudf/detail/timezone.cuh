@@ -17,10 +17,7 @@ namespace cudf::detail {
 /**
  * @brief Returns the UT offset for a given date and given timezone table.
  *
- * @param transition_times Transition times; trailing `solar_cycle_entry_count` entries are used for
- * all times beyond the one covered by the TZif file
- * @param offsets Time offsets in specific intervals; trailing `solar_cycle_entry_count` entries are
- * used for all times beyond the one covered by the TZif file
+ * @param tz_table Timezone conversion table
  * @param ts ORC timestamp
  *
  * @return offset from UT, in seconds

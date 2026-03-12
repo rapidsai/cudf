@@ -73,6 +73,7 @@ CUDF_KERNEL void valid_if_kernel(
  * @param end The end of the sequence
  * @param p The predicate
  * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned device memory
  * @return A pair containing a `device_buffer` with the new bitmask and its null count
  */
 template <typename InputIterator, typename Predicate>

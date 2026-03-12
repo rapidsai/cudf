@@ -71,6 +71,8 @@ struct sort_groupby_helper {
    * @throw cudf::logic_error if `values.size() != keys.num_rows()`
    *
    * @param values The value column to group and sort
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource used to allocate the returned device memory
    * @return the sorted and grouped column
    */
   std::unique_ptr<column> sorted_values(column_view const& values,
@@ -85,6 +87,8 @@ struct sort_groupby_helper {
    * @throw cudf::logic_error if `values.size() != keys.num_rows()`
    *
    * @param values The value column to group
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource used to allocate the returned device memory
    * @return the grouped column
    */
   std::unique_ptr<column> grouped_values(column_view const& values,

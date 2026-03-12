@@ -66,7 +66,8 @@ struct temporary_nullable_data {
  *            {{"abc", "def", "ghi"}, {"uvw", "xyz"} ]
  * @endcode
  *
- * @param columns Vector of structs columns to extract from.
+ * @param struct_cols Vector of structs columns to extract from.
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @return New column with concatenated results.
  */
 std::vector<std::vector<column_view>> extract_ordered_struct_children(

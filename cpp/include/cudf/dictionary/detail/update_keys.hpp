@@ -83,7 +83,7 @@ std::vector<std::unique_ptr<column>> match_dictionaries(
  *
  * Any null rows are left unchanged.
  *
- * @param input Vector of cudf::table_views that include dictionary columns to be matched.
+ * @param tables Vector of cudf::table_views that include dictionary columns to be matched.
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New dictionary columns and updated cudf::table_views.

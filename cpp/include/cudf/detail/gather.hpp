@@ -46,7 +46,7 @@ enum class negative_index_policy : bool { ALLOWED, NOT_ALLOWED };
  * performance, use `DONT_CHECK` when the `gather_map` is known to contain only valid
  * indices. If `policy` is set to `DONT_CHECK` and there are out-of-bounds indices in `gather_map`,
  * the behavior is undefined.
- * @param[in] negative_index_policy Interpret each negative index `i` in the
+ * @param[in] neg_indices Interpret each negative index `i` in the
  * `gather_map` as the positive index `i+num_source_rows`.
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  * @param[in] mr Device memory resource used to allocate the returned table's device memory

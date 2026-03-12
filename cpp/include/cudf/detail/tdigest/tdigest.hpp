@@ -218,7 +218,7 @@ std::unique_ptr<scalar> reduce_tdigest(column_view const& values,
  *   double       // max
  * }
  *
- * @param values tdigests to merge.
+ * @param input tdigests to merge.
  * @param max_centroids Parameter controlling the level of compression of the tdigest. Higher
  * values result in a larger, more precise tdigest.
  * @param stream CUDA stream used for device memory operations and kernel launches.

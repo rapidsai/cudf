@@ -130,7 +130,7 @@ __launch_bounds__(block_size) CUDF_KERNEL
  * @param rhs         Begin iterator of rhs range
  * @param filter      Function of type `FilterFn` which determines for index `i` where to get the
  *                    corresponding output value from
- * @param out_type    `cudf::data_type` of the returned column
+ * @param output_type `cudf::data_type` of the returned column
  * @param stream      CUDA stream used for device memory operations and kernel launches.
  * @param mr          Device memory resource used to allocate the returned column's device memory
  * @return            A new column that contains the values from either `lhs` or `rhs` as determined

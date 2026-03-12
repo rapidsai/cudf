@@ -98,6 +98,9 @@ class expression_parser {
    * @param expr The expression to create an evaluable expression_parser for.
    * @param left The left table used for evaluating the abstract syntax tree.
    * @param right The right table used for evaluating the abstract syntax tree.
+   * @param has_nulls Whether any of the input columns contain nulls
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource used to allocate the returned device memory
    */
   expression_parser(expression const& expr,
                     cudf::table_view const& left,
@@ -111,6 +114,9 @@ class expression_parser {
    *
    * @param expr The expression to create an evaluable expression_parser for.
    * @param table The table used for evaluating the abstract syntax tree.
+   * @param has_nulls Whether any of the input columns contain nulls
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource used to allocate the returned device memory
    */
   expression_parser(expression const& expr,
                     cudf::table_view const& table,
