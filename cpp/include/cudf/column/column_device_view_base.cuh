@@ -586,7 +586,7 @@ class alignas(16) mutable_column_device_view_core : public detail::column_device
    */
   template <typename T = void,
             CUDF_ENABLE_IF(cuda::std::is_same_v<T, void> or is_rep_layout_compatible<T>())>
-  CUDF_HOST_DEVICE T* head() const noexcept
+  [[nodiscard]] CUDF_HOST_DEVICE T* head() const noexcept
   {
     return const_cast<T*>(detail::column_device_view_base::head<T>());
   }
@@ -604,7 +604,7 @@ class alignas(16) mutable_column_device_view_core : public detail::column_device
    * @return Typed pointer to underlying data, including the offset
    */
   template <typename T, CUDF_ENABLE_IF(is_rep_layout_compatible<T>())>
-  CUDF_HOST_DEVICE T* data() const noexcept
+  [[nodiscard]] CUDF_HOST_DEVICE T* data() const noexcept
   {
     return const_cast<T*>(detail::column_device_view_base::data<T>());
   }
