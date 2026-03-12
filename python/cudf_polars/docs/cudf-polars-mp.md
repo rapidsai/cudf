@@ -1,6 +1,6 @@
-# cudf-polars-mp
+# Multi-GPU Polars
 
-cudf-polars-mp extends Polars query execution to multiple GPUs.
+Multi-GPU Polars extends Polars query execution to multiple GPUs.
 
 Multi-process (mp) execution distributes a query across several GPU workers. Each
 worker owns a disjoint fragment of the data and participates in collective operations

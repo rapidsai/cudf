@@ -2,7 +2,7 @@
 
 This document describes the multi-GPU execution architecture of cudf-polars.
 For user-facing setup instructions, see
-`cudf_polars_mp.md`.
+`cudf-polars-mp.md`.
 
 - [1. Architecture Overview](#1-architecture-overview)
 - [2. SPMD Mode](#2-spmd-mode)
