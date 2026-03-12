@@ -60,7 +60,7 @@ def evaluate_pipeline_ray_mode(
     """
     Evaluate a RapidsMPF streaming pipeline in Ray mode.
 
-    The query is dispatched concurrently to every :class:`RankActor` in the
+    The query is dispatched in parallel to every :class:`RankActor` in the
     Ray cluster. Each actor evaluates the full pipeline on its local GPU and
     participates in collective operations through the shared UCXX
     communicator. The per-rank outputs are concatenated on the client before
@@ -147,9 +147,9 @@ class RankActor:
     """
     Ray actor that owns one GPU and participates in a RapidsMPF cluster.
 
-    Each actor manages its own memory resource, statistics collector,
-    communicator, and streaming context. Collectively, the actors form a
-    SPMD execution cluster used by the client-side Ray integration.
+    Each actor manages its own memory resource, communicator, streaming context,
+    etc. Collectively, the actors form an SPMD execution cluster used by the
+    client-side Ray integration.
 
     Parameters
     ----------
@@ -245,8 +245,7 @@ class RankActor:
         """
         Release actor-owned resources and exit the process.
 
-        This shuts down the local Python executor, drops communicator and
-        memory-resource references, and then terminates the Ray actor process.
+        Raises `ray.exceptions.RayActorError`
         """
         self._py_executor.shutdown(wait=True, cancel_futures=True)
         self._comm = None
