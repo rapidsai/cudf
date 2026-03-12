@@ -6,6 +6,7 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/strings/detail/gather.cuh>
@@ -84,43 +85,33 @@ std::unique_ptr<column> make_strings_column(IndexPairIterator begin,
                              std::move(null_mask));
 }
 
-std::unique_ptr<column> make_strings_column(device_span<string_view const> strings,
-                                            rmm::device_buffer null_mask,
-                                            std::optional<size_type> null_count,
-                                            rmm::cuda_stream_view stream,
-                                            rmm::device_async_resource_ref mr)
+inline std::unique_ptr<column> make_strings_column(device_span<string_view const> strings,
+                                                   rmm::device_buffer null_mask,
+                                                   size_type null_count,
+                                                   rmm::cuda_stream_view stream,
+                                                   rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   auto size = static_cast<size_type>(strings.size());
   if (size == 0) return make_empty_column(type_id::STRING);
 
+  auto stencil = static_cast<bitmask_type const*>(null_mask.data());
+
   // build offsets column from the strings sizes
-  auto sizes = thrust::make_counting_transform_iterator(
+  auto sizes = cudf::detail::make_counting_transform_iterator(
     cudf::size_type{0},
-    [stencil = null_mask.data(),
-     strings = strings.data()] __device__(cudf::size_type index) -> size_type {
-      if (stencil != nullptr && !bit_is_set(stencil, index)) { return size_type{0}; }
+    [stencil, strings = strings.data()] __device__(cudf::size_type index) -> size_type {
+      if (stencil != nullptr && !bit_is_set(stencil, index)) { return 0; }
       return static_cast<size_type>(strings[index].size_bytes());
     });
 
   auto [offsets, bytes] =
     cudf::strings::detail::make_offsets_child_column(sizes, sizes + size, stream, mr);
 
-  auto final_null_count = size_type{0};
-
-  if (!null_count.has_value()) {
-    final_null_count =
-      null_mask.empty() ? 0
-                        : cudf::detail::count_set_bits(null_mask.data(), 0, strings.size(), stream);
-  } else {
-    final_null_count = null_count.value();
-  }
-
-  auto chars =
-    make_chars_buffer(offsets->view(), bytes, strings.data(), null_mask.data(), size, stream, mr);
+  auto chars = make_chars_buffer(offsets->view(), bytes, strings.data(), stencil, size, stream, mr);
 
   return make_strings_column(
-    size, std::move(offsets), chars.release(), final_null_count, std::move(null_mask));
+    size, std::move(offsets), chars.release(), null_count, std::move(null_mask));
 }
 
 /**

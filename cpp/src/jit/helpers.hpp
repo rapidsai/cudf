@@ -76,7 +76,8 @@ std::vector<std::string> input_type_names(
 
 jitify2::Kernel get_udf_kernel(jitify2::PreprocessedProgramData const& preprocessed_program_data,
                                std::string const& kernel_name,
-                               std::string const& cuda_source);
+                               std::string const& cuda_source,
+                               std::vector<std::string> const& extra_options = {});
 
 }  // namespace jit
 }  // namespace cudf

@@ -89,7 +89,8 @@ std::vector<std::string> input_type_names(
 
 jitify2::Kernel get_udf_kernel(jitify2::PreprocessedProgramData const& preprocessed_program_data,
                                std::string const& kernel_name,
-                               std::string const& cuda_source)
+                               std::string const& cuda_source,
+                               std::vector<std::string> const& extra_options)
 {
   CUDF_FUNC_RANGE();
 
@@ -99,8 +100,13 @@ jitify2::Kernel get_udf_kernel(jitify2::PreprocessedProgramData const& preproces
 
   std::vector<std::string> options;
   options.emplace_back("-arch=sm_.");
+  options.emplace_back("-minimal");
 
   if (runtime_version >= min_pch_runtime_version) { options.emplace_back("-pch"); }
+
+  for (auto& opt : extra_options) {
+    options.push_back(opt);
+  }
 
   return cudf::jit::get_program_cache(preprocessed_program_data)
     .get_kernel(kernel_name, {}, {{"cudf/detail/operation-udf.hpp", cuda_source}}, options);

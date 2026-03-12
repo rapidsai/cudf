@@ -13,10 +13,11 @@
 
 #include <cuda/std/cstddef>
 
-#include <jit/accessors.cuh>
-#include <jit/span.cuh>
+#include <jit/column_accessor.cuh>
+#include <jit/column_device_view_wrappers.cuh>
+#include <jit/sync.cuh>
+#include <jit/transform_udf.cuh>
 #include <jit/type_list.cuh>
-#include <jit/udf_invoker.cuh>
 
 #pragma nv_hdrstop  // The above headers are used by the kernel below and need to be included before
                     // it. Each UDF will have a different operation-udf.hpp generated for it, so we
@@ -30,20 +31,6 @@
 
 namespace cudf {
 namespace jit {
-namespace {
-template <typename Out>
-__device__ void warp_compact_validity(detail::column_device_view_base const* columns,
-                                      size_type row,
-                                      bool is_valid)
-{
-  if constexpr (!Out::may_be_nullable) {
-    return;
-  } else {
-    auto null_word = __ballot_sync(0xFFFF'FFFFU, is_valid);
-    if ((threadIdx.x & 31) == 0) { Out::set_null_word(columns, row / 32, null_word); }
-  }
-}
-}  // namespace
 
 template <null_aware is_null_aware,
           bool has_stencil,
@@ -51,22 +38,26 @@ template <null_aware is_null_aware,
           typename Ins,
           typename Outs>
 CUDF_KERNEL void transform_kernel(size_type row_size,
-                                  void* user_data,
                                   bitmask_type const* stencil,
-                                  detail::column_device_view_base const* columns)
+                                  void* user_data,
+                                  column_device_view_core const* incols,
+                                  mutable_column_device_view_core const* outcols)
 {
-  auto const start  = detail::grid_1d::global_thread_id();
-  auto const stride = detail::grid_1d::grid_stride();
+  // ensure block size is a multiple of warp size for correct warp-synchronous behavior
+  assert((blockDim.x & 31) == 0);
+  auto start  = detail::grid_1d::global_thread_id();
+  auto stride = detail::grid_1d::grid_stride();
 
-  for (auto row = start; row < row_size; row += stride) {
-    bool is_valid[Outs::size];
+  for (auto i = start; i < row_size; i += stride) {
+    bool is_valid[Outs::size] = {};
 
     transform_udf<is_null_aware, has_stencil, has_user_data, Ins, Outs>::call(
-      GENERIC_TRANSFORM_OP, row, user_data, stencil, columns, is_valid);
+      GENERIC_TRANSFORM_OP, stencil, user_data, incols, outcols, is_valid, i);
 
-    Outs::map([&]<typename... Out> {
-      (warp_compact_validity<Out>(columns, row, is_valid[Out::index]), ...);
-    });
+    if constexpr (is_null_aware == null_aware::YES) {
+      Outs::map(
+        [&]<typename... A>() { (warp_compact_validity<A>(outcols, i, is_valid[A::index]), ...); });
+    }
   }
 }
 
