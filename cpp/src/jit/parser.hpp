@@ -130,7 +130,7 @@ class ptx_parser {
    *
    * See the implementation for details
    *
-   * @param register_type The input code
+   * @param register_type Registered type string
    * @return The resulting code
    */
   static std::string register_type_to_cpp_type(std::string const& register_type);
