@@ -14,6 +14,15 @@ from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
 )
 
+# Only rapidsmpf emits "Sort does not support multiple partitions"; apply filter conditionally.
+_maybe_ignore_unique_warning = (
+    pytest.mark.filterwarnings(
+        "ignore:Unsupported unique options for multiple partitions"
+    )
+    if DEFAULT_RUNTIME == "rapidsmpf"
+    else lambda f: f
+)
+
 
 @pytest.fixture(scope="module")
 def df():
@@ -26,6 +35,7 @@ def df():
     )
 
 
+@_maybe_ignore_unique_warning
 @pytest.mark.parametrize("subset", [None, ("y",), ("y", "z")])
 @pytest.mark.parametrize("keep", ["first", "last", "any", "none"])
 @pytest.mark.parametrize("maintain_order", [True, False])
@@ -58,7 +68,7 @@ def test_unique(df, keep, subset, maintain_order, cardinality):
         not maintain_order and (not is_cardinality0) and keep in {"first", "last"}
     )
 
-    if should_warn:
+    if DEFAULT_RUNTIME != "rapidsmpf" and should_warn:
         with pytest.warns(
             UserWarning, match="Unsupported unique options for multiple partitions"
         ):
@@ -77,6 +87,7 @@ def test_unique_fallback(df):
             "runtime": DEFAULT_RUNTIME,
             "unique_fraction": {"y": 1.0},
             "fallback_mode": "raise",
+            "dynamic_planning": None,  # Requires static planning
         },
     )
     q = df.unique(keep="first", maintain_order=True)

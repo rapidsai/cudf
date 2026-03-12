@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -660,7 +660,7 @@ TEST_F(ToArrowDecimalScalarTest, Basic)
 
   auto const get_ref_scalar = [&](std::shared_ptr<arrow::DataType> type) {
     auto const maybe_ref_scalar = arrow::MakeScalar(type, value);
-    if (!maybe_ref_scalar.ok()) { CUDF_FAIL("Failed to construct reference scalar"); }
+    CUDF_EXPECTS(maybe_ref_scalar.ok(), "Failed to construct reference scalar");
     return *maybe_ref_scalar;
   };
 

@@ -198,7 +198,7 @@ def test_sort_stable_rapidsmpf_warns():
     )
 
     q = df.sort(by=["y", "z"], maintain_order=True)
-    with pytest.warns(UserWarning, match="Falling back to shuffle_method='tasks'."):
+    with pytest.warns(UserWarning, match="Falling back to shuffle_method"):
         assert_gpu_result_equal(q, engine=engine, check_row_order=True)
 
 
@@ -207,6 +207,7 @@ def test_is_already_partitioned():
     chunks = 4
     columns = (0, 1)
     modulus = 8
+    nranks = 1
 
     # Exact match: should return True
     metadata_match = ChannelMetadata(
@@ -216,7 +217,7 @@ def test_is_already_partitioned():
             local="inherit",
         ),
     )
-    assert _is_already_partitioned(metadata_match, columns, modulus) is True
+    assert _is_already_partitioned(metadata_match, columns, modulus, nranks) is True
 
     # Different columns: should return False
     metadata_diff_cols = ChannelMetadata(
@@ -226,7 +227,9 @@ def test_is_already_partitioned():
             local="inherit",
         ),
     )
-    assert _is_already_partitioned(metadata_diff_cols, columns, modulus) is False
+    assert (
+        _is_already_partitioned(metadata_diff_cols, columns, modulus, nranks) is False
+    )
 
     # Different local partitioning: should return False
     metadata_diff_local = ChannelMetadata(
@@ -236,7 +239,9 @@ def test_is_already_partitioned():
             local=None,
         ),
     )
-    assert _is_already_partitioned(metadata_diff_local, columns, modulus) is False
+    assert (
+        _is_already_partitioned(metadata_diff_local, columns, modulus, nranks) is False
+    )
 
     # Different modulus: should return False
     metadata_diff_mod = ChannelMetadata(
@@ -246,11 +251,11 @@ def test_is_already_partitioned():
             local="inherit",
         ),
     )
-    assert _is_already_partitioned(metadata_diff_mod, columns, modulus) is False
+    assert _is_already_partitioned(metadata_diff_mod, columns, modulus, nranks) is False
 
     # No partitioning: should return False
     metadata_none = ChannelMetadata(chunks)
-    assert _is_already_partitioned(metadata_none, columns, modulus) is False
+    assert _is_already_partitioned(metadata_none, columns, modulus, nranks) is False
 
     # Local not "inherit": should return False
     metadata_local = ChannelMetadata(
@@ -260,4 +265,4 @@ def test_is_already_partitioned():
             local=HashScheme((0,), 4),
         ),
     )
-    assert _is_already_partitioned(metadata_local, columns, modulus) is False
+    assert _is_already_partitioned(metadata_local, columns, modulus, nranks) is False

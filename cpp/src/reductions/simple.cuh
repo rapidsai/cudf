@@ -146,7 +146,7 @@ std::unique_ptr<scalar> dictionary_reduction(
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
-  if (init.has_value()) { CUDF_FAIL("Initial value not supported for dictionary reductions"); }
+  CUDF_EXPECTS(!init.has_value(), "Initial value not supported for dictionary reductions");
 
   auto dcol      = cudf::column_device_view::create(col, stream);
   auto simple_op = Op{};
@@ -305,7 +305,7 @@ struct same_element_type_dispatcher {
              (std::is_same_v<Op, cudf::reduction::detail::op::min> ||
               std::is_same_v<Op, cudf::reduction::detail::op::max>))
   {
-    if (init.has_value()) { CUDF_FAIL("Initial value not supported for nested type reductions"); }
+    CUDF_EXPECTS(!init.has_value(), "Initial value not supported for nested type reductions");
 
     if (input.is_empty()) { return cudf::make_empty_scalar_like(input, stream, mr); }
 

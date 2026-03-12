@@ -125,6 +125,19 @@ def evaluate_logical_plan(
                 collective_id_map,
                 collect_metadata=collect_metadata,
             )
+        elif config_options.executor.cluster == "spmd":
+            from cudf_polars.experimental.rapidsmpf.spmd import (
+                evaluate_pipeline_spmd_mode,
+            )
+
+            result, metadata_collector = evaluate_pipeline_spmd_mode(
+                ir,
+                partition_info,
+                config_options,
+                stats,
+                collective_id_map,
+                collect_metadata=collect_metadata,
+            )
         else:
             # Single-process execution: Run locally
             result, metadata_collector = evaluate_pipeline(
@@ -260,11 +273,11 @@ def evaluate_pipeline(
         )
 
         # Run the network
-        executor = ThreadPoolExecutor(
+        with ThreadPoolExecutor(
             max_workers=config_options.executor.rapidsmpf_py_executor_max_workers,
             thread_name_prefix="cpse",
-        )
-        run_actor_network(actors=nodes, py_executor=executor)
+        ) as executor:
+            run_actor_network(actors=nodes, py_executor=executor)
 
         # Extract/return the concatenated result.
         # Keep chunks alive until after concatenation to prevent
@@ -299,11 +312,7 @@ def evaluate_pipeline(
                 stream,
             )
 
-        # We need to materialize the polars dataframe before we drop the rapidsmpf
-        # context, which keeps the CUDA streams alive.
-        stream = df.stream
         result = df.to_polars()
-        stream.synchronize()
 
         # Now we need to drop *all* GPU data. This ensures that no cudaFreeAsync runs
         # before the Context, which ultimately contains the rmm MR, goes out of scope.
