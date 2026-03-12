@@ -116,7 +116,7 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition(
  * @throw std::invalid_argument if `keys` does not have the same number of rows as `input`.
  *
  * @param input The table to partition
- * @param keys The table of keys to hash defining the partitioning.
+ * @param keys The table of keys to hash defining the partitioning
  * @param num_partitions The number of partitions to use
  * @param hash_function Optional hash id that chooses the hash function to use
  * @param seed Optional seed value to the hash function
