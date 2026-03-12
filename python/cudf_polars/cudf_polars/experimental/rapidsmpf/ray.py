@@ -478,6 +478,9 @@ def ray_execution(
         if rapidsmpf_options is not None
         else Options(get_environment_variables())
     )
+    rapidsmpf_options.insert_if_absent(
+        {"num_streaming_threads": str(executor_options.get("max_io_threads", 4))}
+    )
     rapidsmpf_options_as_bytes = rapidsmpf_options.serialize()
 
     ray_was_initialized: bool = ray.is_initialized()
