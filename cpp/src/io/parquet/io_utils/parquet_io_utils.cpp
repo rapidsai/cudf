@@ -240,6 +240,12 @@ fetch_byte_ranges_to_device_async(
       switch (op.method) {
         case io_method::GDS_DEVICE:
         case io_method::PLAIN_DEVICE:
+#if 0
+          if ((op.src_offset % 4096) or (op.read_size % 4096) or
+              (reinterpret_cast<uintptr_t>(op.dest) % 4096)) {
+            std::cout << "Encountered an unaligned IO operation" << std::endl;
+          }
+#endif
           device_read_tasks.emplace_back(
             datasource.device_read_async(op.src_offset, op.read_size, op.dest, stream));
           break;
@@ -260,6 +266,21 @@ fetch_byte_ranges_to_device_async(
       }
     }
   }
+#if 0
+  // Calculate and print metrics
+  size_t total_buffer_size = 0;
+  for (auto const& buffer : buffers) {
+    total_buffer_size += buffer.size();
+  }
+  size_t num_ios_issued = device_read_tasks.size() + host_read_tasks.size();
+
+  std::cout << "[fetch_byte_ranges_to_device_async] Metrics:\n"
+            << "  Total buffer size allocated: " << total_buffer_size << std::endl
+            << "  Number of buffers allocated: " << buffers.size() << "\n"
+            << "  Number of IOs issued: " << num_ios_issued << " (" << device_read_tasks.size()
+            << " device, " << host_read_tasks.size() << " host)\n"
+            << std::flush;
+#endif
 
   auto sync_function = [](decltype(host_read_tasks) host_read_tasks,
                           decltype(device_read_tasks) device_read_tasks) {
