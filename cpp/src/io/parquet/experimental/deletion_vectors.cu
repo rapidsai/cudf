@@ -337,7 +337,7 @@ std::unique_ptr<cudf::column> compute_row_mask_column(
  * vectors
  *
  * @param row_index_column View of the row index column
- * @param deletion_vector_refs Queue of roaring bitmap wrappers
+ * @param deletion_vectors Queue of roaring bitmap wrappers
  * @param deletion_vector_row_counts Queue of number of rows in eachdeletion vector
  * @param start_row Starting row index of the current table chunk
  * @param stream CUDA stream for kernel launches and data transfers

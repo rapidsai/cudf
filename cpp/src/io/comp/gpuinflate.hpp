@@ -86,8 +86,6 @@ size_t get_gpu_debrotli_scratch_size(int max_num_inputs = 0);
  * @param[in] inputs List of input buffers
  * @param[out] outputs List of output buffers
  * @param[out] results List of output status structures
- * @param[in] scratch Temporary memory for intermediate work
- * @param[in] scratch_size Size in bytes of the temporary memory
  * @param[in] stream CUDA stream to use
  */
 CUDF_EXPORT

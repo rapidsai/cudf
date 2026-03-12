@@ -192,6 +192,7 @@ class output_builder {
    *
    * @param max_write_size the maximum number of elements that will be written into a
    *                       split_device_span returned from `next_output`.
+   * @param max_growth Maximum growth factor for the internal buffer
    * @param stream the stream used to allocate the first chunk of memory.
    * @param mr optional, the memory resource to use for allocation.
    */
@@ -321,7 +322,6 @@ class output_builder {
   /**
    * @brief Resizes a vector without reallocating
    *
-   * @param vector The vector
    * @param new_size The new size. Must be smaller than the vector's capacity
    * @param stream The stream on which to resize the vector. Since this function will not
    *               reallocate, this only changes the stream of `vector`, impacting its subsequent

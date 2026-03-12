@@ -138,6 +138,7 @@ struct hierarchy_info {
  * @param out: (output) Flattened vector of output column_views
  * @param info: (output) Additional per-output column_view metadata needed by the gpu
  * @param h_info: (output) Information about the hierarchy
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param cur_depth: Current absolute depth in the hierarchy
  * @param cur_branch_depth: Current branch depth
  * @param parent_index: Index into `out` representing our owning parent column
