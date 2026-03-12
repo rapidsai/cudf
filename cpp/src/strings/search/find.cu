@@ -196,7 +196,7 @@ std::unique_ptr<column> find_fn(strings_column_view const& input,
 {
   CUDF_EXPECTS(target.is_valid(stream), "Parameter target must be valid.");
   CUDF_EXPECTS(start >= 0, "Parameter start must be positive integer or zero.");
-  if ((stop > 0) && (start > stop)) CUDF_FAIL("Parameter start must be less than stop.");
+  CUDF_EXPECTS(stop <= 0 or start <= stop, "Parameter start must be less than stop.");
 
   // create output column
   auto results = make_numeric_column(data_type{type_to_id<size_type>()},

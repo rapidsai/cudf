@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2024, NVIDIA CORPORATION.  All rights reserved.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.  All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -562,7 +562,7 @@ class regex_parser {
     // treats the chr character as a literal instead as a quantifier.
     // This could lead to confusion where sometimes unescaped quantifier characters
     // are treated as regex expressions and sometimes they are not.
-    if (_items.empty()) { CUDF_FAIL("invalid regex pattern: nothing to repeat at position 0"); }
+    CUDF_EXPECTS(!_items.empty(), "invalid regex pattern: nothing to repeat at position 0");
 
     // handle alternation instruction
     if (chr == '|') return OR;
