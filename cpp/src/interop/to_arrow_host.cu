@@ -31,6 +31,7 @@
 #include <rmm/device_buffer.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <thrust/binary_search.h>
 #include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
 

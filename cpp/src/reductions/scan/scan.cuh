@@ -55,6 +55,12 @@ std::unique_ptr<column> scan_agg_dispatch(column_view const& input,
       return type_dispatcher<dispatch_storage_type>(
         input.type(), DispatchFn<DeviceProduct>(), input, output_mask, stream, mr);
     case aggregation::EWMA: return exponentially_weighted_moving_average(input, agg, stream, mr);
+    case aggregation::COUNT_VALID:
+      return type_dispatcher<dispatch_storage_type>(
+        input.type(), DispatchFn<DeviceCount>(), input, output_mask, stream, mr);
+    case aggregation::COUNT_ALL:
+      return type_dispatcher<dispatch_storage_type>(
+        input.type(), DispatchFn<DeviceCount>(), input, nullptr, stream, mr);
     default: CUDF_FAIL("Unsupported aggregation operator for scan");
   }
 }

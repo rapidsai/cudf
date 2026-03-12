@@ -62,6 +62,7 @@ def test_structlog_streaming_node_events():
 @pytest.mark.skipif(DEFAULT_CLUSTER != "single", reason="Requires 'single' cluster.")
 def test_structlog_contains_expected_ir_types():
     """Test that structlog output contains expected IR types for a query."""
+    pytest.importorskip("structlog")
     code = textwrap.dedent("""\
     import polars as pl
     import rmm
@@ -100,6 +101,7 @@ def test_structlog_contains_expected_ir_types():
 @pytest.mark.skipif(DEFAULT_CLUSTER != "single", reason="Requires 'single' cluster.")
 def test_structlog_disabled_by_default():
     """Test that structlog does NOT emit events when CUDF_POLARS_LOG_TRACES is not set."""
+    pytest.importorskip("structlog")
     code = textwrap.dedent("""\
     import polars as pl
     import rmm
