@@ -1625,7 +1625,8 @@ size_t column_index_buffer_size(EncColumnChunk* ck,
  * @param column_index_truncate_length maximum length of min or max values in column index, in bytes
  * @param stats_granularity Level of statistics requested in output file
  * @param compression Compression format
- * @param collect_compression_statistics Flag to indicate if compression statistics should be collected
+ * @param collect_compression_statistics Flag to indicate if compression statistics should be
+ * collected
  * @param dict_policy Policy for dictionary use
  * @param max_dictionary_size Maximum dictionary size, in bytes
  * @param write_mode Flag to indicate that we are guaranteeing a single table write
