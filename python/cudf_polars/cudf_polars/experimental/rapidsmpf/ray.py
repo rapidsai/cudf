@@ -179,7 +179,8 @@ class RankActor:
         self._nranks: int = nranks
         self._py_executor = ThreadPoolExecutor(
             max_workers=cast(
-                int, executor_options.get("rapidsmpf_py_executor_max_workers", 1)
+                int | None,
+                executor_options.get("rapidsmpf_py_executor_max_workers"),
             ),
             thread_name_prefix="ray-executor",
         )
