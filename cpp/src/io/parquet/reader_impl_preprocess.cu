@@ -234,8 +234,10 @@ void reader_impl::allocate_nesting_info()
           // values indexed by output column index
           nesting_info[cur_depth].max_def_level = actual_cur_schema.max_definition_level;
           pni[cur_depth].size                   = 0;
-          pni[cur_depth].type =
-            to_type_id(actual_cur_schema, _strings_to_categorical, _options.timestamp_type.id());
+          pni[cur_depth].type                   = to_type_id(actual_cur_schema,
+                                           _strings_to_categorical,
+                                           _options.timestamp_type.id(),
+                                           _options.decimal_width);
           pni[cur_depth].nullable = cur_schema.repetition_type == FieldRepetitionType::OPTIONAL;
         }
 
@@ -274,7 +276,8 @@ void reader_impl::allocate_level_decode_space()
   size_t total_memory_size = 0;
   for (size_t idx = 0; idx < num_pages; idx++) {
     // Skip pages that are masked out - no need to allocate level decode space for them
-    if (!_subpass_page_mask.empty() && !_subpass_page_mask[idx]) {
+    auto const page_mask = subpass_page_mask_span();
+    if (!page_mask.is_empty() && !page_mask[idx]) {
       def_level_sizes[idx] = 0;
       rep_level_sizes[idx] = 0;
       continue;
@@ -458,7 +461,7 @@ void reader_impl::compute_page_string_offset_indices(size_t skip_rows, size_t nu
   detail::preprocess_string_offsets(subpass.pages,
                                     pass.chunks,
                                     subpass.page_string_offset_indices,
-                                    _subpass_page_mask,
+                                    subpass_page_mask_span(),
                                     skip_rows,
                                     num_rows,
                                     _stream);
@@ -632,7 +635,8 @@ void reader_impl::preprocess_file(read_mode mode)
   printf("# Input columns: %'lu\n", _input_columns.size());
   for (size_t idx = 0; idx < _input_columns.size(); idx++) {
     auto const& schema = _metadata->get_schema(_input_columns[idx].schema_idx);
-    auto const type_id = to_type_id(schema, _strings_to_categorical, _options.timestamp_type.id());
+    auto const type_id = to_type_id(
+      schema, _strings_to_categorical, _options.timestamp_type.id(), _options.decimal_width);
     printf("\tC(%'lu, %s): %s\n",
            idx,
            _input_columns[idx].name.c_str(),
@@ -707,7 +711,7 @@ void reader_impl::preprocess_subpass_pages(read_mode mode, size_t chunk_read_lim
   // We can't determine subpass skip_rows & num_rows yet, so we use the pass values.
   detail::preprocess_levels(subpass.pages,
                             pass.chunks,
-                            _subpass_page_mask,
+                            subpass_page_mask_span(),
                             pass.skip_rows,
                             pass.num_rows,
                             pass.level_type_size,
@@ -750,7 +754,7 @@ void reader_impl::preprocess_subpass_pages(read_mode mode, size_t chunk_read_lim
     // - we will be doing a chunked read
     compute_page_sizes(subpass.pages,
                        pass.chunks,
-                       _subpass_page_mask,
+                       subpass_page_mask_span(),
                        0,  // 0-max size_t. process all possible rows
                        std::numeric_limits<size_t>::max(),
                        true,  // compute num_rows
@@ -814,7 +818,7 @@ void reader_impl::preprocess_subpass_pages(read_mode mode, size_t chunk_read_lim
       constexpr bool compute_all_string_sizes = true;
       compute_page_string_sizes_pass1(subpass.pages,
                                       pass.chunks,
-                                      _subpass_page_mask,
+                                      subpass_page_mask_span(),
                                       subpass.page_string_offset_indices,
                                       pass.skip_rows,
                                       pass.num_rows,

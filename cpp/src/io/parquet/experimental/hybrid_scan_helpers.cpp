@@ -66,7 +66,8 @@ metadata::metadata(cudf::host_span<uint8_t const> footer_bytes)
 
   CompactProtocolReader cp(footer_bytes.data(), footer_bytes.size());
   cp.read(this);
-  CUDF_EXPECTS(cp.InitSchema(this), "Cannot initialize schema");
+  auto const is_schema_initialized = cp.InitSchema(this);
+  CUDF_EXPECTS(is_schema_initialized, "Cannot initialize schema");
   sanitize_schema();
 }
 
@@ -199,13 +200,19 @@ aggregate_reader_metadata::select_payload_columns(
   bool include_index,
   bool strings_to_categorical,
   bool ignore_missing_columns,
-  type_id timestamp_type_id)
+  type_id timestamp_type_id,
+  type_id decimal_type_id)
 {
   // If neither payload nor filter columns are specified, select all columns
   if (not payload_column_names.has_value() and not filter_column_names.has_value()) {
     // Call the base `select_columns()` method without specifying any columns
-    return select_columns(
-      {}, {}, include_index, strings_to_categorical, ignore_missing_columns, timestamp_type_id);
+    return select_columns({},
+                          {},
+                          include_index,
+                          strings_to_categorical,
+                          ignore_missing_columns,
+                          timestamp_type_id,
+                          decimal_type_id);
   }
 
   std::vector<std::string> valid_payload_columns;
@@ -233,7 +240,8 @@ aggregate_reader_metadata::select_payload_columns(
                           include_index,
                           strings_to_categorical,
                           ignore_missing_columns,
-                          timestamp_type_id);
+                          timestamp_type_id,
+                          decimal_type_id);
   }
 
   // Else if only filter columns are specified, select all columns that do not appear in the
@@ -265,7 +273,8 @@ aggregate_reader_metadata::select_payload_columns(
                         include_index,
                         strings_to_categorical,
                         ignore_missing_columns,
-                        timestamp_type_id);
+                        timestamp_type_id,
+                        decimal_type_id);
 }
 
 std::vector<std::vector<cudf::size_type>>
@@ -601,12 +610,13 @@ std::reference_wrapper<ast::expression const> named_to_reference_converter::visi
   ast::column_reference const& expr)
 {
   // Map the column index to its name
-  auto const col_name = _column_indices_to_names[expr.get_column_index()];
+  auto const col_name_iter = _column_indices_to_names.find(expr.get_column_index());
+  CUDF_EXPECTS(col_name_iter != _column_indices_to_names.end(),
+               "Column index not found in column indices to names map");
+  auto const col_name = col_name_iter->second;
   // Check if the column name exists in the metadata and map it to its new column index
   auto col_index_it = _column_name_to_index.find(col_name);
-  if (col_index_it == _column_name_to_index.end()) {
-    CUDF_FAIL("Column name not found in metadata");
-  }
+  CUDF_EXPECTS(col_index_it != _column_name_to_index.end(), "Column name not found in metadata");
   auto col_index = col_index_it->second;
   // Create a new column reference
   _col_ref.emplace_back(col_index);

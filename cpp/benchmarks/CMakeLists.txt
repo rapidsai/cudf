@@ -153,7 +153,7 @@ ConfigureNVBench(
   join/distinct_join.cu
   join/filter_join_indices.cu
   join/generate_input_tables.cu
-  join/jit_filter_join_indices.cu
+  join/filter_join_indices_jit.cu
   join/multiplicity_join.cu
   join/sort_merge_join.cu
   join/join_heuristics.cu
@@ -186,11 +186,6 @@ ConfigureNVBench(
   sort/sort_structs.cpp
   sort/top_k.cpp
 )
-
-# ##################################################################################################
-# * structs benchmark
-# --------------------------------------------------------------------------------
-ConfigureNVBench(STRUCT_CREATION_NVBENCH structs/create_structs.cpp)
 
 # ##################################################################################################
 # * quantiles benchmark
@@ -256,6 +251,21 @@ ConfigureNVBench(
 ConfigureNVBench(HASHING_NVBENCH hashing/hash.cpp hashing/partition.cpp)
 
 # ##################################################################################################
+# * hybrid scan filters benchmark
+# ----------------------------------------------------------------------
+ConfigureNVBench(
+  HYBRID_SCAN_FILTERS_NVBENCH io/parquet/experimental/hybrid_scan/dict_page_filter.cpp
+)
+
+# ##################################################################################################
+# * hybrid scan multithread benchmark
+# ----------------------------------------------------------------------
+ConfigureNVBench(
+  HYBRID_SCAN_MULTITHREAD_NVBENCH io/parquet/experimental/hybrid_scan/hybrid_scan_multithread.cpp
+  io/parquet/experimental/hybrid_scan/hybrid_scan_composer.cpp
+)
+
+# ##################################################################################################
 # * interop benchmark ------------------------------------------------------------------------------
 ConfigureNVBench(INTEROP_NVBENCH interop/interop.cpp interop/interop_stringview.cpp)
 target_link_libraries(INTEROP_NVBENCH PRIVATE nanoarrow::nanoarrow)
@@ -268,12 +278,8 @@ ConfigureNVBench(
 )
 
 # ##################################################################################################
-# * null_mask benchmark ---------------------------------------------------------------------------
-ConfigureNVBench(NULLMASK_NVBENCH bitmask/set_null_mask.cpp)
-
-# ##################################################################################################
 # * bitmask benchmark ---------------------------------------------------------------------------
-ConfigureNVBench(BITMASK_NVBENCH bitmask/bitmask_and.cu)
+ConfigureNVBench(BITMASK_NVBENCH bitmask/bitmask_and.cpp bitmask/set_null_mask.cpp)
 
 # ##################################################################################################
 # * parquet writer benchmark ----------------------------------------------------------------------
@@ -285,6 +291,34 @@ ConfigureNVBench(
 # * parquet reader benchmark ----------------------------------------------------------------------
 ConfigureNVBench(
   PARQUET_READER_NVBENCH io/parquet/parquet_reader_input.cpp io/parquet/parquet_reader_options.cpp
+  io/parquet/reader_common.cpp
+)
+
+# ##################################################################################################
+# * parquet reader chunks benchmark
+# ------------------------------------------------------------------
+ConfigureNVBench(
+  PARQUET_READER_CHUNKS_NVBENCH io/parquet/parquet_reader_chunks.cpp io/parquet/reader_common.cpp
+)
+
+# ##################################################################################################
+# * parquet reader compressed benchmark ------------------------------------------------------------
+ConfigureNVBench(
+  PARQUET_READER_COMPRESSED_NVBENCH io/parquet/parquet_reader_compressed.cpp
+  io/parquet/reader_common.cpp
+)
+
+# ##################################################################################################
+# * parquet reader strings benchmark
+# ------------------------------------------------------------------
+ConfigureNVBench(
+  PARQUET_READER_STRINGS_NVBENCH io/parquet/parquet_reader_strings.cpp io/parquet/reader_common.cpp
+)
+
+# ##################################################################################################
+# * parquet reader wide benchmark ------------------------------------------------------------------
+ConfigureNVBench(
+  PARQUET_READER_WIDE_NVBENCH io/parquet/parquet_reader_wide.cpp io/parquet/reader_common.cpp
 )
 
 # ##################################################################################################
@@ -293,17 +327,16 @@ ConfigureNVBench(
 ConfigureNVBench(PARQUET_READER_FILTER_NVBENCH io/parquet/parquet_reader_filter.cpp)
 
 # ##################################################################################################
-# * parquet experimental reader benchmark
+# * parquet reader metadata benchmark
 # ----------------------------------------------------------------------
-ConfigureNVBench(
-  PARQUET_EXPERIMENTAL_READER_NVBENCH io/parquet/experimental/parquet_dictionary_page_filter.cpp
-)
+ConfigureNVBench(PARQUET_READER_METADATA_NVBENCH io/parquet/parquet_reader_metadata.cpp)
 
 # ##################################################################################################
 # * parquet deletion vector benchmark
 # ----------------------------------------------------------------------
 ConfigureNVBench(
-  PARQUET_DELETION_VECTORS_NVBENCH io/parquet/experimental/parquet_deletion_vectors.cpp
+  PARQUET_DELETION_VECTORS_NVBENCH
+  io/parquet/experimental/deletion_vectors/parquet_deletion_vectors.cpp
 )
 target_compile_definitions(
   PARQUET_DELETION_VECTORS_NVBENCH
