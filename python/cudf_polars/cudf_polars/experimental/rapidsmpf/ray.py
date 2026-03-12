@@ -112,10 +112,11 @@ def evaluate_pipeline_ray_mode(
         executor=dataclasses.replace(config_options.executor, ray_client=None),
     )
 
-    # ir, partition_info, stats, and collective_id_map must be pickled together
-    # so that the IR-node keys in partition_info / collective_id_map are the
-    # same objects as the nodes in the ir tree after deserialization.
-    query_bundle = (ir, partition_info, stats, collective_id_map)
+    # Serialize the IR bundle once into the Ray object store. The objects must be
+    # pickled together so IR-node keys in partition_info / collective_id_map remain
+    # identical to the nodes in the deserialized IR tree. Actors fetch the bundle
+    # by reference instead of receiving N copies.
+    query_bundle = ray.put((ir, partition_info, stats, collective_id_map))
     result = ray.get(
         [
             rank.evaluate_polars_ir.remote(
