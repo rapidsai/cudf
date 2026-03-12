@@ -28,8 +28,8 @@
 #include <cudf/utilities/span.hpp>
 #include <cudf/utilities/traits.hpp>
 
+#include <cuda/iterator>
 #include <cuda/std/tuple>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/tabulate.h>
 
@@ -39,194 +39,6 @@
 #include <vector>
 
 namespace cudf::io::json::detail {
-
-std::unique_ptr<column> make_strings_column_from_host(host_span<std::string const> host_strings,
-                                                      rmm::cuda_stream_view stream);
-std::unique_ptr<column> make_column_names_column(host_span<column_name_info const> column_names,
-                                                 size_type num_columns,
-                                                 rmm::cuda_stream_view stream);
-std::unique_ptr<column> leaf_column_to_strings(column_view const& column,
-                                               json_writer_options const& options,
-                                               rmm::cuda_stream_view stream,
-                                               rmm::device_async_resource_ref mr);
-
-namespace {
-
-host_span<column_name_info const> child_column_names(
-  host_span<column_name_info const> children_names, size_t child_index)
-{
-  return children_names.size() > child_index
-           ? host_span<column_name_info const>{children_names[child_index].children}
-           : host_span<column_name_info const>{};
-}
-
-struct column_to_strings_fn {
-  explicit column_to_strings_fn(json_writer_options const& options,
-                                rmm::cuda_stream_view stream,
-                                rmm::device_async_resource_ref mr)
-    : options_(options),
-      stream_(stream),
-      mr_(mr),
-      narep(options.get_na_rep(), true, stream),
-      struct_value_separator(",", true, stream),
-      struct_row_begin_wrap("{", true, stream),
-      struct_row_end_wrap("}", true, stream),
-      list_value_separator(",", true, stream),
-      list_row_begin_wrap("[", true, stream),
-      list_row_end_wrap("]", true, stream)
-  {
-  }
-
-  column_to_strings_fn(column_to_strings_fn const&)            = delete;
-  column_to_strings_fn& operator=(column_to_strings_fn const&) = delete;
-  column_to_strings_fn(column_to_strings_fn&&)                 = delete;
-  column_to_strings_fn& operator=(column_to_strings_fn&&)      = delete;
-
-  template <typename column_type>
-  std::unique_ptr<column> operator()(column_view const&, host_span<column_name_info const>) const
-    requires(!std::is_same_v<column_type, cudf::list_view> &&
-             !std::is_same_v<column_type, cudf::struct_view>)
-  {
-    CUDF_FAIL("Only nested columns should use this overload.");
-  }
-
-  template <typename column_type>
-  std::unique_ptr<column> operator()(column_view const& column,
-                                     host_span<column_name_info const> children_names) const
-    requires(std::is_same_v<column_type, cudf::list_view>)
-  {
-    auto child_view            = lists_column_view(column).get_sliced_child(stream_);
-    auto constexpr child_index = lists_column_view::child_column_index;
-
-    auto child_string_with_null = [&]() {
-      if (child_view.type().id() == type_id::STRUCT) {
-        return this->template operator()<cudf::struct_view>(
-          child_view, child_column_names(children_names, child_index));
-      } else if (child_view.type().id() == type_id::LIST) {
-        return this->template operator()<cudf::list_view>(
-          child_view, child_column_names(children_names, child_index));
-      } else {
-        return leaf_column_to_strings(child_view, options_, stream_, mr_);
-      }
-    };
-
-    auto new_offsets = cudf::lists::detail::get_normalized_offsets(
-      lists_column_view(column), stream_, cudf::get_current_device_resource_ref());
-    auto const list_child_string = make_lists_column(
-      column.size(),
-      std::move(new_offsets),
-      child_string_with_null(),
-      column.null_count(),
-      cudf::detail::copy_bitmask(column, stream_, cudf::get_current_device_resource_ref()));
-    return join_list_of_strings(lists_column_view(*list_child_string),
-                                list_row_begin_wrap.value(stream_),
-                                list_row_end_wrap.value(stream_),
-                                list_value_separator.value(stream_),
-                                narep.value(stream_),
-                                stream_,
-                                mr_);
-  }
-
-  template <typename column_type>
-  std::unique_ptr<column> operator()(column_view const& column,
-                                     host_span<column_name_info const> children_names) const
-    requires(std::is_same_v<column_type, cudf::struct_view>)
-  {
-    auto structs_view   = structs_column_view{column};
-    auto const child_it = cudf::detail::make_counting_transform_iterator(
-      0, [&stream = stream_, &s_v = structs_view](auto const child_idx) {
-        return s_v.get_sliced_child(child_idx, stream);
-      });
-    auto col_string = operator()(child_it,
-                                 child_it + column.num_children(),
-                                 children_names,
-                                 column.size(),
-                                 struct_row_end_wrap.value(stream_));
-    col_string->set_null_mask(cudf::detail::copy_bitmask(column, stream_, mr_),
-                              column.null_count());
-    return col_string;
-  }
-
-  template <typename column_iterator>
-  std::unique_ptr<column> operator()(column_iterator column_begin,
-                                     column_iterator column_end,
-                                     host_span<column_name_info const> children_names,
-                                     size_type num_rows,
-                                     cudf::string_view row_end_wrap_value) const
-  {
-    auto const num_columns = std::distance(column_begin, column_end);
-    auto column_names      = make_column_names_column(children_names, num_columns, stream_);
-    auto column_names_view = column_names->view();
-    std::vector<std::unique_ptr<cudf::column>> str_column_vec;
-
-    auto i_col_begin =
-      thrust::make_zip_iterator(thrust::counting_iterator<size_t>(0), column_begin);
-    std::transform(i_col_begin,
-                   i_col_begin + num_columns,
-                   std::back_inserter(str_column_vec),
-                   [this, &children_names](auto const& i_current_col) {
-                     auto const i            = cuda::std::get<0>(i_current_col);
-                     auto const& current_col = cuda::std::get<1>(i_current_col);
-                     if (current_col.type().id() == type_id::STRUCT) {
-                       return this->template operator()<cudf::struct_view>(
-                         current_col, child_column_names(children_names, i));
-                     } else if (current_col.type().id() == type_id::LIST) {
-                       return this->template operator()<cudf::list_view>(
-                         current_col, child_column_names(children_names, i));
-                     } else {
-                       return leaf_column_to_strings(current_col, options_, stream_, mr_);
-                     }
-                   });
-
-    auto str_table_ptr  = std::make_unique<cudf::table>(std::move(str_column_vec));
-    auto str_table_view = str_table_ptr->view();
-
-    return struct_to_strings(str_table_view,
-                             column_names_view,
-                             num_rows,
-                             struct_row_begin_wrap.value(stream_),
-                             row_end_wrap_value,
-                             struct_value_separator.value(stream_),
-                             narep,
-                             options_.is_enabled_include_nulls(),
-                             stream_,
-                             cudf::get_current_device_resource_ref());
-  }
-
- private:
-  json_writer_options const& options_;
-  rmm::cuda_stream_view stream_;
-  rmm::device_async_resource_ref mr_;
-  string_scalar const narep;
-  string_scalar const struct_value_separator;
-  string_scalar const struct_row_begin_wrap;
-  string_scalar const struct_row_end_wrap;
-  string_scalar const list_value_separator;
-  string_scalar const list_row_begin_wrap;
-  string_scalar const list_row_end_wrap;
-};
-
-void write_chunked(data_sink* out_sink,
-                   strings_column_view const& str_column_view,
-                   int skip_last_chars,
-                   json_writer_options const&,
-                   rmm::cuda_stream_view stream)
-{
-  CUDF_EXPECTS(str_column_view.size() > 0, "Unexpected empty strings column.");
-
-  auto const total_num_bytes = str_column_view.chars_size(stream) - skip_last_chars;
-  char const* ptr_all_bytes  = str_column_view.chars_begin(stream);
-
-  if (out_sink->is_device_write_preferred(total_num_bytes)) {
-    out_sink->device_write(ptr_all_bytes, total_num_bytes, stream);
-  } else {
-    auto const h_bytes = cudf::detail::make_host_vector(
-      device_span<char const>(ptr_all_bytes, total_num_bytes), stream);
-    out_sink->host_write(h_bytes.data(), total_num_bytes);
-  }
-}
-
-}  // namespace
 
 std::unique_ptr<column> make_strings_column_from_host(host_span<std::string const> host_strings,
                                                       rmm::cuda_stream_view stream)
@@ -358,6 +170,183 @@ std::unique_ptr<column> leaf_column_to_strings(column_view const& column,
 
   CUDF_FAIL("Unsupported column type.");
 }
+
+namespace {
+
+host_span<column_name_info const> child_column_names(
+  host_span<column_name_info const> children_names, size_t child_index)
+{
+  return children_names.size() > child_index
+           ? host_span<column_name_info const>{children_names[child_index].children}
+           : host_span<column_name_info const>{};
+}
+
+struct column_to_strings_fn {
+  explicit column_to_strings_fn(json_writer_options const& options,
+                                rmm::cuda_stream_view stream,
+                                rmm::device_async_resource_ref mr)
+    : options_(options),
+      stream_(stream),
+      mr_(mr),
+      narep(options.get_na_rep(), true, stream),
+      struct_value_separator(",", true, stream),
+      struct_row_begin_wrap("{", true, stream),
+      struct_row_end_wrap("}", true, stream),
+      list_value_separator(",", true, stream),
+      list_row_begin_wrap("[", true, stream),
+      list_row_end_wrap("]", true, stream)
+  {
+  }
+
+  column_to_strings_fn(column_to_strings_fn const&)            = delete;
+  column_to_strings_fn& operator=(column_to_strings_fn const&) = delete;
+  column_to_strings_fn(column_to_strings_fn&&)                 = delete;
+  column_to_strings_fn& operator=(column_to_strings_fn&&)      = delete;
+
+  template <typename column_type>
+  std::unique_ptr<column> operator()(column_view const&, host_span<column_name_info const>) const
+    requires(!std::is_same_v<column_type, cudf::list_view> &&
+             !std::is_same_v<column_type, cudf::struct_view>)
+  {
+    CUDF_FAIL("Only nested columns should use this overload.");
+  }
+
+  template <typename column_type>
+  std::unique_ptr<column> operator()(column_view const& column,
+                                     host_span<column_name_info const> children_names) const
+    requires(std::is_same_v<column_type, cudf::list_view>)
+  {
+    auto child_view            = lists_column_view(column).get_sliced_child(stream_);
+    auto constexpr child_index = lists_column_view::child_column_index;
+
+    auto child_string_with_null = [&]() {
+      if (child_view.type().id() == type_id::STRUCT) {
+        return this->template operator()<cudf::struct_view>(
+          child_view, child_column_names(children_names, child_index));
+      } else if (child_view.type().id() == type_id::LIST) {
+        return this->template operator()<cudf::list_view>(
+          child_view, child_column_names(children_names, child_index));
+      } else {
+        return leaf_column_to_strings(child_view, options_, stream_, mr_);
+      }
+    };
+
+    auto new_offsets = cudf::lists::detail::get_normalized_offsets(
+      lists_column_view(column), stream_, cudf::get_current_device_resource_ref());
+    auto const list_child_string = make_lists_column(
+      column.size(),
+      std::move(new_offsets),
+      child_string_with_null(),
+      column.null_count(),
+      cudf::detail::copy_bitmask(column, stream_, cudf::get_current_device_resource_ref()));
+    return join_list_of_strings(lists_column_view(*list_child_string),
+                                list_row_begin_wrap.value(stream_),
+                                list_row_end_wrap.value(stream_),
+                                list_value_separator.value(stream_),
+                                narep.value(stream_),
+                                stream_,
+                                mr_);
+  }
+
+  template <typename column_type>
+  std::unique_ptr<column> operator()(column_view const& column,
+                                     host_span<column_name_info const> children_names) const
+    requires(std::is_same_v<column_type, cudf::struct_view>)
+  {
+    auto structs_view   = structs_column_view{column};
+    auto const child_it = cudf::detail::make_counting_transform_iterator(
+      0, [&stream = stream_, &s_v = structs_view](auto const child_idx) {
+        return s_v.get_sliced_child(child_idx, stream);
+      });
+    auto col_string = operator()(child_it,
+                                 child_it + column.num_children(),
+                                 children_names,
+                                 column.size(),
+                                 struct_row_end_wrap.value(stream_));
+    col_string->set_null_mask(cudf::detail::copy_bitmask(column, stream_, mr_),
+                              column.null_count());
+    return col_string;
+  }
+
+  template <typename column_iterator>
+  std::unique_ptr<column> operator()(column_iterator column_begin,
+                                     column_iterator column_end,
+                                     host_span<column_name_info const> children_names,
+                                     size_type num_rows,
+                                     cudf::string_view row_end_wrap_value) const
+  {
+    auto const num_columns = std::distance(column_begin, column_end);
+    auto column_names      = make_column_names_column(children_names, num_columns, stream_);
+    auto column_names_view = column_names->view();
+    std::vector<std::unique_ptr<cudf::column>> str_column_vec;
+
+    auto i_col_begin = thrust::make_zip_iterator(cuda::counting_iterator<size_t>(0), column_begin);
+    std::transform(i_col_begin,
+                   i_col_begin + num_columns,
+                   std::back_inserter(str_column_vec),
+                   [this, &children_names](auto const& i_current_col) {
+                     auto const i            = cuda::std::get<0>(i_current_col);
+                     auto const& current_col = cuda::std::get<1>(i_current_col);
+                     if (current_col.type().id() == type_id::STRUCT) {
+                       return this->template operator()<cudf::struct_view>(
+                         current_col, child_column_names(children_names, i));
+                     } else if (current_col.type().id() == type_id::LIST) {
+                       return this->template operator()<cudf::list_view>(
+                         current_col, child_column_names(children_names, i));
+                     } else {
+                       return leaf_column_to_strings(current_col, options_, stream_, mr_);
+                     }
+                   });
+
+    auto str_table_ptr  = std::make_unique<cudf::table>(std::move(str_column_vec));
+    auto str_table_view = str_table_ptr->view();
+
+    return struct_to_strings(str_table_view,
+                             column_names_view,
+                             num_rows,
+                             struct_row_begin_wrap.value(stream_),
+                             row_end_wrap_value,
+                             struct_value_separator.value(stream_),
+                             narep,
+                             options_.is_enabled_include_nulls(),
+                             stream_,
+                             cudf::get_current_device_resource_ref());
+  }
+
+ private:
+  json_writer_options const& options_;
+  rmm::cuda_stream_view stream_;
+  rmm::device_async_resource_ref mr_;
+  string_scalar const narep;
+  string_scalar const struct_value_separator;
+  string_scalar const struct_row_begin_wrap;
+  string_scalar const struct_row_end_wrap;
+  string_scalar const list_value_separator;
+  string_scalar const list_row_begin_wrap;
+  string_scalar const list_row_end_wrap;
+};
+
+void write_chunked(data_sink* out_sink,
+                   strings_column_view const& str_column_view,
+                   int skip_last_chars,
+                   json_writer_options const&,
+                   rmm::cuda_stream_view stream)
+{
+  CUDF_EXPECTS(str_column_view.size() > 0, "Unexpected empty strings column.");
+
+  auto const total_num_bytes = str_column_view.chars_size(stream) - skip_last_chars;
+  char const* ptr_all_bytes  = str_column_view.chars_begin(stream);
+
+  if (out_sink->is_device_write_preferred(total_num_bytes)) {
+    out_sink->device_write(ptr_all_bytes, total_num_bytes, stream);
+  } else {
+    auto const h_bytes = cudf::detail::make_host_vector(
+      device_span<char const>(ptr_all_bytes, total_num_bytes), stream);
+    out_sink->host_write(h_bytes.data(), total_num_bytes);
+  }
+}
+
+}  // namespace
 
 void write_json_uncompressed(data_sink* out_sink,
                              table_view const& table,
