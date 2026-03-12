@@ -235,6 +235,9 @@ class RankActor:
         self._ctx = Context.from_options(
             self._comm.logger, self._mr, self._rapidsmpf_options
         )
+        # Set the current RMM device resource so all temporary allocations
+        # in libcudf also use the same memory resource.
+        rmm.mr.set_current_device_resource(self._ctx.br().device_mr)
 
     def shutdown(self) -> None:
         """
