@@ -8,11 +8,16 @@ import operator
 from functools import partial, reduce
 from typing import TYPE_CHECKING, Any
 
-from cudf_polars.dsl.ir import ConditionalJoin, Join, Slice
+from cudf_polars.dsl.expr import Col, NamedExpr
+from cudf_polars.dsl.ir import ConditionalJoin, Join, Select, Slice
 from cudf_polars.experimental.base import PartitionInfo, get_key_name
 from cudf_polars.experimental.dispatch import generate_ir_tasks, lower_ir_node
 from cudf_polars.experimental.repartition import Repartition
-from cudf_polars.experimental.shuffle import Shuffle, _hash_partition_dataframe
+from cudf_polars.experimental.shuffle import (
+    Shuffle,
+    _hash_partition_dataframe,
+    _materialize_key_exprs,
+)
 from cudf_polars.experimental.utils import (
     _concat,
     _dynamic_planning_on,
@@ -23,7 +28,6 @@ from cudf_polars.experimental.utils import (
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
 
-    from cudf_polars.dsl.expr import NamedExpr
     from cudf_polars.dsl.ir import IR, IRExecutionContext
     from cudf_polars.experimental.parallel import LowerIRTransformer
     from cudf_polars.utils.config import ShuffleMethod, ShufflerInsertionMethod
@@ -45,20 +49,52 @@ def _maybe_shuffle_frame(
     ):
         # Already shuffled
         return frame
-    else:
-        # Insert new Shuffle node
-        frame = Shuffle(
-            frame.schema,
-            on,
-            shuffle_method,
-            shuffler_insertion_method,
-            frame,
-        )
-        partition_info[frame] = PartitionInfo(
-            count=output_count,
-            partitioned_on=on,
-        )
-        return frame
+
+    if shuffle_method in {"rapidsmpf", "rapidsmpf-single"}:  # pragma: no cover
+        # Materialize non-Col expression keys before shuffling
+        key_select, new_on = _materialize_key_exprs(frame, on)
+        if key_select is not None:
+            partition_info[key_select] = PartitionInfo(
+                count=partition_info[frame].count,
+                partitioned_on=partition_info[frame].partitioned_on,
+            )
+            key_shuffle = Shuffle(
+                key_select.schema,
+                new_on,
+                shuffle_method,
+                shuffler_insertion_method,
+                key_select,
+            )
+            partition_info[key_shuffle] = PartitionInfo(
+                count=output_count, partitioned_on=new_on
+            )
+            new_node = Select(
+                frame.schema,
+                [
+                    NamedExpr(name, Col(dtype, name))
+                    for name, dtype in frame.schema.items()
+                ],
+                False,  # noqa: FBT003
+                key_shuffle,
+            )
+            partition_info[new_node] = PartitionInfo(
+                count=output_count, partitioned_on=on
+            )
+            return new_node
+
+    # Insert new Shuffle node
+    frame = Shuffle(
+        frame.schema,
+        on,
+        shuffle_method,
+        shuffler_insertion_method,
+        frame,
+    )
+    partition_info[frame] = PartitionInfo(
+        count=output_count,
+        partitioned_on=on,
+    )
+    return frame
 
 
 def _make_hash_join(
