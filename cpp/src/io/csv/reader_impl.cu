@@ -981,9 +981,9 @@ table_with_metadata read_csv(cudf::io::datasource* source,
       auto streams               = cudf::detail::fork_streams(stream, num_tasks);
 
       auto process_string_column = [&](size_t str_col_idx, rmm::cuda_stream_view col_stream) {
-        auto const col_idx    = string_col_indices[str_col_idx];
+        auto const col_idx   = string_col_indices[str_col_idx];
         auto const is_quoted = device_span<bool>(is_quoted_flags[str_col_idx]);
-        auto* buffer          = &out_buffers[col_idx];
+        auto* buffer         = &out_buffers[col_idx];
 
         // Count how many rows were quoted to determine the fast path
         auto const num_quoted = thrust::count(
