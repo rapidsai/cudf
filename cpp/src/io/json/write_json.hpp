@@ -21,9 +21,8 @@ class lists_column_view;
 class string_scalar;
 class string_view;
 class table_view;
-}  // namespace cudf
 
-namespace cudf::io::json::detail {
+namespace io::json::detail {
 
 std::unique_ptr<column> make_escaped_json_strings(column_device_view const& d_column,
                                                   size_type size,
@@ -71,4 +70,5 @@ std::unique_ptr<column> leaf_column_to_strings(column_view const& column,
                                                rmm::cuda_stream_view stream,
                                                rmm::device_async_resource_ref mr);
 
-}  // namespace cudf::io::json::detail
+}  // namespace io::json::detail
+}  // namespace cudf
