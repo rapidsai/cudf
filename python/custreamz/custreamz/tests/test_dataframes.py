@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 """
@@ -195,10 +195,7 @@ def test_unary_operators(op, getter):
     "func",
     [
         lambda df: df.query("x > 1 and x < 4"),
-        pytest.param(
-            lambda df: df.x.value_counts().nlargest(2).astype(int),
-            marks=pytest.mark.xfail(reason="Index name lost in _getattr_"),
-        ),
+        lambda df: df.x.value_counts().nlargest(2).astype(int),
     ],
 )
 def test_dataframe_simple(func):
@@ -842,7 +839,7 @@ def test_rolling_aggs_with_start_state(stream):
     )
     assert assert_eq(
         output0[-1][1].reset_index(drop=True),
-        cudf.Series([450], name="amount"),
+        cudf.Series([450.0], name="amount"),
     )
 
     stream = Stream()
@@ -862,7 +859,7 @@ def test_rolling_aggs_with_start_state(stream):
     )
     assert assert_eq(
         output1[-1][1].reset_index(drop=True),
-        cudf.Series([300], name="amount"),
+        cudf.Series([300.0], name="amount"),
     )
 
 

@@ -1,6 +1,6 @@
 # =============================================================================
 # cmake-format: off
-# SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 # cmake-format: on
 # =============================================================================
@@ -157,6 +157,7 @@ ConfigureTest(
   groupby/sum_tests.cpp
   groupby/sum_with_overflow_tests.cpp
   groupby/tdigest_tests.cpp
+  groupby/topk_tests.cpp
   groupby/var_tests.cpp
   GPUS 1
   PERCENT 100
@@ -165,8 +166,14 @@ ConfigureTest(
 # ##################################################################################################
 # * join tests ------------------------------------------------------------------------------------
 ConfigureTest(
-  JOIN_TEST join/join_tests.cpp join/conditional_join_tests.cu join/cross_join_tests.cpp
-  join/semi_anti_join_tests.cpp join/mixed_join_tests.cu join/distinct_join_tests.cpp
+  JOIN_TEST
+  join/join_tests.cpp
+  join/conditional_join_tests.cu
+  join/cross_join_tests.cpp
+  join/semi_anti_join_tests.cpp
+  join/mixed_join_tests.cu
+  join/distinct_join_tests.cpp
+  join/key_remapping_tests.cpp
   GPUS 1
   PERCENT 100
 )
@@ -217,8 +224,10 @@ ConfigureTest(
 # * reduction tests -------------------------------------------------------------------------------
 ConfigureTest(
   REDUCTIONS_TEST
+  reductions/approx_distinct_count_tests.cpp
   reductions/bitwise_tests.cpp
   reductions/collect_ops_tests.cpp
+  reductions/distinct_count_tests.cpp
   reductions/ewm_tests.cpp
   reductions/host_udf_example_tests.cu
   reductions/list_rank_test.cpp
@@ -227,6 +236,7 @@ ConfigureTest(
   reductions/scan_tests.cpp
   reductions/segmented_reduction_tests.cpp
   reductions/tdigest_tests.cpp
+  reductions/unique_count_tests.cpp
   GPUS 1
   PERCENT 70
 )
@@ -328,11 +338,11 @@ ConfigureTest(
   io/parquet_v2_test.cpp
   io/parquet_writer_test.cpp
   GPUS 1
-  PERCENT 30
+  PERCENT 100
 )
 ConfigureTest(
   HYBRID_SCAN_TEST
-  io/experimental/hybrid_scan_common.cpp
+  io/experimental/hybrid_scan_composer.cpp
   io/experimental/hybrid_scan_filters_test.cpp
   io/experimental/hybrid_scan_test.cpp
   io/parquet_common.cpp
@@ -371,6 +381,7 @@ ConfigureTest(
 target_link_libraries(DATA_CHUNK_SOURCE_TEST PRIVATE ZLIB::ZLIB)
 ConfigureTest(LOGICAL_STACK_TEST io/fst/logical_stack_test.cu)
 ConfigureTest(FST_TEST io/fst/fst_test.cu)
+ConfigureTest(CUDFTABLE_TEST io/cudftable_test.cpp)
 ConfigureTest(TYPE_INFERENCE_TEST io/type_inference_test.cpp)
 
 # ##################################################################################################
@@ -390,7 +401,6 @@ ConfigureTest(
   copying/copy_if_else_nested_tests.cpp
   copying/copy_range_tests.cpp
   copying/copy_tests.cpp
-  copying/detail_gather_tests.cu
   copying/gather_list_tests.cpp
   copying/gather_str_tests.cpp
   copying/gather_struct_tests.cpp
@@ -435,20 +445,7 @@ ConfigureTest(
 # ##################################################################################################
 # * span tests -------------------------------------------------------------------------------
 
-# This test must be split into two executables so that one can use the preload library and one does
-# not. The one that doesn't includes a thrust::device_vector copy, which is always synchronous on
-# the default stream and is out of libcudf's control (but must be tested).
-set(_allowlist_filter SpanTest.CanConstructFromDeviceContainers)
-
 ConfigureTest(SPAN_TEST utilities_tests/span_tests.cu)
-ConfigureTest(SPAN_TEST_DEVICE_VECTOR utilities_tests/span_tests.cu)
-
-# Overwrite the environments set by ConfigureTest
-set_property(
-  TEST SPAN_TEST SPAN_TEST_DEVICE_VECTOR
-  APPEND
-  PROPERTY ENVIRONMENT "GTEST_FILTER=-${_allowlist_filter}"
-)
 
 # ##################################################################################################
 # * iterator tests --------------------------------------------------------------------------------
@@ -507,12 +504,10 @@ ConfigureTest(
 ConfigureTest(
   STREAM_COMPACTION_TEST
   stream_compaction/apply_boolean_mask_tests.cpp
-  stream_compaction/distinct_count_tests.cpp
   stream_compaction/distinct_tests.cpp
   stream_compaction/drop_nans_tests.cpp
   stream_compaction/drop_nulls_tests.cpp
   stream_compaction/stable_distinct_tests.cpp
-  stream_compaction/unique_count_tests.cpp
   stream_compaction/unique_tests.cpp
 )
 
@@ -638,7 +633,6 @@ ConfigureTest(STRUCTS_TEST structs/structs_column_tests.cpp structs/utilities_te
 # * nvtext test -----------------------------------------------------------------------------------
 ConfigureTest(
   TEXT_TEST
-  text/bpe_tests.cpp
   text/deduplicate_tests.cpp
   text/edit_distance_tests.cpp
   text/jaccard_tests.cpp
@@ -674,6 +668,7 @@ ConfigureTest(
   dictionary/search_test.cpp
   dictionary/set_keys_test.cpp
   dictionary/slice_test.cpp
+  dictionary/sort_test.cpp
 )
 
 # ##################################################################################################
@@ -783,7 +778,6 @@ ConfigureTest(
 )
 ConfigureTest(
   STREAM_TEXT_TEST
-  streams/text/bpe_test.cpp
   streams/text/edit_distance_test.cpp
   streams/text/ngrams_test.cpp
   streams/text/replace_test.cpp

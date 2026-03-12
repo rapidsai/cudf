@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #include <cudf/column/column_device_view.cuh>
@@ -20,9 +20,9 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/iterator>
 #include <cuda/std/utility>
 #include <thrust/for_each.h>
-#include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
 
 #include <iterator>
@@ -299,7 +299,7 @@ std::unique_ptr<column> md5(table_view const& input,
   // Digest size in bytes
   auto constexpr digest_size = 32;
   // Result column allocation and creation
-  auto begin = thrust::make_constant_iterator(digest_size);
+  auto begin = cuda::make_constant_iterator(digest_size);
   auto [offsets_column, bytes] =
     cudf::strings::detail::make_offsets_child_column(begin, begin + input.num_rows(), stream, mr);
 
@@ -310,7 +310,7 @@ std::unique_ptr<column> md5(table_view const& input,
 
   // Hash each row, hashing each element sequentially left to right
   thrust::for_each(
-    rmm::exec_policy(stream),
+    rmm::exec_policy_nosync(stream),
     thrust::make_counting_iterator(0),
     thrust::make_counting_iterator(input.num_rows()),
     [d_chars, device_input = *device_input] __device__(auto row_index) {

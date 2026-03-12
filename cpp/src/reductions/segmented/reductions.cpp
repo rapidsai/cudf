@@ -42,7 +42,7 @@ struct segmented_reduce_dispatch_functor {
       null_handling(null_handling),
       init(init),
       stream(stream),
-      mr(mr)
+      mr(std::move(mr))
   {
   }
 

@@ -78,9 +78,15 @@ the source files that implement the API. For example, the implementation of the 
 `cudf/cpp/include/cudf/copying.hpp` are located in `cudf/src/copying`. Likewise, the unit tests for
 the APIs reside in `cudf/tests/copying/`.
 
-Internal API headers containing `detail` namespace definitions that are either used across translation
-units inside libcudf should be placed in `include/cudf/detail`. Just like the public C++ API headers, any
-internal C++ API header requires `CUDF_EXPORT` markup on the `cudf` namespace so that the functions can be tested.
+Internal API headers containing `detail` namespace definitions that are used across translation
+units inside libcudf should be placed according to their namespace:
+
+- For APIs in `cudf::detail`, place headers in `include/cudf/detail/`.
+- For APIs in a sub-namespace's detail (e.g., `cudf::hashing::detail` or `cudf::strings::detail`),
+  place headers in `include/cudf/<sub-namespace>/detail/` (e.g., `include/cudf/hashing/detail/`).
+
+Internal C++ headers may need `CUDF_EXPORT` if that internal functionality is tested directly (as
+opposed to tested via only public APIs).
 
 All headers in cudf should use `#pragma once` for include guards.
 
@@ -93,7 +99,7 @@ All headers in cudf should use `#pragma once` for include guards.
 
 Only use `.cu` and `.cuh` if necessary. A good indicator is the inclusion of `__device__` and other
 symbols that are only recognized by `nvcc`. Another indicator is Thrust algorithm APIs with a device
-execution policy (always `rmm::exec_policy` in libcudf).
+execution policy (always `rmm::exec_policy_nosync` in libcudf).
 
 ## Code and Documentation Style and Formatting
 
@@ -480,7 +486,7 @@ This policy applies only to fixed-width types. It does **not** apply to variable
 (strings) or nested types (lists, structs), which have their own requirements as described in the
 sections above.
 
-## Treat libcudf APIs as if they were asynchronous
+## Treat libcudf APIs as if they were asynchronous {#async-apis}
 
 libcudf APIs called on the host do not guarantee that the stream is synchronized before returning.
 Work in libcudf occurs on `cudf::get_default_stream().value`, which defaults to the CUDA default
@@ -547,7 +553,7 @@ void external_function(..., rmm::cuda_stream_view stream, rmm::device_async_reso
   rmm::device_buffer buff(..., stream, mr);
   CUDF_CUDA_TRY(cudaMemcpyAsync(...,stream.value()));
   kernel<<<..., stream>>>(...);
-  thrust::algorithm(rmm::exec_policy(stream), ...);
+  thrust::algorithm(rmm::exec_policy_nosync(stream), ...);
 }
 } // namespace detail
 
@@ -567,7 +573,7 @@ asynchrony.
 **Note:** `cudaDeviceSynchronize()` should *never* be used.
 This limits the ability to do any multi-stream/multi-threaded work with libcudf APIs.
 
- ### Stream Creation
+### Stream Creation
 
 There may be times in implementing libcudf features where it would be advantageous to use streams
 *internally*, i.e., to accomplish overlap in implementing an algorithm. However, dynamically
@@ -575,6 +581,30 @@ creating a stream can be expensive. RMM has a stream pool class to help avoid dy
 creation. However, this is not yet exposed in libcudf, so for the time being, libcudf features
 should avoid creating streams (even if it is slightly less efficient). It is a good idea to leave a
 `// TODO:` note indicating where using a stream would be beneficial.
+
+### Thrust Execution Policy
+
+libcudf uses `rmm::exec_policy_nosync(stream)` for all Thrust algorithm calls. This execution policy
+avoids internal stream synchronizations except when required for correctness, such as when an
+algorithm returns a value to the host (e.g., `thrust::reduce`).
+
+Using `nosync` provides significant performance improvements, particularly for small data sizes
+where synchronization overhead is proportionally larger. Benchmarks have shown speedups of 10-40%
+for many operations on small inputs.
+
+This policy aligns with libcudf's existing stream semantics: libcudf APIs called on the host
+[do not guarantee that the stream is synchronized before returning](#async-apis).
+Callers must explicitly synchronize if they need to access results on the host.
+
+Notes on `nosync`:
+
+- Algorithms that return values to the host (like `thrust::reduce`) will still synchronize
+  internally as needed for correctness.
+- Ensure that stream-ordered accesses are considered in the context of RAII. Host objects that could
+  go out of scope (whose lifetime could expire before stream-ordered access) may require an explicit
+  synchronization before returning or exiting that scope.
+- All new code should use `rmm::exec_policy_nosync(stream)` rather than `rmm::exec_policy(stream)`.
+  If a stream sync is needed, call `stream.synchronize()` explicitly.
 
 ## Memory Allocation
 
@@ -721,6 +751,70 @@ auto mr = new my_custom_resource{...};
 // Allocates uninitialized storage for 100 `int32_t` elements on stream `s` using the resource `mr`
 rmm::device_uvector<int32_t> v2{100, s, mr};
 ```
+
+## Memory Copies
+
+libcudf code should prefer `cudf::detail::cuda_memcpy_async` and `cudf::detail::memcpy_async` over
+direct calls to `cudaMemcpyAsync`. These cudf utilities try to use `cudaMemcpyBatchAsync` on CUDA
+13.0+, but not primarily for the "batch" properties:
+- `cudaMemcpyBatchAsync` can be lower-overhead, it is actually asynchronous in certain cases where
+  `cudaMemcpyAsync` cannot be asynchronous
+- `cudaMemcpyBatchAsync` may also reduce multi-thread lock contention compared to `cudaMemcpyAsync`
+
+For host-to-device or device-to-host copies, prefer the typed span-based wrappers:
+
+```c++
+cudf::detail::cuda_memcpy_async<T>(device_span<T>{dst}, host_span<T const>{src}, stream);
+cudf::detail::cuda_memcpy_async<T>(host_span<T>{dst}, device_span<T const>{src}, stream);
+```
+
+For device-to-device copies, or when a raw `void*` interface is required, use
+`cudf::detail::memcpy_async` (single buffer) or `cudf::detail::memcpy_batch_async` (multiple
+buffers) and check errors with `CUDF_CUDA_TRY` at the call site:
+
+```c++
+// Single buffer copy
+CUDF_CUDA_TRY(cudf::detail::memcpy_async(dst, src, size_bytes, stream));
+
+// Batch copy of multiple buffers
+CUDF_CUDA_TRY(cudf::detail::memcpy_batch_async(dsts, srcs, sizes, count, stream));
+```
+
+`memcpy_async` is a thin wrapper around `memcpy_batch_async` with `count = 1`. Prefer
+`memcpy_batch_async` directly when copying multiple buffers, as it issues all copies in a single
+`cudaMemcpyBatchAsync` call.
+
+**Important:** Both functions use `cudaMemcpyBatchAsync` with `cudaMemcpySrcAccessOrderStream`,
+which defers reading the source buffers until the stream reaches the copies. The **source buffers
+must remain valid until the stream has executed the copies**. For device memory this is naturally
+satisfied; for host memory the caller must ensure the sources are not freed before the stream is
+synchronized.
+
+When a temporary host buffer is used as the source of an async copy, its destructor must not free
+the memory before the stream has consumed it. Buffers allocated with a stream-ordered allocator
+(e.g., the pinned memory pool) are safe — deallocation is deferred until the stream catches up.
+Buffers from non-stream-ordered allocators (e.g., `new_delete_resource`) require an explicit
+`stream.synchronize()` before the buffer is destroyed. Prefer `make_pinned_vector_async` for
+temporary host staging buffers to avoid the sync:
+
+```c++
+// UNSAFE — std::vector uses pageable memory; must synchronize before it goes out of scope
+{
+  auto staging = std::vector<char>(size);
+  fill(staging);
+  cudf::detail::cuda_memcpy_async<char>(d_buf, staging, stream);
+  stream.synchronize();  // required: pageable allocator is not stream-ordered
+}
+
+// SAFE — stream-ordered pinned buffer, no sync needed
+{
+  auto staging = cudf::detail::make_pinned_vector_async<char>(size, stream);
+  fill(staging);
+  cudf::detail::cuda_memcpy_async<char>(d_buf, staging, stream);
+} // deallocation is stream-ordered → no race
+```
+
+The same stream-safety requirements apply to `memcpy_async` and `memcpy_batch_async`.
 
 ## Default Parameters
 
@@ -904,7 +998,7 @@ Example output iterator usage:
 
 ```c++
 auto result_itr = indexalator_factory::create_output_iterator(indices->mutable_view());
-thrust::lower_bound(rmm::exec_policy(stream),
+thrust::lower_bound(rmm::exec_policy_nosync(stream),
                     input->begin<Element>(),
                     input->end<Element>(),
                     values->begin<Element>(),
@@ -1048,6 +1142,19 @@ occurred and is used for the exception's `what()` message. If the conditional ev
 `false`, then an error has occurred and an instance of the exception class in the third argument
 (or the default, `cudf::logic_error`) is thrown.
 
+The condition (first argument) of `CUDF_EXPECTS` should be a pure predicate that only inspects
+state without modifying it. If the result of an operation with a side effect needs to be checked,
+capture the result in a variable first:
+
+```c++
+// WRONG — side effect (initialization) inside the condition:
+CUDF_EXPECTS(reader.init(source), "Failed to initialize reader");
+
+// RIGHT — capture the result, then check it:
+auto const init_ok = reader.init(source);
+CUDF_EXPECTS(init_ok, "Failed to initialize reader");
+```
+
 There are times where a particular code path, if reached, should indicate an error no matter what.
 For example, often the `default` case of a `switch` statement represents an invalid alternative.
 Use the `CUDF_FAIL` macro for such errors. This is effectively the same as calling
@@ -1058,6 +1165,11 @@ Example:
 ```c++
 CUDF_FAIL("This code path should not be reached.");
 ```
+
+Prefer `CUDF_EXPECTS` over `if (condition) { CUDF_FAIL(reason); }` when the condition has no side
+effects. The `if`/`CUDF_FAIL` pattern is appropriate when cleanup or other actions must be
+performed before throwing, or when the condition itself involves side effects that cannot be
+separated from the check.
 
 ### CUDA Error Checking
 

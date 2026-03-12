@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -18,9 +18,9 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/iterator>
 #include <thrust/copy.h>
 #include <thrust/for_each.h>
-#include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
 
 #include <type_traits>
@@ -59,9 +59,7 @@ struct byte_list_conversion_fn<T, std::enable_if_t<cudf::is_numeric<T>()>> {
                                         rmm::cuda_stream_view stream,
                                         rmm::device_async_resource_ref mr)
   {
-    if (input.size() == 0) {
-      return cudf::lists::detail::make_empty_lists_column(output_type, stream, mr);
-    }
+    if (input.size() == 0) { return cudf::lists::detail::make_empty_lists_column(output_type); }
     if (input.size() == input.null_count()) {
       return cudf::lists::detail::make_all_nulls_lists_column(
         input.size(), output_type, stream, mr);
@@ -75,7 +73,7 @@ struct byte_list_conversion_fn<T, std::enable_if_t<cudf::is_numeric<T>()>> {
     auto const d_out = byte_column->mutable_view().data<char>();
 
     if (configuration == flip_endianness::YES) {
-      thrust::for_each(rmm::exec_policy(stream),
+      thrust::for_each(rmm::exec_policy_nosync(stream),
                        thrust::make_counting_iterator(0),
                        thrust::make_counting_iterator(num_bytes),
                        [d_inp, d_out] __device__(auto index) {
@@ -83,10 +81,10 @@ struct byte_list_conversion_fn<T, std::enable_if_t<cudf::is_numeric<T>()>> {
                          d_out[index]        = d_inp[index + mask - ((index & mask) << 1)];
                        });
     } else {
-      thrust::copy_n(rmm::exec_policy(stream), d_inp, num_bytes, d_out);
+      thrust::copy_n(rmm::exec_policy_nosync(stream), d_inp, num_bytes, d_out);
     }
 
-    auto const it = thrust::make_constant_iterator(sizeof(T));
+    auto const it = cuda::make_constant_iterator(sizeof(T));
     auto offsets_column =
       std::get<0>(cudf::detail::make_offsets_child_column(it, it + input.size(), stream, mr));
 
@@ -94,9 +92,7 @@ struct byte_list_conversion_fn<T, std::enable_if_t<cudf::is_numeric<T>()>> {
                                     std::move(offsets_column),
                                     std::move(byte_column),
                                     input.null_count(),
-                                    detail::copy_bitmask(input, stream, mr),
-                                    stream,
-                                    mr);
+                                    detail::copy_bitmask(input, stream, mr));
 
     // If any nulls are present, the corresponding lists must be purged so that
     // the result is sanitized.
@@ -116,9 +112,7 @@ struct byte_list_conversion_fn<T, std::enable_if_t<std::is_same_v<T, cudf::strin
                                         rmm::cuda_stream_view stream,
                                         rmm::device_async_resource_ref mr)
   {
-    if (input.size() == 0) {
-      return cudf::lists::detail::make_empty_lists_column(output_type, stream, mr);
-    }
+    if (input.size() == 0) { return cudf::lists::detail::make_empty_lists_column(output_type); }
     if (input.size() == input.null_count()) {
       return cudf::lists::detail::make_all_nulls_lists_column(
         input.size(), output_type, stream, mr);
@@ -139,9 +133,7 @@ struct byte_list_conversion_fn<T, std::enable_if_t<std::is_same_v<T, cudf::strin
       std::move(col_content.children[cudf::strings_column_view::offsets_column_index]),
       std::move(uint8_col),
       input.null_count(),
-      detail::copy_bitmask(input, stream, mr),
-      stream,
-      mr);
+      detail::copy_bitmask(input, stream, mr));
 
     // If any nulls are present, the corresponding lists must be purged so that
     // the result is sanitized.

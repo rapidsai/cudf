@@ -13,6 +13,8 @@
 #include <cudf/hashing/detail/xxhash_64.cuh>
 #include <cudf/utilities/default_stream.hpp>
 
+#include <rmm/mr/polymorphic_allocator.hpp>
+
 #include <cuco/bloom_filter.cuh>
 #include <cuco/bloom_filter_policies.cuh>
 

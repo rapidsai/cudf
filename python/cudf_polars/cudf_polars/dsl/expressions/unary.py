@@ -1,13 +1,11 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 # TODO: remove need for this
 """DSL nodes for unary operations."""
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, ClassVar, cast
-
-from typing_extensions import assert_never
+from typing import TYPE_CHECKING, Any, ClassVar, assert_never, cast
 
 import pylibcudf as plc
 
@@ -114,6 +112,8 @@ class UnaryFunction(Expr):
             "rank",
             "round",
             "set_sorted",
+            "shift",
+            "shift_and_fill",
             "top_k",
             "unique",
             "value_counts",
@@ -146,6 +146,8 @@ class UnaryFunction(Expr):
             "cum_sum",
             "drop_nulls",
             "rank",
+            "shift",
+            "shift_and_fill",
             "top_k",
             "unique",
         )
@@ -241,7 +243,9 @@ class UnaryFunction(Expr):
             if maintain_order:
                 column = column.sorted_like(values)
             return column
-        elif self.name == "set_sorted":
+        elif self.name == "set_sorted":  # pragma: no cover
+            # TODO: LazyFrame.set_sorted is proper IR concept (ie. FunctionIR::Hint)
+            # and is is currently not implemented. We should reimplement it as a MapFunction.
             (column,) = (child.evaluate(df, context=context) for child in self.children)
             (asc,) = self.options
             order = (
@@ -509,6 +513,35 @@ class UnaryFunction(Expr):
                     else plc.types.Order.DESCENDING,
                     stream=df.stream,
                 ),
+                dtype=self.dtype,
+            )
+        elif self.name in ("shift", "shift_and_fill"):
+            column = self.children[0].evaluate(df, context=context)
+            n_expr = self.children[1]
+            if isinstance(n_expr, Literal):
+                offset = n_expr.value
+            else:
+                n_col = n_expr.evaluate(df, context=context)
+                offset_py = plc.copying.get_element(
+                    n_col.obj, 0, stream=df.stream
+                ).to_py()
+                assert isinstance(offset_py, int)
+                offset = offset_py
+            if self.name == "shift":
+                fill_scalar = plc.Scalar.from_py(
+                    None, column.dtype.plc_type, stream=df.stream
+                )
+            else:
+                fill_expr = self.children[2]
+                if isinstance(fill_expr, Literal):
+                    fill_scalar = plc.Scalar.from_py(
+                        fill_expr.value, column.dtype.plc_type, stream=df.stream
+                    )
+                else:
+                    fill_col = fill_expr.evaluate(df, context=context)
+                    fill_scalar = fill_col.obj_scalar(stream=df.stream)
+            return Column(
+                plc.copying.shift(column.obj, offset, fill_scalar, stream=df.stream),
                 dtype=self.dtype,
             )
         elif self.name in self._OP_MAPPING:

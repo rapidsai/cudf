@@ -106,7 +106,7 @@ def test_dataframe_hash_values_xxhash32():
 
     out_df = gdf.hash_values(method="xxhash32", seed=0)
     expected_df = cudf.Series(
-        [1223721700, 2885793241, 1920811472, 1146715602, 4294967295],
+        [3217993155, 2243235024, 3783294776, 940382429, 566789768],
         dtype=np.uint32,
     )
     assert_eq(out_df, expected_df)
@@ -147,11 +147,11 @@ def test_dataframe_hash_values_xxhash64():
     out_df = gdf.hash_values(method="xxhash64", seed=0)
     expected_df = cudf.Series(
         [
-            10208049663714815266,
-            4949201786888768834,
-            18122173653994477335,
-            11133539368563441730,
-            18446744073709551615,
+            3012780887911066904,
+            2108190815019463645,
+            1057888907238192171,
+            7243162636073134573,
+            2434343235958965292,
         ],
         dtype=np.uint64,
     )

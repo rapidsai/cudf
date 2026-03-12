@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -56,7 +56,7 @@ std::unique_ptr<column> concatenate_lists_ignore_null(column_view const& input,
   // into row offsets of the root column. Those entry offsets are subtracted by the first entry
   // offset to output zero-based offsets.
   auto const iter = thrust::make_counting_iterator<size_type>(0);
-  thrust::transform(rmm::exec_policy(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream),
                     iter,
                     iter + num_rows + 1,
                     d_out_offsets,
@@ -95,9 +95,7 @@ std::unique_ptr<column> concatenate_lists_ignore_null(column_view const& input,
                            std::move(out_offsets),
                            std::move(out_entries),
                            null_count,
-                           null_count > 0 ? std::move(null_mask) : rmm::device_buffer{},
-                           stream,
-                           mr);
+                           null_count > 0 ? std::move(null_mask) : rmm::device_buffer{});
 }
 
 /**
@@ -173,7 +171,7 @@ std::unique_ptr<column> gather_list_entries(column_view const& input,
 
   // Fill the gather map with indices of the lists from the child column of the input column.
   thrust::for_each_n(
-    rmm::exec_policy(stream),
+    rmm::exec_policy_nosync(stream),
     thrust::make_counting_iterator<size_type>(0),
     num_rows,
     [d_row_offsets,
@@ -221,9 +219,7 @@ std::unique_ptr<column> concatenate_lists_nullifying_rows(column_view const& inp
                            std::move(list_offsets),
                            std::move(list_entries),
                            null_count,
-                           null_count ? std::move(null_mask) : rmm::device_buffer{},
-                           stream,
-                           mr);
+                           null_count ? std::move(null_mask) : rmm::device_buffer{});
 }
 
 }  // namespace

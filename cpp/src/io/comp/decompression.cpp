@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -566,8 +566,7 @@ void host_decompress(compression_type compression,
   for (size_t i = 0; i < num_chunks; ++i) {
     auto const cur_stream = streams[i % streams.size()];
     auto task = [d_in = h_inputs[i], d_out = h_outputs[i], cur_stream, compression]() -> size_t {
-      auto h_in = cudf::detail::make_pinned_vector_async<uint8_t>(d_in.size(), cur_stream);
-      cudf::detail::cuda_memcpy<uint8_t>(h_in, d_in, cur_stream);
+      auto h_in = cudf::detail::make_pinned_vector_async<uint8_t>(d_in, cur_stream);
 
       auto h_out             = cudf::detail::make_pinned_vector<uint8_t>(d_out.size(), cur_stream);
       auto const uncomp_size = decompress(compression, h_in, h_out);
@@ -656,10 +655,9 @@ size_t get_uncompressed_size(compression_type compression, host_span<uint8_t con
   auto const nvcomp_disabled = nvcomp_type.has_value()
                                  ? nvcomp::is_decompression_disabled(*nvcomp_type)
                                  : "invalid compression type";
-  if (nvcomp_disabled) {
-    CUDF_FAIL("Cannot compute decompression scratch size for " +
-              compression_type_name(compression));
-  }
+  CUDF_EXPECTS(
+    !nvcomp_disabled,
+    "Cannot compute decompression scratch size for " + compression_type_name(compression));
   return nvcomp::batched_decompress_temp_size_ex(
     nvcomp_type.value(), inputs, max_uncomp_chunk_size, max_total_uncomp_size, stream);
 }
@@ -775,8 +773,8 @@ void decompress(compression_type compression,
   // sort inputs by size, largest first
   auto const [sorted_inputs, sorted_outputs, order] =
     sort_decompression_tasks(inputs, outputs, stream, cudf::get_current_device_resource_ref());
-  auto inputs_view  = device_span<device_span<uint8_t const> const>(sorted_inputs);
-  auto outputs_view = device_span<device_span<uint8_t> const>(sorted_outputs);
+  device_span<device_span<uint8_t const> const> inputs_view = sorted_inputs;
+  device_span<device_span<uint8_t> const> outputs_view      = sorted_outputs;
 
   auto const split_idx = split_decompression_tasks(
     inputs_view,
@@ -788,7 +786,7 @@ void decompress(compression_type compression,
 
   auto tmp_results = cudf::detail::make_device_uvector_async<detail::codec_exec_result>(
     results, stream, cudf::get_current_device_resource_ref());
-  auto results_view = device_span<codec_exec_result>(tmp_results);
+  device_span<codec_exec_result> results_view = tmp_results;
 
   auto const streams = cudf::detail::fork_streams(stream, 2);
   detail::device_decompress(compression,

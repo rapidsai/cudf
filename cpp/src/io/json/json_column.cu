@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -24,11 +24,10 @@
 
 #include <cuda/atomic>
 #include <cuda/functional>
+#include <cuda/iterator>
 #include <cuda/std/utility>
 #include <thrust/for_each.h>
-#include <thrust/functional.h>
 #include <thrust/gather.h>
-#include <thrust/iterator/discard_iterator.h>
 #include <thrust/iterator/permutation_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/reduce.h>
@@ -111,7 +110,7 @@ reduce_to_column_tree(tree_meta_t const& tree,
   rmm::device_uvector<size_type> max_row_offsets(num_columns, stream);
   auto ordered_row_offsets =
     thrust::make_permutation_iterator(row_offsets.begin(), ordered_node_ids.begin());
-  thrust::reduce_by_key(rmm::exec_policy(stream),
+  thrust::reduce_by_key(rmm::exec_policy_nosync(stream),
                         sorted_col_ids.begin(),
                         sorted_col_ids.end(),
                         ordered_row_offsets,
@@ -123,7 +122,7 @@ reduce_to_column_tree(tree_meta_t const& tree,
   // 3. reduce_by_key {col_id}, {node_categories} - custom opp (*+v=*, v+v=v, *+#=E)
   rmm::device_uvector<NodeT> column_categories(num_columns, stream);
   thrust::reduce_by_key(
-    rmm::exec_policy(stream),
+    rmm::exec_policy_nosync(stream),
     sorted_col_ids.begin(),
     sorted_col_ids.end(),
     thrust::make_permutation_iterator(tree.node_categories.begin(), ordered_node_ids.begin()),
@@ -158,7 +157,7 @@ reduce_to_column_tree(tree_meta_t const& tree,
                              sorted_col_ids.begin(),
                              sorted_col_ids.end(),
                              ordered_node_ids.begin(),
-                             thrust::make_discard_iterator(),
+                             cuda::make_discard_iterator(),
                              unique_node_ids.begin());
 
   thrust::copy_n(
@@ -489,9 +488,7 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> device_json_co
         std::move(offsets_column),
         std::move(child_column),
         null_count,
-        null_count == 0 ? rmm::device_buffer{0, stream, mr} : std::move(result_bitmask),
-        stream,
-        mr);
+        null_count == 0 ? rmm::device_buffer{0, stream, mr} : std::move(result_bitmask));
       // Since some rows in child column may need to be nullified due to mixed types, we cannot
       // skip the purge_nonempty_nulls call.
       if (auto const output_cv = ret_col->view();
@@ -554,7 +551,7 @@ table_with_metadata device_parse_nested_json(device_span<SymbolT const> d_input,
   device_json_column root_column(stream, mr);
   root_column.type = json_col_t::ListColumn;
   root_column.child_offsets.resize(2, stream);
-  thrust::fill(rmm::exec_policy(stream),
+  thrust::fill(rmm::exec_policy_nosync(stream),
                root_column.child_offsets.begin(),
                root_column.child_offsets.end(),
                0);

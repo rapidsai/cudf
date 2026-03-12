@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 import cupy as cp
@@ -238,8 +238,8 @@ def test_string_slice_with_mask():
     actual = cudf.Series(["hi", "hello", None])
     expected = actual[0:3]
 
-    assert actual._column.base_size == 3
-    assert_eq(actual._column.base_size, expected._column.base_size)
+    assert actual._column.size == 3
+    assert_eq(actual._column.size, expected._column.size)
     assert_eq(actual._column.null_count, expected._column.null_count)
 
     assert_eq(actual, expected)

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from collections.abc import Iterable, Sequence
@@ -8,9 +8,9 @@ from rmm.pylibrmm.device_buffer import DeviceBuffer
 from rmm.pylibrmm.memory_resource import DeviceMemoryResource
 from rmm.pylibrmm.stream import Stream
 
-from pylibcudf._interop_helpers import ArrowLike
-from pylibcudf.gpumemoryview import gpumemoryview
+from pylibcudf._interop_helpers import ArrowLike, ColumnMetadata
 from pylibcudf.scalar import Scalar
+from pylibcudf.span import Span
 from pylibcudf.types import DataType
 
 class ArrayInterfaceBase(TypedDict):
@@ -28,32 +28,38 @@ class CudaArrayInterface(ArrayInterfaceBase):
     stream: None | int
     mask: None | "SupportsCudaArrayInterface"
 
+# Numpy doesn't use a typed dict for their type stubs, they just annotate
+# as dict[str, Any]. So do the same here but with a union type so it's
+# clearer.
 class SupportsCudaArrayInterface(Protocol):
     @property
-    def __cuda_array_interface__(self) -> CudaArrayInterface: ...
+    def __cuda_array_interface__(
+        self,
+    ) -> CudaArrayInterface | dict[str, Any]: ...
 
 class SupportsArrayInterface(Protocol):
     @property
-    def __array_interface__(self) -> ArrayInterface: ...
+    def __array_interface__(self) -> ArrayInterface | dict[str, Any]: ...
 
 class Column:
     def __init__(
         self,
         data_type: DataType,
         size: int,
-        data: gpumemoryview | None,
-        mask: gpumemoryview | None,
+        data: Span | None,
+        mask: Span | None,
         null_count: int,
         offset: int,
         children: list[Column],
+        validate: bool = True,
     ) -> None: ...
     def type(self) -> DataType: ...
     def child(self, index: int) -> Column: ...
     def size(self) -> int: ...
     def null_count(self) -> int: ...
     def offset(self) -> int: ...
-    def data(self) -> gpumemoryview | None: ...
-    def null_mask(self) -> gpumemoryview | None: ...
+    def data(self) -> Span | None: ...
+    def null_mask(self) -> Span | None: ...
     def children(self) -> list[Column]: ...
     def num_children(self) -> int: ...
     def copy(
@@ -63,9 +69,10 @@ class Column:
     ) -> Column: ...
     def device_buffer_size(self) -> int: ...
     def with_mask(
-        self, mask: gpumemoryview | None, null_count: int
+        self, mask: Span | None, null_count: int, validate: bool = True
     ) -> Column: ...
-    def list_view(self) -> ListColumnView: ...
+    def list_view(self) -> ListsColumnView: ...
+    def struct_view(self) -> StructsColumnView: ...
     @staticmethod
     def from_scalar(
         scalar: Scalar,
@@ -90,7 +97,9 @@ class Column:
         buff: DeviceBuffer, dtype: DataType, size: int, children: list[Column]
     ) -> Column: ...
     def to_arrow(
-        self, metadata: list | str | None = None, stream: Stream | None = None
+        self,
+        metadata: ColumnMetadata | str | None = None,
+        stream: Stream | None = None,
     ) -> ArrowLike: ...
     # Private methods below are included because polars is currently using them,
     # but we want to remove stubs for these private methods eventually
@@ -111,7 +120,7 @@ class Column:
     def from_array_interface(
         cls, obj: SupportsArrayInterface, stream: Stream | None = None
     ) -> Column: ...
-    @staticmethod
+    @classmethod
     def from_array(
         cls,
         obj: SupportsCudaArrayInterface | SupportsArrayInterface,
@@ -126,10 +135,19 @@ class Column:
         stream: Stream | None = None,
     ) -> Column: ...
 
-class ListColumnView:
+class ListsColumnView:
     def __init__(self, column: Column): ...
     def child(self) -> Column: ...
     def offsets(self) -> Column: ...
+    def get_sliced_child(self, stream: Stream | None = None) -> Column: ...
+
+class StructsColumnView:
+    def __init__(self, column: Column): ...
+    def child(self) -> Column: ...
+    def offsets(self) -> Column: ...
+    def get_sliced_child(
+        self, index: int, stream: Stream | None = None
+    ) -> Column: ...
 
 def is_c_contiguous(
     shape: Sequence[int], strides: Sequence[int] | None, itemsize: int

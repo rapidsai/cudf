@@ -1,9 +1,8 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 import pyarrow as pa
 import pytest
-from packaging.version import parse
 
 import pylibcudf as plc
 
@@ -25,16 +24,13 @@ def test_dtype_from_arrow():
         == plc.TypeId.LIST
     )
 
-    if parse(pa.__version__) > parse("19.0.0"):
-        assert (
-            plc.DataType.from_arrow(pa.decimal32(3)).id()
-            == plc.TypeId.DECIMAL32
-        )
+    assert (
+        plc.DataType.from_arrow(pa.decimal32(3)).id() == plc.TypeId.DECIMAL32
+    )
 
-        assert (
-            plc.DataType.from_arrow(pa.decimal64(5)).id()
-            == plc.TypeId.DECIMAL64
-        )
+    assert (
+        plc.DataType.from_arrow(pa.decimal64(5)).id() == plc.TypeId.DECIMAL64
+    )
 
     assert plc.DataType.from_arrow(pa.int32()).id() == plc.TypeId.INT32
 

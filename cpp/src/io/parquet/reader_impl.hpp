@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -10,6 +10,7 @@
 
 #pragma once
 
+#include "expression_transform_helpers.hpp"
 #include "parquet_gpu.hpp"
 #include "reader_impl_chunking.hpp"
 #include "reader_impl_helpers.hpp"
@@ -18,6 +19,7 @@
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/detail/parquet.hpp>
 #include <cudf/io/parquet.hpp>
+#include <cudf/io/parquet_schema.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -46,11 +48,13 @@ class reader_impl {
    * entire given file.
    *
    * @param sources Dataset sources
+   * @param parquet_metadatas Pre-materialized Parquet file metadata(s). Read from sources if empty
    * @param options Settings for controlling reading behavior
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource to use for device memory allocation
    */
   explicit reader_impl(std::vector<std::unique_ptr<datasource>>&& sources,
+                       std::vector<FileMetaData>&& parquet_metadatas,
                        parquet_reader_options const& options,
                        rmm::cuda_stream_view stream,
                        rmm::device_async_resource_ref mr);
@@ -91,6 +95,7 @@ class reader_impl {
    * @param pass_read_limit Limit on memory usage for the purposes of decompression and processing
    * of input, or `0` if there is no limit.
    * @param sources Dataset sources
+   * @param parquet_metadatas Pre-materialized Parquet file metadata(s). Read from sources if empty
    * @param options Settings for controlling reading behavior
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource to use for device memory allocation
@@ -98,6 +103,7 @@ class reader_impl {
   explicit reader_impl(std::size_t chunk_read_limit,
                        std::size_t pass_read_limit,
                        std::vector<std::unique_ptr<datasource>>&& sources,
+                       std::vector<FileMetaData>&& parquet_metadatas,
                        parquet_reader_options const& options,
                        rmm::cuda_stream_view stream,
                        rmm::device_async_resource_ref mr);
@@ -253,12 +259,11 @@ class reader_impl {
    * @brief Set page string offset indices for non-dictionary, non-FLBA string columns.
    *
    * This function calculates the string offset index for each page of non-dictionary, non-FLBA
-   * string columns and populates the _page_string_offset_indices member variable.
+   * string columns and populates the subpass.page_string_offset_indices member variable.
    * The indices are used by decode kernels to access pre-computed string offsets.
    *
    * @param skip_rows The number of rows to skip in this subpass
    * @param num_rows The number of rows to read in this subpass
-   * @param page_mask The page mask for this subpass
    */
   void compute_page_string_offset_indices(size_t skip_rows, size_t num_rows);
 
@@ -401,6 +406,11 @@ class reader_impl {
     return not _expr_conv.get_converted_expr().has_value();
   }
 
+  [[nodiscard]] cudf::detail::hostdevice_span<bool> subpass_page_mask_span() const
+  {
+    return _subpass_page_mask ? *_subpass_page_mask : cudf::detail::hostdevice_span<bool>{};
+  }
+
   /**
    * @brief Calculate the number of rows read from each source in the output chunk
    *
@@ -411,6 +421,23 @@ class reader_impl {
   [[nodiscard]] std::vector<size_t> calculate_output_num_rows_per_source(size_t chunk_start_row,
                                                                          size_t chunk_num_rows);
 
+  /**
+   * @brief Computes the names of columns to be read from the file, if specified.
+   *
+   * @param options The reader options
+   * @param ignore_missing_columns Whether to ignore non-existent projected columns
+   * @return Names of columns to be read from the file if specified, `nullopt` otherwise
+   */
+  [[nodiscard]] std::optional<std::vector<std::string>> get_column_projection(
+    parquet_reader_options const& options, bool ignore_missing_columns) const;
+
+  /**
+   * @brief Cast any fixed-point output columns to the decimal width specified in options.
+   *
+   * @param out_columns Output columns to cast
+   */
+  void apply_decimal_width_cast(std::vector<std::unique_ptr<cudf::column>>& out_columns);
+
   rmm::cuda_stream_view _stream;
   rmm::device_async_resource_ref _mr{cudf::get_current_device_resource_ref()};
 
@@ -418,6 +445,8 @@ class reader_impl {
   struct {
     // timestamp_type
     data_type timestamp_type;
+    // decimal_width
+    type_id decimal_width;
     // User specified reading rows/stripes selection.
     int64_t const skip_rows;
     std::optional<int64_t> num_rows;
@@ -452,15 +481,7 @@ class reader_impl {
   thrust::host_vector<bool> _pass_page_mask;
 
   // Page mask for filtering out subpass data pages (Copied to the device)
-  cudf::detail::hostdevice_vector<bool> _subpass_page_mask;
-
-  // String offset buffer for non-dictionary, non-FLBA string columns
-  // Contains pre-computed offsets into the string data
-  rmm::device_uvector<uint32_t> _string_offset_buffer;
-
-  // For each page, the index into the column's string offset buffer
-  // Used for non-dictionary, non-FLBA string columns
-  rmm::device_uvector<size_t> _page_string_offset_indices;
+  std::unique_ptr<cudf::detail::hostdevice_vector<bool>> _subpass_page_mask;
 
   // _output_buffers associated metadata
   std::unique_ptr<table_metadata> _output_metadata;

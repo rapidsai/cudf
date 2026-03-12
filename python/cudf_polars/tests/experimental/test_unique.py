@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -13,7 +13,15 @@ from cudf_polars.testing.asserts import (
     DEFAULT_RUNTIME,
     assert_gpu_result_equal,
 )
-from cudf_polars.utils.versions import POLARS_VERSION_LT_130
+
+# Only rapidsmpf emits "Sort does not support multiple partitions"; apply filter conditionally.
+_maybe_ignore_unique_warning = (
+    pytest.mark.filterwarnings(
+        "ignore:Unsupported unique options for multiple partitions"
+    )
+    if DEFAULT_RUNTIME == "rapidsmpf"
+    else lambda f: f
+)
 
 
 @pytest.fixture(scope="module")
@@ -27,6 +35,7 @@ def df():
     )
 
 
+@_maybe_ignore_unique_warning
 @pytest.mark.parametrize("subset", [None, ("y",), ("y", "z")])
 @pytest.mark.parametrize("keep", ["first", "last", "any", "none"])
 @pytest.mark.parametrize("maintain_order", [True, False])
@@ -59,7 +68,7 @@ def test_unique(df, keep, subset, maintain_order, cardinality):
         not maintain_order and (not is_cardinality0) and keep in {"first", "last"}
     )
 
-    if should_warn:
+    if DEFAULT_RUNTIME != "rapidsmpf" and should_warn:
         with pytest.warns(
             UserWarning, match="Unsupported unique options for multiple partitions"
         ):
@@ -78,11 +87,12 @@ def test_unique_fallback(df):
             "runtime": DEFAULT_RUNTIME,
             "unique_fraction": {"y": 1.0},
             "fallback_mode": "raise",
+            "dynamic_planning": None,  # Requires static planning
         },
     )
     q = df.unique(keep="first", maintain_order=True)
     with pytest.raises(
-        pl.exceptions.ComputeError if POLARS_VERSION_LT_130 else NotImplementedError,
+        NotImplementedError,
         match="Unsupported unique options",
     ):
         assert_gpu_result_equal(q, engine=engine)
@@ -135,3 +145,22 @@ def test_unique_head_tail(keep, zlice):
         getattr(q, zlice)().collect(engine=engine),
         getattr(expect, zlice)().collect(),
     )
+
+
+def test_unique_complex_slice_fallback(df):
+    """Test that unique with complex slice (offset >= 1) falls back correctly."""
+    engine = pl.GPUEngine(
+        raise_on_fail=True,
+        executor="streaming",
+        executor_options={
+            "max_rows_per_partition": 50,
+            "cluster": DEFAULT_CLUSTER,
+            "runtime": DEFAULT_RUNTIME,
+        },
+    )
+    # unique().slice(offset=5, length=10) has zlice[0] >= 1, triggering fallback
+    q = df.unique(subset=("y",), keep="any").slice(5, 10)
+    with pytest.warns(UserWarning, match="Complex slice not supported"):
+        result = q.collect(engine=engine)
+    # Just verify the fallback produces valid output with expected shape
+    assert result.shape == (10, 3)

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #include "nvcomp_adapter.cuh"
@@ -125,9 +125,13 @@ void skip_unsupported_inputs(device_span<size_t> input_sizes,
 std::pair<size_t, size_t> max_chunk_and_total_input_size(device_span<size_t const> input_sizes,
                                                          rmm::cuda_stream_view stream)
 {
-  auto const max = thrust::reduce(
-    rmm::exec_policy(stream), input_sizes.begin(), input_sizes.end(), 0ul, cuda::maximum<size_t>());
-  auto const sum = thrust::reduce(rmm::exec_policy(stream), input_sizes.begin(), input_sizes.end());
+  auto const max = thrust::reduce(rmm::exec_policy_nosync(stream),
+                                  input_sizes.begin(),
+                                  input_sizes.end(),
+                                  0ul,
+                                  cuda::maximum<size_t>());
+  auto const sum =
+    thrust::reduce(rmm::exec_policy_nosync(stream), input_sizes.begin(), input_sizes.end());
   return {max, sum};
 }
 

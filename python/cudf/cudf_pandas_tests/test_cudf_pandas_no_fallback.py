@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.  All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.  All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 import pytest
@@ -151,3 +151,11 @@ def test_no_fallback_in_memory_usage_and_sizeof(dataframe, series):
     with pytest.warns(UserWarning, match="The deep parameter is ignored"):
         i.memory_usage(deep=True)
         i.__sizeof__()
+
+
+def test_no_fallback_in_named_agg(dataframe):
+    df = dataframe
+    df.groupby("a").agg(
+        min_b=pd.NamedAgg(column="b", aggfunc="min"),
+        max_c=pd.NamedAgg(column="c", aggfunc="max"),
+    )

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 # This module is for generating "synthetic" datasets. It was originally
@@ -141,6 +141,10 @@ def _generate_column(column_params, num_rows, rng):
         else:
             arrow_type = None
 
+        is_arrow_type_decimal = isinstance(
+            arrow_type, (pa.Decimal128Type, pa.Decimal64Type, pa.Decimal32Type)
+        )
+
         if isinstance(column_params.dtype, cudf.StructDtype):
             vals = pa.StructArray.from_arrays(
                 column_params.generator,
@@ -159,7 +163,7 @@ def _generate_column(column_params, num_rows, rng):
                 else None,
             )
             return vals
-        elif not isinstance(arrow_type, pa.lib.Decimal128Type):
+        elif not is_arrow_type_decimal:
             vals = pa.array(
                 column_params.generator,
                 size=column_params.cardinality,
@@ -168,7 +172,7 @@ def _generate_column(column_params, num_rows, rng):
             )
         vals = pa.array(
             rng.choice(column_params.generator, size=num_rows)
-            if isinstance(arrow_type, pa.lib.Decimal128Type)
+            if is_arrow_type_decimal
             else rng.choice(vals, size=num_rows),
             mask=rng.choice(
                 [True, False],
@@ -182,11 +186,9 @@ def _generate_column(column_params, num_rows, rng):
             else None,
             size=num_rows,
             safe=False,
-            type=None
-            if isinstance(arrow_type, pa.lib.Decimal128Type)
-            else arrow_type,
+            type=None if is_arrow_type_decimal else arrow_type,
         )
-        if isinstance(arrow_type, pa.lib.Decimal128Type):
+        if is_arrow_type_decimal:
             vals = vals.cast(arrow_type, safe=False)
         return vals
     else:

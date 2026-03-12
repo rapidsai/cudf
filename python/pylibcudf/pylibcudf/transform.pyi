@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 from rmm.pylibrmm.memory_resource import DeviceMemoryResource
 from rmm.pylibrmm.stream import Stream
@@ -7,13 +7,18 @@ from pylibcudf.column import Column
 from pylibcudf.expressions import Expression
 from pylibcudf.gpumemoryview import gpumemoryview
 from pylibcudf.table import Table
-from pylibcudf.types import DataType, NullAware
+from pylibcudf.types import DataType, NullAware, OutputNullability
 
 def nans_to_nulls(
     input: Column,
     stream: Stream | None = None,
     mr: DeviceMemoryResource | None = None,
 ) -> tuple[gpumemoryview, int]: ...
+def column_nans_to_nulls(
+    input: Column,
+    stream: Stream | None = None,
+    mr: DeviceMemoryResource | None = None,
+) -> Column: ...
 def compute_column(
     input: Table,
     expr: Expression,
@@ -44,6 +49,7 @@ def transform(
     output_type: DataType,
     is_ptx: bool,
     null_aware: NullAware = NullAware.NO,
+    null_policy: OutputNullability = OutputNullability.PRESERVE,
     stream: Stream | None = None,
     mr: DeviceMemoryResource | None = None,
 ) -> Column: ...

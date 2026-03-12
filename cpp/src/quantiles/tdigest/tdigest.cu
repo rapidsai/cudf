@@ -1,11 +1,12 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "quantiles/tdigest/tdigest_util.cuh"
 
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/algorithms/reduce.cuh>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/tdigest/tdigest.hpp>
@@ -22,12 +23,10 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
-#include <cuda/std/iterator>
+#include <cuda/iterator>
 #include <thrust/binary_search.h>
 #include <thrust/execution_policy.h>
 #include <thrust/fill.h>
-#include <thrust/functional.h>
-#include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/reduce.h>
@@ -199,7 +198,7 @@ std::unique_ptr<column> compute_approx_percentiles(tdigest_column_view const& in
           offsets_begin,
           cuda::std::prev(thrust::upper_bound(thrust::seq, offsets_begin, offsets_end, i)));
       }));
-  thrust::inclusive_scan_by_key(rmm::exec_policy(stream),
+  thrust::inclusive_scan_by_key(rmm::exec_policy_nosync(stream),
                                 keys,
                                 keys + weight.size(),
                                 weight.begin<double>(),
@@ -271,8 +270,8 @@ std::unique_ptr<column> make_tdigest_column(size_type num_rows,
     cudf::make_structs_column(centroids_size, std::move(inner_children), 0, {}, stream, mr);
 
   // grouped into lists
-  auto tdigest = cudf::make_lists_column(
-    num_rows, std::move(tdigest_offsets), std::move(tdigest_data), 0, {}, stream, mr);
+  auto tdigest =
+    cudf::make_lists_column(num_rows, std::move(tdigest_offsets), std::move(tdigest_data), 0, {});
 
   // create the final column
   std::vector<std::unique_ptr<column>> children;
@@ -288,20 +287,20 @@ std::unique_ptr<column> make_empty_tdigests_column(size_type num_rows,
 {
   auto offsets = cudf::make_fixed_width_column(
     data_type(type_id::INT32), num_rows + 1, mask_state::UNALLOCATED, stream, mr);
-  thrust::fill(rmm::exec_policy(stream),
+  thrust::fill(rmm::exec_policy_nosync(stream),
                offsets->mutable_view().begin<size_type>(),
                offsets->mutable_view().end<size_type>(),
                0);
 
   auto min_col = cudf::make_numeric_column(
     data_type(type_id::FLOAT64), num_rows, mask_state::UNALLOCATED, stream, mr);
-  thrust::fill(rmm::exec_policy(stream),
+  thrust::fill(rmm::exec_policy_nosync(stream),
                min_col->mutable_view().begin<double>(),
                min_col->mutable_view().end<double>(),
                0);
   auto max_col = cudf::make_numeric_column(
     data_type(type_id::FLOAT64), num_rows, mask_state::UNALLOCATED, stream, mr);
-  thrust::fill(rmm::exec_policy(stream),
+  thrust::fill(rmm::exec_policy_nosync(stream),
                max_col->mutable_view().begin<double>(),
                max_col->mutable_view().end<double>(),
                0);
@@ -348,13 +347,13 @@ std::unique_ptr<column> percentile_approx(tdigest_column_view const& input,
   // output is a list column with each row containing percentiles.size() percentile values
   auto offsets = cudf::make_fixed_width_column(
     data_type{type_id::INT32}, input.size() + 1, mask_state::UNALLOCATED, stream, mr);
-  auto const all_empty_rows =
-    thrust::count_if(rmm::exec_policy(stream),
-                     detail::size_begin(input),
-                     detail::size_begin(input) + input.size(),
-                     [] __device__(auto const x) { return x == 0; }) == input.size();
-  auto row_size_iter = thrust::make_constant_iterator(all_empty_rows ? 0 : percentiles.size());
-  thrust::exclusive_scan(rmm::exec_policy(stream),
+  auto const all_empty_rows = cudf::detail::count_if(
+                                detail::size_begin(input),
+                                detail::size_begin(input) + input.size(),
+                                [] __device__(auto const x) { return x == 0; },
+                                stream) == static_cast<std::size_t>(input.size());
+  auto row_size_iter = cuda::make_constant_iterator(all_empty_rows ? 0 : percentiles.size());
+  thrust::exclusive_scan(rmm::exec_policy_nosync(stream),
                          row_size_iter,
                          row_size_iter + input.size() + 1,
                          offsets->mutable_view().begin<size_type>());
@@ -366,9 +365,7 @@ std::unique_ptr<column> percentile_approx(tdigest_column_view const& input,
       cudf::make_empty_column(type_id::FLOAT64),
       input.size(),
       cudf::detail::create_null_mask(
-        input.size(), mask_state::ALL_NULL, rmm::cuda_stream_view(stream), mr),
-      stream,
-      mr);
+        input.size(), mask_state::ALL_NULL, rmm::cuda_stream_view(stream), mr));
   }
 
   // if any of the input digests are empty, nullify the corresponding output rows (values will be
@@ -378,8 +375,8 @@ std::unique_ptr<column> percentile_approx(tdigest_column_view const& input,
       detail::size_begin(tdv),
       cuda::proclaim_return_type<size_type>(
         [] __device__(size_type tdigest_size) -> size_type { return tdigest_size == 0; }));
-    auto const null_count =
-      thrust::reduce(rmm::exec_policy(stream), tdigest_is_empty, tdigest_is_empty + tdv.size(), 0);
+    auto const null_count = thrust::reduce(
+      rmm::exec_policy_nosync(stream), tdigest_is_empty, tdigest_is_empty + tdv.size(), 0);
     if (null_count == 0) {
       return std::pair<rmm::device_buffer, size_type>{rmm::device_buffer{}, null_count};
     }
@@ -391,9 +388,7 @@ std::unique_ptr<column> percentile_approx(tdigest_column_view const& input,
                                  std::move(offsets),
                                  detail::compute_approx_percentiles(input, percentiles, stream, mr),
                                  null_count,
-                                 std::move(bitmask),
-                                 stream,
-                                 mr);
+                                 std::move(bitmask));
 }
 
 }  // namespace tdigest

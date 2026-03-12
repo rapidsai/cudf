@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -22,9 +22,9 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/iterator>
 #include <cuda/std/functional>
 #include <thrust/iterator/counting_iterator.h>
-#include <thrust/iterator/discard_iterator.h>
 #include <thrust/reduce.h>
 
 namespace cudf {
@@ -157,11 +157,11 @@ struct group_reduction_functor<
 
     // Perform segmented reduction.
     auto const do_reduction = [&](auto const& inp_iter, auto const& out_iter, auto const& binop) {
-      thrust::reduce_by_key(rmm::exec_policy(stream),
+      thrust::reduce_by_key(rmm::exec_policy_nosync(stream),
                             group_labels.data(),
                             group_labels.data() + group_labels.size(),
                             inp_iter,
-                            thrust::make_discard_iterator(),
+                            cuda::make_discard_iterator(),
                             out_iter,
                             cuda::std::equal_to{},
                             binop);
@@ -220,11 +220,11 @@ struct group_reduction_functor<
 
     // Perform segmented reduction to find ARGMIN/ARGMAX.
     auto const do_reduction = [&](auto const& inp_iter, auto const& out_iter, auto const& binop) {
-      thrust::reduce_by_key(rmm::exec_policy(stream),
+      thrust::reduce_by_key(rmm::exec_policy_nosync(stream),
                             group_labels.data(),
                             group_labels.data() + group_labels.size(),
                             inp_iter,
-                            thrust::make_discard_iterator(),
+                            cuda::make_discard_iterator(),
                             out_iter,
                             cuda::std::equal_to{},
                             binop);

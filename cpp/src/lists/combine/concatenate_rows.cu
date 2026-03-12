@@ -1,10 +1,11 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/copying.hpp>
+#include <cudf/detail/algorithms/reduce.cuh>
 #include <cudf/detail/concatenate.hpp>
 #include <cudf/detail/gather.cuh>
 #include <cudf/detail/iterator.cuh>
@@ -19,10 +20,9 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
+#include <cuda/iterator>
 #include <thrust/iterator/counting_iterator.h>
-#include <thrust/iterator/discard_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
-#include <thrust/reduce.h>
 #include <thrust/scan.h>
 
 namespace cudf {
@@ -101,15 +101,16 @@ generate_regrouped_offsets_and_null_mask(table_device_view const& input,
       return offsets[row_index + 1] - offsets[row_index];
     }));
 
-  thrust::reduce_by_key(rmm::exec_policy(stream),
-                        keys,
-                        keys + (input.num_rows() * input.num_columns()),
-                        values,
-                        thrust::make_discard_iterator(),
-                        offsets->mutable_view().begin<size_type>());
+  cudf::detail::reduce_by_key_async(keys,
+                                    keys + (input.num_rows() * input.num_columns()),
+                                    values,
+                                    cuda::make_discard_iterator(),
+                                    offsets->mutable_view().begin<size_type>(),
+                                    cuda::std::plus<size_type>(),
+                                    stream);
 
   // convert to offsets
-  thrust::exclusive_scan(rmm::exec_policy(stream),
+  thrust::exclusive_scan(rmm::exec_policy_nosync(stream),
                          offsets->view().begin<size_type>(),
                          offsets->view().begin<size_type>() + input.num_rows() + 1,
                          offsets->mutable_view().begin<size_type>(),
@@ -165,12 +166,13 @@ rmm::device_uvector<size_type> generate_null_counts(table_device_view const& inp
       return col.null_mask() ? (bit_is_set(col.null_mask(), row_index + col.offset()) ? 0 : 1) : 0;
     }));
 
-  thrust::reduce_by_key(rmm::exec_policy(stream),
-                        keys,
-                        keys + (input.num_rows() * input.num_columns()),
-                        null_values,
-                        thrust::make_discard_iterator(),
-                        null_counts.data());
+  cudf::detail::reduce_by_key_async(keys,
+                                    keys + (input.num_rows() * input.num_columns()),
+                                    null_values,
+                                    cuda::make_discard_iterator(),
+                                    null_counts.data(),
+                                    cuda::std::plus<size_type>(),
+                                    stream);
 
   return null_counts;
 }
@@ -291,9 +293,7 @@ std::unique_ptr<column> concatenate_rows(table_view const& input,
     std::move(offsets),
     std::move(contents.children[lists_column_view::child_column_index]),
     null_count,
-    std::move(null_mask),
-    stream,
-    mr);
+    std::move(null_mask));
 }
 
 }  // namespace detail

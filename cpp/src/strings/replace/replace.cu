@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -7,9 +7,9 @@
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/algorithms/copy_if.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/detail/utilities/grid_1d.cuh>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/strings/detail/replace.hpp>
@@ -290,7 +290,7 @@ std::unique_ptr<column> replace_character_parallel(strings_column_view const& in
   // These may also include overlapping targets which will be resolved later.
   auto targets_positions = rmm::device_uvector<int64_t>(target_count, stream);
   auto const copy_itr    = thrust::counting_iterator<int64_t>(chars_offset);
-  auto const copy_end    = cudf::detail::copy_if_safe(
+  auto const copy_end    = cudf::detail::copy_if(
     copy_itr,
     copy_itr + chars_bytes + chars_offset,
     targets_positions.begin(),

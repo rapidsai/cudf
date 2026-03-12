@@ -1,5 +1,5 @@
 #!/bin/bash
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 set -uo pipefail
@@ -15,7 +15,13 @@ compute-sanitizer --tool memcheck basic_example
 popd || exit
 
 pushd hybrid_scan_io || exit
-compute-sanitizer --tool memcheck hybrid_scan_io example.parquet string_col 0000001  PINNED_BUFFER
+compute-sanitizer --tool memcheck hybrid_scan_io example.parquet string_col 0000001 PINNED_BUFFER
+compute-sanitizer --tool memcheck hybrid_scan_pipeline example.parquet 2 HOST_BUFFER ROW_GROUPS 2
+compute-sanitizer --tool memcheck hybrid_scan_pipeline example.parquet 2 FILEPATH BYTE_RANGES 2
+compute-sanitizer --tool memcheck hybrid_scan_multifile_single_step example.parquet 10 2 YES DEVICE_BUFFER 2
+compute-sanitizer --tool memcheck hybrid_scan_multifile_single_step example.parquet 10 2 NO FILEPATH 1
+compute-sanitizer --tool memcheck hybrid_scan_multifile_two_step example.parquet 10 2 string_col 0000001 PINNED_BUFFER 2
+compute-sanitizer --tool memcheck hybrid_scan_multifile_two_step example.parquet 10 2 string_col 0000001 HOST_BUFFER 1
 popd || exit
 
 pushd nested_types || exit

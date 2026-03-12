@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2023-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -35,7 +35,7 @@ rmm::device_uvector<size_type> segmented_counts(bitmask_type const* null_mask,
 
   rmm::device_uvector<size_type> valid_counts(num_segments, stream, mr);
   thrust::adjacent_difference(
-    rmm::exec_policy(stream), offsets.begin() + 1, offsets.end(), valid_counts.begin());
+    rmm::exec_policy_nosync(stream), offsets.begin() + 1, offsets.end(), valid_counts.begin());
   return valid_counts;
 }
 

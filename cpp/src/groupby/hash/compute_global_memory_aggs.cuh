@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -17,6 +17,11 @@
 
 #include <thrust/for_each.h>
 #include <thrust/tabulate.h>
+
+#include <cstdint>
+#include <memory>
+#include <span>
+#include <utility>
 
 namespace cudf::groupby::detail::hash {
 
@@ -72,6 +77,7 @@ std::pair<std::unique_ptr<table>, rmm::device_uvector<size_type>> compute_aggs_d
   SetType const& key_set,
   host_span<aggregation::Kind const> h_agg_kinds,
   device_span<aggregation::Kind const> d_agg_kinds,
+  std::span<int8_t const> is_agg_intermediate,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
@@ -88,9 +94,13 @@ std::pair<std::unique_ptr<table>, rmm::device_uvector<size_type>> compute_aggs_d
   }();
 
   auto const d_values = table_device_view::create(values, stream);
-  auto agg_results    = create_results_table(
-    static_cast<size_type>(unique_keys.size()), values, h_agg_kinds, stream, mr);
-  auto d_results_ptr = mutable_table_device_view::create(*agg_results, stream);
+  auto agg_results    = create_results_table(static_cast<size_type>(unique_keys.size()),
+                                          values,
+                                          h_agg_kinds,
+                                          is_agg_intermediate,
+                                          stream,
+                                          mr);
+  auto d_results_ptr  = mutable_table_device_view::create(*agg_results, stream);
 
   thrust::for_each_n(rmm::exec_policy_nosync(stream),
                      thrust::make_counting_iterator(int64_t{0}),
@@ -116,13 +126,15 @@ std::pair<std::unique_ptr<table>, rmm::device_uvector<size_type>> compute_aggs_s
   SetType const& key_set,
   host_span<aggregation::Kind const> h_agg_kinds,
   device_span<aggregation::Kind const> d_agg_kinds,
+  std::span<int8_t const> is_agg_intermediate,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
   auto const num_rows = values.num_rows();
   auto const d_values = table_device_view::create(values, stream);
-  auto agg_results    = create_results_table(num_rows, values, h_agg_kinds, stream, mr);
-  auto d_results_ptr  = mutable_table_device_view::create(*agg_results, stream);
+  auto agg_results =
+    create_results_table(num_rows, values, h_agg_kinds, is_agg_intermediate, stream, mr);
+  auto d_results_ptr = mutable_table_device_view::create(*agg_results, stream);
 
   thrust::for_each_n(
     rmm::exec_policy_nosync(stream),
@@ -153,14 +165,27 @@ std::pair<std::unique_ptr<table>, rmm::device_uvector<size_type>> compute_global
   SetType const& key_set,
   host_span<aggregation::Kind const> h_agg_kinds,
   device_span<aggregation::Kind const> d_agg_kinds,
+  std::span<int8_t const> is_agg_intermediate,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
   return h_agg_kinds.size() > GROUPBY_DENSE_OUTPUT_THRESHOLD
-           ? compute_aggs_dense_output(
-               row_bitmask, values, key_set, h_agg_kinds, d_agg_kinds, stream, mr)
-           : compute_aggs_sparse_output_gather(
-               row_bitmask, values, key_set, h_agg_kinds, d_agg_kinds, stream, mr);
+           ? compute_aggs_dense_output(row_bitmask,
+                                       values,
+                                       key_set,
+                                       h_agg_kinds,
+                                       d_agg_kinds,
+                                       is_agg_intermediate,
+                                       stream,
+                                       mr)
+           : compute_aggs_sparse_output_gather(row_bitmask,
+                                               values,
+                                               key_set,
+                                               h_agg_kinds,
+                                               d_agg_kinds,
+                                               is_agg_intermediate,
+                                               stream,
+                                               mr);
 }
 
 }  // namespace cudf::groupby::detail::hash

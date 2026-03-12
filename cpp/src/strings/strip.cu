@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -60,7 +60,7 @@ std::unique_ptr<column> strip(strings_column_view const& input,
   auto const d_column = column_device_view::create(input.parent(), stream);
 
   auto result = rmm::device_uvector<string_index_pair>(input.size(), stream);
-  thrust::transform(rmm::exec_policy(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream),
                     thrust::counting_iterator<size_type>(0),
                     thrust::counting_iterator<size_type>(input.size()),
                     result.begin(),

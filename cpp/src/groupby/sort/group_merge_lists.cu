@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -40,7 +40,7 @@ std::unique_ptr<column> group_merge_lists(column_view const& values,
   //
   //   then, the output offsets_column is [0, 5, 8].
   //
-  thrust::gather(rmm::exec_policy(stream),
+  thrust::gather(rmm::exec_policy_nosync(stream),
                  group_offsets.begin(),
                  group_offsets.end(),
                  lists_column_view(values).offsets_begin(),
@@ -50,13 +50,8 @@ std::unique_ptr<column> group_merge_lists(column_view const& values,
   auto child_column =
     std::make_unique<column>(lists_column_view(values).get_sliced_child(stream), stream, mr);
 
-  return make_lists_column(num_groups,
-                           std::move(offsets_column),
-                           std::move(child_column),
-                           0,
-                           rmm::device_buffer{},
-                           stream,
-                           mr);
+  return make_lists_column(
+    num_groups, std::move(offsets_column), std::move(child_column), 0, rmm::device_buffer{});
 }
 
 }  // namespace detail

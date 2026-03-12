@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -319,9 +319,8 @@ std::vector<std::unique_ptr<column>> superimpose_nulls(
 
   // This recursive function navigates the column hierarchy and for each path in the tree, it
   // collects all null masks that need to be combined for each column in the hierarchy
-  std::function<void(mutable_column_view input)> populate_segmented_sources =
-    [&populate_segmented_sources, &path, &sources, &segment_offsets](
-      mutable_column_view input) -> void {
+  std::function<void(column_view input)> populate_segmented_sources =
+    [&populate_segmented_sources, &path, &sources, &segment_offsets](column_view input) -> void {
     if (input.type().id() != cudf::type_id::EMPTY) {
       // EMPTY columns should not have a null mask,
       // so don't superimpose null mask on empty columns.
@@ -352,7 +351,7 @@ std::vector<std::unique_ptr<column>> superimpose_nulls(
     path.push_back(null_masks[c]);
 
     // Collect all null masks for this column and its descendants
-    populate_segmented_sources(inputs[c]->mutable_view());
+    populate_segmented_sources(inputs[c]->view());
     path.pop_back();
   }
 
@@ -363,18 +362,8 @@ std::vector<std::unique_ptr<column>> superimpose_nulls(
     segment_offsets.push_back(total_sum);
   }
 
-  // All masks start at bit position 0
-  std::vector<size_type> sources_begin_bits(sources.size(), 0);
-
-  // Perform the segmented bitwise AND operation across all collected masks
-  auto [result_null_masks, result_null_counts] = cudf::detail::segmented_bitmask_binop(
-    [] __device__(bitmask_type left, bitmask_type right) { return left & right; },
-    sources,
-    sources_begin_bits,
-    num_rows,
-    segment_offsets,
-    stream,
-    mr);
+  auto [result_null_masks, result_null_counts] =
+    cudf::detail::segmented_bitmask_and(sources, segment_offsets, num_rows, stream, mr);
 
   // Create new struct column and its descendants with updated null masks
   // Recursively updates each column and its children with their new null masks

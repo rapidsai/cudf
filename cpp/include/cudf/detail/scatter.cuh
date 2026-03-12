@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -26,9 +26,8 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <cuda/std/iterator>
+#include <cuda/iterator>
 #include <thrust/count.h>
-#include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/scatter.h>
@@ -108,7 +107,7 @@ auto scatter_to_gather_complement(MapIterator scatter_map_begin,
   thrust::sequence(rmm::exec_policy_nosync(stream), gather_map.begin(), gather_map.end(), 0);
 
   auto const out_of_bounds_begin =
-    thrust::make_constant_iterator(std::numeric_limits<size_type>::lowest());
+    cuda::make_constant_iterator(std::numeric_limits<size_type>::lowest());
   auto const out_of_bounds_end =
     out_of_bounds_begin + cuda::std::distance(scatter_map_begin, scatter_map_end);
   thrust::scatter(rmm::exec_policy_nosync(stream),
@@ -224,25 +223,11 @@ struct column_scatterer_impl<dictionary32> {
                     scatter_map_begin,
                     target_itr);
 
-    // record some data before calling release()
-    auto const indices_type = new_indices->type();
-    auto const output_size  = new_indices->size();
-    auto const null_count   = new_indices->null_count();
-    auto contents           = new_indices->release();
-    auto indices_column     = std::make_unique<column>(indices_type,
-                                                   static_cast<size_type>(output_size),
-                                                   std::move(*(contents.data.release())),
-                                                   rmm::device_buffer{0, stream, mr},
-                                                   0);
-
     // take the keys from the matched column allocated using mr
     std::unique_ptr<column> keys_column(std::move(target_matched->release().children.back()));
 
     // create column with keys_column and indices_column
-    return make_dictionary_column(std::move(keys_column),
-                                  std::move(indices_column),
-                                  std::move(*(contents.null_mask.release())),
-                                  null_count);
+    return make_dictionary_column(std::move(keys_column), std::move(new_indices), stream, mr);
   }
 };
 

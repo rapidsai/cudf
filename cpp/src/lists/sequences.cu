@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -116,7 +116,7 @@ struct sequences_functor<T, std::enable_if_t<is_supported<T>()>> {
     auto const steps_begin  = steps ? steps.value().template begin<T>() : nullptr;
 
     auto const op = tabulator<T>{n_lists, n_elements, starts_begin, steps_begin, offsets};
-    thrust::tabulate(rmm::exec_policy(stream), result_begin, result_begin + n_elements, op);
+    thrust::tabulate(rmm::exec_policy_nosync(stream), result_begin, result_begin + n_elements, op);
 
     return result;
   }
@@ -147,7 +147,7 @@ std::unique_ptr<column> sequences(column_view const& starts,
   }
 
   auto const n_lists = starts.size();
-  if (n_lists == 0) { return cudf::make_empty_lists_column(starts.type(), stream, mr); }
+  if (n_lists == 0) { return cudf::make_empty_lists_column(starts.type()); }
 
   auto const sizes_input_it = cudf::detail::indexalator_factory::make_input_iterator(sizes);
   // Generate list offsets for the output.
@@ -165,13 +165,8 @@ std::unique_ptr<column> sequences(column_view const& starts,
                                stream,
                                mr);
 
-  return make_lists_column(n_lists,
-                           std::move(list_offsets),
-                           std::move(child),
-                           0,
-                           rmm::device_buffer(0, stream, mr),
-                           stream,
-                           mr);
+  return make_lists_column(
+    n_lists, std::move(list_offsets), std::move(child), 0, rmm::device_buffer(0, stream, mr));
 }
 
 }  // anonymous namespace

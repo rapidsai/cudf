@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from cython.operator cimport dereference
@@ -29,7 +29,9 @@ from pylibcudf.libcudf.interop cimport (
 )
 from pylibcudf.libcudf.null_mask cimport bitmask_allocation_size_bytes
 from pylibcudf.libcudf.scalar.scalar cimport scalar
+from pylibcudf.libcudf.lists.lists_column_view cimport lists_column_view
 from pylibcudf.libcudf.strings.strings_column_view cimport strings_column_view
+from pylibcudf.libcudf.structs.structs_column_view cimport structs_column_view
 from pylibcudf.libcudf.types cimport size_type, size_of as cpp_size_of, bitmask_type
 from pylibcudf.libcudf.utilities.traits cimport is_fixed_width
 from pylibcudf.libcudf.copying cimport get_element
@@ -43,6 +45,7 @@ from .gpumemoryview cimport gpumemoryview
 from .filling cimport sequence
 from .gpumemoryview cimport gpumemoryview
 from .scalar cimport Scalar
+from .span import is_span as py_is_span
 from .traits cimport (
     is_fixed_width as plc_is_fixed_width,
     is_nested,
@@ -73,7 +76,7 @@ except ImportError as e:
     pa_err = e
 
 
-__all__ = ["Column", "ListColumnView", "is_c_contiguous"]
+__all__ = ["Column", "ListsColumnView", "StructsColumnView", "is_c_contiguous"]
 
 
 cdef is_iterable(obj):
@@ -331,16 +334,31 @@ cdef class Column:
         The offset into the data buffer where the column's data begins.
     children : list
         The children of this column if it is a compound column type.
+    validate : bool, default True
+        Whether to validate that data and mask satisfy Span protocol.
     """
     __hash__ = None
 
     def __init__(
-        self, DataType data_type not None, size_type size, gpumemoryview data,
-        gpumemoryview mask, size_type null_count, size_type offset,
-        list children
+        self, DataType data_type not None, size_type size, object data,
+        object mask, size_type null_count, size_type offset,
+        list children, bint validate=True
     ):
         if not all(isinstance(c, Column) for c in children):
             raise ValueError("All children must be pylibcudf Column objects")
+
+        if validate:
+            if data is not None and not py_is_span(data):
+                raise TypeError(
+                    f"data must satisfy Span protocol (have .ptr and .size), "
+                    f"got {type(data).__name__}"
+                )
+            if mask is not None and not py_is_span(mask):
+                raise TypeError(
+                    f"mask must satisfy Span protocol (have .ptr and .size), "
+                    f"got {type(mask).__name__}"
+                )
+
         self._data_type = data_type
         self._size = size
         self._data = data
@@ -523,11 +541,16 @@ cdef class Column:
         """
         cdef const void * data = NULL
         cdef const bitmask_type * null_mask = NULL
+        cdef size_t data_ptr
+        cdef size_t mask_ptr
 
-        if self._data is not None:
-            data = <void*>self._data.ptr
-        if self._mask is not None:
-            null_mask = <bitmask_type*>self._mask.ptr
+        with gil:
+            if self._data is not None:
+                data_ptr = <size_t>self._data.ptr
+                data = <void*>data_ptr
+            if self._mask is not None:
+                mask_ptr = <size_t>self._mask.ptr
+                null_mask = <bitmask_type*>mask_ptr
 
         # TODO: Check if children can ever change. If not, this could be
         # computed once in the constructor and always be reused.
@@ -560,11 +583,16 @@ cdef class Column:
         """
         cdef void * data = NULL
         cdef bitmask_type * null_mask = NULL
+        cdef size_t data_ptr
+        cdef size_t mask_ptr
 
-        if self._data is not None:
-            data = <void*>self._data.ptr
-        if self._mask is not None:
-            null_mask = <bitmask_type*>self._mask.ptr
+        with gil:
+            if self._data is not None:
+                data_ptr = <size_t>self._data.ptr
+                data = <void*>data_ptr
+            if self._mask is not None:
+                mask_ptr = <size_t>self._mask.ptr
+                null_mask = <bitmask_type*>mask_ptr
 
         cdef vector[mutable_column_view] c_children
         with gil:
@@ -676,20 +704,27 @@ cdef class Column:
             children,
         )
 
-    cpdef Column with_mask(self, gpumemoryview mask, size_type null_count):
+    cpdef Column with_mask(self, object mask, size_type null_count, bint validate=True):
         """Augment this column with a new null mask.
 
         Parameters
         ----------
-        mask : gpumemoryview
-            New mask (or None to unset the mask)
+        mask : Span-like or None
+            New mask (or None to unset the mask). Must satisfy Span protocol.
         null_count : int
             New null count. If this is incorrect, bad things happen.
+        validate : bool, default True
+            Whether to validate that mask satisfies Span protocol.
 
         Returns
         -------
         New Column object sharing data with self (except for the mask which is new).
         """
+        if validate and mask is not None and not py_is_span(mask):
+            raise TypeError(
+                f"mask must satisfy Span protocol or None, "
+                f"got {type(mask).__name__}"
+            )
         if mask is None and null_count > 0:
             raise ValueError("Empty mask must have null count of zero")
         return Column(
@@ -700,6 +735,7 @@ cdef class Column:
             null_count,
             self._offset,
             self._children,
+            validate=False,  # Already validated above if needed
         )
 
     @staticmethod
@@ -1286,15 +1322,19 @@ cdef class Column:
         """The number of children of this column."""
         return self._num_children
 
-    cpdef ListColumnView list_view(self):
+    cpdef ListsColumnView list_view(self):
         """Accessor for methods of a Column that are specific to lists."""
-        return ListColumnView(self)
+        return ListsColumnView(self)
 
-    cpdef gpumemoryview data(self):
+    cpdef StructsColumnView struct_view(self):
+        """Accessor for methods of a Column that are specific to structs."""
+        return StructsColumnView(self)
+
+    cpdef object data(self):
         """The data buffer of the column."""
         return self._data
 
-    cpdef gpumemoryview null_mask(self):
+    cpdef object null_mask(self):
         """The null mask of the column."""
         return self._mask
 
@@ -1309,6 +1349,16 @@ cdef class Column:
     cpdef size_type null_count(self):
         """The number of null elements in the column."""
         return self._null_count
+
+    cpdef void set_null_count(self, size_type null_count):
+        """Set the null count of the column.
+
+        Parameters
+        ----------
+        null_count : size_type
+            The new null count of the column.
+        """
+        self._null_count = null_count
 
     cpdef list children(self):
         """The children of the column."""
@@ -1408,7 +1458,7 @@ cdef class Column:
         return self._to_schema(), self._to_device_array()
 
 
-cdef class ListColumnView:
+cdef class ListsColumnView:
     """Accessor for methods of a Column that are specific to lists."""
     def __init__(self, Column col):
         if col.type().id() != type_id.LIST:
@@ -1433,6 +1483,65 @@ cdef class ListColumnView:
         (even direct pylibcudf Cython users).
         """
         return lists_column_view(self._column.view())
+
+    cpdef Column get_sliced_child(self, Stream stream=None):
+        """
+        Get the list elements child properly sliced to match parent's view.
+
+        Parameters
+        ----------
+        stream : Stream, optional
+            CUDA stream to use
+
+        Returns
+        -------
+        Column
+            The sliced elements column
+        """
+        stream = _get_stream(stream)
+
+        cdef column_view c_child = self.view().get_sliced_child(stream.view())
+        return Column.from_column_view(c_child, self._column.child(1))
+
+
+cdef class StructsColumnView:
+    """Accessor for methods of a Column that are specific to structs."""
+    def __init__(self, Column col):
+        if col.type().id() != type_id.STRUCT:
+            raise TypeError("Column is not a struct type")
+        self._column = col
+
+    __hash__ = None
+
+    cdef structs_column_view view(self) nogil:
+        """Generate a libcudf structs_column_view to pass to libcudf algorithms.
+
+        This method is for pylibcudf's functions to use to generate inputs when
+        calling libcudf algorithms, and should generally not be needed by users
+        (even direct pylibcudf Cython users).
+        """
+        return structs_column_view(self._column.view())
+
+    cpdef Column get_sliced_child(self, int index, Stream stream=None):
+        """
+        Get the struct elements child properly sliced to match parent's view.
+
+        Parameters
+        ----------
+        index : int
+            The index of the child to get.
+        stream : Stream, optional
+            CUDA stream to use
+
+        Returns
+        -------
+        Column
+            The sliced elements column
+        """
+        stream = _get_stream(stream)
+
+        cdef column_view c_child = self.view().get_sliced_child(index, stream.view())
+        return Column.from_column_view(c_child, self._column.child(index))
 
 
 def is_c_contiguous(

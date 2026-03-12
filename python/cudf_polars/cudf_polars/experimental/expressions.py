@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 """
 Multi-partition Expr classes and utilities.
@@ -41,14 +41,18 @@ from cudf_polars.dsl.expressions.aggregation import Agg
 from cudf_polars.dsl.expressions.base import Col, ExecutionContext, Expr, NamedExpr
 from cudf_polars.dsl.expressions.binaryop import BinOp
 from cudf_polars.dsl.expressions.literal import Literal
-from cudf_polars.dsl.expressions.unary import Cast, UnaryFunction
+from cudf_polars.dsl.expressions.unary import Cast, Len, UnaryFunction
 from cudf_polars.dsl.ir import IR, Distinct, Empty, HConcat, Select
 from cudf_polars.dsl.traversal import (
     CachingVisitor,
 )
 from cudf_polars.experimental.base import PartitionInfo
 from cudf_polars.experimental.repartition import Repartition
-from cudf_polars.experimental.utils import _get_unique_fractions, _leaf_column_names
+from cudf_polars.experimental.utils import (
+    _dynamic_planning_on,
+    _get_unique_fractions,
+    _leaf_column_names,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Generator, MutableMapping, Sequence
@@ -57,7 +61,7 @@ if TYPE_CHECKING:
     from cudf_polars.dsl.ir import IR
     from cudf_polars.experimental.base import ColumnStat, ColumnStats
     from cudf_polars.typing import GenericTransformer, Schema
-    from cudf_polars.utils.config import ConfigOptions
+    from cudf_polars.utils.config import ConfigOptions, StreamingExecutor
 
 
 class State(TypedDict):
@@ -153,7 +157,7 @@ def _decompose_unique(
     unique: UnaryFunction,
     input_ir: IR,
     partition_info: MutableMapping[IR, PartitionInfo],
-    config_options: ConfigOptions,
+    config_options: ConfigOptions[StreamingExecutor],
     row_count_estimate: ColumnStat[int],
     column_stats: dict[str, ColumnStats],
     *,
@@ -202,10 +206,6 @@ def _decompose_unique(
     )
     (column,) = columns
 
-    assert config_options.executor.name == "streaming", (
-        "'in-memory' executor not supported in '_decompose_unique'"
-    )
-
     unique_fraction_dict = _get_unique_fractions(
         _leaf_column_names(child),
         config_options.executor.unique_fraction,
@@ -236,7 +236,7 @@ def _decompose_unique(
 
 
 def _decompose_agg_node(
-    agg: Agg,
+    agg: Agg | Len,
     input_ir: IR,
     partition_info: MutableMapping[IR, PartitionInfo],
     config_options: ConfigOptions,
@@ -272,7 +272,7 @@ def _decompose_agg_node(
     """
     expr: Expr
     exprs: list[Expr]
-    if agg.name == "count":
+    if isinstance(agg, Len) or agg.name == "count":
         # Chunkwise stage
         columns, input_ir, partition_info = select(
             [agg],
@@ -342,14 +342,11 @@ def _decompose_agg_node(
             agg = agg.reconstruct([child])
             shuffle_on = (NamedExpr(next(names), child),)
 
-            assert config_options.executor.name == "streaming", (
-                "'in-memory' executor not supported in '_decompose_agg_node'"
-            )
-
             input_ir = Shuffle(
                 input_ir.schema,
                 shuffle_on,
                 config_options.executor.shuffle_method,
+                config_options.executor.shuffler_insertion_method,
                 input_ir,
             )
             partition_info[input_ir] = PartitionInfo(
@@ -405,7 +402,7 @@ def _decompose_expr_node(
     expr: Expr,
     input_ir: IR,
     partition_info: MutableMapping[IR, PartitionInfo],
-    config_options: ConfigOptions,
+    config_options: ConfigOptions[StreamingExecutor],
     row_count_estimate: ColumnStat[int],
     column_stats: dict[str, ColumnStats],
     *,
@@ -450,10 +447,16 @@ def _decompose_expr_node(
         partition_info[input_ir] = PartitionInfo(count=1)
 
     partition_count = partition_info[input_ir].count
-    if partition_count == 1 or expr.is_pointwise:
+
+    # Check for dynamic planning - may have more partitions at runtime
+    dynamic_planning = _dynamic_planning_on(config_options)
+
+    if expr.is_pointwise or (partition_count == 1 and not dynamic_planning):
         # Single-partition and pointwise expressions are always supported.
         return expr, input_ir, partition_info
-    elif isinstance(expr, Agg) and expr.name in _SUPPORTED_AGGS:
+    elif isinstance(expr, Len) or (
+        isinstance(expr, Agg) and expr.name in _SUPPORTED_AGGS
+    ):
         # This is a supported Agg expression.
         return _decompose_agg_node(
             expr, input_ir, partition_info, config_options, names=names

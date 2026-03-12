@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 import cupy as cp
@@ -60,9 +60,9 @@ def test_buffer_from_cuda_iface_dtype(data, dtype, arr_len):
 
 def test_buffer_creation_from_any(arr_len):
     ary = cp.arange(arr_len)
-    b = as_buffer(ary, exposed=True)
+    b = as_buffer(ary)
     assert isinstance(b, Buffer)
-    assert ary.data.ptr == b.get_ptr(mode="read")
+    assert ary.data.ptr == b.ptr
     assert ary.nbytes == b.size
 
 

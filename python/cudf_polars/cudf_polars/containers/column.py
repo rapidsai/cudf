@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 """A column, with some properties."""
@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING
 from polars.exceptions import InvalidOperationError
 
 import pylibcudf as plc
+from pylibcudf.strings.convert.convert_booleans import from_booleans
 from pylibcudf.strings.convert.convert_floats import from_floats, is_float, to_floats
 from pylibcudf.strings.convert.convert_integers import (
     from_integers,
@@ -24,8 +25,7 @@ from cudf_polars.utils.dtypes import is_order_preserving_cast
 
 if TYPE_CHECKING:
     from collections.abc import Callable
-
-    from typing_extensions import Self
+    from typing import Self
 
     from polars import Series as pl_Series
 
@@ -39,6 +39,13 @@ if TYPE_CHECKING:
     )
 
 __all__: list[str] = ["Column"]
+
+
+# Float64 has 53-bit significand precision (52 fraction bits + 1 implicit leading bit),
+# giving 15-17 significant decimal digits. Use 17 as upper bound when casting to
+# intermediate decimal to preserve all float64 precision before rounding.
+# https://en.wikipedia.org/wiki/Double-precision_floating-point_format
+_FLOAT64_DECIMAL_PRECISION = 17
 
 
 class Column:
@@ -259,9 +266,11 @@ class Column:
         if plc.sorting.is_sorted(
             plc.Table([self.obj]), [order], [null_order], stream=stream
         ):
-            self.sorted = plc.types.Sorted.YES
-            self.order = order
-            self.null_order = null_order
+            self.set_sorted(
+                is_sorted=plc.types.Sorted.YES,
+                order=order,
+                null_order=null_order,
+            )
             return True
         return False
 
@@ -326,7 +335,11 @@ class Column:
             self.obj.type()
         ):
             plc_col = plc.column.Column(
-                plc.DataType(plc.TypeId.INT64),
+                plc.DataType(
+                    plc.TypeId.INT32
+                    if self.obj.type().id() == plc.TypeId.TIMESTAMP_DAYS
+                    else plc.TypeId.INT64
+                ),
                 self.obj.size(),
                 self.obj.data(),
                 self.obj.null_mask(),
@@ -337,6 +350,31 @@ class Column:
             return Column(
                 plc.unary.cast(plc_col, plc_dtype, stream=stream), dtype=dtype
             ).sorted_like(self)
+        elif plc.traits.is_floating_point(
+            self.obj.type()
+        ) and plc.traits.is_fixed_point(plc_dtype):
+            # cudf::cast from float to decimal truncates instead of rounding.
+            # Polars expects rounding, so cast to higher precision decimal first to
+            # preserve float64's significant digits, then round_decimal to target scale.
+            target_scale = -plc_dtype.scale()
+            return Column(
+                plc.round.round_decimal(
+                    plc.unary.cast(
+                        self.obj,
+                        plc.DataType(
+                            plc.TypeId.DECIMAL128,
+                            scale=-max(target_scale, _FLOAT64_DECIMAL_PRECISION),
+                        ),
+                        stream=stream,
+                    ),
+                    decimal_places=target_scale,
+                    # Note polars uses banker's rounding
+                    # See crates/polars-ops/src/series/ops/round.rs (RoundMethod::HalfEven)
+                    round_method=plc.round.RoundingMethod.HALF_EVEN,
+                    stream=stream,
+                ),
+                dtype=dtype,
+            )
         else:
             result = Column(
                 plc.unary.cast(self.obj, plc_dtype, stream=stream), dtype=dtype
@@ -353,6 +391,13 @@ class Column:
                 return from_floats(self.obj, stream=stream)
             elif plc.traits.is_integral_not_bool(self.obj.type()):
                 return from_integers(self.obj, stream=stream)
+            elif plc.traits.is_boolean(self.obj.type()):
+                return from_booleans(
+                    self.obj,
+                    plc.Scalar.from_py("true", dtype, stream=stream),
+                    plc.Scalar.from_py("false", dtype, stream=stream),
+                    stream=stream,
+                )
             else:
                 raise InvalidOperationError(
                     f"Unsupported casting from {self.dtype.id()} to {dtype.id()}."
@@ -366,7 +411,8 @@ class Column:
         elif plc.traits.is_integral_not_bool(dtype):
             # is_integer has a second optional int_type: plc.DataType | None = None argument
             # we do not use
-            type_checker = is_integer  # type: ignore[assignment]
+            # unused-ignore for if RMM is missing
+            type_checker = is_integer  # type: ignore[assignment,unused-ignore]
             type_caster = to_integers
         else:
             raise InvalidOperationError(

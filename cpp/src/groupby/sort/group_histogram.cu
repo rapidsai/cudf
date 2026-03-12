@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2023-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -69,8 +69,7 @@ std::unique_ptr<column> build_histogram(column_view const& values,
                                          stream,
                                          mr);
 
-  return make_lists_column(
-    num_groups, std::move(out_offsets), std::move(out_structs), 0, {}, stream, mr);
+  return make_lists_column(num_groups, std::move(out_offsets), std::move(out_structs), 0, {});
 }
 
 }  // namespace
@@ -121,7 +120,7 @@ std::unique_ptr<column> group_merge_histogram(column_view const& values,
   // That is equivalent to creating a new lists column (view) from the input lists column
   // with new offsets gathered as below.
   auto new_offsets = rmm::device_uvector<size_type>(num_groups + 1, stream);
-  thrust::gather(rmm::exec_policy(stream),
+  thrust::gather(rmm::exec_policy_nosync(stream),
                  group_offsets.begin(),
                  group_offsets.end(),
                  lists_cv.offsets_begin(),

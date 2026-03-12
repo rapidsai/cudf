@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -131,7 +131,7 @@ struct shift_functor {
         return out_of_bounds(size, src_idx) ? *fill : input.element<T>(src_idx);
       };
 
-    thrust::transform(rmm::exec_policy(stream), index_begin, index_end, data, func_value);
+    thrust::transform(rmm::exec_policy_nosync(stream), index_begin, index_end, data, func_value);
 
     return output;
   }

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -8,13 +8,13 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/algorithms/copy_if.cuh>
 #include <cudf/detail/cuco_helpers.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/offsets_iterator_factory.cuh>
 #include <cudf/detail/sizes_to_offsets_iterator.cuh>
-#include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/grid_1d.cuh>
 #include <cudf/hashing/detail/murmurhash3_x86_32.cuh>
@@ -28,13 +28,13 @@
 #include <nvtext/tokenize.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/mr/polymorphic_allocator.hpp>
 
 #include <cuco/static_map.cuh>
 #include <cuda/std/functional>
 #include <cuda/std/iterator>
 #include <thrust/copy.h>
 #include <thrust/execution_policy.h>
-#include <thrust/functional.h>
 #include <thrust/logical.h>
 #include <thrust/transform.h>
 
@@ -376,14 +376,12 @@ std::unique_ptr<cudf::column> tokenize_with_vocabulary(cudf::strings_column_view
     auto d_offsets = cudf::detail::offsetalator_factory::make_input_iterator(token_offsets->view());
     vocabulary_tokenizer_fn<decltype(map_ref)> tokenizer{
       *d_strings, d_delimiter, map_ref, default_id, d_offsets, d_tokens};
-    thrust::for_each_n(rmm::exec_policy(stream), zero_itr, input.size(), tokenizer);
+    thrust::for_each_n(rmm::exec_policy_nosync(stream), zero_itr, input.size(), tokenizer);
     return cudf::make_lists_column(input.size(),
                                    std::move(token_offsets),
                                    std::move(tokens),
                                    input.null_count(),
-                                   cudf::detail::copy_bitmask(input.parent(), stream, mr),
-                                   stream,
-                                   mr);
+                                   cudf::detail::copy_bitmask(input.parent(), stream, mr));
   }
 
   // longer strings perform better with warp-parallel approach
@@ -418,7 +416,7 @@ std::unique_ptr<cudf::column> tokenize_with_vocabulary(cudf::strings_column_view
 
   auto d_tmp_offsets = rmm::device_uvector<int64_t>(total_count + 1, stream);
   d_tmp_offsets.set_element(total_count, chars_size, stream);
-  cudf::detail::copy_if_safe(
+  cudf::detail::copy_if_async(
     thrust::counting_iterator<int64_t>(0),
     thrust::counting_iterator<int64_t>(chars_size),
     d_tmp_offsets.begin(),
@@ -440,7 +438,7 @@ std::unique_ptr<cudf::column> tokenize_with_vocabulary(cudf::strings_column_view
   auto d_tokens = tokens->mutable_view().data<cudf::size_type>();
 
   transform_tokenizer_fn<decltype(map_ref)> tokenizer{d_delimiter, map_ref, default_id};
-  thrust::transform(rmm::exec_policy(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream),
                     d_tmp_strings->begin<cudf::string_view>(),
                     d_tmp_strings->end<cudf::string_view>(),
                     d_tokens,
@@ -450,9 +448,7 @@ std::unique_ptr<cudf::column> tokenize_with_vocabulary(cudf::strings_column_view
                                  std::move(token_offsets),
                                  std::move(tokens),
                                  input.null_count(),
-                                 cudf::detail::copy_bitmask(input.parent(), stream, mr),
-                                 stream,
-                                 mr);
+                                 cudf::detail::copy_bitmask(input.parent(), stream, mr));
 }
 
 }  // namespace detail

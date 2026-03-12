@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 """Tests for RapidsMPF spilling functionality."""
@@ -15,7 +15,9 @@ from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 
 import pylibcudf as plc
 
-from cudf_polars.experimental.rapidsmpf.utils import make_spill_function
+from cudf_polars.experimental.rapidsmpf.utils import (
+    make_spill_function,
+)
 
 if TYPE_CHECKING:
     from rapidsmpf.streaming.core.context import Context
@@ -29,8 +31,7 @@ def create_test_table(nbytes: int, stream: Stream) -> plc.Table:
     # Create a simple table with one column of random float32 data
     num_elements = nbytes // 4
     data = np.random.random(num_elements).astype(np.float32)
-    # mypy doesn't recognize pylibcudf's from_array signature correctly
-    return plc.Table([plc.Column.from_array(data, stream=stream)])  # type: ignore[call-arg]
+    return plc.Table([plc.Column.from_array(data, stream=stream)])
 
 
 def test_make_spill_function(local_context: Context) -> None:

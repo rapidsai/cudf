@@ -31,7 +31,7 @@ def df():
 
 @pytest.mark.parametrize("op", reductions)
 def test_numpy_dataframe_reductions(df, op):
-    return getattr(np, op)(df)
+    return getattr(np, op)(df, axis=0)
 
 
 def test_numpy_dot(df):

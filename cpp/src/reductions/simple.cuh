@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -13,6 +13,7 @@
 #include <cudf/dictionary/detail/iterator.cuh>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/reduction/detail/reduction.cuh>
+#include <cudf/reduction/detail/reduction_functions.hpp>
 #include <cudf/scalar/scalar_device_view.cuh>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/utilities/memory_resource.hpp>
@@ -145,7 +146,7 @@ std::unique_ptr<scalar> dictionary_reduction(
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
-  if (init.has_value()) { CUDF_FAIL("Initial value not supported for dictionary reductions"); }
+  CUDF_EXPECTS(!init.has_value(), "Initial value not supported for dictionary reductions");
 
   auto dcol      = cudf::column_device_view::create(col, stream);
   auto simple_op = Op{};
@@ -304,7 +305,7 @@ struct same_element_type_dispatcher {
              (std::is_same_v<Op, cudf::reduction::detail::op::min> ||
               std::is_same_v<Op, cudf::reduction::detail::op::max>))
   {
-    if (init.has_value()) { CUDF_FAIL("Initial value not supported for nested type reductions"); }
+    CUDF_EXPECTS(!init.has_value(), "Initial value not supported for nested type reductions");
 
     if (input.is_empty()) { return cudf::make_empty_scalar_like(input, stream, mr); }
 
@@ -312,7 +313,7 @@ struct same_element_type_dispatcher {
     auto const binop_generator =
       cudf::reduction::detail::arg_minmax_binop_generator::create<Op>(input, stream);
     auto const binary_op  = cudf::detail::cast_functor<size_type>(binop_generator.binop());
-    auto const minmax_idx = thrust::reduce(rmm::exec_policy(stream),
+    auto const minmax_idx = thrust::reduce(rmm::exec_policy_nosync(stream),
                                            thrust::make_counting_iterator(0),
                                            thrust::make_counting_iterator(input.size()),
                                            size_type{0},
@@ -332,12 +333,9 @@ struct same_element_type_dispatcher {
     if (!cudf::is_dictionary(col.type())) {
       return simple_reduction<ElementType, ElementType, Op>(col, init, stream, mr);
     }
-    auto index = simple_reduction<ElementType, ElementType, Op>(
-      dictionary_column_view(col).get_indices_annotated(),
-      init,
-      stream,
-      cudf::get_current_device_resource_ref());
-    return resolve_key<ElementType>(dictionary_column_view(col).keys(), *index, stream, mr);
+    auto mm = cudf::reduction::detail::minmax(col, stream, mr);
+    return std::is_same_v<Op, cudf::reduction::detail::op::min> ? std::move(mm.first)
+                                                                : std::move(mm.second);
   }
 
   template <typename ElementType>

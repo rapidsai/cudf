@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -66,27 +66,28 @@ metadata::metadata(cudf::host_span<uint8_t const> footer_bytes)
 
   CompactProtocolReader cp(footer_bytes.data(), footer_bytes.size());
   cp.read(this);
-  CUDF_EXPECTS(cp.InitSchema(this), "Cannot initialize schema");
+  auto const is_schema_initialized = cp.InitSchema(this);
+  CUDF_EXPECTS(is_schema_initialized, "Cannot initialize schema");
   sanitize_schema();
 }
 
 aggregate_reader_metadata::aggregate_reader_metadata(FileMetaData const& parquet_metadata,
                                                      bool use_arrow_schema,
                                                      bool has_cols_from_mismatched_srcs)
-  : aggregate_reader_metadata_base({}, false, false)
+  : aggregate_reader_metadata_base(host_span<std::unique_ptr<datasource> const>{}, false, false)
 {
   // Just copy over the FileMetaData struct to the internal metadata struct
-  per_file_metadata.emplace_back(metadata{parquet_metadata}.get_file_metadata());
+  per_file_metadata.emplace_back(metadata{parquet_metadata});
   initialize_internals(use_arrow_schema, has_cols_from_mismatched_srcs);
 }
 
 aggregate_reader_metadata::aggregate_reader_metadata(cudf::host_span<uint8_t const> footer_bytes,
                                                      bool use_arrow_schema,
                                                      bool has_cols_from_mismatched_srcs)
-  : aggregate_reader_metadata_base({}, false, false)
+  : aggregate_reader_metadata_base(host_span<std::unique_ptr<datasource> const>{}, false, false)
 {
   // Re-initialize internal variables here as base class was initialized without a source
-  per_file_metadata.emplace_back(metadata{footer_bytes}.get_file_metadata());
+  per_file_metadata.emplace_back(metadata{footer_bytes});
   initialize_internals(use_arrow_schema, has_cols_from_mismatched_srcs);
 }
 
@@ -148,36 +149,25 @@ void aggregate_reader_metadata::setup_page_index(cudf::host_span<uint8_t const> 
     return;
   }
 
-  auto& row_groups = per_file_metadata.front().row_groups;
+  // Get the file metadata and setup the page index
+  auto& file_metadata    = per_file_metadata.front();
+  auto const& row_groups = file_metadata.row_groups;
 
+  // Check for empty parquet file
   CUDF_EXPECTS(not row_groups.empty() and not row_groups.front().columns.empty(),
                "No column chunks in Parquet schema to read page index for");
 
-  CompactProtocolReader cp(page_index_bytes.data(), page_index_bytes.size());
-
   // Set the first ColumnChunk's offset of ColumnIndex as the adjusted zero offset
   int64_t const min_offset = row_groups.front().columns.front().column_index_offset;
-  // now loop over row groups
-  for (auto& rg : row_groups) {
-    for (auto& col : rg.columns) {
-      // Read the ColumnIndex for this ColumnChunk
-      if (col.column_index_length > 0 && col.column_index_offset > 0) {
-        int64_t const offset = col.column_index_offset - min_offset;
-        cp.init(page_index_bytes.data() + offset, col.column_index_length);
-        ColumnIndex ci;
-        cp.read(&ci);
-        col.column_index = std::move(ci);
-      }
-      // Read the OffsetIndex for this ColumnChunk
-      if (col.offset_index_length > 0 && col.offset_index_offset > 0) {
-        int64_t const offset = col.offset_index_offset - min_offset;
-        cp.init(page_index_bytes.data() + offset, col.offset_index_length);
-        OffsetIndex oi;
-        cp.read(&oi);
-        col.offset_index = std::move(oi);
-      }
-    }
+
+  // Check if the page index buffer is valid
+  {
+    auto const& last_col  = row_groups.back().columns.back();
+    auto const max_offset = last_col.offset_index_offset + last_col.offset_index_length;
+    CUDF_EXPECTS(max_offset > min_offset, "Encountered an invalid page index buffer");
   }
+
+  file_metadata.setup_page_index(page_index_bytes, min_offset);
 }
 
 size_type aggregate_reader_metadata::total_rows_in_row_groups(
@@ -210,13 +200,19 @@ aggregate_reader_metadata::select_payload_columns(
   bool include_index,
   bool strings_to_categorical,
   bool ignore_missing_columns,
-  type_id timestamp_type_id)
+  type_id timestamp_type_id,
+  type_id decimal_type_id)
 {
   // If neither payload nor filter columns are specified, select all columns
   if (not payload_column_names.has_value() and not filter_column_names.has_value()) {
     // Call the base `select_columns()` method without specifying any columns
-    return select_columns(
-      {}, {}, include_index, strings_to_categorical, ignore_missing_columns, timestamp_type_id);
+    return select_columns({},
+                          {},
+                          include_index,
+                          strings_to_categorical,
+                          ignore_missing_columns,
+                          timestamp_type_id,
+                          decimal_type_id);
   }
 
   std::vector<std::string> valid_payload_columns;
@@ -244,7 +240,8 @@ aggregate_reader_metadata::select_payload_columns(
                           include_index,
                           strings_to_categorical,
                           ignore_missing_columns,
-                          timestamp_type_id);
+                          timestamp_type_id,
+                          decimal_type_id);
   }
 
   // Else if only filter columns are specified, select all columns that do not appear in the
@@ -276,7 +273,8 @@ aggregate_reader_metadata::select_payload_columns(
                         include_index,
                         strings_to_categorical,
                         ignore_missing_columns,
-                        timestamp_type_id);
+                        timestamp_type_id,
+                        decimal_type_id);
 }
 
 std::vector<std::vector<cudf::size_type>>
@@ -534,7 +532,7 @@ aggregate_reader_metadata::filter_row_groups_with_dictionary_pages(
 
 std::vector<std::vector<cudf::size_type>>
 aggregate_reader_metadata::filter_row_groups_with_bloom_filters(
-  cudf::host_span<rmm::device_buffer> bloom_filter_data,
+  cudf::host_span<cudf::device_span<uint8_t const> const> bloom_filter_data,
   host_span<std::vector<cudf::size_type> const> row_group_indices,
   host_span<data_type const> output_dtypes,
   host_span<cudf::size_type const> output_column_schemas,
@@ -561,7 +559,18 @@ aggregate_reader_metadata::filter_row_groups_with_bloom_filters(
   // Compute total number of input row groups
   auto const total_row_groups = compute_total_row_groups(row_group_indices);
 
-  auto const bloom_filtered_row_groups = apply_bloom_filters(bloom_filter_data,
+  // Transform bloom filter data to cuda::std::byte type for apply_bloom_filters
+  std::vector<cudf::device_span<cuda::std::byte const>> transformed_bloom_filter_data;
+  transformed_bloom_filter_data.reserve(bloom_filter_data.size());
+  std::transform(bloom_filter_data.begin(),
+                 bloom_filter_data.end(),
+                 std::back_inserter(transformed_bloom_filter_data),
+                 [](auto const& data) {
+                   return cudf::device_span<cuda::std::byte const>{
+                     reinterpret_cast<cuda::std::byte const*>(data.data()), data.size()};
+                 });
+
+  auto const bloom_filtered_row_groups = apply_bloom_filters(transformed_bloom_filter_data,
                                                              row_group_indices,
                                                              literals,
                                                              total_row_groups,
@@ -571,6 +580,48 @@ aggregate_reader_metadata::filter_row_groups_with_bloom_filters(
                                                              stream);
 
   return bloom_filtered_row_groups.value_or(all_row_group_indices(row_group_indices));
+}
+
+/**
+ * @brief Converts column named expression to column index reference expression
+ */
+named_to_reference_converter::named_to_reference_converter(
+  std::optional<std::reference_wrapper<ast::expression const>> expr,
+  table_metadata const& metadata,
+  std::vector<SchemaElement> const& schema_tree,
+  cudf::io::parquet_reader_options const& options)
+{
+  if (!expr.has_value()) { return; }
+
+  _column_indices_to_names =
+    cudf::io::parquet::detail::map_column_indices_to_names(options, schema_tree);
+
+  // Map column names to their indices
+  std::transform(metadata.schema_info.cbegin(),
+                 metadata.schema_info.cend(),
+                 thrust::counting_iterator<size_t>(0),
+                 std::inserter(_column_name_to_index, _column_name_to_index.end()),
+                 [](auto const& sch, auto index) { return std::make_pair(sch.name, index); });
+
+  expr.value().get().accept(*this);
+}
+
+std::reference_wrapper<ast::expression const> named_to_reference_converter::visit(
+  ast::column_reference const& expr)
+{
+  // Map the column index to its name
+  auto const col_name_iter = _column_indices_to_names.find(expr.get_column_index());
+  CUDF_EXPECTS(col_name_iter != _column_indices_to_names.end(),
+               "Column index not found in column indices to names map");
+  auto const col_name = col_name_iter->second;
+  // Check if the column name exists in the metadata and map it to its new column index
+  auto col_index_it = _column_name_to_index.find(col_name);
+  CUDF_EXPECTS(col_index_it != _column_name_to_index.end(), "Column name not found in metadata");
+  auto col_index = col_index_it->second;
+  // Create a new column reference
+  _col_ref.emplace_back(col_index);
+  _converted_expr = std::reference_wrapper<ast::expression const>(_col_ref.back());
+  return std::reference_wrapper<ast::expression const>(_col_ref.back());
 }
 
 }  // namespace cudf::io::parquet::experimental::detail

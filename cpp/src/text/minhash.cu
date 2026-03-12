@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -394,7 +394,7 @@ std::pair<cudf::size_type, rmm::device_uvector<cudf::size_type>> partition_input
   rmm::cuda_stream_view stream)
 {
   auto indices = rmm::device_uvector<cudf::size_type>(size, stream);
-  thrust::sequence(rmm::exec_policy(stream), indices.begin(), indices.end());
+  thrust::sequence(rmm::exec_policy_nosync(stream), indices.begin(), indices.end());
   cudf::size_type threshold_index = threshold_count < size ? size : 0;
 
   // if we counted a split of above/below threshold then
@@ -602,9 +602,7 @@ std::unique_ptr<cudf::column> build_list_result(cudf::column_view const& input,
                                   std::move(offsets),
                                   std::move(hashes),
                                   input.null_count(),
-                                  cudf::detail::copy_bitmask(input, stream, mr),
-                                  stream,
-                                  mr);
+                                  cudf::detail::copy_bitmask(input, stream, mr));
   // expect this condition to be very rare
   if (input.null_count() > 0) {
     result = cudf::detail::purge_nonempty_nulls(result->view(), stream, mr);

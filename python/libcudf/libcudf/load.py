@@ -36,6 +36,13 @@ def _load_wheel_installation(soname: str):
 def load_library():
     """Dynamically load libcudf.so and its dependencies"""
     try:
+        from cuda.pathfinder import load_nvidia_dynamic_lib
+
+        load_nvidia_dynamic_lib("nvJitLink")
+    except ModuleNotFoundError:
+        pass
+
+    try:
         # librmm and libkvikio must be loaded before libcudf because libcudf references
         # them.
         import libkvikio

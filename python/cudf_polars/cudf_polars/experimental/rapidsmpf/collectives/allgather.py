@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 """AllGather logic for the RapidsMPF streaming runtime."""
 
@@ -14,6 +14,7 @@ from rapidsmpf.streaming.coll.allgather import AllGather
 from pylibcudf.contiguous_split import pack
 
 if TYPE_CHECKING:
+    from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.streaming.core.context import Context
     from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 
@@ -29,13 +30,15 @@ class AllGatherManager:
     ----------
     context: Context
         The streaming context.
+    comm: Communicator
+        The communicator.
     op_id: int
         Pre-allocated operation ID for this operation.
     """
 
-    def __init__(self, context: Context, op_id: int):
+    def __init__(self, context: Context, comm: Communicator, op_id: int):
         self.context = context
-        self.allgather = AllGather(self.context, op_id)
+        self.allgather = AllGather(self.context, comm, op_id)
 
     def insert(self, sequence_number: int, chunk: TableChunk) -> None:
         """
@@ -59,6 +62,7 @@ class AllGatherManager:
                 self.context.br(),
             ),
         )
+        del chunk
 
     def insert_finished(self) -> None:
         """Insert finished into the AllGatherManager."""
@@ -81,12 +85,9 @@ class AllGatherManager:
         -------
         The concatenated AllGather result.
         """
-        partition_chunks = await self.allgather.extract_all(
-            self.context, ordered=ordered
-        )
         return await asyncio.to_thread(
             unpack_and_concat,
-            partitions=partition_chunks,
+            partitions=await self.allgather.extract_all(self.context, ordered=ordered),
             stream=stream,
             br=self.context.br(),
         )

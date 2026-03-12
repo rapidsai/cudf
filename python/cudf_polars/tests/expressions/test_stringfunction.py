@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -15,10 +15,11 @@ from cudf_polars.testing.asserts import (
     assert_ir_translation_raises,
 )
 from cudf_polars.utils.versions import (
-    POLARS_VERSION_LT_130,
     POLARS_VERSION_LT_131,
     POLARS_VERSION_LT_132,
     POLARS_VERSION_LT_133,
+    POLARS_VERSION_LT_136,
+    POLARS_VERSION_LT_138,
 )
 
 
@@ -257,6 +258,12 @@ def test_split_exact_inclusive_unsupported(ldf_split):
     assert_ir_translation_raises(q, NotImplementedError)
 
 
+def test_split_exact_null_correct_children():
+    df = pl.LazyFrame({"a": ["a_b", None]})
+    q = df.slice(1).select(pl.col("a").str.split_exact("_", 1))
+    assert_gpu_result_equal(q)
+
+
 @pytest.mark.parametrize("cache", [True, False], ids=lambda cache: f"{cache=}")
 @pytest.mark.parametrize("strict", [True, False], ids=lambda strict: f"{strict=}")
 @pytest.mark.parametrize("exact", [True, False], ids=lambda exact: f"{exact=}")
@@ -296,11 +303,7 @@ def test_to_datetime(values, has_invalid_row, cache, strict, format, exact):
     if outcome == "translation_error":
         assert_ir_translation_raises(q, NotImplementedError)
     elif outcome == "collect_error":
-        cudf_exc = (
-            pl.exceptions.ComputeError
-            if POLARS_VERSION_LT_130
-            else pl.exceptions.InvalidOperationError
-        )
+        cudf_exc = pl.exceptions.InvalidOperationError
         assert_collect_raises(
             q,
             polars_except=pl.exceptions.InvalidOperationError,
@@ -369,6 +372,13 @@ def test_replace_many_ascii_case(ldf):
     q = ldf.select(
         pl.col("a").str.replace_many(["a", "b", "c"], "a", ascii_case_insensitive=True)
     )
+
+    assert_ir_translation_raises(q, NotImplementedError)
+
+
+@pytest.mark.skipif(POLARS_VERSION_LT_136, reason="leftmost arg added in 1.36")
+def test_replace_many_leftmost(ldf):
+    q = ldf.select(pl.col("a").str.replace_many(["a", "b"], "x", leftmost=True))
 
     assert_ir_translation_raises(q, NotImplementedError)
 
@@ -508,9 +518,7 @@ def test_string_to_numeric_invalid(numeric_type):
     assert_collect_raises(
         q,
         polars_except=pl.exceptions.InvalidOperationError,
-        cudf_except=pl.exceptions.ComputeError
-        if POLARS_VERSION_LT_130
-        else pl.exceptions.InvalidOperationError,
+        cudf_except=pl.exceptions.InvalidOperationError,
     )
 
 
@@ -604,13 +612,7 @@ def test_string_zfill_column(fill):
     q = ldf.select(pl.col("input_strings").str.zfill(pl.col("fill")))
     if fill is not None and fill < 0:
         cudf_except = (
-            (
-                pl.exceptions.InvalidOperationError
-                if not POLARS_VERSION_LT_130
-                else pl.exceptions.ComputeError
-            )
-            if POLARS_VERSION_LT_132
-            else ()
+            pl.exceptions.InvalidOperationError if POLARS_VERSION_LT_132 else ()
         )
         assert_collect_raises(
             q,
@@ -627,9 +629,7 @@ def test_string_zfill_forbidden_chars():
     assert_collect_raises(
         q,
         polars_except=(),
-        cudf_except=pl.exceptions.InvalidOperationError
-        if not POLARS_VERSION_LT_130
-        else pl.exceptions.ComputeError,
+        cudf_except=pl.exceptions.InvalidOperationError,
     )
 
 
@@ -898,3 +898,20 @@ def test_single_column_concat_str():
     lf = pl.LazyFrame({"c0": ["a", "b"]})
     q = lf.select(pl.concat_str(pl.col("c0")))
     assert_gpu_result_equal(q)
+
+
+def test_concat_str_with_boolean():
+    lf = pl.LazyFrame({"c0": [True, False, None]})
+    q = lf.with_columns(pl.concat_str([pl.col("c0"), pl.lit("bool")]))
+    assert_gpu_result_equal(q)
+
+
+@pytest.mark.skipif(
+    POLARS_VERSION_LT_138, reason="Split with literal parameter added in 1.38"
+)
+def test_split_regex_not_supported():
+    lf = pl.LazyFrame({"a": ["foo1bar", "baz456boo", "abc321"]})
+
+    q = lf.select(pl.col("a").str.split(r"\d+", literal=False))
+
+    assert_ir_translation_raises(q, NotImplementedError)

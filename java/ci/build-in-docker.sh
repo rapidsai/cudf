@@ -1,7 +1,7 @@
 #!/bin/bash
 
 #
-# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 #
 
@@ -53,8 +53,7 @@ cmake .. -G"${CMAKE_GENERATOR}" \
          -DCUDF_USE_PER_THREAD_DEFAULT_STREAM="$ENABLE_PTDS" \
          -DRMM_LOGGING_LEVEL="$RMM_LOGGING_LEVEL" \
          -DBUILD_SHARED_LIBS=OFF \
-         -DCUDF_KVIKIO_REMOTE_IO=OFF \
-         -DCUDF_EXPORT_NVCOMP=ON
+         -DCUDF_KVIKIO_REMOTE_IO=OFF
 
 if [[ -z "${PARALLEL_LEVEL}" ]]; then
     cmake --build .

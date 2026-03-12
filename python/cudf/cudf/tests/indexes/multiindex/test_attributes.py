@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 import re
@@ -206,7 +206,7 @@ def test_multiindex_iter_error():
         TypeError,
         match=re.escape(
             f"{midx.__class__.__name__} object is not iterable. "
-            f"Consider using `.to_arrow()`, `.to_pandas()` or `.values_host` "
+            f"Consider using `.to_arrow()`, `.to_pandas()` or `.to_numpy()` "
             f"if you wish to iterate over the values."
         ),
     ):
@@ -236,7 +236,7 @@ def test_multiindex_values_host():
     )
     pmidx = midx.to_pandas()
 
-    assert_eq(midx.values_host, pmidx.values)
+    assert_eq(midx.to_numpy(), pmidx.values)
 
 
 @pytest.mark.parametrize(

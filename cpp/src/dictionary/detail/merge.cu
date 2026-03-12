@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -40,7 +40,7 @@ std::unique_ptr<column> merge(dictionary_column_view const& lcol,
     cudf::detail::indexalator_factory::make_output_iterator(indices_column->mutable_view());
 
   // merge the input indices columns into the output column
-  thrust::transform(rmm::exec_policy(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream),
                     row_order.begin(),
                     row_order.end(),
                     output_iter,

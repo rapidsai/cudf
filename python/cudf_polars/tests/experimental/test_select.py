@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -17,7 +17,6 @@ from cudf_polars.testing.asserts import (
     assert_ir_translation_raises,
 )
 from cudf_polars.utils.versions import (
-    POLARS_VERSION_LT_130,
     POLARS_VERSION_LT_132,
     POLARS_VERSION_LT_134,
 )
@@ -78,9 +77,7 @@ def test_select_reduce_fallback(df, fallback_mode):
         ctx = contextlib.nullcontext()
     elif fallback_mode == "raise":
         ctx = pytest.raises(
-            pl.exceptions.ComputeError
-            if POLARS_VERSION_LT_130
-            else NotImplementedError,
+            NotImplementedError,
             match=match,
         )
     elif fallback_mode == "foo":
@@ -184,3 +181,16 @@ def test_select_mean_with_decimals(df, engine):
     df = pl.LazyFrame({"d": [Decimal("1.23")] * 4})
     q = df.select(pl.mean("d"))
     assert_gpu_result_equal(q, engine=engine, check_dtypes=not POLARS_VERSION_LT_134)
+
+
+def test_select_with_len(engine):
+    # https://github.com/pola-rs/polars/issues/25592
+    df1 = pl.LazyFrame({"c0": [1] * 4})
+    df2 = pl.LazyFrame({"c0": [2] * 4})
+    q = pl.concat([df1.join(df2, how="cross"), df1.with_columns(pl.lit(None))]).select(
+        pl.len()
+    )
+    with pytest.warns(
+        UserWarning, match="Cross join not support for multiple partitions"
+    ):
+        assert_gpu_result_equal(q, engine=engine)

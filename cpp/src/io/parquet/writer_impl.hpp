@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -104,9 +104,11 @@ class writer::impl {
   /**
    * @brief Finishes the chunked/streamed write process.
    *
-   * @param[in] column_chunks_file_path Column chunks file path to be set in the raw output metadata
-   * @return A parquet-compatible blob that contains the data for all rowgroups in the list only if
-   * `column_chunks_file_path` is provided, else null.
+   * @param[in] column_chunks_file_path Column chunks file path to be set in the raw output
+   * metadata
+   * @return A parquet-compatible blob that contains the file header and footer metadata. If
+   * `column_chunks_file_path` is non-empty, the output metadata blob will also have row group file
+   * paths set.
    */
   std::unique_ptr<std::vector<uint8_t>> close(
     std::vector<std::string> const& column_chunks_file_path = {});
@@ -150,6 +152,7 @@ class writer::impl {
   bool const _int96_timestamps;
   bool const _utc_timestamps;
   bool const _write_v2_headers;
+  bool const _page_level_compression;
   bool const _write_arrow_schema;
   std::optional<std::vector<sorting_column>> _sorting_columns;
   int32_t const _column_index_truncate_length;

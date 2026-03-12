@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -49,7 +49,7 @@ rmm::device_uvector<column_device_view> create_leaf_column_device_views(
 
   auto iter = thrust::make_counting_iterator<size_type>(0);
   thrust::for_each(
-    rmm::exec_policy(stream),
+    rmm::exec_policy_nosync(stream),
     iter,
     iter + parent_table_device_view.num_columns(),
     [col_desc, parent_col_view = parent_table_device_view, leaf_columns] __device__(
@@ -69,7 +69,7 @@ rmm::device_uvector<column_device_view> create_leaf_column_device_views(
         col = child;
       }
       // Store leaf_column to device storage
-      column_device_view* leaf_col_ptr = leaf_columns.begin() + index;
+      column_device_view* leaf_col_ptr = leaf_columns.data() + index;
       *leaf_col_ptr                    = col;
       col_desc[index].leaf_column      = leaf_col_ptr;
     });

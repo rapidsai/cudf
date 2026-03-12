@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -152,7 +152,7 @@ std::string nested_offsets_to_string(NestedColumnView const& c, std::string cons
   // normalize the offset values for the column offset
   size_type const* d_offsets = offsets.head<size_type>() + c.offset();
   thrust::transform(
-    rmm::exec_policy(cudf::get_default_stream()),
+    rmm::exec_policy_nosync(cudf::get_default_stream()),
     d_offsets,
     d_offsets + output_size,
     shifted_offsets.begin(),

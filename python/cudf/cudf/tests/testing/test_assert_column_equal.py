@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 import pyarrow as pa
@@ -54,24 +54,11 @@ def test_assert_column_memory_slice(arrow_arrays):
 
 def test_assert_column_memory_basic_same(arrow_arrays):
     data = cudf.core.column.ColumnBase.from_arrow(arrow_arrays)
-    plc_col = data.to_pylibcudf(mode="read")
+    plc_col = data.plc_column
 
-    left = cudf.core.column.build_column(
-        plc_column=plc_col,
-        dtype=data.dtype,
-        size=data.size,
-        offset=0,
-        null_count=data.null_count,
-        exposed=False,
-    )
-    right = cudf.core.column.build_column(
-        plc_column=plc_col,
-        dtype=data.dtype,
-        size=data.size,
-        offset=0,
-        null_count=data.null_count,
-        exposed=False,
-    )
+    # Create two references to same underlying data
+    left = cudf.core.column.ColumnBase.create(plc_col, dtype=data.dtype)
+    right = cudf.core.column.ColumnBase.create(plc_col, dtype=data.dtype)
 
     assert_column_memory_eq(left, right)
     with pytest.raises(AssertionError):

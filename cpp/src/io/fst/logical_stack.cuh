@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -537,7 +537,7 @@ void sparse_stack_op_to_top_of_stack(StackSymbolItT d_symbols,
     stream));
 
   // Fill the output tape with read-symbol
-  thrust::fill(rmm::exec_policy(stream),
+  thrust::fill(rmm::exec_policy_nosync(stream),
                thrust::device_ptr<StackSymbolT>{d_top_of_stack},
                thrust::device_ptr<StackSymbolT>{d_top_of_stack + num_symbols_out},
                read_symbol);
@@ -548,7 +548,7 @@ void sparse_stack_op_to_top_of_stack(StackSymbolItT d_symbols,
 
   // Scatter the stack symbols to the output tape (spots that are not scattered to have been
   // pre-filled with the read-symbol)
-  thrust::scatter(rmm::exec_policy(stream),
+  thrust::scatter(rmm::exec_policy_nosync(stream),
                   kv_op_to_stack_sym_it,
                   kv_op_to_stack_sym_it + num_symbols_in,
                   d_symbol_positions_db.Current(),

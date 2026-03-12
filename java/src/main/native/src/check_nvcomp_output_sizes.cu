@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #include "check_nvcomp_output_sizes.hpp"
@@ -31,7 +31,7 @@ bool check_nvcomp_output_sizes(std::size_t const* dev_uncompressed_sizes,
                                rmm::cuda_stream_view stream)
 {
   NVTX3_FUNC_RANGE_IN(java_domain);
-  return thrust::equal(rmm::exec_policy(stream),
+  return thrust::equal(rmm::exec_policy_nosync(stream),
                        dev_uncompressed_sizes,
                        dev_uncompressed_sizes + num_chunks,
                        dev_actual_uncompressed_sizes);

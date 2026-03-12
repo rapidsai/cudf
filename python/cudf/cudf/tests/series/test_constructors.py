@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 import array
 import datetime
@@ -731,9 +731,7 @@ def test_to_from_arrow_nulls(all_supported_types_as_str):
     # number of bytes, so only check the first byte in this case
     np.testing.assert_array_equal(
         np.asarray(s1.buffers()[0]).view("u1")[0],
-        cp.asarray(gs1._column.to_pylibcudf(mode="read").null_mask())
-        .get()
-        .view("u1")[0],
+        cp.asarray(gs1._column.plc_column.null_mask()).get().view("u1")[0],
     )
     assert pa.Array.equals(s1, gs1.to_arrow())
 
@@ -744,9 +742,7 @@ def test_to_from_arrow_nulls(all_supported_types_as_str):
     # number of bytes, so only check the first byte in this case
     np.testing.assert_array_equal(
         np.asarray(s2.buffers()[0]).view("u1")[0],
-        cp.asarray(gs2._column.to_pylibcudf(mode="read").null_mask())
-        .get()
-        .view("u1")[0],
+        cp.asarray(gs2._column.plc_column.null_mask()).get().view("u1")[0],
     )
     assert pa.Array.equals(s2, gs2.to_arrow())
 
@@ -910,17 +906,14 @@ def test_series_arrow_category_types_roundtrip():
     pi = pd.Index(ps)
     pdf = pi.to_frame()
 
-    with cudf.option_context("mode.pandas_compatible", True):
-        with pytest.raises(NotImplementedError):
-            cudf.from_pandas(ps)
+    with pytest.raises(TypeError):
+        cudf.from_pandas(ps)
 
-    with cudf.option_context("mode.pandas_compatible", True):
-        with pytest.raises(NotImplementedError):
-            cudf.from_pandas(pi)
+    with pytest.raises(TypeError):
+        cudf.from_pandas(pi)
 
-    with cudf.option_context("mode.pandas_compatible", True):
-        with pytest.raises(NotImplementedError):
-            cudf.from_pandas(pdf)
+    with pytest.raises(TypeError):
+        cudf.from_pandas(pdf)
 
 
 @pytest.mark.parametrize(
@@ -1407,37 +1400,29 @@ def test_from_pandas_obj_tz_aware_unsupported(klass):
 
 
 @pytest.mark.parametrize(
-    "data",
+    "codes",
     [
-        [1, 2, 3, 4],
-        ["a", "1", "2", "1", "a"],
-        pd.Series(["a", "1", "22", "1", "aa"]),
-        pd.Series(["a", "1", "22", "1", "aa"], dtype="category"),
-        pd.Series([1, 2, 3, -4], dtype="int64"),
-        pd.Series([1, 2, 3, 4], dtype="uint64"),
-        pd.Series([1, 2.3, 3, 4], dtype="float"),
-        np.asarray([0, 2, 1]),
-        [None, 1, None, 2, None],
         [],
+        [0],
+        [0, 1, 2],
+        [0, 1, -1],
+        [0, 1, 2, -1],
     ],
 )
 @pytest.mark.parametrize(
     "categories",
     [
         ["aa", "bb", "cc"],
-        [2, 4, 10, 100],
-        ["a", "b", "c"],
-        ["22", "b", "c"],
-        [],
+        [2, 4, 10],
     ],
 )
-def test_categorical_creation(data, categories):
-    dtype = pd.CategoricalDtype(categories)
-    expected = pd.Series(data, dtype=dtype)
-    got = cudf.Series(data, dtype=dtype)
+def test_categorical_creation(codes, categories):
+    data = pd.Categorical.from_codes(codes, categories)
+    expected = pd.Series(data)
+    got = cudf.Series(data)
     assert_eq(expected, got)
 
-    got = cudf.Series(data, dtype=cudf.from_pandas(dtype))
+    got = cudf.Series(data, dtype=cudf.from_pandas(data.dtype))
     assert_eq(expected, got)
 
     expected = pd.Series(data, dtype="category")
@@ -1485,7 +1470,7 @@ def test_categorical_interval_pandas_roundtrip():
 
 
 def test_from_arrow_missing_categorical():
-    pd_cat = pd.Categorical(["a", "b", "c"], categories=["a", "b"])
+    pd_cat = pd.Categorical.from_codes([0, 1, -1], categories=["a", "b"])
     pa_cat = pa.array(pd_cat, from_pandas=True)
     gd_cat = cudf.Series(pa_cat)
 
@@ -1556,7 +1541,7 @@ def test_as_column_types():
 
     pds = pd.Series([1, 2, 4], dtype="int64")
     gds = cudf.Series._from_column(
-        as_column(cudf.Series([1, 2, 4]), dtype="int64")
+        as_column(cudf.Series([1, 2, 4]), dtype=np.dtype("int64"))
     )
 
     assert_eq(pds, gds)
@@ -1585,3 +1570,57 @@ def test_series_type_invalid_error():
     with cudf.option_context("mode.pandas_compatible", True):
         with pytest.raises(ValueError):
             cudf.Series(["a", "b", "c"], dtype="Int64")
+
+
+def test_series_constructor_numpy_dtype_str(pandas_compatible):
+    data = ["a"]
+    dtype = np.dtype(str)
+    expected = pd.Series(data, dtype=dtype)
+    result = cudf.Series(data, dtype=dtype)
+    assert result.dtype == np.dtype(object)
+    assert_eq(result, expected)
+
+
+def test_series_constructor_dtype_is_pandas_nullable_extension_type(
+    all_supported_pandas_nullable_extension_dtypes,
+):
+    scalar, dtype = all_supported_pandas_nullable_extension_dtypes
+    result = cudf.Series([scalar], dtype=dtype)
+    expected = pd.Series([scalar], dtype=dtype)
+    assert result.dtype == expected.dtype
+    assert_eq(result, expected)
+
+
+def test_series_constructor_dtype_is_pandas_arrowdtype(
+    all_supported_pandas_arrowdtypes,
+    request,
+):
+    scalar, dtype = all_supported_pandas_arrowdtypes
+    if PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION:
+        if dtype.kind == "M" and dtype.pyarrow_dtype.tz is not None:
+            pytest.skip(
+                f"RecursionError occurs in older versions of pandas/pyarrow for {dtype}"
+            )
+        elif pa.types.is_decimal(dtype.pyarrow_dtype):
+            pytest.skip(
+                "Decimal types coerced to object in older versions of pandas/pyarrow"
+            )
+    result = cudf.Series([scalar], dtype=dtype)
+    expected = pd.Series([scalar], dtype=dtype)
+    assert result.dtype == expected.dtype
+    assert_eq(result, expected)
+
+
+def test_build_series_from_nullable_pandas_dtype(
+    all_supported_pandas_nullable_extension_dtypes,
+):
+    scalar, dtype = all_supported_pandas_nullable_extension_dtypes
+    expected = pd.Series([scalar, pd.NA], dtype=dtype)
+    result = cudf.Series(expected)
+
+    assert result.dtype == expected.dtype
+
+    expect_mask = expected.isna()
+    got_mask = result.isna().to_numpy()
+
+    np.testing.assert_array_equal(expect_mask, got_mask)

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -22,9 +22,9 @@
 
 #include <cooperative_groups.h>
 #include <cooperative_groups/reduce.h>
+#include <cuda/iterator>
 #include <thrust/copy.h>
 #include <thrust/count.h>
-#include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform.h>
 
@@ -325,7 +325,7 @@ std::unique_ptr<column> like(strings_column_view const& input,
   if ((input.size() == input.null_count()) ||
       ((last_offset - first_offset) / (input.size() - input.null_count())) <
         AVG_CHAR_BYTES_THRESHOLD) {
-    thrust::transform(rmm::exec_policy(stream),
+    thrust::transform(rmm::exec_policy_nosync(stream),
                       thrust::make_counting_iterator<size_type>(0),
                       thrust::make_counting_iterator<size_type>(input.size()),
                       results->mutable_view().data<bool>(),
@@ -362,7 +362,7 @@ std::unique_ptr<column> like(strings_column_view const& input,
                std::invalid_argument);
 
   auto const d_pattern    = pattern.value(stream);
-  auto const patterns_itr = thrust::make_constant_iterator(d_pattern);
+  auto const patterns_itr = cuda::make_constant_iterator(d_pattern);
   return like(input, patterns_itr, d_escape, stream, mr);
 }
 

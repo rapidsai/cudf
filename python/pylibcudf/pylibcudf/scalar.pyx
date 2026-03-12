@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from cpython cimport bool as py_bool
@@ -158,15 +158,15 @@ cdef class Scalar:
 
     def to_arrow(
         self,
-        metadata: list[ColumnMetadata] | str | None = None,
+        metadata: ColumnMetadata | str | None = None,
         stream: Stream | None = None,
     ) -> ArrowLike:
         """Create a PyArrow array from a pylibcudf scalar.
 
         Parameters
         ----------
-        metadata : list
-            The metadata to attach to the columns of the table.
+        metadata : ColumnMetadata | str | None
+            The metadata to attach to the scalar.
         stream : Stream | None
             CUDA stream on which to perform the operation.
 
@@ -508,6 +508,12 @@ def _(
             raise OverflowError(f"{py_val} out of range for UINT64 scalar")
         c_obj = make_numeric_scalar(c_dtype.c_obj, stream.view(), mr.get_mr())
         (<numeric_scalar[uint64_t]*>c_obj.get()).set_value(py_val, stream.view())
+
+    elif tid == type_id.BOOL8:
+        if py_val not in (0, 1):
+            raise ValueError(f"Cannot convert {py_val} to BOOL8 scalar")
+        c_obj = make_numeric_scalar(c_dtype.c_obj, stream.view(), mr.get_mr())
+        (<numeric_scalar[cbool]*>c_obj.get()).set_value(py_val != 0, stream.view())
 
     elif tid == type_id.DURATION_NANOSECONDS:
         if py_val > numeric_limits[int64_t].max():

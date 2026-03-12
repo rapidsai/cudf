@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -22,11 +22,11 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/iterator>
 #include <cuda/std/limits>
 #include <thrust/execution_policy.h>
 #include <thrust/fill.h>
 #include <thrust/for_each.h>
-#include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
 
 #include <algorithm>
@@ -119,15 +119,16 @@ struct HashBase : public crtp<Hasher> {
       this->underlying().hash_step(state);
 
       // Take buffer-sized chunks of the data and do a hash step on each chunk.
-      while (len > Hasher::message_chunk_size + copylen) {
+      // Check with equality here because the last chunk may be exactly the size of the buffer.
+      while (len >= Hasher::message_chunk_size + copylen) {
         memcpy(state.buffer, data + copylen, Hasher::message_chunk_size);
         this->underlying().hash_step(state);
         copylen += Hasher::message_chunk_size;
       }
 
-      // The remaining data chunk does not fill the buffer. We copy the data into
+      // The remaining data chunk (if any) does not fill the buffer. We copy the data into
       // the buffer but do not trigger a hash step yet.
-      memcpy(state.buffer, data + copylen, len - copylen);
+      if (len > copylen) { memcpy(state.buffer, data + copylen, len - copylen); }
       state.buffer_length = len - copylen;
     }
   }
@@ -509,7 +510,7 @@ std::unique_ptr<column> sha_hash(table_view const& input,
     cudf::data_type_error);
 
   // Result column allocation and creation
-  auto begin = thrust::make_constant_iterator(Hasher::digest_size);
+  auto begin = cuda::make_constant_iterator(Hasher::digest_size);
   auto [offsets_column, bytes] =
     cudf::strings::detail::make_offsets_child_column(begin, begin + input.num_rows(), stream, mr);
 
@@ -520,7 +521,7 @@ std::unique_ptr<column> sha_hash(table_view const& input,
 
   // Hash each row, hashing each element sequentially left to right
   thrust::for_each(
-    rmm::exec_policy(stream),
+    rmm::exec_policy_nosync(stream),
     thrust::make_counting_iterator(0),
     thrust::make_counting_iterator(input.num_rows()),
     [d_chars, device_input = *device_input] __device__(auto row_index) {

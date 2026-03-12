@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -16,10 +16,13 @@
 #include <cudf/join/filtered_join.hpp>
 #include <cudf/join/join.hpp>
 #include <cudf/table/table_view.hpp>
+#include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
+#include <rmm/exec_policy.hpp>
+#include <rmm/mr/polymorphic_allocator.hpp>
 #include <rmm/resource_ref.hpp>
 
 #include <cuco/bucket_storage.cuh>
@@ -27,9 +30,11 @@
 #include <cuco/extent.cuh>
 #include <cuco/operator.hpp>
 #include <cuco/static_set_ref.cuh>
-#include <cuda/std/iterator>
+#include <cuda/iterator>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/sequence.h>
+
+#include <memory>
 
 namespace cudf {
 namespace detail {
@@ -114,7 +119,7 @@ void filtered_join::insert_build_table(Ref const& insert_ref, rmm::cuda_stream_v
         <<<grid_size, cuco::detail::default_block_size(), 0, stream.value()>>>(
           build_iter,
           _build.num_rows(),
-          thrust::constant_iterator<bool>{true},
+          cuda::constant_iterator<bool>{true},
           cuda::std::identity{},
           insert_ref);
     }
@@ -176,7 +181,7 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> distinct_filtered_join::qu
         <<<grid_size, cuco::detail::default_block_size(), 0, stream.value()>>>(
           probe_iter,
           probe.num_rows(),
-          thrust::constant_iterator<bool>{true},
+          cuda::constant_iterator<bool>{true},
           cuda::std::identity{},
           contains_iter,
           query_ref);
@@ -199,7 +204,7 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> distinct_filtered_join::qu
     query_set(probe_iter, contains_map.begin());
   }
   rmm::device_uvector<size_type> gather_map(probe.num_rows(), stream, mr);
-  auto gather_map_end = thrust::copy_if(rmm::exec_policy(stream),
+  auto gather_map_end = thrust::copy_if(rmm::exec_policy_nosync(stream),
                                         thrust::counting_iterator<size_type>(0),
                                         thrust::counting_iterator<size_type>(probe.num_rows()),
                                         gather_map.begin(),

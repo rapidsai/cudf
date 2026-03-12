@@ -1,6 +1,6 @@
 # =============================================================================
 # cmake-format: off
-# SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 # cmake-format: on
 # =============================================================================
@@ -41,7 +41,6 @@ option(BUILD_SHARED_LIBS "Build cuDF shared libraries" ON)
 option(JITIFY_USE_CACHE "Use a file cache for JIT compiled kernels" ON)
 option(CUDF_BUILD_TESTUTIL "Whether to build the test utilities contained in libcudf" ON)
 mark_as_advanced(CUDF_BUILD_TESTUTIL)
-option(CUDF_EXPORT_NVCOMP "Export NVCOMP as a dependency" ON)
 option(CUDF_LARGE_STRINGS_DISABLED "Build with large string support disabled" OFF)
 mark_as_advanced(CUDF_LARGE_STRINGS_DISABLED)
 option(
@@ -402,6 +401,7 @@ add_library(
   src/dictionary/dictionary_column_view.cpp
   src/dictionary/dictionary_factories.cu
   src/dictionary/encode.cu
+  src/dictionary/match_keys.cu
   src/dictionary/remove_keys.cu
   src/dictionary/replace.cu
   src/dictionary/search.cu
@@ -431,25 +431,26 @@ add_library(
   src/groupby/sort/group_collect.cu
   src/groupby/sort/group_correlation.cu
   src/groupby/sort/group_count.cu
+  src/groupby/sort/group_count_scan.cu
   src/groupby/sort/group_histogram.cu
   src/groupby/sort/group_m2.cu
   src/groupby/sort/group_max.cu
-  src/groupby/sort/group_min.cu
+  src/groupby/sort/group_max_scan.cu
   src/groupby/sort/group_merge_lists.cu
   src/groupby/sort/group_merge_m2.cu
+  src/groupby/sort/group_min.cu
+  src/groupby/sort/group_min_scan.cu
   src/groupby/sort/group_nth_element.cu
   src/groupby/sort/group_nunique.cu
   src/groupby/sort/group_product.cu
-  src/groupby/sort/group_quantiles.cu
-  src/groupby/sort/group_std.cu
-  src/groupby/sort/group_sum.cu
-  src/groupby/sort/group_count_scan.cu
-  src/groupby/sort/group_max_scan.cu
-  src/groupby/sort/group_min_scan.cu
   src/groupby/sort/group_product_scan.cu
+  src/groupby/sort/group_quantiles.cu
   src/groupby/sort/group_rank_scan.cu
   src/groupby/sort/group_replace_nulls.cu
+  src/groupby/sort/group_std.cu
+  src/groupby/sort/group_sum.cu
   src/groupby/sort/group_sum_scan.cu
+  src/groupby/sort/group_topk.cu
   src/groupby/sort/host_udf_aggregation.cpp
   src/groupby/sort/scan.cpp
   src/groupby/sort/sort_helper.cu
@@ -493,6 +494,7 @@ add_library(
   src/io/csv/reader_impl.cu
   src/io/csv/writer_impl.cu
   src/io/functions.cpp
+  src/io/cudftable.cpp
   src/io/json/host_tree_algorithms.cu
   src/io/json/json_column.cu
   src/io/json/column_tree_construction.cu
@@ -530,6 +532,8 @@ add_library(
   src/io/parquet/experimental/hybrid_scan_preprocess.cu
   src/io/parquet/experimental/page_index_filter.cu
   src/io/parquet/experimental/page_index_filter_utils.cu
+  src/io/parquet/expression_transform_helpers.cpp
+  src/io/parquet/io_utils/parquet_io_utils.cpp
   src/io/parquet/page_data.cu
   src/io/parquet/chunk_dict.cu
   src/io/parquet/page_enc.cu
@@ -579,9 +583,12 @@ add_library(
   src/join/filter_join_indices_kernel_null_primitive.cu
   src/join/filter_join_indices_kernel_primitive.cu
   src/join/filtered_join.cu
+  src/join/mark_join.cu
   src/join/hash_join.cu
+  src/join/filter_join_indices_jit.cu
   src/join/join.cu
   src/join/join_utils.cu
+  src/join/key_remapping.cu
   src/join/mixed_join.cu
   src/join/mixed_join_kernel.cu
   src/join/mixed_join_kernel_nulls.cu
@@ -623,11 +630,13 @@ add_library(
   src/quantiles/quantiles.cu
   src/reductions/all.cu
   src/reductions/any.cu
+  src/reductions/approx_distinct_count.cu
   src/reductions/argmax.cu
   src/reductions/argmin.cu
   src/reductions/bitwise.cu
   src/reductions/collect_ops.cu
   src/reductions/count.cpp
+  src/reductions/distinct_count.cu
   src/reductions/histogram.cu
   src/reductions/max.cu
   src/reductions/mean.cu
@@ -638,8 +647,8 @@ add_library(
   src/reductions/product.cu
   src/reductions/quantile.cu
   src/reductions/reductions.cpp
-  src/reductions/scan/rank_scan.cu
   src/reductions/scan/ewm.cu
+  src/reductions/scan/rank_scan.cu
   src/reductions/scan/scan.cpp
   src/reductions/scan/scan_exclusive.cu
   src/reductions/scan/scan_inclusive.cu
@@ -661,6 +670,8 @@ add_library(
   src/reductions/sum.cu
   src/reductions/sum_of_squares.cu
   src/reductions/sum_with_overflow.cu
+  src/reductions/unique_count.cu
+  src/reductions/unique_count_column.cu
   src/reductions/var.cu
   src/replace/clamp.cu
   src/replace/nans.cu
@@ -706,15 +717,12 @@ add_library(
   src/sort/top_k.cu
   src/stream_compaction/apply_boolean_mask.cu
   src/stream_compaction/distinct.cu
-  src/stream_compaction/distinct_count.cu
   src/stream_compaction/distinct_helpers.cu
   src/stream_compaction/drop_nans.cu
   src/stream_compaction/drop_nulls.cu
   src/stream_compaction/filter/filter.cu
   src/stream_compaction/stable_distinct.cu
   src/stream_compaction/unique.cu
-  src/stream_compaction/unique_count.cu
-  src/stream_compaction/unique_count_column.cu
   src/strings/attributes.cu
   src/strings/capitalize.cu
   src/strings/case.cu
@@ -814,7 +822,7 @@ add_library(
   src/transform/nans_to_nulls.cu
   src/transform/one_hot_encode.cu
   src/transform/row_bit_count.cu
-  src/transform/transform.cpp
+  src/transform/transform.cu
   src/transpose/transpose.cu
   src/unary/cast_ops.cu
   src/unary/math_ops.cu
@@ -844,7 +852,7 @@ set_source_files_properties(
   src/rolling/detail/rolling_variable_window.cu
   src/rolling/grouped_rolling.cu
   src/rolling/rolling.cu
-  src/transform/transform.cpp
+  src/transform/transform.cu
   PROPERTIES COMPILE_DEFINITIONS "_FILE_OFFSET_BITS=64"
 )
 

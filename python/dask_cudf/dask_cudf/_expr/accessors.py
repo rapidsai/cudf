@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2021-2024, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 
@@ -34,11 +34,13 @@ class StructMethods:
         1    3
         dtype: int64
         """
-        typ = self.d_series._meta.struct.field(key).dtype
+        meta_result = self.d_series._meta.struct.field(key)
+        typ = meta_result.dtype
+        name = meta_result.name
 
         return self.d_series.map_partitions(
             lambda s: s.struct.field(key),
-            meta=self.d_series._meta._constructor([], dtype=typ),
+            meta=self.d_series._meta._constructor([], dtype=typ, name=name),
         )
 
     def explode(self):

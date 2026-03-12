@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -26,8 +26,8 @@
 
 #include <cooperative_groups.h>
 #include <cooperative_groups/reduce.h>
+#include <cuda/iterator>
 #include <cuda/std/utility>
-#include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform.h>
 
@@ -247,7 +247,7 @@ std::unique_ptr<column> compute_substrings_from_fn(strings_column_view const& in
   auto const d_column = column_device_view::create(input.parent(), stream);
 
   if ((input.chars_size(stream) / (input.size() - input.null_count())) < AVG_CHAR_BYTES_THRESHOLD) {
-    thrust::transform(rmm::exec_policy(stream),
+    thrust::transform(rmm::exec_policy_nosync(stream),
                       thrust::counting_iterator<size_type>(0),
                       thrust::counting_iterator<size_type>(input.size()),
                       results.begin(),
@@ -290,8 +290,8 @@ std::unique_ptr<column> slice_strings(strings_column_view const& input,
     if ((start_value >= 0) && (start_value < stop_value)) {
       // this is about 2x faster on long strings for this common case
       return compute_substrings_from_fn(input,
-                                        thrust::constant_iterator<size_type>(start_value),
-                                        thrust::constant_iterator<size_type>(stop_value),
+                                        cuda::constant_iterator<size_type>(start_value),
+                                        cuda::constant_iterator<size_type>(stop_value),
                                         stream,
                                         mr);
     }

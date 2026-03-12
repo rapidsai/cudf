@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2018-2024, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 """
@@ -263,13 +263,13 @@ doc_describe = docfmt_partial(
         unique           3    <NA>      3
         top              d    <NA>      a
         freq             1    <NA>      1
-        mean          <NA>     2.0   <NA>
-        std           <NA>     1.0   <NA>
-        min           <NA>     1.0   <NA>
-        25%           <NA>     1.5   <NA>
-        50%           <NA>     2.0   <NA>
-        75%           <NA>     2.5   <NA>
-        max           <NA>     3.0   <NA>
+        mean          None     2.0   None
+        std           None     1.0   None
+        min           None     1.0   None
+        25%           None     1.5   None
+        50%           None     2.0   None
+        75%           None     2.5   None
+        max           None     3.0   None
 
         Describing a column from a ``DataFrame`` by accessing it as an
         attribute.
@@ -333,12 +333,12 @@ doc_describe = docfmt_partial(
         unique           3    <NA>
         top              d    <NA>
         freq             1    <NA>
-        mean          <NA>     2.0
-        std           <NA>     1.0
-        min           <NA>     1.0
-        25%           <NA>     1.5
-        50%           <NA>     2.0
-        75%           <NA>     2.5
-        max           <NA>     3.0
+        mean          None     2.0
+        std           None     1.0
+        min           None     1.0
+        25%           None     1.5
+        50%           None     2.0
+        75%           None     2.5
+        max           None     3.0
 """
 )

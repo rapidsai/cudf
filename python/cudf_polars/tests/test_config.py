@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -11,14 +11,17 @@ import pytest
 import polars as pl
 from polars.testing.asserts import assert_frame_equal
 
-import pylibcudf as plc
 import rmm
 from rmm._cuda import gpu
 from rmm.pylibrmm import CudaStreamFlags
 
 import cudf_polars.callback
 import cudf_polars.utils.config
-from cudf_polars.callback import default_memory_resource, set_memory_resource
+from cudf_polars.callback import (
+    _is_concurrent_managed_access_supported,
+    default_memory_resource,
+    set_memory_resource,
+)
 from cudf_polars.dsl.ir import DataFrameScan, IRExecutionContext
 from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
@@ -31,7 +34,6 @@ from cudf_polars.utils.config import (
     MemoryResourceConfig,
 )
 from cudf_polars.utils.cuda_stream import get_cuda_stream, get_new_cuda_stream
-from cudf_polars.utils.versions import POLARS_VERSION_LT_130
 
 
 @pytest.fixture(params=[False, True], ids=["norapidsmpf.single", "rapidsmpf.single"])
@@ -97,10 +99,7 @@ def test_use_device_not_current(monkeypatch):
 def test_invalid_device_raises(device, monkeypatch):
     monkeypatch.setattr(cudf_polars.callback, "SEEN_DEVICE", None)
     q = pl.LazyFrame({})
-    if POLARS_VERSION_LT_130:
-        with pytest.raises(pl.exceptions.ComputeError):
-            q.collect(engine=pl.GPUEngine(device=device))
-    elif isinstance(device, int):
+    if isinstance(device, int):
         with pytest.raises(rmm._cuda.gpu.CUDARuntimeError):
             q.collect(engine=pl.GPUEngine(device=device))
     elif isinstance(device, str):
@@ -112,28 +111,20 @@ def test_multiple_devices_in_same_process_raise(monkeypatch):
     # A device we haven't already seen
     monkeypatch.setattr(cudf_polars.callback, "SEEN_DEVICE", 4)
     q = pl.LazyFrame({})
-    if POLARS_VERSION_LT_130:
-        with pytest.raises(pl.exceptions.ComputeError):
-            q.collect(engine=pl.GPUEngine())
-    else:
-        with pytest.raises(RuntimeError):
-            q.collect(engine=pl.GPUEngine())
+    with pytest.raises(RuntimeError):
+        q.collect(engine=pl.GPUEngine())
 
 
 @pytest.mark.parametrize("mr", [1, object()])
 def test_invalid_memory_resource_raises(mr, monkeypatch):
     monkeypatch.setattr(cudf_polars.callback, "SEEN_DEVICE", None)
     q = pl.LazyFrame({})
-    if POLARS_VERSION_LT_130:
-        with pytest.raises(pl.exceptions.ComputeError):
-            q.collect(engine=pl.GPUEngine(memory_resource=mr))
-    else:
-        with pytest.raises(TypeError):
-            q.collect(engine=pl.GPUEngine(memory_resource=mr))
+    with pytest.raises(TypeError):
+        q.collect(engine=pl.GPUEngine(memory_resource=mr))
 
 
 @pytest.mark.skipif(
-    not plc.utils._is_concurrent_managed_access_supported(),
+    not _is_concurrent_managed_access_supported(),
     reason="managed memory not supported",
 )
 @pytest.mark.parametrize("enable_managed_memory", ["1", "0"])
@@ -234,6 +225,16 @@ def test_parquet_options(executor: str) -> None:
     )
     assert config.parquet_options.chunked is False
     assert config.parquet_options.n_output_chunks == 16
+
+
+def test_parquet_options_from_none() -> None:
+    config = ConfigOptions.from_polars_engine(
+        pl.GPUEngine(
+            executor="streaming",
+            parquet_options=None,
+        )
+    )
+    assert config.parquet_options.chunked is True
 
 
 def test_validate_streaming_executor_shuffle_method(
@@ -413,6 +414,25 @@ def test_validate_shuffle_method_defaults(
         )
 
 
+def test_validate_shuffle_insertion_method() -> None:
+    config = ConfigOptions.from_polars_engine(
+        pl.GPUEngine(
+            executor="streaming",
+            executor_options={"shuffler_insertion_method": "concat_insert"},
+        )
+    )
+    assert config.executor.name == "streaming"
+    assert config.executor.shuffler_insertion_method == "concat_insert"
+
+    with pytest.raises(ValueError, match="is not a valid ShufflerInsertionMethod"):
+        ConfigOptions.from_polars_engine(
+            pl.GPUEngine(
+                executor="streaming",
+                executor_options={"shuffler_insertion_method": object()},
+            )
+        )
+
+
 @pytest.mark.parametrize(
     "option",
     [
@@ -425,6 +445,8 @@ def test_validate_shuffle_method_defaults(
         "sink_to_directory",
         "client_device_threshold",
         "max_io_threads",
+        "spill_to_pinned_memory",
+        "rapidsmpf_py_executor_max_workers",
     ],
 )
 def test_validate_streaming_executor_options(option: str) -> None:
@@ -459,6 +481,7 @@ def test_parquet_options_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
         m.setenv("CUDF_POLARS__PARQUET_OPTIONS__PASS_READ_LIMIT", "200")
         m.setenv("CUDF_POLARS__PARQUET_OPTIONS__MAX_FOOTER_SAMPLES", "0")
         m.setenv("CUDF_POLARS__PARQUET_OPTIONS__MAX_ROW_GROUP_SAMPLES", "0")
+        m.setenv("CUDF_POLARS__PARQUET_OPTIONS__USE_RAPIDSMPF_NATIVE", "0")
 
         # Test default
         engine = pl.GPUEngine()
@@ -469,6 +492,7 @@ def test_parquet_options_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
         assert config.parquet_options.pass_read_limit == 200
         assert config.parquet_options.max_footer_samples == 0
         assert config.parquet_options.max_row_group_samples == 0
+        assert config.parquet_options.use_rapidsmpf_native is False
 
     with monkeypatch.context() as m:
         m.setenv("CUDF_POLARS__PARQUET_OPTIONS__CHUNKED", "foo")
@@ -491,6 +515,7 @@ def test_config_option_from_env(
         m.setenv("CUDF_POLARS__EXECUTOR__RAPIDSMPF_SPILL", "1")
         m.setenv("CUDF_POLARS__EXECUTOR__SINK_TO_DIRECTORY", "1")
         m.setenv("CUDF_POLARS__CUDA_STREAM_POLICY", "new")
+        m.setenv("CUDF_POLARS__EXECUTOR__SHUFFLER_INSERTION_METHOD", "concat_insert")
 
         if rapidsmpf_distributed_available:
             m.setenv("CUDF_POLARS__EXECUTOR__SHUFFLE_METHOD", "rapidsmpf")
@@ -510,6 +535,7 @@ def test_config_option_from_env(
         assert config.executor.rapidsmpf_spill is True
         assert config.executor.sink_to_directory is True
         assert config.cuda_stream_policy == CUDAStreamPolicy.NEW
+        assert config.executor.shuffler_insertion_method == "concat_insert"
 
         if rapidsmpf_distributed_available:
             assert config.executor.shuffle_method == "rapidsmpf"
@@ -565,6 +591,7 @@ def test_cardinality_factor_compat() -> None:
         "pass_read_limit",
         "max_footer_samples",
         "max_row_group_samples",
+        "use_rapidsmpf_native",
     ],
 )
 def test_validate_parquet_options(option: str) -> None:
@@ -627,11 +654,13 @@ def test_memory_resource(memory_resource, memory_resource_config) -> None:
         )
     )
 
-    with set_memory_resource(memory_resource, memory_resource_config) as result:
+    with set_memory_resource(
+        memory_resource, memory_resource_config, config.executor
+    ) as result:
         if memory_resource is None and memory_resource_config is None:
             # The default case: We make a new RMM MR, whose type depends on the GPU's features.
 
-            if plc.utils._is_concurrent_managed_access_supported():
+            if _is_concurrent_managed_access_supported():
                 assert isinstance(result, rmm.mr.PrefetchResourceAdaptor)
             else:
                 assert isinstance(result, rmm.mr.CudaAsyncMemoryResource)
@@ -752,7 +781,7 @@ def test_cuda_stream_policy_from_config(*, rapidsmpf_single_available: bool) -> 
         executor_options={"runtime": "rapidsmpf"},
         cuda_stream_policy={
             "pool_size": 32,
-            "flags": rmm.pylibrmm.cuda_stream.CudaStreamFlags.NON_BLOCKING,
+            "flags": rmm.pylibrmm.CudaStreamFlags.NON_BLOCKING,
         },
     )
     if rapidsmpf_single_available:
@@ -760,8 +789,7 @@ def test_cuda_stream_policy_from_config(*, rapidsmpf_single_available: bool) -> 
         assert isinstance(config.cuda_stream_policy, CUDAStreamPoolConfig)
         assert config.cuda_stream_policy.pool_size == 32
         assert (
-            config.cuda_stream_policy.flags
-            == rmm.pylibrmm.cuda_stream.CudaStreamFlags.NON_BLOCKING
+            config.cuda_stream_policy.flags == rmm.pylibrmm.CudaStreamFlags.NON_BLOCKING
         )
         config.cuda_stream_policy.build().get_stream()  # no exception
     else:
@@ -817,10 +845,7 @@ def test_cuda_stream_policy_default_rapidsmpf(monkeypatch: pytest.MonkeyPatch) -
     )
     assert isinstance(config.cuda_stream_policy, CUDAStreamPoolConfig)
     assert config.cuda_stream_policy.pool_size == 16
-    assert (
-        config.cuda_stream_policy.flags
-        == rmm.pylibrmm.cuda_stream.CudaStreamFlags.NON_BLOCKING
-    )
+    assert config.cuda_stream_policy.flags == rmm.pylibrmm.CudaStreamFlags.NON_BLOCKING
 
     # "new" user argument
     monkeypatch.setenv("CUDF_POLARS__CUDA_STREAM_POLICY", "new")
@@ -877,6 +902,69 @@ def test_validate_stats_planning(option: str) -> None:
         )
 
 
+def test_validate_dynamic_planning() -> None:
+    with pytest.raises(TypeError, match="sample_chunk_count must be"):
+        ConfigOptions.from_polars_engine(
+            pl.GPUEngine(
+                executor="streaming",
+                executor_options={"dynamic_planning": {"sample_chunk_count": object()}},
+            )
+        )
+
+
+def test_dynamic_planning_sample_chunk_count_min() -> None:
+    with pytest.raises(ValueError, match="sample_chunk_count must be at least 1"):
+        ConfigOptions.from_polars_engine(
+            pl.GPUEngine(
+                executor="streaming",
+                executor_options={"dynamic_planning": {"sample_chunk_count": 0}},
+            )
+        )
+
+
+def test_dynamic_planning_defaults() -> None:
+    config = ConfigOptions.from_polars_engine(pl.GPUEngine())
+    assert config.executor.name == "streaming"
+    # Dynamic planning is enabled by default
+    assert config.executor.dynamic_planning is not None
+    assert config.executor.dynamic_planning.sample_chunk_count == 2
+
+
+def test_dynamic_planning_disabled_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Test that env var can disable dynamic planning
+    monkeypatch.setenv("CUDF_POLARS__EXECUTOR__DYNAMIC_PLANNING", "0")
+    config = ConfigOptions.from_polars_engine(pl.GPUEngine())
+    assert config.executor.name == "streaming"
+    assert config.executor.dynamic_planning is None
+
+
+def test_dynamic_planning_sample_chunk_count_from_env(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Test that sample_chunk_count_reduce can be configured via env var
+    monkeypatch.setenv(
+        "CUDF_POLARS__EXECUTOR__DYNAMIC_PLANNING__SAMPLE_CHUNK_COUNT", "3"
+    )
+    config = ConfigOptions.from_polars_engine(pl.GPUEngine())
+    assert config.executor.name == "streaming"
+    assert config.executor.dynamic_planning is not None
+    assert config.executor.dynamic_planning.sample_chunk_count == 3
+
+
+def test_dynamic_planning_from_instance() -> None:
+    from cudf_polars.utils.config import DynamicPlanningOptions
+
+    config = ConfigOptions.from_polars_engine(
+        pl.GPUEngine(
+            executor="streaming",
+            executor_options={"dynamic_planning": DynamicPlanningOptions()},
+        )
+    )
+    assert config.executor.name == "streaming"
+    assert config.executor.dynamic_planning is not None
+    assert config.executor.dynamic_planning.sample_chunk_count == 2  # default
+
+
 def test_parse_memory_resource_config() -> None:
     config = ConfigOptions.from_polars_engine(
         pl.GPUEngine(
@@ -907,30 +995,33 @@ def test_memory_resource_config_hash(options) -> None:
     assert hash(config) == hash(config)
 
 
-def test_rapidsmpf_distributed_warns(monkeypatch: pytest.MonkeyPatch) -> None:
-    # Emulate the case that rapidsmpf is available
-    # (even if it's not actually installed)
-    monkeypatch.setattr(
-        cudf_polars.utils.config,
-        "rapidsmpf_single_available",
-        lambda: True,
-    )
-    monkeypatch.setattr(
-        cudf_polars.utils.config,
-        "rapidsmpf_distributed_available",
-        lambda: True,
-    )
-
-    with pytest.warns(
-        UserWarning,
-        match="The rapidsmpf runtime does NOT support distributed execution yet.",
-    ):
-        ConfigOptions.from_polars_engine(
-            pl.GPUEngine(
-                executor="streaming",
-                executor_options={
-                    "runtime": "rapidsmpf",
-                    "cluster": "distributed",
-                },
-            )
+def test_rapidsmpf_py_executor_max_workers_default() -> None:
+    config = ConfigOptions.from_polars_engine(
+        pl.GPUEngine(
+            executor="streaming",
         )
+    )
+    assert config.executor.name == "streaming"
+    assert config.executor.rapidsmpf_py_executor_max_workers is None
+
+
+def test_rapidsmpf_py_executor_max_workers_from_executor_options() -> None:
+    config = ConfigOptions.from_polars_engine(
+        pl.GPUEngine(
+            executor="streaming",
+            executor_options={"rapidsmpf_py_executor_max_workers": 4},
+        )
+    )
+    assert config.executor.name == "streaming"
+    assert config.executor.rapidsmpf_py_executor_max_workers == 4
+
+
+def test_rapidsmpf_py_executor_max_workers_from_env(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    with monkeypatch.context() as m:
+        m.setenv("CUDF_POLARS__EXECUTOR__RAPIDSMPF_PY_EXECUTOR_MAX_WORKERS", "8")
+        engine = pl.GPUEngine(executor="streaming")
+        config = ConfigOptions.from_polars_engine(engine)
+        assert config.executor.name == "streaming"
+        assert config.executor.rapidsmpf_py_executor_max_workers == 8

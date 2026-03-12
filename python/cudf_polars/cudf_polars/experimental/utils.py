@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 """Multi-partition utilities."""
 
@@ -23,7 +23,7 @@ if TYPE_CHECKING:
     from cudf_polars.dsl.ir import IR, IRExecutionContext
     from cudf_polars.experimental.base import ColumnStats
     from cudf_polars.experimental.dispatch import LowerIRTransformer
-    from cudf_polars.utils.config import ConfigOptions
+    from cudf_polars.utils.config import ConfigOptions, StreamingExecutor
 
 
 def _concat(*dfs: DataFrame, context: IRExecutionContext) -> DataFrame:
@@ -31,13 +31,10 @@ def _concat(*dfs: DataFrame, context: IRExecutionContext) -> DataFrame:
     return dfs[0] if len(dfs) == 1 else Union.do_evaluate(None, *dfs, context=context)
 
 
-def _fallback_inform(msg: str, config_options: ConfigOptions) -> None:
+def _fallback_inform(
+    msg: str, config_options: ConfigOptions[StreamingExecutor]
+) -> None:
     """Inform the user of single-partition fallback."""
-    # Satisfy type checking
-    assert config_options.executor.name == "streaming", (
-        "'in-memory' executor not supported in '_fallback_inform'"
-    )
-
     match fallback_mode := config_options.executor.fallback_mode:
         case "warn":
             warnings.warn(msg, stacklevel=2)
@@ -52,6 +49,14 @@ def _fallback_inform(msg: str, config_options: ConfigOptions) -> None:
             )
 
 
+def _dynamic_planning_on(config_options: ConfigOptions[StreamingExecutor]) -> bool:
+    """Check if dynamic planning is enabled for rapidsmpf runtime."""
+    return (
+        config_options.executor.runtime == "rapidsmpf"
+        and config_options.executor.dynamic_planning is not None
+    )
+
+
 def _lower_ir_fallback(
     ir: IR,
     rec: LowerIRTransformer,
@@ -63,22 +68,8 @@ def _lower_ir_fallback(
     # those children will be collapsed with `Repartition`.
     from cudf_polars.experimental.repartition import Repartition
 
-    # TODO: (IMPORTANT) Since Repartition is a local operation,
-    # the current fallback logic will only work for one rank!
-    # For multiple ranks, we will need to AllGather the data
-    # on all ranks.
     config_options = rec.state["config_options"]
-    assert config_options.executor.name == "streaming", (
-        "'in-memory' executor not supported in 'generate_ir_sub_network'"
-    )
-    if (
-        (rapidsmpf_engine := config_options.executor.runtime == "rapidsmpf")
-        and config_options.executor.scheduler == "distributed"
-    ):  # pragma: no cover; Requires distributed
-        raise NotImplementedError(
-            "Fallback is not yet supported distributed execution "
-            "with the RAPIDS-MPF streaming runtime."
-        )
+    rapidsmpf_engine = config_options.executor.runtime == "rapidsmpf"
 
     # Lower children
     lowered_children, _partition_info = zip(*(rec(c) for c in ir.children), strict=True)
