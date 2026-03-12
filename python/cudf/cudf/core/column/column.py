@@ -374,7 +374,7 @@ def _wrap_and_validate(col: plc.Column, dtype: DtypeObj) -> plc.Column:
             f"{col.type().id()}. If normalization is required, please run the "
             "column through _normalize_types_column first."
         )
-    
+
     if isinstance(dtype, np.dtype) and dtype.kind == "U":
         raise ValueError(
             f"dtype {dtype} is a numpy Unicode dtype. "
@@ -2288,7 +2288,9 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         elif len(self) == 0:
             if isinstance(dtype, np.dtype) and dtype.kind == "U":
                 dtype = np.dtype("object")
-            result = self if self.dtype == dtype else column_empty(0, dtype=dtype)
+            result = (
+                self if self.dtype == dtype else column_empty(0, dtype=dtype)
+            )
         else:
             if isinstance(dtype, CategoricalDtype):
                 result = self.as_categorical_column(dtype)
