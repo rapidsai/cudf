@@ -646,21 +646,13 @@ class NumericalColumn(NumericalBaseColumn):
                 cudf.core.column.string.StringColumn,
                 ColumnBase.create(conv_func(col.plc_column), dtype),
             )
-        if (
-            cudf.get_option("mode.pandas_compatible")
-            and self.dtype.kind == "f"
-        ):
-            # Match pandas casing for non-finite float string conversions.
-            result = result.replace_multiple(
-                as_column(["NaN", "Inf", "-Inf"]),  # type: ignore[arg-type]
-                as_column(["nan", "inf", "-inf"]),  # type: ignore[arg-type]
+        if self.dtype == np.dtype(np.float32):
+            # Collapse float32 artifacts like 0.100000001 -> 0.1.
+            # https://github.com/pandas-dev/pandas/pull/36464
+            result = result.replace_with_backrefs(
+                r"^([+-]?[0-9]+(?:\.[0-9]*?[1-9])?)0{6,}[0-9]+$",
+                r"\1",
             )
-            if self.dtype == np.dtype(np.float32):
-                # Collapse float32 artifacts like 0.100000001 -> 0.1.
-                result = result.replace_with_backrefs(
-                    r"^([+-]?[0-9]+(?:\.[0-9]*?[1-9])?)0{6,}[0-9]+$",
-                    r"\1",
-                )
         return result
 
     def _as_temporal_column(self, dtype: np.dtype) -> plc.Column:

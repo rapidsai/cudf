@@ -374,6 +374,13 @@ def _wrap_and_validate(col: plc.Column, dtype: DtypeObj) -> plc.Column:
             f"{col.type().id()}. If normalization is required, please run the "
             "column through _normalize_types_column first."
         )
+    
+    if isinstance(dtype, np.dtype) and dtype.kind == "U":
+        raise ValueError(
+            f"dtype {dtype} is a numpy Unicode dtype. "
+            "Normalize to np.dtype('O') before calling "
+            "ColumnBase.create."
+        )
 
     dtype_kind = dtype.kind
     children: list[plc.Column] = []
@@ -412,7 +419,7 @@ def _wrap_and_validate(col: plc.Column, dtype: DtypeObj) -> plc.Column:
                     f"Field '{field_name}' validation failed"
                 ) from e
             children.append(wrapped_child)
-    elif is_dtype_obj_string(dtype) or dtype_kind == "U":
+    elif is_dtype_obj_string(dtype):
         valid_types = {plc.TypeId.STRING}
         # An empty string column may have no children.
         if col.num_children() == 1:
