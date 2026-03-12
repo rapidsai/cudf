@@ -1033,4 +1033,34 @@ return l - t * l + t * h;
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*cuda_result, *expected);
 }
 
+// TODO: add offseted string output support tests
+// TODO: add multi-output transform tests
+// TODO: add zero-input transform test
+// TODO: merge main
+/**
+*
+* TODO: Regex extract with multiple capture groups, then the JIT implementation would just need to
+handle multiple column outputs without handling AST common subexpression elimination.
+
+Example:
+Example: Phone Number
+Format: (123) 456-7890
+
+Regex pattern:
+\((\d{3})\)\s(\d{3})-(\d{4})
+
+Example matches:
+Input: (415) 555-1234
+Column 1: 415
+Column 2: 555
+Column 3: 1234
+
+Input: (212) 867-5309
+Column 1: 212
+Column 2: 867
+Column 3: 5309
+*
+*
+*/
+
 }  // namespace transformation
