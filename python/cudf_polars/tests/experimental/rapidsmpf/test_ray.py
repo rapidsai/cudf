@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -14,6 +15,7 @@ ray = pytest.importorskip("ray")
 
 from cudf_polars.experimental.rapidsmpf.ray import (  # noqa: E402
     RayClient,
+    RayContext,
     ray_execution,
 )
 
@@ -57,23 +59,26 @@ pytestmark = [
 
 def test_ray_execution_reserved_executor_keys() -> None:
     """executor_options rejects reserved keys."""
-    for key in ("runtime", "cluster", "spmd", "ray_client"):
-        with (
-            pytest.raises(ValueError, match="reserved"),
-            ray_execution(executor_options={key: "anything"}),
-        ):
-            pass
+    for key in ("runtime", "cluster", "spmd", "ray_context"):
+        with pytest.raises(ValueError, match="reserved"):
+            ray_execution(executor_options={key: "anything"})
 
 
 def test_ray_execution_reserved_engine_kwargs_keys() -> None:
     """engine_kwargs rejects keys that are set explicitly by ray_execution."""
     for key in ("memory_resource", "executor"):
         kwargs: dict[str, Any] = {key: "anything"}
-        with (
-            pytest.raises(ValueError, match="reserved"),
-            ray_execution(engine_kwargs=kwargs),
-        ):
-            pass
+        with pytest.raises(ValueError, match="reserved"):
+            ray_execution(engine_kwargs=kwargs)
+
+
+def test_ray_client_shutdown_idempotent() -> None:
+    """RayClient.shutdown() is safe to call more than once."""
+    mock_engine = MagicMock(spec=pl.GPUEngine)
+    mock_engine.config = {"executor_options": {"ray_context": RayContext([])}}
+    client = RayClient(mock_engine, ray_was_initialized=True)
+    client.shutdown()
+    client.shutdown()  # must not raise
 
 
 # ---------------------------------------------------------------------------
