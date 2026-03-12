@@ -6,6 +6,9 @@ set -euo pipefail
 
 source rapids-init-pip
 
+# TODO(jameslamb): revert before merging
+source ci/use_wheels_from_prs.sh
+
 package_dir="python/cudf_polars"
 
 ./ci/build_wheel.sh cudf-polars ${package_dir}
