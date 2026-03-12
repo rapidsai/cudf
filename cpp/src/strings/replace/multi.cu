@@ -30,6 +30,7 @@
 #include <cuda/functional>
 #include <cuda/std/iterator>
 #include <cuda/std/tuple>
+#include <thrust/binary_search.h>
 #include <thrust/copy.h>
 #include <thrust/execution_policy.h>
 #include <thrust/for_each.h>
