@@ -117,7 +117,7 @@ std::unique_ptr<column> group_nth_element(column_view const& values,
   auto output_table = cudf::detail::gather(table_view{{values}},
                                            nth_index,
                                            out_of_bounds_policy::NULLIFY,
-                                           cudf::detail::negative_index_policy::NOT_ALLOWED,
+                                           cudf::negative_index_policy::NOT_ALLOWED,
                                            stream,
                                            mr);
   if (!output_table->get_column(0).has_nulls()) output_table->get_column(0).set_null_mask({}, 0);
