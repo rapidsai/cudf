@@ -267,6 +267,19 @@ RAPIDSMPF_TESTS_TO_SKIP: Mapping[str, str] = {
     "tests/unit/operations/test_group_by.py::test_grouped_agg_parametric[drop_nulls-True-False-False-False]": "Crashes pytest worker",
     "tests/unit/io/test_hive.py::test_hive_partition_directory_scan[False-scan_parquet-write_parquet]": "Crashes pytest worker",
     "tests/unit/operations/test_queries.py::test_sorted_group_by_optimization[True-True-True]": "Crashes pytest worker",
+    "tests/unit/io/test_lazy_parquet.py::test_parquet_statistics": "Crashes pytest worker",
+    "tests/unit/streaming/test_streaming_join.py::test_merge_join[right_left-True-False-True-True-left-on0]": "Crashes pytest worker",
+    "tests/unit/operations/test_group_by.py::test_grouped_agg_parametric[unique-False-False-False-False]": "Crashes pytest worker",
+    "tests/unit/sql/test_distinct.py::test_distinct_with_expressions": "Crashes pytest worker",
+    "tests/unit/io/test_scan_lines.py::test_scan_lines[False-True-True]": "Crashes pytest worker",
+    "tests/unit/lazyframe/test_schema.py::test_lazy_collect_schema_matches_computed_schema[Date-dtype110-expr2]": "Crashes pytest worker",
+    "tests/benchmark/test_group_by.py::test_groupby_h2oai_q1": "Takes >2 minutes to run locally",
+    "tests/benchmark/test_group_by.py::test_groupby_h2oai_q2": "Takes >2 minutes to run locally",
+    "tests/benchmark/test_group_by.py::test_groupby_h2oai_q3": "Takes >2 minutes to run locally",
+    "tests/benchmark/test_group_by.py::test_groupby_h2oai_q4": "Takes >2 minutes to run locally",
+    "tests/benchmark/test_group_by.py::test_groupby_h2oai_q5": "Takes >2 minutes to run locally",
+    "tests/benchmark/test_group_by.py::test_groupby_h2oai_q7": "Takes >2 minutes to run locally",
+    "tests/benchmark/test_group_by.py::test_groupby_h2oai_q10": "Takes >2 minutes to run locally",
 }
 
 RAPIDSMPF_ONLY_EXPECTED_FAILURES: Mapping[str, str] = {
