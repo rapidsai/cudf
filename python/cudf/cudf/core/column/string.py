@@ -700,11 +700,6 @@ class StringColumn(ColumnBase, Scannable):
         merge_pairs: plc.nvtext.byte_pair_encode.BPEMergePairs,
         separator: str,
     ) -> Self:
-        warnings.warn(
-            "byte_pair_encoding is deprecated and will be removed in a future version.",
-            FutureWarning,
-            stacklevel=2,
-        )
         with self.access(mode="read", scope="internal"):
             plc_column = plc.nvtext.byte_pair_encode.byte_pair_encoding(
                 self.plc_column,

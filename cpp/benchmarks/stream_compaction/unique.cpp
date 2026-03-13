@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -86,6 +86,7 @@ void nvbench_unique_list(nvbench::state& state, nvbench::type_list<Type, nvbench
   // KEEP_FIRST and KEEP_ANY are equivalent for unique
   if constexpr (Keep == cudf::duplicate_keep_option::KEEP_ANY) {
     state.skip("Skip unwanted benchmarks.");
+    return;
   }
 
   auto const size               = state.get_int64("ColumnSize");

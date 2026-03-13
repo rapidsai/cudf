@@ -23,6 +23,7 @@
 #include <cub/cub.cuh>
 #include <cuda/std/functional>
 #include <cuda/std/limits>
+#include <thrust/binary_search.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/remove.h>
 #include <thrust/sort.h>
