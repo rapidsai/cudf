@@ -33,6 +33,7 @@ Hint: Ensure `GH_TOKEN` (or GitHub CLI auth) is already configured in the enviro
 > Items marked **(guide: Section Name(s))** are covered in detail in the Developer Guide — verify compliance against the mentioned section(s) of the Developer Guide. Items without the tag are review-specific or derived from codebase patterns.
 
 ### Correctness & Logic
+
 - Core logic implemented by algorithms is correct and coherent.
 - No unnecessary memory usage or leaks.
 - Recursive and branched algorithms have no pitfalls, unintended fallthroughs, or unhandled cases. Trace such algorithms.
@@ -47,6 +48,7 @@ Hint: Ensure `GH_TOKEN` (or GitHub CLI auth) is already configured in the enviro
 - Use `cudf::have_same_types()` for data type comparison, not `a.type() == b.type()`. **(guide: "Comparing Data Types")**
 
 ### Performance Optimization
+
 - Optimal algorithms and data structures have been employed. For example, use `unordered_set`s instead of `vector`s for frequent lookups.
 - Ensure compute-intensive algorithms are GPU-accelerated when possible.
 - Ensure Host-side compute or memory intensive algorithms are accelerated using `cudf::detail::host_worker_pool()` when possible.
@@ -56,6 +58,7 @@ Hint: Ensure `GH_TOKEN` (or GitHub CLI auth) is already configured in the enviro
 - Avoid multiple levels of `type_dispatcher`. **(guide: "Avoid Multiple Type Dispatch")**
 
 ### CUDA-Specific
+
 - CUDA kernels check bounds correctly.
 - Shared memory usage doesn't exceed device limits.
 - No race conditions and out-of-bounds memory accesses in concurrent kernel access patterns.
@@ -63,11 +66,13 @@ Hint: Ensure `GH_TOKEN` (or GitHub CLI auth) is already configured in the enviro
 - Modern CUDA C++ primitives and patterns using Thrust/CUB (NVIDIA CCCL) and cooperative groups preferred over C-like versions. For example, `cuda::std::popcount` over `__popc`, `cg::thread_block::thread_rank()` over `threadIdx.x`.
 
 ### Type Dispatch Patterns
+
 - New dispatch functors prefer C++20 `requires` clauses over `CUDF_ENABLE_IF` for type-gating `operator()` overloads.
 - Unsupported type overloads call `CUDF_FAIL` or `CUDF_UNREACHABLE` as appropriate.
 - Functors may include a `static constexpr bool is_supported()` helper for compile-time type filtering.
 
 ### Column Construction Patterns
+
 - Use `make_empty_column` to construct empty columns for early returns.
 - Use `cudf::make_column_from_scalar` to construct a column filled with the same value.
 - Use `cudf::detail::copy_bitmask` when output nullability mirrors the input.
@@ -80,6 +85,7 @@ Hint: Ensure `GH_TOKEN` (or GitHub CLI auth) is already configured in the enviro
 - For strings columns, pass `.parent()` to `column_device_view::create`.
 
 ### Naming & Code Duplication
+
 - No significant code duplication; reusable logic must be refactored into common helper functions.
 - Function and variable names are meaningful — not too vague or verbose.
 - No single-letter variable names except loop indices (`i`, `j`, `k`) or thread IDs (`t`, `tid`).
@@ -131,6 +137,7 @@ Verify compliance with the developer guide section: **(guide: "Includes")**. Key
 - Bracket style (`<>` vs `""`).
 
 ### Documentation & Doxygen
+
 Verify compliance with the documentation guide. Key checks:
 - Public API functions and classes have `/** ... */` doxygen comments.
 - `@brief`, `@param`, `@return`, `@throw`, `@tparam` tags used and documented unless it's trivial and in the `detail` namespace (just `@brief` is sufficient here).
@@ -138,6 +145,10 @@ Verify compliance with the documentation guide. Key checks:
 ### Deprecations & Removals
 
 Verify compliance with the developer guide section: **(guide:"Deprecating and Removing Code")**. Ensure `[[deprecated]]`, `@deprecated`, and correct PR labels ("deprecation" / "breaking").
+
+### Examples
+
+- All libcudf examples located at `cpp/examples/<example_name>` must be self-contained. i.e., all files needed by an example - duplicated if needed - must be present in the same location.
 
 ### Testing
 
@@ -159,16 +170,19 @@ Refer to the **Benchmarking Guide** (`cpp/doxygen/developer_guide/BENCHMARKING.m
 - Prefer `.cpp` over `.cu` for benchmark files when possible.
 
 ### Python Bindings (if applicable)
+
 - Cython bindings match the C++ API.
 - Proper GIL handling.
 - Docstrings present and accurate.
 - Python code conforms to cudf Python and general Pythonic standards.
 
 ### Python Testing (if applicable)
+
 - New pytests match standards and patterns across other tests in the file.
 - New pytest files conform to standards and patterns of existing Python test files in that directory.
 
 ### Nits & Comments
+
 - No excessive or trivial comments.
 - No narration of obvious logic.
 - Meaningful comments around non-obvious, complex, or unintuitive logic.
