@@ -26,6 +26,7 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/random.hpp>
+#include <cudf_test/table_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/detail/iterator.cuh>
@@ -208,7 +209,7 @@ TEST_F(UnaryOperationIntegrationTest, Transform_INT32_INT32)
   //
   // ```py
   //
-  // from numba import cuda, float32
+  // from numba import cuda, int32
   // from numba.cuda import compile_ptx_for_current_device
   //
   // # Define a CUDA device function
@@ -218,7 +219,7 @@ TEST_F(UnaryOperationIntegrationTest, Transform_INT32_INT32)
   //         return a * a - a
   //
   // # Define argument types for the function
-  // arg_types = (float32, )
+  // arg_types = (int32, )
   //
   // # Compile the device function as relocatable
   // ptx, _ = cuda.compile_ptx_for_current_device(op, arg_types, device=True)
@@ -245,26 +246,26 @@ TEST_F(UnaryOperationIntegrationTest, Transform_INT32_INT32)
 .target sm_86
 .address_size 64
 
-	// .globl	_ZN8__main__3opxB2v1B96cw51cXTLSUwv1sCUt9Ww0FEw09RRQPKiLTj0gIGIFp_2b2oLQFEYYkHSQB1OQAk0Bynm21OizQ1K0UoIGvDpQE8oxrNQE_3dEd
-.common .global .align 8 .u64 _ZN08NumbaEnv8__main__3opxB2v1B96cw51cXTLSUwv1sCUt9Ww0FEw09RRQPKiLTj0gIGIFp_2b2oLQFEYYkHSQB1OQAk0Bynm21OizQ1K0UoIGvDpQE8oxrNQE_3dEd;
+	// .globl	_ZN8__main__2opB2v1B96cw51cXTLSUwv1sCUt9Ww0FEw09RRQPKiLTj0gIGIFp_2b2oLQFEYYkHSQB1OQAk0Bynm21OizQ1K0UoIGvDpQE8oxrNQE_3dEi
+.common .global .align 8 .u64 _ZN08NumbaEnv8__main__2opB2v1B96cw51cXTLSUwv1sCUt9Ww0FEw09RRQPKiLTj0gIGIFp_2b2oLQFEYYkHSQB1OQAk0Bynm21OizQ1K0UoIGvDpQE8oxrNQE_3dEi;
 
-.visible .func  (.param .b32 func_retval0) _ZN8__main__3opxB2v1B96cw51cXTLSUwv1sCUt9Ww0FEw09RRQPKiLTj0gIGIFp_2b2oLQFEYYkHSQB1OQAk0Bynm21OizQ1K0UoIGvDpQE8oxrNQE_3dEd(
-	.param .b64 _ZN8__main__3opxB2v1B96cw51cXTLSUwv1sCUt9Ww0FEw09RRQPKiLTj0gIGIFp_2b2oLQFEYYkHSQB1OQAk0Bynm21OizQ1K0UoIGvDpQE8oxrNQE_3dEd_param_0,
-	.param .b64 _ZN8__main__3opxB2v1B96cw51cXTLSUwv1sCUt9Ww0FEw09RRQPKiLTj0gIGIFp_2b2oLQFEYYkHSQB1OQAk0Bynm21OizQ1K0UoIGvDpQE8oxrNQE_3dEd_param_1
+.visible .func  (.param .b32 func_retval0) _ZN8__main__2opB2v1B96cw51cXTLSUwv1sCUt9Ww0FEw09RRQPKiLTj0gIGIFp_2b2oLQFEYYkHSQB1OQAk0Bynm21OizQ1K0UoIGvDpQE8oxrNQE_3dEi(
+	.param .b64 _ZN8__main__2opB2v1B96cw51cXTLSUwv1sCUt9Ww0FEw09RRQPKiLTj0gIGIFp_2b2oLQFEYYkHSQB1OQAk0Bynm21OizQ1K0UoIGvDpQE8oxrNQE_3dEi_param_0,
+	.param .b32 _ZN8__main__2opB2v1B96cw51cXTLSUwv1sCUt9Ww0FEw09RRQPKiLTj0gIGIFp_2b2oLQFEYYkHSQB1OQAk0Bynm21OizQ1K0UoIGvDpQE8oxrNQE_3dEi_param_1
 )
 {
-	.reg .b32 	%r<2>;
-	.reg .f64 	%fd<4>;
-	.reg .b64 	%rd<2>;
+	.reg .b32 	%r<3>;
+	.reg .b64 	%rd<5>;
 
 
-	ld.param.u64 	%rd1, [_ZN8__main__3opxB2v1B96cw51cXTLSUwv1sCUt9Ww0FEw09RRQPKiLTj0gIGIFp_2b2oLQFEYYkHSQB1OQAk0Bynm21OizQ1K0UoIGvDpQE8oxrNQE_3dEd_param_0];
-	ld.param.f64 	%fd1, [_ZN8__main__3opxB2v1B96cw51cXTLSUwv1sCUt9Ww0FEw09RRQPKiLTj0gIGIFp_2b2oLQFEYYkHSQB1OQAk0Bynm21OizQ1K0UoIGvDpQE8oxrNQE_3dEd_param_1];
-	mul.f64 	%fd2, %fd1, %fd1;
-	sub.f64 	%fd3, %fd2, %fd1;
-	st.f64 	[%rd1], %fd3;
-	mov.u32 	%r1, 0;
-	st.param.b32 	[func_retval0+0], %r1;
+	ld.param.u64 	%rd1, [_ZN8__main__2opB2v1B96cw51cXTLSUwv1sCUt9Ww0FEw09RRQPKiLTj0gIGIFp_2b2oLQFEYYkHSQB1OQAk0Bynm21OizQ1K0UoIGvDpQE8oxrNQE_3dEi_param_0];
+	ld.param.u32 	%r1, [_ZN8__main__2opB2v1B96cw51cXTLSUwv1sCUt9Ww0FEw09RRQPKiLTj0gIGIFp_2b2oLQFEYYkHSQB1OQAk0Bynm21OizQ1K0UoIGvDpQE8oxrNQE_3dEi_param_1];
+	cvt.s64.s32 	%rd2, %r1;
+	mul.wide.s32 	%rd3, %r1, %r1;
+	sub.s64 	%rd4, %rd3, %rd2;
+	st.u64 	[%rd1], %rd4;
+	mov.u32 	%r2, 0;
+	st.param.b32 	[func_retval0+0], %r2;
 	ret;
 
 }
@@ -301,7 +302,7 @@ __device__ inline void f(
   //
   // ```py
   //
-  // from numba import cuda, float32
+  // from numba import cuda, int8
   // from numba.cuda import compile_ptx_for_current_device
   //
   // # Define a CUDA device function
@@ -311,7 +312,7 @@ __device__ inline void f(
   //         return (a - 32) if (a > 96 and a < 123) else a
   //
   // # Define argument types for the function
-  // arg_types = (float32, float32, float32)
+  // arg_types = (int8, )
   //
   // # Compile the device function as relocatable
   // ptx, _ = cuda.compile_ptx_for_current_device(op, arg_types, device=True)
@@ -338,35 +339,37 @@ __device__ inline void f(
 .target sm_86
 .address_size 64
 
-	// .globl	_ZN8__main__3opxB2v1B96cw51cXTLSUwv1sCUt9Ww0FEw09RRQPKiLTj0gIGIFp_2b2oLQFEYYkHSQB1OQAk0Bynm21OizQ1K0UoIGvDpQE8oxrNQE_3dEd
-.common .global .align 8 .u64 _ZN08NumbaEnv8__main__3opxB2v1B96cw51cXTLSUwv1sCUt9Ww0FEw09RRQPKiLTj0gIGIFp_2b2oLQFEYYkHSQB1OQAk0Bynm21OizQ1K0UoIGvDpQE8oxrNQE_3dEd;
+	// .globl	_ZN8__main__2opB2v1B96cw51cXTLSUwv1sCUt9Ww0FEw09RRQPKiLTj0gIGIFp_2b2oLQFEYYkHSQB1OQAk0Bynm21OizQ1K0UoIGvDpQE8oxrNQE_3dEa
+.common .global .align 8 .u64 _ZN08NumbaEnv8__main__2opB2v1B96cw51cXTLSUwv1sCUt9Ww0FEw09RRQPKiLTj0gIGIFp_2b2oLQFEYYkHSQB1OQAk0Bynm21OizQ1K0UoIGvDpQE8oxrNQE_3dEa;
 
-.visible .func  (.param .b32 func_retval0) _ZN8__main__3opxB2v1B96cw51cXTLSUwv1sCUt9Ww0FEw09RRQPKiLTj0gIGIFp_2b2oLQFEYYkHSQB1OQAk0Bynm21OizQ1K0UoIGvDpQE8oxrNQE_3dEd(
-	.param .b64 _ZN8__main__3opxB2v1B96cw51cXTLSUwv1sCUt9Ww0FEw09RRQPKiLTj0gIGIFp_2b2oLQFEYYkHSQB1OQAk0Bynm21OizQ1K0UoIGvDpQE8oxrNQE_3dEd_param_0,
-	.param .b64 _ZN8__main__3opxB2v1B96cw51cXTLSUwv1sCUt9Ww0FEw09RRQPKiLTj0gIGIFp_2b2oLQFEYYkHSQB1OQAk0Bynm21OizQ1K0UoIGvDpQE8oxrNQE_3dEd_param_1
+.visible .func  (.param .b32 func_retval0) _ZN8__main__2opB2v1B96cw51cXTLSUwv1sCUt9Ww0FEw09RRQPKiLTj0gIGIFp_2b2oLQFEYYkHSQB1OQAk0Bynm21OizQ1K0UoIGvDpQE8oxrNQE_3dEa(
+	.param .b64 _ZN8__main__2opB2v1B96cw51cXTLSUwv1sCUt9Ww0FEw09RRQPKiLTj0gIGIFp_2b2oLQFEYYkHSQB1OQAk0Bynm21OizQ1K0UoIGvDpQE8oxrNQE_3dEa_param_0,
+	.param .b32 _ZN8__main__2opB2v1B96cw51cXTLSUwv1sCUt9Ww0FEw09RRQPKiLTj0gIGIFp_2b2oLQFEYYkHSQB1OQAk0Bynm21OizQ1K0UoIGvDpQE8oxrNQE_3dEa_param_1
 )
 {
-	.reg .pred 	%p<4>;
+	.reg .pred 	%p<2>;
+	.reg .b16 	%rs<4>;
 	.reg .b32 	%r<2>;
-	.reg .f64 	%fd<3>;
-	.reg .b64 	%rd<2>;
+	.reg .b64 	%rd<5>;
 
 
-	ld.param.u64 	%rd1, [_ZN8__main__3opxB2v1B96cw51cXTLSUwv1sCUt9Ww0FEw09RRQPKiLTj0gIGIFp_2b2oLQFEYYkHSQB1OQAk0Bynm21OizQ1K0UoIGvDpQE8oxrNQE_3dEd_param_0];
-	ld.param.f64 	%fd1, [_ZN8__main__3opxB2v1B96cw51cXTLSUwv1sCUt9Ww0FEw09RRQPKiLTj0gIGIFp_2b2oLQFEYYkHSQB1OQAk0Bynm21OizQ1K0UoIGvDpQE8oxrNQE_3dEd_param_1];
-	setp.gt.f64 	%p1, %fd1, 0d4058000000000000;
-	setp.lt.f64 	%p2, %fd1, 0d405EC00000000000;
-	and.pred  	%p3, %p1, %p2;
-	@%p3 bra 	$L__BB0_2;
+	ld.param.u64 	%rd2, [_ZN8__main__2opB2v1B96cw51cXTLSUwv1sCUt9Ww0FEw09RRQPKiLTj0gIGIFp_2b2oLQFEYYkHSQB1OQAk0Bynm21OizQ1K0UoIGvDpQE8oxrNQE_3dEa_param_0];
+	ld.param.u8 	%rs1, [_ZN8__main__2opB2v1B96cw51cXTLSUwv1sCUt9Ww0FEw09RRQPKiLTj0gIGIFp_2b2oLQFEYYkHSQB1OQAk0Bynm21OizQ1K0UoIGvDpQE8oxrNQE_3dEa_param_1];
+	add.s16 	%rs2, %rs1, -97;
+	and.b16  	%rs3, %rs2, 255;
+	setp.lt.u16 	%p1, %rs3, 26;
+	cvt.u64.u16 	%rd3, %rs1;
+	cvt.s64.s8 	%rd1, %rd3;
+	@%p1 bra 	$L__BB0_2;
 	bra.uni 	$L__BB0_1;
 
 $L__BB0_2:
-	add.f64 	%fd2, %fd1, 0dC040000000000000;
-	st.f64 	[%rd1], %fd2;
+	add.s64 	%rd4, %rd1, -32;
+	st.u64 	[%rd2], %rd4;
 	bra.uni 	$L__BB0_3;
 
 $L__BB0_1:
-	st.f64 	[%rd1], %fd1;
+	st.u64 	[%rd2], %rd1;
 
 $L__BB0_3:
 	mov.u32 	%r1, 0;
@@ -687,6 +690,42 @@ TEST_F(StringOperationTest, Output)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_empty, result_empty->view());
 }
 
+TEST_F(StringOperationTest, OutputOffseted)
+{
+  auto a = cudf::test::strings_column_wrapper{"x", "xx", "xxx", "xxxx", "xxxxx", "xxxxxx"};
+  auto b = cudf::test::strings_column_wrapper{"aa", "bb", "cc", "dd", "ee", "ff"};
+  auto c = cudf::test::strings_column_wrapper{"1", "2", "3", "4", "5", "6"};
+
+  std::string cuda = R"***(
+    __device__ void concat(cuda::std::span<char> * out, cudf::string_view a, cudf::string_view b, cudf::string_view c){
+      auto iter = out->data();
+      memcpy(iter, a.data(), a.size_bytes());
+      iter += a.size_bytes();
+      memcpy(iter, b.data(), b.size_bytes());
+      iter += b.size_bytes();
+      memcpy(iter, c.data(), c.size_bytes());
+    }
+    )***";
+
+  auto offsets = cudf::test::fixed_width_column_wrapper<int32_t>{0, 4, 9, 15, 22, 30, 39}.release();
+  std::vector<std::unique_ptr<cudf::column>> strings_offsets;
+  strings_offsets.push_back(std::move(offsets));
+  auto expected = cudf::test::strings_column_wrapper{
+    "xaa1", "xxbb2", "xxxcc3", "xxxxdd4", "xxxxxee5", "xxxxxxff6"};
+  cudf::transform_input inputs[]   = {a, b, c};
+  cudf::transform_output outputs[] = {cudf::data_type(cudf::type_id::STRING)};
+  auto result                      = cudf::multi_transform(cuda,
+                                      cudf::udf_source_type::CUDA,
+                                      cudf::null_aware::NO,
+                                      std::nullopt,
+                                      inputs,
+                                      outputs,
+                                      std::move(strings_offsets),
+                                      std::nullopt);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->get_column(0));
+}
+
 TEST_F(StringOperationTest, StringConcat)
 {
   auto first_name = cudf::test::strings_column_wrapper{
@@ -764,6 +803,69 @@ TEST_F(StringOperationTest, EmptyInput)
   result                             = cudf::transform_extended(
     str_inputs, rtn_str, cudf::data_type(cudf::type_id::STRING), cudf::udf_source_type::CUDA);
   EXPECT_EQ(0, result->size());
+}
+
+TEST_F(StringOperationTest, MultiOutput)
+{
+  auto a = cudf::test::strings_column_wrapper{
+    "415 555 1234", "212 867 5309", "214 947 5689", "712 312 1863", "777 214 9063", "964 123 2934"};
+  auto expected_area_code =
+    cudf::test::strings_column_wrapper{"415", "212", "214", "712", "777", "964"};
+  auto expected_prefix =
+    cudf::test::strings_column_wrapper{"555", "867", "947", "312", "214", "123"};
+  auto expected_line_number =
+    cudf::test::strings_column_wrapper{"1234", "5309", "5689", "1863", "9063", "2934"};
+
+  auto expected = cudf::table_view({expected_area_code, expected_prefix, expected_line_number});
+
+  std::string cuda = R"***(
+__device__ void capture_group(cudf::string_view* area_code,
+                              cudf::string_view* prefix,
+                              cudf::string_view* line_number,
+                              cudf::string_view input) {
+    auto seek = [] (char const*& iter, char const* end, char c) {
+        while (iter != end && *iter != c) {
+            iter++;
+        }
+    };
+    auto* iter = input.data();
+    auto* end = iter + input.size_bytes();
+    auto* area_code_begin = iter;
+    seek(iter, end, ' ');
+    auto* area_code_end = iter;
+    iter++;
+    auto* prefix_begin = iter;
+    seek(iter, end, ' ');
+    auto* prefix_end = iter;
+    iter++;
+    auto* line_number_begin = iter;
+    seek(iter, end, ' ');
+    auto* line_number_end = iter;
+    *area_code = cudf::string_view{
+        area_code_begin,
+        static_cast<cudf::size_type>(area_code_end - area_code_begin)};
+    *prefix = cudf::string_view{
+        prefix_begin, static_cast<cudf::size_type>(prefix_end - prefix_begin)};
+    *line_number = cudf::string_view{
+        line_number_begin,
+        static_cast<cudf::size_type>(line_number_end - line_number_begin)};
+}
+    )***";
+
+  cudf::transform_input inputs[]   = {a};
+  cudf::transform_output outputs[] = {{.type = cudf::data_type(cudf::type_id::STRING)},
+                                      {.type = cudf::data_type(cudf::type_id::STRING)},
+                                      {.type = cudf::data_type(cudf::type_id::STRING)}};
+  auto result                      = cudf::multi_transform(cuda,
+                                      cudf::udf_source_type::CUDA,
+                                      cudf::null_aware::NO,
+                                      std::nullopt,
+                                      inputs,
+                                      outputs,
+                                                           {},
+                                      std::nullopt);
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result->view());
 }
 
 struct NullTest : public cudf::test::BaseFixture {
@@ -1033,34 +1135,11 @@ return l - t * l + t * h;
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*cuda_result, *expected);
 }
 
-// TODO: add offseted string output support tests
-// TODO: add multi-output transform tests
 // TODO: add zero-input transform test
-// TODO: merge main
 /**
-*
-* TODO: Regex extract with multiple capture groups, then the JIT implementation would just need to
-handle multiple column outputs without handling AST common subexpression elimination.
-
-Example:
-Example: Phone Number
-Format: (123) 456-7890
-
-Regex pattern:
-\((\d{3})\)\s(\d{3})-(\d{4})
-
-Example matches:
-Input: (415) 555-1234
-Column 1: 415
-Column 2: 555
-Column 3: 1234
-
-Input: (212) 867-5309
-Column 1: 212
-Column 2: 867
-Column 3: 5309
-*
-*
-*/
+ *
+ *
+ *
+ */
 
 }  // namespace transformation

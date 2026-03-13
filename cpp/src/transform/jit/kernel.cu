@@ -8,15 +8,17 @@
 #include <cudf/detail/utilities/grid_1d.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/types.hpp>
+#include <cudf/utilities/bit.hpp>
 #include <cudf/wrappers/durations.hpp>
 #include <cudf/wrappers/timestamps.hpp>
 
 #include <cuda/std/cstddef>
+#include <cuda/std/tuple>
+#include <cuda/std/utility>
 
 #include <jit/column_accessor.cuh>
 #include <jit/column_device_view_wrappers.cuh>
 #include <jit/sync.cuh>
-#include <jit/transform_udf.cuh>
 #include <jit/type_list.cuh>
 
 #pragma nv_hdrstop  // The above headers are used by the kernel below and need to be included before
@@ -32,31 +34,79 @@
 namespace cudf {
 namespace jit {
 
-template <null_aware is_null_aware,
-          bool has_stencil,
-          bool has_user_data,
-          typename Ins,
-          typename Outs>
+
+/// @brief The generic transform kernel. Supports all types and nullability combinations.
+template <null_aware is_null_aware, bool has_user_data, typename Ins, typename Outs>
 CUDF_KERNEL void transform_kernel(size_type row_size,
-                                  bitmask_type const* stencil,
-                                  void* user_data,
-                                  column_device_view_core const* incols,
-                                  mutable_column_device_view_core const* outcols)
+                                  bitmask_type const* __restrict__ stencil,
+                                  bool stencil_has_nulls,
+                                  void* __restrict__ user_data,
+                                  column_device_view_core const* __restrict__ incols,
+                                  mutable_column_device_view_core const* __restrict__ outcols)
 {
   // ensure block size is a multiple of warp size for correct warp-synchronous behavior
-  assert((blockDim.x & 31) == 0);
   auto start  = detail::grid_1d::global_thread_id();
   auto stride = detail::grid_1d::grid_stride();
 
-  for (auto i = start; i < row_size; i += stride) {
-    bool is_valid[Outs::size] = {};
+  for (auto element_idx = start; element_idx < row_size; element_idx += stride) {
+    if constexpr (is_null_aware == null_aware::NO) {
+      if (stencil_has_nulls && !bit_is_set(stencil, element_idx)) { continue; }
 
-    transform_udf<is_null_aware, has_stencil, has_user_data, Ins, Outs>::call(
-      GENERIC_TRANSFORM_OP, stencil, user_data, incols, outcols, is_valid, i);
+      auto outs = Outs::map(
+        [&]<typename... A>() { return cuda::std::tuple{A::output_arg(outcols, element_idx)...}; });
 
-    if constexpr (is_null_aware == null_aware::YES) {
-      Outs::map(
-        [&]<typename... A>() { (warp_compact_validity<A>(outcols, i, is_valid[A::index]), ...); });
+      auto out_ptrs =
+        cuda::std::apply([&](auto&... args) { return cuda::std::tuple{&args...}; }, outs);
+
+      auto inputs = Ins::map(
+        [&]<typename... A>() { return cuda::std::tuple{A::element(incols, element_idx)...}; });
+
+      if constexpr (has_user_data) {
+        auto args =
+          cuda::std::tuple_cat(cuda::std::tuple{user_data, element_idx}, out_ptrs, inputs);
+        cuda::std::apply(udf, args);
+
+      } else {
+        // TODO: static assert invocable
+        auto args = cuda::std::tuple_cat(out_ptrs, inputs);
+        cuda::std::apply(udf, args);
+      }
+
+      Outs::map([&]<typename... A>() {
+        (A::assign(outcols, element_idx, cuda::std::get<A::index>(outs)), ...);
+      });
+    } else {
+      bool is_valid[Outs::size];
+
+      auto outs = Outs::map([&]<typename... A>() {
+        return cuda::std::tuple{A::null_output_arg(outcols, element_idx)...};
+      });
+
+      auto out_ptrs =
+        cuda::std::apply([&](auto&... args) { return cuda::std::tuple{&args...}; }, outs);
+
+      auto inputs = Ins::map([&]<typename... A>() {
+        return cuda::std::tuple{A::nullable_element(incols, element_idx)...};
+      });
+
+      if constexpr (has_user_data) {
+        auto args =
+          cuda::std::tuple_cat(cuda::std::tuple{user_data, element_idx}, out_ptrs, inputs);
+        cuda::std::apply(udf, args);
+
+      } else {
+        auto args = cuda::std::tuple_cat(out_ptrs, inputs);
+        cuda::std::apply(udf, args);
+      }
+
+      Outs::map([&]<typename... A>() {
+        (A::assign(outcols, element_idx, *cuda::std::get<A::index>(outs)), ...);
+        ((is_valid[A::index] = cuda::std::get<A::index>(outs).has_value()), ...);
+      });
+
+      Outs::map([&]<typename... A>() {
+        (warp_compact_validity<A>(outcols, element_idx, is_valid[A::index]), ...);
+      });
     }
   }
 }

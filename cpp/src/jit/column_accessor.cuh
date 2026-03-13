@@ -40,18 +40,18 @@ struct column_accessor {
   }
 
   template <typename T>
-  static __device__ auto& column(T const* cols)
-    requires(sizeof(T) == sizeof(column_type))
+  static __device__ auto& column(T const* __restrict__ cols)
+    requires(sizeof(T) == sizeof(column_type) && alignof(T) == alignof(column_type))
   {
     return reinterpret_cast<column_type const&>(cols[index]);
   }
 
-  static __device__ element_type element(auto const* cols, size_type row)
+  static __device__ element_type element(auto const* __restrict__ cols, size_type row)
   {
     return column(cols).template element<element_type>(map_index(row));
   }
 
-  static __device__ bool is_null(auto const* cols, size_type row)
+  static __device__ bool is_null(auto const* __restrict__ cols, size_type row)
   {
     if constexpr (!may_be_nullable) {
       return false;
@@ -60,7 +60,7 @@ struct column_accessor {
     }
   }
 
-  static __device__ bool is_valid(auto const* cols, size_type row)
+  static __device__ bool is_valid(auto const* __restrict__ cols, size_type row)
   {
     if constexpr (!may_be_nullable) {
       return true;
@@ -69,7 +69,8 @@ struct column_accessor {
     }
   }
 
-  static __device__ optional_element_type nullable_element(auto const* cols, size_type row)
+  static __device__ optional_element_type nullable_element(auto const* __restrict__ cols,
+                                                           size_type row)
   {
     auto& c = column(cols);
 
@@ -80,7 +81,7 @@ struct column_accessor {
     }
   }
 
-  static __device__ void set_null_mask_word(auto const* cols,
+  static __device__ void set_null_mask_word(auto const* __restrict__ cols,
                                             size_type word_index,
                                             bitmask_type word)
     requires(!as_scalar)
@@ -96,13 +97,13 @@ struct column_accessor {
     }
   }
 
-  static __device__ void assign(auto const* cols, size_type row, element_type value)
+  static __device__ void assign(auto const* __restrict__ cols, size_type row, element_type value)
     requires(!as_scalar)
   {
     column(cols).template assign<element_type>(row, value);
   }
 
-  static __device__ element_type output_arg(auto const* cols, size_type row)
+  static __device__ element_type output_arg(auto const* __restrict__ cols, size_type row)
     requires(!as_scalar)
   {
     if constexpr (is_strings_output) {
@@ -112,7 +113,8 @@ struct column_accessor {
     }
   }
 
-  static __device__ optional_element_type null_output_arg(auto const* cols, size_type row)
+  static __device__ optional_element_type null_output_arg(auto const* __restrict__ cols,
+                                                          size_type row)
     requires(!as_scalar)
   {
     if constexpr (is_strings_output) {

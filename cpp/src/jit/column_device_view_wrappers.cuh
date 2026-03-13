@@ -18,15 +18,15 @@ namespace jit {
  * @brief A column wrapper type that treats a column as a vector of elements.
  *
  */
-struct vector_column_device_view : private mutable_column_device_view_core {
+struct mut_vector_device_view : private mutable_column_device_view_core {
   using base = mutable_column_device_view_core;
 
-  CUDF_HOST_DEVICE constexpr vector_column_device_view(base const& src) : base{src} {}
-  ~vector_column_device_view()                                           = default;
-  vector_column_device_view(vector_column_device_view const&)            = default;
-  vector_column_device_view(vector_column_device_view&&)                 = default;
-  vector_column_device_view& operator=(vector_column_device_view const&) = default;
-  vector_column_device_view& operator=(vector_column_device_view&&)      = default;
+  CUDF_HOST_DEVICE constexpr mut_vector_device_view(base const& src) : base{src} {}
+  ~mut_vector_device_view()                                        = default;
+  mut_vector_device_view(mut_vector_device_view const&)            = default;
+  mut_vector_device_view(mut_vector_device_view&&)                 = default;
+  mut_vector_device_view& operator=(mut_vector_device_view const&) = default;
+  mut_vector_device_view& operator=(mut_vector_device_view&&)      = default;
 
   using base::nullable;
   using base::offset;
@@ -34,7 +34,7 @@ struct vector_column_device_view : private mutable_column_device_view_core {
   using base::type;
 
   template <typename T>
-  CUDF_HOST_DEVICE T* data() const noexcept
+  CUDF_HOST_DEVICE T* __restrict__ data() const noexcept
   {
     return static_cast<T*>(const_cast<void*>(_data)) + _offset;
   }
@@ -91,13 +91,14 @@ struct mut_strings_column_device_view : private mutable_column_device_view_core 
   [[nodiscard]] __device__ cuda::std::span<char> element(size_type element_index) const noexcept
     requires(cuda::std::is_same_v<T, cuda::std::span<char>>)
   {
-    auto index   = element_index + offset();
-    auto chars   = static_cast<char*>(const_cast<void*>(_data));
-    auto offsets = child(offsets_column_index);
-    auto itr     = cudf::detail::input_offsetalator(offsets.head(), offsets.type());
-    auto offset  = itr[index];
-    return cuda::std::span<char>{chars + offset,
-                                 static_cast<cudf::size_type>(itr[index + 1] - offset)};
+    auto index             = element_index + offset();
+    auto chars             = static_cast<char*>(const_cast<void*>(_data));
+    auto offsets           = child(offsets_column_index);
+    auto itr               = cudf::detail::input_offsetalator(offsets.head(), offsets.type());
+    auto beg               = itr[index];
+    auto end               = itr[index + 1];
+    auto* __restrict__ str = chars + beg;
+    return cuda::std::span<char>{str, static_cast<size_t>(end - beg)};
   }
 
   template <typename T = cuda::std::span<char>>

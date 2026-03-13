@@ -155,7 +155,6 @@ using handle            = std::variant<
 namespace jit_transform {
 
 jitify2::Kernel instantiate(null_aware is_null_aware,
-                            bool has_stencil,
                             bool has_user_data,
                             std::string const& ins,
                             std::string const& outs,
@@ -173,21 +172,25 @@ jitify2::Kernel instantiate(null_aware is_null_aware,
                        : jit::parse_single_function_cuda(udf, "GENERIC_TRANSFORM_OP");
 
   auto kernel = jitify2::reflection::Template("cudf::jit::transform_kernel")
-                  .instantiate(is_null_aware, has_stencil, has_user_data, ins, outs);
+                  .instantiate(is_null_aware, has_user_data, ins, outs);
 
-  return jit::get_udf_kernel(*transform_jit_kernel_cu_jit, kernel, cuda_source, {"--restrict"});
+  return jit::get_udf_kernel(*transform_jit_kernel_cu_jit,
+                             kernel,
+                             cuda_source,
+                             {"-restrict", "--device-debug", "--dopt=on", "--generate-line-info"});
 }
 
 void launch(jitify2::Kernel const& kernel,
             size_type row_size,
             bitmask_type const* stencil,
+            bool stencil_has_nulls,
             void* user_data,
             column_device_view_core const* incols,
             mutable_column_device_view_core const* outcols,
             rmm::cuda_stream_view stream)
 {
   CUDF_FUNC_RANGE();
-  void* args[] = {&row_size, &stencil, &user_data, &incols, &outcols};
+  void* args[] = {&row_size, &stencil, &stencil_has_nulls, &user_data, &incols, &outcols};
   kernel->configure_1d_max_occupancy(0, 0, nullptr, stream.value())->launch_raw(args);
 }
 
@@ -218,7 +221,7 @@ std::string reflect_output_column(fixed_width_column const&)
 
 std::string reflect_output_column(string_views_column const&)
 {
-  return "cudf::jit::vector_column_device_view";
+  return "cudf::jit::mut_vector_device_view";
 }
 
 std::string reflect_output_column(mut_strings_column const&)
@@ -329,10 +332,10 @@ auto to_args(std::span<input_column_view const> inputs,
 }
 
 void run(null_aware is_null_aware,
-         bool has_stencil,
          bool has_user_data,
          size_type row_size,
          bitmask_type const* d_stencil,
+         bool stencil_has_nulls,
          void* user_data,
          std::span<input_column_view const> inputs,
          std::span<output_column const> outputs,
@@ -346,7 +349,6 @@ void run(null_aware is_null_aware,
   auto [in_types, out_types, ptx_in_types, ptx_out_types] =
     reflect(source_type, inputs, outputs, input_may_be_nullable, output_may_be_nullable);
   auto kernel          = instantiate(is_null_aware,
-                            has_stencil,
                             has_user_data,
                             in_types,
                             out_types,
@@ -357,7 +359,7 @@ void run(null_aware is_null_aware,
   auto [cols, handles] = to_args(inputs, outputs, stream, mr);
   auto* incols         = reinterpret_cast<column_device_view_core const*>(cols.data());
   auto* outcols = reinterpret_cast<mutable_column_device_view_core const*>(incols + inputs.size());
-  return launch(kernel, row_size, d_stencil, user_data, incols, outcols, stream);
+  return launch(kernel, row_size, d_stencil, stencil_has_nulls, user_data, incols, outcols, stream);
 }
 
 }  // namespace jit_transform
@@ -402,7 +404,7 @@ size_type inplace_null_mask_and(bitmask_type* null_mask,
   auto has_cols = std::any_of(
     inputs.begin(), inputs.end(), [](auto& in) { return std::holds_alternative<column_view>(in); });
 
-  if (has_cols) {
+  if (!has_cols) {
     // no non-scalar columns, so all rows are valid
     CUDF_CUDA_TRY(cudaMemsetAsync(null_mask, 0xFF, num_bytes, stream.value()));
     return 0;
@@ -497,9 +499,7 @@ void perform_checks(udf_source_type source_type,
                               [](auto& in) {
                                 return std::visit(
                                   [](auto& c) {
-                                    auto type = c.type();
-                                    return !is_integer(type) && !is_floating_point(type) &&
-                                           type.id() != type_id::BOOL8;
+                                    return !is_integral(c.type()) && !is_floating_point(c.type());
                                   },
                                   in);
                               }),
@@ -508,13 +508,7 @@ void perform_checks(udf_source_type source_type,
     CUDF_EXPECTS(std::none_of(outputs.begin(),
                               outputs.end(),
                               [](auto& out) {
-                                return std::visit(
-                                  [](auto& c) {
-                                    auto type = c.type();
-                                    return !is_integer(type) && !is_floating_point(type) &&
-                                           type.id() != type_id::BOOL8;
-                                  },
-                                  out);
+                                return !is_integral(out.type) && !is_floating_point(out.type);
                               }),
                  "Transforms with PTX UDFs only support integer, floating-point, and boolean types",
                  std::invalid_argument);
@@ -576,11 +570,12 @@ void perform_checks(udf_source_type source_type,
                std::invalid_argument);
 }
 
-std::optional<bitmask_type const*> make_stencil(null_aware is_null_aware,
-                                                size_type row_size,
-                                                std::span<transform_input const> inputs,
-                                                std::span<output_column> outputs,
-                                                rmm::cuda_stream_view stream)
+std::optional<std::pair<bitmask_type*, size_type>> make_stencil(
+  null_aware is_null_aware,
+  size_type row_size,
+  std::span<transform_input const> inputs,
+  std::span<output_column> outputs,
+  rmm::cuda_stream_view stream)
 {
   CUDF_FUNC_RANGE();
 
@@ -594,7 +589,7 @@ std::optional<bitmask_type const*> make_stencil(null_aware is_null_aware,
   }
 
   // no nullable outputs
-  if (!stencil.has_value()) { return nullptr; }
+  if (!stencil.has_value()) { return std::pair<bitmask_type*, size_type>{nullptr, 0}; }
 
   auto stencil_null_count = inplace_null_mask_and(*stencil, row_size, inputs, stream);
 
@@ -609,15 +604,16 @@ std::optional<bitmask_type const*> make_stencil(null_aware is_null_aware,
                                      stream);
     }
 
-    auto null_count = mask == nullptr ? 0 : stencil_null_count;
+    auto null_count = (mask == nullptr) ? 0 : stencil_null_count;
 
     std::visit([&](auto& c) { c.set_null_count(null_count); }, out);
   }
 
-  return stencil;
+  return std::pair<bitmask_type*, size_type>{*stencil, stencil_null_count};
 }
 
-auto make_outputs(size_type row_size,
+auto make_outputs(null_aware is_null_aware,
+                  size_type row_size,
                   std::span<transform_input const> inputs,
                   std::span<transform_output const> outputs,
                   std::span<char const> is_output_nullable,
@@ -656,9 +652,9 @@ auto make_outputs(size_type row_size,
     }
   }
 
-  auto stencil = make_stencil(is_null_aware, row_size, inputs, output_columns, stream);
+  auto stencil = make_stencil(is_null_aware, row_size, inputs, cols, stream);
 
-  return std::make_tuple(std::move(output_columns), stencil);
+  return std::make_tuple(std::move(cols), stencil);
 }
 
 void update_null_counts(std::span<output_column> outputs,
@@ -755,11 +751,14 @@ std::unique_ptr<table> execute_transform(std::string const& udf,
                                                 std::move(string_offsets),
                                                 stream,
                                                 mr);
+
+  auto stencil_arg       = stencil.has_value() ? stencil->first : nullptr;
+  auto stencil_has_nulls = stencil.has_value() ? (stencil->second > 0) : false;
   jit_transform::run(is_null_aware,
-                     stencil.has_value(),
                      user_data.has_value(),
                      row_size,
-                     stencil.value_or(nullptr),
+                     stencil_arg,
+                     stencil_has_nulls,
                      user_data.value_or(nullptr),
                      inputs,
                      output_columns,
