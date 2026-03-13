@@ -2,39 +2,74 @@
 
 Multi-GPU Polars extends Polars query execution to multiple GPUs.
 
-Multi-process (mp) execution distributes a query across several GPU workers. Each
-worker owns a disjoint fragment of the data and participates in collective operations
-(shuffles, all-gathers, joins) to produce a globally correct result.
+Multi-GPU execution distributes a query across several GPU workers. Each worker
+owns a disjoint fragment of the data and participates in collective operations
+such as shuffles, all-gathers, and joins to produce a globally correct result.
 
 The entry point in all cases is the Polars `GPUEngine` with `executor="streaming"`.
 The `cluster` option selects the execution model:
 
-| `cluster` value | Description                                 | Status          |
-| --------------- | ------------------------------------------- | --------------- |
-| `"single"`      | Single-GPU, in-process execution            | Stable (legacy) |
-| `"distributed"` | Multi-GPU via Dask Distributed              | Stable (legacy) |
-| `"spmd"`        | Multi-GPU via SPMD with the `rrun` launcher | Experimental    |
-| `"ray"`         | Multi-GPU via Ray actors                    | Experimental    |
+| `cluster`       | Description                             | Status            |
+| --------------- | --------------------------------------- | ----------------- |
+| `"single"`      | Single-GPU, in-process execution        | Stable            |
+| `"distributed"` | Multi-GPU via Dask Distributed          | Stable (legacy)   |
+| `"spmd"`        | Multi-GPU via SPMD launched with `rrun` | Preview (new API) |
+| `"ray"`         | Multi-GPU via Ray actors                | Preview (new API) |
 
-This document describes the two experimental multi-GPU modes. Both rely on RapidsMPF
-for shuffle and collective communication.
+Two preview execution modes are available:
 
-* [SPMD cluster mode](#spmd-cluster-mode)
-* [Ray cluster mode](#ray-cluster-mode)
+* **SPMD mode** — MPI-style execution where the user launches one Python process
+  per GPU using `rrun`.
+* **Ray mode** — a single-client model where a driver program coordinates GPU
+  workers implemented as Ray actors.
+
+This document describes these two execution modes.
+
+* [SPMD execution mode](#spmd-execution-mode)
+* [Ray execution mode](#ray-execution-mode)
 
 ---
 
-# SPMD cluster mode
+# SPMD execution mode
 
 In SPMD (Single Program, Multiple Data) execution, the same Python script is launched
 multiple times simultaneously, once per GPU, using the `rrun` launcher bundled with
 RapidsMPF. Each process is assigned a GPU and receives a **rank**. Ranks communicate
 through a UCXX-based communicator established at startup.
 
-Each rank runs an independent Python process and owns its local data. File-based
-sources (`scan_parquet`, `scan_csv`, etc.) are automatically partitioned so that
-different ranks read different file or row-group ranges. In-memory `DataFrame`
-objects are already rank-local, so each rank processes its own copy.
+Each rank runs an independent Python process and owns its local data fragment.
+
+File-based sources (`scan_parquet`, `scan_csv`, etc.) are automatically partitioned
+so that different ranks read different file or row-group ranges. In-memory
+`DataFrame` objects are already rank-local, so each rank processes its own copy.
+
+Conceptually the setup looks like this:
+
+```
+       rank 0               rank 1       ...      rank N-1
+┌─────────────────┐  ┌─────────────────┐     ┌─────────────────┐
+│   User script   │  │   User script   │     │   User script   │
+│ (same code on   │  │ (same code on   │     │ (same code on   │
+│  every rank)    │  │  every rank)    │     │  every rank)    │
+└────────┬────────┘  └────────┬────────┘     └────────┬────────┘
+         │                    │                       │
+         │     LazyFrame.collect(engine=engine)       │
+         ↓                    ↓                       ↓
+┌─────────────────┐  ┌─────────────────┐     ┌─────────────────┐
+│     run IR      │  │     run IR      │     │     run IR      │
+└────────┬────────┘  └────────┬────────┘     └────────┬────────┘
+         │                    │                       │
+         ↓                    ↓                       ↓
+┌────────────────────────────────────────────────────────────────┐
+│                     RapidsMPF streaming engine                 │
+│   shuffle / all-gather · UCXX communicator · RMM GPU memory    │
+└────────────────────────────────────────────────────────────────┘
+         ↑                    ↑                       ↑
+      GPU 0                GPU 1                   GPU N-1
+```
+
+After `collect`, results are **rank-local**. To assemble the full dataset on
+every rank, call `allgather_polars_dataframe()`.
 
 ## Prerequisites
 
@@ -89,6 +124,18 @@ The context manager yields:
 
 Pass `engine` to every `LazyFrame.collect()` inside the context block.
 
+## Query symmetry requirement
+
+All ranks must execute the **same sequence of queries in the same order**. Collective
+operations are matched using internal operation IDs. If one rank executes a collective
+that another rank does not, the program will deadlock.
+
+In practice:
+
+* Avoid rank-conditional `collect()` calls
+* Avoid branches that change the query graph
+* Keep the driver script deterministic
+
 ## Collecting distributed results
 
 `collect()` returns a rank-local result. Use
@@ -104,22 +151,9 @@ full = allgather_polars_dataframe(
 ```
 
 `op_id` is a unique integer that identifies this collective operation across ranks.
-All ranks must call the same collective with the same `op_id`. Otherwise the program
-will deadlock.
+All ranks must call the same collective with the same `op_id`.
 
 The result is a `pl.DataFrame` containing rows from all ranks, ordered by rank.
-
-## Query symmetry requirement
-
-All ranks must execute the **same sequence of queries in the same order**. Collective
-operations are matched using internal operation IDs. If one rank executes a collective
-that another rank does not, the program will deadlock.
-
-In practice:
-
-* Avoid rank-conditional `collect()` calls
-* Avoid branches that change the query graph
-* Keep the driver script deterministic
 
 ## Passing options
 
@@ -131,34 +165,61 @@ with spmd_execution(
         "max_rows_per_partition": 500_000,
         "rapidsmpf_spill": True,
     },
-    parquet_options={"use_rapidsmpf_native": True},  # forwarded via **engine_kwargs
+    parquet_options={"use_rapidsmpf_native": True},
 ) as (comm, ctx, engine):
     ...
 ```
 
-`executor_options` keys map to `StreamingExecutor` fields. Any additional keyword
-arguments to `spmd_execution()` (such as `parquet_options`) are forwarded directly
-to `pl.GPUEngine` as `**engine_kwargs`.
+`executor_options` keys map to `StreamingExecutor` fields. Additional keyword
+arguments to `spmd_execution()` are forwarded directly to `pl.GPUEngine`.
 
-The keys `"runtime"`, `"cluster"`, and `"spmd"` in `executor_options`, and
-`"memory_resource"` and `"executor"` in `engine_kwargs`, are reserved.
+Reserved keys:
+
+* `executor_options`: `"runtime"`, `"cluster"`, `"spmd"`
+* `engine_kwargs`: `"memory_resource"`, `"executor"`
 
 ---
 
-# Ray cluster mode
+# Ray execution mode
 
 Ray mode uses a single client process that drives execution across multiple GPU
-workers. Internally, the system uses the concept of **ranks**, similar to MPI ranks.
-Each rank corresponds to one GPU worker and participates in collective operations
+workers.
+
+Internally the system uses the concept of **ranks**, similar to MPI ranks. Each
+rank corresponds to one GPU worker and participates in collective operations
 through a shared UCXX communicator.
 
-In the Ray implementation, each rank is implemented as a **Ray actor**, with one
-actor created per available GPU. Each rank owns its GPU, memory resource,
-communicator endpoint, and RapidsMPF streaming context.
+In the Ray implementation each rank is implemented as a **Ray actor**, with one
+actor created per available GPU.
 
-The client sends the query plan to all ranks. The ranks execute the pipeline
+Conceptually the system looks like this:
+
+```
+                 ┌──────────────────────────────┐
+                 │        User script           │
+                 │   (single client process)    │
+                 │  LazyFrame.collect(engine=…) │
+                 └──────────────┬───────────────┘
+                                │ IR dispatched to all actors
+               ┌────────────────|─────────────────┐
+               ↓                ↓                 ↓
+        ┌─────────────┐  ┌─────────────┐   ┌─────────────┐
+        │  RankActor  │  │  RankActor  │   │  RankActor  │
+        │   rank 0    │  │   rank 1    │   │  rank N-1   │
+        │   run IR    │  │   run IR    │   │   run IR    │
+        └──────┬──────┘  └──────┬──────┘   └──────┬──────┘
+               ↓                ↓                 ↓
+┌────────────────────────────────────────────────────────────────┐
+│                     RapidsMPF streaming engine                 │
+│   shuffle / all-gather · UCXX communicator · RMM GPU memory    │
+└────────────────────────────────────────────────────────────────┘
+               ↑                ↑                 ↑
+             GPU 0            GPU 1            GPU N-1
+```
+
+The client broadcasts the query plan to all ranks. The ranks execute the pipeline
 collectively through UCXX, and their outputs are streamed back and concatenated on
-the client.
+the client process.
 
 Unlike SPMD mode, the driver script runs as a normal Python program. There is no
 `rrun` launcher and no symmetry requirement for the driver code.
@@ -229,6 +290,7 @@ GPUs are available.
 
 ```python
 with ray_execution() as (ray_client, engine):
+    print(f"cluster has {ray_client.nranks} ranks")
     for i, info in enumerate(ray_client.gather_cluster_info()):
         print(
             f"rank {i}: hostname={info['hostname']}, pid={info['pid']}, "
@@ -252,6 +314,7 @@ with ray_execution(
     ...
 ```
 
-The keys `"runtime"`, `"cluster"`, `"spmd"`, and `"ray_client"` in
-`executor_options`, and `"memory_resource"` and `"executor"` in `engine_kwargs`,
-are reserved.
+Reserved keys:
+
+* `executor_options`: `"runtime"`, `"cluster"`, `"spmd"`, `"ray_context"`
+* `engine_kwargs`: `"memory_resource"`, `"executor"`
