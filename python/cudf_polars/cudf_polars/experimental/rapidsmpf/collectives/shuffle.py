@@ -8,8 +8,10 @@ from typing import TYPE_CHECKING, Any
 
 from rapidsmpf.integrations.cudf.partition import (
     partition_and_pack as py_partition_and_pack,
+    split_and_pack as py_split_and_pack,
     unpack_and_concat as py_unpack_and_concat,
 )
+from rapidsmpf.shuffler import PartitionAssignment
 from rapidsmpf.streaming.coll.shuffler import ShufflerAsync
 from rapidsmpf.streaming.core.actor import define_actor
 from rapidsmpf.streaming.core.message import Message
@@ -61,6 +63,10 @@ class ShuffleManager:
         The columns to hash.
     collective_id: int
         The collective ID.
+    partition_assignment: PartitionAssignment, optional
+        How to assign partition IDs to ranks: ROUND_ROBIN (default) or
+        CONTIGUOUS. Use CONTIGUOUS for sort so each rank gets adjacent
+        partition IDs and concatenation order matches global order.
     """
 
     def __init__(
@@ -70,6 +76,8 @@ class ShuffleManager:
         num_partitions: int,
         columns_to_hash: tuple[int, ...],
         collective_id: int,
+        *,
+        partition_assignment: PartitionAssignment = PartitionAssignment.ROUND_ROBIN,
     ):
         self.context = context
         self.num_partitions = num_partitions
@@ -79,31 +87,45 @@ class ShuffleManager:
             comm,
             collective_id,
             num_partitions,
+            partition_assignment=partition_assignment,
         )
 
     def local_partitions(self) -> list[int]:
         """Get the local partition IDs for this rank."""
         return self.shuffler.local_partitions()
 
-    def insert_chunk(self, chunk: TableChunk) -> None:
+    def insert_chunk(
+        self,
+        chunk: TableChunk,
+        *,
+        splits: list[int] | None = None,
+    ) -> None:
         """
         Insert a chunk into the ShuffleContext.
 
         Parameters
         ----------
-        chunk: TableChunk
+        chunk : TableChunk
             The table chunk to insert.
+        splits : list[int], optional
+            If provided, split the chunk at these indices and pack (for
+            sort/ordered data). If not provided, partition by hash.
         """
-        # Partition and pack using the Python function
-        partitioned_chunks = py_partition_and_pack(
-            table=chunk.table_view(),
-            columns_to_hash=self.columns_to_hash,
-            num_partitions=self.num_partitions,
-            stream=chunk.stream,
-            br=self.context.br(),
-        )
-
-        # Insert into shuffler
+        if splits is not None:
+            partitioned_chunks = py_split_and_pack(
+                table=chunk.table_view(),
+                splits=splits,
+                stream=chunk.stream,
+                br=self.context.br(),
+            )
+        else:
+            partitioned_chunks = py_partition_and_pack(
+                table=chunk.table_view(),
+                columns_to_hash=self.columns_to_hash,
+                num_partitions=self.num_partitions,
+                stream=chunk.stream,
+                br=self.context.br(),
+            )
         self.shuffler.insert(partitioned_chunks)
 
     async def insert_finished(self) -> None:

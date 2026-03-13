@@ -16,6 +16,7 @@ from cudf_polars.experimental.io import StreamingSink
 from cudf_polars.experimental.join import Join
 from cudf_polars.experimental.repartition import Repartition
 from cudf_polars.experimental.shuffle import Shuffle
+from cudf_polars.experimental.sort import ShuffleSorted
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -82,14 +83,20 @@ class ReserveOpIDs:
         )
 
         # Find all collective IR nodes.
-        collective_types: tuple[type, ...] = (Shuffle, Join, Repartition, StreamingSink)
+        collective_types: tuple[type, ...] = (
+            Shuffle,
+            Join,
+            Repartition,
+            StreamingSink,
+            ShuffleSorted,
+        )
         if self.dynamic_planning_enabled:
-            # Include GroupBy and Distinct when dynamic planning is enabled
             collective_types = (
                 Shuffle,
                 Join,
                 Repartition,
                 StreamingSink,
+                ShuffleSorted,
                 GroupBy,
                 Distinct,
             )
@@ -119,9 +126,13 @@ class ReserveOpIDs:
                     _get_new_collective_id(),
                 ]
             elif isinstance(node, Join) and self.dynamic_planning_enabled:
-                # Join needs 3 IDs: size allgather, left shuffle/bcast, right shuffle/bcast
                 self.collective_id_map[node] = [
                     _get_new_collective_id(),
+                    _get_new_collective_id(),
+                    _get_new_collective_id(),
+                ]
+            elif isinstance(node, ShuffleSorted):
+                self.collective_id_map[node] = [
                     _get_new_collective_id(),
                     _get_new_collective_id(),
                 ]
