@@ -90,6 +90,18 @@ def test_ray_client_shutdown_idempotent() -> None:
     client.shutdown()  # must not raise
 
 
+def test_ray_client_post_shutdown_state() -> None:
+    """After shutdown, rank_actors is empty, nranks is 0, and engine raises."""
+    mock_engine = MagicMock(spec=pl.GPUEngine)
+    mock_engine.config = {"executor_options": {"ray_context": RayContext([])}}
+    client = RayClient(mock_engine, owns_ray=False)
+    client.shutdown()
+    assert client.rank_actors == []
+    assert client.nranks == 0
+    with pytest.raises(RuntimeError, match="shutdown"):
+        _ = client.engine
+
+
 def test_ray_execution_raises_inside_rrun() -> None:
     """ray_execution() must not be called from within an rrun cluster."""
     with (
@@ -126,7 +138,8 @@ def test_ray_execution_executor_options_forwarded(
     assert opts["runtime"] == "rapidsmpf"
     assert opts["cluster"] == "ray"
     assert isinstance(opts["ray_context"], RayContext)
-    assert len(opts["ray_context"].rank_actors) == ray_client.nranks
+    assert ray_client.rank_actors == opts["ray_context"].rank_actors
+    assert len(ray_client.rank_actors) == ray_client.nranks
 
 
 def test_gather_cluster_info(ray_client: RayClient) -> None:

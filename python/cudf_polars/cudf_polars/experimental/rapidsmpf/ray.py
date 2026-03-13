@@ -392,12 +392,15 @@ class RayClient:
         *,
         owns_ray: bool,
     ) -> None:
-        self._engine: pl.GPUEngine = engine
+        self._engine: pl.GPUEngine | None = engine
         self._owns_ray: bool = owns_ray
-        # Own copy of actor handles for shutdown; drained to [] on first call.
-        self._rank_actors: list[ActorHandle[RankActor]] = list(
-            engine.config["executor_options"]["ray_context"].rank_actors
-        )
+
+    @property
+    def rank_actors(self) -> list[ActorHandle[RankActor]]:
+        """List of Ray rank actor handles, or ``[]`` after :meth:`shutdown`."""
+        if self._engine is None:
+            return []
+        return self._engine.config["executor_options"]["ray_context"].rank_actors
 
     @property
     def nranks(self) -> int:
@@ -408,11 +411,13 @@ class RayClient:
         -------
         Number of ranks/nodes in the Ray cluster.
         """
-        return len(self._rank_actors)
+        return len(self.rank_actors)
 
     @property
     def engine(self) -> pl.GPUEngine:
         """The Polars GPU engine bound to this cluster."""
+        if self._engine is None:
+            raise RuntimeError("engine is not available after shutdown")
         return self._engine
 
     def gather_cluster_info(self) -> list[dict]:
@@ -430,7 +435,7 @@ class RayClient:
         ...     for i, info in enumerate(ray_client.gather_cluster_info()):
         ...         print(f"rank {i}: {info}")
         """
-        return ray.get([rank.get_info.remote() for rank in self._rank_actors])
+        return ray.get([rank.get_info.remote() for rank in self.rank_actors])
 
     def shutdown(self) -> None:
         """
@@ -439,14 +444,14 @@ class RayClient:
         If Ray was initialized by this client, also calls :func:`ray.shutdown`.
         Safe to call more than once.
         """
-        actors, self._rank_actors = self._rank_actors, []
-        for a in actors:
+        for a in self.rank_actors:
             try:
                 ray.get(a.shutdown.remote())
             except ray.exceptions.RayActorError:
                 pass  # expected: exit_actor() terminates the process immediately
             except Exception as e:
                 print(f"shutdown error: {e}")
+        self._engine = None
         if self._owns_ray:
             self._owns_ray = False
             ray.shutdown()
