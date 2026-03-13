@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -11,7 +11,7 @@ namespace cudf {
 namespace strings {
 namespace detail {
 
-constexpr bool is_whitespace(char_utf8 ch) { return ch <= ' '; }
+__device__ constexpr bool is_whitespace(char_utf8 ch) { return ch <= ' '; }
 
 /**
  * @brief Count tokens delimited by whitespace
