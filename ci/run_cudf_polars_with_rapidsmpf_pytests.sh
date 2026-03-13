@@ -12,16 +12,20 @@ set -euo pipefail
 # Support invoking run_cudf_polars_with_rapidsmpf_pytests.sh outside the script directory
 cd "$(dirname "$(realpath "${BASH_SOURCE[0]}")")"/../python/cudf_polars/
 
-# Run experimental tests with the "single" cluster mode and the "rapidsmpf" runtime
-rapids-logger "Running experimental tests with the 'rapidsmpf' runtime and a 'single' cluster"
+rapids-logger "Multi-GPU Polars: testing on '--cluster single'"
 timeout 10m python -m pytest --cache-clear "$@" "tests/experimental" \
     --executor streaming \
-    --cluster single \
-    --runtime rapidsmpf
+    --runtime rapidsmpf \
+    --cluster single
 
-# Run experimental tests with the "distributed" cluster mode and the "rapidsmpf" runtime
-rapids-logger "Running experimental tests with the 'rapidsmpf' runtime and a 'distributed' cluster"
+rapids-logger "Multi-GPU Polars: testing on '--cluster distributed'"
 timeout 10m python -m pytest --cache-clear "$@" "tests/experimental" \
     --executor streaming \
-    --cluster distributed \
-    --runtime rapidsmpf
+    --runtime rapidsmpf \
+    --cluster distributed
+
+rapids-logger "Multi-GPU Polars: testing on multi-ranks using 'rrun'"
+timeout 10m rrun --tag-output -n 2 -g 0,0 python -m pytest --cache-clear "$@" \
+    tests/experimental/rapidsmpf/test_spmd.py \
+    --executor streaming \
+    --runtime=rapidsmpf
