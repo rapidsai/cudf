@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -25,6 +25,8 @@ class stream_checking_resource_adaptor final : public rmm::mr::device_memory_res
    * @throws `cudf::logic_error` if `upstream == nullptr`
    *
    * @param upstream The resource used for allocating/deallocating device memory
+   * @param error_on_invalid_stream Whether to error on invalid streams
+   * @param check_default_stream Whether to check for the default stream
    */
   stream_checking_resource_adaptor(rmm::device_async_resource_ref upstream,
                                    bool error_on_invalid_stream,
