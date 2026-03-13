@@ -13,10 +13,13 @@
     "--name",
     "${localEnv:USER:anon}-rapids-${localWorkspaceFolderBasename}-26.04-cuda12.9-conda",
     "--ulimit",
-    "nofile=500000"
+    "nofile=500000",
+    "--gpus",
+    "all",
+    "--privileged"
   ],
   "hostRequirements": {
-    "gpu": "optional"
+    "gpu": "required"
   },
   "features": {
     "ghcr.io/rapidsai/devcontainers/features/cuda:26.4": {
@@ -33,7 +36,7 @@
       "installcuBLAS": false,
       "installcuSPARSE": false,
       "installcuFFT": false,
-      "installcuFile": false,
+      "installcuFile": true,
       "installcuRAND": false,
       "installcuSOLVER": false,
       "installNPP": false,
@@ -49,7 +52,7 @@
   "initializeCommand": [
     "/bin/bash",
     "-c",
-    "mkdir -m 0755 -p ${localWorkspaceFolder}/../.{aws,cache,config,conda/pkgs,conda/${localWorkspaceFolderBasename}-cuda12.9-envs}"
+    "mkdir -m 0755 -p ${localWorkspaceFolder}/../.{aws,cache,cache/tmp,config,conda/pkgs,conda/${localWorkspaceFolderBasename}-cuda12.9-envs}"
   ],
   "postAttachCommand": [
     "/bin/bash",
@@ -59,12 +62,18 @@
   "workspaceFolder": "/home/coder",
   "workspaceMount": "source=${localWorkspaceFolder},target=/home/coder/cudf,type=bind,consistency=consistent",
   "mounts": [
+    "source=/run/udev,target=/run/udev,type=bind,readonly",
     "source=${localWorkspaceFolder}/../.aws,target=/home/coder/.aws,type=bind,consistency=consistent",
     "source=${localWorkspaceFolder}/../.cache,target=/home/coder/.cache,type=bind,consistency=consistent",
     "source=${localWorkspaceFolder}/../.config,target=/home/coder/.config,type=bind,consistency=consistent",
     "source=${localWorkspaceFolder}/../.conda/pkgs,target=/home/coder/.conda/pkgs,type=bind,consistency=consistent",
     "source=${localWorkspaceFolder}/../.conda/${localWorkspaceFolderBasename}-cuda12.9-envs,target=/home/coder/.conda/envs,type=bind,consistency=consistent"
   ],
+  "containerEnv": {
+    "KVIKIO_COMPAT_MODE": "OFF",
+    "CUFILE_ALLOW_COMPAT_MODE": "false",
+    "CUFILE_FORCE_COMPAT_MODE": "false"
+  },
   "customizations": {
     "vscode": {
       "extensions": [
