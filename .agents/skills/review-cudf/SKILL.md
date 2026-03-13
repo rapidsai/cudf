@@ -72,7 +72,7 @@ Hint: Ensure `GH_TOKEN` (or GitHub CLI auth) is already configured in the enviro
 - Use `cudf::make_column_from_scalar` to construct a column filled with the same value.
 - Use `cudf::detail::copy_bitmask` when output nullability mirrors the input.
 - Use `cudf::detail::bitmask_and` to combine null masks.
-- Use `rmm::device_buffer{0, stream}` (not a null pointer) when constructing a non-nullable column.
+- Use `rmm::device_buffer{0, stream, mr}` (or `rmm::device_buffer{0, stream}` when no MR is available), not a null pointer, when constructing a non-nullable column.
 - Strings columns may use a two-phase approach via `make_strings_children`.
 - Use `cudf::strings::detail::make_offsets_child_column` for strings; use `cudf::detail::make_offsets_child_column` for non-strings lists.
 - Use `cudf::detail::offsetalator_factory::make_input_iterator` for type-erased offset access supporting both INT32 and INT64 offsets.
@@ -97,8 +97,8 @@ Verify compliance with the developer guide sections: **(guide: "Directory Struct
 
 Additional key checks not in the guide:
 - No raw owning pointers; use `std::unique_ptr`, `std::shared_ptr`, `std::reference_wrapper`.
-- Prefer pinned memory/vectors for small H2D/D2H transfers via `cudf::make_pinned_vector` instead of `cudf::make_host_vector`.
-- Prefer `span` versions of constructors for `cudf::make_pinned_vector` and `cudf::make_host_vector`.
+- Prefer pinned memory/vectors for small H2D/D2H transfers via `cudf::detail::make_pinned_vector{,_async}` instead of `cudf::detail::make_host_vector{,_async}`.
+- Prefer `span` versions of constructors for `cudf::detail::make_pinned_vector{,_async}` and `cudf::detail::make_host_vector{,_async}`.
 - Functions defined in headers (e.g. templates) must be `inline`.
 - Anonymous namespaces for single-TU helpers; never in headers.
 - Use `host_span`/`device_span` ; no owning vectors passed around by copy/reference unless explicitly moved (transferring ownership).
