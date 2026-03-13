@@ -1480,19 +1480,21 @@ TEST_F(ParquetReaderTest, FilterWithColumnProjection)
   auto [src, filepath] = create_parquet_with_stats("FilterWithColumnProjection.parquet");
   auto val             = cudf::numeric_scalar<uint32_t>{10};
   auto lit             = cudf::ast::literal{val};
-  auto col_ref         = cudf::ast::column_name_reference{"col_uint32"};
-  auto col_index       = cudf::ast::column_reference{0};
-  auto filter_expr     = cudf::ast::operation(cudf::ast::ast_operator::GREATER, lit, col_index);
 
-  auto predicate = cudf::compute_column(src, filter_expr);
+  // Prepare the predicate
+  auto col_index   = cudf::ast::column_reference{0};
+  auto filter_expr = cudf::ast::operation(cudf::ast::ast_operator::GREATER, lit, col_index);
+  auto predicate   = cudf::compute_column(src, filter_expr);
 
   {  // column_name_reference in parquet filter (not present in column projection)
-    auto read_expr       = cudf::ast::operation(cudf::ast::ast_operator::GREATER, lit, col_ref);
+    auto col_ref         = cudf::ast::column_name_reference{"cOL_uint32"};
+    auto read_expr       = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref, lit);
     auto projected_table = cudf::table_view{{src.get_column(2)}};
     auto expected        = cudf::apply_boolean_mask(projected_table, *predicate);
 
     auto read_opts = cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath})
-                       .column_names({"col_double"})
+                       .column_names({"col_Double"})
+                       .case_sensitive_names(false)
                        .filter(read_expr);
     auto result = cudf::io::read_parquet(read_opts);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *expected);
@@ -1500,6 +1502,7 @@ TEST_F(ParquetReaderTest, FilterWithColumnProjection)
     // Repeat but select columns using indices instead of names
     read_opts = cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath})
                   .column_indices({2})
+                  .case_sensitive_names(false)
                   .filter(read_expr);
     result = cudf::io::read_parquet(read_opts);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *expected);
@@ -1512,7 +1515,8 @@ TEST_F(ParquetReaderTest, FilterWithColumnProjection)
     auto projected_table = cudf::table_view{{src.get_column(2), src.get_column(0)}};
     auto expected        = cudf::apply_boolean_mask(projected_table, *predicate);
     auto read_opts = cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath})
-                       .column_names({"col_double", "col_uint32"})
+                       .column_names({"col_Double", "col_UInt32"})
+                       .case_sensitive_names(false)
                        .filter(read_ref_expr);
     auto result = cudf::io::read_parquet(read_opts);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*(cudf::io::read_parquet(read_opts).tbl), *expected);
@@ -4291,5 +4295,60 @@ TEST_F(ParquetReaderTest, DecimalTypeOption)
 
     EXPECT_EQ(result.tbl->view().column(0).type().id(), cudf::type_id::DECIMAL64);
     EXPECT_EQ(result.tbl->view().column(0).type().scale(), -2);
+  }
+}
+
+TEST_F(ParquetReaderTest, CaseInsensitiveColumnSelection)
+{
+  auto col0 = cudf::test::fixed_width_column_wrapper<int32_t>{1, 2, 3, 4, 5};
+  auto col1 = cudf::test::fixed_width_column_wrapper<int32_t>{10, 20, 30, 40, 50};
+  cudf::table_view tbl{{col0, col1}};
+
+  cudf::io::table_input_metadata meta(tbl);
+  meta.column_metadata[0].set_name("col0");
+  meta.column_metadata[1].set_name("col1");
+
+  auto filepath = temp_env->get_temp_filepath("CaseInsensitiveColumnSelection.parquet");
+  cudf::io::parquet_writer_options write_opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, tbl)
+      .metadata(meta)
+      .build();
+  cudf::io::write_parquet(write_opts);
+
+  // Case-sensitive: "col0" is ignored
+  {
+    auto read_opts =
+      cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath}).build();
+    read_opts.set_column_names({"Col0"});
+    // ignore_missing_columns defaults to true, so result should be empty
+    auto result = cudf::io::read_parquet(read_opts);
+    EXPECT_EQ(result.tbl->view().num_columns(), 0);
+  }
+
+  // Case-insensitive: "Col0" -> "col0"
+  {
+    auto read_opts = cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath})
+                       .case_sensitive_names(false)
+                       .build();
+    read_opts.set_column_names({"Col0"});
+    auto result = cudf::io::read_parquet(read_opts);
+    ASSERT_EQ(result.tbl->view().num_columns(), 1);
+    // Output column name should be the file's original name "col0"
+    EXPECT_EQ(result.metadata.schema_info[0].name, "col0");
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->view().column(0), col0);
+  }
+
+  // Case-insensitive: "COL0" -> "col0", "Col1" -> "col1"
+  {
+    auto read_opts = cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath})
+                       .case_sensitive_names(false)
+                       .build();
+    read_opts.set_column_names({"COL0", "Col1"});
+    auto result = cudf::io::read_parquet(read_opts);
+    ASSERT_EQ(result.tbl->view().num_columns(), 2);
+    EXPECT_EQ(result.metadata.schema_info[0].name, "col0");
+    EXPECT_EQ(result.metadata.schema_info[1].name, "col1");
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->view().column(0), col0);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->view().column(1), col1);
   }
 }

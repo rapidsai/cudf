@@ -13,6 +13,7 @@
 #include <cudf/io/parquet_schema.hpp>
 #include <cudf/types.hpp>
 
+#include <string_view>
 #include <tuple>
 #include <vector>
 
@@ -81,7 +82,32 @@ struct row_group_info {
 };
 
 /**
- * @brief Function that translates Parquet datatype to cuDF type enum
+ * @brief Returns a normalized (lowercased) column name or path when case-insensitive matching is
+ * enabled
+ *
+ * @param col_path The column name or path to normalize
+ * @param case_sensitive_names Whether to normalize the column path case-insensitively
+ *
+ * @return The normalized column path
+ */
+[[nodiscard]] std::string normalize_column_path(std::string_view col_path,
+                                                bool case_sensitive_names);
+
+/**
+ * @brief Compares two column paths with specified case sensitivity
+ *
+ * @param lhs The left-hand side column path
+ * @param rhs The right-hand side column path
+ * @param case_sensitive Whether to compare the column paths case-sensitively
+ *
+ * @return Boolean indicating if the column paths are equal
+ */
+[[nodiscard]] bool are_column_paths_equal(std::string_view lhs,
+                                          std::string_view rhs,
+                                          bool case_sensitive);
+
+/**
+ * @brief Translates Parquet datatype to cuDF type enum
  */
 [[nodiscard]] type_id to_type_id(SchemaElement const& schema,
                                  bool strings_to_categorical,
@@ -594,7 +620,8 @@ class aggregate_reader_metadata {
                  bool strings_to_categorical,
                  bool ignore_missing_columns,
                  type_id timestamp_type_id,
-                 type_id decimal_type_id);
+                 type_id decimal_type_id,
+                 bool case_sensitive_names);
 };
 
 }  // namespace cudf::io::parquet::detail
