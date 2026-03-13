@@ -333,8 +333,8 @@ __device__ inline void decode(cudf::string_view * output, cudf::string_view inpu
 
     cudf::transform_input inputs[] = {*a_encoded};
 
-    auto out =
-      cudf::transform_extended(inputs, cuda, cudf::data_type{cudf::type_id::STRING}, false);
+    auto out = cudf::transform_extended(
+      inputs, cuda, cudf::data_type{cudf::type_id::STRING}, cudf::udf_source_type::CUDA);
 
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(out->view(), a->view());
   }
