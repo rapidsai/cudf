@@ -42,6 +42,7 @@ namespace detail {
 
 // Minimum number of output rows before fork/join overhead is worthwhile.
 // Below this, per-column kernels are too fast for stream overlap to help.
+// Empirically determined: regression at 32K rows, benefit at 262K rows.
 constexpr size_type min_rows_for_stream_fork = 65'536;
 
 // Maximum number of forked streams. GPU memory bandwidth saturates

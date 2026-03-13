@@ -392,6 +392,8 @@ std::unique_ptr<table> scatter(table_view const& source,
   // Fork streams for multi-column tables when there is enough work per column
   // to amortize the fork/join overhead. Cap at max_forked_streams since GPU
   // memory bandwidth saturates well before that many concurrent kernels.
+  // Use target.num_rows() as the size proxy since the dominant cost per column
+  // is copying the full target before overwriting the scattered rows.
   auto const use_stream_pool = num_columns > 1 && target.num_rows() >= min_rows_for_stream_fork;
   auto const num_streams     = use_stream_pool ? std::min(num_columns, max_forked_streams) : 0;
   auto const streams         = num_streams > 0 ? cudf::detail::fork_streams(stream, num_streams)
