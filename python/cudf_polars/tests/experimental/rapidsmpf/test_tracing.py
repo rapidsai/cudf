@@ -20,6 +20,7 @@ from cudf_polars.testing.asserts import DEFAULT_CLUSTER, DEFAULT_RUNTIME
 @pytest.mark.skipif(DEFAULT_CLUSTER != "single", reason="Requires 'single' cluster.")
 def test_structlog_streaming_node_events():
     """Test that structlog emits 'Streaming Actor' events when tracing is enabled."""
+    pytest.importorskip("structlog")
     # Run in subprocess to control CUDF_POLARS_LOG_TRACES environment variable
     code = textwrap.dedent("""\
     import polars as pl

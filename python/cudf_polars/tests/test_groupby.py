@@ -126,7 +126,53 @@ def maintain_order(request):
     return request.param
 
 
-def test_groupby(df: pl.LazyFrame, maintain_order, keys, exprs):
+def test_groupby(
+    df: pl.LazyFrame, maintain_order, keys, exprs, using_rapidsmpf, request
+):
+    failing_rapidsmpf_nodeids = {
+        'test_groupby[maintain_order-col("key1")-col("int32").mean()]',
+        'test_groupby[maintain_order-col("key1")-col("uint16_with_null").sum()-col("uint16_with_null").mean().alias("mean")]',
+        'test_groupby[maintain_order-col("key2")-col("int32").mean()]',
+        'test_groupby[maintain_order-col("key2")-col("uint16_with_null").sum()-col("uint16_with_null").mean().alias("mean")]',
+        'test_groupby[maintain_order-col("key1")-dyn int: 1-col("int32").mean()]',
+        'test_groupby[maintain_order-col("key1")-dyn int: 1-col("uint16_with_null").sum()-col("uint16_with_null").mean().alias("mean")]',
+        'test_groupby[maintain_order-[(col("key1")) * (col("key2"))]-col("int32").mean()]',
+        'test_groupby[maintain_order-[(col("key1")) * (col("key2"))]-col("uint16_with_null").sum()-col("uint16_with_null").mean().alias("mean")]',
+        'test_groupby[maintain_order-col("key1")-col("key2")-col("int32").mean()]',
+        'test_groupby[maintain_order-col("key1")-col("key2")-col("uint16_with_null").sum()-col("uint16_with_null").mean().alias("mean")]',
+        'test_groupby[maintain_order-[(col("key1")) == (col("key2"))]-col("int32").mean()]',
+        'test_groupby[maintain_order-[(col("key1")) == (col("key2"))]-col("uint16_with_null").sum()-col("uint16_with_null").mean().alias("mean")]',
+        'test_groupby[maintain_order-col("key2")-[(col("key1")) == (1)]-col("int32").mean()]',
+        'test_groupby[maintain_order-col("key2")-[(col("key1")) == (1)]-col("uint16_with_null").sum()-col("uint16_with_null").mean().alias("mean")]',
+    }
+    request.applymarker(
+        pytest.mark.xfail(
+            using_rapidsmpf and request.node.name in failing_rapidsmpf_nodeids,
+            reason="https://github.com/rapidsai/cudf/issues/21642 and probably mean calculation referenced in https://github.com/rapidsai/cudf/issues/21721",
+        )
+    )
+    failing_rapidsmpf_nodeids_lt_1_36 = {
+        'test_groupby[maintain_order-col("key2")-[(col("key1")) == (dyn int: 1.strict_cast(Int64))]-col("uint16_with_null").sum()-col("uint16_with_null").mean().alias("mean")]'
+    }
+    request.applymarker(
+        pytest.mark.xfail(
+            using_rapidsmpf
+            and POLARS_VERSION_LT_136
+            and request.node.name in failing_rapidsmpf_nodeids_lt_1_36,
+            reason="Type mismatch in columns to concatenate.",
+        )
+    )
+    segfaulting_rapidsmpf_nodeids = {
+        'test_groupby[maintain_order-col("key2")-[(col("key1")) == (dyn int: 1.strict_cast(Int64))]-col("int32").mean()]'
+    }
+    if (
+        using_rapidsmpf
+        and POLARS_VERSION_LT_136
+        and request.node.name in segfaulting_rapidsmpf_nodeids
+    ):
+        pytest.skip(
+            "Usually raises 'Type mismatch in columns to concatenate' but can also segfault."
+        )
     q = df.group_by(*keys, maintain_order=maintain_order).agg(*exprs)
 
     if not maintain_order:
@@ -136,7 +182,14 @@ def test_groupby(df: pl.LazyFrame, maintain_order, keys, exprs):
     assert_gpu_result_equal(q, check_exact=False)
 
 
-def test_groupby_sorted_keys(df: pl.LazyFrame, keys, exprs):
+def test_groupby_sorted_keys(df: pl.LazyFrame, keys, exprs, using_rapidsmpf, request):
+    request.applymarker(
+        pytest.mark.xfail(
+            using_rapidsmpf,
+            strict=False,
+            reason="https://github.com/rapidsai/cudf/issues/21642 -  no deterministic sort for keys",
+        )
+    )
     sorted_keys = [
         key.sort(descending=descending)
         for key, descending in zip(keys, itertools.cycle([False, True]))
