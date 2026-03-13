@@ -18,8 +18,8 @@ The `cluster` option selects the execution model:
 
 Two preview execution modes are available:
 
-* **SPMD mode** — MPI-style execution where the user launches one Python process
-  per GPU using `rrun`.
+* **SPMD mode** — each GPU runs the same script as an independent process,
+  launched with `rrun`.
 * **Ray mode** — a single-client model where a driver program coordinates GPU
   workers implemented as Ray actors.
 
