@@ -2288,6 +2288,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         ).execute_with_args(self, cast_dtype)
 
     def astype(self, dtype: DtypeObj, copy: bool | None = False) -> ColumnBase:
+        # import pdb;pdb.set_trace()
         if self.dtype == dtype:
             result = self
         elif isinstance(dtype, CategoricalDtype):
@@ -2340,11 +2341,12 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             codes = self._label_encoding(cats=dtype._categories)
         else:
             # Compute categories from self
+            # import pdb;pdb.set_trace()
             cats = self.unique().sort_values()
-            codes = self._label_encoding(cats=cats)
             # Only dropna if cats actually has nulls (self having nulls doesn't mean cats does)
             if cats.has_nulls():
                 cats = cats.dropna()
+            codes = self._label_encoding(cats=cats)
             dtype = CategoricalDtype(categories=cats, ordered=dtype.ordered)
         codes_with_mask = codes.set_mask(self.mask, self.null_count)
         codes_with_mask = codes_with_mask.copy_if_else(

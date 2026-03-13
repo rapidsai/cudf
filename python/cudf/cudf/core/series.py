@@ -1358,10 +1358,11 @@ class Series(SingleColumnFrame, IndexedFrame):
             category_memory = lines[-1]
             if preprocess.dtype.categories.dtype.kind == "f":
                 category_memory = category_memory.replace("'", "").split(": ")
+                cat_dtype_name = preprocess.dtype.categories.dtype.name
                 category_memory = (
-                    category_memory[0].replace(
-                        "object", preprocess.dtype.categories.dtype.name
-                    )
+                    category_memory[0]
+                    .replace("object", cat_dtype_name)
+                    .replace("str", cat_dtype_name)
                     + ": "
                     + category_memory[1]
                 )

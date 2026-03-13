@@ -131,6 +131,23 @@ class NumericalColumn(NumericalBaseColumn):
             ),
         ).any()
 
+    def dropna(self) -> Self:
+        if self.has_nulls(include_nan=True):
+            with self.access(mode="read", scope="internal") as accessed:
+                plc_table = plc.Table([accessed.plc_column])
+                plc_result = plc.stream_compaction.drop_nulls(
+                    plc_table, [0], 1
+                )
+                plc_result = plc.stream_compaction.drop_nans(
+                    plc_result, [0], 1
+                )
+            return cast(
+                "Self",
+                ColumnBase.create(plc_result.columns()[0], dtype=self.dtype),
+            )
+        else:
+            return self.copy()
+
     @property
     def values(self) -> cp.ndarray:
         """
