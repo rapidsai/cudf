@@ -468,7 +468,7 @@ _intersphinx_cache = {}
 _intersphinx_extra_prefixes = ("rmm", "rmm::mr", "mr")
 
 _external_intersphinx_aliases = {
-    "pandas": "pd",
+    # "pandas": "pd",
     "pyarrow": "pa",
     "numpy": "np",
     "cupy": "cp",
