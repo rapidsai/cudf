@@ -35,16 +35,16 @@ ninja
 ### Building python wheel wrapper
 
 ```bash
-build-libcudf-python`
+build-libcudf-python
 ```
 
 ## Cython bindings (pylibcudf)
 
 ```bash
- build-pylibcudf-python
+build-pylibcudf-python
 ```
 
-## High-level Python pacakges
+## High-level Python packages
 
 ```bash
 build-cudf-python        # cudf-python
@@ -78,7 +78,7 @@ Make sure that libcudf has been built before running any of these. Discover all 
 ```bash
 test-cudf-cpp -j10             # all tests 10 parallel jobs
 test-cudf-cpp -R <NAME>_TEST   # specific test suite
-cd cpp/build/latest/gtests ; <NAME>_TEST --gtest_filter="<pattern>" # Run tests matching the <pattern> from the <NAME>_TEST
+cd cpp/build/latest/gtests && <NAME>_TEST --gtest_filter="<pattern>" # Run tests matching the <pattern> from the <NAME>_TEST
 ```
 
 ## Running Pytests

@@ -24,7 +24,7 @@ Hint: Ensure `GH_TOKEN` (or GitHub CLI auth) is already configured in the enviro
 
 5. **Produce a structured review** using the output format at the bottom.
 
-6. **Dump the structured review** to `.cursor/reviews/<PR NUMBER>/review.md`
+6. **Dump the structured review** to `.agents/reviews/<PR_NUMBER>/review.md`
 
 ---
 
@@ -58,9 +58,9 @@ Hint: Ensure `GH_TOKEN` (or GitHub CLI auth) is already configured in the enviro
 ### CUDA-Specific
 - CUDA kernels check bounds correctly.
 - Shared memory usage doesn't exceed device limits.
-- No race conditions and out of bound memory accesses in concurrent kernel access patterns.
+- No race conditions and out-of-bounds memory accesses in concurrent kernel access patterns.
 - Stream and MR parameters are propagated across all internal APIs for stream-ordered memory management and kernel launches.
-- Modern CUDA C++ primitives and patterns using Thrust/CUB (NVIDIA CCCL) and cooperative groups preferred over C-like versions. For example, `cuda::std::popcount` over `__popc`, `cg::thread_block::thread_rank()` over `threadIdx.x.
+- Modern CUDA C++ primitives and patterns using Thrust/CUB (NVIDIA CCCL) and cooperative groups preferred over C-like versions. For example, `cuda::std::popcount` over `__popc`, `cg::thread_block::thread_rank()` over `threadIdx.x`.
 
 ### Type Dispatch Patterns
 - New dispatch functors prefer C++20 `requires` clauses over `CUDF_ENABLE_IF` for type-gating `operator()` overloads.
@@ -89,7 +89,7 @@ Hint: Ensure `GH_TOKEN` (or GitHub CLI auth) is already configured in the enviro
 
 Verify compliance with the developer guide sections: **(guide: "Directory Structure and File Naming"**, **"Streams"**, **"Default Parameters"**, **"NVTX Ranges"**, **"Input/Output Style"**, **"Multiple Return Values"**, **"Namespaces"**, **"Error Handling"**, **"Spans"**, and **"Deprecating and Removing Code")**. Key review checks:
 
-- Public APIs in `cpp/include/cudf/` with `CUDF_EXPORT`; detail headers in `include/cudf/detail/` or `include/cudf/<sub>/detail/`.
+- Public APIs in `cpp/include/cudf/` with `CUDF_EXPORT`; detail headers in `cpp/include/cudf/detail/` or `cpp/include/cudf/<sub>/detail/`.
 - Stream and MR as last two parameters (stream before MR); public defaults, no defaults in detail APIs.
 - `CUDF_EXPECTS` / `CUDF_FAIL` / `CUDF_UNREACHABLE` are used correctly; `CUDF_EXPECTS` condition must be a pure predicate.
 - Public functions: `CUDF_FUNC_RANGE()` then delegate to `detail::`.
@@ -97,7 +97,7 @@ Verify compliance with the developer guide sections: **(guide: "Directory Struct
 
 Additional key checks not in the guide:
 - No raw owning pointers; use `std::unique_ptr`, `std::shared_ptr`, `std::reference_wrapper`.
-- Prefer pinned memory/vectors for small H2D and H2D transfers via `cudf::make_pinned_vector` instead of `cudf::make_host_vector`.
+- Prefer pinned memory/vectors for small H2D/D2H transfers via `cudf::make_pinned_vector` instead of `cudf::make_host_vector`.
 - Prefer `span` versions of constructors for `cudf::make_pinned_vector` and `cudf::make_host_vector`.
 - Functions defined in headers (e.g. templates) must be `inline`.
 - Anonymous namespaces for single-TU helpers; never in headers.
@@ -107,7 +107,7 @@ Additional key checks not in the guide:
 
 ### Memory Allocation & Management
 
-Verify compliance with the developer guide sections: **(guide: "Memory Allocation)"** (subsections: Output Memory, Temporary Memory, Memory Management) and **(guide:"Memory Copies")**. Key checks:
+Verify compliance with the developer guide sections: **(guide: "Memory Allocation")** and subsections, and guide section **(guide:"Memory Copies")**. Key checks:
 
 - Returned memory uses the passed-in MR; temporary memory uses `cudf::get_current_device_resource_ref()`.
 - Use `rmm::device_uvector` or `column_wrapper` (no `device_vector`/`thrust::device_vector`).
