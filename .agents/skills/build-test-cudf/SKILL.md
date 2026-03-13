@@ -11,10 +11,10 @@ Detect cudf devcontainer usage by checking if the username is `coder`. If not, i
 
 cudf packages must be built in this order as needed (each depends on the previous):
 
-1. C++ library (libcudf)  
-2. Python wheel wrapper for the C++ library  
-3. Cython bindings (compiles `.pyx` files)  
-4. high-level Python packages  
+1. C++ library (libcudf)
+2. Python wheel wrapper for the C++ library
+3. Cython bindings (compiles `.pyx` files)
+4. high-level Python packages
 
 When rebuilding a package, ensure its dependencies are already built. Since we are in cudf devcontainer, DO NOT run the `build.sh` script or install any packages yourself. Instead, always use the `build-*`, `test-*`, `rapids-*`, `clean-*` scripts located at `/usr/bin`.
 
@@ -73,7 +73,7 @@ Make sure to run `clean-cudf` after running this for a fresh subsequent build.
 
 ## Running Google tests
 
-Make sure that libcudf has been built before running any of these. Discover all Google test name binaries at `cpp/build/latest/gtests` and run relevant Google tests using `test-cudf-xxx` script located at `/usr/bin`. 
+Make sure that libcudf has been built before running any of these. Discover all Google test name binaries at `cpp/build/latest/gtests` and run relevant Google tests using `test-cudf-xxx` script located at `/usr/bin`.
 
 ```bash
 test-cudf-cpp -j10             # all tests 10 parallel jobs
