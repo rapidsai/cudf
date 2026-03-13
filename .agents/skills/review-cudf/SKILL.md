@@ -1,6 +1,6 @@
 ---
 name: review-cudf
-description: Use this skill to review GitHub pull requests for cudf/
+description: Use this skill to review GitHub pull requests for cudf
 ---
 
 Use this skill when the user invokes `/review-cudf` with a GitHub PR link, or asks to review a PR, code changes, or diff for cudf.
