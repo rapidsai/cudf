@@ -20,7 +20,7 @@ rapids_cuda_init_architectures(CUDF)
 project(
   CUDF
   VERSION "${RAPIDS_VERSION}"
-  LANGUAGES C CXX CUDA
+  LANGUAGES C CXX CUDA ASM
 )
 
 if(CMAKE_CUDA_COMPILER_ID STREQUAL "NVIDIA" AND CMAKE_CUDA_COMPILER_VERSION VERSION_LESS 12.2)
@@ -308,8 +308,14 @@ include(cmake/thirdparty/get_nanoarrow.cmake)
 # find thread_pool
 include(cmake/thirdparty/get_thread_pool.cmake)
 
+# JIT Embedding helper functions
+include(src/librtcx/CMake/embed.cmake)
+
 # find zstd
 include(cmake/thirdparty/get_zstd.cmake)
+
+# find lz4
+include(cmake/thirdparty/get_lz4.cmake)
 
 # Workaround until https://github.com/rapidsai/rapids-cmake/issues/176 is resolved
 if(NOT BUILD_SHARED_LIBS)
@@ -327,6 +333,37 @@ if(NOT BUILD_SHARED_LIBS)
     install(TARGETS conda_env EXPORT cudf-exports)
   endif()
 endif()
+
+set(CUDF_CXX_STANDARD 20)
+set(CUDF_CUDA_STANDARD ${CUDF_CXX_STANDARD})
+
+jit_add_include_directory(
+  cudf_jit_embed COPY_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include DEST_DIRECTORY cudf/include
+  INCLUDE_DIRECTORIES cudf/include
+)
+
+jit_add_include_directory(
+  cudf_jit_embed COPY_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/src DEST_DIRECTORY cudf/src
+  INCLUDE_DIRECTORIES cudf/src
+)
+
+jit_add_include_directory(
+  cudf_jit_embed COPY_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/src/librtcx/system_includes
+  DEST_DIRECTORY system_includes INCLUDE_DIRECTORIES system_includes
+)
+
+get_target_property(LIBCUDACXX_RAW_INCLUDE_DIRS CCCL::libcudacxx INTERFACE_INCLUDE_DIRECTORIES)
+
+foreach(INC_DIR IN LISTS LIBCUDACXX_RAW_INCLUDE_DIRS)
+  cmake_path(GET INC_DIR FILENAME INC_DIR_NAME)
+
+  jit_add_include_directory(
+    cudf_jit_embed COPY_DIRECTORY ${INC_DIR} DEST_DIRECTORY CCCL/libcudacxx/${INC_DIR_NAME}
+    INCLUDE_DIRECTORIES CCCL/libcudacxx/${INC_DIR_NAME}
+  )
+endforeach()
+
+jit_embed(cudf_jit_embed COMPRESSION zstd)
 
 # ##################################################################################################
 # * library targets -------------------------------------------------------------------------------
@@ -575,6 +612,7 @@ add_library(
   src/io/utilities/trie.cu
   src/jit/cache.cpp
   src/jit/helpers.cpp
+  src/jit/jit.cpp
   src/jit/parser.cpp
   src/jit/row_ir.cpp
   src/jit/util.cpp
@@ -845,7 +883,16 @@ add_library(
   src/utilities/traits.cpp
   src/utilities/type_checks.cpp
   src/utilities/type_dispatcher.cpp
+  src/librtcx/rtcx.cpp
+  ${cudf_jit_embed_SOURCE_DIR}/cudf_jit_embed.s
 )
+
+add_dependencies(cudf cudf_jit_embed)
+target_include_directories(cudf PRIVATE ${cudf_jit_embed_INCLUDE_DIRS})
+
+foreach(incbin_dir IN LISTS cudf_jit_embed_INCLUDE_DIRS)
+  target_compile_options(cudf PRIVATE $<$<COMPILE_LANGUAGE:ASM>:-Wa,-I${incbin_dir}>)
+endforeach()
 
 # Anything that includes jitify needs to be compiled with _FILE_OFFSET_BITS=64 due to a limitation
 # in how conda builds glibc
@@ -985,11 +1032,22 @@ target_compile_definitions(cudf PRIVATE THRUST_FORCE_32_BIT_OFFSET_TYPE=1 CCCL_A
 add_dependencies(cudf jitify_preprocess_run)
 
 # Specify the target module library dependencies
+
+# TODO: use runtime nvrtc and nvjitlink and driver
 target_link_libraries(
   cudf
   PUBLIC CCCL::CCCL rapids_logger::rapids_logger rmm::rmm $<BUILD_LOCAL_INTERFACE:BS::thread_pool>
-  PRIVATE $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp> cuco::cuco ZLIB::ZLIB nvcomp::nvcomp
-          kvikio::kvikio nanoarrow::nanoarrow zstd
+  PRIVATE $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp>
+          cuco::cuco
+          ZLIB::ZLIB
+          nvcomp::nvcomp
+          kvikio::kvikio
+          nanoarrow::nanoarrow
+          zstd
+          CUDA::nvJitLink
+          CUDA::nvrtc
+          CUDA::cuda_driver
+          lz4_objects
 )
 
 # Add Conda library, and include paths if specified
