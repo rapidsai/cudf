@@ -240,12 +240,10 @@ fetch_byte_ranges_to_device_async(
       switch (op.method) {
         case io_method::GDS_DEVICE:
         case io_method::PLAIN_DEVICE:
-#if 0
           if ((op.src_offset % 4096) or (op.read_size % 4096) or
               (reinterpret_cast<uintptr_t>(op.dest) % 4096)) {
             std::cout << "Encountered an unaligned IO operation" << std::endl;
           }
-#endif
           device_read_tasks.emplace_back(
             datasource.device_read_async(op.src_offset, op.read_size, op.dest, stream));
           break;
