@@ -27,6 +27,7 @@ from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
     cudf_dtype_from_pa_type,
     cudf_dtype_to_pa_type,
+    dtype_to_pylibcudf_type,
     find_common_type,
     get_dtype_of_same_kind,
     is_pandas_nullable_extension_dtype,
@@ -271,54 +272,91 @@ class TimeDeltaColumn(TemporalBaseColumn):
 
             has_subday = has_hours or has_minutes or has_seconds
             has_fraction = has_millis or has_micros or has_nanos
-            if not (has_subday or has_fraction):
-                result = self.strftime("%D days", dtype=dtype)
-                return result.fillna("NaT")
-
-            if has_fraction:
-                # %S appends fractional digits whose count depends on
-                # time_unit: 3 for ms, 6 for us, 9 for ns.  Pandas
-                # always renders 6 digits unless actual nanoseconds
-                # are present, in which case it uses 9.
-                #
-                # For ms we cast to us so %S natively outputs 6
-                # digits (backrefs can't append literal digits after
-                # a group reference, so regex padding isn't viable).
-                # For ns without actual nanos we trim 9 → 6 via
-                # regex.  us already outputs 6 — no adjustment.
-                if self.time_unit == "ms":
-                    col = self.as_timedelta_column(np.dtype("timedelta64[us]"))
-                else:
-                    col = self
-                result = col.strftime("%D days %H:%M:%S", dtype=dtype)
-                if has_nanos:
-                    # Rows that are exact microseconds: strip the
-                    # trailing "000" → 6 digits.
-                    result = result.replace_with_backrefs(
-                        r"(\.\d{6})000$",
-                        r"\1",
-                    )
-                elif self.time_unit == "ns":
-                    # No actual nanos but stored as ns: trim 9 → 6.
-                    result = result.replace_with_backrefs(
-                        r"(\.\d{6})\d{3}$",
-                        r"\1",
-                    )
-
-                # Drop fully-zero fractional seconds on rows that
-                # have no sub-second component (keeps HH:MM:SS for
-                # mixed columns).
-                result = result.replace_with_backrefs(
-                    r"(\d{2}:\d{2}:\d{2})\.000000$",
-                    r"\1",
-                )
-                return result.fillna("NaT")
-            else:
-                return self.strftime("%D days %H:%M:%S", dtype=dtype).fillna(
-                    "NaT"
-                )
+            return self._as_string_pandas_compat(
+                dtype,
+                has_subday=has_subday,
+                has_fraction=has_fraction,
+                has_nanos=has_nanos,
+            )
 
         return self.strftime("%D days %H:%M:%S", dtype=dtype)
+
+    def _as_string_pandas_compat(
+        self,
+        dtype: DtypeObj,
+        *,
+        has_subday: bool,
+        has_fraction: bool,
+        has_nanos: bool,
+    ) -> StringColumn:
+        """Convert to string using pandas-compatible formatting."""
+        nat_scalar = pa_scalar_to_plc_scalar(
+            pa.scalar("NaT", type=pa.string())
+        )
+
+        if not (has_subday or has_fraction):
+            fmt = "%D days"
+        else:
+            fmt = "%D days %H:%M:%S"
+
+        with self.access(mode="read", scope="internal"):
+            # Determine which pylibcudf column to format: for ms we
+            # cast to us so %S natively outputs 6 fractional digits.
+            if has_fraction and self.time_unit == "ms":
+                cast_type = dtype_to_pylibcudf_type(
+                    np.dtype("timedelta64[us]")
+                )
+                plc_col = plc.unary.cast(self.plc_column, cast_type)
+            else:
+                plc_col = self.plc_column
+
+            # Convert durations to strings.
+            plc_result = plc.strings.convert.convert_durations.from_durations(
+                plc_col, fmt
+            )
+
+        if has_fraction:
+            if has_nanos:
+                # Rows that are exact microseconds: strip the
+                # trailing "000" → 6 digits.
+                plc_result = plc.strings.replace_re.replace_with_backrefs(
+                    plc_result,
+                    plc.strings.regex_program.RegexProgram.create(
+                        r"(\.\d{6})000$",
+                        plc.strings.regex_flags.RegexFlags.DEFAULT,
+                    ),
+                    r"\1",
+                )
+            elif self.time_unit == "ns":
+                # No actual nanos but stored as ns: trim 9 → 6.
+                plc_result = plc.strings.replace_re.replace_with_backrefs(
+                    plc_result,
+                    plc.strings.regex_program.RegexProgram.create(
+                        r"(\.\d{6})\d{3}$",
+                        plc.strings.regex_flags.RegexFlags.DEFAULT,
+                    ),
+                    r"\1",
+                )
+
+            # Drop fully-zero fractional seconds on rows that
+            # have no sub-second component (keeps HH:MM:SS for
+            # mixed columns).
+            plc_result = plc.strings.replace_re.replace_with_backrefs(
+                plc_result,
+                plc.strings.regex_program.RegexProgram.create(
+                    r"(\d{2}:\d{2}:\d{2})\.000000$",
+                    plc.strings.regex_flags.RegexFlags.DEFAULT,
+                ),
+                r"\1",
+            )
+
+        # Fill nulls with "NaT".
+        plc_result = plc.replace.replace_nulls(plc_result, nat_scalar)
+
+        return cast(
+            cudf.core.column.string.StringColumn,
+            ColumnBase.create(plc_result, dtype),
+        )
 
     def as_timedelta_column(self, dtype: np.dtype) -> TimeDeltaColumn:
         if dtype == self.dtype:
