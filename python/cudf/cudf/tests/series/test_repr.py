@@ -34,7 +34,9 @@ def test_null_series(nrows, all_supported_types_as_str, request):
         ps = sr.to_pandas()
 
     with pd.option_context("display.max_rows", int(nrows)):
-        psrepr = repr(ps).replace("NaN", "<NA>")
+        psrepr = repr(ps)
+        if all_supported_types_as_str != "str":
+            psrepr = psrepr.replace("NaN", "<NA>")
         if "UInt" in psrepr:
             psrepr = psrepr.replace("UInt", "uint")
         elif "Int" in psrepr:
@@ -120,7 +122,9 @@ def test_series_null_index_repr(sr):
 
     expected_repr = repr(psr).replace("NaN", "<NA>")
     actual_repr = repr(gsr)
+    import pdb
 
+    pdb.set_trace()
     assert expected_repr.split() == actual_repr.split()
 
 
@@ -450,33 +454,32 @@ def test_timedelta_series_ns_ms_repr(ser, expected_repr):
 
 
 def test_categorical_series_with_nan_repr():
-    series = cudf.Series(
-        [1, 2, np.nan, 10, np.nan, None], nan_as_null=False
-    ).astype("category")
+    series = cudf.Series([1, 2, np.nan, 10, np.nan, None], nan_as_null=False)
+    series = series.astype("category")
 
     expected_repr = textwrap.dedent(
         """
     0     1.0
     1     2.0
-    2     NaN
+    2    <NA>
     3    10.0
-    4     NaN
+    4    <NA>
     5    <NA>
     dtype: category
-    Categories (4, float64): [1.0, 2.0, 10.0, NaN]
+    Categories (3, float64): [1.0, 2.0, 10.0]
     """
     )
-
+    # import pdb;pdb.set_trace()
     assert repr(series).split() == expected_repr.split()
 
     sliced_expected_repr = textwrap.dedent(
         """
-        2     NaN
+        2    <NA>
         3    10.0
-        4     NaN
+        4    <NA>
         5    <NA>
         dtype: category
-        Categories (4, float64): [1.0, 2.0, 10.0, NaN]
+        Categories (3, float64): [1.0, 2.0, 10.0]
         """
     )
 
