@@ -34,7 +34,6 @@
 namespace cudf {
 namespace jit {
 
-
 /// @brief The generic transform kernel. Supports all types and nullability combinations.
 template <null_aware is_null_aware, bool has_user_data, typename Ins, typename Outs>
 CUDF_KERNEL void transform_kernel(size_type row_size,
