@@ -1135,11 +1135,4 @@ return l - t * l + t * h;
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*cuda_result, *expected);
 }
 
-// TODO: add zero-input transform test
-/**
- *
- *
- *
- */
-
 }  // namespace transformation
