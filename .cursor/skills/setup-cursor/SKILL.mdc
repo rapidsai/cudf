@@ -1,0 +1,169 @@
+---
+description: Setup Cursor environment
+globs: 
+alwaysApply: false
+---
+
+Execute this rule entirely when the user asks to "setup container", "setup environment", "configure environment" or prompts `@setup-environment`. 
+
+The user may call this place with a more specific prompt as well in which case we might need to execute a part of this plan. To do this, first of all look at the instructions under each heading and see which part(s) of the plan need to be executed and then execute them. There are four separate parts of the plan namely: 
+
+* Update settings.json
+* Update ~/.bashrc
+* Setup signing key
+* Get extensions
+
+# Update settings.json
+
+Only execute this part of the plan when the user asks to "update settings", or "update settings.json" and exit. Do not execute the rest of the plan
+
+1. We will be applying edits to this file `/home/coder/.cursor-server/data/Machine/settings.json`
+2. Update or add the key `"clangFormat.executable.default"` with the value obtained by running `which clang-format` in a terminal. The value may be: `/home/coder/.conda/envs/rapids/bin/clang-format`
+
+Example of the correct setting:
+```json
+"clangFormat.executable.default": "/home/coder/.conda/envs/rapids/bin/clang-format",
+```
+
+3. If not already then add or edit the following keys `"[cuda-cpp]"`, `"[c]`, and `"[cpp]"` to be like this:
+```json
+  "[c]": {
+    "editor.defaultFormatter": "seaube.clangformat",
+    "editor.formatOnSave": true
+  },
+  "[cpp]": {
+    "editor.defaultFormatter": "seaube.clangformat",
+    "editor.formatOnSave": true
+  },
+  "[cuda-cpp]": {
+    "editor.defaultFormatter": "seaube.clangformat",
+    "editor.formatOnSave": true
+  },
+```
+
+4. Add or edit the `"[python]"` key to be as follows:
+```json
+  "[python]": {
+    "editor.defaultFormatter": "charliermarsh.ruff",
+    "editor.formatOnSave": true
+  },
+```
+
+5. Add or edit the `"githubPullRequests.queries"` key to look like:
+```json
+    "githubPullRequests.queries": [
+        {
+            "label": "Created By Me",
+            "query": "is:open author:${user}"
+        },
+        {
+            "label": "Waiting For My Review",
+            "query": "is:open user-review-requested:${user}"
+        },
+        {
+            "label": "Assigned To Me",
+            "query": "is:open assignee:${user}"
+        },
+        {
+            "label": "Review In Progress",
+            "query": "is:open commenter:${user}"
+        },
+        {
+            "label": "Where I Have Been Mentioned",
+            "query": "is:open mentions:${user}"
+        }
+    ],
+```
+
+6. Add or edit the following key `"git.enableCommitSigning": true`
+
+# Edit ~/.bashrc
+
+Only execute this part of the plan when the user asks to "set bashrc", "update bashrc" or "configure bashrc" and exit. Do not execute the rest of the plan.
+
+1. We will be applying edits to this file: `/home/coder/.bashrc`
+2. Navigate to `/home/coder` directory and run `ls`. See the name of the `.code-workspace` file. If and only if the name has a `-conda` suffix then in `/home/coder/.bashrc` (for example if the file name is `wkstn-cu13.1-conda.code-workspace`) replace the definition of the `__bash_prompt()` function with the following:
+
+```bash
+__bash_prompt() {
+    local userpart='`export XIT=$? \
+        && [ ! -z "${GITHUB_USER:-}" ] && echo -n "\[\033[1;32m\]@${GITHUB_USER:-} " || echo -n "\[\033[1;32m\]\u " \
+        && [ "$XIT" -ne "0" ] && echo -n "\[\033[1;31m\]➜" || echo -n "\[\033[0m\]➜"`'
+    local gitbranch='`\
+        if [ "$(git config --get devcontainers-theme.hide-status 2>/dev/null)" != 1 ] && [ "$(git config --get codespaces-theme.hide-status 2>/dev/null)" != 1 ]; then \
+            export BRANCH=$(git --no-optional-locks symbolic-ref --short HEAD 2>/dev/null || git --no-optional-locks rev-parse --short HEAD 2>/dev/null); \
+            if [ "${BRANCH}" != "" ]; then \
+                echo -n "\[\033[1;36m\](\[\033[1;31m\]${BRANCH}" \
+                && if [ "$(git config --get devcontainers-theme.show-dirty 2>/dev/null)" = 1 ] && \
+                    git --no-optional-locks ls-files --error-unmatch -m --directory --no-empty-directory -o --exclude-standard ":/*" > /dev/null 2>&1; then \
+                        echo -n " \[\033[1;33m\]✗"; \
+                fi \
+                && echo -n "\[\033[1;36m\]) "; \
+            fi; \
+        fi`'
+    local red='\[\033[1;31m\]'
+    local removecolor='\[\033[0m\]'
+    PS1="${CONDA_PROMPT_MODIFIER:-}${userpart} ${red}\w ${gitbranch}${removecolor}\$ "
+    unset -f __bash_prompt
+}
+```
+
+3. If the workspace name did have a `-conda` suffix, also export this variable (only if not already) at the end of the `~/.bashrc` file we are editing. Make sure to leave empty lines before and after this blob
+
+```bash
+# Set ls colors
+export LS_COLORS=$LS_COLORS:'di=34;42:';
+```
+
+4. Now regardless of the name of the workspace file, export these variables (only if not already done) at the end of the `~/.bashrc` file we are editing. Leave one empty line before and after this blob
+
+```bash
+alias nvccdump='nvcc --compiler-options -dM -E -x cu - < /dev/null'
+alias gppdump='echo | g++ -dM -E -x c++ -'
+alias nvcppdump='echo | nvc++ -dM -E -x c++ -'
+alias set-native='export CUDAARCHS=NATIVE'
+alias restart-sccache='devcontainer-utils-start-sccache --kill-all'
+```
+
+# Setup signing key
+
+Only execute this part of the plan when the user asks to "setup signing key", "setup gh key" or "update signing key" and exit. Do not execute the rest of the plan.
+
+1. Navigate to `/home/coder` and check if a `.ssh` folder containing `id_ed25519` and `id_ed25519.pub` files. If so, skip to step 3. Otherwise, if the folder doesn't exist or doesn't contain `id_ed25519` files, go to step 2
+2. Look inside `/home/coder/cudf/python/cudf/build` and its subdirectories to find an existing `.ssh` folder. Hint: It may be under `/home/coder/cudf/python/cudf/build/*devcontainer*`. Copy the `.ssh` folder to `/home/coder` as is. If you can't find the `.ssh` folder here, pause and ask me to tell you what to do next.
+3. Now once we have the `/home/coder/.ssh` folder ready, execute the following script in a terminal:
+
+```bash
+# Start the ssh-agent in the background
+eval "$(ssh-agent -s)"
+
+# Add your SSH private key to the ssh-agent.
+ssh-add ~/.ssh/id_ed25519
+
+# Display the generated key
+cat ~/.ssh/id_ed25519.pub
+
+# tell git about signing key
+git config --global gpg.format ssh
+git config --global user.signingkey ~/.ssh/id_ed25519.pub
+```
+
+# Get extensions
+
+Only execute this part of the plan when the user asks to "setup extensions" or "get extensions" and exit. Do not execute the rest of the plan.
+
+1. If not already installed, then install the extensions with the following extension ids:
+* anysphere.cpptools
+* llvm-vs-code-extensions.vscode-clangd
+* seaube.clangformat
+* twxs.cmake
+* ms-vscode.cmake-tools
+* cheshirekow.cmake-format
+* GitHub.vscode-pull-request-github
+* eamodio.gitlens
+* innerlee.nvidia-smi
+* mutantdino.resourcemonitor
+* lucien-martijn.parquet-visualizer
+* charliermarsh.ruff
+
+Note: If you can't find any of the above extensions, please list them so I can install them manually. No need to look or install alternatives.
