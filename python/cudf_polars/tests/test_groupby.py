@@ -151,6 +151,28 @@ def test_groupby(
             reason="https://github.com/rapidsai/cudf/issues/21642 and probably mean calculation referenced in https://github.com/rapidsai/cudf/issues/21721",
         )
     )
+    failing_rapidsmpf_nodeids_lt_1_36 = {
+        'test_groupby[maintain_order-col("key2")-[(col("key1")) == (dyn int: 1.strict_cast(Int64))]-col("uint16_with_null").sum()-col("uint16_with_null").mean().alias("mean")]'
+    }
+    request.applymarker(
+        pytest.mark.xfail(
+            using_rapidsmpf
+            and POLARS_VERSION_LT_136
+            and request.node.name in failing_rapidsmpf_nodeids_lt_1_36,
+            reason="Type mismatch in columns to concatenate.",
+        )
+    )
+    segfaulting_rapidsmpf_nodeids = {
+        'test_groupby[maintain_order-col("key2")-[(col("key1")) == (dyn int: 1.strict_cast(Int64))]-col("int32").mean()]'
+    }
+    if (
+        using_rapidsmpf
+        and POLARS_VERSION_LT_136
+        and request.node.name in segfaulting_rapidsmpf_nodeids
+    ):
+        pytest.skip(
+            "Usually raises 'Type mismatch in columns to concatenate' but can also segfault."
+        )
     q = df.group_by(*keys, maintain_order=maintain_order).agg(*exprs)
 
     if not maintain_order:
