@@ -272,25 +272,51 @@ class TimeDeltaColumn(TemporalBaseColumn):
             has_subday = has_hours or has_minutes or has_seconds
             has_fraction = has_millis or has_micros or has_nanos
             if not (has_subday or has_fraction):
-                return self.strftime("%D days", dtype=dtype)
+                result = self.strftime("%D days", dtype=dtype)
+                return result.fillna("NaT")
 
-            if has_nanos:
-                result = self.strftime("%D days %H:%M:%S.%9f", dtype=dtype)
+            if has_fraction:
+                # %S appends fractional digits whose count depends on
+                # time_unit: 3 for ms, 6 for us, 9 for ns.  Pandas
+                # always renders 6 digits unless actual nanoseconds
+                # are present, in which case it uses 9.
+                #
+                # For ms we cast to us so %S natively outputs 6
+                # digits (backrefs can't append literal digits after
+                # a group reference, so regex padding isn't viable).
+                # For ns without actual nanos we trim 9 → 6 via
+                # regex.  us already outputs 6 — no adjustment.
+                if self.time_unit == "ms":
+                    col = self.as_timedelta_column(np.dtype("timedelta64[us]"))
+                else:
+                    col = self
+                result = col.strftime("%D days %H:%M:%S", dtype=dtype)
+                if has_nanos:
+                    # Rows that are exact microseconds: strip the
+                    # trailing "000" → 6 digits.
+                    result = result.replace_with_backrefs(
+                        r"(\.\d{6})000$",
+                        r"\1",
+                    )
+                elif self.time_unit == "ns":
+                    # No actual nanos but stored as ns: trim 9 → 6.
+                    result = result.replace_with_backrefs(
+                        r"(\.\d{6})\d{3}$",
+                        r"\1",
+                    )
+
+                # Drop fully-zero fractional seconds on rows that
+                # have no sub-second component (keeps HH:MM:SS for
+                # mixed columns).
                 result = result.replace_with_backrefs(
-                    r"(\.\d{6})000$",
+                    r"(\d{2}:\d{2}:\d{2})\.000000$",
                     r"\1",
                 )
-            elif has_fraction:
-                result = self.strftime("%D days %H:%M:%S.%6f", dtype=dtype)
+                return result.fillna("NaT")
             else:
-                result = self.strftime("%D days %H:%M:%S", dtype=dtype)
-
-            # Keep HH:MM:SS for mixed columns while dropping fully-zero
-            # fractional seconds on rows where they are not needed.
-            return result.replace_with_backrefs(
-                r"(\d{2}:\d{2}:\d{2})\.000000$",
-                r"\1",
-            )
+                return self.strftime("%D days %H:%M:%S", dtype=dtype).fillna(
+                    "NaT"
+                )
 
         return self.strftime("%D days %H:%M:%S", dtype=dtype)
 

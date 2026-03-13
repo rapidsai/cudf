@@ -642,12 +642,10 @@ class NumericalColumn(NumericalBaseColumn):
             raise ValueError(f"No string conversion from type {self.dtype}")
 
         with col.access(mode="read", scope="internal"):
-            result = cast(
+            return cast(
                 cudf.core.column.string.StringColumn,
                 ColumnBase.create(conv_func(col.plc_column), dtype),
             )
-
-        return result
 
     def _as_temporal_column(self, dtype: np.dtype) -> plc.Column:
         """Convert Self to a temporal pylibcudf Column for as_datetime_column and as_timedelta_column"""
