@@ -303,7 +303,8 @@ class StringColumn(ColumnBase, Scannable):
             add_back_nat = is_nat.any()
         elif dtype.kind == "m":
             casting_func = plc.strings.convert.convert_durations.to_durations
-            add_back_nat = False
+            is_nat = self == "NaT"
+            add_back_nat = is_nat.any()
 
         with self.access(mode="read", scope="internal"):
             plc_dtype = dtype_to_pylibcudf_type(dtype)
