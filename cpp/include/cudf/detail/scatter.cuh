@@ -400,7 +400,9 @@ std::unique_ptr<table> scatter(table_view const& source,
       if (cudf::is_fixed_width(col.type())) {
         result = std::max(result, cudf::size_of(col.type()));
       } else {
-        return 8;  // Non-fixed-width columns are always treated as heavy.
+        // Non-fixed-width columns (strings, lists, structs) involve offset
+        // arrays and child data; treat as at least int64-width.
+        result = std::max(result, std::size_t{8});
       }
     }
     return std::max(result, std::size_t{1});
