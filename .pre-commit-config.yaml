@@ -273,8 +273,8 @@ repos:
             ^[.]pre-commit-config[.]yaml$|
             ^conda/environments/|
             [.](md|rst|avro|parquet|png|orc|gz|pkl|sas7bdat)$|
-            ^python/cudf/cudf/VERSION$|
-            ^RAPIDS_BRANCH$
+            ^python/cudf/cudf/tests|
+            ^python/cudf/cudf/VERSION$
       - id: verify-pyproject-license
         # ignore the top-level pyproject.toml, which doesn't
         # have or need a [project] table
