@@ -35,6 +35,8 @@
 #include <thrust/sequence.h>
 #include <thrust/uninitialized_fill.h>
 
+#include <algorithm>
+
 namespace cudf {
 namespace detail {
 
@@ -387,26 +389,26 @@ std::unique_ptr<table> scatter(table_view const& source,
   auto const num_columns = target.num_columns();
   auto result            = std::vector<std::unique_ptr<column>>(num_columns);
 
-  // The data scatter for n columns will be executed over n streams. If there is
-  // only a single column, the fork/join overhead should be avoided.
-  auto streams = std::vector<rmm::cuda_stream_view>{};
-  if (num_columns > 1) {
-    streams = cudf::detail::fork_streams(stream, num_columns);
-  } else {
-    streams.push_back(stream);
-  }
+  // Fork streams for multi-column tables when there is enough work per column
+  // to amortize the fork/join overhead. Cap at max_forked_streams since GPU
+  // memory bandwidth saturates well before that many concurrent kernels.
+  auto const use_stream_pool = num_columns > 1 && target.num_rows() >= min_rows_for_stream_fork;
+  auto const num_streams     = use_stream_pool ? std::min(num_columns, max_forked_streams) : 0;
+  auto const streams         = num_streams > 0 ? cudf::detail::fork_streams(stream, num_streams)
+                                               : std::vector<rmm::cuda_stream_view>{};
 
   auto it = thrust::make_counting_iterator<size_type>(0);
 
   std::transform(it, it + num_columns, result.begin(), [&](size_type i) {
     auto const& source_col = source.column(i);
+    auto const col_stream  = num_streams > 0 ? streams[i % num_streams] : stream;
     return type_dispatcher<dispatch_storage_type>(source_col.type(),
                                                   column_scatterer{},
                                                   source_col,
                                                   updated_scatter_map_begin,
                                                   updated_scatter_map_end,
                                                   target.column(i),
-                                                  streams[i],
+                                                  col_stream,
                                                   mr);
   });
 
@@ -432,11 +434,12 @@ std::unique_ptr<table> scatter(table_view const& source,
         auto contents         = col->release();
 
         // Children null_mask will be superimposed during structs column construction.
-        col = cudf::make_structs_column(num_rows,
+        auto const col_stream = num_streams > 0 ? streams[i % num_streams] : stream;
+        col                   = cudf::make_structs_column(num_rows,
                                         std::move(contents.children),
                                         null_count,
                                         std::move(*contents.null_mask),
-                                        streams[i],
+                                        col_stream,
                                         mr);
       }
     });
@@ -445,7 +448,7 @@ std::unique_ptr<table> scatter(table_view const& source,
   // Join streams as late as possible so that null mask computations can run on
   // the passed in stream while other streams are scattering. Skip joining if
   // only one column, since it used the passed in stream rather than forking.
-  if (num_columns > 1) { cudf::detail::join_streams(streams, stream); }
+  if (num_streams > 0) { cudf::detail::join_streams(streams, stream); }
 
   return std::make_unique<table>(std::move(result));
 }

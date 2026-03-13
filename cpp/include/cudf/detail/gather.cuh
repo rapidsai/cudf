@@ -40,6 +40,14 @@
 namespace cudf {
 namespace detail {
 
+// Minimum number of output rows before fork/join overhead is worthwhile.
+// Below this, per-column kernels are too fast for stream overlap to help.
+constexpr size_type min_rows_for_stream_fork = 65'536;
+
+// Maximum number of forked streams. GPU memory bandwidth saturates
+// well before this many concurrent gather/scatter kernels.
+constexpr size_type max_forked_streams = 8;
+
 /**
  * @brief Function object to check if an index is within the bounds [begin, end).
  */
@@ -633,19 +641,20 @@ std::unique_ptr<table> gather(table_view const& source_table,
   auto const num_columns = source_table.num_columns();
   auto result            = std::vector<std::unique_ptr<column>>(num_columns);
 
-  // The data gather for n columns will be executed over n streams. If there is
-  // only a single column, the fork/join overhead should be avoided.
-  auto streams = std::vector<rmm::cuda_stream_view>{};
-  if (num_columns > 1) {
-    streams = cudf::detail::fork_streams(stream, num_columns);
-  } else {
-    streams.push_back(stream);
-  }
+  // Fork streams for multi-column tables when there is enough work per column
+  // to amortize the fork/join overhead. Cap at max_forked_streams since GPU
+  // memory bandwidth saturates well before that many concurrent kernels.
+  auto const num_rows        = cudf::distance(gather_map_begin, gather_map_end);
+  auto const use_stream_pool = num_columns > 1 && num_rows >= min_rows_for_stream_fork;
+  auto const num_streams     = use_stream_pool ? std::min(num_columns, max_forked_streams) : 0;
+  auto const streams         = num_streams > 0 ? cudf::detail::fork_streams(stream, num_streams)
+                                               : std::vector<rmm::cuda_stream_view>{};
 
   auto it = thrust::make_counting_iterator<size_type>(0);
 
   std::transform(it, it + num_columns, result.begin(), [&](size_type i) {
     auto const& source_column = source_table.column(i);
+    auto const col_stream     = num_streams > 0 ? streams[i % num_streams] : stream;
     return cudf::type_dispatcher<dispatch_storage_type>(
       source_column.type(),
       column_gatherer{},
@@ -653,7 +662,7 @@ std::unique_ptr<table> gather(table_view const& source_table,
       gather_map_begin,
       gather_map_end,
       bounds_policy == out_of_bounds_policy::NULLIFY,
-      streams[i],
+      col_stream,
       mr);
   });
 
@@ -668,7 +677,8 @@ std::unique_ptr<table> gather(table_view const& source_table,
       gather_bitmask(source_table, gather_map_begin, result, op, stream, mr);
     } else {
       for (size_type i = 0; i < source_table.num_columns(); ++i) {
-        set_all_valid_null_masks(source_table.column(i), *result[i], streams[i], mr);
+        auto const col_stream = num_streams > 0 ? streams[i % num_streams] : stream;
+        set_all_valid_null_masks(source_table.column(i), *result[i], col_stream, mr);
       }
     }
   }
@@ -676,7 +686,7 @@ std::unique_ptr<table> gather(table_view const& source_table,
   // Join streams as late as possible so that null mask computations can run on
   // the passed in stream while other streams are gathering. Skip joining if
   // only one column, since it used the passed in stream rather than forking.
-  if (num_columns > 1) { cudf::detail::join_streams(streams, stream); }
+  if (num_streams > 0) { cudf::detail::join_streams(streams, stream); }
 
   return std::make_unique<table>(std::move(result));
 }
