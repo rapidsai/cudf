@@ -38,7 +38,7 @@ ninja
 build-libcudf-python
 ```
 
-## Cython bindings (pylibcudf)
+### Cython bindings (pylibcudf)
 
 ```bash
 build-pylibcudf-python
