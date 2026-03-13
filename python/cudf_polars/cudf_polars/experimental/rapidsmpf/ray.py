@@ -192,9 +192,9 @@ class RankActor:
         """
         Initialize this actor as the root rank.
 
-        The root actor creates a new UCXX communicator without an existing
-        root address. The resulting root address is returned so it can be
-        distributed to all other actors during bootstrap.
+        The root actor creates a new UCXX communicator and returns the
+        serialized root address, which must be passed to :meth:`setup_worker`
+        on all actors to complete communicator setup.
 
         Returns
         -------
