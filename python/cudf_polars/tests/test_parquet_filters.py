@@ -65,3 +65,13 @@ def test_parquet_filter_boolean_column(tmp_path):
     df.write_parquet(tmp_path / "df.parquet")
     q = pl.scan_parquet(tmp_path / "df.parquet").filter(pl.col("y"))
     assert_gpu_result_equal(q)
+
+
+def test_jit_filter(pq_file):
+    q = pq_file.filter((pl.col("a") >= 2) & (pl.col("a") <= 4)).select("a", "c")
+    assert_gpu_result_equal(
+        q,
+        engine=pl.GPUEngine(
+            raise_on_fail=True, parquet_options={"use_jit_filter": True}
+        ),
+    )

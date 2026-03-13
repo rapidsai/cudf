@@ -807,11 +807,14 @@ class Scan(IR):
                     ),
                     stream=stream,
                 )
-            parquet_reader_options = (
-                plc.io.parquet.ParquetReaderOptions.builder(plc.io.SourceInfo(paths))
-                .decimal_width(plc.TypeId.DECIMAL128)
-                .build()
+            builder = plc.io.parquet.ParquetReaderOptions.builder(
+                plc.io.SourceInfo(paths)
             )
+            if filters is not None and parquet_options.use_jit_filter:
+                builder.use_jit_filter(use_jit_filter=True)
+            parquet_reader_options = builder.decimal_width(
+                plc.TypeId.DECIMAL128
+            ).build()
 
             if with_columns is not None:
                 parquet_reader_options.set_column_names(with_columns)
