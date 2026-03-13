@@ -10,6 +10,7 @@
 #include <cudf/detail/gather.cuh>
 #include <cudf/detail/indexalator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/utilities/stream_pool.hpp>
 #include <cudf/dictionary/detail/update_keys.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/dictionary/dictionary_factories.hpp>
@@ -33,6 +34,8 @@
 #include <thrust/scatter.h>
 #include <thrust/sequence.h>
 #include <thrust/uninitialized_fill.h>
+
+#include <algorithm>
 
 namespace cudf {
 namespace detail {
@@ -382,22 +385,55 @@ std::unique_ptr<table> scatter(table_view const& source,
     thrust::make_transform_iterator(scatter_map_begin, index_converter<MapType>{target.num_rows()});
   auto updated_scatter_map_end =
     thrust::make_transform_iterator(scatter_map_end, index_converter<MapType>{target.num_rows()});
-  auto result = std::vector<std::unique_ptr<column>>(target.num_columns());
 
-  std::transform(source.begin(),
-                 source.end(),
-                 target.begin(),
-                 result.begin(),
-                 [=](auto const& source_col, auto const& target_col) {
-                   return type_dispatcher<dispatch_storage_type>(source_col.type(),
-                                                                 column_scatterer{},
-                                                                 source_col,
-                                                                 updated_scatter_map_begin,
-                                                                 updated_scatter_map_end,
-                                                                 target_col,
-                                                                 stream,
-                                                                 mr);
-                 });
+  auto const num_columns = target.num_columns();
+  auto result            = std::vector<std::unique_ptr<column>>(num_columns);
+
+  // Fork streams for multi-column tables when there is enough data per column
+  // to amortize the fork/join overhead. The byte-based threshold adapts to
+  // element width: narrow types (int8) need more rows, wide types (int64) fewer.
+  // Use target.num_rows() as the size proxy since the dominant cost per column
+  // is copying the full target before overwriting the scattered rows.
+  auto const max_elem_bytes = [&]() -> std::size_t {
+    std::size_t widest = 0;
+    for (auto const& col : target) {
+      if (cudf::is_fixed_width(col.type())) {
+        widest = std::max(widest, cudf::size_of(col.type()));
+      } else {
+        // Non-fixed-width columns (strings, lists, structs) involve offset
+        // arrays and child data; treat as at least int64-width.
+        widest = std::max(widest, std::size_t{8});
+      }
+    }
+    return std::max(widest, std::size_t{1});
+  }();
+  auto const bytes_per_col   = static_cast<std::size_t>(target.num_rows()) * max_elem_bytes;
+  auto const use_stream_pool = num_columns > 1 && bytes_per_col >= min_bytes_for_stream_fork;
+  auto const effective_cap   = bytes_per_col >= bytes_for_full_streams
+                                 ? max_forked_streams
+                                 : std::max(size_type{2}, max_forked_streams / 2);
+  auto const num_streams     = use_stream_pool ? std::min(num_columns, effective_cap) : 0;
+  auto const streams         = num_streams > 0 ? cudf::detail::fork_streams(stream, num_streams)
+                                               : std::vector<rmm::cuda_stream_view>{};
+
+  auto it = thrust::make_counting_iterator<size_type>(0);
+
+  std::transform(it, it + num_columns, result.begin(), [&](size_type i) {
+    auto const& source_col = source.column(i);
+    auto const col_stream  = num_streams > 0 ? streams[i % num_streams] : stream;
+    return type_dispatcher<dispatch_storage_type>(source_col.type(),
+                                                  column_scatterer{},
+                                                  source_col,
+                                                  updated_scatter_map_begin,
+                                                  updated_scatter_map_end,
+                                                  target.column(i),
+                                                  col_stream,
+                                                  mr);
+  });
+
+  // Join forked streams before gather_bitmask, which reads result columns'
+  // null masks written on forked streams via the PASSTHROUGH op.
+  if (num_streams > 0) { cudf::detail::join_streams(streams, stream); }
 
   // We still need to call `gather_bitmask` even when the source columns are not nullable,
   // as if the target has null_mask, that null_mask needs to be updated after scattering.
@@ -411,7 +447,9 @@ std::unique_ptr<table> scatter(table_view const& source,
 
     // For struct columns, we need to superimpose the null_mask of the parent over the null_mask of
     // the children.
-    std::for_each(result.begin(), result.end(), [=](auto& col) {
+    auto it = thrust::make_counting_iterator<size_type>(0);
+    std::for_each(it, it + num_columns, [&](size_type i) {
+      auto& col           = result[i];
       auto const col_view = col->view();
       if (col_view.type().id() == type_id::STRUCT and col_view.nullable()) {
         auto const num_rows   = col_view.size();
@@ -428,6 +466,7 @@ std::unique_ptr<table> scatter(table_view const& source,
       }
     });
   }
+
   return std::make_unique<table>(std::move(result));
 }
 }  // namespace detail
