@@ -325,10 +325,11 @@ intersphinx_mapping = {
     "dlpack": ("https://dmlc.github.io/dlpack/latest/", None),
     "nanoarrow": ("https://arrow.apache.org/nanoarrow/latest", None),
     "numpy": ("https://numpy.org/doc/stable", None),
-    "pandas": (
-        "https://pandas.pydata.org/pandas-docs/version/2.3.3/",
-        None,
-    ),
+    # Temporarily disable pandas intersphinx: https://github.com/pandas-dev/pandas/issues/64584
+    # "pandas": (
+    #     "https://pandas.pydata.org/pandas-docs/version/2.3.3/",
+    #     None,
+    # ),
     "polars": ("https://docs.pola.rs/api/python/stable/", None),
     "pyarrow": ("https://arrow.apache.org/docs/", None),
     "python": ("https://docs.python.org/3", None),
