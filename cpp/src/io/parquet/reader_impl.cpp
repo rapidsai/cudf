@@ -13,6 +13,7 @@
 #include <cudf/detail/structs/utilities.hpp>
 #include <cudf/detail/transform.hpp>
 #include <cudf/detail/utilities/stream_pool.hpp>
+#include <cudf/dictionary/encode.hpp>
 #include <cudf/io/parquet_schema.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/stream_compaction.hpp>
@@ -920,7 +921,25 @@ table_with_metadata reader_impl::finalize_output(read_mode mode,
       return {std::move(output_table), std::move(out_metadata)};
     }
   }
-  return {std::make_unique<table>(std::move(out_columns)), std::move(out_metadata)};
+  // Note to Bret: This diff simply encodes regular cudf columns decoded from parquet to cudf
+  // dictionaries and is for testing purposes only. Please revert it when you start working as we
+  // want to directly decode parquet dictionaries to cudf dictionaries.
+  auto constexpr is_bret_testing = true;
+  if constexpr (is_bret_testing) {
+    // Dictionary encoded output columns and return
+    std::vector<std::unique_ptr<cudf::column>> dict_encoded_cols{};
+    dict_encoded_cols.reserve(out_columns.size());
+    std::transform(out_columns.begin(),
+                   out_columns.end(),
+                   std::back_inserter(dict_encoded_cols),
+                   [&](auto const& input_col) {
+                     return cudf::dictionary::encode(
+                       input_col->view(), data_type{type_id::INT32}, _stream, _mr);
+                   });
+    return {std::make_unique<table>(std::move(dict_encoded_cols)), std::move(out_metadata)};
+  } else {
+    return {std::make_unique<table>(std::move(out_columns)), std::move(out_metadata)};
+  }
 }
 
 table_with_metadata reader_impl::read()
@@ -1128,7 +1147,8 @@ std::vector<parquet::FileMetaData> read_parquet_footers(
   // Do not select any columns when only reading the parquet metadata.
   constexpr auto has_column_projection = false;
 
-  // Read page indexes if available here since we will want to reuse the raw metadata for later use.
+  // Read page indexes if available here since we will want to reuse the raw metadata for later
+  // use.
   constexpr auto read_page_indexes = true;
 
   // Parse the source dataset metadata
