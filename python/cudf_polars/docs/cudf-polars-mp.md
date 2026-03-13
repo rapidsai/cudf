@@ -9,12 +9,12 @@ such as shuffles, all-gathers, and joins to produce a globally correct result.
 The entry point in all cases is the Polars `GPUEngine` with `executor="streaming"`.
 The `cluster` option selects the execution model:
 
-| `cluster`       | Description                             | Status            |
-| --------------- | --------------------------------------- | ----------------- |
-| `"single"`      | Single-GPU, in-process execution        | Stable            |
-| `"distributed"` | Multi-GPU via Dask Distributed          | Stable (legacy)   |
-| `"spmd"`        | Multi-GPU via SPMD launched with `rrun` | Preview (new API) |
-| `"ray"`         | Multi-GPU via Ray actors                | Preview (new API) |
+| `cluster`       | Description                                          | Status            |
+| --------------- | ---------------------------------------------------- | ----------------- |
+| `"single"`      | Single-GPU, in-process execution                     | Stable            |
+| `"distributed"` | Multi-GPU via [Dask Distributed][dask-distributed]   | Stable (legacy)   |
+| `"spmd"`        | Multi-GPU via [SPMD][spmd-wiki] launched with `rrun` | Preview (new API) |
+| `"ray"`         | Multi-GPU via [Ray][ray-docs] actors                 | Preview (new API) |
 
 Two preview execution modes are available:
 
@@ -53,7 +53,9 @@ Conceptually the setup looks like this:
 │  every rank)    │  │  every rank)    │     │  every rank)    │
 └────────┬────────┘  └────────┬────────┘     └────────┬────────┘
          │                    │                       │
-         │     LazyFrame.collect(engine=engine)       │
+┌────────┴────────────────────┴───────────────────────┴────────┐
+│              LazyFrame.collect(engine=engine)                │
+└────────┬────────────────────┬───────────────────────┬────────┘
          ↓                    ↓                       ↓
 ┌─────────────────┐  ┌─────────────────┐     ┌─────────────────┐
 │     run IR      │  │     run IR      │     │     run IR      │
@@ -118,9 +120,9 @@ with spmd_execution() as (comm, ctx, engine):
 
 The context manager yields:
 
-* `comm` — `rapidsmpf.communicator.Communicator`
-* `ctx` — `rapidsmpf.streaming.core.context.Context`
-* `engine` — `pl.GPUEngine` configured for SPMD execution
+* `comm` — [`rapidsmpf.communicator.Communicator`][rapidsmpf-communicator]
+* `ctx` — [`rapidsmpf.streaming.core.context.Context`][rapidsmpf-context]
+* `engine` — [`pl.GPUEngine`][polars-gpuengine] configured for SPMD execution
 
 Pass `engine` to every `LazyFrame.collect()` inside the context block.
 
@@ -135,6 +137,32 @@ In practice:
 * Avoid rank-conditional `collect()` calls
 * Avoid branches that change the query graph
 * Keep the driver script deterministic
+
+**Example that works correctly:**
+
+```python
+# Every rank executes the same query in the same order.
+with spmd_execution() as (comm, ctx, engine):
+    result = (
+        pl.scan_parquet("/data/*.parquet")
+        .filter(pl.col("amount") > 100)
+        .group_by("customer_id")
+        .agg(pl.col("amount").sum())
+        .collect(engine=engine)
+    )
+```
+
+**Example that deadlocks:**
+
+```python
+# Rank 0 executes a group_by collective; other ranks do not.
+# The collective IDs go out of sync → deadlock.
+with spmd_execution() as (comm, ctx, engine):
+    df = pl.scan_parquet("/data/*.parquet")
+    if comm.rank() == 0:        # DON'T DO THIS
+        df = df.group_by("customer_id").agg(pl.col("amount").sum())
+    result = df.collect(engine=engine)
+```
 
 ## Collecting distributed results
 
@@ -185,12 +213,13 @@ Reserved keys:
 Ray mode uses a single client process that drives execution across multiple GPU
 workers.
 
-Internally the system uses the concept of **ranks**, similar to MPI ranks. Each
-rank corresponds to one GPU worker and participates in collective operations
-through a shared UCXX communicator.
+Internally the system uses the concept of **ranks** (described in the
+[SPMD section](#spmd-execution-mode) above). Each rank corresponds to one GPU
+worker and participates in collective operations through a shared UCXX
+communicator.
 
-In the Ray implementation each rank is implemented as a **Ray actor**, with one
-actor created per available GPU.
+In the Ray implementation each rank is implemented as a [**Ray actor**][ray-actors],
+with one actor created per available GPU.
 
 Conceptually the system looks like this:
 
@@ -221,8 +250,10 @@ The client broadcasts the query plan to all ranks. The ranks execute the pipelin
 collectively through UCXX, and their outputs are streamed back and concatenated on
 the client process.
 
-Unlike SPMD mode, the driver script runs as a normal Python program. There is no
-`rrun` launcher and no symmetry requirement for the driver code.
+Unlike SPMD mode, the driver script runs as a normal Python program with no
+`rrun` launcher. Query symmetry is handled automatically: the client serializes
+the complete query plan and broadcasts it to all actors, so every rank always
+executes the same query.
 
 ## Prerequisites
 
@@ -318,3 +349,12 @@ Reserved keys:
 
 * `executor_options`: `"runtime"`, `"cluster"`, `"spmd"`, `"ray_context"`
 * `engine_kwargs`: `"memory_resource"`, `"executor"`
+
+<!-- Reference links -->
+[dask-distributed]: https://distributed.dask.org/
+[spmd-wiki]: https://en.wikipedia.org/wiki/Single_program,_multiple_data
+[ray-docs]: https://docs.ray.io/
+[ray-actors]: https://docs.ray.io/en/latest/ray-core/actors.html
+[rapidsmpf-communicator]: https://docs.rapids.ai/api/rapidsmpf/stable/api/communicator/
+[rapidsmpf-context]: https://docs.rapids.ai/api/rapidsmpf/stable/api/streaming/context/
+[polars-gpuengine]: https://docs.pola.rs/api/python/stable/reference/api/polars.GPUEngine.html
