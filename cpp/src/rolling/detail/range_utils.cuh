@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -33,7 +33,7 @@
 
 #include <optional>
 
-namespace CUDF_EXPORT cudf {
+namespace cudf {
 namespace detail {
 namespace rolling {
 
@@ -682,4 +682,4 @@ struct range_window_clamper {
 };
 }  // namespace rolling
 }  // namespace detail
-}  // namespace CUDF_EXPORT cudf
+}  // namespace cudf
