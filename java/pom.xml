@@ -153,7 +153,6 @@
         <skipNativeCopy>false</skipNativeCopy>
         <cxx.flags/>
         <CMAKE_EXPORT_COMPILE_COMMANDS>OFF</CMAKE_EXPORT_COMPILE_COMMANDS>
-        <CUDA_STATIC_RUNTIME>OFF</CUDA_STATIC_RUNTIME>
         <CUDF_USE_PER_THREAD_DEFAULT_STREAM>OFF</CUDF_USE_PER_THREAD_DEFAULT_STREAM>
         <USE_GDS>OFF</USE_GDS>
         <CMAKE_CUDA_ARCHITECTURES>RAPIDS</CMAKE_CUDA_ARCHITECTURES>
@@ -484,7 +483,6 @@
                                     <env key="CUDF_CPP_BUILD_DIR" value="${CUDF_CPP_BUILD_DIR}"/>
                                     <arg value="${basedir}/src/main/native"/>
                                     <arg line="${cmake.ccache.opts}"/>
-                                    <arg value="-DCUDA_STATIC_RUNTIME=${CUDA_STATIC_RUNTIME}" />
                                     <arg value="-DCUDF_USE_PER_THREAD_DEFAULT_STREAM=${CUDF_USE_PER_THREAD_DEFAULT_STREAM}" />
                                     <arg value="-DUSE_GDS=${USE_GDS}" />
                                     <arg value="-DCMAKE_CXX_FLAGS=${cxx.flags}"/>
