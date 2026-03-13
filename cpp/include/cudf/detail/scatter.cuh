@@ -395,17 +395,17 @@ std::unique_ptr<table> scatter(table_view const& source,
   // Use target.num_rows() as the size proxy since the dominant cost per column
   // is copying the full target before overwriting the scattered rows.
   auto const max_elem_bytes = [&]() -> std::size_t {
-    std::size_t result = 0;
+    std::size_t widest = 0;
     for (auto const& col : target) {
       if (cudf::is_fixed_width(col.type())) {
-        result = std::max(result, cudf::size_of(col.type()));
+        widest = std::max(widest, cudf::size_of(col.type()));
       } else {
         // Non-fixed-width columns (strings, lists, structs) involve offset
         // arrays and child data; treat as at least int64-width.
-        result = std::max(result, std::size_t{8});
+        widest = std::max(widest, std::size_t{8});
       }
     }
-    return std::max(result, std::size_t{1});
+    return std::max(widest, std::size_t{1});
   }();
   auto const bytes_per_col   = static_cast<std::size_t>(target.num_rows()) * max_elem_bytes;
   auto const use_stream_pool = num_columns > 1 && bytes_per_col >= min_bytes_for_stream_fork;
@@ -431,6 +431,10 @@ std::unique_ptr<table> scatter(table_view const& source,
                                                   mr);
   });
 
+  // Join forked streams before gather_bitmask, which reads result columns'
+  // null masks written on forked streams via the PASSTHROUGH op.
+  if (num_streams > 0) { cudf::detail::join_streams(streams, stream); }
+
   // We still need to call `gather_bitmask` even when the source columns are not nullable,
   // as if the target has null_mask, that null_mask needs to be updated after scattering.
   auto const nullable =
@@ -453,25 +457,15 @@ std::unique_ptr<table> scatter(table_view const& source,
         auto contents         = col->release();
 
         // Children null_mask will be superimposed during structs column construction.
-        // STREAM ORDERING: gather_bitmask writes null masks on `stream` and
-        // synchronizes the host before returning (via make_host_vector). This
-        // makes the null mask data globally visible, so launching on col_stream
-        // is safe. If gather_bitmask becomes fully async, this must use `stream`.
-        auto const col_stream = num_streams > 0 ? streams[i % num_streams] : stream;
-        col                   = cudf::make_structs_column(num_rows,
+        col = cudf::make_structs_column(num_rows,
                                         std::move(contents.children),
                                         null_count,
                                         std::move(*contents.null_mask),
-                                        col_stream,
+                                        stream,
                                         mr);
       }
     });
   }
-
-  // Join streams as late as possible so that null mask computations can run on
-  // the passed in stream while other streams are scattering. Skip joining if
-  // only one column, since it used the passed in stream rather than forking.
-  if (num_streams > 0) { cudf::detail::join_streams(streams, stream); }
 
   return std::make_unique<table>(std::move(result));
 }

@@ -653,17 +653,17 @@ std::unique_ptr<table> gather(table_view const& source_table,
   // element width: narrow types (int8) need more rows, wide types (int64) fewer.
   auto const num_rows       = cudf::distance(gather_map_begin, gather_map_end);
   auto const max_elem_bytes = [&]() -> std::size_t {
-    std::size_t result = 0;
+    std::size_t widest = 0;
     for (auto const& col : source_table) {
       if (cudf::is_fixed_width(col.type())) {
-        result = std::max(result, cudf::size_of(col.type()));
+        widest = std::max(widest, cudf::size_of(col.type()));
       } else {
         // Non-fixed-width columns (strings, lists, structs) involve offset
         // arrays and child data; treat as at least int64-width.
-        result = std::max(result, std::size_t{8});
+        widest = std::max(widest, std::size_t{8});
       }
     }
-    return std::max(result, std::size_t{1});
+    return std::max(widest, std::size_t{1});
   }();
   auto const bytes_per_col   = static_cast<std::size_t>(num_rows) * max_elem_bytes;
   auto const use_stream_pool = num_columns > 1 && bytes_per_col >= min_bytes_for_stream_fork;
@@ -698,6 +698,9 @@ std::unique_ptr<table> gather(table_view const& source_table,
       auto const op = bounds_policy == out_of_bounds_policy::NULLIFY
                         ? gather_bitmask_op::NULLIFY
                         : gather_bitmask_op::DONT_CHECK;
+      // Safe to run on `stream` while forked streams are still gathering:
+      // column_gatherer uses mask_allocation_policy::NEVER, so result columns
+      // have no null masks. gather_bitmask allocates fresh masks on `stream`.
       gather_bitmask(source_table, gather_map_begin, result, op, stream, mr);
     } else {
       for (size_type i = 0; i < source_table.num_columns(); ++i) {
