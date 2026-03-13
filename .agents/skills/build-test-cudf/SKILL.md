@@ -96,7 +96,7 @@ test-cudf-python # run all cudf-python Pytests
 pytest python/cudf/cudf/tests/<subfolder>/test_<name>.py # specific cudf-python test suite
 ```
 
-Similarly, cudf-python pytests can be discovered at: `python/cudf_polars/tests` and subfolders. Run them using:
+Similarly, cudf-polars pytests can be discovered at: `python/cudf_polars/tests` and subfolders. Run them using:
 
 ```bash
 test-cudf-polars-python
