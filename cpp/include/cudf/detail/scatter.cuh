@@ -389,13 +389,28 @@ std::unique_ptr<table> scatter(table_view const& source,
   auto const num_columns = target.num_columns();
   auto result            = std::vector<std::unique_ptr<column>>(num_columns);
 
-  // Fork streams for multi-column tables when there is enough work per column
-  // to amortize the fork/join overhead. Cap at max_forked_streams since GPU
-  // memory bandwidth saturates well before that many concurrent kernels.
+  // Fork streams for multi-column tables when there is enough data per column
+  // to amortize the fork/join overhead. The byte-based threshold adapts to
+  // element width: narrow types (int8) need more rows, wide types (int64) fewer.
   // Use target.num_rows() as the size proxy since the dominant cost per column
   // is copying the full target before overwriting the scattered rows.
-  auto const use_stream_pool = num_columns > 1 && target.num_rows() >= min_rows_for_stream_fork;
-  auto const num_streams     = use_stream_pool ? std::min(num_columns, max_forked_streams) : 0;
+  auto const max_elem_bytes = [&]() -> std::size_t {
+    std::size_t result = 0;
+    for (auto const& col : target) {
+      if (cudf::is_fixed_width(col.type())) {
+        result = std::max(result, cudf::size_of(col.type()));
+      } else {
+        return 8;  // Non-fixed-width columns are always treated as heavy.
+      }
+    }
+    return std::max(result, std::size_t{1});
+  }();
+  auto const bytes_per_col   = static_cast<std::size_t>(target.num_rows()) * max_elem_bytes;
+  auto const use_stream_pool = num_columns > 1 && bytes_per_col >= min_bytes_for_stream_fork;
+  auto const effective_cap   = bytes_per_col >= bytes_for_full_streams
+                                 ? max_forked_streams
+                                 : std::max(size_type{2}, max_forked_streams / 2);
+  auto const num_streams     = use_stream_pool ? std::min(num_columns, effective_cap) : 0;
   auto const streams         = num_streams > 0 ? cudf::detail::fork_streams(stream, num_streams)
                                                : std::vector<rmm::cuda_stream_view>{};
 

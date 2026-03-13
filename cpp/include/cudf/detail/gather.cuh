@@ -40,14 +40,20 @@
 namespace cudf {
 namespace detail {
 
-// Minimum number of output rows before fork/join overhead is worthwhile.
-// Below this, per-column kernels are too fast for stream overlap to help.
-// Empirically determined: regression at 32K rows, benefit at 262K rows.
-constexpr size_type min_rows_for_stream_fork = 65'536;
+// Minimum bytes per column before fork/join overhead is worthwhile.
+// Below this, per-column kernels finish too fast for stream overlap to help.
+// 512KB = 65536 × 8, so for int64 the effective threshold is 65K rows (unchanged
+// from original calibration). For narrow types like int8, this correctly raises
+// the threshold to 512K rows, avoiding wasteful forking.
+constexpr std::size_t min_bytes_for_stream_fork = 512 * 1024;
 
 // Maximum number of forked streams. GPU memory bandwidth saturates
 // well before this many concurrent gather/scatter kernels.
 constexpr size_type max_forked_streams = 8;
+
+// Bytes per column at which the full stream cap is used. Below this,
+// use half the cap to reduce fork/join API overhead at moderate sizes.
+constexpr std::size_t bytes_for_full_streams = 8 * 1024 * 1024;
 
 /**
  * @brief Function object to check if an index is within the bounds [begin, end).
@@ -642,12 +648,27 @@ std::unique_ptr<table> gather(table_view const& source_table,
   auto const num_columns = source_table.num_columns();
   auto result            = std::vector<std::unique_ptr<column>>(num_columns);
 
-  // Fork streams for multi-column tables when there is enough work per column
-  // to amortize the fork/join overhead. Cap at max_forked_streams since GPU
-  // memory bandwidth saturates well before that many concurrent kernels.
-  auto const num_rows        = cudf::distance(gather_map_begin, gather_map_end);
-  auto const use_stream_pool = num_columns > 1 && num_rows >= min_rows_for_stream_fork;
-  auto const num_streams     = use_stream_pool ? std::min(num_columns, max_forked_streams) : 0;
+  // Fork streams for multi-column tables when there is enough data per column
+  // to amortize the fork/join overhead. The byte-based threshold adapts to
+  // element width: narrow types (int8) need more rows, wide types (int64) fewer.
+  auto const num_rows       = cudf::distance(gather_map_begin, gather_map_end);
+  auto const max_elem_bytes = [&]() -> std::size_t {
+    std::size_t result = 0;
+    for (auto const& col : source_table) {
+      if (cudf::is_fixed_width(col.type())) {
+        result = std::max(result, cudf::size_of(col.type()));
+      } else {
+        return 8;  // Non-fixed-width columns are always treated as heavy.
+      }
+    }
+    return std::max(result, std::size_t{1});
+  }();
+  auto const bytes_per_col   = static_cast<std::size_t>(num_rows) * max_elem_bytes;
+  auto const use_stream_pool = num_columns > 1 && bytes_per_col >= min_bytes_for_stream_fork;
+  auto const effective_cap   = bytes_per_col >= bytes_for_full_streams
+                                 ? max_forked_streams
+                                 : std::max(size_type{2}, max_forked_streams / 2);
+  auto const num_streams     = use_stream_pool ? std::min(num_columns, effective_cap) : 0;
   auto const streams         = num_streams > 0 ? cudf::detail::fork_streams(stream, num_streams)
                                                : std::vector<rmm::cuda_stream_view>{};
 
