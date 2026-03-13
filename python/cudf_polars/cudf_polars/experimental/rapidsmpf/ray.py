@@ -249,6 +249,9 @@ class RankActor:
         Raises `ray.exceptions.RayActorError`.
         """
         self._py_executor.shutdown(wait=True, cancel_futures=True)
+        # Release resources in dependency order before exit_actor() terminates
+        # the process.
+        self._ctx = None
         self._comm = None
         self._mr = None
         ray.actor.exit_actor()
@@ -364,6 +367,10 @@ class RankActor:
                 list(ir.schema.values()),
                 stream,
             )
+        # Ray transfers the returned Polars DataFrame back to the client via the
+        # object store (pickle / Arrow IPC). The DataFrame is already on CPU at
+        # this point (to_polars() copies the result off-GPU), so no GPU memory
+        # crosses process boundaries.
         result = df.to_polars()
         return result, metadata_collector
 
@@ -443,18 +450,28 @@ class RayClient:
 
         If Ray was initialized by this client, also calls :func:`ray.shutdown`.
         Safe to call more than once.
+
+        Raises
+        ------
+        ExceptionGroup
+            If one or more actors raise an unexpected exception during shutdown.
         """
-        for a in self.rank_actors:
-            try:
-                ray.get(a.shutdown.remote())
-            except ray.exceptions.RayActorError:
-                pass  # expected: exit_actor() terminates the process immediately
-            except Exception as e:
-                print(f"shutdown error: {e}")
-        self._engine = None
-        if self._owns_ray:
-            self._owns_ray = False
-            ray.shutdown()
+        exceptions: list[Exception] = []
+        try:
+            for a in self.rank_actors:
+                try:
+                    ray.get(a.shutdown.remote())
+                except ray.exceptions.RayActorError:
+                    pass  # expected: exit_actor() terminates the process immediately
+                except Exception as e:
+                    exceptions.append(e)
+            if exceptions:
+                raise ExceptionGroup("Actor shutdown failed", exceptions)
+        finally:
+            self._engine = None
+            if self._owns_ray:
+                self._owns_ray = False
+                ray.shutdown()
 
     def __enter__(self) -> tuple[RayClient, pl.GPUEngine]:
         """Enter the context manager, returning ``(self, engine)``."""
@@ -476,8 +493,10 @@ def ray_execution(
     Create a RapidsMPF Ray cluster and return a :class:`RayClient`.
 
     The returned client supports both direct use and the context-manager
-    protocol. Prefer the context-manager form in scripts; use the direct
-    form in interactive environments such as Jupyter notebooks.
+    protocol. Prefer the context-manager form in scripts: it guarantees that
+    actors and Ray are shut down even if an exception is raised. In interactive
+    environments such as Jupyter notebooks, the direct form lets the cluster
+    persist across multiple cells without tearing it down after every query.
 
     If Ray is not already initialized, :func:`ray.init` is called here and
     :func:`ray.shutdown` is called by :meth:`RayClient.shutdown`. If Ray is
@@ -490,8 +509,6 @@ def ray_execution(
         ``Options(get_environment_variables())``.
     executor_options
         Additional key-value pairs forwarded to the Polars executor options.
-        If ``"max_io_threads"`` is present, its value is also used as the
-        default for ``rapidsmpf_options["num_streaming_threads"]``.
     engine_kwargs
         Additional keyword arguments forwarded to :class:`polars.GPUEngine`.
     ray_init_kwargs
@@ -552,9 +569,7 @@ def ray_execution(
         if rapidsmpf_options is not None
         else Options(get_environment_variables())
     )
-    rapidsmpf_options.insert_if_absent(
-        {"num_streaming_threads": str(executor_options.get("max_io_threads", 4))}
-    )
+    rapidsmpf_options.insert_if_absent({"num_streaming_threads": "4"})
     rapidsmpf_options_as_bytes = rapidsmpf_options.serialize()
 
     ray_was_initialized: bool = ray.is_initialized()
@@ -576,7 +591,7 @@ def ray_execution(
     if free_gpus == 0:
         raise RuntimeError("No available GPUs in the Ray cluster at startup")
 
-    # Create one actor per GPU. Ray adds .remote() dynamically; no type stubs.
+    # Create one actor per GPU.
     rank_actors: list[ActorHandle[RankActor]] = [
         RankActor.remote(  # type: ignore[attr-defined]
             nranks=free_gpus,

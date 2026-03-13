@@ -210,13 +210,9 @@ Reserved keys:
 
 # Ray execution mode
 
-Ray mode uses a single client process that drives execution across multiple GPU
-workers.
-
-Internally the system uses the concept of **ranks** (described in the
-[SPMD section](#spmd-execution-mode) above). Each rank corresponds to one GPU
-worker and participates in collective operations through a shared UCXX
-communicator.
+Ray mode uses a single client process that drives execution across multiple ranks.
+Each rank corresponds to one GPU worker and participates in collective operations
+through a shared UCXX communicator.
 
 In the Ray implementation each rank is implemented as a [**Ray actor**][ray-actors],
 with one actor created per available GPU.
