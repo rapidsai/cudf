@@ -45,7 +45,7 @@ namespace detail {
 // 512KB = 65536 × 8, so for int64 the effective threshold is 65K rows (unchanged
 // from original calibration). For narrow types like int8, this correctly raises
 // the threshold to 512K rows, avoiding wasteful forking.
-constexpr std::size_t min_bytes_for_stream_fork = 512 * 1024;
+constexpr std::size_t min_bytes_for_stream_fork = 512 * 1'024;
 
 // Maximum number of forked streams. GPU memory bandwidth saturates
 // well before this many concurrent gather/scatter kernels.
@@ -53,7 +53,7 @@ constexpr size_type max_forked_streams = 8;
 
 // Bytes per column at which the full stream cap is used. Below this,
 // use half the cap to reduce fork/join API overhead at moderate sizes.
-constexpr std::size_t bytes_for_full_streams = 8 * 1024 * 1024;
+constexpr std::size_t bytes_for_full_streams = 8 * 1'024 * 1'024;
 
 /**
  * @brief Function object to check if an index is within the bounds [begin, end).

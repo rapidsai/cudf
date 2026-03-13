@@ -453,6 +453,10 @@ std::unique_ptr<table> scatter(table_view const& source,
         auto contents         = col->release();
 
         // Children null_mask will be superimposed during structs column construction.
+        // STREAM ORDERING: gather_bitmask writes null masks on `stream` and
+        // synchronizes the host before returning (via make_host_vector). This
+        // makes the null mask data globally visible, so launching on col_stream
+        // is safe. If gather_bitmask becomes fully async, this must use `stream`.
         auto const col_stream = num_streams > 0 ? streams[i % num_streams] : stream;
         col                   = cudf::make_structs_column(num_rows,
                                         std::move(contents.children),
