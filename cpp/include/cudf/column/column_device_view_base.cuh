@@ -4,7 +4,7 @@
  */
 #pragma once
 
-#include <cudf/column/column_child_offsets.h>
+#include <cudf/column/column_child_offsets.hpp>
 #include <cudf/detail/offsets_iterator.cuh>
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/strings/string_view.cuh>

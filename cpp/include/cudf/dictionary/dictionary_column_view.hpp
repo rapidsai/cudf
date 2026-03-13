@@ -4,7 +4,7 @@
  */
 #pragma once
 
-#include <cudf/column/column_child_offsets.h>
+#include <cudf/column/column_child_offsets.hpp>
 #include <cudf/column/column_view.hpp>
 
 /**
