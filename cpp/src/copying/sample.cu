@@ -18,9 +18,9 @@
 #include <rmm/cuda_stream_view.hpp>
 
 #include <cuda/functional>
+#include <cuda/std/random>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/random.h>
-#include <thrust/random/uniform_int_distribution.h>
 #include <thrust/shuffle.h>
 
 namespace cudf {
@@ -44,8 +44,8 @@ std::unique_ptr<table> sample(table_view const& input,
 
   if (replacement == sample_with_replacement::TRUE) {
     auto RandomGen = cuda::proclaim_return_type<size_type>([seed, num_rows] __device__(auto i) {
-      thrust::default_random_engine rng(seed);
-      thrust::uniform_int_distribution<size_type> dist{0, num_rows - 1};
+      cuda::std::philox4x32 rng(seed);
+      cuda::std::uniform_int_distribution<size_type> dist{0, num_rows - 1};
       rng.discard(i);
       return dist(rng);
     });
