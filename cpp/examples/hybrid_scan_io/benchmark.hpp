@@ -5,6 +5,8 @@
 
 #include "timer.hpp"
 
+#include <kvikio/file_utils.hpp>
+
 #include <thrust/iterator/counting_iterator.h>
 
 #include <chrono>
@@ -13,12 +15,13 @@
 #pragma once
 
 template <std::invocable F>
-void benchmark(F&& f, std::size_t iterations)
+void benchmark(F&& f, std::size_t iterations, std::string const& file_path = "")
 {
   auto total_time = double{0.0};
 
   std::for_each(
     thrust::counting_iterator<size_t>(0), thrust::counting_iterator(iterations), [&](auto iter) {
+      if (not file_path.empty()) { kvikio::drop_file_page_cache(file_path); }
       timer timer;
 
       f();
