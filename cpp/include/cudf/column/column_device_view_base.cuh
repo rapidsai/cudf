@@ -269,10 +269,13 @@ class alignas(16) column_device_view_base {
   data_type _type{type_id::EMPTY};   ///< Element type
   cudf::size_type _size{};           ///< Number of elements
   void const* _data{};               ///< Pointer to device memory containing elements
+  size_type _null_count{};           ///< The number of nulls
   bitmask_type const* _null_mask{};  ///< Pointer to device memory containing
                                      ///< bitmask representing null elements.
   size_type _offset{};               ///< Index position of the first element.
                                      ///< Enables zero-copy slicing
+  void* _children{};                 ///< Array of `column_device_view` objects in device memory.
+  size_type _num_children{};         ///< The number of child columns
 
   /**
    * @brief Constructs a column with the specified type, size, data, nullmask and offset.
@@ -280,15 +283,28 @@ class alignas(16) column_device_view_base {
    * @param type The type of the column
    * @param size The number of elements in the column
    * @param data Pointer to device memory containing elements
+   * @param null_count The number of nulls in the column
    * @param null_mask Pointer to device memory containing bitmask representing valid elements
    * @param offset Index position of the first element
+   * @param children Pointer to device memory containing child `column_device_view` objects
+   * @param num_children The number of child columns
    */
   CUDF_HOST_DEVICE column_device_view_base(data_type type,
                                            size_type size,
                                            void const* data,
+                                           size_type null_count,
                                            bitmask_type const* null_mask,
-                                           size_type offset)
-    : _type{type}, _size{size}, _data{data}, _null_mask{null_mask}, _offset{offset}
+                                           size_type offset,
+                                           void* children,
+                                           size_type num_children)
+    : _type{type},
+      _size{size},
+      _data{data},
+      _null_count{null_count},
+      _null_mask{null_mask},
+      _offset{offset},
+      _children{children},
+      _num_children{num_children}
   {
   }
 
@@ -325,6 +341,9 @@ struct mutable_value_accessor;
  */
 class alignas(16) column_device_view_core : public detail::column_device_view_base {
  public:
+  static constexpr bool is_mutable =
+    false;  ///< Indicates whether this view allows mutation of the underlying data
+
   column_device_view_core()                               = delete;
   ~column_device_view_core()                              = default;
   column_device_view_core(column_device_view_core const&) = default;  ///< Copy constructor
@@ -378,7 +397,7 @@ class alignas(16) column_device_view_core : public detail::column_device_view_ba
                                    this->null_count(),
                                    this->null_mask(),
                                    this->offset() + offset,
-                                   d_children,
+                                   static_cast<column_device_view_core*>(_children),
                                    this->num_child_columns()};
   }
 
@@ -448,6 +467,22 @@ class alignas(16) column_device_view_core : public detail::column_device_view_ba
   }
 
   /**
+   * @brief Returns a nullable element at the specified index. If the element is null, returns
+   * `nullopt`.
+   *
+   * @param element_index Position of the desired element
+   * @return `optional` containing the element at the specified index, or `nullopt` if the element
+   * is null
+   */
+  template <typename T>
+  [[nodiscard]] __device__ cuda::std::optional<T> nullable_element(
+    size_type element_index) const noexcept
+  {
+    if (is_null(element_index)) { return cuda::std::nullopt; }
+    return element<T>(element_index);
+  }
+
+  /**
    * @brief Returns the specified child
    *
    * @param child_index The index of the desired child
@@ -455,7 +490,7 @@ class alignas(16) column_device_view_core : public detail::column_device_view_ba
    */
   [[nodiscard]] __device__ column_device_view_core child(size_type child_index) const noexcept
   {
-    return d_children[child_index];
+    return static_cast<column_device_view_core*>(_children)[child_index];
   }
 
   /**
@@ -497,20 +532,10 @@ class alignas(16) column_device_view_core : public detail::column_device_view_ba
                                            size_type offset,
                                            column_device_view_core* children,
                                            size_type num_children)
-    : column_device_view_base(type, size, data, null_mask, offset),
-      d_children(children),
-      _num_children(num_children),
-      _null_count{null_count}
+    : column_device_view_base(
+        type, size, data, null_count, null_mask, offset, children, num_children)
   {
   }
-
- protected:
-  column_device_view_core* d_children{};  ///< Array of `raw_column_device_view`
-                                          ///< objects in device memory.
-                                          ///< Based on element type, children
-                                          ///< may contain additional data
-  size_type _num_children{};              ///< The number of child columns
-  size_type _null_count{};                ///< The number of nulls
 };
 
 /**
@@ -521,6 +546,9 @@ class alignas(16) column_device_view_core : public detail::column_device_view_ba
  */
 class alignas(16) mutable_column_device_view_core : public detail::column_device_view_base {
  public:
+  static constexpr bool is_mutable =
+    true;  ///< Indicates whether this view allows mutation of the underlying data
+
   mutable_column_device_view_core()  = delete;
   ~mutable_column_device_view_core() = default;
   mutable_column_device_view_core(mutable_column_device_view_core const&) =
@@ -558,7 +586,7 @@ class alignas(16) mutable_column_device_view_core : public detail::column_device
    */
   template <typename T = void,
             CUDF_ENABLE_IF(cuda::std::is_same_v<T, void> or is_rep_layout_compatible<T>())>
-  CUDF_HOST_DEVICE T* head() const noexcept
+  [[nodiscard]] CUDF_HOST_DEVICE T* head() const noexcept
   {
     return const_cast<T*>(detail::column_device_view_base::head<T>());
   }
@@ -576,7 +604,7 @@ class alignas(16) mutable_column_device_view_core : public detail::column_device
    * @return Typed pointer to underlying data, including the offset
    */
   template <typename T, CUDF_ENABLE_IF(is_rep_layout_compatible<T>())>
-  CUDF_HOST_DEVICE T* data() const noexcept
+  [[nodiscard]] CUDF_HOST_DEVICE T* data() const noexcept
   {
     return const_cast<T*>(detail::column_device_view_base::data<T>());
   }
@@ -599,6 +627,63 @@ class alignas(16) mutable_column_device_view_core : public detail::column_device
   [[nodiscard]] __device__ T& element(size_type element_index) const noexcept
   {
     return data<T>()[element_index];
+  }
+
+  /**
+   * @brief Returns `string_view` to the string element at the specified index.
+   *
+   * If the element at the specified index is NULL, i.e., `is_null(element_index)
+   * == true`, then using the result is undefined behavior.
+   *
+   * This function accounts for the offset.
+   *
+   * @param element_index Position of the desired string element
+   * @return string_view instance representing this element at this index
+   */
+  template <typename T, CUDF_ENABLE_IF(cuda::std::is_same_v<T, string_view>)>
+  [[nodiscard]] __device__ T element(size_type element_index) const noexcept
+  {
+    size_type index       = element_index + offset();  // account for this view's _offset
+    char const* d_strings = static_cast<char const*>(_data);
+    auto const offsets    = child(offsets_column_index);
+    auto const itr        = cudf::detail::input_offsetalator(offsets.head(), offsets.type());
+    auto const offset     = itr[index];
+    return string_view{d_strings + offset, static_cast<cudf::size_type>(itr[index + 1] - offset)};
+  }
+
+  /**
+   * @brief Returns a `numeric::fixed_point` element at the specified index for a `fixed_point`
+   * column.
+   *
+   * If the element at the specified index is NULL, i.e., `is_null(element_index) == true`,
+   * then using the result is undefined behavior.
+   *
+   * @param element_index Position of the desired element
+   * @return numeric::fixed_point representing the element at this index
+   */
+  template <typename T, CUDF_ENABLE_IF(cudf::is_fixed_point<T>())>
+  [[nodiscard]] __device__ T element(size_type element_index) const noexcept
+  {
+    using namespace numeric;
+    using rep        = typename T::rep;
+    auto const scale = scale_type{_type.scale()};
+    return T{scaled_integer<rep>{data<rep>()[element_index], scale}};
+  }
+
+  /**
+   * @brief Returns a nullable element at the specified index. If the element is null, returns
+   * `nullopt`.
+   *
+   * @param element_index Position of the desired element
+   * @return `optional` containing the element at the specified index, or `nullopt` if the element
+   * is null
+   */
+  template <typename T>
+  [[nodiscard]] __device__ cuda::std::optional<T> nullable_element(
+    size_type element_index) const noexcept
+  {
+    if (is_null(element_index)) { return cuda::std::nullopt; }
+    return element<T>(element_index);
   }
 
   /**
@@ -653,7 +738,7 @@ class alignas(16) mutable_column_device_view_core : public detail::column_device
   [[nodiscard]] __device__ mutable_column_device_view_core
   child(size_type child_index) const noexcept
   {
-    return d_children[child_index];
+    return static_cast<mutable_column_device_view_core*>(_children)[child_index];
   }
 
 #ifdef __CUDACC__  // because set_bit in bit.hpp is wrapped with __CUDACC__
@@ -731,17 +816,16 @@ class alignas(16) mutable_column_device_view_core : public detail::column_device
                                                    size_type offset,
                                                    mutable_column_device_view_core* children,
                                                    size_type num_children)
-    : column_device_view_base(type, size, data, null_mask, offset),
-      d_children(children),
-      _num_children(num_children)
+    : column_device_view_base(type,
+                              size,
+                              data,
+                              0,  // unused
+                              null_mask,
+                              offset,
+                              children,
+                              num_children)
   {
   }
-
-  mutable_column_device_view_core* d_children{};  ///< Array of `raw_mutable_column_device_view`
-                                                  ///< objects in device memory.
-                                                  ///< Based on element type, children
-                                                  ///< may contain additional data
-  size_type _num_children{};                      ///< The number of child columns
 };
 
 }  // namespace CUDF_EXPORT cudf
