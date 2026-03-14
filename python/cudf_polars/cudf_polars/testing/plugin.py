@@ -279,6 +279,8 @@ RAPIDSMPF_TESTS_TO_SKIP: Mapping[str, str] = {
     "tests/benchmark/test_group_by.py::test_groupby_h2oai_q5": "Takes >2 minutes to run locally",
     "tests/benchmark/test_group_by.py::test_groupby_h2oai_q7": "Takes >2 minutes to run locally",
     "tests/benchmark/test_group_by.py::test_groupby_h2oai_q10": "Takes >2 minutes to run locally",
+    "tests/unit/streaming/test_streaming_io.py::test_sink_parquet": "Take >20 seconds to run locally",
+    "tests/unit/streaming/test_streaming_sort.py::test_streaming_sort_varying_order_and_dtypes[sort_by0]": "Take >20 seconds to run locally",
 }
 
 RAPIDSMPF_ONLY_EXPECTED_FAILURES: Mapping[str, str] = {
