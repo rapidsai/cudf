@@ -762,7 +762,6 @@ class alignas(16) mutable_column_device_view : public mutable_column_device_view
    * @param num_children The number of child columns
    * @return A `mutable_column_device_view` instance representing the specified column data
    * in device memory
-   *
    */
   static auto from_parts(data_type type,
                          size_type size,

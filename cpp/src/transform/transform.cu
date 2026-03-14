@@ -174,10 +174,8 @@ jitify2::Kernel instantiate(null_aware is_null_aware,
   auto kernel = jitify2::reflection::Template("cudf::jit::transform_kernel")
                   .instantiate(is_null_aware, has_user_data, ins, outs);
 
-  return jit::get_udf_kernel(*transform_jit_kernel_cu_jit,
-                             kernel,
-                             cuda_source,
-                             {"-restrict", "--device-debug", "--dopt=on", "--generate-line-info"});
+  return jit::get_udf_kernel(
+    *transform_jit_kernel_cu_jit, kernel, cuda_source, {"-restrict", "--dopt=on"});
 }
 
 void launch(jitify2::Kernel const& kernel,
@@ -185,12 +183,12 @@ void launch(jitify2::Kernel const& kernel,
             bitmask_type const* stencil,
             bool stencil_has_nulls,
             void* user_data,
-            column_device_view_core const* incols,
-            mutable_column_device_view_core const* outcols,
+            column_device_view_core const* input_cols,
+            mutable_column_device_view_core const* output_cols,
             rmm::cuda_stream_view stream)
 {
   CUDF_FUNC_RANGE();
-  void* args[] = {&row_size, &stencil, &stencil_has_nulls, &user_data, &incols, &outcols};
+  void* args[] = {&row_size, &stencil, &stencil_has_nulls, &user_data, &input_cols, &output_cols};
   kernel->configure_1d_max_occupancy(0, 0, nullptr, stream.value())->launch_raw(args);
 }
 
@@ -221,12 +219,12 @@ std::string reflect_output_column(fixed_width_column const&)
 
 std::string reflect_output_column(string_views_column const&)
 {
-  return "cudf::jit::mut_vector_device_view";
+  return "cudf::jit::mutable_vector_device_view";
 }
 
 std::string reflect_output_column(mut_strings_column const&)
 {
-  return "cudf::jit::mut_strings_column_device_view";
+  return "cudf::jit::mutable_strings_column_device_view";
 }
 
 auto reflect(udf_source_type source_type,
@@ -299,34 +297,35 @@ auto to_args(std::span<input_column_view const> inputs,
 
   for (auto& in : inputs) {
     if (auto* col = std::get_if<column_view>(&in)) {
-      auto hnd = column_device_view::create(*col, stream);
-      h_args.push_back(*hnd);
-      handles.push_back(std::move(hnd));
+      auto handle = column_device_view::create(*col, stream);
+      h_args.push_back(*handle);
+      handles.emplace_back(std::move(handle));
     } else {
       auto& scalar = std::get<scalar_column_view>(in);
-      auto hnd     = column_device_view::create(scalar.as_column_view(), stream);
-      h_args.push_back(*hnd);
-      handles.push_back(std::move(hnd));
+      auto handle  = column_device_view::create(scalar.as_column_view(), stream);
+      h_args.push_back(*handle);
+      handles.emplace_back(std::move(handle));
     }
   }
 
   for (auto& out : outputs) {
     std::visit(
       [&](auto& col) {
-        auto hnd = col.mutable_view().to_device(stream);
-        h_args.push_back(*hnd);
-        handles.push_back(std::move(hnd));
+        auto handle = col.mutable_view().to_device(stream);
+        h_args.push_back(*handle);
+        handles.push_back(std::move(handle));
       },
       out);
   }
 
   rmm::device_buffer d_args{h_args.size() * sizeof(detail::column_device_view_base), stream, mr};
 
-  detail::cuda_memcpy_async_impl(d_args.data(),
-                                 h_args.data(),
-                                 h_args.size() * sizeof(detail::column_device_view_base),
-                                 detail::host_memory_kind::PAGEABLE,
-                                 stream);
+  CUDF_CUDA_TRY(detail::memcpy_async(
+    d_args.data(), h_args.data(), h_args.size() * sizeof(detail::column_device_view_base), stream));
+
+  // ensure the device buffer copy is complete before `h_args` goes out of scope and its destructors
+  // are called
+  CUDF_CUDA_TRY(cudaStreamSynchronize(stream.value()));
 
   return std::make_tuple(std::move(d_args), std::move(handles));
 }
@@ -357,9 +356,11 @@ void run(null_aware is_null_aware,
                             udf,
                             source_type);
   auto [cols, handles] = to_args(inputs, outputs, stream, mr);
-  auto* incols         = reinterpret_cast<column_device_view_core const*>(cols.data());
-  auto* outcols = reinterpret_cast<mutable_column_device_view_core const*>(incols + inputs.size());
-  return launch(kernel, row_size, d_stencil, stencil_has_nulls, user_data, incols, outcols, stream);
+  auto* input_cols     = reinterpret_cast<column_device_view_core const*>(cols.data());
+  auto* output_cols =
+    reinterpret_cast<mutable_column_device_view_core const*>(input_cols + inputs.size());
+  return launch(
+    kernel, row_size, d_stencil, stencil_has_nulls, user_data, input_cols, output_cols, stream);
 }
 
 }  // namespace jit_transform
@@ -433,8 +434,7 @@ size_type inplace_null_mask_and(bitmask_type* null_mask,
 
   if (nullable_masks.size() == 1) {
     // only 1 mask provided, copy it directly to the output
-    detail::cuda_memcpy_async_impl(
-      null_mask, nullable_masks[0], num_bytes, detail::host_memory_kind::PINNED, stream);
+    CUDF_CUDA_TRY(detail::memcpy_async(null_mask, nullable_masks[0], num_bytes, stream));
     return nullable_null_counts[0];
   }
 
@@ -458,11 +458,7 @@ auto get_null_transformation(null_aware is_null_aware,
                              std::span<transform_input const> inputs,
                              std::span<transform_output const> outputs)
 {
-  std::vector<char> input_may_be_nullable;
-
-  for (auto& in : inputs) {
-    input_may_be_nullable.push_back(true);
-  }
+  std::vector<char> input_may_be_nullable(inputs.size(), true);
 
   auto any_input_nullable = std::any_of(inputs.begin(), inputs.end(), [](auto& in) {
     return std::visit([](auto& c) { return c.nullable(); }, in);
@@ -597,11 +593,8 @@ std::optional<std::pair<bitmask_type*, size_type>> make_stencil(
     auto* mask = std::visit([&](auto& c) { return c.null_mask(); }, out);
 
     if (mask != nullptr && mask != *stencil) {
-      detail::cuda_memcpy_async_impl(mask,
-                                     *stencil,
-                                     bitmask_allocation_size_bytes(row_size),
-                                     detail::host_memory_kind::PINNED,
-                                     stream);
+      CUDF_CUDA_TRY(
+        detail::memcpy_async(mask, *stencil, bitmask_allocation_size_bytes(row_size), stream));
     }
 
     auto null_count = (mask == nullptr) ? 0 : stencil_null_count;
@@ -634,18 +627,18 @@ auto make_outputs(null_aware is_null_aware,
     if (is_fixed_width(output.type)) {
       auto col =
         fixed_width_column::make(output.type, row_size, std::move(null_mask), 0, stream, mr);
-      cols.push_back(std::move(col));
+      cols.emplace_back(std::move(col));
     } else if (output.type.id() == type_id::STRING) {
       if (string_offsets.empty() || string_offsets[i] == nullptr) {
         auto col = string_views_column::make(row_size, std::move(null_mask), 0, stream, mr);
-        cols.push_back(std::move(col));
+        cols.emplace_back(std::move(col));
       } else {
         auto chars_size =
           strings::detail::get_offset_value(string_offsets[i]->view(), row_size, stream);
         auto chars = rmm::device_buffer{static_cast<size_t>(chars_size), stream, mr};
         auto col   = mut_strings_column::make(
           row_size, std::move(chars), std::move(string_offsets[i]), std::move(null_mask), 0);
-        cols.push_back(std::move(col));
+        cols.emplace_back(std::move(col));
       }
     } else {
       CUDF_UNREACHABLE("Unsupported output type for transform");
@@ -781,7 +774,7 @@ std::unique_ptr<table> multi_transform(std::string const& udf,
                                        std::optional<void*> user_data,
                                        std::span<transform_input const> inputs,
                                        std::span<transform_output const> outputs,
-                                       std::vector<std::unique_ptr<column>> string_offsets,
+                                       std::vector<std::unique_ptr<column>>&& string_offsets,
                                        std::optional<size_type> row_size,
                                        rmm::cuda_stream_view stream,
                                        rmm::device_async_resource_ref mr)

@@ -144,6 +144,8 @@ std::unique_ptr<column> transform_extended(
  * @throws std::invalid_argument if the inputs only have a scalar with no column inputs and
  * `row_size` is not provided. This is because the row size cannot be inferred from the inputs in
  * this case.
+ * @throws std::invalid_argument if string offsets are provided for non-string output columns, or
+ * if the number of string offsets does not match the number of output columns.
  *
  * The size of the resulting column is the `row_size` if provided, otherwise it is inferred from
  * the input and pre-allocated output columns.
@@ -171,7 +173,7 @@ std::unique_ptr<table> multi_transform(
   std::optional<void*> user_data,
   std::span<transform_input const> inputs,
   std::span<transform_output const> outputs,
-  std::vector<std::unique_ptr<column>> string_offsets,
+  std::vector<std::unique_ptr<column>>&& string_offsets,
   std::optional<size_type> row_size,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());

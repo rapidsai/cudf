@@ -690,7 +690,7 @@ TEST_F(StringOperationTest, Output)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_empty, result_empty->view());
 }
 
-TEST_F(StringOperationTest, OutputOffseted)
+TEST_F(StringOperationTest, OutputOffsetted)
 {
   auto a = cudf::test::strings_column_wrapper{"x", "xx", "xxx", "xxxx", "xxxxx", "xxxxxx"};
   auto b = cudf::test::strings_column_wrapper{"aa", "bb", "cc", "dd", "ee", "ff"};

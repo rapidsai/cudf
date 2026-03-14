@@ -4,6 +4,7 @@
  */
 
 #pragma once
+
 #include <cudf/column/column_device_view_base.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/export.hpp>
@@ -18,15 +19,15 @@ namespace jit {
  * @brief A column wrapper type that treats a column as a vector of elements.
  *
  */
-struct mut_vector_device_view : private mutable_column_device_view_core {
+struct mutable_vector_device_view : private mutable_column_device_view_core {
   using base = mutable_column_device_view_core;
 
-  CUDF_HOST_DEVICE constexpr mut_vector_device_view(base const& src) : base{src} {}
-  ~mut_vector_device_view()                                        = default;
-  mut_vector_device_view(mut_vector_device_view const&)            = default;
-  mut_vector_device_view(mut_vector_device_view&&)                 = default;
-  mut_vector_device_view& operator=(mut_vector_device_view const&) = default;
-  mut_vector_device_view& operator=(mut_vector_device_view&&)      = default;
+  CUDF_HOST_DEVICE constexpr mutable_vector_device_view(base const& src) : base{src} {}
+  ~mutable_vector_device_view()                                            = default;
+  mutable_vector_device_view(mutable_vector_device_view const&)            = default;
+  mutable_vector_device_view(mutable_vector_device_view&&)                 = default;
+  mutable_vector_device_view& operator=(mutable_vector_device_view const&) = default;
+  mutable_vector_device_view& operator=(mutable_vector_device_view&&)      = default;
 
   using base::nullable;
   using base::offset;
@@ -68,16 +69,17 @@ struct mut_vector_device_view : private mutable_column_device_view_core {
  * @brief A column wrapper type that treats a column as a column of mutable strings.
  * The offsets will have been pre-initialized and the chars will have been pre-allocated.
  */
-struct mut_strings_column_device_view : private mutable_column_device_view_core {
+struct mutable_strings_column_device_view : private mutable_column_device_view_core {
   using base = mutable_column_device_view_core;
 
-  CUDF_HOST_DEVICE constexpr mut_strings_column_device_view(base const& src) : base{src} {}
+  CUDF_HOST_DEVICE constexpr mutable_strings_column_device_view(base const& src) : base{src} {}
 
-  ~mut_strings_column_device_view()                                                = default;
-  mut_strings_column_device_view(mut_strings_column_device_view const&)            = default;
-  mut_strings_column_device_view(mut_strings_column_device_view&&)                 = default;
-  mut_strings_column_device_view& operator=(mut_strings_column_device_view const&) = default;
-  mut_strings_column_device_view& operator=(mut_strings_column_device_view&&)      = default;
+  ~mutable_strings_column_device_view()                                         = default;
+  mutable_strings_column_device_view(mutable_strings_column_device_view const&) = default;
+  mutable_strings_column_device_view(mutable_strings_column_device_view&&)      = default;
+  mutable_strings_column_device_view& operator=(mutable_strings_column_device_view const&) =
+    default;
+  mutable_strings_column_device_view& operator=(mutable_strings_column_device_view&&) = default;
 
   using base::is_null;
   using base::is_valid;
@@ -114,7 +116,7 @@ struct mut_strings_column_device_view : private mutable_column_device_view_core 
   __device__ void assign(size_type row, cuda::std::span<char> value) const noexcept
     requires(cuda::std::is_same_v<T, cuda::std::span<char>>)
   {
-    // no-op for since we assume the chars have already been pre-allocated and they are mutated
+    // no-op since we assume the chars have already been pre-allocated and they are mutated
     // in-place
     return;
   }

@@ -633,7 +633,7 @@ class alignas(16) mutable_column_device_view_core : public detail::column_device
    * @brief Returns `string_view` to the string element at the specified index.
    *
    * If the element at the specified index is NULL, i.e., `is_null(element_index)
-   * == true`, then any attempt to use the result will lead to undefined behavior.
+   * == true`, then using the result is undefined behavior.
    *
    * This function accounts for the offset.
    *
@@ -656,7 +656,7 @@ class alignas(16) mutable_column_device_view_core : public detail::column_device
    * column.
    *
    * If the element at the specified index is NULL, i.e., `is_null(element_index) == true`,
-   * then any attempt to use the result will lead to undefined behavior.
+   * then using the result is undefined behavior.
    *
    * @param element_index Position of the desired element
    * @return numeric::fixed_point representing the element at this index
