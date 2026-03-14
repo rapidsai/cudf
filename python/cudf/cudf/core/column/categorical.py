@@ -651,6 +651,8 @@ class CategoricalColumn(ColumnBase):
         return self._get_decategorized_column().as_numerical_column(dtype)
 
     def as_string_column(self, dtype: DtypeObj) -> StringColumn:
+        if isinstance(dtype, np.dtype) and dtype.kind == "U":
+            dtype = np.dtype("object")
         return self._get_decategorized_column().as_string_column(dtype)
 
     def as_datetime_column(self, dtype: np.dtype) -> DatetimeColumn:
