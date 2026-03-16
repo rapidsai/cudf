@@ -30,7 +30,7 @@ This document describes these two execution modes.
 
 ---
 
-# SPMD execution mode
+## SPMD execution mode
 
 In SPMD (Single Program, Multiple Data) execution, the same Python script is launched
 multiple times simultaneously, once per GPU, using the `rrun` launcher bundled with
@@ -73,13 +73,13 @@ Conceptually the setup looks like this:
 After `collect`, results are **rank-local**. To assemble the full dataset on
 every rank, call `allgather_polars_dataframe()`.
 
-## Prerequisites
+### Prerequisites
 
 * RapidsMPF (`rapidsmpf`) installed
 * UCXX available (usually installed with RapidsMPF)
 * `rrun` launcher available (`rrun --help` should succeed)
 
-## Running in SPMD mode
+### Running in SPMD mode
 
 `spmd_execution()` is the primary entry point for SPMD execution. It is a context
 manager imported from `cudf_polars.experimental.rapidsmpf.spmd`. On entry it:
@@ -122,11 +122,11 @@ The context manager yields:
 
 * `comm` — [`rapidsmpf.communicator.Communicator`][rapidsmpf-communicator]
 * `ctx` — [`rapidsmpf.streaming.core.context.Context`][rapidsmpf-context]
-* `engine` — [`pl.GPUEngine`][polars-gpuengine] configured for SPMD execution
+* `engine` — {class}`~polars.lazyframe.engine_config.GPUEngine`
 
 Pass `engine` to every `LazyFrame.collect()` inside the context block.
 
-## Query symmetry requirement
+### Query symmetry requirement
 
 All ranks must execute the **same sequence of queries in the same order**. Collective
 operations are matched using internal operation IDs. If one rank executes a collective
@@ -159,12 +159,12 @@ with spmd_execution() as (comm, ctx, engine):
 # The collective IDs go out of sync → deadlock.
 with spmd_execution() as (comm, ctx, engine):
     df = pl.scan_parquet("/data/*.parquet")
-    if comm.rank() == 0:        # DON'T DO THIS
+    if comm.rank == 0:        # DON'T DO THIS
         df = df.group_by("customer_id").agg(pl.col("amount").sum())
     result = df.collect(engine=engine)
 ```
 
-## Collecting distributed results
+### Collecting distributed results
 
 `collect()` returns a rank-local result. Use
 `allgather_polars_dataframe()` to gather all fragments:
@@ -183,7 +183,7 @@ All ranks must call the same collective with the same `op_id`.
 
 The result is a `pl.DataFrame` containing rows from all ranks, ordered by rank.
 
-## Passing options
+### Passing options
 
 `executor_options` and `engine_kwargs` accept pass-through dictionaries:
 
@@ -208,7 +208,7 @@ Reserved keys:
 
 ---
 
-# Ray execution mode
+## Ray execution mode
 
 Ray mode uses a single client process that drives execution across multiple ranks.
 Each rank corresponds to one GPU worker and participates in collective operations
@@ -251,12 +251,12 @@ Unlike SPMD mode, the driver script runs as a normal Python program with no
 the complete query plan and broadcasts it to all actors, so every rank always
 executes the same query.
 
-## Prerequisites
+### Prerequisites
 
 * Ray (`ray`) installed
 * RapidsMPF and UCXX available on all GPU nodes
 
-## Running in Ray mode
+### Running in Ray mode
 
 `ray_execution()` is imported from `cudf_polars.experimental.rapidsmpf.ray`. It:
 
@@ -289,7 +289,7 @@ The context manager yields:
 * `ray_client` — cluster diagnostics and utilities
 * `engine` — `pl.GPUEngine` configured for Ray execution
 
-## Ray lifecycle
+### Ray lifecycle
 
 If Ray is already initialized, `ray_execution()` attaches to the existing cluster and
 does not call `ray.shutdown()` on exit.
@@ -311,7 +311,7 @@ finally:
 `ray_execution()` raises `RuntimeError` if called inside an `rrun` cluster or if no
 GPUs are available.
 
-## Cluster diagnostics
+### Cluster diagnostics
 
 `RayClient.gather_cluster_info()` returns placement information for all rank actors:
 
@@ -327,7 +327,7 @@ with ray_execution() as (ray_client, engine):
 
 Each entry includes `pid`, `hostname`, `cuda_visible_devices`, and `node_id`.
 
-## Passing options
+### Passing options
 
 `executor_options`, `engine_kwargs`, and `ray_init_kwargs` accept pass-through
 dictionaries:
