@@ -610,6 +610,8 @@ class NumericalColumn(NumericalBaseColumn):
                 "Cannot convert numerical column to string column "
                 "when dtype is an object dtype in pandas compatibility mode."
             )
+        if isinstance(dtype, np.dtype) and dtype.kind == "U":
+            dtype = np.dtype("object")
         if len(self) == 0:
             return cast(
                 cudf.core.column.StringColumn,
