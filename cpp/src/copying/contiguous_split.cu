@@ -149,14 +149,8 @@ struct dst_buf_info {
  * @param dst Destination buffer
  * @param src Source buffer
  * @param t Thread index
- * @param num_elements Number of elements to copy
- * @param element_size Size of each element in bytes
- * @param src_element_index Element index to start copying at
+ * @param dst_info Destination buffer info containing element count, sizes, shifts, and validity
  * @param stride Size of the kernel block
- * @param value_shift Shift incoming 4-byte offset values down by this amount
- * @param bit_shift Shift incoming data right by this many bits
- * @param num_rows Number of rows being copied
- * @param valid_count Optional pointer to a value to store count of set bits
  */
 template <int block_size, bool is_offsets, typename offset_type = int32_t>
 __device__ void copy_buffer(uint8_t* __restrict__ dst,
@@ -464,6 +458,7 @@ size_type count_src_bufs(InputIter begin, InputIter end)
  * @param end End of input columns
  * @param head Beginning of source buffer info array
  * @param current Current source buffer info to be written to
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param offset_stack_pos Integer representing our current offset nesting depth
  * (how many list or string levels deep we are)
  * @param parent_offset_index Index into src_buf_info output array indicating our nearest
@@ -799,6 +794,7 @@ std::tuple<size_t, int64_t, int64_t, size_type> build_output_column_metadata(
  * copied buffer
  * @param out_begin Output iterator of column views
  * @param base_ptr Pointer to the base address of copied data for the working partition
+ * @param mb Memory block for the output columns
  *
  * @returns new dst_buf_info iterator after processing this range of input columns
  */

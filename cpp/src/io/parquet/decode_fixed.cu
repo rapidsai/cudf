@@ -272,11 +272,11 @@ __device__ inline void decode_fixed_width_split_values(
  *
  * @tparam decode_block_size Size of the thread block
  * @tparam level_t Definition level type
- * @tparam is_nested Whether the type is nested
  *
  * @param target_value_count The target value count to process
  * @param s Pointer to page state
  * @param def Pointer to the definition levels
+ * @param is_nested Whether the column is nested
  * @param t Thread index
  *
  * @return Maximum depth valid count after skipping
@@ -548,9 +548,10 @@ __device__ int update_validity_and_row_indices_flat(
  * @tparam state_buf State buffer type
  *
  * @param target_value_count The target value count to process
- * @param s Pointer to  page state
- * @param sb Pointer to  state buffer
+ * @param s Pointer to page state
+ * @param sb Pointer to state buffer
  * @param def Pointer to the definition levels
+ * @param rep Repetition level decoder
  * @param t Thread index
  *
  * @return Maximum depth valid count after processing
