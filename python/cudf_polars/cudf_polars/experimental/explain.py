@@ -106,7 +106,7 @@ def serialize_query(
     q: pl.LazyFrame,
     engine: pl.GPUEngine,
     *,
-    physical: bool = False,
+    physical: bool = True,
 ) -> SerializablePlan:
     """
     Return a structured, serializable representation of the IR plan.
