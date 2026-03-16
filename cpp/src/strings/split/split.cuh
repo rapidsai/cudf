@@ -181,7 +181,8 @@ struct split_tokenizer_fn : base_split_tokenizer<split_tokenizer_fn> {
    * The tokens are processed from the beginning of each string ignoring overlapping
    * delimiters and honoring the `max_tokens` value.
    *
-   * @param d_str String to tokenize
+   * @param pos_begin Start position of the string in the character data
+   * @param pos_end End position of the string in the character data
    * @param d_delimiters Positions of delimiters for this string
    * @param d_tokens Output vector to store tokens for this string
    */
@@ -239,7 +240,8 @@ struct rsplit_tokenizer_fn : base_split_tokenizer<rsplit_tokenizer_fn> {
    * The tokens are processed from the end of each string ignoring overlapping
    * delimiters and honoring the `max_tokens` value.
    *
-   * @param d_str String to tokenize
+   * @param pos_begin Start position of the string in the character data
+   * @param pos_end End position of the string in the character data
    * @param d_delimiters Positions of delimiters for this string
    * @param d_tokens Output vector to store tokens for this string
    */

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -29,7 +29,7 @@ namespace strings::detail {
  *
  * @param source The strings column to copy from inside the `target_begin` range
  * @param target The strings column to copy from outside the range
- * @param source_end The index of the first element in the source range
+ * @param source_begin Index of the first element in the source range
  * @param source_end The index of the last element in the source range (exclusive)
  * @param target_begin The starting index of the target range (inclusive)
  * @param stream CUDA stream used for device memory operations and kernel launches.

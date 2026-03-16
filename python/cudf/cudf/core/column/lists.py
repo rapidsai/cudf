@@ -164,6 +164,8 @@ class ListColumn(ColumnBase):
                 raise TypeError(
                     f"Cannot cast a list from {self.dtype} to {dtype}"
                 )
+        if isinstance(dtype, np.dtype) and dtype.kind == "U":
+            dtype = np.dtype("object")
         lc = self._transform_leaves(
             lambda col, dtype: col.as_string_column(dtype), dtype
         )
