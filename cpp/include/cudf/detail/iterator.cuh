@@ -93,7 +93,7 @@ struct null_replaced_value_accessor {
    * @throws cudf::logic_error if `has_nulls` is true but `col` does not have a validity mask.
    *
    * @param[in] col column device view of cudf column
-   * @param[in] null_replacement The value to return for null elements
+   * @param[in] null_val The value to return for null elements
    * @param[in] has_nulls Must be set to true if `col` has nulls.
    */
   null_replaced_value_accessor(column_device_view const& col,
