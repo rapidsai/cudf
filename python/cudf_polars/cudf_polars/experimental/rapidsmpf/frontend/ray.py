@@ -161,8 +161,9 @@ class RankActor:
     rapidsmpf_options_as_bytes
         Serialized RapidsMPF options produced by
         :meth:`rapidsmpf.config.Options.serialize`.
-    executor_options
-        Additional executor options forwarded from the client.
+    py_executor_max_workers
+        Maximum number of threads for the actor's Python thread-pool executor.
+        ``None`` lets :class:`~concurrent.futures.ThreadPoolExecutor` choose.
     """
 
     def __init__(
@@ -170,7 +171,7 @@ class RankActor:
         *,
         nranks: int,
         rapidsmpf_options_as_bytes: bytes,
-        executor_options: dict[str, object],
+        py_executor_max_workers: int,
     ) -> None:
         self._mr = RmmResourceAdaptor(rmm.mr.CudaAsyncMemoryResource())
         self._rapidsmpf_options: Options = Options.deserialize(
@@ -181,10 +182,7 @@ class RankActor:
         )
         self._nranks: int = nranks
         self._py_executor = ThreadPoolExecutor(
-            max_workers=cast(
-                int | None,
-                executor_options.get("rapidsmpf_py_executor_max_workers"),
-            ),
+            max_workers=py_executor_max_workers,
             thread_name_prefix="ray-executor",
         )
         self._comm: Communicator | None = None
@@ -258,7 +256,7 @@ class RankActor:
         self._mr = None
         ray.actor.exit_actor()
 
-    def get_info(self) -> dict:
+    def get_info(self) -> dict[str, Any]:
         """
         Return diagnostic information about actor placement.
 
@@ -605,8 +603,11 @@ def ray_execution(
     rank_actors: list[ActorHandle[RankActor]] = [
         RankActor.remote(  # type: ignore[attr-defined]
             nranks=free_gpus,
-            executor_options=executor_options,
             rapidsmpf_options_as_bytes=rapidsmpf_options_as_bytes,
+            py_executor_max_workers=cast(
+                int,
+                executor_options.get("rapidsmpf_py_executor_max_workers", 1),
+            ),
         )
         for _ in range(free_gpus)
     ]
