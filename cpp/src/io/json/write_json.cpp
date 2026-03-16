@@ -36,6 +36,7 @@
 #include <algorithm>
 #include <numeric>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace cudf::io::json::detail {
@@ -187,7 +188,7 @@ struct column_to_strings_fn {
                                 rmm::device_async_resource_ref mr)
     : options_(options),
       stream_(stream),
-      mr_(mr),
+      mr_(std::move(mr)),
       narep(options.get_na_rep(), true, stream),
       struct_value_separator(",", true, stream),
       struct_row_begin_wrap("{", true, stream),
