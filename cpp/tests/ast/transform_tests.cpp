@@ -1068,8 +1068,6 @@ TEST_F(ComputeColumnTest, FloorDivIntegerEqualComparison)
 
 TEST_F(ComputeColumnTest, TrueDivIntegerEqualComparison)
 {
-  // TRUE_DIV(int64, int64) should return double, and EQUAL(double, double) should work.
-  // 10 / 4 = 2.5, 8 / 4 = 2.0, 7 / 4 = 1.75
   auto col   = column_wrapper<int64_t>{10, 8, 7, 4};
   auto table = cudf::table_view{{col}};
 
@@ -1089,8 +1087,6 @@ TEST_F(ComputeColumnTest, TrueDivIntegerEqualComparison)
 
 TEST_F(ComputeColumnTest, PowIntegerEqualComparison)
 {
-  // POW(int64, int64) should return int64 for integer inputs, and EQUAL(int64, int64) should work.
-  // 2^3=8, 3^2=9, 4^2=16, 2^0=1
   auto col   = column_wrapper<int64_t>{2, 3, 4, 2};
   auto table = cudf::table_view{{col}};
 
