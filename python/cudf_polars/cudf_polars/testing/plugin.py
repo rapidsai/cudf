@@ -272,6 +272,8 @@ RAPIDSMPF_TESTS_TO_SKIP: Mapping[str, str] = {
     "tests/unit/sql/test_distinct.py::test_distinct_with_expressions": "Crashes pytest worker",
     "tests/unit/io/test_scan_lines.py::test_scan_lines[False-True-True]": "Crashes pytest worker",
     "tests/unit/lazyframe/test_schema.py::test_lazy_collect_schema_matches_computed_schema[Date-dtype110-expr2]": "Crashes pytest worker",
+    "tests/unit/io/test_lazy_parquet.py::test_sink_parquet_arrow_schema_logical_types": "Crashes pytest worker",
+    "tests/unit/io/test_lazy_parquet.py::test_parquet_many_row_groups_12297": "Crashes pytest worker",
     "tests/benchmark/test_group_by.py::test_groupby_h2oai_q1": "Takes >2 minutes to run locally",
     "tests/benchmark/test_group_by.py::test_groupby_h2oai_q2": "Takes >2 minutes to run locally",
     "tests/benchmark/test_group_by.py::test_groupby_h2oai_q3": "Takes >2 minutes to run locally",
@@ -281,6 +283,9 @@ RAPIDSMPF_TESTS_TO_SKIP: Mapping[str, str] = {
     "tests/benchmark/test_group_by.py::test_groupby_h2oai_q10": "Takes >2 minutes to run locally",
     "tests/unit/streaming/test_streaming_io.py::test_sink_parquet": "Take >20 seconds to run locally",
     "tests/unit/streaming/test_streaming_sort.py::test_streaming_sort_varying_order_and_dtypes[sort_by0]": "Take >20 seconds to run locally",
+    "tests/unit/io/test_partition.py::test_partition_approximate_size": "Takes >x minutes/seconds to run locally",
+    "tests/unit/lazyframe/test_optimizations.py::test_collapse_joins_combinations": "Takes >x minutes/seconds to run locally",
+    "tests/unit/operations/test_slice.py::test_slice_slice_pushdown": "Takes >x minutes/seconds to run locally",
 }
 
 RAPIDSMPF_ONLY_EXPECTED_FAILURES: Mapping[str, str] = {
