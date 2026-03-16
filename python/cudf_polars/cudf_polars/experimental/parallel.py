@@ -24,7 +24,6 @@ from cudf_polars.dsl.ir import (
     HStack,
     IRExecutionContext,
     MapFunction,
-    Projection,
     Slice,
     Union,
 )
@@ -393,7 +392,6 @@ def _lower_ir_pwise(
 
 
 _lower_ir_pwise_preserve = partial(_lower_ir_pwise, preserve_partitioning=True)
-lower_ir_node.register(Projection, _lower_ir_pwise_preserve)
 lower_ir_node.register(Cache, _lower_ir_pwise_preserve)
 lower_ir_node.register(HConcat, _lower_ir_pwise)
 
@@ -460,9 +458,7 @@ def _(
 def _(
     ir: HStack, rec: LowerIRTransformer
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
-    if not all(
-        expr.is_pointwise for expr in traversal([e.value for e in ir.columns])
-    ):  # pragma: no cover
+    if not all(expr.is_pointwise for expr in traversal([e.value for e in ir.columns])):
         # TODO: Avoid fallback if/when possible
         return _lower_ir_fallback(
             ir, rec, msg="This HStack not supported for multiple partitions."

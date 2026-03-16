@@ -11,7 +11,7 @@ import polars as pl
 
 from cudf_polars.dsl import expr
 from cudf_polars.dsl.expr import Col, Len
-from cudf_polars.dsl.ir import Empty, HConcat, Scan, Select, Union
+from cudf_polars.dsl.ir import Empty, HConcat, HStack, Projection, Scan, Select, Union
 from cudf_polars.dsl.traversal import traversal
 from cudf_polars.dsl.utils.naming import unique_names
 from cudf_polars.experimental.base import ColumnStat, PartitionInfo
@@ -32,6 +32,80 @@ if TYPE_CHECKING:
     from cudf_polars.experimental.statistics import StatsCollector
     from cudf_polars.typing import Schema
     from cudf_polars.utils.config import ConfigOptions
+
+
+def _substitute_cse_exprs(e: expr.Expr, cse_map: dict[str, expr.Expr]) -> expr.Expr:
+    """Recursively replace Col references that are CSE placeholders with actual exprs."""
+    if isinstance(e, Col) and e.name in cse_map:
+        return cse_map[e.name]
+    if not e.children:
+        return e
+    new_children = [_substitute_cse_exprs(c, cse_map) for c in e.children]
+    if all(nc is oc for nc, oc in zip(new_children, e.children, strict=True)):
+        return e
+    return e.reconstruct(new_children)
+
+
+def _collect_hstack_cse_chain(
+    ir: HStack,
+) -> tuple[IR, dict[str, expr.Expr], bool]:
+    """
+    Collect the full CSE substitution map from a contiguous HStack chain.
+
+    Traverses ALL contiguous HStack nodes (outermost-first), then builds
+    the cse_map (innermost-first) so that outer entries reference resolved
+    expressions (not intermediate placeholder names).
+
+    Returns (base_input, cse_map, needs_expansion) where:
+    - base_input is the first non-HStack node
+    - cse_map maps all HStack column names to fully-resolved expressions
+    - needs_expansion is True if any HStack(should_broadcast=False) in the chain
+      defines non-pointwise expressions, which would create mixed-length intermediates
+    """
+    # Collect ALL HStack nodes in the chain, outermost-first
+    hstack_chain: list[HStack] = []
+    current: IR = ir
+    while isinstance(current, HStack):
+        hstack_chain.append(current)
+        current = current.children[0]
+    base_input = current
+
+    # Build cse_map innermost-first, substituting as we go
+    cse_map: dict[str, expr.Expr] = {}
+    needs_expansion = False
+    for hstack in reversed(hstack_chain):
+        for ne in hstack.columns:
+            cse_map[ne.name] = _substitute_cse_exprs(ne.value, cse_map)
+        # A should_broadcast=False HStack with non-pointwise exprs
+        # creates mixed-length columns
+        if not hstack.should_broadcast and not all(
+            e.is_pointwise for e in traversal([ne.value for ne in hstack.columns])
+        ):
+            needs_expansion = True
+
+    return base_input, cse_map, needs_expansion
+
+
+@lower_ir_node.register(Projection)
+def _(
+    ir: Projection, rec: LowerIRTransformer
+) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
+    if isinstance(child := ir.children[0], HStack):
+        # Check if we need to expand the child to avoid mixed-length columns
+        base_input, cse_map, needs_expansion = _collect_hstack_cse_chain(child)
+        if needs_expansion:
+            has_data_col = any(name in base_input.schema for name in ir.schema)
+            new_exprs = tuple(
+                expr.NamedExpr(name, cse_map.get(name, Col(ir.schema[name], name)))
+                for name in ir.schema
+            )
+            new_ir = Select(ir.schema, new_exprs, has_data_col, base_input)
+            return lower_ir_node(new_ir, rec)
+
+    # Partition-wise default - Import here to avoid circular import
+    from cudf_polars.experimental.parallel import _lower_ir_pwise
+
+    return _lower_ir_pwise(ir, rec, preserve_partitioning=True)
 
 
 def decompose_select(
@@ -259,9 +333,24 @@ def _fuse_simple_reductions(
         )
         count = max(pi[c].count for c in new_decomposed_select_irs)
         pi[new_hconcat] = PartitionInfo(count=count)
+
+        # Non-fused columns are already computed in new_decomposed_select_irs.
+        # Replace their exprs with Col references to avoid re-evaluation against
+        # the HConcat (which would double-apply any pointwise expression).
+        already_computed: Schema = {}
+        for group in reduction_groups.values():
+            if len(group) == 1:
+                already_computed |= group[0].schema
+
+        final_exprs = [
+            expr.NamedExpr(ne.name, Col(already_computed[ne.name], ne.name))
+            if ne.name in already_computed
+            else ne
+            for ne in fused_select_c_exprs
+        ]
         fused_select_c = Select(
             fused_select_c_schema,
-            fused_select_c_exprs,
+            final_exprs,
             True,  # noqa: FBT003
             new_hconcat,
         )
@@ -275,6 +364,17 @@ def _fuse_simple_reductions(
 def _(
     ir: Select, rec: LowerIRTransformer
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
+    if isinstance(hstack := ir.children[0], HStack):
+        # Check if we need to expand the child to avoid mixed-length columns
+        base_input, cse_map, needs_expansion = _collect_hstack_cse_chain(hstack)
+        if needs_expansion:
+            new_exprs = tuple(
+                expr.NamedExpr(ne.name, _substitute_cse_exprs(ne.value, cse_map))
+                for ne in ir.exprs
+            )
+            new_ir = Select(ir.schema, new_exprs, ir.should_broadcast, base_input)
+            return lower_ir_node(new_ir, rec)
+
     child, partition_info = rec(ir.children[0])
     pi = partition_info[child]
 
